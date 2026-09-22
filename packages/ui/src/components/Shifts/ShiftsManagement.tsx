@@ -14,6 +14,8 @@ import { MerchandiseHandoversPanel } from './MerchandiseHandoversPanel.js';
 import { NozzleReadingsGrid } from './NozzleReadingsGrid.js';
 import { ShiftTotalsSummary } from './ShiftTotalsSummary.js';
 import { BusinessDayTab } from './BusinessDayTab.js';
+import { seedStaffAssignments } from './seedStaffAssignments.js';
+import { buildOpenShiftAssignments } from './openShiftAssignments.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { useToast } from '../primitives/ToastProvider.js';
@@ -537,14 +539,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     if (statusData.templates && statusData.templates.length > 0) {
       setSelectedTemplateId((prev: string) => prev || statusData.templates[0].id);
     }
-    if (statusData.dispensers) {
-      setStaffAssignments(
-        statusData.dispensers.map((du: any) => ({
-          duId: du.id,
-          userId: statusData.staff?.[0]?.id ?? '',
-        })),
-      );
-    }
+    setStaffAssignments(seedStaffAssignments(statusData.dispensers, statusData.staff));
     if (statusData.terminals) {
       setTerminalAssignments(
         statusData.terminals.map((t: any) => ({ terminalId: t.id, duId: '' })),
@@ -590,11 +585,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         shiftTemplateId: values.shiftTemplateId,
         businessDate: values.businessDate,
         openingCash: Number(values.openingCash),
-        staffAssignments: staffAssignments.filter((a) => a.userId !== ''),
-        terminalLinks: terminalAssignments.map((t) => ({
-          terminalId: t.terminalId,
-          duId: t.duId || null,
-        })),
+        ...buildOpenShiftAssignments(staffAssignments, terminalAssignments),
       };
 
       // If no last shift exists, send the manual override initial readings

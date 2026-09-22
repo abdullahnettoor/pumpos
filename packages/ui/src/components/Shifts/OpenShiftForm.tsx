@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FileText, Info, Play } from 'lucide-react';
-import { Panel, Button, Form } from '../../pump-ds/index.js';
+import { Panel, Button, Chip, Form } from '../../pump-ds/index.js';
 import { Field, Select, NumberInput, DateField } from '../primitives/Field.js';
 import type { BusinessDayStatusItem } from '../../services/cloud.js';
 import { compareByDispenserThenNozzle, dispenserLabel, formatStationDateTime } from '@pump/shared';
@@ -34,10 +34,163 @@ interface OpenShiftFormProps {
   onViewLastShiftSummary: () => void;
 }
 
+const sectionHeading: React.CSSProperties = {
+  fontSize: '12px',
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  color: 'var(--text-muted)',
+  marginBottom: '6px',
+};
+
 const sectionNote: React.CSSProperties = {
   fontSize: '12px',
   color: 'var(--text-muted)',
   marginBottom: '12px',
+};
+
+/** The dispenser fields this form reads. Narrower than the API row on purpose. */
+interface DispenserOption {
+  id: string;
+  code?: string | null;
+  name?: string | null;
+}
+
+/** The terminal fields this form reads. */
+interface TerminalOption {
+  id: string;
+  label: string;
+  supportsCard?: boolean | null;
+  supportsUpi?: boolean | null;
+}
+
+/** The staff fields this form reads. `email` distinguishes a back-office user. */
+interface StaffOption {
+  id: string;
+  fullName: string;
+  email?: string | null;
+}
+
+/** "POS A (Card + UPI)" — the rails matter when deciding which pump it belongs to. */
+function terminalLabel(term: TerminalOption): string {
+  const rails = [term.supportsCard ? 'Card' : null, term.supportsUpi ? 'UPI' : null]
+    .filter(Boolean)
+    .join(' + ');
+  return `${term.label}${rails ? ` (${rails})` : ''}`;
+}
+
+/**
+ * One dispenser unit's assignment: the attendant accountable for it this
+ * shift, and the POS terminals that sit with them.
+ *
+ * Grouped per dispenser because that is the unit the operator actually thinks
+ * in — "who is on pump 2 and which POS is with them". Two flat lists, one of
+ * attendants and one of terminals, made that mapping something they had to
+ * hold in their head while reading down both (#223).
+ *
+ * `role="group"` rather than a bare panel: these are related form controls,
+ * and the dispenser's label is the only thing that tells two otherwise
+ * identical "Attendant" selects apart — for a screen reader and for a test.
+ */
+const DispenserAssignmentCard: React.FC<{
+  du: DispenserOption;
+  dispensers: DispenserOption[];
+  staff: StaffOption[];
+  terminals: TerminalOption[];
+  assignedUserId: string;
+  terminalAssignments: { terminalId: string; duId: string }[];
+  onStaffAssignmentChange: (duId: string, userId: string) => void;
+  onTerminalAssignmentChange: (terminalId: string, duId: string) => void;
+}> = ({
+  du,
+  dispensers,
+  staff,
+  terminals,
+  assignedUserId,
+  terminalAssignments,
+  onStaffAssignmentChange,
+  onTerminalAssignmentChange,
+}) => {
+  const label = `Dispenser ${dispenserLabel({ duCode: du.code, duName: du.name })}`;
+  const duIdOf = (terminalId: string) =>
+    terminalAssignments.find((t) => t.terminalId === terminalId)?.duId ?? '';
+  const mine = terminals.filter((term) => duIdOf(term.id) === du.id);
+  const attachable = terminals.filter((term) => duIdOf(term.id) !== du.id);
+  const nameOfDu = (duId: string) => {
+    const other = dispensers.find((d) => d.id === duId);
+    return other ? dispenserLabel({ duCode: other.code, duName: other.name }) : null;
+  };
+
+  return (
+    <Panel title={label} role="group" aria-label={label}>
+      {/* `htmlFor` + `id` are not decoration here: every card renders an
+          identically-labelled "Attendant" select, so without the association
+          the dispenser's name is the only thing distinguishing them and
+          nothing carries it to the control. */}
+      <Field label="Attendant" htmlFor={`attendant-${du.id}`}>
+        <Select
+          id={`attendant-${du.id}`}
+          value={assignedUserId}
+          onChange={(e) => onStaffAssignmentChange(du.id, e.target.value)}
+        >
+          <option value="">— Unassigned —</option>
+          {staff?.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.fullName}
+              {!u.email ? ' (Attendant)' : ''}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      {terminals && terminals.length > 0 && (
+        <div style={{ marginTop: '10px' }}>
+          {mine.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+              {mine.map((term) => (
+                <Chip
+                  key={term.id}
+                  size="sm"
+                  tone="info"
+                  variant="soft"
+                  // Detaching returns it to the shift-wide pool, which is where
+                  // an unassigned POS lives — it is never removed from the shift.
+                  onRemove={() => onTerminalAssignmentChange(term.id, '')}
+                  removeLabel={`Detach ${term.label} from ${label}`}
+                >
+                  {terminalLabel(term)}
+                </Chip>
+              ))}
+            </div>
+          )}
+          <Field label="Attach POS" htmlFor={`attach-pos-${du.id}`}>
+            <Select
+              id={`attach-pos-${du.id}`}
+              value=""
+              onChange={(e) => {
+                if (e.target.value) onTerminalAssignmentChange(e.target.value, du.id);
+              }}
+            >
+              <option value="">
+                {mine.length > 0 ? '— Attach another POS —' : '— No POS attached —'}
+              </option>
+              {attachable.map((term) => {
+                // A POS already on another pump is offered, but never silently:
+                // moving it is one step, and the option says where it is now.
+                const heldBy = nameOfDu(duIdOf(term.id));
+                return (
+                  <option key={term.id} value={term.id}>
+                    {terminalLabel(term)}
+                    {heldBy ? ` — on ${heldBy}` : ''}
+                  </option>
+                );
+              })}
+            </Select>
+          </Field>
+        </div>
+      )}
+    </Panel>
+  );
 };
 
 /**
@@ -69,6 +222,24 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   onSubmit,
   onViewLastShiftSummary,
 }) => {
+  /**
+   * Terminals on no dispenser. They keep their own panel rather than vanishing:
+   * a POS shared across pumps is a real configuration, and a station with no
+   * dispensers configured at all still has to see its terminals.
+   */
+  const sharedTerminals = useMemo(() => {
+    // "Not on a dispenser that exists", not merely "has no duId". A stale
+    // assignment naming a dispenser that is no longer configured matches
+    // neither a card's list nor this one, so the terminal would render
+    // nowhere at all while still being submitted with that stale link. The
+    // old flat panel was immune by construction — it listed every terminal
+    // unconditionally — so the invariant has to be stated here instead.
+    const knownDuIds = new Set((dispensers ?? []).map((du: any) => du.id));
+    return (terminals ?? []).filter((term: any) => {
+      const duId = terminalAssignments.find((t) => t.terminalId === term.id)?.duId;
+      return !duId || !knownDuIds.has(duId);
+    });
+  }, [dispensers, terminals, terminalAssignments]);
   const [customDateMode, setCustomDateMode] = useState(false);
   // The date the business-day query follows: whatever the operator picked, else
   // the prop. Derived rather than synced, so a new prop reaches the query
@@ -326,74 +497,50 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
         )}
 
         {dispensers && dispensers.length > 0 && (
-          <Panel title="Staff assignment">
-            <p style={sectionNote}>Assign attendants to dispenser units (optional).</p>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                gap: '14px',
-              }}
-            >
-              {dispensers.map((du: any) => {
-                const assigned = staffAssignments.find((a) => a.duId === du.id);
-                return (
-                  <Field key={du.id} label={`Dispenser ${du.code || du.name}`}>
-                    <Select
-                      value={assigned?.userId ?? ''}
-                      onChange={(e) => onStaffAssignmentChange(du.id, e.target.value)}
-                    >
-                      <option value="">— Unassigned —</option>
-                      {staff &&
-                        staff.map((u: any) => (
-                          <option key={u.id} value={u.id}>
-                            {u.fullName}
-                            {!u.email ? ' (Attendant)' : ''}
-                          </option>
-                        ))}
-                    </Select>
-                  </Field>
-                );
-              })}
-            </div>
-          </Panel>
-        )}
-
-        {terminals && terminals.length > 0 && (
-          <Panel title="Payment terminals (POS)">
+          // A plain section, not a Panel: each card below is already one, and
+          // nesting draws a second bordered box inside the first.
+          <section>
+            <h3 style={sectionHeading}>Dispenser assignment</h3>
             <p style={sectionNote}>
-              Assign each POS to a dispenser so attendants can declare its card/UPI batch at
-              handover; leave shift-wide if shared across pumps.
+              Who is on each pump, and which POS is with them. Both are optional; a POS left
+              shift-wide is shared across pumps.
             </p>
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                gap: '14px',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: '12px',
               }}
             >
-              {terminals.map((term: any) => {
-                const assigned = terminalAssignments.find((t) => t.terminalId === term.id);
-                const rails = [term.supportsCard ? 'Card' : null, term.supportsUpi ? 'UPI' : null]
-                  .filter(Boolean)
-                  .join(' + ');
-                return (
-                  <Field key={term.id} label={`${term.label}${rails ? ` (${rails})` : ''}`}>
-                    <Select
-                      value={assigned?.duId ?? ''}
-                      onChange={(e) => onTerminalAssignmentChange(term.id, e.target.value)}
-                    >
-                      <option value="">— Shift-wide (any pump) —</option>
-                      {dispensers &&
-                        dispensers.map((du: any) => (
-                          <option key={du.id} value={du.id}>
-                            Dispenser {du.code || du.name}
-                          </option>
-                        ))}
-                    </Select>
-                  </Field>
-                );
-              })}
+              {dispensers.map((du: any) => (
+                <DispenserAssignmentCard
+                  key={du.id}
+                  du={du}
+                  dispensers={dispensers}
+                  staff={staff}
+                  terminals={terminals}
+                  assignedUserId={staffAssignments.find((a) => a.duId === du.id)?.userId ?? ''}
+                  terminalAssignments={terminalAssignments}
+                  onStaffAssignmentChange={onStaffAssignmentChange}
+                  onTerminalAssignmentChange={onTerminalAssignmentChange}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {sharedTerminals.length > 0 && (
+          <Panel title="Shift-wide POS" role="group" aria-label="Shift-wide POS">
+            <p style={sectionNote}>
+              Not tied to a pump. Any attendant can declare these at handover — attach one to a
+              dispenser above if only that pump uses it.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {sharedTerminals.map((term: any) => (
+                <Chip key={term.id} size="sm" tone="neutral" variant="soft">
+                  {terminalLabel(term)}
+                </Chip>
+              ))}
             </div>
           </Panel>
         )}
