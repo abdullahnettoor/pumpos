@@ -139,6 +139,73 @@ describe('GET /reports/attendant-handovers', () => {
     });
   });
 
+  it('carries the per-customer credit breakdown onto the wire', async () => {
+    const res = await makeApp(
+      fakeDb(
+        ['reports.attendant'],
+        [HANDOVER_ROW],
+        [],
+        [
+          {
+            transactionId: 'ct-1',
+            shiftId: 'sh-1',
+            attendantId: 'att-1',
+            duId: 'du-1',
+            customerId: 'cust-1',
+            customerName: 'Kerala Roadways',
+            vehicleRegistration: 'KL-07-AB-1234',
+            productName: 'Diesel',
+            quantity: '20.000',
+            unitPrice: '40.00',
+            amount: '800.00',
+          },
+          // Product, vehicle and quantity are optional on the ledger row; the
+          // chit must still be listed, and still counted.
+          {
+            transactionId: 'ct-2',
+            shiftId: 'sh-1',
+            attendantId: 'att-1',
+            duId: null,
+            customerId: 'cust-2',
+            customerName: 'Anand Transports',
+            vehicleRegistration: null,
+            productName: null,
+            quantity: null,
+            unitPrice: null,
+            amount: '200.00',
+          },
+        ],
+      ),
+    ).request(URL);
+    const body = (await res.json()) as any;
+    const shift = body.data.attendants[0].shifts[0];
+
+    expect(shift.creditSaleLines).toEqual([
+      {
+        transactionId: 'ct-2',
+        customerId: 'cust-2',
+        customerName: 'Anand Transports',
+        vehicleRegistration: null,
+        productName: null,
+        quantity: null,
+        unitPrice: null,
+        amount: 200,
+      },
+      {
+        transactionId: 'ct-1',
+        customerId: 'cust-1',
+        customerName: 'Kerala Roadways',
+        vehicleRegistration: 'KL-07-AB-1234',
+        productName: 'Diesel',
+        quantity: 20,
+        unitPrice: 40,
+        amount: 800,
+      },
+    ]);
+    // The breakdown explains the total the statement prints beneath it.
+    expect(shift.creditSales).toBe(1000);
+  });
+
   it.each(['Attendant', 'Staff'])('refuses a %s of an entitled Organization', async (role) => {
     const res = await makeApp(fakeDb(['reports.attendant']), role).request(URL);
     expect(res.status).toBe(403);

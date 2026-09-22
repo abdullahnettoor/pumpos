@@ -173,21 +173,59 @@ const builders: Record<
   },
 
   creditSales: (d) => {
-    const shifts = d.shifts.filter((sh) => sh.creditSales !== 0);
+    const shifts = d.shifts.filter((sh) => sh.creditSales !== 0 || sh.creditSaleLines.length > 0);
     if (shifts.length === 0) return null;
+    /*
+     * One row per chit, not per shift: the operator chasing a receivable needs
+     * the name behind the number. A shift whose chits predate the breakdown
+     * still prints its own row, so the section total never loses money that
+     * the shift line accounted for.
+     */
+    const rows: Cell[][] = [];
+    for (const shift of shifts) {
+      if (shift.creditSaleLines.length === 0) {
+        rows.push([
+          { text: shiftLabel(shift) },
+          { text: '—' },
+          { text: '—' },
+          { text: '—' },
+          { text: inr(shift.creditSales) },
+        ]);
+        continue;
+      }
+      for (const line of shift.creditSaleLines) {
+        rows.push([
+          { text: shiftLabel(shift) },
+          { text: line.customerName || 'Unknown customer' },
+          { text: line.vehicleRegistration || '—' },
+          {
+            text: line.productName
+              ? `${line.productName}${line.quantity != null ? ` · ${vol3(line.quantity)}` : ''}`
+              : '—',
+          },
+          { text: inr(line.amount) },
+        ]);
+      }
+    }
     return (
       <View key="creditSales" wrap={false}>
         <SectionTitle>Fuel-on-Credit Sales</SectionTitle>
         <TableView
           columns={[
-            { header: 'Shift', flex: 3 },
-            { header: 'Credit sales', flex: 1.5, align: 'right', mono: true },
+            { header: 'Shift', flex: 2.5 },
+            { header: 'Customer', flex: 2.5 },
+            { header: 'Vehicle', flex: 1.5 },
+            { header: 'Product', flex: 2 },
+            { header: 'Amount', flex: 1.5, align: 'right', mono: true },
           ]}
-          rows={shifts.map((shift) => [
-            { text: shiftLabel(shift) },
-            { text: inr(shift.creditSales) },
-          ])}
-          total={[{ text: 'Total' }, { text: inr(d.totals.creditSales) }]}
+          rows={rows}
+          total={[
+            { text: 'Total' },
+            { text: '' },
+            { text: '' },
+            { text: '' },
+            { text: inr(d.totals.creditSales) },
+          ]}
         />
       </View>
     );

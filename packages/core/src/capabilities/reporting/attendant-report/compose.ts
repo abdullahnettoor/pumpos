@@ -4,6 +4,7 @@ import type {
   AttendantHandoverReportSource,
   AttendantNozzleReadingSourceRow,
   AttendantReportEntry,
+  AttendantReportCreditSale,
   AttendantReportNozzle,
   AttendantReportShift,
   AttendantReportTerminal,
@@ -86,20 +87,46 @@ function indexNozzleReadings(rows: AttendantNozzleReadingSourceRow[]) {
  * and per (Shift, Dispenser) so a Dispenser's row shows the credit dispensed
  * from it. A chit recorded outside a Dispenser handover carries no `duId`; it
  * still counts toward the Shift, it simply has no Dispenser to sit under.
+ *
+ * The chits themselves are kept per (Shift, Attendant) as well: the statement
+ * prints who owes the total, and those lines are summed from the very rows the
+ * total is summed from, so the breakdown cannot drift from it.
  */
 function indexCreditSales(rows: AttendantCreditSaleSourceRow[]) {
   const byShiftAttendant = new Map<string, number>();
   const byShiftDu = new Map<string, number>();
+  const linesByShiftAttendant = new Map<string, AttendantReportCreditSale[]>();
   for (const row of rows) {
     const k = key(row.shiftId, row.attendantId);
     byShiftAttendant.set(k, (byShiftAttendant.get(k) ?? 0) + row.amount);
+    const lines = linesByShiftAttendant.get(k) ?? [];
+    lines.push({
+      transactionId: row.transactionId,
+      customerId: row.customerId,
+      customerName: row.customerName,
+      vehicleRegistration: row.vehicleRegistration,
+      productName: row.productName,
+      quantity: row.quantity,
+      unitPrice: row.unitPrice,
+      amount: row.amount,
+    });
+    linesByShiftAttendant.set(k, lines);
     if (row.duId) {
       const duKey = key(row.shiftId, row.duId);
       byShiftDu.set(duKey, (byShiftDu.get(duKey) ?? 0) + row.amount);
     }
   }
-  return { byShiftAttendant, byShiftDu };
+  return { byShiftAttendant, byShiftDu, linesByShiftAttendant };
 }
+
+/**
+ * Customer order, with the transaction id breaking ties — two chits for the
+ * same customer in the same shift are common, and row order out of the
+ * database is not stable enough to print.
+ */
+const byCustomerThenId = (a: AttendantReportCreditSale, b: AttendantReportCreditSale) =>
+  (a.customerName ?? '').localeCompare(b.customerName ?? '') ||
+  a.transactionId.localeCompare(b.transactionId);
 
 /**
  * Fold Handover source rows into one entry per Attendant.
@@ -153,6 +180,7 @@ export function composeAttendantHandoverReport(
         billedSales: billed.get(k) ?? 0,
         handoverProductSales: handoverProduct.get(k) ?? 0,
         creditSales: credit.byShiftAttendant.get(k) ?? 0,
+        creditSaleLines: [...(credit.linesByShiftAttendant.get(k) ?? [])].sort(byCustomerThenId),
         varianceAmount: 0,
         testingVolume: 0,
       };

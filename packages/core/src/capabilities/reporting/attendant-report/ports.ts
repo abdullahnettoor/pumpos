@@ -1,5 +1,6 @@
 import type {
   AttendantHandoverReport,
+  AttendantReportCreditSale,
   AttendantReportDispenser,
   AttendantReportEntry,
   AttendantReportFilters,
@@ -21,6 +22,7 @@ import type {
  */
 export type {
   AttendantHandoverReport,
+  AttendantReportCreditSale,
   AttendantReportDispenser,
   AttendantReportEntry,
   AttendantReportFilters,
@@ -83,6 +85,8 @@ export interface AttendantSaleSourceRow {
 }
 
 export interface AttendantCreditSaleSourceRow {
+  /** The customer-ledger row this chit was raised as. */
+  transactionId: string;
   shiftId: string;
   attendantId: string;
   /**
@@ -90,6 +94,18 @@ export interface AttendantCreditSaleSourceRow {
    * outside a Dispenser handover, which still counts toward the Shift.
    */
   duId: string | null;
+  /**
+   * The customer the receivable is owed by. A credit sale always names one;
+   * null only guards the anonymous OMC-fleet-card row shape, which this
+   * reader's `CREDIT_SALE` filter already excludes.
+   */
+  customerId: string | null;
+  customerName: string | null;
+  /** Vehicle the fuel went into, when the chit recorded one. */
+  vehicleRegistration: string | null;
+  productName: string | null;
+  quantity: number | null;
+  unitPrice: number | null;
   amount: number;
 }
 

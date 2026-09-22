@@ -88,6 +88,48 @@ const DispenserDetail: React.FC<{ dispenser: AttendantReportDispenser }> = ({ di
   </div>
 );
 
+/**
+ * Who owes the shift's fuel-on-credit. The chits sum to the shift's credit
+ * total by construction, so the total is printed beneath them as the same
+ * figure the shift line already showed — not a second, re-derived number.
+ */
+const CreditBreakdown: React.FC<{ shift: AttendantReportShift }> = ({ shift }) => {
+  if (shift.creditSaleLines.length === 0) return null;
+  return (
+    <div style={{ marginTop: '8px' }}>
+      <div style={{ fontSize: '11px', fontWeight: 600 }}>Fuel-on-credit</div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+        <thead>
+          <tr style={{ color: 'var(--text-faint)' }}>
+            <th style={th}>Customer</th>
+            <th style={th}>Vehicle</th>
+            <th style={th}>Product</th>
+            <th style={thR}>Qty</th>
+            <th style={thR}>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shift.creditSaleLines.map((line) => (
+            <tr key={line.transactionId}>
+              <td style={td}>{line.customerName || 'Unknown customer'}</td>
+              <td style={td}>{line.vehicleRegistration || '—'}</td>
+              <td style={td}>{line.productName ?? '—'}</td>
+              <td style={tdR}>{line.quantity ?? '—'}</td>
+              <td style={tdR}>{inr(line.amount)}</td>
+            </tr>
+          ))}
+          <tr>
+            <td style={{ ...td, fontWeight: 600 }} colSpan={4}>
+              Total
+            </td>
+            <td style={{ ...tdR, fontWeight: 600 }}>{inr(shift.creditSales)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 /** One attendant's shifts: dispensers, their nozzles, terminals and variance. */
 const AttendantDetailDrawer: React.FC<{
   attendant: AttendantReportEntry | null;
@@ -152,6 +194,8 @@ const AttendantDetailDrawer: React.FC<{
             {shift.dispensers.map((dispenser) => (
               <DispenserDetail key={dispenser.handoverId} dispenser={dispenser} />
             ))}
+
+            <CreditBreakdown shift={shift} />
           </div>
         ))}
       </div>
