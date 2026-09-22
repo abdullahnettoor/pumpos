@@ -6,6 +6,7 @@ import { Button } from '../pump-ds/index.js';
 import { formatDateTime, formatMoney, inr } from '../utils/format.js';
 import { ReportNote } from './reports/ReportNote.js';
 import { isDesktopApp } from '../utils/platform.js';
+import { shiftDisplayLabel } from '@pump/shared';
 
 interface DailyDssrViewProps {
   dailyDssr: any;
@@ -1079,7 +1080,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
               color: 'var(--text-muted)',
             }}
           >
-            <th style={{ padding: '8px 12px', fontWeight: 600 }}>Shift ID</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600 }}>Shift</th>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Template</th>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Closed At</th>
             <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
@@ -1109,7 +1110,11 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
                       color: 'var(--text-strong)',
                     }}
                   >
-                    {(shift.shiftId || '').slice(0, 8)}...
+                    {shiftDisplayLabel({
+                      businessDate: dailyDssr?.businessDate ?? snapshot.businessDate,
+                      shiftSequence: shift.shiftSequence,
+                      shiftId: shift.shiftId,
+                    })}
                   </td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>
                     {shift.templateName || 'Custom'}

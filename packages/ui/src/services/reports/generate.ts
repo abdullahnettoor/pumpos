@@ -7,6 +7,7 @@ import {
   paperFromStation,
 } from './reportConfig.js';
 import { letterheadFromStation, showLogoFromStation } from './letterhead.js';
+import { formatShiftLabel, shiftDisplayLabel } from '@pump/shared';
 import type { AttendantReportEntry } from '@pump/shared';
 import type { AttendantReportSection } from './reportConfig.js';
 
@@ -41,12 +42,20 @@ export async function generateDssrPdf(station: any, dssr: any): Promise<void> {
   );
 }
 
-/** Shift Summary PDF from an immutable shift-summary snapshot. */
+/**
+ * Shift Summary PDF from an immutable shift-summary snapshot.
+ *
+ * `businessDate`/`shiftSequence` come from the read, not the snapshot, and name
+ * the shift `YYYYMMDD-N` (#228) — in the document and in the file name — so the
+ * PDF, the screen and the attendant statement agree. Older snapshots without
+ * them fall back to a UUID fragment.
+ */
 export async function generateShiftSummaryPdf(
   station: any,
   snapshot: any,
   shiftId: string,
   templateName?: string,
+  shift?: { businessDate?: string | null; shiftSequence?: number | null },
 ): Promise<void> {
   const doc = await import('./shiftSummaryDoc.js');
   const sections = station?.settings?.report_config?.shiftSummary?.length
@@ -59,9 +68,15 @@ export async function generateShiftSummaryPdf(
     letterhead: letterheadFromStation(station),
     paper: paperFromStation(station),
   };
+  const businessDate = shift?.businessDate ?? snapshot?.businessDate ?? null;
+  const shiftSequence = shift?.shiftSequence ?? snapshot?.shiftSequence ?? null;
   await exportReactPdf(
-    React.createElement(doc.ShiftSummaryDoc, { snapshot, config }),
-    `Shift_Summary_${String(shiftId).slice(0, 8)}`,
+    React.createElement(doc.ShiftSummaryDoc, {
+      snapshot: { ...snapshot, businessDate, shiftSequence },
+      config,
+    }),
+    // File names stay ASCII: the display fallback carries an ellipsis.
+    `Shift_Summary_${formatShiftLabel(businessDate, shiftSequence) ?? String(shiftId).slice(0, 8)}`,
   );
 }
 

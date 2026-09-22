@@ -32,6 +32,8 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
   const productAgg: Record<string, FuelAgg> = {};
   const shifts: {
     shiftId: string;
+    /** Position within the business day; drives the readable `YYYYMMDD-N` label. */
+    shiftSequence: number | null;
     templateName: string | null;
     closedAt: string | null;
     expectedDrawerCash: number;
@@ -51,6 +53,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     totalCashVariance += Number(snap.cashVariance ?? 0);
     shifts.push({
       shiftId: s.shiftId,
+      shiftSequence: s.sequence ?? null,
       templateName: s.templateName ?? null,
       closedAt: s.closedAt ?? null,
       expectedDrawerCash: Number(snap.expectedDrawerCash ?? 0),

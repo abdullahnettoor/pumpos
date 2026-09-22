@@ -10,6 +10,7 @@ import type {
   AttendantSaleSourceRow,
   AttendantTerminalEntrySourceRow,
 } from '@pump/core';
+import { shiftSequenceSql } from '../shift-sequence-sql.js';
 
 const num = (v: string | number | null | undefined): number => Number(v ?? 0) || 0;
 
@@ -40,6 +41,7 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
         handoverId: schema.attendantHandovers.id,
         shiftId: schema.attendantHandovers.shiftId,
         businessDate: schema.businessDays.businessDate,
+        shiftSequence: shiftSequenceSql('shifts'),
         shiftTemplateName: schema.shiftTemplates.name,
         closedAt: schema.shifts.closedAt,
         attendantId: schema.attendantHandovers.userId,
@@ -69,6 +71,7 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
       handoverId: r.handoverId,
       shiftId: r.shiftId,
       businessDate: r.businessDate,
+      shiftSequence: r.shiftSequence ?? null,
       shiftTemplateName: r.shiftTemplateName ?? null,
       closedAt: r.closedAt ? r.closedAt.toISOString() : null,
       attendantId: r.attendantId,

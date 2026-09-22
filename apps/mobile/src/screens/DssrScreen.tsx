@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useDailyDssrPreview, generateDssrPdf, inr } from '@pump/ui';
-import { resolveBusinessDate } from '@pump/shared';
+import { resolveBusinessDate, shiftDisplayLabel } from '@pump/shared';
 import type { Station } from '@pump/shared';
 import { ShareButton } from '../components/ShareButton.js';
 
@@ -200,7 +200,13 @@ export const DssrScreen: React.FC<Props> = ({ station, businessDate }) => {
                       <div>
                         <p style={{ color: 'var(--text-default)' }}>{s.templateName || 'Shift'}</p>
                         <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                          {numberFmt(Number(s.netVolume || 0))} L net
+                          {/* Readable shift name (#228), not a UUID fragment. */}
+                          {shiftDisplayLabel({
+                            businessDate: date,
+                            shiftSequence: s.shiftSequence,
+                            shiftId: s.shiftId,
+                          })}{' '}
+                          · {numberFmt(Number(s.netVolume || 0))} L net
                         </p>
                       </div>
                       <span
