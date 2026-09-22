@@ -52,6 +52,8 @@ export interface AppShellProps {
   /** Newer version available (desktop only): shows an update chip in the
    *  status bar. In-app updates exist only in the packaged desktop app. */
   updateAvailableVersion?: string | null;
+  /** Phase-aware update-chip label (desktop only). Falls back to "Update to v…". */
+  updateLabel?: string;
   /** Clicked when the status-bar update chip is used. Desktop only. */
   onUpdate?: () => void;
 }
@@ -153,6 +155,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   userMenuExtras,
   appVersion,
   updateAvailableVersion,
+  updateLabel,
   onUpdate,
 }) => {
   // Sidebar expanded by default; the top-bar hamburger collapses it to an icon rail.
@@ -335,13 +338,13 @@ export const AppShell: React.FC<AppShellProps> = ({
       <div className="no-print" style={{ flexShrink: 0 }}>
         <AppStatusBar
           selectedStation={selectedStation}
-          userRole={(userRole as 'Owner' | 'Manager' | 'Accountant' | 'Staff') || 'Staff'}
           syncStatus={syncStatus}
           pendingSyncCount={pendingSyncCount}
           onNavigate={onNavigate}
           stationReady={stationReady}
           appVersion={appVersion}
           updateAvailableVersion={updateAvailableVersion}
+          updateLabel={updateLabel}
           onUpdate={onUpdate}
         />
       </div>

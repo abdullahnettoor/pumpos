@@ -64,7 +64,16 @@ export interface StatusBarProps {
   appVersion?: string | null;
   /** Newer version available (desktop only). Turns the version into an update chip. */
   updateAvailableVersion?: string | null;
-  /** Clicked when an update is available. Desktop only. */
+  /**
+   * Phase-aware chip label (desktop only), e.g. "Downloading v1.5.0…" or
+   * "Restart to update". Falls back to "Update to v{updateAvailableVersion}".
+   */
+  updateLabel?: string;
+  /**
+   * Clicked when an update is available. Desktop only. Omit for phases already
+   * in progress (downloading/installing): the chip then reports status without
+   * inviting a click that does nothing.
+   */
   onUpdate?: () => void;
 
   className?: string;
@@ -123,6 +132,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   openShiftLabel,
   appVersion,
   updateAvailableVersion,
+  updateLabel,
   onUpdate,
   className,
 }) => {
@@ -265,10 +275,14 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               type="button"
               data-testid="statusbar-update"
               onClick={onUpdate}
-              className="inline-flex h-[18px] items-center gap-1 rounded-chip bg-info-bg px-2 text-[11px] font-medium text-info-fg transition-colors hover:brightness-95"
+              disabled={!onUpdate}
+              className={cn(
+                'inline-flex h-[18px] items-center gap-1 rounded-chip bg-info-bg px-2 text-[11px] font-medium text-info-fg transition-colors',
+                onUpdate ? 'hover:brightness-95' : 'cursor-default opacity-80',
+              )}
             >
               <Icon name="arrow-up" size="xs" />
-              <span>Update to v{updateAvailableVersion}</span>
+              <span>{updateLabel ?? `Update to v${updateAvailableVersion}`}</span>
             </button>
           ) : (
             <Segment data-testid="statusbar-version">

@@ -115,4 +115,33 @@ describe('StatusBar version / update', () => {
     expect(screen.queryByTestId('statusbar-version')).toBeNull();
     expect(screen.queryByTestId('statusbar-update')).toBeNull();
   });
+
+  it('shows a phase-aware label when one is provided', () => {
+    render(
+      <StatusBar
+        {...baseProps}
+        appVersion="1.4.2"
+        updateAvailableVersion="1.5.0"
+        updateLabel="Restart to update"
+        onUpdate={vi.fn()}
+      />,
+    );
+    const chip = screen.getByTestId('statusbar-update');
+    expect(chip.textContent).toContain('Restart to update');
+    expect(chip.textContent).not.toContain('Update to v1.5.0');
+  });
+
+  it('disables the chip for an in-progress phase (no onUpdate)', () => {
+    render(
+      <StatusBar
+        {...baseProps}
+        appVersion="1.4.2"
+        updateAvailableVersion="1.5.0"
+        updateLabel="Downloading v1.5.0…"
+      />,
+    );
+    const chip = screen.getByTestId('statusbar-update') as HTMLButtonElement;
+    expect(chip.textContent).toContain('Downloading v1.5.0');
+    expect(chip.disabled).toBe(true);
+  });
 });
