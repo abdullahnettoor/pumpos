@@ -5,6 +5,7 @@ import type {
   BusinessDayRepository,
   BusinessDayLock,
   BusinessDayStatusReader,
+  BusinessDayStatusQuery,
   BusinessDayStatusSlices,
   BusinessDayStatusItem,
   Shift,
@@ -79,13 +80,13 @@ export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
     };
   }
 
-  async loadSlices(
-    organizationId: string,
-    stationId: string,
-    requestedBusinessDate: string,
-    currentBusinessDate: string,
-    recentFromBusinessDate: string,
-  ): Promise<BusinessDayStatusSlices> {
+  async loadSlices({
+    organizationId,
+    stationId,
+    requestedBusinessDate,
+    currentBusinessDate,
+    recentFromBusinessDate,
+  }: BusinessDayStatusQuery): Promise<BusinessDayStatusSlices> {
     // ONE query for all four slices (#155): the requested date's day, every
     // OPEN day, and every day inside the recent window. Classification happens
     // here, not in SQL — the slices overlap heavily, and four queries would be

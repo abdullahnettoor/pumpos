@@ -16,6 +16,7 @@ import {
 import type { AttendantReportDispenser, AttendantReportShift } from '@pump/shared';
 import type { AttendantStatementData } from './attendantStatementData.js';
 import { sliceAttendantStatementByDay } from './attendantStatementDays.js';
+import { creditChitRows, shiftShowsCreditBreakdown } from './attendantCreditLines.js';
 import type { AttendantReportSection, AttendantReportConfig } from './reportConfig.js';
 import { DEFAULT_ATTENDANT_REPORT_CONFIG } from './reportConfig.js';
 
@@ -164,38 +165,29 @@ const builders: Record<
   },
 
   creditSales: (d) => {
-    const shifts = d.shifts.filter((sh) => sh.creditSales !== 0 || sh.creditSaleLines.length > 0);
+    const shifts = d.shifts.filter(shiftShowsCreditBreakdown);
     if (shifts.length === 0) return null;
     /*
      * One row per chit, not per shift: the operator chasing a receivable needs
      * the name behind the number. A shift can carry a credit total with no
      * chits under it — a back-office entry raised against the shift outside
-     * any attendant's handover — and it still prints its own row, so the
-     * section total never loses money the shift line accounted for.
+     * any attendant's handover — and `creditChitRows` still yields it a row,
+     * so the section total never loses money the shift line accounted for.
+     *
+     * The rows come from the same module the drawer renders, so the export and
+     * the screen cannot disagree about a cell (#244). Even the folded
+     * product-and-quantity cell is composed there — deciding it here meant
+     * re-spelling that module's "missing" sentinel to branch on.
      */
     const rows: Cell[][] = [];
     for (const shift of shifts) {
-      if (shift.creditSaleLines.length === 0) {
+      for (const row of creditChitRows(shift)) {
         rows.push([
           { text: shiftLabel(shift) },
-          { text: '—' },
-          { text: '—' },
-          { text: '—' },
-          { text: inr(shift.creditSales) },
-        ]);
-        continue;
-      }
-      for (const line of shift.creditSaleLines) {
-        rows.push([
-          { text: shiftLabel(shift) },
-          { text: line.customerName || 'Unknown customer' },
-          { text: line.vehicleRegistration || '—' },
-          {
-            text: line.productName
-              ? `${line.productName}${line.quantity != null ? ` · ${vol3(line.quantity)}` : ''}`
-              : '—',
-          },
-          { text: inr(line.amount) },
+          { text: row.customerName },
+          { text: row.vehicle },
+          { text: row.productWithQuantity },
+          { text: inr(row.amount) },
         ]);
       }
     }

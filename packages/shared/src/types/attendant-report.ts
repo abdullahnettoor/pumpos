@@ -44,6 +44,12 @@ export interface AttendantReportCreditSale {
   vehicleRegistration: string | null;
   productName: string | null;
   quantity: number | null;
+  /**
+   * Unit the quantity is measured in — 'L' for liquids, 'kg' for CNG and
+   * Auto-LPG. Carried because a renderer that assumes litres prints a CNG
+   * chit wrong, and quantities must never be summed across units.
+   */
+  unit: string | null;
   unitPrice: number | null;
   amount: number;
 }

@@ -107,6 +107,7 @@ function indexCreditSales(rows: AttendantCreditSaleSourceRow[]) {
       vehicleRegistration: row.vehicleRegistration,
       productName: row.productName,
       quantity: row.quantity,
+      unit: row.unit,
       unitPrice: row.unitPrice,
       amount: row.amount,
     });

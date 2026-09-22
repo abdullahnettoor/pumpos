@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { canViewReports } from '@pump/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { CalendarRange, Check, Info, Lock } from 'lucide-react';
 import {
@@ -38,11 +39,15 @@ interface BusinessDayTabProps {
   requestedBusinessDate?: string | null;
   onBusinessDateSelected?: () => void;
   /**
-   * Route elsewhere in the app. Only used by "See older", which hands days
-   * beyond the recent window to the Reports page's Daily DSSR list (#226).
-   * Optional: an embed that cannot route simply does not get the affordance.
+   * Route elsewhere in the app. Used by "See older", which hands days beyond
+   * the recent window to the Reports page's Daily DSSR list (#226).
+   *
+   * Required rather than optional (#244). Both shells pass it today, so this
+   * fixes no live bug; it closes the failure mode, where a host that simply
+   * omitted the prop would lose the only route to a day older than 14 days and
+   * look exactly like a host that had no such feature. Now it will not compile.
    */
-  onNavigate?: (path: string) => void;
+  onNavigate: (path: string) => void;
 }
 
 const rowStyle: React.CSSProperties = {
@@ -148,12 +153,6 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   const report = selectedState === 'CLOSED' ? snapshotQ.data : previewQ.data;
   const snap = report?.snapshotData ?? null;
 
-  const openBusinessDays = useMemo(() => {
-    return [...(currentBusinessDayStatusQ.data?.openBusinessDays ?? [])].sort((a: any, b: any) =>
-      b.businessDate.localeCompare(a.businessDate),
-    );
-  }, [currentBusinessDayStatusQ.data]);
-
   /**
    * The last 14 days, open AND closed. This replaces an open-days-only panel,
    * which made a closed day invisible — an operator had no way to reach, say,
@@ -168,12 +167,11 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     currentBusinessDayStatusQ.data?.recentFromBusinessDate;
 
   /**
-   * "See older" hands the operator to the Reports page, which is role-gated to
-   * Owner / Manager / Accountant. Offering it to Staff would route them to a
-   * page their own nav does not list and whose reads refuse them.
+   * "See older" hands the operator to the Reports page. The answer comes from
+   * `guards.ts`, the same source the nav gates the route with — an inline role
+   * list here could drift from it and offer a door that does not open.
    */
-  const mayOpenReports =
-    userRole === 'Owner' || userRole === 'Manager' || userRole === 'Accountant';
+  const mayOpenReports = canViewReports(userRole);
 
   useEffect(() => {
     if (
@@ -184,7 +182,14 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     )
       return;
     const resolvedActiveBusinessDayId = activeShift?.businessDayId ?? activeBusinessDayId;
-    const activeDay = openBusinessDays.find((day: any) => day.id === resolvedActiveBusinessDayId);
+    // Looked up in the recent list, which the use-case guarantees contains
+    // every open day at any age — so the separate open-days memo this replaced
+    // bought only its `any`-typed re-sort, and the `status` filter kept here:
+    // if the active shift's day has since closed, fall back to today rather
+    // than preselecting a day the operator can no longer work in.
+    const activeDay = recentBusinessDays.find(
+      (day) => day.id === resolvedActiveBusinessDayId && day.status === 'OPEN',
+    );
     setPickedBusinessDate(requestedBusinessDate || activeDay?.businessDate || currentBusinessDate);
     initializedStationId.current = stationId;
     if (requestedBusinessDate) onBusinessDateSelected?.();
@@ -194,7 +199,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     activeShift?.businessDayId,
     requestedBusinessDate,
     currentBusinessDate,
-    openBusinessDays,
+    recentBusinessDays,
     currentBusinessDayStatusQ.isFetching,
     shiftStatusQ.isFetching,
     onBusinessDateSelected,
@@ -508,9 +513,10 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
               );
             })}
             {/* Days beyond the window live in the Reports page's Daily DSSR
-                list, which already reads them. Offered only when the app gave
-                us somewhere to route — a dead button is worse than none. */}
-            {onNavigate && mayOpenReports && (
+                list, which already reads them. Gated on the role that may open
+                that page — routing anyone else there lands them on a page
+                their own nav does not list. */}
+            {mayOpenReports && (
               <div style={{ padding: '8px 16px' }}>
                 <Button variant="ghost" size="xs" onClick={() => onNavigate('/reports')}>
                   See older Business Days

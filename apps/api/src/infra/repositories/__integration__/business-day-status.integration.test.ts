@@ -176,13 +176,13 @@ describe.skipIf(!CONNECTION)('Business Day status reader against real Postgres',
   }
 
   const load = (requestedDate: string) =>
-    new DrizzleBusinessDayStatusReader(db).loadSlices(
-      ORG,
-      STATION,
-      requestedDate,
-      CURRENT_BUSINESS_DATE,
-      RECENT_FROM,
-    );
+    new DrizzleBusinessDayStatusReader(db).loadSlices({
+      organizationId: ORG,
+      stationId: STATION,
+      requestedBusinessDate: requestedDate,
+      currentBusinessDate: CURRENT_BUSINESS_DATE,
+      recentFromBusinessDate: RECENT_FROM,
+    });
 
   it('counts the day’s closed and open shifts (not zero)', async () => {
     const slices = await load('2026-03-10');

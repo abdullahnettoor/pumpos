@@ -106,6 +106,8 @@ export interface AttendantCreditSaleSourceRow {
   vehicleRegistration: string | null;
   productName: string | null;
   quantity: number | null;
+  /** 'L' for liquids, 'kg' for CNG / Auto-LPG. Never sum across units. */
+  unit: string | null;
   unitPrice: number | null;
   amount: number;
 }

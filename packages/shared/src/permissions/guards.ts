@@ -227,8 +227,30 @@ export function isManageableByManager(targetRole: Role): boolean {
 // Reporting
 // ----------------------------------------------------
 
+/**
+ * Back-office roles: the ones accountable for the station's numbers rather
+ * than for working a dispenser. Reaching Reports and exporting from it are the
+ * same answer, so they are the same list — written once, because three copies
+ * of `Owner | Manager | Accountant` in one file is more drift surface than the
+ * inline check this replaced.
+ */
+export const REPORTS_ROLES: readonly Role[] = ['Owner', 'Manager', 'Accountant'];
+
+/**
+ * Reach the Reports workspace at all.
+ *
+ * Exported because more than the nav needs the answer: anything that offers a
+ * route *into* Reports has to agree with the nav that gates it, or it sends
+ * the operator to a page their own sidebar does not list and whose reads
+ * refuse them. The "See older Business Days" affordance is one such caller
+ * (#244).
+ */
+export function canViewReports(role: Role): boolean {
+  return REPORTS_ROLES.includes(role);
+}
+
 export function canExportReports(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
+  return REPORTS_ROLES.includes(role);
 }
 
 /**

@@ -38,7 +38,7 @@ import {
   useRunTask,
   publishNavIntent,
 } from '@pump/ui';
-import { Station } from '@pump/shared';
+import { REPORTS_ROLES, Station } from '@pump/shared';
 import { environmentTag, showDeveloperSurfaces } from './buildEnv.js';
 import { useDesktopUpdates } from './updates/useDesktopUpdates.js';
 import { UpdateNotice } from './updates/UpdateNotice.js';
@@ -282,7 +282,7 @@ const App: React.FC = () => {
         { label: 'Pricing', path: '/pricing', roles: ['Owner', 'Manager'] },
         { label: 'Accounts', path: '/accounts', roles: ['Owner', 'Manager', 'Accountant'] },
         { label: 'Customers', path: '/customers' },
-        { label: 'Reports', path: '/reports', roles: ['Owner', 'Manager', 'Accountant'] },
+        { label: 'Reports', path: '/reports', roles: [...REPORTS_ROLES] },
         { label: 'Organization', path: '/organization', roles: ['Owner'] },
       ]
     : [{ label: 'Onboarding Setup', path: '/onboarding', roles: ['Owner', 'Manager'] }];
