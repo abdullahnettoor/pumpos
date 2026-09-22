@@ -222,6 +222,20 @@ const App: React.FC = () => {
       ]
     : undefined;
 
+  // Status-bar version/update. The version shows on desktop (web passes none);
+  // the update chip appears only when an offer is actually on the table — the
+  // phases where the operator can act on a newer build.
+  const updateState = updates.state;
+  const updateAvailableVersion =
+    updateState &&
+    (updateState.phase === 'available' ||
+      updateState.phase === 'postponed' ||
+      updateState.phase === 'downloading' ||
+      updateState.phase === 'downloaded' ||
+      updateState.phase === 'relaunch-ready')
+      ? updateState.update.version
+      : null;
+
   const handleStationChange = (station: Station) => {
     pickStation(station.id);
     setCurrentPath('/dashboard');
@@ -532,6 +546,9 @@ const App: React.FC = () => {
       onStationChange={handleStationChange}
       environmentTag={environmentTag}
       userMenuExtras={updateMenuEntries}
+      appVersion={updates.currentVersion}
+      updateAvailableVersion={updateAvailableVersion}
+      onUpdate={updates.check}
     >
       {renderContent()}
       <QuickEntryHost selectedStation={selectedStation} />

@@ -31,13 +31,11 @@ import {
   type QuickCreateAction,
   type UserMenuAction,
   type SyncStatus,
-  type BusinessDayOption,
   PumpOSLockup,
 } from '../pump-ds/index.js';
-import { useBusinessDayStatus, useCustomers, useSuppliers, useProducts } from '../query/hooks.js';
+import { useCustomers, useSuppliers, useProducts } from '../query/hooks.js';
 import { useStationAlerts } from '../query/useStationAlerts.js';
 import { inr } from '../utils/format.js';
-import { useStationBusinessDate } from '../hooks/useStationBusinessDate.js';
 import { useRunTask } from '../utils/runTask.js';
 import { useDesktopTitleBar } from '../utils/desktopTitleBar.js';
 
@@ -48,6 +46,9 @@ import { useDesktopTitleBar } from '../utils/desktopTitleBar.js';
  *
  * Kept OUT of pump-ds (it depends on app query hooks). pump-ds stays pure.
  *
+ * Ambient status (business day, sync, past-open-day warnings) is rendered by
+ * `AppStatusBar` in the shell's bottom bar, not here.
+ *
  * TODO(follow-up): the notification derivation duplicates DashboardOverview's
  * alert logic — extract a shared `useStationAlerts(stationId)` hook so both
  * read one source.
@@ -55,8 +56,6 @@ import { useDesktopTitleBar } from '../utils/desktopTitleBar.js';
 
 export interface AppTopBarProps {
   selectedStation: Station | null;
-  /** Station list still in flight — see TopBar.stationsLoading. */
-  stationsLoading?: boolean;
   navItems: { label: string; path: string; roles?: string[] }[];
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
   userName: string;
@@ -66,7 +65,7 @@ export interface AppTopBarProps {
   onLogout: () => void | Promise<unknown>;
   onToggleSidebar?: () => void;
   /** When false the active station isn't operational yet (pre-onboarding hub):
-   *  hide business day, station alerts, and operational quick-create; scope the
+   *  hide station alerts and operational quick-create; scope the
    *  “+ New” menu to getting-started actions. */
   stationReady?: boolean;
   /** Shell-provided menu entries appended above "Log out" (desktop updates). */
@@ -80,22 +79,8 @@ function initialsOf(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function formatDayLabel(iso: string): string {
-  // iso is YYYY-MM-DD; render as "09 Jul 2026".
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-}
-
 export const AppTopBar: React.FC<AppTopBarProps> = ({
   selectedStation,
-  stationsLoading = false,
   navItems,
   userRole,
   userName,
@@ -119,35 +104,6 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   const { data: suppliers } = useSuppliers(true, { enabled: canSeeFinancials } as any);
   const { data: products } = useProducts();
   const stationAlerts = useStationAlerts(stationId, stationReady && canSeeFinancials);
-
-  // --- business day ---
-  const settings: any = (selectedStation as any)?.settings || {};
-  const businessIso = useStationBusinessDate(settings.timezone, settings.business_day_starts_at);
-  const businessDate = formatDayLabel(businessIso);
-  const dayStatusQ = useBusinessDayStatus(stationId, businessIso, {
-    enabled: !!stationId && stationReady,
-  } as any);
-  const dayStatus = dayStatusQ.data;
-  const businessDayStatus = dayStatusQ.isError
-    ? 'unavailable'
-    : dayStatusQ.isPending
-      ? 'unknown'
-      : dayStatus?.requestedState === 'OPEN'
-        ? 'open'
-        : dayStatus?.requestedState === 'CLOSED'
-          ? 'closed'
-          : 'not-created';
-
-  const businessDays: BusinessDayOption[] = useMemo(() => {
-    return (dayStatus?.pastOpenBusinessDays ?? []).map((day: any) => ({
-      date: day.businessDate,
-      label: formatDayLabel(day.businessDate),
-      status: 'open',
-      openShiftCount: Number(day.openShiftCount),
-      closedShiftCount: Number(day.closedShiftCount),
-      lastActivityAt: day.lastActivityAt,
-    }));
-  }, [dayStatus]);
 
   // --- quick create ---
   const quickCreate: QuickCreateAction[] = useMemo(() => {
@@ -403,22 +359,10 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         titleBar={titleBar}
         onToggleSidebar={onToggleSidebar}
         brand={<PumpOSLockup />}
-        businessDate={businessDate}
-        businessDayStatus={businessDayStatus}
-        showBusinessDay={stationReady}
-        onBusinessDay={() => onNavigate('/shifts', { openBusinessDayDate: businessIso })}
-        businessDays={dayStatusQ.isError || dayStatusQ.isPending ? [] : businessDays}
-        businessDaysState={
-          dayStatusQ.isError ? 'unavailable' : dayStatusQ.isPending ? 'loading' : 'ready'
-        }
-        onSelectBusinessDay={(date) => onNavigate('/shifts', { openBusinessDayDate: date })}
-        stationLabel={selectedStation?.name}
-        stationsLoading={stationsLoading}
+        stationName={selectedStation?.name}
         onOpenSearch={() => setOpen(true)}
         quickCreate={quickCreate}
         notifications={notifications}
-        syncStatus={syncStatus}
-        pendingSyncCount={pendingSyncCount}
         userInitials={initialsOf(userName)}
         userName={userName}
         userRole={userRole}

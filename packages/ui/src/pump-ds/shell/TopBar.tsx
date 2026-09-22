@@ -1,10 +1,7 @@
-import React, { forwardRef, type ReactNode } from 'react';
+import React, { forwardRef, useEffect, useRef, useState, type ReactNode } from 'react';
 import { cn } from '../lib/cn.js';
 import { Button } from '../button/index.js';
 import { Icon } from '../icon/index.js';
-import { SyncPulse, type SyncStatus } from '../sync-pulse/index.js';
-import { BusinessDayChip } from '../business-day/index.js';
-import { Skeleton } from '../../components/primitives/Skeleton.js';
 import {
   Menu,
   MenuTrigger,
@@ -16,9 +13,12 @@ import {
 
 /**
  * TopBar — the app-shell top bar. Composes pump-ds primitives into the real,
- * wired header: sidebar toggle · business-day anchor · (deferred) station
- * label · global search trigger (⌘K) · + New · notifications · sync pulse ·
- * user menu.
+ * wired header: sidebar toggle · brand · station name · global search trigger
+ * (⌘K) · + New · notifications · user menu.
+ *
+ * Ambient status (business day, sync, past-open-day warnings) lives in the
+ * bottom `StatusBar`, not here — the top bar carries navigation and actions
+ * only, and never wraps.
  *
  * Fully controlled/data-driven so AppShell can wire it to real state without
  * the TopBar knowing about routing, queries, or auth.
@@ -67,27 +67,8 @@ export interface TopBarProps {
   onToggleSidebar?: () => void;
   /** Brand wordmark or logo. Defaults to "PumpOS". */
   brand?: ReactNode;
-  /** Current business date string (e.g. "09 Jul 2026"). */
-  businessDate: string;
-  /** Status of current business day. */
-  businessDayStatus: 'open' | 'closed' | 'not-created' | 'unknown' | 'unavailable';
-  /** When false, business-day affordances are hidden (pre-onboarding hub). */
-  showBusinessDay?: boolean;
-  /** Callback when user clicks the business day chip (e.g. opens day-close drawer). */
-  onBusinessDay?: () => void;
-  /** Past business days that remain open and need attention. */
-  businessDays?: BusinessDayOption[];
-  /** State of the past business days query. */
-  businessDaysState?: 'ready' | 'loading' | 'unavailable';
-  /** Callback when user selects a past business day from the menu. */
-  onSelectBusinessDay?: (date: string) => void;
-  /** Callback when the business day menu opens or closes. */
-  onBusinessDayMenuOpenChange?: (open: boolean) => void;
-  /** Active station name (shown when app is scoped to one station). */
-  stationLabel?: string;
-  /** Stations are still in flight: hold the station chip open rather than
-   *  letting it appear late and re-flow the bar. */
-  stationsLoading?: boolean;
+  /** Active station name, shown as quiet text next to the brand. */
+  stationName?: string;
   /** Global search click/shortcut handler. Opens command palette. */
   onOpenSearch?: () => void;
   /** Search button placeholder text. Defaults to "Search customers, suppliers, products…". */
@@ -96,10 +77,6 @@ export interface TopBarProps {
   quickCreate?: QuickCreateAction[];
   /** Notification items. Empty array hides the badge. */
   notifications?: NotificationItem[];
-  /** Sync status for the local-first engine. */
-  syncStatus: SyncStatus;
-  /** Pending mutations waiting to sync. */
-  pendingSyncCount?: number;
   /** User initials for the avatar button. */
   userInitials?: string;
   /** User display name. */
@@ -142,6 +119,32 @@ const IS_MAC =
   typeof window !== 'undefined' &&
   typeof navigator !== 'undefined' &&
   /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+
+/** Below this bar width the centered search would collide with the side
+ *  clusters, so it collapses to an icon button in the right cluster. */
+const SEARCH_COLLAPSE_WIDTH = 900;
+
+/**
+ * Track a container's width via ResizeObserver so the search trigger can be
+ * true-centered when there's room and collapse to an icon when there isn't.
+ * Starts optimistic (wide) so the full search renders on first paint and only
+ * collapses if the box is genuinely narrow.
+ */
+function useContainerWidth<T extends HTMLElement>(): [React.RefObject<T>, number] {
+  const ref = useRef<T>(null);
+  const [width, setWidth] = useState(Number.POSITIVE_INFINITY);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (typeof w === 'number') setWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, width];
+}
 
 const IconBtn = forwardRef<
   HTMLButtonElement,
@@ -239,22 +242,11 @@ const WindowControls: React.FC<{
 export const TopBar: React.FC<TopBarProps> = ({
   onToggleSidebar,
   brand,
-  businessDate,
-  businessDayStatus,
-  showBusinessDay = true,
-  onBusinessDay,
-  businessDays = [],
-  businessDaysState = 'ready',
-  onSelectBusinessDay,
-  onBusinessDayMenuOpenChange,
-  stationLabel,
-  stationsLoading = false,
+  stationName,
   onOpenSearch,
   searchPlaceholder = 'Search customers, suppliers, products\u2026',
   quickCreate = [],
   notifications = [],
-  syncStatus,
-  pendingSyncCount = 0,
   userInitials,
   userName,
   userRole,
@@ -263,6 +255,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   className,
 }) => {
   const notifCount = notifications.length;
+  const [barRef, barWidth] = useContainerWidth<HTMLDivElement>();
+  const searchCollapsed = barWidth < SEARCH_COLLAPSE_WIDTH;
 
   // On desktop this bar IS the window title bar. `data-tauri-drag-region` makes
   // the bar's own surface drag the window (and double-click zoom it); Tauri only
@@ -282,10 +276,11 @@ export const TopBar: React.FC<TopBarProps> = ({
 
   return (
     <div
+      ref={barRef}
       {...dragRegion}
       style={{ paddingLeft: leadingInset, paddingRight: trailingInset }}
       className={cn(
-        'flex h-14 items-center gap-3 border-b border-border-soft bg-surface px-3',
+        'relative flex h-12 items-center gap-2 border-b border-border-soft bg-surface px-3',
         titleBar && 'cursor-default select-none',
         className,
       )}
@@ -311,113 +306,51 @@ export const TopBar: React.FC<TopBarProps> = ({
         </div>
       )}
 
-      {showBusinessDay && (
-        <Menu onOpenChange={onBusinessDayMenuOpenChange}>
-          <MenuTrigger asChild>
-            <BusinessDayChip
-              date={businessDate}
-              status={businessDayStatus}
-              pastOpenCount={businessDays.length}
-            />
-          </MenuTrigger>
-          <MenuContent align="start">
-            <MenuLabel>Business Day</MenuLabel>
-            <MenuItem onSelect={onBusinessDay}>
-              <span className="flex flex-1 items-center justify-between gap-3">
-                <span>Current Business Date · {businessDate}</span>
-                <span
-                  className={cn(
-                    'text-[11px] font-medium',
-                    businessDayStatus === 'open' ? 'text-brand' : 'text-ink-muted',
-                  )}
-                >
-                  {businessDayStatus === 'open'
-                    ? 'Open'
-                    : businessDayStatus === 'closed'
-                      ? 'Closed'
-                      : businessDayStatus === 'not-created'
-                        ? 'Not started'
-                        : businessDayStatus === 'unavailable'
-                          ? 'Unavailable'
-                          : 'Checking'}
-                </span>
-              </span>
-            </MenuItem>
-            {businessDaysState === 'ready' && businessDays.length > 0 && (
-              <>
-                <MenuSeparator />
-                <MenuLabel>Past Open Business Days</MenuLabel>
-              </>
+      {stationName && (
+        <>
+          <div className="mx-0.5 h-4 w-px bg-border-soft" />
+          <span
+            data-testid="topbar-station"
+            className={cn(
+              'select-none truncate text-[12.5px] font-medium text-ink-strong',
+              titleBar && 'pointer-events-none',
             )}
-            {businessDaysState === 'loading' && (
-              <div className="px-2 py-1.5 text-[11px] text-ink-faint">
-                Checking Past Open Business Days
-              </div>
-            )}
-            {businessDaysState === 'unavailable' && (
-              <div className="px-2 py-1.5 text-[11px] text-danger-fg">
-                Past Open Business Days unavailable
-              </div>
-            )}
-            {businessDays.length === 0 && businessDaysState === 'ready' && (
-              <div className="px-2 py-1.5 text-[11px] text-ink-faint">
-                No Past Open Business Days
-              </div>
-            )}
-            {businessDaysState === 'ready' &&
-              businessDays.map((d) => (
-                <MenuItem key={d.date} onSelect={() => onSelectBusinessDay?.(d.date)}>
-                  <span className="flex flex-1 items-center justify-between gap-4">
-                    <span className="flex flex-col">
-                      <span>{d.label}</span>
-                      <span className="text-[10px] text-ink-faint">
-                        {d.closedShiftCount ?? 0} closed · {d.openShiftCount ?? 0} open
-                      </span>
-                    </span>
-                    <span className="text-[11px] text-brand">Open</span>
-                  </span>
-                </MenuItem>
-              ))}
-          </MenuContent>
-        </Menu>
+            title={stationName}
+          >
+            {stationName}
+          </span>
+        </>
       )}
 
-      {(stationLabel || stationsLoading) && (
-        <div
-          data-testid="topbar-station"
-          className="hidden items-center gap-1.5 rounded-button px-2 text-[12px] text-ink-muted lg:inline-flex"
-          title={stationLabel ? 'Single station' : undefined}
+      {/* Global search trigger. True-centered at 50% of the bar when there's
+          room; collapses to an icon button in the right cluster below
+          SEARCH_COLLAPSE_WIDTH so it never collides with the side clusters. */}
+      {!searchCollapsed && (
+        <button
+          onClick={onOpenSearch}
+          aria-label="Search"
+          className="group absolute left-1/2 top-1/2 flex h-8 w-[min(420px,38vw)] -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-button border border-border-soft bg-canvas px-3 text-[12.5px] text-ink-muted transition-colors hover:border-border-strong focus:outline-none focus-visible:outline-none focus-visible:border-border-strong"
         >
-          <Icon name="fuel" size="xs" />
-          {stationLabel ? (
-            <span>{stationLabel}</span>
-          ) : (
-            // Same wrapper, same icon, same padding — only the text is
-            // swapped — so the chip does not shove the search bar sideways
-            // when the station name lands a round trip later.
-            <Skeleton width={92} height={12} radius="4px" />
-          )}
-        </div>
+          <Icon name="search" size="sm" />
+          <span className="flex-1 truncate text-left">{searchPlaceholder}</span>
+          <span className="flex items-center gap-0.5">
+            <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
+              {IS_MAC ? <Icon name="command" size="xs" className="size-2.5" /> : 'Ctrl'}
+            </kbd>
+            <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
+              K
+            </kbd>
+          </span>
+        </button>
       )}
-
-      {/* Global search trigger */}
-      <button
-        onClick={onOpenSearch}
-        className="group flex h-9 max-w-[420px] flex-1 items-center gap-2 rounded-button border border-border-soft bg-canvas px-3 text-[12.5px] text-ink-muted transition-colors hover:border-border-strong focus:outline-none focus-visible:outline-none focus-visible:border-border-strong"
-      >
-        <Icon name="search" size="sm" />
-        <span className="flex-1 truncate text-left">{searchPlaceholder}</span>
-        <span className="flex items-center gap-0.5">
-          <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
-            {IS_MAC ? <Icon name="command" size="xs" className="size-2.5" /> : 'Ctrl'}
-          </kbd>
-          <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
-            K
-          </kbd>
-        </span>
-      </button>
 
       <div className="ml-auto flex items-center gap-1.5">
+        {searchCollapsed && (
+          <IconBtn onClick={onOpenSearch} aria-label="Search">
+            <Icon name="search" size="md" />
+          </IconBtn>
+        )}
+
         {quickCreate.length > 0 && (
           <Menu>
             <MenuTrigger asChild>
@@ -493,8 +426,6 @@ export const TopBar: React.FC<TopBarProps> = ({
             )}
           </MenuContent>
         </Menu>
-
-        <SyncPulse status={syncStatus} pendingCount={pendingSyncCount} />
 
         <div className="mx-0.5 h-5 w-px bg-border-soft" />
 
