@@ -34,7 +34,6 @@ interface ShiftControlBarProps {
   timeZone?: string;
 }
 
-
 const iconForKey = (key: string) => {
   switch (key) {
     case 'expense':

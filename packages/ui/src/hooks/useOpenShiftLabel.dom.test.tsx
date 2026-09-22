@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Drive the hook through a faked shift-status query so no QueryClient/network
 // is involved: this test is about the mapping + ticker, not the fetch.
 const useShiftStatus = vi.fn();
-vi.mock('../query/hooks.js', () => ({ useShiftStatus: (...args: unknown[]) => useShiftStatus(...args) }));
+vi.mock('../query/hooks.js', () => ({
+  useShiftStatus: (...args: unknown[]) => useShiftStatus(...args),
+}));
 
 import { useOpenShiftLabel } from './useOpenShiftLabel.js';
 
@@ -49,7 +51,13 @@ describe('useOpenShiftLabel', () => {
 
   it('renders nothing when the shift lacks a derivable label', () => {
     useShiftStatus.mockReturnValue({
-      data: { activeShift: { businessDate: null, shiftSequence: null, openedAt: '2026-09-22T06:00:00.000Z' } },
+      data: {
+        activeShift: {
+          businessDate: null,
+          shiftSequence: null,
+          openedAt: '2026-09-22T06:00:00.000Z',
+        },
+      },
     });
     render(<Probe />);
     expect(screen.getByTestId('label').textContent).toBe('NONE');
