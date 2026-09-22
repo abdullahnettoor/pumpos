@@ -229,19 +229,44 @@ const App: React.FC = () => {
   const updateState = updates.state;
   const update = (() => {
     const s = updateState;
-    if (!s) return { version: null as string | null, label: undefined as string | undefined, onClick: undefined as (() => void) | undefined };
+    if (!s)
+      return {
+        version: null as string | null,
+        label: undefined as string | undefined,
+        onClick: undefined as (() => void) | undefined,
+      };
     switch (s.phase) {
       case 'available':
-        return { version: s.update.version, label: `Update to v${s.update.version}`, onClick: updates.download };
+        return {
+          version: s.update.version,
+          label: `Update to v${s.update.version}`,
+          onClick: updates.download,
+        };
       case 'postponed':
-        return { version: s.update.version, label: `Update to v${s.update.version}`, onClick: updates.check };
+        return {
+          version: s.update.version,
+          label: `Update to v${s.update.version}`,
+          onClick: updates.check,
+        };
       case 'downloading':
         // In progress: report status, no click.
-        return { version: s.update.version, label: `Downloading v${s.update.version}\u2026`, onClick: undefined };
+        return {
+          version: s.update.version,
+          label: `Downloading v${s.update.version}\u2026`,
+          onClick: undefined,
+        };
       case 'downloaded':
-        return { version: s.update.version, label: `Install v${s.update.version}`, onClick: updates.install };
+        return {
+          version: s.update.version,
+          label: `Install v${s.update.version}`,
+          onClick: updates.install,
+        };
       case 'installing':
-        return { version: s.update.version, label: `Installing v${s.update.version}\u2026`, onClick: undefined };
+        return {
+          version: s.update.version,
+          label: `Installing v${s.update.version}\u2026`,
+          onClick: undefined,
+        };
       case 'relaunch-ready':
         return { version: s.update.version, label: 'Restart to update', onClick: updates.relaunch };
       default:

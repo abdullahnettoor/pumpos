@@ -1,11 +1,7 @@
 import React, { useMemo } from 'react';
 import { type Station } from '@pump/shared';
 import type { NavIntent } from './AppShell.js';
-import {
-  StatusBar,
-  type SyncStatus,
-  type BusinessDayOption,
-} from '../pump-ds/index.js';
+import { StatusBar, type SyncStatus, type BusinessDayOption } from '../pump-ds/index.js';
 import { useBusinessDayStatus } from '../query/hooks.js';
 import { useStationBusinessDate } from '../hooks/useStationBusinessDate.js';
 import { formatBusinessDate } from '../utils/format.js';
@@ -53,10 +49,10 @@ export const AppStatusBar: React.FC<AppStatusBarProps> = ({
   const stationId = selectedStation?.id;
 
   // --- business day ---
-  const settings = ((selectedStation?.settings ?? {}) as {
+  const settings = (selectedStation?.settings ?? {}) as {
     timezone?: string;
     business_day_starts_at?: string;
-  });
+  };
   const businessIso = useStationBusinessDate(settings.timezone, settings.business_day_starts_at);
   const businessDate = formatBusinessDate(businessIso);
   const dayStatusQ = useBusinessDayStatus(stationId, businessIso, {
