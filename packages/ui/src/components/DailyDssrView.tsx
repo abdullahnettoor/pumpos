@@ -4,6 +4,7 @@ import { DEFAULT_DSSR_CONFIG, paperFromStation } from '../services/reports/repor
 import { letterheadFromStation } from '../services/reports/letterhead.js';
 import { Button } from '../pump-ds/index.js';
 import { formatDateTime, formatMoney, inr } from '../utils/format.js';
+import { ReportNote } from './reports/ReportNote.js';
 import { isDesktopApp } from '../utils/platform.js';
 
 interface DailyDssrViewProps {
@@ -448,10 +449,12 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           </span>
         </div>
       </div>
-      <p style={{ fontSize: '10px', color: 'var(--text-faint)', marginBottom: '24px' }}>
-        COGS uses each product&apos;s weighted-average cost at day close. Fuel VAT is output tax
-        (excluded from cost); merchandise cost is pre-tax.
-      </p>
+      <div style={{ marginBottom: '24px' }}>
+        <ReportNote>
+          COGS uses each product&apos;s weighted-average cost at day close. Fuel VAT is output tax
+          (excluded from cost); merchandise cost is pre-tax.
+        </ReportNote>
+      </div>
 
       <h3
         style={{

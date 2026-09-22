@@ -11,6 +11,7 @@ import { computeLedgerRows } from '../ledger/LedgerView.js';
 import type { LedgerResolved } from '../ledger/LedgerView.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
+import { ReportNote } from './ReportNote.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr, formatDate } from '../../utils/format.js';
 import { paperFromStation } from '../../services/reports/reportConfig.js';
@@ -419,6 +420,9 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
             View Ledger
           </Button>
         </div>
+        <div style={{ marginTop: '6px' }}>
+          <ReportNote>{resolvedCfg.caption}</ReportNote>
+        </div>
       </Panel>
 
       {!committed ? (
@@ -481,8 +485,6 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
               );
             })()}
           </KpiStrip>
-
-          <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{resolvedCfg.caption}</div>
 
           <LedgerView
             entries={entries}

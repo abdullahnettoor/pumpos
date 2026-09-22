@@ -197,7 +197,14 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
         value={range}
         onChange={setRange}
         clock={clock}
-        note={`${isSingleDay ? 'Single day' : 'Period total'} · COGS uses each day's weighted-average cost (frozen at close; live today).`}
+        note={
+          <>
+            {isSingleDay ? 'Single day' : 'Period total'} · COGS uses each day&apos;s
+            weighted-average cost (frozen at close; live today). Period profit is the sum of each
+            day&apos;s profit, each computed with that day&apos;s own cost basis, so historical cost
+            changes are respected. Days without a generated DSSR are excluded from the total.
+          </>
+        }
       />
 
       {/* Headline KPIs (period total, or the single day) */}
@@ -545,12 +552,6 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
           </table>
         </Panel>
       )}
-
-      <div style={{ fontSize: '10px', color: 'var(--text-faint)' }}>
-        Period profit is the sum of each day&apos;s profit, each computed with that day&apos;s own
-        cost basis (so historical cost changes are respected). Days without a generated DSSR are
-        excluded from the total.
-      </div>
     </div>
   );
 };
