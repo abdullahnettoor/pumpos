@@ -1,8 +1,28 @@
 import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { schema } from '@pump/db';
 import type { Role } from '@pump/shared';
-import { transactionsRouter } from './transactions.js';
+
+/**
+ * Every ExecutionContext the router builds during a request, so a test can ask
+ * what station the write was actually anchored to — not merely whether it was
+ * refused. The station reaching the context is a separate claim from the
+ * refusal, and it is the one that regressed unnoticed on `/supplier-payments`.
+ */
+const contexts: Array<Record<string, unknown>> = [];
+
+vi.mock('../infra/context.js', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, any>>();
+  return {
+    ...actual,
+    buildContext: (user: unknown, opts: Record<string, unknown> = {}) => {
+      contexts.push(opts);
+      return actual.buildContext(user, opts);
+    },
+  };
+});
+
+const { transactionsRouter } = await import('./transactions.js');
 
 /**
  * Station scope on shift-anchored money writes (#243).
@@ -133,6 +153,10 @@ async function post(
   };
 }
 
+beforeEach(() => {
+  contexts.length = 0;
+});
+
 describe('POST /transactions/sales — station scope', () => {
   it('refuses a shift at a station the Manager is not assigned to', async () => {
     const { status, code } = await postSale(
@@ -227,4 +251,26 @@ describe('shift-anchored writes refuse a foreign station', () => {
 
     expect(code).not.toBe('FORBIDDEN');
   });
+});
+
+describe('the station reaching the ExecutionContext', () => {
+  // Criterion 3 of #243, and the claim the refusal tests do NOT make. The core
+  // station clause is `ctx.stationId && discovered.stationId !== ctx.stationId`
+  // — with no station in the context it no-ops, so a route that refuses
+  // correctly can still hand the core nothing to check with.
+  it.each(SHIFT_ANCHORED_WRITES)(
+    'POST %s anchors to the station resolved from the shift',
+    async (path, extra) => {
+      // An Owner, so authorization passes and what is left to observe is which
+      // station the write was anchored to when the caller named none.
+      await post(
+        path,
+        { ...extra, shiftId: SHIFT },
+        { shiftStation: THEIRS, caller: { role: 'Owner', assignedStationIds: [] } },
+      );
+
+      expect(contexts.some((ctx) => ctx.stationId === THEIRS)).toBe(true);
+      expect(contexts.some((ctx) => ctx.stationId === undefined)).toBe(false);
+    },
+  );
 });

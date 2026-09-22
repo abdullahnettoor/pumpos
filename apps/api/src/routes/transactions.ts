@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { and, desc, eq, gte, ilike, inArray, lt, lte, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
@@ -48,7 +48,7 @@ import {
 import { buildContext, createCommandTrace } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock, stationExistsInOrg, stationNotFound } from '../infra/station-clock.js';
-import { authorizeShiftStation, type ShiftStationAuthorization } from '../infra/shift-station.js';
+import { authorizeShiftStation, findShiftStation } from '../infra/shift-station.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import { refreshShiftSummaryForShift } from '../infra/shift-summary-projection.js';
 import { TimestampDocumentNumberGenerator } from '../infra/doc-numbers.js';
@@ -118,15 +118,9 @@ async function loadStationStateCode(
   stationId?: string | null,
   shiftId?: string | null,
 ): Promise<string | null> {
-  let sid = stationId ?? null;
-  if (!sid && shiftId) {
-    const [sh] = await db
-      .select({ stationId: schema.shifts.stationId })
-      .from(schema.shifts)
-      .where(and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, organizationId)))
-      .limit(1);
-    sid = sh?.stationId ?? null;
-  }
+  // One home for "which station does this shift belong to", shared with the
+  // station guard below — the two must never disagree about the answer.
+  const sid = stationId ?? (shiftId ? await findShiftStation(db, organizationId, shiftId) : null);
   if (!sid) return null;
   const [row] = await db
     .select({ settings: schema.stations.settings })
@@ -139,26 +133,48 @@ async function loadStationStateCode(
     : null;
 }
 
-/** The uniform refusal for a Shift-anchored write the caller may not make (#243). */
-function refuseShiftStation(
-  c: any,
-  reason: Extract<ShiftStationAuthorization, { authorized: false }>['reason'],
-): Response {
-  return reason === 'FORBIDDEN'
-    ? c.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
-        403,
-      )
-    : c.json(
-        {
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'stationId does not match the station of the shift',
-          },
-        },
-        400,
-      );
+/**
+ * Station guard for a Shift-anchored write, and the station its context must
+ * carry (#243).
+ *
+ * Deliberately one call returning both halves. When they were two steps, one
+ * route (`/supplier-payments`) got the refusal but kept `body?.stationId` in
+ * its context, so the core's defence-in-depth clause still no-opped there.
+ * Returning the station the caller must use makes that impossible to forget.
+ */
+async function guardShiftStation(
+  c: Context<{ Variables: Variables }>,
+  body: { shiftId?: string | null; stationId?: string | null },
+): Promise<{ ok: true; stationId: string | undefined } | { ok: false; response: Response }> {
+  const user = c.var.user;
+  const decision = await authorizeShiftStation(
+    c.var.db,
+    user,
+    body?.shiftId,
+    body?.stationId ?? null,
+  );
+  if (decision.authorized) {
+    return { ok: true, stationId: decision.stationId ?? body?.stationId ?? undefined };
+  }
+  return {
+    ok: false,
+    response:
+      decision.reason === 'FORBIDDEN'
+        ? c.json(
+            { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+            403,
+          )
+        : c.json(
+            {
+              success: false,
+              error: {
+                code: 'VALIDATION_ERROR',
+                message: 'stationId does not match the station of the shift',
+              },
+            },
+            400,
+          ),
+  };
 }
 
 async function belongsToOrg(
@@ -1090,16 +1106,9 @@ transactionsRouter.post('/income', writePolicyGuard('POST /transactions/income')
   }
   const clock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
   if (!clock) return stationNotFound(c);
-  // The station is the Shift's, not the caller's to assert: guarding only
-  // a body stationId leaves the guard optional, and a request carrying just
-  // a shiftId reached the core with no station in context (#243).
-  const shiftStation = await authorizeShiftStation(
-    c.var.db,
-    user,
-    body?.shiftId,
-    body?.stationId ?? null,
-  );
-  if (!shiftStation.authorized) return refuseShiftStation(c, shiftStation.reason);
+  // The Shift owns the station; a body stationId is only cross-checked (#243).
+  const shiftStation = await guardShiftStation(c, body);
+  if (!shiftStation.ok) return shiftStation.response;
   // FI4 — place of supply: station state is the supplier side; the payer state
   // (when the operator knows it) makes the entry inter-state (IGST).
   const supplierStateCode = await loadStationStateCode(
@@ -1144,7 +1153,7 @@ transactionsRouter.post('/income', writePolicyGuard('POST /transactions/income')
       events,
     }).execute(
       { ...body, supplierStateCode: supplierStateCode ?? undefined },
-      buildContext(user, { stationId: shiftStation.stationId ?? body?.stationId, ...clock }),
+      buildContext(user, { stationId: shiftStation.stationId, ...clock }),
     );
     if (r.success)
       await new LedgerPostingService(tx).postIncome(user.organizationId, r.data, body?.accountId);
@@ -1311,16 +1320,9 @@ transactionsRouter.post('/expenses', writePolicyGuard('POST /transactions/expens
   }
   const clock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
   if (!clock) return stationNotFound(c);
-  // The station is the Shift's, not the caller's to assert: guarding only
-  // a body stationId leaves the guard optional, and a request carrying just
-  // a shiftId reached the core with no station in context (#243).
-  const shiftStation = await authorizeShiftStation(
-    c.var.db,
-    user,
-    body?.shiftId,
-    body?.stationId ?? null,
-  );
-  if (!shiftStation.authorized) return refuseShiftStation(c, shiftStation.reason);
+  // The Shift owns the station; a body stationId is only cross-checked (#243).
+  const shiftStation = await guardShiftStation(c, body);
+  if (!shiftStation.ok) return shiftStation.response;
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     // When a specific pay-from account is chosen, derive paidFrom/affectsDrawer
     // from its type so drawer reconciliation stays correct (only the shift's
@@ -1355,10 +1357,7 @@ transactionsRouter.post('/expenses', writePolicyGuard('POST /transactions/expens
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
-    }).execute(
-      body,
-      buildContext(user, { stationId: shiftStation.stationId ?? body?.stationId, ...clock }),
-    );
+    }).execute(body, buildContext(user, { stationId: shiftStation.stationId, ...clock }));
     if (r.success) {
       await new LedgerPostingService(tx).postExpense(user.organizationId, r.data, body?.accountId);
       // Late attribution to a closed shift: keep its stored summary current.
@@ -1440,16 +1439,9 @@ transactionsRouter.post(
     }
     const clock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
     if (!clock) return stationNotFound(c);
-    // The station is the Shift's, not the caller's to assert: guarding only
-    // a body stationId leaves the guard optional, and a request carrying just
-    // a shiftId reached the core with no station in context (#243).
-    const shiftStation = await authorizeShiftStation(
-      c.var.db,
-      user,
-      body?.shiftId,
-      body?.stationId ?? null,
-    );
-    if (!shiftStation.authorized) return refuseShiftStation(c, shiftStation.reason);
+    // The Shift owns the station; a body stationId is only cross-checked (#243).
+    const shiftStation = await guardShiftStation(c, body);
+    if (!shiftStation.ok) return shiftStation.response;
     // A "Credit" collection is a credit SALE (a receivable), not a payment. It is
     // recorded on the customer ledger with no drawer/stock impact.
     if (body?.paymentMethod === 'Credit') {
@@ -1460,10 +1452,7 @@ transactionsRouter.post(
           shifts: new DrizzleShiftRepository(tx),
           businessDays: new DrizzleBusinessDayRepository(tx),
           events,
-        }).execute(
-          body,
-          buildContext(user, { stationId: shiftStation.stationId ?? body?.stationId, ...clock }),
-        );
+        }).execute(body, buildContext(user, { stationId: shiftStation.stationId, ...clock }));
         if (r.success)
           await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
         return r;
@@ -1480,10 +1469,7 @@ transactionsRouter.post(
           shifts: new DrizzleShiftRepository(tx),
           businessDays: new DrizzleBusinessDayRepository(tx),
           events,
-        }).execute(
-          body,
-          buildContext(user, { stationId: shiftStation.stationId ?? body?.stationId, ...clock }),
-        );
+        }).execute(body, buildContext(user, { stationId: shiftStation.stationId, ...clock }));
         if (r.success) {
           await new LedgerPostingService(tx).postOmcCardSale(user.organizationId, r.data);
           await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
@@ -1501,10 +1487,7 @@ transactionsRouter.post(
         businessDays: new DrizzleBusinessDayRepository(tx),
         docNumbers,
         events,
-      }).execute(
-        body,
-        buildContext(user, { stationId: shiftStation.stationId ?? body?.stationId, ...clock }),
-      );
+      }).execute(body, buildContext(user, { stationId: shiftStation.stationId, ...clock }));
       if (r.success) {
         await new LedgerPostingService(tx).postCollection(
           user.organizationId,
@@ -1644,20 +1627,13 @@ transactionsRouter.post(
     }
     const clock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
     if (!clock) return stationNotFound(c);
-    // The station is the Shift's, not the caller's to assert: guarding only
-    // a body stationId leaves the guard optional, and a request carrying just
-    // a shiftId reached the core with no station in context (#243).
-    const shiftStation = await authorizeShiftStation(
-      c.var.db,
-      user,
-      body?.shiftId,
-      body?.stationId ?? null,
-    );
-    if (!shiftStation.authorized) return refuseShiftStation(c, shiftStation.reason);
+    // The Shift owns the station; a body stationId is only cross-checked (#243).
+    const shiftStation = await guardShiftStation(c, body);
+    if (!shiftStation.ok) return shiftStation.response;
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const trace = createCommandTrace();
       const ctx = buildContext(user, {
-        stationId: shiftStation.stationId ?? body?.stationId,
+        stationId: shiftStation.stationId,
         correlationId: trace.correlationId,
         groupingRole: 'primary',
         ...clock,
@@ -1684,7 +1660,7 @@ transactionsRouter.post(
         const paymentBody: any = {
           supplierId: body.supplierId,
           amount: Number(body.payment.amount),
-          stationId: shiftStation.stationId ?? body?.stationId,
+          stationId: shiftStation.stationId,
           transactionDate: body?.transactionDate,
           shiftId: body?.shiftId,
           notes: body?.payment?.notes,
@@ -1723,7 +1699,7 @@ transactionsRouter.post(
         }).execute(
           paymentBody,
           buildContext(user, {
-            stationId: shiftStation.stationId ?? body?.stationId,
+            stationId: shiftStation.stationId,
             correlationId: trace.correlationId,
             groupingRole: 'related',
             ...clock,
@@ -1766,16 +1742,9 @@ transactionsRouter.post(
     const body = await c.req.json().catch(() => ({}));
     const clock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
     if (!clock) return stationNotFound(c);
-    // The station is the Shift's, not the caller's to assert: guarding only
-    // a body stationId leaves the guard optional, and a request carrying just
-    // a shiftId reached the core with no station in context (#243).
-    const shiftStation = await authorizeShiftStation(
-      c.var.db,
-      user,
-      body?.shiftId,
-      body?.stationId ?? null,
-    );
-    if (!shiftStation.authorized) return refuseShiftStation(c, shiftStation.reason);
+    // The Shift owns the station; a body stationId is only cross-checked (#243).
+    const shiftStation = await guardShiftStation(c, body);
+    if (!shiftStation.ok) return shiftStation.response;
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       // Chosen pay-from account → derive paidFrom/affectsDrawer so drawer
       // reconciliation stays correct (only the shift Cash-in-Hand affects it).
@@ -1810,7 +1779,7 @@ transactionsRouter.post(
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
         events,
-      }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+      }).execute(body, buildContext(user, { stationId: shiftStation.stationId, ...clock }));
       if (r.success) {
         await new LedgerPostingService(tx).postSupplierPayment(
           user.organizationId,
@@ -1854,13 +1823,8 @@ transactionsRouter.post('/sales', writePolicyGuard('POST /transactions/sales'), 
   // made them optional: a request carrying only a shiftId skipped them and
   // reached the core with no station in context, where the station clause is
   // itself conditional and no-ops (#243). The shift owns the station.
-  const shiftStation = await authorizeShiftStation(
-    c.var.db,
-    user,
-    body?.shiftId,
-    body?.stationId ?? null,
-  );
-  if (!shiftStation.authorized) return refuseShiftStation(c, shiftStation.reason);
+  const shiftStation = await guardShiftStation(c, body);
+  if (!shiftStation.ok) return shiftStation.response;
   const rawBuyer = body.buyer && typeof body.buyer === 'object' ? body.buyer : null;
   const saveAsCustomer = !!body.saveAsCustomer;
   // T5 — supplier side of place of supply for the frozen line-tax split.
@@ -1935,7 +1899,7 @@ transactionsRouter.post('/sales', writePolicyGuard('POST /transactions/sales'), 
       buildContext(user, {
         // The resolved station, so the core's own station clause engages
         // instead of no-opping on an absent context station (#243).
-        stationId: shiftStation.stationId ?? body?.stationId,
+        stationId: shiftStation.stationId,
         correlationId: trace.correlationId,
         groupingRole: 'primary',
       }),

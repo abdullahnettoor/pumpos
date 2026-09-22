@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import { isAuthorizedForStation } from '@pump/shared';
+import type { AuthenticatedPrincipal } from './authenticated-principal.js';
 
 /**
  * The station a Shift belongs to, scoped to the caller's organization (#243).
@@ -50,7 +51,7 @@ export type ShiftStationAuthorization =
  */
 export async function authorizeShiftStation(
   db: DbClient,
-  user: { organizationId: string; role: string; assignedStationIds: string[] },
+  user: AuthenticatedPrincipal,
   shiftId: string | null | undefined,
   claimedStationId?: string | null,
 ): Promise<ShiftStationAuthorization> {
@@ -59,12 +60,7 @@ export async function authorizeShiftStation(
   const stationId = await findShiftStation(db, user.organizationId, shiftId);
   if (!stationId) return { authorized: true, stationId: null };
 
-  if (
-    !isAuthorizedForStation(user as Parameters<typeof isAuthorizedForStation>[0], {
-      organizationId: user.organizationId,
-      stationId,
-    })
-  ) {
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
     return { authorized: false, reason: 'FORBIDDEN' };
   }
 
