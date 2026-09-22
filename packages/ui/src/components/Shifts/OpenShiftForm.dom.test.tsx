@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import {
   renderWithProviders,
   createTestQueryClient,
@@ -329,6 +329,189 @@ describe('OpenShiftForm', () => {
       expect(
         listed([nozzle({ name: 'n10', duCode: 'du-1' }), nozzle({ name: 'N2', duCode: 'DU-1' })]),
       ).toEqual(['N2', 'n10']);
+    });
+  });
+
+  /**
+   * Assignment is DU-centric (#223). An operator's conversation is "who is on
+   * pump 2 and which POS is with them", not "here are all the attendants, and
+   * separately here are all the terminals". The two flat sections made that
+   * mapping something the operator had to hold in their head; the cards make
+   * it the shape of the form.
+   *
+   * The submitted payload is unchanged — `staffAssignments` and
+   * `terminalLinks` were already keyed by DU on the wire, so this is a
+   * presentation change, and these pin that it stayed one.
+   */
+  describe('per-dispenser assignment cards', () => {
+    const DISPENSERS = [
+      { id: 'du-1', code: 'DU-1', name: 'Pump One' },
+      { id: 'du-2', code: 'DU-2', name: 'Pump Two' },
+    ];
+    const STAFF = [
+      { id: 'u-1', fullName: 'Ravi' },
+      { id: 'u-2', fullName: 'Asha' },
+    ];
+    const TERMINALS = [
+      { id: 't-1', label: 'POS A', supportsCard: true, supportsUpi: false },
+      { id: 't-2', label: 'POS B', supportsCard: true, supportsUpi: true },
+      { id: 't-3', label: 'POS C', supportsCard: false, supportsUpi: true },
+    ];
+
+    const assignmentProps = (over: Record<string, unknown> = {}) => ({
+      dispensers: DISPENSERS,
+      staff: STAFF,
+      terminals: TERMINALS,
+      staffAssignments: [
+        { duId: 'du-1', userId: 'u-1' },
+        { duId: 'du-2', userId: '' },
+      ],
+      terminalAssignments: [
+        { terminalId: 't-1', duId: 'du-1' },
+        { terminalId: 't-2', duId: 'du-1' },
+        { terminalId: 't-3', duId: '' },
+      ],
+      ...over,
+    });
+
+    const card = (name: RegExp) => within(screen.getByRole('group', { name }));
+    const attendantValue = (name: RegExp) =>
+      (card(name).getByLabelText(/Attendant/i) as HTMLSelectElement).value;
+    const attachOptions = (name: RegExp) =>
+      Array.from(
+        card(name)
+          .getByLabelText(/Attach POS/i)
+          .querySelectorAll('option'),
+      ).map((o) => o.textContent ?? '');
+
+    it('does not draw a card inside a card', () => {
+      // Each dispenser card is a Panel, so the section wrapping them must not
+      // be one too — nesting puts a second bordered box inside the first,
+      // against the compact/dense house style.
+      renderForm(assignmentProps());
+      const card = screen.getByRole('group', { name: /DU-1/ });
+      expect(card.className).toMatch(/rounded-card/);
+      expect(card.parentElement?.closest('.rounded-card')).toBeNull();
+    });
+
+    it('gives every dispenser its own card', () => {
+      renderForm(assignmentProps());
+      expect(screen.getByRole('group', { name: /DU-1/ })).toBeDefined();
+      expect(screen.getByRole('group', { name: /DU-2/ })).toBeDefined();
+    });
+
+    it('shows the attendant that dispenser is assigned to', () => {
+      renderForm(assignmentProps());
+      expect(attendantValue(/DU-1/)).toBe('u-1');
+    });
+
+    it('reports a staff change against the dispenser whose card it came from', () => {
+      const onStaffAssignmentChange = vi.fn();
+      renderForm(assignmentProps({ onStaffAssignmentChange }));
+
+      fireEvent.change(card(/DU-2/).getByLabelText(/Attendant/i), {
+        target: { value: 'u-2' },
+      });
+
+      expect(onStaffAssignmentChange).toHaveBeenCalledWith('du-2', 'u-2');
+    });
+
+    /** Attached terminals are the ones with a detach control, not merely any
+     *  text on the card — a POS the card can *offer* also appears, as an
+     *  option in its attach select. */
+    const attached = (name: RegExp) =>
+      card(name)
+        .queryAllByRole('button', { name: /Detach/i })
+        .map((b) => b.getAttribute('aria-label') ?? '');
+
+    it('lists a dispenser’s terminals on its own card, and only its own', () => {
+      renderForm(assignmentProps());
+      expect(attached(/DU-1/).some((l) => /POS A/.test(l))).toBe(true);
+      expect(attached(/DU-1/).some((l) => /POS B/.test(l))).toBe(true);
+      // Shift-wide, so DU-1 may attach it — but it is not attached.
+      expect(attached(/DU-1/).some((l) => /POS C/.test(l))).toBe(false);
+    });
+
+    it('attaches more than one POS to one dispenser', () => {
+      renderForm(assignmentProps());
+      const removals = card(/DU-1/).getAllByRole('button', {
+        name: /Detach POS/i,
+      });
+      expect(removals).toHaveLength(2);
+    });
+
+    it('attaches a terminal to the dispenser whose card it was added from', () => {
+      const onTerminalAssignmentChange = vi.fn();
+      renderForm(assignmentProps({ onTerminalAssignmentChange }));
+
+      fireEvent.change(card(/DU-2/).getByLabelText(/Attach POS/i), {
+        target: { value: 't-3' },
+      });
+
+      expect(onTerminalAssignmentChange).toHaveBeenCalledWith('t-3', 'du-2');
+    });
+
+    it('detaches a terminal by clearing its dispenser, which is how shift-wide is spelled', () => {
+      const onTerminalAssignmentChange = vi.fn();
+      renderForm(assignmentProps({ onTerminalAssignmentChange }));
+
+      fireEvent.click(card(/DU-1/).getByRole('button', { name: /Detach POS A/i }));
+
+      expect(onTerminalAssignmentChange).toHaveBeenCalledWith('t-1', '');
+    });
+
+    it('keeps an unassigned terminal visible as shift-wide', () => {
+      // A POS shared across pumps is a real configuration, not an oversight —
+      // it must have somewhere to live or it vanishes from the form.
+      renderForm(assignmentProps());
+      const shared = within(screen.getByRole('group', { name: /Shift-wide/i }));
+      expect(shared.getByText(/POS C/)).toBeDefined();
+      expect(shared.queryByText(/POS A/)).toBeNull();
+    });
+
+    it('offers a terminal held by another dispenser, and says where it is', () => {
+      // One step to move a POS between pumps, but never a silent steal.
+      renderForm(assignmentProps());
+      expect(attachOptions(/DU-2/).some((t) => /POS A/.test(t) && /DU-1/.test(t))).toBe(true);
+    });
+
+    it('does not offer a dispenser the terminals it already holds', () => {
+      renderForm(assignmentProps());
+      expect(attachOptions(/DU-1/).some((t) => /POS A/.test(t))).toBe(false);
+    });
+
+    it('still shows terminals at a station that has no dispensers configured', () => {
+      // No dispensers means nothing to attach to, so every POS is shift-wide —
+      // which is exactly how the parent seeds them.
+      renderForm(
+        assignmentProps({
+          dispensers: [],
+          staffAssignments: [],
+          terminalAssignments: TERMINALS.map((t) => ({ terminalId: t.id, duId: '' })),
+        }),
+      );
+      const shared = within(screen.getByRole('group', { name: /Shift-wide/i }));
+      expect(shared.getByText(/POS A/)).toBeDefined();
+      expect(shared.getByText(/POS C/)).toBeDefined();
+    });
+
+    it('omits the shift-wide panel entirely when every POS is on a dispenser', () => {
+      renderForm(
+        assignmentProps({
+          terminalAssignments: [
+            { terminalId: 't-1', duId: 'du-1' },
+            { terminalId: 't-2', duId: 'du-1' },
+            { terminalId: 't-3', duId: 'du-2' },
+          ],
+        }),
+      );
+      expect(screen.queryByRole('group', { name: /Shift-wide/i })).toBeNull();
+    });
+
+    it('shows a dispenser card at a station with no terminals at all', () => {
+      renderForm(assignmentProps({ terminals: [], terminalAssignments: [] }));
+      expect(screen.getByRole('group', { name: /DU-1/ })).toBeDefined();
+      expect(screen.queryByRole('group', { name: /Shift-wide/i })).toBeNull();
     });
   });
 });
