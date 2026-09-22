@@ -117,6 +117,13 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
         value={range}
         onChange={setRange}
         clock={clock}
+        note={
+          <>
+            Live {account.toLowerCase()} movements from the money ledger (shift sales, collections,
+            expenses, transfers &amp; settlements). Opening balance carries the closing position
+            from before the selected range; closing = opening + in − out.
+          </>
+        }
         actions={
           <div style={{ minWidth: 200 }}>
             <Segmented
@@ -148,12 +155,6 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
           value={inr(totals.closing)}
         />
       </KpiStrip>
-
-      <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-        Live {account.toLowerCase()} movements from the money ledger (shift sales, collections,
-        expenses, transfers &amp; settlements). Opening balance carries the closing position from
-        before the selected range; closing = opening + in − out.
-      </div>
 
       <Panel flush title={`${account} ledger`}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
