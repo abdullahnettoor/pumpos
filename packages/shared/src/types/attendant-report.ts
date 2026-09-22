@@ -28,6 +28,26 @@ export interface AttendantReportNozzle {
   unitPrice: number | null;
 }
 
+/**
+ * One fuel-on-credit chit raised by the Attendant in the Shift.
+ *
+ * A receivable, never drawer cash: it is listed so the operator can see *who*
+ * owes the Shift's credit total, rather than the single number the statement
+ * used to print. Product, quantity and vehicle are shown when the chit
+ * recorded them — a back-dated or merchandise-free chit may carry none.
+ */
+export interface AttendantReportCreditSale {
+  transactionId: string;
+  customerId: string | null;
+  /** "Unknown customer" is the renderer's business; the contract stays honest. */
+  customerName: string | null;
+  vehicleRegistration: string | null;
+  productName: string | null;
+  quantity: number | null;
+  unitPrice: number | null;
+  amount: number;
+}
+
 /** One Dispenser's Handover within a Shift. */
 export interface AttendantReportDispenser {
   handoverId: string;
@@ -69,6 +89,12 @@ export interface AttendantReportShift {
   handoverProductSales: number;
   /** Fuel-on-credit receivables raised by this Attendant in this Shift. */
   creditSales: number;
+  /**
+   * The chits behind `creditSales`, one line each, ordered by customer. Their
+   * amounts sum to `creditSales` — the breakdown never disagrees with the
+   * total it explains.
+   */
+  creditSaleLines: AttendantReportCreditSale[];
   varianceAmount: number;
   testingVolume: number;
 }
