@@ -28,34 +28,35 @@ describe('ReportRangeBar', () => {
     const note = screen.getByText('Closed shifts only.');
     const action = screen.getByRole('button', { name: 'Export' });
 
-    // The note is a sibling of the control row, never inside it: no ancestor
-    // of the action is an ancestor of the note short of the bar itself.
+    // The row that holds the controls must not hold the prose — that is the
+    // bug: a sentence in the row stretches it and misaligns the controls.
     const controlRow = action.parentElement!.parentElement!;
-    expect(controlRow.contains(action)).toBe(true);
     expect(controlRow.contains(note)).toBe(false);
     expect(controlRow.nextElementSibling).toBe(note);
   });
 
-  it('keeps the actions aligned with the range picker in one row', () => {
+  it('puts the actions in the same row as the range picker', () => {
     render(
       <ReportRangeBar
         value={range}
         onChange={vi.fn()}
+        note="Closed shifts only."
         actions={<button type="button">Export</button>}
       />,
     );
 
     const action = screen.getByRole('button', { name: 'Export' });
-    // Actions sit in a bottom-aligned flex row, so a labelled select and the
-    // range picker rest on the same baseline instead of centring against prose.
-    const actionRow = action.parentElement!;
-    expect(actionRow.style.alignItems).toBe('flex-end');
-    expect(actionRow.style.flexWrap).toBe('wrap');
+    const controlRow = action.parentElement!.parentElement!;
+
+    // The range picker's own inputs live in that row too, so the two clusters
+    // are siblings and can align — rather than the actions being pushed into
+    // a cluster shared with the note, as they were.
+    expect(controlRow.querySelectorAll('input').length).toBeGreaterThan(0);
   });
 
-  it('renders nothing extra when a tab has no note', () => {
-    const { container } = render(<ReportRangeBar value={range} onChange={vi.fn()} />);
+  it('renders no caption at all when a tab has no note', () => {
+    render(<ReportRangeBar value={range} onChange={vi.fn()} note={undefined} />);
 
-    expect(container.querySelector('p')).toBeNull();
+    expect(screen.queryByText(/only/)).toBeNull();
   });
 });

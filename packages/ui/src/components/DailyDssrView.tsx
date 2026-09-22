@@ -449,12 +449,10 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           </span>
         </div>
       </div>
-      <div style={{ marginBottom: '24px' }}>
-        <ReportNote>
-          COGS uses each product&apos;s weighted-average cost at day close. Fuel VAT is output tax
-          (excluded from cost); merchandise cost is pre-tax.
-        </ReportNote>
-      </div>
+      <ReportNote className="mb-6">
+        COGS uses each product&apos;s weighted-average cost at day close. Fuel VAT is output tax
+        (excluded from cost); merchandise cost is pre-tax.
+      </ReportNote>
 
       <h3
         style={{

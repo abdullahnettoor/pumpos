@@ -1,7 +1,9 @@
 import React from 'react';
+import { cn } from '../../pump-ds/lib/cn.js';
 
 export interface ReportNoteProps {
   children: React.ReactNode;
+  className?: string;
 }
 
 /**
@@ -16,16 +18,10 @@ export interface ReportNoteProps {
  * the control row stretches the bar and pushes the controls out of alignment,
  * which is what this component exists to stop.
  */
-export const ReportNote: React.FC<ReportNoteProps> = ({ children }) => (
-  <p
-    style={{
-      margin: 0,
-      fontSize: '11px',
-      lineHeight: 1.45,
-      color: 'var(--text-faint)',
-      maxWidth: '78ch',
-    }}
-  >
+export const ReportNote: React.FC<ReportNoteProps> = ({ children, className }) => (
+  // max-w-[78ch]: a long caveat wraps as prose instead of running the width of
+  // a desktop display, where the eye loses the line.
+  <p className={cn('m-0 max-w-[78ch] text-[11px] leading-[1.45] text-ink-faint', className)}>
     {children}
   </p>
 );

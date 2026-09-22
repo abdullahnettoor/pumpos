@@ -420,9 +420,7 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
             View Ledger
           </Button>
         </div>
-        <div style={{ marginTop: '6px' }}>
-          <ReportNote>{resolvedCfg.caption}</ReportNote>
-        </div>
+        <ReportNote className="mt-1.5">{resolvedCfg.caption}</ReportNote>
       </Panel>
 
       {!committed ? (
