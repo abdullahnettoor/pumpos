@@ -273,4 +273,62 @@ describe('OpenShiftForm', () => {
       await waitFor(() => expect(openButton().getAttribute('aria-busy')).toBe('true'));
     });
   });
+
+  /**
+   * The opening-readings grid. The comparator is unit-tested in
+   * `@pump/shared`; what this pins is the part this surface owns — which
+   * fields it hands it. Note the nozzle field here is `name`, not the
+   * `nozzleName` the readings grid uses, which is exactly the asymmetry that
+   * kept the cascade duplicated (#244).
+   */
+  describe('the order opening-reading fields are listed in (#244)', () => {
+    const nozzle = (over: Record<string, unknown>) => ({
+      id: String(over.name ?? 'x'),
+      productCode: 'MS',
+      unit: 'L',
+      ...over,
+    });
+
+    const listed = (nozzles: Record<string, unknown>[]): string[] => {
+      renderForm({ nozzles });
+      return Array.from(document.querySelectorAll('label'))
+        .map((l) => l.textContent ?? '')
+        .filter((t) => t.startsWith('Nozzle '))
+        .map((t) => t.replace(/^Nozzle /, '').split(' —')[0]);
+    };
+
+    it('groups by dispenser first, then orders nozzles naturally', () => {
+      expect(
+        listed([
+          nozzle({ name: 'N10', duCode: 'DU-1' }),
+          nozzle({ name: 'N1', duCode: 'DU-2' }),
+          nozzle({ name: 'N2', duCode: 'DU-1' }),
+        ]),
+      ).toEqual(['N2', 'N10', 'N1']);
+    });
+
+    it('reads the nozzle from `name`, which is not what the readings grid calls it', () => {
+      // Handing it `nozzleName` here would leave every label undefined and the
+      // order arbitrary.
+      expect(
+        listed([nozzle({ name: 'N10', duCode: 'DU-1' }), nozzle({ name: 'N2', duCode: 'DU-1' })]),
+      ).toEqual(['N2', 'N10']);
+    });
+
+    it('keys the dispenser on its code, not its name', () => {
+      expect(
+        listed([
+          nozzle({ name: 'N1', duCode: 'DU-2', duName: 'Alpha' }),
+          nozzle({ name: 'N2', duCode: 'DU-1', duName: 'Zulu' }),
+        ]),
+      ).toEqual(['N2', 'N1']);
+    });
+
+    it('ignores case, so a renamed nozzle does not jump the list', () => {
+      // The delta #241 introduced here and never pinned.
+      expect(
+        listed([nozzle({ name: 'n10', duCode: 'du-1' }), nozzle({ name: 'N2', duCode: 'DU-1' })]),
+      ).toEqual(['N2', 'n10']);
+    });
+  });
 });

@@ -4,6 +4,7 @@ import {
   handoverInvalidationKeys,
   handoverPayloadFingerprint,
   loadHandoverRequestIdentity,
+  HANDOVER_REFRESH_FAILED,
   recordHandoverMutationOptions,
   refreshAfterHandover,
   resolveHandoverRequestIdentity,
@@ -112,6 +113,50 @@ describe('Handover mutation state', () => {
     expect(seen).toEqual(handoverInvalidationKeys('station-1'));
   });
 
+  /**
+   * The refresh runs in the background, so if it fails the operator is left
+   * looking at stale balances on a shift-close screen. #240 sank that into
+   * `console.error`; the rest of the app routes it through `useRunTask`, which
+   * also toasts. The sink is injected so the hook can supply the toasting one.
+   */
+  describe('when the background refresh fails', () => {
+    it('hands the refresh to the injected task runner with an operator-facing message', () => {
+      const runBackgroundTask = vi.fn();
+      const options = recordHandoverMutationOptions(
+        { invalidateQueries: async () => {} },
+        runBackgroundTask,
+      );
+
+      options.onSuccess(accepted, { stationId: 'station-1', payload, idempotencyKey: 'key-1' });
+
+      expect(runBackgroundTask).toHaveBeenCalledTimes(1);
+      const [task, message] = runBackgroundTask.mock.calls[0];
+      expect(task).toBeInstanceOf(Promise);
+      expect(message).toBe(HANDOVER_REFRESH_FAILED);
+    });
+
+    it('does not swallow the rejection before the runner sees it', async () => {
+      // The runner owns the reporting; the options builder must not attach its
+      // own catch and hand over an already-settled promise.
+      const failure = new Error('offline');
+      let handed!: Promise<unknown>;
+      const options = recordHandoverMutationOptions(
+        {
+          invalidateQueries: async () => {
+            throw failure;
+          },
+        },
+        (task) => {
+          handed = task as Promise<unknown>;
+        },
+      );
+
+      options.onSuccess(accepted, { stationId: 'station-1', payload, idempotencyKey: 'key-1' });
+
+      await expect(handed).rejects.toThrow('offline');
+    });
+  });
+
   it('settles the write without waiting for the refetch cascade', async () => {
     // The convention this guards: success feedback comes from the write
     // response. If `onSuccess` ever returns its invalidations, React Query
@@ -121,12 +166,17 @@ describe('Handover mutation state', () => {
       released = resolve;
     });
     let invalidated = 0;
-    const options = recordHandoverMutationOptions({
-      invalidateQueries: async () => {
-        invalidated++;
-        await blocked;
+    const options = recordHandoverMutationOptions(
+      {
+        invalidateQueries: async () => {
+          invalidated++;
+          await blocked;
+        },
       },
-    });
+      (task) => {
+        void task;
+      },
+    );
 
     const returned = options.onSuccess(accepted, {
       stationId: 'station-1',

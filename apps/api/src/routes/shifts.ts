@@ -9,7 +9,8 @@ import {
   canCloseShift,
   canReopenShift,
   canRecordHandover,
-  compareNatural,
+  compareByDispenserThenNozzle,
+  dispenserLabel,
   isAuthorizedForStation,
   isAttendant,
   resolveBusinessDate,
@@ -71,9 +72,18 @@ export const shiftsRouter = new Hono<{ Variables: Variables }>();
  * Deterministic nozzle order for the shift-status payload: by dispenser unit,
  * then by nozzle, both naturally — so N10 follows N2, and a drawer reopened
  * mid-shift shows the same list it showed a minute ago.
+ *
+ * Both the cascade and the dispenser label come from `@pump/shared` so this
+ * route, the readings grid and the open-shift form cannot drift into three
+ * different orders (#244). This route used to key on `duName` alone while both
+ * UI surfaces keyed on `duCode || duName`, so the payload order and the
+ * rendered order could disagree; `dispenserLabel` settles it.
  */
-const compareNozzleRows = <T extends { duName: string; nozzleName: string }>(a: T, b: T): number =>
-  compareNatural(a.duName, b.duName) || compareNatural(a.nozzleName, b.nozzleName);
+const compareNozzleRows = compareByDispenserThenNozzle<{
+  duCode?: string | null;
+  duName?: string | null;
+  nozzleName: string;
+}>(dispenserLabel, (row) => row.nozzleName);
 
 /**
  * Ids that arrive in the request body and are used to look a record up.
