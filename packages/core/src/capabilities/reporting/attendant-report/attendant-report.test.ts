@@ -49,6 +49,27 @@ function row(over: Partial<AttendantHandoverSourceRow> = {}): AttendantHandoverS
   };
 }
 
+/**
+ * A fuel-on-credit chit. The identity fields the breakdown reads default here
+ * so a test that only cares about totals stays about totals.
+ */
+function creditRow(over: Partial<AttendantCreditSaleSourceRow> = {}): AttendantCreditSaleSourceRow {
+  return {
+    transactionId: 'ct-1',
+    shiftId: 'shift-1',
+    attendantId: 'att-1',
+    duId: 'du-1',
+    customerId: 'cust-1',
+    customerName: 'Kerala Roadways',
+    vehicleRegistration: 'KL-07-AB-1234',
+    productName: 'Diesel',
+    quantity: 20,
+    unitPrice: 40,
+    amount: 800,
+    ...over,
+  };
+}
+
 interface SourceOverrides {
   sales?: AttendantSaleSourceRow[];
   creditSales?: AttendantCreditSaleSourceRow[];
@@ -240,9 +261,9 @@ describe('GetAttendantHandoverReport', () => {
         undefined,
         {
           creditSales: [
-            { shiftId: 's-1', attendantId: 'att-1', duId: 'du-1', amount: 800 },
-            { shiftId: 's-2', attendantId: 'att-1', duId: 'du-1', amount: 200 },
-            { shiftId: 's-1', attendantId: 'att-2', duId: 'du-1', amount: 999 },
+            creditRow({ shiftId: 's-1', attendantId: 'att-1', duId: 'du-1', amount: 800 }),
+            creditRow({ shiftId: 's-2', attendantId: 'att-1', duId: 'du-1', amount: 200 }),
+            creditRow({ shiftId: 's-1', attendantId: 'att-2', duId: 'du-1', amount: 999 }),
           ],
         },
       );
@@ -262,8 +283,8 @@ describe('GetAttendantHandoverReport', () => {
         undefined,
         {
           creditSales: [
-            { shiftId: 's-1', attendantId: 'att-1', duId: 'du-1', amount: 800 },
-            { shiftId: 's-1', attendantId: 'att-1', duId: 'du-2', amount: 200 },
+            creditRow({ shiftId: 's-1', attendantId: 'att-1', duId: 'du-1', amount: 800 }),
+            creditRow({ shiftId: 's-1', attendantId: 'att-1', duId: 'du-2', amount: 200 }),
           ],
         },
       );
@@ -281,13 +302,136 @@ describe('GetAttendantHandoverReport', () => {
         [row({ handoverId: 'h-1', shiftId: 's-1', duId: 'du-1' })],
         undefined,
         {
-          creditSales: [{ shiftId: 's-1', attendantId: 'att-1', duId: null, amount: 500 }],
+          creditSales: [
+            creditRow({ shiftId: 's-1', attendantId: 'att-1', duId: null, amount: 500 }),
+          ],
         },
       );
       const res = await result;
       if (!res.success) throw new Error('expected success');
       expect(res.data.attendants[0].shifts[0].creditSales).toBe(500);
       expect(res.data.attendants[0].shifts[0].dispensers[0].creditSales).toBe(0);
+    });
+
+    it('lists each chit under the shift, named, with what was dispensed', async () => {
+      const { result } = run([row({ shiftId: 's-1' })], undefined, {
+        creditSales: [
+          creditRow({
+            transactionId: 'ct-b',
+            shiftId: 's-1',
+            customerId: 'cust-b',
+            customerName: 'Zenith Logistics',
+            vehicleRegistration: 'KL-11-Z-9',
+            productName: 'Diesel',
+            quantity: 30,
+            unitPrice: 40,
+            amount: 1200,
+          }),
+          creditRow({
+            transactionId: 'ct-a',
+            shiftId: 's-1',
+            customerId: 'cust-a',
+            customerName: 'Anand Transports',
+            productName: 'Petrol',
+            quantity: 10,
+            unitPrice: 50,
+            amount: 500,
+          }),
+        ],
+      });
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+      const lines = res.data.attendants[0].shifts[0].creditSaleLines;
+
+      // Ordered by customer, so the same statement exported twice reads the same.
+      expect(lines.map((l) => l.customerName)).toEqual(['Anand Transports', 'Zenith Logistics']);
+      expect(lines[1]).toMatchObject({
+        transactionId: 'ct-b',
+        customerId: 'cust-b',
+        vehicleRegistration: 'KL-11-Z-9',
+        productName: 'Diesel',
+        quantity: 30,
+        unitPrice: 40,
+        amount: 1200,
+      });
+    });
+
+    it('never lets the breakdown disagree with the total it explains', async () => {
+      const { result } = run([row({ shiftId: 's-1' })], undefined, {
+        creditSales: [
+          creditRow({ transactionId: 'ct-1', shiftId: 's-1', amount: 800 }),
+          creditRow({ transactionId: 'ct-2', shiftId: 's-1', duId: null, amount: 250 }),
+          creditRow({ transactionId: 'ct-3', shiftId: 's-1', amount: 125.5 }),
+        ],
+      });
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+      const shift = res.data.attendants[0].shifts[0];
+
+      // Includes the dispenser-less chit: the lines explain the SHIFT total,
+      // which is the number the statement prints beneath them.
+      expect(shift.creditSaleLines).toHaveLength(3);
+      expect(shift.creditSaleLines.reduce((a, l) => a + l.amount, 0)).toBe(shift.creditSales);
+      expect(shift.creditSales).toBe(1175.5);
+    });
+
+    it('keeps one attendant\u2019s chits out of another\u2019s breakdown', async () => {
+      const { result } = run(
+        [
+          row({ shiftId: 's-1' }),
+          row({ handoverId: 'h-2', shiftId: 's-1', attendantId: 'att-2', attendantName: 'Sita' }),
+        ],
+        undefined,
+        {
+          creditSales: [
+            creditRow({ transactionId: 'ct-1', shiftId: 's-1', attendantId: 'att-1', amount: 800 }),
+            creditRow({
+              transactionId: 'ct-2',
+              shiftId: 's-1',
+              attendantId: 'att-2',
+              customerName: 'Other Co',
+              amount: 999,
+            }),
+          ],
+        },
+      );
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+      const ravi = res.data.attendants.find((a) => a.attendantId === 'att-1');
+      const sita = res.data.attendants.find((a) => a.attendantId === 'att-2');
+
+      expect(ravi?.shifts[0].creditSaleLines.map((l) => l.transactionId)).toEqual(['ct-1']);
+      expect(sita?.shifts[0].creditSaleLines.map((l) => l.transactionId)).toEqual(['ct-2']);
+    });
+
+    it('still lists a chit that recorded no product or vehicle', async () => {
+      const { result } = run([row({ shiftId: 's-1' })], undefined, {
+        creditSales: [
+          creditRow({
+            shiftId: 's-1',
+            productName: null,
+            quantity: null,
+            unitPrice: null,
+            vehicleRegistration: null,
+            amount: 400,
+          }),
+        ],
+      });
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+      const [line] = res.data.attendants[0].shifts[0].creditSaleLines;
+
+      expect(line.amount).toBe(400);
+      expect(line.productName).toBeNull();
+      expect(line.quantity).toBeNull();
+    });
+
+    it('leaves the breakdown empty rather than absent for a shift with no chits', async () => {
+      const { result } = run([row({ shiftId: 's-1' })]);
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+
+      expect(res.data.attendants[0].shifts[0].creditSaleLines).toEqual([]);
     });
 
     it('counts a shift component once even when the attendant worked two dispensers', async () => {
@@ -299,7 +443,9 @@ describe('GetAttendantHandoverReport', () => {
         undefined,
         {
           sales: [sale({ captureMechanism: 'POS', totalAmount: 500 })],
-          creditSales: [{ shiftId: 's-1', attendantId: 'att-1', duId: 'du-1', amount: 300 }],
+          creditSales: [
+            creditRow({ shiftId: 's-1', attendantId: 'att-1', duId: 'du-1', amount: 300 }),
+          ],
         },
       );
       const res = await result;

@@ -13,11 +13,9 @@ import {
   type Col,
   type Cell,
 } from './shiftSummaryDoc.js';
-import type {
-  AttendantReportDispenser,
-  AttendantReportEntry,
-  AttendantReportShift,
-} from '@pump/shared';
+import type { AttendantReportDispenser, AttendantReportShift } from '@pump/shared';
+import type { AttendantStatementData } from './attendantStatementData.js';
+import { sliceAttendantStatementByDay } from './attendantStatementDays.js';
 import type { AttendantReportSection, AttendantReportConfig } from './reportConfig.js';
 import { DEFAULT_ATTENDANT_REPORT_CONFIG } from './reportConfig.js';
 
@@ -31,15 +29,8 @@ export {
  * Attendant Handover Report — a per-Attendant statement for one Business-Date
  * range, built for the conversation that follows a persistent shortage. Every
  * figure comes from closed Shifts, so the document never restates later.
- *
- * `data` is one attendant entry from the report plus its period meta.
  */
-export interface AttendantStatementData extends AttendantReportEntry {
-  from: string;
-  to: string;
-  /** The instant the report was composed — never the moment of printing. */
-  generatedAt: string;
-}
+export type { AttendantStatementData };
 
 const shiftLabel = (shift: AttendantReportShift): string =>
   `${shift.businessDate}${shift.shiftTemplateName ? ` · ${shift.shiftTemplateName}` : ''}`;
@@ -173,21 +164,60 @@ const builders: Record<
   },
 
   creditSales: (d) => {
-    const shifts = d.shifts.filter((sh) => sh.creditSales !== 0);
+    const shifts = d.shifts.filter((sh) => sh.creditSales !== 0 || sh.creditSaleLines.length > 0);
     if (shifts.length === 0) return null;
+    /*
+     * One row per chit, not per shift: the operator chasing a receivable needs
+     * the name behind the number. A shift can carry a credit total with no
+     * chits under it — a back-office entry raised against the shift outside
+     * any attendant's handover — and it still prints its own row, so the
+     * section total never loses money the shift line accounted for.
+     */
+    const rows: Cell[][] = [];
+    for (const shift of shifts) {
+      if (shift.creditSaleLines.length === 0) {
+        rows.push([
+          { text: shiftLabel(shift) },
+          { text: '—' },
+          { text: '—' },
+          { text: '—' },
+          { text: inr(shift.creditSales) },
+        ]);
+        continue;
+      }
+      for (const line of shift.creditSaleLines) {
+        rows.push([
+          { text: shiftLabel(shift) },
+          { text: line.customerName || 'Unknown customer' },
+          { text: line.vehicleRegistration || '—' },
+          {
+            text: line.productName
+              ? `${line.productName}${line.quantity != null ? ` · ${vol3(line.quantity)}` : ''}`
+              : '—',
+          },
+          { text: inr(line.amount) },
+        ]);
+      }
+    }
     return (
       <View key="creditSales" wrap={false}>
         <SectionTitle>Fuel-on-Credit Sales</SectionTitle>
         <TableView
           columns={[
-            { header: 'Shift', flex: 3 },
-            { header: 'Credit sales', flex: 1.5, align: 'right', mono: true },
+            { header: 'Shift', flex: 2.5 },
+            { header: 'Customer', flex: 2.5 },
+            { header: 'Vehicle', flex: 1.5 },
+            { header: 'Product', flex: 2 },
+            { header: 'Amount', flex: 1.5, align: 'right', mono: true },
           ]}
-          rows={shifts.map((shift) => [
-            { text: shiftLabel(shift) },
-            { text: inr(shift.creditSales) },
-          ])}
-          total={[{ text: 'Total' }, { text: inr(d.totals.creditSales) }]}
+          rows={rows}
+          total={[
+            { text: 'Total' },
+            { text: '' },
+            { text: '' },
+            { text: '' },
+            { text: inr(d.totals.creditSales) },
+          ]}
         />
       </View>
     );
@@ -286,19 +316,102 @@ const builders: Record<
   ),
 };
 
+/**
+ * Where each section belongs once a statement paginates by day.
+ *
+ * `cover` describes the range as a whole, `day` describes one day's shifts,
+ * and `variance` is `both` — the cover carries the net figure the recovery
+ * conversation opens with, each day carries its own. Exhaustive by type, so a
+ * new section fails to compile until it has been placed.
+ */
+const SECTION_PLACEMENT: Record<AttendantReportSection, 'cover' | 'day' | 'both'> = {
+  header: 'cover',
+  summary: 'cover',
+  signature: 'cover',
+  fuelSales: 'day',
+  merchandise: 'day',
+  creditSales: 'day',
+  terminals: 'day',
+  variance: 'both',
+};
+
+const placedOn = (where: 'cover' | 'day') => (key: AttendantReportSection) =>
+  SECTION_PLACEMENT[key] === where || SECTION_PLACEMENT[key] === 'both';
+
+/** A day page's own title — larger than a section head, it is the page's subject. */
+const dayTitle = { fontSize: 13, color: C.ink, fontWeight: 700 as const, marginBottom: 2 };
+
+const PageFooter: React.FC<{ generatedAt: string }> = ({ generatedAt }) => (
+  <View style={s.foot} fixed>
+    {/* The instant the report was composed — a re-print must not claim to
+        be newer than the data it prints. */}
+    <Text>Generated {fmtDateTime(generatedAt)}</Text>
+    <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+  </View>
+);
+
+/**
+ * Attendant statement.
+ *
+ * One Business Day reads as one document — so a single-day export stays a
+ * single flow, and a range is cut into a page per day behind a cover carrying
+ * the range's collective figures. The day pages are the same statement
+ * sections pointed at one day's shifts (see `sliceAttendantStatementByDay`),
+ * so a figure never has two renderers that could drift apart.
+ */
 export const AttendantReportDoc: React.FC<{
   data: AttendantStatementData;
   config?: AttendantReportConfig;
-}> = ({ data, config = DEFAULT_ATTENDANT_REPORT_CONFIG }) => (
-  <Document>
-    <Page size={config.paper} style={s.page}>
-      {config.sections.map((key) => builders[key]?.(data, config))}
-      <View style={s.foot} fixed>
-        {/* The instant the report was composed — a re-print must not claim to
-            be newer than the data it prints. */}
-        <Text>Generated {fmtDateTime(data.generatedAt)}</Text>
-        <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
-      </View>
-    </Page>
-  </Document>
-);
+}> = ({ data, config = DEFAULT_ATTENDANT_REPORT_CONFIG }) => {
+  const days = sliceAttendantStatementByDay(data);
+
+  if (days.length <= 1) {
+    return (
+      <Document>
+        <Page size={config.paper} style={s.page}>
+          {config.sections.map((key) => builders[key]?.(data, config))}
+          <PageFooter generatedAt={data.generatedAt} />
+        </Page>
+      </Document>
+    );
+  }
+
+  const daySections = config.sections.filter(placedOn('day'));
+  const coverSections = config.sections.filter(placedOn('cover'));
+
+  return (
+    <Document>
+      <Page size={config.paper} style={s.page}>
+        {coverSections
+          .filter((key) => key !== 'signature')
+          .map((key) => builders[key]?.(data, config))}
+        <View style={{ marginTop: 12 }}>
+          <Text style={s.h2}>Days in this statement</Text>
+          <Text style={s.sub}>
+            {days.length} business days · one page each, from {days[0].businessDate} to{' '}
+            {days[days.length - 1].businessDate}.
+          </Text>
+        </View>
+        {/* Signed at the end of the cover: the acknowledgement is of the
+            period's net variance, not of any one day. */}
+        {coverSections.includes('signature') ? builders.signature?.(data, config) : null}
+        <PageFooter generatedAt={data.generatedAt} />
+      </Page>
+
+      {days.map((day) => (
+        <Page key={day.businessDate} size={config.paper} style={s.page}>
+          <View>
+            <Text style={dayTitle}>{day.businessDate}</Text>
+            <Text style={s.sub}>
+              {data.attendantName} · {day.data.shiftsWorked}{' '}
+              {day.data.shiftsWorked === 1 ? 'shift' : 'shifts'} · net variance{' '}
+              {inr(day.data.totals.varianceAmount)}
+            </Text>
+          </View>
+          {daySections.map((key) => builders[key]?.(day.data, config))}
+          <PageFooter generatedAt={data.generatedAt} />
+        </Page>
+      ))}
+    </Document>
+  );
+};

@@ -257,9 +257,16 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
 
     const rows = await this.db
       .select({
+        transactionId: schema.customerTransactions.id,
         shiftId: schema.customerTransactions.shiftId,
         attendantId: schema.customerTransactions.attendantId,
         duId: schema.customerTransactions.duId,
+        customerId: schema.customerTransactions.customerId,
+        customerName: schema.customers.name,
+        vehicleRegistration: schema.customerVehicles.registrationNumber,
+        productName: schema.products.name,
+        quantity: schema.customerTransactions.quantity,
+        unitPrice: schema.customerTransactions.unitPrice,
         amount: schema.customerTransactions.amount,
       })
       .from(schema.customerTransactions)
@@ -267,12 +274,28 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
         schema.businessDays,
         eq(schema.customerTransactions.businessDayId, schema.businessDays.id),
       )
+      // Left joins throughout: a chit names a customer, but product and vehicle
+      // are optional on the ledger row, and a missing one must not drop the
+      // chit out of a breakdown that has to sum to the shift total.
+      .leftJoin(schema.customers, eq(schema.customerTransactions.customerId, schema.customers.id))
+      .leftJoin(
+        schema.customerVehicles,
+        eq(schema.customerTransactions.vehicleId, schema.customerVehicles.id),
+      )
+      .leftJoin(schema.products, eq(schema.customerTransactions.productId, schema.products.id))
       .where(and(...filters));
 
     return rows.map((r) => ({
+      transactionId: r.transactionId,
       shiftId: r.shiftId as string,
       attendantId: r.attendantId as string,
       duId: r.duId ?? null,
+      customerId: r.customerId ?? null,
+      customerName: r.customerName ?? null,
+      vehicleRegistration: r.vehicleRegistration ?? null,
+      productName: r.productName ?? null,
+      quantity: r.quantity == null ? null : num(r.quantity),
+      unitPrice: r.unitPrice == null ? null : num(r.unitPrice),
       amount: num(r.amount),
     }));
   }
