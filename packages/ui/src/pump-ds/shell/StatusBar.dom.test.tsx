@@ -45,7 +45,13 @@ describe('StatusBar business day', () => {
 
   it('exposes the business-day segment as a menu trigger', () => {
     const days: BusinessDayOption[] = [
-      { date: '2026-07-07', label: 'Mon, 07 Jul', status: 'open', openShiftCount: 1, closedShiftCount: 2 },
+      {
+        date: '2026-07-07',
+        label: 'Mon, 07 Jul',
+        status: 'open',
+        openShiftCount: 1,
+        closedShiftCount: 2,
+      },
     ];
     const onSelect = vi.fn();
     render(<StatusBar {...baseProps} businessDays={days} onSelectBusinessDay={onSelect} />);
@@ -65,7 +71,9 @@ describe('StatusBar past-open warning', () => {
       { date: '2026-07-06', label: 'Sun, 06 Jul' },
     ];
     render(<StatusBar {...baseProps} businessDays={days} />);
-    expect(screen.getByTestId('statusbar-past-open-warning').textContent).toContain('2 past days open');
+    expect(screen.getByTestId('statusbar-past-open-warning').textContent).toContain(
+      '2 past days open',
+    );
   });
 
   it('is absent when no past days are open', () => {

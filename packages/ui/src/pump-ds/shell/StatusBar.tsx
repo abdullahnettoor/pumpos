@@ -27,12 +27,7 @@ import type { BusinessDayOption } from './TopBar.js';
  * is desktop-only, gated by the container.
  */
 
-export type BusinessDayStatus =
-  | 'open'
-  | 'closed'
-  | 'not-created'
-  | 'unknown'
-  | 'unavailable';
+export type BusinessDayStatus = 'open' | 'closed' | 'not-created' | 'unknown' | 'unavailable';
 
 export interface StatusBarProps {
   /** Sync status for the local-first engine. */
@@ -79,7 +74,10 @@ export interface StatusBarProps {
   className?: string;
 }
 
-const SYNC_META: Record<SyncStatus, { tone: 'success' | 'warning' | 'danger' | 'neutral'; label: string; pulse: boolean }> = {
+const SYNC_META: Record<
+  SyncStatus,
+  { tone: 'success' | 'warning' | 'danger' | 'neutral'; label: string; pulse: boolean }
+> = {
   online: { tone: 'success', label: 'Synced', pulse: true },
   synced: { tone: 'success', label: 'Synced', pulse: true },
   pending: { tone: 'warning', label: 'Pending', pulse: true },
@@ -102,9 +100,11 @@ function businessDayStatusLabel(status: BusinessDayStatus): string {
   }
 }
 
-const Segment: React.FC<
-  React.HTMLAttributes<HTMLDivElement> & { as?: 'div' }
-> = ({ className, children, ...rest }) => (
+const Segment: React.FC<React.HTMLAttributes<HTMLDivElement> & { as?: 'div' }> = ({
+  className,
+  children,
+  ...rest
+}) => (
   <div
     className={cn(
       'inline-flex h-full items-center gap-1.5 px-2.5 text-[11.5px] text-ink-muted',
@@ -177,10 +177,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                 data-testid="statusbar-business-day"
                 className="inline-flex h-full items-center gap-1.5 rounded-none px-2.5 text-[11.5px] text-ink-muted transition-colors hover:bg-surface hover:text-ink-strong focus:outline-none focus-visible:outline-none"
               >
-                <Dot
-                  tone={businessDayStatus === 'open' ? 'success' : 'neutral'}
-                  size="sm"
-                />
+                <Dot tone={businessDayStatus === 'open' ? 'success' : 'neutral'} size="sm" />
                 <span>
                   {businessDate} · {businessDayStatusLabel(businessDayStatus)}
                 </span>
@@ -243,10 +240,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
 
           {/* Past-open-days warning — present only when days are open. */}
           {businessDaysState === 'ready' && pastOpenCount > 0 && (
-            <Segment
-              className="text-warning-fg"
-              data-testid="statusbar-past-open-warning"
-            >
+            <Segment className="text-warning-fg" data-testid="statusbar-past-open-warning">
               <Icon name="alert-triangle" size="xs" />
               <span>
                 {pastOpenCount} past {pastOpenCount === 1 ? 'day' : 'days'} open

@@ -116,10 +116,10 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
 
   const currentBusinessDayStatusQ = useBusinessDayStatus(stationId, currentBusinessDate, {
     enabled: !!stationId,
-  } as any);
+  });
   const businessDayStatusQ = useBusinessDayStatus(stationId, businessDate, {
     enabled: !!stationId,
-  } as any);
+  });
   const selectedState = businessDayStatusQ.data?.requestedState;
   const previewQ = useDailyDssrPreview(stationId, businessDate, {
     enabled: !!stationId && (selectedState === 'OPEN' || selectedState === 'NOT_CREATED'),
