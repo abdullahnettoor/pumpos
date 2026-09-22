@@ -21,6 +21,7 @@ import {
   CloudPaymentTerminalService,
   CloudAccessService,
 } from '../services/cloud.js';
+import type { BusinessDayStatusResponse } from '../services/cloud.js';
 import type { AccessDocument, AttendantHandoverReport, AttendantReportFilters } from '@pump/shared';
 
 /**
@@ -514,7 +515,7 @@ export function useShiftStatus(
 export function useBusinessDayStatus(
   stationId: string | null | undefined,
   businessDate?: string,
-  options?: Options<any>,
+  options?: Options<BusinessDayStatusResponse>,
 ) {
   return useQuery({
     queryKey: queryKeys.businessDayStatus(stationId ?? '', businessDate),

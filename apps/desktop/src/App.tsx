@@ -222,6 +222,59 @@ const App: React.FC = () => {
       ]
     : undefined;
 
+  // Status-bar version/update. The version shows on desktop (web passes none).
+  // The chip's label and click follow the updater phase, so it reports progress
+  // ("Downloading…") without inviting a click on an action already under way,
+  // and offers the right next step ("Restart to update") when there is one.
+  const updateState = updates.state;
+  const update = (() => {
+    const s = updateState;
+    if (!s)
+      return {
+        version: null as string | null,
+        label: undefined as string | undefined,
+        onClick: undefined as (() => void) | undefined,
+      };
+    switch (s.phase) {
+      case 'available':
+        return {
+          version: s.update.version,
+          label: `Update to v${s.update.version}`,
+          onClick: updates.download,
+        };
+      case 'postponed':
+        return {
+          version: s.update.version,
+          label: `Update to v${s.update.version}`,
+          onClick: updates.check,
+        };
+      case 'downloading':
+        // In progress: report status, no click.
+        return {
+          version: s.update.version,
+          label: `Downloading v${s.update.version}\u2026`,
+          onClick: undefined,
+        };
+      case 'downloaded':
+        return {
+          version: s.update.version,
+          label: `Install v${s.update.version}`,
+          onClick: updates.install,
+        };
+      case 'installing':
+        return {
+          version: s.update.version,
+          label: `Installing v${s.update.version}\u2026`,
+          onClick: undefined,
+        };
+      case 'relaunch-ready':
+        return { version: s.update.version, label: 'Restart to update', onClick: updates.relaunch };
+      default:
+        // idle / checking / up-to-date / failed → no chip (plain version shows).
+        return { version: null, label: undefined, onClick: undefined };
+    }
+  })();
+
   const handleStationChange = (station: Station) => {
     pickStation(station.id);
     setCurrentPath('/dashboard');
@@ -532,6 +585,10 @@ const App: React.FC = () => {
       onStationChange={handleStationChange}
       environmentTag={environmentTag}
       userMenuExtras={updateMenuEntries}
+      appVersion={updates.currentVersion}
+      updateAvailableVersion={update.version}
+      updateLabel={update.label}
+      onUpdate={update.onClick}
     >
       {renderContent()}
       <QuickEntryHost selectedStation={selectedStation} />

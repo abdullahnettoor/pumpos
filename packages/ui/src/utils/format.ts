@@ -62,6 +62,21 @@ export function toDate(value: string | number | Date | null | undefined): Date |
 
 const DATE_FULL: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', year: 'numeric' };
 
+/**
+ * Format a business date (`YYYY-MM-DD`) as `09 Jul 2026`.
+ *
+ * Business dates are a bare calendar day with no time or zone (see
+ * AGENTS.md "Business-Day Date Resolution"), so this formats in UTC: building a
+ * local-midnight Date would let a negative-offset timezone roll the label back
+ * to the previous day. Returns the input unchanged if it isn't a valid date.
+ */
+export function formatBusinessDate(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.toLocaleDateString('en-IN', { ...DATE_FULL, timeZone: 'UTC' });
+}
+
 /** Canonical date: `11 Jul 2026`. Pass `compact` for a 2-digit year (`11 Jul 26`). */
 export function formatDate(
   value: string | number | Date | null | undefined,

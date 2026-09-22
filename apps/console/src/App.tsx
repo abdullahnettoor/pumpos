@@ -628,6 +628,7 @@ export const App: React.FC = () => {
       onStationChange={handleStationChange}
       environmentTag={environmentTag}
       stationReady={!!isStationReady}
+      appVersion={__APP_VERSION__}
     >
       {renderContent()}
       <QuickEntryHost selectedStation={selectedStation} />
