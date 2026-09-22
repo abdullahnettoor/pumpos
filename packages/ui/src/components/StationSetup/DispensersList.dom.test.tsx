@@ -33,12 +33,21 @@ const dispensers = [
   { id: 'du-3', stationId: 'st-1', name: 'Pump Three', code: 'DU-3', status: 'INACTIVE' },
 ];
 
+/**
+ * Mocked at the QUERY layer, not just the service. Taking a pump out of
+ * service changes what the shifts screen may offer, and that cache is a
+ * different (operational, 15s) tier from the dispenser list — a test that only
+ * watches the service call cannot tell whether it was refreshed.
+ */
+const invalidateOperational = vi.fn();
+
 vi.mock('../../query/hooks.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   useDispensers: () => ({ data: dispensers, isPending: false }),
   useTanks: () => ({ data: [], isPending: false }),
   useProducts: () => ({ data: [], isPending: false }),
   useNozzles: () => ({ data: [], isPending: false }),
+  useInvalidateOperational: () => invalidateOperational,
 }));
 
 const { DispensersList } = await import('./DispensersList.js');
@@ -53,6 +62,7 @@ describe('DispensersList — taking a pump out of service', () => {
   afterEach(() => {
     cleanup();
     updateDispenser.mockReset().mockResolvedValue({});
+    invalidateOperational.mockReset().mockResolvedValue(undefined);
   });
 
   it('offers to take an in-service pump out', () => {
@@ -108,5 +118,40 @@ describe('DispensersList — taking a pump out of service', () => {
     fireEvent.click(card('Pump One').getByRole('button', { name: /maintenance/i }));
     await waitFor(() => expect(screen.getByText(/Network down/i)).toBeDefined());
     expect(screen.queryByText(/is out of service\./i)).toBeNull();
+  });
+
+  describe('refreshing what the change reaches', () => {
+    it('refreshes the shifts screen, which decides whether the pump is offered', async () => {
+      // The dispenser list and shift status are different cache tiers. Only
+      // invalidating the list leaves shift open still offering a pump that was
+      // just taken out of service, for up to the operational staleness window.
+      render();
+      fireEvent.click(card('Pump One').getByRole('button', { name: /maintenance/i }));
+      await waitFor(() => expect(invalidateOperational).toHaveBeenCalledTimes(1));
+    });
+
+    it('refreshes it when a pump comes back into service too', async () => {
+      render();
+      fireEvent.click(card('Pump Two').getByRole('button', { name: /return to service/i }));
+      await waitFor(() => expect(invalidateOperational).toHaveBeenCalledTimes(1));
+    });
+
+    it('does not refresh anything when the change itself failed', async () => {
+      updateDispenser.mockRejectedValueOnce(new Error('Network down'));
+      render();
+      fireEvent.click(card('Pump One').getByRole('button', { name: /maintenance/i }));
+      await waitFor(() => expect(screen.getByText(/Network down/i)).toBeDefined());
+      expect(invalidateOperational).not.toHaveBeenCalled();
+    });
+
+    it('still reports success when only the refresh fails', async () => {
+      // The status did change. Reporting that as a failed change would send
+      // the operator back to flip it again.
+      invalidateOperational.mockRejectedValueOnce(new Error('offline'));
+      render();
+      fireEvent.click(card('Pump One').getByRole('button', { name: /maintenance/i }));
+      await waitFor(() => expect(screen.getByText(/is out of service\./i)).toBeDefined());
+      expect(screen.queryByText(/Could not change the dispenser status/i)).toBeNull();
+    });
   });
 });

@@ -167,15 +167,24 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     try {
       setStatusBusyId(du.id);
       await dispenserService.updateDispenser(du.id, { status: next });
-      await refreshDispensers();
       toast.success(
         next === 'MAINTENANCE' ? `${du.name} is out of service.` : `${du.name} is back in service.`,
       );
     } catch (err: any) {
       toast.error(err?.message || 'Could not change the dispenser status.');
+      return;
     } finally {
       setStatusBusyId(null);
     }
+    // Refreshes run after the toast and outside the try: the status HAS
+    // changed by now, so a failed refresh must not be reported as a failed
+    // change. Same shape as `handleCreate` below.
+    runTask(refreshDispensers(), 'Status saved, but the dispenser list could not be refreshed.');
+    // Shift status is a separate, operational cache (15s) that now derives
+    // from dispenser status — whether a pump is offered at shift open, and
+    // whether its nozzles are read. Without this the shifts screen keeps
+    // offering a pump that was just taken out of service.
+    runTask(invalidateOperational(), 'Status saved, but the shifts screen may be out of date.');
   };
 
   const handleCreate = async (e: React.FormEvent) => {

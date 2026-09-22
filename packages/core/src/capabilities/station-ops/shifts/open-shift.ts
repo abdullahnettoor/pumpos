@@ -102,6 +102,17 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
       return err(validationError('Invalid OpenShift command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
+    await this.deps.businessDays.lockStation(ctx.organizationId, cmd.stationId);
+    const existingOpen = await this.deps.shifts.findOpenByStation(
+      ctx.organizationId,
+      cmd.stationId,
+    );
+    if (existingOpen) {
+      return err(
+        conflictError('A shift is already open at this station', { shiftId: existingOpen.id }),
+      );
+    }
+
     /*
      * Every dispenser in service needs somebody accountable for it.
      *
@@ -116,6 +127,13 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
      * The escape is the dispenser's own status: a pump nobody is working is a
      * pump not in use. One attendant may cover several, so a short-staffed
      * shift spreads rather than skips.
+     *
+     * Read after `lockStation`, and used for BOTH this check and the nozzle
+     * seeding below, so the two can never disagree about which pumps are
+     * running. The station lock does not cover `UpdateDispenser`, though, so a
+     * status flip landing inside this transaction could still be missed — the
+     * window is one transaction wide and the outcome is a shift that ran a
+     * pump for one period longer than intended, which the next open corrects.
      */
     const inServiceDuIds = new Set(
       await this.deps.dispensers.listInServiceIds(ctx.organizationId, cmd.stationId),
@@ -127,17 +145,6 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
         validationError('Every dispenser in service needs an attendant before the shift can open', {
           duIds: unattendedDuIds,
         }),
-      );
-    }
-
-    await this.deps.businessDays.lockStation(ctx.organizationId, cmd.stationId);
-    const existingOpen = await this.deps.shifts.findOpenByStation(
-      ctx.organizationId,
-      cmd.stationId,
-    );
-    if (existingOpen) {
-      return err(
-        conflictError('A shift is already open at this station', { shiftId: existingOpen.id }),
       );
     }
 
