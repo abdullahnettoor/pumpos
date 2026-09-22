@@ -67,6 +67,7 @@ const openShiftJson = {
   openingCash: 5000,
   templateName: 'Morning',
   businessDate: '2026-03-15',
+  shiftSequence: 2,
   scheduledStartTime: '06:00',
   scheduledEndTime: '14:00',
   openedByName: 'Owner',
@@ -107,6 +108,11 @@ describe('GET /status?lite=true query-count regression', () => {
     expect(body.data.activeShift.id).toBe('sh-open');
     expect(body.data.activeShift.templateName).toBe('Morning');
     expect(body.data.activeShift.businessDate).toBe('2026-03-15');
+    // …including the fields the status-bar open-shift indicator derives its
+    // label + elapsed time from (business date, sequence, opened-at). See
+    // useOpenShiftLabel / #265.
+    expect(body.data.activeShift.shiftSequence).toBe(2);
+    expect(body.data.activeShift.openedAt).toBe('2026-03-15T06:00:00.000Z');
     expect(body.data.businessDay.id).toBe('bd-1');
     expect(body.data.recentClosedShifts).toHaveLength(1);
     expect(body.data.recentClosedShifts[0].templateName).toBe('Night');

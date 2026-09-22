@@ -8,6 +8,7 @@ import {
 } from '../pump-ds/index.js';
 import { useBusinessDayStatus } from '../query/hooks.js';
 import { useStationBusinessDate } from '../hooks/useStationBusinessDate.js';
+import { useOpenShiftLabel } from '../hooks/useOpenShiftLabel.js';
 import { formatBusinessDate } from '../utils/format.js';
 
 /**
@@ -84,6 +85,9 @@ export const AppStatusBar: React.FC<AppStatusBarProps> = ({
     }));
   }, [dayStatus]);
 
+  // --- open shift ---
+  const openShiftLabel = useOpenShiftLabel(stationReady ? stationId : undefined);
+
   return (
     <StatusBar
       syncStatus={syncStatus}
@@ -97,11 +101,7 @@ export const AppStatusBar: React.FC<AppStatusBarProps> = ({
         dayStatusQ.isError ? 'unavailable' : dayStatusQ.isPending ? 'loading' : 'ready'
       }
       onSelectBusinessDay={(date) => onNavigate('/shifts', { openBusinessDayDate: date })}
-      // openShiftLabel is intentionally not wired yet: the shell has no cached
-      // shift-status query hook, and adding one (with its tiered caching and
-      // operational invalidations) is tracked in #265. The pure StatusBar
-      // already supports the indicator so the container can pass it there
-      // without touching pump-ds.
+      openShiftLabel={openShiftLabel}
       appVersion={appVersion}
       updateAvailableVersion={updateAvailableVersion}
       updateLabel={updateLabel}
