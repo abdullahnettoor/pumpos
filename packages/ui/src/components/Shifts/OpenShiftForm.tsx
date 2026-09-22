@@ -245,6 +245,30 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
       return !duId || !knownDuIds.has(duId);
     });
   }, [dispensers, terminals, terminalAssignments]);
+
+  /**
+   * Dispensers being offered with nobody on them.
+   *
+   * This blocks the open rather than warning, because it is not correctable
+   * afterwards: `shift_staff_assignments` is written only by `OpenShift`, and
+   * no route adds one to a shift that is already running. An unassigned
+   * dispenser therefore cannot be handed over for the life of that shift, and
+   * the only way out is to close and re-open, discarding the opening
+   * readings (#258).
+   *
+   * There is deliberately no "skip this pump for now" here. A pump nobody is
+   * working is a pump that is not in use, which is what the dispenser's own
+   * MAINTENANCE status already means — and the shift-status read filters those
+   * out, so one never reaches this form. A short-staffed shift spreads one
+   * attendant across several pumps instead.
+   */
+  const unattendedDispensers = useMemo(
+    () =>
+      (dispensers ?? []).filter(
+        (du: any) => !staffAssignments.find((a) => a.duId === du.id)?.userId,
+      ),
+    [dispensers, staffAssignments],
+  );
   const [customDateMode, setCustomDateMode] = useState(false);
   // The date the business-day query follows: whatever the operator picked, else
   // the prop. Derived rather than synced, so a new prop reaches the query
@@ -509,8 +533,9 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
           <section>
             <h3 style={sectionHeading}>Dispenser assignment</h3>
             <p style={sectionNote}>
-              Who is on each pump, and which POS is with them. Both are optional; a POS left
-              shift-wide is shared across pumps.
+              Who is on each pump, and which POS is with them. Every pump in service needs an
+              attendant — it cannot be given one after the shift opens. A POS is optional, and one
+              left shift-wide is shared across pumps.
             </p>
             <div
               style={{
@@ -552,7 +577,31 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
           </Panel>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            gap: '12px',
+          }}
+        >
+          {unattendedDispensers.length > 0 && (
+            <p
+              // A blocking validation message: announced, and the only stable
+              // handle on it — the text spans several nodes.
+              role="alert"
+              style={{ ...sectionNote, marginBottom: 0, textAlign: 'right' }}
+            >
+              {/* Named, not counted: the operator has to know which card to go
+                  back to, and on a wide grid "2 dispensers" does not say. */}
+              {unattendedDispensers
+                .map((du: any) => dispenserLabel({ duCode: du.code, duName: du.name }))
+                .join(', ')}{' '}
+              {unattendedDispensers.length === 1 ? 'needs an attendant' : 'need an attendant'} — a
+              dispenser cannot be assigned one after the shift opens. Put a pump that is not in use
+              into maintenance instead.
+            </p>
+          )}
           <Button
             type="submit"
             variant="primary"
@@ -562,7 +611,8 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
               formBusinessDate > currentBusinessDate ||
               businessDayState === 'CLOSED' ||
               businessDayState === 'UNKNOWN' ||
-              businessDayState === 'UNAVAILABLE'
+              businessDayState === 'UNAVAILABLE' ||
+              unattendedDispensers.length > 0
             }
             leftIcon={<Play style={{ fill: 'currentColor' }} />}
           >

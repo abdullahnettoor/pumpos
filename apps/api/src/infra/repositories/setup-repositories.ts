@@ -2,6 +2,7 @@ import { and, eq, inArray, desc } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import type { Role } from '@pump/shared';
 import type {
+  InServiceDispenserReader,
   Tank,
   TankRepository,
   DispenserUnit,
@@ -101,8 +102,27 @@ export class DrizzleTankRepository implements TankRepository {
 }
 
 // ---------------- Dispensers ----------------
-export class DrizzleDispenserRepository implements DispenserRepository {
+export class DrizzleDispenserRepository implements DispenserRepository, InServiceDispenserReader {
   constructor(private readonly db: DbClient) {}
+
+  /**
+   * Dispensers the station is actually running on. MAINTENANCE and INACTIVE
+   * are excluded: for the length of a shift they do not exist — nobody is
+   * accountable for them and their nozzles are not read (#258).
+   */
+  async listInServiceIds(organizationId: string, stationId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ id: schema.dispenserUnits.id })
+      .from(schema.dispenserUnits)
+      .where(
+        and(
+          eq(schema.dispenserUnits.organizationId, organizationId),
+          eq(schema.dispenserUnits.stationId, stationId),
+          eq(schema.dispenserUnits.status, 'ACTIVE'),
+        ),
+      );
+    return rows.map((r) => r.id);
+  }
   private toEntity(r: typeof schema.dispenserUnits.$inferSelect): DispenserUnit {
     return {
       id: r.id,

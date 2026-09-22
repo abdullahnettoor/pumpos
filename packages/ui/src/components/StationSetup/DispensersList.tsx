@@ -18,6 +18,7 @@ import { DispenserUnit, Tank, Product, Nozzle } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
+import { useInvalidateOperational } from '../../query/hooks.js';
 import { Button, Form, Icon } from '../../pump-ds/index.js';
 
 const dispenserService = new CloudDispenserService();
@@ -40,6 +41,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
+  const invalidateOperational = useInvalidateOperational();
   // Shared hooks rather than a loader copying four lists into local state.
   const dispensersQ = useDispensers(stationId);
   const tanksQ = useTanks(stationId);
@@ -61,6 +63,8 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     ]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isCodeEdited, setIsCodeEdited] = useState(false);
+  /** Dispenser whose status is being changed; blocks a double-flip. */
+  const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Form states
@@ -148,6 +152,30 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
         return { ...item, currentReading: reading };
       }),
     );
+  };
+
+  /**
+   * Flip a dispenser between in and out of service.
+   *
+   * Sends only `status`. The update command accepts name and code too, and
+   * echoing the current ones back would turn a maintenance flip into a rename
+   * race against anyone editing the dispenser concurrently.
+   */
+  const handleStatusToggle = async (du: DispenserUnit) => {
+    if (statusBusyId) return;
+    const next = du.status === 'ACTIVE' ? 'MAINTENANCE' : 'ACTIVE';
+    try {
+      setStatusBusyId(du.id);
+      await dispenserService.updateDispenser(du.id, { status: next });
+      await refreshDispensers();
+      toast.success(
+        next === 'MAINTENANCE' ? `${du.name} is out of service.` : `${du.name} is back in service.`,
+      );
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not change the dispenser status.');
+    } finally {
+      setStatusBusyId(null);
+    }
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -657,6 +685,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
           return (
             <div
               key={du.id}
+              data-dispenser={du.id}
               style={{
                 backgroundColor: 'var(--bg-surface)',
                 padding: '18px',
@@ -680,10 +709,20 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                     fontWeight: 700,
                     padding: '2px 6px',
                     borderRadius: '4px',
+                    // Maintenance is a warning, not a fault: the pump is
+                    // expected back. Only INACTIVE is retired.
                     backgroundColor:
-                      du.status === 'ACTIVE' ? 'var(--state-success-bg)' : 'var(--state-danger-bg)',
+                      du.status === 'ACTIVE'
+                        ? 'var(--state-success-bg)'
+                        : du.status === 'MAINTENANCE'
+                          ? 'var(--state-warning-bg)'
+                          : 'var(--state-danger-bg)',
                     color:
-                      du.status === 'ACTIVE' ? 'var(--state-success-fg)' : 'var(--state-danger-fg)',
+                      du.status === 'ACTIVE'
+                        ? 'var(--state-success-fg)'
+                        : du.status === 'MAINTENANCE'
+                          ? 'var(--state-warning-fg)'
+                          : 'var(--state-danger-fg)',
                   }}
                 >
                   {du.status}
@@ -787,6 +826,43 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                   >
                     No nozzles connected to this dispenser.
                   </p>
+                )}
+              </div>
+
+              {/* Taking a pump out of service. The consequences are not
+                  obvious from the word "maintenance", so they are spelled
+                  out: it stops being offered at shift open, which is what
+                  lets a shift open at all while it is broken (#258). */}
+              <div
+                style={{
+                  borderTop: '1px solid var(--border-soft)',
+                  paddingTop: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '8px',
+                }}
+              >
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  {du.status === 'ACTIVE'
+                    ? 'In service'
+                    : du.status === 'MAINTENANCE'
+                      ? 'Out of service — not offered at shift open, and its nozzles are not read'
+                      : 'Retired'}
+                </span>
+                {/* Only ACTIVE ⇄ MAINTENANCE. A retired dispenser is not the
+                    same as one under repair, and a two-state toggle over a
+                    three-state enum would silently un-retire it. */}
+                {du.status !== 'INACTIVE' && (
+                  <Button
+                    variant="secondary"
+                    size="xs"
+                    loading={statusBusyId === du.id}
+                    disabled={!!statusBusyId && statusBusyId !== du.id}
+                    onClick={() => handleStatusToggle(du)}
+                  >
+                    {du.status === 'ACTIVE' ? 'Put into maintenance' : 'Return to service'}
+                  </Button>
                 )}
               </div>
             </div>

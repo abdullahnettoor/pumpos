@@ -36,6 +36,7 @@ import { rowJson, rowJsonNullable, tsIso } from '../infra/sql-json.js';
 import { shiftSequenceSql } from '../infra/shift-sequence-sql.js';
 import { assembleReconTotals, reconTotalsJson } from '../infra/repositories/shift-recon-sql.js';
 import {
+  DrizzleDispenserRepository,
   DrizzleNozzleRepository,
   DrizzleFuelPriceRepository,
 } from '../infra/repositories/setup-repositories.js';
@@ -933,6 +934,10 @@ shiftsRouter.get('/status', async (c) => {
 
   // Statement 3: station reference data (templates / nozzles / staff /
   // dispensers / terminals), previously five fully sequential selects.
+  // Nozzles join their dispenser and filter on its status for the same reason
+  // the dispenser list does: a pump out of service must disappear completely.
+  // Half-filtering left it out of assignment while its nozzle still demanded
+  // an opening reading, and the open is now blocked on unassigned pumps (#258).
   const [refRow] = (await db.execute(sql`
     SELECT
       COALESCE((SELECT jsonb_agg(${rowJson(schema.shiftTemplates, 't')})
@@ -944,15 +949,18 @@ shiftsRouter.get('/status', async (c) => {
           'tnk', ${rowJsonNullable(schema.tanks, 'tnk')}
         ))
         FROM nozzles nz
+        JOIN dispenser_units nzdu ON nzdu.id = nz.du_id
         LEFT JOIN products prod ON prod.id = nz.product_id
         LEFT JOIN tanks tnk ON tnk.id = nz.tank_id
-        WHERE nz.station_id = ${stationId} AND nz.organization_id = ${orgId}), '[]'::jsonb) AS nozzles,
+        WHERE nz.station_id = ${stationId} AND nz.organization_id = ${orgId}
+          AND nzdu.status = 'ACTIVE'), '[]'::jsonb) AS nozzles,
       COALESCE((SELECT jsonb_agg(${rowJson(schema.users, 'u')})
         FROM users u
         WHERE u.organization_id = ${orgId} AND u.status = 'ACTIVE'), '[]'::jsonb) AS staff,
       COALESCE((SELECT jsonb_agg(${rowJson(schema.dispenserUnits, 'du')})
         FROM dispenser_units du
-        WHERE du.station_id = ${stationId} AND du.status = 'ACTIVE'), '[]'::jsonb) AS dispensers,
+        WHERE du.station_id = ${stationId} AND du.organization_id = ${orgId}
+          AND du.status = 'ACTIVE'), '[]'::jsonb) AS dispensers,
       COALESCE((SELECT jsonb_agg(${rowJson(schema.paymentTerminals, 'pt')})
         FROM payment_terminals pt
         WHERE pt.station_id = ${stationId} AND pt.is_active = true), '[]'::jsonb) AS terminals
@@ -1420,6 +1428,7 @@ shiftsRouter.post(
         nozzles: new DrizzleNozzleRepository(tx),
         nozzleReadings: new DrizzleNozzleReadingRepository(tx),
         fuelPrices: new DrizzleFuelPriceRepository(tx),
+        dispensers: new DrizzleDispenserRepository(tx),
         events,
       }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
     });

@@ -58,12 +58,25 @@ const schema = z.object({
     .optional(),
 });
 
+/**
+ * The dispensers a station is actually running on.
+ *
+ * A dispenser out of service is not a lesser dispenser — for the length of a
+ * shift it does not exist: nobody is accountable for it, and its nozzles are
+ * not read. Both of those are decisions this use-case has to make, so it has
+ * to be able to ask.
+ */
+export interface InServiceDispenserReader {
+  listInServiceIds(organizationId: string, stationId: string): Promise<string[]>;
+}
+
 export interface OpenShiftDeps {
   shifts: ShiftRepository;
   businessDays: BusinessDayWriteRepository;
   nozzles: NozzleRepository;
   nozzleReadings: NozzleReadingRepository;
   fuelPrices: FuelPriceRepository;
+  dispensers: InServiceDispenserReader;
   events: EventPublisher;
 }
 
@@ -88,6 +101,34 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
     if (!p.success)
       return err(validationError('Invalid OpenShift command', { issues: p.error.flatten() }));
     const cmd = p.data;
+
+    /*
+     * Every dispenser in service needs somebody accountable for it.
+     *
+     * Checked here rather than only in the form because the form is not the
+     * only caller — the mobile client, an API caller and a replayed offline
+     * write all arrive here. And it has to be refused rather than warned
+     * about: nothing writes `shift_staff_assignments` after this point, so a
+     * dispenser opened with nobody on it can never be handed over, and the
+     * only way out is to close and re-open, discarding the opening readings
+     * (#258).
+     *
+     * The escape is the dispenser's own status: a pump nobody is working is a
+     * pump not in use. One attendant may cover several, so a short-staffed
+     * shift spreads rather than skips.
+     */
+    const inServiceDuIds = new Set(
+      await this.deps.dispensers.listInServiceIds(ctx.organizationId, cmd.stationId),
+    );
+    const assignedDuIds = new Set((cmd.staffAssignments ?? []).map((a) => a.duId));
+    const unattendedDuIds = [...inServiceDuIds].filter((duId) => !assignedDuIds.has(duId));
+    if (unattendedDuIds.length > 0) {
+      return err(
+        validationError('Every dispenser in service needs an attendant before the shift can open', {
+          duIds: unattendedDuIds,
+        }),
+      );
+    }
 
     await this.deps.businessDays.lockStation(ctx.organizationId, cmd.stationId);
     const existingOpen = await this.deps.shifts.findOpenByStation(
@@ -196,8 +237,9 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
       await this.deps.shifts.addTerminalLinks(shift.id, cmd.terminalLinks);
     }
 
-    // Seed nozzle opening readings.
-    const nozzles = await this.deps.nozzles.listByStation(ctx.organizationId, cmd.stationId);
+    // Seed nozzle opening readings, for the dispensers actually in service.
+    const allNozzles = await this.deps.nozzles.listByStation(ctx.organizationId, cmd.stationId);
+    const nozzles = allNozzles.filter((n) => inServiceDuIds.has(n.duId));
     if (nozzles.length > 0) {
       const lastClosing = await this.deps.nozzleReadings.lastClosingByNozzleIds(
         nozzles.map((n) => n.id),

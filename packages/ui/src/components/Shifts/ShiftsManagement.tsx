@@ -539,7 +539,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     if (statusData.templates && statusData.templates.length > 0) {
       setSelectedTemplateId((prev: string) => prev || statusData.templates[0].id);
     }
-    setStaffAssignments(seedStaffAssignments(statusData.dispensers, statusData.staff));
+    setStaffAssignments(seedStaffAssignments(statusData.dispensers));
     if (statusData.terminals) {
       setTerminalAssignments(
         statusData.terminals.map((t: any) => ({ terminalId: t.id, duId: '' })),
