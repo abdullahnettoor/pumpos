@@ -35,6 +35,7 @@ export type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
 export { DEFAULT_SHIFT_SUMMARY_CONFIG, SHIFT_SUMMARY_SECTION_LABELS } from './reportConfig.js';
 export type { Letterhead } from './letterhead.js';
 export { letterheadFromStation } from './letterhead.js';
+import { shiftDisplayLabel } from '@pump/shared';
 import type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
 import { DEFAULT_SHIFT_SUMMARY_CONFIG } from './reportConfig.js';
 import type { Letterhead } from './letterhead.js';
@@ -375,8 +376,14 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
   meta: (d) => (
     <View key="meta" style={s.metaBox}>
       <View style={s.metaCell}>
-        <Text style={s.label}>SHIFT ID</Text>
-        <Text style={s.valMono}>{String(d.shiftId || '').slice(0, 8)}...</Text>
+        <Text style={s.label}>SHIFT</Text>
+        <Text style={s.valMono}>
+          {shiftDisplayLabel({
+            businessDate: d.businessDate,
+            shiftSequence: d.shiftSequence,
+            shiftId: d.shiftId,
+          })}
+        </Text>
       </View>
       <View style={s.metaCell}>
         <Text style={s.label}>SHIFT TEMPLATE</Text>

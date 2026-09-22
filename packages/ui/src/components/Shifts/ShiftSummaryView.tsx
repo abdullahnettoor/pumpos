@@ -12,7 +12,7 @@ import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { inr } from '../../utils/format.js';
 import { isDesktopApp } from '../../utils/platform.js';
-import { formatStationDateTime } from '@pump/shared';
+import { formatStationDateTime, shiftDisplayLabel } from '@pump/shared';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 
@@ -57,6 +57,12 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   const printRef = useRef<HTMLDivElement>(null);
 
   const { snapshotData, generatedAt } = shiftSummary;
+  // The readable shift name (#228). Business date and sequence come from the
+  // read, not the frozen snapshot, so a summary written before #228 still gets
+  // a label; `shiftDisplayLabel` falls back to a UUID fragment when neither is
+  // known.
+  const businessDate: string | null = shiftSummary.businessDate ?? null;
+  const shiftSequence: number | null = shiftSummary.shiftSequence ?? null;
   const stationSettings = (station?.settings ?? {}) as {
     timezone?: string;
     business_day_starts_at?: string;
@@ -98,6 +104,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
     creditSales = [],
     creditSalesTotal = 0,
   } = snapshotData;
+  const shiftLabel = shiftDisplayLabel({ businessDate, shiftSequence, shiftId });
 
   // Fuel unit handling (L for liquids, kg for CNG/Auto-LPG). A tank/nozzle
   // inherits its unit from its product; we never sum across different units.
@@ -162,24 +169,12 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             size="sm"
             leftIcon={<Download size={13} />}
             onClick={async () => {
-              const [{ exportReactPdf }, doc] = await Promise.all([
-                import('../../services/exportPdf.js'),
-                import('../../services/reports/shiftSummaryDoc.js'),
-              ]);
-              const sections = station?.settings?.report_config?.shiftSummary?.length
-                ? station.settings.report_config.shiftSummary
-                : DEFAULT_SHIFT_SUMMARY_CONFIG.sections;
-              const config = {
-                ...DEFAULT_SHIFT_SUMMARY_CONFIG,
-                sections: sections,
-                stationName: station?.name || templateName,
-                letterhead: letterheadFromStation(station),
-                paper: paperFromStation(station),
-              };
-              await exportReactPdf(
-                React.createElement(doc.ShiftSummaryDoc, { snapshot: snapshotData, config }),
-                `Shift_Summary_${String(shiftId).slice(0, 8)}`,
-              );
+              const { generateShiftSummaryPdf } =
+                await import('../../services/reports/generate.js');
+              await generateShiftSummaryPdf(station, snapshotData, shiftId, templateName, {
+                businessDate,
+                shiftSequence,
+              });
             }}
           >
             Save PDF
@@ -264,7 +259,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
               fontWeight: 600,
             }}
           >
-            Shift ID
+            Shift
           </span>
           <strong
             style={{
@@ -273,7 +268,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
               fontFamily: 'var(--font-mono)',
             }}
           >
-            {shiftId.slice(0, 8)}...
+            {shiftLabel}
           </strong>
         </div>
         <div>

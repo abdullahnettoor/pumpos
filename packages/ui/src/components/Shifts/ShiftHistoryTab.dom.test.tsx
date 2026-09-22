@@ -54,6 +54,17 @@ describe('ShiftHistoryTab', () => {
     summaries.mockReset();
   });
 
+  it('names the shift YYYYMMDD-N rather than a uuid fragment (#228)', () => {
+    render([apiRow({ shiftSequence: 2 })]);
+    expect(body().getByText('20260301-2')).toBeDefined();
+    expect(body().queryByText(/shift-1/)).toBeNull();
+  });
+
+  it('falls back to a uuid fragment for rows with no sequence', () => {
+    render([apiRow({ shiftId: '8f6c3d04-aaaa-bbbb-cccc-dddddddddddd', shiftSequence: null })]);
+    expect(body().getByText('8f6c3d04\u2026')).toBeDefined();
+  });
+
   it('shows the template the shift was opened from', () => {
     render([apiRow()]);
     expect(body().getByText('Morning')).toBeDefined();

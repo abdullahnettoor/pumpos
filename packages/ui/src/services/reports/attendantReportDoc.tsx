@@ -13,6 +13,7 @@ import {
   type Col,
   type Cell,
 } from './shiftSummaryDoc.js';
+import { shiftDisplayLabel } from '@pump/shared';
 import type { AttendantReportDispenser, AttendantReportShift } from '@pump/shared';
 import type { AttendantStatementData } from './attendantStatementData.js';
 import { sliceAttendantStatementByDay } from './attendantStatementDays.js';
@@ -33,8 +34,14 @@ export {
  */
 export type { AttendantStatementData };
 
+// The shift is named the way every other surface names it (#228):
+// `YYYYMMDD-N`, then the template it ran under.
 const shiftLabel = (shift: AttendantReportShift): string =>
-  `${shift.businessDate}${shift.shiftTemplateName ? ` · ${shift.shiftTemplateName}` : ''}`;
+  `${shiftDisplayLabel({
+    businessDate: shift.businessDate,
+    shiftSequence: shift.shiftSequence,
+    shiftId: shift.shiftId,
+  })}${shift.shiftTemplateName ? ` · ${shift.shiftTemplateName}` : ''}`;
 
 const sum = <T,>(rows: T[], get: (row: T) => number): number =>
   rows.reduce((acc, row) => acc + Number(get(row) || 0), 0);

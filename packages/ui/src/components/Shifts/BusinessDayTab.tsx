@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { canViewReports } from '@pump/shared';
+import { canViewReports, shiftDisplayLabel } from '@pump/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { CalendarRange, Check, Info, Lock } from 'lucide-react';
 import {
@@ -220,9 +220,21 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
         id: 'template',
         header: 'Shift',
         cell: ({ row }) => (
-          <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
-            {row.original.templateName || 'Custom'}
-          </span>
+          <div>
+            <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
+              {row.original.templateName || 'Custom'}
+            </span>
+            {/* The readable shift name (#228), identical in the summary PDF. */}
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '11px',
+                color: 'var(--text-muted)',
+              }}
+            >
+              {shiftDisplayLabel(row.original)}
+            </div>
+          </div>
         ),
       },
       {
@@ -298,11 +310,18 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   const reportError =
     businessDayStatusQ.isError || (status === 'CLOSED' ? snapshotQ.isError : previewQ.isError);
   const shiftRows = (() => {
-    const rows = [...((snap?.shifts ?? []) as any[])];
+    // Every row carries the day's business date so `shiftDisplayLabel` can
+    // derive the `YYYYMMDD-N` name from the sequence the API projected.
+    const rows = ((snap?.shifts ?? []) as any[]).map((row) => ({
+      ...row,
+      businessDate: row.businessDate ?? snap?.businessDate ?? businessDate,
+    }));
     if (hasOpenShift && !rows.some((row) => row.shiftId === activeShift.id)) {
       rows.unshift({
         shiftId: activeShift.id,
         templateName: activeShift.templateName,
+        businessDate: activeShift.businessDate ?? businessDate,
+        shiftSequence: activeShift.shiftSequence ?? null,
         closedAt: null,
       });
     }

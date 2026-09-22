@@ -20,6 +20,12 @@ export interface DssrShiftSummary {
   shiftId: string;
   templateName?: string | null;
   closedAt?: string | null;
+  /**
+   * The shift's position within its business day — the `N` of the human
+   * `YYYYMMDD-N` label (see `formatShiftLabel` in `@pump/shared`). Counted over
+   * every shift of the day, voided included, so labels never renumber.
+   */
+  shiftSequence?: number | null;
   snapshot: Record<string, unknown>;
 }
 export interface DssrCollection {

@@ -15,6 +15,7 @@ import {
   type Col,
   type Cell,
 } from './shiftSummaryDoc.js';
+import { shiftDisplayLabel } from '@pump/shared';
 import type { DssrSection, DssrReportConfig } from './reportConfig.js';
 import { DEFAULT_DSSR_CONFIG } from './reportConfig.js';
 
@@ -339,7 +340,13 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     const rows: Cell[][] = list.map((sh) => {
       const v = Number(sh.cashVariance || 0);
       return [
-        { text: `${String(sh.shiftId || '').slice(0, 8)}\u2026` },
+        {
+          text: shiftDisplayLabel({
+            businessDate: d.businessDate as string | null | undefined,
+            shiftSequence: sh.shiftSequence,
+            shiftId: sh.shiftId,
+          }),
+        },
         { text: sh.templateName || 'Custom' },
         { text: sh.closedAt ? fmtDateTime(sh.closedAt) : '-' },
         { text: vol3(sh.netVolume) },

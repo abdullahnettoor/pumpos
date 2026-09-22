@@ -6,6 +6,7 @@ import type {
   DssrSnapshotRepository,
   DssrSourceData,
 } from '@pump/core';
+import { shiftSequenceSql } from '../shift-sequence-sql.js';
 
 export class DrizzleDssrSnapshotRepository implements DssrSnapshotRepository {
   constructor(private readonly db: DbClient) {}
@@ -78,6 +79,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         shiftId: schema.shiftSummaries.shiftId,
         snapshotData: schema.shiftSummaries.snapshotData,
         closedAt: schema.shifts.closedAt,
+        shiftSequence: shiftSequenceSql('shifts'),
         templateName: schema.shiftTemplates.name,
       })
       .from(schema.shiftSummaries)
@@ -241,6 +243,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         shiftId: r.shiftId,
         templateName: r.templateName ?? null,
         closedAt: r.closedAt ? r.closedAt.toISOString() : null,
+        shiftSequence: r.shiftSequence ?? null,
         snapshot: (r.snapshotData as Record<string, unknown>) ?? {},
       })),
       collections: collectionRows.map((r) => ({
