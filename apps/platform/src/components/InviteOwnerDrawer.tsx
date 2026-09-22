@@ -4,6 +4,7 @@
  */
 import React, { useState } from 'react';
 import { Banner, Button, Checkbox, Drawer, Field, TextInput } from '@pump/ui';
+import { PlatformApiError } from '../api/client.js';
 import { commands, useInvalidatePlatform } from '../api/queries.js';
 import type { ApiTarget } from '../api/targets.js';
 import type { InviteResult } from '../api/types.js';
@@ -11,6 +12,23 @@ import type { InviteResult } from '../api/types.js';
 export interface InviteOwnerDrawerProps {
   target: ApiTarget;
   onClose: () => void;
+}
+
+/**
+ * Did the invite fail because the Supabase project cannot send mail?
+ *
+ * Email transport is Supabase Auth custom SMTP (Resend), configured per
+ * project — so it does not follow a project move, and the first invite after
+ * one fails with GoTrue's bare "Error sending invite email". That message
+ * reads like a bug in this app. It is a missing setting, and there is a way
+ * past it right here, so say both.
+ */
+function isMailDeliveryFailure(error: unknown): boolean {
+  return (
+    error instanceof PlatformApiError &&
+    error.code === 'INVITE_FAILED' &&
+    /email|smtp|mail/i.test(error.message)
+  );
 }
 
 export const InviteOwnerDrawer: React.FC<InviteOwnerDrawerProps> = ({ target, onClose }) => {
@@ -21,12 +39,14 @@ export const InviteOwnerDrawer: React.FC<InviteOwnerDrawerProps> = ({ target, on
   const [noEmail, setNoEmail] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [mailFailed, setMailFailed] = useState(false);
   // Held in component state rather than a toast: the password is returned once
   // and never again, so it must not be dismissible by a timer or a re-render.
   const [result, setResult] = useState<InviteResult | null>(null);
 
   const submit = async () => {
     setError(null);
+    setMailFailed(false);
     try {
       const data = await commands.invite(target, {
         email,
@@ -38,6 +58,10 @@ export const InviteOwnerDrawer: React.FC<InviteOwnerDrawerProps> = ({ target, on
       setResult(data);
       invalidate();
     } catch (err: unknown) {
+      if (isMailDeliveryFailure(err)) {
+        setMailFailed(true);
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Could not provision the owner.');
     }
   };
@@ -130,6 +154,24 @@ export const InviteOwnerDrawer: React.FC<InviteOwnerDrawerProps> = ({ target, on
         )}
 
         {error && <Banner severity="danger">{error}</Banner>}
+
+        {mailFailed && (
+          <Banner
+            severity="warning"
+            title="This project cannot send email"
+            actionLabel="Provision without email instead"
+            onAction={() => {
+              setNoEmail(true);
+              setMailFailed(false);
+            }}
+          >
+            Supabase rejected the invite with &ldquo;Error sending invite email&rdquo;. Custom SMTP
+            (Resend) is configured per Supabase project and does not survive a project move, so it
+            needs setting up again on {target.label} — along with the verified sender, the Invite
+            template, and {target.url.includes('pumpos.app') ? 'the production' : 'the dev'}{' '}
+            redirect URL in the allow-list. No account was created; nothing is half-done.
+          </Banner>
+        )}
       </div>
     </Drawer>
   );
