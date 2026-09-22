@@ -20,7 +20,7 @@ import { formatElapsedSince } from '../utils/format.js';
  */
 export function useOpenShiftLabel(stationId: string | null | undefined): string | undefined {
   const { data } = useShiftStatus(stationId, true);
-  const activeShift = (data as any)?.activeShift ?? null;
+  const activeShift = data?.activeShift ?? null;
   const businessDate: string | null = activeShift?.businessDate ?? null;
   const shiftSequence: number | null = activeShift?.shiftSequence ?? null;
   const openedAt: string | null = activeShift?.openedAt ?? null;
