@@ -44,9 +44,10 @@ _Avoid_: Shift Date, opening date, closing date
 **Shift Label**:
 How a Shift is named to a human: `YYYYMMDD-N` — its Shift Business Date, then
 its position within that Business Day (`20260917-2`). Derived at read time,
-never stored; the UUID stays the only identifier. The position counts every
-Shift the day ever had, voided ones included, so a Label printed yesterday names
-the same Shift tomorrow. Numbering resets each Business Day.
+never an identifier and never a column; the UUID stays the only identifier.
+Report snapshots freeze it alongside the figures they freeze. The position
+counts every Shift the day ever had, voided ones included, so a Label printed
+yesterday names the same Shift tomorrow. Numbering resets each Business Day.
 _Avoid_: shift number, shift code, shift ID (the UUID)
 
 **Scheduled Shift Window**:

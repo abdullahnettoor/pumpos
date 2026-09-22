@@ -53,7 +53,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     totalCashVariance += Number(snap.cashVariance ?? 0);
     shifts.push({
       shiftId: s.shiftId,
-      shiftSequence: s.sequence ?? null,
+      shiftSequence: s.shiftSequence ?? null,
       templateName: s.templateName ?? null,
       closedAt: s.closedAt ?? null,
       expectedDrawerCash: Number(snap.expectedDrawerCash ?? 0),

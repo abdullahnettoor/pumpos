@@ -243,7 +243,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         shiftId: r.shiftId,
         templateName: r.templateName ?? null,
         closedAt: r.closedAt ? r.closedAt.toISOString() : null,
-        sequence: r.shiftSequence ?? null,
+        shiftSequence: r.shiftSequence ?? null,
         snapshot: (r.snapshotData as Record<string, unknown>) ?? {},
       })),
       collections: collectionRows.map((r) => ({

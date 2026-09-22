@@ -25,7 +25,7 @@ export interface DssrShiftSummary {
    * `YYYYMMDD-N` label (see `formatShiftLabel` in `@pump/shared`). Counted over
    * every shift of the day, voided included, so labels never renumber.
    */
-  sequence?: number | null;
+  shiftSequence?: number | null;
   snapshot: Record<string, unknown>;
 }
 export interface DssrCollection {

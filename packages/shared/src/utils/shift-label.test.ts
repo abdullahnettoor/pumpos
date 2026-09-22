@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  formatShiftLabel,
-  deriveShiftSequences,
-  shiftLabelFrom,
-  shiftDisplayLabel,
-} from './shift-label.js';
+import { formatShiftLabel, deriveShiftSequences, shiftDisplayLabel } from './shift-label.js';
 
 const shift = (id: string, openedAt: string | null) => ({ id, openedAt });
 
@@ -44,6 +39,20 @@ describe('deriveShiftSequences', () => {
     expect(seq.get('z')).toBe(2);
   });
 
+  // Ties must break the way Postgres orders `uuid` — raw bytes, i.e. codepoint
+  // order over the canonical hex form. `localeCompare` ignores the hyphens and
+  // puts these the other way round, which would make a client-derived label
+  // disagree with the one the API projects.
+  it('orders tied ids the way Postgres orders uuids, not by collation', () => {
+    const at = '2026-09-17T06:00:00Z';
+    const seq = deriveShiftSequences([
+      shift('00000000-0000-0000-0000-0000000000b0', at),
+      shift('00000000-0000-0000-0000-00000000000a', at),
+    ]);
+    expect(seq.get('00000000-0000-0000-0000-00000000000a')).toBe(1);
+    expect(seq.get('00000000-0000-0000-0000-0000000000b0')).toBe(2);
+  });
+
   it('accepts Date as well as ISO strings', () => {
     const seq = deriveShiftSequences([
       { id: 'b', openedAt: new Date('2026-09-17T14:00:00Z') },
@@ -53,32 +62,31 @@ describe('deriveShiftSequences', () => {
     expect(seq.get('b')).toBe(2);
   });
 
+  // The label's whole value is that it does not change. A voided shift must
+  // keep its slot: the third shift of the day stays `-3` even once the second
+  // is written off, or a statement printed yesterday names a different shift
+  // today. Sequencing over the day's surviving shifts is the mistake this
+  // pins — it is off by one for every shift after the voided one.
   it('keeps a voided shift in its slot so later shifts never renumber', () => {
-    const day = [
+    const wholeDay = [
       shift('a', '2026-09-17T06:00:00Z'),
       shift('voided', '2026-09-17T14:00:00Z'),
       shift('c', '2026-09-17T22:00:00Z'),
     ];
-    expect(deriveShiftSequences(day).get('c')).toBe(3);
-    // Same day re-read after the middle shift is voided — it is still counted.
-    expect(deriveShiftSequences([...day]).get('c')).toBe(3);
-    // Dropping it, which this helper must never do, is what would renumber.
-    expect(deriveShiftSequences(day.filter((s) => s.id !== 'voided')).get('c')).toBe(2);
+    const surviving = wholeDay.filter((s) => s.id !== 'voided');
+    expect(deriveShiftSequences(wholeDay).get('c')).toBe(3);
+    expect(deriveShiftSequences(surviving).get('c')).toBe(2);
   });
 });
 
-describe('shiftLabelFrom', () => {
-  it('resets numbering each business day', () => {
+describe('numbering resets each business day', () => {
+  it('starts the next day at 1, however many shifts the previous day had', () => {
     const dayOne = [shift('a', '2026-09-17T06:00:00Z'), shift('b', '2026-09-17T18:00:00Z')];
     const dayTwo = [shift('c', '2026-09-18T06:00:00Z')];
-    expect(shiftLabelFrom('2026-09-17', 'b', dayOne)).toBe('20260917-2');
-    expect(shiftLabelFrom('2026-09-18', 'c', dayTwo)).toBe('20260918-1');
-  });
-
-  it('returns null for a shift outside the given day', () => {
-    expect(
-      shiftLabelFrom('2026-09-17', 'missing', [shift('a', '2026-09-17T06:00:00Z')]),
-    ).toBeNull();
+    const label = (date: string, id: string, day: typeof dayOne) =>
+      formatShiftLabel(date, deriveShiftSequences(day).get(id));
+    expect(label('2026-09-17', 'b', dayOne)).toBe('20260917-2');
+    expect(label('2026-09-18', 'c', dayTwo)).toBe('20260918-1');
   });
 });
 

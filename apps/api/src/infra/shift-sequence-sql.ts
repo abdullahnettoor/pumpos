@@ -1,5 +1,8 @@
 import { sql, type SQL } from 'drizzle-orm';
 
+/** The aliases the `shifts` row goes by in this codebase's statements. */
+export type ShiftAlias = 's' | 'shifts';
+
 /**
  * A shift's position within its business day — the `N` of the `YYYYMMDD-N`
  * label operators read (see `formatShiftLabel` in `@pump/shared`).
@@ -13,9 +16,11 @@ import { sql, type SQL } from 'drizzle-orm';
  * `@pump/shared` exactly, so a label derived on the client from a day's shift
  * list agrees with one projected here.
  *
- * @param alias the SQL alias of the `shifts` row being projected, e.g. `s`.
+ * @param alias the SQL alias of the `shifts` row being projected. A closed set
+ *   rather than free text: the value is interpolated raw, and nothing outside
+ *   this module should be able to choose it.
  */
-export function shiftSequenceSql(alias: string): SQL<number> {
+export function shiftSequenceSql(alias: ShiftAlias): SQL<number> {
   const a = sql.raw(alias);
   return sql<number>`(
     SELECT COUNT(*)

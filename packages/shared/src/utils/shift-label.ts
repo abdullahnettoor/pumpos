@@ -6,10 +6,10 @@
  * Two rules make the label trustworthy, and both are the reason this lives in
  * one shared module rather than at each render site:
  *
- * 1. **Derived, never stored.** UUIDs remain the only identifiers
- *    (data-modeling rules); the label is projected at read time from the
- *    business date plus the ordering of that day's shifts. Nothing to migrate,
- *    nothing to drift.
+ * 1. **Derived, never an identifier.** UUIDs remain the only identifiers
+ *    (data-modeling rules) and no column stores this; the label is projected at
+ *    read time from the business date plus the ordering of that day's shifts.
+ *    Report snapshots freeze it the way they freeze every other figure.
  * 2. **Stable under voiding.** The sequence is taken over *every* shift the
  *    business day ever had, including voided/archived ones. A voided shift
  *    keeps its slot, so a label printed on yesterday's statement still names
@@ -46,29 +46,28 @@ const openedAtMs = (value: string | Date | null | undefined): number => {
 /**
  * Sequence numbers for one business day's shifts, keyed by shift id.
  *
+ * This is the executable statement of the ordering rule. In production the
+ * sequence is projected in SQL (`shiftSequenceSql`, apps/api) so a single
+ * shift can be labelled without loading its whole day; that fragment mirrors
+ * this ordering — `(opened_at, id)` ascending — and the tests here are what
+ * pins it.
+ *
  * Pass every shift of the day — voided ones included — or later shifts will
  * renumber (see rule 2 above).
  */
 export function deriveShiftSequences(shifts: readonly SequencableShift[]): Map<string, number> {
   const ordered = [...shifts].sort((a, b) => {
     const delta = openedAtMs(a.openedAt) - openedAtMs(b.openedAt);
-    return delta !== 0 ? delta : a.id.localeCompare(b.id);
+    if (delta !== 0) return delta;
+    // Plain codepoint comparison, deliberately not `localeCompare`: Postgres
+    // orders `uuid` by its 16 raw bytes, which for the canonical lowercase hex
+    // form is exactly this. A collation-aware compare treats the hyphens
+    // differently and would let the server and the client disagree.
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
   const out = new Map<string, number>();
   ordered.forEach((shift, index) => out.set(shift.id, index + 1));
   return out;
-}
-
-/**
- * The label for one shift, given every shift of its business day.
- * Returns null when the shift is not among them — callers render the fallback.
- */
-export function shiftLabelFrom(
-  businessDate: string | null | undefined,
-  shiftId: string,
-  daysShifts: readonly SequencableShift[],
-): string | null {
-  return formatShiftLabel(businessDate, deriveShiftSequences(daysShifts).get(shiftId) ?? null);
 }
 
 /**
