@@ -31,15 +31,22 @@ This is an operational operating system focused on fuel station management.
 
 ## Business-Day & Shift Anchoring
 
-The platform has two anchors, and using the right one is the single most
-important domain rule:
+A station has two worlds, and using the right anchor is the single most
+important domain rule (ADR 0005):
 
-- **`business_day_id`** is the **universal anchor**. Every operational and
-  financial record belongs to a business day.
-- **`shift_id`** is an **optional** anchor. A shift is an attendant-accountability
-  window for drawer cash. It is set by default when money touches the physical
-  drawer (and for sales), and may be passed explicitly or preselected on other
-  records when shift attribution is useful.
+- **Forecourt → `business_day_id` + `shift_id`.** The business day is the
+  station's **sales day**: it starts at the Day Start chosen at onboarding and
+  runs 24h. It holds shifts and **all sales** (fuel, product, credit, including
+  their card/UPI method) and cash drops.
+- **Office → entry date only.** Collections (any method, even at a pump
+  terminal), supplier payments, expenses, income and bank work are handled by
+  the office, not attendants. They carry a **station-timezone calendar date**
+  and no shift or business day, and live in the ledger. The test is "is this
+  paying for fuel or products right now?", not "which machine was used?"
+
+> Transition: the code and parts of this document still reflect the old
+> "universal business-day anchor" model. Treat ADR 0005 as the target;
+> implementation is tracked in its follow-up issues.
 
 Operational flow:
 
@@ -57,44 +64,42 @@ DSSR                ← immutable snapshot, created on BUSINESS-DAY close
 Reports
 ```
 
-Anchoring rules (DO NOT couple everything to a shift):
+Anchoring rules (target, ADR 0005):
 
-- Fuel/product **sales** occur within a shift (attendant accountability) →
-  `shift_id` set by default.
-- **Cash** collections / cash supplier payments / drawer (`SHIFT_CASH`) expenses
-  touch the drawer → `shift_id` set by default.
-- **Card / UPI / bank / online** collections, **bank/owner** expenses,
-  **purchases**, and **credit sales** do NOT touch the drawer → `shift_id`
-  defaults to NULL, anchored to the business day. The field remains optional:
-  callers may pass a `shift_id`, or the UI may preselect the open shift, when
-  attributing the record to a shift window helps future capabilities slice
-  historical data.
+- **All sales** (fuel, product, credit) occur within a shift → `shift_id` +
+  `business_day_id`. The card/UPI method of a sale is part of the sale.
+- **Office records** (collections, supplier payments, expenses, income,
+  purchases, bank work) → **entry date only** (station-timezone calendar
+  date, never Day Start), no `shift_id`, no `business_day_id`.
 - **Credit sales are receivables**, not drawer cash. A fleet fuel-on-credit sale
   records only a customer-ledger debit (receivable); it never moves stock again
   (the fuel is already metered via nozzle readings). Customer balance =
   Σ credit sales − Σ collections.
 
-Drawer reconciliation at shift close:
+Drawer reconciliation at shift close (**target, ADR 0005** — the code still
+subtracts `drawerExpenses` and `drawerSupplierPayments`; see the transition
+note above and the ADR 0005 milestone):
 
 ```text
-expectedDrawerCash =
-  openingCash + cashSales + cashCollections
-  − drawerExpenses − drawerSupplierPayments − cashDrops
+expectedDrawerCash = openingCash + cashSales − cashDrops
 ```
 
-Never force card/UPI/bank/credit movements into the drawer reconciliation.
+Office cash taken from a drawer is a cash drop. Cash in Hand (`CASH_IN_HAND`)
+is the office cash account. Never force card/UPI/bank/credit movements into
+the drawer reconciliation.
 
 ---
 
 ## Business-Day Date Resolution (timezone-aware)
 
 A business day is keyed by **`(station, calendar date)`**, lazily opened when the
-first shift OR financial entry of that date lands. Several business days may be
+first shift or sale of that date lands. Several business days may be
 **open at once**; a past day is closed **independently** at any time (e.g. close
-day 1 on day 5) — closing never blocks today's day. `OpenShift` and
-`ensureBusinessDayForDate` both resolve via `findByStationAndDate`, so shifts and
-financials always agree. Uniqueness is enforced by
+day 1 on day 5) — closing never blocks today's day. Uniqueness is enforced by
 `business_days_org_station_date_uniq (org, station, date)`.
+
+Office records use an **entry date** (station-timezone calendar date, no Day
+Start rollback) instead of a business day (ADR 0005).
 
 The `business_date` (`varchar(10)` `YYYY-MM-DD`) is the single date anchor;
 audit timestamps stay UTC. **Never derive a business date with
@@ -102,7 +107,7 @@ audit timestamps stay UTC. **Never derive a business date with
 day-start boundary. Always use **`resolveBusinessDate({ now, timeZone, dayStartsAt })`**
 from `@pump/shared`, which converts the instant to the station's timezone and
 rolls back to the previous date when the local time is before the station's
-`business_day_starts_at` (a fuel day commonly runs 06:00 → 06:00).
+`business_day_starts_at` (the Day Start chosen at onboarding).
 
 - The station's `timezone` + `business_day_starts_at` are captured at onboarding
   and stored in `stations.settings`.

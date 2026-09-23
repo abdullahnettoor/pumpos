@@ -7,10 +7,11 @@ When writing issues, specs, tests, or code names, use these terms exactly.
 ## Time & Anchoring
 
 **Business Day**:
-One station's operating day, keyed by `(station, Business Date)`. The universal
-anchor: every operational and financial record belongs to one. May run
-06:00 → 06:00 per station config. Several may be open at once; a past day
-closes independently without blocking the Current Business Date.
+One station's sales day, keyed by `(station, Business Date)`. It starts at the
+station's Day Start (any time chosen at onboarding) and runs 24 hours. It holds
+Shifts and Sales only; Office Records do not belong to it (ADR 0005). Several
+may be open at once; a past day closes independently without blocking the
+Current Business Date.
 _Avoid_: operating day, trading day, diwas
 
 **Business Date**:
@@ -27,12 +28,24 @@ _Avoid_: today, current date
 
 **Day Start** (`business_day_starts_at`):
 The station-local time before which instants roll back to the previous
-Business Date.
+Business Date. A change takes effect from the next Business Day.
 _Avoid_: cutoff, open time
 
+**Entry Date**:
+The station-timezone calendar date (midnight to midnight) of an Office Record.
+Day Start never applies to it.
+_Avoid_: Business Date (for office records), UTC date
+
+**Office Record**:
+Money handled by the office, not by Attendants: Collections, Supplier
+Payments, Expenses, Income and bank work. Carries an Entry Date, no Shift and
+no Business Day, and lives in the ledger.
+_Avoid_: day-anchored financial, back-office entry
+
 **Shift**:
-An attendant-accountability window inside a Business Day. A Business Day has
-one or more Shifts; day-anchored financials need none. A Shift inherits its
+An attendant-accountability window inside a Business Day, covering the Sales
+at the Attendant's Dispenser Unit. A Business Day has one or more Shifts;
+Office Records never belong to one. A Shift inherits its
 Business Date from its Business Day and has no independent date.
 _Avoid_: slot, rotation, session, duty
 
@@ -75,15 +88,15 @@ _Avoid_: backdating the close
 **Day Seal**:
 What closing a Business Day protects: the day's sales and stock picture. A
 closed Business Day rejects Shift opening/reopening, Stock Counts, Tank Dips,
-Purchases, and opening-stock writes. It still accepts Late Entries on the
-financial ledger.
+Purchases, and opening-stock writes. Office Records are unaffected: they carry
+an Entry Date, not a Business Day. (How calendar-dated Purchases meet the
+sealed stock picture is open; see ADR 0005.)
 _Avoid_: day lock, freeze
 
 **Late Entry**:
-A financial-ledger record (collection, expense, income, supplier payment,
-credit sale, opening balance) written to an already-closed Business Day,
-flagged as such at write time. Late Entries never move stock and never alter
-the day's DSSR Snapshot.
+Retired for Office Records by ADR 0005: they no longer attach to a Business
+Day, so there is no closed day to be late against. Office Records stay
+editable with an audit trail until a future books-close lock exists.
 _Avoid_: backdated entry, adjustment
 
 **Locked Shift**:
@@ -99,13 +112,10 @@ does not alter audit or lifecycle timestamps.
 _Avoid_: backdated timestamp, backdated Shift
 
 **Anchoring Rule**:
-`business_day_id` anchors every record. `shift_id` is optional: set by default
-for drawer-touching movements (sales, cash collections, drawer expenses,
-drawer supplier payments, cash drops), NULL by default otherwise — but always
-passable or preselectable when attributing a record to a shift window helps
-future capabilities slice historical data. Drawer math keys off movement kind,
-never off `shift_id` presence.
-_Avoid_: linking everything to a shift; treating `shift_id` as drawer-math input
+Forecourt records (Shifts, all Sales including Credit Sales, Cash Drops)
+anchor to a Business Day, and Sales and Cash Drops to a Shift. Office Records
+anchor only to an Entry Date (ADR 0005).
+_Avoid_: linking office money to a shift or Business Day
 
 ## Station Setup
 
@@ -247,11 +257,13 @@ _Avoid_: till, cashbox, register
 
 **Collection**:
 A customer payment settling dues — emits `CREDIT_PAYMENT_RECEIVED` and credits
-the customer ledger. Cash Collections touch the Drawer; card/UPI/bank do not.
+the customer ledger. An Office Record in any method; never touches the Drawer,
+even when paid at a pump terminal.
 _Avoid_: receipt, payment-in
 
 **Expense**:
-Money paid out. Drawer Expenses hit the Drawer; bank/owner Expenses do not.
+Money paid out. An Office Record; cash Expenses come from Cash in Hand, never
+the Drawer.
 _Avoid_: cost, spend
 
 **Income**:
@@ -260,11 +272,12 @@ Account with its GST split frozen at capture.
 _Avoid_: other income, misc income
 
 **Supplier Payment**:
-Money paid to a supplier. Cash payments touch the Drawer; bank payments do not.
+Money paid to a supplier. An Office Record; never touches the Drawer.
 _Avoid_: vendor payment, purchase payment
 
 **Purchase**:
-Stock bought from a supplier, anchored to the Business Day, never to a Shift.
+Stock bought from a supplier, never anchored to a Shift. Handled by the
+office; its anchoring against the sealed stock picture is open (ADR 0005).
 _Avoid_: procurement, inward
 
 **Credit Sale**:
@@ -293,9 +306,22 @@ compared against expected drawer cash to produce the cash Variance.
 _Avoid_: cash stated, declared amount
 
 **Drawer Reconciliation**:
-At shift close: `opening + cash sales + cash collections − drawer expenses −
-drawer supplier payments − cash drops`. Card/UPI/bank/credit never enter it.
+At shift close: `opening + cash sales − cash drops`. Office money,
+card/UPI and credit never enter it. Cash the office takes from a Drawer is a
+Cash Drop. _Transition (ADR 0005)_: the code still subtracts Drawer Expenses
+and Drawer Supplier Payments; this entry describes the target, tracked in the
+ADR 0005 milestone.
 _Avoid_: cash count, tally
+
+**Cash in Hand**:
+The station's office cash account (`CASH_IN_HAND`). Receives shift-close cash
+and cash Collections; pays cash Expenses and Supplier Payments.
+_Avoid_: petty cash, office drawer
+
+**Daily Cash Book**:
+A live ledger view per Entry Date and account: opening, in, out, closing. Not
+a snapshot.
+_Avoid_: day book, cash report
 
 ## Customers & Cards
 
@@ -374,12 +400,11 @@ reconciliation plus totals.
 _Avoid_: shift report, closing report, DSSR
 
 **DSSR Snapshot** (Daily Station Sales Report):
-Immutable snapshot created when a Business Day closes: composes the day's
-closed Shift Summaries plus day-anchored financials (collections, expenses,
-purchases, supplier payments, credit sales). A snapshot exists if and only if
-its Business Day is closed; an open day's DSSR is a preview, computed on
-demand and never persisted. Financial sections are as of `generatedAt`; Late
-Entries recorded afterwards do not alter the snapshot.
+Immutable snapshot created when a Business Day closes: a sales-only report
+composing the day's closed Shift Summaries (fuel, product and credit sales,
+their card/UPI split, stock). Office Records are not in it; see Daily Cash
+Book (ADR 0005). A snapshot exists if and only if its Business Day is closed;
+an open day's DSSR is a preview, computed on demand and never persisted.
 _Avoid_: Shift Summary, daily report, day summary
 
 **Attendant Handover Report**:

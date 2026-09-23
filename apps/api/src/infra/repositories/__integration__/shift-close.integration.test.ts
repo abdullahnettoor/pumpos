@@ -534,6 +534,25 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
     expect(bySource.get('SALE_CARD')!.accountId).toBe(clearing.id);
   });
 
+  it('refuses to post when the business day row is missing, instead of guessing a date (#249)', async () => {
+    await expect(
+      runInTransaction(db, async (tx) => {
+        await new LedgerPostingService(tx).postShiftClose(
+          ORG,
+          { id: SHIFT, stationId: STATION, businessDayId: crypto.randomUUID() },
+          { cashSales: 1 },
+        );
+        return { success: true as const, data: null };
+      }),
+    ).rejects.toThrow(/BUSINESS_DAY_MISSING/);
+    // the rollback left the original postings intact
+    const entries = await db
+      .select()
+      .from(schema.ledgerEntries)
+      .where(eq(schema.ledgerEntries.shiftId, SHIFT));
+    expect(entries).toHaveLength(2);
+  });
+
   it('emits CASH_DECLARED and SHIFT_CLOSED events', async () => {
     const events = await db
       .select()
