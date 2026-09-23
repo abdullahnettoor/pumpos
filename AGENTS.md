@@ -497,6 +497,20 @@ Prefer:
 
 # Database Rules
 
+Migrations have one source: `packages/db/migrations`, generated from
+`packages/db/src/schema.ts`. `supabase/migrations` is derived from it.
+
+- Changing `schema.ts`? Run `npm run db:generate -w @pump/db` in the same
+  change and commit everything it writes.
+- Changing a generated migration means changing `schema.ts` and regenerating.
+- RLS, triggers, functions and grants go in a custom migration:
+  `npm run db:generate:custom -w @pump/db -- <name>`.
+- `supabase/migrations` is written only by `npm run db:sync-supabase -w @pump/db`.
+- `npm run db:check -w @pump/db` proves all of the above; CI runs it.
+
+Apply the `drizzle-orm` skill before editing `schema.ts`, adding a migration,
+touching `supabase/migrations`, or writing `CREATE POLICY/TRIGGER/FUNCTION` SQL.
+
 Never optimize prematurely.
 
 Avoid:

@@ -1,19 +1,63 @@
 ---
 name: drizzle-orm
-description: "Type-safe SQL ORM for TypeScript with zero runtime overhead"
+description: "PumpOS schema-change workflow plus Drizzle ORM reference. Use when editing packages/db/src/schema.ts, adding or changing a migration, touching supabase/migrations, or writing CREATE POLICY / TRIGGER / FUNCTION SQL."
 user-invocable: false
-disable-model-invocation: true
 progressive_disclosure:
   entry_point:
-    summary: "Type-safe SQL ORM for TypeScript with zero runtime overhead"
-    when_to_use: "When working with drizzle-orm or related functionality."
-    quick_start: "1. Review the core concepts below. 2. Apply patterns to your use case. 3. Follow best practices for implementation."
+    summary: "PumpOS schema-change workflow plus Drizzle ORM reference"
+    when_to_use: "Editing schema.ts, adding a migration, touching supabase/migrations, or writing RLS/trigger/function SQL."
+    quick_start: "Follow 'PumpOS schema changes' below before anything else."
   references:
     - advanced-schemas.md
     - performance.md
     - query-patterns.md
     - vs-prisma.md
 ---
+
+# PumpOS schema changes
+
+`packages/db/migrations` (the drizzle journal) is the single migration source.
+`supabase/migrations` is a build artifact derived from it. Commands and the
+recreate-don't-migrate policy: `packages/db/README.md`.
+
+Checklist for every schema change. Each step ends when its command is green:
+
+1. **Declare** it in `packages/db/src/schema.ts`: tables, columns, FKs,
+   checks, and indexes, including partial (`.where(sql\`…\`)`) and expression
+   indexes.
+2. **Generate** in the same change: `npm run db:generate -w @pump/db`. This
+   writes the journaled migration + snapshot and re-derives
+   `supabase/migrations`.
+3. **Non-declarative SQL** (RLS policies, `ENABLE ROW LEVEL SECURITY`,
+   triggers, functions, grants, data backfills) goes in its own custom
+   migration: `npm run db:generate:custom -w @pump/db -- <name>`, write the SQL,
+   then `npm run db:sync-supabase -w @pump/db`. A new table's
+   `ENABLE ROW LEVEL SECURITY` + tenant policy belong in the same change as
+   the table.
+4. **Verify**: `npx tsc -b && npm run db:check -w @pump/db` passes. It proves
+   schema.ts has no ungenerated change, no generated SQL was edited, and
+   `supabase/migrations` matches its derivation.
+5. **Commit** schema.ts, the new `migrations/*.sql`, `migrations/meta/*`, and
+   the re-derived `supabase/migrations/*` together.
+
+A generated migration is output: to change it, change schema.ts and
+regenerate. Files in `supabase/migrations` come only from
+`db:sync-supabase`.
+
+## Failure modes this workflow exists to prevent (#268)
+
+- **Hand-pruned generated SQL (0008).** A generated migration had columns
+  removed from its SQL while its snapshot kept them. `drizzle-kit generate`
+  compares schema.ts to the snapshot, so it kept reporting "no changes"
+  while every fresh database lacked the columns, and the API failed at
+  runtime. `db:check` now regenerates each migration from its snapshots and
+  fails on any difference.
+- **One-chain-only SQL (4f19336).** The RLS rewrite was written straight into
+  `supabase/migrations`, so the drizzle chain that provisions real databases
+  never ran it: the preview DB shipped with RLS disabled on all 45 tables,
+  readable with the publishable key. `supabase/migrations` is now derived and
+  CI fails on any file the derivation does not produce.
+
 # Drizzle ORM
 
 Modern TypeScript-first ORM with zero dependencies, compile-time type safety, and SQL-like syntax. Optimized for edge runtimes and serverless environments.

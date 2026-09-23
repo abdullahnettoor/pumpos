@@ -1,3 +1,0 @@
-CREATE INDEX "events_activity_primary_timeline_idx" ON "events" USING btree ("organization_id","recorded_at" desc,"event_id" desc) WHERE "events"."correlation_id" IS NULL OR ("events"."metadata" -> 'grouping' ->> 'role') = 'primary';--> statement-breakpoint
-CREATE INDEX "events_activity_correlation_detail_idx" ON "events" USING btree ("organization_id","correlation_id","occurred_at","event_id") WHERE "events"."correlation_id" IS NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "events_activity_primary_correlation_uniq" ON "events" USING btree ("organization_id","correlation_id") WHERE "events"."correlation_id" IS NOT NULL AND ("events"."metadata" -> 'grouping' ->> 'role') = 'primary';

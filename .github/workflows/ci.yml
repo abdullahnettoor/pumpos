@@ -94,6 +94,74 @@ jobs:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/pumpos_test
         run: npx vitest run apps/api/src/infra/repositories/__integration__
 
+  # One migration source of truth (#270). packages/db/migrations (drizzle
+  # journal) is authoritative; supabase/migrations is derived from it. Each
+  # step below is red on one way the two drifted apart in #268:
+  #
+  #   generate no-op      schema.ts edited without `npm run db:generate`
+  #   db:check (chain)    a generated migration hand-edited after the fact
+  #                       (0008: SQL pruned, snapshot kept the columns), or a
+  #                       SQL file the journal never ships
+  #   db:check (derived)  a hand-written file in supabase/migrations
+  #                       (4f19336: RLS rewrite that only one chain ran)
+  #   fresh provision     the chain fails to apply, or leaves a table without
+  #                       RLS (the preview DB served every table to anon)
+  migrations:
+    name: migrations (single source)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # db:check reads schema.ts from packages/db/dist.
+      - name: Build packages
+        run: npx tsc -b
+
+      - name: drizzle-kit generate is a no-op
+        working-directory: packages/db
+        run: |
+          npx drizzle-kit generate
+          changes="$(git status --porcelain -- migrations)"
+          if [ -n "$changes" ]; then
+            echo "::error::src/schema.ts changed without a migration. Run 'npm run db:generate -w @pump/db' and commit the result."
+            echo "$changes"
+            exit 1
+          fi
+
+      - name: Chain consistent, derived folder in sync, applies fresh
+        env:
+          CHAIN_CHECK_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: npm run db:check -w @pump/db
+
+      # What `supabase start` does: replay the derived folder in filename
+      # order into an empty database, then assert tenancy on the result.
+      - name: Replay supabase/migrations and assert RLS
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb replay
+          for f in supabase/migrations/*.sql; do
+            psql -q -v ON_ERROR_STOP=1 -d replay -f "$f"
+          done
+          psql -v ON_ERROR_STOP=1 -d replay -f supabase/tests/rls_tenancy.test.sql
+
   # Separate job so a lint failure is instantly distinguishable from a broken
   # test, and so lint problems never mask a real regression.
   #
