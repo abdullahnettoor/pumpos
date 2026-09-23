@@ -74,5 +74,5 @@ before running scripts:
 cd packages/db && set -a && . ./.env && set +a && node -e "…postgres…"
 ```
 
-Migrations are plain SQL in `packages/db/migrations/`. Apply them against the live DB
+Migrations live in `packages/db/migrations/` (see `packages/db/README.md`). Apply them against the live DB
 with a small postgres-js script (the worker connects via Hyperdrive at runtime).

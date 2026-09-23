@@ -8,9 +8,12 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
-    "db:generate": "drizzle-kit generate && mkdir -p ../../supabase/migrations && cp migrations/*.sql ../../supabase/migrations/ 2>/dev/null || true",
+    "db:generate": "drizzle-kit generate && node scripts/sync-supabase-migrations.mjs",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "node seed.mjs"
+    "db:seed": "node seed.mjs",
+    "db:generate:custom": "node scripts/generate-custom.mjs",
+    "db:sync-supabase": "node scripts/sync-supabase-migrations.mjs",
+    "db:check": "node scripts/check-migration-chain.mjs && node scripts/sync-supabase-migrations.mjs --check"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

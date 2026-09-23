@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
@@ -20,9 +20,9 @@ import {
  * index that admits a second active row, a CHECK that never fires, or a lock
  * that does not serialize would all pass a fake and fail a customer.
  *
- * The two history tables are created by executing the shipped migration file
- * verbatim, so a change to that file which breaks these guarantees fails here
- * rather than in production.
+ * The schema is created by executing the shipped migration chain verbatim,
+ * so a change to it which breaks these guarantees fails here rather than in
+ * production.
  *
  * Runs only when TEST_DATABASE_URL is set (CI provides a service container).
  *
@@ -58,52 +58,34 @@ const BOOTSTRAP = `
   create schema ${TEST_SCHEMA};
 `;
 
-/** The parts of the product schema these adapters actually touch. */
-const FIXTURE_SCHEMA = `
-  create table organizations (
-    id uuid primary key default gen_random_uuid(),
-    name varchar(255) not null,
-    subscription_plan varchar(50) default 'CORE' not null,
-    subscription_status varchar(50) default 'ACTIVE' not null,
-    access_until timestamptz,
-    suspended_at timestamptz,
-    metadata jsonb default '{}' not null,
-    created_at timestamptz default now() not null,
-    updated_at timestamptz default now() not null
-  );
-
-  create table stations (
-    id uuid primary key default gen_random_uuid(),
-    organization_id uuid not null references organizations(id),
-    name varchar(255) not null,
-    code varchar(50) not null,
-    is_active boolean default true not null,
-    onboarding_status varchar(50) default 'NOT_STARTED' not null,
-    created_at timestamptz default now() not null,
-    updated_at timestamptz default now() not null
-  );
-
-  -- Mirror Supabase's defaults for tenant roles, so the migration's REVOKE
-  -- statements have something to take away.
-  grant usage on schema ${TEST_SCHEMA} to authenticated, anon;
-  grant select, insert, update, delete on all tables in schema ${TEST_SCHEMA} to authenticated;
-`;
-
 /**
- * The shipped migration, executed as written apart from its schema qualifier —
- * drift in that file fails these tests, which is the point of reading it
- * rather than restating the DDL here.
+ * The shipped chain (supabase/migrations, derived from packages/db/migrations),
+ * executed as written apart from its schema qualifier. Drift in those files
+ * fails these tests, which is the point of reading them rather than restating
+ * the DDL here.
  */
-function grantsMigration(): string {
-  const file = path.resolve(
-    __dirname,
-    '../../../../../../supabase/migrations/20260919140000_organization_access_grants.sql',
-  );
-  // The file qualifies objects as both `public.x` and `"public"."x"`; both
+function shippedSchema(): string {
+  const dir = path.resolve(__dirname, '../../../../../../supabase/migrations');
+  // The files qualify objects as both `public.x` and `"public"."x"`; both
   // forms have to move, or a table would be created in the test schema while
   // its foreign key still pointed at the real one.
-  return readFileSync(file, 'utf8').replace(/(?:"public"|public)\./g, `"${TEST_SCHEMA}".`);
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+    .map((f) => readFileSync(path.join(dir, f), 'utf8'))
+    .join('\n')
+    .replace(/(?:"public"|public)\./g, `"${TEST_SCHEMA}".`);
 }
+
+/**
+ * Mirror Supabase's default privileges for tenant roles, so the migration's
+ * REVOKE statements have something to take away.
+ */
+const SUPABASE_DEFAULT_GRANTS = `
+  grant usage on schema ${TEST_SCHEMA} to authenticated, anon;
+  alter default privileges in schema ${TEST_SCHEMA}
+    grant select, insert, update, delete on tables to authenticated;
+`;
 
 const actor = { email: 'admin@pumpos.app', subjectId: 'auth-1' };
 
@@ -136,11 +118,14 @@ describe.skipIf(!CONNECTION)('Organization access against real Postgres', () => 
       // inside BOOTSTRAP create shared/global objects that collide when
       // replayed concurrently.
       await bootstrap.unsafe('select pg_advisory_lock(872634)');
+      await bootstrap.unsafe(BOOTSTRAP);
       await bootstrap.unsafe(
-        BOOTSTRAP.replace(
-          /create trigger on_auth_user_created/gi,
-          'create or replace trigger on_auth_user_created',
-        ),
+        `set search_path to ${TEST_SCHEMA};` +
+          SUPABASE_DEFAULT_GRANTS +
+          shippedSchema().replace(
+            /create trigger on_auth_user_created/gi,
+            'create or replace trigger on_auth_user_created',
+          ),
       );
       await bootstrap.unsafe('select pg_advisory_unlock(872634)');
     } finally {
@@ -154,8 +139,6 @@ describe.skipIf(!CONNECTION)('Organization access against real Postgres', () => 
       onnotice: () => {},
       connection: { search_path: TEST_SCHEMA },
     });
-    await sql.unsafe(FIXTURE_SCHEMA);
-    await sql.unsafe(grantsMigration());
     db = drizzle(sql, { schema }) as unknown as DbClient;
   }, 60_000);
 

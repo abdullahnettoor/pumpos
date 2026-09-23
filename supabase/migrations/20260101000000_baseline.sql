@@ -1,3 +1,6 @@
+-- DERIVED from packages/db/migrations/0000_baseline.sql by
+-- `npm run db:sync-supabase -w @pump/db`. Edit the source, never this copy.
+
 CREATE TABLE "attendant_handovers" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"organization_id" uuid NOT NULL,
@@ -39,6 +42,7 @@ CREATE TABLE "collections" (
 	"amount" numeric(12, 2) NOT NULL,
 	"payment_method" varchar(50) NOT NULL,
 	"notes" varchar(500),
+	"metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -73,6 +77,7 @@ CREATE TABLE "customer_transactions" (
 	"reference_type" varchar(50),
 	"reference_id" uuid,
 	"notes" varchar(500),
+	"metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -174,6 +179,7 @@ CREATE TABLE "expenses" (
 	"parent_expense_id" uuid,
 	"adjustment_reason" varchar(255),
 	"status" varchar(20) DEFAULT 'ACTIVE' NOT NULL,
+	"metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
@@ -221,10 +227,20 @@ CREATE TABLE "idempotency_keys" (
 	"organization_id" uuid NOT NULL,
 	"idempotency_key" varchar(255) NOT NULL,
 	"request_path" varchar(255),
+	"actor_id" uuid,
+	"request_hash" varchar(64),
 	"response_status" integer,
 	"response_body" jsonb,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "idempotency_keys_idempotency_key_unique" UNIQUE("idempotency_key")
+	"created_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "income_categories" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"name" varchar(100) NOT NULL,
+	"tax_config" jsonb,
+	"is_system" boolean DEFAULT false NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "invoices" (
@@ -295,11 +311,69 @@ CREATE TABLE "nozzles" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "organization_capability_grants" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"capability_key" varchar(100) NOT NULL,
+	"granted_by_subject" varchar(255),
+	"granted_by_email" varchar(255) NOT NULL,
+	"reason" varchar(500),
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"revoked_at" timestamp with time zone,
+	"revoked_by_subject" varchar(255),
+	"revoked_by_email" varchar(255)
+);
+--> statement-breakpoint
+CREATE TABLE "organization_limit_overrides" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"limit_key" varchar(100) NOT NULL,
+	"value" integer NOT NULL,
+	"assigned_by_subject" varchar(255),
+	"assigned_by_email" varchar(255) NOT NULL,
+	"reason" varchar(500),
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"revoked_at" timestamp with time zone,
+	"revoked_by_subject" varchar(255),
+	"revoked_by_email" varchar(255),
+	CONSTRAINT "organization_limit_overrides_value_positive" CHECK ("organization_limit_overrides"."value" > 0)
+);
+--> statement-breakpoint
 CREATE TABLE "organizations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" varchar(255) NOT NULL,
-	"subscription_plan" varchar(50) DEFAULT 'Core' NOT NULL,
-	"subscription_status" varchar(50) DEFAULT 'Active' NOT NULL,
+	"subscription_plan" varchar(50) DEFAULT 'CORE' NOT NULL,
+	"subscription_status" varchar(50) DEFAULT 'ACTIVE' NOT NULL,
+	"access_until" timestamp with time zone,
+	"suspended_at" timestamp with time zone,
+	"metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "other_income" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"shift_id" uuid,
+	"business_day_id" uuid NOT NULL,
+	"category_id" uuid NOT NULL,
+	"amount" numeric(12, 2) NOT NULL,
+	"received_into" varchar(20) DEFAULT 'SHIFT_CASH' NOT NULL,
+	"affects_drawer" boolean DEFAULT true NOT NULL,
+	"payer" varchar(255),
+	"reference_type" varchar(50),
+	"reference_id" uuid,
+	"description" varchar(500),
+	"tax_category" varchar(20) DEFAULT 'NON_TAXABLE' NOT NULL,
+	"gst_rate" numeric(5, 2),
+	"cess_rate" numeric(5, 2),
+	"hsn_code" varchar(50),
+	"taxable_amount" numeric(12, 2),
+	"cgst" numeric(12, 2) DEFAULT '0' NOT NULL,
+	"sgst" numeric(12, 2) DEFAULT '0' NOT NULL,
+	"igst" numeric(12, 2) DEFAULT '0' NOT NULL,
+	"cess" numeric(12, 2) DEFAULT '0' NOT NULL,
+	"tax_snapshot" jsonb,
+	"status" varchar(20) DEFAULT 'ACTIVE' NOT NULL,
 	"metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
@@ -514,6 +588,7 @@ CREATE TABLE "stock_variances" (
 	"variance_quantity" numeric(12, 3) NOT NULL,
 	"reason" varchar(255),
 	"approved_by" uuid,
+	"metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -529,6 +604,7 @@ CREATE TABLE "supplier_transactions" (
 	"reference_type" varchar(50),
 	"reference_id" uuid,
 	"notes" varchar(500),
+	"metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -551,6 +627,7 @@ CREATE TABLE "tanks" (
 	"name" varchar(100) NOT NULL,
 	"product_id" uuid NOT NULL,
 	"capacity" numeric(12, 2) NOT NULL,
+	"status" varchar(20) DEFAULT 'ACTIVE' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
@@ -570,42 +647,6 @@ CREATE TABLE "users" (
 	"email" varchar(255),
 	"phone" varchar(50),
 	"role" varchar(50) DEFAULT 'Staff' NOT NULL,
-	"status" varchar(20) DEFAULT 'ACTIVE' NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "income_categories" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"organization_id" uuid NOT NULL,
-	"name" varchar(100) NOT NULL,
-	"tax_config" jsonb,
-	"is_system" boolean DEFAULT false NOT NULL,
-	"is_active" boolean DEFAULT true NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "other_income" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"shift_id" uuid,
-	"business_day_id" uuid NOT NULL,
-	"category_id" uuid NOT NULL,
-	"amount" numeric(12, 2) NOT NULL,
-	"received_into" varchar(20) DEFAULT 'SHIFT_CASH' NOT NULL,
-	"affects_drawer" boolean DEFAULT true NOT NULL,
-	"payer" varchar(255),
-	"reference_type" varchar(50),
-	"reference_id" uuid,
-	"description" varchar(500),
-	"tax_category" varchar(20) DEFAULT 'NON_TAXABLE' NOT NULL,
-	"gst_rate" numeric(5, 2),
-	"cess_rate" numeric(5, 2),
-	"hsn_code" varchar(50),
-	"taxable_amount" numeric(12, 2),
-	"cgst" numeric(12, 2) DEFAULT '0' NOT NULL,
-	"sgst" numeric(12, 2) DEFAULT '0' NOT NULL,
-	"igst" numeric(12, 2) DEFAULT '0' NOT NULL,
-	"cess" numeric(12, 2) DEFAULT '0' NOT NULL,
-	"tax_snapshot" jsonb,
 	"status" varchar(20) DEFAULT 'ACTIVE' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
@@ -664,6 +705,7 @@ ALTER TABLE "handover_terminal_entries" ADD CONSTRAINT "handover_terminal_entrie
 ALTER TABLE "handover_terminal_entries" ADD CONSTRAINT "handover_terminal_entries_terminal_id_payment_terminals_id_fk" FOREIGN KEY ("terminal_id") REFERENCES "public"."payment_terminals"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "handover_terminal_entries" ADD CONSTRAINT "handover_terminal_entries_du_id_dispenser_units_id_fk" FOREIGN KEY ("du_id") REFERENCES "public"."dispenser_units"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "idempotency_keys" ADD CONSTRAINT "idempotency_keys_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "income_categories" ADD CONSTRAINT "income_categories_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_station_id_stations_id_fk" FOREIGN KEY ("station_id") REFERENCES "public"."stations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_sale_id_sales_id_fk" FOREIGN KEY ("sale_id") REFERENCES "public"."sales"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -679,6 +721,11 @@ ALTER TABLE "nozzles" ADD CONSTRAINT "nozzles_organization_id_organizations_id_f
 ALTER TABLE "nozzles" ADD CONSTRAINT "nozzles_station_id_stations_id_fk" FOREIGN KEY ("station_id") REFERENCES "public"."stations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "nozzles" ADD CONSTRAINT "nozzles_du_id_dispenser_units_id_fk" FOREIGN KEY ("du_id") REFERENCES "public"."dispenser_units"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "nozzles" ADD CONSTRAINT "nozzles_tank_id_tanks_id_fk" FOREIGN KEY ("tank_id") REFERENCES "public"."tanks"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "organization_capability_grants" ADD CONSTRAINT "organization_capability_grants_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "organization_limit_overrides" ADD CONSTRAINT "organization_limit_overrides_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "other_income" ADD CONSTRAINT "other_income_shift_id_shifts_id_fk" FOREIGN KEY ("shift_id") REFERENCES "public"."shifts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "other_income" ADD CONSTRAINT "other_income_business_day_id_business_days_id_fk" FOREIGN KEY ("business_day_id") REFERENCES "public"."business_days"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "other_income" ADD CONSTRAINT "other_income_category_id_income_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."income_categories"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payment_terminals" ADD CONSTRAINT "payment_terminals_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payment_terminals" ADD CONSTRAINT "payment_terminals_station_id_stations_id_fk" FOREIGN KEY ("station_id") REFERENCES "public"."stations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "products" ADD CONSTRAINT "products_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -728,18 +775,20 @@ ALTER TABLE "tanks" ADD CONSTRAINT "tanks_station_id_stations_id_fk" FOREIGN KEY
 ALTER TABLE "user_station_assignments" ADD CONSTRAINT "user_station_assignments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_station_assignments" ADD CONSTRAINT "user_station_assignments_station_id_stations_id_fk" FOREIGN KEY ("station_id") REFERENCES "public"."stations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "users" ADD CONSTRAINT "users_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "income_categories" ADD CONSTRAINT "income_categories_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "other_income" ADD CONSTRAINT "other_income_shift_id_shifts_id_fk" FOREIGN KEY ("shift_id") REFERENCES "public"."shifts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "other_income" ADD CONSTRAINT "other_income_business_day_id_business_days_id_fk" FOREIGN KEY ("business_day_id") REFERENCES "public"."business_days"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "other_income" ADD CONSTRAINT "other_income_category_id_income_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."income_categories"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "attendant_handovers_org_station_shift_user_du_uniq" ON "attendant_handovers" USING btree ("organization_id","station_id","shift_id","user_id","du_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "business_days_org_station_date_uniq" ON "business_days" USING btree ("organization_id","station_id","business_date");--> statement-breakpoint
 CREATE INDEX "customer_txn_shift_attendant_idx" ON "customer_transactions" USING btree ("shift_id","attendant_id");--> statement-breakpoint
 CREATE INDEX "customer_txn_shift_du_idx" ON "customer_transactions" USING btree ("shift_id","du_id");--> statement-breakpoint
+CREATE INDEX "events_activity_primary_timeline_idx" ON "events" USING btree ("organization_id","recorded_at" desc,"event_id" desc) WHERE "events"."correlation_id" IS NULL OR ("events"."metadata" -> 'grouping' ->> 'role') = 'primary';--> statement-breakpoint
+CREATE INDEX "events_activity_correlation_detail_idx" ON "events" USING btree ("organization_id","correlation_id","occurred_at","event_id") WHERE "events"."correlation_id" IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "events_activity_primary_correlation_uniq" ON "events" USING btree ("organization_id","correlation_id") WHERE "events"."correlation_id" IS NOT NULL AND ("events"."metadata" -> 'grouping' ->> 'role') = 'primary';--> statement-breakpoint
 CREATE UNIQUE INDEX "expense_categories_org_name_idx" ON "expense_categories" USING btree ("organization_id","name");--> statement-breakpoint
 CREATE INDEX "financial_accounts_org_station_idx" ON "financial_accounts" USING btree ("organization_id","station_id");--> statement-breakpoint
 CREATE INDEX "handover_terminal_entries_handover_idx" ON "handover_terminal_entries" USING btree ("handover_id");--> statement-breakpoint
 CREATE INDEX "handover_terminal_entries_shift_idx" ON "handover_terminal_entries" USING btree ("shift_id");--> statement-breakpoint
 CREATE INDEX "idempotency_keys_org_idx" ON "idempotency_keys" USING btree ("organization_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "idempotency_keys_org_key_uniq" ON "idempotency_keys" USING btree ("organization_id","idempotency_key");--> statement-breakpoint
+CREATE UNIQUE INDEX "income_categories_org_name_idx" ON "income_categories" USING btree ("organization_id","name");--> statement-breakpoint
 CREATE UNIQUE INDEX "invoices_org_number_uniq" ON "invoices" USING btree ("organization_id","invoice_number");--> statement-breakpoint
 CREATE UNIQUE INDEX "invoices_sale_uniq" ON "invoices" USING btree ("sale_id") WHERE "sale_id" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "invoices_org_fy_idx" ON "invoices" USING btree ("organization_id","financial_year");--> statement-breakpoint
@@ -749,10 +798,15 @@ CREATE INDEX "ledger_entries_org_station_idx" ON "ledger_entries" USING btree ("
 CREATE INDEX "ledger_entries_org_station_date_idx" ON "ledger_entries" USING btree ("organization_id","station_id","entry_date");--> statement-breakpoint
 CREATE INDEX "ledger_entries_source_idx" ON "ledger_entries" USING btree ("source_type","source_id");--> statement-breakpoint
 CREATE INDEX "ledger_entries_transfer_idx" ON "ledger_entries" USING btree ("transfer_id");--> statement-breakpoint
-CREATE INDEX "purchase_items_purchase_id_idx" ON "purchase_items" USING btree ("purchase_id");--> statement-breakpoint
-CREATE INDEX "purchase_items_product_id_idx" ON "purchase_items" USING btree ("product_id");--> statement-breakpoint
-CREATE INDEX "sales_shift_attendant_idx" ON "sales" USING btree ("shift_id","attendant_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "income_categories_org_name_idx" ON "income_categories" USING btree ("organization_id","name");--> statement-breakpoint
+CREATE INDEX "organization_capability_grants_org_idx" ON "organization_capability_grants" USING btree ("organization_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "organization_capability_grants_active_uniq" ON "organization_capability_grants" USING btree ("organization_id","capability_key") WHERE "organization_capability_grants"."revoked_at" IS NULL;--> statement-breakpoint
+CREATE INDEX "organization_limit_overrides_org_idx" ON "organization_limit_overrides" USING btree ("organization_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "organization_limit_overrides_active_uniq" ON "organization_limit_overrides" USING btree ("organization_id","limit_key") WHERE "organization_limit_overrides"."revoked_at" IS NULL;--> statement-breakpoint
 CREATE INDEX "other_income_business_day_idx" ON "other_income" USING btree ("business_day_id");--> statement-breakpoint
 CREATE INDEX "other_income_shift_idx" ON "other_income" USING btree ("shift_id");--> statement-breakpoint
 CREATE INDEX "other_income_category_idx" ON "other_income" USING btree ("category_id");--> statement-breakpoint
+CREATE INDEX "purchase_items_purchase_id_idx" ON "purchase_items" USING btree ("purchase_id");--> statement-breakpoint
+CREATE INDEX "purchase_items_product_id_idx" ON "purchase_items" USING btree ("product_id");--> statement-breakpoint
+CREATE INDEX "sales_shift_attendant_idx" ON "sales" USING btree ("shift_id","attendant_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "shifts_station_open_uniq" ON "shifts" USING btree ("organization_id","station_id") WHERE "shifts"."status" = 'OPEN';--> statement-breakpoint
+CREATE UNIQUE INDEX "users_auth_user_id_uniq" ON "users" USING btree ("auth_user_id") WHERE "users"."auth_user_id" IS NOT NULL;
