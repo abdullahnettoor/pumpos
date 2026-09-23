@@ -76,7 +76,9 @@ Anchoring rules (target, ADR 0005):
   (the fuel is already metered via nozzle readings). Customer balance =
   Σ credit sales − Σ collections.
 
-Drawer reconciliation at shift close:
+Drawer reconciliation at shift close (**target, ADR 0005** — the code still
+subtracts `drawerExpenses` and `drawerSupplierPayments`; see the transition
+note above and the ADR 0005 milestone):
 
 ```text
 expectedDrawerCash = openingCash + cashSales − cashDrops

@@ -308,7 +308,9 @@ _Avoid_: cash stated, declared amount
 **Drawer Reconciliation**:
 At shift close: `opening + cash sales − cash drops`. Office money,
 card/UPI and credit never enter it. Cash the office takes from a Drawer is a
-Cash Drop.
+Cash Drop. _Transition (ADR 0005)_: the code still subtracts Drawer Expenses
+and Drawer Supplier Payments; this entry describes the target, tracked in the
+ADR 0005 milestone.
 _Avoid_: cash count, tally
 
 **Cash in Hand**:

@@ -1,5 +1,13 @@
 # Day close seals sales and stock, not the financial ledger
 
+> **Status: partially superseded by [ADR 0005](0005-sales-day-vs-office-calendar-date.md)
+> (2026-09-23).** The financial-ledger half of this ADR — Late Entries and
+> business-day anchoring for collections, expenses, income and supplier
+> payments — no longer applies: office records anchor to the station-timezone
+> calendar date and Late Entry is retired. The sales-and-stock sealing half
+> (shift summaries, nozzle volumes, tank stock) stands. The purchases-vs-sealed-
+> stock interaction is an open question in ADR 0005.
+
 Closing a Business Day exists to protect the day's sales and stock picture (shift
 summaries, nozzle-derived volumes, tank stock). Financial-ledger records —
 collections, expenses, income, supplier payments, credit sales, opening
