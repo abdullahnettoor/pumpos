@@ -58,10 +58,31 @@ Consequences:
 - **Pure calendar for everything.** Rejected: a shift that crosses midnight
   would span two dates.
 
+## Clarifications (2026-09-23 grilling)
+
+- **Purchases stay forecourt stock events** anchored to the Business Day, and
+  the Day Seal still covers them. The DSSR keeps purchase and stock lines.
+  Paying the supplier is a separate Supplier Payment (an Office Record).
+- **Funding Account replaces `paid_from` / `received_into`.** An Office Record
+  names the Financial Account the money moved through (Cash in Hand, Petty
+  Cash, a specific bank, Owner…). Its method filters the accounts offered.
+  `SHIFT_CASH` is removed.
+- **Entry Date** defaults to today in the station timezone. The user may pick
+  any past date but never a future one. There is no window until a books-close
+  lock exists.
+- **Shift-close cash** posts to Cash in Hand on the station-timezone calendar
+  date of the close instant, not the Shift Business Date. With Delayed Closure
+  that is the date the cash actually reached the office.
+
+- **The Drawer is per Attendant.** Each Attendant/DU gets an Opening Float
+  (0 allowed) at Shift open and is reconciled at Handover as
+  `float + DU cash sales − that Drawer's Cash Drops`. The Shift figure is the
+  sum. Rejected: one shift-wide float nobody owns, which is how the code
+  worked before and does not match stations where each DSM carries a pouch.
+
 ## Open / deferred
 
-- **Purchases.** Treated as office records here, but they move tank stock, and
-  ADR 0003 seals stock on day close. How a calendar-dated Purchase interacts
-  with the sealed stock picture needs its own decision.
+- **Purchases on a calendar date.** Revisit only if accountants need invoice
+  dates separate from the stock receipt day.
 - **Bank value date** (statement date, for bank reconciliation) is a third
   date axis. It goes in a separate future ADR.
