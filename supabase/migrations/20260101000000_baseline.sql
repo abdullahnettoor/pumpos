@@ -1,5 +1,5 @@
--- GENERATED from packages/db/migrations/0000_baseline.sql. Do not edit.
--- Change packages/db/src/schema.ts and run `npm run db:generate`.
+-- DERIVED from packages/db/migrations/0000_baseline.sql by
+-- `npm run db:sync-supabase -w @pump/db`. Edit the source, never this copy.
 
 CREATE TABLE "attendant_handovers" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,

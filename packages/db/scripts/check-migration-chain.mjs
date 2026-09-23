@@ -52,7 +52,11 @@ const statementsOf = (sqlText) =>
     .map((s) => s.trim())
     .filter(Boolean);
 
-/** The state before the first migration: an empty database. */
+/**
+ * The state before the first migration: an empty database, in drizzle-kit's
+ * snapshot format (version 7, drizzle-kit 0.31). If a drizzle-kit upgrade bumps
+ * the snapshot version, update this too, or every migration reads as edited.
+ */
 const EMPTY = {
   id: '00000000-0000-0000-0000-000000000000',
   prevId: '',
@@ -114,7 +118,7 @@ if (failures.length) {
   console.error(
     '\nFix: change src/schema.ts, then `npm run db:generate -w @pump/db`. Never hand-edit a' +
       ' generated migration; regenerate it. Triggers/RLS/functions go in' +
-      ' `npx drizzle-kit generate --custom --name <name>`.',
+      ' `npm run db:generate:custom -w @pump/db -- <name>`.',
   );
   process.exit(1);
 }

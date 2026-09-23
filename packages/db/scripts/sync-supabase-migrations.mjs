@@ -42,8 +42,8 @@ export function expectedFiles() {
     const name = `${versionFor(idx)}_${tag.replace(/^\d+_/, '')}.sql`;
     const body = readFileSync(path.join(SOURCE_DIR, `${tag}.sql`), 'utf8');
     const header =
-      `-- GENERATED from packages/db/migrations/${tag}.sql. Do not edit.\n` +
-      `-- Change packages/db/src/schema.ts and run \`npm run db:generate\`.\n\n`;
+      `-- DERIVED from packages/db/migrations/${tag}.sql by\n` +
+      `-- \`npm run db:sync-supabase -w @pump/db\`. Edit the source, never this copy.\n\n`;
     files.set(name, header + body);
   }
   return files;

@@ -1,5 +1,5 @@
--- GENERATED from packages/db/migrations/0001_rls_and_triggers.sql. Do not edit.
--- Change packages/db/src/schema.ts and run `npm run db:generate`.
+-- DERIVED from packages/db/migrations/0001_rls_and_triggers.sql by
+-- `npm run db:sync-supabase -w @pump/db`. Edit the source, never this copy.
 
 -- =====================================================================
 -- 0001 — Auth bootstrap, provisioning triggers, Row-Level Security
