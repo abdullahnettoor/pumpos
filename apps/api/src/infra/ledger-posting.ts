@@ -434,8 +434,15 @@ export class LedgerPostingService {
             AND fa.account_type IN ('CASH_IN_HAND', 'MERCHANT_CLEARING')), '[]'::jsonb) AS accounts
     `)) as unknown as [Record<string, any>];
 
-    const entryDate: string =
-      (read.business_date as string | null) ?? new Date().toISOString().slice(0, 10);
+    // shifts.business_day_id is a NOT NULL FK, so the row always exists. A
+    // missing row is corruption: refuse (rolling back the close) rather than
+    // guess a date (#249).
+    const entryDate = read.business_date as string | null;
+    if (!entryDate) {
+      throw new Error(
+        `BUSINESS_DAY_MISSING: shift ${shift.id} references business day ${shift.businessDayId}, which was not found`,
+      );
+    }
     const termEntries: Array<{
       card: string | null;
       upi: string | null;
