@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
+import { resolveEntryDate } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
-import { Field, MoneyInput, TextInput } from '../primitives/Field.js';
+import { DateField, Field, MoneyInput, TextInput } from '../primitives/Field.js';
 import { Combobox } from '../primitives/Combobox.js';
-import { AccountSelect } from '../primitives/AccountSelect.js';
+import { FundingAccountSelect } from '../primitives/FundingAccountSelect.js';
+import { SUPPLIER_PAYMENT_ACCOUNT_TYPES } from '../../utils/fundingAccounts.js';
 import { Button, Form } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
 import { CloudTransactionService } from '../../services/cloud.js';
-import { useInvalidateOperational } from '../../query/hooks.js';
+import { useInvalidateOperational, useStationTimeZone } from '../../query/hooks.js';
 import { useToast } from '../primitives/ToastProvider.js';
 
 const transactionService = new CloudTransactionService();
@@ -18,6 +20,8 @@ interface SupplierPaymentDrawerProps {
   /** Pick list for a standalone launch (when no fixed `supplier`). */
   suppliers?: any[];
   stationId: string | null;
+  /** Station timezone — the entry date defaults to today there. */
+  timeZone?: string | null;
   onClose: () => void;
   /** Called after a successful payment (e.g. to refresh the open statement). */
   onDone?: () => void | Promise<unknown>;
@@ -25,9 +29,8 @@ interface SupplierPaymentDrawerProps {
 
 /**
  * Record a payment to a supplier (reduces the payable). Self-contained: owns its
- * form + save + toast. Business-day anchored and account-driven — the chosen
- * pay-from account decides drawer impact server-side (no shift required for
- * bank/owner payments). Amount defaults to the outstanding balance.
+ * form + save + toast. An Office Record (ADR 0005): entry date + the account it
+ * is paid from, never a shift. Amount defaults to the outstanding balance.
  */
 export const SupplierPaymentDrawer: React.FC<SupplierPaymentDrawerProps> = ({
   isOpen,
@@ -48,9 +51,12 @@ const SupplierPaymentForm: React.FC<Omit<SupplierPaymentDrawerProps, 'isOpen'>> 
   supplier,
   suppliers,
   stationId,
+  timeZone,
   onClose,
   onDone,
 }) => {
+  const stationTimeZone = useStationTimeZone(stationId);
+  const today = resolveEntryDate({ timeZone: timeZone ?? stationTimeZone });
   const invalidateOperational = useInvalidateOperational();
   const toast = useToast();
   // Prefilling the owed amount is the initial value, not a reaction to a change.
@@ -59,7 +65,13 @@ const SupplierPaymentForm: React.FC<Omit<SupplierPaymentDrawerProps, 'isOpen'>> 
     const owedNow = Number(supplier?.currentBalance || 0);
     return supplier && owedNow > 0 ? owedNow.toFixed(2) : '';
   });
-  const [accountId, setAccountId] = useState('');
+  const [fundingAccountId, setFundingAccountId] = useState('');
+  const [entryDate, setEntryDate] = useState(today);
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const onAccountChange = React.useCallback((v: string) => {
+    setFundingAccountId(v);
+    if (v) setAccountError(null);
+  }, []);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,15 +89,20 @@ const SupplierPaymentForm: React.FC<Omit<SupplierPaymentDrawerProps, 'isOpen'>> 
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resolvedSupplier?.id || !amount || Number(amount) <= 0) return;
+    if (!stationId || !resolvedSupplier?.id || !amount || Number(amount) <= 0) return;
+    if (!fundingAccountId) {
+      setAccountError('Choose the account');
+      return;
+    }
     try {
       setSubmitting(true);
       setError(null);
       await transactionService.recordSupplierPayment({
-        stationId: stationId ?? undefined,
+        stationId,
+        entryDate: entryDate || undefined,
+        fundingAccountId,
         supplierId: resolvedSupplier.id,
         amount: Number(amount),
-        accountId: accountId || undefined,
         notes: notes || undefined,
       });
       toast.success('Supplier payment recorded.');
@@ -174,12 +191,23 @@ const SupplierPaymentForm: React.FC<Omit<SupplierPaymentDrawerProps, 'isOpen'>> 
         />
       </Field>
 
-      <Field label="Pay from account">
-        <AccountSelect
-          stationId={stationId}
-          value={accountId}
-          onChange={setAccountId}
+      <Field label="Entry date" required>
+        <DateField
+          max={today}
+          value={entryDate}
+          onChange={(e) => setEntryDate(e.target.value)}
           disabled={submitting}
+        />
+      </Field>
+
+      <Field label="Paid from" required error={accountError ?? undefined}>
+        <FundingAccountSelect
+          types={SUPPLIER_PAYMENT_ACCOUNT_TYPES}
+          stationId={stationId}
+          value={fundingAccountId}
+          onChange={onAccountChange}
+          disabled={submitting}
+          invalid={!!accountError}
         />
       </Field>
 

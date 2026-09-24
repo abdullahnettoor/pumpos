@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import type {
   DssrDataReader,
@@ -87,63 +87,10 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       .leftJoin(schema.shiftTemplates, eq(schema.shiftTemplates.id, schema.shifts.shiftTemplateId))
       .where(eq(schema.shifts.businessDayId, businessDayId));
 
-    const collectionRows = await this.db
-      .select({
-        paymentMethod: schema.collections.paymentMethod,
-        amount: schema.collections.amount,
-      })
-      .from(schema.collections)
-      .where(sql`${schema.collections.metadata}->>'businessDayId' = ${businessDayId}`); // TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280)
-
-    const expenseRows = await this.db
-      .select({
-        affectsDrawer: schema.expenses.affectsDrawer,
-        paidFrom: sql<string>`COALESCE(${schema.expenses.metadata}->>'paidFrom', 'SHIFT_CASH')`, // TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280)
-        amount: schema.expenses.amount,
-        status: schema.expenses.status,
-      })
-      .from(schema.expenses)
-      .where(sql`${schema.expenses.metadata}->>'businessDayId' = ${businessDayId}`); // TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280)
-
-    const incomeRows = await this.db
-      .select({
-        affectsDrawer: schema.otherIncome.affectsDrawer,
-        receivedInto: sql<string>`COALESCE(${schema.otherIncome.metadata}->>'receivedInto', 'SHIFT_CASH')`, // TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280)
-        amount: schema.otherIncome.amount,
-        status: schema.otherIncome.status,
-        categoryName: schema.incomeCategories.name,
-        taxCategory: schema.otherIncome.taxCategory,
-        taxableAmount: schema.otherIncome.taxableAmount,
-        cgst: schema.otherIncome.cgst,
-        sgst: schema.otherIncome.sgst,
-        igst: schema.otherIncome.igst,
-        cess: schema.otherIncome.cess,
-      })
-      .from(schema.otherIncome)
-      .leftJoin(
-        schema.incomeCategories,
-        eq(schema.incomeCategories.id, schema.otherIncome.categoryId),
-      )
-      .where(sql`${schema.otherIncome.metadata}->>'businessDayId' = ${businessDayId}`); // TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280)
-
     const purchaseRows = await this.db
       .select({ amount: schema.purchases.amount })
       .from(schema.purchases)
       .where(eq(schema.purchases.businessDayId, businessDayId));
-
-    const supplierPaymentRows = await this.db
-      .select({
-        affectsDrawer: schema.supplierTransactions.affectsDrawer,
-        paidFrom: sql<string>`COALESCE(${schema.supplierTransactions.metadata}->>'paidFrom', 'BANK')`, // TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280)
-        amount: schema.supplierTransactions.amount,
-      })
-      .from(schema.supplierTransactions)
-      .where(
-        and(
-          sql`${schema.supplierTransactions.metadata}->>'businessDayId' = ${businessDayId}`, // TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280)
-          eq(schema.supplierTransactions.transactionType, 'Payment'),
-        ),
-      );
 
     const saleRows = await this.db
       .select({
@@ -246,35 +193,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         shiftSequence: r.shiftSequence ?? null,
         snapshot: (r.snapshotData as Record<string, unknown>) ?? {},
       })),
-      collections: collectionRows.map((r) => ({
-        paymentMethod: r.paymentMethod,
-        amount: Number(r.amount),
-      })),
-      expenses: expenseRows.map((r) => ({
-        affectsDrawer: r.affectsDrawer,
-        paidFrom: r.paidFrom,
-        amount: Number(r.amount),
-        status: r.status,
-      })),
-      income: incomeRows.map((r) => ({
-        affectsDrawer: r.affectsDrawer,
-        receivedInto: r.receivedInto,
-        amount: Number(r.amount),
-        status: r.status,
-        categoryName: r.categoryName ?? null,
-        taxCategory: r.taxCategory ?? null,
-        taxableAmount: r.taxableAmount != null ? Number(r.taxableAmount) : null,
-        cgst: Number(r.cgst ?? 0),
-        sgst: Number(r.sgst ?? 0),
-        igst: Number(r.igst ?? 0),
-        cess: Number(r.cess ?? 0),
-      })),
       purchases: purchaseRows.map((r) => ({ amount: Number(r.amount) })),
-      supplierPayments: supplierPaymentRows.map((r) => ({
-        affectsDrawer: r.affectsDrawer,
-        paidFrom: r.paidFrom,
-        amount: Number(r.amount),
-      })),
       sales: saleRows.map((r) => ({
         paymentMethod: r.paymentMethod,
         saleType: r.saleType,

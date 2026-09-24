@@ -154,10 +154,12 @@ What happens during a typical shift, and where to record it:
 - **Merchandise sale**: **Merchandise Sale** → product, quantity, payment
   mode. Stock decrements automatically.
 - **Customer collection** (customer pays down credit): **Log Collection** →
-  customer, amount, mode. Cash collections join the drawer; bank/UPI
-  collections need a **Deposit to** account.
-- **Petty expense from the drawer**: **Add Expense (E)** → category, amount,
-  paid-from. Drawer-cash expenses reduce expected drawer cash.
+  customer, amount, mode, entry date, the account it landed in (Cash in Hand
+  / Petty Cash for cash; a bank or clearing account for UPI/card, or pick the
+  payment terminal). It is office money: it never touches the drawer.
+- **Petty expense**: **Add Expense (E)** → category, amount, entry date,
+  paid-from account (e.g. Petty Cash). Office money: it never touches the
+  drawer. Cash taken out of a drawer for it is a cash drop.
 - **Fuel delivery mid-shift**: **Add Purchase (P)** → supplier, tank,
   quantity, invoice; tick **Record payment now** if paid on the spot.
 - **Attendant handover** (attendant ends duty or hands cash to the safe):
@@ -177,8 +179,8 @@ credit sales are in before you close.
 Active Shift → **Close Shift** — a 4-step wizard:
 
 1. **Cash Reconciliation** — "Count safe cash by denomination". Expected
-   drawer cash = opening float + cash sales + cash collections − drawer
-   expenses − cash supplier payments − cash drops. Enter the real count;
+   drawer cash = opening float + cash sales − cash drops (collections,
+   expenses and supplier payments are office money, never drawer cash). Enter the real count;
    the difference is recorded as variance with a reason.
 2. **Physical Dip Readings** — enter each tank's dip. Skipping is allowed
    ("Close without recording Tank Dips?") but dips are what catch tank
@@ -192,7 +194,10 @@ Shift** starts the following window; past shifts live under **History**.
 
 ## 9. Day-to-day finance (any time, not shift-bound)
 
-These attach to the business day; a shift is optional ("Target Shift" field).
+Office Records carry an **entry date** (today by default; past dates
+allowed, never future) and the **account** the money moved through. They
+never attach to a shift or business day. Purchases are the exception: they
+are stock events on the business day.
 
 - **Purchases**: Sidebar → **Purchases** → **Record Purchase** → supplier,
   product lines, invoice; **Record payment now** or pay later via **Record
@@ -200,7 +205,7 @@ These attach to the business day; a shift is optional ("Target Shift" field).
   GST input credit sits under the **GST / ITC** tab.
 - **Expenses**: Sidebar → **Expenses** → **Log New Expense** → category
   (manage via **Manage expense categories** → **New category**), amount,
-  paid-from account. Wrong entry? Void it with a reason — nothing is deleted.
+  entry date, paid-from account. Wrong entry? Void it with a reason — nothing is deleted.
 - **Income** (non-fuel income like rent, commissions): Sidebar → **Income** →
   **Record Income**.
 - **Collections**: Sidebar → **Customers** → **Collections** tab → **Log
@@ -228,9 +233,10 @@ Sidebar → **Inventory**:
 
 When all of a date's shifts are closed: **Shifts** → **Business Day** tab →
 **Close day** → confirm "Close this business day?". This generates the
-immutable **DSSR** (Daily Station Sales Report) — all shift summaries plus
-the day's collections, expenses, purchases, supplier payments, and credit
-sales — and seals the day.
+immutable **DSSR** (Daily Station Sales Report) — a sales-only report of all
+shift summaries plus the day's sales, credit sales, purchases and stock — and
+seals the day. Office money (collections, expenses, income, supplier
+payments) is in **Reports → Daily Cash Book**, dated by entry date.
 
 Days close independently: you can close Monday on Friday; an unclosed past
 day never blocks today.
@@ -241,7 +247,8 @@ Done when: toast "Business day closed · DSSR generated."
 
 Sidebar → **Reports**: **Daily DSSR** (generate/view snapshots) · **Profit &
 Loss** (Owner) · **Ledger** · **Invoices** · **Tax Register** · **Cash &
-Bank** · **Expense Register** · **Attendant Handovers**.
+Bank** · **Daily Cash Book** (each account's opening, in, out and closing for
+one date, live) · **Expense Register** · **Attendant Handovers**.
 
 ---
 
@@ -253,7 +260,7 @@ Bank** · **Expense Register** · **Attendant Handovers**.
 09:30  Fuel tanker arrives     → Add Purchase (decant into tank)
 11:00  Fleet truck fuels       → handover drawer → Log Credit Sale
 12:00  Customer clears dues    → Log Collection
-13:00  Tea & sundries paid     → Add Expense (drawer cash)
+13:00  Tea & sundries paid     → Add Expense (Petty Cash)
 14:00  Attendants hand over    → Record Handover (readings + cash count)
 14:05  Close Morning shift     → 4-step wizard → Shift Summary
 14:10  Open Evening shift      → Open next Shift

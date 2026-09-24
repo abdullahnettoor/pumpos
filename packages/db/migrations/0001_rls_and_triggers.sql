@@ -426,3 +426,9 @@ CREATE POLICY purchase_items_tenant_policy ON "purchase_items" FOR ALL TO authen
     WHERE "purchases".id = "purchase_items".purchase_id
       AND "business_days".organization_id = public.current_organization_id()
   ));
+
+-- A supplier Payment moves money, so it must name the account it left;
+-- payables (Purchase, Opening Balance) move none. Lives here rather than
+-- schema.ts: see the schema comment on supplier_transactions.
+ALTER TABLE "supplier_transactions" ADD CONSTRAINT "supplier_transactions_payment_has_funding"
+  CHECK ("transaction_type" <> 'Payment' OR "funding_account_id" IS NOT NULL);

@@ -64,8 +64,8 @@ const money: React.CSSProperties = { fontFamily: 'var(--font-mono)', color: 'var
  * Business Day cockpit. The Shifts page is shift-centric; this tab
  * surfaces the *business-day* layer — the universal anchor — so day-level
  * activity is visible even when no shift is open. Composed live from the DSSR
- * preview (all closed shifts + day-level collections, credit, purchases,
- * supplier payments and expenses + P&L), without writing a snapshot.
+ * preview (all closed shifts + day-level credit, purchases and gross margin),
+ * without writing a snapshot.
  * Owner/Manager closure generates the immutable DSSR snapshot and locks the
  * selected day. A day can close when it has no open Shift.
  */
@@ -367,11 +367,8 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   };
 
   const fuel = snap?.fuel ?? {};
-  const collections = snap?.collections ?? {};
   const credit = snap?.credit ?? {};
-  const expenses = snap?.expenses ?? {};
   const purchases = snap?.purchases ?? {};
-  const supplierPayments = snap?.supplierPayments ?? {};
   const pnl = snap?.pnl ?? {};
   const merchandise = snap?.merchandise ?? {};
 
@@ -648,13 +645,6 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
               hint={`Fuel ${inr(pnl.revenueFuel || 0)} · Merch ${inr(pnl.revenueMerch || 0)}`}
             />
             <KpiTile
-              dot="success"
-              valueTone="success"
-              label="Collections"
-              value={inr(collections.total || 0)}
-              hint="Customer receipts"
-            />
-            <KpiTile
               dot="warning"
               valueTone="warning"
               label="Credit Issued"
@@ -669,11 +659,11 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
               hint="Stock inflow (business-day anchored)"
             />
             <KpiTile
-              dot={Number(pnl.netProfit || 0) < 0 ? 'danger' : 'success'}
-              valueTone={Number(pnl.netProfit || 0) < 0 ? 'danger' : 'success'}
-              label="Net Profit"
-              value={inr(pnl.netProfit || 0)}
-              hint={`Gross ${inr(pnl.grossMargin || 0)}`}
+              dot={Number(pnl.grossMargin || 0) < 0 ? 'danger' : 'success'}
+              valueTone={Number(pnl.grossMargin || 0) < 0 ? 'danger' : 'success'}
+              label="Gross Margin"
+              value={inr(pnl.grossMargin || 0)}
+              hint={`COGS ${inr(pnl.cogs || 0)}`}
             />
           </KpiStrip>
 
@@ -697,7 +687,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
                 <strong>
                   {snap.shiftsIncluded || 0} closed shift{snap.shiftsIncluded === 1 ? '' : 's'}
                 </strong>{' '}
-                plus live merchandise, collections, credit, purchases &amp; expenses.
+                plus live merchandise, credit and purchases. Office money is in the Daily Cash Book.
                 {hasOpenShift
                   ? " Fuel from the currently open shift isn't counted until it closes (nozzle readings are taken at close)."
                   : ' Fuel for a shift is counted once that shift closes.'}
@@ -739,7 +729,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
             />
           </Panel>
 
-          {/* Day financials — grouped, drawer vs non-drawer made explicit */}
+          {/* Day sales figures — office money lives in the Daily Cash Book */}
           <div
             style={{
               display: 'grid',
@@ -747,57 +737,18 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
               gap: '14px',
             }}
           >
-            <Panel flush title="Collections & credit">
-              <div style={rowStyle}>
-                <span>Cash</span>
-                <span style={money}>{inr(collections.Cash || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>Card</span>
-                <span style={money}>{inr(collections.Card || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>UPI</span>
-                <span style={money}>{inr(collections.UPI || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>Bank transfer</span>
-                <span style={money}>{inr(collections.BankTransfer || 0)}</span>
-              </div>
-              <div style={{ ...rowStyle }}>
-                <span style={{ fontWeight: 600 }}>Collections total</span>
-                <span style={{ ...money, fontWeight: 700 }}>{inr(collections.total || 0)}</span>
-              </div>
+            <Panel flush title="Credit & merchandise">
               <div style={rowStyle}>
                 <span>Credit — regular</span>
                 <span style={money}>{inr(credit.normalCredit || 0)}</span>
               </div>
-              <div style={{ ...rowStyle, borderBottom: 'none' }}>
+              <div style={rowStyle}>
                 <span>Credit — fleet</span>
                 <span style={money}>{inr(credit.fleetCredit || 0)}</span>
               </div>
-            </Panel>
-
-            <Panel flush title="Outflows & merchandise">
               <div style={rowStyle}>
                 <span>Purchases</span>
                 <span style={money}>{inr(purchases.total || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>Supplier payments — drawer</span>
-                <span style={money}>{inr(supplierPayments.drawer || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>Supplier payments — bank/owner</span>
-                <span style={money}>{inr(supplierPayments.bank || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>Expenses — drawer (petty)</span>
-                <span style={money}>{inr(expenses.drawer || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>Expenses — bank/owner</span>
-                <span style={money}>{inr(expenses.business || 0)}</span>
               </div>
               <div style={{ ...rowStyle, borderBottom: 'none' }}>
                 <span>Merchandise sales</span>

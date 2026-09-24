@@ -3,7 +3,6 @@ import {
   BusinessEvents,
   err,
   eventFromContext,
-  invariantViolation,
   notFoundError,
   ok,
   validationError,
@@ -15,59 +14,40 @@ import type {
   Result,
   UseCase,
 } from '../../kernel/index.js';
-import { resolveFinancialAnchor, type ShiftRepository } from '../station-ops/shifts/index.js';
-import type { BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 import type { SupplierRepository } from '../crm/suppliers/index.js';
+import type { FinancialAccountRepository } from '../finance/accounts/index.js';
+import { resolveOfficeEntry, SUPPLIER_PAYMENT_ACCOUNT_TYPES } from '../finance/office-entry.js';
 import type { SupplierTransaction, SupplierTransactionRepository } from './ports.js';
-
-export type SupplierPaidFrom = 'SHIFT_CASH' | 'BANK' | 'OWNER' | 'CMS';
-
-function accountLabel(paidFrom: SupplierPaidFrom): string {
-  return {
-    SHIFT_CASH: 'shift cash',
-    BANK: 'bank account',
-    OWNER: 'owner account',
-    CMS: 'CMS account',
-  }[paidFrom];
-}
 
 export interface RecordSupplierPaymentCommand {
   supplierId: string;
   amount: number | string;
-  paidFrom?: SupplierPaidFrom;
-  affectsDrawer?: boolean;
-  shiftId?: string;
   stationId?: string;
+  entryDate?: string;
+  fundingAccountId: string;
   notes?: string;
-  transactionDate?: string;
 }
 
 const schema = z.object({
   supplierId: z.string().min(1, 'supplierId is required'),
   amount: z.coerce.number().positive('amount must be positive'),
-  paidFrom: z.enum(['SHIFT_CASH', 'BANK', 'OWNER', 'CMS']).optional(),
-  affectsDrawer: z.boolean().optional(),
-  shiftId: z.string().min(1).optional(),
   stationId: z.string().min(1).optional(),
+  entryDate: z.string().optional(),
+  fundingAccountId: z.string().min(1, 'fundingAccountId is required'),
   notes: z.string().max(500).optional(),
-  transactionDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD')
-    .optional(),
 });
 
 export interface RecordSupplierPaymentDeps {
   supplierTxns: SupplierTransactionRepository;
   suppliers: SupplierRepository;
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
+  accounts: FinancialAccountRepository;
   events: EventPublisher;
 }
 
 /**
- * Record a payment made to a supplier (reduces the payable). Only a payment made
- * from SHIFT_CASH touches the drawer and requires an open shift; BANK/OWNER
- * payments may retain optional shift attribution without changing the drawer.
+ * Record a payment made to a supplier (reduces the payable). An Office Record
+ * (ADR 0005): dated by its Entry Date and paid out of the chosen Funding
+ * Account. Never touches a Shift or the Drawer.
  */
 export class RecordSupplierPayment implements UseCase<
   RecordSupplierPaymentCommand,
@@ -90,64 +70,50 @@ export class RecordSupplierPayment implements UseCase<
     if (!supplier || supplier.organizationId !== ctx.organizationId)
       return err(notFoundError('Supplier', cmd.supplierId));
 
-    const paidFrom: SupplierPaidFrom = cmd.paidFrom ?? 'BANK';
-    const affectsDrawer = cmd.affectsDrawer ?? paidFrom === 'SHIFT_CASH';
-
-    const requestedStationId = cmd.stationId ?? ctx.stationId ?? null;
-    if (!cmd.shiftId && !requestedStationId)
-      return err(validationError('Either shiftId or stationId is required'));
-    const anchor = await resolveFinancialAnchor(
-      this.deps,
-      ctx,
-      {
-        shiftId: cmd.shiftId,
-        stationId: requestedStationId,
-        transactionDate: cmd.transactionDate,
-      },
-      { affectsDrawer, drawerLabel: 'Drawer supplier payments' },
-    );
-    if (!anchor.success) return anchor;
-    const { businessDayId, shiftId, stationId } = anchor.data;
+    const entry = await resolveOfficeEntry(this.deps, ctx, cmd, {
+      allowedAccountTypes: SUPPLIER_PAYMENT_ACCOUNT_TYPES,
+    });
+    if (!entry.success) return entry;
+    const { stationId, entryDate, fundingAccount } = entry.data;
 
     const now = ctx.clock.now().toISOString();
     const payment: SupplierTransaction = {
       id: ctx.ids.newId(),
-      shiftId,
-      businessDayId,
+      organizationId: ctx.organizationId,
+      stationId,
+      entryDate,
       supplierId: supplier.id,
       transactionType: 'Payment',
       amount: String(cmd.amount),
-      paidFrom,
-      affectsDrawer: shiftId !== null && affectsDrawer,
+      fundingAccountId: fundingAccount.id,
       referenceType: null,
       referenceId: null,
       notes: cmd.notes ?? null,
-      metadata: anchor.data.recordMetadata,
+      metadata: {},
       createdAt: now,
     };
     await this.deps.supplierTxns.save(payment);
 
+    const payload = {
+      supplierId: supplier.id,
+      amount: payment.amount,
+      entryDate,
+      fundingAccountId: fundingAccount.id,
+    };
     const events: DomainEvent[] = [
       eventFromContext(ctx, {
         eventType: BusinessEvents.SUPPLIER_PAID,
         aggregateType: 'Supplier',
         aggregateId: supplier.id,
         stationId,
-        businessDayId,
-        metadata: anchor.data.eventMetadata,
-        payload: {
-          supplierId: supplier.id,
-          amount: payment.amount,
-          paidFrom,
-          affectsDrawer: payment.affectsDrawer,
-          shiftId,
-        },
+        businessDayId: null,
+        payload,
         presentation: {
-          templateId: 'supplier-paid.v1',
+          templateId: 'supplier-paid.v2',
           values: {
             supplierName: supplier.name,
             amount: Number(payment.amount),
-            accountName: accountLabel(paidFrom),
+            accountName: fundingAccount.name,
           },
         },
       }),
@@ -156,15 +122,14 @@ export class RecordSupplierPayment implements UseCase<
         aggregateType: 'Supplier',
         aggregateId: supplier.id,
         stationId,
-        businessDayId,
-        metadata: anchor.data.lateEntry ? { lateEntry: true } : undefined,
-        payload: { supplierId: supplier.id, amount: payment.amount, paidFrom },
+        businessDayId: null,
+        payload,
         presentation: {
-          templateId: 'payment-made.v1',
+          templateId: 'payment-made.v2',
           values: {
             partyName: supplier.name,
             amount: Number(payment.amount),
-            accountName: accountLabel(paidFrom),
+            accountName: fundingAccount.name,
           },
         },
       }),

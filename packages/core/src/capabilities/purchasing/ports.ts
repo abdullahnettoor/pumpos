@@ -48,15 +48,21 @@ export interface PurchaseItemRepository {
 
 export type SupplierTransactionType = 'Purchase' | 'Payment' | 'Adjustment' | 'Opening Balance';
 
+/**
+ * A supplier-ledger row. Payments are Office Records (ADR 0005) and carry the
+ * Funding Account the money left; payables (Purchase, Opening Balance) move no
+ * money, so their Funding Account is null. `entryDate` is the Entry Date for a
+ * payment and the Business Date for a purchase payable.
+ */
 export interface SupplierTransaction {
   id: string;
-  shiftId: string | null;
-  businessDayId: string;
+  organizationId: string;
+  stationId: string;
+  entryDate: string;
   supplierId: string;
   transactionType: SupplierTransactionType;
   amount: string;
-  paidFrom: string; // 'SHIFT_CASH' | 'BANK' | 'OWNER'
-  affectsDrawer: boolean;
+  fundingAccountId: string | null;
   referenceType: string | null;
   referenceId: string | null;
   notes: string | null;

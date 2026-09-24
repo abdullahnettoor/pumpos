@@ -12,7 +12,7 @@ import {
 } from '../query/hooks.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
-import { PurchaseEntryForm } from './transactions/PurchaseEntryForm.js';
+import { PurchaseEntryForm, type PurchasePayNow } from './transactions/PurchaseEntryForm.js';
 import { DataTable } from './primitives/DataTable.js';
 import { inr } from '../utils/format.js';
 import { Tabs } from './primitives/Tabs.js';
@@ -249,10 +249,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
   // from whatever the queries hold at that moment — so seeding them in advance
   // was duplicated work that could only ever be more stale than the reset.
 
-  const handleAddPurchase = async (
-    values: PurchaseEntryFormValues,
-    payment?: { amount: number; accountId?: string | null },
-  ) => {
+  const handleAddPurchase = async (values: PurchaseEntryFormValues, payment?: PurchasePayNow) => {
     setFormError(null);
     if (!values.supplierId || values.lines.length === 0) return;
 
@@ -271,10 +268,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
           tankAllocations:
             l.tankAllocations && l.tankAllocations.length > 0 ? l.tankAllocations : undefined,
         })),
-        payment:
-          payment && payment.amount > 0
-            ? { amount: payment.amount, accountId: payment.accountId ?? null }
-            : undefined,
+        payment: payment && payment.amount > 0 ? payment : undefined,
       });
 
       closePurchaseDrawer();
@@ -831,6 +825,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
           products={products}
           tanks={tanks}
           stationId={stationId}
+          timeZone={stationSettings.timezone}
           enablePayment
           submitting={submitting}
           error={formError}
@@ -1235,6 +1230,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
       />
 
       <SupplierPaymentDrawer
+        timeZone={stationSettings.timezone}
         isOpen={isPaymentDrawerOpen}
         suppliers={allSuppliers}
         stationId={stationId}

@@ -30,7 +30,6 @@ describe('entry forms rebuild for a different entry', () => {
 
   it('ExpenseEntryForm shows the new amount, not the previous one', () => {
     const props = {
-      shiftOptions: [],
       categories: CATEGORIES,
       submitting: false,
       onCancel: vi.fn(),
@@ -50,7 +49,6 @@ describe('entry forms rebuild for a different entry', () => {
     // literal with the same values re-renders constantly, and an identity-based
     // key would remount on each one — wiping a part-finished entry.
     const props = {
-      shiftOptions: [],
       categories: CATEGORIES,
       submitting: false,
       onCancel: vi.fn(),
@@ -68,7 +66,6 @@ describe('entry forms rebuild for a different entry', () => {
 
   it('CollectionEntryForm shows the new amount, not the previous one', () => {
     const props = {
-      shiftOptions: [],
       customers: CUSTOMERS,
       submitting: false,
       onCancel: vi.fn(),

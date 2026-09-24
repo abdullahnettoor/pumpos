@@ -84,19 +84,6 @@ export const DEFAULT_ACCOUNT_NAME: Record<FinancialAccountType, string> = {
   OWNER: 'Owner',
 };
 
-/** Which account a collection lands in, by payment method (cash → drawer, else bank). */
-export function accountTypeForPaymentMethod(method: string): FinancialAccountType {
-  return method === 'Cash' ? 'CASH_IN_HAND' : 'BANK';
-}
-
-/** Which account an expense / supplier payment comes out of, by funding source. */
-export function accountTypeForPaidFrom(paidFrom: string): FinancialAccountType {
-  if (paidFrom === 'SHIFT_CASH') return 'CASH_IN_HAND';
-  if (paidFrom === 'OWNER') return 'OWNER';
-  if (paidFrom === 'CMS') return 'CMS';
-  return 'BANK';
-}
-
 export interface LedgerEntryRepository {
   saveMany(entries: LedgerEntry[]): Promise<void>;
   /** Remove all entries of a given source type for one account (used to rewrite the OPENING entry). */

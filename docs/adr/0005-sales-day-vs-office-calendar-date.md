@@ -80,9 +80,19 @@ Consequences:
   sum. Rejected: one shift-wide float nobody owns, which is how the code
   worked before and does not match stations where each DSM carries a pouch.
 
+- **Collections leave the customer ledger.** A Collection is read straight
+  from `collections` (balance = Σ credit sales − Σ collections); no mirror row
+  is written to the Business-Day-anchored customer ledger.
+- **Payment Terminal on an office receipt** (#276) routes the money to that
+  terminal's clearing account, else the station's generic Merchant Clearing,
+  and is kept on the ledger row.
+
 ## Open / deferred
 
 - **Purchases on a calendar date.** Revisit only if accountants need invoice
   dates separate from the stock receipt day.
+- **Editing an Entry Date / voiding a collection.** Office Records are voided
+  (expenses, income) or not correctable at all (collections, supplier
+  payments) today. How a correction re-posts the ledger is undecided.
 - **Bank value date** (statement date, for bank reconciliation) is a third
   date axis. It goes in a separate future ADR.

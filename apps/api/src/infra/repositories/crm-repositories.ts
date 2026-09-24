@@ -1,7 +1,5 @@
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { accountTypeForPaymentMethod } from '@pump/core';
-import { resolveOfficeColumns } from '../office-anchor.js';
 import type {
   Customer,
   CustomerRepository,
@@ -195,26 +193,20 @@ export class DrizzleCustomerLedgerRepository implements CustomerLedgerRepository
 export class DrizzleCollectionRepository implements CollectionRepository {
   constructor(private readonly db: DbClient) {}
   async save(c: Collection): Promise<void> {
-    // TODO(#273): derive the new not-null office columns from the legacy anchor;
-    // the legacy shift/business-day anchor is stashed in metadata (ADR 0005, #280).
-    const cols = await resolveOfficeColumns(
-      this.db,
-      c.businessDayId,
-      accountTypeForPaymentMethod(c.paymentMethod),
-    );
     await this.db.insert(schema.collections).values({
       id: c.id,
       documentNumber: c.documentNumber,
-      organizationId: cols.organizationId,
-      stationId: cols.stationId,
-      entryDate: cols.entryDate,
-      fundingAccountId: cols.fundingAccountId,
+      organizationId: c.organizationId,
+      stationId: c.stationId,
+      entryDate: c.entryDate,
+      fundingAccountId: c.fundingAccountId,
+      terminalId: c.terminalId,
       customerId: c.customerId,
       vehicleId: c.vehicleId,
       amount: c.amount,
       paymentMethod: c.paymentMethod,
       notes: c.notes,
-      metadata: { ...(c.metadata ?? {}), shiftId: c.shiftId, businessDayId: c.businessDayId },
+      metadata: c.metadata ?? {},
       createdAt: new Date(c.createdAt),
     });
   }

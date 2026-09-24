@@ -3,7 +3,6 @@ import {
   BusinessEvents,
   err,
   eventFromContext,
-  invariantViolation,
   notFoundError,
   ok,
   validationError,
@@ -15,17 +14,25 @@ import type {
   Result,
   UseCase,
 } from '../../../kernel/index.js';
-import { resolveFinancialAnchor, type ShiftRepository } from '../../station-ops/shifts/index.js';
-import type { BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
+import type { FinancialAccountRepository } from '../../finance/accounts/index.js';
+import {
+  accountTypesForPaymentMethod,
+  resolveOfficeEntry,
+  type PaymentTerminalLookup,
+} from '../../finance/office-entry.js';
 import type { CustomerRepository } from '../customers/index.js';
 
 export type CollectionPaymentMethod = 'Cash' | 'Card' | 'UPI' | 'BankTransfer';
 
 export interface Collection {
   id: string;
+  organizationId: string;
   documentNumber: string;
-  shiftId: string | null;
-  businessDayId: string;
+  stationId: string;
+  entryDate: string;
+  fundingAccountId: string;
+  /** Payment Terminal used for a Card/UPI collection (#276). */
+  terminalId: string | null;
   customerId: string;
   vehicleId: string | null;
   amount: string;
@@ -75,41 +82,43 @@ export interface RecordCollectionCommand {
   customerId: string;
   amount: number | string;
   paymentMethod: CollectionPaymentMethod;
-  shiftId?: string;
   stationId?: string;
+  entryDate?: string;
+  /** Required unless a terminal is named (its clearing account is used). */
+  fundingAccountId?: string;
+  terminalId?: string | null;
   vehicleId?: string | null;
   notes?: string;
-  transactionDate?: string;
 }
 
 const schema = z.object({
   customerId: z.string().min(1, 'customerId is required'),
   amount: z.coerce.number().positive('amount must be positive'),
   paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'BankTransfer']),
-  shiftId: z.string().min(1).optional(),
   stationId: z.string().min(1).optional(),
+  entryDate: z.string().optional(),
+  fundingAccountId: z.string().min(1).optional(),
+  terminalId: z.string().min(1).nullish(),
   vehicleId: z.string().nullish(),
   notes: z.string().max(500).optional(),
-  transactionDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD')
-    .optional(),
 });
 
 export interface RecordCollectionDeps {
   collections: CollectionRepository;
-  ledger: CustomerLedgerRepository;
   customers: CustomerRepository;
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
+  accounts: FinancialAccountRepository;
+  terminals?: PaymentTerminalLookup;
   docNumbers: DocumentNumberGenerator;
   events: EventPublisher;
 }
 
 /**
- * Record a payment received against a customer's receivable. Only CASH collected
- * at the counter touches the drawer/shift; bank/UPI/card collections do not
- * affect the drawer but may retain optional shift attribution.
+ * Record a payment received against a customer's receivable. A Collection is
+ * an Office Record (ADR 0005): dated by its Entry Date and landing in the
+ * chosen Funding Account, whose type must suit the payment method. It never
+ * touches a Shift or the Drawer. The customer balance reads collections
+ * directly (Σ credit sales − Σ collections), so no customer-ledger row is
+ * written.
  */
 export class RecordCollection implements UseCase<RecordCollectionCommand, Collection> {
   constructor(private readonly deps: RecordCollectionDeps) {}
@@ -129,53 +138,32 @@ export class RecordCollection implements UseCase<RecordCollectionCommand, Collec
     if (!customer || customer.organizationId !== ctx.organizationId)
       return err(notFoundError('Customer', cmd.customerId));
 
-    const affectsDrawer = cmd.paymentMethod === 'Cash';
-
-    if (!cmd.shiftId && !cmd.stationId)
-      return err(validationError('Either shiftId or stationId is required'));
-    const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {
-      affectsDrawer,
-      drawerLabel: 'Cash collections',
+    const entry = await resolveOfficeEntry(this.deps, ctx, cmd, {
+      allowedAccountTypes: accountTypesForPaymentMethod(cmd.paymentMethod),
+      paymentMethod: cmd.paymentMethod,
     });
-    if (!anchor.success) return anchor;
-    const { businessDayId, shiftId, stationId } = anchor.data;
+    if (!entry.success) return entry;
+    const { stationId, entryDate, fundingAccount, terminalId } = entry.data;
 
     const now = ctx.clock.now().toISOString();
-    const affectsDrawerToStore = shiftId !== null && affectsDrawer;
     const documentNumber = await this.deps.docNumbers.next('COLLECTION');
     const collection: Collection = {
       id: ctx.ids.newId(),
+      organizationId: ctx.organizationId,
       documentNumber,
-      shiftId,
-      businessDayId,
+      stationId,
+      entryDate,
+      fundingAccountId: fundingAccount.id,
+      terminalId,
       customerId: customer.id,
       vehicleId: cmd.vehicleId ?? null,
       amount: String(cmd.amount),
       paymentMethod: cmd.paymentMethod,
       notes: cmd.notes ?? null,
-      metadata: anchor.data.recordMetadata,
+      metadata: {},
       createdAt: now,
     };
     await this.deps.collections.save(collection);
-
-    // Customer ledger credit (reduces receivable).
-    await this.deps.ledger.save({
-      id: ctx.ids.newId(),
-      shiftId,
-      businessDayId,
-      customerId: customer.id,
-      vehicleId: cmd.vehicleId ?? null,
-      productId: null,
-      transactionType: 'Collection',
-      amount: String(cmd.amount),
-      quantity: null,
-      unitPrice: null,
-      referenceType: 'COLLECTION',
-      referenceId: collection.id,
-      notes: cmd.notes ?? null,
-      metadata: anchor.data.recordMetadata,
-      createdAt: now,
-    });
 
     await this.deps.events.publish([
       eventFromContext(ctx, {
@@ -183,22 +171,23 @@ export class RecordCollection implements UseCase<RecordCollectionCommand, Collec
         aggregateType: 'Customer',
         aggregateId: customer.id,
         stationId,
-        businessDayId,
-        metadata: anchor.data.eventMetadata,
+        businessDayId: null,
         payload: {
           collectionId: collection.id,
           customerId: customer.id,
           amount: collection.amount,
           paymentMethod: cmd.paymentMethod,
-          affectsDrawer: affectsDrawerToStore,
-          shiftId,
+          entryDate,
+          fundingAccountId: fundingAccount.id,
+          terminalId,
         },
         presentation: {
-          templateId: 'credit-payment-received.v1',
+          templateId: 'credit-payment-received.v2',
           values: {
             customerName: customer.name,
             amount: Number(collection.amount),
             paymentMethod: cmd.paymentMethod,
+            accountName: fundingAccount.name,
           },
         },
       }),

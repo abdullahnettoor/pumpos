@@ -476,10 +476,9 @@ export const supplierTransactions = pgTable(
       .notNull(),
     transactionType: varchar('transaction_type', { length: 50 }).notNull(), // 'Purchase', 'Payment', 'Adjustment'
     amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
-    // The money account this record moves; replaces the paid_from enum.
-    fundingAccountId: uuid('funding_account_id')
-      .references(() => financialAccounts.id)
-      .notNull(),
+    // The money account a Payment moved through; replaces the paid_from enum.
+    // Null for payables (Purchase, Opening Balance), which move no money.
+    fundingAccountId: uuid('funding_account_id').references(() => financialAccounts.id),
     // Payment terminal used, when paid via card/UPI at a terminal (#276).
     terminalId: uuid('terminal_id').references(() => paymentTerminals.id),
     affectsDrawer: boolean('affects_drawer').default(false).notNull(),
@@ -495,6 +494,9 @@ export const supplierTransactions = pgTable(
       t.stationId,
       t.entryDate,
     ),
+    // The payment-has-funding CHECK lives in 0001_rls_and_triggers.sql (custom
+    // SQL): drizzle-kit's regenerate-compare mishandles inline CREATE TABLE
+    // checks when folded into the baseline.
   }),
 );
 

@@ -72,6 +72,8 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /finance/accounts': 'org-scoped-query',
   'GET /finance/accounts/:id/ledger': 'org-scoped-query',
   'GET /finance/movements': 'org-scoped-query',
+  'GET /finance/funding-accounts': 'org-scoped-query',
+  'GET /finance/cash-book': 'org-scoped-query',
 
   'GET /setup/stations': 'not-station-scoped',
   'GET /setup/tanks': 'org-scoped-query',
@@ -88,6 +90,7 @@ const DECLARATIONS: Record<string, Tenancy> = {
 
   'GET /dssr/daily': 'org-scoped-query',
   'GET /dssr/daily/preview': 'org-scoped-query',
+  'GET /dssr/profit-loss': 'org-scoped-query',
   'GET /dssr/daily/range': 'org-scoped-query',
 
   'GET /reports/attendant-handovers': 'org-scoped-query',

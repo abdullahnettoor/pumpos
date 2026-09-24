@@ -88,12 +88,12 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     );
   },
   kpis: (d) => {
-    const col = d.collections || {};
     const credit = d.credit || {};
+    const pnl = d.pnl || {};
     return (
       <View key="kpis" style={s.kpiRow}>
-        <Kpi l="Total Collections" v={inr(col.total)} c={C.success} />
-        <Kpi l="Cash Collections" v={inr(col.Cash)} c={C.ink} />
+        <Kpi l="Total Revenue" v={inr(pnl.revenue)} c={C.ink} />
+        <Kpi l="Gross Margin" v={inr(pnl.grossMargin)} c={C.success} />
         <Kpi
           l="Credit (Normal + Fleet)"
           v={inr(Number(credit.normalCredit || 0) + Number(credit.fleetCredit || 0))}
@@ -103,12 +103,9 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     );
   },
   financial: (d) => {
-    const col = d.collections || {};
     const credit = d.credit || {};
-    const exp = d.expenses || {};
-    const inc = d.income || {};
     const pur = d.purchases || {};
-    const sup = d.supplierPayments || {};
+    const pnl = d.pnl || {};
     const merch = d.merchandise || {};
     const sTax = (d.salesTax || {}) as {
       gst?: Record<string, number>;
@@ -116,30 +113,12 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     };
     return (
       <View key="financial">
-        <Text style={s.h2}>FINANCIAL SUMMARY</Text>
+        <Text style={s.h2}>SALES SUMMARY</Text>
         <View style={s.reconBox}>
-          <ReconRow label="Cash Collections" value={inr(col.Cash)} />
-          <ReconRow label="Card Collections" value={inr(col.Card)} />
-          <ReconRow label="UPI Collections" value={inr(col.UPI)} />
-          <ReconRow label="Bank Transfer Collections" value={inr(col.BankTransfer)} />
           <ReconRow label="Merchandise Sales" value={inr(merch.salesValue)} />
           <ReconRow label="Normal Credit Sales" value={inr(credit.normalCredit)} color={C.amber} />
           <ReconRow label="Fleet Credit Sales" value={inr(credit.fleetCredit)} color={C.amber} />
           <ReconRow label="Purchases" value={inr(pur.total)} />
-          <ReconRow
-            label="Supplier Payments (Drawer / Bank)"
-            value={`${inr(sup.drawer)} / ${inr(sup.bank)}`}
-          />
-          <ReconRow label="Drawer Expenses" value={inr(exp.drawer)} />
-          <ReconRow label="Business Expenses" value={inr(exp.business)} />
-          <ReconRow label="Total Expenses" value={inr(exp.total)} color={C.danger} />
-          {Number(inc.total || 0) > 0 && (
-            <ReconRow
-              label="Other Income (Cash / Bank)"
-              value={`${inr(inc.drawer)} / ${inr(inc.business)}`}
-              color={C.green}
-            />
-          )}
           {/* T5 — output tax on sales: GST (merchandise) and VAT (fuel) kept apart. */}
           {Number(sTax.gst?.total || 0) > 0 && (
             <>
@@ -163,27 +142,12 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
           {Number(sTax.vat?.vat || 0) > 0 && (
             <ReconRow label="Output VAT on Fuel" value={inr(Number(sTax.vat?.vat || 0))} />
           )}
-          {/* FI4 — output GST collected on other income. */}
-          {Number(inc.tax?.total || 0) > 0 && (
-            <>
-              <ReconRow
-                label="Other Income — Taxable Value"
-                value={inr(Number(inc.tax?.taxable || 0))}
-              />
-              {Number(inc.tax?.igst || 0) > 0 ? (
-                <ReconRow
-                  label="Output GST on Income (IGST)"
-                  value={inr(Number(inc.tax?.igst || 0))}
-                />
-              ) : (
-                <ReconRow
-                  label="Output GST on Income (CGST / SGST)"
-                  value={`${inr(Number(inc.tax?.cgst || 0))} / ${inr(Number(inc.tax?.sgst || 0))}`}
-                />
-              )}
-            </>
-          )}
+          <ReconRow label="Gross Margin" value={inr(pnl.grossMargin)} color={C.green} />
         </View>
+        <Text style={[s.label, { marginTop: 4 }]}>
+          Sales only. Collections, expenses, income and supplier payments are in the Daily Cash
+          Book.
+        </Text>
       </View>
     );
   },

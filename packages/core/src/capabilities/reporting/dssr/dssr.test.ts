@@ -117,52 +117,7 @@ function source(): DssrSourceData {
         },
       },
     ],
-    collections: [
-      { paymentMethod: 'Cash', amount: 2000 },
-      { paymentMethod: 'UPI', amount: 1000 },
-    ],
-    expenses: [
-      { affectsDrawer: true, paidFrom: 'SHIFT_CASH', amount: 300, status: 'ACTIVE' },
-      { affectsDrawer: false, paidFrom: 'BANK', amount: 5000, status: 'ACTIVE' },
-      { affectsDrawer: true, paidFrom: 'SHIFT_CASH', amount: 999, status: 'VOIDED' },
-    ],
-    income: [
-      {
-        affectsDrawer: true,
-        receivedInto: 'SHIFT_CASH',
-        amount: 500,
-        status: 'ACTIVE',
-        categoryName: 'Tanker Rental',
-      },
-      {
-        affectsDrawer: false,
-        receivedInto: 'BANK',
-        amount: 1500,
-        status: 'ACTIVE',
-        categoryName: 'Commission',
-        taxCategory: 'GST',
-        taxableAmount: 1271.19,
-        cgst: 114.41,
-        sgst: 114.4,
-        igst: 0,
-        cess: 0,
-      },
-      {
-        affectsDrawer: true,
-        receivedInto: 'SHIFT_CASH',
-        amount: 999,
-        status: 'VOIDED',
-        categoryName: 'Scrap Sale',
-        taxCategory: 'GST',
-        taxableAmount: 846.61,
-        cgst: 76.19,
-        sgst: 76.2,
-        igst: 0,
-        cess: 0,
-      },
-    ],
     purchases: [{ amount: 450000 }],
-    supplierPayments: [{ affectsDrawer: false, paidFrom: 'BANK', amount: 200000 }],
     sales: [
       { paymentMethod: 'Cash', saleType: 'Product', totalAmount: 500 },
       { paymentMethod: 'Credit', saleType: 'Product', totalAmount: 1180 },
@@ -206,7 +161,7 @@ function source(): DssrSourceData {
 }
 
 describe('GenerateDssr', () => {
-  it('composes an immutable snapshot from shift summaries + business-day financials', async () => {
+  it('composes a sales-only snapshot from shift summaries + business-day sales and stock', async () => {
     const snapshots = new SnapRepo();
     const store = new InMemoryEventStore();
     const result = await new GenerateDssr({
@@ -227,25 +182,13 @@ describe('GenerateDssr', () => {
       expect(d.fuel.nozzles[0].nozzleName).toBe('N1');
       expect(d.merchandise.salesValue).toBe(1680);
       expect(d.merchandise.byPaymentMethod.Credit).toBe(1180);
-      expect(d.collections.Cash).toBe(2000);
-      expect(d.collections.total).toBe(3000);
       expect(d.credit.normalCredit).toBe(1000);
       expect(d.credit.fleetCredit).toBe(4000);
-      expect(d.expenses.drawer).toBe(300); // voided excluded
-      expect(d.expenses.business).toBe(5000);
-      expect(d.income.drawer).toBe(500); // voided excluded
-      expect(d.income.business).toBe(1500);
-      expect(d.income.total).toBe(2000);
-      // FI4: only live GST income contributes to the output-GST-on-income lines.
-      expect(d.income.tax.entries).toBe(1);
-      expect(d.income.tax.taxable).toBe(1271.19);
-      expect(d.income.tax.total).toBe(228.81);
       // T5: output GST on merchandise, extracted from the MRP-inclusive line.
       expect(d.salesTax.gst.taxable).toBe(1423.73);
       expect(d.salesTax.gst.total).toBe(256.27);
       expect(d.salesTax.vat.vat).toBe(0);
       expect(d.purchases.total).toBe(450000);
-      expect(d.supplierPayments.bank).toBe(200000);
       expect(d.fuelStockVariance[0].status).toBe('Loss');
       expect(d.merchandiseStockVariance.length).toBe(0);
       expect(d.drawer.totalCashVariance).toBe(-50);
@@ -257,9 +200,10 @@ describe('GenerateDssr', () => {
       expect(d.pnl.cogsMerch).toBe(800);
       expect(d.pnl.cogs).toBe(87040);
       expect(d.pnl.grossMargin).toBe(12640);
-      expect(d.pnl.expenses).toBe(5300);
-      expect(d.pnl.otherIncome).toBe(2000);
-      expect(d.pnl.netProfit).toBe(9340);
+      // Sales-only (ADR 0005): no Office Records, so no net profit here.
+      for (const key of ['collections', 'expenses', 'income', 'supplierPayments'])
+        expect(d).not.toHaveProperty(key);
+      expect(d.pnl).not.toHaveProperty('netProfit');
       // Per-product margin (FB3): fuel 98000 - 86240 = 11760; merch 1680 - 800 = 880.
       expect(d.pnl.byProduct).toHaveLength(2);
       const fuelRow = d.pnl.byProduct.find((r: any) => r.kind === 'fuel');

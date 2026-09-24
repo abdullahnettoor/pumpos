@@ -250,9 +250,10 @@ export const buildCustomerColumns = (
 
 export const buildCollectionColumns = (): ColumnDef<any, any>[] => [
   {
-    accessorKey: 'businessDate',
-    header: 'Date',
-    cell: ({ row }) => <DateText value={row.original.businessDate ?? row.original.createdAt} />,
+    // Collections are office records dated by entry date (ADR 0005).
+    accessorKey: 'entryDate',
+    header: 'Entry Date',
+    cell: ({ row }) => <DateText value={row.original.entryDate ?? row.original.createdAt} />,
   },
   {
     accessorKey: 'customerName',
@@ -276,6 +277,13 @@ export const buildCollectionColumns = (): ColumnDef<any, any>[] => [
         <span style={{ color: 'var(--text-muted)' }}>-</span>
       );
     },
+  },
+  {
+    accessorKey: 'accountName',
+    header: 'Account',
+    cell: ({ getValue }) => (
+      <span style={{ color: 'var(--text-default)' }}>{(getValue() as string) || '—'}</span>
+    ),
   },
   {
     accessorKey: 'notes',

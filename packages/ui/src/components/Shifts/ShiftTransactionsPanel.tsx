@@ -2,17 +2,10 @@ import React, { useState } from 'react';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { inr } from '../../utils/format.js';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  queryKeys,
-  useCustomers,
-  useExpenseCategories,
-  useShiftTransactions,
-  useSuppliers,
-} from '../../query/hooks.js';
+import { queryKeys, useCustomers, useShiftTransactions, useSuppliers } from '../../query/hooks.js';
 import { Tabs } from '../primitives/Tabs.js';
 import {
   Plus,
-  Coins,
   Receipt,
   ShoppingCart,
   CreditCard,
@@ -41,7 +34,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
 }) => {
   const qc = useQueryClient();
   const runTask = useRunTask();
-  const [activeTab, setActiveTab] = useState<'expenses' | 'purchases' | 'collections'>('expenses');
+  const [activeTab, setActiveTab] = useState<'purchases' | 'credit'>('purchases');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,24 +43,18 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
   // violations at once (a loader referenced before declaration, an incomplete
   // dependency list, and setState inside an effect) and it also bypassed the
   // tiered cache that docs/DATA-CACHING.md asks every read to go through.
-  const categoriesQ = useExpenseCategories();
   const suppliersQ = useSuppliers(true);
   const customersQ = useCustomers(true);
   const transactionsQ = useShiftTransactions(shiftId);
 
-  const categories: any[] = categoriesQ.data ?? [];
   const suppliers: any[] = suppliersQ.data ?? [];
   const customers: any[] = customersQ.data ?? [];
-  const loggedTransactions: { expenses: any[]; purchases: any[]; collections: any[] } =
-    transactionsQ.data ?? { expenses: [], purchases: [], collections: [] };
+  // Expenses and collections are Office Records (ADR 0005) and never belong to a
+  // shift, so only purchases are listed here.
+  const loggedPurchases: any[] = transactionsQ.data?.purchases ?? [];
 
-  const loading =
-    categoriesQ.isPending ||
-    suppliersQ.isPending ||
-    customersQ.isPending ||
-    transactionsQ.isPending;
-  const loadError =
-    categoriesQ.error || suppliersQ.error || customersQ.error || transactionsQ.error;
+  const loading = suppliersQ.isPending || customersQ.isPending || transactionsQ.isPending;
+  const loadError = suppliersQ.error || customersQ.error || transactionsQ.error;
 
   // Unique products derived from nozzles
   const products = React.useMemo(() => {
@@ -84,11 +71,6 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
     return Array.from(map.values());
   }, [nozzles]);
 
-  // Form States - Expense
-  const [expenseCategoryIdRaw, setExpenseCategoryId] = useState('');
-  const [expenseAmount, setExpenseAmount] = useState('');
-  const [expenseDescription, setExpenseDescription] = useState('');
-
   // Form States - Purchase
   const [purchaseSupplierIdRaw, setPurchaseSupplierId] = useState('');
   const [purchaseProductIdRaw, setPurchaseProductId] = useState('');
@@ -97,50 +79,18 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
   const [purchaseInvoice, setPurchaseInvoice] = useState('');
   const [purchaseNotes, setPurchaseNotes] = useState('');
 
-  // Form States - Collection
+  // Form States - Credit sale (shift-anchored; customer collections are office entries)
   const [collectionCustomerIdRaw, setCollectionCustomerId] = useState('');
   const [collectionAmount, setCollectionAmount] = useState('');
-  const [collectionMethod, setCollectionMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Credit'>(
-    'Cash',
-  );
   const [collectionNotes, setCollectionNotes] = useState('');
 
   // The selects used to be seeded by the loader calling setState inside an
   // effect. Derived during render instead: "whatever the operator picked, else
   // the first available option". Same visible behaviour, no cascading render,
   // and it now self-corrects when the lists arrive rather than only on mount.
-  const expenseCategoryId = expenseCategoryIdRaw || categories[0]?.id || '';
   const purchaseSupplierId = purchaseSupplierIdRaw || suppliers[0]?.id || '';
   const purchaseProductId = purchaseProductIdRaw || products[0]?.id || '';
   const collectionCustomerId = collectionCustomerIdRaw || customers[0]?.id || '';
-
-  const handleAddExpense = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isReadOnly) return;
-    if (!expenseCategoryId || !expenseAmount) return;
-
-    try {
-      setSubmitting(true);
-      setError(null);
-      await transactionService.recordExpense({
-        shiftId,
-        categoryId: expenseCategoryId,
-        amount: Number(expenseAmount),
-        description: expenseDescription || undefined,
-      });
-
-      // Clear form
-      setExpenseAmount('');
-      setExpenseDescription('');
-
-      await qc.invalidateQueries({ queryKey: queryKeys.shiftTransactions(shiftId) });
-      await onTransactionAdded?.();
-    } catch (err: any) {
-      setError(err.message || 'Failed to record expense');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const handleAddPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -185,8 +135,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
     if (isReadOnly) return;
     if (!collectionAmount) return;
 
-    // For 'Credit' payment method, a customer must be selected
-    if (collectionMethod === 'Credit' && !collectionCustomerId) {
+    if (!collectionCustomerId) {
       setError('A customer account must be selected for Credit Sales.');
       return;
     }
@@ -198,7 +147,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
         shiftId,
         customerId: collectionCustomerId || undefined,
         amount: Number(collectionAmount),
-        paymentMethod: collectionMethod,
+        paymentMethod: 'Credit',
         notes: collectionNotes || undefined,
       });
 
@@ -253,8 +202,8 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
               Shift Transactions & Logbook
             </h3>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-              Record expenses, fuel drops, credit sales, and payment collections directly against
-              this shift.
+              Record fuel deliveries and credit sales against this shift. Expenses and collections
+              are office entries — record them from Expenses or Customers.
             </p>
           </div>
           {isReadOnly && (
@@ -277,17 +226,16 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
           variant="underline"
           aria-label="Shift transactions"
           activeId={activeTab}
-          onChange={(id) => setActiveTab(id as 'expenses' | 'purchases' | 'collections')}
+          onChange={(id) => setActiveTab(id as 'purchases' | 'credit')}
           tabs={[
-            { id: 'expenses', label: 'Petty Expenses', icon: <Coins size={14} /> },
             {
               id: 'purchases',
               label: 'Fuel Deliveries (Purchases)',
               icon: <ShoppingCart size={14} />,
             },
             {
-              id: 'collections',
-              label: 'Credit Sales & Collections',
+              id: 'credit',
+              label: 'Credit Sales',
               icon: <CreditCard size={14} />,
             },
           ]}
@@ -314,107 +262,6 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
             >
               {error ?? 'Could not load transaction settings. Reopen the panel to retry.'}
             </div>
-          )}
-
-          {/* Tab Form: Expenses */}
-          {activeTab === 'expenses' && (
-            <Form
-              onSubmit={handleAddExpense}
-              style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
-            >
-              <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                Record Petty Expense
-              </h4>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                  Category
-                </label>
-                <select
-                  value={expenseCategoryId}
-                  onChange={(e) => setExpenseCategoryId(e.target.value)}
-                  disabled={isReadOnly || submitting}
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                  }}
-                >
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                  Amount (₹)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={expenseAmount}
-                  onChange={(e) => setExpenseAmount(e.target.value)}
-                  disabled={isReadOnly || submitting}
-                  required
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                  Description
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Snacks for staff, Generator Oil, etc."
-                  value={expenseDescription}
-                  onChange={(e) => setExpenseDescription(e.target.value)}
-                  disabled={isReadOnly || submitting}
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                  }}
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isReadOnly || submitting || !expenseAmount}
-                style={{
-                  height: '36px',
-                  backgroundColor: 'var(--brand-primary)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: isReadOnly || submitting ? 'not-allowed' : 'pointer',
-                  marginTop: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                }}
-              >
-                <Plus size={14} /> {submitting ? 'Recording...' : 'Add Expense'}
-              </button>
-            </Form>
           )}
 
           {/* Tab Form: Purchases */}
@@ -589,54 +436,19 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
             </Form>
           )}
 
-          {/* Tab Form: Collections */}
-          {activeTab === 'collections' && (
+          {/* Tab Form: Credit sales */}
+          {activeTab === 'credit' && (
             <Form
               onSubmit={handleAddCollection}
               style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
             >
               <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                Record Shift Credit Sale / Collection
+                Record Shift Credit Sale
               </h4>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                  Entry Type / Payment Method
-                </label>
-                <div
-                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}
-                >
-                  {(['Cash', 'Card', 'UPI', 'Credit'] as const).map((method) => (
-                    <button
-                      key={method}
-                      type="button"
-                      onClick={() => setCollectionMethod(method)}
-                      disabled={isReadOnly || submitting}
-                      style={{
-                        height: '32px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        backgroundColor:
-                          collectionMethod === method
-                            ? 'var(--brand-primary)'
-                            : 'var(--bg-surface-alt)',
-                        color: collectionMethod === method ? 'white' : 'var(--text-default)',
-                        border:
-                          collectionMethod === method ? 'none' : '1px solid var(--border-strong)',
-                        borderRadius: 'var(--radius-input)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {method}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                  Customer Account{' '}
-                  {collectionMethod === 'Credit' ? '(Required)' : '(Optional for Walk-in)'}
+                  Customer Account (Required)
                 </label>
                 <select
                   value={collectionCustomerId}
@@ -650,7 +462,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                     fontSize: '13px',
                   }}
                 >
-                  <option value="">-- Walk-in / General --</option>
+                  <option value="">-- Select customer --</option>
                   {customers.map((cust) => (
                     <option key={cust.id} value={cust.id}>
                       {cust.name} ({cust.customerType})
@@ -721,12 +533,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                   gap: '6px',
                 }}
               >
-                <Plus size={14} />{' '}
-                {submitting
-                  ? 'Recording...'
-                  : collectionMethod === 'Credit'
-                    ? 'Log Credit Sale'
-                    : 'Log Collection'}
+                <Plus size={14} /> {submitting ? 'Recording...' : 'Log Credit Sale'}
               </button>
             </Form>
           )}
@@ -765,54 +572,8 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
             }}
           >
             {/* Render Tab-Specific List */}
-            {activeTab === 'expenses' &&
-              (loggedTransactions.expenses.length === 0 ? (
-                <div
-                  style={{
-                    textAlign: 'center',
-                    padding: '32px',
-                    color: 'var(--text-muted)',
-                    fontSize: '12px',
-                  }}
-                >
-                  No expenses recorded in this shift.
-                </div>
-              ) : (
-                loggedTransactions.expenses.map((tx) => (
-                  <div
-                    key={tx.id}
-                    style={{
-                      backgroundColor: 'var(--bg-surface)',
-                      border: '1px solid var(--border-soft)',
-                      borderRadius: '6px',
-                      padding: '8px 12px',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      fontSize: '12px',
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
-                        {tx.categoryName}
-                      </div>
-                      {tx.description && (
-                        <div
-                          style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '2px' }}
-                        >
-                          {tx.description}
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ fontWeight: 700, color: 'var(--brand-danger)' }}>
-                      - {inr(tx.amount)}
-                    </div>
-                  </div>
-                ))
-              ))}
-
             {activeTab === 'purchases' &&
-              (loggedTransactions.purchases.length === 0 ? (
+              (loggedPurchases.length === 0 ? (
                 <div
                   style={{
                     textAlign: 'center',
@@ -824,7 +585,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                   No fuel deliveries recorded in this shift.
                 </div>
               ) : (
-                loggedTransactions.purchases.map((tx) => (
+                loggedPurchases.map((tx) => (
                   <div
                     key={tx.id}
                     style={{
@@ -865,119 +626,18 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                 ))
               ))}
 
-            {activeTab === 'collections' &&
-              (loggedTransactions.collections.length === 0 ? (
-                <div
-                  style={{
-                    textAlign: 'center',
-                    padding: '32px',
-                    color: 'var(--text-muted)',
-                    fontSize: '12px',
-                  }}
-                >
-                  No collections or credit sales logged.
-                </div>
-              ) : (
-                loggedTransactions.collections.map((tx) => (
-                  <div
-                    key={tx.id}
-                    style={{
-                      backgroundColor: 'var(--bg-surface)',
-                      border: '1px solid var(--border-soft)',
-                      borderRadius: '6px',
-                      padding: '8px 12px',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      fontSize: '12px',
-                    }}
-                  >
-                    <div>
-                      <div
-                        style={{
-                          fontWeight: 600,
-                          color: 'var(--text-strong)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                        }}
-                      >
-                        <span>{tx.customerName}</span>
-                        <span
-                          style={{
-                            fontSize: '10px',
-                            fontWeight: 600,
-                            backgroundColor:
-                              tx.paymentMethod === 'Credit'
-                                ? 'var(--state-warning-bg)'
-                                : 'var(--state-success-bg)',
-                            color:
-                              tx.paymentMethod === 'Credit'
-                                ? 'var(--state-warning-fg)'
-                                : 'var(--state-success-fg)',
-                            padding: '1px 6px',
-                            borderRadius: '4px',
-                          }}
-                        >
-                          {tx.paymentMethod}
-                        </span>
-                      </div>
-                      {tx.notes && (
-                        <div
-                          style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '2px' }}
-                        >
-                          {tx.notes}
-                        </div>
-                      )}
-                    </div>
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        color:
-                          tx.paymentMethod === 'Credit'
-                            ? 'var(--text-muted)'
-                            : 'var(--state-success-fg)',
-                      }}
-                    >
-                      {tx.paymentMethod === 'Credit' ? '' : '+ '}
-                      {inr(tx.amount)}
-                    </div>
-                  </div>
-                ))
-              ))}
-          </div>
-
-          {/* Quick Metrics Summary */}
-          <div
-            style={{
-              padding: '12px',
-              backgroundColor: 'var(--bg-surface-alt)',
-              borderRadius: 'var(--radius-input)',
-              fontSize: '12px',
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '8px',
-              border: '1px solid var(--border-soft)',
-            }}
-          >
-            <div>
-              <span style={{ color: 'var(--text-muted)' }}>Petty Expenses:</span>
-              <strong style={{ display: 'block', fontSize: '13px', color: 'var(--brand-danger)' }}>
-                {inr(loggedTransactions.expenses.reduce((sum, e) => sum + Number(e.amount), 0))}
-              </strong>
-            </div>
-            <div>
-              <span style={{ color: 'var(--text-muted)' }}>Cash Collections:</span>
-              <strong
-                style={{ display: 'block', fontSize: '13px', color: 'var(--state-success-fg)' }}
+            {activeTab === 'credit' && (
+              <div
+                style={{
+                  textAlign: 'center',
+                  padding: '32px',
+                  color: 'var(--text-muted)',
+                  fontSize: '12px',
+                }}
               >
-                {inr(
-                  loggedTransactions.collections
-                    .filter((c) => c.paymentMethod === 'Cash')
-                    .reduce((sum, c) => sum + Number(c.amount), 0),
-                )}
-              </strong>
-            </div>
+                Credit sales appear in the shift summary.
+              </div>
+            )}
           </div>
         </div>
       </div>

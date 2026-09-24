@@ -363,15 +363,17 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
 
     await this.deps.stock.saveMany(movements);
 
+    // The payable moves no money (no Funding Account); it is dated on the
+    // purchase's Business Date — purchases stay forecourt stock events (ADR 0005).
     const payable: SupplierTransaction = {
       id: ctx.ids.newId(),
-      shiftId: shiftIdToStore,
-      businessDayId,
+      organizationId: ctx.organizationId,
+      stationId,
+      entryDate: anchor.data.businessDate,
       supplierId: supplier.id,
       transactionType: 'Purchase',
       amount: String(headerTotals.grand),
-      paidFrom: 'BANK',
-      affectsDrawer: false,
+      fundingAccountId: null,
       referenceType: 'PURCHASE',
       referenceId: purchase.id,
       notes: cmd.invoiceNumber ?? null,

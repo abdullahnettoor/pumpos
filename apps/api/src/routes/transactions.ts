@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import { and, desc, eq, gte, ilike, inArray, lt, lte, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, lte, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
   isAuthorizedForStation,
@@ -88,6 +88,10 @@ import {
   DrizzleTankRepository,
 } from '../infra/repositories/setup-repositories.js';
 import { LedgerPostingService } from '../infra/ledger-posting.js';
+import {
+  DrizzleFinancialAccountRepository,
+  DrizzlePaymentTerminalLookup,
+} from '../infra/repositories/finance-account-repositories.js';
 import { sendResult } from '../infra/send-result.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
 import {
@@ -207,6 +211,48 @@ async function guardRowStation(
   };
 }
 
+/**
+ * Station guard + clock for an Office Record write (ADR 0005). Office records
+ * name their station directly — there is no Shift to derive it from — so the
+ * station is required, must belong to the organization, and must be one the
+ * caller may act on.
+ */
+async function guardOfficeStation(
+  c: Context<{ Variables: Variables }>,
+  body: { stationId?: string | null },
+): Promise<
+  | {
+      ok: true;
+      stationId: string;
+      clock: NonNullable<Awaited<ReturnType<typeof loadStationClock>>>;
+    }
+  | { ok: false; response: Response }
+> {
+  const user = c.var.user;
+  const stationId = body?.stationId;
+  if (!stationId) {
+    return {
+      ok: false,
+      response: c.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } },
+        400,
+      ),
+    };
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return {
+      ok: false,
+      response: c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+        403,
+      ),
+    };
+  }
+  const clock = await loadStationClock(c.var.db, user.organizationId, stationId);
+  if (!clock) return { ok: false, response: stationNotFound(c) };
+  return { ok: true, stationId, clock };
+}
+
 const DEFAULT_EXPENSE_CATEGORIES = [
   'Staff Tea & Snacks',
   'Office Stationery',
@@ -233,7 +279,7 @@ transactionsRouter.get('/suppliers', async (c) => {
   const user = c.var.user;
   const activeOnly = c.req.query('activeOnly') !== 'false';
 
-  // Outstanding balance = Σ purchases − Σ payments, scoped to org via business_days.
+  // Outstanding balance = Σ purchases − Σ payments, scoped to the organization.
   // Aggregated in SQL (one row per supplier) + run alongside the list query.
   const [list, balanceRows] = await Promise.all([
     new DrizzleSupplierRepository(db).listByOrganization(user.organizationId, activeOnly),
@@ -243,11 +289,7 @@ transactionsRouter.get('/suppliers', async (c) => {
         balance: sql<string>`COALESCE(SUM(CASE WHEN ${schema.supplierTransactions.transactionType} = 'Payment' THEN -${schema.supplierTransactions.amount} ELSE ${schema.supplierTransactions.amount} END), 0)`,
       })
       .from(schema.supplierTransactions)
-      .innerJoin(
-        schema.businessDays,
-        sql`${schema.businessDays.id} = (${schema.supplierTransactions.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-      )
-      .where(eq(schema.businessDays.organizationId, user.organizationId))
+      .where(eq(schema.supplierTransactions.organizationId, user.organizationId))
       .groupBy(schema.supplierTransactions.supplierId),
   ]);
 
@@ -391,20 +433,24 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
       id: schema.supplierTransactions.id,
       transactionType: schema.supplierTransactions.transactionType,
       amount: schema.supplierTransactions.amount,
-      paidFrom: sql<string>`COALESCE(${schema.supplierTransactions.metadata}->>'paidFrom', 'BANK')` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+      fundingAccountId: schema.supplierTransactions.fundingAccountId,
+      accountName: schema.financialAccounts.name,
       notes: schema.supplierTransactions.notes,
       createdAt: schema.supplierTransactions.createdAt,
-      shiftId: sql<
-        string | null
-      >`${schema.supplierTransactions.metadata}->>'shiftId'` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-      businessDate: schema.businessDays.businessDate,
+      // The ledger date: Entry Date for a payment, Business Date for a payable.
+      businessDate: schema.supplierTransactions.entryDate,
     })
     .from(schema.supplierTransactions)
-    .innerJoin(
-      schema.businessDays,
-      sql`${schema.businessDays.id} = (${schema.supplierTransactions.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+    .leftJoin(
+      schema.financialAccounts,
+      eq(schema.financialAccounts.id, schema.supplierTransactions.fundingAccountId),
     )
-    .where(eq(schema.supplierTransactions.supplierId, supplierId))
+    .where(
+      and(
+        eq(schema.supplierTransactions.supplierId, supplierId),
+        eq(schema.supplierTransactions.organizationId, user.organizationId),
+      ),
+    )
     .orderBy(schema.supplierTransactions.createdAt);
   return c.json({ success: true, data: list });
 });
@@ -418,24 +464,27 @@ transactionsRouter.get('/customers', async (c) => {
   const user = c.var.user;
   const activeOnly = c.req.query('activeOnly') !== 'false';
 
-  // Receivable = Σ credit sales/adjustments − Σ collections, scoped via business_days.
-  // OMC fleet-card sales are a CMS-settled payment channel (never a receivable),
-  // so they are excluded from the customer balance.
-  // Aggregated in SQL (one row per customer) + run alongside the list query.
+  // Receivable = Σ credit sales/adjustments (customer_transactions) − Σ
+  // collections (the `collections` Office Records, ADR 0005). OMC fleet-card
+  // sales are a CMS-settled payment channel (never a receivable), so they are
+  // excluded. Aggregated in SQL (one row per customer) alongside the list query.
   const [list, balanceRows] = await Promise.all([
     new DrizzleCustomerRepository(db).listByOrganization(user.organizationId, activeOnly),
-    db
-      .select({
-        customerId: schema.customerTransactions.customerId,
-        balance: sql<string>`COALESCE(SUM(CASE WHEN ${schema.customerTransactions.transactionType} = 'Collection' THEN -${schema.customerTransactions.amount} WHEN ${schema.customerTransactions.transactionType} = 'OMC Sale' THEN 0 ELSE ${schema.customerTransactions.amount} END), 0)`,
-      })
-      .from(schema.customerTransactions)
-      .innerJoin(
-        schema.businessDays,
-        eq(schema.customerTransactions.businessDayId, schema.businessDays.id),
-      )
-      .where(eq(schema.businessDays.organizationId, user.organizationId))
-      .groupBy(schema.customerTransactions.customerId),
+    db.execute(sql`
+      SELECT customer_id AS "customerId", SUM(amount)::text AS balance FROM (
+        SELECT ct.customer_id, ct.amount
+          FROM customer_transactions ct
+          JOIN business_days bd ON bd.id = ct.business_day_id
+         WHERE bd.organization_id = ${user.organizationId}
+           AND ct.transaction_type NOT IN ('OMC Sale', 'Collection')
+        UNION ALL
+        SELECT co.customer_id, -co.amount
+          FROM collections co
+         WHERE co.organization_id = ${user.organizationId}
+      ) t
+      WHERE customer_id IS NOT NULL
+      GROUP BY customer_id
+    `) as unknown as Promise<Array<{ customerId: string; balance: string }>>,
   ]);
 
   const balances: Record<string, number> = {};
@@ -573,28 +622,60 @@ transactionsRouter.get('/customers/:id/ledger', async (c) => {
   // account-statement pattern: accept from/to, return
   // { periodOpeningBalance: Σ(debit − credit) WHERE businessDate < from, entries: in-range only }
   // and drop the client-side clampByDate/opening computation in UnifiedLedger.
-  const list = await db
-    .select({
-      id: schema.customerTransactions.id,
-      transactionType: schema.customerTransactions.transactionType,
-      amount: schema.customerTransactions.amount,
-      notes: schema.customerTransactions.notes,
-      createdAt: schema.customerTransactions.createdAt,
-      shiftId: schema.customerTransactions.shiftId,
-      businessDate: schema.businessDays.businessDate,
-    })
-    .from(schema.customerTransactions)
-    .innerJoin(
-      schema.businessDays,
-      eq(schema.customerTransactions.businessDayId, schema.businessDays.id),
-    )
-    .where(
-      and(
-        eq(schema.customerTransactions.customerId, customerId),
-        ne(schema.customerTransactions.transactionType, 'OMC Sale'),
+  // Credit sales / adjustments come from the customer ledger; collections are
+  // Office Records read from `collections` (ADR 0005). `businessDate` is the
+  // ledger date: Business Date for a sale, Entry Date for a collection.
+  const [sales, collections] = await Promise.all([
+    db
+      .select({
+        id: schema.customerTransactions.id,
+        transactionType: schema.customerTransactions.transactionType,
+        amount: schema.customerTransactions.amount,
+        notes: schema.customerTransactions.notes,
+        createdAt: schema.customerTransactions.createdAt,
+        shiftId: schema.customerTransactions.shiftId,
+        businessDate: schema.businessDays.businessDate,
+      })
+      .from(schema.customerTransactions)
+      .innerJoin(
+        schema.businessDays,
+        eq(schema.customerTransactions.businessDayId, schema.businessDays.id),
+      )
+      .where(
+        and(
+          eq(schema.customerTransactions.customerId, customerId),
+          eq(schema.businessDays.organizationId, user.organizationId),
+          ne(schema.customerTransactions.transactionType, 'OMC Sale'),
+          ne(schema.customerTransactions.transactionType, 'Collection'),
+        ),
       ),
-    )
-    .orderBy(schema.customerTransactions.createdAt);
+    db
+      .select({
+        id: schema.collections.id,
+        amount: schema.collections.amount,
+        notes: schema.collections.notes,
+        createdAt: schema.collections.createdAt,
+        businessDate: schema.collections.entryDate,
+      })
+      .from(schema.collections)
+      .where(
+        and(
+          eq(schema.collections.customerId, customerId),
+          eq(schema.collections.organizationId, user.organizationId),
+        ),
+      ),
+  ]);
+  const list = [
+    ...sales,
+    ...collections.map((r) => ({
+      ...r,
+      transactionType: 'Collection',
+      shiftId: null as string | null,
+    })),
+  ].sort(
+    (a, b) =>
+      a.businessDate.localeCompare(b.businessDate) || a.createdAt.getTime() - b.createdAt.getTime(),
+  );
   return c.json({ success: true, data: list });
 });
 
@@ -1109,71 +1190,28 @@ transactionsRouter.post('/income', writePolicyGuard('POST /transactions/income')
     );
   }
   const body = await c.req.json().catch(() => ({}));
-  if (
-    body?.stationId &&
-    !isAuthorizedForStation(user, {
-      organizationId: user.organizationId,
-      stationId: body.stationId,
-    })
-  ) {
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
-      403,
-    );
-  }
-  const clock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
-  if (!clock) return stationNotFound(c);
-  // The Shift owns the station; a body stationId is only cross-checked (#243).
-  const shiftStation = await guardShiftStation(c, body);
-  if (!shiftStation.ok) return shiftStation.response;
+  const office = await guardOfficeStation(c, body);
+  if (!office.ok) return office.response;
   // FI4 — place of supply: station state is the supplier side; the payer state
   // (when the operator knows it) makes the entry inter-state (IGST).
   const supplierStateCode = await loadStationStateCode(
     c.var.db,
     user.organizationId,
-    body?.stationId,
-    body?.shiftId,
+    office.stationId,
+    undefined,
   );
   const result = await runInTransaction(c.var.db, async (tx, events) => {
-    // A chosen account overrides receivedInto/affectsDrawer by its type, so
-    // drawer reconciliation stays correct (only shift Cash-in-Hand hits drawer).
-    if (body?.accountId) {
-      const [acc] = await tx
-        .select({ t: schema.financialAccounts.accountType })
-        .from(schema.financialAccounts)
-        .where(
-          and(
-            eq(schema.financialAccounts.id, body.accountId),
-            eq(schema.financialAccounts.organizationId, user.organizationId),
-          ),
-        )
-        .limit(1);
-      const t = acc?.t;
-      if (t === 'BANK') {
-        body.receivedInto = 'BANK';
-        body.affectsDrawer = false;
-      } else if (t === 'OWNER') {
-        body.receivedInto = 'OWNER';
-        body.affectsDrawer = false;
-      } else if (t === 'PETTY_CASH') {
-        body.receivedInto = 'SHIFT_CASH';
-        body.affectsDrawer = false;
-      } else if (t === 'CASH_IN_HAND') {
-        body.receivedInto = 'SHIFT_CASH';
-      }
-    }
     const r = await new RecordIncome({
       income: new DrizzleIncomeRepository(tx),
-      shifts: new DrizzleShiftRepository(tx),
-      businessDays: new DrizzleBusinessDayRepository(tx),
+      accounts: new DrizzleFinancialAccountRepository(tx),
+      terminals: new DrizzlePaymentTerminalLookup(tx),
       incomeCategories: new DrizzleIncomeCategoryRepository(tx),
       events,
     }).execute(
       { ...body, supplierStateCode: supplierStateCode ?? undefined },
-      buildContext(user, { stationId: shiftStation.stationId, ...clock }),
+      buildContext(user, { stationId: office.stationId, ...office.clock }),
     );
-    if (r.success)
-      await new LedgerPostingService(tx).postIncome(user.organizationId, r.data, body?.accountId);
+    if (r.success) await new LedgerPostingService(tx).postIncome(r.data);
     return r;
   });
   return sendResult(c, result);
@@ -1200,7 +1238,6 @@ transactionsRouter.post(
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const r = await new VoidIncome({
         income: new DrizzleIncomeRepository(tx),
-        shifts: new DrizzleShiftRepository(tx),
         events,
       }).execute(
         { id, reason: body?.reason },
@@ -1218,25 +1255,23 @@ transactionsRouter.get('/income', async (c) => {
   const user = c.var.user;
   const from = c.req.query('from');
   const to = c.req.query('to');
-  const conds = [eq(schema.businessDays.organizationId, user.organizationId)];
+  const conds = [eq(schema.otherIncome.organizationId, user.organizationId)];
   const stationId = c.req.query('stationId');
-  if (stationId) conds.push(eq(schema.businessDays.stationId, stationId));
-  if (from) conds.push(gte(schema.businessDays.businessDate, from));
-  if (to) conds.push(lte(schema.businessDays.businessDate, to));
+  if (stationId) conds.push(eq(schema.otherIncome.stationId, stationId));
+  if (from) conds.push(gte(schema.otherIncome.entryDate, from));
+  if (to) conds.push(lte(schema.otherIncome.entryDate, to));
   const rows = await db
     .select({
       id: schema.otherIncome.id,
       amount: schema.otherIncome.amount,
       categoryId: schema.otherIncome.categoryId,
       categoryName: schema.incomeCategories.name,
-      receivedInto: sql<string>`COALESCE(${schema.otherIncome.metadata}->>'receivedInto', 'SHIFT_CASH')` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-      affectsDrawer: schema.otherIncome.affectsDrawer,
+      fundingAccountId: schema.otherIncome.fundingAccountId,
+      accountName: schema.financialAccounts.name,
+      accountType: schema.financialAccounts.accountType,
       payer: schema.otherIncome.payer,
       description: schema.otherIncome.description,
       status: schema.otherIncome.status,
-      shiftId: sql<
-        string | null
-      >`${schema.otherIncome.metadata}->>'shiftId'` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
       taxCategory: schema.otherIncome.taxCategory,
       gstRate: schema.otherIncome.gstRate,
       hsnCode: schema.otherIncome.hsnCode,
@@ -1245,13 +1280,13 @@ transactionsRouter.get('/income', async (c) => {
       sgst: schema.otherIncome.sgst,
       igst: schema.otherIncome.igst,
       cess: schema.otherIncome.cess,
-      businessDate: schema.businessDays.businessDate,
+      entryDate: schema.otherIncome.entryDate,
       createdAt: schema.otherIncome.createdAt,
     })
     .from(schema.otherIncome)
-    .innerJoin(
-      schema.businessDays,
-      sql`${schema.businessDays.id} = (${schema.otherIncome.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+    .leftJoin(
+      schema.financialAccounts,
+      eq(schema.financialAccounts.id, schema.otherIncome.fundingAccountId),
     )
     .leftJoin(
       schema.incomeCategories,
@@ -1274,17 +1309,17 @@ transactionsRouter.get('/income/gst-register', async (c) => {
   const to = c.req.query('to');
   const stationId = c.req.query('stationId');
   const conds = [
-    eq(schema.businessDays.organizationId, user.organizationId),
+    eq(schema.otherIncome.organizationId, user.organizationId),
     eq(schema.otherIncome.taxCategory, 'GST'),
     ne(schema.otherIncome.status, 'VOIDED'),
   ];
-  if (stationId) conds.push(eq(schema.businessDays.stationId, stationId));
-  if (from) conds.push(gte(schema.businessDays.businessDate, from));
-  if (to) conds.push(lte(schema.businessDays.businessDate, to));
+  if (stationId) conds.push(eq(schema.otherIncome.stationId, stationId));
+  if (from) conds.push(gte(schema.otherIncome.entryDate, from));
+  if (to) conds.push(lte(schema.otherIncome.entryDate, to));
   const rows = await db
     .select({
       id: schema.otherIncome.id,
-      businessDate: schema.businessDays.businessDate,
+      entryDate: schema.otherIncome.entryDate,
       categoryName: schema.incomeCategories.name,
       payer: schema.otherIncome.payer,
       description: schema.otherIncome.description,
@@ -1299,16 +1334,12 @@ transactionsRouter.get('/income/gst-register', async (c) => {
       cess: schema.otherIncome.cess,
     })
     .from(schema.otherIncome)
-    .innerJoin(
-      schema.businessDays,
-      sql`${schema.businessDays.id} = (${schema.otherIncome.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-    )
     .leftJoin(
       schema.incomeCategories,
       eq(schema.incomeCategories.id, schema.otherIncome.categoryId),
     )
     .where(and(...conds))
-    .orderBy(desc(schema.businessDays.businessDate));
+    .orderBy(desc(schema.otherIncome.entryDate));
   const data = rows.map((r) => ({
     ...r,
     // Inter-state is derivable — IGST is only ever charged across states.
@@ -1330,63 +1361,15 @@ transactionsRouter.post('/expenses', writePolicyGuard('POST /transactions/expens
     );
   }
   const body = await c.req.json().catch(() => ({}));
-  if (
-    body?.stationId &&
-    !isAuthorizedForStation(user, {
-      organizationId: user.organizationId,
-      stationId: body.stationId,
-    })
-  ) {
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
-      403,
-    );
-  }
-  const clock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
-  if (!clock) return stationNotFound(c);
-  // The Shift owns the station; a body stationId is only cross-checked (#243).
-  const shiftStation = await guardShiftStation(c, body);
-  if (!shiftStation.ok) return shiftStation.response;
+  const office = await guardOfficeStation(c, body);
+  if (!office.ok) return office.response;
   const result = await runInTransaction(c.var.db, async (tx, events) => {
-    // When a specific pay-from account is chosen, derive paidFrom/affectsDrawer
-    // from its type so drawer reconciliation stays correct (only the shift's
-    // Cash-in-Hand affects the drawer; petty cash / bank / owner do not).
-    if (body?.accountId) {
-      const [acc] = await tx
-        .select({ t: schema.financialAccounts.accountType })
-        .from(schema.financialAccounts)
-        .where(
-          and(
-            eq(schema.financialAccounts.id, body.accountId),
-            eq(schema.financialAccounts.organizationId, user.organizationId),
-          ),
-        )
-        .limit(1);
-      const t = acc?.t;
-      if (t === 'BANK') {
-        body.paidFrom = 'BANK';
-        body.affectsDrawer = false;
-      } else if (t === 'OWNER') {
-        body.paidFrom = 'OWNER';
-        body.affectsDrawer = false;
-      } else if (t === 'PETTY_CASH') {
-        body.paidFrom = 'SHIFT_CASH';
-        body.affectsDrawer = false;
-      } else if (t === 'CASH_IN_HAND') {
-        body.paidFrom = 'SHIFT_CASH';
-      }
-    }
     const r = await new RecordExpense({
       expenses: new DrizzleExpenseRepository(tx),
-      shifts: new DrizzleShiftRepository(tx),
-      businessDays: new DrizzleBusinessDayRepository(tx),
+      accounts: new DrizzleFinancialAccountRepository(tx),
       events,
-    }).execute(body, buildContext(user, { stationId: shiftStation.stationId, ...clock }));
-    if (r.success) {
-      await new LedgerPostingService(tx).postExpense(user.organizationId, r.data, body?.accountId);
-      // Late attribution to a closed shift: keep its stored summary current.
-      await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
-    }
+    }).execute(body, buildContext(user, { stationId: office.stationId, ...office.clock }));
+    if (r.success) await new LedgerPostingService(tx).postExpense(r.data);
     return r;
   });
   return sendResult(c, result);
@@ -1413,16 +1396,12 @@ transactionsRouter.post(
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const r = await new VoidExpense({
         expenses: new DrizzleExpenseRepository(tx),
-        shifts: new DrizzleShiftRepository(tx),
         events,
       }).execute(
         { id, reason: body?.reason },
         buildContext(user, { stationId: rowStation.stationId }),
       );
-      if (r.success) {
-        await new LedgerPostingService(tx).reverseExpense(id);
-        await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
-      }
+      if (r.success) await new LedgerPostingService(tx).reverseExpense(id);
       return r;
     });
     return sendResult(c, result);
@@ -1501,24 +1480,20 @@ transactionsRouter.post(
       });
       return sendResult(c, result);
     }
+    // A payment collection is an Office Record (ADR 0005): station + Entry
+    // Date + Funding Account, never a Shift.
+    const office = await guardOfficeStation(c, body);
+    if (!office.ok) return office.response;
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const r = await new RecordCollection({
         collections: new DrizzleCollectionRepository(tx),
-        ledger: new DrizzleCustomerLedgerRepository(tx),
         customers: new DrizzleCustomerRepository(tx),
-        shifts: new DrizzleShiftRepository(tx),
-        businessDays: new DrizzleBusinessDayRepository(tx),
+        accounts: new DrizzleFinancialAccountRepository(tx),
+        terminals: new DrizzlePaymentTerminalLookup(tx),
         docNumbers,
         events,
-      }).execute(body, buildContext(user, { stationId: shiftStation.stationId, ...clock }));
-      if (r.success) {
-        await new LedgerPostingService(tx).postCollection(
-          user.organizationId,
-          r.data,
-          body?.accountId,
-        );
-        await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
-      }
+      }).execute(body, buildContext(user, { stationId: office.stationId, ...office.clock }));
+      if (r.success) await new LedgerPostingService(tx).postCollection(r.data);
       return r;
     });
     return sendResult(c, result);
@@ -1652,65 +1627,33 @@ transactionsRouter.post(
         events,
       }).execute(body, ctx);
 
-      // Optional "pay now" — record a supplier payment atomically with the
-      // purchase (partial allowed). Same funding-account → paidFrom derivation as
-      // the standalone /supplier-payments route; both commit or roll back together.
+      // Optional "pay now" — record a supplier payment (an Office Record on
+      // today's Entry Date, from the chosen Funding Account) atomically with the
+      // purchase (partial allowed); both commit or roll back together.
       if (r.success && body?.payment && Number(body.payment.amount) > 0) {
-        const accountId = body.payment.accountId || undefined;
-        const paymentBody: any = {
-          supplierId: body.supplierId,
-          amount: Number(body.payment.amount),
-          stationId: shiftStation.stationId,
-          transactionDate: body?.transactionDate,
-          shiftId: body?.shiftId,
-          notes: body?.payment?.notes,
-        };
-        if (accountId) {
-          const [acc] = await tx
-            .select({ t: schema.financialAccounts.accountType })
-            .from(schema.financialAccounts)
-            .where(
-              and(
-                eq(schema.financialAccounts.id, accountId),
-                eq(schema.financialAccounts.organizationId, user.organizationId),
-              ),
-            )
-            .limit(1);
-          const t = acc?.t;
-          if (t === 'BANK') {
-            paymentBody.paidFrom = 'BANK';
-            paymentBody.affectsDrawer = false;
-          } else if (t === 'OWNER') {
-            paymentBody.paidFrom = 'OWNER';
-            paymentBody.affectsDrawer = false;
-          } else if (t === 'PETTY_CASH') {
-            paymentBody.paidFrom = 'SHIFT_CASH';
-            paymentBody.affectsDrawer = false;
-          } else if (t === 'CASH_IN_HAND') {
-            paymentBody.paidFrom = 'SHIFT_CASH';
-          }
-        }
         const pr = await new RecordSupplierPayment({
           supplierTxns: new DrizzleSupplierTransactionRepository(tx),
           suppliers: new DrizzleSupplierRepository(tx),
-          shifts: new DrizzleShiftRepository(tx),
-          businessDays: new DrizzleBusinessDayRepository(tx),
+          accounts: new DrizzleFinancialAccountRepository(tx),
           events,
         }).execute(
-          paymentBody,
+          {
+            supplierId: body.supplierId,
+            amount: Number(body.payment.amount),
+            stationId: r.data.payable.stationId,
+            entryDate: body.payment.entryDate,
+            fundingAccountId: body.payment.fundingAccountId,
+            notes: body.payment.notes,
+          },
           buildContext(user, {
-            stationId: shiftStation.stationId,
+            stationId: r.data.payable.stationId,
             correlationId: trace.correlationId,
             groupingRole: 'related',
             ...clock,
           }),
         );
         if (!pr.success) return pr; // roll the whole purchase back
-        await new LedgerPostingService(tx).postSupplierPayment(
-          user.organizationId,
-          pr.data,
-          accountId,
-        );
+        await new LedgerPostingService(tx).postSupplierPayment(pr.data);
       }
 
       if (r.success) {
@@ -1740,54 +1683,16 @@ transactionsRouter.post(
       );
     }
     const body = await c.req.json().catch(() => ({}));
-    const clock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
-    if (!clock) return stationNotFound(c);
-    // The Shift owns the station; a body stationId is only cross-checked (#243).
-    const shiftStation = await guardShiftStation(c, body);
-    if (!shiftStation.ok) return shiftStation.response;
+    const office = await guardOfficeStation(c, body);
+    if (!office.ok) return office.response;
     const result = await runInTransaction(c.var.db, async (tx, events) => {
-      // Chosen pay-from account → derive paidFrom/affectsDrawer so drawer
-      // reconciliation stays correct (only the shift Cash-in-Hand affects it).
-      if (body?.accountId) {
-        const [acc] = await tx
-          .select({ t: schema.financialAccounts.accountType })
-          .from(schema.financialAccounts)
-          .where(
-            and(
-              eq(schema.financialAccounts.id, body.accountId),
-              eq(schema.financialAccounts.organizationId, user.organizationId),
-            ),
-          )
-          .limit(1);
-        const t = acc?.t;
-        if (t === 'BANK') {
-          body.paidFrom = 'BANK';
-          body.affectsDrawer = false;
-        } else if (t === 'OWNER') {
-          body.paidFrom = 'OWNER';
-          body.affectsDrawer = false;
-        } else if (t === 'PETTY_CASH') {
-          body.paidFrom = 'SHIFT_CASH';
-          body.affectsDrawer = false;
-        } else if (t === 'CASH_IN_HAND') {
-          body.paidFrom = 'SHIFT_CASH';
-        }
-      }
       const r = await new RecordSupplierPayment({
         supplierTxns: new DrizzleSupplierTransactionRepository(tx),
         suppliers: new DrizzleSupplierRepository(tx),
-        shifts: new DrizzleShiftRepository(tx),
-        businessDays: new DrizzleBusinessDayRepository(tx),
+        accounts: new DrizzleFinancialAccountRepository(tx),
         events,
-      }).execute(body, buildContext(user, { stationId: shiftStation.stationId, ...clock }));
-      if (r.success) {
-        await new LedgerPostingService(tx).postSupplierPayment(
-          user.organizationId,
-          r.data,
-          body?.accountId,
-        );
-        await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
-      }
+      }).execute(body, buildContext(user, { stationId: office.stationId, ...office.clock }));
+      if (r.success) await new LedgerPostingService(tx).postSupplierPayment(r.data);
       return r;
     });
     return sendResult(c, result);
@@ -1918,23 +1823,25 @@ transactionsRouter.get('/expenses', async (c) => {
   const rows = await db
     .select({
       expense: schema.expenses,
-      businessDate: schema.businessDays.businessDate,
       categoryName: schema.expenseCategories.name,
+      accountName: schema.financialAccounts.name,
+      accountType: schema.financialAccounts.accountType,
     })
     .from(schema.expenses)
-    .innerJoin(
-      schema.businessDays,
-      sql`${schema.businessDays.id} = (${schema.expenses.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-    )
     .leftJoin(schema.expenseCategories, eq(schema.expenses.categoryId, schema.expenseCategories.id))
-    .where(eq(schema.businessDays.organizationId, user.organizationId))
-    .orderBy(desc(schema.expenses.createdAt));
+    .leftJoin(
+      schema.financialAccounts,
+      eq(schema.financialAccounts.id, schema.expenses.fundingAccountId),
+    )
+    .where(eq(schema.expenses.organizationId, user.organizationId))
+    .orderBy(desc(schema.expenses.entryDate), desc(schema.expenses.createdAt));
   return c.json({
     success: true,
     data: rows.map((r) => ({
       ...r.expense,
-      businessDate: r.businessDate,
       categoryName: r.categoryName ?? 'General',
+      accountName: r.accountName,
+      accountType: r.accountType,
     })),
   });
 });
@@ -2121,23 +2028,23 @@ transactionsRouter.get('/collections', async (c) => {
   const rows = await db
     .select({
       collection: schema.collections,
-      businessDate: schema.businessDays.businessDate,
       customerName: schema.customers.name,
+      accountName: schema.financialAccounts.name,
     })
     .from(schema.collections)
-    .innerJoin(
-      schema.businessDays,
-      sql`${schema.businessDays.id} = (${schema.collections.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-    )
     .leftJoin(schema.customers, eq(schema.collections.customerId, schema.customers.id))
-    .where(eq(schema.businessDays.organizationId, user.organizationId))
-    .orderBy(desc(schema.collections.createdAt));
+    .leftJoin(
+      schema.financialAccounts,
+      eq(schema.financialAccounts.id, schema.collections.fundingAccountId),
+    )
+    .where(eq(schema.collections.organizationId, user.organizationId))
+    .orderBy(desc(schema.collections.entryDate), desc(schema.collections.createdAt));
   return c.json({
     success: true,
     data: rows.map((r) => ({
       ...r.collection,
-      businessDate: r.businessDate,
       customerName: r.customerName ?? 'Walk-in Customer',
+      accountName: r.accountName,
     })),
   });
 });
@@ -2213,11 +2120,22 @@ transactionsRouter.get('/money-movements', async (c) => {
       403,
     );
   }
-  const dateConds = [
-    eq(schema.businessDays.stationId, stationId),
-    eq(schema.businessDays.organizationId, user.organizationId),
-    ...(from ? [gte(schema.businessDays.businessDate, from)] : []),
-    ...(to ? [lte(schema.businessDays.businessDate, to)] : []),
+  // Office Records (ADR 0005) are dated by Entry Date and classified by the
+  // type of their Funding Account.
+  type Bucket = 'Cash' | 'Bank' | 'Owner';
+  const bucketOf = (accountType: string | null): Bucket =>
+    accountType === 'CASH_IN_HAND' || accountType === 'PETTY_CASH'
+      ? 'Cash'
+      : accountType === 'OWNER'
+        ? 'Owner'
+        : 'Bank';
+  const officeConds = (
+    t: typeof schema.collections | typeof schema.expenses | typeof schema.supplierTransactions,
+  ) => [
+    eq(t.stationId, stationId),
+    eq(t.organizationId, user.organizationId),
+    ...(from ? [gte(t.entryDate, from)] : []),
+    ...(to ? [lte(t.entryDate, to)] : []),
   ];
 
   const [collectionRows, expenseRows, paymentRows] = await Promise.all([
@@ -2225,65 +2143,67 @@ transactionsRouter.get('/money-movements', async (c) => {
       .select({
         id: schema.collections.id,
         amount: schema.collections.amount,
-        paymentMethod: schema.collections.paymentMethod,
+        accountType: schema.financialAccounts.accountType,
         createdAt: schema.collections.createdAt,
-        businessDate: schema.businessDays.businessDate,
+        entryDate: schema.collections.entryDate,
         customerName: schema.customers.name,
       })
       .from(schema.collections)
-      .innerJoin(
-        schema.businessDays,
-        sql`${schema.businessDays.id} = (${schema.collections.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+      .leftJoin(
+        schema.financialAccounts,
+        eq(schema.financialAccounts.id, schema.collections.fundingAccountId),
       )
       .leftJoin(schema.customers, eq(schema.customers.id, schema.collections.customerId))
-      .where(and(...dateConds)),
+      .where(and(...officeConds(schema.collections))),
     db
       .select({
         id: schema.expenses.id,
         amount: schema.expenses.amount,
-        paidFrom: sql<string>`COALESCE(${schema.expenses.metadata}->>'paidFrom', 'SHIFT_CASH')` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+        accountType: schema.financialAccounts.accountType,
         description: schema.expenses.description,
         createdAt: schema.expenses.createdAt,
-        businessDate: schema.businessDays.businessDate,
+        entryDate: schema.expenses.entryDate,
         categoryName: schema.expenseCategories.name,
       })
       .from(schema.expenses)
-      .innerJoin(
-        schema.businessDays,
-        sql`${schema.businessDays.id} = (${schema.expenses.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+      .leftJoin(
+        schema.financialAccounts,
+        eq(schema.financialAccounts.id, schema.expenses.fundingAccountId),
       )
       .leftJoin(
         schema.expenseCategories,
         eq(schema.expenseCategories.id, schema.expenses.categoryId),
       )
-      .where(and(ne(schema.expenses.status, 'VOIDED'), ...dateConds)),
+      .where(and(ne(schema.expenses.status, 'VOIDED'), ...officeConds(schema.expenses))),
     db
       .select({
         id: schema.supplierTransactions.id,
         amount: schema.supplierTransactions.amount,
-        paidFrom: sql<string>`COALESCE(${schema.supplierTransactions.metadata}->>'paidFrom', 'BANK')` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+        accountType: schema.financialAccounts.accountType,
         notes: schema.supplierTransactions.notes,
         createdAt: schema.supplierTransactions.createdAt,
-        businessDate: schema.businessDays.businessDate,
+        entryDate: schema.supplierTransactions.entryDate,
         supplierName: schema.suppliers.name,
       })
       .from(schema.supplierTransactions)
-      .innerJoin(
-        schema.businessDays,
-        sql`${schema.businessDays.id} = (${schema.supplierTransactions.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+      .leftJoin(
+        schema.financialAccounts,
+        eq(schema.financialAccounts.id, schema.supplierTransactions.fundingAccountId),
       )
       .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.supplierTransactions.supplierId))
-      .where(and(eq(schema.supplierTransactions.transactionType, 'Payment'), ...dateConds)),
+      .where(
+        and(
+          eq(schema.supplierTransactions.transactionType, 'Payment'),
+          ...officeConds(schema.supplierTransactions),
+        ),
+      ),
   ]);
-
-  const accountForPaidFrom = (pf: string): 'Cash' | 'Bank' | 'Owner' =>
-    pf === 'SHIFT_CASH' ? 'Cash' : pf === 'OWNER' ? 'Owner' : 'Bank';
 
   type Movement = {
     id: string;
     date: string;
     createdAt: any;
-    account: 'Cash' | 'Bank' | 'Owner';
+    account: Bucket;
     direction: 'in' | 'out';
     label: string;
     source: string;
@@ -2294,9 +2214,9 @@ transactionsRouter.get('/money-movements', async (c) => {
   for (const r of collectionRows) {
     movements.push({
       id: r.id,
-      date: r.businessDate,
+      date: r.entryDate,
       createdAt: r.createdAt,
-      account: r.paymentMethod === 'Cash' ? 'Cash' : 'Bank',
+      account: bucketOf(r.accountType),
       direction: 'in',
       label: r.customerName ? `Collection · ${r.customerName}` : 'Collection',
       source: 'Collection',
@@ -2304,12 +2224,11 @@ transactionsRouter.get('/money-movements', async (c) => {
     });
   }
   for (const r of expenseRows) {
-    const account = accountForPaidFrom(r.paidFrom);
     movements.push({
       id: r.id,
-      date: r.businessDate,
+      date: r.entryDate,
       createdAt: r.createdAt,
-      account,
+      account: bucketOf(r.accountType),
       direction: 'out',
       label: r.categoryName || r.description || 'Expense',
       source: 'Expense',
@@ -2317,12 +2236,11 @@ transactionsRouter.get('/money-movements', async (c) => {
     });
   }
   for (const r of paymentRows) {
-    const account = accountForPaidFrom(r.paidFrom);
     movements.push({
       id: r.id,
-      date: r.businessDate,
+      date: r.entryDate,
       createdAt: r.createdAt,
-      account,
+      account: bucketOf(r.accountType),
       direction: 'out',
       label: r.supplierName ? `Payment · ${r.supplierName}` : 'Supplier payment',
       source: 'Supplier Payment',
@@ -2337,64 +2255,30 @@ transactionsRouter.get('/money-movements', async (c) => {
   );
 
   // Per-account opening balance = signed net (collections in − expenses/payments
-  // out) for business days strictly before `from`, so the ledger's running
+  // out) for entry dates strictly before `from`, so the ledger's running
   // balance carries the historical opening instead of restarting at zero.
   // Only computed when a range start is given.
-  const openings: Array<{ account: 'Cash' | 'Bank' | 'Owner'; opening: number }> = [];
+  const openings: Array<{ account: Bucket; opening: number }> = [];
   if (from) {
-    const priorConds = [
-      eq(schema.businessDays.stationId, stationId),
-      eq(schema.businessDays.organizationId, user.organizationId),
-      lt(schema.businessDays.businessDate, from),
-    ];
-    const [priorCollections, priorExpenses, priorPayments] = await Promise.all([
-      db
-        .select({
-          paymentMethod: schema.collections.paymentMethod,
-          total: sql<string>`COALESCE(SUM(${schema.collections.amount}), 0)`,
-        })
-        .from(schema.collections)
-        .innerJoin(
-          schema.businessDays,
-          sql`${schema.businessDays.id} = (${schema.collections.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-        )
-        .where(and(...priorConds))
-        .groupBy(schema.collections.paymentMethod),
-      db
-        .select({
-          paidFrom: sql<string>`COALESCE(${schema.expenses.metadata}->>'paidFrom', 'SHIFT_CASH')` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-          total: sql<string>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
-        })
-        .from(schema.expenses)
-        .innerJoin(
-          schema.businessDays,
-          sql`${schema.businessDays.id} = (${schema.expenses.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-        )
-        .where(and(ne(schema.expenses.status, 'VOIDED'), ...priorConds))
-        .groupBy(
-          sql`${schema.expenses.metadata}->>'paidFrom'` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-        ),
-      db
-        .select({
-          paidFrom: sql<string>`COALESCE(${schema.supplierTransactions.metadata}->>'paidFrom', 'BANK')` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-          total: sql<string>`COALESCE(SUM(${schema.supplierTransactions.amount}), 0)`,
-        })
-        .from(schema.supplierTransactions)
-        .innerJoin(
-          schema.businessDays,
-          sql`${schema.businessDays.id} = (${schema.supplierTransactions.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-        )
-        .where(and(eq(schema.supplierTransactions.transactionType, 'Payment'), ...priorConds))
-        .groupBy(
-          sql`${schema.supplierTransactions.metadata}->>'paidFrom'` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-        ),
-    ]);
-
-    const openMap: Record<'Cash' | 'Bank' | 'Owner', number> = { Cash: 0, Bank: 0, Owner: 0 };
-    for (const r of priorCollections)
-      openMap[r.paymentMethod === 'Cash' ? 'Cash' : 'Bank'] += Number(r.total);
-    for (const r of priorExpenses) openMap[accountForPaidFrom(r.paidFrom)] -= Number(r.total);
-    for (const r of priorPayments) openMap[accountForPaidFrom(r.paidFrom)] -= Number(r.total);
+    const prior = (await db.execute(sql`
+      SELECT fa.account_type AS "accountType", SUM(x.signed)::float8 AS total FROM (
+        SELECT funding_account_id, amount AS signed FROM collections
+         WHERE organization_id = ${user.organizationId} AND station_id = ${stationId}
+           AND entry_date < ${from}
+        UNION ALL
+        SELECT funding_account_id, -amount FROM expenses
+         WHERE organization_id = ${user.organizationId} AND station_id = ${stationId}
+           AND entry_date < ${from} AND status <> 'VOIDED'
+        UNION ALL
+        SELECT funding_account_id, -amount FROM supplier_transactions
+         WHERE organization_id = ${user.organizationId} AND station_id = ${stationId}
+           AND entry_date < ${from} AND transaction_type = 'Payment'
+      ) x
+      LEFT JOIN financial_accounts fa ON fa.id = x.funding_account_id
+      GROUP BY fa.account_type
+    `)) as unknown as Array<{ accountType: string | null; total: number }>;
+    const openMap: Record<Bucket, number> = { Cash: 0, Bank: 0, Owner: 0 };
+    for (const r of prior) openMap[bucketOf(r.accountType)] += Number(r.total);
     (['Cash', 'Bank', 'Owner'] as const).forEach((account) =>
       openings.push({ account, opening: openMap[account] }),
     );
@@ -2957,26 +2841,7 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
   // totals consume (#149 / #113) — full-row selects made this payload scale
   // with every column of every table. Names are joined here (category /
   // supplier / customer) because the raw tables store only ids.
-  const [expenses, purchases, collections, creditSales] = await Promise.all([
-    db
-      .select({
-        id: schema.expenses.id,
-        amount: schema.expenses.amount,
-        description: schema.expenses.description,
-        paidFrom: sql<string>`COALESCE(${schema.expenses.metadata}->>'paidFrom', 'SHIFT_CASH')` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-        affectsDrawer: schema.expenses.affectsDrawer,
-        status: schema.expenses.status,
-        createdAt: schema.expenses.createdAt,
-        categoryName: schema.expenseCategories.name,
-      })
-      .from(schema.expenses)
-      .leftJoin(
-        schema.expenseCategories,
-        eq(schema.expenseCategories.id, schema.expenses.categoryId),
-      )
-      .where(
-        sql`${schema.expenses.metadata}->>'shiftId' = ${shiftId}` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-      ),
+  const [purchases, creditSales] = await Promise.all([
     db
       .select({
         id: schema.purchases.id,
@@ -2990,20 +2855,6 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
       .from(schema.purchases)
       .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.purchases.supplierId))
       .where(eq(schema.purchases.shiftId, shiftId)),
-    db
-      .select({
-        id: schema.collections.id,
-        amount: schema.collections.amount,
-        paymentMethod: schema.collections.paymentMethod,
-        notes: schema.collections.notes,
-        createdAt: schema.collections.createdAt,
-        customerName: schema.customers.name,
-      })
-      .from(schema.collections)
-      .leftJoin(schema.customers, eq(schema.customers.id, schema.collections.customerId))
-      .where(
-        sql`${schema.collections.metadata}->>'shiftId' = ${shiftId}` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
-      ),
     // Stage B fuel-on-credit sales live in customer_transactions (a receivable),
     // not the collections table — surface them so totals/reconciliation/summary see them.
     db
@@ -3042,11 +2893,12 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
       ),
   ]);
   // `sales` has no UI consumer on this payload (fuel is metered via readings;
-  // merchandise renders from the status/merch endpoints). Kept as a key for
-  // contract stability, no longer queried.
+  // merchandise renders from the status/merch endpoints). Expenses and
+  // collections are Office Records with no Shift (ADR 0005). All three keys
+  // stay for contract stability and are always empty.
   return c.json({
     success: true,
-    data: { expenses, purchases, collections, sales: [], creditSales },
+    data: { expenses: [], purchases, collections: [], sales: [], creditSales },
   });
 });
 

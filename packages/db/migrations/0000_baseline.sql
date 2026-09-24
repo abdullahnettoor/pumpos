@@ -608,7 +608,7 @@ CREATE TABLE "supplier_transactions" (
 	"supplier_id" uuid NOT NULL,
 	"transaction_type" varchar(50) NOT NULL,
 	"amount" numeric(12, 2) NOT NULL,
-	"funding_account_id" uuid NOT NULL,
+	"funding_account_id" uuid,
 	"terminal_id" uuid,
 	"affects_drawer" boolean DEFAULT false NOT NULL,
 	"reference_type" varchar(50),

@@ -330,7 +330,7 @@ describe.skipIf(!CONNECTION)('GET /shifts/status full mode against real Postgres
       totalAmount: '120',
       nonCashAmount: '20',
     });
-    // TODO(#273): office rows carry entry-date + funding account; legacy anchor in metadata (ADR 0005, #280).
+    // An Office Record on the same day (ADR 0005): it must not reach the drawer.
     await db.insert(schema.financialAccounts).values({
       id: CASH_ACCOUNT,
       organizationId: ORG,
@@ -345,7 +345,6 @@ describe.skipIf(!CONNECTION)('GET /shifts/status full mode against real Postgres
       stationId: STATION,
       entryDate: '2026-03-10',
       fundingAccountId: CASH_ACCOUNT,
-      metadata: { shiftId: OPEN_SHIFT, businessDayId: DAY },
       amount: '300',
       paymentMethod: 'Cash',
     });
@@ -427,7 +426,7 @@ describe.skipIf(!CONNECTION)('GET /shifts/status full mode against real Postgres
       cashSales: 5000,
       handoverCash: 5000,
       merchCashOutsideHandover: 0,
-      cashCollections: 300,
+      cashCollections: 0, // collections are Office Records, never drawer cash
       drawerExpenses: 0,
     });
   });

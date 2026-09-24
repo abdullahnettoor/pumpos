@@ -525,31 +525,47 @@ export const supplierPaymentSchema = z.object({
 // drawer shift.
 // ---------------------------------------------------------------------------
 
+const entryDateField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose the entry date');
+
+/** Expense / other income — an Office Record (ADR 0005): entry date + funding account. */
 export const expenseEntryFormSchema = z.object({
-  targetShiftId: z.string().optional().default(''),
-  transactionDate: z.string().optional().default(''),
+  entryDate: entryDateField,
   categoryId: z.string().min(1, 'Category is required'),
   amount: z.coerce
     .number({ invalid_type_error: 'Amount is required' })
     .positive('Amount must be positive'),
   description: z.string().max(255).optional().default(''),
-  /** Which money account it's paid from (empty = auto by context). */
-  accountId: z.string().optional().default(''),
+  /** The money account it is paid from / received into. */
+  fundingAccountId: z.string().min(1, 'Choose the account'),
 });
 export type ExpenseEntryFormValues = z.infer<typeof expenseEntryFormSchema>;
 
-export const collectionEntryFormSchema = z.object({
-  targetShiftId: z.string().optional().default(''),
-  transactionDate: z.string().optional().default(''),
-  customerId: z.string().optional().default(''),
-  amount: z.coerce
-    .number({ invalid_type_error: 'Amount is required' })
-    .positive('Amount must be positive'),
-  paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'BankTransfer']).default('Cash'),
-  notes: z.string().max(500).optional().default(''),
-  /** Bank account a non-cash collection lands in (empty = auto/default). */
-  accountId: z.string().optional().default(''),
-});
+/** Customer collection — an Office Record (ADR 0005). */
+export const collectionEntryFormSchema = z
+  .object({
+    entryDate: entryDateField,
+    customerId: z.string().optional().default(''),
+    amount: z.coerce
+      .number({ invalid_type_error: 'Amount is required' })
+      .positive('Amount must be positive'),
+    paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'BankTransfer']).default('Cash'),
+    notes: z.string().max(500).optional().default(''),
+    /** Account the money lands in. Not needed when a terminal is chosen. */
+    fundingAccountId: z.string().optional().default(''),
+    /** Card/UPI terminal; the server posts to its clearing account. */
+    terminalId: z.string().optional().default(''),
+  })
+  .superRefine((data, ctx) => {
+    const usesTerminal =
+      !!data.terminalId && (data.paymentMethod === 'Card' || data.paymentMethod === 'UPI');
+    if (!usesTerminal && !data.fundingAccountId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['fundingAccountId'],
+        message: 'Choose the account',
+      });
+    }
+  });
 export type CollectionEntryFormValues = z.infer<typeof collectionEntryFormSchema>;
 
 export const purchaseLineFormSchema = z.object({

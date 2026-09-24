@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import { isAuthorizedForStation, canExportReports } from '@pump/shared';
-import { GenerateDssr, composeDssr, type Result } from '@pump/core';
+import { GenerateDssr, composeDssr, composeProfitLoss, type Result } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { runInTransaction } from '../infra/transaction.js';
@@ -310,4 +310,95 @@ dssrRouter.get('/daily/range', async (c) => {
     )
     .orderBy(desc(schema.dssrSnapshots.businessDate));
   return c.json({ success: true, data: list });
+});
+
+// GET /api/dssr/profit-loss?stationId=&from=&to= — period P&L (ADR 0005).
+// Gross margin per sales day from stored DSSRs (closed days) or a live preview
+// (open days); expenses and other income per entry date from Office Records.
+dssrRouter.get('/profit-loss', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  if (!stationId || !from || !to) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Missing stationId, from, or to' },
+      },
+      400,
+    );
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
+  }
+  const org = user.organizationId;
+  const inRange = (col: any) => and(gte(col, from), lte(col, to));
+  const [snapshots, openDays, office] = await Promise.all([
+    db
+      .select({
+        businessDate: schema.dssrSnapshots.businessDate,
+        snapshotData: schema.dssrSnapshots.snapshotData,
+      })
+      .from(schema.dssrSnapshots)
+      .where(
+        and(
+          eq(schema.dssrSnapshots.organizationId, org),
+          eq(schema.dssrSnapshots.stationId, stationId),
+          inRange(schema.dssrSnapshots.businessDate),
+        ),
+      ),
+    db
+      .select({
+        id: schema.businessDays.id,
+        stationId: schema.businessDays.stationId,
+        businessDate: schema.businessDays.businessDate,
+        status: schema.businessDays.status,
+      })
+      .from(schema.businessDays)
+      .where(
+        and(
+          eq(schema.businessDays.organizationId, org),
+          eq(schema.businessDays.stationId, stationId),
+          eq(schema.businessDays.status, 'OPEN'),
+          inRange(schema.businessDays.businessDate),
+        ),
+      ),
+    db.execute(sql`
+      SELECT entry_date AS date,
+             SUM(expense)::float8 AS expenses,
+             SUM(income)::float8 AS "otherIncome"
+      FROM (
+        SELECT entry_date, amount AS expense, 0 AS income FROM expenses
+         WHERE organization_id = ${org} AND station_id = ${stationId}
+           AND entry_date BETWEEN ${from} AND ${to} AND status <> 'VOIDED'
+        UNION ALL
+        SELECT entry_date, 0, amount FROM other_income
+         WHERE organization_id = ${org} AND station_id = ${stationId}
+           AND entry_date BETWEEN ${from} AND ${to} AND status <> 'VOIDED'
+      ) x
+      GROUP BY entry_date
+    `) as unknown as Promise<Array<{ date: string; expenses: number; otherIncome: number }>>,
+  ]);
+  const live = await Promise.all(openDays.map((bd) => buildLiveDssrPreview(db, user, bd)));
+  const salesDays = [
+    ...snapshots.map((s) => ({
+      date: s.businessDate,
+      live: false,
+      pnl: (s.snapshotData as { pnl?: Record<string, unknown> })?.pnl,
+    })),
+    ...live.map((p) => ({
+      date: p.businessDate,
+      live: true,
+      pnl: (p.snapshotData as { pnl?: Record<string, unknown> }).pnl,
+    })),
+  ];
+  return c.json({
+    success: true,
+    data: composeProfitLoss({ from, to, salesDays, officeDays: office }),
+  });
 });

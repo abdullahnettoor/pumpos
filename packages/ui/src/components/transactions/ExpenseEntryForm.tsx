@@ -1,8 +1,13 @@
-import React from 'react';
-import { expenseEntryFormSchema, type ExpenseEntryFormValues } from '@pump/shared';
+import React, { useCallback } from 'react';
+import {
+  expenseEntryFormSchema,
+  resolveEntryDate,
+  type ExpenseEntryFormValues,
+} from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
+import { useStationTimeZone } from '../../query/hooks.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
-import { AccountSelect } from '../primitives/AccountSelect.js';
+import { FundingAccountSelect } from '../primitives/FundingAccountSelect.js';
 import { Button, Form } from '../../pump-ds/index.js';
 
 export interface ShiftOption {
@@ -11,10 +16,11 @@ export interface ShiftOption {
 }
 
 export interface ExpenseEntryFormProps {
-  shiftOptions: ShiftOption[];
   categories: any[];
-  /** Station whose money accounts populate the "Paid from" picker. */
+  /** Station whose funding accounts populate the account picker. */
   stationId?: string | null;
+  /** Station timezone — the entry date defaults to today there. */
+  timeZone?: string | null;
   defaultValues?: Partial<ExpenseEntryFormValues>;
   submitting: boolean;
   error?: string | null;
@@ -27,24 +33,22 @@ export interface ExpenseEntryFormProps {
   descriptionLabel?: string;
   descriptionPlaceholder?: string;
   categoryEmptyMessage?: string;
-  showShiftHintWhenSingle?: boolean;
-  /** When true, a date input is shown (standalone business-day expenses). */
-  showDateField?: boolean;
   dateLabel?: string;
-  /** Label for the money-account picker (e.g. 'Paid from' / 'Received into'). */
+  /** Label for the funding-account picker (e.g. 'Paid from' / 'Received into'). */
   accountLabel?: string;
 }
 
-const EMPTY_DEFAULTS: ExpenseEntryFormValues = {
-  targetShiftId: '',
-  transactionDate: '',
+const EMPTY_DEFAULTS: Omit<ExpenseEntryFormValues, 'entryDate'> = {
   categoryId: '',
   amount: undefined as unknown as number,
   description: '',
-  accountId: '',
+  fundingAccountId: '',
 };
 
 /**
+ * An expense or other income — an Office Record (ADR 0005): it carries an entry
+ * date and a funding account, never a shift.
+ *
  * Remounted when the defaults change rather than reset by an effect — the same
  * treatment as PurchaseEntryForm. The defaults are the form's *initial* values,
  * so mounting fresh says that directly, and there is no effect to keep honest.
@@ -54,9 +58,9 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = (props) => (
 );
 
 const ExpenseEntryFormBody: React.FC<ExpenseEntryFormProps> = ({
-  shiftOptions,
   categories,
   stationId,
+  timeZone,
   defaultValues,
   submitting,
   error,
@@ -69,13 +73,11 @@ const ExpenseEntryFormBody: React.FC<ExpenseEntryFormProps> = ({
   descriptionLabel = 'Description',
   descriptionPlaceholder,
   categoryEmptyMessage = 'No expense categories configured. Please add categories before recording expenses.',
-  showShiftHintWhenSingle = true,
-  showDateField = false,
-  dateLabel = 'Expense Date',
+  dateLabel = 'Entry date',
   accountLabel = 'Paid from',
 }) => {
-  const hasMultipleShiftOptions = shiftOptions.length > 1;
-
+  const stationTimeZone = useStationTimeZone(stationId);
+  const today = resolveEntryDate({ timeZone: timeZone ?? stationTimeZone });
   const {
     register,
     handleSubmit,
@@ -83,42 +85,26 @@ const ExpenseEntryFormBody: React.FC<ExpenseEntryFormProps> = ({
     setValue,
     formState: { errors },
   } = useZodForm<ExpenseEntryFormValues>(expenseEntryFormSchema, {
-    defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
+    defaultValues: { ...EMPTY_DEFAULTS, entryDate: today, ...defaultValues },
   });
+  const onAccountChange = useCallback(
+    (v: string) => setValue('fundingAccountId', v, { shouldValidate: !!v }),
+    [setValue],
+  );
 
   return (
     <Form
       onSubmit={handleSubmit((values) => onSubmit(values))}
       style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
     >
-      {showDateField && (
-        <Field label={dateLabel}>
-          <DateField disabled={submitting} {...register('transactionDate')} />
-        </Field>
-      )}
-      {hasMultipleShiftOptions ? (
-        <Field label="Target Shift">
-          <Select disabled={submitting} {...register('targetShiftId')}>
-            {shiftOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      ) : showShiftHintWhenSingle && shiftOptions.length === 1 ? (
-        <div
-          style={{
-            backgroundColor: 'var(--state-info-bg)',
-            color: 'var(--state-info-fg)',
-            padding: '10px 12px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-          }}
-        >
-          Logging to shift: <strong>{shiftOptions[0].label}</strong>
-        </div>
-      ) : null}
+      <Field label={dateLabel} error={errors.entryDate?.message}>
+        <DateField
+          max={today}
+          disabled={submitting}
+          invalid={!!errors.entryDate}
+          {...register('entryDate')}
+        />
+      </Field>
 
       <Field label={categoryLabel} error={errors.categoryId?.message}>
         {categories.length === 0 ? (
@@ -148,12 +134,13 @@ const ExpenseEntryFormBody: React.FC<ExpenseEntryFormProps> = ({
         />
       </Field>
 
-      <Field label={accountLabel}>
-        <AccountSelect
+      <Field label={accountLabel} error={errors.fundingAccountId?.message}>
+        <FundingAccountSelect
           stationId={stationId}
-          value={watch('accountId') || ''}
-          onChange={(v) => setValue('accountId', v, { shouldValidate: true })}
+          value={watch('fundingAccountId') || ''}
+          onChange={onAccountChange}
           disabled={submitting}
+          invalid={!!errors.fundingAccountId}
         />
       </Field>
 

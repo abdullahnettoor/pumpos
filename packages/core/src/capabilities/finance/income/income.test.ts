@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  FixedClock,
-  InMemoryEventStore,
-  InProcessEventDispatcher,
-  SequentialIdGenerator,
-  BusinessEvents,
-} from '../../../kernel/index.js';
-import type { ExecutionContext } from '../../../kernel/index.js';
+import { BusinessEvents } from '../../../kernel/index.js';
 import { RecordIncome, VoidIncome, computeIncomeTax } from './index.js';
 import type {
   OtherIncome,
@@ -14,11 +7,7 @@ import type {
   IncomeCategory,
   IncomeCategoryRepository,
 } from './index.js';
-import type { Shift, ShiftRepository } from '../../station-ops/shifts/index.js';
-import type {
-  BusinessDay,
-  BusinessDayWriteRepository,
-} from '../../station-ops/business-days/index.js';
+import { AccountRepo, eventBus, officeCtx, terminal, TerminalLookup } from '../__tests__/office.js';
 
 class IncomeRepo implements IncomeRepository {
   readonly rows: OtherIncome[] = [];
@@ -37,213 +26,82 @@ class CategoryRepo implements IncomeCategoryRepository {
     return this.rows.find((r) => r.id === id) ?? null;
   }
 }
-class ShiftRepo implements ShiftRepository {
-  constructor(readonly rows: Shift[]) {}
-  async findById(id: string) {
-    return this.rows.find((r) => r.id === id) ?? null;
-  }
-  async findByIdWithoutLock(id: string) {
-    return this.findById(id);
-  }
-  async save() {}
-  async findOpenByStation() {
-    return null;
-  }
-  async addStaffAssignments() {}
-  async addTerminalLinks() {}
-}
-class BdRepo implements BusinessDayWriteRepository {
-  constructor(readonly rows: BusinessDay[]) {}
-  async findById(id: string) {
-    return this.rows.find((r) => r.id === id) ?? null;
-  }
-  async save() {}
-  async findOpenByStation() {
-    return null;
-  }
-  async findByStationAndDate(orgId: string, stationId: string) {
-    return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId) ?? null;
-  }
-  async lockStation() {}
-  async lockById() {}
-  async lockByStationAndDate() {}
+function ctx() {
+  return officeCtx();
 }
 
-function ctx(): ExecutionContext {
-  return {
-    organizationId: 'org-1',
-    stationId: 'st-1',
-    businessDayId: null,
-    actorId: 'u',
-    correlationId: null,
-    clock: new FixedClock(new Date('2026-03-15T10:00:00Z')),
-    ids: new SequentialIdGenerator('inc'),
-  };
-}
-function shift(status: Shift['status'] = 'OPEN'): Shift {
-  return {
-    id: 'sh-1',
-    organizationId: 'org-1',
-    stationId: 'st-1',
-    businessDayId: 'bd-1',
-    shiftTemplateId: 't',
-    status,
-    openedBy: 'u',
-    openedAt: '',
-    closedBy: null,
-    closedAt: null,
-    lockedAt: null,
-    openingCash: '0',
-    closingCash: null,
-    createdAt: '',
-    updatedAt: '',
-  };
-}
-function bday(): BusinessDay {
-  return {
-    id: 'bd-1',
-    organizationId: 'org-1',
-    stationId: 'st-1',
-    businessDate: '2026-03-15',
-    status: 'OPEN',
-    openedBy: 'u',
-    openedAt: '',
-    closedBy: null,
-    closedAt: null,
-    createdAt: '',
-    updatedAt: '',
-  };
-}
-
-describe('RecordIncome', () => {
-  it('cash income (SHIFT_CASH) attaches to shift + affects drawer', async () => {
+describe('RecordIncome (Office Record, ADR 0005)', () => {
+  it('records on the Entry Date into the Funding Account, with no shift or business day', async () => {
     const income = new IncomeRepo();
-    const store = new InMemoryEventStore();
-    const result = await new RecordIncome({
-      income,
-      shifts: new ShiftRepo([shift()]),
-      businessDays: new BdRepo([bday()]),
-      events: new InProcessEventDispatcher({ store }),
-    }).execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 500, payer: 'Truck ABC' }, ctx());
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.shiftId).toBe('sh-1');
-      expect(result.data.affectsDrawer).toBe(true);
-      expect(result.data.receivedInto).toBe('SHIFT_CASH');
-      expect(result.data.businessDayId).toBe('bd-1');
-    }
-    expect(store.events[0].eventType).toBe(BusinessEvents.INCOME_RECORDED);
-  });
-
-  it('bank income (via stationId) does not affect drawer and has no shift', async () => {
-    const income = new IncomeRepo();
-    const result = await new RecordIncome({
-      income,
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([bday()]),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
-      { stationId: 'st-1', categoryId: 'cat-1', amount: 25000, receivedInto: 'BANK' },
+    const { store, events } = eventBus();
+    const r = await new RecordIncome({ income, accounts: new AccountRepo(), events }).execute(
+      { categoryId: 'cat-1', amount: 1500, fundingAccountId: 'hdfc', payer: 'Tanker Co' },
       ctx(),
     );
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.shiftId).toBeNull();
-      expect(result.data.affectsDrawer).toBe(false);
-      expect(result.data.businessDayId).toBe('bd-1');
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.data).toMatchObject({
+      stationId: 'st-1',
+      entryDate: '2026-03-15',
+      fundingAccountId: 'hdfc',
+      terminalId: null,
+    });
+    const [event] = store.events;
+    expect(event.eventType).toBe(BusinessEvents.INCOME_RECORDED);
+    expect(event.businessDayId).toBeNull();
+    expect(event.payload).toMatchObject({ entryDate: '2026-03-15', fundingAccountId: 'hdfc' });
+    expect(event.payload).not.toHaveProperty('shiftId');
+  });
+
+  it('routes a terminal receipt to its clearing account (#276)', async () => {
+    const income = new IncomeRepo();
+    const { events } = eventBus();
+    const r = await new RecordIncome({
+      income,
+      accounts: new AccountRepo(),
+      terminals: new TerminalLookup([terminal('pos-1')]),
+      events,
+    }).execute(
+      { categoryId: 'cat-1', amount: 800, terminalId: 'pos-1', paymentMethod: 'UPI' },
+      ctx(),
+    );
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.fundingAccountId).toBe('clearing');
+      expect(r.data.terminalId).toBe('pos-1');
     }
   });
 
-  it('preserves explicit non-drawer handling for a petty-cash account', async () => {
-    const income = new IncomeRepo();
-    const result = await new RecordIncome({
-      income,
-      shifts: new ShiftRepo([shift()]),
-      businessDays: new BdRepo([bday()]),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+  it('requires Card or UPI for a terminal receipt (#276)', async () => {
+    const { events } = eventBus();
+    const r = await new RecordIncome({
+      income: new IncomeRepo(),
+      accounts: new AccountRepo(),
+      terminals: new TerminalLookup([terminal('pos-1', { supportsUpi: false })]),
+      events,
     }).execute(
-      {
-        shiftId: 'sh-1',
-        categoryId: 'cat-1',
-        amount: 500,
-        receivedInto: 'SHIFT_CASH',
-        affectsDrawer: false,
-      },
+      { categoryId: 'cat-1', amount: 800, terminalId: 'pos-1', paymentMethod: 'UPI' },
       ctx(),
     );
-    expect(result.success).toBe(true);
-    if (result.success) expect(result.data.affectsDrawer).toBe(false);
-  });
-
-  it('rejects drawer income against a closed shift', async () => {
-    const income = new IncomeRepo();
-    const result = await new RecordIncome({
-      income,
-      shifts: new ShiftRepo([shift('CLOSED')]),
-      businessDays: new BdRepo([bday()]),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 500 }, ctx());
-    expect(result.success).toBe(false);
-    if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
-    expect(income.rows).toHaveLength(0);
-  });
-
-  it('retains a closed shift on non-drawer income after day close', async () => {
-    const income = new IncomeRepo();
-    const result = await new RecordIncome({
-      income,
-      shifts: new ShiftRepo([shift('CLOSED')]),
-      businessDays: new BdRepo([{ ...bday(), status: 'CLOSED', closedAt: '2026-03-15T09:00:00Z' }]),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 500, receivedInto: 'BANK' }, ctx());
-    expect(result.success).toBe(true);
-    if (result.success)
-      expect(result.data).toMatchObject({
-        shiftId: 'sh-1',
-        affectsDrawer: false,
-        metadata: { lateEntry: true },
-      });
+    expect(r.success).toBe(false);
   });
 
   it('voids an income entry', async () => {
     const income = new IncomeRepo();
-    const rec = await new RecordIncome({
+    const { events } = eventBus();
+    const recorded = await new RecordIncome({
       income,
-      shifts: new ShiftRepo([shift()]),
-      businessDays: new BdRepo([bday()]),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 500 }, ctx());
-    const id = rec.success ? rec.data.id : '';
-    const store = new InMemoryEventStore();
-    const result = await new VoidIncome({
-      income,
-      events: new InProcessEventDispatcher({ store }),
-    }).execute({ id, reason: 'duplicate' }, ctx());
-    expect(result.success).toBe(true);
-    if (result.success) expect(result.data.status).toBe('VOIDED');
-    expect(store.events[0].eventType).toBe(BusinessEvents.INCOME_VOIDED);
-  });
-});
-
-describe('VoidIncome drawer guard', () => {
-  it('refuses to void drawer cash income once its shift is closed', async () => {
-    const income = new IncomeRepo();
-    const shifts = new ShiftRepo([shift()]);
-    const rec = await new RecordIncome({
-      income,
-      shifts,
-      businessDays: new BdRepo([bday()]),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 500 }, ctx());
-    const id = rec.success ? rec.data.id : '';
-    shifts.rows[0] = shift('CLOSED');
-    const result = await new VoidIncome({
-      income,
-      shifts,
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ id }, ctx());
-    expect(result.success).toBe(false);
-    if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
+      accounts: new AccountRepo(),
+      events,
+    }).execute({ categoryId: 'cat-1', amount: 100, fundingAccountId: 'cash' }, ctx());
+    if (!recorded.success) throw new Error('setup');
+    const bus = eventBus();
+    const r = await new VoidIncome({ income, events: bus.events }).execute(
+      { id: recorded.data.id },
+      ctx(),
+    );
+    expect(r.success && r.data.status).toBe('VOIDED');
+    expect(bus.store.events[0].eventType).toBe(BusinessEvents.INCOME_VOIDED);
   });
 });
 
@@ -308,16 +166,15 @@ describe('RecordIncome tax capture', () => {
     const income = new IncomeRepo();
     const result = await new RecordIncome({
       income,
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([bday()]),
+      accounts: new AccountRepo(),
       incomeCategories: new CategoryRepo([category({ gst_rate: 18 })]),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      events: eventBus().events,
     }).execute(
       {
         stationId: 'st-1',
         categoryId: 'cat-1',
         amount: 11800,
-        receivedInto: 'BANK',
+        fundingAccountId: 'hdfc',
         supplierStateCode: '32',
       },
       ctx(),
@@ -334,11 +191,10 @@ describe('RecordIncome tax capture', () => {
     const income = new IncomeRepo();
     const result = await new RecordIncome({
       income,
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([bday()]),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      accounts: new AccountRepo(),
+      events: eventBus().events,
     }).execute(
-      { stationId: 'st-1', categoryId: 'cat-1', amount: 500, receivedInto: 'BANK' },
+      { stationId: 'st-1', categoryId: 'cat-1', amount: 500, fundingAccountId: 'hdfc' },
       ctx(),
     );
     expect(result.success).toBe(true);
