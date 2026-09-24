@@ -1568,6 +1568,7 @@ shiftsRouter.post(
             id: r.data.shift.id,
             stationId: r.data.shift.stationId,
             businessDayId: r.data.shift.businessDayId,
+            closedAt: r.data.shift.closedAt,
           },
           // Typed on the use-case result — not dug out of the (projected)
           // snapshot, whose shape is a presentation concern.

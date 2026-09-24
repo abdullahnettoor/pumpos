@@ -82,6 +82,16 @@ export function resolveBusinessDate(opts: BusinessDateOptions = {}): string {
 }
 
 /**
+ * Resolve the Entry Date (`YYYY-MM-DD`) of an Office Record: the plain
+ * station-timezone calendar date of the instant. Unlike a business date, Day
+ * Start never applies — an office entry at 03:00 on the 15th is dated the 15th
+ * even when the sales day starts at 06:00 (ADR 0005).
+ */
+export function resolveEntryDate(opts: { now?: Date; timeZone?: string | null } = {}): string {
+  return resolveBusinessDate({ now: opts.now, timeZone: opts.timeZone, dayStartsAt: '00:00' });
+}
+
+/**
  * A business date shifted by whole days, staying in `YYYY-MM-DD`.
  *
  * Business dates are calendar labels, not instants, so the arithmetic is done

@@ -11,6 +11,8 @@ import type { ShiftRepository } from './ports.js';
 export interface FinancialAnchor {
   stationId: string;
   businessDayId: string;
+  /** The anchoring Business Day's date (YYYY-MM-DD). */
+  businessDate: string;
   shiftId: string | null;
   lateEntry: boolean;
   /** Persist on the record: `{ lateEntry: true }` when late, `{}` otherwise. */
@@ -73,7 +75,7 @@ export async function resolveFinancialAnchor(
         }),
       );
     }
-    return ok(anchor(shift.stationId, businessDay.id, shift.id, lateEntry));
+    return ok(anchor(shift.stationId, businessDay, shift.id, lateEntry));
   }
 
   if (cmd.stationId) {
@@ -92,7 +94,7 @@ export async function resolveFinancialAnchor(
     });
     if (!eligibility.success) return eligibility;
     return ok(
-      anchor(cmd.stationId, eligibility.data.businessDay.id, null, eligibility.data.lateEntry),
+      anchor(cmd.stationId, eligibility.data.businessDay, null, eligibility.data.lateEntry),
     );
   }
 
@@ -101,13 +103,14 @@ export async function resolveFinancialAnchor(
 
 function anchor(
   stationId: string,
-  businessDayId: string,
+  businessDay: { id: string; businessDate: string },
   shiftId: string | null,
   lateEntry: boolean,
 ): FinancialAnchor {
   return {
     stationId,
-    businessDayId,
+    businessDayId: businessDay.id,
+    businessDate: businessDay.businessDate,
     shiftId,
     lateEntry,
     recordMetadata: lateEntry ? { lateEntry: true } : {},

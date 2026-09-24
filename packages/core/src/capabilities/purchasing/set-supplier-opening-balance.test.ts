@@ -109,9 +109,9 @@ describe('SetSupplierOpeningBalance', () => {
       expect(result.data.transactionType).toBe('Opening Balance');
       expect(result.data.referenceType).toBe('OPENING_BALANCE');
       expect(result.data.amount).toBe('250000');
-      expect(result.data.affectsDrawer).toBe(false);
-      expect(result.data.businessDayId).toBe('bd-1');
-      expect(result.data.shiftId).toBeNull();
+      // An opening payable moves no money: no Funding Account.
+      expect(result.data.fundingAccountId).toBeNull();
+      expect(result.data.stationId).toBe('st-1');
     }
     expect(store.events.map((e) => e.eventType)).toContain(
       BusinessEvents.SUPPLIER_OPENING_BALANCE_SET,

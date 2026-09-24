@@ -1,14 +1,26 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
-  accountTypeForPaidFrom,
-  accountTypeForPaymentMethod,
   DEFAULT_ACCOUNT_NAME,
   type FinancialAccountType,
   type LedgerDirection,
   type LedgerSourceType,
 } from '@pump/core';
+import { businessDateSettings, resolveEntryDate } from '@pump/shared';
 import { AccountResolutionPlan, type PlannedAccount } from './account-provisioning.js';
+
+/** The fields of an Office Record the ledger needs (ADR 0005). */
+export interface OfficeRecordPosting {
+  id: string;
+  organizationId: string;
+  stationId: string;
+  entryDate: string;
+  /** Null only on supplier payables, which are never posted. */
+  fundingAccountId: string | null;
+  amount: string;
+  /** Payment Terminal the money went through (#276), kept on the ledger row. */
+  terminalId?: string | null;
+}
 
 /**
  * Posts money movements onto the persisted ledger (Phase F, FA2). Called inside
@@ -85,30 +97,6 @@ export class LedgerPostingService {
     return created.id;
   }
 
-  /** Resolve the target account: an explicitly chosen one (validated to the org),
-   *  else the station's system account of the fallback type (created on demand). */
-  private async resolveTarget(
-    organizationId: string,
-    stationId: string,
-    explicitId: string | null | undefined,
-    fallbackType: FinancialAccountType,
-  ): Promise<string> {
-    if (explicitId) {
-      const rows = await this.db
-        .select({ id: schema.financialAccounts.id })
-        .from(schema.financialAccounts)
-        .where(
-          and(
-            eq(schema.financialAccounts.id, explicitId),
-            eq(schema.financialAccounts.organizationId, organizationId),
-          ),
-        )
-        .limit(1);
-      if (rows[0]) return rows[0].id;
-    }
-    return this.ensureAccount(organizationId, stationId, fallbackType);
-  }
-
   private async postEntry(params: {
     organizationId: string;
     stationId: string;
@@ -118,8 +106,9 @@ export class LedgerPostingService {
     entryDate: string;
     sourceType: LedgerSourceType;
     sourceId: string;
-    businessDayId: string;
+    businessDayId: string | null;
     shiftId: string | null;
+    terminalId?: string | null;
     notes?: string | null;
   }): Promise<void> {
     if (!(Number(params.amount) > 0)) return; // never post a zero/blank movement
@@ -135,149 +124,63 @@ export class LedgerPostingService {
       transferId: null,
       businessDayId: params.businessDayId,
       shiftId: params.shiftId,
+      terminalId: params.terminalId ?? null,
       reconciled: false,
       notes: params.notes ?? null,
     });
   }
 
-  /** Customer collection → money IN (cash → drawer, else bank). */
-  async postCollection(
-    organizationId: string,
-    collection: {
-      id: string;
-      amount: string;
-      paymentMethod: string;
-      businessDayId: string;
-      shiftId: string | null;
-    },
-    accountId?: string | null,
+  /**
+   * Post an Office Record (ADR 0005) to its Funding Account on its Entry Date.
+   * No Business Day, no Shift: the use-case already validated the account.
+   */
+  private async postOfficeRecord(
+    record: OfficeRecordPosting,
+    direction: LedgerDirection,
+    sourceType: LedgerSourceType,
+    notes: string,
   ): Promise<void> {
-    const meta = await this.businessDayMeta(collection.businessDayId);
-    if (!meta) return;
-    const target = await this.resolveTarget(
-      organizationId,
-      meta.stationId,
-      accountId,
-      accountTypeForPaymentMethod(collection.paymentMethod),
-    );
+    if (!record.fundingAccountId)
+      throw new Error(`FUNDING_ACCOUNT_MISSING: ${sourceType} ${record.id} has no funding account`);
     await this.postEntry({
-      organizationId,
-      stationId: meta.stationId,
-      accountId: target,
-      direction: 'in',
-      amount: collection.amount,
-      entryDate: meta.businessDate,
-      sourceType: 'COLLECTION',
-      sourceId: collection.id,
-      businessDayId: collection.businessDayId,
-      shiftId: collection.shiftId,
-      notes: `Collection (${collection.paymentMethod})`,
+      organizationId: record.organizationId,
+      stationId: record.stationId,
+      accountId: record.fundingAccountId,
+      direction,
+      amount: record.amount,
+      entryDate: record.entryDate,
+      sourceType,
+      sourceId: record.id,
+      businessDayId: null,
+      shiftId: null,
+      terminalId: record.terminalId ?? null,
+      notes,
     });
   }
 
-  /** Expense → money OUT of drawer / petty / bank / owner (chosen account or by paidFrom). */
-  async postExpense(
-    organizationId: string,
-    expense: {
-      id: string;
-      amount: string;
-      paidFrom: string;
-      businessDayId: string;
-      shiftId: string | null;
-    },
-    accountId?: string | null,
-  ): Promise<void> {
-    const meta = await this.businessDayMeta(expense.businessDayId);
-    if (!meta) return;
-    const target = await this.resolveTarget(
-      organizationId,
-      meta.stationId,
-      accountId,
-      accountTypeForPaidFrom(expense.paidFrom),
+  /** Customer collection → money IN to its Funding Account. */
+  async postCollection(collection: OfficeRecordPosting & { paymentMethod: string }): Promise<void> {
+    await this.postOfficeRecord(
+      collection,
+      'in',
+      'COLLECTION',
+      `Collection (${collection.paymentMethod})`,
     );
-    await this.postEntry({
-      organizationId,
-      stationId: meta.stationId,
-      accountId: target,
-      direction: 'out',
-      amount: expense.amount,
-      entryDate: meta.businessDate,
-      sourceType: 'EXPENSE',
-      sourceId: expense.id,
-      businessDayId: expense.businessDayId,
-      shiftId: expense.shiftId,
-      notes: 'Expense',
-    });
   }
 
-  /** Other/indirect income → money IN to drawer / bank / owner (by receivedInto). */
-  async postIncome(
-    organizationId: string,
-    income: {
-      id: string;
-      amount: string;
-      receivedInto: string;
-      businessDayId: string;
-      shiftId: string | null;
-    },
-    accountId?: string | null,
-  ): Promise<void> {
-    const meta = await this.businessDayMeta(income.businessDayId);
-    if (!meta) return;
-    const target = await this.resolveTarget(
-      organizationId,
-      meta.stationId,
-      accountId,
-      accountTypeForPaidFrom(income.receivedInto),
-    );
-    await this.postEntry({
-      organizationId,
-      stationId: meta.stationId,
-      accountId: target,
-      direction: 'in',
-      amount: income.amount,
-      entryDate: meta.businessDate,
-      sourceType: 'INCOME',
-      sourceId: income.id,
-      businessDayId: income.businessDayId,
-      shiftId: income.shiftId,
-      notes: 'Other income',
-    });
+  /** Expense → money OUT of its Funding Account. */
+  async postExpense(expense: OfficeRecordPosting): Promise<void> {
+    await this.postOfficeRecord(expense, 'out', 'EXPENSE', 'Expense');
   }
 
-  /** Supplier payment → money OUT of drawer / petty / bank / owner (chosen account or by paidFrom). */
-  async postSupplierPayment(
-    organizationId: string,
-    txn: {
-      id: string;
-      amount: string;
-      paidFrom: string;
-      businessDayId: string;
-      shiftId: string | null;
-    },
-    accountId?: string | null,
-  ): Promise<void> {
-    const meta = await this.businessDayMeta(txn.businessDayId);
-    if (!meta) return;
-    const target = await this.resolveTarget(
-      organizationId,
-      meta.stationId,
-      accountId,
-      accountTypeForPaidFrom(txn.paidFrom),
-    );
-    await this.postEntry({
-      organizationId,
-      stationId: meta.stationId,
-      accountId: target,
-      direction: 'out',
-      amount: txn.amount,
-      entryDate: meta.businessDate,
-      sourceType: 'SUPPLIER_PAYMENT',
-      sourceId: txn.id,
-      businessDayId: txn.businessDayId,
-      shiftId: txn.shiftId,
-      notes: 'Supplier payment',
-    });
+  /** Other/indirect income → money IN to its Funding Account. */
+  async postIncome(income: OfficeRecordPosting): Promise<void> {
+    await this.postOfficeRecord(income, 'in', 'INCOME', 'Other income');
+  }
+
+  /** Supplier payment → money OUT of its Funding Account. */
+  async postSupplierPayment(txn: OfficeRecordPosting): Promise<void> {
+    await this.postOfficeRecord(txn, 'out', 'SUPPLIER_PAYMENT', 'Supplier payment');
   }
 
   /** OMC fleet-card sale → money IN to the station's CMS (card-settlement) account.
@@ -395,7 +298,7 @@ export class LedgerPostingService {
    */
   async postShiftClose(
     organizationId: string,
-    shift: { id: string; stationId: string; businessDayId: string },
+    shift: { id: string; stationId: string; businessDayId: string; closedAt: string | null },
     recon: { cashSales?: number },
   ): Promise<void> {
     const cash = Number(recon.cashSales ?? 0);
@@ -410,6 +313,7 @@ export class LedgerPostingService {
       SELECT
         (SELECT d.business_date FROM business_days d
           WHERE d.id = ${shift.businessDayId}) AS business_date,
+        (SELECT st.settings FROM stations st WHERE st.id = ${shift.stationId}) AS station_settings,
         COALESCE((SELECT jsonb_agg(jsonb_build_object(
             'card', e.card_amount::text,
             'upi', e.upi_amount::text,
@@ -437,12 +341,19 @@ export class LedgerPostingService {
     // shifts.business_day_id is a NOT NULL FK, so the row always exists. A
     // missing row is corruption: refuse (rolling back the close) rather than
     // guess a date (#249).
-    const entryDate = read.business_date as string | null;
-    if (!entryDate) {
+    if (!read.business_date) {
       throw new Error(
         `BUSINESS_DAY_MISSING: shift ${shift.id} references business day ${shift.businessDayId}, which was not found`,
       );
     }
+    // Shift-close cash reaches the office when the shift is closed, so it is
+    // booked on the station-timezone calendar date of the close instant — not
+    // the Shift's Business Date (ADR 0005). A Delayed Closure books on the day
+    // it is actually closed.
+    const entryDate = resolveEntryDate({
+      now: shift.closedAt ? new Date(shift.closedAt) : new Date(),
+      timeZone: businessDateSettings(read.station_settings).timeZone,
+    });
     const termEntries: Array<{
       card: string | null;
       upi: string | null;

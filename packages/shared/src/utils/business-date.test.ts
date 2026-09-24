@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shiftBusinessDate } from './business-date.js';
+import { resolveBusinessDate, resolveEntryDate, shiftBusinessDate } from './business-date.js';
 
 /**
  * Business dates are calendar labels, not instants. The arithmetic must roll
@@ -30,5 +30,20 @@ describe('shiftBusinessDate', () => {
     } finally {
       process.env.TZ = original;
     }
+  });
+});
+
+describe('resolveEntryDate (ADR 0005)', () => {
+  // 03:00 IST on the 15th = 21:30 UTC on the 14th.
+  const now = new Date('2026-03-14T21:30:00Z');
+
+  it('dates an office entry by the station calendar, ignoring Day Start', () => {
+    expect(resolveEntryDate({ now, timeZone: 'Asia/Kolkata' })).toBe('2026-03-15');
+  });
+
+  it('differs from the business date before Day Start', () => {
+    expect(resolveBusinessDate({ now, timeZone: 'Asia/Kolkata', dayStartsAt: '06:00' })).toBe(
+      '2026-03-14',
+    );
   });
 });

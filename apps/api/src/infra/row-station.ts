@@ -18,7 +18,8 @@ export type BusinessDayAnchoredTable = any;
  * (#247). `null` when the row does not exist inside this organization — a
  * foreign row is indistinguishable from a missing one.
  *
- * The station comes from the row's Business Day and from nowhere else. An
+ * The station comes from the row itself (Office Records, ADR 0005) or from its
+ * Business Day, and from nowhere else. An
  * id-resolved mutation has no shift and no caller-supplied station to trust,
  * so this is the only honest source.
  */
@@ -28,6 +29,15 @@ export async function findRowStation(
   id: string,
   organizationId: string,
 ): Promise<string | null> {
+  // Office Records (ADR 0005) carry their own organization + station.
+  if (table.organizationId && table.stationId && !table.businessDayId) {
+    const [own] = await db
+      .select({ stationId: table.stationId })
+      .from(table)
+      .where(and(eq(table.id, id), eq(table.organizationId, organizationId)))
+      .limit(1);
+    return (own?.stationId as string | undefined) ?? null;
+  }
   const [row] = await db
     .select({ stationId: schema.businessDays.stationId })
     .from(table)

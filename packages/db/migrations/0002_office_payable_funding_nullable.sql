@@ -1,0 +1,1 @@
+ALTER TABLE "supplier_transactions" ALTER COLUMN "funding_account_id" DROP NOT NULL;

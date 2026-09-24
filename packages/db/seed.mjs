@@ -71,6 +71,9 @@ const ID = {
   collection1: '00000000-0000-4000-8000-000000001201',
   mvPurchase: '00000000-0000-4000-8000-000000001301',
   mvSalePetrol: '00000000-0000-4000-8000-000000001302',
+  accCash: '00000000-0000-4000-8000-000000001401',
+  accPetty: '00000000-0000-4000-8000-000000001402',
+  accBank: '00000000-0000-4000-8000-000000001403',
 };
 
 const today = new Date();
@@ -578,28 +581,55 @@ async function main() {
     })
     .onConflictDoNothing();
 
-  // Expenses: drawer (tea) + business (electricity via bank)
+  // Office money accounts (ADR 0005): every office record names one.
+  await db
+    .insert(schema.financialAccounts)
+    .values([
+      {
+        id: ID.accCash,
+        organizationId: ID.org,
+        stationId: ID.station,
+        accountType: 'CASH_IN_HAND',
+        name: 'Cash in Hand',
+      },
+      {
+        id: ID.accPetty,
+        organizationId: ID.org,
+        stationId: ID.station,
+        accountType: 'PETTY_CASH',
+        name: 'Petty Cash',
+      },
+      {
+        id: ID.accBank,
+        organizationId: ID.org,
+        stationId: ID.station,
+        accountType: 'BANK',
+        name: 'Bank',
+      },
+    ])
+    .onConflictDoNothing();
+
+  // Expenses are Office Records on an Entry Date: petty cash (tea) + bank (electricity)
+  const office = { organizationId: ID.org, stationId: ID.station, entryDate: businessDate };
   await db
     .insert(schema.expenses)
     .values([
       {
         id: ID.expDrawer,
-        shiftId: ID.shiftMorning,
-        businessDayId: ID.bday,
+        ...office,
+        fundingAccountId: ID.accPetty,
         categoryId: ID.catMisc,
         amount: nz(350),
-        paidFrom: 'SHIFT_CASH',
-        affectsDrawer: true,
+        affectsDrawer: false,
         description: 'Tea & snacks',
         status: 'ACTIVE',
       },
       {
         id: ID.expBank,
-        shiftId: null,
-        businessDayId: ID.bday,
+        ...office,
+        fundingAccountId: ID.accBank,
         categoryId: ID.catUtilities,
         amount: nz(12000),
-        paidFrom: 'BANK',
         affectsDrawer: false,
         description: 'Electricity bill',
         status: 'ACTIVE',
@@ -643,8 +673,8 @@ async function main() {
     .values({
       id: ID.collection1,
       documentNumber: 'COL-000001',
-      shiftId: ID.shiftMorning,
-      businessDayId: ID.bday,
+      ...office,
+      fundingAccountId: ID.accCash,
       customerId: ID.custCredit,
       amount: nz(5000),
       paymentMethod: 'Cash',

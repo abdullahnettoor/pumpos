@@ -3,7 +3,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import { CloseShift, type ExecutionContext } from '@pump/core';
 import { runInTransaction } from '../../transaction.js';
@@ -311,8 +311,8 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       registrationNumber: 'KL07AB1234',
       vehicleType: 'Truck',
     });
-    // TODO(#273): office rows carry entry-date + funding account; the legacy
-    // shift/business-day anchor is stashed in metadata (ADR 0005, #280).
+    // Office Records on the shift's day (ADR 0005): they carry an Entry Date
+    // and a Funding Account and must NOT reach the shift's drawer.
     await db.insert(schema.financialAccounts).values({
       id: CASH_ACCOUNT,
       organizationId: ORG,
@@ -328,7 +328,6 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
         stationId: STATION,
         entryDate: '2026-03-10',
         fundingAccountId: CASH_ACCOUNT,
-        metadata: { shiftId: SHIFT, businessDayId: DAY },
         amount: '300',
         paymentMethod: 'Cash',
       },
@@ -339,7 +338,6 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
         stationId: STATION,
         entryDate: '2026-03-10',
         fundingAccountId: CASH_ACCOUNT,
-        metadata: { shiftId: SHIFT, businessDayId: DAY },
         amount: '150',
         paymentMethod: 'Card',
       },
@@ -353,7 +351,6 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
         stationId: STATION,
         entryDate: '2026-03-10',
         fundingAccountId: CASH_ACCOUNT,
-        metadata: { shiftId: SHIFT, businessDayId: DAY, paidFrom: 'SHIFT_CASH' },
         categoryId: CATEGORY,
         amount: '50',
         affectsDrawer: true,
@@ -363,7 +360,6 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
         stationId: STATION,
         entryDate: '2026-03-10',
         fundingAccountId: CASH_ACCOUNT,
-        metadata: { shiftId: SHIFT, businessDayId: DAY, paidFrom: 'SHIFT_CASH' },
         categoryId: CATEGORY,
         amount: '999',
         affectsDrawer: true,
@@ -376,7 +372,6 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       stationId: STATION,
       entryDate: '2026-03-10',
       fundingAccountId: CASH_ACCOUNT,
-      metadata: { shiftId: SHIFT, businessDayId: DAY, paidFrom: 'SHIFT_CASH' },
       supplierId: SUPPLIER,
       transactionType: 'Payment',
       amount: '75',
@@ -391,7 +386,6 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       stationId: STATION,
       entryDate: '2026-03-10',
       fundingAccountId: CASH_ACCOUNT,
-      metadata: { shiftId: SHIFT, businessDayId: DAY, receivedInto: 'SHIFT_CASH' },
       amount: '25',
       affectsDrawer: true,
     });
@@ -436,7 +430,7 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       }).execute(
         {
           shiftId: SHIFT,
-          closingCash: 5300, // TODO(#274): openingCash dropped; expected drawer fell by the old 1000 opening
+          closingCash: 5100, // TODO(#274): openingCash dropped; office records never reach the drawer
           nozzleReadings: [
             { nozzleId: NOZZLE_1, closingReading: 150 },
             { nozzleId: NOZZLE_2, closingReading: 260 },
@@ -448,7 +442,7 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
         const snap = r.data.snapshot as any;
         await new LedgerPostingService(tx).postShiftClose(
           ORG,
-          { id: SHIFT, stationId: STATION, businessDayId: DAY },
+          { id: SHIFT, stationId: STATION, businessDayId: DAY, closedAt: r.data.shift.closedAt },
           { cashSales: Number(snap?.reconciliation?.cashSales ?? 0) },
         );
       }
@@ -464,19 +458,20 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       cashSales: 5100,
       handoverCash: 5000,
       merchCashOutsideHandover: 100,
-      cashCollections: 300,
-      cardCollections: 150,
+      // Office Records carry no Shift (ADR 0005): none of them reach the drawer.
+      cashCollections: 0,
+      cardCollections: 0,
       upiCollections: 0,
       creditCollections: 0,
-      cashIncome: 25,
-      drawerExpenses: 50, // the VOIDED 999 is excluded
-      drawerSupplierPayments: 75,
+      cashIncome: 0,
+      drawerExpenses: 0,
+      drawerSupplierPayments: 0,
     });
     expect(snap.reconciliation.merchCashOutsideHandoverBreakdown).toEqual([
       { sellerName: 'Divya', amount: 100 },
     ]);
-    // TODO(#274): 0 + 5100 + 300 + 25 − 50 − 75 = 5300 → zero variance (openingCash dropped)
-    expect(snap.expectedDrawerCash).toBe(5300);
+    // TODO(#274): 0 + 5100 (openingCash dropped; office money is not drawer cash)
+    expect(snap.expectedDrawerCash).toBe(5100);
     expect(snap.cashVariance).toBe(0);
   });
 
@@ -509,9 +504,9 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       upiAmount: '100.00',
     });
     expect(snap.terminalBreakdown[0]).toMatchObject({ card: 400, upi: 100, provider: 'HDFC' });
-    expect(snap.expenses).toHaveLength(2);
-    expect(snap.expenses[0].categoryName).toBe('Tea');
-    expect(snap.collections).toHaveLength(2);
+    // Expenses and collections are Office Records, not part of a Shift Summary.
+    expect(snap.expenses).toHaveLength(0);
+    expect(snap.collections).toHaveLength(0);
     expect(snap.creditSales[0]).toMatchObject({
       amount: 2000,
       customerName: 'Sharma Transports',
@@ -520,7 +515,7 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
     });
     expect(snap.creditSalesTotal).toBe(2000);
     expect(snap.cashSalesSum).toBe(5100);
-    expect(snap.cardCollectionsSum).toBe(150);
+    expect(snap.cardCollectionsSum).toBe(0); // collections are Office Records
   });
 
   it('records fuel SALE stock movements net of testing', async () => {
@@ -557,12 +552,43 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
     expect(bySource.get('SALE_CARD')!.accountId).toBe(clearing.id);
   });
 
+  it('books shift-close cash on the calendar date of the close instant (ADR 0005)', async () => {
+    const entryDateOf = async () => {
+      const [cash] = await db
+        .select({ entryDate: schema.ledgerEntries.entryDate })
+        .from(schema.ledgerEntries)
+        .where(
+          and(
+            eq(schema.ledgerEntries.shiftId, SHIFT),
+            eq(schema.ledgerEntries.sourceType, 'SALE_CASH'),
+          ),
+        );
+      return cash.entryDate;
+    };
+    // Closed 19:30 IST on the 10th: booked the 10th.
+    expect(await entryDateOf()).toBe('2026-03-10');
+    // A Delayed Closure at 01:30 IST on the 12th books on the 12th, not the
+    // shift's Business Date (the 10th).
+    const repost = (closedAt: string) =>
+      runInTransaction(db, async (tx) => {
+        await new LedgerPostingService(tx).postShiftClose(
+          ORG,
+          { id: SHIFT, stationId: STATION, businessDayId: DAY, closedAt },
+          { cashSales: 5100 },
+        );
+        return { success: true as const, data: null };
+      });
+    await repost('2026-03-11T20:00:00.000Z');
+    expect(await entryDateOf()).toBe('2026-03-12');
+    await repost('2026-03-10T14:00:00.000Z');
+  });
+
   it('refuses to post when the business day row is missing, instead of guessing a date (#249)', async () => {
     await expect(
       runInTransaction(db, async (tx) => {
         await new LedgerPostingService(tx).postShiftClose(
           ORG,
-          { id: SHIFT, stationId: STATION, businessDayId: crypto.randomUUID() },
+          { id: SHIFT, stationId: STATION, businessDayId: crypto.randomUUID(), closedAt: null },
           { cashSales: 1 },
         );
         return { success: true as const, data: null };

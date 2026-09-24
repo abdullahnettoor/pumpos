@@ -9,28 +9,22 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import { resolveFinancialAnchor, type ShiftRepository } from '../../station-ops/shifts/index.js';
-import type { BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
-import { assertDrawerEntryVoidable } from '../void-guard.js';
+import type { FinancialAccountRepository } from '../accounts/index.js';
+import { resolveOfficeEntry } from '../office-entry.js';
 
-export type PaidFrom = 'SHIFT_CASH' | 'BANK' | 'OWNER';
-
-function accountLabel(paidFrom: PaidFrom): string {
-  return {
-    SHIFT_CASH: 'shift cash',
-    BANK: 'bank account',
-    OWNER: 'owner account',
-  }[paidFrom];
-}
-
+/**
+ * An expense is an Office Record (ADR 0005): dated by its Entry Date and paid
+ * out of a Funding Account. It never touches a Shift, a Business Day or the
+ * Drawer.
+ */
 export interface Expense {
   id: string;
-  shiftId: string | null;
-  businessDayId: string;
+  organizationId: string;
+  stationId: string;
+  entryDate: string;
+  fundingAccountId: string;
   categoryId: string;
   amount: string;
-  paidFrom: PaidFrom;
-  affectsDrawer: boolean;
   description: string | null;
   status: string;
   metadata?: Record<string, unknown>;
@@ -44,44 +38,30 @@ export interface ExpenseRepository {
 }
 
 export interface RecordExpenseCommand {
-  /** Drawer expenses require shiftId; business expenses may pass stationId instead. */
-  shiftId?: string;
   stationId?: string;
+  entryDate?: string;
+  fundingAccountId: string;
   categoryId: string;
   amount: number | string;
   description?: string;
-  paidFrom?: PaidFrom;
-  affectsDrawer?: boolean;
-  transactionDate?: string;
 }
 
 const schema = z.object({
-  shiftId: z.string().min(1).optional(),
   stationId: z.string().min(1).optional(),
+  entryDate: z.string().optional(),
+  fundingAccountId: z.string().min(1, 'fundingAccountId is required'),
   categoryId: z.string().min(1, 'categoryId is required'),
   amount: z.coerce.number().positive('amount must be positive'),
   description: z.string().max(255).optional(),
-  paidFrom: z.enum(['SHIFT_CASH', 'BANK', 'OWNER']).optional(),
-  affectsDrawer: z.boolean().optional(),
-  transactionDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD')
-    .optional(),
 });
 
 export interface RecordExpenseDeps {
   expenses: ExpenseRepository;
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
+  accounts: FinancialAccountRepository;
   events: EventPublisher;
 }
 
-/**
- * Record an expense anchored to a business day. Drawer expenses (paidFrom
- * SHIFT_CASH) attach to the open shift and reduce its drawer; business expenses
- * (BANK/OWNER) do not affect reconciliation and may retain optional shift
- * attribution.
- */
+/** Record an expense on its Entry Date, paid from the chosen Funding Account. */
 export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
   constructor(private readonly deps: RecordExpenseDeps) {}
 
@@ -91,30 +71,22 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
       return err(validationError('Invalid RecordExpense command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
-    const paidFrom: PaidFrom = cmd.paidFrom ?? 'SHIFT_CASH';
-    const affectsDrawer = cmd.affectsDrawer ?? paidFrom === 'SHIFT_CASH';
-
-    if (!cmd.shiftId && !cmd.stationId)
-      return err(validationError('Either shiftId or stationId is required'));
-    const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {
-      affectsDrawer,
-      drawerLabel: 'Drawer expenses',
-    });
-    if (!anchor.success) return anchor;
-    const { businessDayId, shiftId, stationId } = anchor.data;
+    const entry = await resolveOfficeEntry(this.deps, ctx, cmd);
+    if (!entry.success) return entry;
+    const { stationId, entryDate, fundingAccount } = entry.data;
 
     const now = ctx.clock.now().toISOString();
     const expense: Expense = {
       id: ctx.ids.newId(),
-      shiftId,
-      businessDayId,
+      organizationId: ctx.organizationId,
+      stationId,
+      entryDate,
+      fundingAccountId: fundingAccount.id,
       categoryId: cmd.categoryId,
       amount: String(cmd.amount),
-      paidFrom,
-      affectsDrawer,
       description: cmd.description ?? null,
       status: 'ACTIVE',
-      metadata: anchor.data.recordMetadata,
+      metadata: {},
       createdAt: now,
       updatedAt: now,
     };
@@ -126,18 +98,16 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
         aggregateType: 'Expense',
         aggregateId: expense.id,
         stationId,
-        businessDayId,
-        metadata: anchor.data.eventMetadata,
+        businessDayId: null,
         payload: {
           expenseId: expense.id,
           amount: expense.amount,
-          paidFrom,
-          affectsDrawer,
-          shiftId,
+          entryDate,
+          fundingAccountId: fundingAccount.id,
         },
         presentation: {
-          templateId: 'expense.v1',
-          values: { amount: Number(expense.amount), accountName: accountLabel(paidFrom) },
+          templateId: 'expense.v2',
+          values: { amount: Number(expense.amount), accountName: fundingAccount.name },
         },
       }),
     ]);
@@ -158,8 +128,6 @@ const voidSchema = z.object({
 
 export interface VoidExpenseDeps {
   expenses: ExpenseRepository;
-  /** Optional: enables the drawer guard (a closed shift's drawer is immutable). */
-  shifts?: ShiftRepository;
   events: EventPublisher;
 }
 
@@ -177,9 +145,6 @@ export class VoidExpense implements UseCase<VoidExpenseCommand, Expense> {
     if (existing.status === 'VOIDED')
       return err(invariantViolation('Expense already voided', { id: existing.id }));
 
-    const guard = await assertDrawerEntryVoidable(existing, this.deps.shifts, 'This expense');
-    if (!guard.success) return guard;
-
     const now = ctx.clock.now().toISOString();
     const voided: Expense = { ...existing, status: 'VOIDED', updatedAt: now };
     await this.deps.expenses.save(voided);
@@ -189,11 +154,13 @@ export class VoidExpense implements UseCase<VoidExpenseCommand, Expense> {
         eventType: BusinessEvents.EXPENSE_VOIDED,
         aggregateType: 'Expense',
         aggregateId: voided.id,
-        businessDayId: voided.businessDayId,
+        stationId: voided.stationId,
+        businessDayId: null,
         payload: {
           expenseId: voided.id,
           amount: voided.amount,
-          paidFrom: voided.paidFrom,
+          entryDate: voided.entryDate,
+          fundingAccountId: voided.fundingAccountId,
           reason: p.data.reason ?? null,
         },
       }),

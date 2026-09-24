@@ -10,13 +10,9 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import { resolveFinancialAnchor, type ShiftRepository } from '../../station-ops/shifts/index.js';
-import type { BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
-import { assertDrawerEntryVoidable } from '../void-guard.js';
+import type { FinancialAccountRepository } from '../accounts/index.js';
+import { resolveOfficeEntry, type PaymentTerminalLookup } from '../office-entry.js';
 import { computeLineTax, isInterState } from '../tax/index.js';
-
-/** Where the money landed. Symmetric with expense `paidFrom`. */
-export type ReceivedInto = 'SHIFT_CASH' | 'BANK' | 'OWNER';
 
 export interface IncomeCategory {
   id: string;
@@ -45,14 +41,17 @@ export interface IncomeTax {
   snapshot: Record<string, unknown> | null;
 }
 
+/** Other income is an Office Record (ADR 0005): Entry Date + Funding Account. */
 export interface OtherIncome {
   id: string;
-  shiftId: string | null;
-  businessDayId: string;
+  organizationId: string;
+  stationId: string;
+  entryDate: string;
+  fundingAccountId: string;
+  /** Payment Terminal the income was received through (#276). */
+  terminalId: string | null;
   categoryId: string;
   amount: string;
-  receivedInto: ReceivedInto;
-  affectsDrawer: boolean;
   payer: string | null;
   referenceType: string | null;
   referenceId: string | null;
@@ -162,16 +161,15 @@ export function computeIncomeTax(
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 export interface RecordIncomeCommand {
-  /** Drawer (cash) income requires shiftId; bank/owner income may pass stationId instead. */
-  shiftId?: string;
   stationId?: string;
+  entryDate?: string;
+  /** Required unless a terminal is named (its clearing account is used). */
+  fundingAccountId?: string;
+  terminalId?: string | null;
   categoryId: string;
   amount: number | string;
-  receivedInto?: ReceivedInto;
-  affectsDrawer?: boolean;
   payer?: string;
   description?: string;
-  transactionDate?: string;
   /** Supplier (station) state code for the GST place-of-supply decision. */
   supplierStateCode?: string;
   /** Payer state code, when known — makes the entry inter-state (IGST). */
@@ -179,26 +177,22 @@ export interface RecordIncomeCommand {
 }
 
 const schema = z.object({
-  shiftId: z.string().min(1).optional(),
   stationId: z.string().min(1).optional(),
+  entryDate: z.string().optional(),
+  fundingAccountId: z.string().min(1).optional(),
+  terminalId: z.string().min(1).nullish(),
   categoryId: z.string().min(1, 'categoryId is required'),
   amount: z.coerce.number().positive('amount must be positive'),
-  receivedInto: z.enum(['SHIFT_CASH', 'BANK', 'OWNER']).optional(),
-  affectsDrawer: z.boolean().optional(),
   payer: z.string().max(255).optional(),
   description: z.string().max(500).optional(),
-  transactionDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD')
-    .optional(),
   supplierStateCode: z.string().max(10).optional(),
   buyerStateCode: z.string().max(10).optional(),
 });
 
 export interface RecordIncomeDeps {
   income: IncomeRepository;
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
+  accounts: FinancialAccountRepository;
+  terminals?: PaymentTerminalLookup;
   /** Optional (FI4): resolves the category's tax_config to split GST at capture. */
   incomeCategories?: IncomeCategoryRepository;
   events: EventPublisher;
@@ -206,10 +200,8 @@ export interface RecordIncomeDeps {
 
 /**
  * Record indirect / non-operating income (tanker rental, truck parking,
- * commission, scrap, interest, …) anchored to a business day. Cash income
- * (receivedInto SHIFT_CASH) attaches to the open shift and increases its drawer;
- * bank/owner income does not affect the drawer and may retain optional shift
- * attribution. Mirror of RecordExpense.
+ * commission, scrap, interest, …) on its Entry Date, received into the chosen
+ * Funding Account. Mirror of RecordExpense.
  */
 export class RecordIncome implements UseCase<RecordIncomeCommand, OtherIncome> {
   constructor(private readonly deps: RecordIncomeDeps) {}
@@ -220,17 +212,9 @@ export class RecordIncome implements UseCase<RecordIncomeCommand, OtherIncome> {
       return err(validationError('Invalid RecordIncome command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
-    const receivedInto: ReceivedInto = cmd.receivedInto ?? 'SHIFT_CASH';
-    const affectsDrawer = cmd.affectsDrawer ?? receivedInto === 'SHIFT_CASH';
-
-    if (!cmd.shiftId && !cmd.stationId)
-      return err(validationError('Either shiftId or stationId is required'));
-    const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {
-      affectsDrawer,
-      drawerLabel: 'Drawer income entries',
-    });
-    if (!anchor.success) return anchor;
-    const { businessDayId, shiftId, stationId } = anchor.data;
+    const entry = await resolveOfficeEntry(this.deps, ctx, cmd);
+    if (!entry.success) return entry;
+    const { stationId, entryDate, fundingAccount, terminalId } = entry.data;
 
     // FI4 — freeze the GST split from the category's tax_config at capture.
     const category = this.deps.incomeCategories
@@ -246,12 +230,13 @@ export class RecordIncome implements UseCase<RecordIncomeCommand, OtherIncome> {
     const now = ctx.clock.now().toISOString();
     const income: OtherIncome = {
       id: ctx.ids.newId(),
-      shiftId,
-      businessDayId,
+      organizationId: ctx.organizationId,
+      stationId,
+      entryDate,
+      fundingAccountId: fundingAccount.id,
+      terminalId,
       categoryId: cmd.categoryId,
       amount: String(cmd.amount),
-      receivedInto,
-      affectsDrawer,
       payer: cmd.payer ?? null,
       referenceType: null,
       referenceId: null,
@@ -267,7 +252,7 @@ export class RecordIncome implements UseCase<RecordIncomeCommand, OtherIncome> {
       igst: tax.igst,
       cess: tax.cess,
       taxSnapshot: tax.snapshot,
-      metadata: anchor.data.recordMetadata,
+      metadata: {},
       createdAt: now,
       updatedAt: now,
     };
@@ -279,17 +264,20 @@ export class RecordIncome implements UseCase<RecordIncomeCommand, OtherIncome> {
         aggregateType: 'Income',
         aggregateId: income.id,
         stationId,
-        businessDayId,
-        metadata: anchor.data.eventMetadata,
+        businessDayId: null,
         payload: {
           incomeId: income.id,
           amount: income.amount,
-          receivedInto,
-          affectsDrawer,
-          shiftId,
+          entryDate,
+          fundingAccountId: fundingAccount.id,
+          terminalId,
           categoryId: income.categoryId,
           taxCategory: income.taxCategory,
           taxableAmount: income.taxableAmount,
+        },
+        presentation: {
+          templateId: 'income.v2',
+          values: { amount: Number(income.amount), accountName: fundingAccount.name },
         },
       }),
     ]);
@@ -310,8 +298,6 @@ const voidSchema = z.object({
 
 export interface VoidIncomeDeps {
   income: IncomeRepository;
-  /** Optional: enables the drawer guard (a closed shift's drawer is immutable). */
-  shifts?: ShiftRepository;
   events: EventPublisher;
 }
 
@@ -329,9 +315,6 @@ export class VoidIncome implements UseCase<VoidIncomeCommand, OtherIncome> {
     if (existing.status === 'VOIDED')
       return err(invariantViolation('Income already voided', { id: existing.id }));
 
-    const guard = await assertDrawerEntryVoidable(existing, this.deps.shifts, 'This income entry');
-    if (!guard.success) return guard;
-
     const now = ctx.clock.now().toISOString();
     const voided: OtherIncome = { ...existing, status: 'VOIDED', updatedAt: now };
     await this.deps.income.save(voided);
@@ -341,7 +324,8 @@ export class VoidIncome implements UseCase<VoidIncomeCommand, OtherIncome> {
         eventType: BusinessEvents.INCOME_VOIDED,
         aggregateType: 'Income',
         aggregateId: voided.id,
-        businessDayId: voided.businessDayId,
+        stationId: voided.stationId,
+        businessDayId: null,
         payload: { incomeId: voided.id, amount: voided.amount, reason: p.data.reason ?? null },
       }),
     ]);

@@ -225,11 +225,7 @@ describe('POST /transactions/sales — station scope', () => {
  */
 const SHIFT_ANCHORED_WRITES: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
   ['/transactions/sales', {}],
-  ['/transactions/income', {}],
-  ['/transactions/expenses', {}],
-  ['/transactions/collections', { paymentMethod: 'Cash' }],
   ['/transactions/purchases', {}],
-  ['/transactions/supplier-payments', {}],
 ];
 
 describe('shift-anchored writes refuse a foreign station', () => {
@@ -273,4 +269,38 @@ describe('the station reaching the ExecutionContext', () => {
       expect(contexts.some((ctx) => ctx.stationId === undefined)).toBe(false);
     },
   );
+});
+
+/**
+ * Office Records (ADR 0005) have no Shift: they name their station directly.
+ * The station is required, must be one the caller may act on, and is what
+ * reaches the ExecutionContext.
+ */
+const OFFICE_WRITES: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
+  ['/transactions/income', {}],
+  ['/transactions/expenses', {}],
+  ['/transactions/collections', { paymentMethod: 'Cash' }],
+  ['/transactions/supplier-payments', {}],
+];
+
+describe('office writes (ADR 0005) are scoped by their named station', () => {
+  it.each(OFFICE_WRITES)('POST %s refuses an unassigned station', async (path, extra) => {
+    const { status, code } = await post(
+      path,
+      { ...extra, stationId: THEIRS },
+      { shiftStation: null },
+    );
+    expect({ path, status, code }).toEqual({ path, status: 403, code: 'FORBIDDEN' });
+  });
+
+  it.each(OFFICE_WRITES)('POST %s requires a station', async (path, extra) => {
+    const { status, code } = await post(path, { ...extra }, { shiftStation: null });
+    expect({ path, status, code }).toEqual({ path, status: 400, code: 'VALIDATION_ERROR' });
+  });
+
+  it.each(OFFICE_WRITES)('POST %s anchors to the named station', async (path, extra) => {
+    await post(path, { ...extra, stationId: MINE }, { shiftStation: null });
+    expect(contexts.some((ctx) => ctx.stationId === MINE)).toBe(true);
+    expect(contexts.some((ctx) => ctx.stationId === undefined)).toBe(false);
+  });
 });

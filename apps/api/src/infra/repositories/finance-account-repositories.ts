@@ -1,6 +1,9 @@
 import { and, asc, eq, gte, isNull, lte, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
+import { AccountProvisioningService } from '../account-provisioning.js';
 import type {
+  OfficePaymentTerminal,
+  PaymentTerminalLookup,
   FinancialAccount,
   FinancialAccountRepository,
   LedgerEntry,
@@ -181,6 +184,109 @@ export class DrizzleFinancialAccountReader {
     return rows.map((r) => ({ ...toAccount(r.account), balance: String(r.balance) }));
   }
 
+  /**
+   * Active accounts an Office Record at this station may move money through
+   * (station accounts + organization-shared ones). No balances: this backs the
+   * Funding Account picker, which any office role may use (ADR 0005).
+   */
+  async listFundingAccounts(
+    organizationId: string,
+    stationId: string,
+  ): Promise<Array<{ id: string; name: string; accountType: string; stationId: string | null }>> {
+    return this.db
+      .select({
+        id: schema.financialAccounts.id,
+        name: schema.financialAccounts.name,
+        accountType: schema.financialAccounts.accountType,
+        stationId: schema.financialAccounts.stationId,
+      })
+      .from(schema.financialAccounts)
+      .where(
+        and(
+          eq(schema.financialAccounts.organizationId, organizationId),
+          eq(schema.financialAccounts.isActive, true),
+          sql`(${schema.financialAccounts.stationId} = ${stationId} OR ${schema.financialAccounts.stationId} IS NULL)`,
+        ),
+      )
+      .orderBy(asc(schema.financialAccounts.accountType), asc(schema.financialAccounts.name));
+  }
+
+  /**
+   * Daily Cash Book (ADR 0005): for one station-timezone date, every account's
+   * opening (Σ before the date), money in, money out and closing, plus the
+   * day's entries. Computed live from ledger_entries — never a snapshot.
+   */
+  async dailyCashBook(
+    organizationId: string,
+    stationId: string,
+    date: string,
+  ): Promise<{
+    date: string;
+    accounts: Array<{
+      id: string;
+      name: string;
+      accountType: string;
+      opening: number;
+      moneyIn: number;
+      moneyOut: number;
+      closing: number;
+      entries: Array<{
+        id: string;
+        direction: string;
+        amount: number;
+        sourceType: string;
+        sourceId: string | null;
+        notes: string | null;
+        createdAt: string;
+      }>;
+    }>;
+  }> {
+    const rows = (await this.db.execute(sql`
+      SELECT
+        fa.id, fa.name, fa.account_type AS "accountType",
+        COALESCE(SUM(CASE WHEN le.entry_date < ${date}
+          THEN CASE WHEN le.direction = 'in' THEN le.amount ELSE -le.amount END END), 0)::float8 AS opening,
+        COALESCE(SUM(CASE WHEN le.entry_date = ${date} AND le.direction = 'in'
+          THEN le.amount END), 0)::float8 AS "moneyIn",
+        COALESCE(SUM(CASE WHEN le.entry_date = ${date} AND le.direction = 'out'
+          THEN le.amount END), 0)::float8 AS "moneyOut",
+        COALESCE(jsonb_agg(jsonb_build_object(
+            'id', le.id,
+            'direction', le.direction,
+            'amount', le.amount::float8,
+            'sourceType', le.source_type,
+            'sourceId', le.source_id,
+            'notes', le.notes,
+            'createdAt', le.created_at
+          ) ORDER BY le.created_at, le.id) FILTER (WHERE le.entry_date = ${date}), '[]'::jsonb) AS entries
+      FROM financial_accounts fa
+      LEFT JOIN ledger_entries le ON le.account_id = fa.id AND le.entry_date <= ${date}
+      WHERE fa.organization_id = ${organizationId}
+        AND (fa.station_id = ${stationId} OR fa.station_id IS NULL)
+      GROUP BY fa.id
+      ORDER BY fa.account_type, fa.name
+    `)) as unknown as Array<{
+      id: string;
+      name: string;
+      accountType: string;
+      opening: number;
+      moneyIn: number;
+      moneyOut: number;
+      entries: any[];
+    }>;
+    const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+    return {
+      date,
+      accounts: rows.map((r) => ({
+        ...r,
+        opening: r2(r.opening),
+        moneyIn: r2(r.moneyIn),
+        moneyOut: r2(r.moneyOut),
+        closing: r2(r.opening + r.moneyIn - r.moneyOut),
+      })),
+    };
+  }
+
   /** Account statement: period-opening balance (Σ before `from`) + entries in [from,to]. */
   async accountLedger(
     organizationId: string,
@@ -342,5 +448,33 @@ export class DrizzleFinancialAccountReader {
       movements: rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
       openings,
     };
+  }
+}
+
+/** Payment Terminal lookup for Office Records (#276). */
+export class DrizzlePaymentTerminalLookup implements PaymentTerminalLookup {
+  constructor(private readonly db: DbClient) {}
+  async findById(id: string): Promise<OfficePaymentTerminal | null> {
+    const [t] = await this.db
+      .select({
+        id: schema.paymentTerminals.id,
+        organizationId: schema.paymentTerminals.organizationId,
+        stationId: schema.paymentTerminals.stationId,
+        isActive: schema.paymentTerminals.isActive,
+        supportsCard: schema.paymentTerminals.supportsCard,
+        supportsUpi: schema.paymentTerminals.supportsUpi,
+        clearingAccountId: schema.paymentTerminals.clearingAccountId,
+      })
+      .from(schema.paymentTerminals)
+      .where(eq(schema.paymentTerminals.id, id))
+      .limit(1);
+    return t ?? null;
+  }
+  defaultClearingAccountId(organizationId: string, stationId: string): Promise<string> {
+    return new AccountProvisioningService(this.db).ensureClearingForProvider(
+      organizationId,
+      stationId,
+      null,
+    );
   }
 }

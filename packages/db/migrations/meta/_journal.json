@@ -15,6 +15,13 @@
       "when": 1790213199531,
       "tag": "0001_rls_and_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790217149864,
+      "tag": "0002_office_payable_funding_nullable",
+      "breakpoints": true
     }
   ]
 }

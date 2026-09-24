@@ -72,6 +72,8 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /finance/accounts': 'org-scoped-query',
   'GET /finance/accounts/:id/ledger': 'org-scoped-query',
   'GET /finance/movements': 'org-scoped-query',
+  'GET /finance/funding-accounts': 'org-scoped-query',
+  'GET /finance/cash-book': 'org-scoped-query',
 
   'GET /setup/stations': 'not-station-scoped',
   'GET /setup/tanks': 'org-scoped-query',

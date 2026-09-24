@@ -83,13 +83,8 @@ export async function projectShiftSummary(
         FROM handover_terminal_entries e
         LEFT JOIN payment_terminals pt ON pt.id = e.terminal_id
         WHERE e.shift_id = ${shift.id}), '[]'::jsonb) AS te_rows,
-      COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'e', ${rowJson(S.expenses, 'e')},
-          'categoryName', ec.name
-        ) ORDER BY e.created_at, e.id)
-        FROM expenses e
-        LEFT JOIN expense_categories ec ON ec.id = e.category_id
-        WHERE e.metadata->>'shiftId' = ${shift.id}), '[]'::jsonb) AS expense_rows, -- TODO(#273): legacy shift anchor in metadata (ADR 0005, #280)
+      -- Expenses and collections are Office Records with no Shift (ADR 0005).
+      '[]'::jsonb AS expense_rows,
       COALESCE((SELECT jsonb_agg(jsonb_build_object(
           'p', ${rowJson(S.purchases, 'p')},
           'supplierName', sup.name
@@ -97,8 +92,7 @@ export async function projectShiftSummary(
         FROM purchases p
         LEFT JOIN suppliers sup ON sup.id = p.supplier_id
         WHERE p.shift_id = ${shift.id}), '[]'::jsonb) AS purchase_rows,
-      COALESCE((SELECT jsonb_agg(${rowJson(S.collections, 'c')} ORDER BY c.created_at, c.id)
-        FROM collections c WHERE c.metadata->>'shiftId' = ${shift.id}), '[]'::jsonb) AS collection_rows, -- TODO(#273)
+      '[]'::jsonb AS collection_rows,
       ${creditSaleLinesJson(shift.id)} AS credit_rows
   `)) as unknown as [Record<string, any>];
 

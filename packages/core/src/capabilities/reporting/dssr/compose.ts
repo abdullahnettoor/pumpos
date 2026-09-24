@@ -2,7 +2,6 @@ import type { DssrSourceData } from './ports.js';
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-const isLive = (status: string) => status !== 'VOIDED';
 
 interface FuelAgg {
   productId: string | null;
@@ -137,15 +136,6 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     vat: salesVat,
   };
 
-  // --- Collections by method ---
-  const collectionsByMethod = { Cash: 0, Card: 0, UPI: 0, BankTransfer: 0 } as Record<
-    string,
-    number
-  >;
-  for (const col of source.collections)
-    collectionsByMethod[col.paymentMethod] =
-      (collectionsByMethod[col.paymentMethod] ?? 0) + col.amount;
-
   // --- Credit receivables created today, split normal vs fleet ---
   let normalCredit = 0;
   let fleetCredit = 0;
@@ -154,45 +144,8 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     else normalCredit += cs.amount;
   }
 
-  // --- Expenses (exclude voided), drawer vs business ---
-  const liveExpenses = source.expenses.filter((e) => isLive(e.status));
-  const drawerExpenses = sum(liveExpenses.filter((e) => e.affectsDrawer).map((e) => e.amount));
-  const businessExpenses = sum(liveExpenses.filter((e) => !e.affectsDrawer).map((e) => e.amount));
-
-  // --- Other/indirect income (exclude voided), drawer vs non-drawer + by category ---
-  const liveIncome = source.income.filter((i) => isLive(i.status));
-  const drawerIncome = sum(liveIncome.filter((i) => i.affectsDrawer).map((i) => i.amount));
-  const businessIncome = sum(liveIncome.filter((i) => !i.affectsDrawer).map((i) => i.amount));
-  const incomeByCategoryMap: Record<string, number> = {};
-  for (const i of liveIncome) {
-    const key = i.categoryName || 'Other Income';
-    incomeByCategoryMap[key] = (incomeByCategoryMap[key] ?? 0) + i.amount;
-  }
-  const incomeByCategory = Object.entries(incomeByCategoryMap).map(([name, amount]) => ({
-    name,
-    amount: round2(amount),
-  }));
-
-  // --- FI4: output GST on other income (from the split frozen at capture) ---
-  const gstIncome = liveIncome.filter((i) => i.taxCategory === 'GST');
-  const incomeTax = {
-    taxable: round2(sum(gstIncome.map((i) => i.taxableAmount ?? 0))),
-    cgst: round2(sum(gstIncome.map((i) => i.cgst ?? 0))),
-    sgst: round2(sum(gstIncome.map((i) => i.sgst ?? 0))),
-    igst: round2(sum(gstIncome.map((i) => i.igst ?? 0))),
-    cess: round2(sum(gstIncome.map((i) => i.cess ?? 0))),
-    entries: gstIncome.length,
-  };
-  const incomeTaxTotal = round2(incomeTax.cgst + incomeTax.sgst + incomeTax.igst + incomeTax.cess);
-
-  // --- Purchases & supplier payments ---
+  // --- Purchases (forecourt stock events; paying for them is an Office Record) ---
   const purchasesTotal = sum(source.purchases.map((p) => p.amount));
-  const drawerSupplierPayments = sum(
-    source.supplierPayments.filter((p) => p.affectsDrawer).map((p) => p.amount),
-  );
-  const bankSupplierPayments = sum(
-    source.supplierPayments.filter((p) => !p.affectsDrawer).map((p) => p.amount),
-  );
 
   // --- Tank dip / stock variance, split by unit basis (fuel = volume in L,
   // merchandise = item count) so the two never share a confusing unit column. ---
@@ -221,10 +174,9 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
   const revenueMerch = round2(merchandiseSalesValue);
   const revenue = round2(revenueFuel + revenueMerch);
   const cogs = round2(cogsFuel + cogsMerch);
+  // The DSSR is sales-only (ADR 0005): expenses and other income are Office
+  // Records on their own Entry Dates, so net profit belongs to the P&L report.
   const grossMargin = round2(revenue - cogs);
-  const expensesTotal = round2(drawerExpenses + businessExpenses);
-  const otherIncome = round2(drawerIncome + businessIncome);
-  const netProfit = round2(grossMargin - expensesTotal + otherIncome);
 
   // Per-product margin (FB3): fuel from the nozzle roll-up, merchandise from the
   // sale line items — each { revenue, cogs, margin }. Powers the P&L breakdown.
@@ -298,33 +250,12 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       byPaymentMethod: salesByMethod,
     },
     salesTax,
-    collections: {
-      ...collectionsByMethod,
-      total: sum(source.collections.map((c) => c.amount)),
-    },
     credit: {
       normalCredit,
       fleetCredit,
       total: normalCredit + fleetCredit,
     },
-    expenses: {
-      drawer: drawerExpenses,
-      business: businessExpenses,
-      total: drawerExpenses + businessExpenses,
-    },
-    income: {
-      drawer: round2(drawerIncome),
-      business: round2(businessIncome),
-      total: otherIncome,
-      byCategory: incomeByCategory,
-      tax: { ...incomeTax, total: incomeTaxTotal },
-    },
     purchases: { total: purchasesTotal },
-    supplierPayments: {
-      drawer: drawerSupplierPayments,
-      bank: bankSupplierPayments,
-      total: drawerSupplierPayments + bankSupplierPayments,
-    },
     pnl: {
       revenueFuel,
       revenueMerch,
@@ -333,9 +264,6 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       cogsMerch,
       cogs,
       grossMargin,
-      expenses: expensesTotal,
-      otherIncome,
-      netProfit,
       byProduct,
     },
     fuelStockVariance,
