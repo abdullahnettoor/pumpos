@@ -255,7 +255,7 @@ try {
     );
     unwrap('RecordExpense (drawer)', expRes);
 
-    // --- Close shift: expectedDrawerCash = 5000 + cashSales(500) - drawerExpenses(300) = 5200 ---
+    // --- Close shift (ADR 0005): drawer = opening floats + cash sales; office expenses no longer touch it ---
     const closeRes = await new CloseShift({
       shifts: new DrizzleShiftRepository(tx),
       nozzles: new DrizzleNozzleRepository(tx),
