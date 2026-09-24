@@ -33,7 +33,8 @@ _Avoid_: cutoff, open time
 
 **Entry Date**:
 The station-timezone calendar date (midnight to midnight) of an Office Record.
-Day Start never applies to it.
+Day Start never applies to it. Defaults to today; may be any past date, never a
+future one.
 _Avoid_: Business Date (for office records), UTC date
 
 **Office Record**:
@@ -89,8 +90,7 @@ _Avoid_: backdating the close
 What closing a Business Day protects: the day's sales and stock picture. A
 closed Business Day rejects Shift opening/reopening, Stock Counts, Tank Dips,
 Purchases, and opening-stock writes. Office Records are unaffected: they carry
-an Entry Date, not a Business Day. (How calendar-dated Purchases meet the
-sealed stock picture is open; see ADR 0005.)
+an Entry Date, not a Business Day.
 _Avoid_: day lock, freeze
 
 **Late Entry**:
@@ -251,8 +251,9 @@ _Avoid_: merchandise handover, bulk sale
 ## Money Movements
 
 **Drawer**:
-The physical cash box an Attendant is accountable for during a Shift. Only cash
-touches it.
+The cash an Attendant is accountable for at their Dispenser Unit during a
+Shift (in practice, their pouch). One per Attendant per DU per Shift, never
+shared. Only cash touches it.
 _Avoid_: till, cashbox, register
 
 **Collection**:
@@ -276,8 +277,9 @@ Money paid to a supplier. An Office Record; never touches the Drawer.
 _Avoid_: vendor payment, purchase payment
 
 **Purchase**:
-Stock bought from a supplier, never anchored to a Shift. Handled by the
-office; its anchoring against the sealed stock picture is open (ADR 0005).
+Stock received from a supplier. A forecourt stock event anchored to the
+Business Day (sealed with it), never to a Shift. Paying for it is a separate
+Supplier Payment.
 _Avoid_: procurement, inward
 
 **Credit Sale**:
@@ -291,8 +293,8 @@ figure.
 _Avoid_: outstanding, khata
 
 **Cash Drop**:
-Cash moved out of the Drawer mid-shift (e.g., to a safe), reducing expected
-drawer cash.
+Cash taken from one Attendant's Drawer mid-shift (e.g., to a safe), reducing
+that Drawer's expected cash. Recorded on that Attendant's Handover. Rare.
 _Avoid_: safe drop, remittance
 
 **Handover**:
@@ -300,23 +302,40 @@ The documented pre-close handoff from an outgoing Attendant: the handed-over
 cash plus meter state, recorded just before Shift close.
 _Avoid_: shift change, takeover, exchange
 
+**Opening Float**:
+Change money issued to one Attendant for their Drawer at Shift open; zero is
+allowed. The Shift's opening cash is the sum of its Opening Floats.
+_Avoid_: opening cash (per shift), change fund
+
 **Cash Declaration**:
 The total Drawer cash an Attendant declares at Shift close (`CASH_DECLARED`),
 compared against expected drawer cash to produce the cash Variance.
 _Avoid_: cash stated, declared amount
 
 **Drawer Reconciliation**:
-At shift close: `opening + cash sales − cash drops`. Office money,
-card/UPI and credit never enter it. Cash the office takes from a Drawer is a
+Per Drawer, at Handover: `Opening Float + DU cash sales − Cash Drops`,
+compared with the cash handed over. The Shift's figure is the sum of its
+Drawers. Office money, card/UPI and credit never enter it. Cash the office takes from a Drawer is a
 Cash Drop. _Transition (ADR 0005)_: the code still subtracts Drawer Expenses
 and Drawer Supplier Payments; this entry describes the target, tracked in the
 ADR 0005 milestone.
 _Avoid_: cash count, tally
 
 **Cash in Hand**:
-The station's office cash account (`CASH_IN_HAND`). Receives shift-close cash
-and cash Collections; pays cash Expenses and Supplier Payments.
-_Avoid_: petty cash, office drawer
+The station's main office cash account (`CASH_IN_HAND`). Receives shift-close
+cash (on the calendar date of the close) and cash Collections; pays cash
+Expenses and Supplier Payments.
+_Avoid_: office drawer
+
+**Petty Cash**:
+A small second office cash float (`PETTY_CASH`), topped up from Cash in Hand
+by transfer, for minor spends.
+_Avoid_: Cash in Hand, float
+
+**Funding Account**:
+The Financial Account an Office Record's money moved through, chosen by the
+user and filtered by method. Replaces the old "paid from" sources.
+_Avoid_: paid from, received into, source
 
 **Daily Cash Book**:
 A live ledger view per Entry Date and account: opening, in, out, closing. Not
