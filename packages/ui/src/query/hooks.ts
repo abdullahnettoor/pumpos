@@ -25,6 +25,7 @@ import type {
   BusinessDayStatusResponse,
   DailyCashBook,
   FundingAccount,
+  ProfitLossReport,
 } from '../services/cloud.js';
 import type { AccessDocument, AttendantHandoverReport, AttendantReportFilters } from '@pump/shared';
 
@@ -117,6 +118,10 @@ export const queryKeys = {
   financialAccounts: (stationId: string) => ['financial-accounts', stationId] as const,
   /** Accounts an Office Record may use (no balances) — semi tier, persisted. */
   fundingAccounts: (stationId: string) => ['funding-accounts', stationId] as const,
+  fundingAccountsAll: () => ['funding-accounts'] as const,
+  profitLoss: (stationId: string, from: string, to: string) =>
+    ['profit-loss', stationId, from, to] as const,
+  profitLossAll: () => ['profit-loss'] as const,
   accountLedger: (accountId: string, from: string, to: string) =>
     ['account-ledger', accountId, from, to] as const,
   financeMovements: (stationId: string, from: string, to: string) =>
@@ -798,6 +803,22 @@ export function useDailyDssrPreview(
   });
 }
 
+/** Period P&L (ADR 0005), computed server-side. Operational tier. */
+export function useProfitLoss(
+  stationId: string | null | undefined,
+  from: string,
+  to: string,
+  options?: Options<ProfitLossReport>,
+) {
+  return useQuery({
+    queryKey: queryKeys.profitLoss(stationId ?? '', from, to),
+    queryFn: () => shiftService.getProfitLoss(stationId!, from, to),
+    enabled: !!stationId && !!from && !!to,
+    staleTime: TIER.operational.staleTime,
+    ...options,
+  });
+}
+
 export function useDailyDssrRange(
   stationId: string | null | undefined,
   from: string,
@@ -877,6 +898,7 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['account-ledger'] }),
       qc.invalidateQueries({ queryKey: ['finance-movements'] }),
       qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() }),
+      qc.invalidateQueries({ queryKey: queryKeys.profitLossAll() }),
       qc.invalidateQueries({ queryKey: ['money-movements'] }),
       // Suppliers carry computed payable balances that move with purchases/payments,
       // and new suppliers are created from PurchasesList — keep them fresh too.

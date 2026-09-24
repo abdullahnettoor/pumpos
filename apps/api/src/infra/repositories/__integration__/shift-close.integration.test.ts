@@ -442,7 +442,12 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
         const snap = r.data.snapshot as any;
         await new LedgerPostingService(tx).postShiftClose(
           ORG,
-          { id: SHIFT, stationId: STATION, businessDayId: DAY, closedAt: r.data.shift.closedAt },
+          {
+            id: SHIFT,
+            stationId: STATION,
+            businessDayId: DAY,
+            closedAt: r.data.shift.closedAt ?? '',
+          },
           { cashSales: Number(snap?.reconciliation?.cashSales ?? 0) },
         );
       }
@@ -588,7 +593,12 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       runInTransaction(db, async (tx) => {
         await new LedgerPostingService(tx).postShiftClose(
           ORG,
-          { id: SHIFT, stationId: STATION, businessDayId: crypto.randomUUID(), closedAt: null },
+          {
+            id: SHIFT,
+            stationId: STATION,
+            businessDayId: crypto.randomUUID(),
+            closedAt: '2026-03-10T14:00:00.000Z',
+          },
           { cashSales: 1 },
         );
         return { success: true as const, data: null };

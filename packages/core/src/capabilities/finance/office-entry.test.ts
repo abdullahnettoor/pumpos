@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveOfficeEntry } from './office-entry.js';
-import {
-  AccountRepo,
-  account,
-  officeCtx,
-  terminal,
-  TerminalLookup,
-} from './__fixtures__/office.js';
-import { accountTypesForPaymentMethod } from './office-entry.js';
+import { AccountRepo, account, officeCtx, terminal, TerminalLookup } from './__tests__/office.js';
+import { OFFICE_ACCOUNT_TYPES, accountTypesForPaymentMethod } from './office-entry.js';
 
 const accounts = new AccountRepo();
 
@@ -58,6 +52,16 @@ describe('resolveOfficeEntry — Entry Date (ADR 0005)', () => {
 });
 
 describe('resolveOfficeEntry — Funding Account', () => {
+  it('refuses a clearing account for an expense-type record', async () => {
+    const r = await resolveOfficeEntry(
+      { accounts },
+      officeCtx(),
+      { fundingAccountId: 'clearing' },
+      { allowedAccountTypes: OFFICE_ACCOUNT_TYPES },
+    );
+    expect(r.success).toBe(false);
+  });
+
   it('requires one', async () => {
     const r = await resolveOfficeEntry({ accounts }, officeCtx(), {});
     expect(r.success).toBe(false);
@@ -129,10 +133,20 @@ describe('resolveOfficeEntry — Payment Terminal (#276)', () => {
     const r = await resolveOfficeEntry(
       deps,
       officeCtx(),
-      { terminalId: 'pos-2', fundingAccountId: 'hdfc' },
+      { terminalId: 'pos-2' },
       { paymentMethod: 'Card' },
     );
     expect(r.success && r.data.fundingAccount.id).toBe('clearing');
+  });
+
+  it('refuses a terminal together with a different account, instead of overriding it', async () => {
+    const r = await resolveOfficeEntry(
+      deps,
+      officeCtx(),
+      { terminalId: 'pos-1', fundingAccountId: 'hdfc' },
+      { paymentMethod: 'UPI' },
+    );
+    expect(r.success).toBe(false);
   });
 
   it('rejects a cross-tenant or wrong-station terminal', async () => {

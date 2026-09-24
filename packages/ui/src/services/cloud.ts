@@ -687,6 +687,12 @@ export class CloudShiftService {
     return request<any>(`/dssr/daily/preview?stationId=${stationId}&date=${date}`);
   }
 
+  async getProfitLoss(stationId: string, from: string, to: string): Promise<ProfitLossReport> {
+    return request<ProfitLossReport>(
+      `/dssr/profit-loss?stationId=${stationId}&from=${from}&to=${to}`,
+    );
+  }
+
   async getDailyDssrRange(stationId: string, from: string, to: string): Promise<any[]> {
     const data = await request<any[]>(
       `/dssr/daily/range?stationId=${stationId}&from=${from}&to=${to}`,
@@ -1389,6 +1395,43 @@ export interface FundingAccount {
 }
 
 /** GET /finance/cash-book — one ledger entry on the requested date. */
+/** GET /dssr/profit-loss — composed server-side (core composeProfitLoss). */
+export interface ProfitLossFigures {
+  revenueFuel: number;
+  revenueMerch: number;
+  revenue: number;
+  cogsFuel: number;
+  cogsMerch: number;
+  cogs: number;
+  grossMargin: number;
+  expenses: number;
+  otherIncome: number;
+  netProfit: number;
+}
+export interface ProfitLossDay extends ProfitLossFigures {
+  date: string;
+  live: boolean;
+  hasSales: boolean;
+}
+export interface ProfitLossProductMargin {
+  productId: string;
+  name: string;
+  code: string;
+  kind: string;
+  quantity: number;
+  revenue: number;
+  cogs: number;
+  margin: number;
+  marginPct: number;
+}
+export interface ProfitLossReport {
+  from: string;
+  to: string;
+  days: ProfitLossDay[];
+  totals: ProfitLossFigures & { marginPct: number };
+  byProduct: ProfitLossProductMargin[];
+}
+
 export interface DailyCashBookEntry {
   id: string;
   direction: 'in' | 'out';

@@ -209,7 +209,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
       });
       setSettleOpen(false);
       await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
-      await qc.invalidateQueries({ queryKey: ['funding-accounts'] });
+      await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
       await qc.invalidateQueries({ queryKey: ['account-ledger'] });
       await qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() });
       toast.success('Settlement recorded.');
@@ -274,7 +274,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
         });
         setEntryOpen(false);
         await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
-        await qc.invalidateQueries({ queryKey: ['funding-accounts'] });
+        await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
         await qc.invalidateQueries({ queryKey: ['account-ledger'] });
         await qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() });
         toast.success('Opening balance updated.');
@@ -303,7 +303,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
       });
       setEntryOpen(false);
       await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
-      await qc.invalidateQueries({ queryKey: ['funding-accounts'] });
+      await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
       await qc.invalidateQueries({ queryKey: ['account-ledger'] });
       await qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() });
       toast.success('Entry recorded.');
@@ -362,7 +362,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
       });
       setTransferOpen(false);
       await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
-      await qc.invalidateQueries({ queryKey: ['funding-accounts'] });
+      await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
       await qc.invalidateQueries({ queryKey: ['account-ledger'] });
       await qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() });
       toast.success('Transfer recorded.');
@@ -397,7 +397,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
       });
       setDrawerOpen(false);
       await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
-      await qc.invalidateQueries({ queryKey: ['funding-accounts'] });
+      await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
       toast.success('Account created.');
     } catch (err: any) {
       setError(err.message || 'Failed to create account.');

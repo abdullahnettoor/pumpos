@@ -1,12 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import {
-  useDailyDssrRange,
-  useDailyDssrPreview,
-  useExpenses,
-  useIncome,
-  useShiftStatus,
-} from '../../query/hooks.js';
-import { buildProfitLoss } from '../../utils/profitLoss.js';
+import { useDailyDssrPreview, useProfitLoss, useShiftStatus } from '../../query/hooks.js';
 import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr } from '../../utils/format.js';
@@ -26,39 +19,11 @@ export interface ProfitLossViewProps {
   selectedStation: any | null;
 }
 
-const num = (v: any) => Number(v || 0);
-
-interface DayPnl {
-  date: string;
-  live: boolean;
-  revenueFuel: number;
-  revenueMerch: number;
-  revenue: number;
-  cogsFuel: number;
-  cogsMerch: number;
-  cogs: number;
-  grossMargin: number;
-  byProduct: any[];
-  hasData: boolean;
-}
-
-function pnlFromSnapshot(date: string, snapshotData: any, live: boolean): DayPnl {
-  const p = snapshotData?.pnl || {};
-  return {
-    date,
-    live,
-    revenueFuel: num(p.revenueFuel),
-    revenueMerch: num(p.revenueMerch),
-    revenue: num(p.revenue),
-    cogsFuel: num(p.cogsFuel),
-    cogsMerch: num(p.cogsMerch),
-    cogs: num(p.cogs),
-    grossMargin: num(p.grossMargin),
-    byProduct: Array.isArray(p.byProduct) ? p.byProduct : [],
-    hasData: !!snapshotData,
-  };
-}
-
+/**
+ * Period Profit & Loss. Every figure is composed server-side
+ * (GET /dssr/profit-loss): gross margin by sales day, expenses and other
+ * income by entry date (ADR 0005). This view only renders.
+ */
 export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation }) => {
   const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
@@ -71,18 +36,15 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
   const isSingleDay = range.from === range.to;
   const todayInRange = todayBiz >= range.from && todayBiz <= range.to;
 
-  const { data: snapshots, isLoading: loadingRange } = useDailyDssrRange(
+  const { data: report, isLoading: loading } = useProfitLoss(
     selectedStation?.id,
     range.from,
     range.to,
   );
-  // Live preview only when the range includes today's (open) business day.
-  const { data: preview, isLoading: loadingPreview } = useDailyDssrPreview(
-    selectedStation?.id,
-    todayBiz,
-    { enabled: !!selectedStation?.id && todayInRange } as any,
-  );
-  // Shift status → whether an open shift's fuel is still pending (Option 1 context).
+  // Live-day context only: how many shifts today's provisional figure includes.
+  const { data: preview } = useDailyDssrPreview(selectedStation?.id, todayBiz, {
+    enabled: !!selectedStation?.id && todayInRange,
+  } as any);
   const { data: shiftStatus } = useShiftStatus(selectedStation?.id, true, {
     enabled: !!selectedStation?.id && todayInRange,
   } as any);
@@ -92,115 +54,24 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
     ? new Date(preview.generatedAt).toLocaleTimeString('en-IN')
     : null;
 
-  // Office records (ADR 0005): expenses and income are dated by entry date.
-  const { data: expenseRows, isLoading: loadingExpenses } = useExpenses({
-    enabled: !!selectedStation?.id,
-  } as any);
-  const { data: incomeRows, isLoading: loadingIncome } = useIncome(
-    { stationId: selectedStation?.id, from: range.from, to: range.to },
-    { enabled: !!selectedStation?.id } as any,
-  );
-
-  const loading =
-    loadingRange || loadingExpenses || loadingIncome || (todayInRange && loadingPreview);
-
-  const days = useMemo(() => {
-    const byDate = new Map<string, DayPnl>();
-    for (const snap of snapshots || []) {
-      byDate.set(snap.businessDate, pnlFromSnapshot(snap.businessDate, snap.snapshotData, false));
-    }
-    // Today: prefer the live preview (reflects current sales) over a stale snapshot.
-    if (todayInRange && preview?.snapshotData) {
-      byDate.set(todayBiz, pnlFromSnapshot(todayBiz, preview.snapshotData, true));
-    }
-    return Array.from(byDate.values()).sort((a, b) => (a.date < b.date ? 1 : -1));
-  }, [snapshots, preview, todayInRange, todayBiz]);
-
-  const pl = useMemo(
-    () =>
-      buildProfitLoss({
-        from: range.from,
-        to: range.to,
-        stationId: selectedStation?.id,
-        salesDays: days,
-        expenses: expenseRows,
-        income: incomeRows,
-      }),
-    [range.from, range.to, selectedStation?.id, days, expenseRows, incomeRows],
-  );
-
-  const totals = useMemo(() => {
-    const acc = {
-      revenueFuel: 0,
-      revenueMerch: 0,
-      revenue: 0,
-      cogsFuel: 0,
-      cogsMerch: 0,
-      cogs: 0,
-      grossMargin: 0,
-    };
-    for (const d of days) {
-      acc.revenueFuel += d.revenueFuel;
-      acc.revenueMerch += d.revenueMerch;
-      acc.revenue += d.revenue;
-      acc.cogsFuel += d.cogsFuel;
-      acc.cogsMerch += d.cogsMerch;
-      acc.cogs += d.cogs;
-      acc.grossMargin += d.grossMargin;
-    }
-    return { ...acc, ...pl.totals, grossMargin: acc.grossMargin };
-  }, [days, pl.totals]);
-
-  const salesByDate = useMemo(() => new Map(days.map((d) => [d.date, d])), [days]);
-  const marginPct = totals.revenue > 0 ? (totals.grossMargin / totals.revenue) * 100 : 0;
-  const emptyDay = pnlFromSnapshot(range.from, null, false);
-  const single = isSingleDay
-    ? {
-        ...(days[0] ?? emptyDay),
-        expenses: pl.totals.expenses,
-        otherIncome: pl.totals.otherIncome,
-        netProfit: pl.totals.netProfit,
-      }
-    : null;
-
-  // Per-product margin aggregated across the selected days (FB3).
-  const productMargins = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        productId: string;
-        name: string;
-        code: string;
-        kind: string;
-        quantity: number;
-        revenue: number;
-        cogs: number;
-        margin: number;
-      }
-    >();
-    for (const d of days) {
-      for (const bp of d.byProduct || []) {
-        const cur = map.get(bp.productId) ?? {
-          productId: bp.productId,
-          name: bp.name,
-          code: bp.code,
-          kind: bp.kind,
-          quantity: 0,
-          revenue: 0,
-          cogs: 0,
-          margin: 0,
-        };
-        cur.quantity += num(bp.quantity);
-        cur.revenue += num(bp.revenue);
-        cur.cogs += num(bp.cogs);
-        cur.margin += num(bp.margin);
-        map.set(bp.productId, cur);
-      }
-    }
-    return Array.from(map.values())
-      .map((r) => ({ ...r, marginPct: r.revenue > 0 ? (r.margin / r.revenue) * 100 : 0 }))
-      .sort((a, b) => b.margin - a.margin);
-  }, [days]);
+  const pl = useMemo(() => ({ days: report?.days ?? [] }), [report]);
+  const totals = report?.totals ?? {
+    revenueFuel: 0,
+    revenueMerch: 0,
+    revenue: 0,
+    cogsFuel: 0,
+    cogsMerch: 0,
+    cogs: 0,
+    grossMargin: 0,
+    expenses: 0,
+    otherIncome: 0,
+    netProfit: 0,
+    marginPct: 0,
+  };
+  const salesByDate = useMemo(() => new Map(pl.days.map((d) => [d.date, d])), [pl.days]);
+  const marginPct = totals.marginPct;
+  const single = isSingleDay ? (pl.days[0] ?? { ...totals, date: range.from, live: false }) : null;
+  const productMargins = report?.byProduct ?? [];
 
   // Chronological (oldest→newest) net-profit series for the trend sparkline.
   const trend = useMemo(() => [...pl.days].reverse().map((d) => d.netProfit), [pl.days]);

@@ -10,7 +10,7 @@ import {
   officeCtx,
   terminal,
   TerminalLookup,
-} from '../../finance/__fixtures__/office.js';
+} from '../../finance/__tests__/office.js';
 
 class CollRepo implements CollectionRepository {
   readonly rows: Collection[] = [];

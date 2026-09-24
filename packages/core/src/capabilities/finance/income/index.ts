@@ -11,7 +11,11 @@ import {
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { FinancialAccountRepository } from '../accounts/index.js';
-import { resolveOfficeEntry, type PaymentTerminalLookup } from '../office-entry.js';
+import {
+  OFFICE_ACCOUNT_TYPES,
+  resolveOfficeEntry,
+  type PaymentTerminalLookup,
+} from '../office-entry.js';
 import { computeLineTax, isInterState } from '../tax/index.js';
 
 export interface IncomeCategory {
@@ -166,6 +170,8 @@ export interface RecordIncomeCommand {
   /** Required unless a terminal is named (its clearing account is used). */
   fundingAccountId?: string;
   terminalId?: string | null;
+  /** Required with a terminal: the method it was received by. */
+  paymentMethod?: 'Card' | 'UPI';
   categoryId: string;
   amount: number | string;
   payer?: string;
@@ -181,6 +187,7 @@ const schema = z.object({
   entryDate: z.string().optional(),
   fundingAccountId: z.string().min(1).optional(),
   terminalId: z.string().min(1).nullish(),
+  paymentMethod: z.enum(['Card', 'UPI']).optional(),
   categoryId: z.string().min(1, 'categoryId is required'),
   amount: z.coerce.number().positive('amount must be positive'),
   payer: z.string().max(255).optional(),
@@ -212,7 +219,18 @@ export class RecordIncome implements UseCase<RecordIncomeCommand, OtherIncome> {
       return err(validationError('Invalid RecordIncome command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
-    const entry = await resolveOfficeEntry(this.deps, ctx, cmd);
+    // Through a terminal (#276) the money lands in a clearing account and the
+    // terminal must support the method; otherwise an ordinary office account.
+    if (cmd.terminalId && cmd.paymentMethod !== 'Card' && cmd.paymentMethod !== 'UPI')
+      return err(validationError('Income through a terminal needs paymentMethod Card or UPI'));
+    const entry = await resolveOfficeEntry(
+      this.deps,
+      ctx,
+      cmd,
+      cmd.terminalId
+        ? { paymentMethod: cmd.paymentMethod, allowedAccountTypes: ['MERCHANT_CLEARING'] }
+        : { allowedAccountTypes: OFFICE_ACCOUNT_TYPES },
+    );
     if (!entry.success) return entry;
     const { stationId, entryDate, fundingAccount, terminalId } = entry.data;
 

@@ -8,6 +8,7 @@ import { and, eq } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import { transactionsRouter } from '../../../routes/transactions.js';
 import { financeRouter } from '../../../routes/finance.js';
+import { dssrRouter } from '../../../routes/dssr.js';
 
 /**
  * Office Records against a real Postgres (ADR 0005, #273 / #275 / #276).
@@ -108,6 +109,7 @@ describe.skipIf(!CONNECTION)('Office Records against real Postgres (ADR 0005)', 
     });
     a.route('/transactions', transactionsRouter);
     a.route('/finance', financeRouter);
+    a.route('/dssr', dssrRouter);
     app = a as unknown as Hono;
   }, 60_000);
 
@@ -126,15 +128,13 @@ describe.skipIf(!CONNECTION)('Office Records against real Postgres (ADR 0005)', 
       { id: STATION, organizationId: ORG, name: 'Station A', code: 'STA' },
       { id: OTHER_STATION, organizationId: ORG, name: 'Station B', code: 'STB' },
     ]);
-    await db
-      .insert(schema.users)
-      .values({
-        id: MANAGER,
-        organizationId: ORG,
-        fullName: 'Meera',
-        role: 'Manager',
-        status: 'ACTIVE',
-      });
+    await db.insert(schema.users).values({
+      id: MANAGER,
+      organizationId: ORG,
+      fullName: 'Meera',
+      role: 'Manager',
+      status: 'ACTIVE',
+    });
     await db.insert(schema.financialAccounts).values([
       {
         id: CASH,
@@ -176,14 +176,12 @@ describe.skipIf(!CONNECTION)('Office Records against real Postgres (ADR 0005)', 
       },
       { id: FOREIGN_TERMINAL, organizationId: ORG, stationId: OTHER_STATION, label: 'B-POS' },
     ]);
-    await db
-      .insert(schema.customers)
-      .values({
-        id: CUSTOMER,
-        organizationId: ORG,
-        customerType: 'Fleet',
-        name: 'Sharma Transports',
-      });
+    await db.insert(schema.customers).values({
+      id: CUSTOMER,
+      organizationId: ORG,
+      customerType: 'Fleet',
+      name: 'Sharma Transports',
+    });
     await db
       .insert(schema.expenseCategories)
       .values({ id: CATEGORY, organizationId: ORG, name: 'Tea' });
@@ -360,5 +358,12 @@ describe.skipIf(!CONNECTION)('Office Records against real Postgres (ADR 0005)', 
     const nextDay = await get(`/finance/cash-book?stationId=${STATION}&date=2026-03-16`);
     const cashNext = nextDay.data.accounts.find((a: any) => a.id === CASH);
     expect(cashNext).toMatchObject({ opening: 4000, moneyIn: 0, closing: 4000, entries: [] });
+  });
+
+  it('composes the period P&L server-side: expenses by entry date (ADR 0005)', async () => {
+    const r = await get(`/dssr/profit-loss?stationId=${STATION}&from=2026-03-01&to=2026-03-31`);
+    const day15 = r.data.days.find((d: any) => d.date === '2026-03-15');
+    expect(day15).toMatchObject({ expenses: 250, otherIncome: 0 });
+    expect(r.data.totals.expenses).toBe(250);
   });
 });

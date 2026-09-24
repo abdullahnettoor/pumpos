@@ -81,8 +81,8 @@ export class TerminalLookup implements PaymentTerminalLookup {
     readonly rows: OfficePaymentTerminal[] = [],
     readonly defaultClearing = 'clearing',
   ) {}
-  async findById(id: string) {
-    return this.rows.find((r) => r.id === id) ?? null;
+  async findById(organizationId: string, id: string) {
+    return this.rows.find((r) => r.id === id && r.organizationId === organizationId) ?? null;
   }
   async defaultClearingAccountId() {
     return this.defaultClearing;

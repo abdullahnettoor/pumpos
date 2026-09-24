@@ -1562,13 +1562,16 @@ shiftsRouter.post(
         events,
       }).execute(command, buildContext(user));
       if (r.success) {
+        // CloseShift always stamps closedAt; the ledger dates the cash by it.
+        const closedAt = r.data.shift.closedAt;
+        if (!closedAt) throw new Error(`SHIFT_CLOSED_AT_MISSING: shift ${r.data.shift.id}`);
         await new LedgerPostingService(tx).postShiftClose(
           user.organizationId,
           {
             id: r.data.shift.id,
             stationId: r.data.shift.stationId,
             businessDayId: r.data.shift.businessDayId,
-            closedAt: r.data.shift.closedAt,
+            closedAt,
           },
           // Typed on the use-case result — not dug out of the (projected)
           // snapshot, whose shape is a presentation concern.

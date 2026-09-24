@@ -10,7 +10,7 @@ import {
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { FinancialAccountRepository } from '../accounts/index.js';
-import { resolveOfficeEntry } from '../office-entry.js';
+import { OFFICE_ACCOUNT_TYPES, resolveOfficeEntry } from '../office-entry.js';
 
 /**
  * An expense is an Office Record (ADR 0005): dated by its Entry Date and paid
@@ -71,7 +71,9 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
       return err(validationError('Invalid RecordExpense command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
-    const entry = await resolveOfficeEntry(this.deps, ctx, cmd);
+    const entry = await resolveOfficeEntry(this.deps, ctx, cmd, {
+      allowedAccountTypes: OFFICE_ACCOUNT_TYPES,
+    });
     if (!entry.success) return entry;
     const { stationId, entryDate, fundingAccount } = entry.data;
 

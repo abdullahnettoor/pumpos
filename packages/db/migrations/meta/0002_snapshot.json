@@ -1,5 +1,5 @@
 {
-  "id": "ae14b4e2-878e-40b0-ad9d-b27b4d8beb3f",
+  "id": "56db2f09-06da-413e-b1bf-0d61d3efa665",
   "prevId": "0da5991b-3d51-45bd-9ef4-0231a8adea09",
   "version": "7",
   "dialect": "postgresql",
@@ -6169,7 +6169,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "supplier_transactions_payment_has_funding": {
+          "name": "supplier_transactions_payment_has_funding",
+          "value": "\"supplier_transactions\".\"transaction_type\" <> 'Payment' OR \"supplier_transactions\".\"funding_account_id\" IS NOT NULL"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.suppliers": {

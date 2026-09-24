@@ -494,6 +494,11 @@ export const supplierTransactions = pgTable(
       t.stationId,
       t.entryDate,
     ),
+    // A Payment moves money, so it must name the account it left.
+    paymentHasFunding: check(
+      'supplier_transactions_payment_has_funding',
+      sql`${t.transactionType} <> 'Payment' OR ${t.fundingAccountId} IS NOT NULL`,
+    ),
   }),
 );
 

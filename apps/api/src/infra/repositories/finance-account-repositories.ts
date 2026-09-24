@@ -150,6 +150,34 @@ export class DrizzleLedgerEntryRepository implements LedgerEntryRepository {
   }
 }
 
+/** One ledger entry of a Daily Cash Book account. */
+export interface DailyCashBookEntry {
+  id: string;
+  direction: 'in' | 'out';
+  amount: number;
+  sourceType: string;
+  sourceId: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+/** One account's day in the Daily Cash Book (ADR 0005). */
+export interface DailyCashBookAccount {
+  id: string;
+  name: string;
+  accountType: string;
+  opening: number;
+  moneyIn: number;
+  moneyOut: number;
+  closing: number;
+  entries: DailyCashBookEntry[];
+}
+
+export interface DailyCashBook {
+  date: string;
+  accounts: DailyCashBookAccount[];
+}
+
 export interface AccountWithBalance extends FinancialAccount {
   balance: string;
 }
@@ -220,27 +248,7 @@ export class DrizzleFinancialAccountReader {
     organizationId: string,
     stationId: string,
     date: string,
-  ): Promise<{
-    date: string;
-    accounts: Array<{
-      id: string;
-      name: string;
-      accountType: string;
-      opening: number;
-      moneyIn: number;
-      moneyOut: number;
-      closing: number;
-      entries: Array<{
-        id: string;
-        direction: string;
-        amount: number;
-        sourceType: string;
-        sourceId: string | null;
-        notes: string | null;
-        createdAt: string;
-      }>;
-    }>;
-  }> {
+  ): Promise<DailyCashBook> {
     const rows = (await this.db.execute(sql`
       SELECT
         fa.id, fa.name, fa.account_type AS "accountType",
@@ -267,15 +275,7 @@ export class DrizzleFinancialAccountReader {
       -- An inactive account still shows while it holds money or moved some.
       HAVING fa.is_active OR COUNT(le.id) > 0
       ORDER BY fa.account_type, fa.name
-    `)) as unknown as Array<{
-      id: string;
-      name: string;
-      accountType: string;
-      opening: number;
-      moneyIn: number;
-      moneyOut: number;
-      entries: any[];
-    }>;
+    `)) as unknown as Array<Omit<DailyCashBookAccount, 'closing'>>;
     const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
     return {
       date,
@@ -456,7 +456,7 @@ export class DrizzleFinancialAccountReader {
 /** Payment Terminal lookup for Office Records (#276). */
 export class DrizzlePaymentTerminalLookup implements PaymentTerminalLookup {
   constructor(private readonly db: DbClient) {}
-  async findById(id: string): Promise<OfficePaymentTerminal | null> {
+  async findById(organizationId: string, id: string): Promise<OfficePaymentTerminal | null> {
     const [t] = await this.db
       .select({
         id: schema.paymentTerminals.id,
@@ -468,7 +468,12 @@ export class DrizzlePaymentTerminalLookup implements PaymentTerminalLookup {
         clearingAccountId: schema.paymentTerminals.clearingAccountId,
       })
       .from(schema.paymentTerminals)
-      .where(eq(schema.paymentTerminals.id, id))
+      .where(
+        and(
+          eq(schema.paymentTerminals.id, id),
+          eq(schema.paymentTerminals.organizationId, organizationId),
+        ),
+      )
       .limit(1);
     return t ?? null;
   }

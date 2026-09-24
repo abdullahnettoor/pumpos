@@ -5,3 +5,4 @@ export * from './dssr/close-business-day.js';
 export * from './attendant-report/ports.js';
 export * from './attendant-report/compose.js';
 export * from './attendant-report/get-attendant-handover-report.js';
+export * from './profit-loss/compose.js';

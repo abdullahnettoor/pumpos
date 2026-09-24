@@ -35,12 +35,9 @@ export const FundingAccountSelect: React.FC<FundingAccountSelectProps> = ({
   id,
 }) => {
   const { data, isSuccess } = useFundingAccounts(stationId);
-  const typesKey = types.join(',');
-  const accounts = useMemo(
-    () => filterFundingAccounts(data ?? [], types),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- typesKey stands in for `types`
-    [data, typesKey],
-  );
+  // `types` must be referentially stable: callers pass module-level constants
+  // (OFFICE_ACCOUNT_TYPES, collectionAccountTypes(), …).
+  const accounts = useMemo(() => filterFundingAccounts(data ?? [], types), [data, types]);
 
   useEffect(() => {
     if (!isSuccess) return;

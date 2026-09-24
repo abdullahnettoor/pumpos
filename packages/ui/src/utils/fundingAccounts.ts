@@ -2,16 +2,23 @@ import type { FundingAccount, FundingAccountType } from '../services/cloud.js';
 
 export type CollectionMethod = 'Cash' | 'Card' | 'UPI' | 'BankTransfer';
 
-/** Account types a customer collection may land in, by payment method (ADR 0005). */
+const CASH_TYPES: FundingAccountType[] = ['CASH_IN_HAND', 'PETTY_CASH'];
+const CARD_TYPES: FundingAccountType[] = ['BANK', 'MERCHANT_CLEARING'];
+const BANK_TYPES: FundingAccountType[] = ['BANK'];
+
+/**
+ * Account types a customer collection may land in, by payment method
+ * (ADR 0005). Returns shared constants so the result is referentially stable.
+ */
 export function collectionAccountTypes(method: CollectionMethod): FundingAccountType[] {
   switch (method) {
     case 'Cash':
-      return ['CASH_IN_HAND', 'PETTY_CASH'];
+      return CASH_TYPES;
     case 'Card':
     case 'UPI':
-      return ['BANK', 'MERCHANT_CLEARING'];
+      return CARD_TYPES;
     case 'BankTransfer':
-      return ['BANK'];
+      return BANK_TYPES;
   }
 }
 

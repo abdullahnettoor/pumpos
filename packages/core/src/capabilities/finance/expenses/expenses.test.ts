@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BusinessEvents } from '../../../kernel/index.js';
 import { RecordExpense, VoidExpense } from './index.js';
 import type { Expense, ExpenseRepository } from './index.js';
-import { AccountRepo, eventBus, officeCtx } from '../__fixtures__/office.js';
+import { AccountRepo, eventBus, officeCtx } from '../__tests__/office.js';
 
 class ExpenseRepo implements ExpenseRepository {
   readonly rows: Expense[] = [];

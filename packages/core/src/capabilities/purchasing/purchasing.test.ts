@@ -7,7 +7,7 @@ import {
   BusinessEvents,
 } from '../../kernel/index.js';
 import type { DocumentNumberGenerator, ExecutionContext } from '../../kernel/index.js';
-import { AccountRepo, eventBus, officeCtx } from '../finance/__fixtures__/office.js';
+import { AccountRepo, eventBus, officeCtx } from '../finance/__tests__/office.js';
 import { RecordPurchase, RecordSupplierPayment } from './index.js';
 import type {
   Purchase,

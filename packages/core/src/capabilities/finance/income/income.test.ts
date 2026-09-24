@@ -7,13 +7,7 @@ import type {
   IncomeCategory,
   IncomeCategoryRepository,
 } from './index.js';
-import {
-  AccountRepo,
-  eventBus,
-  officeCtx,
-  terminal,
-  TerminalLookup,
-} from '../__fixtures__/office.js';
+import { AccountRepo, eventBus, officeCtx, terminal, TerminalLookup } from '../__tests__/office.js';
 
 class IncomeRepo implements IncomeRepository {
   readonly rows: OtherIncome[] = [];
@@ -67,12 +61,29 @@ describe('RecordIncome (Office Record, ADR 0005)', () => {
       accounts: new AccountRepo(),
       terminals: new TerminalLookup([terminal('pos-1')]),
       events,
-    }).execute({ categoryId: 'cat-1', amount: 800, terminalId: 'pos-1' }, ctx());
+    }).execute(
+      { categoryId: 'cat-1', amount: 800, terminalId: 'pos-1', paymentMethod: 'UPI' },
+      ctx(),
+    );
     expect(r.success).toBe(true);
     if (r.success) {
       expect(r.data.fundingAccountId).toBe('clearing');
       expect(r.data.terminalId).toBe('pos-1');
     }
+  });
+
+  it('requires Card or UPI for a terminal receipt (#276)', async () => {
+    const { events } = eventBus();
+    const r = await new RecordIncome({
+      income: new IncomeRepo(),
+      accounts: new AccountRepo(),
+      terminals: new TerminalLookup([terminal('pos-1', { supportsUpi: false })]),
+      events,
+    }).execute(
+      { categoryId: 'cat-1', amount: 800, terminalId: 'pos-1', paymentMethod: 'UPI' },
+      ctx(),
+    );
+    expect(r.success).toBe(false);
   });
 
   it('voids an income entry', async () => {

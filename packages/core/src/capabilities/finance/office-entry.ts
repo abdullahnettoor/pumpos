@@ -31,7 +31,8 @@ export interface OfficePaymentTerminal {
 }
 
 export interface PaymentTerminalLookup {
-  findById(id: string): Promise<OfficePaymentTerminal | null>;
+  /** The terminal, only if it belongs to the organization. */
+  findById(organizationId: string, id: string): Promise<OfficePaymentTerminal | null>;
   /** The station's generic Merchant Clearing account (created on first use). */
   defaultClearingAccountId(organizationId: string, stationId: string): Promise<string>;
 }
@@ -55,6 +56,20 @@ export interface OfficeEntryOptions {
    */
   paymentMethod?: string;
 }
+
+/** Account types an expense, other income or supplier payment may move through. */
+export const OFFICE_ACCOUNT_TYPES: readonly FinancialAccountType[] = [
+  'CASH_IN_HAND',
+  'PETTY_CASH',
+  'BANK',
+  'OWNER',
+];
+
+/** A supplier may also be paid out of the OMC card-settlement (CMS) account. */
+export const SUPPLIER_PAYMENT_ACCOUNT_TYPES: readonly FinancialAccountType[] = [
+  ...OFFICE_ACCOUNT_TYPES,
+  'CMS',
+];
 
 /** Account types a Collection may land in, by payment method. */
 export function accountTypesForPaymentMethod(method: string): readonly FinancialAccountType[] {
@@ -91,9 +106,20 @@ export async function resolveOfficeEntry(
     const terminal = await resolveTerminal(deps.terminals, ctx, stationId, cmd.terminalId, opts);
     if (!terminal.success) return terminal;
     terminalId = terminal.data.id;
-    fundingAccountId =
+    const clearing =
       terminal.data.clearingAccountId ??
       (await deps.terminals!.defaultClearingAccountId(ctx.organizationId, stationId));
+    // The terminal decides where the money lands; a different explicit
+    // account is a contradiction, not something to override silently.
+    if (fundingAccountId && fundingAccountId !== clearing)
+      return err(
+        validationError("A terminal payment posts to the terminal's clearing account", {
+          terminalId,
+          fundingAccountId,
+          clearingAccountId: clearing,
+        }),
+      );
+    fundingAccountId = clearing;
   }
 
   if (!fundingAccountId) return err(validationError('fundingAccountId is required'));
@@ -129,7 +155,7 @@ async function resolveTerminal(
   const method = opts.paymentMethod;
   if (method !== undefined && method !== 'Card' && method !== 'UPI')
     return err(validationError('A payment terminal is only used for Card or UPI payments'));
-  const terminal = await terminals.findById(terminalId);
+  const terminal = await terminals.findById(ctx.organizationId, terminalId);
   if (
     !terminal ||
     terminal.organizationId !== ctx.organizationId ||

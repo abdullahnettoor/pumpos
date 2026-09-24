@@ -298,7 +298,7 @@ export class LedgerPostingService {
    */
   async postShiftClose(
     organizationId: string,
-    shift: { id: string; stationId: string; businessDayId: string; closedAt: string | null },
+    shift: { id: string; stationId: string; businessDayId: string; closedAt: string },
     recon: { cashSales?: number },
   ): Promise<void> {
     const cash = Number(recon.cashSales ?? 0);
@@ -351,7 +351,7 @@ export class LedgerPostingService {
     // the Shift's Business Date (ADR 0005). A Delayed Closure books on the day
     // it is actually closed.
     const entryDate = resolveEntryDate({
-      now: shift.closedAt ? new Date(shift.closedAt) : new Date(),
+      now: new Date(shift.closedAt),
       timeZone: businessDateSettings(read.station_settings).timeZone,
     });
     const termEntries: Array<{

@@ -644,6 +644,7 @@ transactionsRouter.get('/customers/:id/ledger', async (c) => {
       .where(
         and(
           eq(schema.customerTransactions.customerId, customerId),
+          eq(schema.businessDays.organizationId, user.organizationId),
           ne(schema.customerTransactions.transactionType, 'OMC Sale'),
           ne(schema.customerTransactions.transactionType, 'Collection'),
         ),

@@ -16,7 +16,7 @@ import type {
 } from '../../kernel/index.js';
 import type { SupplierRepository } from '../crm/suppliers/index.js';
 import type { FinancialAccountRepository } from '../finance/accounts/index.js';
-import { resolveOfficeEntry } from '../finance/office-entry.js';
+import { resolveOfficeEntry, SUPPLIER_PAYMENT_ACCOUNT_TYPES } from '../finance/office-entry.js';
 import type { SupplierTransaction, SupplierTransactionRepository } from './ports.js';
 
 export interface RecordSupplierPaymentCommand {
@@ -70,7 +70,9 @@ export class RecordSupplierPayment implements UseCase<
     if (!supplier || supplier.organizationId !== ctx.organizationId)
       return err(notFoundError('Supplier', cmd.supplierId));
 
-    const entry = await resolveOfficeEntry(this.deps, ctx, cmd);
+    const entry = await resolveOfficeEntry(this.deps, ctx, cmd, {
+      allowedAccountTypes: SUPPLIER_PAYMENT_ACCOUNT_TYPES,
+    });
     if (!entry.success) return entry;
     const { stationId, entryDate, fundingAccount } = entry.data;
 
