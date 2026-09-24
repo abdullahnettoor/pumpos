@@ -208,7 +208,6 @@ describe.skipIf(!CONNECTION)('POST /shifts/handovers against real Postgres', () 
       shiftTemplateId: TEMPLATE,
       status: 'OPEN',
       openedBy: MANAGER,
-      openingCash: '1000',
     });
     await db.insert(schema.nozzleReadings).values([
       {

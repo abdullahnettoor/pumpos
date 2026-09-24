@@ -7,6 +7,8 @@ import type {
   SupplierTransaction,
   SupplierTransactionRepository,
 } from '@pump/core';
+import { accountTypeForPaidFrom } from '@pump/core';
+import { resolveOfficeColumns } from '../office-anchor.js';
 
 export class DrizzlePurchaseRepository implements PurchaseRepository {
   constructor(private readonly db: DbClient) {}
@@ -64,19 +66,32 @@ export class DrizzlePurchaseItemRepository implements PurchaseItemRepository {
 export class DrizzleSupplierTransactionRepository implements SupplierTransactionRepository {
   constructor(private readonly db: DbClient) {}
   async save(t: SupplierTransaction): Promise<void> {
+    // TODO(#273): derive the new not-null office columns from the legacy anchor;
+    // the legacy shift/business-day/paid-from is stashed in metadata (ADR 0005, #280).
+    const cols = await resolveOfficeColumns(
+      this.db,
+      t.businessDayId,
+      accountTypeForPaidFrom(t.paidFrom),
+    );
     await this.db.insert(schema.supplierTransactions).values({
       id: t.id,
-      shiftId: t.shiftId,
-      businessDayId: t.businessDayId,
+      organizationId: cols.organizationId,
+      stationId: cols.stationId,
+      entryDate: cols.entryDate,
+      fundingAccountId: cols.fundingAccountId,
       supplierId: t.supplierId,
       transactionType: t.transactionType,
       amount: t.amount,
-      paidFrom: t.paidFrom,
       affectsDrawer: t.affectsDrawer,
       referenceType: t.referenceType,
       referenceId: t.referenceId,
       notes: t.notes,
-      metadata: t.metadata ?? {},
+      metadata: {
+        ...(t.metadata ?? {}),
+        shiftId: t.shiftId,
+        businessDayId: t.businessDayId,
+        paidFrom: t.paidFrom,
+      },
       createdAt: new Date(t.createdAt),
     });
   }

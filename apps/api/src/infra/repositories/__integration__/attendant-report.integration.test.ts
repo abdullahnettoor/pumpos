@@ -171,7 +171,6 @@ describe.skipIf(!CONNECTION)('Attendant Handover Report reader against real Post
         shiftTemplateId: template,
         status,
         openedBy: ATTENDANT,
-        openingCash: '0',
       });
       await db.insert(schema.attendantHandovers).values({
         organizationId: ORG,

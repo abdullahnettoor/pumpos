@@ -1,5 +1,5 @@
 {
-  "id": "98c2cfdb-6576-4062-adde-8b6ef1dc8958",
+  "id": "329ee00f-280c-4a87-b2a6-f64b0f5a2e9a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -82,6 +82,27 @@
         },
         "expected_sales": {
           "name": "expected_sales",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "opening_float": {
+          "name": "opening_float",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "cash_drops": {
+          "name": "cash_drops",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "expected_cash": {
+          "name": "expected_cash",
           "type": "numeric(12, 2)",
           "primaryKey": false,
           "notNull": true,
@@ -398,15 +419,21 @@
           "primaryKey": false,
           "notNull": true
         },
-        "shift_id": {
-          "name": "shift_id",
+        "organization_id": {
+          "name": "organization_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "business_day_id": {
-          "name": "business_day_id",
+        "station_id": {
+          "name": "station_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entry_date": {
+          "name": "entry_date",
+          "type": "varchar(10)",
           "primaryKey": false,
           "notNull": true
         },
@@ -434,6 +461,18 @@
           "primaryKey": false,
           "notNull": true
         },
+        "funding_account_id": {
+          "name": "funding_account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "terminal_id": {
+          "name": "terminal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "notes": {
           "name": "notes",
           "type": "varchar(500)",
@@ -455,14 +494,42 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "collections_org_station_entry_date_idx": {
+          "name": "collections_org_station_entry_date_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "station_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entry_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
-        "collections_shift_id_shifts_id_fk": {
-          "name": "collections_shift_id_shifts_id_fk",
+        "collections_organization_id_organizations_id_fk": {
+          "name": "collections_organization_id_organizations_id_fk",
           "tableFrom": "collections",
-          "tableTo": "shifts",
+          "tableTo": "organizations",
           "columnsFrom": [
-            "shift_id"
+            "organization_id"
           ],
           "columnsTo": [
             "id"
@@ -470,12 +537,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "collections_business_day_id_business_days_id_fk": {
-          "name": "collections_business_day_id_business_days_id_fk",
+        "collections_station_id_stations_id_fk": {
+          "name": "collections_station_id_stations_id_fk",
           "tableFrom": "collections",
-          "tableTo": "business_days",
+          "tableTo": "stations",
           "columnsFrom": [
-            "business_day_id"
+            "station_id"
           ],
           "columnsTo": [
             "id"
@@ -502,6 +569,32 @@
           "tableTo": "customer_vehicles",
           "columnsFrom": [
             "vehicle_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "collections_funding_account_id_financial_accounts_id_fk": {
+          "name": "collections_funding_account_id_financial_accounts_id_fk",
+          "tableFrom": "collections",
+          "tableTo": "financial_accounts",
+          "columnsFrom": [
+            "funding_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "collections_terminal_id_payment_terminals_id_fk": {
+          "name": "collections_terminal_id_payment_terminals_id_fk",
+          "tableFrom": "collections",
+          "tableTo": "payment_terminals",
+          "columnsFrom": [
+            "terminal_id"
           ],
           "columnsTo": [
             "id"
@@ -1732,15 +1825,21 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "shift_id": {
-          "name": "shift_id",
+        "organization_id": {
+          "name": "organization_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "business_day_id": {
-          "name": "business_day_id",
+        "station_id": {
+          "name": "station_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entry_date": {
+          "name": "entry_date",
+          "type": "varchar(10)",
           "primaryKey": false,
           "notNull": true
         },
@@ -1756,12 +1855,17 @@
           "primaryKey": false,
           "notNull": true
         },
-        "paid_from": {
-          "name": "paid_from",
-          "type": "varchar(20)",
+        "funding_account_id": {
+          "name": "funding_account_id",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'SHIFT_CASH'"
+          "notNull": true
+        },
+        "terminal_id": {
+          "name": "terminal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "affects_drawer": {
           "name": "affects_drawer",
@@ -1817,14 +1921,42 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "expenses_org_station_entry_date_idx": {
+          "name": "expenses_org_station_entry_date_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "station_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entry_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
-        "expenses_shift_id_shifts_id_fk": {
-          "name": "expenses_shift_id_shifts_id_fk",
+        "expenses_organization_id_organizations_id_fk": {
+          "name": "expenses_organization_id_organizations_id_fk",
           "tableFrom": "expenses",
-          "tableTo": "shifts",
+          "tableTo": "organizations",
           "columnsFrom": [
-            "shift_id"
+            "organization_id"
           ],
           "columnsTo": [
             "id"
@@ -1832,12 +1964,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "expenses_business_day_id_business_days_id_fk": {
-          "name": "expenses_business_day_id_business_days_id_fk",
+        "expenses_station_id_stations_id_fk": {
+          "name": "expenses_station_id_stations_id_fk",
           "tableFrom": "expenses",
-          "tableTo": "business_days",
+          "tableTo": "stations",
           "columnsFrom": [
-            "business_day_id"
+            "station_id"
           ],
           "columnsTo": [
             "id"
@@ -1851,6 +1983,32 @@
           "tableTo": "expense_categories",
           "columnsFrom": [
             "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "expenses_funding_account_id_financial_accounts_id_fk": {
+          "name": "expenses_funding_account_id_financial_accounts_id_fk",
+          "tableFrom": "expenses",
+          "tableTo": "financial_accounts",
+          "columnsFrom": [
+            "funding_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "expenses_terminal_id_payment_terminals_id_fk": {
+          "name": "expenses_terminal_id_payment_terminals_id_fk",
+          "tableFrom": "expenses",
+          "tableTo": "payment_terminals",
+          "columnsFrom": [
+            "terminal_id"
           ],
           "columnsTo": [
             "id"
@@ -2857,6 +3015,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "terminal_id": {
+          "name": "terminal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "reconciled": {
           "name": "reconciled",
           "type": "boolean",
@@ -3044,6 +3208,19 @@
           "tableTo": "shifts",
           "columnsFrom": [
             "shift_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ledger_entries_terminal_id_payment_terminals_id_fk": {
+          "name": "ledger_entries_terminal_id_payment_terminals_id_fk",
+          "tableFrom": "ledger_entries",
+          "tableTo": "payment_terminals",
+          "columnsFrom": [
+            "terminal_id"
           ],
           "columnsTo": [
             "id"
@@ -3633,15 +3810,21 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "shift_id": {
-          "name": "shift_id",
+        "organization_id": {
+          "name": "organization_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "business_day_id": {
-          "name": "business_day_id",
+        "station_id": {
+          "name": "station_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entry_date": {
+          "name": "entry_date",
+          "type": "varchar(10)",
           "primaryKey": false,
           "notNull": true
         },
@@ -3657,12 +3840,17 @@
           "primaryKey": false,
           "notNull": true
         },
-        "received_into": {
-          "name": "received_into",
-          "type": "varchar(20)",
+        "funding_account_id": {
+          "name": "funding_account_id",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'SHIFT_CASH'"
+          "notNull": true
+        },
+        "terminal_id": {
+          "name": "terminal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "affects_drawer": {
           "name": "affects_drawer",
@@ -3790,26 +3978,23 @@
         }
       },
       "indexes": {
-        "other_income_business_day_idx": {
-          "name": "other_income_business_day_idx",
+        "other_income_org_station_entry_date_idx": {
+          "name": "other_income_org_station_entry_date_idx",
           "columns": [
             {
-              "expression": "business_day_id",
+              "expression": "organization_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "other_income_shift_idx": {
-          "name": "other_income_shift_idx",
-          "columns": [
+            },
             {
-              "expression": "shift_id",
+              "expression": "station_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entry_date",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3837,12 +4022,12 @@
         }
       },
       "foreignKeys": {
-        "other_income_shift_id_shifts_id_fk": {
-          "name": "other_income_shift_id_shifts_id_fk",
+        "other_income_organization_id_organizations_id_fk": {
+          "name": "other_income_organization_id_organizations_id_fk",
           "tableFrom": "other_income",
-          "tableTo": "shifts",
+          "tableTo": "organizations",
           "columnsFrom": [
-            "shift_id"
+            "organization_id"
           ],
           "columnsTo": [
             "id"
@@ -3850,12 +4035,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "other_income_business_day_id_business_days_id_fk": {
-          "name": "other_income_business_day_id_business_days_id_fk",
+        "other_income_station_id_stations_id_fk": {
+          "name": "other_income_station_id_stations_id_fk",
           "tableFrom": "other_income",
-          "tableTo": "business_days",
+          "tableTo": "stations",
           "columnsFrom": [
-            "business_day_id"
+            "station_id"
           ],
           "columnsTo": [
             "id"
@@ -3869,6 +4054,32 @@
           "tableTo": "income_categories",
           "columnsFrom": [
             "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "other_income_funding_account_id_financial_accounts_id_fk": {
+          "name": "other_income_funding_account_id_financial_accounts_id_fk",
+          "tableFrom": "other_income",
+          "tableTo": "financial_accounts",
+          "columnsFrom": [
+            "funding_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "other_income_terminal_id_payment_terminals_id_fk": {
+          "name": "other_income_terminal_id_payment_terminals_id_fk",
+          "tableFrom": "other_income",
+          "tableTo": "payment_terminals",
+          "columnsFrom": [
+            "terminal_id"
           ],
           "columnsTo": [
             "id"
@@ -4903,6 +5114,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "opening_float": {
+          "name": "opening_float",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
         "assigned_at": {
           "name": "assigned_at",
           "type": "timestamp",
@@ -5234,12 +5452,6 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
-        },
-        "opening_cash": {
-          "name": "opening_cash",
-          "type": "numeric(12, 2)",
-          "primaryKey": false,
-          "notNull": true
         },
         "closing_cash": {
           "name": "closing_cash",
@@ -5770,15 +5982,21 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "shift_id": {
-          "name": "shift_id",
+        "organization_id": {
+          "name": "organization_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "business_day_id": {
-          "name": "business_day_id",
+        "station_id": {
+          "name": "station_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entry_date": {
+          "name": "entry_date",
+          "type": "varchar(10)",
           "primaryKey": false,
           "notNull": true
         },
@@ -5800,12 +6018,17 @@
           "primaryKey": false,
           "notNull": true
         },
-        "paid_from": {
-          "name": "paid_from",
-          "type": "varchar(20)",
+        "funding_account_id": {
+          "name": "funding_account_id",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'BANK'"
+          "notNull": true
+        },
+        "terminal_id": {
+          "name": "terminal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "affects_drawer": {
           "name": "affects_drawer",
@@ -5847,14 +6070,42 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "supplier_transactions_org_station_entry_date_idx": {
+          "name": "supplier_transactions_org_station_entry_date_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "station_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entry_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
-        "supplier_transactions_shift_id_shifts_id_fk": {
-          "name": "supplier_transactions_shift_id_shifts_id_fk",
+        "supplier_transactions_organization_id_organizations_id_fk": {
+          "name": "supplier_transactions_organization_id_organizations_id_fk",
           "tableFrom": "supplier_transactions",
-          "tableTo": "shifts",
+          "tableTo": "organizations",
           "columnsFrom": [
-            "shift_id"
+            "organization_id"
           ],
           "columnsTo": [
             "id"
@@ -5862,12 +6113,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "supplier_transactions_business_day_id_business_days_id_fk": {
-          "name": "supplier_transactions_business_day_id_business_days_id_fk",
+        "supplier_transactions_station_id_stations_id_fk": {
+          "name": "supplier_transactions_station_id_stations_id_fk",
           "tableFrom": "supplier_transactions",
-          "tableTo": "business_days",
+          "tableTo": "stations",
           "columnsFrom": [
-            "business_day_id"
+            "station_id"
           ],
           "columnsTo": [
             "id"
@@ -5881,6 +6132,32 @@
           "tableTo": "suppliers",
           "columnsFrom": [
             "supplier_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "supplier_transactions_funding_account_id_financial_accounts_id_fk": {
+          "name": "supplier_transactions_funding_account_id_financial_accounts_id_fk",
+          "tableFrom": "supplier_transactions",
+          "tableTo": "financial_accounts",
+          "columnsFrom": [
+            "funding_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "supplier_transactions_terminal_id_payment_terminals_id_fk": {
+          "name": "supplier_transactions_terminal_id_payment_terminals_id_fk",
+          "tableFrom": "supplier_transactions",
+          "tableTo": "payment_terminals",
+          "columnsFrom": [
+            "terminal_id"
           ],
           "columnsTo": [
             "id"

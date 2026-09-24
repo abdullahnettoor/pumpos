@@ -374,11 +374,8 @@ CREATE POLICY customer_transactions_tenant_policy ON "customer_transactions" FOR
   ));
 
 CREATE POLICY supplier_transactions_tenant_policy ON "supplier_transactions" FOR ALL TO authenticated
-  USING (EXISTS (
-    SELECT 1 FROM "business_days"
-    WHERE "business_days".id = "supplier_transactions".business_day_id
-      AND "business_days".organization_id = public.current_organization_id()
-  ));
+  USING (organization_id = public.current_organization_id())
+  WITH CHECK (organization_id = public.current_organization_id());
 
 CREATE POLICY sales_tenant_policy ON "sales" FOR ALL TO authenticated
   USING (EXISTS (
@@ -402,18 +399,12 @@ CREATE POLICY stock_variances_tenant_policy ON "stock_variances" FOR ALL TO auth
   ));
 
 CREATE POLICY expenses_tenant_policy ON "expenses" FOR ALL TO authenticated
-  USING (EXISTS (
-    SELECT 1 FROM "business_days"
-    WHERE "business_days".id = "expenses".business_day_id
-      AND "business_days".organization_id = public.current_organization_id()
-  ));
+  USING (organization_id = public.current_organization_id())
+  WITH CHECK (organization_id = public.current_organization_id());
 
 CREATE POLICY collections_tenant_policy ON "collections" FOR ALL TO authenticated
-  USING (EXISTS (
-    SELECT 1 FROM "business_days"
-    WHERE "business_days".id = "collections".business_day_id
-      AND "business_days".organization_id = public.current_organization_id()
-  ));
+  USING (organization_id = public.current_organization_id())
+  WITH CHECK (organization_id = public.current_organization_id());
 
 CREATE POLICY purchases_tenant_policy ON "purchases" FOR ALL TO authenticated
   USING (EXISTS (

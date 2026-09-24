@@ -181,7 +181,9 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
     // Drawer reconciliation (totals preloaded in the consolidated context read;
     // they aggregate money rows this use case never mutates).
     const totals = context.totals;
-    const openingCash = Number(shift.openingCash);
+    // TODO(#274): shifts.opening_cash was dropped (ADR 0005, #280); per-attendant
+    // opening floats replace it. Until then the drawer opens at 0.
+    const openingCash = Number(shift.openingCash ?? 0);
     const closingCash = cmd.closingCash;
     const cashDrops = Number(cmd.cashDrops ?? 0);
     const expectedDrawerCash =

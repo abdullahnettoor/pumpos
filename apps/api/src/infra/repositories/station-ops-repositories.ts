@@ -286,7 +286,7 @@ export class DrizzleShiftRepository implements ShiftRepository {
       closedBy: r.closedBy,
       closedAt: r.closedAt ? r.closedAt.toISOString() : null,
       lockedAt: r.lockedAt ? r.lockedAt.toISOString() : null,
-      openingCash: r.openingCash,
+      openingCash: '0', // TODO(#274): shifts.opening_cash dropped (ADR 0005, #280)
       closingCash: r.closingCash,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
@@ -320,7 +320,7 @@ export class DrizzleShiftRepository implements ShiftRepository {
         closedBy: s.closedBy,
         closedAt: s.closedAt ? new Date(s.closedAt) : null,
         lockedAt: s.lockedAt ? new Date(s.lockedAt) : null,
-        openingCash: s.openingCash,
+        // TODO(#274): openingCash no longer persisted (per-attendant floats).
         closingCash: s.closingCash,
         createdAt: new Date(s.createdAt),
         updatedAt: new Date(s.updatedAt),

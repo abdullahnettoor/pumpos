@@ -169,7 +169,6 @@ describe.skipIf(!CONNECTION)('Business Day status reader against real Postgres',
         shiftTemplateId: TEMPLATE,
         status,
         openedBy: USER,
-        openingCash: '0',
         updatedAt,
       });
     }
