@@ -44,9 +44,9 @@ important domain rule (ADR 0005):
   and no shift or business day, and live in the ledger. The test is "is this
   paying for fuel or products right now?", not "which machine was used?"
 
-> Transition: the code and parts of this document still reflect the old
-> "universal business-day anchor" model. Treat ADR 0005 as the target;
-> implementation is tracked in its follow-up issues.
+> Transition: Office Records (entry date + Funding Account), the sales-only
+> DSSR and the Daily Cash Book are implemented. The drawer formula still
+> carries the old office terms (always zero now) until #274 removes them.
 
 Operational flow:
 
@@ -235,9 +235,10 @@ There are **two** immutable report snapshots:
 - **Shift Summary** — created when a **shift is closed** (`shift_summaries`).
   Holds that shift's nozzle reconciliation, drawer reconciliation, and totals.
 - **DSSR** (Daily Station Sales Report) — created when a **business day is
-  closed** / generated on demand (`dssr_snapshots`). Composes all of the day's
-  closed-shift summaries plus business-day-anchored financials (collections,
-  expenses, purchases, supplier payments, credit sales).
+  closed** / generated on demand (`dssr_snapshots`). Sales-only: composes the
+  day's closed-shift summaries plus the day's sales, credit sales, purchases
+  and stock. Office Records (collections, expenses, income, supplier
+  payments) are not in it — they live in the live **Daily Cash Book**.
 
 Rules for both:
 
