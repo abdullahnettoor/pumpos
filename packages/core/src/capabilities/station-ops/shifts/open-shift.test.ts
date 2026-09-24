@@ -592,7 +592,6 @@ describe('OpenShift attendant requirement', () => {
           fuelPrices: new PriceRepo([]),
           dispensers: new InServiceDispenserRepo(opts.inService),
           staff: new StaffDirectoryFake(opts.assignable),
-          staff: new StaffDirectoryFake(),
           events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
         }).execute(
           {
