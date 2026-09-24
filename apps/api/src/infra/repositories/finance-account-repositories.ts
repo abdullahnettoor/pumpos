@@ -264,6 +264,8 @@ export class DrizzleFinancialAccountReader {
       WHERE fa.organization_id = ${organizationId}
         AND (fa.station_id = ${stationId} OR fa.station_id IS NULL)
       GROUP BY fa.id
+      -- An inactive account still shows while it holds money or moved some.
+      HAVING fa.is_active OR COUNT(le.id) > 0
       ORDER BY fa.account_type, fa.name
     `)) as unknown as Array<{
       id: string;

@@ -10,7 +10,11 @@ import type {
 import { Drawer } from '../components/Drawer.js';
 import { ExpenseEntryForm } from '../components/transactions/ExpenseEntryForm.js';
 import { CollectionEntryForm } from '../components/transactions/CollectionEntryForm.js';
-import { PurchaseEntryForm } from '../components/transactions/PurchaseEntryForm.js';
+import {
+  PurchaseEntryForm,
+  type PurchasePayNow,
+} from '../components/transactions/PurchaseEntryForm.js';
+import { collectionPayload, expensePayload, incomePayload } from '../utils/officeRecordPayloads.js';
 import { MerchandiseSaleEntryForm } from '../components/transactions/MerchandiseSaleEntryForm.js';
 import { useToast } from '../components/primitives/ToastProvider.js';
 import { useRunTask } from '../utils/runTask.js';
@@ -206,30 +210,14 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
     await invalidateOperational(stationId);
   };
 
+  // Expenses, income and collections are Office Records (ADR 0005): station +
+  // entry date + funding account. They never attach to the open shift.
   const handleExpense = async (values: ExpenseEntryFormValues) => {
+    if (!stationId) return;
     try {
       setSubmitting(true);
       setError(null);
-      const shiftId = values.targetShiftId || activeShiftId;
-      await txService.recordExpense(
-        shiftId
-          ? {
-              shiftId,
-              categoryId: values.categoryId,
-              amount: Number(values.amount),
-              description: values.description || undefined,
-              accountId: values.accountId || undefined,
-            }
-          : {
-              stationId: stationId ?? undefined,
-              transactionDate: businessDate,
-              paidFrom: 'BANK',
-              categoryId: values.categoryId,
-              amount: Number(values.amount),
-              description: values.description || undefined,
-              accountId: values.accountId || undefined,
-            },
-      );
+      await txService.recordExpense(expensePayload(stationId, values));
       await done('Expense recorded.');
     } catch (err: any) {
       setError(err.message || 'Failed to record expense');
@@ -239,29 +227,11 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
   };
 
   const handleIncome = async (values: ExpenseEntryFormValues) => {
+    if (!stationId) return;
     try {
       setSubmitting(true);
       setError(null);
-      const shiftId = values.targetShiftId || activeShiftId;
-      await txService.recordIncome(
-        shiftId
-          ? {
-              shiftId,
-              categoryId: values.categoryId,
-              amount: Number(values.amount),
-              description: values.description || undefined,
-              accountId: values.accountId || undefined,
-            }
-          : {
-              stationId: stationId ?? undefined,
-              transactionDate: businessDate,
-              receivedInto: 'BANK',
-              categoryId: values.categoryId,
-              amount: Number(values.amount),
-              description: values.description || undefined,
-              accountId: values.accountId || undefined,
-            },
-      );
+      await txService.recordIncome(incomePayload(stationId, values));
       await done('Income recorded.');
     } catch (err: any) {
       setError(err.message || 'Failed to record income');
@@ -271,22 +241,11 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
   };
 
   const handleCollection = async (values: CollectionEntryFormValues) => {
+    if (!stationId) return;
     try {
       setSubmitting(true);
       setError(null);
-      const shiftId = values.targetShiftId || activeShiftId;
-      const base = {
-        customerId: values.customerId || undefined,
-        amount: Number(values.amount),
-        paymentMethod: values.paymentMethod,
-        notes: values.notes || undefined,
-        accountId: values.accountId || undefined,
-      };
-      await txService.recordCollection(
-        shiftId
-          ? { shiftId, ...base }
-          : { stationId: stationId ?? undefined, transactionDate: businessDate, ...base },
-      );
+      await txService.recordCollection(collectionPayload(stationId, values));
       await done('Collection recorded.');
     } catch (err: any) {
       setError(err.message || 'Failed to record collection');
@@ -295,10 +254,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
     }
   };
 
-  const handlePurchase = async (
-    values: PurchaseEntryFormValues,
-    payment?: { amount: number; accountId?: string | null },
-  ) => {
+  const handlePurchase = async (values: PurchaseEntryFormValues, payment?: PurchasePayNow) => {
     if (!values.supplierId || values.lines.length === 0) {
       setError('Select a supplier and at least one line.');
       return;
@@ -316,10 +272,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
         tankAllocations:
           l.tankAllocations && l.tankAllocations.length > 0 ? l.tankAllocations : undefined,
       }));
-      const pay =
-        payment && payment.amount > 0
-          ? { amount: payment.amount, accountId: payment.accountId ?? null }
-          : undefined;
+      const pay = payment && payment.amount > 0 ? payment : undefined;
       const base = {
         supplierId: values.supplierId,
         invoiceNumber: values.invoiceNumber || undefined,
@@ -416,17 +369,13 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
         </div>
       ) : type === 'expense' ? (
         <ExpenseEntryForm
-          shiftOptions={shiftOptions}
           categories={categories}
           stationId={stationId}
+          timeZone={clock.timeZone}
           defaultValues={{
-            targetShiftId: activeShiftId ?? '',
             categoryId: categories[0]?.id ?? '',
             ...extra,
           }}
-          showDateField={!activeShiftId}
-          dateLabel="Expense Date"
-          showShiftHintWhenSingle={!!activeShiftId}
           submitting={submitting}
           error={error}
           amountLabel="Amount (₹)"
@@ -436,17 +385,13 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
         />
       ) : type === 'income' ? (
         <ExpenseEntryForm
-          shiftOptions={shiftOptions}
           categories={categories}
           stationId={stationId}
+          timeZone={clock.timeZone}
           defaultValues={{
-            targetShiftId: activeShiftId ?? '',
             categoryId: categories[0]?.id ?? '',
             ...extra,
           }}
-          showDateField={!activeShiftId}
-          dateLabel="Income Date"
-          showShiftHintWhenSingle={!!activeShiftId}
           submitting={submitting}
           error={error}
           amountLabel="Amount (₹)"
@@ -459,19 +404,15 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
         />
       ) : type === 'collection' ? (
         <CollectionEntryForm
-          shiftOptions={shiftOptions}
           customers={customers}
           stationId={stationId}
+          timeZone={clock.timeZone}
           requireCustomer
           defaultValues={{
-            targetShiftId: activeShiftId ?? '',
             customerId: '',
             paymentMethod: 'Cash',
             ...extra,
           }}
-          showDateField={!activeShiftId}
-          dateLabel="Collection Date"
-          showShiftHintWhenSingle={!!activeShiftId}
           submitting={submitting}
           error={error}
           amountLabel="Amount (₹)"
@@ -493,6 +434,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
           products={products}
           tanks={tanks}
           stationId={stationId}
+          timeZone={clock.timeZone}
           enablePayment
           defaultValues={{
             supplierId: suppliers[0]?.id ?? '',

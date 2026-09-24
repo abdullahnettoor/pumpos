@@ -11,6 +11,7 @@ import { useToast } from './primitives/ToastProvider.js';
 import { useAsk } from './primitives/ConfirmDialog.js';
 import { Drawer } from './Drawer.js';
 import { ExpenseEntryForm } from './transactions/ExpenseEntryForm.js';
+import { incomePayload } from '../utils/officeRecordPayloads.js';
 import {
   useIncome,
   useIncomeCategories,
@@ -33,6 +34,7 @@ import { Tabs } from './primitives/Tabs.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { buildIncomeColumns } from './income/columns.js';
 import { IncomeCategoryManagerDrawer } from './income/IncomeCategoryManagerDrawer.js';
+import { CASH_ACCOUNT_TYPES } from '../utils/ledgerLabels.js';
 import { useRunTask } from '../utils/runTask.js';
 
 const transactionService = new CloudTransactionService();
@@ -59,6 +61,8 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
     () => ({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at }),
     [s.timezone, s.business_day_starts_at],
   );
+  // Office records are dated by entry date: the plain station calendar date (ADR 0005).
+  const entryClock = useMemo(() => ({ timeZone: s.timezone }), [s.timezone]);
 
   const income = useMemo(() => incomeQ.data ?? [], [incomeQ.data]);
   const categories = categoriesQ.data ?? [];
@@ -66,7 +70,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
   const canVoid = canVoidExpense((userRole as any) ?? 'Staff');
 
   const [activeTab, setActiveTab] = useState<IncomeTab>('ledger');
-  const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
+  const [range, setRange] = useState<DateRange>(() => computeRange('this-month', entryClock));
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
 
@@ -82,8 +86,6 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
     setFormError(null);
     setFormDefaults({
       categoryId: categories[0]?.id ?? '',
-      targetShiftId: '',
-      transactionDate: new Date().toISOString().slice(0, 10),
       amount: undefined as unknown as number,
       description: '',
     });
@@ -95,15 +97,8 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
     try {
       setSubmitting(true);
       setFormError(null);
-      await transactionService.recordIncome({
-        stationId: stationId ?? undefined,
-        transactionDate: values.transactionDate || undefined,
-        receivedInto: 'BANK',
-        categoryId: values.categoryId,
-        amount: Number(values.amount),
-        description: values.description || undefined,
-        accountId: values.accountId || undefined,
-      });
+      if (!stationId) return;
+      await transactionService.recordIncome(incomePayload(stationId, values));
       closeDrawer();
       toast.success('Income recorded.');
       await invalidateOperational(stationId);
@@ -155,11 +150,11 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
 
   // KPIs — fixed windows (today / this month), independent of the table range filter.
   const kpis = useMemo(() => {
-    const today = computeRange('today', clock);
-    const month = computeRange('this-month', clock);
+    const today = computeRange('today', entryClock);
+    const month = computeRange('this-month', entryClock);
     const active = income.filter((e: any) => e.status !== 'VOIDED');
     const inWindow = (e: any, r: DateRange) => {
-      const d = e.businessDate ?? e.shiftDate;
+      const d = e.entryDate;
       return d && d >= r.from && d <= r.to;
     };
     const monthRows = active.filter((e: any) => inWindow(e, month));
@@ -167,16 +162,16 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
       .filter((e: any) => inWindow(e, today))
       .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
     const monthTotal = monthRows.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
-    const drawerMonth = monthRows
-      .filter((e: any) => e.receivedInto === 'SHIFT_CASH')
+    const cashMonth = monthRows
+      .filter((e: any) => CASH_ACCOUNT_TYPES.includes(e.accountType))
       .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
-    const otherMonth = monthTotal - drawerMonth;
-    return { todayTotal, monthTotal, entriesMonth: monthRows.length, drawerMonth, otherMonth };
-  }, [income, clock]);
+    const otherMonth = monthTotal - cashMonth;
+    return { todayTotal, monthTotal, entriesMonth: monthRows.length, cashMonth, otherMonth };
+  }, [income, entryClock]);
 
   // FI4 — output GST register. Read straight from the API (not the tiered cache):
   // it is a period report driven by its own date inputs, not the ledger range.
-  const [gstRange, setGstRange] = useState<DateRange>(() => computeRange('this-month', clock));
+  const [gstRange, setGstRange] = useState<DateRange>(() => computeRange('this-month', entryClock));
   // Read through the shared hook, fetched only while the GST tab is showing.
   // The old version loaded it from an effect keyed on the tab, which is the
   // same thing a gated query expresses without the effect or the local mirror.
@@ -215,7 +210,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
           const catMatch = e.categoryName ? e.categoryName.toLowerCase().includes(q) : false;
           if (!descMatch && !catMatch) return false;
         }
-        const d = e.businessDate ?? e.shiftDate;
+        const d = e.entryDate;
         if (d && (d < range.from || d > range.to)) return false;
         return true;
       }),
@@ -277,7 +272,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
                 valueTone="success"
                 label="Received Today"
                 value={inr(kpis.todayTotal)}
-                hint="business day"
+                hint="entry date"
               />
               <KpiTile
                 dot="success"
@@ -288,8 +283,8 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
               />
               <KpiTile
                 dot="warning"
-                label="Into Cash Drawer"
-                value={inr(kpis.drawerMonth)}
+                label="Into Cash in Hand / Petty"
+                value={inr(kpis.cashMonth)}
                 hint="this month"
               />
               <KpiTile
@@ -301,7 +296,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
             </KpiStrip>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px' }}>
-              <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
+              <DateRangeField value={range} onChange={setRange} clock={entryClock} size="sm" />
               <div style={{ flex: 1 }} />
               <SearchInput
                 inputSize="sm"
@@ -327,7 +322,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
               </div>
               <button
                 type="button"
-                title="Other income posts to the selected business day — no open shift required. Cash income entered from the shift workspace reconciles into the drawer."
+                title="Income is an office record: dated by entry date and received into the chosen account. It never touches a shift drawer."
                 aria-label="About income anchoring"
                 style={{
                   display: 'inline-flex',
@@ -377,7 +372,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
                   error={incomeQ.error}
                   emptyMessage="No matching income found."
                   getRowId={(r: any) => r.id}
-                  initialSorting={[{ id: 'businessDate', desc: true }]}
+                  initialSorting={[{ id: 'entryDate', desc: true }]}
                 />
               )}
             </Panel>
@@ -408,7 +403,12 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
             </div>
 
             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-              <DateRangeField value={gstRange} onChange={setGstRange} clock={clock} size="sm" />
+              <DateRangeField
+                value={gstRange}
+                onChange={setGstRange}
+                clock={entryClock}
+                size="sm"
+              />
               <Button
                 variant="secondary"
                 size="sm"
@@ -507,7 +507,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
                       {gstRows.map((r) => (
                         <tr key={r.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
                           <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
-                            <DateText value={r.businessDate} variant="compact" tone="muted" />
+                            <DateText value={r.entryDate} variant="compact" tone="muted" />
                           </td>
                           <td
                             style={{
@@ -661,13 +661,10 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
 
       <Drawer isOpen={isDrawerOpen} onClose={closeDrawer} title="Record Income">
         <ExpenseEntryForm
-          shiftOptions={[]}
           categories={categories}
           stationId={stationId}
+          timeZone={clock.timeZone}
           defaultValues={formDefaults}
-          showDateField
-          dateLabel="Income Date"
-          showShiftHintWhenSingle={false}
           submitting={submitting}
           error={formError}
           submittingLabel="Recording..."

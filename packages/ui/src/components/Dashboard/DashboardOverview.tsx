@@ -33,7 +33,7 @@ import { inr, formatQty } from '../../utils/format.js';
 import { classifyTank, tankPct, OVER_CAPACITY_EXPLANATION } from '../../utils/stock.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
-import { Station, canOnboardStation, resolveBusinessDate } from '@pump/shared';
+import { Station, canOnboardStation, resolveBusinessDate, resolveEntryDate } from '@pump/shared';
 import { STATION_SETUP_IN_PROGRESS } from '../StationSetup/StationOnboardingLockout.js';
 import type { NavIntent } from '../AppShell.js';
 import {
@@ -345,8 +345,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           (r.stationId ? r.stationId === selectedStation.id : true),
       )
       .reduce((s, r) => s + Number(r.amount || 0), 0);
-  const todayCollections = sumToday(collections);
-  const todayExpenses = sumToday(expenses);
+  // Office records (ADR 0005) are dated by the station calendar date, not the sales day.
+  const todayEntry = resolveEntryDate({ timeZone });
+  const sumTodayEntry = (rows: any[] | undefined) =>
+    (rows || [])
+      .filter(
+        (r) =>
+          r.entryDate === todayEntry && (r.stationId ? r.stationId === selectedStation.id : true),
+      )
+      .reduce((s, r) => s + Number(r.amount || 0), 0);
+  const todayCollections = sumTodayEntry(collections);
+  const todayExpenses = sumTodayEntry(expenses);
   const todayPurchases = sumToday(purchases);
   const receivables = (customers || []).reduce(
     (s: number, c: any) => s + Math.max(0, Number(c.currentBalance || 0)),
@@ -769,16 +778,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               value={inr(Number(livePnl.grossMargin || 0))}
             />
             <KpiTile
-              dot={Number(livePnl.netProfit || 0) < 0 ? 'danger' : 'success'}
-              valueTone={Number(livePnl.netProfit || 0) < 0 ? 'danger' : 'success'}
-              label="Net Profit Today"
-              value={inr(Number(livePnl.netProfit || 0))}
-              hint="After COGS & expenses"
+              dot="warning"
+              label="COGS Today"
+              value={inr(Number(livePnl.cogs || 0))}
+              hint="Weighted-average cost"
             />
           </KpiStrip>
           <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             Provisional — {pnlShiftsClosed} shift{pnlShiftsClosed === 1 ? '' : 's'} closed today +
-            live merchandise &amp; expenses.
+            live merchandise. Expenses and income are in the Daily Cash Book.
             {activeShift
               ? " The open shift's fuel is added when it closes."
               : ' Fuel is counted as each shift closes.'}

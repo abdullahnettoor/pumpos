@@ -71,9 +71,7 @@ export const DssrScreen: React.FC<Props> = ({ station, businessDate }) => {
   const snapshot: any = q.data?.snapshotData ?? q.data ?? {};
   const fuel = snapshot.fuel || {};
   const merchandise = snapshot.merchandise || {};
-  const collections = snapshot.collections || {};
   const credit = snapshot.credit || {};
-  const expenses = snapshot.expenses || {};
   const purchases = snapshot.purchases || {};
   const pnl = snapshot.pnl || {};
   const byProduct: any[] = fuel.byProduct || [];
@@ -120,8 +118,8 @@ export const DssrScreen: React.FC<Props> = ({ station, businessDate }) => {
             </p>
           )}
 
-          {/* Financial summary */}
-          <Section title="Financial summary">
+          {/* Sales summary */}
+          <Section title="Sales summary">
             <div className="flex flex-col gap-2">
               <Row
                 label={`Fuel sales · ${numberFmt(Number(fuel.totalNetVolume ?? fuel.totalVolume ?? 0))} L`}
@@ -131,15 +129,13 @@ export const DssrScreen: React.FC<Props> = ({ station, businessDate }) => {
               {Number(merchandise.salesValue || 0) > 0 && (
                 <Row label="Merchandise sales" value={inr(Number(merchandise.salesValue || 0))} />
               )}
-              <Row label="Collections" value={inr(Number(collections.total || 0))} />
               <Row label="Credit sales (receivable)" value={inr(Number(credit.total || 0))} />
-              <Row label="Expenses" value={inr(Number(expenses.total || 0))} />
               <Row label="Purchases" value={inr(Number(purchases.total || 0))} />
               {hasCostBasis && (
                 <div className="mt-1 border-t pt-2" style={{ borderColor: 'var(--border-soft)' }}>
                   <Row
-                    label="Net profit (after COGS)"
-                    value={inr(Number(pnl.netProfit || 0))}
+                    label="Gross margin (after COGS)"
+                    value={inr(Number(pnl.grossMargin || 0))}
                     strong
                   />
                 </div>
@@ -147,21 +143,10 @@ export const DssrScreen: React.FC<Props> = ({ station, businessDate }) => {
             </div>
           </Section>
 
-          {/* Collections by mode */}
-          <Section title="Collections by mode">
-            <div className="flex flex-col gap-2">
-              {(
-                [
-                  ['Cash', collections.Cash],
-                  ['Card', collections.Card],
-                  ['UPI', collections.UPI],
-                  ['Bank transfer', collections.BankTransfer],
-                ] as const
-              ).map(([label, val]) => (
-                <Row key={label} label={label} value={inr(Number(val || 0))} />
-              ))}
-            </div>
-          </Section>
+          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Sales only. Collections, expenses and supplier payments are office records by entry
+            date.
+          </p>
 
           {/* Fuel sales by product */}
           {byProduct.length > 0 && (

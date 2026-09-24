@@ -1,21 +1,28 @@
-import React from 'react';
-import { collectionEntryFormSchema, type CollectionEntryFormValues } from '@pump/shared';
+import React, { useCallback } from 'react';
+import {
+  collectionEntryFormSchema,
+  resolveEntryDate,
+  type CollectionEntryFormValues,
+} from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
 import { Segmented } from '../primitives/Segmented.js';
 import { Combobox } from '../primitives/Combobox.js';
-import { AccountSelect } from '../primitives/AccountSelect.js';
+import { FundingAccountSelect } from '../primitives/FundingAccountSelect.js';
+import { usePaymentTerminals, useStationTimeZone } from '../../query/hooks.js';
+import {
+  collectionAccountTypes,
+  methodUsesTerminal,
+  terminalsForMethod,
+} from '../../utils/fundingAccounts.js';
 import { Button, Form } from '../../pump-ds/index.js';
 
-export interface ShiftOption {
-  id: string;
-  label: string;
-}
 export interface CollectionEntryFormProps {
-  shiftOptions: ShiftOption[];
   customers: any[];
-  /** Station whose bank accounts populate the deposit picker (non-cash). */
+  /** Station whose funding accounts and terminals populate the pickers. */
   stationId?: string | null;
+  /** Station timezone — the entry date defaults to today there. */
+  timeZone?: string | null;
   defaultValues?: Partial<CollectionEntryFormValues>;
   submitting: boolean;
   error?: string | null;
@@ -34,22 +41,22 @@ export interface CollectionEntryFormProps {
   customerOptionLabel?: (customer: any) => string;
   /** Collections are receivable payments — require a customer (no walk-in). */
   requireCustomer?: boolean;
-  showShiftHintWhenSingle?: boolean;
-  showDateField?: boolean;
   dateLabel?: string;
 }
 
-const EMPTY_DEFAULTS: CollectionEntryFormValues = {
-  targetShiftId: '',
-  transactionDate: '',
+const EMPTY_DEFAULTS: Omit<CollectionEntryFormValues, 'entryDate'> = {
   customerId: '',
   amount: undefined as unknown as number,
   paymentMethod: 'Cash',
   notes: '',
-  accountId: '',
+  fundingAccountId: '',
+  terminalId: '',
 };
 
 /**
+ * A customer collection — an Office Record (ADR 0005): entry date + the account
+ * the money lands in (or, for Card/UPI, the terminal it went through). Never a shift.
+ *
  * Remounted when the defaults change rather than reset by an effect — the same
  * treatment as PurchaseEntryForm. The defaults are the form's *initial* values,
  * so mounting fresh says that directly, and there is no effect to keep honest.
@@ -59,9 +66,9 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = (props) =
 );
 
 const CollectionEntryFormBody: React.FC<CollectionEntryFormProps> = ({
-  shiftOptions,
   customers,
   stationId,
+  timeZone,
   defaultValues,
   submitting,
   error,
@@ -79,12 +86,10 @@ const CollectionEntryFormBody: React.FC<CollectionEntryFormProps> = ({
   customerLabel = 'Customer Account (Optional for Walk-in)',
   customerOptionLabel,
   requireCustomer = false,
-  showShiftHintWhenSingle = true,
-  showDateField = false,
-  dateLabel = 'Collection Date',
+  dateLabel = 'Entry date',
 }) => {
-  const hasMultipleShiftOptions = shiftOptions.length > 1;
-
+  const stationTimeZone = useStationTimeZone(stationId);
+  const today = resolveEntryDate({ timeZone: timeZone ?? stationTimeZone });
   const {
     register,
     handleSubmit,
@@ -94,11 +99,25 @@ const CollectionEntryFormBody: React.FC<CollectionEntryFormProps> = ({
     clearErrors,
     formState: { errors },
   } = useZodForm<CollectionEntryFormValues>(collectionEntryFormSchema, {
-    defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
+    defaultValues: { ...EMPTY_DEFAULTS, entryDate: today, ...defaultValues },
   });
 
   const paymentMethod = watch('paymentMethod');
   const customerId = watch('customerId');
+  const terminalId = watch('terminalId');
+  const { data: terminalRows } = usePaymentTerminals(stationId);
+  const terminals = terminalsForMethod(terminalRows ?? [], paymentMethod);
+  const usingTerminal = !!terminalId && methodUsesTerminal(paymentMethod);
+  const onAccountChange = useCallback(
+    (v: string) => setValue('fundingAccountId', v, { shouldValidate: !!v }),
+    [setValue],
+  );
+
+  const changeMethod = (v: CollectionEntryFormValues['paymentMethod']) => {
+    setValue('paymentMethod', v, { shouldValidate: true });
+    // A terminal only fits the method it was chosen for.
+    setValue('terminalId', '');
+  };
 
   return (
     <Form
@@ -110,38 +129,20 @@ const CollectionEntryFormBody: React.FC<CollectionEntryFormProps> = ({
           });
           return;
         }
-        return onSubmit(values);
+        return onSubmit(
+          methodUsesTerminal(values.paymentMethod) ? values : { ...values, terminalId: '' },
+        );
       })}
       style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
     >
-      {showDateField && (
-        <Field label={dateLabel}>
-          <DateField disabled={submitting} {...register('transactionDate')} />
-        </Field>
-      )}
-      {hasMultipleShiftOptions ? (
-        <Field label="Target Shift">
-          <Select disabled={submitting} {...register('targetShiftId')}>
-            {shiftOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      ) : showShiftHintWhenSingle && shiftOptions.length === 1 ? (
-        <div
-          style={{
-            backgroundColor: 'var(--state-info-bg)',
-            color: 'var(--state-info-fg)',
-            padding: '10px 12px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-          }}
-        >
-          Logging to shift: <strong>{shiftOptions[0].label}</strong>
-        </div>
-      ) : null}
+      <Field label={dateLabel} error={errors.entryDate?.message}>
+        <DateField
+          max={today}
+          disabled={submitting}
+          invalid={!!errors.entryDate}
+          {...register('entryDate')}
+        />
+      </Field>
 
       <Field label={paymentMethodLabel}>
         {usePaymentMethodButtons ? (
@@ -153,15 +154,18 @@ const CollectionEntryFormBody: React.FC<CollectionEntryFormProps> = ({
               { value: 'BankTransfer', label: 'Bank' },
             ]}
             value={paymentMethod}
-            onChange={(v) => {
-              setValue('paymentMethod', v, { shouldValidate: true });
-              if (v === 'Cash') setValue('accountId', '');
-            }}
+            onChange={changeMethod}
             disabled={submitting}
             aria-label={paymentMethodLabel}
           />
         ) : (
-          <Select disabled={submitting} {...register('paymentMethod')}>
+          <Select
+            disabled={submitting}
+            value={paymentMethod}
+            onChange={(e) =>
+              changeMethod(e.target.value as CollectionEntryFormValues['paymentMethod'])
+            }
+          >
             <option value="Cash">Cash</option>
             <option value="Card">Card</option>
             <option value="UPI">UPI</option>
@@ -202,18 +206,35 @@ const CollectionEntryFormBody: React.FC<CollectionEntryFormProps> = ({
         />
       </Field>
 
-      {paymentMethod !== 'Cash' && (
-        <Field label="Deposit to (Bank)">
-          <AccountSelect
-            stationId={stationId}
-            value={watch('accountId') || ''}
-            onChange={(v) => setValue('accountId', v, { shouldValidate: true })}
-            types={['BANK']}
-            disabled={submitting}
-            autoLabel="Auto (default bank)"
-          />
+      {terminals.length > 0 && (
+        <Field label="Payment terminal">
+          <Select disabled={submitting} {...register('terminalId')}>
+            <option value="">None</option>
+            {terminals.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </Select>
         </Field>
       )}
+
+      <Field
+        label="Received into"
+        error={usingTerminal ? undefined : errors.fundingAccountId?.message}
+        hint={usingTerminal ? "Posts to the terminal's clearing account" : undefined}
+      >
+        {usingTerminal ? null : (
+          <FundingAccountSelect
+            stationId={stationId}
+            value={watch('fundingAccountId') || ''}
+            onChange={onAccountChange}
+            types={collectionAccountTypes(paymentMethod)}
+            disabled={submitting}
+            invalid={!!errors.fundingAccountId}
+          />
+        )}
+      </Field>
 
       <Field label={notesLabel}>
         <TextInput placeholder={notesPlaceholder} disabled={submitting} {...register('notes')} />

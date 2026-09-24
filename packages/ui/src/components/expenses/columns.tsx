@@ -2,27 +2,24 @@ import React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { inr } from '../../utils/format.js';
 import { Chip, DateText, Icon } from '../../pump-ds/index.js';
+import { accountTypeLabel } from '../../utils/ledgerLabels.js';
 import { voidActionColumn } from '../finance/voidActionColumn.js';
 
-export const PAID_FROM: Record<
-  string,
-  { label: string; tone: 'brand' | 'info' | 'success' | 'warning' | 'danger' | 'neutral' }
-> = {
-  SHIFT_CASH: { label: 'Cash · drawer', tone: 'warning' },
-  BANK: { label: 'Bank', tone: 'info' },
-  OWNER: { label: 'Owner', tone: 'neutral' },
-};
+const dateCell = (row: any) => <DateText value={row.original.entryDate} />;
 
-const dateCell = (row: any) => (
-  <DateText value={row.original.businessDate ?? row.original.shiftDate} />
-);
-
-const paidFromCell = (value: string) => {
-  const cfg = PAID_FROM[value] ?? { label: value ?? '—', tone: 'neutral' as const };
+/** Funding Account the money moved through, with its type as secondary text. */
+const accountCell = (row: any) => {
+  const { accountName, accountType } = row.original;
+  if (!accountName) return <span style={{ color: 'var(--text-faint)' }}>—</span>;
   return (
-    <Chip tone={cfg.tone} size="xs">
-      {cfg.label}
-    </Chip>
+    <span style={{ display: 'inline-flex', flexDirection: 'column', lineHeight: 1.25 }}>
+      <span style={{ color: 'var(--text-strong)' }}>{accountName}</span>
+      {accountType && (
+        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+          {accountTypeLabel(accountType)}
+        </span>
+      )}
+    </span>
   );
 };
 
@@ -55,7 +52,7 @@ const amountCell = (row: any, getValue: () => any) => {
 };
 
 const baseColumns: ColumnDef<any, any>[] = [
-  { accessorKey: 'businessDate', header: 'Business Day', cell: ({ row }) => dateCell(row) },
+  { accessorKey: 'entryDate', header: 'Entry Date', cell: ({ row }) => dateCell(row) },
   {
     accessorKey: 'categoryName',
     header: 'Category',
@@ -73,9 +70,9 @@ const baseColumns: ColumnDef<any, any>[] = [
     ),
   },
   {
-    accessorKey: 'paidFrom',
-    header: 'Paid From',
-    cell: ({ getValue }) => paidFromCell(getValue() as string),
+    accessorKey: 'accountName',
+    header: 'Account',
+    cell: ({ row }) => accountCell(row),
   },
   {
     accessorKey: 'amount',
@@ -84,7 +81,7 @@ const baseColumns: ColumnDef<any, any>[] = [
   },
 ];
 
-/** Full expense ledger columns incl. Paid From — shared by the Ledger tab and the register. */
+/** Full expense ledger columns incl. Account — shared by the Ledger tab and the register. */
 export const expenseColumns: ColumnDef<any, any>[] = baseColumns;
 
 /**

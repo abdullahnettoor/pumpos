@@ -12,8 +12,9 @@ import { PurchaseEntryForm, type PurchaseEntryFormProps } from './PurchaseEntryF
  * up to the delivered quantity. Both are asserted through the payload handed to
  * `onSubmit`, which is what a downstream refactor must not change.
  *
- * No providers are needed: the form takes no query hooks, and `AccountSelect`
- * (the only thing that does) renders solely when payment capture is enabled.
+ * No providers are needed: the form takes no query hooks, and
+ * `FundingAccountSelect` (the only thing that does) renders solely when payment
+ * capture is enabled — those cases live in officeRecordForms.dom.test.tsx.
  */
 const PETROL = { id: 'p-fuel', name: 'Petrol', productType: 'FUEL', unit: 'L' };
 const OIL = {

@@ -21,7 +21,11 @@ import {
   CloudPaymentTerminalService,
   CloudAccessService,
 } from '../services/cloud.js';
-import type { BusinessDayStatusResponse } from '../services/cloud.js';
+import type {
+  BusinessDayStatusResponse,
+  DailyCashBook,
+  FundingAccount,
+} from '../services/cloud.js';
 import type { AccessDocument, AttendantHandoverReport, AttendantReportFilters } from '@pump/shared';
 
 /**
@@ -111,10 +115,15 @@ export const queryKeys = {
   incomeGstRegister: (stationId: string, from: string, to: string) =>
     ['income-gst-register', stationId, from, to] as const,
   financialAccounts: (stationId: string) => ['financial-accounts', stationId] as const,
+  /** Accounts an Office Record may use (no balances) — semi tier, persisted. */
+  fundingAccounts: (stationId: string) => ['funding-accounts', stationId] as const,
   accountLedger: (accountId: string, from: string, to: string) =>
     ['account-ledger', accountId, from, to] as const,
   financeMovements: (stationId: string, from: string, to: string) =>
     ['finance-movements', stationId, from, to] as const,
+  /** Daily Cash Book (ADR 0005) — live per-account opening/in/out/closing for a date. */
+  dailyCashBook: (stationId: string, date: string) => ['daily-cash-book', stationId, date] as const,
+  dailyCashBookPrefix: () => ['daily-cash-book'] as const,
 } as const;
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -173,6 +182,16 @@ export function useStations(options?: Options<any[]>) {
     ...stationsQueryOptions(),
     ...options,
   });
+}
+
+/**
+ * The station's IANA timezone from the (static, persisted) stations cache, for
+ * defaulting an Office Record's entry date with `resolveEntryDate`.
+ */
+export function useStationTimeZone(stationId: string | null | undefined): string | undefined {
+  const { data } = useStations();
+  const station = (data ?? []).find((s: any) => s.id === stationId);
+  return (station?.settings as { timezone?: string } | undefined)?.timezone;
 }
 
 export function useUsers(options?: Options<any[]>) {
@@ -456,6 +475,23 @@ export function useFinancialAccounts(
   });
 }
 
+/**
+ * Active funding accounts (station + org-shared) for the Office Record pickers.
+ * Readable by every role except Attendant, unlike `useFinancialAccounts`.
+ */
+export function useFundingAccounts(
+  stationId: string | null | undefined,
+  options?: Options<FundingAccount[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.fundingAccounts(stationId ?? ''),
+    queryFn: () => financeSvc.getFundingAccounts(stationId!),
+    enabled: !!stationId,
+    ...TIER.semi,
+    ...options,
+  });
+}
+
 export function useAccountLedger(
   accountId: string | null | undefined,
   params?: { from?: string; to?: string },
@@ -483,6 +519,21 @@ export function useFinanceMovements(
     queryFn: () =>
       financeSvc.getMovements({ stationId: params.stationId!, from: params.from, to: params.to }),
     enabled: !!params.stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/** Daily Cash Book for one station-calendar date — operational tier, not persisted. */
+export function useDailyCashBook(
+  stationId: string | null | undefined,
+  date: string,
+  options?: Options<DailyCashBook>,
+) {
+  return useQuery({
+    queryKey: queryKeys.dailyCashBook(stationId ?? '', date),
+    queryFn: () => financeSvc.getDailyCashBook(stationId!, date),
+    enabled: !!stationId && !!date,
     ...TIER.operational,
     ...options,
   });
@@ -825,6 +876,7 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['financial-accounts'] }),
       qc.invalidateQueries({ queryKey: ['account-ledger'] }),
       qc.invalidateQueries({ queryKey: ['finance-movements'] }),
+      qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() }),
       qc.invalidateQueries({ queryKey: ['money-movements'] }),
       // Suppliers carry computed payable balances that move with purchases/payments,
       // and new suppliers are created from PurchasesList — keep them fresh too.

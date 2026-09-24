@@ -998,15 +998,14 @@ export class CloudTransactionService {
     );
   }
 
+  /** Office Record (ADR 0005): entry date + funding account, no shift. */
   async recordExpense(payload: {
-    shiftId?: string;
-    stationId?: string;
-    transactionDate?: string;
-    paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER';
+    stationId: string;
+    entryDate?: string;
+    fundingAccountId: string;
     categoryId: string;
     amount: number;
     description?: string;
-    accountId?: string | null;
   }): Promise<any> {
     return request<any>('/transactions/expenses', {
       method: 'POST',
@@ -1030,15 +1029,16 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/income${suffix}`);
   }
 
+  /** Office Record: `fundingAccountId` is required unless `terminalId` is given. */
   async recordIncome(payload: {
-    shiftId?: string;
-    stationId?: string;
-    transactionDate?: string;
-    receivedInto?: 'SHIFT_CASH' | 'BANK' | 'OWNER';
+    stationId: string;
+    entryDate?: string;
+    fundingAccountId?: string;
+    terminalId?: string;
     categoryId: string;
     amount: number;
+    payer?: string;
     description?: string;
-    accountId?: string | null;
   }): Promise<any> {
     return request<any>('/transactions/income', {
       method: 'POST',
@@ -1067,7 +1067,7 @@ export class CloudTransactionService {
       tankAllocations?: { tankId: string; quantity: number }[];
     }[];
     /** Optional immediate payment recorded atomically with the purchase. */
-    payment?: { amount: number; accountId?: string | null; notes?: string };
+    payment?: { amount: number; fundingAccountId?: string; entryDate?: string; notes?: string };
   }): Promise<any> {
     return request<any>('/transactions/purchases', {
       method: 'POST',
@@ -1075,11 +1075,17 @@ export class CloudTransactionService {
     });
   }
 
+  /**
+   * Cash/Card/UPI/BankTransfer are Office Records (entry date + funding account
+   * or terminal). Credit/OMC are shift-anchored sales (shiftId, product lines).
+   */
   async recordCollection(
     payload: {
       shiftId?: string;
       stationId?: string;
-      transactionDate?: string;
+      entryDate?: string;
+      fundingAccountId?: string;
+      terminalId?: string;
       customerId?: string;
       vehicleId?: string | null;
       productId?: string | null;
@@ -1090,7 +1096,6 @@ export class CloudTransactionService {
       attendantId?: string | null;
       duId?: string | null;
       notes?: string;
-      accountId?: string | null;
     },
     opts?: { idempotencyKey?: string },
   ): Promise<any> {
@@ -1217,15 +1222,14 @@ export class CloudTransactionService {
     return request<any>(`/transactions/merchandise-handovers/${saleId}`, { method: 'DELETE' });
   }
 
+  /** Office Record (ADR 0005): entry date + funding account, no shift. */
   async recordSupplierPayment(payload: {
-    shiftId?: string;
-    stationId?: string;
-    transactionDate?: string;
-    paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER' | 'CMS';
+    stationId: string;
+    entryDate?: string;
+    fundingAccountId: string;
     supplierId: string;
     amount: number;
     notes?: string;
-    accountId?: string | null;
   }): Promise<any> {
     return request<any>('/transactions/supplier-payments', {
       method: 'POST',
@@ -1374,10 +1378,61 @@ export class CloudEventsService {
   }
 }
 
+export type FundingAccountType =
+  'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
+
+export interface FundingAccount {
+  id: string;
+  name: string;
+  accountType: FundingAccountType;
+  stationId: string | null;
+}
+
+/** GET /finance/cash-book — one ledger entry on the requested date. */
+export interface DailyCashBookEntry {
+  id: string;
+  direction: 'in' | 'out';
+  amount: number;
+  sourceType: string;
+  sourceId: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface DailyCashBookAccount {
+  id: string;
+  name: string;
+  accountType: FundingAccountType;
+  opening: number;
+  moneyIn: number;
+  moneyOut: number;
+  closing: number;
+  entries: DailyCashBookEntry[];
+}
+
+/** Daily Cash Book (ADR 0005): every Financial Account of the station for one calendar date. */
+export interface DailyCashBook {
+  date: string;
+  accounts: DailyCashBookAccount[];
+}
+
 export class CloudFinanceService {
+  /** Daily Cash Book: per-account opening / in / out / closing for a station calendar date. */
+  async getDailyCashBook(stationId: string, date: string): Promise<DailyCashBook> {
+    const qs = new URLSearchParams({ stationId, date });
+    return request<DailyCashBook>(`/finance/cash-book?${qs.toString()}`);
+  }
+
   /** Money accounts with current balances (cash / petty / bank / clearing / owner). */
   async listAccounts(stationId?: string | null): Promise<any[]> {
     return request<any[]>(`/finance/accounts${stationId ? `?stationId=${stationId}` : ''}`);
+  }
+
+  /** Active accounts an Office Record can be paid from / received into (no balances). */
+  async getFundingAccounts(stationId: string): Promise<FundingAccount[]> {
+    return request<FundingAccount[]>(
+      `/finance/funding-accounts?stationId=${encodeURIComponent(stationId)}`,
+    );
   }
 
   /** Per-account statement: period-opening balance + entries in [from, to]. */

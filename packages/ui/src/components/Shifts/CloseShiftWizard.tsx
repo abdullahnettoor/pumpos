@@ -454,24 +454,17 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                     {cashVariance < 0 ? (
                       <>
                         <li>
-                          Cash-paid petty expense not yet logged — close this drawer and use{' '}
-                          <strong>+ Expense</strong> (shortcut <kbd>E</kbd>) on the shift bar.
+                          Cash taken from the drawer for the office (expenses, supplier payments)
+                          not yet recorded as a cash drop.
                         </li>
                         <li>
                           Attendant handed over less cash than declared on the chit. Re-check the
                           handover row in the attendants panel.
                         </li>
-                        <li>
-                          Cash was used to settle a supplier purchase — record it via{' '}
-                          <strong>+ Purchase</strong> (shortcut <kbd>P</kbd>).
-                        </li>
                       </>
                     ) : (
                       <>
-                        <li>
-                          Customer collection received in cash but not yet logged — use{' '}
-                          <strong>+ Collection</strong> (shortcut <kbd>C</kbd>) on the shift bar.
-                        </li>
+                        <li>A cash drop was recorded that did not leave the drawer.</li>
                         <li>
                           Counted safe cash includes the next-shift float that hasn't been removed
                           yet.

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
 import { CloudTransactionService } from '../services/cloud.js';
+import { collectionPayload } from '../utils/officeRecordPayloads.js';
 import {
   useCustomers,
   useShiftStatus,
@@ -37,6 +38,7 @@ const transactionService = new CloudTransactionService();
 
 interface CustomersListProps {
   selectedStation: any | null;
+  /** @deprecated Collections are office records now; ignored. */
   defaultShiftId?: string;
 }
 
@@ -54,10 +56,7 @@ export function summarizeCustomerBalances(customers: any[]) {
   );
 }
 
-export const CustomersList: React.FC<CustomersListProps> = ({
-  selectedStation,
-  defaultShiftId,
-}) => {
+export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation }) => {
   const [selectedTab, setSelectedTab] = useState<TabType>('transactions');
 
   const stationId = selectedStation?.id ?? null;
@@ -79,8 +78,6 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   const allCustomers = useMemo(() => customersAllQ.data ?? [], [customersAllQ.data]);
   const allCollections = useMemo(() => collectionsQ.data ?? [], [collectionsQ.data]);
   const anyPrepaid = allCustomers.some((c: any) => c.isPrepaid);
-  const activeShift = statusQ.data?.activeShift ?? null;
-  const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
   const fuelProducts = (productsQ.data ?? []).filter(
     (p: any) => p.productType === 'FUEL' && p.isActive,
   );
@@ -265,22 +262,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   const [collectionSubmitting, setCollectionSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const resolvePreferredShiftId = (active: any | null, closedList: any[]) => {
-    if (defaultShiftId) {
-      const matchesActive = active?.id === defaultShiftId;
-      const matchesClosed = closedList.some((shift) => shift.id === defaultShiftId);
-      if (matchesActive || matchesClosed) return defaultShiftId;
-    }
-    if (active) return active.id;
-    if (closedList.length > 0) return closedList[0].id;
-    return '';
-  };
-
   const resetCollectionForm = (customerId?: string) => {
-    const preferredShiftId = resolvePreferredShiftId(activeShift, recentClosedShifts);
+    // A collection is an Office Record: the form defaults the entry date to today.
     setCollectionDefaults({
-      targetShiftId: preferredShiftId,
-      transactionDate: new Date().toISOString().slice(0, 10),
       customerId: customerId || customers[0]?.id || '',
       amount: undefined as unknown as number,
       paymentMethod: 'Cash',
@@ -302,20 +286,10 @@ export const CustomersList: React.FC<CustomersListProps> = ({
 
   const onAddCollection = async (values: CollectionEntryFormValues) => {
     setFormError(null);
-    if (!values.targetShiftId) {
-      setFormError('A shift is required to record this entry.');
-      return;
-    }
+    if (!stationId) return;
     try {
       setCollectionSubmitting(true);
-      await transactionService.recordCollection({
-        shiftId: values.targetShiftId,
-        customerId: values.customerId || undefined,
-        amount: Number(values.amount),
-        paymentMethod: values.paymentMethod,
-        notes: values.notes || undefined,
-        accountId: values.accountId || undefined,
-      });
+      await transactionService.recordCollection(collectionPayload(stationId, values));
       closeCollectionDrawer();
       toast.success('Collection recorded.');
       await invalidateOperational(stationId);
@@ -530,20 +504,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
                   <button
                     type="button"
                     aria-label="Where do collections post?"
-                    title={
-                      activeShift || recentClosedShifts.length > 0
-                        ? `New collections post to ${
-                            resolvePreferredShiftId(activeShift, recentClosedShifts) ===
-                            activeShift?.id
-                              ? `${activeShift?.templateName} (active shift)`
-                              : (recentClosedShifts.find(
-                                  (s) =>
-                                    s.id ===
-                                    resolvePreferredShiftId(activeShift, recentClosedShifts),
-                                )?.templateName ?? 'the selected shift')
-                          }. Cash collections touch the drawer; card / UPI / bank do not.`
-                        : 'Open a shift to record collections — cash collections are reconciled against the drawer.'
-                    }
+                    title="Collections are office entries: they post to the account you choose on the entry date, not to a shift."
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -834,11 +795,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({
         title="Log Customer Collection"
       >
         <CollectionEntryForm
-          shiftOptions={[]}
-          showShiftHintWhenSingle={false}
-          showDateField
-          dateLabel="Collection Date"
           stationId={selectedStation?.id}
+          timeZone={stationSettings.timezone}
           defaultValues={collectionDefaults}
           customers={customers}
           submitting={collectionSubmitting}

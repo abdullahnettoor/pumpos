@@ -11,6 +11,7 @@ import { DataTable } from './primitives/DataTable.js';
 import { DateField } from './primitives/Field.js';
 import { ExpenseRegister } from './reports/ExpenseRegister.js';
 import { CashBankLedger } from './reports/CashBankLedger.js';
+import { DailyCashBook } from './reports/DailyCashBook.js';
 import { UnifiedLedger } from './reports/UnifiedLedger.js';
 import { InvoicesPanel } from './reports/InvoicesPanel.js';
 import { TaxRegisterPanel } from './reports/TaxRegisterPanel.js';
@@ -31,6 +32,7 @@ import {
   TrendingUp,
   Percent,
   Users,
+  BookText,
 } from 'lucide-react';
 import { useRunTask } from '../utils/runTask.js';
 
@@ -69,8 +71,8 @@ const dssrColumns: ColumnDef<any, any>[] = [
     },
   },
   {
-    id: 'collections',
-    header: 'Cash Collected',
+    id: 'grossMargin',
+    header: 'Gross Margin',
     cell: ({ row }) => (
       <span
         style={{
@@ -79,7 +81,7 @@ const dssrColumns: ColumnDef<any, any>[] = [
           color: 'var(--state-success-fg)',
         }}
       >
-        {inr(row.original.snapshotData?.totalCashCollections || 0)}
+        {inr(row.original.snapshotData?.pnl?.grossMargin || 0)}
       </span>
     ),
   },
@@ -98,6 +100,7 @@ type ReportsTab =
   | 'tax-register'
   | 'expense-register'
   | 'cash-bank'
+  | 'cash-book'
   | 'attendant-handovers';
 
 export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStation, userRole }) => {
@@ -245,6 +248,9 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
             { id: 'ledger', label: 'Ledger', icon: <BookOpen size={13} /> },
             { id: 'invoices', label: 'Invoices', icon: <FileText size={13} /> },
             { id: 'tax-register', label: 'Tax Register', icon: <Percent size={13} /> },
+            ...(userRole !== 'Staff'
+              ? [{ id: 'cash-book', label: 'Daily Cash Book', icon: <BookText size={13} /> }]
+              : []),
             { id: 'cash-bank', label: 'Cash & Bank', icon: <Wallet size={13} /> },
             { id: 'expense-register', label: 'Expense Register', icon: <Receipt size={13} /> },
             ...(showAttendantReport
@@ -359,6 +365,10 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
       {activeTab === 'tax-register' && <TaxRegisterPanel selectedStation={selectedStation} />}
 
       {activeTab === 'expense-register' && <ExpenseRegister selectedStation={selectedStation} />}
+
+      {activeTab === 'cash-book' && userRole !== 'Staff' && (
+        <DailyCashBook selectedStation={selectedStation} />
+      )}
 
       {activeTab === 'cash-bank' && <CashBankLedger selectedStation={selectedStation} />}
 

@@ -1,5 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { useDailyDssrRange, useDailyDssrPreview, useShiftStatus } from '../../query/hooks.js';
+import {
+  useDailyDssrRange,
+  useDailyDssrPreview,
+  useExpenses,
+  useIncome,
+  useShiftStatus,
+} from '../../query/hooks.js';
+import { buildProfitLoss } from '../../utils/profitLoss.js';
 import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr } from '../../utils/format.js';
@@ -31,9 +38,6 @@ interface DayPnl {
   cogsMerch: number;
   cogs: number;
   grossMargin: number;
-  expenses: number;
-  otherIncome: number;
-  netProfit: number;
   byProduct: any[];
   hasData: boolean;
 }
@@ -50,9 +54,6 @@ function pnlFromSnapshot(date: string, snapshotData: any, live: boolean): DayPnl
     cogsMerch: num(p.cogsMerch),
     cogs: num(p.cogs),
     grossMargin: num(p.grossMargin),
-    expenses: num(p.expenses),
-    otherIncome: num(p.otherIncome),
-    netProfit: num(p.netProfit),
     byProduct: Array.isArray(p.byProduct) ? p.byProduct : [],
     hasData: !!snapshotData,
   };
@@ -91,7 +92,17 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
     ? new Date(preview.generatedAt).toLocaleTimeString('en-IN')
     : null;
 
-  const loading = loadingRange || (todayInRange && loadingPreview);
+  // Office records (ADR 0005): expenses and income are dated by entry date.
+  const { data: expenseRows, isLoading: loadingExpenses } = useExpenses({
+    enabled: !!selectedStation?.id,
+  } as any);
+  const { data: incomeRows, isLoading: loadingIncome } = useIncome(
+    { stationId: selectedStation?.id, from: range.from, to: range.to },
+    { enabled: !!selectedStation?.id } as any,
+  );
+
+  const loading =
+    loadingRange || loadingExpenses || loadingIncome || (todayInRange && loadingPreview);
 
   const days = useMemo(() => {
     const byDate = new Map<string, DayPnl>();
@@ -105,6 +116,19 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
     return Array.from(byDate.values()).sort((a, b) => (a.date < b.date ? 1 : -1));
   }, [snapshots, preview, todayInRange, todayBiz]);
 
+  const pl = useMemo(
+    () =>
+      buildProfitLoss({
+        from: range.from,
+        to: range.to,
+        stationId: selectedStation?.id,
+        salesDays: days,
+        expenses: expenseRows,
+        income: incomeRows,
+      }),
+    [range.from, range.to, selectedStation?.id, days, expenseRows, incomeRows],
+  );
+
   const totals = useMemo(() => {
     const acc = {
       revenueFuel: 0,
@@ -114,9 +138,6 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
       cogsMerch: 0,
       cogs: 0,
       grossMargin: 0,
-      expenses: 0,
-      otherIncome: 0,
-      netProfit: 0,
     };
     for (const d of days) {
       acc.revenueFuel += d.revenueFuel;
@@ -126,15 +147,21 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
       acc.cogsMerch += d.cogsMerch;
       acc.cogs += d.cogs;
       acc.grossMargin += d.grossMargin;
-      acc.expenses += d.expenses;
-      acc.otherIncome += d.otherIncome;
-      acc.netProfit += d.netProfit;
     }
-    return acc;
-  }, [days]);
+    return { ...acc, ...pl.totals, grossMargin: acc.grossMargin };
+  }, [days, pl.totals]);
 
+  const salesByDate = useMemo(() => new Map(days.map((d) => [d.date, d])), [days]);
   const marginPct = totals.revenue > 0 ? (totals.grossMargin / totals.revenue) * 100 : 0;
-  const single = isSingleDay ? days[0] : null;
+  const emptyDay = pnlFromSnapshot(range.from, null, false);
+  const single = isSingleDay
+    ? {
+        ...(days[0] ?? emptyDay),
+        expenses: pl.totals.expenses,
+        otherIncome: pl.totals.otherIncome,
+        netProfit: pl.totals.netProfit,
+      }
+    : null;
 
   // Per-product margin aggregated across the selected days (FB3).
   const productMargins = useMemo(() => {
@@ -176,7 +203,7 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
   }, [days]);
 
   // Chronological (oldest→newest) net-profit series for the trend sparkline.
-  const trend = useMemo(() => [...days].reverse().map((d) => d.netProfit), [days]);
+  const trend = useMemo(() => [...pl.days].reverse().map((d) => d.netProfit), [pl.days]);
 
   const rowStyle: React.CSSProperties = {
     display: 'flex',
@@ -199,10 +226,9 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
         clock={clock}
         note={
           <>
-            {isSingleDay ? 'Single day' : 'Period total'} · COGS uses each day&apos;s
-            weighted-average cost (frozen at close; live today). Period profit is the sum of each
-            day&apos;s profit, each computed with that day&apos;s own cost basis, so historical cost
-            changes are respected. Days without a generated DSSR are excluded from the total.
+            {isSingleDay ? 'Single day' : 'Period total'} · Gross margin is by sales day (from the
+            DSSR, each day at its own weighted-average cost; live today). Expenses and other income
+            are by entry date. Days without a generated DSSR add no margin.
           </>
         }
       />
@@ -216,13 +242,14 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
           valueTone="success"
           label="Gross Margin"
           value={inr(totals.grossMargin)}
-          hint={`${marginPct.toFixed(1)}% of revenue`}
+          hint={`${marginPct.toFixed(1)}% of revenue · by sales day`}
         />
         <KpiTile
           dot="danger"
           valueTone="danger"
           label="Operating Expenses"
           value={inr(totals.expenses)}
+          hint="By entry date"
         />
         {totals.otherIncome > 0 && (
           <KpiTile
@@ -267,9 +294,9 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
                 color: 'var(--text-faint)',
               }}
             >
-              <span>{days[days.length - 1]?.date}</span>
+              <span>{pl.days[pl.days.length - 1]?.date}</span>
               <span>{trend.length} days · net profit / day</span>
-              <span>{days[0]?.date}</span>
+              <span>{pl.days[0]?.date}</span>
             </div>
           </div>
         </Panel>
@@ -297,7 +324,7 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
             <strong>
               {closedShiftsToday} closed shift{closedShiftsToday === 1 ? '' : 's'}
             </strong>{' '}
-            plus live merchandise, collections &amp; expenses.
+            plus live merchandise.
             {hasOpenShift
               ? " Fuel from the currently open shift isn't counted until it closes (nozzle readings are taken at close)."
               : ' Fuel for a shift is counted once that shift closes.'}
@@ -309,11 +336,11 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
         <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
           Loading…
         </div>
-      ) : days.length === 0 ? (
+      ) : pl.days.length === 0 ? (
         <Panel flush>
           <EmptyState
             title="No profit data for this period"
-            description="Generate the DSSR for closed days to include them. The open day appears here live once it has sales."
+            description="Generate the DSSR for closed days to include their margin. Expenses and income appear by entry date."
           />
         </Panel>
       ) : isSingleDay && single ? (
@@ -346,16 +373,20 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
                 value: `(${inr(single.cogsMerch)})`,
                 color: 'var(--brand-warning)',
               },
-              { label: 'Gross Margin', value: inr(single.grossMargin), strong: true },
               {
-                label: 'Operating Expenses',
+                label: 'Gross Margin (by sales day)',
+                value: inr(single.grossMargin),
+                strong: true,
+              },
+              {
+                label: 'Operating Expenses (by entry date)',
                 value: `(${inr(single.expenses)})`,
                 color: 'var(--brand-warning)',
               },
               ...(single.otherIncome > 0
                 ? [
                     {
-                      label: 'Other Income',
+                      label: 'Other Income (by entry date)',
                       value: inr(single.otherIncome),
                       color: 'var(--brand-success)',
                     },
@@ -411,28 +442,34 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: 'var(--bg-surface-alt)', textAlign: 'left' }}>
-                {['Date', 'Revenue', 'COGS', 'Gross Margin', 'Expenses', 'Net Profit'].map(
-                  (h, i) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: '8px 12px',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        color: 'var(--text-muted)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.04em',
-                        textAlign: i === 0 ? 'left' : 'right',
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ),
-                )}
+                {[
+                  'Date',
+                  'Revenue',
+                  'COGS',
+                  'Gross Margin',
+                  'Expenses',
+                  'Income',
+                  'Net Profit',
+                ].map((h, i) => (
+                  <th
+                    key={h}
+                    style={{
+                      padding: '8px 12px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: 'var(--text-muted)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      textAlign: i === 0 ? 'left' : 'right',
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {days.map((d) => (
+              {pl.days.map((d) => (
                 <tr key={d.date} style={{ borderTop: '1px solid var(--border-soft)' }}>
                   <td
                     style={{
@@ -448,10 +485,13 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
                       </Chip>
                     )}
                   </td>
-                  <td style={cell}>{inr(d.revenue)}</td>
-                  <td style={{ ...cell, color: 'var(--brand-warning)' }}>{inr(d.cogs)}</td>
+                  <td style={cell}>{inr(salesByDate.get(d.date)?.revenue ?? 0)}</td>
+                  <td style={{ ...cell, color: 'var(--brand-warning)' }}>
+                    {inr(salesByDate.get(d.date)?.cogs ?? 0)}
+                  </td>
                   <td style={cell}>{inr(d.grossMargin)}</td>
                   <td style={{ ...cell, color: 'var(--brand-warning)' }}>{inr(d.expenses)}</td>
+                  <td style={{ ...cell, color: 'var(--brand-success)' }}>{inr(d.otherIncome)}</td>
                   <td
                     style={{
                       ...cell,
@@ -472,7 +512,7 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
                 }}
               >
                 <td style={{ padding: '10px 12px', fontWeight: 700 }}>
-                  Total ({days.length} day{days.length === 1 ? '' : 's'})
+                  Total ({pl.days.length} day{pl.days.length === 1 ? '' : 's'})
                 </td>
                 <td style={{ ...cell, fontWeight: 700 }}>{inr(totals.revenue)}</td>
                 <td style={{ ...cell, fontWeight: 700, color: 'var(--brand-warning)' }}>
@@ -481,6 +521,9 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
                 <td style={{ ...cell, fontWeight: 700 }}>{inr(totals.grossMargin)}</td>
                 <td style={{ ...cell, fontWeight: 700, color: 'var(--brand-warning)' }}>
                   {inr(totals.expenses)}
+                </td>
+                <td style={{ ...cell, fontWeight: 700, color: 'var(--brand-success)' }}>
+                  {inr(totals.otherIncome)}
                 </td>
                 <td
                   style={{
