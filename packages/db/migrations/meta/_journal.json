@@ -5,22 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1790213194151,
+      "when": 1790222393065,
       "tag": "0000_baseline",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1790213199531,
+      "when": 1790222393636,
       "tag": "0001_rls_and_triggers",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1790221019754,
-      "tag": "0002_office_supplier_funding",
       "breakpoints": true
     }
   ]

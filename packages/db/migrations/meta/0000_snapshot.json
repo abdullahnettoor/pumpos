@@ -1,5 +1,5 @@
 {
-  "id": "329ee00f-280c-4a87-b2a6-f64b0f5a2e9a",
+  "id": "aecf5c29-ecfe-4271-b6c5-137b26f4bc5f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -6022,7 +6022,7 @@
           "name": "funding_account_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "terminal_id": {
           "name": "terminal_id",
