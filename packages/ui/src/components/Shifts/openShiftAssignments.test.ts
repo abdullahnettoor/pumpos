@@ -10,7 +10,7 @@ describe('buildOpenShiftAssignments', () => {
   it('sends an assigned dispenser', () => {
     expect(
       buildOpenShiftAssignments([{ duId: 'du-1', userId: 'u-1' }], []).staffAssignments,
-    ).toEqual([{ duId: 'du-1', userId: 'u-1' }]);
+    ).toEqual([{ duId: 'du-1', userId: 'u-1', openingFloat: 0 }]);
   });
 
   it('drops an unassigned dispenser rather than sending an empty user', () => {
@@ -24,7 +24,14 @@ describe('buildOpenShiftAssignments', () => {
         ],
         [],
       ).staffAssignments,
-    ).toEqual([{ duId: 'du-1', userId: 'u-1' }]);
+    ).toEqual([{ duId: 'du-1', userId: 'u-1', openingFloat: 0 }]);
+  });
+
+  it("sends each Drawer's Opening Float (ADR 0005)", () => {
+    expect(
+      buildOpenShiftAssignments([{ duId: 'du-1', userId: 'u-1', openingFloat: 500 }], [])
+        .staffAssignments,
+    ).toEqual([{ duId: 'du-1', userId: 'u-1', openingFloat: 500 }]);
   });
 
   it('lets one attendant hold more than one dispenser', () => {

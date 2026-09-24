@@ -11,9 +11,9 @@ const dus = [{ id: 'du-1' }, { id: 'du-2' }, { id: 'du-3' }];
 describe('seedStaffAssignments', () => {
   it('leaves every dispenser unassigned, so accountability is chosen not defaulted', () => {
     expect(seedStaffAssignments(dus)).toEqual([
-      { duId: 'du-1', userId: '' },
-      { duId: 'du-2', userId: '' },
-      { duId: 'du-3', userId: '' },
+      { duId: 'du-1', userId: '', openingFloat: 0 },
+      { duId: 'du-2', userId: '', openingFloat: 0 },
+      { duId: 'du-3', userId: '', openingFloat: 0 },
     ]);
   });
 

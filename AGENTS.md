@@ -44,9 +44,8 @@ important domain rule (ADR 0005):
   and no shift or business day, and live in the ledger. The test is "is this
   paying for fuel or products right now?", not "which machine was used?"
 
-> Transition: Office Records (entry date + Funding Account), the sales-only
-> DSSR and the Daily Cash Book are implemented. The drawer formula still
-> carries the old office terms (always zero now) until #274 removes them.
+Office Records (entry date + Funding Account), the sales-only DSSR, the
+Daily Cash Book and the per-Attendant Drawer are implemented.
 
 Operational flow:
 
@@ -76,13 +75,18 @@ Anchoring rules (target, ADR 0005):
   (the fuel is already metered via nozzle readings). Customer balance =
   Σ credit sales − Σ collections.
 
-Drawer reconciliation at shift close (**target, ADR 0005** — the code still
-subtracts `drawerExpenses` and `drawerSupplierPayments`; see the transition
-note above and the ADR 0005 milestone):
+Drawer reconciliation (ADR 0005). Each Attendant/DU has its own Drawer with
+an Opening Float issued at shift open (`shift_staff_assignments.opening_float`)
+and is reconciled at Handover; the Shift's figure is the sum of its Drawers
+(`expectedShiftDrawerCash` in core):
 
 ```text
-expectedDrawerCash = openingCash + cashSales − cashDrops
+drawer.expectedCash = openingFloat + DU cash sales − cashDrops   (at Handover)
+expectedDrawerCash  = Σ openingFloat + cashSales − Σ cashDrops    (at shift close)
 ```
+
+The Shift's opening cash is not stored; it is Σ Opening Floats. Cash sales
+posted to the ledger exclude the floats.
 
 Office cash taken from a drawer is a cash drop. Cash in Hand (`CASH_IN_HAND`)
 is the office cash account. Never force card/UPI/bank/credit movements into

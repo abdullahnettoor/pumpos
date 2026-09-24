@@ -43,6 +43,8 @@ interface DuFormState {
   aggregateCard: string;
   aggregateUpi: string;
   cash: string;
+  /** Cash taken from this Drawer mid-shift (ADR 0005). */
+  drops: string;
 }
 
 interface CreditLine {
@@ -558,6 +560,7 @@ function seedForm(du: any): DuFormState {
         ? String(Number(du.handover.upiHandedOver))
         : '',
     cash: du.handover?.cashHandedOver != null ? String(Number(du.handover.cashHandedOver)) : '',
+    drops: Number(du.handover?.cashDrops) ? String(Number(du.handover.cashDrops)) : '',
   };
 }
 
@@ -763,6 +766,10 @@ export const HandoverPanel: React.FC = () => {
     resetAcceptedHandover(duId);
     setEditedForms((f) => ({ ...f, [duId]: { ...(f[duId] ?? forms[duId]), cash: v } }));
   };
+  const setDrops = (duId: string, v: string) => {
+    resetAcceptedHandover(duId);
+    setEditedForms((f) => ({ ...f, [duId]: { ...(f[duId] ?? forms[duId]), drops: v } }));
+  };
   const setAggregate = (duId: string, field: 'aggregateCard' | 'aggregateUpi', v: string) => {
     resetAcceptedHandover(duId);
     setEditedForms((f) => ({ ...f, [duId]: { ...(f[duId] ?? forms[duId]), [field]: v } }));
@@ -881,6 +888,7 @@ export const HandoverPanel: React.FC = () => {
           errs.push(`${du.duName}: negative POS amount`);
       }
       if (num(form.cash) < 0) errs.push(`${du.duName}: negative cash`);
+      if (num(form.drops) < 0) errs.push(`${du.duName}: negative cash drops`);
       if (aggregateNonCashAllowed && (num(form.aggregateCard) < 0 || num(form.aggregateUpi) < 0))
         errs.push(`${du.duName}: negative non-cash amount`);
     }
@@ -964,6 +972,7 @@ export const HandoverPanel: React.FC = () => {
           userId: attendantId!,
           duId: du.duId,
           cashHandedOver: num(form.cash),
+          cashDrops: num(form.drops),
           ...(du.terminals.length === 0 && aggregateNonCashAllowed
             ? { cardHandedOver: num(form.aggregateCard), upiHandedOver: num(form.aggregateUpi) }
             : {}),
@@ -990,6 +999,9 @@ export const HandoverPanel: React.FC = () => {
           [du.duId]: {
             ...(current[du.duId] ?? forms[du.duId]),
             cash: String(Number(result.handover.cashHandedOver)),
+            drops: Number(result.handover.cashDrops)
+              ? String(Number(result.handover.cashDrops))
+              : '',
             aggregateCard: String(Number(result.handover.cardHandedOver)),
             aggregateUpi: String(Number(result.handover.upiHandedOver)),
             readings: Object.fromEntries(
@@ -1059,6 +1071,7 @@ export const HandoverPanel: React.FC = () => {
   // Aggregate reconciliation across all DUs + merchandise (matches desktop).
   let fuelExpected = 0;
   let declaredTotal = 0;
+  let drawerAdjustment = 0;
   for (const du of dus) {
     const form = forms[du.duId];
     if (!form) continue;
@@ -1082,6 +1095,8 @@ export const HandoverPanel: React.FC = () => {
     const creditTotal = (creditByDu[du.duId] || []).reduce((s, l) => s + Number(l.amount || 0), 0);
     const omcTotal = (omcByDu[du.duId] || []).reduce((s, l) => s + Number(l.amount || 0), 0);
     declaredTotal += num(form.cash) + cardTotal + upiTotal + creditTotal + omcTotal;
+    // The pouch also holds the Opening Float and lacks what was dropped.
+    drawerAdjustment += Number(du.openingFloat || 0) - num(form.drops);
   }
   const merchTotal = merchRows.reduce(
     (s, r) => s + num(r.quantity) * Number(merchById[r.productId]?.sellingPrice || 0),
@@ -1089,7 +1104,7 @@ export const HandoverPanel: React.FC = () => {
   );
   const merchCash = Math.max(0, merchTotal - num(merchNonCash));
   const expectedTotal = fuelExpected + merchCash;
-  const varianceTotal = Math.round((declaredTotal - expectedTotal) * 100) / 100;
+  const varianceTotal = Math.round((declaredTotal - expectedTotal - drawerAdjustment) * 100) / 100;
   const allAccepted = dus.length > 0 && dus.every((du) => acceptedByDu[du.duId]);
   const acceptedSummary = allAccepted
     ? {
@@ -1098,13 +1113,10 @@ export const HandoverPanel: React.FC = () => {
           dus.reduce((sum, du) => sum + acceptedByDu[du.duId].expectedFuelSales, 0) +
           acceptedByDu[dus[0].duId].merchandiseCash,
         declaredTotal: dus.reduce((sum, du) => sum + acceptedByDu[du.duId].declaredTotal, 0),
+        // Each Drawer's server-reconciled variance (float and drops included).
         varianceAmount:
-          Math.round(
-            (dus.reduce((sum, du) => sum + acceptedByDu[du.duId].declaredTotal, 0) -
-              (dus.reduce((sum, du) => sum + acceptedByDu[du.duId].expectedFuelSales, 0) +
-                acceptedByDu[dus[0].duId].merchandiseCash)) *
-              100,
-          ) / 100,
+          Math.round(dus.reduce((sum, du) => sum + acceptedByDu[du.duId].varianceAmount, 0) * 100) /
+          100,
       }
     : null;
   const shownSummary = selectHandoverSummary(
@@ -1448,8 +1460,23 @@ export const HandoverPanel: React.FC = () => {
             }
           />
         ))}
+        {dus.map((du) => (
+          <NumberField
+            key={`drops-${du.duId}`}
+            label={dus.length > 1 ? `${du.duName} · Cash drops (₹)` : 'Cash drops (₹)'}
+            value={forms[du.duId]?.drops ?? ''}
+            onChange={(v) => setDrops(du.duId, v)}
+            error={num(forms[du.duId]?.drops) < 0 ? 'No negatives' : undefined}
+          />
+        ))}
+        {dus.some((du) => Number(du.openingFloat) > 0) && (
+          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Include your opening float:{' '}
+            {dus.map((du) => `${du.duName} ${inr(Number(du.openingFloat || 0))}`).join(' · ')}
+          </p>
+        )}
         <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
-          Confirm physical cash at close.
+          Confirm physical cash at close. Hand over everything in the pouch, float included.
         </p>
       </section>
 

@@ -26,6 +26,7 @@ import {
   CloseBusinessDayAndGenerateDssr,
   GetBusinessDayStatus,
   RecordHandover,
+  expectedShiftDrawerCash,
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
@@ -210,7 +211,9 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         ${shiftSequenceSql('s')} AS "shiftSequence",
         COALESCE(u.full_name, 'System') AS "openedByName",
         ${sql.raw(isoTs('s.opened_at'))} AS "openedAt",
-        '0'::text AS "openingCash" -- TODO(#274): shifts.opening_cash dropped (ADR 0005, #280)
+        -- Opening cash = Σ Opening Floats (ADR 0005, #278).
+        (SELECT COALESCE(SUM(sa.opening_float), 0)::text
+          FROM shift_staff_assignments sa WHERE sa.shift_id = s.id) AS "openingCash"
       FROM shifts s
       LEFT JOIN shift_templates t ON t.id = s.shift_template_id
       LEFT JOIN users u ON u.id = s.opened_by AND u.organization_id = s.organization_id
@@ -391,7 +394,8 @@ shiftsRouter.get('/status', async (c) => {
       'closedBy', s.closed_by,
       'closedAt', ${ts('s.closed_at')},
       'lockedAt', ${ts('s.locked_at')},
-      'openingCash', '0', -- TODO(#274): shifts.opening_cash dropped (ADR 0005, #280)
+      'openingCash', (SELECT COALESCE(SUM(sa.opening_float), 0)::text
+        FROM shift_staff_assignments sa WHERE sa.shift_id = s.id),
       'closingCash', s.closing_cash,
       'createdAt', ${ts('s.created_at')},
       'updatedAt', ${ts('s.updated_at')}
@@ -880,8 +884,12 @@ shiftsRouter.get('/status', async (c) => {
       merchandiseSales,
       // Authoritative cash reconciliation (same figures CloseShift will use), so
       // the closing wizard's expected drawer includes non-attendant merch cash
-      // and reads the true station-level short/surplus.
-      reconciliation,
+      // and reads the true station-level short/surplus. expectedDrawerCash is
+      // the core formula (before any drops declared at close).
+      reconciliation: {
+        ...reconciliation,
+        expectedDrawerCash: expectedShiftDrawerCash(reconciliation),
+      },
     };
   }
 
@@ -1175,6 +1183,8 @@ shiftsRouter.get('/my-assignment', async (c) => {
       duId,
       duName: du?.name ?? 'Unknown',
       duCode: du?.code ?? null,
+      // This Drawer's Opening Float (ADR 0005, #278).
+      openingFloat: Number(myRows.find((r) => r.sa.duId === duId)?.sa.openingFloat ?? 0),
       nozzles,
       terminals,
       handover,
@@ -1322,6 +1332,7 @@ shiftsRouter.post(
       userId,
       duId,
       cashHandedOver,
+      cashDrops,
       cardHandedOver,
       upiHandedOver,
       nozzleReadings,
@@ -1377,6 +1388,7 @@ shiftsRouter.post(
           attendantId,
           duId,
           cashHandedOver,
+          cashDrops,
           cardHandedOver,
           upiHandedOver,
           nozzleReadings,

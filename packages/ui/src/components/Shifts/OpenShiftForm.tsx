@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { FileText, Info, Play } from 'lucide-react';
 import { Panel, Button, Chip, Form } from '../../pump-ds/index.js';
 import { Field, Select, NumberInput, DateField } from '../primitives/Field.js';
+import { inr } from '../../utils/format.js';
 import type { BusinessDayStatusItem } from '../../services/cloud.js';
 import {
   compareByDispenserThenNozzle,
@@ -29,9 +30,10 @@ interface OpenShiftFormProps {
   businessDate: string;
   currentBusinessDate: string;
   timeZone?: string;
-  openingCash: number;
-  staffAssignments: { userId: string; duId: string }[];
+  staffAssignments: { userId: string; duId: string; openingFloat: number }[];
   onStaffAssignmentChange: (duId: string, userId: string) => void;
+  /** Opening Float per dispenser Drawer (ADR 0005). */
+  onOpeningFloatChange: (duId: string, openingFloat: number) => void;
   initialReadings: { nozzleId: string; openingReading: number }[];
   onInitialReadingChange: (nozzleId: string, value: number) => void;
   isOpening: boolean;
@@ -103,8 +105,10 @@ const DispenserAssignmentCard: React.FC<{
   staff: StaffOption[];
   terminals: TerminalOption[];
   assignedUserId: string;
+  openingFloat: number;
   terminalAssignments: { terminalId: string; duId: string }[];
   onStaffAssignmentChange: (duId: string, userId: string) => void;
+  onOpeningFloatChange: (duId: string, openingFloat: number) => void;
   onTerminalAssignmentChange: (terminalId: string, duId: string) => void;
 }> = ({
   du,
@@ -112,8 +116,10 @@ const DispenserAssignmentCard: React.FC<{
   staff,
   terminals,
   assignedUserId,
+  openingFloat,
   terminalAssignments,
   onStaffAssignmentChange,
+  onOpeningFloatChange,
   onTerminalAssignmentChange,
 }) => {
   const label = `Dispenser ${dispenserLabel({ duCode: du.code, duName: du.name })}`;
@@ -147,6 +153,20 @@ const DispenserAssignmentCard: React.FC<{
           ))}
         </Select>
       </Field>
+      {assignedUserId && (
+        <Field label="Opening float (₹)" htmlFor={`float-${du.id}`}>
+          <NumberInput
+            id={`float-${du.id}`}
+            min="0"
+            value={Number.isFinite(openingFloat) ? openingFloat : 0}
+            invalid={openingFloat < 0}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              onOpeningFloatChange(du.id, Number.isFinite(v) && v >= 0 ? v : 0);
+            }}
+          />
+        </Field>
+      )}
 
       {terminals && terminals.length > 0 && (
         <div style={{ marginTop: '10px' }}>
@@ -218,9 +238,9 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   businessDate,
   currentBusinessDate,
   timeZone,
-  openingCash,
   staffAssignments,
   onStaffAssignmentChange,
+  onOpeningFloatChange,
   initialReadings,
   onInitialReadingChange,
   isOpening,
@@ -289,12 +309,12 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
     setValue,
     formState: { errors },
   } = useZodForm<OpenShiftFormValues>(schema, {
-    defaultValues: { shiftTemplateId: selectedTemplateId, businessDate, openingCash },
+    defaultValues: { shiftTemplateId: selectedTemplateId, businessDate },
     // React Hook Form syncs these from props, replacing three hand-rolled
     // setValue effects. `keepDirtyValues` leaves a field the operator has
     // already edited alone — which those effects could not express, so an
     // unrelated parent re-render used to overwrite a half-filled form.
-    values: { shiftTemplateId: selectedTemplateId, businessDate, openingCash },
+    values: { shiftTemplateId: selectedTemplateId, businessDate },
     resetOptions: { keepDirtyValues: true },
   });
   const formTemplateId = watch('shiftTemplateId');
@@ -466,12 +486,14 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                 )}
               </Field>
             )}
-            <Field label="Opening cash float (₹)" error={errors.openingCash?.message} required>
-              <NumberInput
-                {...register('openingCash', { valueAsNumber: true })}
-                min="0"
-                invalid={!!errors.openingCash}
-              />
+            <Field label="Opening cash (Σ floats)">
+              <div className="font-mono" style={{ padding: '6px 0' }}>
+                {inr(
+                  staffAssignments
+                    .filter((a) => a.userId)
+                    .reduce((sum, a) => sum + (a.openingFloat || 0), 0),
+                )}
+              </div>
             </Field>
           </div>
         </Panel>
@@ -552,8 +574,10 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                   staff={staff}
                   terminals={terminals}
                   assignedUserId={staffAssignments.find((a) => a.duId === du.id)?.userId ?? ''}
+                  openingFloat={staffAssignments.find((a) => a.duId === du.id)?.openingFloat ?? 0}
                   terminalAssignments={terminalAssignments}
                   onStaffAssignmentChange={onStaffAssignmentChange}
+                  onOpeningFloatChange={onOpeningFloatChange}
                   onTerminalAssignmentChange={onTerminalAssignmentChange}
                 />
               ))}

@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, desc, ne, or, sql } from 'drizzle-orm';
+import { and, eq, getTableColumns, gte, inArray, desc, ne, or, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import type {
   BusinessDay,
@@ -263,6 +263,17 @@ export class DrizzleBusinessDayRepository implements BusinessDayRepository, Busi
 }
 
 // ---------------- Shifts ----------------
+/**
+ * A shift row plus its opening cash, derived as the sum of its Drawers'
+ * Opening Floats (ADR 0005, #278) — the shift itself stores no opening cash.
+ */
+const shiftColumns = {
+  ...getTableColumns(schema.shifts),
+  openingCash: sql<string>`(SELECT COALESCE(SUM(sa.opening_float), 0)::text
+    FROM shift_staff_assignments sa WHERE sa.shift_id = ${schema.shifts.id})`,
+};
+type ShiftRow = typeof schema.shifts.$inferSelect & { openingCash: string };
+
 export class DrizzleShiftRepository implements ShiftRepository {
   constructor(private readonly db: DbClient) {}
   async hasOpenShift(businessDayId: string): Promise<boolean> {
@@ -273,7 +284,7 @@ export class DrizzleShiftRepository implements ShiftRepository {
       .limit(1);
     return Boolean(row);
   }
-  private toEntity(r: typeof schema.shifts.$inferSelect): Shift {
+  private toEntity(r: ShiftRow): Shift {
     return {
       id: r.id,
       organizationId: r.organizationId,
@@ -286,7 +297,7 @@ export class DrizzleShiftRepository implements ShiftRepository {
       closedBy: r.closedBy,
       closedAt: r.closedAt ? r.closedAt.toISOString() : null,
       lockedAt: r.lockedAt ? r.lockedAt.toISOString() : null,
-      openingCash: '0', // TODO(#274): shifts.opening_cash dropped (ADR 0005, #280)
+      openingCash: r.openingCash,
       closingCash: r.closingCash,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
@@ -294,15 +305,19 @@ export class DrizzleShiftRepository implements ShiftRepository {
   }
   async findById(id: string): Promise<Shift | null> {
     const [r] = await this.db
-      .select()
+      .select(shiftColumns)
       .from(schema.shifts)
       .where(eq(schema.shifts.id, id))
       .limit(1)
-      .for('update');
+      .for('update', { of: schema.shifts });
     return r ? this.toEntity(r) : null;
   }
   async findByIdWithoutLock(id: string): Promise<Shift | null> {
-    const [r] = await this.db.select().from(schema.shifts).where(eq(schema.shifts.id, id)).limit(1);
+    const [r] = await this.db
+      .select(shiftColumns)
+      .from(schema.shifts)
+      .where(eq(schema.shifts.id, id))
+      .limit(1);
     return r ? this.toEntity(r) : null;
   }
   async save(s: Shift): Promise<void> {
@@ -320,7 +335,6 @@ export class DrizzleShiftRepository implements ShiftRepository {
         closedBy: s.closedBy,
         closedAt: s.closedAt ? new Date(s.closedAt) : null,
         lockedAt: s.lockedAt ? new Date(s.lockedAt) : null,
-        // TODO(#274): openingCash no longer persisted (per-attendant floats).
         closingCash: s.closingCash,
         createdAt: new Date(s.createdAt),
         updatedAt: new Date(s.updatedAt),
@@ -339,7 +353,7 @@ export class DrizzleShiftRepository implements ShiftRepository {
   }
   async findOpenByStation(organizationId: string, stationId: string): Promise<Shift | null> {
     const [r] = await this.db
-      .select()
+      .select(shiftColumns)
       .from(schema.shifts)
       .where(
         and(
@@ -353,9 +367,14 @@ export class DrizzleShiftRepository implements ShiftRepository {
   }
   async addStaffAssignments(shiftId: string, assignments: StaffAssignmentInput[]): Promise<void> {
     if (assignments.length === 0) return;
-    await this.db
-      .insert(schema.shiftStaffAssignments)
-      .values(assignments.map((a) => ({ shiftId, userId: a.userId, duId: a.duId })));
+    await this.db.insert(schema.shiftStaffAssignments).values(
+      assignments.map((a) => ({
+        shiftId,
+        userId: a.userId,
+        duId: a.duId,
+        openingFloat: String(a.openingFloat ?? 0),
+      })),
+    );
   }
   async addTerminalLinks(shiftId: string, links: TerminalLinkInput[]): Promise<void> {
     if (links.length === 0) return;
@@ -469,6 +488,10 @@ export class DrizzleHandoverContextReader implements HandoverContextReader {
             AND sh.organization_id = ${organizationId} AND sh.station_id = ${stationId}
           WHERE sa.shift_id = ${shiftId} AND sa.user_id = ${attendantId}
             AND sa.du_id = ${duId}) AS assigned,
+        (SELECT COALESCE(SUM(sa.opening_float), 0)::float8
+          FROM shift_staff_assignments sa
+          WHERE sa.shift_id = ${shiftId} AND sa.user_id = ${attendantId}
+            AND sa.du_id = ${duId}) AS opening_float,
         COALESCE((SELECT jsonb_agg(jsonb_build_object(
             'reading', CASE WHEN nr.id IS NULL THEN NULL ELSE jsonb_build_object(
               'id', nr.id,
@@ -543,6 +566,7 @@ export class DrizzleHandoverContextReader implements HandoverContextReader {
       attendant: (row.attendant as HandoverContext['attendant']) ?? null,
       dispenser: (row.dispenser as HandoverContext['dispenser']) ?? null,
       assigned: Boolean(row.assigned),
+      openingFloat: Number(row.opening_float ?? 0),
       nozzleReadings: readingRows
         .filter((r) => r.reading !== null)
         .map(({ reading, ...nozzle }) => ({
@@ -574,14 +598,16 @@ export class DrizzleHandoverRepository implements HandoverRepository {
       INSERT INTO attendant_handovers (
         id, organization_id, station_id, shift_id, user_id, du_id,
         cash_handed_over, card_handed_over, upi_handed_over, credit_handed_over,
-        testing_volume, expected_sales, variance_amount, created_at
+        testing_volume, expected_sales, opening_float, cash_drops, expected_cash,
+        variance_amount, created_at
       ) VALUES (
         ${handover.id}, ${handover.organizationId}, ${handover.stationId},
         ${handover.shiftId}, ${handover.attendantId}, ${handover.duId},
         ${handover.cashHandedOver}::numeric, ${handover.cardHandedOver}::numeric,
         ${handover.upiHandedOver}::numeric, ${handover.creditHandedOver}::numeric,
         ${handover.testingVolume}::numeric, ${handover.expectedSales}::numeric,
-        ${handover.varianceAmount}::numeric, ${handover.createdAt}::timestamp
+        ${handover.openingFloat}::numeric, ${handover.cashDrops}::numeric,
+        ${handover.expectedCash}::numeric, ${handover.varianceAmount}::numeric, ${handover.createdAt}::timestamp
       )
       ON CONFLICT (organization_id, station_id, shift_id, user_id, du_id)
       DO UPDATE SET
@@ -591,6 +617,9 @@ export class DrizzleHandoverRepository implements HandoverRepository {
         credit_handed_over = EXCLUDED.credit_handed_over,
         testing_volume = EXCLUDED.testing_volume,
         expected_sales = EXCLUDED.expected_sales,
+        opening_float = EXCLUDED.opening_float,
+        cash_drops = EXCLUDED.cash_drops,
+        expected_cash = EXCLUDED.expected_cash,
         variance_amount = EXCLUDED.variance_amount,
         created_at = EXCLUDED.created_at
       RETURNING
@@ -606,6 +635,9 @@ export class DrizzleHandoverRepository implements HandoverRepository {
         credit_handed_over::text AS "creditHandedOver",
         testing_volume::text AS "testingVolume",
         expected_sales::text AS "expectedSales",
+        opening_float::text AS "openingFloat",
+        cash_drops::text AS "cashDrops",
+        expected_cash::text AS "expectedCash",
         variance_amount::text AS "varianceAmount",
         to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt",
         (xmax <> 0) AS replaced
@@ -663,6 +695,9 @@ export class DrizzleHandoverRepository implements HandoverRepository {
       creditHandedOver: row.creditHandedOver,
       testingVolume: row.testingVolume,
       expectedSales: row.expectedSales,
+      openingFloat: row.openingFloat,
+      cashDrops: row.cashDrops,
+      expectedCash: row.expectedCash,
       varianceAmount: row.varianceAmount,
       createdAt: row.createdAt,
     };

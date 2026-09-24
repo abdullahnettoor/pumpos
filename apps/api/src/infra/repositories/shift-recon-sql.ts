@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { DbClient } from '@pump/db';
-import type { CreditSaleRecord, ShiftReconciliationTotals } from '@pump/core';
+import type { CreditSaleRecord, DrawerReconciliation, ShiftReconciliationTotals } from '@pump/core';
 
 /**
  * Shift-scoped money/reading SQL shared by the consolidated statements
@@ -16,17 +16,36 @@ import type { CreditSaleRecord, ShiftReconciliationTotals } from '@pump/core';
  * array. Pair with {@link assembleReconTotals}.
  */
 export function reconTotalsJson(shiftId: string) {
+  // Office Records (collections, expenses, income, supplier payments) carry no
+  // Shift, so they never reach a Drawer (ADR 0005). Only cash sales do.
   return sql`(SELECT jsonb_build_object(
-    -- Office Records (collections, expenses, income, supplier payments) carry
-    -- no Shift (ADR 0005), so they contribute nothing to a Drawer. The keys
-    -- stay zero until #274 drops the terms from the reconciliation.
-    'cash_collections', 0::float8,
-    'card_collections', 0::float8,
-    'upi_collections', 0::float8,
-    'credit_collections', 0::float8,
-    'drawer_expenses', 0::float8,
-    'cash_income', 0::float8,
-    'drawer_supplier_payments', 0::float8,
+    'opening_float', (SELECT COALESCE(SUM(opening_float), 0)::float8
+      FROM shift_staff_assignments WHERE shift_id = ${shiftId}),
+    'handover_cash_drops', (SELECT COALESCE(SUM(cash_drops), 0)::float8
+      FROM attendant_handovers WHERE shift_id = ${shiftId}),
+    -- Float and drops recorded on the Handovers themselves, so cash sales can
+    -- be recovered from the handed-over cash: sales = handed − float + drops.
+    'handover_float', (SELECT COALESCE(SUM(opening_float), 0)::float8
+      FROM attendant_handovers WHERE shift_id = ${shiftId}),
+    -- One Drawer per Attendant/DU assignment (ADR 0005, #278).
+    'drawers', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+        'attendantId', sa.user_id,
+        'attendantName', u.full_name,
+        'duId', sa.du_id,
+        'duName', du.name,
+        'openingFloat', sa.opening_float::float8,
+        'cashDrops', COALESCE(h.cash_drops, 0)::float8,
+        'expectedCash', h.expected_cash::float8,
+        'cashHandedOver', h.cash_handed_over::float8,
+        'variance', h.variance_amount::float8,
+        'handedOver', h.id IS NOT NULL
+      ) ORDER BY du.name, u.full_name)
+      FROM shift_staff_assignments sa
+      LEFT JOIN users u ON u.id = sa.user_id
+      LEFT JOIN dispenser_units du ON du.id = sa.du_id
+      LEFT JOIN attendant_handovers h
+        ON h.shift_id = sa.shift_id AND h.user_id = sa.user_id AND h.du_id = sa.du_id
+      WHERE sa.shift_id = ${shiftId}), '[]'::jsonb),
     'handover_cash', (SELECT COALESCE(SUM(cash_handed_over), 0)::float8
       FROM attendant_handovers WHERE shift_id = ${shiftId}),
     'handover_count', (SELECT COUNT(*)::int FROM attendant_handovers WHERE shift_id = ${shiftId}),
@@ -65,7 +84,12 @@ export function assembleReconTotals(raw: Record<string, any>): ShiftReconciliati
       inside: boolean;
     }>) ?? [];
   const handoverCount = Number(raw.handover_count ?? 0);
-  const handoverCash = Number(raw.handover_cash ?? 0);
+  // Handed-over cash holds the float and is net of drops; the sales part is
+  // handed − float + drops (ADR 0005, #278).
+  const handoverCash =
+    Number(raw.handover_cash ?? 0) -
+    Number(raw.handover_float ?? 0) +
+    Number(raw.handover_cash_drops ?? 0);
 
   // Cash sales for the drawer = the cash attendants declared in their DU handovers
   // (fuel cash is never a `sales` row — it's metered and declared at handover),
@@ -94,13 +118,28 @@ export function assembleReconTotals(raw: Record<string, any>): ShiftReconciliati
     handoverCash: handoverCount > 0 ? handoverCash : 0,
     merchCashOutsideHandover: handoverCount > 0 ? nonHandoverMerchCash : merchCashSales,
     merchCashOutsideHandoverBreakdown,
-    cashCollections: Number(raw.cash_collections ?? 0),
-    cardCollections: Number(raw.card_collections ?? 0),
-    upiCollections: Number(raw.upi_collections ?? 0),
-    creditCollections: Number(raw.credit_collections ?? 0),
-    cashIncome: Number(raw.cash_income ?? 0),
-    drawerExpenses: Number(raw.drawer_expenses ?? 0),
-    drawerSupplierPayments: Number(raw.drawer_supplier_payments ?? 0),
+    openingFloat: Number(raw.opening_float ?? 0),
+    handoverCashDrops: Number(raw.handover_cash_drops ?? 0),
+    drawers: ((raw.drawers as Array<Record<string, any>>) ?? []).map(toDrawer),
+  };
+}
+
+function toDrawer(d: Record<string, any>): DrawerReconciliation {
+  const handedOver = Boolean(d.handedOver);
+  const openingFloat = Number(d.openingFloat ?? 0);
+  const cashDrops = Number(d.cashDrops ?? 0);
+  const expectedCash = handedOver ? Number(d.expectedCash ?? 0) : null;
+  return {
+    attendantId: d.attendantId,
+    attendantName: d.attendantName ?? null,
+    duId: d.duId,
+    duName: d.duName ?? null,
+    openingFloat,
+    cashSales: expectedCash == null ? null : expectedCash - openingFloat + cashDrops,
+    cashDrops,
+    expectedCash,
+    cashHandedOver: handedOver ? Number(d.cashHandedOver ?? 0) : null,
+    variance: handedOver ? Number(d.variance ?? 0) : null,
   };
 }
 

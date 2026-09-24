@@ -183,9 +183,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // Open Shift Form States
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [businessDate, setBusinessDate] = useState(currentBusinessDate);
-  const [openingCash, setOpeningCash] = useState(0);
   const [preserveNextShiftDate, setPreserveNextShiftDate] = useState(false);
-  const [staffAssignments, setStaffAssignments] = useState<{ userId: string; duId: string }[]>([]);
+  const [staffAssignments, setStaffAssignments] = useState<
+    { userId: string; duId: string; openingFloat: number }[]
+  >([]);
   // Terminal→DU assignment for the shift being opened. duId '' means shift-wide (any DU).
   const [terminalAssignments, setTerminalAssignments] = useState<
     { terminalId: string; duId: string }[]
@@ -352,14 +353,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // uses). Preferred over the client estimate so the expected drawer includes
   // non-attendant merchandise cash and reads the true station-level short/surplus.
   const recon = data?.activeShift?.reconciliation;
+  // Σ Opening Floats + cash sales − Handover Cash Drops, from the server's
+  // core formula (ADR 0005). Office money never reaches a Drawer.
   const expectedCash = recon
-    ? openingCashNum +
-      Number(recon.cashSales || 0) +
-      Number(recon.cashCollections || 0) +
-      Number(recon.cashIncome || 0) -
-      Number(recon.drawerExpenses || 0) -
-      Number(recon.drawerSupplierPayments || 0)
-    : openingCashNum + activeCashCollections - shiftTotals.cashExpenses;
+    ? Number(recon.expectedDrawerCash ?? 0)
+    : openingCashNum + activeCashCollections;
   const cashVariance = closingCash - expectedCash;
 
   // Station-level cash summary for the closing wizard (#4). Aggregate figures —
@@ -370,10 +368,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         cashSales: Number(recon.cashSales || 0),
         handoverCash: Number(recon.handoverCash || 0),
         merchCashOutsideHandover: Number(recon.merchCashOutsideHandover || 0),
-        cashCollections: Number(recon.cashCollections || 0),
-        cashIncome: Number(recon.cashIncome || 0),
-        drawerExpenses: Number(recon.drawerExpenses || 0),
-        drawerSupplierPayments: Number(recon.drawerSupplierPayments || 0),
+        cashDrops: Number(recon.handoverCashDrops || 0),
+        drawers: Array.isArray(recon.drawers) ? recon.drawers : [],
         expectedDrawer: expectedCash,
         merchCashBreakdown: Array.isArray(recon.merchCashOutsideHandoverBreakdown)
           ? recon.merchCashOutsideHandoverBreakdown
@@ -579,12 +575,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       setIsOpening(true);
       setBusinessDate(values.businessDate);
       setSelectedTemplateId(values.shiftTemplateId);
-      setOpeningCash(Number(values.openingCash));
       const payload: any = {
         stationId: selectedStation.id,
         shiftTemplateId: values.shiftTemplateId,
         businessDate: values.businessDate,
-        openingCash: Number(values.openingCash),
         ...buildOpenShiftAssignments(staffAssignments, terminalAssignments),
       };
 
@@ -605,6 +599,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   const handleStaffAssignmentChange = (duId: string, userId: string) => {
     setStaffAssignments((prev) => prev.map((a) => (a.duId === duId ? { ...a, userId } : a)));
+  };
+
+  const handleOpeningFloatChange = (duId: string, openingFloat: number) => {
+    setStaffAssignments((prev) => prev.map((a) => (a.duId === duId ? { ...a, openingFloat } : a)));
   };
 
   const handleTerminalAssignmentChange = (terminalId: string, duId: string) => {
@@ -908,7 +906,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         onSaveTankDips={() => saveTankDips()}
         onDiscardTankDips={discardTankDips}
         onStartNext={() => {
-          setOpeningCash(closedShiftSuccess.closingCash);
           setSelectedTemplateId(closedShiftSuccess.nextTemplateId);
           setBusinessDate(closedShiftSuccess.businessDate);
           setPreserveNextShiftDate(true);
@@ -1042,7 +1039,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           timeZone={stationSettings.timezone}
           openingCash={openingCashNum}
           cashCollections={activeCashCollections}
-          cashExpenses={shiftTotals.cashExpenses}
           expectedCash={expectedCash}
           closingCash={closingCash}
           onClosingCashChange={setClosingCash}
@@ -1084,6 +1080,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               (activeShift.staffAssignments || []).find(
                 (sa: any) => sa.userId === selectedHandoverAssignment.userId,
               )?.attributed?.merchandiseCash ?? 0,
+            )}
+            openingFloat={Number(
+              (activeShift.staffAssignments || []).find(
+                (sa: any) =>
+                  sa.userId === selectedHandoverAssignment.userId &&
+                  sa.duId === selectedHandoverAssignment.duId,
+              )?.openingFloat ?? 0,
             )}
             merchandiseNonCash={(() => {
               const a = (activeShift.staffAssignments || []).find(
@@ -1151,9 +1154,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         businessDate={businessDate}
         currentBusinessDate={currentBusinessDate}
         timeZone={stationSettings.timezone}
-        openingCash={openingCash}
         staffAssignments={staffAssignments}
         onStaffAssignmentChange={handleStaffAssignmentChange}
+        onOpeningFloatChange={handleOpeningFloatChange}
         initialReadings={initialReadings}
         onInitialReadingChange={handleInitialReadingChange}
         isOpening={isOpening}

@@ -13,6 +13,7 @@ import { useToast } from '../primitives/ToastProvider.js';
 import { inr } from '../../utils/format.js';
 import { isDesktopApp } from '../../utils/platform.js';
 import { formatStationDateTime, shiftDisplayLabel } from '@pump/shared';
+import { DrawerReconciliationTable } from './DrawerReconciliationTable.js';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 
@@ -90,15 +91,10 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
     warnings = [],
     expectedCash = Number(openingCash),
     cashVariance = 0,
-    cashCollectionsSum = 0,
     cashSalesSum = 0,
-    cardCollectionsSum = 0,
-    upiCollectionsSum = 0,
-    bankCollectionsSum = 0,
-    cashExpensesSum = 0,
-    expenses = [],
+    cashDrops = 0,
+    drawers = [],
     purchases = [],
-    collections = [],
     handovers = [],
     terminalBreakdown = [],
     creditSales = [],
@@ -1270,7 +1266,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             borderBottom: '1px solid var(--border-soft)',
           }}
         >
-          <span>Opening Cash Float</span>
+          <span>Opening Floats</span>
           <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
             {inr(openingCash)}
           </span>
@@ -1289,34 +1285,22 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             + {inr(cashSalesSum)}
           </span>
         </div>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            padding: '12px 16px',
-            borderBottom: '1px solid var(--border-soft)',
-            color: 'var(--state-success-fg)',
-          }}
-        >
-          <span>(+) Cash Collections</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-            + {inr(cashCollectionsSum)}
-          </span>
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            padding: '12px 16px',
-            borderBottom: '1px solid var(--border-soft)',
-            color: 'var(--brand-danger)',
-          }}
-        >
-          <span>(-) Petty Cash Expenses</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-            - {inr(cashExpensesSum)}
-          </span>
-        </div>
+        {cashDrops > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              borderBottom: '1px solid var(--border-soft)',
+              color: 'var(--brand-danger)',
+            }}
+          >
+            <span>(−) Cash Drops</span>
+            <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+              − {inr(cashDrops)}
+            </span>
+          </div>
+        )}
         <div
           style={{
             display: 'flex',
@@ -1373,171 +1357,29 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
         </div>
       </div>
 
-      {/* Non-Cash Collections by channel (customer account payments received) */}
-      <h3
-        style={{
-          fontSize: '14px',
-          fontWeight: 600,
-          color: 'var(--text-strong)',
-          marginBottom: '4px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.02em',
-        }}
-      >
-        Non-Cash Collections
-      </h3>
-      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-        Customer account payments received via card, UPI or direct bank transfer this shift. These
-        settle receivables and do not touch the cash drawer. Fuel-on-credit <em>sales</em> are
-        listed separately above.
-      </p>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-          gap: '16px',
-          marginBottom: '32px',
-        }}
-      >
-        <div
-          style={{
-            padding: '12px',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-input)',
-            backgroundColor: 'var(--bg-surface)',
-          }}
-        >
-          <span
+      {drawers.length > 0 && (
+        <div style={{ marginBottom: '32px' }}>
+          <h3
             style={{
-              fontSize: '11px',
-              color: 'var(--text-muted)',
-              display: 'block',
+              fontSize: '14px',
               fontWeight: 600,
-            }}
-          >
-            Card Collections
-          </span>
-          <strong
-            style={{
-              fontSize: '15px',
               color: 'var(--text-strong)',
-              fontFamily: 'var(--font-mono)',
-            }}
-          >
-            {inr(cardCollectionsSum)}
-          </strong>
-        </div>
-        <div
-          style={{
-            padding: '12px',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-input)',
-            backgroundColor: 'var(--bg-surface)',
-          }}
-        >
-          <span
-            style={{
-              fontSize: '11px',
-              color: 'var(--text-muted)',
-              display: 'block',
-              fontWeight: 600,
-            }}
-          >
-            UPI/QR Collections
-          </span>
-          <strong
-            style={{
-              fontSize: '15px',
-              color: 'var(--text-strong)',
-              fontFamily: 'var(--font-mono)',
-            }}
-          >
-            {inr(upiCollectionsSum)}
-          </strong>
-        </div>
-        <div
-          style={{
-            padding: '12px',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-input)',
-            backgroundColor: 'var(--bg-surface)',
-          }}
-        >
-          <span
-            style={{
-              fontSize: '11px',
-              color: 'var(--text-muted)',
-              display: 'block',
-              fontWeight: 600,
-            }}
-          >
-            Bank Transfer Collections
-          </span>
-          <strong
-            style={{
-              fontSize: '15px',
-              color: 'var(--text-strong)',
-              fontFamily: 'var(--font-mono)',
-            }}
-          >
-            {inr(bankCollectionsSum)}
-          </strong>
-        </div>
-      </div>
-
-      {/* Shift Transaction Logs Breakdown */}
-      {expenses.length > 0 && (
-        <div style={{ marginBottom: '28px' }}>
-          <h4
-            style={{
-              fontSize: '12px',
-              fontWeight: 600,
-              color: 'var(--text-muted)',
+              marginBottom: '4px',
               textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '8px',
+              letterSpacing: '0.02em',
             }}
           >
-            Shift Petty Cash Expenses
-          </h4>
-          <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr
-                style={{
-                  borderBottom: '1px solid var(--border-strong)',
-                  textAlign: 'left',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                <th style={{ padding: '6px 8px' }}>Category</th>
-                <th style={{ padding: '6px 8px' }}>Description</th>
-                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {expenses.map((e: any, idx: number) => (
-                <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                  <td style={{ padding: '6px 8px', fontWeight: 600 }}>{e.categoryName}</td>
-                  <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>
-                    {e.description}
-                  </td>
-                  <td
-                    style={{
-                      padding: '6px 8px',
-                      textAlign: 'right',
-                      fontWeight: 600,
-                      color: 'var(--brand-danger)',
-                    }}
-                  >
-                    - {inr(e.amount)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            Drawers
+          </h3>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+            Each attendant's pouch: opening float + cash sales − cash drops, against the cash handed
+            over. The drawer figure above is their sum.
+          </p>
+          <DrawerReconciliationTable drawers={drawers} />
         </div>
       )}
 
+      {/* Shift Transaction Logs Breakdown */}
       {purchases.length > 0 && (
         <div style={{ marginBottom: '28px' }}>
           <h4
@@ -1577,80 +1419,6 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                   <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{p.notes}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>
                     {inr(p.amount)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {collections.length > 0 && (
-        <div style={{ marginBottom: '32px' }}>
-          <h4
-            style={{
-              fontSize: '12px',
-              fontWeight: 600,
-              color: 'var(--text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '8px',
-            }}
-          >
-            Collections & Account Sales Logs
-          </h4>
-          <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr
-                style={{
-                  borderBottom: '1px solid var(--border-strong)',
-                  textAlign: 'left',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                <th style={{ padding: '6px 8px' }}>Customer</th>
-                <th style={{ padding: '6px 8px' }}>Method</th>
-                <th style={{ padding: '6px 8px' }}>Notes</th>
-                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {collections.map((c: any, idx: number) => (
-                <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                  <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.customerName}</td>
-                  <td style={{ padding: '6px 8px' }}>
-                    <span
-                      style={{
-                        backgroundColor:
-                          c.paymentMethod === 'Credit'
-                            ? 'var(--state-warning-bg)'
-                            : 'var(--state-success-bg)',
-                        color:
-                          c.paymentMethod === 'Credit'
-                            ? 'var(--state-warning-fg)'
-                            : 'var(--state-success-fg)',
-                        padding: '1px 6px',
-                        borderRadius: '4px',
-                        fontSize: '10px',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {c.paymentMethod}
-                    </span>
-                  </td>
-                  <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{c.notes}</td>
-                  <td
-                    style={{
-                      padding: '6px 8px',
-                      textAlign: 'right',
-                      fontWeight: 600,
-                      color:
-                        c.paymentMethod === 'Credit'
-                          ? 'var(--text-muted)'
-                          : 'var(--state-success-fg)',
-                    }}
-                  >
-                    {inr(c.amount)}
                   </td>
                 </tr>
               ))}

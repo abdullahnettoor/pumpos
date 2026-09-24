@@ -13,10 +13,8 @@ export type ShiftSummarySection =
   | 'terminals'
   | 'creditSales'
   | 'cashRecon'
-  | 'nonCash'
-  | 'expenses'
+  | 'drawers'
   | 'purchases'
-  | 'collections'
   | 'signatures';
 
 export type DssrSection =
@@ -74,10 +72,8 @@ export const DEFAULT_SHIFT_SUMMARY_CONFIG: ReportConfig = {
     'terminals',
     'creditSales',
     'cashRecon',
-    'nonCash',
-    'expenses',
+    'drawers',
     'purchases',
-    'collections',
     'signatures',
   ],
   showLogo: true,
@@ -125,10 +121,8 @@ export const SHIFT_SUMMARY_SECTION_LABELS: Record<ShiftSummarySection, string> =
   terminals: 'POS Terminals',
   creditSales: 'Fuel-on-Credit Sales',
   cashRecon: 'Cash Reconciliation',
-  nonCash: 'Non-Cash Collections',
-  expenses: 'Expenses',
+  drawers: 'Drawers (per attendant)',
   purchases: 'Purchases',
-  collections: 'Collections',
   signatures: 'Signatures',
 };
 

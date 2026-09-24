@@ -231,6 +231,7 @@ describe.skipIf(!CONNECTION)('POST /shifts/handovers against real Postgres', () 
       shiftId: SHIFT,
       userId: ATTENDANT,
       duId: DU,
+      openingFloat: '1000',
     });
     await db.insert(schema.shiftTerminalLinks).values({
       shiftId: SHIFT,
@@ -261,10 +262,13 @@ describe.skipIf(!CONNECTION)('POST /shifts/handovers against real Postgres', () 
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
     expect(body.success).toBe(true);
-    // expected fuel = 50×100 + 60×90 = 10,400; declared = 9000 + 400 + 100 = 9500
+    // expected fuel = 50×100 + 60×90 = 10,400; declared = 9000 + 400 + 100 = 9500.
+    // Drawer: float 1000 + cash sales (10,400 − 500 non-cash) − 0 drops = 10,900.
     expect(body.data.expectedFuelSales).toBe(10400);
     expect(body.data.declaredTotal).toBe(9500);
-    expect(body.data.varianceAmount).toBe(-900);
+    expect(body.data.openingFloat).toBe(1000);
+    expect(body.data.expectedCash).toBe(10900);
+    expect(body.data.varianceAmount).toBe(-1900);
     expect(body.data.replaced).toBe(false);
     expect(body.data.terminalEntries).toHaveLength(1);
     expect(body.data.terminalEntries[0]).toMatchObject({
@@ -302,6 +306,7 @@ describe.skipIf(!CONNECTION)('POST /shifts/handovers against real Postgres', () 
       userId: ATTENDANT,
       duId: DU,
       cashHandedOver: 9900,
+      cashDrops: 2000,
       nozzleReadings: [
         { nozzleId: NOZZLE_1, closingReading: 150 },
         { nozzleId: NOZZLE_2, closingReading: 260 },
@@ -319,7 +324,15 @@ describe.skipIf(!CONNECTION)('POST /shifts/handovers against real Postgres', () 
       .from(schema.attendantHandovers)
       .where(eq(schema.attendantHandovers.shiftId, SHIFT));
     expect(handovers).toHaveLength(1);
-    expect(handovers[0]).toMatchObject({ cashHandedOver: '9900.00', userId: ATTENDANT });
+    // Drawer: 1000 + (10,400 − 500) − 2000 dropped = 8900 → handed 9900 = +1000.
+    expect(handovers[0]).toMatchObject({
+      cashHandedOver: '9900.00',
+      userId: ATTENDANT,
+      openingFloat: '1000.00',
+      cashDrops: '2000.00',
+      expectedCash: '8900.00',
+      varianceAmount: '1000.00',
+    });
 
     const entries = await db
       .select()

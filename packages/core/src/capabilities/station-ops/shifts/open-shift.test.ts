@@ -190,9 +190,8 @@ describe('OpenShift', () => {
       {
         stationId: 'st-1',
         shiftTemplateId: 'tpl-1',
-        openingCash: 5000,
         // du-1 is in service, so it needs an attendant before the open (#258).
-        staffAssignments: [{ userId: 'u-1', duId: 'du-1' }],
+        staffAssignments: [{ userId: 'u-1', duId: 'du-1', openingFloat: 5000 }],
         terminalLinks: [{ terminalId: 't1', duId: 'du-1' }],
       },
       makeContext(),
@@ -215,6 +214,66 @@ describe('OpenShift', () => {
     const types = store.events.map((e) => e.eventType);
     expect(types).toContain(BusinessEvents.BUSINESS_DAY_OPENED);
     expect(types).toContain(BusinessEvents.SHIFT_OPENED);
+  });
+
+  it("issues each Drawer's Opening Float; opening cash is their sum (ADR 0005)", async () => {
+    const shifts = new ShiftRepo();
+    const store = new InMemoryEventStore();
+    const result = await new OpenShift({
+      shifts,
+      businessDays: new BdRepo(),
+      nozzles: new NozzleRepo([]),
+      nozzleReadings: new ReadingRepo(),
+      fuelPrices: new PriceRepo([]),
+      dispensers: new InServiceDispenserRepo(['du-1', 'du-2', 'du-3', 'du-4']),
+      events: new InProcessEventDispatcher({ store }),
+    }).execute(
+      {
+        stationId: 'st-1',
+        shiftTemplateId: 'tpl-1',
+        staffAssignments: [
+          { userId: 'u-1', duId: 'du-1', openingFloat: 500 },
+          { userId: 'u-2', duId: 'du-2', openingFloat: 1000 },
+          { userId: 'u-3', duId: 'du-3', openingFloat: 0 },
+          { userId: 'u-4', duId: 'du-4' },
+        ],
+      },
+      makeContext(),
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.shift.openingCash).toBe('1500');
+    expect(shifts.staff.map((x) => x.a.openingFloat)).toEqual([500, 1000, 0, 0]);
+    const opened = store.events.find((e) => e.eventType === BusinessEvents.SHIFT_OPENED)!;
+    expect(opened.payload).toMatchObject({
+      openingCash: '1500',
+      openingFloats: [
+        { attendantId: 'u-1', duId: 'du-1', openingFloat: 500 },
+        { attendantId: 'u-2', duId: 'du-2', openingFloat: 1000 },
+        { attendantId: 'u-3', duId: 'du-3', openingFloat: 0 },
+        { attendantId: 'u-4', duId: 'du-4', openingFloat: 0 },
+      ],
+    });
+  });
+
+  it('refuses a negative Opening Float', async () => {
+    const result = await new OpenShift({
+      shifts: new ShiftRepo(),
+      businessDays: new BdRepo(),
+      nozzles: new NozzleRepo([]),
+      nozzleReadings: new ReadingRepo(),
+      fuelPrices: new PriceRepo([]),
+      dispensers: new InServiceDispenserRepo(['du-1']),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute(
+      {
+        stationId: 'st-1',
+        shiftTemplateId: 'tpl-1',
+        staffAssignments: [{ userId: 'u-1', duId: 'du-1', openingFloat: -1 }],
+      },
+      makeContext(),
+    );
+    expect(result.success).toBe(false);
   });
 
   it('reuses an already-open business day', async () => {
@@ -244,7 +303,7 @@ describe('OpenShift', () => {
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0 }, ctx);
+    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1' }, ctx);
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.shift.businessDayId).toBe('bd-existing');
     expect(businessDays.rows).toHaveLength(1);
@@ -294,7 +353,7 @@ describe('OpenShift', () => {
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0 }, makeContext());
+    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1' }, makeContext());
 
     expect(result.success).toBe(true);
     expect(calls).toEqual(['station-lock', 'active-check', 'day-lock', 'find']);
@@ -328,7 +387,7 @@ describe('OpenShift', () => {
       dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
-      { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' },
+      { stationId: 'st-1', shiftTemplateId: 'tpl-1', businessDate: '2026-03-14' },
       makeContext(),
     );
 
@@ -351,7 +410,7 @@ describe('OpenShift', () => {
       dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
-      { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' },
+      { stationId: 'st-1', shiftTemplateId: 'tpl-1', businessDate: '2026-03-14' },
       makeContext(),
     );
 
@@ -388,7 +447,7 @@ describe('OpenShift', () => {
       dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
-      { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' },
+      { stationId: 'st-1', shiftTemplateId: 'tpl-1', businessDate: '2026-03-14' },
       makeContext(),
     );
 
@@ -417,7 +476,7 @@ describe('OpenShift', () => {
       dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
-      { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-16' },
+      { stationId: 'st-1', shiftTemplateId: 'tpl-1', businessDate: '2026-03-16' },
       makeContext(),
     );
 
@@ -437,7 +496,7 @@ describe('OpenShift', () => {
       dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
-      { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-02-31' },
+      { stationId: 'st-1', shiftTemplateId: 'tpl-1', businessDate: '2026-02-31' },
       makeContext(),
     );
 
@@ -474,7 +533,7 @@ describe('OpenShift', () => {
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0 }, makeContext());
+    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1' }, makeContext());
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.code).toBe('CONFLICT');
   });
@@ -514,7 +573,6 @@ describe('OpenShift attendant requirement', () => {
           {
             stationId: 'st-1',
             shiftTemplateId: 'tpl-1',
-            openingCash: 0,
             staffAssignments: opts.staffAssignments,
           },
           makeContext(),

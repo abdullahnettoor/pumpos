@@ -316,9 +316,7 @@ _Avoid_: cash stated, declared amount
 Per Drawer, at Handover: `Opening Float + DU cash sales − Cash Drops`,
 compared with the cash handed over. The Shift's figure is the sum of its
 Drawers. Office money, card/UPI and credit never enter it. Cash the office takes from a Drawer is a
-Cash Drop. _Transition (ADR 0005)_: the code still carries the old Drawer
-Expense and Drawer Supplier Payment terms (always zero, since Office Records
-have no Shift) until #274 removes them.
+Cash Drop.
 _Avoid_: cash count, tally
 
 **Cash in Hand**:

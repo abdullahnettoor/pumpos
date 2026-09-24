@@ -57,6 +57,9 @@ export interface RecordHandoverResult {
     creditHandedOver: string;
     testingVolume: string;
     expectedSales: string;
+    openingFloat: string;
+    cashDrops: string;
+    expectedCash: string;
     varianceAmount: string;
     createdAt: string;
   };
@@ -88,6 +91,11 @@ export interface RecordHandoverResult {
   creditSales: number;
   omcCardSales: number;
   declaredTotal: number;
+  /** Drawer Reconciliation (ADR 0005): float + DU cash sales − drops. */
+  openingFloat: number;
+  cashDrops: number;
+  expectedCash: number;
+  /** cashHandedOver − expectedCash. */
   varianceAmount: number;
   replaced: boolean;
 }

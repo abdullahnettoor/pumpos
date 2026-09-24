@@ -13,12 +13,25 @@ import type {
   CloseShiftContextReader,
   NozzleReadingRepository,
   Shift,
+  ShiftReconciliationTotals,
   ShiftRepository,
   ShiftSummaryProjector,
   ShiftSummaryWriter,
   StockMovementInput,
   StockMovementWriter,
 } from './ports.js';
+
+/**
+ * The Shift's expected drawer cash: the sum of its Drawers — Σ Opening Floats +
+ * cash sales − Cash Drops (Handover drops plus any declared at close). Office
+ * money never enters it (ADR 0005). One formula for close and live status.
+ */
+export function expectedShiftDrawerCash(
+  totals: Pick<ShiftReconciliationTotals, 'openingFloat' | 'cashSales' | 'handoverCashDrops'>,
+  closeCashDrops = 0,
+): number {
+  return totals.openingFloat + totals.cashSales - totals.handoverCashDrops - closeCashDrops;
+}
 
 export interface CloseShiftCommand {
   shiftId: string;
@@ -67,8 +80,8 @@ export interface CloseShiftResult {
 /**
  * Close an open shift: finalize nozzle readings (volume = closing - opening),
  * record fuel SALE stock movements, run drawer reconciliation
- * (expectedDrawerCash = openingCash + cashCollections - drawerExpenses
- *  - drawerSupplierPayments - cashDrops), persist an immutable shift summary,
+ * (expectedDrawerCash = openingCash + cashSales - cashDrops; office money never
+ * enters a Drawer, ADR 0005), persist an immutable shift summary,
  * and mark the shift CLOSED. Run inside runInTransaction.
  *
  * NOTE: fuel cash-vs-card split is not yet known (Retail capture lands in
@@ -181,19 +194,13 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
     // Drawer reconciliation (totals preloaded in the consolidated context read;
     // they aggregate money rows this use case never mutates).
     const totals = context.totals;
-    // TODO(#274): shifts.opening_cash was dropped (ADR 0005, #280); per-attendant
-    // opening floats replace it. Until then the drawer opens at 0.
-    const openingCash = Number(shift.openingCash ?? 0);
+    // The Shift's figure is the sum of its Drawers (ADR 0005, #278): opening
+    // cash is Σ Opening Floats; drops are those recorded on Handovers plus any
+    // declared at close (e.g. counter cash with no Handover).
+    const openingCash = totals.openingFloat;
     const closingCash = cmd.closingCash;
-    const cashDrops = Number(cmd.cashDrops ?? 0);
-    const expectedDrawerCash =
-      openingCash +
-      totals.cashSales +
-      totals.cashCollections +
-      (totals.cashIncome ?? 0) -
-      totals.drawerExpenses -
-      totals.drawerSupplierPayments -
-      cashDrops;
+    const cashDrops = totals.handoverCashDrops + Number(cmd.cashDrops ?? 0);
+    const expectedDrawerCash = expectedShiftDrawerCash(totals, Number(cmd.cashDrops ?? 0));
     const cashVariance = closingCash - expectedDrawerCash;
 
     // Credit sales with vehicle information for the immutable snapshot.
@@ -208,6 +215,7 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       openingCash,
       closingCash,
       cashDrops,
+      drawers: totals.drawers,
       reconciliation: totals,
       expectedDrawerCash,
       cashVariance,

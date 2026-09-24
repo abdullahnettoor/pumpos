@@ -198,7 +198,7 @@ describe('HandoverPanel (mobile)', () => {
       await waitFor(() => expect(screen.getByLabelText(/N1 · Petrol/)).toBeDefined());
 
       fireEvent.change(screen.getByLabelText(/N1 · Petrol/), { target: { value: '1050' } });
-      fireEvent.change(screen.getByLabelText(/Cash/), { target: { value: '5000' } });
+      fireEvent.change(screen.getByLabelText(/^Cash \(₹\)/), { target: { value: '5000' } });
       save();
 
       await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
@@ -212,12 +212,27 @@ describe('HandoverPanel (mobile)', () => {
       ]);
     });
 
+    it("sends this Drawer's cash drops (ADR 0005)", async () => {
+      withClient(<HandoverPanel />);
+      await waitFor(() => expect(screen.getByLabelText(/N1 · Petrol/)).toBeDefined());
+
+      fireEvent.change(screen.getByLabelText(/N1 · Petrol/), { target: { value: '1050' } });
+      fireEvent.change(screen.getByLabelText(/^Cash \(₹\)/), { target: { value: '3000' } });
+      fireEvent.change(screen.getByLabelText(/^Cash drops/), { target: { value: '2000' } });
+      save();
+
+      await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+      const { payload } = mutateAsync.mock.calls[0][0];
+      expect(payload.cashHandedOver).toBe(3000);
+      expect(payload.cashDrops).toBe(2000);
+    });
+
     it('sends the testing volume alongside the closing reading', async () => {
       withClient(<HandoverPanel />);
       await waitFor(() => expect(screen.getByLabelText(/N1 · Petrol/)).toBeDefined());
       fireEvent.change(screen.getByLabelText(/N1 · Petrol/), { target: { value: '1050' } });
       fireEvent.change(screen.getByLabelText(/Testing/), { target: { value: '5' } });
-      fireEvent.change(screen.getByLabelText(/Cash/), { target: { value: '4500' } });
+      fireEvent.change(screen.getByLabelText(/^Cash \(₹\)/), { target: { value: '4500' } });
       save();
 
       await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
@@ -228,7 +243,7 @@ describe('HandoverPanel (mobile)', () => {
       withClient(<HandoverPanel />);
       await waitFor(() => expect(screen.getByLabelText(/N1 · Petrol/)).toBeDefined());
       fireEvent.change(screen.getByLabelText(/N1 · Petrol/), { target: { value: '1050' } });
-      fireEvent.change(screen.getByLabelText(/Cash/), { target: { value: '3000' } });
+      fireEvent.change(screen.getByLabelText(/^Cash \(₹\)/), { target: { value: '3000' } });
       fireEvent.change(screen.getByLabelText('Card'), { target: { value: '1500' } });
       fireEvent.change(screen.getByLabelText('UPI'), { target: { value: '500' } });
       save();
@@ -245,7 +260,7 @@ describe('HandoverPanel (mobile)', () => {
       withClient(<HandoverPanel />);
       await waitFor(() => expect(screen.getByLabelText(/N1 · Petrol/)).toBeDefined());
       fireEvent.change(screen.getByLabelText(/N1 · Petrol/), { target: { value: '1050' } });
-      fireEvent.change(screen.getByLabelText(/Cash/), { target: { value: '5000' } });
+      fireEvent.change(screen.getByLabelText(/^Cash \(₹\)/), { target: { value: '5000' } });
       save();
 
       await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
@@ -275,7 +290,7 @@ describe('HandoverPanel (mobile)', () => {
       withClient(<HandoverPanel />);
       await waitFor(() => expect(screen.getByLabelText(/N1 · Petrol/)).toBeDefined());
       fireEvent.change(screen.getByLabelText(/N1 · Petrol/), { target: { value: '1050' } });
-      fireEvent.change(screen.getByLabelText(/Cash/), { target: { value: '4000' } });
+      fireEvent.change(screen.getByLabelText(/^Cash \(₹\)/), { target: { value: '4000' } });
       fireEvent.change(screen.getAllByLabelText('Card')[0], { target: { value: '1000' } });
       save();
 
@@ -293,7 +308,7 @@ describe('HandoverPanel (mobile)', () => {
       withClient(<HandoverPanel />);
       await waitFor(() => expect(screen.getByLabelText(/N1 · Petrol/)).toBeDefined());
       fireEvent.change(screen.getByLabelText(/N1 · Petrol/), { target: { value: '1050' } });
-      fireEvent.change(screen.getByLabelText(/Cash/), { target: { value: '4000' } });
+      fireEvent.change(screen.getByLabelText(/^Cash \(₹\)/), { target: { value: '4000' } });
       fireEvent.change(screen.getAllByLabelText('Card')[0], { target: { value: '1000' } });
       save();
 
@@ -322,13 +337,13 @@ describe('HandoverPanel (mobile)', () => {
       const { rerender } = withClient(<HandoverPanel />);
       await waitFor(() => expect(screen.getByLabelText(/N1 · Petrol/)).toBeDefined());
       fireEvent.change(screen.getByLabelText(/N1 · Petrol/), { target: { value: '1050' } });
-      fireEvent.change(screen.getByLabelText(/Cash/), { target: { value: '5000' } });
+      fireEvent.change(screen.getByLabelText(/^Cash \(₹\)/), { target: { value: '5000' } });
 
       assignment.data = makeAssignment();
       rerender(<HandoverPanel />);
 
       expect((screen.getByLabelText(/N1 · Petrol/) as HTMLInputElement).value).toBe('1050');
-      expect((screen.getByLabelText(/Cash/) as HTMLInputElement).value).toBe('5000');
+      expect((screen.getByLabelText(/^Cash \(₹\)/) as HTMLInputElement).value).toBe('5000');
     });
 
     it('pre-fills a merchandise closing this attendant already recorded', async () => {
@@ -381,7 +396,7 @@ describe('HandoverPanel (mobile)', () => {
       withClient(<HandoverPanel />);
       await waitFor(() => expect(screen.getByLabelText(/N1 · Petrol/)).toBeDefined());
       fireEvent.change(screen.getByLabelText(/N1 · Petrol/), { target: { value: '900' } });
-      fireEvent.change(screen.getByLabelText(/Cash/), { target: { value: '100' } });
+      fireEvent.change(screen.getByLabelText(/^Cash \(₹\)/), { target: { value: '100' } });
 
       await waitFor(() => expect(saveButton().disabled).toBe(true));
       expect(mutateAsync).not.toHaveBeenCalled();
@@ -412,7 +427,7 @@ describe('HandoverPanel (mobile)', () => {
       withClient(<HandoverPanel />);
       await waitFor(() => expect(screen.getByLabelText(/N1 · Petrol/)).toBeDefined());
       fireEvent.change(screen.getByLabelText(/N1 · Petrol/), { target: { value: '1050' } });
-      fireEvent.change(screen.getByLabelText(/Cash/), { target: { value: '5000' } });
+      fireEvent.change(screen.getByLabelText(/^Cash \(₹\)/), { target: { value: '5000' } });
       await waitFor(() => expect(saveButton().disabled).toBe(false));
     });
   });

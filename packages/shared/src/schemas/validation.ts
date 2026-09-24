@@ -26,7 +26,6 @@ export function createOpenShiftFormSchema(
     .object({
       shiftTemplateId: z.string().min(1, 'Choose a Shift Template'),
       businessDate: z.string().refine(isValidBusinessDate, 'Choose a valid Business Date'),
-      openingCash: z.coerce.number().nonnegative('Opening cash cannot be negative'),
     })
     .superRefine((values, ctx) => {
       if (values.businessDate > currentBusinessDate) {
@@ -200,18 +199,18 @@ export const expenseSchema = z.object({
 
 export const shiftSchema = z.object({
   shiftTemplateId: z.string().uuid('Invalid shift template ID'),
-  openingCash: z.number().nonnegative('Opening cash must be non-negative'),
 });
 
 export const shiftOpenSchema = z.object({
   stationId: z.string().uuid('Invalid station ID'),
   shiftTemplateId: z.string().uuid('Invalid shift template ID'),
-  openingCash: z.number().nonnegative('Opening cash must be non-negative'),
+  // The Shift's opening cash is the sum of these Opening Floats (ADR 0005).
   staffAssignments: z
     .array(
       z.object({
         userId: z.string().uuid('Invalid user ID'),
         duId: z.string().uuid('Invalid dispenser unit ID'),
+        openingFloat: z.number().nonnegative('Opening float must be non-negative').default(0),
       }),
     )
     .optional(),
@@ -478,6 +477,8 @@ export const attendantHandoverSchema = z
     userId: z.string().uuid('Invalid user ID').optional(),
     duId: z.string().uuid('Invalid DU ID'),
     cashHandedOver: handoverAmountSchema,
+    /** Cash taken from this Drawer mid-shift (ADR 0005). */
+    cashDrops: handoverAmountSchema.optional(),
     cardHandedOver: handoverAmountSchema.optional(),
     upiHandedOver: handoverAmountSchema.optional(),
     nozzleReadings: z

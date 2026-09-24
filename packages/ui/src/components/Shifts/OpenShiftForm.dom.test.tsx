@@ -44,9 +44,9 @@ const baseProps = (over: Record<string, unknown> = {}): any =>
     selectedTemplateId: 'tpl-1',
     businessDate: TODAY,
     currentBusinessDate: TODAY,
-    openingCash: 5000,
     staffAssignments: [],
     onStaffAssignmentChange: vi.fn(),
+    onOpeningFloatChange: vi.fn(),
     initialReadings: [],
     onInitialReadingChange: vi.fn(),
     isOpening: false,
@@ -157,7 +157,7 @@ describe('OpenShiftForm', () => {
       const [values] = onSubmit.mock.calls[0];
       expect(values.shiftTemplateId).toBe('tpl-1');
       expect(values.businessDate).toBe(TODAY);
-      expect(values.openingCash).toBe(5000);
+      expect(values).not.toHaveProperty('openingCash');
     });
 
     it('re-derives the submitted business date when the prop changes', async () => {
@@ -203,7 +203,7 @@ describe('OpenShiftForm', () => {
       }
 
       const { rerender } = renderWithProviders(
-        <OpenShiftForm {...baseProps({ onSubmit, businessDate: TODAY, openingCash: 5000 })} />,
+        <OpenShiftForm {...baseProps({ onSubmit, businessDate: TODAY })} />,
         { queryClient: client },
       );
       await waitFor(() => expect(openButton().disabled).toBe(false));
@@ -213,30 +213,10 @@ describe('OpenShiftForm', () => {
         fireEvent.change(dateInput, { target: { value: '2026-02-27' } });
         // An unrelated prop moves; the chosen date must survive it.
         rerender(
-          <OpenShiftForm {...baseProps({ onSubmit, businessDate: TODAY, openingCash: 7250 })} />,
+          <OpenShiftForm {...baseProps({ onSubmit, businessDate: TODAY, isOpening: false })} />,
         );
         await waitFor(() => expect(dateInput.value).toBe('2026-02-27'));
       }
-    });
-
-    it('re-derives the submitted opening cash when the prop changes', async () => {
-      const onSubmit = vi.fn();
-      const client = createTestQueryClient();
-      seedStatus(client, TODAY, {
-        requestedState: 'OPEN',
-        openBusinessDays: [{ businessDate: TODAY }],
-      });
-
-      const { rerender } = renderWithProviders(
-        <OpenShiftForm {...baseProps({ onSubmit, openingCash: 5000 })} />,
-        { queryClient: client },
-      );
-      await waitFor(() => expect(openButton().disabled).toBe(false));
-
-      rerender(<OpenShiftForm {...baseProps({ onSubmit, openingCash: 7250 })} />);
-      fireEvent.submit(openButton().closest('form')!);
-      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-      expect(onSubmit.mock.calls[0][0].openingCash).toBe(7250);
     });
 
     it('re-derives the submitted template when the selection changes', async () => {
@@ -543,6 +523,23 @@ describe('OpenShiftForm', () => {
      * on every render, and a looser matcher silently matched that instead.
      */
     const blockingMessage = () => screen.queryByRole('alert');
+
+    it('takes an Opening Float per assigned Drawer and shows their sum (ADR 0005)', () => {
+      const onOpeningFloatChange = vi.fn();
+      renderForm({
+        dispensers: DUS,
+        staff: STAFF,
+        onOpeningFloatChange,
+        staffAssignments: [
+          { duId: 'du-1', userId: 'u-1', openingFloat: 500 },
+          { duId: 'du-2', userId: 'u-1', openingFloat: 250 },
+        ],
+      });
+      expect(screen.getByText('₹750.00')).toBeTruthy();
+      const float = document.getElementById('float-du-2') as HTMLInputElement;
+      fireEvent.change(float, { target: { value: '300' } });
+      expect(onOpeningFloatChange).toHaveBeenCalledWith('du-2', 300);
+    });
 
     it('blocks the open while a dispenser has no attendant', () => {
       withAssignments([
