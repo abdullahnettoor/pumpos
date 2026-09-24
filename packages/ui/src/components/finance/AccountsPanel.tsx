@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { resolveEntryDate } from '@pump/shared';
 import type { ColumnDef } from '@tanstack/react-table';
 import { PageLayout } from '../primitives/PageLayout.js';
 import { Drawer } from '../Drawer.js';
@@ -98,6 +99,8 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
   const stationId = selectedStation?.id ?? null;
   const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
+  // Bank work is an Office Record: default to the Entry Date, never the sales day (ADR 0005).
+  const todayEntry = () => resolveEntryDate({ timeZone: s.timezone });
 
   const { data: accounts, isLoading } = useFinancialAccounts(stationId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -176,7 +179,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
     setSettleBankId(banks[0]?.id ?? '');
     setSettleGross(selected ? String(Number(selected.balance) || '') : '');
     setSettleFee('');
-    setSettleDate('');
+    setSettleDate(todayEntry());
     setSettleNotes('');
     setSettleError(null);
     setSettleOpen(true);
@@ -238,7 +241,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
   const openEntry = () => {
     setEntryKind('CHARGE');
     setEntryAmount('');
-    setEntryDate('');
+    setEntryDate(todayEntry());
     setEntryNotes('');
     setEntryError(null);
     setEntryOpen(true);
@@ -331,7 +334,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
     setFromAccountId(list[0]?.id ?? '');
     setToAccountId(list[1]?.id ?? '');
     setTransferAmount('');
-    setTransferDate('');
+    setTransferDate(todayEntry());
     setTransferNotes('');
     setTransferError(null);
     setTransferOpen(true);
