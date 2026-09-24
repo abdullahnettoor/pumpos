@@ -18,22 +18,22 @@ import type { CreditSaleRecord, ShiftReconciliationTotals } from '@pump/core';
 export function reconTotalsJson(shiftId: string) {
   return sql`(SELECT jsonb_build_object(
     'cash_collections', (SELECT COALESCE(SUM(amount) FILTER (WHERE payment_method = 'Cash'), 0)::float8
-      FROM collections WHERE shift_id = ${shiftId}),
+      FROM collections WHERE metadata->>'shiftId' = ${shiftId} /* TODO(#273): legacy shift anchor stashed in metadata (ADR 0005, #280) */),
     'card_collections', (SELECT COALESCE(SUM(amount) FILTER (WHERE payment_method = 'Card'), 0)::float8
-      FROM collections WHERE shift_id = ${shiftId}),
+      FROM collections WHERE metadata->>'shiftId' = ${shiftId} /* TODO(#273): legacy shift anchor stashed in metadata (ADR 0005, #280) */),
     'upi_collections', (SELECT COALESCE(SUM(amount) FILTER (WHERE payment_method = 'UPI'), 0)::float8
-      FROM collections WHERE shift_id = ${shiftId}),
+      FROM collections WHERE metadata->>'shiftId' = ${shiftId} /* TODO(#273): legacy shift anchor stashed in metadata (ADR 0005, #280) */),
     'credit_collections', (SELECT COALESCE(SUM(amount) FILTER (WHERE payment_method = 'Credit'), 0)::float8
-      FROM collections WHERE shift_id = ${shiftId}),
+      FROM collections WHERE metadata->>'shiftId' = ${shiftId} /* TODO(#273): legacy shift anchor stashed in metadata (ADR 0005, #280) */),
     'drawer_expenses', (SELECT COALESCE(SUM(amount) FILTER (
         WHERE affects_drawer AND COALESCE(status, '') <> 'VOIDED'), 0)::float8
-      FROM expenses WHERE shift_id = ${shiftId}),
+      FROM expenses WHERE metadata->>'shiftId' = ${shiftId} /* TODO(#273): legacy shift anchor stashed in metadata (ADR 0005, #280) */),
     'cash_income', (SELECT COALESCE(SUM(amount) FILTER (
         WHERE affects_drawer AND COALESCE(status, '') <> 'VOIDED'), 0)::float8
-      FROM other_income WHERE shift_id = ${shiftId}),
+      FROM other_income WHERE metadata->>'shiftId' = ${shiftId} /* TODO(#273): legacy shift anchor stashed in metadata (ADR 0005, #280) */),
     'drawer_supplier_payments', (SELECT COALESCE(SUM(amount) FILTER (
         WHERE transaction_type = 'Payment' AND affects_drawer), 0)::float8
-      FROM supplier_transactions WHERE shift_id = ${shiftId}),
+      FROM supplier_transactions WHERE metadata->>'shiftId' = ${shiftId} /* TODO(#273): legacy shift anchor stashed in metadata (ADR 0005, #280) */),
     'handover_cash', (SELECT COALESCE(SUM(cash_handed_over), 0)::float8
       FROM attendant_handovers WHERE shift_id = ${shiftId}),
     'handover_count', (SELECT COUNT(*)::int FROM attendant_handovers WHERE shift_id = ${shiftId}),

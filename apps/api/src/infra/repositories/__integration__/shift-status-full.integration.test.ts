@@ -38,6 +38,7 @@ const NOZZLE_MAINTENANCE = '00000000-0000-0000-0000-0000000000f2';
 const NOZZLE = '00000000-0000-0000-0000-00000000e10c';
 const TERMINAL = '00000000-0000-0000-0000-00000000e10d';
 const HANDOVER = '00000000-0000-0000-0000-00000000e10e';
+const CASH_ACCOUNT = '00000000-0000-0000-0000-00000000c1ff';
 const CUSTOMER = '00000000-0000-0000-0000-00000000e10f';
 
 const BOOTSTRAP = `
@@ -230,7 +231,6 @@ describe.skipIf(!CONNECTION)('GET /shifts/status full mode against real Postgres
       openedBy: MANAGER,
       closedBy: MANAGER,
       closedAt: new Date(),
-      openingCash: '500',
       closingCash: '900',
     });
     await db.insert(schema.shiftSummaries).values({
@@ -245,7 +245,6 @@ describe.skipIf(!CONNECTION)('GET /shifts/status full mode against real Postgres
       shiftTemplateId: TEMPLATE,
       status: 'OPEN',
       openedBy: MANAGER,
-      openingCash: '1000',
     });
     await db.insert(schema.nozzleReadings).values({
       shiftId: OPEN_SHIFT,
@@ -331,11 +330,22 @@ describe.skipIf(!CONNECTION)('GET /shifts/status full mode against real Postgres
       totalAmount: '120',
       nonCashAmount: '20',
     });
+    // TODO(#273): office rows carry entry-date + funding account; legacy anchor in metadata (ADR 0005, #280).
+    await db.insert(schema.financialAccounts).values({
+      id: CASH_ACCOUNT,
+      organizationId: ORG,
+      stationId: STATION,
+      accountType: 'CASH_IN_HAND',
+      name: 'Cash in Hand',
+    });
     await db.insert(schema.collections).values({
       documentNumber: 'COL-1',
       customerId: CUSTOMER,
-      shiftId: OPEN_SHIFT,
-      businessDayId: DAY,
+      organizationId: ORG,
+      stationId: STATION,
+      entryDate: '2026-03-10',
+      fundingAccountId: CASH_ACCOUNT,
+      metadata: { shiftId: OPEN_SHIFT, businessDayId: DAY },
       amount: '300',
       paymentMethod: 'Cash',
     });

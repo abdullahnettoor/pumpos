@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
+import { accountTypeForPaidFrom } from '@pump/core';
 import type {
   Expense,
   ExpenseRepository,
@@ -8,19 +9,27 @@ import type {
   IncomeCategory,
   IncomeCategoryRepository,
 } from '@pump/core';
+import { resolveOfficeColumns } from '../office-anchor.js';
+
+// TODO(#273): the office tables dropped shift_id / business_day_id / paid_from /
+// received_into (ADR 0005, #280). Until the office use-cases move to the new
+// entry-date model, the legacy anchor fields are stashed in metadata so the
+// domain entities round-trip unchanged.
+type LegacyMeta = Record<string, unknown>;
 
 function toExpense(r: typeof schema.expenses.$inferSelect): Expense {
+  const meta = (r.metadata as LegacyMeta) ?? {};
   return {
     id: r.id,
-    shiftId: r.shiftId,
-    businessDayId: r.businessDayId,
+    shiftId: (meta.shiftId as string | null) ?? null, // TODO(#273)
+    businessDayId: (meta.businessDayId as string) ?? '', // TODO(#273)
     categoryId: r.categoryId,
     amount: r.amount,
-    paidFrom: r.paidFrom as Expense['paidFrom'],
+    paidFrom: ((meta.paidFrom as string) ?? 'SHIFT_CASH') as Expense['paidFrom'], // TODO(#273)
     affectsDrawer: r.affectsDrawer,
     description: r.description ?? null,
     status: r.status,
-    metadata: (r.metadata as Record<string, unknown>) ?? {},
+    metadata: meta,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   };
@@ -37,19 +46,32 @@ export class DrizzleExpenseRepository implements ExpenseRepository {
     return r ? toExpense(r) : null;
   }
   async save(e: Expense): Promise<void> {
+    // TODO(#273): derive the new not-null office columns from the legacy anchor.
+    const cols = await resolveOfficeColumns(
+      this.db,
+      e.businessDayId,
+      accountTypeForPaidFrom(e.paidFrom),
+    );
+    const metadata: LegacyMeta = {
+      ...(e.metadata ?? {}),
+      shiftId: e.shiftId,
+      businessDayId: e.businessDayId,
+      paidFrom: e.paidFrom,
+    };
     await this.db
       .insert(schema.expenses)
       .values({
         id: e.id,
-        shiftId: e.shiftId,
-        businessDayId: e.businessDayId,
+        organizationId: cols.organizationId,
+        stationId: cols.stationId,
+        entryDate: cols.entryDate,
+        fundingAccountId: cols.fundingAccountId,
         categoryId: e.categoryId,
         amount: e.amount,
-        paidFrom: e.paidFrom,
         affectsDrawer: e.affectsDrawer,
         description: e.description,
         status: e.status,
-        metadata: e.metadata ?? {},
+        metadata,
         createdAt: new Date(e.createdAt),
         updatedAt: new Date(e.updatedAt),
       })
@@ -57,11 +79,10 @@ export class DrizzleExpenseRepository implements ExpenseRepository {
         target: schema.expenses.id,
         set: {
           amount: e.amount,
-          paidFrom: e.paidFrom,
           affectsDrawer: e.affectsDrawer,
           description: e.description,
           status: e.status,
-          metadata: e.metadata ?? {},
+          metadata,
           updatedAt: new Date(e.updatedAt),
         },
       });
@@ -69,13 +90,14 @@ export class DrizzleExpenseRepository implements ExpenseRepository {
 }
 
 function toIncome(r: typeof schema.otherIncome.$inferSelect): OtherIncome {
+  const meta = (r.metadata as LegacyMeta) ?? {};
   return {
     id: r.id,
-    shiftId: r.shiftId,
-    businessDayId: r.businessDayId,
+    shiftId: (meta.shiftId as string | null) ?? null, // TODO(#273)
+    businessDayId: (meta.businessDayId as string) ?? '', // TODO(#273)
     categoryId: r.categoryId,
     amount: r.amount,
-    receivedInto: r.receivedInto as OtherIncome['receivedInto'],
+    receivedInto: ((meta.receivedInto as string) ?? 'SHIFT_CASH') as OtherIncome['receivedInto'], // TODO(#273)
     affectsDrawer: r.affectsDrawer,
     payer: r.payer ?? null,
     referenceType: r.referenceType ?? null,
@@ -109,15 +131,28 @@ export class DrizzleIncomeRepository implements IncomeRepository {
     return r ? toIncome(r) : null;
   }
   async save(i: OtherIncome): Promise<void> {
+    // TODO(#273): derive the new not-null office columns from the legacy anchor.
+    const cols = await resolveOfficeColumns(
+      this.db,
+      i.businessDayId,
+      accountTypeForPaidFrom(i.receivedInto),
+    );
+    const metadata: LegacyMeta = {
+      ...(i.metadata ?? {}),
+      shiftId: i.shiftId,
+      businessDayId: i.businessDayId,
+      receivedInto: i.receivedInto,
+    };
     await this.db
       .insert(schema.otherIncome)
       .values({
         id: i.id,
-        shiftId: i.shiftId,
-        businessDayId: i.businessDayId,
+        organizationId: cols.organizationId,
+        stationId: cols.stationId,
+        entryDate: cols.entryDate,
+        fundingAccountId: cols.fundingAccountId,
         categoryId: i.categoryId,
         amount: i.amount,
-        receivedInto: i.receivedInto,
         affectsDrawer: i.affectsDrawer,
         payer: i.payer,
         referenceType: i.referenceType,
@@ -134,7 +169,7 @@ export class DrizzleIncomeRepository implements IncomeRepository {
         igst: i.igst,
         cess: i.cess,
         taxSnapshot: i.taxSnapshot,
-        metadata: i.metadata ?? {},
+        metadata,
         createdAt: new Date(i.createdAt),
         updatedAt: new Date(i.updatedAt),
       })
@@ -142,12 +177,11 @@ export class DrizzleIncomeRepository implements IncomeRepository {
         target: schema.otherIncome.id,
         set: {
           amount: i.amount,
-          receivedInto: i.receivedInto,
           affectsDrawer: i.affectsDrawer,
           payer: i.payer,
           description: i.description,
           status: i.status,
-          metadata: i.metadata ?? {},
+          metadata,
           updatedAt: new Date(i.updatedAt),
         },
       });

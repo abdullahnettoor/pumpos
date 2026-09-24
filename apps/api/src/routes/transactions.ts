@@ -245,7 +245,7 @@ transactionsRouter.get('/suppliers', async (c) => {
       .from(schema.supplierTransactions)
       .innerJoin(
         schema.businessDays,
-        eq(schema.supplierTransactions.businessDayId, schema.businessDays.id),
+        sql`${schema.businessDays.id} = (${schema.supplierTransactions.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
       )
       .where(eq(schema.businessDays.organizationId, user.organizationId))
       .groupBy(schema.supplierTransactions.supplierId),
@@ -391,16 +391,18 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
       id: schema.supplierTransactions.id,
       transactionType: schema.supplierTransactions.transactionType,
       amount: schema.supplierTransactions.amount,
-      paidFrom: schema.supplierTransactions.paidFrom,
+      paidFrom: sql<string>`COALESCE(${schema.supplierTransactions.metadata}->>'paidFrom', 'BANK')` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
       notes: schema.supplierTransactions.notes,
       createdAt: schema.supplierTransactions.createdAt,
-      shiftId: schema.supplierTransactions.shiftId,
+      shiftId: sql<
+        string | null
+      >`${schema.supplierTransactions.metadata}->>'shiftId'` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
       businessDate: schema.businessDays.businessDate,
     })
     .from(schema.supplierTransactions)
     .innerJoin(
       schema.businessDays,
-      eq(schema.supplierTransactions.businessDayId, schema.businessDays.id),
+      sql`${schema.businessDays.id} = (${schema.supplierTransactions.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
     )
     .where(eq(schema.supplierTransactions.supplierId, supplierId))
     .orderBy(schema.supplierTransactions.createdAt);
@@ -1227,12 +1229,14 @@ transactionsRouter.get('/income', async (c) => {
       amount: schema.otherIncome.amount,
       categoryId: schema.otherIncome.categoryId,
       categoryName: schema.incomeCategories.name,
-      receivedInto: schema.otherIncome.receivedInto,
+      receivedInto: sql<string>`COALESCE(${schema.otherIncome.metadata}->>'receivedInto', 'SHIFT_CASH')` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
       affectsDrawer: schema.otherIncome.affectsDrawer,
       payer: schema.otherIncome.payer,
       description: schema.otherIncome.description,
       status: schema.otherIncome.status,
-      shiftId: schema.otherIncome.shiftId,
+      shiftId: sql<
+        string | null
+      >`${schema.otherIncome.metadata}->>'shiftId'` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
       taxCategory: schema.otherIncome.taxCategory,
       gstRate: schema.otherIncome.gstRate,
       hsnCode: schema.otherIncome.hsnCode,
@@ -1245,7 +1249,10 @@ transactionsRouter.get('/income', async (c) => {
       createdAt: schema.otherIncome.createdAt,
     })
     .from(schema.otherIncome)
-    .innerJoin(schema.businessDays, eq(schema.otherIncome.businessDayId, schema.businessDays.id))
+    .innerJoin(
+      schema.businessDays,
+      sql`${schema.businessDays.id} = (${schema.otherIncome.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+    )
     .leftJoin(
       schema.incomeCategories,
       eq(schema.incomeCategories.id, schema.otherIncome.categoryId),
@@ -1292,7 +1299,10 @@ transactionsRouter.get('/income/gst-register', async (c) => {
       cess: schema.otherIncome.cess,
     })
     .from(schema.otherIncome)
-    .innerJoin(schema.businessDays, eq(schema.otherIncome.businessDayId, schema.businessDays.id))
+    .innerJoin(
+      schema.businessDays,
+      sql`${schema.businessDays.id} = (${schema.otherIncome.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+    )
     .leftJoin(
       schema.incomeCategories,
       eq(schema.incomeCategories.id, schema.otherIncome.categoryId),
@@ -1912,7 +1922,10 @@ transactionsRouter.get('/expenses', async (c) => {
       categoryName: schema.expenseCategories.name,
     })
     .from(schema.expenses)
-    .innerJoin(schema.businessDays, eq(schema.expenses.businessDayId, schema.businessDays.id))
+    .innerJoin(
+      schema.businessDays,
+      sql`${schema.businessDays.id} = (${schema.expenses.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+    )
     .leftJoin(schema.expenseCategories, eq(schema.expenses.categoryId, schema.expenseCategories.id))
     .where(eq(schema.businessDays.organizationId, user.organizationId))
     .orderBy(desc(schema.expenses.createdAt));
@@ -2112,7 +2125,10 @@ transactionsRouter.get('/collections', async (c) => {
       customerName: schema.customers.name,
     })
     .from(schema.collections)
-    .innerJoin(schema.businessDays, eq(schema.collections.businessDayId, schema.businessDays.id))
+    .innerJoin(
+      schema.businessDays,
+      sql`${schema.businessDays.id} = (${schema.collections.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+    )
     .leftJoin(schema.customers, eq(schema.collections.customerId, schema.customers.id))
     .where(eq(schema.businessDays.organizationId, user.organizationId))
     .orderBy(desc(schema.collections.createdAt));
@@ -2215,21 +2231,27 @@ transactionsRouter.get('/money-movements', async (c) => {
         customerName: schema.customers.name,
       })
       .from(schema.collections)
-      .innerJoin(schema.businessDays, eq(schema.collections.businessDayId, schema.businessDays.id))
+      .innerJoin(
+        schema.businessDays,
+        sql`${schema.businessDays.id} = (${schema.collections.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+      )
       .leftJoin(schema.customers, eq(schema.customers.id, schema.collections.customerId))
       .where(and(...dateConds)),
     db
       .select({
         id: schema.expenses.id,
         amount: schema.expenses.amount,
-        paidFrom: schema.expenses.paidFrom,
+        paidFrom: sql<string>`COALESCE(${schema.expenses.metadata}->>'paidFrom', 'SHIFT_CASH')` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
         description: schema.expenses.description,
         createdAt: schema.expenses.createdAt,
         businessDate: schema.businessDays.businessDate,
         categoryName: schema.expenseCategories.name,
       })
       .from(schema.expenses)
-      .innerJoin(schema.businessDays, eq(schema.expenses.businessDayId, schema.businessDays.id))
+      .innerJoin(
+        schema.businessDays,
+        sql`${schema.businessDays.id} = (${schema.expenses.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+      )
       .leftJoin(
         schema.expenseCategories,
         eq(schema.expenseCategories.id, schema.expenses.categoryId),
@@ -2239,7 +2261,7 @@ transactionsRouter.get('/money-movements', async (c) => {
       .select({
         id: schema.supplierTransactions.id,
         amount: schema.supplierTransactions.amount,
-        paidFrom: schema.supplierTransactions.paidFrom,
+        paidFrom: sql<string>`COALESCE(${schema.supplierTransactions.metadata}->>'paidFrom', 'BANK')` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
         notes: schema.supplierTransactions.notes,
         createdAt: schema.supplierTransactions.createdAt,
         businessDate: schema.businessDays.businessDate,
@@ -2248,7 +2270,7 @@ transactionsRouter.get('/money-movements', async (c) => {
       .from(schema.supplierTransactions)
       .innerJoin(
         schema.businessDays,
-        eq(schema.supplierTransactions.businessDayId, schema.businessDays.id),
+        sql`${schema.businessDays.id} = (${schema.supplierTransactions.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
       )
       .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.supplierTransactions.supplierId))
       .where(and(eq(schema.supplierTransactions.transactionType, 'Payment'), ...dateConds)),
@@ -2334,31 +2356,38 @@ transactionsRouter.get('/money-movements', async (c) => {
         .from(schema.collections)
         .innerJoin(
           schema.businessDays,
-          eq(schema.collections.businessDayId, schema.businessDays.id),
+          sql`${schema.businessDays.id} = (${schema.collections.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
         )
         .where(and(...priorConds))
         .groupBy(schema.collections.paymentMethod),
       db
         .select({
-          paidFrom: schema.expenses.paidFrom,
+          paidFrom: sql<string>`COALESCE(${schema.expenses.metadata}->>'paidFrom', 'SHIFT_CASH')` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
           total: sql<string>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
         })
         .from(schema.expenses)
-        .innerJoin(schema.businessDays, eq(schema.expenses.businessDayId, schema.businessDays.id))
+        .innerJoin(
+          schema.businessDays,
+          sql`${schema.businessDays.id} = (${schema.expenses.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+        )
         .where(and(ne(schema.expenses.status, 'VOIDED'), ...priorConds))
-        .groupBy(schema.expenses.paidFrom),
+        .groupBy(
+          sql`${schema.expenses.metadata}->>'paidFrom'` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+        ),
       db
         .select({
-          paidFrom: schema.supplierTransactions.paidFrom,
+          paidFrom: sql<string>`COALESCE(${schema.supplierTransactions.metadata}->>'paidFrom', 'BANK')` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
           total: sql<string>`COALESCE(SUM(${schema.supplierTransactions.amount}), 0)`,
         })
         .from(schema.supplierTransactions)
         .innerJoin(
           schema.businessDays,
-          eq(schema.supplierTransactions.businessDayId, schema.businessDays.id),
+          sql`${schema.businessDays.id} = (${schema.supplierTransactions.metadata}->>'businessDayId')::uuid` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
         )
         .where(and(eq(schema.supplierTransactions.transactionType, 'Payment'), ...priorConds))
-        .groupBy(schema.supplierTransactions.paidFrom),
+        .groupBy(
+          sql`${schema.supplierTransactions.metadata}->>'paidFrom'` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+        ),
     ]);
 
     const openMap: Record<'Cash' | 'Bank' | 'Owner', number> = { Cash: 0, Bank: 0, Owner: 0 };
@@ -2934,7 +2963,7 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
         id: schema.expenses.id,
         amount: schema.expenses.amount,
         description: schema.expenses.description,
-        paidFrom: schema.expenses.paidFrom,
+        paidFrom: sql<string>`COALESCE(${schema.expenses.metadata}->>'paidFrom', 'SHIFT_CASH')` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
         affectsDrawer: schema.expenses.affectsDrawer,
         status: schema.expenses.status,
         createdAt: schema.expenses.createdAt,
@@ -2945,7 +2974,9 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
         schema.expenseCategories,
         eq(schema.expenseCategories.id, schema.expenses.categoryId),
       )
-      .where(eq(schema.expenses.shiftId, shiftId)),
+      .where(
+        sql`${schema.expenses.metadata}->>'shiftId' = ${shiftId}` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+      ),
     db
       .select({
         id: schema.purchases.id,
@@ -2970,7 +3001,9 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
       })
       .from(schema.collections)
       .leftJoin(schema.customers, eq(schema.customers.id, schema.collections.customerId))
-      .where(eq(schema.collections.shiftId, shiftId)),
+      .where(
+        sql`${schema.collections.metadata}->>'shiftId' = ${shiftId}` /* TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280) */,
+      ),
     // Stage B fuel-on-credit sales live in customer_transactions (a receivable),
     // not the collections table — surface them so totals/reconciliation/summary see them.
     db

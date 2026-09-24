@@ -284,7 +284,8 @@ export const shifts = pgTable(
     closedBy: uuid('closed_by').references(() => users.id),
     closedAt: timestamp('closed_at'),
     lockedAt: timestamp('locked_at'),
-    openingCash: numeric('opening_cash', { precision: 12, scale: 2 }).notNull(),
+    // ADR 0005: drawer accountability moved to per-attendant opening floats
+    // (shift_staff_assignments.opening_float); the shift-level opening cash is gone.
     closingCash: numeric('closing_cash', { precision: 12, scale: 2 }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -307,6 +308,8 @@ export const shiftStaffAssignments = pgTable('shift_staff_assignments', {
   duId: uuid('du_id')
     .references(() => dispenserUnits.id)
     .notNull(),
+  // ADR 0005 (#278): per-attendant drawer float issued at shift open.
+  openingFloat: numeric('opening_float', { precision: 12, scale: 2 }).default('0').notNull(),
   assignedAt: timestamp('assigned_at').defaultNow().notNull(),
 });
 
@@ -454,27 +457,46 @@ export const suppliers = pgTable('suppliers', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-export const supplierTransactions = pgTable('supplier_transactions', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  // Nullable: a supplier payment from the drawer links to a shift; bank/office
-  // payments do not. Always anchored to a business day.
-  shiftId: uuid('shift_id').references(() => shifts.id),
-  businessDayId: uuid('business_day_id')
-    .references(() => businessDays.id)
-    .notNull(),
-  supplierId: uuid('supplier_id')
-    .references(() => suppliers.id)
-    .notNull(),
-  transactionType: varchar('transaction_type', { length: 50 }).notNull(), // 'Purchase', 'Payment', 'Adjustment'
-  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
-  paidFrom: varchar('paid_from', { length: 20 }).default('BANK').notNull(), // 'SHIFT_CASH' | 'BANK' | 'OWNER'
-  affectsDrawer: boolean('affects_drawer').default(false).notNull(),
-  referenceType: varchar('reference_type', { length: 50 }),
-  referenceId: uuid('reference_id'),
-  notes: varchar('notes', { length: 500 }),
-  metadata: jsonb('metadata').default({}).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const supplierTransactions = pgTable(
+  'supplier_transactions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    // ADR 0005: office record. Tenancy used to flow via business_day_id, which
+    // is dropped; org/station are now explicit for RLS and date-scoped queries.
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    stationId: uuid('station_id')
+      .references(() => stations.id)
+      .notNull(),
+    // Station-timezone calendar date (YYYY-MM-DD, same format as business_date).
+    entryDate: varchar('entry_date', { length: 10 }).notNull(),
+    supplierId: uuid('supplier_id')
+      .references(() => suppliers.id)
+      .notNull(),
+    transactionType: varchar('transaction_type', { length: 50 }).notNull(), // 'Purchase', 'Payment', 'Adjustment'
+    amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+    // The money account this record moves; replaces the paid_from enum.
+    fundingAccountId: uuid('funding_account_id')
+      .references(() => financialAccounts.id)
+      .notNull(),
+    // Payment terminal used, when paid via card/UPI at a terminal (#276).
+    terminalId: uuid('terminal_id').references(() => paymentTerminals.id),
+    affectsDrawer: boolean('affects_drawer').default(false).notNull(),
+    referenceType: varchar('reference_type', { length: 50 }),
+    referenceId: uuid('reference_id'),
+    notes: varchar('notes', { length: 500 }),
+    metadata: jsonb('metadata').default({}).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    orgStationEntryDateIdx: index('supplier_transactions_org_station_entry_date_idx').on(
+      t.organizationId,
+      t.stationId,
+      t.entryDate,
+    ),
+  }),
+);
 
 // ----------------------------------------------------
 // FINANCIAL ACCOUNTS & MONEY LEDGER (Phase F, Layer A)
@@ -529,6 +551,8 @@ export const ledgerEntries = pgTable(
     transferId: uuid('transfer_id'), // links the two rows of a transfer
     businessDayId: uuid('business_day_id').references(() => businessDays.id),
     shiftId: uuid('shift_id').references(() => shifts.id),
+    // Payment terminal that carried the money, when applicable (#276).
+    terminalId: uuid('terminal_id').references(() => paymentTerminals.id),
     reconciled: boolean('reconciled').default(false).notNull(),
     notes: varchar('notes', { length: 500 }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -685,28 +709,47 @@ export const expenseCategories = pgTable(
   }),
 );
 
-export const expenses = pgTable('expenses', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  // Nullable: only drawer-paid expenses link to a shift; rent/salary/bill
-  // expenses paid from bank/office attach only to the business day.
-  shiftId: uuid('shift_id').references(() => shifts.id),
-  businessDayId: uuid('business_day_id')
-    .references(() => businessDays.id)
-    .notNull(),
-  categoryId: uuid('category_id')
-    .references(() => expenseCategories.id)
-    .notNull(),
-  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
-  paidFrom: varchar('paid_from', { length: 20 }).default('SHIFT_CASH').notNull(), // 'SHIFT_CASH' | 'BANK' | 'OWNER'
-  affectsDrawer: boolean('affects_drawer').default(true).notNull(),
-  description: varchar('description', { length: 255 }),
-  parentExpenseId: uuid('parent_expense_id'),
-  adjustmentReason: varchar('adjustment_reason', { length: 255 }),
-  status: varchar('status', { length: 20 }).default('ACTIVE').notNull(), // 'ACTIVE', 'ADJUSTMENT', 'VOIDED'
-  metadata: jsonb('metadata').default({}).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const expenses = pgTable(
+  'expenses',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    // ADR 0005: office record. Tenancy used to flow via business_day_id, which
+    // is dropped; org/station are now explicit for RLS and date-scoped queries.
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    stationId: uuid('station_id')
+      .references(() => stations.id)
+      .notNull(),
+    // Station-timezone calendar date (YYYY-MM-DD, same format as business_date).
+    entryDate: varchar('entry_date', { length: 10 }).notNull(),
+    categoryId: uuid('category_id')
+      .references(() => expenseCategories.id)
+      .notNull(),
+    amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+    // The money account this record moves; replaces the paid_from enum.
+    fundingAccountId: uuid('funding_account_id')
+      .references(() => financialAccounts.id)
+      .notNull(),
+    // Payment terminal used, when paid via card/UPI at a terminal (#276).
+    terminalId: uuid('terminal_id').references(() => paymentTerminals.id),
+    affectsDrawer: boolean('affects_drawer').default(true).notNull(),
+    description: varchar('description', { length: 255 }),
+    parentExpenseId: uuid('parent_expense_id'),
+    adjustmentReason: varchar('adjustment_reason', { length: 255 }),
+    status: varchar('status', { length: 20 }).default('ACTIVE').notNull(), // 'ACTIVE', 'ADJUSTMENT', 'VOIDED'
+    metadata: jsonb('metadata').default({}).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    orgStationEntryDateIdx: index('expenses_org_station_entry_date_idx').on(
+      t.organizationId,
+      t.stationId,
+      t.entryDate,
+    ),
+  }),
+);
 
 // ----------------------------------------------------
 // OTHER / INDIRECT INCOME (Phase FI)
@@ -734,21 +777,32 @@ export const incomeCategories = pgTable(
 );
 
 // Non-operating / indirect income (tanker rental, truck parking, commission,
-// scrap, interest, …). Mirrors `expenses`: business-day anchored, shift_id set
-// only when the cash hits the drawer (received_into = SHIFT_CASH).
+// scrap, interest, …). Office record (ADR 0005): entry-date anchored, money
+// lands in funding_account_id.
 export const otherIncome = pgTable(
   'other_income',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    shiftId: uuid('shift_id').references(() => shifts.id),
-    businessDayId: uuid('business_day_id')
-      .references(() => businessDays.id)
+    // ADR 0005: office record. Tenancy used to flow via business_day_id, which
+    // is dropped; org/station are now explicit for RLS and date-scoped queries.
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
       .notNull(),
+    stationId: uuid('station_id')
+      .references(() => stations.id)
+      .notNull(),
+    // Station-timezone calendar date (YYYY-MM-DD, same format as business_date).
+    entryDate: varchar('entry_date', { length: 10 }).notNull(),
     categoryId: uuid('category_id')
       .references(() => incomeCategories.id)
       .notNull(),
     amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
-    receivedInto: varchar('received_into', { length: 20 }).default('SHIFT_CASH').notNull(), // 'SHIFT_CASH' | 'BANK' | 'OWNER'
+    // The money account this record moves; replaces the received_into enum.
+    fundingAccountId: uuid('funding_account_id')
+      .references(() => financialAccounts.id)
+      .notNull(),
+    // Payment terminal used, when received via card/UPI at a terminal (#276).
+    terminalId: uuid('terminal_id').references(() => paymentTerminals.id),
     affectsDrawer: boolean('affects_drawer').default(true).notNull(),
     payer: varchar('payer', { length: 255 }),
     referenceType: varchar('reference_type', { length: 50 }),
@@ -778,31 +832,54 @@ export const otherIncome = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (t) => ({
-    bdIdx: index('other_income_business_day_idx').on(t.businessDayId),
-    shiftIdx: index('other_income_shift_idx').on(t.shiftId),
+    orgStationEntryDateIdx: index('other_income_org_station_entry_date_idx').on(
+      t.organizationId,
+      t.stationId,
+      t.entryDate,
+    ),
     categoryIdx: index('other_income_category_idx').on(t.categoryId),
   }),
 );
 
-export const collections = pgTable('collections', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  documentNumber: varchar('document_number', { length: 100 }).notNull(),
-  // Nullable: only cash collected at the counter touches the drawer/shift.
-  // Bank/UPI/online collections are anchored to the business day only.
-  shiftId: uuid('shift_id').references(() => shifts.id),
-  businessDayId: uuid('business_day_id')
-    .references(() => businessDays.id)
-    .notNull(),
-  customerId: uuid('customer_id')
-    .references(() => customers.id)
-    .notNull(),
-  vehicleId: uuid('vehicle_id').references(() => customerVehicles.id),
-  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
-  paymentMethod: varchar('payment_method', { length: 50 }).notNull(),
-  notes: varchar('notes', { length: 500 }),
-  metadata: jsonb('metadata').default({}).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const collections = pgTable(
+  'collections',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    documentNumber: varchar('document_number', { length: 100 }).notNull(),
+    // ADR 0005: office record. Tenancy used to flow via business_day_id, which
+    // is dropped; org/station are now explicit for RLS and date-scoped queries.
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    stationId: uuid('station_id')
+      .references(() => stations.id)
+      .notNull(),
+    // Station-timezone calendar date (YYYY-MM-DD, same format as business_date).
+    entryDate: varchar('entry_date', { length: 10 }).notNull(),
+    customerId: uuid('customer_id')
+      .references(() => customers.id)
+      .notNull(),
+    vehicleId: uuid('vehicle_id').references(() => customerVehicles.id),
+    amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+    paymentMethod: varchar('payment_method', { length: 50 }).notNull(),
+    // The money account this record moves; replaces method→account inference.
+    fundingAccountId: uuid('funding_account_id')
+      .references(() => financialAccounts.id)
+      .notNull(),
+    // Payment terminal used, when collected via card/UPI at a terminal (#276).
+    terminalId: uuid('terminal_id').references(() => paymentTerminals.id),
+    notes: varchar('notes', { length: 500 }),
+    metadata: jsonb('metadata').default({}).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    orgStationEntryDateIdx: index('collections_org_station_entry_date_idx').on(
+      t.organizationId,
+      t.stationId,
+      t.entryDate,
+    ),
+  }),
+);
 
 export const purchases = pgTable('purchases', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -1067,6 +1144,10 @@ export const attendantHandovers = pgTable(
       .notNull(),
     testingVolume: numeric('testing_volume', { precision: 10, scale: 3 }).default('0').notNull(),
     expectedSales: numeric('expected_sales', { precision: 12, scale: 2 }).default('0').notNull(),
+    // ADR 0005 (#278): per-attendant drawer reconciliation inputs.
+    openingFloat: numeric('opening_float', { precision: 12, scale: 2 }).default('0').notNull(),
+    cashDrops: numeric('cash_drops', { precision: 12, scale: 2 }).default('0').notNull(),
+    expectedCash: numeric('expected_cash', { precision: 12, scale: 2 }).default('0').notNull(),
     varianceAmount: numeric('variance_amount', { precision: 12, scale: 2 }).default('0').notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },

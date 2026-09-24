@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import type {
   DssrDataReader,
@@ -93,22 +93,22 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         amount: schema.collections.amount,
       })
       .from(schema.collections)
-      .where(eq(schema.collections.businessDayId, businessDayId));
+      .where(sql`${schema.collections.metadata}->>'businessDayId' = ${businessDayId}`); // TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280)
 
     const expenseRows = await this.db
       .select({
         affectsDrawer: schema.expenses.affectsDrawer,
-        paidFrom: schema.expenses.paidFrom,
+        paidFrom: sql<string>`COALESCE(${schema.expenses.metadata}->>'paidFrom', 'SHIFT_CASH')`, // TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280)
         amount: schema.expenses.amount,
         status: schema.expenses.status,
       })
       .from(schema.expenses)
-      .where(eq(schema.expenses.businessDayId, businessDayId));
+      .where(sql`${schema.expenses.metadata}->>'businessDayId' = ${businessDayId}`); // TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280)
 
     const incomeRows = await this.db
       .select({
         affectsDrawer: schema.otherIncome.affectsDrawer,
-        receivedInto: schema.otherIncome.receivedInto,
+        receivedInto: sql<string>`COALESCE(${schema.otherIncome.metadata}->>'receivedInto', 'SHIFT_CASH')`, // TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280)
         amount: schema.otherIncome.amount,
         status: schema.otherIncome.status,
         categoryName: schema.incomeCategories.name,
@@ -124,7 +124,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         schema.incomeCategories,
         eq(schema.incomeCategories.id, schema.otherIncome.categoryId),
       )
-      .where(eq(schema.otherIncome.businessDayId, businessDayId));
+      .where(sql`${schema.otherIncome.metadata}->>'businessDayId' = ${businessDayId}`); // TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280)
 
     const purchaseRows = await this.db
       .select({ amount: schema.purchases.amount })
@@ -134,13 +134,13 @@ export class DrizzleDssrDataReader implements DssrDataReader {
     const supplierPaymentRows = await this.db
       .select({
         affectsDrawer: schema.supplierTransactions.affectsDrawer,
-        paidFrom: schema.supplierTransactions.paidFrom,
+        paidFrom: sql<string>`COALESCE(${schema.supplierTransactions.metadata}->>'paidFrom', 'BANK')`, // TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280)
         amount: schema.supplierTransactions.amount,
       })
       .from(schema.supplierTransactions)
       .where(
         and(
-          eq(schema.supplierTransactions.businessDayId, businessDayId),
+          sql`${schema.supplierTransactions.metadata}->>'businessDayId' = ${businessDayId}`, // TODO(#273): legacy anchor stashed in metadata (ADR 0005, #280)
           eq(schema.supplierTransactions.transactionType, 'Payment'),
         ),
       );

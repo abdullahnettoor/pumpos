@@ -55,6 +55,7 @@ const VEHICLE = '00000000-0000-0000-0000-00000000b114';
 const SUPPLIER = '00000000-0000-0000-0000-00000000b115';
 const CATEGORY = '00000000-0000-0000-0000-00000000b116';
 const INCOME_CATEGORY = '00000000-0000-0000-0000-00000000b117';
+const CASH_ACCOUNT = '00000000-0000-0000-0000-00000000b118';
 
 const BOOTSTRAP = `
   do $$ begin
@@ -212,7 +213,6 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       shiftTemplateId: TEMPLATE,
       status: 'OPEN',
       openedBy: MANAGER,
-      openingCash: '1000',
     });
     await db.insert(schema.nozzleReadings).values([
       {
@@ -311,20 +311,35 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       registrationNumber: 'KL07AB1234',
       vehicleType: 'Truck',
     });
+    // TODO(#273): office rows carry entry-date + funding account; the legacy
+    // shift/business-day anchor is stashed in metadata (ADR 0005, #280).
+    await db.insert(schema.financialAccounts).values({
+      id: CASH_ACCOUNT,
+      organizationId: ORG,
+      stationId: STATION,
+      accountType: 'CASH_IN_HAND',
+      name: 'Cash in Hand',
+    });
     await db.insert(schema.collections).values([
       {
         documentNumber: 'COL-1',
         customerId: CUSTOMER,
-        shiftId: SHIFT,
-        businessDayId: DAY,
+        organizationId: ORG,
+        stationId: STATION,
+        entryDate: '2026-03-10',
+        fundingAccountId: CASH_ACCOUNT,
+        metadata: { shiftId: SHIFT, businessDayId: DAY },
         amount: '300',
         paymentMethod: 'Cash',
       },
       {
         documentNumber: 'COL-2',
         customerId: CUSTOMER,
-        shiftId: SHIFT,
-        businessDayId: DAY,
+        organizationId: ORG,
+        stationId: STATION,
+        entryDate: '2026-03-10',
+        fundingAccountId: CASH_ACCOUNT,
+        metadata: { shiftId: SHIFT, businessDayId: DAY },
         amount: '150',
         paymentMethod: 'Card',
       },
@@ -334,31 +349,37 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       .values({ id: CATEGORY, organizationId: ORG, name: 'Tea' });
     await db.insert(schema.expenses).values([
       {
-        shiftId: SHIFT,
-        businessDayId: DAY,
+        organizationId: ORG,
+        stationId: STATION,
+        entryDate: '2026-03-10',
+        fundingAccountId: CASH_ACCOUNT,
+        metadata: { shiftId: SHIFT, businessDayId: DAY, paidFrom: 'SHIFT_CASH' },
         categoryId: CATEGORY,
         amount: '50',
-        paidFrom: 'SHIFT_CASH',
         affectsDrawer: true,
       },
       {
-        shiftId: SHIFT,
-        businessDayId: DAY,
+        organizationId: ORG,
+        stationId: STATION,
+        entryDate: '2026-03-10',
+        fundingAccountId: CASH_ACCOUNT,
+        metadata: { shiftId: SHIFT, businessDayId: DAY, paidFrom: 'SHIFT_CASH' },
         categoryId: CATEGORY,
         amount: '999',
-        paidFrom: 'SHIFT_CASH',
         affectsDrawer: true,
         status: 'VOIDED',
       },
     ]);
     await db.insert(schema.suppliers).values({ id: SUPPLIER, organizationId: ORG, name: 'IOC' });
     await db.insert(schema.supplierTransactions).values({
-      shiftId: SHIFT,
-      businessDayId: DAY,
+      organizationId: ORG,
+      stationId: STATION,
+      entryDate: '2026-03-10',
+      fundingAccountId: CASH_ACCOUNT,
+      metadata: { shiftId: SHIFT, businessDayId: DAY, paidFrom: 'SHIFT_CASH' },
       supplierId: SUPPLIER,
       transactionType: 'Payment',
       amount: '75',
-      paidFrom: 'SHIFT_CASH',
       affectsDrawer: true,
     });
     await db
@@ -366,10 +387,12 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       .values({ id: INCOME_CATEGORY, organizationId: ORG, name: 'Scrap' });
     await db.insert(schema.otherIncome).values({
       categoryId: INCOME_CATEGORY,
-      shiftId: SHIFT,
-      businessDayId: DAY,
+      organizationId: ORG,
+      stationId: STATION,
+      entryDate: '2026-03-10',
+      fundingAccountId: CASH_ACCOUNT,
+      metadata: { shiftId: SHIFT, businessDayId: DAY, receivedInto: 'SHIFT_CASH' },
       amount: '25',
-      receivedInto: 'SHIFT_CASH',
       affectsDrawer: true,
     });
 
@@ -413,7 +436,7 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       }).execute(
         {
           shiftId: SHIFT,
-          closingCash: 6300,
+          closingCash: 5300, // TODO(#274): openingCash dropped; expected drawer fell by the old 1000 opening
           nozzleReadings: [
             { nozzleId: NOZZLE_1, closingReading: 150 },
             { nozzleId: NOZZLE_2, closingReading: 260 },
@@ -452,8 +475,8 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
     expect(snap.reconciliation.merchCashOutsideHandoverBreakdown).toEqual([
       { sellerName: 'Divya', amount: 100 },
     ]);
-    // 1000 + 5100 + 300 + 25 − 50 − 75 = 6300 → zero variance
-    expect(snap.expectedDrawerCash).toBe(6300);
+    // TODO(#274): 0 + 5100 + 300 + 25 − 50 − 75 = 5300 → zero variance (openingCash dropped)
+    expect(snap.expectedDrawerCash).toBe(5300);
     expect(snap.cashVariance).toBe(0);
   });
 

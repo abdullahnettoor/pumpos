@@ -210,7 +210,7 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         ${shiftSequenceSql('s')} AS "shiftSequence",
         COALESCE(u.full_name, 'System') AS "openedByName",
         ${sql.raw(isoTs('s.opened_at'))} AS "openedAt",
-        s.opening_cash AS "openingCash"
+        '0'::text AS "openingCash" -- TODO(#274): shifts.opening_cash dropped (ADR 0005, #280)
       FROM shifts s
       LEFT JOIN shift_templates t ON t.id = s.shift_template_id
       LEFT JOIN users u ON u.id = s.opened_by AND u.organization_id = s.organization_id
@@ -391,7 +391,7 @@ shiftsRouter.get('/status', async (c) => {
       'closedBy', s.closed_by,
       'closedAt', ${ts('s.closed_at')},
       'lockedAt', ${ts('s.locked_at')},
-      'openingCash', s.opening_cash,
+      'openingCash', '0', -- TODO(#274): shifts.opening_cash dropped (ADR 0005, #280)
       'closingCash', s.closing_cash,
       'createdAt', ${ts('s.created_at')},
       'updatedAt', ${ts('s.updated_at')}
