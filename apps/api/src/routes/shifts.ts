@@ -51,6 +51,8 @@ import {
   DrizzleShiftSummaryWriter,
   DrizzleHandoverContextReader,
   DrizzleHandoverRepository,
+  DrizzleStaffDirectory,
+  assignableStaffWhere,
 } from '../infra/repositories/station-ops-repositories.js';
 import {
   DrizzleDssrDataReader,
@@ -964,7 +966,7 @@ shiftsRouter.get('/status', async (c) => {
           AND nzdu.status = 'ACTIVE'), '[]'::jsonb) AS nozzles,
       COALESCE((SELECT jsonb_agg(${rowJson(schema.users, 'u')})
         FROM users u
-        WHERE u.organization_id = ${orgId} AND u.status = 'ACTIVE'), '[]'::jsonb) AS staff,
+        WHERE ${assignableStaffWhere(orgId)}), '[]'::jsonb) AS staff,
       COALESCE((SELECT jsonb_agg(${rowJson(schema.dispenserUnits, 'du')})
         FROM dispenser_units du
         WHERE du.station_id = ${stationId} AND du.organization_id = ${orgId}
@@ -1441,6 +1443,7 @@ shiftsRouter.post(
         nozzleReadings: new DrizzleNozzleReadingRepository(tx),
         fuelPrices: new DrizzleFuelPriceRepository(tx),
         dispensers: new DrizzleDispenserRepository(tx),
+        staff: new DrizzleStaffDirectory(tx),
         events,
       }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
     });

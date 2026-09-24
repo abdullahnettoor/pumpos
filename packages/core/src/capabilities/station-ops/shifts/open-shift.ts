@@ -74,6 +74,19 @@ export interface InServiceDispenserReader {
   listInServiceIds(organizationId: string, stationId: string): Promise<string[]>;
 }
 
+/**
+ * Who may be put on a dispenser at this station. Must agree with the staff
+ * list the shift-open form offers, or the form offers people the open refuses.
+ * Returns the subset of `userIds` that are assignable.
+ */
+export interface StaffDirectory {
+  findAssignableUserIds(
+    organizationId: string,
+    stationId: string,
+    userIds: string[],
+  ): Promise<Set<string>>;
+}
+
 export interface OpenShiftDeps {
   shifts: ShiftRepository;
   businessDays: BusinessDayWriteRepository;
@@ -81,6 +94,7 @@ export interface OpenShiftDeps {
   nozzleReadings: NozzleReadingRepository;
   fuelPrices: FuelPriceRepository;
   dispensers: InServiceDispenserReader;
+  staff: StaffDirectory;
   events: EventPublisher;
 }
 
@@ -151,6 +165,21 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
         }),
       );
     }
+
+    /*
+     * And the reverse: every assignment must be to a Drawer that can be
+     * reconciled (#286). Each Opening Float lands in Σ Opening Float and so in
+     * `expectedDrawerCash`; a float nobody can hand over — issued to a pump out
+     * of service or unknown, counted twice, or held by someone who is not
+     * staff here — closes the shift with a permanent shortage of that float.
+     */
+    const assignmentError = await this.validateAssignments(
+      cmd.staffAssignments ?? [],
+      inServiceDuIds,
+      ctx.organizationId,
+      cmd.stationId,
+    );
+    if (assignmentError) return err(assignmentError);
 
     const events: DomainEvent[] = [];
     const now = ctx.clock.now();
@@ -316,4 +345,68 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
 
     return ok({ shift, businessDay });
   }
+
+  private async validateAssignments(
+    assignments: { userId: string; duId: string }[],
+    inServiceDuIds: Set<string>,
+    organizationId: string,
+    stationId: string,
+  ) {
+    const unknownDuIds = unique(
+      assignments.map((a) => a.duId).filter((duId) => !inServiceDuIds.has(duId)),
+    );
+    if (unknownDuIds.length > 0) {
+      return validationError('Attendants can only be assigned to dispensers in service', {
+        duIds: unknownDuIds,
+      });
+    }
+
+    const seenPairs = new Set<string>();
+    const duplicates: { userId: string; duId: string }[] = [];
+    for (const a of assignments) {
+      const key = `${a.userId}\u0000${a.duId}`;
+      if (seenPairs.has(key)) {
+        if (!duplicates.some((d) => d.userId === a.userId && d.duId === a.duId))
+          duplicates.push({ userId: a.userId, duId: a.duId });
+      } else seenPairs.add(key);
+    }
+    if (duplicates.length > 0) {
+      return validationError('The same attendant is assigned to the same dispenser twice', {
+        duplicates,
+      });
+    }
+
+    // A Drawer is one per Attendant per DU, never shared, and Handover
+    // reconciles a DU's cash sales against exactly one Drawer. One attendant
+    // may cover several pumps; one pump may not have several attendants.
+    const usersByDu = new Map<string, Set<string>>();
+    for (const a of assignments) {
+      const users = usersByDu.get(a.duId) ?? new Set<string>();
+      users.add(a.userId);
+      usersByDu.set(a.duId, users);
+    }
+    const sharedDuIds = [...usersByDu].filter(([, u]) => u.size > 1).map(([duId]) => duId);
+    if (sharedDuIds.length > 0) {
+      return validationError('A dispenser can have only one attendant per shift', {
+        duIds: sharedDuIds,
+      });
+    }
+
+    const userIds = unique(assignments.map((a) => a.userId));
+    if (userIds.length === 0) return null;
+    const assignable = await this.deps.staff.findAssignableUserIds(
+      organizationId,
+      stationId,
+      userIds,
+    );
+    const ineligible = userIds.filter((id) => !assignable.has(id));
+    if (ineligible.length > 0) {
+      return validationError('Only active staff of this organization can be assigned', {
+        userIds: ineligible,
+      });
+    }
+    return null;
+  }
 }
+
+const unique = <T>(xs: T[]): T[] => [...new Set(xs)];
