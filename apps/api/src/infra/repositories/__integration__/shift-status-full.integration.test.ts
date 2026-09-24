@@ -426,9 +426,12 @@ describe.skipIf(!CONNECTION)('GET /shifts/status full mode against real Postgres
       cashSales: 5000,
       handoverCash: 5000,
       merchCashOutsideHandover: 0,
-      cashCollections: 0, // collections are Office Records, never drawer cash
-      drawerExpenses: 0,
+      openingFloat: 0,
+      handoverCashDrops: 0,
+      // Σ floats + cash sales − drops; collections never reach the drawer.
+      expectedDrawerCash: 5000,
     });
+    expect(data.activeShift.reconciliation).not.toHaveProperty('cashCollections');
   });
 
   it('serves the last closed shift with its stored summary and the recent list', () => {

@@ -145,25 +145,82 @@ function nozzle() {
   return { id: 'n1', productId: 'pet', tankId: 'tk1' };
 }
 
+const emptyTotals: ShiftReconciliationTotals = {
+  cashSales: 0,
+  openingFloat: 0,
+  handoverCashDrops: 0,
+  drawers: [],
+};
+
 describe('CloseShift', () => {
+  it('sums four Drawers with different floats and one drop (#278)', async () => {
+    const drawer = (i: number, openingFloat: number, cashSales: number, cashDrops = 0) => {
+      const expectedCash = openingFloat + cashSales - cashDrops;
+      return {
+        attendantId: `a${i}`,
+        attendantName: `A${i}`,
+        duId: `du${i}`,
+        duName: `DU-${i}`,
+        openingFloat,
+        cashSales,
+        cashDrops,
+        expectedCash,
+        cashHandedOver: expectedCash,
+        variance: 0,
+      };
+    };
+    const drawers = [
+      drawer(1, 500, 4000),
+      drawer(2, 1000, 3000, 2000),
+      drawer(3, 0, 1500),
+      drawer(4, 250, 800),
+    ];
+    const shifts = new ShiftRepo([openShiftRow()]);
+    const readings = new ReadingRepo([reading()]);
+    const context = new ContextReader(shifts.rows, readings.rows, [nozzle()], {
+      ...emptyTotals,
+      cashSales: 9300,
+      openingFloat: 1750,
+      handoverCashDrops: 2000,
+      drawers,
+    });
+    const result = await new CloseShift({
+      context,
+      shifts,
+      nozzleReadings: readings,
+      stockMovements: new StockWriter(),
+      summaries: new SummaryWriter(),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ shiftId: 'sh-1', closingCash: 9050 }, makeContext());
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    // 1750 floats + 9300 cash sales − 2000 dropped = 9050, the Σ of the Drawers.
+    expect(result.data.snapshot).toMatchObject({
+      openingCash: 1750,
+      cashDrops: 2000,
+      expectedDrawerCash: 9050,
+      cashVariance: 0,
+      drawers,
+    });
+    expect(drawers.reduce((s, d) => s + d.expectedCash, 0)).toBe(9050);
+    // The ledger still receives true cash sales, never the floats.
+    expect(result.data.cashSales).toBe(9300);
+  });
+
   it('finalizes readings, records sale movement, reconciles drawer (variance 0)', async () => {
     const shifts = new ShiftRepo([openShiftRow()]);
     const readings = new ReadingRepo([reading()]);
     const context = new ContextReader(shifts.rows, readings.rows, [nozzle()], {
-      cashSales: 0,
-      cashCollections: 2000,
-      cardCollections: 0,
-      upiCollections: 0,
-      creditCollections: 0,
-      drawerExpenses: 300,
-      drawerSupplierPayments: 0,
+      ...emptyTotals,
+      cashSales: 1700,
+      openingFloat: 5000,
     });
     const stock = new StockWriter();
     const summaries = new SummaryWriter();
     const store = new InMemoryEventStore();
     const events = new InProcessEventDispatcher({ store });
 
-    // expected = 5000 + 2000 - 300 = 6700; declare 6700 -> variance 0
+    // expected = floats 5000 + cash sales 1700 = 6700; declare 6700 -> variance 0
     const result = await new CloseShift({
       context,
       shifts,
@@ -197,16 +254,6 @@ describe('CloseShift', () => {
     expect(types).toContain(BusinessEvents.CASH_DECLARED);
     expect(types).toContain(BusinessEvents.SHIFT_CLOSED);
   });
-
-  const emptyTotals: ShiftReconciliationTotals = {
-    cashSales: 0,
-    cashCollections: 0,
-    cardCollections: 0,
-    upiCollections: 0,
-    creditCollections: 0,
-    drawerExpenses: 0,
-    drawerSupplierPayments: 0,
-  };
 
   it('rejects closing an already-closed shift', async () => {
     const closed = { ...openShiftRow(), status: 'CLOSED' as const };

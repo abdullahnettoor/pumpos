@@ -674,14 +674,13 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
       <Text style={s.h2}>CASH RECONCILIATION & VARIANCES</Text>
       <View style={s.reconBox}>
         {[
-          { l: 'Opening Cash Float', v: inr(d.openingCash), c: C.ink },
+          { l: 'Opening Floats', v: inr(d.openingCash), c: C.ink },
           {
             l: '(+) Cash Sales (Attendant Handovers)',
             v: `+ ${inr(d.cashSalesSum)}`,
             c: C.success,
           },
-          { l: '(+) Cash Collections', v: `+ ${inr(d.cashCollectionsSum)}`, c: C.success },
-          { l: '(-) Petty Cash Expenses', v: `- ${inr(d.cashExpensesSum)}`, c: C.danger },
+          { l: '(-) Cash Drops', v: `- ${inr(d.cashDrops)}`, c: C.danger },
           { l: 'Expected Cash in Drawer', v: inr(d.expectedCash), c: C.ink },
           { l: 'Actual Closing Cash (Entered)', v: inr(d.closingCash), c: C.ink },
         ].map((r, i) => (
@@ -731,31 +730,38 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
       </View>
     </View>
   ),
-  nonCash: (d) => (
-    <View key="nonCash">
-      <Text style={s.h2}>NON-CASH COLLECTIONS</Text>
-      <View style={s.kpiRow}>
-        <Kpi l="Card Collections" v={inr(d.cardCollectionsSum)} />
-        <Kpi l="UPI/QR Collections" v={inr(d.upiCollectionsSum)} />
-        <Kpi l="Bank Transfer Collections" v={inr(d.bankCollectionsSum)} />
-      </View>
-    </View>
-  ),
-  expenses: (d) =>
-    d.expenses && d.expenses.length > 0 ? (
-      <View key="expenses">
-        <Text style={s.h2}>SHIFT PETTY CASH EXPENSES</Text>
+  // Office Records (collections, expenses) never appear on a Shift Summary
+  // (ADR 0005); saved configs naming those old sections simply skip them.
+  drawers: (d) =>
+    Array.isArray(d.drawers) && d.drawers.length > 0 ? (
+      <View key="drawers">
+        <Text style={s.h2}>DRAWERS</Text>
         <TableView
           columns={[
-            { header: 'Category', flex: 1.6, strong: true },
-            { header: 'Description', flex: 2.6 },
-            { header: 'Amount', flex: 1.2, align: 'right', mono: true },
+            { header: 'Attendant', flex: 2, strong: true },
+            { header: 'Float', flex: 1, align: 'right', mono: true },
+            { header: 'Cash Sales', flex: 1.2, align: 'right', mono: true },
+            { header: 'Drops', flex: 1, align: 'right', mono: true },
+            { header: 'Expected', flex: 1.2, align: 'right', mono: true },
+            { header: 'Handed Over', flex: 1.2, align: 'right', mono: true },
+            { header: 'Variance', flex: 1.2, align: 'right', mono: true },
           ]}
-          rows={(d.expenses || []).map((e: any) => [
-            { text: e.categoryName || 'General' },
-            { text: e.description || '—' },
-            { text: `- ${inr(e.amount)}`, color: C.danger },
-          ])}
+          rows={d.drawers.map((r: any) => {
+            const m = (v: unknown) => (v == null ? '—' : inr(v));
+            const v = r.variance == null ? null : Number(r.variance);
+            return [
+              { text: `${r.attendantName ?? 'Attendant'}${r.duName ? ` · ${r.duName}` : ''}` },
+              { text: m(r.openingFloat) },
+              { text: m(r.cashSales) },
+              { text: m(r.cashDrops) },
+              { text: m(r.expectedCash) },
+              { text: m(r.cashHandedOver) },
+              {
+                text: v == null ? 'Not handed over' : inr(v),
+                color: v == null || v === 0 ? C.muted : v < 0 ? C.danger : C.success,
+              },
+            ];
+          })}
         />
       </View>
     ) : null,
@@ -775,26 +781,6 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
             { text: `${p.documentNumber || ''}${p.invoiceNumber ? ` (${p.invoiceNumber})` : ''}` },
             { text: p.notes || '—' },
             { text: inr(p.amount) },
-          ])}
-        />
-      </View>
-    ) : null,
-  collections: (d) =>
-    d.collections && d.collections.length > 0 ? (
-      <View key="collections">
-        <Text style={s.h2}>COLLECTIONS & ACCOUNT SALES LOGS</Text>
-        <TableView
-          columns={[
-            { header: 'Customer', flex: 1.8, strong: true },
-            { header: 'Method', flex: 1.1 },
-            { header: 'Notes', flex: 2.2 },
-            { header: 'Amount', flex: 1.2, align: 'right', mono: true },
-          ]}
-          rows={(d.collections || []).map((c: any) => [
-            { text: c.customerName || 'Walk-in Customer' },
-            { text: c.paymentMethod || '' },
-            { text: c.notes || '—' },
-            { text: inr(c.amount), color: c.paymentMethod === 'Credit' ? C.muted : C.success },
           ])}
         />
       </View>

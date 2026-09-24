@@ -86,8 +86,15 @@ Consequences:
 - **Payment Terminal on an office receipt** (#276) routes the money to that
   terminal's clearing account, else the station's generic Merchant Clearing,
   and is kept on the ledger row.
+- **Cash sales are recovered from the Handover** as
+  `cash handed over − float + drops`, so floats never reach the ledger's cash
+  sales posting and a drop is still counted as sold. The Handover stores the
+  float, drops and expected cash it was reconciled with (#278).
 
 ## Open / deferred
+
+- **Mid-shift attendant swap** (#262): one accountability window per Drawer
+  today; a swap needs a Handover at the swap point.
 
 - **Purchases on a calendar date.** Revisit only if accountants need invoice
   dates separate from the stock receipt day.

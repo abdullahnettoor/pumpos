@@ -83,8 +83,8 @@ export async function projectShiftSummary(
         FROM handover_terminal_entries e
         LEFT JOIN payment_terminals pt ON pt.id = e.terminal_id
         WHERE e.shift_id = ${shift.id}), '[]'::jsonb) AS te_rows,
-      -- Expenses and collections are Office Records with no Shift (ADR 0005).
-      '[]'::jsonb AS expense_rows,
+      -- Expenses and collections are Office Records with no Shift (ADR 0005):
+      -- a Shift Summary never shows them.
       COALESCE((SELECT jsonb_agg(jsonb_build_object(
           'p', ${rowJson(S.purchases, 'p')},
           'supplierName', sup.name
@@ -92,7 +92,6 @@ export async function projectShiftSummary(
         FROM purchases p
         LEFT JOIN suppliers sup ON sup.id = p.supplier_id
         WHERE p.shift_id = ${shift.id}), '[]'::jsonb) AS purchase_rows,
-      '[]'::jsonb AS collection_rows,
       ${creditSaleLinesJson(shift.id)} AS credit_rows
   `)) as unknown as [Record<string, any>];
 
@@ -102,18 +101,12 @@ export async function projectShiftSummary(
   const nrRows: any[] = row.nr_rows ?? [];
   const hoRows: any[] = row.ho_rows ?? [];
   const teRows: any[] = row.te_rows ?? [];
-  const expenses: any[] = row.expense_rows ?? [];
   const purchases: any[] = row.purchase_rows ?? [];
-  const collections: any[] = row.collection_rows ?? [];
   const creditSaleRows: any[] = row.credit_rows ?? [];
 
   const template = templateRows[0];
   const closedByName = closedUserRows[0]?.fullName ?? 'System';
   const openedByName = openedUserRows[0]?.fullName ?? 'System';
-  const expensesEnriched = (expenses ?? []).map((r: any) => ({
-    ...r.e,
-    categoryName: r.categoryName ?? 'General',
-  }));
   const purchasesEnriched = (purchases ?? []).map((r: any) => ({
     ...r.p,
     supplierName: r.supplierName ?? 'Unknown Supplier',
@@ -221,17 +214,6 @@ export async function projectShiftSummary(
   const openingCash = Number(snap.openingCash ?? shift.openingCash ?? 0);
   const closingCash = Number(snap.closingCash ?? shift.closingCash ?? 0);
 
-  // Non-cash collection channels, summed LIVE from this shift's collection rows
-  // (card / UPI / bank transfer). Bank-deposited collections never touched the
-  // drawer and were previously not surfaced; "Credit" is not a collection method
-  // (collections are Cash | Card | UPI | BankTransfer), which is why the old
-  // "creditCollections" figure was always zero.
-  const collSum = (method: string) =>
-    (collections ?? []).reduce(
-      (s: number, c: any) => s + (c.paymentMethod === method ? Number(c.amount || 0) : 0),
-      0,
-    );
-
   return {
     ...snap,
     shiftId: shift.id,
@@ -252,9 +234,7 @@ export async function projectShiftSummary(
     totalNetVolumeSold,
     handovers,
     terminalBreakdown,
-    expenses: expensesEnriched,
     purchases: purchasesEnriched,
-    collections,
     creditSales: (creditSaleRows ?? []).map((r: any) => ({
       id: r.id,
       amount: Number(r.amount),
@@ -279,11 +259,9 @@ export async function projectShiftSummary(
     expectedCash: Number(snap.expectedDrawerCash ?? openingCash),
     cashVariance: Number(snap.cashVariance ?? 0),
     cashSalesSum: Number(recon.cashSales ?? 0),
-    cashCollectionsSum: Number(recon.cashCollections ?? collSum('Cash')),
-    cardCollectionsSum: collSum('Card'),
-    upiCollectionsSum: collSum('UPI'),
-    bankCollectionsSum: collSum('BankTransfer'),
-    cashExpensesSum: Number(recon.drawerExpenses ?? 0),
+    cashDrops: Number(snap.cashDrops ?? 0),
+    // Per-Drawer reconciliation (ADR 0005, #278); the shift figure is their sum.
+    drawers: Array.isArray(snap.drawers) ? snap.drawers : (recon.drawers ?? []),
   };
 }
 

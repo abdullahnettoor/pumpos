@@ -124,12 +124,13 @@ Sidebar → **Shifts** → **Active Shift** tab → open-shift form:
 1. Pick the **Shift template** and confirm the **Shift Business Date** (it
    defaults correctly for the station's day-start; before 06:00 the date is
    still "yesterday").
-2. Enter the **Opening cash float (₹)** handed to the drawer.
-3. Assign an **Attendant** to each dispenser unit; **Attach POS** if a
-   terminal travels with that DU.
-4. Verify **Opening nozzle readings** — they default from the previous close;
+2. Assign an **Attendant** to each dispenser unit and enter the **Opening
+   float (₹)** handed to that attendant's pouch (0 is fine); **Attach POS** if
+   a terminal travels with that DU. The shift's opening cash is the sum of the
+   floats.
+3. Verify **Opening nozzle readings** — they default from the previous close;
    correct only if the pump display disagrees.
-5. **Start Shift Operations**.
+4. **Start Shift Operations**.
 
 Done when: the active-shift workspace appears and the status bar shows the
 open shift.
@@ -164,10 +165,12 @@ What happens during a typical shift, and where to record it:
   quantity, invoice; tick **Record payment now** if paid on the spot.
 - **Attendant handover** (attendant ends duty or hands cash to the safe):
   handover dashboard → **Record Handover** → enter the DU's closing nozzle
-  readings, count cash by denomination ("Count handover cash by
-  denomination"), record card/UPI slips per terminal, list credit sales →
-  **Save Handover & Readings**. Small differences between expected and
-  counted cash surface here as **variance** per attendant — record the actual
+  readings, count the whole pouch by denomination ("Count handover cash by
+  denomination") — float included — enter any **Cash Drops** taken from the
+  pouch mid-shift, record card/UPI slips per terminal, list credit sales →
+  **Save Handover & Readings**. The Drawer's expected cash is opening float +
+  DU cash sales − cash drops; the difference from the counted cash is that
+  attendant's **variance** — record the actual
   count; variance is tracked, not hidden. Merchandise attendants use
   **Record Merchandise Handover**.
 
@@ -179,7 +182,8 @@ credit sales are in before you close.
 Active Shift → **Close Shift** — a 4-step wizard:
 
 1. **Cash Reconciliation** — "Count safe cash by denomination". Expected
-   drawer cash = opening float + cash sales − cash drops (collections,
+   drawer cash = Σ opening floats + cash sales − cash drops, the sum of the
+   attendants' Drawers, which the wizard lists one per row (collections,
    expenses and supplier payments are office money, never drawer cash). Enter the real count;
    the difference is recorded as variance with a reason.
 2. **Physical Dip Readings** — enter each tank's dip. Skipping is allowed

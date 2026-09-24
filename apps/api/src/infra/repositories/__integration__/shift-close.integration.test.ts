@@ -244,6 +244,11 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       label: 'POS 1',
       provider: 'HDFC',
     });
+    // Arun's Drawer (ADR 0005, #278): ₹500 float, ₹5000 cash sales, ₹1000
+    // dropped to the safe → he hands over 500 + 5000 − 1000 = ₹4500.
+    await db
+      .insert(schema.shiftStaffAssignments)
+      .values({ shiftId: SHIFT, userId: ATTENDANT, duId: DU, openingFloat: '500' });
     await db.insert(schema.attendantHandovers).values({
       id: HANDOVER,
       organizationId: ORG,
@@ -251,7 +256,10 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       shiftId: SHIFT,
       userId: ATTENDANT,
       duId: DU,
-      cashHandedOver: '5000',
+      openingFloat: '500',
+      cashDrops: '1000',
+      expectedCash: '4500',
+      cashHandedOver: '4500',
       cardHandedOver: '400',
       upiHandedOver: '100',
       creditHandedOver: '0',
@@ -430,7 +438,7 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       }).execute(
         {
           shiftId: SHIFT,
-          closingCash: 5100, // TODO(#274): openingCash dropped; office records never reach the drawer
+          closingCash: 4600, // floats 500 + cash sales 5100 − drops 1000
           nozzleReadings: [
             { nozzleId: NOZZLE_1, closingReading: 150 },
             { nozzleId: NOZZLE_2, closingReading: 260 },
@@ -463,20 +471,33 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       cashSales: 5100,
       handoverCash: 5000,
       merchCashOutsideHandover: 100,
-      // Office Records carry no Shift (ADR 0005): none of them reach the drawer.
-      cashCollections: 0,
-      cardCollections: 0,
-      upiCollections: 0,
-      creditCollections: 0,
-      cashIncome: 0,
-      drawerExpenses: 0,
-      drawerSupplierPayments: 0,
+      openingFloat: 500,
+      handoverCashDrops: 1000,
     });
+    // Office Records carry no Shift (ADR 0005): none of them reach the drawer.
+    expect(snap.reconciliation).not.toHaveProperty('cashCollections');
+    expect(snap.reconciliation).not.toHaveProperty('drawerExpenses');
+    expect(snap.drawers).toEqual([
+      {
+        attendantId: ATTENDANT,
+        attendantName: 'Arun',
+        duId: DU,
+        duName: 'DU-1',
+        openingFloat: 500,
+        cashSales: 5000,
+        cashDrops: 1000,
+        expectedCash: 4500,
+        cashHandedOver: 4500,
+        variance: 0,
+      },
+    ]);
     expect(snap.reconciliation.merchCashOutsideHandoverBreakdown).toEqual([
       { sellerName: 'Divya', amount: 100 },
     ]);
-    // TODO(#274): 0 + 5100 (openingCash dropped; office money is not drawer cash)
-    expect(snap.expectedDrawerCash).toBe(5100);
+    // Σ floats 500 + cash sales 5100 − Σ drops 1000; office money never enters.
+    expect(snap.openingCash).toBe(500);
+    expect(snap.cashDrops).toBe(1000);
+    expect(snap.expectedDrawerCash).toBe(4600);
     expect(snap.cashVariance).toBe(0);
   });
 
@@ -502,7 +523,7 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
     expect(snap.totalFuelSalesValue).toBe(50 * 100 + 60 * 90);
     expect(snap.nozzleReadings.map((r: any) => r.nozzleName)).toEqual(['N1', 'N2']);
     expect(snap.handovers).toHaveLength(1);
-    expect(snap.handovers[0]).toMatchObject({ attendantName: 'Arun', cashHandedOver: '5000.00' });
+    expect(snap.handovers[0]).toMatchObject({ attendantName: 'Arun', cashHandedOver: '4500.00' });
     expect(snap.handovers[0].terminalEntries[0]).toMatchObject({
       terminalLabel: 'POS 1',
       cardAmount: '400.00',
@@ -510,8 +531,8 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
     });
     expect(snap.terminalBreakdown[0]).toMatchObject({ card: 400, upi: 100, provider: 'HDFC' });
     // Expenses and collections are Office Records, not part of a Shift Summary.
-    expect(snap.expenses).toHaveLength(0);
-    expect(snap.collections).toHaveLength(0);
+    expect(snap).not.toHaveProperty('expenses');
+    expect(snap).not.toHaveProperty('collections');
     expect(snap.creditSales[0]).toMatchObject({
       amount: 2000,
       customerName: 'Sharma Transports',
@@ -520,7 +541,7 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
     });
     expect(snap.creditSalesTotal).toBe(2000);
     expect(snap.cashSalesSum).toBe(5100);
-    expect(snap.cardCollectionsSum).toBe(0); // collections are Office Records
+    expect(snap).not.toHaveProperty('cardCollectionsSum'); // collections are Office Records
   });
 
   it('records fuel SALE stock movements net of testing', async () => {

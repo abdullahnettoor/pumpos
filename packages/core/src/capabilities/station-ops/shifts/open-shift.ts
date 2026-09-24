@@ -31,7 +31,6 @@ import type {
 export interface OpenShiftCommand {
   stationId: string;
   shiftTemplateId: string;
-  openingCash: number | string;
   /** Business day this shift anchors to (YYYY-MM-DD). Defaults to today. */
   businessDate?: string;
   staffAssignments?: StaffAssignmentInput[];
@@ -42,13 +41,18 @@ export interface OpenShiftCommand {
 const schema = z.object({
   stationId: z.string().min(1, 'stationId is required'),
   shiftTemplateId: z.string().min(1, 'shiftTemplateId is required'),
-  openingCash: z.coerce.number().min(0, 'openingCash must be >= 0'),
   businessDate: z
     .string()
     .refine(isValidBusinessDate, 'businessDate must be a valid YYYY-MM-DD date')
     .optional(),
   staffAssignments: z
-    .array(z.object({ userId: z.string().min(1), duId: z.string().min(1) }))
+    .array(
+      z.object({
+        userId: z.string().min(1),
+        duId: z.string().min(1),
+        openingFloat: z.coerce.number().finite().min(0, 'openingFloat must be >= 0').default(0),
+      }),
+    )
     .optional(),
   terminalLinks: z
     .array(z.object({ terminalId: z.string().min(1), duId: z.string().nullish() }))
@@ -230,7 +234,8 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
       closedBy: null,
       closedAt: null,
       lockedAt: null,
-      openingCash: String(cmd.openingCash),
+      // The Shift's opening cash is the sum of its Drawers' Opening Floats.
+      openingCash: String((cmd.staffAssignments ?? []).reduce((sum, a) => sum + a.openingFloat, 0)),
       closingCash: null,
       createdAt: nowIso,
       updatedAt: nowIso,
@@ -286,10 +291,22 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
         aggregateId: shift.id,
         stationId: shift.stationId,
         businessDayId: businessDay.id,
-        payload: { shiftId: shift.id, openingCash: shift.openingCash, openedBy: shift.openedBy },
+        payload: {
+          shiftId: shift.id,
+          openingCash: shift.openingCash,
+          openedBy: shift.openedBy,
+          openingFloats: (cmd.staffAssignments ?? []).map((a) => ({
+            attendantId: a.userId,
+            duId: a.duId,
+            openingFloat: a.openingFloat,
+          })),
+        },
         presentation: {
-          templateId: 'shift-opened.v1',
-          values: { openingCash: Number(shift.openingCash) },
+          templateId: 'shift-opened.v2',
+          values: {
+            openingCash: Number(shift.openingCash),
+            drawerCount: (cmd.staffAssignments ?? []).length,
+          },
         },
         groupingRole: 'primary',
       }),

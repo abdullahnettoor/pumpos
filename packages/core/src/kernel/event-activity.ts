@@ -207,6 +207,11 @@ export const EventActivityCatalog = {
   ),
   [BusinessEvents.SHIFT_OPENED]: success(BusinessEvents.SHIFT_OPENED, 'Shift opened', [
     template('shift-opened.v1', 'Opened a shift with {openingCash}.', { openingCash: 'inr' }),
+    template(
+      'shift-opened.v2',
+      'Opened a shift with {openingCash} in Opening Floats across {drawerCount} drawers.',
+      { openingCash: 'inr', drawerCount: 'integer' },
+    ),
   ]),
   [BusinessEvents.SHIFT_CLOSED]: success(BusinessEvents.SHIFT_CLOSED, 'Shift closed', [
     template('shift-closed.v1', 'Closed a shift with a cash variance of {cashVariance}.', {

@@ -61,7 +61,7 @@ describe('ShiftBusinessDateContext', () => {
           businessDate="2026-09-10"
           currentBusinessDate="2026-09-12"
           timeZone="Asia/Kolkata"
-          openingCash={0}
+          onOpeningFloatChange={() => undefined}
           staffAssignments={[]}
           onStaffAssignmentChange={() => {}}
           initialReadings={[]}

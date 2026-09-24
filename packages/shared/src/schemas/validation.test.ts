@@ -13,7 +13,7 @@ import {
 
 describe('Validation Schemas Tests', () => {
   describe('createOpenShiftFormSchema', () => {
-    const values = { shiftTemplateId: 'template-1', businessDate: '2026-09-12', openingCash: 0 };
+    const values = { shiftTemplateId: 'template-1', businessDate: '2026-09-12' };
 
     it('accepts current and earlier eligible Business Dates', () => {
       const schema = createOpenShiftFormSchema('2026-09-12', 'NOT_CREATED');

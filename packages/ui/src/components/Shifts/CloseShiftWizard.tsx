@@ -4,6 +4,7 @@ import { Checkbox } from '../primitives/Toggle.js';
 import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPopover.js';
 import { Button } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
+import { DrawerReconciliationTable } from './DrawerReconciliationTable.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
   AlertTriangle,
@@ -32,8 +33,8 @@ export interface CloseShiftWizardProps {
 
   // Cash reconciliation inputs
   openingCash: number;
+  /** Cash sales (fallback when no server summary is loaded yet). */
   cashCollections: number;
-  cashExpenses: number;
   expectedCash: number;
   closingCash: number;
   onClosingCashChange: (val: number) => void;
@@ -44,10 +45,20 @@ export interface CloseShiftWizardProps {
     cashSales: number;
     handoverCash: number;
     merchCashOutsideHandover: number;
-    cashCollections: number;
-    cashIncome: number;
-    drawerExpenses: number;
-    drawerSupplierPayments: number;
+    /** Σ Cash Drops recorded on Handovers. */
+    cashDrops: number;
+    /** One Drawer per Attendant/DU (ADR 0005). */
+    drawers: {
+      attendantId: string;
+      attendantName: string | null;
+      duName: string | null;
+      openingFloat: number;
+      cashSales: number | null;
+      cashDrops: number;
+      expectedCash: number | null;
+      cashHandedOver: number | null;
+      variance: number | null;
+    }[];
     expectedDrawer: number;
     merchCashBreakdown: { sellerName: string; amount: number }[];
     attendantVariance: number;
@@ -110,7 +121,6 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
   timeZone,
   openingCash,
   cashCollections,
-  cashExpenses,
   expectedCash,
   closingCash,
   onClosingCashChange,
@@ -229,7 +239,7 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
               {cashSummary ? (
                 <>
                   <div className="close-wizard-row">
-                    <span>Opening Cash Float</span>
+                    <span>Opening Floats</span>
                     <span className="font-mono">{inr(cashSummary.openingCash)}</span>
                   </div>
                   <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
@@ -264,24 +274,10 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                       ))}
                     </div>
                   )}
-                  <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
-                    <span>(+) Cash Collections</span>
-                    <span className="font-mono">+ {inr(cashSummary.cashCollections)}</span>
-                  </div>
-                  {cashSummary.cashIncome > 0 && (
-                    <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
-                      <span>(+) Other Income (cash)</span>
-                      <span className="font-mono">+ {inr(cashSummary.cashIncome)}</span>
-                    </div>
-                  )}
-                  <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
-                    <span>(−) Drawer Expenses</span>
-                    <span className="font-mono">− {inr(cashSummary.drawerExpenses)}</span>
-                  </div>
-                  {cashSummary.drawerSupplierPayments > 0 && (
+                  {cashSummary.cashDrops > 0 && (
                     <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
-                      <span>(−) Supplier Payments (cash)</span>
-                      <span className="font-mono">− {inr(cashSummary.drawerSupplierPayments)}</span>
+                      <span>(−) Cash Drops</span>
+                      <span className="font-mono">− {inr(cashSummary.cashDrops)}</span>
                     </div>
                   )}
                   <div className="close-wizard-row close-wizard-row--total">
@@ -296,12 +292,8 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                     <span className="font-mono">{inr(openingCash)}</span>
                   </div>
                   <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
-                    <span>(+) Cash Collections</span>
+                    <span>(+) Cash Sales</span>
                     <span className="font-mono">+ {inr(cashCollections)}</span>
-                  </div>
-                  <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
-                    <span>(−) Petty Cash Expenses</span>
-                    <span className="font-mono">− {inr(cashExpenses)}</span>
                   </div>
                   <div className="close-wizard-row close-wizard-row--total">
                     <span>Expected Safe Cash</span>
@@ -310,6 +302,12 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                 </>
               )}
             </div>
+            {cashSummary && cashSummary.drawers.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <h4 className="close-wizard-section-title">Drawers</h4>
+                <DrawerReconciliationTable drawers={cashSummary.drawers} />
+              </div>
+            )}
 
             {/* Attendant accountability variance (declared vs metered-expected),
                 summed across all attendants — the true net short/surplus that

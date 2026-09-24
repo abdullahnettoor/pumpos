@@ -10,6 +10,8 @@ export interface FormStaffAssignment {
   duId: string;
   /** '' when the dispenser is unassigned. */
   userId: string;
+  /** Change money issued to this Drawer at open (ADR 0005); 0 allowed. */
+  openingFloat?: number;
 }
 
 export interface FormTerminalAssignment {
@@ -19,7 +21,7 @@ export interface FormTerminalAssignment {
 }
 
 export interface OpenShiftAssignmentsPayload {
-  staffAssignments: { userId: string; duId: string }[];
+  staffAssignments: { userId: string; duId: string; openingFloat: number }[];
   terminalLinks: { terminalId: string; duId: string | null }[];
 }
 
@@ -30,7 +32,10 @@ export function buildOpenShiftAssignments(
   return {
     // An unassigned dispenser is an absent row, not a row with an empty user:
     // the command's schema requires a non-empty `userId`.
-    staffAssignments: staffAssignments.filter((a) => a.userId !== ''),
+    // The Shift's opening cash is the sum of these floats.
+    staffAssignments: staffAssignments
+      .filter((a) => a.userId !== '')
+      .map((a) => ({ userId: a.userId, duId: a.duId, openingFloat: a.openingFloat ?? 0 })),
     // Every terminal is linked to the shift. `null` is how "shift-wide" is
     // spelled on the wire — the handover reader treats a null link as
     // declarable from any dispenser, so dropping these would hide a shared

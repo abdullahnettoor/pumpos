@@ -18,10 +18,12 @@ export interface SeededStaffAssignment {
   duId: string;
   /** Empty string means unassigned; the submit path drops those. */
   userId: string;
+  /** Opening Float for this dispenser's Drawer (ADR 0005); 0 allowed. */
+  openingFloat: number;
 }
 
 export function seedStaffAssignments(
   dispensers: { id: string }[] | null | undefined,
 ): SeededStaffAssignment[] {
-  return (dispensers ?? []).map((du) => ({ duId: du.id, userId: '' }));
+  return (dispensers ?? []).map((du) => ({ duId: du.id, userId: '', openingFloat: 0 }));
 }

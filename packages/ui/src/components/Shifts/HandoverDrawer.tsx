@@ -41,6 +41,7 @@ const genIdemKey = (): string =>
 // Define form validation schema using Zod
 const handoverFormSchema = z.object({
   cashHandedOver: z.coerce.number().nonnegative('Cash must be non-negative'),
+  cashDrops: z.coerce.number().nonnegative('Cash drops must be non-negative'),
   cardHandedOver: z.coerce.number().nonnegative('Card Swipe total must be non-negative'),
   upiHandedOver: z.coerce.number().nonnegative('UPI QR total must be non-negative'),
   nozzleReadings: z.record(
@@ -79,6 +80,8 @@ interface HandoverDrawerProps {
   merchandiseCash?: number;
   /** Walk-in merchandise paid by card/UPI on a terminal (informational; not in cash expected). */
   merchandiseNonCash?: number;
+  /** This Drawer's Opening Float, issued at shift open (ADR 0005). */
+  openingFloat?: number;
   /** Called after a credit line is added/voided so the parent can refetch status. */
   onCreditChanged?: () => void | Promise<void>;
   existingHandover: any;
@@ -112,6 +115,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   omcSales = [],
   merchandiseCash = 0,
   merchandiseNonCash = 0,
+  openingFloat = 0,
   onCreditChanged,
   existingHandover,
   onSaveSuccess,
@@ -164,6 +168,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       }
       return {
         cashHandedOver: (Number(existingHandover?.cashHandedOver) || '') as any,
+        cashDrops: (Number(existingHandover?.cashDrops) || '') as any,
         cardHandedOver: (Number(existingHandover?.cardHandedOver) || '') as any,
         upiHandedOver: (Number(existingHandover?.upiHandedOver) || '') as any,
         nozzleReadings,
@@ -606,7 +611,13 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   const merchandiseNonCashNum = Number(merchandiseNonCash) || 0;
   const expectedTotal = expectedSales + merchandiseCashNum;
   // Round to paise so floating-point dust (e.g. -1e-13) doesn't read as a shortage.
-  const variance = Math.round((totalDeclared - expectedTotal) * 100) / 100 || 0;
+  // The pouch also holds the Opening Float and is short what was dropped, so the
+  // Drawer variance is handed − (float + cash sales − drops). Preview only; the
+  // server's figure replaces it once accepted.
+  const openingFloatNum = Number(openingFloat) || 0;
+  const cashDropsNum = Number(formValues.cashDrops) || 0;
+  const variance =
+    Math.round((totalDeclared - expectedTotal - openingFloatNum + cashDropsNum) * 100) / 100 || 0;
 
   // Volume sanity: credit litres billed for a fuel must not exceed the litres
   // metered (and not testing) for that fuel at this DU. Reactive to the readings.
@@ -687,6 +698,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
         userId,
         duId,
         cashHandedOver: Number(values.cashHandedOver),
+        cashDrops: Number(values.cashDrops || 0),
         ...(aggregateAllowed
           ? {
               cardHandedOver: Number(values.cardHandedOver || 0),
@@ -1707,6 +1719,39 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                 )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+                <label
+                  htmlFor="handover-cash-drops"
+                  style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}
+                >
+                  Cash Drops (₹)
+                </label>
+                <input
+                  id="handover-cash-drops"
+                  type="number"
+                  step="any"
+                  min="0"
+                  placeholder="0"
+                  {...register('cashDrops')}
+                  style={{
+                    height: '32px',
+                    padding: '0 8px',
+                    border: '1px solid var(--border-strong)',
+                    borderRadius: 'var(--radius-input)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '13px',
+                    textAlign: 'right',
+                  }}
+                />
+                <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
+                  Cash taken from this pouch mid-shift (e.g. to the safe).
+                </span>
+                {errors.cashDrops && (
+                  <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
+                    {errors.cashDrops.message}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
                 <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>
                   Credit Chits Total (₹)
                 </label>
@@ -1865,6 +1910,23 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
               >
                 <span>of which OMC card (→ CMS):</span>
                 <strong style={{ fontFamily: 'var(--font-mono)' }}>{inr(omcTotal)}</strong>
+              </div>
+            )}
+            {(openingFloatNum > 0 || cashDropsNum > 0) && (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '13px',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                <span>
+                  Pouch: float {inr(openingFloatNum)} · dropped {inr(cashDropsNum)}
+                </span>
+                <strong style={{ fontFamily: 'var(--font-mono)' }}>
+                  {inr(openingFloatNum - cashDropsNum)}
+                </strong>
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>

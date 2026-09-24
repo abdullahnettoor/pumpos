@@ -109,6 +109,7 @@ const handoverContext: HandoverContext = {
   creditSales: 0,
   omcCardSales: 0,
   merchandiseCash: 0,
+  openingFloat: 0,
 };
 
 const initial: HandoverState = {
@@ -125,6 +126,9 @@ const initial: HandoverState = {
     creditHandedOver: '0',
     testingVolume: '1',
     expectedSales: '800',
+    openingFloat: '0',
+    cashDrops: '0',
+    expectedCash: '650',
     varianceAmount: '150',
     createdAt: '2026-09-12T07:00:00.000Z',
   },

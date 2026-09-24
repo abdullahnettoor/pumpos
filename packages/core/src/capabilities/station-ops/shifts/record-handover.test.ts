@@ -144,6 +144,7 @@ function handoverContext(overrides: Partial<HandoverContext> = {}): HandoverCont
       status: 'ACTIVE',
     },
     assigned: true,
+    openingFloat: 0,
     nozzleReadings: [
       {
         id: 'reading-1',
@@ -212,6 +213,45 @@ function setup(
 }
 
 describe('RecordHandover', () => {
+  it('reconciles the Drawer: float + DU cash sales − drops, against cash handed over (#278)', async () => {
+    // Metered ₹950.045 (900.045 fuel + 50 merch); ₹650 settled non-cash
+    // (card 250 + UPI 100 + credit 200 + OMC 100) → DU cash sales ₹300.045.
+    const source = {
+      ...handoverContext({ creditSales: 200, omcCardSales: 100, merchandiseCash: 50 }),
+      openingFloat: 500,
+    };
+    source.terminals = [
+      {
+        id: 'terminal-1',
+        organizationId: 'org-1',
+        stationId: 'station-1',
+        label: 'T1',
+        supportsCard: true,
+        supportsUpi: true,
+        isActive: true,
+        linkedDuId: 'du-1',
+      },
+    ];
+    const { useCase, handovers } = setup(source);
+    const result = await useCase.execute(
+      {
+        ...command(),
+        cashHandedOver: 700,
+        cashDrops: 100,
+        terminalEntries: [{ terminalId: 'terminal-1', cardAmount: 250, upiAmount: 100 }],
+      },
+      context(),
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    // 500 + 300.045 − 100 = 700.045 → handed over 700 → short by under 5 paise.
+    expect(result.data.openingFloat).toBe(500);
+    expect(result.data.cashDrops).toBe(100);
+    expect(result.data.expectedCash).toBeCloseTo(700.045, 1);
+    expect(result.data.varianceAmount).toBeCloseTo(-0.045, 1);
+    expect(handovers.current).toMatchObject({ openingFloat: '500', cashDrops: '100' });
+  });
+
   it('preserves the current fuel, product-cash, declarations, and paise-rounding formula', async () => {
     const source = handoverContext({ creditSales: 200, omcCardSales: 100, merchandiseCash: 50 });
     source.terminals = [
