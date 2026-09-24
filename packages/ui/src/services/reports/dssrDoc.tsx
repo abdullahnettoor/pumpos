@@ -46,12 +46,6 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
         Business Date {d.businessDate}
         {d.generatedAt ? ` \u2022 Generated ${fmtDateTime(d.generatedAt)}` : ''}
       </Text>
-      {d.generatedAt && (
-        <Text style={s.sub}>
-          Financial sections include records available as of {fmtDateTime(d.generatedAt)}. Financial
-          entries recorded later are not included.
-        </Text>
-      )}
     </View>
   ),
   meta: (d) => {
@@ -303,6 +297,7 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     if (list.length === 0) return null;
     const rows: Cell[][] = list.map((sh) => {
       const v = Number(sh.cashVariance || 0);
+      const av = Number(sh.attendantVariance || 0);
       return [
         {
           text: shiftDisplayLabel({
@@ -314,6 +309,7 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
         { text: sh.templateName || 'Custom' },
         { text: sh.closedAt ? fmtDateTime(sh.closedAt) : '-' },
         { text: vol3(sh.netVolume) },
+        { text: `${av > 0 ? '+' : ''}${inr(av)}`, color: varColor(av) },
         { text: `${v > 0 ? '+' : ''}${inr(v)}`, color: varColor(v) },
       ];
     });
@@ -322,12 +318,33 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
       { header: 'Template', flex: 1.6 },
       { header: 'Closed At', flex: 2 },
       { header: 'Net Volume', flex: 1.3, align: 'right', mono: true },
-      { header: 'Cash Variance', flex: 1.4, align: 'right', mono: true },
+      { header: 'Attendant Var.', flex: 1.4, align: 'right', mono: true },
+      { header: 'Office Count Var.', flex: 1.5, align: 'right', mono: true },
     ];
+    // Attendant (Handover) variance per Attendant/DU across the day (#287).
+    const attendants = (d.drawer?.attendants || []) as any[];
     return (
       <View key="shifts">
         <Text style={s.h2}>INCLUDED SHIFTS</Text>
         <TableView columns={cols} rows={rows} />
+        {attendants.length > 0 && (
+          <>
+            <Text style={s.h2}>ATTENDANT VARIANCE</Text>
+            <TableView
+              columns={[
+                { header: 'Attendant', flex: 3, strong: true },
+                { header: 'Variance', flex: 1.4, align: 'right', mono: true },
+              ]}
+              rows={attendants.map((a) => {
+                const av = Number(a.variance || 0);
+                return [
+                  { text: `${a.attendantName ?? 'Attendant'}${a.duName ? ` · ${a.duName}` : ''}` },
+                  { text: `${av > 0 ? '+' : ''}${inr(av)}`, color: varColor(av) },
+                ];
+              })}
+            />
+          </>
+        )}
       </View>
     );
   },

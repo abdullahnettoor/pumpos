@@ -76,8 +76,13 @@ Consequences:
 
 - **The Drawer is per Attendant.** Each Attendant/DU gets an Opening Float
   (0 allowed) at Shift open and is reconciled at Handover as
-  `float + DU cash sales − that Drawer's Cash Drops`. The Shift figure is the
-  sum. Rejected: one shift-wide float nobody owns, which is how the code
+  `float + DU cash sales − that Drawer's Cash Drops`. Variance is two-level
+  (#287): the attendant variance (Σ drawer expected − declared) is judged at
+  Handover, and the office's expected cash is built from each Drawer's
+  declared cash, so the office count variance measures office counting only.
+  Every Drawer must hand over before close. A drop at close names its Drawer;
+  an unnamed one goes to the office variance. Cash moved after close is an
+  office transfer, not a drop. Rejected: one shift-wide float nobody owns, which is how the code
   worked before and does not match stations where each DSM carries a pouch.
 
 - **Collections leave the customer ledger.** A Collection is read straight

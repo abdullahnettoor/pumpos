@@ -211,7 +211,8 @@ export async function projectShiftSummary(
   }
   const terminalBreakdown = Array.from(terminalBreakdownMap.values());
 
-  const openingCash = Number(snap.openingCash ?? shift.openingCash ?? 0);
+  const openingCash = Number(snap.openingCash ?? 0);
+  const drawers: any[] = Array.isArray(snap.drawers) ? snap.drawers : (recon.drawers ?? []);
   const closingCash = Number(snap.closingCash ?? shift.closingCash ?? 0);
 
   return {
@@ -260,8 +261,18 @@ export async function projectShiftSummary(
     cashVariance: Number(snap.cashVariance ?? 0),
     cashSalesSum: Number(recon.cashSales ?? 0),
     cashDrops: Number(snap.cashDrops ?? 0),
-    // Per-Drawer reconciliation (ADR 0005, #278); the shift figure is their sum.
-    drawers: Array.isArray(snap.drawers) ? snap.drawers : (recon.drawers ?? []),
+    // Handover drops vs drops recorded at close, shown on separate lines (#287).
+    // Pre-#287 snapshots only carry the combined figure: treat it as Handover.
+    handoverCashDrops: Number(snap.handoverCashDrops ?? snap.cashDrops ?? 0),
+    closeCashDrops: Number(snap.closeCashDrops ?? 0),
+    // Per-Drawer reconciliation (ADR 0005, #278).
+    drawers,
+    // Two-level variance (#287): attendant (Handover) vs office count.
+    attendantVariance: Number(
+      snap.attendantVariance ??
+        drawers.reduce((s: number, d: any) => s + Number(d?.variance ?? 0), 0),
+    ),
+    officeCountVariance: Number(snap.officeCountVariance ?? snap.cashVariance ?? 0),
   };
 }
 

@@ -93,6 +93,9 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
     cashVariance = 0,
     cashSalesSum = 0,
     cashDrops = 0,
+    handoverCashDrops = cashDrops,
+    closeCashDrops = 0,
+    attendantVariance = 0,
     drawers = [],
     purchases = [],
     handovers = [],
@@ -1285,7 +1288,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             + {inr(cashSalesSum)}
           </span>
         </div>
-        {cashDrops > 0 && (
+        {Number(handoverCashDrops) > 0 && (
           <div
             style={{
               display: 'flex',
@@ -1295,9 +1298,25 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
               color: 'var(--brand-danger)',
             }}
           >
-            <span>(−) Cash Drops</span>
+            <span>(−) Handover drops</span>
             <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-              − {inr(cashDrops)}
+              − {inr(handoverCashDrops)}
+            </span>
+          </div>
+        )}
+        {Number(closeCashDrops) > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              borderBottom: '1px solid var(--border-soft)',
+              color: 'var(--brand-danger)',
+            }}
+          >
+            <span>(−) Drops at close</span>
+            <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+              − {inr(closeCashDrops)}
             </span>
           </div>
         )}
@@ -1310,7 +1329,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             fontWeight: 600,
           }}
         >
-          <span>Expected Cash in Drawer</span>
+          <span>Expected office cash</span>
           <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
             {inr(expectedCash)}
           </span>
@@ -1333,6 +1352,21 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             display: 'flex',
             justifyContent: 'space-between',
             padding: '12px 16px',
+            borderBottom: '1px solid var(--border-soft)',
+            color: Number(attendantVariance) < 0 ? 'var(--brand-danger)' : 'var(--text-strong)',
+          }}
+        >
+          <span>Attendant variance (Handover)</span>
+          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+            {Number(attendantVariance) > 0 ? '+' : ''}
+            {inr(attendantVariance)}
+          </span>
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            padding: '12px 16px',
             backgroundColor:
               Math.abs(cashVariance) > 100 ? 'var(--state-danger-bg)' : 'var(--bg-surface-alt)',
             fontWeight: 700,
@@ -1340,7 +1374,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             color: Math.abs(cashVariance) > 100 ? 'var(--state-danger-fg)' : 'var(--text-strong)',
           }}
         >
-          <span>Cash Variance</span>
+          <span>Office count variance</span>
           <span
             style={{
               fontFamily: 'var(--font-mono)',

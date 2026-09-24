@@ -680,9 +680,19 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
             v: `+ ${inr(d.cashSalesSum)}`,
             c: C.success,
           },
-          { l: '(-) Cash Drops', v: `- ${inr(d.cashDrops)}`, c: C.danger },
-          { l: 'Expected Cash in Drawer', v: inr(d.expectedCash), c: C.ink },
+          {
+            l: '(-) Handover Drops',
+            v: `- ${inr(d.handoverCashDrops ?? d.cashDrops)}`,
+            c: C.danger,
+          },
+          { l: '(-) Drops at Close', v: `- ${inr(d.closeCashDrops ?? 0)}`, c: C.danger },
+          { l: 'Expected Office Cash', v: inr(d.expectedCash), c: C.ink },
           { l: 'Actual Closing Cash (Entered)', v: inr(d.closingCash), c: C.ink },
+          {
+            l: 'Attendant Variance (Handover)',
+            v: `${Number(d.attendantVariance || 0) > 0 ? '+' : ''}${inr(d.attendantVariance ?? 0)}`,
+            c: Number(d.attendantVariance || 0) < 0 ? C.danger : C.ink,
+          },
         ].map((r, i) => (
           <View key={i} style={s.reconRow}>
             <Text style={{ fontSize: 9, color: r.c }}>{r.l}</Text>
@@ -708,7 +718,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
               color: Math.abs(Number(d.cashVariance || 0)) > 100 ? C.danger : C.ink,
             }}
           >
-            Cash Variance
+            Office Count Variance
           </Text>
           <Text
             style={{
@@ -753,7 +763,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
               { text: `${r.attendantName ?? 'Attendant'}${r.duName ? ` · ${r.duName}` : ''}` },
               { text: m(r.openingFloat) },
               { text: m(r.cashSales) },
-              { text: m(r.cashDrops) },
+              { text: m(Number(r.cashDrops ?? 0) + Number(r.closeCashDrops ?? 0)) },
               { text: m(r.expectedCash) },
               { text: m(r.cashHandedOver) },
               {

@@ -37,8 +37,15 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     closedAt: string | null;
     expectedDrawerCash: number;
     cashVariance: number;
+    attendantVariance: number;
     netVolume: number;
   }[] = [];
+  // Attendant (Handover) variance per Attendant/DU across the day (#287).
+  let totalAttendantVariance = 0;
+  const attendantAgg: Record<
+    string,
+    { attendantId: string; attendantName: string | null; duName: string | null; variance: number }
+  > = {};
 
   for (const s of source.shiftSummaries) {
     const snap = s.snapshot as Record<string, any>;
@@ -50,6 +57,22 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     netVolume += sNet;
     fuelSalesValue += Number(snap.totalFuelSalesValue ?? 0);
     totalCashVariance += Number(snap.cashVariance ?? 0);
+    let shiftAttendantVariance = 0;
+    for (const d of (Array.isArray(snap.drawers) ? snap.drawers : []) as Record<string, any>[]) {
+      if (d.variance == null) continue;
+      const v = Number(d.variance);
+      shiftAttendantVariance += v;
+      const key = `${d.attendantId}|${d.duId}`;
+      attendantAgg[key] ??= {
+        attendantId: String(d.attendantId),
+        attendantName: d.attendantName ?? null,
+        duName: d.duName ?? null,
+        variance: 0,
+      };
+      attendantAgg[key].variance = round2(attendantAgg[key].variance + v);
+    }
+    const sAttendantVariance = round2(Number(snap.attendantVariance ?? shiftAttendantVariance));
+    totalAttendantVariance += sAttendantVariance;
     shifts.push({
       shiftId: s.shiftId,
       shiftSequence: s.shiftSequence ?? null,
@@ -57,6 +80,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       closedAt: s.closedAt ?? null,
       expectedDrawerCash: Number(snap.expectedDrawerCash ?? 0),
       cashVariance: Number(snap.cashVariance ?? 0),
+      attendantVariance: sAttendantVariance,
       netVolume: sNet,
     });
     for (const r of (snap.readings ?? []) as Record<string, any>[]) {
@@ -268,7 +292,13 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     },
     fuelStockVariance,
     merchandiseStockVariance,
-    drawer: { totalCashVariance },
+    // totalCashVariance = office count variance; attendant variance is the
+    // separate Handover level (#287).
+    drawer: {
+      totalCashVariance,
+      totalAttendantVariance: round2(totalAttendantVariance),
+      attendants: Object.values(attendantAgg),
+    },
     shifts,
   };
 }

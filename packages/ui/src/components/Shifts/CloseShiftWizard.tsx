@@ -47,10 +47,13 @@ export interface CloseShiftWizardProps {
     merchCashOutsideHandover: number;
     /** Σ Cash Drops recorded on Handovers. */
     cashDrops: number;
+    /** Σ Cash Drops recorded at close (named + unnamed, #287). */
+    closeCashDrops?: number;
     /** One Drawer per Attendant/DU (ADR 0005). */
     drawers: {
       attendantId: string;
       attendantName: string | null;
+      duId?: string;
       duName: string | null;
       openingFloat: number;
       cashSales: number | null;
@@ -65,6 +68,11 @@ export interface CloseShiftWizardProps {
     attendantVariances: { name: string; du: string | null; variance: number }[];
     hasHandovers: boolean;
   } | null;
+
+  /** Cash Drops recorded at close (#287). drawerKey = `${attendantId}|${duId}`
+   *  names the Drawer; '' names none (reduces office expected cash). */
+  closeCashDrops?: CloseDropRow[];
+  onCloseCashDropsChange?: (rows: CloseDropRow[]) => void;
 
   // Physical dip
   stationTanks: any[];
@@ -81,6 +89,11 @@ export interface CloseShiftWizardProps {
   // Submission
   isClosing: boolean;
   onConfirmClose: () => void | Promise<unknown>;
+}
+
+export interface CloseDropRow {
+  drawerKey: string;
+  amount: number;
 }
 
 type Step = 1 | 2 | 3 | 4;
@@ -125,6 +138,8 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
   closingCash,
   onClosingCashChange,
   cashSummary,
+  closeCashDrops = [],
+  onCloseCashDropsChange,
   stationTanks,
   dipReadings,
   onDipReadingsChange,
@@ -146,7 +161,11 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
 
   const cashVariance = closingCash - expectedCash;
   const hasWarnings = warnings.length > 0;
-  const canSubmit = !hasWarnings || confirmWarningsChecked;
+  // Every Drawer must be handed over before close (#287).
+  const pendingDrawers = (cashSummary?.drawers ?? []).filter((d) => d.cashHandedOver === null);
+  const canSubmit = pendingDrawers.length === 0 && (!hasWarnings || confirmWarningsChecked);
+  const updateDrop = (i: number, patch: Partial<CloseDropRow>) =>
+    onCloseCashDropsChange?.(closeCashDrops.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
   const goNext = () => setStep((s) => (s < 4 ? ((s + 1) as Step) : s));
   const goBack = () => setStep((s) => (s > 1 ? ((s - 1) as Step) : s));
@@ -276,12 +295,18 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                   )}
                   {cashSummary.cashDrops > 0 && (
                     <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
-                      <span>(−) Cash Drops</span>
+                      <span>(−) Handover drops</span>
                       <span className="font-mono">− {inr(cashSummary.cashDrops)}</span>
                     </div>
                   )}
+                  {(cashSummary.closeCashDrops ?? 0) > 0 && (
+                    <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
+                      <span>(−) Drops at close</span>
+                      <span className="font-mono">− {inr(cashSummary.closeCashDrops ?? 0)}</span>
+                    </div>
+                  )}
                   <div className="close-wizard-row close-wizard-row--total">
-                    <span>Expected Safe Cash</span>
+                    <span>Expected office cash</span>
                     <span className="font-mono">{inr(expectedCash)}</span>
                   </div>
                 </>
@@ -296,7 +321,7 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                     <span className="font-mono">+ {inr(cashCollections)}</span>
                   </div>
                   <div className="close-wizard-row close-wizard-row--total">
-                    <span>Expected Safe Cash</span>
+                    <span>Expected office cash</span>
                     <span className="font-mono">{inr(expectedCash)}</span>
                   </div>
                 </>
@@ -343,7 +368,7 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                       color: 'var(--text-muted)',
                     }}
                   >
-                    Attendant sales variance
+                    Attendant variance (Handover)
                   </span>
                   <span
                     style={{
@@ -400,8 +425,87 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
               </div>
             )}
 
+            {pendingDrawers.length > 0 && (
+              <div className="close-wizard-variance" data-state="shortage" role="alert">
+                Hand over every drawer before closing:{' '}
+                {pendingDrawers
+                  .map(
+                    (d) => `${d.attendantName ?? 'Attendant'}${d.duName ? ` · ${d.duName}` : ''}`,
+                  )
+                  .join(', ')}
+              </div>
+            )}
+
+            {cashSummary && onCloseCashDropsChange && (
+              <div style={{ marginTop: 12 }}>
+                <label className="close-wizard-field-label">Drops at close</label>
+                {closeCashDrops.map((row, i) => (
+                  <div
+                    key={i}
+                    style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}
+                  >
+                    <select
+                      aria-label="Drop from drawer"
+                      className="close-wizard-input"
+                      style={{ flex: 1.4 }}
+                      value={row.drawerKey}
+                      onChange={(e) => updateDrop(i, { drawerKey: e.target.value })}
+                    >
+                      {cashSummary.drawers.map((d) => (
+                        <option
+                          key={`${d.attendantId}|${d.duId}`}
+                          value={`${d.attendantId}|${d.duId}`}
+                        >
+                          {d.attendantName ?? 'Attendant'}
+                          {d.duName ? ` · ${d.duName}` : ''}
+                        </option>
+                      ))}
+                      <option value="">No drawer (office)</option>
+                    </select>
+                    <input
+                      aria-label="Drop amount"
+                      type="number"
+                      min="0"
+                      className="close-wizard-input close-wizard-input--num"
+                      style={{ flex: 1 }}
+                      placeholder="Amount"
+                      value={row.amount || ''}
+                      onChange={(e) => updateDrop(i, { amount: Number(e.target.value) })}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Remove drop"
+                      onClick={() =>
+                        onCloseCashDropsChange(closeCashDrops.filter((_, j) => j !== i))
+                      }
+                    >
+                      ×
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    onCloseCashDropsChange([
+                      ...closeCashDrops,
+                      {
+                        drawerKey: cashSummary.drawers[0]
+                          ? `${cashSummary.drawers[0].attendantId}|${cashSummary.drawers[0].duId}`
+                          : '',
+                        amount: 0,
+                      },
+                    ])
+                  }
+                >
+                  + Add drop
+                </Button>
+              </div>
+            )}
+
             <label className="close-wizard-field-label">
-              Physical counted safe cash (float + deposited)
+              Counted office cash (float + deposited)
             </label>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -428,7 +532,7 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
               className="close-wizard-variance"
               data-state={cashVariance === 0 ? 'match' : cashVariance > 0 ? 'surplus' : 'shortage'}
             >
-              Drawer cash variance: {cashVariance > 0 ? '+' : ''}
+              Office count variance: {cashVariance > 0 ? '+' : ''}
               {inr(cashVariance)}
               {cashVariance === 0
                 ? ' (Perfect Match)'
@@ -456,8 +560,8 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                           not yet recorded as a cash drop.
                         </li>
                         <li>
-                          Attendant handed over less cash than declared on the chit. Re-check the
-                          handover row in the attendants panel.
+                          Cash was miscounted or went missing after the attendants handed over.
+                          Attendant shortages are shown separately above.
                         </li>
                       </>
                     ) : (
@@ -473,10 +577,6 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                         </li>
                       </>
                     )}
-                    <li>
-                      An attendant handover is still pending — check the Handovers panel for missing
-                      rows.
-                    </li>
                   </ul>
                 )}
               </div>
@@ -616,8 +716,17 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
           <section className="close-wizard-section">
             <h4 className="close-wizard-section-title">Confirm Shift Summary</h4>
             <div className="close-wizard-summary-card">
+              {cashSummary?.hasHandovers && (
+                <div className="close-wizard-row">
+                  <span>Attendant variance (Handover)</span>
+                  <span className="font-mono">
+                    {cashSummary.attendantVariance > 0 ? '+' : ''}
+                    {inr(cashSummary.attendantVariance)}
+                  </span>
+                </div>
+              )}
               <div className="close-wizard-row">
-                <span>Expected Safe Cash</span>
+                <span>Expected office cash</span>
                 <span className="font-mono">{inr(expectedCash)}</span>
               </div>
               <div className="close-wizard-row">
@@ -630,7 +739,7 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                   color: cashVariance === 0 ? 'var(--state-success-fg)' : 'var(--brand-danger)',
                 }}
               >
-                <span>Cash Variance</span>
+                <span>Office count variance</span>
                 <span className="font-mono">
                   {cashVariance > 0 ? '+' : ''}
                   {inr(cashVariance)}

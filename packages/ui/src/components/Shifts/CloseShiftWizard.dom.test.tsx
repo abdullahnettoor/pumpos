@@ -43,7 +43,7 @@ const baseProps = (over: Partial<CloseShiftWizardProps> = {}): CloseShiftWizardP
 
 const step = () => screen.getByText(/^Step \d of 4$/).textContent;
 /** Anchored on the visible label, so a styling change cannot silently break it. */
-const varianceLine = () => screen.getByText(/Drawer cash variance/i).closest('[data-state]');
+const varianceLine = () => screen.getByText(/Office count variance/i).closest('[data-state]');
 const closeButton = () => screen.getByRole('button', { name: /^Close Shift$/ });
 /** Reads the value cell of a step-4 summary row by its label. */
 const summaryValue = (label: string) =>
@@ -360,7 +360,7 @@ describe('CloseShiftWizard', () => {
   describe('cash summary breakdown', () => {
     it('falls back to the legacy card when the server summary is absent', () => {
       renderWithProviders(<CloseShiftWizard {...baseProps({ cashSummary: null })} />);
-      expect(screen.getByText(/Expected Safe Cash/i)).toBeDefined();
+      expect(screen.getByText(/Expected office cash/i)).toBeDefined();
     });
 
     it('reports a balanced attendant variance as balanced', () => {
@@ -410,6 +410,83 @@ describe('CloseShiftWizard', () => {
       expect(screen.getAllByText(/\(short\)/).length).toBeGreaterThan(0);
       // The ₹500 gap must be shown, not just its direction.
       expect(screen.getAllByText(/500/).length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('two-level variance (#287)', () => {
+    it('blocks close while a drawer is not handed over', () => {
+      renderWithProviders(
+        <CloseShiftWizard
+          {...baseProps({
+            cashSummary: {
+              openingCash: 1000,
+              cashSales: 0,
+              handoverCash: 0,
+              merchCashOutsideHandover: 0,
+              cashDrops: 0,
+              drawers: [
+                {
+                  attendantId: 'a',
+                  attendantName: 'Ravi',
+                  duId: 'du1',
+                  duName: 'DU-1',
+                  openingFloat: 1000,
+                  cashSales: null,
+                  cashDrops: 0,
+                  expectedCash: null,
+                  cashHandedOver: null,
+                  variance: null,
+                },
+              ],
+              expectedDrawer: 1000,
+              merchCashBreakdown: [],
+              attendantVariance: 0,
+              attendantVariances: [],
+              hasHandovers: false,
+            },
+          })}
+        />,
+      );
+      expect(screen.getByRole('alert').textContent).toMatch(/Ravi · DU-1/);
+    });
+
+    it('adds a drop at close naming the first drawer', () => {
+      const onChange = vi.fn();
+      renderWithProviders(
+        <CloseShiftWizard
+          {...baseProps({
+            onCloseCashDropsChange: onChange,
+            cashSummary: {
+              openingCash: 1000,
+              cashSales: 5000,
+              handoverCash: 5000,
+              merchCashOutsideHandover: 0,
+              cashDrops: 0,
+              drawers: [
+                {
+                  attendantId: 'a',
+                  attendantName: 'Ravi',
+                  duId: 'du1',
+                  duName: 'DU-1',
+                  openingFloat: 1000,
+                  cashSales: 5000,
+                  cashDrops: 0,
+                  expectedCash: 6000,
+                  cashHandedOver: 6000,
+                  variance: 0,
+                },
+              ],
+              expectedDrawer: 6000,
+              merchCashBreakdown: [],
+              attendantVariance: 0,
+              attendantVariances: [],
+              hasHandovers: true,
+            },
+          })}
+        />,
+      );
+      fireEvent.click(screen.getByText('+ Add drop'));
+      expect(onChange).toHaveBeenCalledWith([{ drawerKey: 'a|du1', amount: 0 }]);
     });
   });
 });

@@ -219,7 +219,10 @@ export interface DrawerReconciliation {
   cashDrops: number;
   expectedCash: number | null;
   cashHandedOver: number | null;
+  /** Attendant variance: declared + drops − expected. Null until handed over. */
   variance: number | null;
+  /** Drops at close naming this Drawer (#287); set on the close snapshot only. */
+  closeCashDrops?: number;
 }
 
 export interface ShiftReconciliationReader {
