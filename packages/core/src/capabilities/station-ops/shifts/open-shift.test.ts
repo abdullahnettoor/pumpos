@@ -104,6 +104,17 @@ class InServiceDispenserRepo {
   }
 }
 
+/**
+ * Who may be put on a dispenser. By default everybody asked about is
+ * assignable; pass a list to make everyone else foreign/ineligible.
+ */
+class StaffDirectoryFake {
+  constructor(readonly assignable?: string[]) {}
+  async findAssignableUserIds(_orgId: string, _stationId: string, userIds: string[]) {
+    return new Set(this.assignable ? userIds.filter((u) => this.assignable!.includes(u)) : userIds);
+  }
+}
+
 class ReadingRepo implements NozzleReadingRepository {
   readonly saved: NozzleReading[] = [];
   constructor(private readonly lastClosing: Record<string, number> = {}) {}
@@ -185,6 +196,7 @@ describe('OpenShift', () => {
       fuelPrices,
       // Both seeded nozzles sit on du-1, which this case runs and assigns.
       dispensers: new InServiceDispenserRepo(['du-1']),
+      staff: new StaffDirectoryFake(),
       events,
     }).execute(
       {
@@ -226,6 +238,7 @@ describe('OpenShift', () => {
       nozzleReadings: new ReadingRepo(),
       fuelPrices: new PriceRepo([]),
       dispensers: new InServiceDispenserRepo(['du-1', 'du-2', 'du-3', 'du-4']),
+      staff: new StaffDirectoryFake(),
       events: new InProcessEventDispatcher({ store }),
     }).execute(
       {
@@ -264,6 +277,7 @@ describe('OpenShift', () => {
       nozzleReadings: new ReadingRepo(),
       fuelPrices: new PriceRepo([]),
       dispensers: new InServiceDispenserRepo(['du-1']),
+      staff: new StaffDirectoryFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       {
@@ -302,6 +316,7 @@ describe('OpenShift', () => {
       // These cases predate the attendant rule and assign nobody, so the
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
+      staff: new StaffDirectoryFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1' }, ctx);
     expect(result.success).toBe(true);
@@ -352,6 +367,7 @@ describe('OpenShift', () => {
       // These cases predate the attendant rule and assign nobody, so the
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
+      staff: new StaffDirectoryFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1' }, makeContext());
 
@@ -385,6 +401,7 @@ describe('OpenShift', () => {
       // These cases predate the attendant rule and assign nobody, so the
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
+      staff: new StaffDirectoryFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', businessDate: '2026-03-14' },
@@ -408,6 +425,7 @@ describe('OpenShift', () => {
       // These cases predate the attendant rule and assign nobody, so the
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
+      staff: new StaffDirectoryFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', businessDate: '2026-03-14' },
@@ -445,6 +463,7 @@ describe('OpenShift', () => {
       // These cases predate the attendant rule and assign nobody, so the
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
+      staff: new StaffDirectoryFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', businessDate: '2026-03-14' },
@@ -474,6 +493,7 @@ describe('OpenShift', () => {
       // These cases predate the attendant rule and assign nobody, so the
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
+      staff: new StaffDirectoryFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', businessDate: '2026-03-16' },
@@ -494,6 +514,7 @@ describe('OpenShift', () => {
       // These cases predate the attendant rule and assign nobody, so the
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
+      staff: new StaffDirectoryFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', businessDate: '2026-02-31' },
@@ -532,6 +553,7 @@ describe('OpenShift', () => {
       // These cases predate the attendant rule and assign nobody, so the
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
+      staff: new StaffDirectoryFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1' }, makeContext());
     expect(result.success).toBe(false);
@@ -552,8 +574,9 @@ describe('OpenShift', () => {
 describe('OpenShift attendant requirement', () => {
   const openWith = (opts: {
     inService: string[];
-    staffAssignments?: { userId: string; duId: string }[];
+    staffAssignments?: { userId: string; duId: string; openingFloat?: number }[];
     nozzles?: Nozzle[];
+    assignable?: string[];
   }) => {
     const readings = new ReadingRepo();
     const shifts = new ShiftRepo();
@@ -568,6 +591,8 @@ describe('OpenShift attendant requirement', () => {
           nozzleReadings: readings,
           fuelPrices: new PriceRepo([]),
           dispensers: new InServiceDispenserRepo(opts.inService),
+          staff: new StaffDirectoryFake(opts.assignable),
+          staff: new StaffDirectoryFake(),
           events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
         }).execute(
           {
@@ -639,5 +664,120 @@ describe('OpenShift attendant requirement', () => {
 
     expect(result.success).toBe(true);
     expect(readings.saved.map((r) => r.nozzleId)).toEqual(['n1']);
+  });
+});
+
+/**
+ * The reverse of the attendant requirement (#286). An Opening Float lands in
+ * Σ Opening Float and so in `expectedDrawerCash`. If it goes to a dispenser
+ * nobody can hand over (out of service, unknown), or is counted twice, the shift
+ * closes with a permanent shortage equal to that float.
+ */
+describe('OpenShift assignment validity', () => {
+  const openWith = (opts: {
+    inService: string[];
+    staffAssignments: { userId: string; duId: string; openingFloat?: number }[];
+    assignable?: string[];
+  }) => {
+    const shifts = new ShiftRepo();
+    const run = () =>
+      new OpenShift({
+        shifts,
+        businessDays: new BdRepo(),
+        nozzles: new NozzleRepo([]),
+        nozzleReadings: new ReadingRepo(),
+        fuelPrices: new PriceRepo([]),
+        dispensers: new InServiceDispenserRepo(opts.inService),
+        staff: new StaffDirectoryFake(opts.assignable),
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }).execute(
+        { stationId: 'st-1', shiftTemplateId: 'tpl-1', staffAssignments: opts.staffAssignments },
+        makeContext(),
+      );
+    return { shifts, run };
+  };
+
+  it('refuses a float issued to an out-of-service dispenser (the ghost float)', async () => {
+    const { shifts, run } = openWith({
+      inService: ['du-1'],
+      staffAssignments: [
+        { userId: 'u-1', duId: 'du-1', openingFloat: 1000 },
+        { userId: 'u-2', duId: 'du-OUT', openingFloat: 5000 },
+      ],
+    });
+    const result = await run();
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.code).toBe('VALIDATION_ERROR');
+      expect((result.error.details as any)?.duIds).toEqual(['du-OUT']);
+    }
+    expect(shifts.rows).toHaveLength(0);
+  });
+
+  it('refuses a dispenser that does not exist at this station', async () => {
+    const result = await openWith({
+      inService: ['du-1'],
+      staffAssignments: [
+        { userId: 'u-1', duId: 'du-1' },
+        { userId: 'u-1', duId: 'du-nope' },
+      ],
+    }).run();
+    expect(result.success).toBe(false);
+    if (!result.success) expect((result.error.details as any)?.duIds).toEqual(['du-nope']);
+  });
+
+  it('refuses the same attendant and dispenser twice', async () => {
+    const result = await openWith({
+      inService: ['du-1'],
+      staffAssignments: [
+        { userId: 'u-1', duId: 'du-1', openingFloat: 1000 },
+        { userId: 'u-1', duId: 'du-1', openingFloat: 1000 },
+      ],
+    }).run();
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.code).toBe('VALIDATION_ERROR');
+      expect((result.error.details as any)?.duplicates).toEqual([{ userId: 'u-1', duId: 'du-1' }]);
+    }
+  });
+
+  it('refuses two attendants on one dispenser — a Drawer is never shared', async () => {
+    const result = await openWith({
+      inService: ['du-1'],
+      staffAssignments: [
+        { userId: 'u-1', duId: 'du-1' },
+        { userId: 'u-2', duId: 'du-1' },
+      ],
+    }).run();
+    expect(result.success).toBe(false);
+    if (!result.success) expect((result.error.details as any)?.duIds).toEqual(['du-1']);
+  });
+
+  it('refuses a user who is not assignable staff here', async () => {
+    const result = await openWith({
+      inService: ['du-1', 'du-2'],
+      staffAssignments: [
+        { userId: 'u-1', duId: 'du-1' },
+        { userId: 'u-foreign', duId: 'du-2' },
+      ],
+      assignable: ['u-1'],
+    }).run();
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.code).toBe('VALIDATION_ERROR');
+      expect((result.error.details as any)?.userIds).toEqual(['u-foreign']);
+    }
+  });
+
+  it('still lets one attendant cover two pumps', async () => {
+    const result = await openWith({
+      inService: ['du-1', 'du-2'],
+      staffAssignments: [
+        { userId: 'u-1', duId: 'du-1', openingFloat: 500 },
+        { userId: 'u-1', duId: 'du-2', openingFloat: 500 },
+      ],
+      assignable: ['u-1'],
+    }).run();
+    expect(result.success).toBe(true);
   });
 });
