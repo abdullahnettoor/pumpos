@@ -411,9 +411,8 @@ export const AttendantReportDoc: React.FC<{
           <View>
             <Text style={dayTitle}>{dayPageTitle(data.attendantName, day.businessDate)}</Text>
             <Text style={s.sub}>
-              {day.data.shiftsWorked}{' '}
-              {day.data.shiftsWorked === 1 ? 'shift' : 'shifts'} · net variance{' '}
-              {inr(day.data.totals.varianceAmount)}
+              {day.data.shiftsWorked} {day.data.shiftsWorked === 1 ? 'shift' : 'shifts'} · net
+              variance {inr(day.data.totals.varianceAmount)}
             </Text>
           </View>
           {daySections.map((key) => builders[key]?.(day.data, config))}

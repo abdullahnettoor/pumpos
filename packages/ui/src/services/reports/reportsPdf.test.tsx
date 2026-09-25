@@ -419,7 +419,7 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
       // 1 cover + 3 day pages.
       expect(pageCount(buffer)).toBe(4);
     });
-  
+
     /*
      * PDF text is font-encoded, so the name is asserted on the element tree:
      * every bold Text node's string content, walked without invoking
