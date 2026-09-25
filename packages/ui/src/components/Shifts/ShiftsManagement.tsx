@@ -375,9 +375,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         closeDropEntries,
       )
     : null;
+  // Fallback without the server recon (#288): office expected = Σ declared
+  // (declared cash already includes each Drawer's float, so never add the
+  // float again). Before any Handover only the floats are known.
   const expectedCash = closeCash
     ? closeCash.expectedDrawerCash
-    : openingCashNum + activeCashCollections;
+    : hasHandovers
+      ? totalCashHandedOver
+      : openingCashNum;
   const cashVariance = closingCash - expectedCash;
 
   // Station-level cash summary for the closing wizard (#4). Aggregate figures —

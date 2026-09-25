@@ -1,5 +1,5 @@
 import React from 'react';
-import { resolveBusinessDate } from '@pump/shared';
+import { resolveBusinessDate, shiftBusinessDate } from '@pump/shared';
 import { Select, Input } from '../../pump-ds/index.js';
 
 export type RangePreset =
@@ -45,8 +45,6 @@ const DEFAULT_PRESETS: RangePreset[] = [
   'this-year',
 ];
 
-const isoOf = (d: Date) => d.toISOString().slice(0, 10);
-
 /**
  * Compute a concrete `{ from, to }` for a preset, anchored to the station's
  * *business* today (timezone + day-start aware). Exported so a parent can seed
@@ -55,11 +53,7 @@ const isoOf = (d: Date) => d.toISOString().slice(0, 10);
 export function computeRange(preset: RangePreset, clock?: RangeClock): DateRange {
   const today = resolveBusinessDate({ timeZone: clock?.timeZone, dayStartsAt: clock?.dayStartsAt });
   const anchor = new Date(`${today}T00:00:00Z`);
-  const minus = (n: number) => {
-    const c = new Date(anchor);
-    c.setUTCDate(c.getUTCDate() - n);
-    return isoOf(c);
-  };
+  const minus = (n: number) => shiftBusinessDate(today, -n);
   switch (preset) {
     case 'today':
       return { from: today, to: today };
