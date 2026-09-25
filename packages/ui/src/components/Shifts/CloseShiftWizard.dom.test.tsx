@@ -368,7 +368,13 @@ describe('CloseShiftWizard', () => {
         <CloseShiftWizard
           {...baseProps({
             cashSummary: {
-              openingCash: 5000,
+              lines: {
+                openingFloats: 5000,
+                cashDeclared: 8000,
+                handoverDrops: 0,
+                unassignedCloseDrops: 0,
+                expectedOfficeCash: 13000,
+              },
               cashSales: 8000,
               handoverCash: 8000,
               merchCashOutsideHandover: 0,
@@ -392,7 +398,13 @@ describe('CloseShiftWizard', () => {
         <CloseShiftWizard
           {...baseProps({
             cashSummary: {
-              openingCash: 5000,
+              lines: {
+                openingFloats: 5000,
+                cashDeclared: 8000,
+                handoverDrops: 0,
+                unassignedCloseDrops: 0,
+                expectedOfficeCash: 13000,
+              },
               cashSales: 8000,
               handoverCash: 7500,
               merchCashOutsideHandover: 0,
@@ -419,7 +431,13 @@ describe('CloseShiftWizard', () => {
         <CloseShiftWizard
           {...baseProps({
             cashSummary: {
-              openingCash: 1000,
+              lines: {
+                openingFloats: 1000,
+                cashDeclared: 0,
+                handoverDrops: 0,
+                unassignedCloseDrops: 0,
+                expectedOfficeCash: 1000,
+              },
               cashSales: 0,
               handoverCash: 0,
               merchCashOutsideHandover: 0,
@@ -447,7 +465,8 @@ describe('CloseShiftWizard', () => {
           })}
         />,
       );
-      expect(screen.getByRole('alert').textContent).toMatch(/Ravi · DU-1/);
+      expect(screen.getByRole('alert').textContent).toMatch(/1 drawer has not handed over/);
+      expect(screen.getByText('Not handed over')).toBeTruthy();
     });
 
     it('adds a drop at close naming the first drawer', () => {
@@ -457,7 +476,13 @@ describe('CloseShiftWizard', () => {
           {...baseProps({
             onCloseCashDropsChange: onChange,
             cashSummary: {
-              openingCash: 1000,
+              lines: {
+                openingFloats: 1000,
+                cashDeclared: 5000,
+                handoverDrops: 0,
+                unassignedCloseDrops: 0,
+                expectedOfficeCash: 6000,
+              },
               cashSales: 5000,
               handoverCash: 5000,
               merchCashOutsideHandover: 0,

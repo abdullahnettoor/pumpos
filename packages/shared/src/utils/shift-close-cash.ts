@@ -115,3 +115,29 @@ export function computeShiftCloseCash<D extends CloseCashDrawer>(
     cashVariance: round2(closingCash - expectedDrawerCash),
   };
 }
+
+/** The lines of the close-shift cash summary (#307). They add up:
+ *  openingFloats + cashDeclared − handoverDrops − unassignedCloseDrops = expected.
+ *  Drops at close that name a Drawer already lower that Drawer's declared
+ *  cash, so they are not repeated here. */
+export interface ShiftCloseCashSummaryLines {
+  openingFloats: number;
+  /** Σ cash the Drawers declared at Handover (floats included via openingFloats). */
+  cashDeclared: number;
+  handoverDrops: number;
+  unassignedCloseDrops: number;
+  expectedOfficeCash: number;
+}
+
+export function shiftCloseCashSummaryLines(
+  totals: { openingFloat: number; cashSales: number; handoverCashDrops: number },
+  closeCash: Pick<ShiftCloseCash, 'unassignedCloseCashDrops' | 'expectedDrawerCash'>,
+): ShiftCloseCashSummaryLines {
+  return {
+    openingFloats: round2(totals.openingFloat),
+    cashDeclared: round2(totals.cashSales),
+    handoverDrops: round2(totals.handoverCashDrops),
+    unassignedCloseDrops: closeCash.unassignedCloseCashDrops,
+    expectedOfficeCash: closeCash.expectedDrawerCash,
+  };
+}
