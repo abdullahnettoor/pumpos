@@ -1,5 +1,5 @@
 import React from 'react';
-import { exportReactPdf } from '../exportPdf.js';
+import { exportReactPdf, outputReactPdf, type PdfOutput } from '../exportPdf.js';
 import {
   DEFAULT_ATTENDANT_REPORT_CONFIG,
   DEFAULT_DSSR_CONFIG,
@@ -25,7 +25,11 @@ interface StationReportSettings {
  */
 
 /** DSSR PDF. `dssr` = { snapshotData, businessDate, generatedAt }. */
-export async function generateDssrPdf(station: any, dssr: any): Promise<void> {
+export async function generateDssrPdf(
+  station: any,
+  dssr: any,
+  output: PdfOutput = 'save',
+): Promise<void> {
   const doc = await import('./dssrDoc.js');
   const sections = resolveSections(
     station?.settings?.report_config?.dssr,
@@ -38,9 +42,10 @@ export async function generateDssrPdf(station: any, dssr: any): Promise<void> {
     letterhead: letterheadFromStation(station),
     paper: paperFromStation(station),
   };
-  await exportReactPdf(
+  await outputReactPdf(
     React.createElement(doc.DssrDoc, { dssr, config }),
     `Daily_DSSR_${dssr?.businessDate || ''}`,
+    output,
   );
 }
 
@@ -58,6 +63,7 @@ export async function generateShiftSummaryPdf(
   shiftId: string,
   templateName?: string,
   shift?: { businessDate?: string | null; shiftSequence?: number | null },
+  output: PdfOutput = 'save',
 ): Promise<void> {
   const doc = await import('./shiftSummaryDoc.js');
   const sections = resolveSections(
@@ -73,13 +79,14 @@ export async function generateShiftSummaryPdf(
   };
   const businessDate = shift?.businessDate ?? snapshot?.businessDate ?? null;
   const shiftSequence = shift?.shiftSequence ?? snapshot?.shiftSequence ?? null;
-  await exportReactPdf(
+  await outputReactPdf(
     React.createElement(doc.ShiftSummaryDoc, {
       snapshot: { ...snapshot, businessDate, shiftSequence },
       config,
     }),
     // File names stay ASCII: the display fallback carries an ellipsis.
     `Shift_Summary_${formatShiftLabel(businessDate, shiftSequence) ?? String(shiftId).slice(0, 8)}`,
+    output,
   );
 }
 

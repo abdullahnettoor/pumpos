@@ -1,15 +1,9 @@
 import React from 'react';
 import { ArrowLeft, Printer, Download, AlertTriangle, Info } from 'lucide-react';
-import {
-  DEFAULT_DSSR_CONFIG,
-  paperFromStation,
-  resolveSections,
-} from '../services/reports/reportConfig.js';
-import { letterheadFromStation } from '../services/reports/letterhead.js';
 import { Button } from '../pump-ds/index.js';
 import { formatDateTime, formatMoney, inr } from '../utils/format.js';
 import { ReportNote } from './reports/ReportNote.js';
-import { isDesktopApp } from '../utils/platform.js';
+import { useRunTask } from '../utils/runTask.js';
 import { shiftDisplayLabel } from '@pump/shared';
 
 interface DailyDssrViewProps {
@@ -19,7 +13,7 @@ interface DailyDssrViewProps {
 }
 
 export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack, station }) => {
-  const printRef = React.useRef<HTMLDivElement>(null);
+  const runTask = useRunTask();
   const snapshot = dailyDssr?.snapshotData || {};
 
   const fuel = snapshot.fuel || {};
@@ -64,9 +58,13 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   const salesGstTotal = Number(salesTax.gst?.total || 0);
   const salesVatTotal = Number(salesTax.vat?.vat || 0);
   const pnl = snapshot.pnl || {};
+  // Save PDF and Print render the same DssrDoc, so they match page for page (#309).
+  const printOrSave = async (output: 'save' | 'print') => {
+    const { generateDssrPdf } = await import('../services/reports/generate.js');
+    await generateDssrPdf(station, dailyDssr, output);
+  };
   return (
     <div
-      ref={printRef}
       className="card card-comfortable print-area"
       style={{ maxWidth: '920px', margin: '0 auto' }}
     >
@@ -90,41 +88,19 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
             variant="secondary"
             size="sm"
             leftIcon={<Download />}
-            onClick={async () => {
-              const [{ exportReactPdf }, doc] = await Promise.all([
-                import('../services/exportPdf.js'),
-                import('../services/reports/dssrDoc.js'),
-              ]);
-              const sections = resolveSections(
-                station?.settings?.report_config?.dssr,
-                DEFAULT_DSSR_CONFIG.sections,
-              );
-              const config = {
-                ...DEFAULT_DSSR_CONFIG,
-                sections: sections,
-                stationName: station?.name,
-                letterhead: letterheadFromStation(station),
-                paper: paperFromStation(station),
-              };
-              await exportReactPdf(
-                React.createElement(doc.DssrDoc, { dssr: dailyDssr, config }),
-                `Daily_DSSR_${dailyDssr?.businessDate || ''}`,
-              );
-            }}
+            onClick={() => runTask(printOrSave('save'), 'Could not create the PDF.')}
           >
             Save PDF
           </Button>
-          {/* window.print() is a no-op in the Tauri webview — desktop uses Save PDF. */}
-          {!isDesktopApp() && (
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<Printer />}
-              onClick={() => window.print()}
-            >
-              Print Daily DSSR
-            </Button>
-          )}
+          {/* Prints the same PDF Save PDF writes, on web and desktop (#309). */}
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<Printer />}
+            onClick={() => runTask(printOrSave('print'), 'Could not print the DSSR.')}
+          >
+            Print Daily DSSR
+          </Button>
         </div>
       </div>
 

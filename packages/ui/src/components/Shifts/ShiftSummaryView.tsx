@@ -12,7 +12,6 @@ import { LegacyPurchasesTable } from './LegacyPurchasesTable.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { inr } from '../../utils/format.js';
-import { isDesktopApp } from '../../utils/platform.js';
 import { formatStationDateTime, shiftDisplayLabel } from '@pump/shared';
 import { DrawerReconciliationTable } from './DrawerReconciliationTable.js';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
@@ -181,17 +180,26 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
           >
             Save PDF
           </Button>
-          {/* window.print() is a no-op in the Tauri webview — desktop uses Save PDF. */}
-          {!isDesktopApp() && (
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<Printer size={13} />}
-              onClick={() => window.print()}
-            >
-              Print Shift Summary
-            </Button>
-          )}
+          {/* Prints the same PDF Save PDF writes, on web and desktop (#309). */}
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<Printer size={13} />}
+            onClick={async () => {
+              const { generateShiftSummaryPdf } =
+                await import('../../services/reports/generate.js');
+              await generateShiftSummaryPdf(
+                station,
+                snapshotData,
+                shiftId,
+                templateName,
+                { businessDate, shiftSequence },
+                'print',
+              );
+            }}
+          >
+            Print Shift Summary
+          </Button>
 
           {canReopen && (
             <Button

@@ -7,6 +7,31 @@
     "core:default",
     "dialog:default",
     "fs:allow-write-file",
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [
+        {
+          "path": "$TEMP/pumpos-print/**"
+        }
+      ]
+    },
+    "fs:allow-mkdir",
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        {
+          "path": "$TEMP/pumpos-print"
+        }
+      ]
+    },
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        {
+          "path": "$TEMP/pumpos-print/**"
+        }
+      ]
+    },
     "core:window:allow-start-dragging",
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",

@@ -2,7 +2,9 @@
 pub fn run() {
   let builder = tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
-    .plugin(tauri_plugin_fs::init());
+    .plugin(tauri_plugin_fs::init())
+    // Opens a report PDF in the system viewer for printing (#309).
+    .plugin(tauri_plugin_opener::init());
 
   // In-app updates are a desktop-only concern: macOS and Windows installs are
   // the ones PumpOS distributes itself. Mobile builds get their updates from
