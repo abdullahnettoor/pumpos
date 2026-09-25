@@ -27,7 +27,6 @@ const OIL = {
 };
 
 const baseProps = (over: Partial<PurchaseEntryFormProps> = {}): PurchaseEntryFormProps => ({
-  shiftOptions: [],
   suppliers: [{ id: 's1', name: 'IOCL Depot', isActive: true }],
   products: [PETROL, OIL],
   tanks: [],

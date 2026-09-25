@@ -585,8 +585,8 @@ export const purchaseLineFormSchema = z.object({
 });
 export type PurchaseLineFormValues = z.infer<typeof purchaseLineFormSchema>;
 
+// A purchase is anchored to the business day by date, never a Shift (#308).
 export const purchaseEntryFormSchema = z.object({
-  targetShiftId: z.string().optional().default(''),
   transactionDate: z.string().optional().default(''),
   supplierId: z.string().min(1, 'Supplier is required'),
   invoiceNumber: z.string().max(100).optional().default(''),

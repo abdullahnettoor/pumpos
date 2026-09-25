@@ -144,7 +144,6 @@ describe('office record forms', () => {
     const onSubmit = vi.fn();
     renderWithProviders(
       <PurchaseEntryForm
-        shiftOptions={[]}
         suppliers={[{ id: 'sup', name: 'IOCL', isActive: true }]}
         products={[{ id: 'oil', name: 'Oil', productType: 'MERCHANDISE', unit: 'unit' }]}
         tanks={[]}

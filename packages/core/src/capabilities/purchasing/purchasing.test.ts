@@ -325,6 +325,61 @@ describe('RecordPurchase', () => {
     expect(store.events.map((e) => e.eventType)).toContain(BusinessEvents.GOODS_RECEIVED);
   });
 
+  // ADR 0005 / #308: a purchase never stores a Shift, even when the client
+  // (e.g. a queued legacy payload) still sends one.
+  it.each([
+    ['station + date with a stale shiftId', { stationId: 'st-1', shiftId: 'sh-1' }],
+    ['a legacy shiftId-only payload', { shiftId: 'sh-1' }],
+  ])('stores shift_id null and the business day for %s', async (_label, anchor) => {
+    const openShift: Shift = {
+      id: 'sh-1',
+      organizationId: 'org-1',
+      stationId: 'st-1',
+      businessDayId: 'bd-9',
+      shiftTemplateId: 't',
+      status: 'OPEN',
+      openedBy: 'u',
+      openedAt: '',
+      closedBy: null,
+      closedAt: null,
+      lockedAt: null,
+      openingCash: '0',
+      closingCash: null,
+      createdAt: '',
+      updatedAt: '',
+    };
+    const purchases = new PurchaseRepo();
+    const result = await new RecordPurchase({
+      purchases,
+      stock: new StockRepo(),
+      supplierTxns: new SupplierTxnRepo(),
+      suppliers: new SupplierRepo([supplier()]),
+      purchaseItems: new PurchaseItemRepo(),
+      products: new ProductRepo([fuelProduct()]),
+      stations: new StationRepo([station()]),
+      shifts: new ShiftRepo([openShift]),
+      businessDays: new BdRepo([bday()]),
+      docNumbers,
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute(
+      {
+        supplierId: 'sup-1',
+        productId: 'petrol-1',
+        quantity: 1000,
+        unitPrice: 90,
+        transactionDate: '2026-03-15',
+        tankAllocations: [{ tankId: 'tank-1', quantity: 1000 }],
+        ...anchor,
+      },
+      ctx(),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.purchase.shiftId).toBeNull();
+      expect(result.data.purchase.businessDayId).toBe('bd-9');
+    }
+  });
+
   it('updates the product cost basis as a weighted average of existing stock and the purchase', async () => {
     const products = new ProductRepo([{ ...fuelProduct(), costBasis: '88' }]);
     const stock = new StockRepo(10000); // 10,000 L already on hand @ ₹88
