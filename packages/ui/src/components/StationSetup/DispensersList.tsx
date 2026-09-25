@@ -555,7 +555,8 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                           <input
                             type="number"
                             min="0"
-                            value={nozzle.currentReading}
+                            placeholder="0"
+                            value={nozzle.currentReading || ''}
                             onChange={(e) =>
                               handleNozzleReadingChange(idx, parseFloat(e.target.value) || 0)
                             }

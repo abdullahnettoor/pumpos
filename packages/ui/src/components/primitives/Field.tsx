@@ -91,6 +91,12 @@ export interface NumberInputProps extends TextInputProps {
   nonNegative?: boolean;
 }
 
+/*
+ * Number boxes start empty with a "0" placeholder rather than a typed 0 the
+ * operator has to delete first (#302). Callers keep a blank value for "zero /
+ * not entered"; a caller's own placeholder (spread after) wins.
+ */
+
 export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
   ({ invalid, className, nonNegative = true, min, ...props }, ref) => (
     <input
@@ -99,6 +105,7 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
       inputMode="decimal"
       step="any"
       min={min ?? (nonNegative ? 0 : undefined)}
+      placeholder="0"
       className={cx('input', 'input-numeric', invalid && 'input-invalid', className)}
       {...props}
     />
@@ -131,6 +138,7 @@ export const MoneyInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
         inputMode="decimal"
         step="any"
         min={min ?? (nonNegative ? 0 : undefined)}
+        placeholder="0"
         className={cx('input', 'input-numeric', invalid && 'input-invalid', className)}
         style={{ paddingLeft: 22, ...style }}
         {...props}

@@ -126,6 +126,8 @@ export { Checkbox, Switch } from './components/primitives/Toggle.js';
 export type { CheckboxProps, SwitchProps } from './components/primitives/Toggle.js';
 export { Tooltip } from './components/primitives/Tooltip.js';
 export type { TooltipProps } from './components/primitives/Tooltip.js';
+export { InfoTip } from './components/primitives/InfoTip.js';
+export type { InfoTipProps } from './components/primitives/InfoTip.js';
 export { Menu, Popover } from './components/primitives/Menu.js';
 export type { MenuProps, MenuItem, PopoverProps } from './components/primitives/Menu.js';
 export { Segmented } from './components/primitives/Segmented.js';
