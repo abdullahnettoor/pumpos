@@ -52,8 +52,8 @@ import {
   DrizzleHandoverContextReader,
   DrizzleHandoverRepository,
   DrizzleStaffDirectory,
-  assignableStaffWhere,
 } from '../infra/repositories/station-ops-repositories.js';
+import { assignableStaffWhere } from '../infra/repositories/assignable-staff.js';
 import {
   DrizzleDssrDataReader,
   DrizzleDssrSnapshotRepository,
@@ -966,7 +966,7 @@ shiftsRouter.get('/status', async (c) => {
           AND nzdu.status = 'ACTIVE'), '[]'::jsonb) AS nozzles,
       COALESCE((SELECT jsonb_agg(${rowJson(schema.users, 'u')})
         FROM users u
-        WHERE ${assignableStaffWhere(orgId)}), '[]'::jsonb) AS staff,
+        WHERE ${assignableStaffWhere(orgId, stationId)}), '[]'::jsonb) AS staff,
       COALESCE((SELECT jsonb_agg(${rowJson(schema.dispenserUnits, 'du')})
         FROM dispenser_units du
         WHERE du.station_id = ${stationId} AND du.organization_id = ${orgId}

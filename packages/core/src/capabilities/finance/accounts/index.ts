@@ -12,6 +12,10 @@ import {
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 
+/** Today's Entry Date in the station timezone (ADR 0005): the office-record date default. */
+const entryDateOf = (ctx: ExecutionContext): string =>
+  resolveEntryDate({ now: ctx.clock.now(), timeZone: ctx.timeZone });
+
 export type FinancialAccountType =
   'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
 export type LedgerDirection = 'in' | 'out';
@@ -189,8 +193,7 @@ export class CreateFinancialAccount implements UseCase<
 
     const now = ctx.clock.now().toISOString();
     const openingBalance = cmd.openingBalance != null ? Number(cmd.openingBalance) : 0;
-    const openingDate =
-      cmd.openingDate ?? resolveEntryDate({ now: ctx.clock.now(), timeZone: ctx.timeZone });
+    const openingDate = cmd.openingDate ?? entryDateOf(ctx);
 
     const account: FinancialAccount = {
       id: ctx.ids.newId(),
@@ -339,10 +342,7 @@ export class SetOpeningBalance implements UseCase<SetOpeningBalanceCommand, Fina
 
     const now = ctx.clock.now().toISOString();
     const opening = round2(Number(cmd.openingBalance));
-    const openingDate =
-      cmd.openingDate ??
-      existing.openingDate ??
-      resolveEntryDate({ now: ctx.clock.now(), timeZone: ctx.timeZone });
+    const openingDate = cmd.openingDate ?? existing.openingDate ?? entryDateOf(ctx);
 
     const updated: FinancialAccount = {
       ...existing,
@@ -446,8 +446,7 @@ export class RecordTransfer implements UseCase<RecordTransferCommand, TransferRe
       return err(notFoundError('FinancialAccount', cmd.toAccountId));
 
     const now = ctx.clock.now().toISOString();
-    const entryDate =
-      cmd.date ?? resolveEntryDate({ now: ctx.clock.now(), timeZone: ctx.timeZone });
+    const entryDate = cmd.date ?? entryDateOf(ctx);
     const transferId = ctx.ids.newId();
     const amount = String(cmd.amount);
     const stationId = from.stationId ?? to.stationId ?? null;
@@ -573,8 +572,7 @@ export class RecordSettlement implements UseCase<RecordSettlementCommand, Settle
       return err(notFoundError('FinancialAccount', cmd.bankAccountId));
 
     const now = ctx.clock.now().toISOString();
-    const entryDate =
-      cmd.date ?? resolveEntryDate({ now: ctx.clock.now(), timeZone: ctx.timeZone });
+    const entryDate = cmd.date ?? entryDateOf(ctx);
     const settlementId = ctx.ids.newId();
     const net = round2(cmd.grossAmount - fee);
     const stationId = clearing.stationId ?? bank.stationId ?? null;
@@ -711,8 +709,7 @@ export class RecordLedgerAdjustment implements UseCase<RecordLedgerAdjustmentCom
       return err(notFoundError('FinancialAccount', cmd.accountId));
 
     const now = ctx.clock.now().toISOString();
-    const entryDate =
-      cmd.date ?? resolveEntryDate({ now: ctx.clock.now(), timeZone: ctx.timeZone });
+    const entryDate = cmd.date ?? entryDateOf(ctx);
     const entry: LedgerEntry = {
       id: ctx.ids.newId(),
       organizationId: ctx.organizationId,

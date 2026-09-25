@@ -141,6 +141,10 @@ describe.skipIf(!CONNECTION)('GET /shifts/status full mode against real Postgres
       { id: MANAGER, organizationId: ORG, fullName: 'Meera', role: 'Manager', status: 'ACTIVE' },
       { id: ATTENDANT, organizationId: ORG, fullName: 'Arun', role: 'Attendant', status: 'ACTIVE' },
     ]);
+    // The open form lists only Attendants/Staff assigned to the station (#291).
+    await db
+      .insert(schema.userStationAssignments)
+      .values([MANAGER, ATTENDANT].map((userId) => ({ userId, stationId: STATION })));
     await db.insert(schema.shiftTemplates).values({
       id: TEMPLATE,
       organizationId: ORG,
@@ -457,7 +461,8 @@ describe.skipIf(!CONNECTION)('GET /shifts/status full mode against real Postgres
       productCode: 'MS',
       tankName: 'T1',
     });
-    expect(data.staff.map((u: any) => u.fullName).sort()).toEqual(['Arun', 'Meera']);
+    // The Manager is on the station but is not given a Drawer (#291).
+    expect(data.staff.map((u: any) => u.fullName)).toEqual(['Arun']);
     expect(data.dispensers[0]).toMatchObject({ name: 'DU-1' });
     expect(data.terminals[0]).toMatchObject({ label: 'POS 1' });
   });

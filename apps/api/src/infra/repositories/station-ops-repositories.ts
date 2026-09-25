@@ -37,6 +37,7 @@ import {
   updateReadingColumns,
   type CreditSaleLineRow,
 } from './shift-recon-sql.js';
+import { assignableStaffWhere } from './assignable-staff.js';
 
 export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
   constructor(private readonly db: DbClient) {}
@@ -822,31 +823,20 @@ export class DrizzleShiftSummaryWriter implements ShiftSummaryStore {
 
 // ---------------- Staff directory (who may be put on a dispenser) ----------------
 
-/**
- * The single definition of "staff this shift-open can assign", over a `users`
- * row aliased `u`. The shift-status reference query offers exactly this list to
- * the open form, and `OpenShift` refuses anyone outside it (#286); both use this
- * fragment so the form can never offer someone the open would refuse.
- *
- * Deliberately org-wide and role-agnostic, matching what the form has always
- * listed: at a small station the owner or manager does work a pump.
- */
-export const assignableStaffWhere = (organizationId: string) =>
-  sql`u.organization_id = ${organizationId} AND u.status = 'ACTIVE'`;
-
+/** Who may be put on a dispenser: see `assignableStaffWhere` (#286, #291). */
 export class DrizzleStaffDirectory implements StaffDirectory {
   constructor(private readonly db: DbClient) {}
 
   /** One query: the subset of `userIds` that are assignable staff. */
   async findAssignableUserIds(
     organizationId: string,
-    _stationId: string,
+    stationId: string,
     userIds: string[],
   ): Promise<Set<string>> {
     if (userIds.length === 0) return new Set();
     const rows = (await this.db.execute(sql`
       SELECT u.id FROM users u
-      WHERE ${assignableStaffWhere(organizationId)}
+      WHERE ${assignableStaffWhere(organizationId, stationId)}
         AND u.id::text IN (${sql.join(
           userIds.map((id) => sql`${id}`),
           sql`, `,
