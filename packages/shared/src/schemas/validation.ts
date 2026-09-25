@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeIndianMobile, INDIAN_MOBILE_MESSAGE } from '../utils/phone-auth.js';
 import { isValidBusinessDate } from '../utils/business-date.js';
 
 const timeStringSchema = z
@@ -155,7 +156,12 @@ export const stationSchema = z.object({
 export const userBaseSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
   email: z.string().email('Invalid email address').or(z.literal('')).optional().nullable(),
-  phone: z.string().optional().nullable(),
+  /** Blank, or a valid Indian mobile in any common spelling (#300). */
+  phone: z
+    .string()
+    .refine((v) => v.trim() === '' || normalizeIndianMobile(v) !== null, INDIAN_MOBILE_MESSAGE)
+    .optional()
+    .nullable(),
   role: z.enum(['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant']).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
   /** When true, provision a login account (needs an identity + password). */
@@ -627,3 +633,22 @@ export const merchandiseSaleEntryFormSchema = z
     path: ['customerId'],
   });
 export type MerchandiseSaleEntryFormValues = z.infer<typeof merchandiseSaleEntryFormSchema>;
+
+/**
+ * An Indian mobile number (#300), normalized to `+91XXXXXXXXXX`. Accepts
+ * spaces/dashes and a leading +91, 91 or 0; rejects anything else.
+ */
+export const indianMobileSchema = z.string().transform((v, ctx) => {
+  const n = normalizeIndianMobile(v);
+  if (!n) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: INDIAN_MOBILE_MESSAGE });
+    return z.NEVER;
+  }
+  return n;
+});
+
+/** Optional phone: blank/absent → null; otherwise a valid Indian mobile. */
+export const optionalIndianMobileSchema = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+  indianMobileSchema.nullish().transform((v) => v ?? null),
+);

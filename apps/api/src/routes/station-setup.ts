@@ -7,7 +7,7 @@ import {
   canManageStaff,
   isManageableByManager,
   isAuthorizedForStation,
-  normalizePhone,
+  normalizeIndianMobile,
   phoneToAuthEmail,
   stationSchema,
   userSchema,
@@ -465,7 +465,9 @@ stationSetupRouter.post(
       body.email && String(body.email).trim() !== ''
         ? String(body.email).trim().toLowerCase()
         : null;
-    const normalizedPhone = normalizePhone(body.phone);
+    // The request schema already refused an invalid mobile (#300), so this is
+    // the single stored spelling, +91XXXXXXXXXX, or null when blank.
+    const normalizedPhone = normalizeIndianMobile(body.phone);
     let authUserId: string | null = null;
 
     if (wantsLogin) {

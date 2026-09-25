@@ -37,6 +37,9 @@ export function normalizePhone(raw: string | null | undefined): string | null {
 
   // Bare national number (India mobile = 10 digits) → prefix country code.
   if (digits.length === 10) return `${DEFAULT_COUNTRY_CODE}${digits}`;
+  // Trunk-prefixed national number (0 + 10 digits), e.g. 09876543210 (#300).
+  if (digits.length === 11 && digits.startsWith('0'))
+    return `${DEFAULT_COUNTRY_CODE}${digits.slice(1)}`;
 
   return digits;
 }
@@ -60,3 +63,24 @@ export function looksLikePhone(identifier: string): boolean {
   // Digits, spaces, dashes, parens and an optional leading '+' only.
   return /^\+?[\d\s()-]+$/.test(trimmed);
 }
+
+/** A valid Indian mobile: 10 digits starting 6–9 (#300). */
+const INDIAN_MOBILE = /^[6-9]\d{9}$/;
+
+/**
+ * Normalize an Indian mobile number to its one stored form, `+91XXXXXXXXXX`,
+ * or `null` when it is not a valid Indian mobile. Spaces, dashes, dots and
+ * brackets are ignored, as is one leading `+91`, `91` or `0`, so
+ * `98765 43210`, `+91 9876543210` and `09876543210` all give `+919876543210`.
+ * Its login handle (`phoneToAuthEmail`) is the same for every spelling.
+ */
+export function normalizeIndianMobile(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  let s = raw.trim().replace(/[\s\-().]/g, '');
+  if (s.startsWith('+91')) s = s.slice(3);
+  else if (s.length === 12 && s.startsWith('91')) s = s.slice(2);
+  else if (s.length === 11 && s.startsWith('0')) s = s.slice(1);
+  return INDIAN_MOBILE.test(s) ? `+${DEFAULT_COUNTRY_CODE}${s}` : null;
+}
+
+export const INDIAN_MOBILE_MESSAGE = 'Enter a valid 10-digit Indian mobile number';
