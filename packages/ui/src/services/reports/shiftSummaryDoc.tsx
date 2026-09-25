@@ -358,6 +358,9 @@ export const LetterheadBand = ({
   );
 };
 
+/** Pre-#287 snapshots keep a single Cash Variance line (snapshots are immutable). */
+const twoLevel = (d: any) => Number(d?.cashVarianceModel ?? 0) >= 2;
+
 const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React.ReactNode> = {
   header: (d, cfg) => (
     <View key="header">
@@ -680,9 +683,27 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
             v: `+ ${inr(d.cashSalesSum)}`,
             c: C.success,
           },
-          { l: '(-) Cash Drops', v: `- ${inr(d.cashDrops)}`, c: C.danger },
-          { l: 'Expected Cash in Drawer', v: inr(d.expectedCash), c: C.ink },
+          {
+            l: '(-) Handover Drops',
+            v: `- ${inr(d.handoverCashDrops ?? d.cashDrops)}`,
+            c: C.danger,
+          },
+          { l: '(-) Drops at Close', v: `- ${inr(d.closeCashDrops ?? 0)}`, c: C.danger },
+          {
+            l: twoLevel(d) ? 'Expected Office Cash' : 'Expected Cash in Drawer',
+            v: inr(d.expectedCash),
+            c: C.ink,
+          },
           { l: 'Actual Closing Cash (Entered)', v: inr(d.closingCash), c: C.ink },
+          ...(twoLevel(d)
+            ? [
+                {
+                  l: 'Attendant Variance (Handover)',
+                  v: `${Number(d.attendantVariance || 0) > 0 ? '+' : ''}${inr(d.attendantVariance ?? 0)}`,
+                  c: Number(d.attendantVariance || 0) < 0 ? C.danger : C.ink,
+                },
+              ]
+            : []),
         ].map((r, i) => (
           <View key={i} style={s.reconRow}>
             <Text style={{ fontSize: 9, color: r.c }}>{r.l}</Text>
@@ -708,7 +729,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
               color: Math.abs(Number(d.cashVariance || 0)) > 100 ? C.danger : C.ink,
             }}
           >
-            Cash Variance
+            {twoLevel(d) ? 'Office Count Variance' : 'Cash Variance'}
           </Text>
           <Text
             style={{
@@ -741,7 +762,8 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
             { header: 'Attendant', flex: 2, strong: true },
             { header: 'Float', flex: 1, align: 'right', mono: true },
             { header: 'Cash Sales', flex: 1.2, align: 'right', mono: true },
-            { header: 'Drops', flex: 1, align: 'right', mono: true },
+            { header: 'Handover Drops', flex: 1.1, align: 'right', mono: true },
+            { header: 'Close Drops', flex: 1, align: 'right', mono: true },
             { header: 'Expected', flex: 1.2, align: 'right', mono: true },
             { header: 'Handed Over', flex: 1.2, align: 'right', mono: true },
             { header: 'Variance', flex: 1.2, align: 'right', mono: true },
@@ -754,6 +776,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
               { text: m(r.openingFloat) },
               { text: m(r.cashSales) },
               { text: m(r.cashDrops) },
+              { text: m(r.closeCashDrops ?? 0) },
               { text: m(r.expectedCash) },
               { text: m(r.cashHandedOver) },
               {

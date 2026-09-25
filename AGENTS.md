@@ -77,18 +77,27 @@ Anchoring rules (target, ADR 0005):
 
 Drawer reconciliation (ADR 0005). Each Attendant/DU has its own Drawer with
 an Opening Float issued at shift open (`shift_staff_assignments.opening_float`)
-and is reconciled at Handover; the Shift's figure is the sum of its Drawers
-(`expectedShiftDrawerCash` in core):
+and is reconciled at Handover. Variance is two-level (#287): the office's
+expected figure is built from each Drawer's **declared** cash
+(`expectedShiftDrawerCash` / `computeShiftCloseCash`), and the attendant
+variance is tracked separately:
 
 ```text
-drawer.expectedCash = openingFloat + DU cash sales − cashDrops   (at Handover)
-expectedDrawerCash  = Σ openingFloat + cashSales − Σ cashDrops    (at shift close)
+drawer.expectedCash = openingFloat + DU cash sales − cashDrops        (at Handover)
+attendantVariance   = Σ (declared + drops − drawer.expectedCash)       (Handover)
+expectedDrawerCash  = Σ declared − unassigned drops at close           (office)
+officeCountVariance = counted − expectedDrawerCash                     (shift close)
 ```
 
-The Shift's opening cash is not stored; it is Σ Opening Floats. Cash sales
-posted to the ledger exclude the floats.
+Every Drawer must hand over before the shift closes. The Shift's opening cash
+is not stored; it is Σ Opening Floats. The ledger receives only cash actually
+received (Σ declared cash sales, floats excluded); attendant shortages are not
+posted (a later feature may post them as recoverable).
 
-Office cash taken from a drawer is a cash drop. Cash in Hand (`CASH_IN_HAND`)
+Office cash taken from a drawer is a cash drop. A drop recorded at close names
+its Drawer (reducing that Drawer's expected cash); one naming no Drawer goes to
+the office variance. Cash moved after close is not a drop: it is an office
+transfer (Cash in Hand → Safe/Bank) dated by the Entry Date. Cash in Hand (`CASH_IN_HAND`)
 is the office cash account. Never force card/UPI/bank/credit movements into
 the drawer reconciliation.
 

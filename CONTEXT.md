@@ -294,7 +294,9 @@ _Avoid_: outstanding, khata
 
 **Cash Drop**:
 Cash taken from one Attendant's Drawer mid-shift (e.g., to a safe), reducing
-that Drawer's expected cash. Recorded on that Attendant's Handover. Rare.
+that Drawer's expected cash. Recorded on that Attendant's Handover, or at
+Shift close naming the Drawer (an unnamed close drop goes to the office count
+variance). Cash moved after close is an office transfer, not a drop. Rare.
 _Avoid_: safe drop, remittance
 
 **Handover**:
@@ -314,8 +316,9 @@ _Avoid_: cash stated, declared amount
 
 **Drawer Reconciliation**:
 Per Drawer, at Handover: `Opening Float + DU cash sales − Cash Drops`,
-compared with the cash handed over. The Shift's figure is the sum of its
-Drawers. Office money, card/UPI and credit never enter it. Cash the office takes from a Drawer is a
+compared with the cash handed over (attendant variance). At Shift close the
+office's expected cash is Σ declared cash (less unnamed close drops), compared
+with the office count (office count variance). The two levels are separate (#287). Office money, card/UPI and credit never enter it. Cash the office takes from a Drawer is a
 Cash Drop.
 _Avoid_: cash count, tally
 

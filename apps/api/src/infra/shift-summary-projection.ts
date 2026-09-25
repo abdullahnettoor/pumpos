@@ -1,3 +1,4 @@
+import { CASH_VARIANCE_MODEL_TWO_LEVEL, isTwoLevelVarianceSnapshot } from '@pump/shared';
 import { sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import { byNaturalField } from '@pump/shared';
@@ -211,7 +212,9 @@ export async function projectShiftSummary(
   }
   const terminalBreakdown = Array.from(terminalBreakdownMap.values());
 
-  const openingCash = Number(snap.openingCash ?? shift.openingCash ?? 0);
+  const openingCash = Number(snap.openingCash ?? 0);
+  const twoLevel = isTwoLevelVarianceSnapshot(snap);
+  const drawers: any[] = Array.isArray(snap.drawers) ? snap.drawers : (recon.drawers ?? []);
   const closingCash = Number(snap.closingCash ?? shift.closingCash ?? 0);
 
   return {
@@ -260,8 +263,20 @@ export async function projectShiftSummary(
     cashVariance: Number(snap.cashVariance ?? 0),
     cashSalesSum: Number(recon.cashSales ?? 0),
     cashDrops: Number(snap.cashDrops ?? 0),
-    // Per-Drawer reconciliation (ADR 0005, #278); the shift figure is their sum.
-    drawers: Array.isArray(snap.drawers) ? snap.drawers : (recon.drawers ?? []),
+    // Handover drops vs drops recorded at close, shown on separate lines (#287).
+    // Pre-#287 snapshots only carry the combined figure: treat it as Handover.
+    handoverCashDrops: Number(snap.handoverCashDrops ?? snap.cashDrops ?? 0),
+    closeCashDrops: Number(snap.closeCashDrops ?? 0),
+    // Per-Drawer reconciliation (ADR 0005, #278).
+    drawers,
+    // Two-level variance (#287): attendant (Handover) vs office count.
+    // Pre-#287 snapshots: cashVariance already includes attendant shortages,
+    // so no separate attendant/office split is shown (snapshots are immutable).
+    cashVarianceModel: twoLevel ? CASH_VARIANCE_MODEL_TWO_LEVEL : 1,
+    attendantVariance: twoLevel ? Number(snap.attendantVariance ?? 0) : null,
+    officeCountVariance: twoLevel
+      ? Number(snap.officeCountVariance ?? snap.cashVariance ?? 0)
+      : null,
   };
 }
 

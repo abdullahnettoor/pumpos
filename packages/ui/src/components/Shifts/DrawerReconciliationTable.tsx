@@ -13,6 +13,8 @@ export interface DrawerRow {
   /** Null until the Attendant hands over. */
   cashSales: number | null;
   cashDrops: number;
+  /** Drops at close naming this Drawer (#287). */
+  closeCashDrops?: number;
   expectedCash: number | null;
   cashHandedOver: number | null;
   variance: number | null;
@@ -36,7 +38,12 @@ const columns: ColumnDef<DrawerRow, any>[] = [
   },
   { id: 'float', header: 'Float', accessorKey: 'openingFloat', cell: (c) => money(c.getValue()) },
   { id: 'sales', header: 'Cash sales', accessorKey: 'cashSales', cell: (c) => money(c.getValue()) },
-  { id: 'drops', header: 'Drops', accessorKey: 'cashDrops', cell: (c) => money(c.getValue()) },
+  {
+    id: 'drops',
+    header: 'Drops',
+    accessorFn: (r) => Number(r.cashDrops ?? 0) + Number(r.closeCashDrops ?? 0),
+    cell: (c) => money(c.getValue()),
+  },
   {
     id: 'expected',
     header: 'Expected',

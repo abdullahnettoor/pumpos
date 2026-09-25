@@ -39,7 +39,8 @@ import {
   type PendingTankDipWorkflow,
 } from '../../query/stockCountMutation.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
-import { Station } from '@pump/shared';
+import { Station, computeShiftCloseCash, parseDrawerKey } from '@pump/shared';
+import type { CloseDropRow } from './CloseShiftWizard.js';
 import type { OpenShiftFormValues } from '@pump/shared';
 import {
   FileText,
@@ -202,6 +203,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [isPreparingClose, setIsPreparingClose] = useState(false);
   const [closeWizardOpen, setCloseWizardOpen] = useState(false);
   const [closingCash, setClosingCash] = useState(0);
+  // Cash Drops recorded at close (#287).
+  const [closeDrops, setCloseDrops] = useState<CloseDropRow[]>([]);
   const [confirmWarningsChecked, setConfirmWarningsChecked] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const inventoryStatusQ = useInventoryStatus(stationId);
@@ -353,36 +356,65 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // uses). Preferred over the client estimate so the expected drawer includes
   // non-attendant merchandise cash and reads the true station-level short/surplus.
   const recon = data?.activeShift?.reconciliation;
-  // Σ Opening Floats + cash sales − Handover Cash Drops, from the server's
-  // core formula (ADR 0005). Office money never reaches a Drawer.
-  const expectedCash = recon
-    ? Number(recon.expectedDrawerCash ?? 0)
+  // Two-level variance (#287, ADR 0005), same shared formula CloseShift uses:
+  // attendant variance at Handover; office count variance against what the
+  // Drawers declared, less drops at close that name no Drawer.
+  const reconDrawers: any[] = Array.isArray(recon?.drawers) ? recon.drawers : [];
+  const closeDropEntries = closeDrops
+    .filter((r) => r.amount > 0)
+    .map((r) => ({ ...parseDrawerKey(r.drawerKey), amount: r.amount }));
+  const closeCash = recon
+    ? computeShiftCloseCash(
+        {
+          openingFloat: Number(recon.openingFloat ?? openingCashNum),
+          cashSales: Number(recon.cashSales || 0),
+          handoverCashDrops: Number(recon.handoverCashDrops || 0),
+          drawers: reconDrawers,
+        },
+        closingCash,
+        closeDropEntries,
+      )
+    : null;
+  const expectedCash = closeCash
+    ? closeCash.expectedDrawerCash
     : openingCashNum + activeCashCollections;
   const cashVariance = closingCash - expectedCash;
 
   // Station-level cash summary for the closing wizard (#4). Aggregate figures —
   // cross-attendant settlements (e.g. a borrowed POS) net out in the drawer total.
-  const cashSummary = recon
-    ? {
-        openingCash: openingCashNum,
-        cashSales: Number(recon.cashSales || 0),
-        handoverCash: Number(recon.handoverCash || 0),
-        merchCashOutsideHandover: Number(recon.merchCashOutsideHandover || 0),
-        cashDrops: Number(recon.handoverCashDrops || 0),
-        drawers: Array.isArray(recon.drawers) ? recon.drawers : [],
-        expectedDrawer: expectedCash,
-        merchCashBreakdown: Array.isArray(recon.merchCashOutsideHandoverBreakdown)
-          ? recon.merchCashOutsideHandoverBreakdown
-          : [],
-        attendantVariance: totalAttendantVariance,
-        attendantVariances: handovers.map((h: any) => ({
-          name: h.attendantName || h.userName || 'Attendant',
-          du: h.duName || null,
-          variance: Number(h.varianceAmount || 0),
-        })),
-        hasHandovers,
-      }
-    : null;
+  const cashSummary =
+    recon && closeCash
+      ? {
+          openingCash: openingCashNum,
+          cashSales: closeCash.cashSales,
+          handoverCash: Number(recon.handoverCash || 0),
+          merchCashOutsideHandover: Number(recon.merchCashOutsideHandover || 0),
+          cashDrops: Number(recon.handoverCashDrops || 0),
+          closeCashDrops: closeCash.drawerCloseCashDrops + closeCash.unassignedCloseCashDrops,
+          drawers: closeCash.drawers,
+          expectedDrawer: expectedCash,
+          merchCashBreakdown: Array.isArray(recon.merchCashOutsideHandoverBreakdown)
+            ? recon.merchCashOutsideHandoverBreakdown
+            : [],
+          attendantVariance: reconDrawers.length
+            ? closeCash.attendantVariance
+            : totalAttendantVariance,
+          attendantVariances: reconDrawers.length
+            ? closeCash.drawers
+                .filter((d: any) => d.variance !== null)
+                .map((d: any) => ({
+                  name: d.attendantName || 'Attendant',
+                  du: d.duName || null,
+                  variance: Number(d.variance || 0),
+                }))
+            : handovers.map((h: any) => ({
+                name: h.attendantName || h.userName || 'Attendant',
+                du: h.duName || null,
+                variance: Number(h.varianceAmount || 0),
+              })),
+          hasHandovers,
+        }
+      : null;
 
   // Reactively compute close warnings when close flow is active
   const warnings: string[] = [];
@@ -707,7 +739,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       const closeResult = await shiftService.closeShift(data.activeShift.id, {
         closingCash,
         nozzleReadings: readingsArray,
+        ...(closeDropEntries.length > 0 ? { closeCashDrops: closeDropEntries } : {}),
       });
+      setCloseDrops([]);
 
       setIsPreparingClose(false);
       setCloseWizardOpen(false);
@@ -1043,6 +1077,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           closingCash={closingCash}
           onClosingCashChange={setClosingCash}
           cashSummary={cashSummary}
+          closeCashDrops={closeDrops}
+          onCloseCashDropsChange={setCloseDrops}
           stationTanks={stationTanks}
           dipReadings={dipReadings}
           onDipReadingsChange={setDipReadings}

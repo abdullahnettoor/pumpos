@@ -7,7 +7,7 @@ import {
   BusinessEvents,
 } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
-import { CloseShift } from './close-shift.js';
+import { CloseShift, computeShiftCloseCash } from './close-shift.js';
 import type {
   CloseShiftContext,
   CloseShiftContextReader,
@@ -151,6 +151,137 @@ const emptyTotals: ShiftReconciliationTotals = {
   handoverCashDrops: 0,
   drawers: [],
 };
+
+/** Worked example pinned by #287 (owner decision, two-level variance). */
+function workedExampleTotals(): ShiftReconciliationTotals {
+  const drawers: ShiftReconciliationTotals['drawers'] = [
+    {
+      attendantId: 'a',
+      attendantName: 'A',
+      duId: 'du1',
+      duName: 'DU-1',
+      openingFloat: 1000,
+      cashSales: 20000,
+      cashDrops: 10000,
+      expectedCash: 11000,
+      cashHandedOver: 10800,
+      variance: -200,
+    },
+    {
+      attendantId: 'b',
+      attendantName: 'B',
+      duId: 'du2',
+      duName: 'DU-2',
+      openingFloat: 1000,
+      cashSales: 15000,
+      cashDrops: 0,
+      expectedCash: 16000,
+      cashHandedOver: 16000,
+      variance: 0,
+    },
+  ];
+  // Derived from the Handovers, as the reader does: Σ (declared − float + drops).
+  // (The raw-row path is pinned in apps/api shift-recon-sql.test.ts.)
+  const sum = (f: (d: (typeof drawers)[number]) => number) => drawers.reduce((s, d) => s + f(d), 0);
+  return {
+    cashSales: sum((d) => (d.cashHandedOver ?? 0) - d.openingFloat + d.cashDrops),
+    openingFloat: sum((d) => d.openingFloat),
+    handoverCashDrops: sum((d) => d.cashDrops),
+    drawers,
+  };
+}
+
+function closeWith(totals: ShiftReconciliationTotals) {
+  const shifts = new ShiftRepo([openShiftRow()]);
+  const readings = new ReadingRepo([reading()]);
+  return new CloseShift({
+    context: new ContextReader(shifts.rows, readings.rows, [nozzle()], totals),
+    shifts,
+    nozzleReadings: readings,
+    stockMovements: new StockWriter(),
+    summaries: new SummaryWriter(),
+    events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+  });
+}
+
+describe('two-level cash variance (#287)', () => {
+  it('pins the worked example: attendant −200, office −100, ledger 34,800', async () => {
+    const result = await closeWith(workedExampleTotals()).execute(
+      { shiftId: 'sh-1', closingCash: 26700 },
+      makeContext(),
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.snapshot).toMatchObject({
+      expectedDrawerCash: 26800,
+      attendantVariance: -200,
+      cashVariance: -100,
+      officeCountVariance: -100,
+    });
+    expect(result.data.cashSales).toBe(34800);
+    expect(result.data.snapshot.cashVarianceModel).toBe(2);
+  });
+
+  it('a drop at close naming a Drawer reduces that Drawer expected cash', () => {
+    const r = computeShiftCloseCash(workedExampleTotals(), 26800, [
+      { attendantId: 'a', duId: 'du1', amount: 200 },
+    ]);
+    expect(r.drawers[0]).toMatchObject({ expectedCash: 10800, variance: 0, closeCashDrops: 200 });
+    expect(r.attendantVariance).toBe(0);
+    expect(r.expectedDrawerCash).toBe(26800);
+    expect(r.cashVariance).toBe(0);
+    expect(r.cashSales).toBe(35000);
+  });
+
+  it('a drop at close naming no Drawer goes to the office variance', () => {
+    const r = computeShiftCloseCash(workedExampleTotals(), 26700, [{ amount: 100 }]);
+    expect(r.attendantVariance).toBe(-200);
+    expect(r.expectedDrawerCash).toBe(26700);
+    expect(r.cashVariance).toBe(0);
+    expect(r.cashSales).toBe(34800);
+  });
+
+  it('blocks close while a Drawer is not handed over', async () => {
+    const totals = workedExampleTotals();
+    totals.drawers[1] = {
+      ...totals.drawers[1],
+      cashSales: null,
+      expectedCash: null,
+      cashHandedOver: null,
+      variance: null,
+    };
+    const result = await closeWith(totals).execute(
+      { shiftId: 'sh-1', closingCash: 26700 },
+      makeContext(),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a drop naming only the attendant or only the DU', async () => {
+    for (const drop of [
+      { attendantId: 'a', amount: 5 },
+      { duId: 'du1', amount: 5 },
+    ]) {
+      const result = await closeWith(workedExampleTotals()).execute(
+        { shiftId: 'sh-1', closingCash: 1, closeCashDrops: [drop] },
+        makeContext(),
+      );
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it('rejects a drop naming a Drawer not on the shift', async () => {
+    const result = await closeWith(workedExampleTotals()).execute(
+      {
+        shiftId: 'sh-1',
+        closingCash: 1,
+        closeCashDrops: [{ attendantId: 'z', duId: 'x', amount: 5 }],
+      },
+      makeContext(),
+    );
+    expect(result.success).toBe(false);
+  });
+});
 
 describe('CloseShift', () => {
   it('sums four Drawers with different floats and one drop (#278)', async () => {

@@ -361,6 +361,9 @@ export interface ShiftOpenPayload {
 export interface ShiftClosePayload {
   closingCash: number;
   nozzleReadings: { nozzleId: string; closingReading: number }[];
+  /** Cash Drops recorded at close (#287). Name a Drawer (attendantId + duId)
+   *  to reduce that Drawer's expected cash; omit both to reduce office cash. */
+  closeCashDrops?: { attendantId?: string | null; duId?: string | null; amount: number }[];
 }
 
 export interface ShiftDashboardSummary {

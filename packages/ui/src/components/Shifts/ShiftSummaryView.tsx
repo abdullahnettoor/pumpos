@@ -93,6 +93,10 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
     cashVariance = 0,
     cashSalesSum = 0,
     cashDrops = 0,
+    handoverCashDrops = cashDrops,
+    closeCashDrops = 0,
+    attendantVariance = null,
+    cashVarianceModel = 1,
     drawers = [],
     purchases = [],
     handovers = [],
@@ -100,6 +104,8 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
     creditSales = [],
     creditSalesTotal = 0,
   } = snapshotData;
+  // Two-level variance (#287) only for snapshots closed under that model.
+  const twoLevel = Number(cashVarianceModel) >= 2;
   const shiftLabel = shiftDisplayLabel({ businessDate, shiftSequence, shiftId });
 
   // Fuel unit handling (L for liquids, kg for CNG/Auto-LPG). A tank/nozzle
@@ -1285,7 +1291,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             + {inr(cashSalesSum)}
           </span>
         </div>
-        {cashDrops > 0 && (
+        {Number(handoverCashDrops) > 0 && (
           <div
             style={{
               display: 'flex',
@@ -1295,9 +1301,25 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
               color: 'var(--brand-danger)',
             }}
           >
-            <span>(−) Cash Drops</span>
+            <span>(−) Handover drops</span>
             <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-              − {inr(cashDrops)}
+              − {inr(handoverCashDrops)}
+            </span>
+          </div>
+        )}
+        {Number(closeCashDrops) > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              borderBottom: '1px solid var(--border-soft)',
+              color: 'var(--brand-danger)',
+            }}
+          >
+            <span>(−) Drops at close</span>
+            <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+              − {inr(closeCashDrops)}
             </span>
           </div>
         )}
@@ -1310,7 +1332,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             fontWeight: 600,
           }}
         >
-          <span>Expected Cash in Drawer</span>
+          <span>{twoLevel ? 'Expected office cash' : 'Expected Cash in Drawer'}</span>
           <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
             {inr(expectedCash)}
           </span>
@@ -1328,6 +1350,23 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             {inr(closingCash)}
           </span>
         </div>
+        {twoLevel && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              borderBottom: '1px solid var(--border-soft)',
+              color: Number(attendantVariance) < 0 ? 'var(--brand-danger)' : 'var(--text-strong)',
+            }}
+          >
+            <span>Attendant variance (Handover)</span>
+            <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+              {Number(attendantVariance) > 0 ? '+' : ''}
+              {inr(attendantVariance)}
+            </span>
+          </div>
+        )}
         <div
           style={{
             display: 'flex',
@@ -1340,7 +1379,8 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             color: Math.abs(cashVariance) > 100 ? 'var(--state-danger-fg)' : 'var(--text-strong)',
           }}
         >
-          <span>Cash Variance</span>
+          {/* Pre-#287 snapshots keep their single Cash Variance line. */}
+          <span>{twoLevel ? 'Office count variance' : 'Cash Variance'}</span>
           <span
             style={{
               fontFamily: 'var(--font-mono)',

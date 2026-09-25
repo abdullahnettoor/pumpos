@@ -570,7 +570,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           ) : (
             <tr>
               <td
-                colSpan={5}
+                colSpan={6}
                 style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}
               >
                 No fuel sales in this daily DSSR.
@@ -721,7 +721,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           ) : (
             <tr>
               <td
-                colSpan={5}
+                colSpan={6}
                 style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}
               >
                 No nozzle data in this daily DSSR.
@@ -978,7 +978,10 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
               Net Volume (L)
             </th>
             <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
-              Cash Variance (₹)
+              Attendant Var. (₹)
+            </th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
+              Office Count Var. (₹)
             </th>
           </tr>
         </thead>
@@ -1022,6 +1025,22 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
                   >
                     {Number(shift.netVolume || 0).toFixed(3)}
                   </td>
+                  {/* Null for pre-#287 shifts (their Cash Variance already includes it). */}
+                  <td
+                    style={{
+                      padding: '10px 12px',
+                      textAlign: 'right',
+                      fontFamily: 'var(--font-mono)',
+                      color:
+                        Number(shift.attendantVariance || 0) < 0
+                          ? 'var(--brand-danger)'
+                          : 'var(--text-default)',
+                    }}
+                  >
+                    {shift.attendantVariance == null
+                      ? '—'
+                      : `${Number(shift.attendantVariance) > 0 ? '+' : ''}${formatMoney(Number(shift.attendantVariance), { symbol: false })}`}
+                  </td>
                   <td
                     style={{
                       padding: '10px 12px',
@@ -1040,7 +1059,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           ) : (
             <tr>
               <td
-                colSpan={5}
+                colSpan={6}
                 style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}
               >
                 No shifts were included for this day.
@@ -1049,6 +1068,50 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           )}
         </tbody>
       </table>
+
+      {/* Attendant (Handover) variance per Attendant/DU for the day (#287). */}
+      {Array.isArray(snapshot.drawer?.attendants) && snapshot.drawer.attendants.length > 0 && (
+        <>
+          <h3
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: 'var(--text-strong)',
+              marginBottom: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.02em',
+            }}
+          >
+            Attendant Variance
+          </h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <tbody>
+              {snapshot.drawer.attendants.map((a: any, i: number) => {
+                const v = Number(a.variance || 0);
+                return (
+                  <tr key={i} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                    <td style={{ padding: '8px 12px' }}>
+                      {a.attendantName ?? 'Attendant'}
+                      {a.duName ? ` · ${a.duName}` : ''}
+                    </td>
+                    <td
+                      style={{
+                        padding: '8px 12px',
+                        textAlign: 'right',
+                        fontFamily: 'var(--font-mono)',
+                        color: v < 0 ? 'var(--brand-danger)' : 'var(--text-default)',
+                      }}
+                    >
+                      {v > 0 ? '+' : ''}
+                      {formatMoney(v, { symbol: false })}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
     </div>
   );
 };

@@ -94,4 +94,35 @@ describe('projectShiftSummary', () => {
     expect(out.cashVariance).toBe(300);
     expect(out.cashNetChange).toBe(13500);
   });
+
+  it('shows no attendant/office split on a pre-#287 snapshot (#287)', async () => {
+    // Old model: cashVariance already includes the attendant shortage.
+    const out = await project(populated, {
+      ...closeSnapshot,
+      cashVariance: -200,
+      drawers: [{ attendantId: 'a', duId: 'd', variance: -200 }],
+    });
+    expect(out.cashVarianceModel).toBe(1);
+    expect(out.attendantVariance).toBeNull();
+    expect(out.officeCountVariance).toBeNull();
+    expect(out.cashVariance).toBe(-200);
+  });
+
+  it('carries both variances on a two-level snapshot, idempotently', async () => {
+    const snap = {
+      ...closeSnapshot,
+      cashVarianceModel: 2,
+      cashVariance: -100,
+      attendantVariance: -200,
+      officeCountVariance: -100,
+    };
+    const out = await project(populated, snap);
+    expect(out).toMatchObject({
+      cashVarianceModel: 2,
+      attendantVariance: -200,
+      officeCountVariance: -100,
+    });
+    const again = await project(populated, out);
+    expect(again).toMatchObject({ cashVarianceModel: 2, attendantVariance: -200 });
+  });
 });
