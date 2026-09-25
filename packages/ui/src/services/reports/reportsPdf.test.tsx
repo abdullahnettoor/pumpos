@@ -8,7 +8,7 @@ import { ShiftSummaryDoc, LetterheadBand, C } from './shiftSummaryDoc.js';
 import { DssrDoc } from './dssrDoc.js';
 import { InvoiceDoc } from './invoiceDoc.js';
 import { LedgerDoc } from './ledgerDoc.js';
-import { AttendantReportDoc } from './attendantReportDoc.js';
+import { AttendantReportDoc, dayPageTitle } from './attendantReportDoc.js';
 import { MARK_PATH, MARK_VIEWBOX } from '../../pump-ds/brand/Brand.js';
 
 async function streamToBuffer(stream: any): Promise<Buffer> {
@@ -418,6 +418,38 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
       expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
       // 1 cover + 3 day pages.
       expect(pageCount(buffer)).toBe(4);
+    });
+
+    /*
+     * PDF text is font-encoded, so the name is asserted on the element tree:
+     * every bold Text node's string content, walked without invoking
+     * components (the letterhead is not the subject here).
+     */
+    const boldTexts = (node: any, out: string[] = []): string[] => {
+      if (node == null || typeof node !== 'object') return out;
+      if (Array.isArray(node)) {
+        node.forEach((n) => boldTexts(n, out));
+        return out;
+      }
+      const props = node.props ?? {};
+      if (props.style?.fontWeight === 700) {
+        const flat = ([] as any[]).concat(props.children).flat(Infinity);
+        out.push(flat.filter((c) => typeof c === 'string').join(''));
+      }
+      boldTexts(props.children, out);
+      return out;
+    };
+
+    it('titles the header and every day page with the attendant name', () => {
+      const tree = (AttendantReportDoc as any)({
+        data: statement(['2026-03-01', '2026-03-02']),
+        config,
+      });
+      const headerTree = tree.props.children[0].props.children;
+      const titles = boldTexts(tree);
+      expect(boldTexts(headerTree)).toContain('Ravi');
+      expect(titles).toContain(dayPageTitle('Ravi', '2026-03-01'));
+      expect(titles).toContain('Ravi · 2026-03-02');
     });
   });
 });

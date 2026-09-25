@@ -19,7 +19,7 @@ import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { useToast } from './primitives/ToastProvider.js';
 import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText, Icon } from '../pump-ds/index.js';
-import { resolveBusinessDate, type PurchaseEntryFormValues } from '@pump/shared';
+import { resolveBusinessDate, resolveEntryDate, type PurchaseEntryFormValues } from '@pump/shared';
 import { purchaseColumns, buildSupplierColumns } from './purchases/columns.js';
 import { SupplierFormDrawer } from './purchases/SupplierFormDrawer.js';
 import { SupplierStatementDrawer } from './purchases/SupplierStatementDrawer.js';
@@ -140,10 +140,10 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
   };
 
   // GST / ITC register
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  const [gstFrom, setGstFrom] = useState(monthStart.toISOString().slice(0, 10));
-  const [gstTo, setGstTo] = useState(new Date().toISOString().slice(0, 10));
+  // Station-timezone calendar dates, never UTC (#288).
+  const gstToday = resolveEntryDate({ timeZone: stationSettings.timezone });
+  const [gstFrom, setGstFrom] = useState(`${gstToday.slice(0, 8)}01`);
+  const [gstTo, setGstTo] = useState(gstToday);
   // See IncomeList: a tab-gated query replaces the load-from-effect.
   const gstQ = usePurchaseGstRegister(
     { from: gstFrom, to: gstTo },
@@ -191,7 +191,8 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
     setFormError(null);
     setPurchaseDefaults({
       targetShiftId: resolvePreferredShiftId(activeShift, recentClosedShifts),
-      transactionDate: new Date().toISOString().slice(0, 10),
+      // Purchases are dated by business day (ADR 0005), not UTC (#288).
+      transactionDate: todayIso,
       supplierId: supplierId || suppliers[0]?.id || '',
       invoiceNumber: '',
       notes: '',
