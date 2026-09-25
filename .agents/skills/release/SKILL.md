@@ -43,6 +43,16 @@ node scripts/next-version.mjs --json --initial 1.0.0
 This is the same command the pipeline runs, so its `version` is the version that
 will be tagged. Never pick one by hand.
 
+Release tags sit on `main` merge commits, which `dev` does not contain, so on
+`dev` this reports the `--initial` version. Derive it on a throwaway merge of
+`dev` into `main` instead, which is what the pipeline sees:
+
+```bash
+wt=$(mktemp -d) && git worktree add -q --detach "$wt" origin/main
+(cd "$wt" && git merge -q --no-edit origin/dev && node scripts/next-version.mjs --json --initial 1.0.0)
+git worktree remove --force "$wt"
+```
+
 **Done when** you have `vX.Y.Z` from that command, not from a guess.
 
 ## 3. Read what merged
@@ -101,30 +111,41 @@ beats a sentence invented to fill the space.
 **Done when** every sentence would make sense read aloud to someone standing at
 a pump, and nothing in the file would need stripping by `operatorNotes`.
 
-## 5. Open the PR
+## 5. Land the summary on `dev`, then promote
+
+**Only a merged `dev` → `main` PR releases.** The Release workflow's first job
+("Validate dev promotion") looks up the PR behind the `main` merge commit and
+fails unless its head is `dev`. A `release/*` branch PR into `main` merges fine
+and then stops the release before tagging. So the summary travels to `main`
+inside `dev`:
 
 ```bash
-git checkout -b release/<version>
+git checkout -b docs/release-notes-<version>
 git add docs/release-notes/<version>.md
 git commit -m "docs(release): operator summary for v<version>"
-node scripts/next-version.mjs --json --initial 1.0.0   # re-derive: the commit above is a new commit
+gh pr create --base dev --title "docs(release): operator summary for v<version>" --body "..."
+# merge it once CI is green, then:
+git checkout dev && git pull
 ```
 
-If the version moved, rename the file to match before pushing — **the pipeline
-reads `docs/release-notes/$VERSION.md` by exact name**, and a mismatched name
-ships empty notes rather than failing loudly.
+If the version moved (re-derive as in step 2), rename the file to match before
+promoting — **the pipeline reads `docs/release-notes/$VERSION.md` by exact
+name**, and a mismatched name ships empty notes rather than failing loudly.
 
-Then open the PR into `main` with the summary quoted in its body, so reviewing
+Then open the promotion PR, with the summary quoted in its body, so reviewing
 the release means reading what stations will be told:
 
 ```bash
-gh pr create --base main --head release/<version> --title "Release: <one line>" --body "..."
+gh pr create --base main --head dev --title "Release: <one line>" --body "..."
 ```
 
 The body should carry the operator summary verbatim, the version, and what is in
 the release for a developer audience.
 
-**Done when** the PR is open against `main`, its body quotes the summary, and CI
+If `main` holds commits `dev` lacks (a failed release, a hotfix), back-merge
+`main` into `dev` through a PR first, so the promotion is a clean superset.
+
+**Done when** the `dev` → `main` PR is open, its body quotes the summary, and CI
 has started.
 
 ## 6. Hand back
