@@ -116,28 +116,90 @@ export function computeShiftCloseCash<D extends CloseCashDrawer>(
   };
 }
 
+/** Variances smaller than this (half a paisa) read as balanced. */
+export const VARIANCE_EPSILON = 0.005;
+
+/** True when a variance is zero to the paisa. */
+export const isBalancedVariance = (v: number) => Math.abs(v) < VARIANCE_EPSILON;
+
 /** The lines of the close-shift cash summary (#307). They add up:
- *  openingFloats + cashDeclared − handoverDrops − unassignedCloseDrops = expected.
- *  Drops at close that name a Drawer already lower that Drawer's declared
- *  cash, so they are not repeated here. */
+ *  openingFloats + cashDeclared − handoverDrops − unassignedCloseDrops =
+ *  expectedOfficeCash. Drops at close that name a Drawer already lower that
+ *  Drawer's declared cash, so they are not repeated here. */
 export interface ShiftCloseCashSummaryLines {
   openingFloats: number;
-  /** Σ cash the Drawers declared at Handover (floats included via openingFloats). */
+  /** Σ cash sales the Drawers declared at Handover (floats excluded). */
   cashDeclared: number;
   handoverDrops: number;
   unassignedCloseDrops: number;
   expectedOfficeCash: number;
 }
 
-export function shiftCloseCashSummaryLines(
-  totals: { openingFloat: number; cashSales: number; handoverCashDrops: number },
-  closeCash: Pick<ShiftCloseCash, 'unassignedCloseCashDrops' | 'expectedDrawerCash'>,
-): ShiftCloseCashSummaryLines {
+/** Server shift reconciliation totals the close summary reads. */
+export interface CloseCashRecon<D extends CloseCashDrawer = CloseCashDrawer> {
+  openingFloat?: number | string | null;
+  cashSales?: number | string | null;
+  handoverCashDrops?: number | string | null;
+  drawers?: D[] | null;
+}
+
+export interface CloseCashSummary<D extends CloseCashDrawer = CloseCashDrawer> {
+  lines: ShiftCloseCashSummaryLines;
+  /** Two-level close maths; null until the server recon loads. */
+  closeCash: ShiftCloseCash<D> | null;
+}
+
+/**
+ * Close-shift cash summary (#307). Opening cash is not stored (ADR 0005): it is
+ * Σ Opening Floats, from the server recon or, before it loads, from the
+ * shift's staff assignments. Without the recon, the office expects Σ cash
+ * handed over (declared cash includes each float), or only the floats before
+ * any Handover.
+ */
+export function buildCloseCashSummary<D extends CloseCashDrawer>(input: {
+  recon: CloseCashRecon<D> | null | undefined;
+  staffAssignments: { openingFloat?: number | string | null }[];
+  closeDrops: CloseCashDrop[];
+  closingCash: number;
+  /** Fallback only: Σ cash handed over, or null before any Handover. */
+  cashHandedOver: number | null;
+}): CloseCashSummary<D> {
+  const { recon, staffAssignments, closeDrops, closingCash, cashHandedOver } = input;
+  if (!recon) {
+    const openingFloats = round2(
+      staffAssignments.reduce((s, a) => s + Number(a.openingFloat || 0), 0),
+    );
+    const expected = cashHandedOver === null ? openingFloats : round2(cashHandedOver);
+    return {
+      closeCash: null,
+      lines: {
+        openingFloats,
+        cashDeclared: round2(expected - openingFloats),
+        handoverDrops: 0,
+        unassignedCloseDrops: 0,
+        expectedOfficeCash: expected,
+      },
+    };
+  }
+  const totals = {
+    openingFloat: Number(recon.openingFloat || 0),
+    cashSales: Number(recon.cashSales || 0),
+    handoverCashDrops: Number(recon.handoverCashDrops || 0),
+    drawers: Array.isArray(recon.drawers) ? recon.drawers : [],
+  };
+  const closeCash = computeShiftCloseCash(
+    totals,
+    closingCash,
+    closeDrops.filter((d) => d.amount > 0),
+  );
   return {
-    openingFloats: round2(totals.openingFloat),
-    cashDeclared: round2(totals.cashSales),
-    handoverDrops: round2(totals.handoverCashDrops),
-    unassignedCloseDrops: closeCash.unassignedCloseCashDrops,
-    expectedOfficeCash: closeCash.expectedDrawerCash,
+    closeCash,
+    lines: {
+      openingFloats: round2(totals.openingFloat),
+      cashDeclared: round2(totals.cashSales),
+      handoverDrops: round2(totals.handoverCashDrops),
+      unassignedCloseDrops: closeCash.unassignedCloseCashDrops,
+      expectedOfficeCash: closeCash.expectedDrawerCash,
+    },
   };
 }

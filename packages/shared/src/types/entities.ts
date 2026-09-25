@@ -380,6 +380,8 @@ export interface ShiftStaffAssignment {
   shiftId: string;
   userId: string;
   duId: string;
+  /** Opening Float issued at shift open (decimal string from the API). */
+  openingFloat?: number | string | null;
   assignedAt: string;
 }
 

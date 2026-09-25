@@ -46,7 +46,7 @@ export function DataTable<T>({
   highlightRowId,
   dense = false,
 }: DataTableProps<T>) {
-  const cellPad = dense ? '6px 8px' : '9px 12px';
+  const cellPad = dense ? '6px 6px' : '9px 12px';
   const runTask = useRunTask();
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting ?? []);
   const scrolledToRef = React.useRef<string | null>(null);
@@ -120,7 +120,7 @@ export function DataTable<T>({
                     key={header.id}
                     onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
                     style={{
-                      padding: dense ? '6px 8px' : '8px 12px',
+                      padding: cellPad,
                       fontWeight: 600,
                       fontSize: '11px',
                       textTransform: 'uppercase',
@@ -184,16 +184,25 @@ export function DataTable<T>({
           <tfoot>
             {table.getFooterGroups().map((fg) => (
               <tr key={fg.id} style={{ borderTop: '1px solid var(--border-strong)' }}>
-                {fg.headers.map((header) => (
-                  <td
-                    key={header.id}
-                    style={{ padding: cellPad, fontWeight: 600, color: 'var(--text-strong)' }}
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.footer, header.getContext())}
-                  </td>
-                ))}
+                {fg.headers.map((header, i) => {
+                  const Cell = i === 0 ? 'th' : 'td';
+                  return (
+                    <Cell
+                      key={header.id}
+                      scope={i === 0 ? 'row' : undefined}
+                      style={{
+                        padding: cellPad,
+                        fontWeight: 600,
+                        textAlign: 'left',
+                        color: 'var(--text-strong)',
+                      }}
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.footer, header.getContext())}
+                    </Cell>
+                  );
+                })}
               </tr>
             ))}
           </tfoot>
