@@ -292,13 +292,11 @@ export const AppShell: React.FC<AppShellProps> = ({
           style={{
             flex: 1,
             overflowY: 'auto',
+            // Keep the full padding on every side: full-bleed children (e.g. the
+            // sticky shift control bar's backdrop) extend by exactly
+            // var(--space-6), so a trimmed right padding would overflow and add a
+            // horizontal scroll.
             padding: 'var(--space-6)',
-            // Draw the (6px) scrollbar within the right padding instead of adding
-            // to it: reserve a stable gutter and trim the right padding by its
-            // width, so the content inset stays a symmetric 24px with no layout
-            // shift when the scrollbar toggles.
-            paddingRight: 'calc(var(--space-6) - 6px)',
-            scrollbarGutter: 'stable',
             position: 'relative',
           }}
         >
