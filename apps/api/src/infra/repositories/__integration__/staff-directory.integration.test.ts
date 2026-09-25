@@ -10,6 +10,7 @@ import { DrizzleStaffDirectory } from '../station-ops-repositories.js';
  * Who `OpenShift` may put on a dispenser (#286), against a real Postgres. The
  * rule is the same fragment the shift-open form's staff list uses, so a user
  * the form offers is never refused and a foreign/inactive one never accepted.
+ * Only Attendants/Staff assigned to the station qualify (#291).
  *
  * Runs only when TEST_DATABASE_URL is set (CI provides a service container).
  */
@@ -24,6 +25,12 @@ const ATTENDANT = '00000000-0000-0000-0000-00000000c204';
 const OWNER = '00000000-0000-0000-0000-00000000c205';
 const INACTIVE = '00000000-0000-0000-0000-00000000c206';
 const FOREIGN = '00000000-0000-0000-0000-00000000c207';
+const OTHER_STATION = '00000000-0000-0000-0000-00000000c208';
+const STAFF = '00000000-0000-0000-0000-00000000c209';
+const MANAGER = '00000000-0000-0000-0000-00000000c20a';
+const ACCOUNTANT = '00000000-0000-0000-0000-00000000c20b';
+const ELSEWHERE = '00000000-0000-0000-0000-00000000c20c';
+const UNASSIGNED = '00000000-0000-0000-0000-00000000c20d';
 
 const BOOTSTRAP = `
   do $$ begin
@@ -83,14 +90,29 @@ describe.skipIf(!CONNECTION)('DrizzleStaffDirectory against real Postgres', () =
       { id: ORG, name: 'Tenant A' },
       { id: OTHER_ORG, name: 'Tenant B' },
     ]);
-    await db
-      .insert(schema.stations)
-      .values({ id: STATION, organizationId: ORG, name: 'Station A', code: 'STA' });
+    await db.insert(schema.stations).values([
+      { id: STATION, organizationId: ORG, name: 'Station A', code: 'STA' },
+      { id: OTHER_STATION, organizationId: ORG, name: 'Station B', code: 'STB' },
+    ]);
     await db.insert(schema.users).values([
       { id: ATTENDANT, organizationId: ORG, fullName: 'Arun', role: 'Attendant' },
       { id: OWNER, organizationId: ORG, fullName: 'Omar', role: 'Owner' },
       { id: INACTIVE, organizationId: ORG, fullName: 'Ina', role: 'Attendant', status: 'INACTIVE' },
       { id: FOREIGN, organizationId: OTHER_ORG, fullName: 'Fay', role: 'Attendant' },
+      { id: STAFF, organizationId: ORG, fullName: 'Sam', role: 'Staff' },
+      { id: MANAGER, organizationId: ORG, fullName: 'Meera', role: 'Manager' },
+      { id: ACCOUNTANT, organizationId: ORG, fullName: 'Asha', role: 'Accountant' },
+      { id: ELSEWHERE, organizationId: ORG, fullName: 'Eli', role: 'Attendant' },
+      { id: UNASSIGNED, organizationId: ORG, fullName: 'Uma', role: 'Attendant' },
+    ]);
+    // Station membership (#291): everyone at STATION except ELSEWHERE (other
+    // station) and UNASSIGNED (no station at all).
+    await db.insert(schema.userStationAssignments).values([
+      ...[ATTENDANT, OWNER, INACTIVE, FOREIGN, STAFF, MANAGER, ACCOUNTANT].map((userId) => ({
+        userId,
+        stationId: STATION,
+      })),
+      { userId: ELSEWHERE, stationId: OTHER_STATION },
     ]);
   }, 60_000);
 
@@ -103,15 +125,28 @@ describe.skipIf(!CONNECTION)('DrizzleStaffDirectory against real Postgres', () =
     }
   });
 
-  it('returns only active users of the organization', async () => {
+  it('returns only active Attendants/Staff of the organization at this station (#291)', async () => {
     const found = await new DrizzleStaffDirectory(db).findAssignableUserIds(ORG, STATION, [
       ATTENDANT,
+      STAFF,
       OWNER,
+      MANAGER,
+      ACCOUNTANT,
       INACTIVE,
       FOREIGN,
+      ELSEWHERE,
+      UNASSIGNED,
       'not-a-uuid',
     ]);
-    expect([...found].sort()).toEqual([ATTENDANT, OWNER].sort());
+    expect([...found].sort()).toEqual([ATTENDANT, STAFF].sort());
+  });
+
+  it('checks membership of the station asked about', async () => {
+    const found = await new DrizzleStaffDirectory(db).findAssignableUserIds(ORG, OTHER_STATION, [
+      ATTENDANT,
+      ELSEWHERE,
+    ]);
+    expect([...found]).toEqual([ELSEWHERE]);
   });
 
   it('asks nothing for an empty list', async () => {

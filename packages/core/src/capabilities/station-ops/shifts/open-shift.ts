@@ -401,9 +401,12 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
     );
     const ineligible = userIds.filter((id) => !assignable.has(id));
     if (ineligible.length > 0) {
-      return validationError('Only active staff of this organization can be assigned', {
-        userIds: ineligible,
-      });
+      return validationError(
+        'Only active Attendants or Staff assigned to this station can be assigned',
+        {
+          userIds: ineligible,
+        },
+      );
     }
     return null;
   }
