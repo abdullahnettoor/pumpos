@@ -121,7 +121,6 @@ const PROJECTION_ROW = {
   ho_rows: [],
   te_rows: [],
   expense_rows: [],
-  purchase_rows: [],
   collection_rows: [],
   credit_rows: [],
 };

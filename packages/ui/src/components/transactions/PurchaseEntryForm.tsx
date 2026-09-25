@@ -13,11 +13,8 @@ import { FundingAccountSelect } from '../primitives/FundingAccountSelect.js';
 import { SUPPLIER_PAYMENT_ACCOUNT_TYPES } from '../../utils/fundingAccounts.js';
 import { Checkbox } from '../primitives/Toggle.js';
 import { Button } from '../../pump-ds/index.js';
-
-export interface ShiftOption {
-  id: string;
-  label: string;
-}
+import { Banner } from '../primitives/Banner.js';
+import { useBusinessDayStatus } from '../../query/hooks.js';
 
 /** Optional pay-now recorded with the purchase — a supplier payment (Office Record). */
 export interface PurchasePayNow {
@@ -28,7 +25,6 @@ export interface PurchasePayNow {
 }
 
 export interface PurchaseEntryFormProps {
-  shiftOptions: ShiftOption[];
   suppliers: any[];
   products: any[];
   /** All station tanks; the form filters to each line's product tanks. */
@@ -52,8 +48,6 @@ export interface PurchaseEntryFormProps {
   invoicePlaceholder?: string;
   notesPlaceholder?: string;
   supplierEmptyMessage?: string;
-  showShiftHintWhenSingle?: boolean;
-  showDateField?: boolean;
   dateLabel?: string;
 }
 
@@ -65,7 +59,6 @@ const labelStyle: React.CSSProperties = {
 const errorTextStyle: React.CSSProperties = { fontSize: '11px', color: 'var(--brand-danger)' };
 
 const EMPTY_DEFAULTS: PurchaseEntryFormValues = {
-  targetShiftId: '',
   transactionDate: '',
   supplierId: '',
   invoiceNumber: '',
@@ -92,7 +85,6 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = (props) => (
 );
 
 const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
-  shiftOptions,
   suppliers,
   products,
   tanks,
@@ -108,15 +100,12 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
   invoicePlaceholder,
   notesPlaceholder,
   supplierEmptyMessage = 'No active suppliers found. Please add or enable suppliers in the Supplier Registry tab.',
-  showShiftHintWhenSingle = true,
-  showDateField = false,
   dateLabel = 'Purchase Date',
   stationId,
   timeZone,
   enablePayment = false,
 }) => {
   const today = resolveEntryDate({ timeZone });
-  const hasMultipleShiftOptions = shiftOptions.length > 1;
 
   const {
     register,
@@ -129,6 +118,15 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
+
+  // A closed business day seals its stock (ADR 0003), and a closed day cannot be
+  // reopened, so the server refuses a purchase dated on one. Say so as soon as
+  // the date is picked instead of after submit (#308).
+  const purchaseDate = watch('transactionDate') || '';
+  const dayStatusQ = useBusinessDayStatus(stationId, purchaseDate, {
+    enabled: !!stationId && !!purchaseDate,
+  });
+  const closedDate = dayStatusQ.data?.requestedState === 'CLOSED' ? purchaseDate : null;
 
   // Tank allocations the operator has typed, keyed by field-array row id then
   // tankId. What the form uses is derived below: an explicit split wins,
@@ -273,6 +271,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
           entryDate: paymentDate || undefined,
         }
       : undefined;
+    if (closedDate) return;
     return onSubmit({ ...values, lines }, payment);
   };
 
@@ -285,34 +284,16 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
       }}
       style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
     >
-      {showDateField && (
-        <Field label={dateLabel}>
-          <DateField disabled={submitting} {...register('transactionDate')} />
-        </Field>
+      {/* Dated by business day only; a purchase never belongs to a Shift (#308). */}
+      <Field label={dateLabel}>
+        <DateField disabled={submitting} {...register('transactionDate')} />
+      </Field>
+      {closedDate && (
+        <Banner severity="warning" title={`${closedDate} is closed.`}>
+          Its stock is sealed, so a purchase cannot be recorded on it. Record this purchase on an
+          open day; the missing delivery will show as stock variance on {closedDate}.
+        </Banner>
       )}
-      {hasMultipleShiftOptions ? (
-        <Field label="Target Shift">
-          <Select disabled={submitting} {...register('targetShiftId')}>
-            {shiftOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      ) : showShiftHintWhenSingle && shiftOptions.length === 1 ? (
-        <div
-          style={{
-            backgroundColor: 'var(--state-info-bg)',
-            color: 'var(--state-info-fg)',
-            padding: '10px 12px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-          }}
-        >
-          Logging to shift: <strong>{shiftOptions[0].label}</strong>
-        </div>
-      ) : null}
 
       <Field label="Supplier" error={errors.supplierId?.message}>
         {suppliers.length === 0 ? (
@@ -809,7 +790,13 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
         >
           Cancel
         </Button>
-        <Button type="submit" variant="primary" size="md" loading={submitting}>
+        <Button
+          type="submit"
+          variant="primary"
+          size="md"
+          loading={submitting}
+          disabled={!!closedDate}
+        >
           {submitLabel}
         </Button>
       </div>

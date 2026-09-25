@@ -3,7 +3,6 @@ import { CloudTransactionService } from '../services/cloud.js';
 import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
 import {
   usePurchases,
-  useShiftStatus,
   useSuppliers,
   useProducts,
   useTanks,
@@ -30,15 +29,11 @@ const transactionService = new CloudTransactionService();
 
 interface PurchasesListProps {
   selectedStation: any | null;
-  defaultShiftId?: string;
 }
 
 type TabType = 'transactions' | 'registry' | 'gst';
 
-export const PurchasesList: React.FC<PurchasesListProps> = ({
-  selectedStation,
-  defaultShiftId,
-}) => {
+export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation }) => {
   const [selectedTab, setSelectedTab] = useState<TabType>('transactions');
   // --- deep-link intent (from global search) ---
   // Derived, not copied into state by an effect: the old version bailed while
@@ -54,7 +49,6 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
 
   const stationId = selectedStation?.id ?? null;
   const purchasesQ = usePurchases();
-  const statusQ = useShiftStatus(stationId, true);
   const suppliersActiveQ = useSuppliers(true);
   const suppliersAllQ = useSuppliers(false);
   const productsQ = useProducts();
@@ -64,16 +58,13 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
   const runTask = useRunTask();
 
   const purchases = useMemo(() => purchasesQ.data ?? [], [purchasesQ.data]);
-  const activeShift = statusQ.data?.activeShift ?? null;
-  const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
   const suppliers = suppliersActiveQ.data ?? [];
   const allSuppliers = useMemo(() => suppliersAllQ.data ?? [], [suppliersAllQ.data]);
   const products = productsQ.data ?? [];
   const tanks = tanksQ.data ?? [];
 
-  const loading =
-    purchasesQ.isLoading || statusQ.isLoading || suppliersActiveQ.isLoading || productsQ.isLoading;
-  const error = purchasesQ.error || statusQ.error || suppliersActiveQ.error;
+  const loading = purchasesQ.isLoading || suppliersActiveQ.isLoading || productsQ.isLoading;
+  const error = purchasesQ.error || suppliersActiveQ.error;
 
   // Business-date bucketing for purchase KPIs + a purchases search filter.
   const stationSettings: any = selectedStation?.settings || {};
@@ -166,31 +157,9 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
   );
   const gstItcTotal = gstTotals.cgst + gstTotals.sgst + gstTotals.igst + gstTotals.cess;
 
-  const resolvePreferredShiftId = (active: any | null, closedList: any[]) => {
-    if (defaultShiftId) {
-      const matchesActive = active?.id === defaultShiftId;
-      const matchesClosed = closedList.some((shift) => shift.id === defaultShiftId);
-
-      if (matchesActive || matchesClosed) {
-        return defaultShiftId;
-      }
-    }
-
-    if (active) {
-      return active.id;
-    }
-
-    if (closedList.length > 0) {
-      return closedList[0].id;
-    }
-
-    return '';
-  };
-
   const resetPurchaseForm = (supplierId?: string) => {
     setFormError(null);
     setPurchaseDefaults({
-      targetShiftId: resolvePreferredShiftId(activeShift, recentClosedShifts),
       // Purchases are dated by business day (ADR 0005), not UTC (#288).
       transactionDate: todayIso,
       supplierId: supplierId || suppliers[0]?.id || '',
@@ -311,16 +280,6 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
       </div>
     );
   }
-
-  const shiftOptions = [
-    ...(activeShift
-      ? [{ id: activeShift.id, label: `Active: ${activeShift.templateName} (Open)` }]
-      : []),
-    ...recentClosedShifts.map((s) => ({
-      id: s.id,
-      label: `Closed: ${s.templateName} (${new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})`,
-    })),
-  ];
 
   return (
     <PageLayout
@@ -817,9 +776,6 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
       {/* Purchase Entry Drawer */}
       <Drawer isOpen={isPurchaseDrawerOpen} onClose={closePurchaseDrawer} title="Record Purchase">
         <PurchaseEntryForm
-          shiftOptions={[]}
-          showShiftHintWhenSingle={false}
-          showDateField
           dateLabel="Purchase Date"
           defaultValues={purchaseDefaults}
           suppliers={suppliers}

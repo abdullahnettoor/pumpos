@@ -71,15 +71,12 @@ interface ShiftTotals {
   upiCollections: number;
   creditSales: number;
   expenseCount: number;
-  purchaseCount: number;
-  purchaseTotal: number;
 }
 
 /** Derive the live shift totals from a shift-transactions payload (pure). */
 function computeShiftTotals(txs: any): ShiftTotals {
   const collections = txs?.collections ?? [];
   const expenses = txs?.expenses ?? [];
-  const purchases = txs?.purchases ?? [];
   const byMethod = (method: string) =>
     collections
       .filter((c: any) => c.paymentMethod === method)
@@ -94,8 +91,6 @@ function computeShiftTotals(txs: any): ShiftTotals {
     ),
     cashExpenses: expenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0),
     expenseCount: expenses.length,
-    purchaseCount: purchases.length,
-    purchaseTotal: purchases.reduce((sum: number, p: any) => sum + Number(p.amount), 0),
   };
 }
 

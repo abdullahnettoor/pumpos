@@ -262,9 +262,6 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
     try {
       setSubmitting(true);
       setError(null);
-      // Populate the shift id when a shift is open (business day is the anchor;
-      // shift id is stored for provenance). No shift → business-day anchored.
-      const shiftId = values.targetShiftId || activeShiftId;
       const lines = values.lines.map((l) => ({
         productId: l.productId,
         quantity: Number(l.quantity),
@@ -280,15 +277,13 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
         lines,
         payment: pay,
       };
-      await txService.recordPurchase(
-        shiftId
-          ? { shiftId, ...base }
-          : {
-              stationId: stationId ?? undefined,
-              transactionDate: values.transactionDate || businessDate,
-              ...base,
-            },
-      );
+      // Purchases anchor to the business day by station + date, never a
+      // Shift (ADR 0005, #308).
+      await txService.recordPurchase({
+        stationId: stationId ?? undefined,
+        transactionDate: values.transactionDate || businessDate,
+        ...base,
+      });
       await done(pay ? 'Purchase recorded with payment.' : 'Purchase recorded.');
     } catch (err: any) {
       setError(err.message || 'Failed to record purchase');
@@ -348,7 +343,11 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
 
   if (!qe.open || !qe.type) return null;
   const type = qe.type;
-  const title = activeShift ? `${activeShift.templateName} · ${TITLE[type]}` : TITLE[type];
+  // Only shift-anchored entries name the shift; a purchase never does (#308).
+  const title =
+    activeShift && type !== 'purchase'
+      ? `${activeShift.templateName} · ${TITLE[type]}`
+      : TITLE[type];
 
   return (
     <Drawer isOpen={qe.open} onClose={close} title={title}>
@@ -426,9 +425,6 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
         />
       ) : type === 'purchase' ? (
         <PurchaseEntryForm
-          shiftOptions={shiftOptions}
-          showShiftHintWhenSingle={!!activeShiftId}
-          showDateField={!activeShiftId}
           dateLabel="Purchase Date"
           suppliers={suppliers}
           products={products}
@@ -438,7 +434,6 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
           enablePayment
           defaultValues={{
             supplierId: suppliers[0]?.id ?? '',
-            targetShiftId: activeShiftId ?? '',
             transactionDate: businessDate,
             lines: [
               {

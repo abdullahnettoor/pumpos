@@ -6,8 +6,6 @@ interface ShiftTotals {
   cashExpenses: number;
   creditSales: number;
   expenseCount: number;
-  purchaseCount: number;
-  purchaseTotal: number;
 }
 
 interface ShiftTotalsSummaryProps {
@@ -21,7 +19,7 @@ interface ShiftTotalsSummaryProps {
 
 /**
  * Real-time operational summary tiles for the active shift (petty expenses, cash/card/UPI
- * handovers, credit chits, supplier purchases). Pure presentational — extracted from
+ * handovers, credit chits). Pure presentational — extracted from
  * ShiftsManagement.
  */
 export const ShiftTotalsSummary: React.FC<ShiftTotalsSummaryProps> = ({

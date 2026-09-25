@@ -14,7 +14,6 @@ export type ShiftSummarySection =
   | 'creditSales'
   | 'cashRecon'
   | 'drawers'
-  | 'purchases'
   | 'signatures';
 
 export type DssrSection =
@@ -73,7 +72,6 @@ export const DEFAULT_SHIFT_SUMMARY_CONFIG: ReportConfig = {
     'creditSales',
     'cashRecon',
     'drawers',
-    'purchases',
     'signatures',
   ],
   showLogo: true,
@@ -122,7 +120,6 @@ export const SHIFT_SUMMARY_SECTION_LABELS: Record<ShiftSummarySection, string> =
   creditSales: 'Fuel-on-Credit Sales',
   cashRecon: 'Cash Reconciliation',
   drawers: 'Drawers (per attendant)',
-  purchases: 'Purchases',
   signatures: 'Signatures',
 };
 
@@ -148,6 +145,19 @@ export const ATTENDANT_REPORT_SECTION_LABELS: Record<AttendantReportSection, str
   variance: 'Variance by Shift',
   signature: 'Acknowledgement & Signatures',
 };
+
+/**
+ * The sections to render from a station's saved list: keeps its order, drops
+ * keys that no longer exist (e.g. the Shift Summary 'purchases' section removed
+ * in #308), and falls back to the defaults when nothing valid is left.
+ */
+export function resolveSections<S extends string>(
+  saved: readonly unknown[] | null | undefined,
+  defaults: readonly S[],
+): S[] {
+  const known = (saved ?? []).filter((k): k is S => defaults.includes(k as S));
+  return known.length > 0 ? known : [...defaults];
+}
 
 /** Resolve the configured paper size from a station's settings (default A4). */
 export function paperFromStation(station: any): 'A4' | 'LETTER' {

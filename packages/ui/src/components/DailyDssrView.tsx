@@ -1,6 +1,10 @@
 import React from 'react';
 import { ArrowLeft, Printer, Download, AlertTriangle, Info } from 'lucide-react';
-import { DEFAULT_DSSR_CONFIG, paperFromStation } from '../services/reports/reportConfig.js';
+import {
+  DEFAULT_DSSR_CONFIG,
+  paperFromStation,
+  resolveSections,
+} from '../services/reports/reportConfig.js';
 import { letterheadFromStation } from '../services/reports/letterhead.js';
 import { Button } from '../pump-ds/index.js';
 import { formatDateTime, formatMoney, inr } from '../utils/format.js';
@@ -91,9 +95,10 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
                 import('../services/exportPdf.js'),
                 import('../services/reports/dssrDoc.js'),
               ]);
-              const sections = station?.settings?.report_config?.dssr?.length
-                ? station.settings.report_config.dssr
-                : DEFAULT_DSSR_CONFIG.sections;
+              const sections = resolveSections(
+                station?.settings?.report_config?.dssr,
+                DEFAULT_DSSR_CONFIG.sections,
+              );
               const config = {
                 ...DEFAULT_DSSR_CONFIG,
                 sections: sections,

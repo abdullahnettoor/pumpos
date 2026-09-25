@@ -129,8 +129,12 @@ class BdRepo implements BusinessDayWriteRepository {
       ) ?? null
     );
   }
-  async findByStationAndDate(orgId: string, stationId: string, _date: string) {
-    return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId) ?? null;
+  async findByStationAndDate(orgId: string, stationId: string, date: string) {
+    return (
+      this.rows.find(
+        (r) => r.organizationId === orgId && r.stationId === stationId && r.businessDate === date,
+      ) ?? null
+    );
   }
   async lockStation() {}
   async lockById() {}
@@ -323,6 +327,79 @@ describe('RecordPurchase', () => {
     expect(supplierTxns.rows[0].fundingAccountId).toBeNull();
     expect(supplierTxns.rows[0].entryDate).toBe('2026-03-15');
     expect(store.events.map((e) => e.eventType)).toContain(BusinessEvents.GOODS_RECEIVED);
+  });
+
+  // ADR 0005 / #308: a purchase never stores a Shift. A legacy queued payload
+  // that sends only a shiftId (no date) must land on that Shift's business day
+  // (bd-8, yesterday), not today's (bd-9), whether or not ctx carries a station.
+  const yesterdayShift: Shift = {
+    id: 'sh-1',
+    organizationId: 'org-1',
+    stationId: 'st-1',
+    businessDayId: 'bd-8',
+    shiftTemplateId: 't',
+    status: 'OPEN',
+    openedBy: 'u',
+    openedAt: '',
+    closedBy: null,
+    closedAt: null,
+    lockedAt: null,
+    openingCash: '0',
+    closingCash: null,
+    createdAt: '',
+    updatedAt: '',
+  };
+  const twoDays = () => [{ ...bday(), id: 'bd-8', businessDate: '2026-03-14' }, bday()];
+  const recordWith = (cmd: Record<string, unknown>, context: ExecutionContext) =>
+    new RecordPurchase({
+      purchases: new PurchaseRepo(),
+      stock: new StockRepo(),
+      supplierTxns: new SupplierTxnRepo(),
+      suppliers: new SupplierRepo([supplier()]),
+      purchaseItems: new PurchaseItemRepo(),
+      products: new ProductRepo([fuelProduct()]),
+      stations: new StationRepo([station()]),
+      shifts: new ShiftRepo([yesterdayShift]),
+      businessDays: new BdRepo(twoDays()),
+      docNumbers,
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute(
+      {
+        supplierId: 'sup-1',
+        productId: 'petrol-1',
+        quantity: 1000,
+        unitPrice: 90,
+        tankAllocations: [{ tankId: 'tank-1', quantity: 1000 }],
+        ...cmd,
+      },
+      context,
+    );
+
+  it.each([
+    ['with ctx.stationId', ctx()],
+    ['without ctx.stationId', { ...ctx(), stationId: null }],
+  ])(
+    "replays a legacy shiftId-only payload onto the Shift's business day (%s)",
+    async (_label, context) => {
+      const result = await recordWith({ shiftId: 'sh-1' }, context as ExecutionContext);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.purchase.businessDayId).toBe('bd-8');
+        expect(result.data.purchase.shiftId).toBeNull();
+      }
+    },
+  );
+
+  it('anchors station + date to that date, ignoring a stale shiftId, and stores no Shift', async () => {
+    const result = await recordWith(
+      { stationId: 'st-1', shiftId: 'sh-1', transactionDate: '2026-03-15' },
+      ctx(),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.purchase.businessDayId).toBe('bd-9');
+      expect(result.data.purchase.shiftId).toBeNull();
+    }
   });
 
   it('updates the product cost basis as a weighted average of existing stock and the purchase', async () => {

@@ -84,15 +84,8 @@ export async function projectShiftSummary(
         FROM handover_terminal_entries e
         LEFT JOIN payment_terminals pt ON pt.id = e.terminal_id
         WHERE e.shift_id = ${shift.id}), '[]'::jsonb) AS te_rows,
-      -- Expenses and collections are Office Records with no Shift (ADR 0005):
+      -- Expenses, collections and purchases have no Shift (ADR 0005, #308):
       -- a Shift Summary never shows them.
-      COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'p', ${rowJson(S.purchases, 'p')},
-          'supplierName', sup.name
-        ) ORDER BY p.created_at, p.id)
-        FROM purchases p
-        LEFT JOIN suppliers sup ON sup.id = p.supplier_id
-        WHERE p.shift_id = ${shift.id}), '[]'::jsonb) AS purchase_rows,
       ${creditSaleLinesJson(shift.id)} AS credit_rows
   `)) as unknown as [Record<string, any>];
 
@@ -102,16 +95,11 @@ export async function projectShiftSummary(
   const nrRows: any[] = row.nr_rows ?? [];
   const hoRows: any[] = row.ho_rows ?? [];
   const teRows: any[] = row.te_rows ?? [];
-  const purchases: any[] = row.purchase_rows ?? [];
   const creditSaleRows: any[] = row.credit_rows ?? [];
 
   const template = templateRows[0];
   const closedByName = closedUserRows[0]?.fullName ?? 'System';
   const openedByName = openedUserRows[0]?.fullName ?? 'System';
-  const purchasesEnriched = (purchases ?? []).map((r: any) => ({
-    ...r.p,
-    supplierName: r.supplierName ?? 'Unknown Supplier',
-  }));
   const nozzleReadings = nrRows.map(({ nr, nz, prod }) => {
     const gross = Number(nr.volumeSold ?? 0);
     const testing = Math.min(Math.max(Number(nr.testingVolume ?? 0), 0), gross);
@@ -237,7 +225,6 @@ export async function projectShiftSummary(
     totalNetVolumeSold,
     handovers,
     terminalBreakdown,
-    purchases: purchasesEnriched,
     creditSales: (creditSaleRows ?? []).map((r: any) => ({
       id: r.id,
       amount: Number(r.amount),

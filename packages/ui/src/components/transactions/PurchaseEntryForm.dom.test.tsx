@@ -1,8 +1,13 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { muteExpectedConsoleErrors } from '../../test/renderWithProviders.js';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import {
+  createTestQueryClient,
+  muteExpectedConsoleErrors,
+  renderWithProviders,
+} from '../../test/renderWithProviders.js';
+import { queryKeys } from '../../query/hooks.js';
 import { PurchaseEntryForm, type PurchaseEntryFormProps } from './PurchaseEntryForm.js';
 
 /**
@@ -12,9 +17,10 @@ import { PurchaseEntryForm, type PurchaseEntryFormProps } from './PurchaseEntryF
  * up to the delivered quantity. Both are asserted through the payload handed to
  * `onSubmit`, which is what a downstream refactor must not change.
  *
- * No providers are needed: the form takes no query hooks, and
- * `FundingAccountSelect` (the only thing that does) renders solely when payment
- * capture is enabled — those cases live in officeRecordForms.dom.test.tsx.
+ * The form reads the chosen date's business-day status (closed-day notice,
+ * #308), so it renders under the query provider. Without a stationId that
+ * query stays disabled; the closed-day tests seed it instead. Payment capture
+ * cases live in officeRecordForms.dom.test.tsx.
  */
 const PETROL = { id: 'p-fuel', name: 'Petrol', productType: 'FUEL', unit: 'L' };
 const OIL = {
@@ -27,7 +33,6 @@ const OIL = {
 };
 
 const baseProps = (over: Partial<PurchaseEntryFormProps> = {}): PurchaseEntryFormProps => ({
-  shiftOptions: [],
   suppliers: [{ id: 's1', name: 'IOCL Depot', isActive: true }],
   products: [PETROL, OIL],
   tanks: [],
@@ -68,7 +73,7 @@ describe('PurchaseEntryForm', () => {
   describe('fuel rate derivation', () => {
     it('submits the ₹/L implied by the total the operator typed, not a typed rate', async () => {
       const onSubmit = vi.fn();
-      render(
+      renderWithProviders(
         <PurchaseEntryForm
           {...baseProps({
             onSubmit,
@@ -93,7 +98,7 @@ describe('PurchaseEntryForm', () => {
 
     it('re-derives the rate when the quantity changes, keeping the entered total fixed', async () => {
       const onSubmit = vi.fn();
-      render(
+      renderWithProviders(
         <PurchaseEntryForm
           {...baseProps({
             onSubmit,
@@ -118,7 +123,7 @@ describe('PurchaseEntryForm', () => {
 
     it('keeps the entered rate for a non-fuel line', async () => {
       const onSubmit = vi.fn();
-      render(
+      renderWithProviders(
         <PurchaseEntryForm
           {...baseProps({
             onSubmit,
@@ -147,7 +152,9 @@ describe('PurchaseEntryForm', () => {
 
     it('refuses to submit when the split does not add up to the delivered quantity', async () => {
       const onSubmit = vi.fn();
-      render(<PurchaseEntryForm {...baseProps({ onSubmit, tanks, defaultValues: fuelLine })} />);
+      renderWithProviders(
+        <PurchaseEntryForm {...baseProps({ onSubmit, tanks, defaultValues: fuelLine })} />,
+      );
       fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '472500' } });
 
       const allocInputs = screen.getAllByPlaceholderText('0.00');
@@ -164,7 +171,9 @@ describe('PurchaseEntryForm', () => {
 
     it('submits the split once it reconciles to the delivered quantity', async () => {
       const onSubmit = vi.fn();
-      render(<PurchaseEntryForm {...baseProps({ onSubmit, tanks, defaultValues: fuelLine })} />);
+      renderWithProviders(
+        <PurchaseEntryForm {...baseProps({ onSubmit, tanks, defaultValues: fuelLine })} />,
+      );
       fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '472500' } });
 
       const allocInputs = screen.getAllByPlaceholderText('0.00');
@@ -181,7 +190,9 @@ describe('PurchaseEntryForm', () => {
 
     it('omits tanks that received nothing rather than sending a zero', async () => {
       const onSubmit = vi.fn();
-      render(<PurchaseEntryForm {...baseProps({ onSubmit, tanks, defaultValues: fuelLine })} />);
+      renderWithProviders(
+        <PurchaseEntryForm {...baseProps({ onSubmit, tanks, defaultValues: fuelLine })} />,
+      );
       fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '472500' } });
 
       const allocInputs = screen.getAllByPlaceholderText('0.00');
@@ -196,7 +207,7 @@ describe('PurchaseEntryForm', () => {
 
     it('carries no allocation for a non-fuel line', async () => {
       const onSubmit = vi.fn();
-      render(
+      renderWithProviders(
         <PurchaseEntryForm
           {...baseProps({
             onSubmit,
@@ -221,19 +232,23 @@ describe('PurchaseEntryForm', () => {
     };
 
     it('splits GST into CGST and SGST for an in-state supply', () => {
-      render(<PurchaseEntryForm {...baseProps({ defaultValues: oilLine, interState: false })} />);
+      renderWithProviders(
+        <PurchaseEntryForm {...baseProps({ defaultValues: oilLine, interState: false })} />,
+      );
       expect(screen.getByText('CGST + SGST')).toBeDefined();
       expect(screen.queryByText('IGST')).toBeNull();
     });
 
     it('charges IGST for an inter-state supply', () => {
-      render(<PurchaseEntryForm {...baseProps({ defaultValues: oilLine, interState: true })} />);
+      renderWithProviders(
+        <PurchaseEntryForm {...baseProps({ defaultValues: oilLine, interState: true })} />,
+      );
       expect(screen.getByText('IGST')).toBeDefined();
       expect(screen.queryByText('CGST + SGST')).toBeNull();
     });
 
     it('adds tax on top of the taxable value for the invoice total', () => {
-      render(<PurchaseEntryForm {...baseProps({ defaultValues: oilLine })} />);
+      renderWithProviders(<PurchaseEntryForm {...baseProps({ defaultValues: oilLine })} />);
       // 10 × ₹450 = ₹4,500 taxable, 18% GST = ₹810, invoice ₹5,310.
       expect(screen.getAllByText(/4,500/).length).toBeGreaterThan(0);
       expect(screen.getByText(/810/)).toBeDefined();
@@ -241,7 +256,7 @@ describe('PurchaseEntryForm', () => {
     });
 
     it('adds no client-side tax to fuel, which is recorded tax-inclusive', async () => {
-      render(
+      renderWithProviders(
         <PurchaseEntryForm
           {...baseProps({
             defaultValues: {
@@ -259,7 +274,7 @@ describe('PurchaseEntryForm', () => {
   describe('validation', () => {
     it('does not submit without a supplier', async () => {
       const onSubmit = vi.fn();
-      render(
+      renderWithProviders(
         <PurchaseEntryForm
           {...baseProps({
             onSubmit,
@@ -274,7 +289,7 @@ describe('PurchaseEntryForm', () => {
 
     it('does not submit a line with no product', async () => {
       const onSubmit = vi.fn();
-      render(
+      renderWithProviders(
         <PurchaseEntryForm {...baseProps({ onSubmit, defaultValues: { supplierId: 's1' } })} />,
       );
       submitForm();
@@ -291,7 +306,9 @@ describe('PurchaseEntryForm', () => {
 
     it('sends no payment when capture is disabled', async () => {
       const onSubmit = vi.fn();
-      render(<PurchaseEntryForm {...baseProps({ onSubmit, defaultValues: oilLine })} />);
+      renderWithProviders(
+        <PurchaseEntryForm {...baseProps({ onSubmit, defaultValues: oilLine })} />,
+      );
       submitForm();
       await waitFor(() => expect(onSubmit).toHaveBeenCalled());
       expect(onSubmit.mock.calls[0][1]).toBeUndefined();
@@ -305,7 +322,7 @@ describe('PurchaseEntryForm', () => {
     const tanks = [{ id: 't1', name: 'Tank 1', productId: PETROL.id, capacity: 10000 }];
 
     it('shows the new purchase, not the previous one', async () => {
-      const { rerender } = render(
+      const { rerender } = renderWithProviders(
         <PurchaseEntryForm
           {...baseProps({
             defaultValues: {
@@ -333,7 +350,7 @@ describe('PurchaseEntryForm', () => {
     });
 
     it('discards what was typed against the previous purchase', async () => {
-      const { rerender } = render(
+      const { rerender } = renderWithProviders(
         <PurchaseEntryForm
           {...baseProps({
             tanks,
@@ -370,7 +387,7 @@ describe('PurchaseEntryForm', () => {
 
     it('auto-allocates a single-tank line on open, with no interaction', async () => {
       const onSubmit = vi.fn();
-      render(
+      renderWithProviders(
         <PurchaseEntryForm
           {...baseProps({
             onSubmit,
@@ -394,6 +411,57 @@ describe('PurchaseEntryForm', () => {
       expect(onSubmit.mock.calls[0][0].lines[0].tankAllocations).toEqual([
         { tankId: 't1', quantity: 5000 },
       ]);
+    });
+  });
+
+  // #308: a closed day's stock is sealed (ADR 0003) and a closed day cannot be
+  // reopened, so the form warns as soon as such a date is picked.
+  describe('closed business day', () => {
+    const dayStatus = (date: string, state: 'OPEN' | 'CLOSED') => ({
+      currentBusinessDate: '2026-03-15',
+      requestedBusinessDate: date,
+      requestedState: state,
+      requestedBusinessDay: null,
+      openBusinessDays: [],
+      pastOpenBusinessDays: [],
+      recentBusinessDays: [],
+      recentFromBusinessDate: '2026-03-01',
+    });
+    const renderFor = (date: string, state: 'OPEN' | 'CLOSED') => {
+      const queryClient = createTestQueryClient();
+      queryClient.setQueryData(queryKeys.businessDayStatus('st-1', date), dayStatus(date, state));
+      const onSubmit = vi.fn();
+      renderWithProviders(
+        <PurchaseEntryForm
+          {...baseProps({
+            onSubmit,
+            stationId: 'st-1',
+            defaultValues: { supplierId: 's1', transactionDate: date },
+          })}
+        />,
+        { queryClient },
+      );
+      return onSubmit;
+    };
+    const submitButton = () =>
+      screen.getByRole('button', { name: 'Add Purchase' }) as HTMLButtonElement;
+
+    it('warns and blocks submit when the chosen day is closed', async () => {
+      const onSubmit = renderFor('2026-03-10', 'CLOSED');
+      expect(await screen.findByText('2026-03-10 is closed.')).toBeTruthy();
+      expect(submitButton().disabled).toBe(true);
+      submitForm();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['an open past day', '2026-03-12'],
+      ['today', '2026-03-15'],
+    ])('shows no warning for %s', (_label, date) => {
+      renderFor(date, 'OPEN');
+      expect(screen.queryByText(/is closed\./)).toBeNull();
+      expect(submitButton().disabled).toBe(false);
     });
   });
 });
