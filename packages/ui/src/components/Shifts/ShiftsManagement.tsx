@@ -39,7 +39,9 @@ import {
   type PendingTankDipWorkflow,
 } from '../../query/stockCountMutation.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
-import { Station, computeShiftCloseCash, parseDrawerKey } from '@pump/shared';
+import { Station, buildCloseCashSummary, parseDrawerKey } from '@pump/shared';
+import type { CloseCashDrawer, ShiftStaffAssignment } from '@pump/shared';
+import type { DrawerRow } from './DrawerReconciliationTable.js';
 import type { CloseDropRow } from './CloseShiftWizard.js';
 import type { OpenShiftFormValues } from '@pump/shared';
 import {
@@ -320,7 +322,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const shiftTxQ = useShiftTransactions(data?.activeShift?.id ?? null);
   const shiftTotals = useMemo(() => computeShiftTotals(shiftTxQ.data), [shiftTxQ.data]);
 
-  const openingCashNum = data?.activeShift ? Number(data.activeShift.openingCash) : 0;
+  const recon = data?.activeShift?.reconciliation;
   const handovers = data?.activeShift?.handovers || [];
   const hasHandovers = handovers.length > 0;
 
@@ -352,37 +354,22 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const activeUpiCollections = hasHandovers ? totalUpiHandedOver : shiftTotals.upiCollections;
   const activeCreditSales = hasHandovers ? totalCreditHandedOver : shiftTotals.creditSales;
 
-  // Authoritative cash reconciliation from the server (same figures CloseShift
-  // uses). Preferred over the client estimate so the expected drawer includes
-  // non-attendant merchandise cash and reads the true station-level short/surplus.
-  const recon = data?.activeShift?.reconciliation;
-  // Two-level variance (#287, ADR 0005), same shared formula CloseShift uses:
-  // attendant variance at Handover; office count variance against what the
-  // Drawers declared, less drops at close that name no Drawer.
+  // Close-shift cash summary (#307, ADR 0005): the server recon when loaded,
+  // else Σ Opening Floats from the staff assignments. The two-level variance
+  // (#287) uses the same shared formula CloseShift uses.
+  const staffAssignmentRows: ShiftStaffAssignment[] = data?.activeShift?.staffAssignments ?? [];
   const reconDrawers: any[] = Array.isArray(recon?.drawers) ? recon.drawers : [];
   const closeDropEntries = closeDrops
     .filter((r) => r.amount > 0)
     .map((r) => ({ ...parseDrawerKey(r.drawerKey), amount: r.amount }));
-  const closeCash = recon
-    ? computeShiftCloseCash(
-        {
-          openingFloat: Number(recon.openingFloat ?? openingCashNum),
-          cashSales: Number(recon.cashSales || 0),
-          handoverCashDrops: Number(recon.handoverCashDrops || 0),
-          drawers: reconDrawers,
-        },
-        closingCash,
-        closeDropEntries,
-      )
-    : null;
-  // Fallback without the server recon (#288): office expected = Σ declared
-  // (declared cash already includes each Drawer's float, so never add the
-  // float again). Before any Handover only the floats are known.
-  const expectedCash = closeCash
-    ? closeCash.expectedDrawerCash
-    : hasHandovers
-      ? totalCashHandedOver
-      : openingCashNum;
+  const { lines: cashLines, closeCash } = buildCloseCashSummary<CloseCashDrawer & DrawerRow>({
+    recon,
+    staffAssignments: staffAssignmentRows,
+    closeDrops: closeDropEntries,
+    closingCash,
+    cashHandedOver: hasHandovers ? totalCashHandedOver : null,
+  });
+  const expectedCash = cashLines.expectedOfficeCash;
   const cashVariance = closingCash - expectedCash;
 
   // Station-level cash summary for the closing wizard (#4). Aggregate figures —
@@ -390,14 +377,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const cashSummary =
     recon && closeCash
       ? {
-          openingCash: openingCashNum,
-          cashSales: closeCash.cashSales,
-          handoverCash: Number(recon.handoverCash || 0),
           merchCashOutsideHandover: Number(recon.merchCashOutsideHandover || 0),
-          cashDrops: Number(recon.handoverCashDrops || 0),
-          closeCashDrops: closeCash.drawerCloseCashDrops + closeCash.unassignedCloseCashDrops,
           drawers: closeCash.drawers,
-          expectedDrawer: expectedCash,
           merchCashBreakdown: Array.isArray(recon.merchCashOutsideHandoverBreakdown)
             ? recon.merchCashOutsideHandoverBreakdown
             : [],
@@ -1076,9 +1057,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           scheduledStartTime={activeShift.scheduledStartTime}
           scheduledEndTime={activeShift.scheduledEndTime}
           timeZone={stationSettings.timezone}
-          openingCash={openingCashNum}
-          cashCollections={activeCashCollections}
-          expectedCash={expectedCash}
+          cashLines={cashLines}
           closingCash={closingCash}
           onClosingCashChange={setClosingCash}
           cashSummary={cashSummary}

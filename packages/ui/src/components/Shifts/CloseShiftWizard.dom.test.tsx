@@ -15,16 +15,25 @@ import { CloseShiftWizard, type CloseShiftWizardProps } from './CloseShiftWizard
  * "what would be submitted" is asserted through the change callbacks plus the
  * figures on screen, which is also what survives the refactor in #63.
  */
-const baseProps = (over: Partial<CloseShiftWizardProps> = {}): CloseShiftWizardProps => ({
+const lines = (expectedOfficeCash: number) => ({
+  openingFloats: 5000,
+  cashDeclared: expectedOfficeCash - 5000,
+  handoverDrops: 0,
+  unassignedCloseDrops: 0,
+  expectedOfficeCash,
+});
+
+const baseProps = ({
+  expectedCash = 10000,
+  ...over
+}: Partial<CloseShiftWizardProps> & { expectedCash?: number } = {}): CloseShiftWizardProps => ({
   isOpen: true,
   onClose: vi.fn(),
   shiftTemplateName: 'Morning',
   openedAt: '2026-03-01T06:00:00.000Z',
   businessDate: '2026-03-01',
   currentBusinessDate: '2026-03-01',
-  openingCash: 5000,
-  cashCollections: 0,
-  expectedCash: 10000,
+  cashLines: lines(expectedCash),
   closingCash: 0,
   onClosingCashChange: vi.fn(),
   cashSummary: null,
@@ -367,14 +376,16 @@ describe('CloseShiftWizard', () => {
       renderWithProviders(
         <CloseShiftWizard
           {...baseProps({
+            cashLines: {
+              openingFloats: 5000,
+              cashDeclared: 8000,
+              handoverDrops: 0,
+              unassignedCloseDrops: 0,
+              expectedOfficeCash: 13000,
+            },
             cashSummary: {
-              openingCash: 5000,
-              cashSales: 8000,
-              handoverCash: 8000,
               merchCashOutsideHandover: 0,
-              cashDrops: 0,
               drawers: [],
-              expectedDrawer: 13000,
               merchCashBreakdown: [],
               attendantVariance: 0,
               attendantVariances: [{ name: 'Ravi', du: 'DU-1', variance: 0 }],
@@ -383,22 +394,24 @@ describe('CloseShiftWizard', () => {
           })}
         />,
       );
-      expect(screen.getAllByText(/\(balanced\)/).length).toBeGreaterThan(0);
-      expect(screen.queryByText(/\(short\)/)).toBeNull();
+      expect(screen.getAllByText(/balanced/).length).toBeGreaterThan(0);
+      expect(screen.queryByText(/short/)).toBeNull();
     });
 
     it('flags an attendant who handed over short', () => {
       renderWithProviders(
         <CloseShiftWizard
           {...baseProps({
+            cashLines: {
+              openingFloats: 5000,
+              cashDeclared: 8000,
+              handoverDrops: 0,
+              unassignedCloseDrops: 0,
+              expectedOfficeCash: 13000,
+            },
             cashSummary: {
-              openingCash: 5000,
-              cashSales: 8000,
-              handoverCash: 7500,
               merchCashOutsideHandover: 0,
-              cashDrops: 0,
               drawers: [],
-              expectedDrawer: 12500,
               merchCashBreakdown: [],
               attendantVariance: -500,
               attendantVariances: [{ name: 'Ravi', du: 'DU-1', variance: -500 }],
@@ -407,7 +420,7 @@ describe('CloseShiftWizard', () => {
           })}
         />,
       );
-      expect(screen.getAllByText(/\(short\)/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/short/).length).toBeGreaterThan(0);
       // The ₹500 gap must be shown, not just its direction.
       expect(screen.getAllByText(/500/).length).toBeGreaterThan(0);
     });
@@ -418,12 +431,15 @@ describe('CloseShiftWizard', () => {
       renderWithProviders(
         <CloseShiftWizard
           {...baseProps({
+            cashLines: {
+              openingFloats: 1000,
+              cashDeclared: 0,
+              handoverDrops: 0,
+              unassignedCloseDrops: 0,
+              expectedOfficeCash: 1000,
+            },
             cashSummary: {
-              openingCash: 1000,
-              cashSales: 0,
-              handoverCash: 0,
               merchCashOutsideHandover: 0,
-              cashDrops: 0,
               drawers: [
                 {
                   attendantId: 'a',
@@ -438,7 +454,6 @@ describe('CloseShiftWizard', () => {
                   variance: null,
                 },
               ],
-              expectedDrawer: 1000,
               merchCashBreakdown: [],
               attendantVariance: 0,
               attendantVariances: [],
@@ -447,7 +462,48 @@ describe('CloseShiftWizard', () => {
           })}
         />,
       );
-      expect(screen.getByRole('alert').textContent).toMatch(/Ravi · DU-1/);
+      expect(screen.getByRole('alert').textContent).toMatch(/1 drawer has not handed over/);
+      expect(screen.getByTitle('Not handed over').textContent).toBe('Pending');
+      // Totals read "—" until every drawer hands over (#306).
+      const total = screen.getByRole('rowheader', { name: 'Total' }).closest('tr')!;
+      expect(total.textContent).not.toMatch(/short|surplus|balanced/);
+    });
+
+    it('totals every Drawers column once all drawers hand over (#306)', () => {
+      const d = (id: string, sales: number, handed: number) => ({
+        attendantId: id,
+        attendantName: id,
+        duId: `du-${id}`,
+        duName: `DU-${id}`,
+        openingFloat: 1000,
+        cashSales: sales,
+        cashDrops: 0,
+        expectedCash: 1000 + sales,
+        cashHandedOver: handed,
+        variance: handed - 1000 - sales,
+      });
+      renderWithProviders(
+        <CloseShiftWizard
+          {...baseProps({
+            cashSummary: {
+              merchCashOutsideHandover: 0,
+              drawers: [d('a', 5000, 6000), d('b', 5000, 6000), d('c', 4650, 5600)],
+              merchCashBreakdown: [],
+              attendantVariance: -50,
+              attendantVariances: [],
+              hasHandovers: true,
+            },
+          })}
+        />,
+      );
+      const cells = [
+        ...screen.getByRole('rowheader', { name: 'Total' }).closest('tr')!.children,
+      ].map((c) => c.textContent);
+      expect(cells[1]).toMatch(/3,000/);
+      expect(cells[2]).toMatch(/14,650/);
+      expect(cells[4]).toMatch(/17,650/);
+      expect(cells[5]).toMatch(/17,600/);
+      expect(cells[6]).toMatch(/−?-?₹?50.*short/);
     });
 
     it('adds a drop at close naming the first drawer', () => {
@@ -456,12 +512,15 @@ describe('CloseShiftWizard', () => {
         <CloseShiftWizard
           {...baseProps({
             onCloseCashDropsChange: onChange,
+            cashLines: {
+              openingFloats: 1000,
+              cashDeclared: 5000,
+              handoverDrops: 0,
+              unassignedCloseDrops: 0,
+              expectedOfficeCash: 6000,
+            },
             cashSummary: {
-              openingCash: 1000,
-              cashSales: 5000,
-              handoverCash: 5000,
               merchCashOutsideHandover: 0,
-              cashDrops: 0,
               drawers: [
                 {
                   attendantId: 'a',
@@ -476,7 +535,6 @@ describe('CloseShiftWizard', () => {
                   variance: 0,
                 },
               ],
-              expectedDrawer: 6000,
               merchCashBreakdown: [],
               attendantVariance: 0,
               attendantVariances: [],
@@ -485,7 +543,7 @@ describe('CloseShiftWizard', () => {
           })}
         />,
       );
-      fireEvent.click(screen.getByText('+ Add drop'));
+      fireEvent.click(screen.getByRole('button', { name: 'Add drop' }));
       expect(onChange).toHaveBeenCalledWith([{ drawerKey: 'a|du1', amount: 0 }]);
     });
   });

@@ -1127,13 +1127,16 @@ select:disabled {
   padding: 0 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-input);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 13px;
   background-color: var(--bg-surface);
   color: var(--text-strong);
 }
 
-.close-wizard-input--num {
+/* Mono only for figures (#305); text inputs and selects stay sans. */
+.close-wizard-input--num,
+.close-wizard-input--small {
+  font-family: var(--font-mono);
   text-align: right;
 }
 
