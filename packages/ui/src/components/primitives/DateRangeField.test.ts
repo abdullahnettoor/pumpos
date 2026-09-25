@@ -6,7 +6,9 @@ import { computeRange } from './DateRangeField.js';
 const IST_EARLY_MARCH = new Date('2026-02-28T20:30:00.000Z');
 
 describe('computeRange (station timezone, not UTC)', () => {
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('anchors presets to the station date across a month boundary', () => {
     vi.useFakeTimers();
