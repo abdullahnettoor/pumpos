@@ -146,6 +146,19 @@ export const ATTENDANT_REPORT_SECTION_LABELS: Record<AttendantReportSection, str
   signature: 'Acknowledgement & Signatures',
 };
 
+/**
+ * The sections to render from a station's saved list: keeps its order, drops
+ * keys that no longer exist (e.g. the Shift Summary 'purchases' section removed
+ * in #308), and falls back to the defaults when nothing valid is left.
+ */
+export function resolveSections<S extends string>(
+  saved: readonly unknown[] | null | undefined,
+  defaults: readonly S[],
+): S[] {
+  const known = (saved ?? []).filter((k): k is S => defaults.includes(k as S));
+  return known.length > 0 ? known : [...defaults];
+}
+
 /** Resolve the configured paper size from a station's settings (default A4). */
 export function paperFromStation(station: any): 'A4' | 'LETTER' {
   return station?.settings?.report_config?.paper === 'LETTER' ? 'LETTER' : 'A4';

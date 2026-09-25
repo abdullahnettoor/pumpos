@@ -13,6 +13,8 @@ import { FundingAccountSelect } from '../primitives/FundingAccountSelect.js';
 import { SUPPLIER_PAYMENT_ACCOUNT_TYPES } from '../../utils/fundingAccounts.js';
 import { Checkbox } from '../primitives/Toggle.js';
 import { Button } from '../../pump-ds/index.js';
+import { Banner } from '../primitives/Banner.js';
+import { useBusinessDayStatus } from '../../query/hooks.js';
 
 /** Optional pay-now recorded with the purchase — a supplier payment (Office Record). */
 export interface PurchasePayNow {
@@ -116,6 +118,15 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
+
+  // A closed business day seals its stock (ADR 0003), and a closed day cannot be
+  // reopened, so the server refuses a purchase dated on one. Say so as soon as
+  // the date is picked instead of after submit (#308).
+  const purchaseDate = watch('transactionDate') || '';
+  const dayStatusQ = useBusinessDayStatus(stationId, purchaseDate, {
+    enabled: !!stationId && !!purchaseDate,
+  });
+  const closedDate = dayStatusQ.data?.requestedState === 'CLOSED' ? purchaseDate : null;
 
   // Tank allocations the operator has typed, keyed by field-array row id then
   // tankId. What the form uses is derived below: an explicit split wins,
@@ -260,6 +271,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
           entryDate: paymentDate || undefined,
         }
       : undefined;
+    if (closedDate) return;
     return onSubmit({ ...values, lines }, payment);
   };
 
@@ -276,6 +288,12 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
       <Field label={dateLabel}>
         <DateField disabled={submitting} {...register('transactionDate')} />
       </Field>
+      {closedDate && (
+        <Banner severity="warning" title={`${closedDate} is closed.`}>
+          Its stock is sealed, so a purchase cannot be recorded on it. Record this purchase on an
+          open day; the missing delivery will show as stock variance on {closedDate}.
+        </Banner>
+      )}
 
       <Field label="Supplier" error={errors.supplierId?.message}>
         {suppliers.length === 0 ? (
@@ -772,7 +790,13 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
         >
           Cancel
         </Button>
-        <Button type="submit" variant="primary" size="md" loading={submitting}>
+        <Button
+          type="submit"
+          variant="primary"
+          size="md"
+          loading={submitting}
+          disabled={!!closedDate}
+        >
           {submitLabel}
         </Button>
       </div>

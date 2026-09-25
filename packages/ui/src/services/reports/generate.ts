@@ -5,6 +5,7 @@ import {
   DEFAULT_DSSR_CONFIG,
   DEFAULT_SHIFT_SUMMARY_CONFIG,
   paperFromStation,
+  resolveSections,
 } from './reportConfig.js';
 import { letterheadFromStation, showLogoFromStation } from './letterhead.js';
 import { formatShiftLabel, shiftDisplayLabel } from '@pump/shared';
@@ -26,9 +27,10 @@ interface StationReportSettings {
 /** DSSR PDF. `dssr` = { snapshotData, businessDate, generatedAt }. */
 export async function generateDssrPdf(station: any, dssr: any): Promise<void> {
   const doc = await import('./dssrDoc.js');
-  const sections = station?.settings?.report_config?.dssr?.length
-    ? station.settings.report_config.dssr
-    : DEFAULT_DSSR_CONFIG.sections;
+  const sections = resolveSections(
+    station?.settings?.report_config?.dssr,
+    DEFAULT_DSSR_CONFIG.sections,
+  );
   const config = {
     ...DEFAULT_DSSR_CONFIG,
     sections: sections,
@@ -58,9 +60,10 @@ export async function generateShiftSummaryPdf(
   shift?: { businessDate?: string | null; shiftSequence?: number | null },
 ): Promise<void> {
   const doc = await import('./shiftSummaryDoc.js');
-  const sections = station?.settings?.report_config?.shiftSummary?.length
-    ? station.settings.report_config.shiftSummary
-    : DEFAULT_SHIFT_SUMMARY_CONFIG.sections;
+  const sections = resolveSections(
+    station?.settings?.report_config?.shiftSummary,
+    DEFAULT_SHIFT_SUMMARY_CONFIG.sections,
+  );
   const config = {
     ...DEFAULT_SHIFT_SUMMARY_CONFIG,
     sections: sections,
@@ -93,9 +96,7 @@ export async function generateAttendantReportPdf(
   const doc = await import('./attendantReportDoc.js');
   const configured = (station?.settings as StationReportSettings | undefined)?.report_config
     ?.attendantReport;
-  const sections = configured?.length
-    ? (configured as AttendantReportSection[])
-    : DEFAULT_ATTENDANT_REPORT_CONFIG.sections;
+  const sections = resolveSections(configured, DEFAULT_ATTENDANT_REPORT_CONFIG.sections);
   const config = {
     ...DEFAULT_ATTENDANT_REPORT_CONFIG,
     sections,

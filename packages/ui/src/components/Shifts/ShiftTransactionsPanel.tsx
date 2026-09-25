@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { CloudTransactionService } from '../../services/cloud.js';
-import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys, useCustomers } from '../../query/hooks.js';
+import { useCustomers, useInvalidateOperational } from '../../query/hooks.js';
 import { Plus } from 'lucide-react';
 import { Form } from '../../pump-ds/index.js';
 
@@ -18,7 +17,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
   onTransactionAdded,
   isReadOnly = false,
 }) => {
-  const qc = useQueryClient();
+  const invalidateOperational = useInvalidateOperational();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,18 +30,18 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
   const loadError = customersQ.error;
 
   // Form state - credit sale (shift-anchored receivable)
-  const [collectionCustomerIdRaw, setCollectionCustomerId] = useState('');
-  const [collectionAmount, setCollectionAmount] = useState('');
-  const [collectionNotes, setCollectionNotes] = useState('');
+  const [creditSaleCustomerIdRaw, setCreditSaleCustomerId] = useState('');
+  const [creditSaleAmount, setCreditSaleAmount] = useState('');
+  const [creditSaleNotes, setCreditSaleNotes] = useState('');
   // Whatever the operator picked, else the first customer.
-  const collectionCustomerId = collectionCustomerIdRaw || customers[0]?.id || '';
+  const creditSaleCustomerId = creditSaleCustomerIdRaw || customers[0]?.id || '';
 
-  const handleAddCollection = async (e: React.FormEvent) => {
+  const handleAddCreditSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isReadOnly) return;
-    if (!collectionAmount) return;
+    if (!creditSaleAmount) return;
 
-    if (!collectionCustomerId) {
+    if (!creditSaleCustomerId) {
       setError('A customer account must be selected for Credit Sales.');
       return;
     }
@@ -52,20 +51,22 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
       setError(null);
       await transactionService.recordCollection({
         shiftId,
-        customerId: collectionCustomerId || undefined,
-        amount: Number(collectionAmount),
+        customerId: creditSaleCustomerId || undefined,
+        amount: Number(creditSaleAmount),
         paymentMethod: 'Credit',
-        notes: collectionNotes || undefined,
+        notes: creditSaleNotes || undefined,
       });
 
       // Clear form
-      setCollectionAmount('');
-      setCollectionNotes('');
+      setCreditSaleAmount('');
+      setCreditSaleNotes('');
 
-      await qc.invalidateQueries({ queryKey: queryKeys.shiftTransactions(shiftId) });
+      // A credit sale moves the customer's balance, the shift and the day, so
+      // refresh every operational key, not just this shift's transactions.
+      await invalidateOperational();
       await onTransactionAdded?.();
     } catch (err: any) {
-      setError(err.message || 'Failed to record collection');
+      setError(err.message || 'Failed to record credit sale');
     } finally {
       setSubmitting(false);
     }
@@ -150,7 +151,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
           )}
 
           <Form
-            onSubmit={handleAddCollection}
+            onSubmit={handleAddCreditSale}
             style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
           >
             <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
@@ -162,8 +163,8 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                 Customer Account (Required)
               </label>
               <select
-                value={collectionCustomerId}
-                onChange={(e) => setCollectionCustomerId(e.target.value)}
+                value={creditSaleCustomerId}
+                onChange={(e) => setCreditSaleCustomerId(e.target.value)}
                 disabled={isReadOnly || submitting}
                 style={{
                   height: '32px',
@@ -191,8 +192,8 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                 min="0"
                 step="0.01"
                 placeholder="0.00"
-                value={collectionAmount}
-                onChange={(e) => setCollectionAmount(e.target.value)}
+                value={creditSaleAmount}
+                onChange={(e) => setCreditSaleAmount(e.target.value)}
                 disabled={isReadOnly || submitting}
                 required
                 style={{
@@ -212,8 +213,8 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
               <input
                 type="text"
                 placeholder="e.g. Slip #9921, UPI txn ref, etc."
-                value={collectionNotes}
-                onChange={(e) => setCollectionNotes(e.target.value)}
+                value={creditSaleNotes}
+                onChange={(e) => setCreditSaleNotes(e.target.value)}
                 disabled={isReadOnly || submitting}
                 style={{
                   height: '32px',
@@ -227,7 +228,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
 
             <button
               type="submit"
-              disabled={isReadOnly || submitting || !collectionAmount}
+              disabled={isReadOnly || submitting || !creditSaleAmount}
               style={{
                 height: '36px',
                 backgroundColor: 'var(--brand-primary)',

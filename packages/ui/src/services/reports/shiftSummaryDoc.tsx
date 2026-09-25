@@ -38,6 +38,7 @@ export { letterheadFromStation } from './letterhead.js';
 import { shiftDisplayLabel } from '@pump/shared';
 import type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
 import { DEFAULT_SHIFT_SUMMARY_CONFIG } from './reportConfig.js';
+import { legacyPurchases } from './legacyPurchases.js';
 import type { Letterhead } from './letterhead.js';
 
 export const C = {
@@ -796,13 +797,51 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
   ),
 };
 
+/**
+ * Older snapshots stored the shift's purchases; render them as they were saved.
+ * New snapshots carry none (#308), so this renders nothing for them.
+ */
+function legacyPurchasesSection(d: any): React.ReactNode {
+  const rows = legacyPurchases(d);
+  if (rows.length === 0) return null;
+  return (
+    <View key="purchases">
+      <Text style={s.h2}>SUPPLIER FUEL INTAKES</Text>
+      <TableView
+        columns={[
+          { header: 'Supplier', flex: 1.8, strong: true },
+          { header: 'Ref / Invoice', flex: 1.8, mono: true },
+          { header: 'Notes', flex: 2 },
+          { header: 'Amount', flex: 1.2, align: 'right', mono: true },
+        ]}
+        rows={rows.map((p: any) => [
+          { text: p.supplierName || 'Unknown Supplier' },
+          { text: `${p.documentNumber || ''}${p.invoiceNumber ? ` (${p.invoiceNumber})` : ''}` },
+          { text: p.notes || '—' },
+          { text: inr(p.amount) },
+        ])}
+      />
+    </View>
+  );
+}
+
 export const ShiftSummaryDoc: React.FC<{ snapshot: any; config?: ReportConfig }> = ({
   snapshot,
   config = DEFAULT_SHIFT_SUMMARY_CONFIG,
 }) => (
   <Document>
     <Page size={config.paper} style={s.page}>
-      {config.sections.map((key) => builders[key]?.(snapshot, config))}
+      {config.sections.map((key) =>
+        key === 'signatures' ? (
+          <React.Fragment key="signatures">
+            {legacyPurchasesSection(snapshot)}
+            {builders.signatures(snapshot, config)}
+          </React.Fragment>
+        ) : (
+          builders[key]?.(snapshot, config)
+        ),
+      )}
+      {!config.sections.includes('signatures') && legacyPurchasesSection(snapshot)}
       <View style={s.foot} fixed>
         <Text>Generated {new Date().toLocaleString('en-IN')}</Text>
         <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />

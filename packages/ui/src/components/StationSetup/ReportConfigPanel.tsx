@@ -7,6 +7,7 @@ import { Field, Select } from '../primitives/Field.js';
 import { Button } from '../../pump-ds/index.js';
 import {
   DEFAULT_SHIFT_SUMMARY_CONFIG,
+  resolveSections,
   SHIFT_SUMMARY_SECTION_LABELS,
   DEFAULT_DSSR_CONFIG,
   DSSR_SECTION_LABELS,
@@ -33,7 +34,7 @@ interface OrderedSection {
 /** Reconstruct the full ordered section list (enabled first in saved order, then
  *  the remaining sections as disabled) from the persisted enabled-only array. */
 function buildOrdered(defaults: string[], saved?: string[]): OrderedSection[] {
-  const savedList = (saved && saved.length ? saved : defaults).filter((k) => defaults.includes(k));
+  const savedList = resolveSections(saved, defaults);
   const enabledSet = new Set(savedList);
   const remaining = defaults.filter((k) => !enabledSet.has(k));
   const ordered = [...savedList, ...remaining];

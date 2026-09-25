@@ -8,6 +8,7 @@ import { letterheadFromStation } from '../../services/reports/letterhead.js';
 import { Button } from '../../pump-ds/index.js';
 import { ArrowLeft, Printer, Download, Unlock, AlertTriangle } from 'lucide-react';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
+import { LegacyPurchasesTable } from './LegacyPurchasesTable.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { inr } from '../../utils/format.js';
@@ -1417,6 +1418,8 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
           <DrawerReconciliationTable drawers={drawers} />
         </div>
       )}
+
+      <LegacyPurchasesTable snapshot={snapshotData} />
 
       {/* Late Transaction Auditing Console (Visible to Owner, Manager, Accountant when CLOSED, read-only when LOCKED) */}
       {userRole !== 'Staff' && (

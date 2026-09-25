@@ -3,7 +3,7 @@ import React from 'react';
 import path from 'node:path';
 import fs from 'node:fs';
 import zlib from 'node:zlib';
-import { Font, pdf } from '@react-pdf/renderer';
+import { Font, pdf, Text } from '@react-pdf/renderer';
 import { ShiftSummaryDoc, LetterheadBand, C } from './shiftSummaryDoc.js';
 import { DssrDoc } from './dssrDoc.js';
 import { InvoiceDoc } from './invoiceDoc.js';
@@ -207,6 +207,31 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
 
     // Deep verification: inspect decompressed PDF page stream
     assertPdfContainsVectorMark(buffer);
+  });
+
+  // #308: an older snapshot that stored purchases keeps its "Supplier Fuel
+  // Intakes" section; a new snapshot (no purchases) renders none.
+  it('renders stored purchases from an older Shift Summary snapshot only', () => {
+    const texts = (node: any): string[] => {
+      if (node == null || typeof node === 'boolean') return [];
+      if (typeof node === 'string' || typeof node === 'number') return [String(node)];
+      if (Array.isArray(node)) return node.flatMap(texts);
+      if (typeof node.type === 'function' && node.type !== Text) {
+        return texts((node.type as any)(node.props));
+      }
+      return texts(node.props?.children);
+    };
+    const config = { sections: ['meta', 'signatures'] as any[], paper: 'A4' as const };
+    const base = { shiftId: 'shift-1', nozzleReadings: [], handovers: [] };
+    const old = {
+      ...base,
+      purchases: [{ supplierName: 'IOCL Depot', documentNumber: 'PUR-7', amount: 450000 }],
+    };
+    const oldText = texts((ShiftSummaryDoc as any)({ snapshot: old, config })).join(' ');
+    expect(oldText).toContain('SUPPLIER FUEL INTAKES');
+    expect(oldText).toContain('IOCL Depot');
+    const newText = texts((ShiftSummaryDoc as any)({ snapshot: base, config })).join(' ');
+    expect(newText).not.toContain('SUPPLIER FUEL INTAKES');
   });
 
   it('generates real PDF buffer for DSSR Report with verified vector mark and showLogo=false', async () => {

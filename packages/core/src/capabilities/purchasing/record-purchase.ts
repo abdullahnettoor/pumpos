@@ -167,14 +167,16 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
       return err(validationError('Either shiftId or stationId is required'));
     // Purchases are forecourt stock events anchored to the business day only,
     // never a Shift (ADR 0005, #308): resolve the day by station + date. A
-    // legacy shiftId-only payload resolves through its Shift, but the Shift is
+    // legacy replay that sends a shiftId but no date resolves through its Shift,
+    // so it lands on that Shift's day rather than today's; the Shift is still
     // not stored.
+    const legacyShiftReplay = !!cmd.shiftId && !cmd.transactionDate;
     const anchor = await resolveFinancialAnchor(
       this.deps,
       ctx,
-      requestedStationId
-        ? { stationId: requestedStationId, transactionDate: cmd.transactionDate }
-        : { shiftId: cmd.shiftId },
+      legacyShiftReplay
+        ? { shiftId: cmd.shiftId }
+        : { stationId: requestedStationId, transactionDate: cmd.transactionDate },
       { kind: 'STOCK' },
     );
     if (!anchor.success) return anchor;
