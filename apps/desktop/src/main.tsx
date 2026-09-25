@@ -6,6 +6,7 @@ import {
   createQueryClient,
   ErrorBoundary,
   setPdfSaver,
+  setPdfPrinter,
   ConfirmProvider,
   ToastProvider,
 } from '@pump/ui';
@@ -30,6 +31,22 @@ if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
       filters: [{ name: 'PDF', extensions: ['pdf'] }],
     });
     if (path) await writeFile(path, bytes);
+  });
+
+  // Print (#309): the webview cannot print a PDF, so write the same bytes Save
+  // PDF would to a temp file and open it in the system PDF viewer, whose Print
+  // command then prints it page for page.
+  setPdfPrinter(async (bytes, filename) => {
+    const [{ tempDir, join }, { mkdir, writeFile }, { openPath }] = await Promise.all([
+      import('@tauri-apps/api/path'),
+      import('@tauri-apps/plugin-fs'),
+      import('@tauri-apps/plugin-opener'),
+    ]);
+    const dir = await join(await tempDir(), 'pumpos-print');
+    await mkdir(dir, { recursive: true });
+    const path = await join(dir, filename);
+    await writeFile(path, bytes);
+    await openPath(path);
   });
 }
 

@@ -57,7 +57,14 @@ export {
 export type { SessionTokenClient } from './services/auth/supabaseTokenSource.js';
 
 export * from './services/cloud.js';
-export { exportReportPdf, exportReactPdf, setPdfSaver } from './services/exportPdf.js';
+export {
+  exportReactPdf,
+  printReactPdf,
+  outputReactPdf,
+  setPdfSaver,
+  setPdfPrinter,
+} from './services/exportPdf.js';
+export type { PdfSaver, PdfPrinter, PdfOutput } from './services/exportPdf.js';
 export {
   DEFAULT_SHIFT_SUMMARY_CONFIG,
   DEFAULT_DSSR_CONFIG,
