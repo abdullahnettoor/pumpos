@@ -17,6 +17,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
+import { drawerKey } from '@pump/shared';
 
 export interface CloseShiftWizardProps {
   isOpen: boolean;
@@ -69,8 +70,8 @@ export interface CloseShiftWizardProps {
     hasHandovers: boolean;
   } | null;
 
-  /** Cash Drops recorded at close (#287). drawerKey = `${attendantId}|${duId}`
-   *  names the Drawer; '' names none (reduces office expected cash). */
+  /** Cash Drops recorded at close (#287). drawerKey() names the
+   *  Drawer; '' names none (reduces office expected cash). */
   closeCashDrops?: CloseDropRow[];
   onCloseCashDropsChange?: (rows: CloseDropRow[]) => void;
 
@@ -452,10 +453,7 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                       onChange={(e) => updateDrop(i, { drawerKey: e.target.value })}
                     >
                       {cashSummary.drawers.map((d) => (
-                        <option
-                          key={`${d.attendantId}|${d.duId}`}
-                          value={`${d.attendantId}|${d.duId}`}
-                        >
+                        <option key={drawerKey(d)} value={drawerKey(d)}>
                           {d.attendantName ?? 'Attendant'}
                           {d.duName ? ` · ${d.duName}` : ''}
                         </option>
@@ -491,9 +489,7 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                     onCloseCashDropsChange([
                       ...closeCashDrops,
                       {
-                        drawerKey: cashSummary.drawers[0]
-                          ? `${cashSummary.drawers[0].attendantId}|${cashSummary.drawers[0].duId}`
-                          : '',
+                        drawerKey: cashSummary.drawers[0] ? drawerKey(cashSummary.drawers[0]) : '',
                         amount: 0,
                       },
                     ])

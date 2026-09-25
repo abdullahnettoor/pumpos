@@ -489,6 +489,7 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
         expectedCash: 4500,
         cashHandedOver: 4500,
         variance: 0,
+        closeCashDrops: 0,
       },
     ]);
     expect(snap.reconciliation.merchCashOutsideHandoverBreakdown).toEqual([

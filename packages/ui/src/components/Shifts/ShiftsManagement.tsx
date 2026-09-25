@@ -39,7 +39,7 @@ import {
   type PendingTankDipWorkflow,
 } from '../../query/stockCountMutation.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
-import { Station, computeShiftCloseCash } from '@pump/shared';
+import { Station, computeShiftCloseCash, parseDrawerKey } from '@pump/shared';
 import type { CloseDropRow } from './CloseShiftWizard.js';
 import type { OpenShiftFormValues } from '@pump/shared';
 import {
@@ -362,10 +362,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const reconDrawers: any[] = Array.isArray(recon?.drawers) ? recon.drawers : [];
   const closeDropEntries = closeDrops
     .filter((r) => r.amount > 0)
-    .map((r) => {
-      const [attendantId, duId] = r.drawerKey ? r.drawerKey.split('|') : [null, null];
-      return { attendantId, duId, amount: r.amount };
-    });
+    .map((r) => ({ ...parseDrawerKey(r.drawerKey), amount: r.amount }));
   const closeCash = recon
     ? computeShiftCloseCash(
         {

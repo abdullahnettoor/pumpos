@@ -3,6 +3,31 @@
  * use-case and the desktop close wizard preview so both use one formula.
  */
 
+/**
+ * Snapshot marker for the two-level variance model (#287). Snapshots without it
+ * were closed under the old model, where `cashVariance` already included the
+ * attendant shortage; they keep a single "Cash Variance" line.
+ */
+export const CASH_VARIANCE_MODEL_TWO_LEVEL = 2;
+
+/** True when a Shift Summary snapshot was closed under the two-level model. */
+export function isTwoLevelVarianceSnapshot(
+  snap: { cashVarianceModel?: unknown } | null | undefined,
+) {
+  return Number(snap?.cashVarianceModel ?? 0) >= CASH_VARIANCE_MODEL_TWO_LEVEL;
+}
+
+/** One key for a Drawer (Attendant + DU); '' is "no drawer". */
+export function drawerKey(d: { attendantId?: string | null; duId?: string | null }): string {
+  return d.attendantId && d.duId ? `${d.attendantId}|${d.duId}` : '';
+}
+
+/** Inverse of drawerKey: '' → no drawer. */
+export function parseDrawerKey(key: string): { attendantId: string | null; duId: string | null } {
+  const [attendantId, duId] = key ? key.split('|') : [];
+  return { attendantId: attendantId || null, duId: duId || null };
+}
+
 /** The Drawer fields the close maths reads. */
 export interface CloseCashDrawer {
   attendantId: string;
@@ -59,14 +84,14 @@ export function computeShiftCloseCash<D extends CloseCashDrawer>(
   const byDrawer = new Map<string, number>();
   let unassigned = legacyUnassignedDrops;
   for (const d of closeDrops) {
-    if (d.attendantId && d.duId) {
-      const k = `${d.attendantId}|${d.duId}`;
+    const k = drawerKey(d);
+    if (k) {
       byDrawer.set(k, (byDrawer.get(k) ?? 0) + d.amount);
     } else unassigned += d.amount;
   }
   let named = 0;
   const drawers = totals.drawers.map((dr): D => {
-    const drop = byDrawer.get(`${dr.attendantId}|${dr.duId}`) ?? 0;
+    const drop = byDrawer.get(drawerKey(dr)) ?? 0;
     named += drop;
     if (!drop) return { ...dr, closeCashDrops: 0 };
     return {

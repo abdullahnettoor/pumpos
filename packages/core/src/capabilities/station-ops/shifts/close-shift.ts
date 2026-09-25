@@ -20,7 +20,7 @@ import type {
   StockMovementInput,
   StockMovementWriter,
 } from './ports.js';
-import { computeShiftCloseCash } from '@pump/shared';
+import { CASH_VARIANCE_MODEL_TWO_LEVEL, computeShiftCloseCash, drawerKey } from '@pump/shared';
 import type { CloseCashDrop } from '@pump/shared';
 
 /**
@@ -62,11 +62,15 @@ const schema = z
     cashDrops: z.coerce.number().min(0).optional(),
     closeCashDrops: z
       .array(
-        z.object({
-          attendantId: z.string().min(1).nullish(),
-          duId: z.string().min(1).nullish(),
-          amount: z.coerce.number().positive(),
-        }),
+        z
+          .object({
+            attendantId: z.string().min(1).nullish(),
+            duId: z.string().min(1).nullish(),
+            amount: z.coerce.number().positive(),
+          })
+          .refine((d) => !d.attendantId === !d.duId, {
+            message: 'A drop names a Drawer with both attendantId and duId, or neither',
+          }),
       )
       .max(50)
       .optional(),
@@ -137,10 +141,7 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       );
     const unknownDrop = (cmd.closeCashDrops ?? []).find(
       (d) =>
-        (d.attendantId || d.duId) &&
-        !context.totals.drawers.some(
-          (dr) => dr.attendantId === d.attendantId && dr.duId === d.duId,
-        ),
+        drawerKey(d) !== '' && !context.totals.drawers.some((dr) => drawerKey(dr) === drawerKey(d)),
     );
     if (unknownDrop)
       return err(
@@ -254,6 +255,7 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
     const nowIso = ctx.clock.now().toISOString();
     const baseSnapshot: Record<string, unknown> = {
       generatedAt: nowIso,
+      cashVarianceModel: CASH_VARIANCE_MODEL_TWO_LEVEL,
       shiftId: shift.id,
       businessDayId: shift.businessDayId,
       openingCash,

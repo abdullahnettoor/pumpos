@@ -1,3 +1,4 @@
+import { drawerKey, isTwoLevelVarianceSnapshot } from '@pump/shared';
 import type { DssrSourceData } from './ports.js';
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
@@ -37,7 +38,8 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     closedAt: string | null;
     expectedDrawerCash: number;
     cashVariance: number;
-    attendantVariance: number;
+    /** Null for pre-#287 shifts, whose cashVariance already includes it. */
+    attendantVariance: number | null;
     netVolume: number;
   }[] = [];
   // Attendant (Handover) variance per Attendant/DU across the day (#287).
@@ -57,12 +59,14 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     netVolume += sNet;
     fuelSalesValue += Number(snap.totalFuelSalesValue ?? 0);
     totalCashVariance += Number(snap.cashVariance ?? 0);
+    const twoLevel = isTwoLevelVarianceSnapshot(snap);
     let shiftAttendantVariance = 0;
-    for (const d of (Array.isArray(snap.drawers) ? snap.drawers : []) as Record<string, any>[]) {
+    const drawerRows = twoLevel && Array.isArray(snap.drawers) ? snap.drawers : [];
+    for (const d of drawerRows as Record<string, any>[]) {
       if (d.variance == null) continue;
       const v = Number(d.variance);
       shiftAttendantVariance += v;
-      const key = `${d.attendantId}|${d.duId}`;
+      const key = drawerKey(d);
       attendantAgg[key] ??= {
         attendantId: String(d.attendantId),
         attendantName: d.attendantName ?? null,
@@ -71,8 +75,10 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       };
       attendantAgg[key].variance = round2(attendantAgg[key].variance + v);
     }
-    const sAttendantVariance = round2(Number(snap.attendantVariance ?? shiftAttendantVariance));
-    totalAttendantVariance += sAttendantVariance;
+    const sAttendantVariance = twoLevel
+      ? round2(Number(snap.attendantVariance ?? shiftAttendantVariance))
+      : null;
+    totalAttendantVariance += sAttendantVariance ?? 0;
     shifts.push({
       shiftId: s.shiftId,
       shiftSequence: s.shiftSequence ?? null,

@@ -17,12 +17,16 @@ describe('composeDssr attendant variance (#287)', () => {
         {
           shiftId: 's1',
           snapshot: {
+            cashVarianceModel: 2,
             cashVariance: -100,
             attendantVariance: -200,
             drawers: [drawer('a', -200), drawer('b', 0)],
           },
         },
-        { shiftId: 's2', snapshot: { cashVariance: 0, drawers: [drawer('a', 50)] } },
+        {
+          shiftId: 's2',
+          snapshot: { cashVarianceModel: 2, cashVariance: 0, drawers: [drawer('a', 50)] },
+        },
       ],
       purchases: [],
       sales: [],
@@ -40,5 +44,24 @@ describe('composeDssr attendant variance (#287)', () => {
       { attendantId: 'a', attendantName: 'A', duName: 'DU-1', variance: -150 },
       { attendantId: 'b', attendantName: 'B', duName: 'DU-1', variance: 0 },
     ]);
+  });
+
+  it('leaves pre-#287 shifts out of the attendant split (their Cash Variance already has it)', () => {
+    const d = composeDssr({
+      shiftSummaries: [
+        { shiftId: 's0', snapshot: { cashVariance: -200, drawers: [drawer('a', -200)] } },
+      ],
+      purchases: [],
+      sales: [],
+      creditSales: [],
+      stockVariances: [],
+      saleItems: [],
+      products: {},
+      nozzles: {},
+    } as unknown as DssrSourceData) as any;
+    expect(d.drawer.totalCashVariance).toBe(-200);
+    expect(d.drawer.totalAttendantVariance).toBe(0);
+    expect(d.shifts[0].attendantVariance).toBeNull();
+    expect(d.drawer.attendants).toEqual([]);
   });
 });

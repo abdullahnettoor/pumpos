@@ -297,7 +297,7 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     if (list.length === 0) return null;
     const rows: Cell[][] = list.map((sh) => {
       const v = Number(sh.cashVariance || 0);
-      const av = Number(sh.attendantVariance || 0);
+      const av = sh.attendantVariance == null ? null : Number(sh.attendantVariance);
       return [
         {
           text: shiftDisplayLabel({
@@ -309,7 +309,9 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
         { text: sh.templateName || 'Custom' },
         { text: sh.closedAt ? fmtDateTime(sh.closedAt) : '-' },
         { text: vol3(sh.netVolume) },
-        { text: `${av > 0 ? '+' : ''}${inr(av)}`, color: varColor(av) },
+        av == null
+          ? { text: '—' }
+          : { text: `${av > 0 ? '+' : ''}${inr(av)}`, color: varColor(av) },
         { text: `${v > 0 ? '+' : ''}${inr(v)}`, color: varColor(v) },
       ];
     });
@@ -339,7 +341,9 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
                 const av = Number(a.variance || 0);
                 return [
                   { text: `${a.attendantName ?? 'Attendant'}${a.duName ? ` · ${a.duName}` : ''}` },
-                  { text: `${av > 0 ? '+' : ''}${inr(av)}`, color: varColor(av) },
+                  av == null
+                    ? { text: '—' }
+                    : { text: `${av > 0 ? '+' : ''}${inr(av)}`, color: varColor(av) },
                 ];
               })}
             />

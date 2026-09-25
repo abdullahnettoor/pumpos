@@ -1025,6 +1025,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
                   >
                     {Number(shift.netVolume || 0).toFixed(3)}
                   </td>
+                  {/* Null for pre-#287 shifts (their Cash Variance already includes it). */}
                   <td
                     style={{
                       padding: '10px 12px',
@@ -1036,8 +1037,9 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
                           : 'var(--text-default)',
                     }}
                   >
-                    {Number(shift.attendantVariance || 0) > 0 ? '+' : ''}
-                    {formatMoney(Number(shift.attendantVariance || 0), { symbol: false })}
+                    {shift.attendantVariance == null
+                      ? '—'
+                      : `${Number(shift.attendantVariance) > 0 ? '+' : ''}${formatMoney(Number(shift.attendantVariance), { symbol: false })}`}
                   </td>
                   <td
                     style={{
