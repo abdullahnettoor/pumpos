@@ -50,6 +50,13 @@ const SectionTitle = ({ children }: { children: React.ReactNode }) => (
   <Text style={s.h2}>{children}</Text>
 );
 
+/** The attendant's name on the header — the report's subject, set above its metadata. */
+const attendantTitle = { fontSize: 13, color: C.ink, fontWeight: 700 as const, marginBottom: 2 };
+
+/** A day page stands alone when printed singly, so its title says whose day it is. */
+export const dayPageTitle = (attendantName: string, businessDate: string): string =>
+  `${attendantName} · ${businessDate}`;
+
 const builders: Record<
   AttendantReportSection,
   (d: AttendantStatementData, cfg: AttendantReportConfig) => React.ReactNode
@@ -62,8 +69,10 @@ const builders: Record<
         letterhead={cfg.letterhead}
         showLogo={cfg.showLogo}
       />
+      {/* The report is about one person: their name is its title, not metadata. */}
+      <Text style={attendantTitle}>{d.attendantName}</Text>
       <Text style={s.sub}>
-        {d.attendantName} • {d.from} to {d.to}
+        {d.from} to {d.to}
         {` • Generated ${fmtDateTime(d.generatedAt)}`}
       </Text>
       <Text style={s.sub}>
@@ -400,9 +409,9 @@ export const AttendantReportDoc: React.FC<{
       {days.map((day) => (
         <Page key={day.businessDate} size={config.paper} style={s.page}>
           <View>
-            <Text style={dayTitle}>{day.businessDate}</Text>
+            <Text style={dayTitle}>{dayPageTitle(data.attendantName, day.businessDate)}</Text>
             <Text style={s.sub}>
-              {data.attendantName} · {day.data.shiftsWorked}{' '}
+              {day.data.shiftsWorked}{' '}
               {day.data.shiftsWorked === 1 ? 'shift' : 'shifts'} · net variance{' '}
               {inr(day.data.totals.varianceAmount)}
             </Text>
