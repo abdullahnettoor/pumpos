@@ -14,7 +14,7 @@ import {
   canRecordIncome,
   canRecordStockCount,
   canRecordHandover,
-  isAttendant,
+  isHandoverSelfScoped,
   type Role,
 } from '@pump/shared';
 import {
@@ -2607,8 +2607,18 @@ transactionsRouter.post(
       );
     }
 
-    // Attendants may only record their OWN merchandise handover.
-    const attendantId = isAttendant(user.role) ? user.id : body.attendantId;
+    // Attendants, and Accountants covering a pump (#301), may only record their
+    // OWN merchandise handover.
+    if (isHandoverSelfScoped(user.role) && body.attendantId && body.attendantId !== user.id) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'You may record only your own handover' },
+        },
+        403,
+      );
+    }
+    const attendantId = isHandoverSelfScoped(user.role) ? user.id : body.attendantId;
 
     const result = await runInTransaction(db, (tx, events) =>
       new RecordMerchandiseHandover({

@@ -541,6 +541,47 @@ describe('OpenShiftForm', () => {
       expect(onOpeningFloatChange).toHaveBeenCalledWith('du-2', 300);
     });
 
+    // #302: a 0 float is a blank box with a "0" placeholder, not a 0 to delete.
+    it('shows a zero Opening Float as an empty box and reads a cleared box as 0', () => {
+      const onOpeningFloatChange = vi.fn();
+      renderForm({
+        dispensers: DUS,
+        staff: STAFF,
+        onOpeningFloatChange,
+        staffAssignments: [
+          { duId: 'du-1', userId: 'u-1', openingFloat: 0 },
+          { duId: 'du-2', userId: 'u-1', openingFloat: 250 },
+        ],
+      });
+      const zero = document.getElementById('float-du-1') as HTMLInputElement;
+      expect(zero.value).toBe('');
+      expect(zero.placeholder).toBe('0');
+      const set = document.getElementById('float-du-2') as HTMLInputElement;
+      fireEvent.change(set, { target: { value: '' } });
+      expect(onOpeningFloatChange).toHaveBeenCalledWith('du-2', 0);
+    });
+
+    // #301: anyone of the station may cover a pump; each option names its role.
+    it('labels every assignable person with their role', () => {
+      renderForm({
+        dispensers: DUS,
+        staff: [
+          { id: 'u-1', fullName: 'Ravi', role: 'Attendant', email: 'r@x.in' },
+          { id: 'u-2', fullName: 'Meera', role: 'Manager' },
+          { id: 'u-3', fullName: 'Omar', role: 'Owner' },
+        ],
+        staffAssignments: [],
+      });
+      const select = document.getElementById('attendant-du-1') as HTMLSelectElement;
+      const labels = [...select.options].map((o) => o.textContent);
+      expect(labels).toEqual([
+        '— Unassigned —',
+        'Ravi (Attendant)',
+        'Meera (Manager)',
+        'Omar (Owner)',
+      ]);
+    });
+
     it('blocks the open while a dispenser has no attendant', () => {
       withAssignments([
         { duId: 'du-1', userId: 'u-1' },

@@ -47,12 +47,24 @@ export function isAttendant(role: Role): boolean {
 }
 
 /**
- * Who may record an attendant handover. Attendants may record only their OWN
- * handover (enforced at the route by forcing userId = self); operational roles
- * may record on behalf of any attendant.
+ * Who may record an attendant handover. Owners, Managers and Staff may record
+ * on behalf of anyone holding a Drawer. Attendants and Accountants may record
+ * only their OWN handover (`isHandoverSelfScoped`): an Accountant holds a Drawer
+ * only when covering a pump (#301) and hands it over themselves, on mobile.
  */
 export function canRecordHandover(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Staff' || role === 'Attendant';
+  return (
+    role === 'Owner' ||
+    role === 'Manager' ||
+    role === 'Staff' ||
+    role === 'Attendant' ||
+    role === 'Accountant'
+  );
+}
+
+/** Roles whose handover writes are limited to their own Drawer (#301). */
+export function isHandoverSelfScoped(role: Role): boolean {
+  return role === 'Attendant' || role === 'Accountant';
 }
 
 // ----------------------------------------------------

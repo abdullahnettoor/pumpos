@@ -10,7 +10,9 @@ import { DrizzleStaffDirectory } from '../station-ops-repositories.js';
  * Who `OpenShift` may put on a dispenser (#286), against a real Postgres. The
  * rule is the same fragment the shift-open form's staff list uses, so a user
  * the form offers is never refused and a foreign/inactive one never accepted.
- * Only Attendants/Staff assigned to the station qualify (#291).
+ * Any active user of the station qualifies, whatever their role, so a Manager,
+ * Accountant or Staff member can cover a pump; an Owner qualifies without a
+ * station assignment row (#301).
  *
  * Runs only when TEST_DATABASE_URL is set (CI provides a service container).
  */
@@ -125,7 +127,7 @@ describe.skipIf(!CONNECTION)('DrizzleStaffDirectory against real Postgres', () =
     }
   });
 
-  it('returns only active Attendants/Staff of the organization at this station (#291)', async () => {
+  it('returns active users of the organization at this station, any role (#301)', async () => {
     const found = await new DrizzleStaffDirectory(db).findAssignableUserIds(ORG, STATION, [
       ATTENDANT,
       STAFF,
@@ -138,7 +140,7 @@ describe.skipIf(!CONNECTION)('DrizzleStaffDirectory against real Postgres', () =
       UNASSIGNED,
       'not-a-uuid',
     ]);
-    expect([...found].sort()).toEqual([ATTENDANT, STAFF].sort());
+    expect([...found].sort()).toEqual([ATTENDANT, STAFF, OWNER, MANAGER, ACCOUNTANT].sort());
   });
 
   it('checks membership of the station asked about', async () => {
@@ -147,6 +149,14 @@ describe.skipIf(!CONNECTION)('DrizzleStaffDirectory against real Postgres', () =
       ELSEWHERE,
     ]);
     expect([...found]).toEqual([ELSEWHERE]);
+  });
+
+  it('accepts an Owner at a station they have no assignment row for', async () => {
+    const found = await new DrizzleStaffDirectory(db).findAssignableUserIds(ORG, OTHER_STATION, [
+      OWNER,
+      MANAGER,
+    ]);
+    expect([...found]).toEqual([OWNER]);
   });
 
   it('asks nothing for an empty list', async () => {

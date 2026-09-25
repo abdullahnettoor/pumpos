@@ -137,6 +137,12 @@ The staff role accountable for one specific Dispenser Unit during a Shift;
 assigned per shift via `shift_staff_assignments`. Generic UX copy may say
 "operator" for any app user, but the shift-accountable person is always the
 Attendant.
+When an Attendant is absent, any active user of the station (Owner, Manager,
+Accountant or Staff) may be put on the Dispenser Unit instead. That person is
+the Attendant for that Shift: they hold the Drawer and hand it over exactly as
+an Attendant would, on mobile ("My handover") or recorded by the office on
+desktop. An Accountant, like an Attendant, may record only their own Handover
+(#301).
 _Avoid_: operator, pumper
 
 **Role**:
