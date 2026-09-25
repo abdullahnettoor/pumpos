@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config';
+import { workspaceSourceAliases } from '../../vitest.aliases.config';
 
 export default defineConfig({
+  resolve: { alias: workspaceSourceAliases },
   test: {
     // Most tests here are plain logic and run fine under node, but the auth
     // bootstrap regression tests have to observe what an operator would see
