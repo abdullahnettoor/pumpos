@@ -31,7 +31,6 @@ import type {
 export interface OpenShiftCommand {
   stationId: string;
   shiftTemplateId: string;
-  openingCash: number | string;
   /** Business day this shift anchors to (YYYY-MM-DD). Defaults to today. */
   businessDate?: string;
   staffAssignments?: StaffAssignmentInput[];
@@ -42,13 +41,18 @@ export interface OpenShiftCommand {
 const schema = z.object({
   stationId: z.string().min(1, 'stationId is required'),
   shiftTemplateId: z.string().min(1, 'shiftTemplateId is required'),
-  openingCash: z.coerce.number().min(0, 'openingCash must be >= 0'),
   businessDate: z
     .string()
     .refine(isValidBusinessDate, 'businessDate must be a valid YYYY-MM-DD date')
     .optional(),
   staffAssignments: z
-    .array(z.object({ userId: z.string().min(1), duId: z.string().min(1) }))
+    .array(
+      z.object({
+        userId: z.string().min(1),
+        duId: z.string().min(1),
+        openingFloat: z.coerce.number().finite().min(0, 'openingFloat must be >= 0').default(0),
+      }),
+    )
     .optional(),
   terminalLinks: z
     .array(z.object({ terminalId: z.string().min(1), duId: z.string().nullish() }))
@@ -58,12 +62,39 @@ const schema = z.object({
     .optional(),
 });
 
+/**
+ * The dispensers a station is actually running on.
+ *
+ * A dispenser out of service is not a lesser dispenser — for the length of a
+ * shift it does not exist: nobody is accountable for it, and its nozzles are
+ * not read. Both of those are decisions this use-case has to make, so it has
+ * to be able to ask.
+ */
+export interface InServiceDispenserReader {
+  listInServiceIds(organizationId: string, stationId: string): Promise<string[]>;
+}
+
+/**
+ * Who may be put on a dispenser at this station. Must agree with the staff
+ * list the shift-open form offers, or the form offers people the open refuses.
+ * Returns the subset of `userIds` that are assignable.
+ */
+export interface StaffDirectory {
+  findAssignableUserIds(
+    organizationId: string,
+    stationId: string,
+    userIds: string[],
+  ): Promise<Set<string>>;
+}
+
 export interface OpenShiftDeps {
   shifts: ShiftRepository;
   businessDays: BusinessDayWriteRepository;
   nozzles: NozzleRepository;
   nozzleReadings: NozzleReadingRepository;
   fuelPrices: FuelPriceRepository;
+  dispensers: InServiceDispenserReader;
+  staff: StaffDirectory;
   events: EventPublisher;
 }
 
@@ -99,6 +130,56 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
         conflictError('A shift is already open at this station', { shiftId: existingOpen.id }),
       );
     }
+
+    /*
+     * Every dispenser in service needs somebody accountable for it.
+     *
+     * Checked here rather than only in the form because the form is not the
+     * only caller — the mobile client, an API caller and a replayed offline
+     * write all arrive here. And it has to be refused rather than warned
+     * about: nothing writes `shift_staff_assignments` after this point, so a
+     * dispenser opened with nobody on it can never be handed over, and the
+     * only way out is to close and re-open, discarding the opening readings
+     * (#258).
+     *
+     * The escape is the dispenser's own status: a pump nobody is working is a
+     * pump not in use. One attendant may cover several, so a short-staffed
+     * shift spreads rather than skips.
+     *
+     * Read after `lockStation`, and used for BOTH this check and the nozzle
+     * seeding below, so the two can never disagree about which pumps are
+     * running. The station lock does not cover `UpdateDispenser`, though, so a
+     * status flip landing inside this transaction could still be missed — the
+     * window is one transaction wide and the outcome is a shift that ran a
+     * pump for one period longer than intended, which the next open corrects.
+     */
+    const inServiceDuIds = new Set(
+      await this.deps.dispensers.listInServiceIds(ctx.organizationId, cmd.stationId),
+    );
+    const assignedDuIds = new Set((cmd.staffAssignments ?? []).map((a) => a.duId));
+    const unattendedDuIds = [...inServiceDuIds].filter((duId) => !assignedDuIds.has(duId));
+    if (unattendedDuIds.length > 0) {
+      return err(
+        validationError('Every dispenser in service needs an attendant before the shift can open', {
+          duIds: unattendedDuIds,
+        }),
+      );
+    }
+
+    /*
+     * And the reverse: every assignment must be to a Drawer that can be
+     * reconciled (#286). Each Opening Float lands in Σ Opening Float and so in
+     * `expectedDrawerCash`; a float nobody can hand over — issued to a pump out
+     * of service or unknown, counted twice, or held by someone who is not
+     * staff here — closes the shift with a permanent shortage of that float.
+     */
+    const assignmentError = await this.validateAssignments(
+      cmd.staffAssignments ?? [],
+      inServiceDuIds,
+      ctx.organizationId,
+      cmd.stationId,
+    );
+    if (assignmentError) return err(assignmentError);
 
     const events: DomainEvent[] = [];
     const now = ctx.clock.now();
@@ -182,7 +263,8 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
       closedBy: null,
       closedAt: null,
       lockedAt: null,
-      openingCash: String(cmd.openingCash),
+      // The Shift's opening cash is the sum of its Drawers' Opening Floats.
+      openingCash: String((cmd.staffAssignments ?? []).reduce((sum, a) => sum + a.openingFloat, 0)),
       closingCash: null,
       createdAt: nowIso,
       updatedAt: nowIso,
@@ -196,8 +278,9 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
       await this.deps.shifts.addTerminalLinks(shift.id, cmd.terminalLinks);
     }
 
-    // Seed nozzle opening readings.
-    const nozzles = await this.deps.nozzles.listByStation(ctx.organizationId, cmd.stationId);
+    // Seed nozzle opening readings, for the dispensers actually in service.
+    const allNozzles = await this.deps.nozzles.listByStation(ctx.organizationId, cmd.stationId);
+    const nozzles = allNozzles.filter((n) => inServiceDuIds.has(n.duId));
     if (nozzles.length > 0) {
       const lastClosing = await this.deps.nozzleReadings.lastClosingByNozzleIds(
         nozzles.map((n) => n.id),
@@ -237,10 +320,22 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
         aggregateId: shift.id,
         stationId: shift.stationId,
         businessDayId: businessDay.id,
-        payload: { shiftId: shift.id, openingCash: shift.openingCash, openedBy: shift.openedBy },
+        payload: {
+          shiftId: shift.id,
+          openingCash: shift.openingCash,
+          openedBy: shift.openedBy,
+          openingFloats: (cmd.staffAssignments ?? []).map((a) => ({
+            attendantId: a.userId,
+            duId: a.duId,
+            openingFloat: a.openingFloat,
+          })),
+        },
         presentation: {
-          templateId: 'shift-opened.v1',
-          values: { openingCash: Number(shift.openingCash) },
+          templateId: 'shift-opened.v2',
+          values: {
+            openingCash: Number(shift.openingCash),
+            drawerCount: (cmd.staffAssignments ?? []).length,
+          },
         },
         groupingRole: 'primary',
       }),
@@ -250,4 +345,68 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
 
     return ok({ shift, businessDay });
   }
+
+  private async validateAssignments(
+    assignments: { userId: string; duId: string }[],
+    inServiceDuIds: Set<string>,
+    organizationId: string,
+    stationId: string,
+  ) {
+    const unknownDuIds = unique(
+      assignments.map((a) => a.duId).filter((duId) => !inServiceDuIds.has(duId)),
+    );
+    if (unknownDuIds.length > 0) {
+      return validationError('Attendants can only be assigned to dispensers in service', {
+        duIds: unknownDuIds,
+      });
+    }
+
+    const seenPairs = new Set<string>();
+    const duplicates: { userId: string; duId: string }[] = [];
+    for (const a of assignments) {
+      const key = `${a.userId}\u0000${a.duId}`;
+      if (seenPairs.has(key)) {
+        if (!duplicates.some((d) => d.userId === a.userId && d.duId === a.duId))
+          duplicates.push({ userId: a.userId, duId: a.duId });
+      } else seenPairs.add(key);
+    }
+    if (duplicates.length > 0) {
+      return validationError('The same attendant is assigned to the same dispenser twice', {
+        duplicates,
+      });
+    }
+
+    // A Drawer is one per Attendant per DU, never shared, and Handover
+    // reconciles a DU's cash sales against exactly one Drawer. One attendant
+    // may cover several pumps; one pump may not have several attendants.
+    const usersByDu = new Map<string, Set<string>>();
+    for (const a of assignments) {
+      const users = usersByDu.get(a.duId) ?? new Set<string>();
+      users.add(a.userId);
+      usersByDu.set(a.duId, users);
+    }
+    const sharedDuIds = [...usersByDu].filter(([, u]) => u.size > 1).map(([duId]) => duId);
+    if (sharedDuIds.length > 0) {
+      return validationError('A dispenser can have only one attendant per shift', {
+        duIds: sharedDuIds,
+      });
+    }
+
+    const userIds = unique(assignments.map((a) => a.userId));
+    if (userIds.length === 0) return null;
+    const assignable = await this.deps.staff.findAssignableUserIds(
+      organizationId,
+      stationId,
+      userIds,
+    );
+    const ineligible = userIds.filter((id) => !assignable.has(id));
+    if (ineligible.length > 0) {
+      return validationError('Only active users of this station can be assigned', {
+        userIds: ineligible,
+      });
+    }
+    return null;
+  }
 }
+
+const unique = <T>(xs: T[]): T[] => [...new Set(xs)];

@@ -14,7 +14,7 @@ compatibility_flags = [ "nodejs_compat_v2" ]
 # production never falls back to a permissive default: per-PR preview origins
 # are accepted only when this reads "preview" (see src/infra/cors.ts).
 ENVIRONMENT = "production"
-SUPABASE_URL = "https://sniubtppskopxkpznfkh.supabase.co"
+SUPABASE_URL = "https://gpfqiesflrpmndhkfvhg.supabase.co"
 # Comma-separated allow-list of platform-admin emails permitted to call
 # /platform/* (owner provisioning). Emails aren't secret, so this is plaintext.
 PLATFORM_ADMIN_EMAILS = "abdullahnettoor@gmail.com"
@@ -78,7 +78,7 @@ workers_dev = false
 # Allows CORS from per-PR preview front ends on workers.dev. Never set this on
 # the production worker.
 ENVIRONMENT = "preview"
-SUPABASE_URL = "https://sniubtppskopxkpznfkh.supabase.co"
+SUPABASE_URL = "https://gpfqiesflrpmndhkfvhg.supabase.co"
 PLATFORM_ADMIN_EMAILS = "abdullahnettoor@gmail.com"
 INVITE_REDIRECT_URL = "https://console.pumpos.abdullahnettoor.com/accept-invite"
 

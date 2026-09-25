@@ -6,6 +6,7 @@ import type {
   DssrSnapshotRepository,
   DssrSourceData,
 } from '@pump/core';
+import { shiftSequenceSql } from '../shift-sequence-sql.js';
 
 export class DrizzleDssrSnapshotRepository implements DssrSnapshotRepository {
   constructor(private readonly db: DbClient) {}
@@ -78,6 +79,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         shiftId: schema.shiftSummaries.shiftId,
         snapshotData: schema.shiftSummaries.snapshotData,
         closedAt: schema.shifts.closedAt,
+        shiftSequence: shiftSequenceSql('shifts'),
         templateName: schema.shiftTemplates.name,
       })
       .from(schema.shiftSummaries)
@@ -85,63 +87,10 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       .leftJoin(schema.shiftTemplates, eq(schema.shiftTemplates.id, schema.shifts.shiftTemplateId))
       .where(eq(schema.shifts.businessDayId, businessDayId));
 
-    const collectionRows = await this.db
-      .select({
-        paymentMethod: schema.collections.paymentMethod,
-        amount: schema.collections.amount,
-      })
-      .from(schema.collections)
-      .where(eq(schema.collections.businessDayId, businessDayId));
-
-    const expenseRows = await this.db
-      .select({
-        affectsDrawer: schema.expenses.affectsDrawer,
-        paidFrom: schema.expenses.paidFrom,
-        amount: schema.expenses.amount,
-        status: schema.expenses.status,
-      })
-      .from(schema.expenses)
-      .where(eq(schema.expenses.businessDayId, businessDayId));
-
-    const incomeRows = await this.db
-      .select({
-        affectsDrawer: schema.otherIncome.affectsDrawer,
-        receivedInto: schema.otherIncome.receivedInto,
-        amount: schema.otherIncome.amount,
-        status: schema.otherIncome.status,
-        categoryName: schema.incomeCategories.name,
-        taxCategory: schema.otherIncome.taxCategory,
-        taxableAmount: schema.otherIncome.taxableAmount,
-        cgst: schema.otherIncome.cgst,
-        sgst: schema.otherIncome.sgst,
-        igst: schema.otherIncome.igst,
-        cess: schema.otherIncome.cess,
-      })
-      .from(schema.otherIncome)
-      .leftJoin(
-        schema.incomeCategories,
-        eq(schema.incomeCategories.id, schema.otherIncome.categoryId),
-      )
-      .where(eq(schema.otherIncome.businessDayId, businessDayId));
-
     const purchaseRows = await this.db
       .select({ amount: schema.purchases.amount })
       .from(schema.purchases)
       .where(eq(schema.purchases.businessDayId, businessDayId));
-
-    const supplierPaymentRows = await this.db
-      .select({
-        affectsDrawer: schema.supplierTransactions.affectsDrawer,
-        paidFrom: schema.supplierTransactions.paidFrom,
-        amount: schema.supplierTransactions.amount,
-      })
-      .from(schema.supplierTransactions)
-      .where(
-        and(
-          eq(schema.supplierTransactions.businessDayId, businessDayId),
-          eq(schema.supplierTransactions.transactionType, 'Payment'),
-        ),
-      );
 
     const saleRows = await this.db
       .select({
@@ -241,37 +190,10 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         shiftId: r.shiftId,
         templateName: r.templateName ?? null,
         closedAt: r.closedAt ? r.closedAt.toISOString() : null,
+        shiftSequence: r.shiftSequence ?? null,
         snapshot: (r.snapshotData as Record<string, unknown>) ?? {},
       })),
-      collections: collectionRows.map((r) => ({
-        paymentMethod: r.paymentMethod,
-        amount: Number(r.amount),
-      })),
-      expenses: expenseRows.map((r) => ({
-        affectsDrawer: r.affectsDrawer,
-        paidFrom: r.paidFrom,
-        amount: Number(r.amount),
-        status: r.status,
-      })),
-      income: incomeRows.map((r) => ({
-        affectsDrawer: r.affectsDrawer,
-        receivedInto: r.receivedInto,
-        amount: Number(r.amount),
-        status: r.status,
-        categoryName: r.categoryName ?? null,
-        taxCategory: r.taxCategory ?? null,
-        taxableAmount: r.taxableAmount != null ? Number(r.taxableAmount) : null,
-        cgst: Number(r.cgst ?? 0),
-        sgst: Number(r.sgst ?? 0),
-        igst: Number(r.igst ?? 0),
-        cess: Number(r.cess ?? 0),
-      })),
       purchases: purchaseRows.map((r) => ({ amount: Number(r.amount) })),
-      supplierPayments: supplierPaymentRows.map((r) => ({
-        affectsDrawer: r.affectsDrawer,
-        paidFrom: r.paidFrom,
-        amount: Number(r.amount),
-      })),
       sales: saleRows.map((r) => ({
         paymentMethod: r.paymentMethod,
         saleType: r.saleType,

@@ -9,23 +9,46 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { NozzleRepository } from '../../station-setup/nozzles/index.js';
 import type {
-  CreditSalesReader,
+  CloseShiftContextReader,
   NozzleReadingRepository,
   Shift,
-  ShiftReconciliationReader,
+  ShiftReconciliationTotals,
   ShiftRepository,
+  ShiftSummaryProjector,
   ShiftSummaryWriter,
   StockMovementInput,
   StockMovementWriter,
 } from './ports.js';
+import { CASH_VARIANCE_MODEL_TWO_LEVEL, computeShiftCloseCash, drawerKey } from '@pump/shared';
+import type { CloseCashDrop } from '@pump/shared';
+
+/**
+ * The office's expected cash at shift close (#287, ADR 0005). It is built from
+ * the cash each Drawer **declared** at Handover (Σ Opening Floats + received
+ * cash sales − Handover drops), less any drop at close that names no Drawer.
+ * Attendant shortages are judged separately at Handover (attendant variance),
+ * so this measures office counting only. One formula for close and live status.
+ */
+export function expectedShiftDrawerCash(
+  totals: Pick<ShiftReconciliationTotals, 'openingFloat' | 'cashSales' | 'handoverCashDrops'>,
+  unassignedCloseCashDrops = 0,
+): number {
+  return (
+    totals.openingFloat + totals.cashSales - totals.handoverCashDrops - unassignedCloseCashDrops
+  );
+}
+
+export { computeShiftCloseCash } from '@pump/shared';
+export type { CloseCashDrop, ShiftCloseCash } from '@pump/shared';
 
 export interface CloseShiftCommand {
   shiftId: string;
   closingCash: number | string;
   nozzleReadings?: { nozzleId: string; closingReading: number }[];
+  /** @deprecated drop at close naming no Drawer; use closeCashDrops. */
   cashDrops?: number | string;
+  closeCashDrops?: CloseCashDrop[];
   notes?: string;
 }
 
@@ -37,35 +60,55 @@ const schema = z
       .array(z.object({ nozzleId: z.string().min(1), closingReading: z.coerce.number().min(0) }))
       .optional(),
     cashDrops: z.coerce.number().min(0).optional(),
+    closeCashDrops: z
+      .array(
+        z
+          .object({
+            attendantId: z.string().min(1).nullish(),
+            duId: z.string().min(1).nullish(),
+            amount: z.coerce.number().positive(),
+          })
+          .refine((d) => !d.attendantId === !d.duId, {
+            message: 'A drop names a Drawer with both attendantId and duId, or neither',
+          }),
+      )
+      .max(50)
+      .optional(),
     notes: z.string().max(500).optional(),
   })
   .strict();
 
 export interface CloseShiftDeps {
+  /** One consolidated read for shift + readings + nozzles + totals + credit sales (#229). */
+  context: CloseShiftContextReader;
   shifts: ShiftRepository;
-  nozzles: NozzleRepository;
   nozzleReadings: NozzleReadingRepository;
-  reconciliation: ShiftReconciliationReader;
-  creditSales: CreditSalesReader;
   stockMovements: StockMovementWriter;
   summaries: ShiftSummaryWriter;
+  /**
+   * Optional presentation projector: when provided, the persisted summary is the
+   * FULL projected snapshot, written ONCE — instead of the caller re-projecting
+   * and re-saving after the fact (two extra statements on the close path, #229).
+   */
+  projector?: ShiftSummaryProjector;
   events: EventPublisher;
 }
 
 export interface CloseShiftResult {
   shift: Shift;
   snapshot: Record<string, unknown>;
+  /** Drawer cash sales from the reconciliation — typed for downstream ledger
+   *  posting, so callers need not dig through the (projected) snapshot. */
+  cashSales: number;
 }
 
 /**
  * Close an open shift: finalize nozzle readings (volume = closing - opening),
- * record fuel SALE stock movements, run drawer reconciliation
- * (expectedDrawerCash = openingCash + cashCollections - drawerExpenses
- *  - drawerSupplierPayments - cashDrops), persist an immutable shift summary,
- * and mark the shift CLOSED. Run inside runInTransaction.
- *
- * NOTE: fuel cash-vs-card split is not yet known (Retail capture lands in
- * Phase 5); cash sales are therefore not added to expected drawer cash yet.
+ * record fuel SALE stock movements, run the two-level cash reconciliation
+ * (attendant variance at Handover + office count variance, #287; office money
+ * never enters a Drawer, ADR 0005), persist an immutable shift summary,
+ * and mark the shift CLOSED. Every Drawer must be handed over first.
+ * Run inside runInTransaction.
  */
 export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> {
   constructor(private readonly deps: CloseShiftDeps) {}
@@ -79,7 +122,8 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       return err(validationError('Invalid CloseShift command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
-    const shift = await this.deps.shifts.findById(cmd.shiftId);
+    const context = await this.deps.context.load(ctx.organizationId, cmd.shiftId);
+    const shift = context.shift;
     if (!shift || shift.organizationId !== ctx.organizationId)
       return err(notFoundError('Shift', cmd.shiftId));
     if (shift.status !== 'OPEN')
@@ -87,12 +131,30 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
         invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }),
       );
 
-    const dbReadings = await this.deps.nozzleReadings.listByShift(shift.id);
+    const pending = context.totals.drawers.filter((d) => d.cashHandedOver === null);
+    if (pending.length > 0)
+      return err(
+        invariantViolation('Every drawer must be handed over before closing the shift', {
+          shiftId: shift.id,
+          pendingDrawers: pending.map((d) => ({ attendantId: d.attendantId, duId: d.duId })),
+        }),
+      );
+    const unknownDrop = (cmd.closeCashDrops ?? []).find(
+      (d) =>
+        drawerKey(d) !== '' && !context.totals.drawers.some((dr) => drawerKey(dr) === drawerKey(d)),
+    );
+    if (unknownDrop)
+      return err(
+        validationError('Cash drop names a drawer not on this shift', { drop: unknownDrop }),
+      );
+
+    const dbReadings = context.readings;
     const closingByNozzle = new Map(
       (cmd.nozzleReadings ?? []).map((r) => [r.nozzleId, r.closingReading]),
     );
 
-    // Apply any provided closing readings.
+    // Apply any provided closing readings — batched into ONE statement (#229).
+    const closingUpdates: { id: string; closingReading: string; volumeSold: string }[] = [];
     for (const reading of dbReadings) {
       const provided = closingByNozzle.get(reading.nozzleId);
       if (provided === undefined) continue;
@@ -105,13 +167,19 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
         );
       }
       const volume = provided - opening;
-      await this.deps.nozzleReadings.updateClosing(reading.id, String(provided), String(volume));
+      closingUpdates.push({
+        id: reading.id,
+        closingReading: String(provided),
+        volumeSold: String(volume),
+      });
       reading.closingReading = String(provided);
       reading.volumeSold = String(volume);
     }
+    if (closingUpdates.length > 0) {
+      await this.deps.nozzleReadings.updateClosingMany(closingUpdates);
+    }
 
-    const nozzles = await this.deps.nozzles.listByStation(ctx.organizationId, shift.stationId);
-    const nozzleMap = new Map(nozzles.map((n) => [n.id, n]));
+    const nozzleMap = new Map(context.nozzles.map((n) => [n.id, n]));
 
     // Enriched readings + fuel sale stock movements.
     const enriched: Record<string, unknown>[] = [];
@@ -163,36 +231,46 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       await this.deps.stockMovements.saveMany(movements);
     }
 
-    // Drawer reconciliation.
-    const totals = await this.deps.reconciliation.totalsForShift(shift.id);
-    const openingCash = Number(shift.openingCash);
+    // Drawer reconciliation (totals preloaded in the consolidated context read;
+    // they aggregate money rows this use case never mutates).
+    const totals = context.totals;
+    // Two-level variance (#287, ADR 0005): opening cash is Σ Opening Floats;
+    // the office expects what Drawers declared at Handover.
+    const openingCash = totals.openingFloat;
     const closingCash = cmd.closingCash;
-    const cashDrops = Number(cmd.cashDrops ?? 0);
-    const expectedDrawerCash =
-      openingCash +
-      totals.cashSales +
-      totals.cashCollections +
-      (totals.cashIncome ?? 0) -
-      totals.drawerExpenses -
-      totals.drawerSupplierPayments -
-      cashDrops;
-    const cashVariance = closingCash - expectedDrawerCash;
+    const closeCash = computeShiftCloseCash(
+      totals,
+      closingCash,
+      cmd.closeCashDrops ?? [],
+      Number(cmd.cashDrops ?? 0),
+    );
+    const { expectedDrawerCash, cashVariance, attendantVariance } = closeCash;
+    const closeCashDrops = closeCash.drawerCloseCashDrops + closeCash.unassignedCloseCashDrops;
+    const cashDrops = totals.handoverCashDrops + closeCashDrops;
 
-    // Fetch credit sales with vehicle information for immutable snapshot.
-    const creditSalesRecords = await this.deps.creditSales.listByShift(shift.id);
+    // Credit sales with vehicle information for the immutable snapshot.
+    const creditSalesRecords = context.creditSales;
     const creditSalesTotal = creditSalesRecords.reduce((sum, r) => sum + Number(r.amount), 0);
 
     const nowIso = ctx.clock.now().toISOString();
-    const snapshot: Record<string, unknown> = {
+    const baseSnapshot: Record<string, unknown> = {
       generatedAt: nowIso,
+      cashVarianceModel: CASH_VARIANCE_MODEL_TWO_LEVEL,
       shiftId: shift.id,
       businessDayId: shift.businessDayId,
       openingCash,
       closingCash,
       cashDrops,
-      reconciliation: totals,
+      handoverCashDrops: totals.handoverCashDrops,
+      closeCashDrops,
+      closeCashDropEntries: cmd.closeCashDrops ?? [],
+      unassignedCloseCashDrops: closeCash.unassignedCloseCashDrops,
+      drawers: closeCash.drawers,
+      reconciliation: { ...totals, cashSales: closeCash.cashSales, drawers: closeCash.drawers },
       expectedDrawerCash,
       cashVariance,
+      officeCountVariance: cashVariance,
+      attendantVariance,
       readings: enriched,
       totalVolume,
       totalTesting,
@@ -217,7 +295,6 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       creditSalesTotal,
       notes: cmd.notes ?? null,
     };
-    await this.deps.summaries.save(shift.id, snapshot);
 
     const closed: Shift = {
       ...shift,
@@ -227,6 +304,14 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       closingCash: String(closingCash),
       updatedAt: nowIso,
     };
+
+    // Project BEFORE persisting so the summary is written exactly once with its
+    // final (presentation-enriched) content. projectShiftSummary is idempotent
+    // over its own output, so downstream refreshes remain safe.
+    const snapshot = this.deps.projector
+      ? await this.deps.projector.project(closed, baseSnapshot)
+      : baseSnapshot;
+    await this.deps.summaries.save(shift.id, snapshot);
     await this.deps.shifts.save(closed);
 
     await this.deps.events.publish([
@@ -236,7 +321,13 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
         aggregateId: shift.id,
         stationId: shift.stationId,
         businessDayId: shift.businessDayId,
-        payload: { shiftId: shift.id, closingCash, expectedDrawerCash, cashVariance },
+        payload: {
+          shiftId: shift.id,
+          closingCash,
+          expectedDrawerCash,
+          cashVariance,
+          attendantVariance,
+        },
         presentation: {
           templateId: 'cash-declared.v1',
           values: { closingCash },
@@ -258,6 +349,6 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       }),
     ]);
 
-    return ok({ shift: closed, snapshot });
+    return ok({ shift: closed, snapshot, cashSales: closeCash.cashSales });
   }
 }

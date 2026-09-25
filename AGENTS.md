@@ -31,15 +31,21 @@ This is an operational operating system focused on fuel station management.
 
 ## Business-Day & Shift Anchoring
 
-The platform has two anchors, and using the right one is the single most
-important domain rule:
+A station has two worlds, and using the right anchor is the single most
+important domain rule (ADR 0005):
 
-- **`business_day_id`** is the **universal anchor**. Every operational and
-  financial record belongs to a business day.
-- **`shift_id`** is an **optional** anchor. A shift is an attendant-accountability
-  window for drawer cash. It is set by default when money touches the physical
-  drawer (and for sales), and may be passed explicitly or preselected on other
-  records when shift attribution is useful.
+- **Forecourt → `business_day_id` + `shift_id`.** The business day is the
+  station's **sales day**: it starts at the Day Start chosen at onboarding and
+  runs 24h. It holds shifts and **all sales** (fuel, product, credit, including
+  their card/UPI method) and cash drops.
+- **Office → entry date only.** Collections (any method, even at a pump
+  terminal), supplier payments, expenses, income and bank work are handled by
+  the office, not attendants. They carry a **station-timezone calendar date**
+  and no shift or business day, and live in the ledger. The test is "is this
+  paying for fuel or products right now?", not "which machine was used?"
+
+Office Records (entry date + Funding Account), the sales-only DSSR, the
+Daily Cash Book and the per-Attendant Drawer are implemented.
 
 Operational flow:
 
@@ -57,44 +63,59 @@ DSSR                ← immutable snapshot, created on BUSINESS-DAY close
 Reports
 ```
 
-Anchoring rules (DO NOT couple everything to a shift):
+Anchoring rules (target, ADR 0005):
 
-- Fuel/product **sales** occur within a shift (attendant accountability) →
-  `shift_id` set by default.
-- **Cash** collections / cash supplier payments / drawer (`SHIFT_CASH`) expenses
-  touch the drawer → `shift_id` set by default.
-- **Card / UPI / bank / online** collections, **bank/owner** expenses,
-  **purchases**, and **credit sales** do NOT touch the drawer → `shift_id`
-  defaults to NULL, anchored to the business day. The field remains optional:
-  callers may pass a `shift_id`, or the UI may preselect the open shift, when
-  attributing the record to a shift window helps future capabilities slice
-  historical data.
+- **All sales** (fuel, product, credit) occur within a shift → `shift_id` +
+  `business_day_id`. The card/UPI method of a sale is part of the sale.
+- **Office records** (collections, supplier payments, expenses, income, bank
+  work) → **entry date only** (station-timezone calendar date, never Day
+  Start), no `shift_id`, no `business_day_id`.
+- **Purchases** are forecourt stock events → `business_day_id` (sealed with
+  the day), never a `shift_id`. Paying for one is a separate supplier payment
+  (an office record).
 - **Credit sales are receivables**, not drawer cash. A fleet fuel-on-credit sale
   records only a customer-ledger debit (receivable); it never moves stock again
   (the fuel is already metered via nozzle readings). Customer balance =
   Σ credit sales − Σ collections.
 
-Drawer reconciliation at shift close:
+Drawer reconciliation (ADR 0005). Each Attendant/DU has its own Drawer with
+an Opening Float issued at shift open (`shift_staff_assignments.opening_float`)
+and is reconciled at Handover. Variance is two-level (#287): the office's
+expected figure is built from each Drawer's **declared** cash
+(`expectedShiftDrawerCash` / `computeShiftCloseCash`), and the attendant
+variance is tracked separately:
 
 ```text
-expectedDrawerCash =
-  openingCash + cashSales + cashCollections
-  − drawerExpenses − drawerSupplierPayments − cashDrops
+drawer.expectedCash = openingFloat + DU cash sales − cashDrops        (at Handover)
+attendantVariance   = Σ (declared + drops − drawer.expectedCash)       (Handover)
+expectedDrawerCash  = Σ declared − unassigned drops at close           (office)
+officeCountVariance = counted − expectedDrawerCash                     (shift close)
 ```
 
-Never force card/UPI/bank/credit movements into the drawer reconciliation.
+Every Drawer must hand over before the shift closes. The Shift's opening cash
+is not stored; it is Σ Opening Floats. The ledger receives only cash actually
+received (Σ declared cash sales, floats excluded); attendant shortages are not
+posted (a later feature may post them as recoverable).
+
+Office cash taken from a drawer is a cash drop. A drop recorded at close names
+its Drawer (reducing that Drawer's expected cash); one naming no Drawer goes to
+the office variance. Cash moved after close is not a drop: it is an office
+transfer (Cash in Hand → Safe/Bank) dated by the Entry Date. Cash in Hand (`CASH_IN_HAND`)
+is the office cash account. Never force card/UPI/bank/credit movements into
+the drawer reconciliation.
 
 ---
 
 ## Business-Day Date Resolution (timezone-aware)
 
 A business day is keyed by **`(station, calendar date)`**, lazily opened when the
-first shift OR financial entry of that date lands. Several business days may be
+first shift or sale of that date lands. Several business days may be
 **open at once**; a past day is closed **independently** at any time (e.g. close
-day 1 on day 5) — closing never blocks today's day. `OpenShift` and
-`ensureBusinessDayForDate` both resolve via `findByStationAndDate`, so shifts and
-financials always agree. Uniqueness is enforced by
+day 1 on day 5) — closing never blocks today's day. Uniqueness is enforced by
 `business_days_org_station_date_uniq (org, station, date)`.
+
+Office records use an **entry date** (station-timezone calendar date, no Day
+Start rollback) instead of a business day (ADR 0005).
 
 The `business_date` (`varchar(10)` `YYYY-MM-DD`) is the single date anchor;
 audit timestamps stay UTC. **Never derive a business date with
@@ -102,7 +123,7 @@ audit timestamps stay UTC. **Never derive a business date with
 day-start boundary. Always use **`resolveBusinessDate({ now, timeZone, dayStartsAt })`**
 from `@pump/shared`, which converts the instant to the station's timezone and
 rolls back to the previous date when the local time is before the station's
-`business_day_starts_at` (a fuel day commonly runs 06:00 → 06:00).
+`business_day_starts_at` (the Day Start chosen at onboarding).
 
 - The station's `timezone` + `business_day_starts_at` are captured at onboarding
   and stored in `stations.settings`.
@@ -230,9 +251,10 @@ There are **two** immutable report snapshots:
 - **Shift Summary** — created when a **shift is closed** (`shift_summaries`).
   Holds that shift's nozzle reconciliation, drawer reconciliation, and totals.
 - **DSSR** (Daily Station Sales Report) — created when a **business day is
-  closed** / generated on demand (`dssr_snapshots`). Composes all of the day's
-  closed-shift summaries plus business-day-anchored financials (collections,
-  expenses, purchases, supplier payments, credit sales).
+  closed** / generated on demand (`dssr_snapshots`). Sales-only: composes the
+  day's closed-shift summaries plus the day's sales, credit sales, purchases
+  and stock. Office Records (collections, expenses, income, supplier
+  payments) are not in it — they live in the live **Daily Cash Book**.
 
 Rules for both:
 
@@ -365,6 +387,13 @@ Custom Roles
 Custom Permissions
 ```
 
+A Role answers whether the **user** may act. Whether the **Organization** may —
+its Product Capabilities, its Limits, and whether Restricted Access or
+Suspension permits the write at all — is a separate axis enforced on the server.
+Every mutating tenant route declares its Restricted Access answer, and a route
+added without one fails the coverage tests. Apply the `pump-access-gating`
+skill for any gated feature, Limit, or new mutating route.
+
 ---
 
 # UI Design Principles
@@ -489,6 +518,20 @@ Prefer:
 ---
 
 # Database Rules
+
+Migrations have one source: `packages/db/migrations`, generated from
+`packages/db/src/schema.ts`. `supabase/migrations` is derived from it.
+
+- Changing `schema.ts`? Run `npm run db:generate -w @pump/db` in the same
+  change and commit everything it writes.
+- Changing a generated migration means changing `schema.ts` and regenerating.
+- RLS, triggers, functions and grants go in a custom migration:
+  `npm run db:generate:custom -w @pump/db -- <name>`.
+- `supabase/migrations` is written only by `npm run db:sync-supabase -w @pump/db`.
+- `npm run db:check -w @pump/db` proves all of the above; CI runs it.
+
+Apply the `drizzle-orm` skill before editing `schema.ts`, adding a migration,
+touching `supabase/migrations`, or writing `CREATE POLICY/TRIGGER/FUNCTION` SQL.
 
 Never optimize prematurely.
 
@@ -696,6 +739,10 @@ Issues live in GitHub Issues for `abdullahnettoor/pumpos`; long-range planning r
 ### Domain docs
 
 Single-context: one `CONTEXT.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
+
+### User flow
+
+For any "how does an operator do X in the app" question — which screen, which button, the end-to-end order of onboarding → shifts → day close — see `docs/USER-FLOW.md` (navigation map: `docs/screenshots/FLOWS.md`).
 
 <!-- graft:start -->
 

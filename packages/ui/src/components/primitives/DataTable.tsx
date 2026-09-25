@@ -24,6 +24,8 @@ export interface DataTableProps<T> {
   bare?: boolean;
   /** Highlight (and scroll into view) the row whose id matches. Used by deep-links. */
   highlightRowId?: string | null;
+  /** Tighter cell padding so wide tables fit without horizontal scroll. */
+  dense?: boolean;
 }
 
 /**
@@ -42,7 +44,9 @@ export function DataTable<T>({
   initialSorting,
   bare = false,
   highlightRowId,
+  dense = false,
 }: DataTableProps<T>) {
+  const cellPad = dense ? '6px 6px' : '9px 12px';
   const runTask = useRunTask();
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting ?? []);
   const scrolledToRef = React.useRef<string | null>(null);
@@ -56,6 +60,9 @@ export function DataTable<T>({
     getSortedRowModel: getSortedRowModel(),
     getRowId,
   });
+
+  // Render a totals row only when some column defines a footer.
+  const hasFooter = columns.some((c) => c.footer != null);
 
   const wrap: React.CSSProperties = bare
     ? { backgroundColor: 'transparent', overflow: 'hidden' }
@@ -113,7 +120,7 @@ export function DataTable<T>({
                     key={header.id}
                     onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
                     style={{
-                      padding: '8px 12px',
+                      padding: cellPad,
                       fontWeight: 600,
                       fontSize: '11px',
                       textTransform: 'uppercase',
@@ -161,7 +168,7 @@ export function DataTable<T>({
                   <td
                     key={cell.id}
                     style={{
-                      padding: '9px 12px',
+                      padding: cellPad,
                       color: 'var(--text-default)',
                       verticalAlign: 'middle',
                     }}
@@ -173,6 +180,33 @@ export function DataTable<T>({
             );
           })}
         </tbody>
+        {hasFooter && (
+          <tfoot>
+            {table.getFooterGroups().map((fg) => (
+              <tr key={fg.id} style={{ borderTop: '1px solid var(--border-strong)' }}>
+                {fg.headers.map((header, i) => {
+                  const Cell = i === 0 ? 'th' : 'td';
+                  return (
+                    <Cell
+                      key={header.id}
+                      scope={i === 0 ? 'row' : undefined}
+                      style={{
+                        padding: cellPad,
+                        fontWeight: 600,
+                        textAlign: 'left',
+                        color: 'var(--text-strong)',
+                      }}
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.footer, header.getContext())}
+                    </Cell>
+                  );
+                })}
+              </tr>
+            ))}
+          </tfoot>
+        )}
       </table>
     </div>
   );

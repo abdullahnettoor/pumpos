@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { CloudUserAssignmentService } from '../../services/cloud.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys, useStations, useUsers } from '../../query/hooks.js';
-import { Station } from '@pump/shared';
+import { INDIAN_MOBILE_MESSAGE, normalizeIndianMobile, Station } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { Checkbox, Switch } from '../primitives/Toggle.js';
@@ -20,7 +20,13 @@ const userService = new CloudUserAssignmentService();
 const userFormSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
   email: z.string().email('Invalid email address').or(z.literal('')).optional().nullable(),
-  phone: z.string().optional().nullable(),
+  // Blank, or a valid Indian mobile (#300); required only for phone login,
+  // which handleCreateOrUpdate checks against the chosen identity.
+  phone: z
+    .string()
+    .refine((v) => v.trim() === '' || normalizeIndianMobile(v) !== null, INDIAN_MOBILE_MESSAGE)
+    .optional()
+    .nullable(),
   password: z.string().optional().nullable(),
   status: z.enum(['ACTIVE', 'INACTIVE']),
   role: z.enum(['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant']),
@@ -257,7 +263,29 @@ const buildUserColumns = (
   },
 ];
 
-export const UserRolesAssignment: React.FC = () => {
+export interface UserRolesAssignmentProps {
+  /** The station the operator is working in; pre-checked for a new member (#299). */
+  currentStationId?: string | null;
+}
+
+/**
+ * The stations a new member starts assigned to (#299): the station the operator
+ * is working in, or the only station when the organization has just one. The
+ * operator can still uncheck it and save with none.
+ */
+export function defaultNewMemberStationIds(
+  stations: { id: string }[],
+  currentStationId?: string | null,
+): string[] {
+  if (currentStationId && stations.some((s) => s.id === currentStationId)) {
+    return [currentStationId];
+  }
+  return stations.length === 1 ? [stations[0].id] : [];
+}
+
+export const UserRolesAssignment: React.FC<UserRolesAssignmentProps> = ({
+  currentStationId = null,
+}) => {
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
@@ -296,6 +324,7 @@ export const UserRolesAssignment: React.FC = () => {
     setValue,
     watch,
     reset,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<UserFormValues>({
     resolver: zodResolver(userFormSchema),
@@ -340,7 +369,7 @@ export const UserRolesAssignment: React.FC = () => {
     if (!editingUser && wantsLogin) {
       // Provisioning a new login account requires an identity + password.
       if (isPhone && (!values.phone || values.phone.trim() === '')) {
-        toast.error('A phone number is required for phone login.');
+        setError('phone', { message: 'A phone number is required for phone login.' });
         return;
       }
       if (!isPhone && (!values.email || values.email.trim() === '')) {
@@ -359,7 +388,8 @@ export const UserRolesAssignment: React.FC = () => {
         // For a phone identity we deliberately clear email so the server uses
         // the synthetic phone handle as the login identity.
         email: wantsLogin && !isPhone ? values.email : editingUser ? values.email || null : null,
-        phone: values.phone || null,
+        // One stored spelling, +91XXXXXXXXXX; the server normalizes too (#300).
+        phone: normalizeIndianMobile(values.phone) ?? null,
         status: values.status,
         role: wantsLogin ? values.role : 'Staff',
         stationIds,
@@ -375,7 +405,9 @@ export const UserRolesAssignment: React.FC = () => {
 
       // Show credentials to hand over when a fresh login was provisioned.
       if (!editingUser && wantsLogin) {
-        const login = isPhone ? (values.phone || '').trim() : (values.email || '').trim();
+        const login = isPhone
+          ? (normalizeIndianMobile(values.phone) ?? '')
+          : (values.email || '').trim();
         setCredentials({ login, password: values.password || '' });
       } else {
         setIsFormOpen(false);
@@ -417,7 +449,7 @@ export const UserRolesAssignment: React.FC = () => {
 
   const resetForm = () => {
     setEditingUser(null);
-    setStationIds([]);
+    setStationIds(defaultNewMemberStationIds(stations, currentStationId));
     setIdentityType('Phone');
     reset({
       fullName: '',
@@ -664,8 +696,14 @@ export const UserRolesAssignment: React.FC = () => {
                       type="tel"
                       style={inputStyle}
                       placeholder="e.g. 98765 43210"
+                      aria-invalid={!!errors.phone}
                       {...register('phone')}
                     />
+                    {errors.phone && (
+                      <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                        {errors.phone.message}
+                      </span>
+                    )}
                     <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                       They sign in with this phone number + password. No SMS is sent.
                     </span>
@@ -724,8 +762,14 @@ export const UserRolesAssignment: React.FC = () => {
                   type="tel"
                   style={inputStyle}
                   placeholder="e.g. 98765 43210"
+                  aria-invalid={!!errors.phone}
                   {...register('phone')}
                 />
+                {errors.phone && (
+                  <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                    {errors.phone.message}
+                  </span>
+                )}
               </div>
             )}
 

@@ -13,10 +13,7 @@ export type ShiftSummarySection =
   | 'terminals'
   | 'creditSales'
   | 'cashRecon'
-  | 'nonCash'
-  | 'expenses'
-  | 'purchases'
-  | 'collections'
+  | 'drawers'
   | 'signatures';
 
 export type DssrSection =
@@ -29,6 +26,16 @@ export type DssrSection =
   | 'fuelStockVariance'
   | 'merchandiseStockVariance'
   | 'shifts';
+
+export type AttendantReportSection =
+  | 'header'
+  | 'summary'
+  | 'fuelSales'
+  | 'merchandise'
+  | 'creditSales'
+  | 'terminals'
+  | 'variance'
+  | 'signature';
 
 export interface ReportConfig {
   sections: ShiftSummarySection[];
@@ -46,6 +53,14 @@ export interface DssrReportConfig {
   paper: 'A4' | 'LETTER';
 }
 
+export interface AttendantReportConfig {
+  sections: AttendantReportSection[];
+  showLogo?: boolean;
+  stationName?: string;
+  letterhead?: Letterhead;
+  paper: 'A4' | 'LETTER';
+}
+
 export const DEFAULT_SHIFT_SUMMARY_CONFIG: ReportConfig = {
   sections: [
     'header',
@@ -56,10 +71,7 @@ export const DEFAULT_SHIFT_SUMMARY_CONFIG: ReportConfig = {
     'terminals',
     'creditSales',
     'cashRecon',
-    'nonCash',
-    'expenses',
-    'purchases',
-    'collections',
+    'drawers',
     'signatures',
   ],
   showLogo: true,
@@ -82,6 +94,21 @@ export const DEFAULT_DSSR_CONFIG: DssrReportConfig = {
   paper: 'A4',
 };
 
+export const DEFAULT_ATTENDANT_REPORT_CONFIG: AttendantReportConfig = {
+  sections: [
+    'header',
+    'summary',
+    'fuelSales',
+    'merchandise',
+    'creditSales',
+    'terminals',
+    'variance',
+    'signature',
+  ],
+  showLogo: true,
+  paper: 'A4',
+};
+
 /** Human labels for the section-config UI (R2). `header` is always rendered. */
 export const SHIFT_SUMMARY_SECTION_LABELS: Record<ShiftSummarySection, string> = {
   header: 'Header / Letterhead',
@@ -92,10 +119,7 @@ export const SHIFT_SUMMARY_SECTION_LABELS: Record<ShiftSummarySection, string> =
   terminals: 'POS Terminals',
   creditSales: 'Fuel-on-Credit Sales',
   cashRecon: 'Cash Reconciliation',
-  nonCash: 'Non-Cash Collections',
-  expenses: 'Expenses',
-  purchases: 'Purchases',
-  collections: 'Collections',
+  drawers: 'Drawers (per attendant)',
   signatures: 'Signatures',
 };
 
@@ -110,6 +134,30 @@ export const DSSR_SECTION_LABELS: Record<DssrSection, string> = {
   merchandiseStockVariance: 'Merchandise Variance',
   shifts: 'Included Shifts',
 };
+
+export const ATTENDANT_REPORT_SECTION_LABELS: Record<AttendantReportSection, string> = {
+  header: 'Header / Letterhead',
+  summary: 'Period Summary',
+  fuelSales: 'Fuel Sales by Shift',
+  merchandise: 'Merchandise (Billed + Handover)',
+  creditSales: 'Fuel-on-Credit Sales',
+  terminals: 'Payment Terminals',
+  variance: 'Variance by Shift',
+  signature: 'Acknowledgement & Signatures',
+};
+
+/**
+ * The sections to render from a station's saved list: keeps its order, drops
+ * keys that no longer exist (e.g. the Shift Summary 'purchases' section removed
+ * in #308), and falls back to the defaults when nothing valid is left.
+ */
+export function resolveSections<S extends string>(
+  saved: readonly unknown[] | null | undefined,
+  defaults: readonly S[],
+): S[] {
+  const known = (saved ?? []).filter((k): k is S => defaults.includes(k as S));
+  return known.length > 0 ? known : [...defaults];
+}
 
 /** Resolve the configured paper size from a station's settings (default A4). */
 export function paperFromStation(station: any): 'A4' | 'LETTER' {

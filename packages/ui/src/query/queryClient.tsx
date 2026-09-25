@@ -23,6 +23,7 @@ const PERSIST_PREFIXES = new Set([
   'users',
   'shift-templates',
   'payment-terminals',
+  'funding-accounts',
   'pricing',
   'organization',
   // Only the role-filtered Access Document is persisted — never grant rows,

@@ -4,6 +4,7 @@ import { Checkbox } from '../primitives/Toggle.js';
 import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPopover.js';
 import { Button } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
+import { DrawerReconciliationTable, VarianceFigure } from './DrawerReconciliationTable.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
   AlertTriangle,
@@ -14,8 +15,11 @@ import {
   Wallet,
   Droplet,
   FileText,
+  Plus,
 } from 'lucide-react';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
+import { drawerKey } from '@pump/shared';
+import type { ShiftCloseCashSummaryLines } from '@pump/shared';
 
 export interface CloseShiftWizardProps {
   isOpen: boolean;
@@ -31,29 +35,38 @@ export interface CloseShiftWizardProps {
   timeZone?: string;
 
   // Cash reconciliation inputs
-  openingCash: number;
-  cashCollections: number;
-  cashExpenses: number;
-  expectedCash: number;
+  /** Summary lines that add up to the expected office cash (#307). Present
+   *  with or without the server recon (Σ floats from the assignments). */
+  cashLines: ShiftCloseCashSummaryLines;
   closingCash: number;
   onClosingCashChange: (val: number) => void;
 
   /** Station-level cash summary (server-authoritative) for the closing drawer. */
   cashSummary?: {
-    openingCash: number;
-    cashSales: number;
-    handoverCash: number;
     merchCashOutsideHandover: number;
-    cashCollections: number;
-    cashIncome: number;
-    drawerExpenses: number;
-    drawerSupplierPayments: number;
-    expectedDrawer: number;
+    /** One Drawer per Attendant/DU (ADR 0005). */
+    drawers: {
+      attendantId: string;
+      attendantName: string | null;
+      duId?: string;
+      duName: string | null;
+      openingFloat: number;
+      cashSales: number | null;
+      cashDrops: number;
+      expectedCash: number | null;
+      cashHandedOver: number | null;
+      variance: number | null;
+    }[];
     merchCashBreakdown: { sellerName: string; amount: number }[];
     attendantVariance: number;
     attendantVariances: { name: string; du: string | null; variance: number }[];
     hasHandovers: boolean;
   } | null;
+
+  /** Cash Drops recorded at close (#287). drawerKey() names the
+   *  Drawer; '' names none (reduces office expected cash). */
+  closeCashDrops?: CloseDropRow[];
+  onCloseCashDropsChange?: (rows: CloseDropRow[]) => void;
 
   // Physical dip
   stationTanks: any[];
@@ -70,6 +83,11 @@ export interface CloseShiftWizardProps {
   // Submission
   isClosing: boolean;
   onConfirmClose: () => void | Promise<unknown>;
+}
+
+export interface CloseDropRow {
+  drawerKey: string;
+  amount: number;
 }
 
 type Step = 1 | 2 | 3 | 4;
@@ -108,13 +126,12 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
   scheduledStartTime,
   scheduledEndTime,
   timeZone,
-  openingCash,
-  cashCollections,
-  cashExpenses,
-  expectedCash,
+  cashLines,
   closingCash,
   onClosingCashChange,
   cashSummary,
+  closeCashDrops = [],
+  onCloseCashDropsChange,
   stationTanks,
   dipReadings,
   onDipReadingsChange,
@@ -134,9 +151,14 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
   // popover / navigating steps preserves them.
   const [cashBreakdown, setCashBreakdown] = useState<CashBreakdown>({});
 
+  const expectedCash = cashLines.expectedOfficeCash;
   const cashVariance = closingCash - expectedCash;
   const hasWarnings = warnings.length > 0;
-  const canSubmit = !hasWarnings || confirmWarningsChecked;
+  // Every Drawer must be handed over before close (#287).
+  const pendingDrawers = (cashSummary?.drawers ?? []).filter((d) => d.cashHandedOver === null);
+  const canSubmit = pendingDrawers.length === 0 && (!hasWarnings || confirmWarningsChecked);
+  const updateDrop = (i: number, patch: Partial<CloseDropRow>) =>
+    onCloseCashDropsChange?.(closeCashDrops.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
   const goNext = () => setStep((s) => (s < 4 ? ((s + 1) as Step) : s));
   const goBack = () => setStep((s) => (s > 1 ? ((s - 1) as Step) : s));
@@ -226,157 +248,109 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
             <h4 className="close-wizard-section-title">Cash Reconciliation</h4>
 
             <div className="close-wizard-summary-card">
-              {cashSummary ? (
-                <>
-                  <div className="close-wizard-row">
-                    <span>Opening Cash Float</span>
-                    <span className="font-mono">{inr(cashSummary.openingCash)}</span>
-                  </div>
-                  <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
-                    <span>(+) Cash Sales</span>
-                    <span className="font-mono">+ {inr(cashSummary.cashSales)}</span>
-                  </div>
-                  {cashSummary.merchCashOutsideHandover > 0 && (
-                    <div
-                      className="close-wizard-row"
-                      style={{ paddingLeft: 14, fontSize: 12, color: 'var(--text-muted)' }}
-                    >
-                      <span>· incl. non-attendant merchandise cash</span>
-                      <span className="font-mono">{inr(cashSummary.merchCashOutsideHandover)}</span>
-                    </div>
-                  )}
-                  {cashSummary.merchCashBreakdown.length > 0 && (
-                    <div style={{ paddingLeft: 24, paddingRight: 2 }}>
-                      {cashSummary.merchCashBreakdown.map((b, i) => (
-                        <div
-                          key={i}
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            fontSize: 11,
-                            color: 'var(--text-faint)',
-                            padding: '1px 0',
-                          }}
-                        >
-                          <span>– {b.sellerName}</span>
-                          <span className="font-mono">{inr(b.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
-                    <span>(+) Cash Collections</span>
-                    <span className="font-mono">+ {inr(cashSummary.cashCollections)}</span>
-                  </div>
-                  {cashSummary.cashIncome > 0 && (
-                    <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
-                      <span>(+) Other Income (cash)</span>
-                      <span className="font-mono">+ {inr(cashSummary.cashIncome)}</span>
-                    </div>
-                  )}
-                  <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
-                    <span>(−) Drawer Expenses</span>
-                    <span className="font-mono">− {inr(cashSummary.drawerExpenses)}</span>
-                  </div>
-                  {cashSummary.drawerSupplierPayments > 0 && (
-                    <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
-                      <span>(−) Supplier Payments (cash)</span>
-                      <span className="font-mono">− {inr(cashSummary.drawerSupplierPayments)}</span>
-                    </div>
-                  )}
-                  <div className="close-wizard-row close-wizard-row--total">
-                    <span>Expected Safe Cash</span>
-                    <span className="font-mono">{inr(expectedCash)}</span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="close-wizard-row">
-                    <span>Opening Cash Float</span>
-                    <span className="font-mono">{inr(openingCash)}</span>
-                  </div>
-                  <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
-                    <span>(+) Cash Collections</span>
-                    <span className="font-mono">+ {inr(cashCollections)}</span>
-                  </div>
-                  <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
-                    <span>(−) Petty Cash Expenses</span>
-                    <span className="font-mono">− {inr(cashExpenses)}</span>
-                  </div>
-                  <div className="close-wizard-row close-wizard-row--total">
-                    <span>Expected Safe Cash</span>
-                    <span className="font-mono">{inr(expectedCash)}</span>
-                  </div>
-                </>
+              <div className="close-wizard-row">
+                <span>Opening Floats</span>
+                <span className="font-mono">{inr(cashLines.openingFloats)}</span>
+              </div>
+              <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
+                <span>(+) Cash declared</span>
+                <span className="font-mono">+ {inr(cashLines.cashDeclared)}</span>
+              </div>
+              {cashSummary && cashSummary.merchCashOutsideHandover > 0 && (
+                <div
+                  className="close-wizard-row"
+                  style={{ paddingLeft: 14, fontSize: 12, color: 'var(--text-muted)' }}
+                >
+                  <span>· incl. non-attendant merchandise cash</span>
+                  <span className="font-mono">{inr(cashSummary.merchCashOutsideHandover)}</span>
+                </div>
               )}
+              {cashSummary && cashSummary.merchCashBreakdown.length > 0 && (
+                <div style={{ paddingLeft: 24, paddingRight: 2 }}>
+                  {cashSummary.merchCashBreakdown.map((b, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: 11,
+                        color: 'var(--text-faint)',
+                        padding: '1px 0',
+                      }}
+                    >
+                      <span>– {b.sellerName}</span>
+                      <span className="font-mono">{inr(b.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {cashLines.handoverDrops > 0 && (
+                <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
+                  <span>(−) Handover drops</span>
+                  <span className="font-mono">− {inr(cashLines.handoverDrops)}</span>
+                </div>
+              )}
+              {cashLines.unassignedCloseDrops > 0 && (
+                <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
+                  <span>(−) Office drops at close</span>
+                  <span className="font-mono">− {inr(cashLines.unassignedCloseDrops)}</span>
+                </div>
+              )}
+              <div className="close-wizard-row close-wizard-row--total">
+                <span>Expected office cash</span>
+                <span className="font-mono">{inr(expectedCash)}</span>
+              </div>
             </div>
+            {cashSummary && cashSummary.drawers.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <h4 className="close-wizard-section-title">Drawers</h4>
+                <DrawerReconciliationTable
+                  drawers={cashSummary.drawers}
+                  showTotals
+                  totalVariance={cashSummary.attendantVariance}
+                />
+              </div>
+            )}
 
-            {/* Attendant accountability variance (declared vs metered-expected),
-                summed across all attendants — the true net short/surplus that
-                nets out cross-attendant settlements (e.g. a borrowed POS). This
-                is separate from the drawer count variance below. */}
-            {/* Per-attendant / DU variance (declared − metered-expected), with the
-                net total on the right of the header. Separate from the drawer
-                count variance below; nets out cross-attendant settlements. */}
-            {cashSummary?.hasHandovers && cashSummary.attendantVariances.length > 0 && (
-              <div
-                style={{
-                  border: '1px solid var(--border-soft)',
-                  borderRadius: 'var(--radius-input)',
-                  overflow: 'hidden',
-                  marginTop: 12,
-                }}
-              >
+            {/* Fallback when there is no server Drawer reconciliation: the
+                per-handover variance card (#306). Otherwise the Drawers table
+                carries the variance and its total. */}
+            {cashSummary?.hasHandovers &&
+              cashSummary.drawers.length === 0 &&
+              cashSummary.attendantVariances.length > 0 && (
                 <div
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '7px 12px',
-                    backgroundColor: 'var(--bg-surface-alt)',
+                    border: '1px solid var(--border-soft)',
+                    borderRadius: 'var(--radius-input)',
+                    overflow: 'hidden',
+                    marginTop: 12,
                   }}
                 >
-                  <span
+                  <div
                     style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                      color: 'var(--text-muted)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '7px 12px',
+                      backgroundColor: 'var(--bg-surface-alt)',
                     }}
                   >
-                    Attendant sales variance
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color:
-                        Math.abs(cashSummary.attendantVariance) < 0.005
-                          ? 'var(--text-muted)'
-                          : cashSummary.attendantVariance > 0
-                            ? 'var(--brand-warning)'
-                            : 'var(--brand-danger)',
-                    }}
-                  >
-                    {cashSummary.attendantVariance > 0 ? '+' : ''}
-                    {inr(cashSummary.attendantVariance)}
-                    {Math.abs(cashSummary.attendantVariance) < 0.005
-                      ? ' (balanced)'
-                      : cashSummary.attendantVariance > 0
-                        ? ' (surplus)'
-                        : ' (short)'}
-                  </span>
-                </div>
-                {cashSummary.attendantVariances.map((v, i) => {
-                  const bal = Math.abs(v.variance) < 0.005;
-                  const color = bal
-                    ? 'var(--text-muted)'
-                    : v.variance > 0
-                      ? 'var(--brand-warning)'
-                      : 'var(--brand-danger)';
-                  return (
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      Attendant variance (Handover)
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 700 }}>
+                      <VarianceFigure value={cashSummary.attendantVariance} label />
+                    </span>
+                  </div>
+                  {cashSummary.attendantVariances.map((v, i) => (
                     <div
                       key={i}
                       style={{
@@ -391,19 +365,106 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                         {v.name}
                         {v.du ? ` · ${v.du}` : ''}
                       </span>
-                      <span style={{ fontFamily: 'var(--font-mono)', color }}>
-                        {v.variance > 0 ? '+' : ''}
-                        {inr(v.variance)}
-                        {bal ? '' : v.variance > 0 ? ' (surplus)' : ' (short)'}
-                      </span>
+                      <VarianceFigure value={v.variance} label />
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+              )}
+
+            {pendingDrawers.length > 0 && (
+              <div className="close-wizard-variance" data-state="shortage" role="alert">
+                {pendingDrawers.length === 1
+                  ? '1 drawer has not handed over.'
+                  : `${pendingDrawers.length} drawers have not handed over.`}{' '}
+                Hand over every drawer before closing.
+              </div>
+            )}
+
+            {cashSummary && onCloseCashDropsChange && (
+              <div style={{ marginTop: 12 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: 6,
+                  }}
+                >
+                  <h5
+                    id="close-drops-heading"
+                    className="close-wizard-field-label"
+                    style={{ margin: 0 }}
+                  >
+                    Drops at close
+                  </h5>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={<Plus size={14} />}
+                    onClick={() =>
+                      onCloseCashDropsChange([
+                        ...closeCashDrops,
+                        {
+                          drawerKey: cashSummary.drawers[0]
+                            ? drawerKey(cashSummary.drawers[0])
+                            : '',
+                          amount: 0,
+                        },
+                      ])
+                    }
+                  >
+                    Add drop
+                  </Button>
+                </div>
+                {closeCashDrops.map((row, i) => (
+                  <div
+                    key={i}
+                    role="group"
+                    aria-labelledby="close-drops-heading"
+                    style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}
+                  >
+                    <select
+                      aria-label="Drop from drawer"
+                      className="close-wizard-input"
+                      style={{ flex: 1.4 }}
+                      value={row.drawerKey}
+                      onChange={(e) => updateDrop(i, { drawerKey: e.target.value })}
+                    >
+                      {cashSummary.drawers.map((d) => (
+                        <option key={drawerKey(d)} value={drawerKey(d)}>
+                          {d.attendantName ?? 'Attendant'}
+                          {d.duName ? ` · ${d.duName}` : ''}
+                        </option>
+                      ))}
+                      <option value="">No drawer (office)</option>
+                    </select>
+                    <input
+                      aria-label="Drop amount"
+                      type="number"
+                      min="0"
+                      className="close-wizard-input close-wizard-input--num"
+                      style={{ flex: 1 }}
+                      placeholder="Amount"
+                      value={row.amount || ''}
+                      onChange={(e) => updateDrop(i, { amount: Number(e.target.value) })}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Remove drop"
+                      onClick={() =>
+                        onCloseCashDropsChange(closeCashDrops.filter((_, j) => j !== i))
+                      }
+                    >
+                      ×
+                    </Button>
+                  </div>
+                ))}
               </div>
             )}
 
             <label className="close-wizard-field-label">
-              Physical counted safe cash (float + deposited)
+              Counted office cash (float + deposited)
             </label>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -430,7 +491,7 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
               className="close-wizard-variance"
               data-state={cashVariance === 0 ? 'match' : cashVariance > 0 ? 'surplus' : 'shortage'}
             >
-              Drawer cash variance: {cashVariance > 0 ? '+' : ''}
+              Office count variance: {cashVariance > 0 ? '+' : ''}
               {inr(cashVariance)}
               {cashVariance === 0
                 ? ' (Perfect Match)'
@@ -454,24 +515,17 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                     {cashVariance < 0 ? (
                       <>
                         <li>
-                          Cash-paid petty expense not yet logged — close this drawer and use{' '}
-                          <strong>+ Expense</strong> (shortcut <kbd>E</kbd>) on the shift bar.
+                          Cash taken from the drawer for the office (expenses, supplier payments)
+                          not yet recorded as a cash drop.
                         </li>
                         <li>
-                          Attendant handed over less cash than declared on the chit. Re-check the
-                          handover row in the attendants panel.
-                        </li>
-                        <li>
-                          Cash was used to settle a supplier purchase — record it via{' '}
-                          <strong>+ Purchase</strong> (shortcut <kbd>P</kbd>).
+                          Cash was miscounted or went missing after the attendants handed over.
+                          Attendant shortages are shown separately above.
                         </li>
                       </>
                     ) : (
                       <>
-                        <li>
-                          Customer collection received in cash but not yet logged — use{' '}
-                          <strong>+ Collection</strong> (shortcut <kbd>C</kbd>) on the shift bar.
-                        </li>
+                        <li>A cash drop was recorded that did not leave the drawer.</li>
                         <li>
                           Counted safe cash includes the next-shift float that hasn't been removed
                           yet.
@@ -482,10 +536,6 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                         </li>
                       </>
                     )}
-                    <li>
-                      An attendant handover is still pending — check the Handovers panel for missing
-                      rows.
-                    </li>
                   </ul>
                 )}
               </div>
@@ -625,8 +675,17 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
           <section className="close-wizard-section">
             <h4 className="close-wizard-section-title">Confirm Shift Summary</h4>
             <div className="close-wizard-summary-card">
+              {cashSummary?.hasHandovers && (
+                <div className="close-wizard-row">
+                  <span>Attendant variance (Handover)</span>
+                  <span className="font-mono">
+                    {cashSummary.attendantVariance > 0 ? '+' : ''}
+                    {inr(cashSummary.attendantVariance)}
+                  </span>
+                </div>
+              )}
               <div className="close-wizard-row">
-                <span>Expected Safe Cash</span>
+                <span>Expected office cash</span>
                 <span className="font-mono">{inr(expectedCash)}</span>
               </div>
               <div className="close-wizard-row">
@@ -639,7 +698,7 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                   color: cashVariance === 0 ? 'var(--state-success-fg)' : 'var(--brand-danger)',
                 }}
               >
-                <span>Cash Variance</span>
+                <span>Office count variance</span>
                 <span className="font-mono">
                   {cashVariance > 0 ? '+' : ''}
                   {inr(cashVariance)}

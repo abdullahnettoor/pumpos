@@ -1,5 +1,9 @@
-import { and, eq } from 'drizzle-orm';
+import { CASH_VARIANCE_MODEL_TWO_LEVEL, isTwoLevelVarianceSnapshot } from '@pump/shared';
+import { sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
+import { byNaturalField } from '@pump/shared';
+import { rowJson, rowJsonNullable } from './sql-json.js';
+import { creditSaleLinesJson } from './repositories/shift-recon-sql.js';
 import {
   RefreshShiftSummary,
   type EventPublisher,
@@ -39,119 +43,63 @@ export async function projectShiftSummary(
   const snap = rawSnapshot ?? {};
   const recon = snap.reconciliation ?? {};
 
-  // Fetch every independent slice in ONE parallel batch instead of ~8 serial
-  // round-trips (the Hyperdrive latency was stacking to multi-second responses).
-  const [
-    templateRows,
-    closedUserRows,
-    openedUserRows,
-    nrRows,
-    hoRows,
-    teRows,
-    expenses,
-    purchases,
-    collections,
-    creditSaleRows,
-  ] = await Promise.all([
-    db
-      .select()
-      .from(schema.shiftTemplates)
-      .where(eq(schema.shiftTemplates.id, shift.shiftTemplateId))
-      .limit(1),
-    shift.closedBy
-      ? db.select().from(schema.users).where(eq(schema.users.id, shift.closedBy)).limit(1)
-      : Promise.resolve([] as any[]),
-    shift.openedBy
-      ? db.select().from(schema.users).where(eq(schema.users.id, shift.openedBy)).limit(1)
-      : Promise.resolve([] as any[]),
-    db
-      .select({ nr: schema.nozzleReadings, nz: schema.nozzles, prod: schema.products })
-      .from(schema.nozzleReadings)
-      .leftJoin(schema.nozzles, eq(schema.nozzles.id, schema.nozzleReadings.nozzleId))
-      .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
-      .where(eq(schema.nozzleReadings.shiftId, shift.id)),
-    db
-      .select({
-        h: schema.attendantHandovers,
-        userName: schema.users.fullName,
-        duName: schema.dispenserUnits.name,
-        duCode: schema.dispenserUnits.code,
-      })
-      .from(schema.attendantHandovers)
-      .leftJoin(schema.users, eq(schema.users.id, schema.attendantHandovers.userId))
-      .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.attendantHandovers.duId))
-      .where(eq(schema.attendantHandovers.shiftId, shift.id)),
-    db
-      .select({
-        e: schema.handoverTerminalEntries,
-        label: schema.paymentTerminals.label,
-        provider: schema.paymentTerminals.provider,
-      })
-      .from(schema.handoverTerminalEntries)
-      .leftJoin(
-        schema.paymentTerminals,
-        eq(schema.paymentTerminals.id, schema.handoverTerminalEntries.terminalId),
-      )
-      .where(eq(schema.handoverTerminalEntries.shiftId, shift.id)),
-    db
-      .select({ e: schema.expenses, categoryName: schema.expenseCategories.name })
-      .from(schema.expenses)
-      .leftJoin(
-        schema.expenseCategories,
-        eq(schema.expenseCategories.id, schema.expenses.categoryId),
-      )
-      .where(eq(schema.expenses.shiftId, shift.id)),
-    db
-      .select({ p: schema.purchases, supplierName: schema.suppliers.name })
-      .from(schema.purchases)
-      .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.purchases.supplierId))
-      .where(eq(schema.purchases.shiftId, shift.id)),
-    db.select().from(schema.collections).where(eq(schema.collections.shiftId, shift.id)),
-    db
-      .select({
-        id: schema.customerTransactions.id,
-        amount: schema.customerTransactions.amount,
-        quantity: schema.customerTransactions.quantity,
-        unitPrice: schema.customerTransactions.unitPrice,
-        notes: schema.customerTransactions.notes,
-        duId: schema.customerTransactions.duId,
-        attendantId: schema.customerTransactions.attendantId,
-        customerId: schema.customerTransactions.customerId,
-        vehicleId: schema.customerTransactions.vehicleId,
-        productId: schema.customerTransactions.productId,
-        customerName: schema.customers.name,
-        productName: schema.products.name,
-        productCode: schema.products.code,
-        unit: schema.products.unit,
-        vehicleNumber: schema.customerVehicles.registrationNumber,
-      })
-      .from(schema.customerTransactions)
-      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
-      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
-      .leftJoin(
-        schema.customerVehicles,
-        eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId),
-      )
-      .where(
-        and(
-          eq(schema.customerTransactions.shiftId, shift.id),
-          eq(schema.customerTransactions.transactionType, 'Credit Sale'),
-          eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
-        ),
-      ),
-  ]);
+  // Fetch every slice in ONE statement (#229): each sub-select renders rows as
+  // jsonb in exactly the shape the previous drizzle builders produced (camelCase
+  // keys, numerics as strings, ISO timestamps), so the shaping code below is
+  // untouched. The former 10-select Promise.all was serialized on the wire by
+  // the max:1 driver — ten round-trips inside the close transaction.
+  const S = schema;
+  const [row] = (await db.execute(sql`
+    SELECT
+      (SELECT ${rowJson(S.shiftTemplates, 't')} FROM shift_templates t
+        WHERE t.id = ${shift.shiftTemplateId}) AS template,
+      (SELECT ${rowJson(S.users, 'u')} FROM users u
+        WHERE u.id = ${shift.closedBy ?? null}::uuid) AS closed_user,
+      (SELECT ${rowJson(S.users, 'u')} FROM users u
+        WHERE u.id = ${shift.openedBy ?? null}::uuid) AS opened_user,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+          'nr', ${rowJson(S.nozzleReadings, 'nr')},
+          'nz', ${rowJsonNullable(S.nozzles, 'nz')},
+          'prod', ${rowJsonNullable(S.products, 'prod')}
+        ) ORDER BY nr.created_at, nr.id)
+        FROM nozzle_readings nr
+        LEFT JOIN nozzles nz ON nz.id = nr.nozzle_id
+        LEFT JOIN products prod ON prod.id = nz.product_id
+        WHERE nr.shift_id = ${shift.id}), '[]'::jsonb) AS nr_rows,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+          'h', ${rowJson(S.attendantHandovers, 'h')},
+          'userName', u.full_name,
+          'duName', du.name,
+          'duCode', du.code
+        ) ORDER BY h.created_at, h.id)
+        FROM attendant_handovers h
+        LEFT JOIN users u ON u.id = h.user_id
+        LEFT JOIN dispenser_units du ON du.id = h.du_id
+        WHERE h.shift_id = ${shift.id}), '[]'::jsonb) AS ho_rows,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+          'e', ${rowJson(S.handoverTerminalEntries, 'e')},
+          'label', pt.label,
+          'provider', pt.provider
+        ) ORDER BY e.created_at, e.id)
+        FROM handover_terminal_entries e
+        LEFT JOIN payment_terminals pt ON pt.id = e.terminal_id
+        WHERE e.shift_id = ${shift.id}), '[]'::jsonb) AS te_rows,
+      -- Expenses, collections and purchases have no Shift (ADR 0005, #308):
+      -- a Shift Summary never shows them.
+      ${creditSaleLinesJson(shift.id)} AS credit_rows
+  `)) as unknown as [Record<string, any>];
+
+  const templateRows = row.template ? [row.template] : [];
+  const closedUserRows = row.closed_user ? [row.closed_user] : [];
+  const openedUserRows = row.opened_user ? [row.opened_user] : [];
+  const nrRows: any[] = row.nr_rows ?? [];
+  const hoRows: any[] = row.ho_rows ?? [];
+  const teRows: any[] = row.te_rows ?? [];
+  const creditSaleRows: any[] = row.credit_rows ?? [];
 
   const template = templateRows[0];
   const closedByName = closedUserRows[0]?.fullName ?? 'System';
   const openedByName = openedUserRows[0]?.fullName ?? 'System';
-  const expensesEnriched = (expenses ?? []).map((r: any) => ({
-    ...r.e,
-    categoryName: r.categoryName ?? 'General',
-  }));
-  const purchasesEnriched = (purchases ?? []).map((r: any) => ({
-    ...r.p,
-    supplierName: r.supplierName ?? 'Unknown Supplier',
-  }));
   const nozzleReadings = nrRows.map(({ nr, nz, prod }) => {
     const gross = Number(nr.volumeSold ?? 0);
     const testing = Math.min(Math.max(Number(nr.testingVolume ?? 0), 0), gross);
@@ -170,9 +118,7 @@ export async function projectShiftSummary(
     };
   });
   // Natural nozzle order (N1, N2, ... N10) for the summary tables.
-  nozzleReadings.sort((a, b) =>
-    String(a.nozzleName).localeCompare(String(b.nozzleName), undefined, { numeric: true }),
-  );
+  nozzleReadings.sort(byNaturalField((r) => String(r.nozzleName)));
   const totalTestingVolume = nozzleReadings.reduce((a, r) => a + r.testingVolume, 0);
   const totalNetVolumeSold =
     nozzleReadings.reduce((a, r) => a + r.netVolume, 0) || Number(snap.totalNetVolume ?? 0);
@@ -254,19 +200,10 @@ export async function projectShiftSummary(
   }
   const terminalBreakdown = Array.from(terminalBreakdownMap.values());
 
-  const openingCash = Number(snap.openingCash ?? shift.openingCash ?? 0);
+  const openingCash = Number(snap.openingCash ?? 0);
+  const twoLevel = isTwoLevelVarianceSnapshot(snap);
+  const drawers: any[] = Array.isArray(snap.drawers) ? snap.drawers : (recon.drawers ?? []);
   const closingCash = Number(snap.closingCash ?? shift.closingCash ?? 0);
-
-  // Non-cash collection channels, summed LIVE from this shift's collection rows
-  // (card / UPI / bank transfer). Bank-deposited collections never touched the
-  // drawer and were previously not surfaced; "Credit" is not a collection method
-  // (collections are Cash | Card | UPI | BankTransfer), which is why the old
-  // "creditCollections" figure was always zero.
-  const collSum = (method: string) =>
-    (collections ?? []).reduce(
-      (s: number, c: any) => s + (c.paymentMethod === method ? Number(c.amount || 0) : 0),
-      0,
-    );
 
   return {
     ...snap,
@@ -288,9 +225,6 @@ export async function projectShiftSummary(
     totalNetVolumeSold,
     handovers,
     terminalBreakdown,
-    expenses: expensesEnriched,
-    purchases: purchasesEnriched,
-    collections,
     creditSales: (creditSaleRows ?? []).map((r: any) => ({
       id: r.id,
       amount: Number(r.amount),
@@ -315,11 +249,21 @@ export async function projectShiftSummary(
     expectedCash: Number(snap.expectedDrawerCash ?? openingCash),
     cashVariance: Number(snap.cashVariance ?? 0),
     cashSalesSum: Number(recon.cashSales ?? 0),
-    cashCollectionsSum: Number(recon.cashCollections ?? collSum('Cash')),
-    cardCollectionsSum: collSum('Card'),
-    upiCollectionsSum: collSum('UPI'),
-    bankCollectionsSum: collSum('BankTransfer'),
-    cashExpensesSum: Number(recon.drawerExpenses ?? 0),
+    cashDrops: Number(snap.cashDrops ?? 0),
+    // Handover drops vs drops recorded at close, shown on separate lines (#287).
+    // Pre-#287 snapshots only carry the combined figure: treat it as Handover.
+    handoverCashDrops: Number(snap.handoverCashDrops ?? snap.cashDrops ?? 0),
+    closeCashDrops: Number(snap.closeCashDrops ?? 0),
+    // Per-Drawer reconciliation (ADR 0005, #278).
+    drawers,
+    // Two-level variance (#287): attendant (Handover) vs office count.
+    // Pre-#287 snapshots: cashVariance already includes attendant shortages,
+    // so no separate attendant/office split is shown (snapshots are immutable).
+    cashVarianceModel: twoLevel ? CASH_VARIANCE_MODEL_TWO_LEVEL : 1,
+    attendantVariance: twoLevel ? Number(snap.attendantVariance ?? 0) : null,
+    officeCountVariance: twoLevel
+      ? Number(snap.officeCountVariance ?? snap.cashVariance ?? 0)
+      : null,
   };
 }
 

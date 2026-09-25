@@ -19,7 +19,7 @@ interface CategoryRow {
 }
 
 /**
- * ExpenseAnalytics — the "by category" view: expenses over a business-date range
+ * ExpenseAnalytics — the "by category" view: expenses over an entry-date range
  * AGGREGATED per category (one row each: entries, total, share of spend). This
  * is deliberately NOT the per-entry ledger (that lives in the Expenses → Ledger
  * tab); it answers "where is the money going". Shared by the Expenses screen
@@ -27,7 +27,8 @@ interface CategoryRow {
  */
 export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStation }) => {
   const s = selectedStation?.settings || {};
-  const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
+  // Office records are dated by entry date (station calendar date), not the sales day.
+  const clock = { timeZone: s.timezone };
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
 
   const { data: expenses, isLoading } = useExpenses();
@@ -36,7 +37,7 @@ export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStat
     () =>
       (expenses || []).filter((e: any) => {
         if (e.status === 'VOIDED') return false;
-        const d = e.businessDate ?? e.shiftDate;
+        const d = e.entryDate;
         return d && d >= range.from && d <= range.to;
       }),
     [expenses, range.from, range.to],

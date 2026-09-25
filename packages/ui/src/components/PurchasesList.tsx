@@ -3,7 +3,6 @@ import { CloudTransactionService } from '../services/cloud.js';
 import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
 import {
   usePurchases,
-  useShiftStatus,
   useSuppliers,
   useProducts,
   useTanks,
@@ -12,14 +11,14 @@ import {
 } from '../query/hooks.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
-import { PurchaseEntryForm } from './transactions/PurchaseEntryForm.js';
+import { PurchaseEntryForm, type PurchasePayNow } from './transactions/PurchaseEntryForm.js';
 import { DataTable } from './primitives/DataTable.js';
 import { inr } from '../utils/format.js';
 import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { useToast } from './primitives/ToastProvider.js';
 import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText, Icon } from '../pump-ds/index.js';
-import { resolveBusinessDate, type PurchaseEntryFormValues } from '@pump/shared';
+import { resolveBusinessDate, resolveEntryDate, type PurchaseEntryFormValues } from '@pump/shared';
 import { purchaseColumns, buildSupplierColumns } from './purchases/columns.js';
 import { SupplierFormDrawer } from './purchases/SupplierFormDrawer.js';
 import { SupplierStatementDrawer } from './purchases/SupplierStatementDrawer.js';
@@ -30,15 +29,11 @@ const transactionService = new CloudTransactionService();
 
 interface PurchasesListProps {
   selectedStation: any | null;
-  defaultShiftId?: string;
 }
 
 type TabType = 'transactions' | 'registry' | 'gst';
 
-export const PurchasesList: React.FC<PurchasesListProps> = ({
-  selectedStation,
-  defaultShiftId,
-}) => {
+export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation }) => {
   const [selectedTab, setSelectedTab] = useState<TabType>('transactions');
   // --- deep-link intent (from global search) ---
   // Derived, not copied into state by an effect: the old version bailed while
@@ -54,7 +49,6 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
 
   const stationId = selectedStation?.id ?? null;
   const purchasesQ = usePurchases();
-  const statusQ = useShiftStatus(stationId, true);
   const suppliersActiveQ = useSuppliers(true);
   const suppliersAllQ = useSuppliers(false);
   const productsQ = useProducts();
@@ -64,16 +58,13 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
   const runTask = useRunTask();
 
   const purchases = useMemo(() => purchasesQ.data ?? [], [purchasesQ.data]);
-  const activeShift = statusQ.data?.activeShift ?? null;
-  const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
   const suppliers = suppliersActiveQ.data ?? [];
   const allSuppliers = useMemo(() => suppliersAllQ.data ?? [], [suppliersAllQ.data]);
   const products = productsQ.data ?? [];
   const tanks = tanksQ.data ?? [];
 
-  const loading =
-    purchasesQ.isLoading || statusQ.isLoading || suppliersActiveQ.isLoading || productsQ.isLoading;
-  const error = purchasesQ.error || statusQ.error || suppliersActiveQ.error;
+  const loading = purchasesQ.isLoading || suppliersActiveQ.isLoading || productsQ.isLoading;
+  const error = purchasesQ.error || suppliersActiveQ.error;
 
   // Business-date bucketing for purchase KPIs + a purchases search filter.
   const stationSettings: any = selectedStation?.settings || {};
@@ -140,10 +131,10 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
   };
 
   // GST / ITC register
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  const [gstFrom, setGstFrom] = useState(monthStart.toISOString().slice(0, 10));
-  const [gstTo, setGstTo] = useState(new Date().toISOString().slice(0, 10));
+  // Station-timezone calendar dates, never UTC (#288).
+  const gstToday = resolveEntryDate({ timeZone: stationSettings.timezone });
+  const [gstFrom, setGstFrom] = useState(`${gstToday.slice(0, 8)}01`);
+  const [gstTo, setGstTo] = useState(gstToday);
   // See IncomeList: a tab-gated query replaces the load-from-effect.
   const gstQ = usePurchaseGstRegister(
     { from: gstFrom, to: gstTo },
@@ -166,32 +157,11 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
   );
   const gstItcTotal = gstTotals.cgst + gstTotals.sgst + gstTotals.igst + gstTotals.cess;
 
-  const resolvePreferredShiftId = (active: any | null, closedList: any[]) => {
-    if (defaultShiftId) {
-      const matchesActive = active?.id === defaultShiftId;
-      const matchesClosed = closedList.some((shift) => shift.id === defaultShiftId);
-
-      if (matchesActive || matchesClosed) {
-        return defaultShiftId;
-      }
-    }
-
-    if (active) {
-      return active.id;
-    }
-
-    if (closedList.length > 0) {
-      return closedList[0].id;
-    }
-
-    return '';
-  };
-
   const resetPurchaseForm = (supplierId?: string) => {
     setFormError(null);
     setPurchaseDefaults({
-      targetShiftId: resolvePreferredShiftId(activeShift, recentClosedShifts),
-      transactionDate: new Date().toISOString().slice(0, 10),
+      // Purchases are dated by business day (ADR 0005), not UTC (#288).
+      transactionDate: todayIso,
       supplierId: supplierId || suppliers[0]?.id || '',
       invoiceNumber: '',
       notes: '',
@@ -249,10 +219,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
   // from whatever the queries hold at that moment — so seeding them in advance
   // was duplicated work that could only ever be more stale than the reset.
 
-  const handleAddPurchase = async (
-    values: PurchaseEntryFormValues,
-    payment?: { amount: number; accountId?: string | null },
-  ) => {
+  const handleAddPurchase = async (values: PurchaseEntryFormValues, payment?: PurchasePayNow) => {
     setFormError(null);
     if (!values.supplierId || values.lines.length === 0) return;
 
@@ -271,10 +238,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
           tankAllocations:
             l.tankAllocations && l.tankAllocations.length > 0 ? l.tankAllocations : undefined,
         })),
-        payment:
-          payment && payment.amount > 0
-            ? { amount: payment.amount, accountId: payment.accountId ?? null }
-            : undefined,
+        payment: payment && payment.amount > 0 ? payment : undefined,
       });
 
       closePurchaseDrawer();
@@ -316,16 +280,6 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
       </div>
     );
   }
-
-  const shiftOptions = [
-    ...(activeShift
-      ? [{ id: activeShift.id, label: `Active: ${activeShift.templateName} (Open)` }]
-      : []),
-    ...recentClosedShifts.map((s) => ({
-      id: s.id,
-      label: `Closed: ${s.templateName} (${new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})`,
-    })),
-  ];
 
   return (
     <PageLayout
@@ -822,15 +776,13 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
       {/* Purchase Entry Drawer */}
       <Drawer isOpen={isPurchaseDrawerOpen} onClose={closePurchaseDrawer} title="Record Purchase">
         <PurchaseEntryForm
-          shiftOptions={[]}
-          showShiftHintWhenSingle={false}
-          showDateField
           dateLabel="Purchase Date"
           defaultValues={purchaseDefaults}
           suppliers={suppliers}
           products={products}
           tanks={tanks}
           stationId={stationId}
+          timeZone={stationSettings.timezone}
           enablePayment
           submitting={submitting}
           error={formError}
@@ -1235,6 +1187,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
       />
 
       <SupplierPaymentDrawer
+        timeZone={stationSettings.timezone}
         isOpen={isPaymentDrawerOpen}
         suppliers={allSuppliers}
         stationId={stationId}

@@ -25,6 +25,8 @@ export interface RecordHandoverCommand {
   attendantId: string;
   duId: string;
   cashHandedOver: number | string;
+  /** Cash taken from this Drawer mid-shift (e.g. to the safe). Default 0. */
+  cashDrops?: number | string;
   cardHandedOver?: number | string;
   upiHandedOver?: number | string;
   nozzleReadings: Array<{
@@ -60,6 +62,11 @@ export interface RecordHandoverResult {
   creditSales: number;
   omcCardSales: number;
   declaredTotal: number;
+  openingFloat: number;
+  cashDrops: number;
+  /** openingFloat + DU cash sales − cashDrops. */
+  expectedCash: number;
+  /** cashHandedOver − expectedCash. */
   varianceAmount: number;
   replaced: boolean;
 }
@@ -71,6 +78,7 @@ const commandSchema = z
     attendantId: z.string().min(1),
     duId: z.string().min(1),
     cashHandedOver: amount,
+    cashDrops: amount.optional(),
     cardHandedOver: amount.optional(),
     upiHandedOver: amount.optional(),
     nozzleReadings: z
@@ -308,9 +316,16 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
 
     const cashHandedOver = Number(cmd.cashHandedOver);
     const expectedTotal = expectedFuelSales + source.merchandiseCash;
-    const declaredTotal =
-      cashHandedOver + cardHandedOver + upiHandedOver + source.creditSales + source.omcCardSales;
-    const varianceAmount = roundPaise(declaredTotal - expectedTotal);
+    const nonCash = cardHandedOver + upiHandedOver + source.creditSales + source.omcCardSales;
+    const declaredTotal = cashHandedOver + nonCash;
+    // Drawer Reconciliation (ADR 0005): the pouch holds the float plus the DU's
+    // cash sales, less what was dropped. DU cash sales are the metered total not
+    // settled by card, UPI, credit or OMC card.
+    const openingFloat = source.openingFloat;
+    const cashDrops = Number(cmd.cashDrops ?? 0);
+    const rawExpectedCash = openingFloat + expectedTotal - nonCash - cashDrops;
+    const expectedCash = roundPaise(rawExpectedCash);
+    const varianceAmount = roundPaise(cashHandedOver - rawExpectedCash);
     const now = ctx.clock.now().toISOString();
     const handover: AttendantHandover = {
       id: ctx.ids.newId(),
@@ -325,6 +340,9 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
       creditHandedOver: String(source.creditSales),
       testingVolume: String(testingVolume),
       expectedSales: String(expectedFuelSales),
+      openingFloat: String(openingFloat),
+      cashDrops: String(cashDrops),
+      expectedCash: String(expectedCash),
       varianceAmount: String(varianceAmount),
       createdAt: now,
     };
@@ -365,6 +383,9 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
           expectedSales: expectedFuelSales,
           expectedTotal,
           declaredTotal,
+          openingFloat,
+          cashDrops,
+          expectedCash,
           varianceAmount,
         },
         presentation: {
@@ -385,6 +406,9 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
       creditSales: source.creditSales,
       omcCardSales: source.omcCardSales,
       declaredTotal,
+      openingFloat,
+      cashDrops,
+      expectedCash,
       varianceAmount,
       replaced: saved.replaced,
     });

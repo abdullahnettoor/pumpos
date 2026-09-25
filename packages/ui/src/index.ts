@@ -57,7 +57,14 @@ export {
 export type { SessionTokenClient } from './services/auth/supabaseTokenSource.js';
 
 export * from './services/cloud.js';
-export { exportReportPdf, exportReactPdf, setPdfSaver } from './services/exportPdf.js';
+export {
+  exportReactPdf,
+  printReactPdf,
+  outputReactPdf,
+  setPdfSaver,
+  setPdfPrinter,
+} from './services/exportPdf.js';
+export type { PdfSaver, PdfPrinter, PdfOutput } from './services/exportPdf.js';
 export {
   DEFAULT_SHIFT_SUMMARY_CONFIG,
   DEFAULT_DSSR_CONFIG,
@@ -126,6 +133,8 @@ export { Checkbox, Switch } from './components/primitives/Toggle.js';
 export type { CheckboxProps, SwitchProps } from './components/primitives/Toggle.js';
 export { Tooltip } from './components/primitives/Tooltip.js';
 export type { TooltipProps } from './components/primitives/Tooltip.js';
+export { InfoTip } from './components/primitives/InfoTip.js';
+export type { InfoTipProps } from './components/primitives/InfoTip.js';
 export { Menu, Popover } from './components/primitives/Menu.js';
 export type { MenuProps, MenuItem, PopoverProps } from './components/primitives/Menu.js';
 export { Segmented } from './components/primitives/Segmented.js';

@@ -196,8 +196,11 @@ export class DrizzleCollectionRepository implements CollectionRepository {
     await this.db.insert(schema.collections).values({
       id: c.id,
       documentNumber: c.documentNumber,
-      shiftId: c.shiftId,
-      businessDayId: c.businessDayId,
+      organizationId: c.organizationId,
+      stationId: c.stationId,
+      entryDate: c.entryDate,
+      fundingAccountId: c.fundingAccountId,
+      terminalId: c.terminalId,
       customerId: c.customerId,
       vehicleId: c.vehicleId,
       amount: c.amount,

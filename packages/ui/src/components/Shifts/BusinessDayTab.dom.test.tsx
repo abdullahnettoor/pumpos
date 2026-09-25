@@ -41,6 +41,7 @@ type Seed = {
   snapshotData?: Record<string, unknown> | null;
   activeShift?: unknown;
   openBusinessDays?: { businessDate: string; id?: string }[];
+  recentBusinessDays?: Record<string, unknown>[];
 };
 
 const renderTab = (props: Record<string, unknown> = {}, seed: Seed = {}) => {
@@ -50,12 +51,21 @@ const renderTab = (props: Record<string, unknown> = {}, seed: Seed = {}) => {
     snapshotData = { businessDayId },
     activeShift = null,
     openBusinessDays = [{ businessDate: TODAY, id: businessDayId }],
+    recentBusinessDays = openBusinessDays.map((d) => ({
+      ...d,
+      status: 'OPEN',
+      openShiftCount: 0,
+      closedShiftCount: 0,
+      lastActivityAt: '2026-03-01T12:00:00.000Z',
+    })),
   } = seed;
   const client = createTestQueryClient();
   const statusPayload = {
     requestedState: status,
     openBusinessDays,
     requestedBusinessDay: { id: businessDayId, businessDate: TODAY },
+    recentBusinessDays,
+    recentFromBusinessDate: '2026-02-16',
   };
   client.setQueryData(queryKeys.businessDayStatus(STATION.id, TODAY), statusPayload);
   client.setQueryData(queryKeys.businessDayStatus(STATION.id, ''), statusPayload);
@@ -74,6 +84,7 @@ const renderTab = (props: Record<string, unknown> = {}, seed: Seed = {}) => {
     <BusinessDayTab
       selectedStation={STATION}
       userRole="Owner"
+      onNavigate={vi.fn()}
       {...(props as Record<string, never>)}
     />,
     { queryClient: client },
@@ -100,7 +111,9 @@ describe('BusinessDayTab', () => {
   });
 
   it('asks for a station before showing anything', () => {
-    renderWithProviders(<BusinessDayTab selectedStation={null} userRole="Owner" />);
+    renderWithProviders(
+      <BusinessDayTab selectedStation={null} userRole="Owner" onNavigate={vi.fn()} />,
+    );
     expect(screen.getByText(/Please select a station/i)).toBeDefined();
   });
 
@@ -203,6 +216,7 @@ describe('BusinessDayTab', () => {
           userRole="Owner"
           requestedBusinessDate={TODAY}
           onBusinessDateSelected={onBusinessDateSelected}
+          onNavigate={vi.fn()}
         />,
       );
       await waitFor(() => expect(onBusinessDateSelected).toHaveBeenCalled());
@@ -242,5 +256,154 @@ describe('BusinessDayTab', () => {
         expect(screen.getByText(new RegExp(`immutable DSSR snapshot for ${TODAY}`))).toBeDefined(),
       );
     });
+  });
+
+  describe('the recent business days list (#226)', () => {
+    const day = (over: Record<string, unknown>) => ({
+      id: 'bd-x',
+      businessDate: '2026-02-24',
+      status: 'CLOSED',
+      openShiftCount: 0,
+      closedShiftCount: 3,
+      lastActivityAt: '2026-02-24T18:00:00.000Z',
+      ...over,
+    });
+
+    it('lists a CLOSED day, which the open-days-only panel could never show', async () => {
+      renderTab({}, { recentBusinessDays: [day({ businessDate: '2026-02-24' })] });
+      // The selected date also appears in the tab's own header, so scope to
+      // the list row itself.
+      await waitFor(() =>
+        expect(screen.getAllByRole('button', { name: /24 Feb 2026/i }).length).toBeGreaterThan(0),
+      );
+    });
+
+    it('marks a day’s status with a chip, distinct from its counts text', async () => {
+      // `getAllByText(/Closed/i)` would also match "3 closed · 0 open", so the
+      // chip could be deleted and the test still pass. Match the chip's own
+      // exact-cased label node instead.
+      renderTab({}, { recentBusinessDays: [day({ status: 'CLOSED' })] });
+      await waitFor(() =>
+        expect(screen.getAllByText((_, el) => el?.textContent === 'Closed').length).toBeGreaterThan(
+          0,
+        ),
+      );
+    });
+
+    it('renders each day’s shift counts (the #225-corrected values)', async () => {
+      renderTab({}, { recentBusinessDays: [day({ closedShiftCount: 3, openShiftCount: 1 })] });
+      await waitFor(() => expect(screen.getByText(/3 closed · 1 open/i)).toBeDefined());
+    });
+
+    it('selecting a closed day moves the view to that date', async () => {
+      renderTab({}, { recentBusinessDays: [day({ businessDate: '2026-02-24' })] });
+      const [row] = await screen.findAllByRole('button', { name: /24 Feb 2026/i });
+      fireEvent.click(row);
+      await waitFor(() => expect(row.getAttribute('aria-pressed')).toBe('true'));
+    });
+
+    it('offers "See older" and sends it to the reports page', async () => {
+      const onNavigate = vi.fn();
+      renderTab({ onNavigate }, { recentBusinessDays: [day({})] });
+      const older = await screen.findByRole('button', { name: /See older/i });
+      fireEvent.click(older);
+      expect(onNavigate).toHaveBeenCalledWith('/reports');
+    });
+
+    it('offers "See older" to an Accountant, who may open Reports', async () => {
+      // Accountant is the non-obvious member of the back-office set; Owner is
+      // already covered by the navigation case above. Enumerating all three
+      // would only restate `canViewReports`'s own list back to it.
+      const onNavigate = vi.fn();
+      renderTab({ onNavigate, userRole: 'Accountant' }, { recentBusinessDays: [day({})] });
+      expect(await screen.findByRole('button', { name: /See older/i })).toBeDefined();
+    });
+
+    it('hides "See older" from Staff, whose nav has no Reports page', async () => {
+      // Routing them there lands on a page their own nav does not list and
+      // whose reads refuse them — worse than not offering it.
+      const onNavigate = vi.fn();
+      renderTab({ onNavigate, userRole: 'Staff' }, { recentBusinessDays: [day({})] });
+      await screen.findAllByRole('button', { name: /24 Feb 2026/i });
+      expect(screen.queryByRole('button', { name: /See older/i })).toBeNull();
+    });
+
+    it('names the window start when it is genuinely empty', async () => {
+      // Read from the payload, not restated in the UI, so the message cannot
+      // drift from the window the server actually applied.
+      renderTab({}, { recentBusinessDays: [], openBusinessDays: [] });
+      await waitFor(() =>
+        expect(screen.getByText(/No Business Days since 16 Feb 2026/i)).toBeDefined(),
+      );
+    });
+  });
+
+  /**
+   * The acceptance criterion in full: a closed day must not merely be listed,
+   * it must open its stored DSSR snapshot. The distinction is visible — an
+   * open day is composed live and flagged "Live"; a closed day reads the
+   * immutable snapshot and must not be.
+   */
+  it('opens a closed day’s stored snapshot, not a live composition', async () => {
+    const CLOSED_DATE = '2026-02-24';
+    const client = createTestQueryClient();
+    const recent = [
+      {
+        id: 'bd-closed',
+        businessDate: CLOSED_DATE,
+        status: 'CLOSED',
+        openShiftCount: 0,
+        closedShiftCount: 3,
+        lastActivityAt: '2026-02-24T18:00:00.000Z',
+      },
+    ];
+    client.setQueryData(queryKeys.businessDayStatus(STATION.id, TODAY), {
+      requestedState: 'OPEN',
+      openBusinessDays: [],
+      recentBusinessDays: recent,
+      requestedBusinessDay: { id: 'bd-1', businessDate: TODAY },
+    });
+    client.setQueryData(queryKeys.businessDayStatus(STATION.id, ''), {
+      requestedState: 'OPEN',
+      openBusinessDays: [],
+      recentBusinessDays: recent,
+      requestedBusinessDay: { id: 'bd-1', businessDate: TODAY },
+    });
+    client.setQueryData(queryKeys.dssrPreview(STATION.id, TODAY), {
+      snapshotData: { businessDayId: 'bd-1' },
+      live: true,
+      generatedAt: '2026-03-01T12:00:00.000Z',
+    });
+    // The closed day's own status + its stored snapshot.
+    client.setQueryData(queryKeys.businessDayStatus(STATION.id, CLOSED_DATE), {
+      requestedState: 'CLOSED',
+      openBusinessDays: [],
+      recentBusinessDays: recent,
+      requestedBusinessDay: { id: 'bd-closed', businessDate: CLOSED_DATE },
+    });
+    client.setQueryData(queryKeys.dssr(STATION.id, CLOSED_DATE), {
+      snapshotData: { businessDayId: 'bd-closed' },
+      generatedAt: '2026-02-25T02:00:00.000Z',
+    });
+    client.setQueryData(queryKeys.shiftStatus(STATION.id, true), { activeShift: null });
+    client.setQueryData(queryKeys.customers(true), []);
+
+    renderWithProviders(
+      <BusinessDayTab selectedStation={STATION} userRole="Owner" onNavigate={vi.fn()} />,
+      { queryClient: client },
+    );
+
+    // Today is open and composed live — so the absence of "Live" after the
+    // click is a real change, not a vacuous assertion.
+    await waitFor(() => expect(screen.getByText(/^Live/)).toBeDefined());
+
+    const [row] = await screen.findAllByRole('button', { name: /24 Feb 2026/i });
+    fireEvent.click(row);
+
+    await waitFor(() => expect(screen.getAllByText(/Closed/i).length).toBeGreaterThan(0));
+    // A stored snapshot is never "Live".
+    expect(screen.queryByText(/^Live/)).toBeNull();
+    // ...and a closed day offers no close button.
+    expect(closeDayButton()).toBeNull();
   });
 });

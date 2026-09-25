@@ -7,21 +7,40 @@ import {
   BusinessEvents,
 } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
-import { CloseShift } from './close-shift.js';
+import { CloseShift, computeShiftCloseCash } from './close-shift.js';
 import type {
+  CloseShiftContext,
+  CloseShiftContextReader,
   NozzleReading,
   NozzleReadingRepository,
   Shift,
-  ShiftReconciliationReader,
   ShiftReconciliationTotals,
   ShiftRepository,
   ShiftSummaryWriter,
-  CreditSalesReader,
   CreditSaleRecord,
   StockMovementInput,
   StockMovementWriter,
 } from './ports.js';
-import type { Nozzle, NozzleRepository } from '../../station-setup/nozzles/index.js';
+
+/** Consolidated context fake: serves the same rows the five old ports did. */
+class ContextReader implements CloseShiftContextReader {
+  constructor(
+    private readonly shifts: Shift[],
+    private readonly readings: NozzleReading[],
+    private readonly nozzles: { id: string; productId: string; tankId: string | null }[],
+    private readonly totals: ShiftReconciliationTotals,
+    private readonly creditSales: CreditSaleRecord[] = [],
+  ) {}
+  async load(_organizationId: string, shiftId: string): Promise<CloseShiftContext> {
+    return {
+      shift: this.shifts.find((r) => r.id === shiftId) ?? null,
+      readings: this.readings.filter((r) => r.shiftId === shiftId),
+      nozzles: this.nozzles,
+      totals: this.totals,
+      creditSales: this.creditSales,
+    };
+  }
+}
 
 class ShiftRepo implements ShiftRepository {
   constructor(readonly rows: Shift[]) {}
@@ -42,19 +61,6 @@ class ShiftRepo implements ShiftRepository {
   async addStaffAssignments() {}
   async addTerminalLinks() {}
 }
-class NozzleRepo implements NozzleRepository {
-  constructor(readonly rows: Nozzle[]) {}
-  async findById(id: string) {
-    return this.rows.find((r) => r.id === id) ?? null;
-  }
-  async save() {}
-  async deleteById() {
-    return true;
-  }
-  async listByStation() {
-    return this.rows;
-  }
-}
 class ReadingRepo implements NozzleReadingRepository {
   constructor(readonly rows: NozzleReading[]) {}
   async lastClosingByNozzleIds() {
@@ -64,24 +70,14 @@ class ReadingRepo implements NozzleReadingRepository {
   async listByShift(shiftId: string) {
     return this.rows.filter((r) => r.shiftId === shiftId);
   }
-  async updateClosing(id: string, closing: string, vol: string) {
-    const r = this.rows.find((x) => x.id === id);
-    if (r) {
-      r.closingReading = closing;
-      r.volumeSold = vol;
+  async updateClosingMany(updates: { id: string; closingReading: string; volumeSold: string }[]) {
+    for (const u of updates) {
+      const r = this.rows.find((x) => x.id === u.id);
+      if (r) {
+        r.closingReading = u.closingReading;
+        r.volumeSold = u.volumeSold;
+      }
     }
-  }
-}
-class ReconReader implements ShiftReconciliationReader {
-  constructor(private readonly totals: ShiftReconciliationTotals) {}
-  async totalsForShift() {
-    return this.totals;
-  }
-}
-class CreditSalesReaderMock implements CreditSalesReader {
-  constructor(private readonly records: CreditSaleRecord[] = []) {}
-  async listByShift(shiftId: string) {
-    return this.records.filter((r) => r.customerId);
   }
 }
 class StockWriter implements StockMovementWriter {
@@ -145,48 +141,221 @@ function reading(): NozzleReading {
     createdAt: '',
   };
 }
-function nozzle(): Nozzle {
+function nozzle() {
+  return { id: 'n1', productId: 'pet', tankId: 'tk1' };
+}
+
+const emptyTotals: ShiftReconciliationTotals = {
+  cashSales: 0,
+  openingFloat: 0,
+  handoverCashDrops: 0,
+  drawers: [],
+};
+
+/** Worked example pinned by #287 (owner decision, two-level variance). */
+function workedExampleTotals(): ShiftReconciliationTotals {
+  const drawers: ShiftReconciliationTotals['drawers'] = [
+    {
+      attendantId: 'a',
+      attendantName: 'A',
+      duId: 'du1',
+      duName: 'DU-1',
+      openingFloat: 1000,
+      cashSales: 20000,
+      cashDrops: 10000,
+      expectedCash: 11000,
+      cashHandedOver: 10800,
+      variance: -200,
+    },
+    {
+      attendantId: 'b',
+      attendantName: 'B',
+      duId: 'du2',
+      duName: 'DU-2',
+      openingFloat: 1000,
+      cashSales: 15000,
+      cashDrops: 0,
+      expectedCash: 16000,
+      cashHandedOver: 16000,
+      variance: 0,
+    },
+  ];
+  // Derived from the Handovers, as the reader does: Σ (declared − float + drops).
+  // (The raw-row path is pinned in apps/api shift-recon-sql.test.ts.)
+  const sum = (f: (d: (typeof drawers)[number]) => number) => drawers.reduce((s, d) => s + f(d), 0);
   return {
-    id: 'n1',
-    organizationId: 'org-1',
-    stationId: 'st-1',
-    duId: 'du',
-    tankId: 'tk1',
-    productId: 'pet',
-    name: 'n1',
-    currentReading: '1000',
-    createdAt: '',
-    updatedAt: '',
+    cashSales: sum((d) => (d.cashHandedOver ?? 0) - d.openingFloat + d.cashDrops),
+    openingFloat: sum((d) => d.openingFloat),
+    handoverCashDrops: sum((d) => d.cashDrops),
+    drawers,
   };
 }
 
+function closeWith(totals: ShiftReconciliationTotals) {
+  const shifts = new ShiftRepo([openShiftRow()]);
+  const readings = new ReadingRepo([reading()]);
+  return new CloseShift({
+    context: new ContextReader(shifts.rows, readings.rows, [nozzle()], totals),
+    shifts,
+    nozzleReadings: readings,
+    stockMovements: new StockWriter(),
+    summaries: new SummaryWriter(),
+    events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+  });
+}
+
+describe('two-level cash variance (#287)', () => {
+  it('pins the worked example: attendant −200, office −100, ledger 34,800', async () => {
+    const result = await closeWith(workedExampleTotals()).execute(
+      { shiftId: 'sh-1', closingCash: 26700 },
+      makeContext(),
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.snapshot).toMatchObject({
+      expectedDrawerCash: 26800,
+      attendantVariance: -200,
+      cashVariance: -100,
+      officeCountVariance: -100,
+    });
+    expect(result.data.cashSales).toBe(34800);
+    expect(result.data.snapshot.cashVarianceModel).toBe(2);
+  });
+
+  it('a drop at close naming a Drawer reduces that Drawer expected cash', () => {
+    const r = computeShiftCloseCash(workedExampleTotals(), 26800, [
+      { attendantId: 'a', duId: 'du1', amount: 200 },
+    ]);
+    expect(r.drawers[0]).toMatchObject({ expectedCash: 10800, variance: 0, closeCashDrops: 200 });
+    expect(r.attendantVariance).toBe(0);
+    expect(r.expectedDrawerCash).toBe(26800);
+    expect(r.cashVariance).toBe(0);
+    expect(r.cashSales).toBe(35000);
+  });
+
+  it('a drop at close naming no Drawer goes to the office variance', () => {
+    const r = computeShiftCloseCash(workedExampleTotals(), 26700, [{ amount: 100 }]);
+    expect(r.attendantVariance).toBe(-200);
+    expect(r.expectedDrawerCash).toBe(26700);
+    expect(r.cashVariance).toBe(0);
+    expect(r.cashSales).toBe(34800);
+  });
+
+  it('blocks close while a Drawer is not handed over', async () => {
+    const totals = workedExampleTotals();
+    totals.drawers[1] = {
+      ...totals.drawers[1],
+      cashSales: null,
+      expectedCash: null,
+      cashHandedOver: null,
+      variance: null,
+    };
+    const result = await closeWith(totals).execute(
+      { shiftId: 'sh-1', closingCash: 26700 },
+      makeContext(),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a drop naming only the attendant or only the DU', async () => {
+    for (const drop of [
+      { attendantId: 'a', amount: 5 },
+      { duId: 'du1', amount: 5 },
+    ]) {
+      const result = await closeWith(workedExampleTotals()).execute(
+        { shiftId: 'sh-1', closingCash: 1, closeCashDrops: [drop] },
+        makeContext(),
+      );
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it('rejects a drop naming a Drawer not on the shift', async () => {
+    const result = await closeWith(workedExampleTotals()).execute(
+      {
+        shiftId: 'sh-1',
+        closingCash: 1,
+        closeCashDrops: [{ attendantId: 'z', duId: 'x', amount: 5 }],
+      },
+      makeContext(),
+    );
+    expect(result.success).toBe(false);
+  });
+});
+
 describe('CloseShift', () => {
+  it('sums four Drawers with different floats and one drop (#278)', async () => {
+    const drawer = (i: number, openingFloat: number, cashSales: number, cashDrops = 0) => {
+      const expectedCash = openingFloat + cashSales - cashDrops;
+      return {
+        attendantId: `a${i}`,
+        attendantName: `A${i}`,
+        duId: `du${i}`,
+        duName: `DU-${i}`,
+        openingFloat,
+        cashSales,
+        cashDrops,
+        expectedCash,
+        cashHandedOver: expectedCash,
+        variance: 0,
+      };
+    };
+    const drawers = [
+      drawer(1, 500, 4000),
+      drawer(2, 1000, 3000, 2000),
+      drawer(3, 0, 1500),
+      drawer(4, 250, 800),
+    ];
+    const shifts = new ShiftRepo([openShiftRow()]);
+    const readings = new ReadingRepo([reading()]);
+    const context = new ContextReader(shifts.rows, readings.rows, [nozzle()], {
+      ...emptyTotals,
+      cashSales: 9300,
+      openingFloat: 1750,
+      handoverCashDrops: 2000,
+      drawers,
+    });
+    const result = await new CloseShift({
+      context,
+      shifts,
+      nozzleReadings: readings,
+      stockMovements: new StockWriter(),
+      summaries: new SummaryWriter(),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ shiftId: 'sh-1', closingCash: 9050 }, makeContext());
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    // 1750 floats + 9300 cash sales − 2000 dropped = 9050, the Σ of the Drawers.
+    expect(result.data.snapshot).toMatchObject({
+      openingCash: 1750,
+      cashDrops: 2000,
+      expectedDrawerCash: 9050,
+      cashVariance: 0,
+      drawers,
+    });
+    expect(drawers.reduce((s, d) => s + d.expectedCash, 0)).toBe(9050);
+    // The ledger still receives true cash sales, never the floats.
+    expect(result.data.cashSales).toBe(9300);
+  });
+
   it('finalizes readings, records sale movement, reconciles drawer (variance 0)', async () => {
     const shifts = new ShiftRepo([openShiftRow()]);
-    const nozzles = new NozzleRepo([nozzle()]);
     const readings = new ReadingRepo([reading()]);
-    const recon = new ReconReader({
-      cashSales: 0,
-      cashCollections: 2000,
-      cardCollections: 0,
-      upiCollections: 0,
-      creditCollections: 0,
-      drawerExpenses: 300,
-      drawerSupplierPayments: 0,
+    const context = new ContextReader(shifts.rows, readings.rows, [nozzle()], {
+      ...emptyTotals,
+      cashSales: 1700,
+      openingFloat: 5000,
     });
     const stock = new StockWriter();
     const summaries = new SummaryWriter();
     const store = new InMemoryEventStore();
     const events = new InProcessEventDispatcher({ store });
-    const creditSales = new CreditSalesReaderMock([]);
 
-    // expected = 5000 + 2000 - 300 = 6700; declare 6700 -> variance 0
+    // expected = floats 5000 + cash sales 1700 = 6700; declare 6700 -> variance 0
     const result = await new CloseShift({
+      context,
       shifts,
-      nozzles,
       nozzleReadings: readings,
-      reconciliation: recon,
-      creditSales,
       stockMovements: stock,
       summaries,
       events,
@@ -220,19 +389,9 @@ describe('CloseShift', () => {
   it('rejects closing an already-closed shift', async () => {
     const closed = { ...openShiftRow(), status: 'CLOSED' as const };
     const result = await new CloseShift({
+      context: new ContextReader([closed], [], [], emptyTotals),
       shifts: new ShiftRepo([closed]),
-      nozzles: new NozzleRepo([]),
       nozzleReadings: new ReadingRepo([]),
-      reconciliation: new ReconReader({
-        cashSales: 0,
-        cashCollections: 0,
-        cardCollections: 0,
-        upiCollections: 0,
-        creditCollections: 0,
-        drawerExpenses: 0,
-        drawerSupplierPayments: 0,
-      }),
-      creditSales: new CreditSalesReaderMock([]),
       stockMovements: new StockWriter(),
       summaries: new SummaryWriter(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
@@ -243,19 +402,9 @@ describe('CloseShift', () => {
 
   it('rejects Tank Dip input because stock counts are a separate post-close action', async () => {
     const result = await new CloseShift({
+      context: new ContextReader([openShiftRow()], [], [], emptyTotals),
       shifts: new ShiftRepo([openShiftRow()]),
-      nozzles: new NozzleRepo([]),
       nozzleReadings: new ReadingRepo([]),
-      reconciliation: new ReconReader({
-        cashSales: 0,
-        cashCollections: 0,
-        cardCollections: 0,
-        upiCollections: 0,
-        creditCollections: 0,
-        drawerExpenses: 0,
-        drawerSupplierPayments: 0,
-      }),
-      creditSales: new CreditSalesReaderMock([]),
       stockMovements: new StockWriter(),
       summaries: new SummaryWriter(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),

@@ -77,6 +77,10 @@ for production approval, derives the next version from commits since the latest
 release tag, tags the merge commit, publishes the GitHub Release, and starts
 production deployment and desktop builds.
 
+Run the **`/release` skill** to open that PR: it derives the version, drafts the
+operator summary from everything merged since the last tag, and puts both in the
+PR for review ([`.agents/skills/release/SKILL.md`](.agents/skills/release/SKILL.md)).
+
 Web and API surfaces deploy for every release. Desktop installers build only
 when the release changes the desktop app, a shared package, TypeScript build
 configuration, root package or lockfile, desktop release workflow, version
@@ -119,29 +123,28 @@ That is a different artifact from the developer changelog: "fix(release): emit
 the platform keys updater clients actually request" tells a station manager
 nothing about whether to update now or after the shift.
 
-So the person cutting the release adds a **`## For operators`** section to the
-GitHub Release body, in plain sentences, addressed to whoever runs the station:
+So the summary is written **in the release PR**, as
+`docs/release-notes/<version>.md` — plain sentences, no heading, addressed to
+whoever runs the station:
 
 ```markdown
-## For operators
-
 Fuel sales now round to the paise, so the drawer matches the till at close.
 Nothing changes in how you open or close a shift.
-
-## What's Changed
-
-<!-- GitHub's auto-generated changelog stays here, untouched. -->
 ```
 
-- **Write it before approving the desktop publish.** The pipeline reads the
-  release body once, when it generates `latest.json`; a section added after that
-  job runs never reaches a station, and the notes for that version stay empty
-  until a later release.
-- Only that section reaches clients. The rest of the body stays on the Release,
-  where developers read it.
-- **Omitting it is allowed and never blocks a release.** No section means no
-  notes: the operator sees the version and the action, which beats commit
-  subjects.
+The `/release` skill drafts that file from everything merged since the last tag
+and opens the PR. Reviewing the release then includes reading what stations will
+be told, days before they are told it.
+
+- **Writing it in the PR is what makes it reviewable — and what removes a race.**
+  The pipeline seeds the draft Release body from this file at tag time, and the
+  desktop manifest job reads that body unattended once the installers finish,
+  which is well before the publish approval. Editing the draft body by hand still
+  works, but only inside that window; the committed file has no deadline.
+- Only the `## For operators` section of the body reaches clients. The rest stays
+  on the Release, where developers read it.
+- **Omitting it is allowed and never blocks a release.** No file means no notes:
+  the operator sees the version and the action, which beats commit subjects.
 - The section is cleaned on the way through
   ([`scripts/updater-manifest.mjs`](scripts/updater-manifest.mjs) →
   `operatorNotes`): commit prefixes, `@handle` mentions, `by … in …` trailers,

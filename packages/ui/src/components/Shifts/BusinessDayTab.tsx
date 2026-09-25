@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { canViewReports, shiftDisplayLabel } from '@pump/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { CalendarRange, Check, Info, Lock } from 'lucide-react';
 import {
@@ -27,6 +28,7 @@ import {
   queryKeys,
 } from '../../query/hooks.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
+import type { BusinessDayStatusItem } from '../../services/cloud.js';
 
 const shiftService = new CloudShiftService();
 
@@ -36,6 +38,16 @@ interface BusinessDayTabProps {
   activeBusinessDayId?: string | null;
   requestedBusinessDate?: string | null;
   onBusinessDateSelected?: () => void;
+  /**
+   * Route elsewhere in the app. Used by "See older", which hands days beyond
+   * the recent window to the Reports page's Daily DSSR list (#226).
+   *
+   * Required rather than optional (#244). Both shells pass it today, so this
+   * fixes no live bug; it closes the failure mode, where a host that simply
+   * omitted the prop would lose the only route to a day older than 14 days and
+   * look exactly like a host that had no such feature. Now it will not compile.
+   */
+  onNavigate: (path: string) => void;
 }
 
 const rowStyle: React.CSSProperties = {
@@ -52,8 +64,8 @@ const money: React.CSSProperties = { fontFamily: 'var(--font-mono)', color: 'var
  * Business Day cockpit. The Shifts page is shift-centric; this tab
  * surfaces the *business-day* layer — the universal anchor — so day-level
  * activity is visible even when no shift is open. Composed live from the DSSR
- * preview (all closed shifts + day-level collections, credit, purchases,
- * supplier payments and expenses + P&L), without writing a snapshot.
+ * preview (all closed shifts + day-level credit, purchases and gross margin),
+ * without writing a snapshot.
  * Owner/Manager closure generates the immutable DSSR snapshot and locks the
  * selected day. A day can close when it has no open Shift.
  */
@@ -76,6 +88,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   activeBusinessDayId,
   requestedBusinessDate,
   onBusinessDateSelected,
+  onNavigate,
 }) => {
   const stationId = selectedStation?.id ?? null;
   const settings = (selectedStation?.settings ?? {}) as {
@@ -103,10 +116,10 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
 
   const currentBusinessDayStatusQ = useBusinessDayStatus(stationId, currentBusinessDate, {
     enabled: !!stationId,
-  } as any);
+  });
   const businessDayStatusQ = useBusinessDayStatus(stationId, businessDate, {
     enabled: !!stationId,
-  } as any);
+  });
   const selectedState = businessDayStatusQ.data?.requestedState;
   const previewQ = useDailyDssrPreview(stationId, businessDate, {
     enabled: !!stationId && (selectedState === 'OPEN' || selectedState === 'NOT_CREATED'),
@@ -140,11 +153,25 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   const report = selectedState === 'CLOSED' ? snapshotQ.data : previewQ.data;
   const snap = report?.snapshotData ?? null;
 
-  const openBusinessDays = useMemo(() => {
-    return [...(currentBusinessDayStatusQ.data?.openBusinessDays ?? [])].sort((a: any, b: any) =>
-      b.businessDate.localeCompare(a.businessDate),
-    );
-  }, [currentBusinessDayStatusQ.data]);
+  /**
+   * The last 14 days, open AND closed. This replaces an open-days-only panel,
+   * which made a closed day invisible — an operator had no way to reach, say,
+   * 16 Sept from here at all. The server already orders it newest first and
+   * already keeps any older still-open day in it.
+   */
+  const recentBusinessDays: BusinessDayStatusItem[] = useMemo(
+    () => currentBusinessDayStatusQ.data?.recentBusinessDays ?? [],
+    [currentBusinessDayStatusQ.data],
+  );
+  const recentFromBusinessDate: string | undefined =
+    currentBusinessDayStatusQ.data?.recentFromBusinessDate;
+
+  /**
+   * "See older" hands the operator to the Reports page. The answer comes from
+   * `guards.ts`, the same source the nav gates the route with — an inline role
+   * list here could drift from it and offer a door that does not open.
+   */
+  const mayOpenReports = canViewReports(userRole);
 
   useEffect(() => {
     if (
@@ -155,7 +182,14 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     )
       return;
     const resolvedActiveBusinessDayId = activeShift?.businessDayId ?? activeBusinessDayId;
-    const activeDay = openBusinessDays.find((day: any) => day.id === resolvedActiveBusinessDayId);
+    // Looked up in the recent list, which the use-case guarantees contains
+    // every open day at any age — so the separate open-days memo this replaced
+    // bought only its `any`-typed re-sort, and the `status` filter kept here:
+    // if the active shift's day has since closed, fall back to today rather
+    // than preselecting a day the operator can no longer work in.
+    const activeDay = recentBusinessDays.find(
+      (day) => day.id === resolvedActiveBusinessDayId && day.status === 'OPEN',
+    );
     setPickedBusinessDate(requestedBusinessDate || activeDay?.businessDate || currentBusinessDate);
     initializedStationId.current = stationId;
     if (requestedBusinessDate) onBusinessDateSelected?.();
@@ -165,7 +199,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     activeShift?.businessDayId,
     requestedBusinessDate,
     currentBusinessDate,
-    openBusinessDays,
+    recentBusinessDays,
     currentBusinessDayStatusQ.isFetching,
     shiftStatusQ.isFetching,
     onBusinessDateSelected,
@@ -186,9 +220,21 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
         id: 'template',
         header: 'Shift',
         cell: ({ row }) => (
-          <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
-            {row.original.templateName || 'Custom'}
-          </span>
+          <div>
+            <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
+              {row.original.templateName || 'Custom'}
+            </span>
+            {/* The readable shift name (#228), identical in the summary PDF. */}
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '11px',
+                color: 'var(--text-muted)',
+              }}
+            >
+              {shiftDisplayLabel(row.original)}
+            </div>
+          </div>
         ),
       },
       {
@@ -264,11 +310,18 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   const reportError =
     businessDayStatusQ.isError || (status === 'CLOSED' ? snapshotQ.isError : previewQ.isError);
   const shiftRows = (() => {
-    const rows = [...((snap?.shifts ?? []) as any[])];
+    // Every row carries the day's business date so `shiftDisplayLabel` can
+    // derive the `YYYYMMDD-N` name from the sequence the API projected.
+    const rows = ((snap?.shifts ?? []) as any[]).map((row) => ({
+      ...row,
+      businessDate: row.businessDate ?? snap?.businessDate ?? businessDate,
+    }));
     if (hasOpenShift && !rows.some((row) => row.shiftId === activeShift.id)) {
       rows.unshift({
         shiftId: activeShift.id,
         templateName: activeShift.templateName,
+        businessDate: activeShift.businessDate ?? businessDate,
+        shiftSequence: activeShift.shiftSequence ?? null,
         closedAt: null,
       });
     }
@@ -314,11 +367,8 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   };
 
   const fuel = snap?.fuel ?? {};
-  const collections = snap?.collections ?? {};
   const credit = snap?.credit ?? {};
-  const expenses = snap?.expenses ?? {};
   const purchases = snap?.purchases ?? {};
-  const supplierPayments = snap?.supplierPayments ?? {};
   const pnl = snap?.pnl ?? {};
   const merchandise = snap?.merchandise ?? {};
 
@@ -394,13 +444,13 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
         </div>
       </div>
 
-      <Panel flush title={`Open Business Days · ${openBusinessDays.length}`}>
+      <Panel flush title={`Recent Business Days · ${recentBusinessDays.length}`}>
         {currentBusinessDayStatusQ.isPending ? (
           <div style={{ padding: '12px' }}>
             <EmptyState
               compact
               icon={<CalendarRange />}
-              title="Loading open Business Days"
+              title="Loading Business Days"
               description="Checking the Station's Business Day lifecycle."
             />
           </div>
@@ -410,22 +460,27 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
               compact
               icon={<CalendarRange />}
               title="Business Day status unavailable"
-              description="Open days could not be loaded. Check the connection and retry."
+              description="Recent Business Days could not be loaded. Check the connection and retry."
             />
           </div>
-        ) : openBusinessDays.length === 0 ? (
+        ) : recentBusinessDays.length === 0 ? (
           <div style={{ padding: '12px' }}>
             <EmptyState
               compact
               icon={<CalendarRange />}
-              title="No open Business Days"
-              description="There are no open days requiring attention."
+              title={
+                recentFromBusinessDate
+                  ? `No Business Days since ${formatDate(recentFromBusinessDate)}`
+                  : 'No recent Business Days'
+              }
+              description="Open a shift to start a Business Day, or see older days in Reports."
             />
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {openBusinessDays.map((day: any) => {
+            {recentBusinessDays.map((day) => {
               const selected = day.businessDate === businessDate;
+              const isOpen = day.status === 'OPEN';
               return (
                 <button
                   key={day.id}
@@ -444,10 +499,11 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
                     fontFamily: 'inherit',
                   }}
                 >
-                  <div style={{ minWidth: 120 }}>
+                  <div style={{ minWidth: 180, display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
-                      {formatDate(day.businessDate)} · Open
+                      {formatDate(day.businessDate)}
                     </span>
+                    <StatusChip status={isOpen ? 'open' : 'closed'} size="sm" />
                   </div>
                   <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
                     {Number(day.closedShiftCount)} closed · {Number(day.openShiftCount)} open
@@ -472,6 +528,17 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
                 </button>
               );
             })}
+            {/* Days beyond the window live in the Reports page's Daily DSSR
+                list, which already reads them. Gated on the role that may open
+                that page — routing anyone else there lands them on a page
+                their own nav does not list. */}
+            {mayOpenReports && (
+              <div style={{ padding: '8px 16px' }}>
+                <Button variant="ghost" size="xs" onClick={() => onNavigate('/reports')}>
+                  See older Business Days
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Panel>
@@ -578,13 +645,6 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
               hint={`Fuel ${inr(pnl.revenueFuel || 0)} · Merch ${inr(pnl.revenueMerch || 0)}`}
             />
             <KpiTile
-              dot="success"
-              valueTone="success"
-              label="Collections"
-              value={inr(collections.total || 0)}
-              hint="Customer receipts"
-            />
-            <KpiTile
               dot="warning"
               valueTone="warning"
               label="Credit Issued"
@@ -599,11 +659,11 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
               hint="Stock inflow (business-day anchored)"
             />
             <KpiTile
-              dot={Number(pnl.netProfit || 0) < 0 ? 'danger' : 'success'}
-              valueTone={Number(pnl.netProfit || 0) < 0 ? 'danger' : 'success'}
-              label="Net Profit"
-              value={inr(pnl.netProfit || 0)}
-              hint={`Gross ${inr(pnl.grossMargin || 0)}`}
+              dot={Number(pnl.grossMargin || 0) < 0 ? 'danger' : 'success'}
+              valueTone={Number(pnl.grossMargin || 0) < 0 ? 'danger' : 'success'}
+              label="Gross Margin"
+              value={inr(pnl.grossMargin || 0)}
+              hint={`COGS ${inr(pnl.cogs || 0)}`}
             />
           </KpiStrip>
 
@@ -627,7 +687,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
                 <strong>
                   {snap.shiftsIncluded || 0} closed shift{snap.shiftsIncluded === 1 ? '' : 's'}
                 </strong>{' '}
-                plus live merchandise, collections, credit, purchases &amp; expenses.
+                plus live merchandise, credit and purchases. Office money is in the Daily Cash Book.
                 {hasOpenShift
                   ? " Fuel from the currently open shift isn't counted until it closes (nozzle readings are taken at close)."
                   : ' Fuel for a shift is counted once that shift closes.'}
@@ -669,7 +729,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
             />
           </Panel>
 
-          {/* Day financials — grouped, drawer vs non-drawer made explicit */}
+          {/* Day sales figures — office money lives in the Daily Cash Book */}
           <div
             style={{
               display: 'grid',
@@ -677,57 +737,18 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
               gap: '14px',
             }}
           >
-            <Panel flush title="Collections & credit">
-              <div style={rowStyle}>
-                <span>Cash</span>
-                <span style={money}>{inr(collections.Cash || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>Card</span>
-                <span style={money}>{inr(collections.Card || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>UPI</span>
-                <span style={money}>{inr(collections.UPI || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>Bank transfer</span>
-                <span style={money}>{inr(collections.BankTransfer || 0)}</span>
-              </div>
-              <div style={{ ...rowStyle }}>
-                <span style={{ fontWeight: 600 }}>Collections total</span>
-                <span style={{ ...money, fontWeight: 700 }}>{inr(collections.total || 0)}</span>
-              </div>
+            <Panel flush title="Credit & merchandise">
               <div style={rowStyle}>
                 <span>Credit — regular</span>
                 <span style={money}>{inr(credit.normalCredit || 0)}</span>
               </div>
-              <div style={{ ...rowStyle, borderBottom: 'none' }}>
+              <div style={rowStyle}>
                 <span>Credit — fleet</span>
                 <span style={money}>{inr(credit.fleetCredit || 0)}</span>
               </div>
-            </Panel>
-
-            <Panel flush title="Outflows & merchandise">
               <div style={rowStyle}>
                 <span>Purchases</span>
                 <span style={money}>{inr(purchases.total || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>Supplier payments — drawer</span>
-                <span style={money}>{inr(supplierPayments.drawer || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>Supplier payments — bank/owner</span>
-                <span style={money}>{inr(supplierPayments.bank || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>Expenses — drawer (petty)</span>
-                <span style={money}>{inr(expenses.drawer || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>Expenses — bank/owner</span>
-                <span style={money}>{inr(expenses.business || 0)}</span>
               </div>
               <div style={{ ...rowStyle, borderBottom: 'none' }}>
                 <span>Merchandise sales</span>

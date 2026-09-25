@@ -248,6 +248,21 @@ describe('operator notes', () => {
     expect(buildUpdaterManifest({ ...manifestArgs(), notes: operatorNotes(v132) }).notes).toBe('');
   });
 
+  /**
+   * The seam between release.yml and this script: the workflow composes the
+   * draft body by printing the `## For operators` heading, the committed
+   * `docs/release-notes/<version>.md`, then GitHub's generated changelog. That
+   * shape has to survive the round trip, or a summary reviewed in the release
+   * PR silently never reaches a station.
+   */
+  it('reads back a body composed the way the release workflow composes it', () => {
+    const file = 'Shift close now catches wrong entries before they reach the drawer.\n';
+    const composed = `## For operators\n\n${file}\n${v132}`;
+    expect(operatorNotes(composed)).toBe(
+      'Shift close now catches wrong entries before they reach the drawer.',
+    );
+  });
+
   it('still publishes a release whose notes are empty', () => {
     const manifest = buildUpdaterManifest({ ...manifestArgs(), notes: operatorNotes('') });
     expect(() => validateUpdaterManifest(manifest, { version: '1.2.3' })).not.toThrow();

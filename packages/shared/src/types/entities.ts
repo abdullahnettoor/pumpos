@@ -85,6 +85,7 @@ export interface StationSettings {
   report_config?: {
     shiftSummary?: string[];
     dssr?: string[];
+    attendantReport?: string[];
     paper?: 'A4' | 'LETTER';
     showLogo?: boolean;
     showStationLogo?: boolean;
@@ -360,6 +361,9 @@ export interface ShiftOpenPayload {
 export interface ShiftClosePayload {
   closingCash: number;
   nozzleReadings: { nozzleId: string; closingReading: number }[];
+  /** Cash Drops recorded at close (#287). Name a Drawer (attendantId + duId)
+   *  to reduce that Drawer's expected cash; omit both to reduce office cash. */
+  closeCashDrops?: { attendantId?: string | null; duId?: string | null; amount: number }[];
 }
 
 export interface ShiftDashboardSummary {
@@ -376,6 +380,8 @@ export interface ShiftStaffAssignment {
   shiftId: string;
   userId: string;
   duId: string;
+  /** Opening Float issued at shift open (decimal string from the API). */
+  openingFloat?: number | string | null;
   assignedAt: string;
 }
 

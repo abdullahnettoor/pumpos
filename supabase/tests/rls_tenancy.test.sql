@@ -15,8 +15,21 @@
 --      account was server-invited or carries server-set app metadata,
 --      handles GoTrue's follow-up invited_at update idempotently, and always
 --      pins the bootstrap role to Owner.
+--   5. Every table in public has row security enabled. A table without it
+--      is readable by the publishable (anon) key through PostgREST: the
+--      hole a lost ENABLE left open on the preview DB in #271.
 -- =====================================================================
 BEGIN;
+
+DO $$
+DECLARE
+  v_unprotected text;
+BEGIN
+  SELECT string_agg(relname, ', ' ORDER BY relname) INTO v_unprotected
+  FROM pg_class
+  WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND NOT relrowsecurity;
+  ASSERT v_unprotected IS NULL, 'tables without row level security: ' || v_unprotected;
+END $$;
 
 -- Local-shim grants mirroring Supabase's defaults for `authenticated`.
 GRANT USAGE ON SCHEMA public TO authenticated;
@@ -155,6 +168,10 @@ BEGIN
           '{"signup_intent":"owner"}'::jsonb);
   SELECT count(*) INTO v_count FROM organizations WHERE name = 'AppMeta Org';
   ASSERT v_count = 1, 'app-metadata owner did not bootstrap an organization';
+  -- The bootstrap writes the typed plan/status keys, not legacy casing.
+  ASSERT (SELECT subscription_plan = 'CORE' AND subscription_status = 'ACTIVE'
+          FROM organizations WHERE name = 'AppMeta Org'),
+    'owner bootstrap wrote a non-canonical subscription plan or status';
 END $$;
 
 ROLLBACK;

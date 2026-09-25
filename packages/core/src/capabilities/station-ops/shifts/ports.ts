@@ -14,6 +14,10 @@ export interface Shift {
   closedBy: string | null;
   closedAt: string | null;
   lockedAt: string | null;
+  /**
+   * Read-only: the sum of the Shift's Opening Floats (ADR 0005, #278). Not
+   * stored on the shift; adapters derive it from the staff assignments.
+   */
   openingCash: string;
   closingCash: string | null;
   createdAt: string;
@@ -23,6 +27,8 @@ export interface Shift {
 export interface StaffAssignmentInput {
   userId: string;
   duId: string;
+  /** Change money issued to this Attendant's Drawer at open; 0 allowed. */
+  openingFloat?: number;
 }
 
 export interface TerminalLinkInput {
@@ -51,12 +57,19 @@ export interface NozzleReading {
   createdAt: string;
 }
 
+export interface NozzleClosingUpdate {
+  id: string;
+  closingReading: string;
+  volumeSold: string;
+}
+
 export interface NozzleReadingRepository {
   /** Latest closing reading per nozzle across all prior shifts. */
   lastClosingByNozzleIds(nozzleIds: string[]): Promise<Map<string, number>>;
   saveMany(readings: NozzleReading[]): Promise<void>;
   listByShift(shiftId: string): Promise<NozzleReading[]>;
-  updateClosing(id: string, closingReading: string, volumeSold: string): Promise<void>;
+  /** Apply closing readings in ONE statement — never a per-nozzle loop (#229). */
+  updateClosingMany(updates: NozzleClosingUpdate[]): Promise<void>;
 }
 
 export interface HandoverNozzleReading extends NozzleReading {
@@ -94,6 +107,8 @@ export interface HandoverContext {
     status: string;
   } | null;
   assigned: boolean;
+  /** This Attendant/DU Drawer's Opening Float (0 when unassigned). */
+  openingFloat: number;
   nozzleReadings: HandoverNozzleReading[];
   missingReadingNozzleIds: string[];
   terminals: HandoverTerminal[];
@@ -125,6 +140,12 @@ export interface AttendantHandover {
   creditHandedOver: string;
   testingVolume: string;
   expectedSales: string;
+  /** Drawer Reconciliation inputs (ADR 0005, #278). */
+  openingFloat: string;
+  cashDrops: string;
+  /** openingFloat + DU cash sales − cashDrops. */
+  expectedCash: string;
+  /** cashHandedOver − expectedCash. */
   varianceAmount: string;
   createdAt: string;
 }
@@ -164,23 +185,44 @@ export interface HandoverRepository {
   updateReadings(readings: AcceptedHandoverReading[]): Promise<void>;
 }
 
-/** Drawer-relevant money totals for a shift (drawer reconciliation model). */
+/**
+ * Drawer-relevant money totals for a shift. Only cash sales touch a Drawer:
+ * Office Records (collections, expenses, income, supplier payments) carry no
+ * Shift and never enter the reconciliation (ADR 0005).
+ */
 export interface ShiftReconciliationTotals {
+  /** True cash sales (Opening Floats excluded; Cash Drops added back). */
   cashSales: number;
-  cashCollections: number;
-  cardCollections: number;
-  upiCollections: number;
-  creditCollections: number;
-  /** Indirect income received as drawer cash (adds to expected drawer). */
-  cashIncome?: number;
-  drawerExpenses: number;
-  drawerSupplierPayments: number;
+  /** Σ Opening Floats: the Shift's opening cash. */
+  openingFloat: number;
+  /** Σ Cash Drops recorded on the Shift's Handovers. */
+  handoverCashDrops: number;
+  /** One Drawer per Attendant/DU assignment. */
+  drawers: DrawerReconciliation[];
   /** Breakdown of cashSales (optional; for the closing cash summary). */
   handoverCash?: number;
   /** Merchandise cash from sellers with no handover (office/counter staff). */
   merchCashOutsideHandover?: number;
   /** Per-seller split of merchCashOutsideHandover (sums exactly to it). */
   merchCashOutsideHandoverBreakdown?: { sellerName: string; amount: number }[];
+}
+
+/** One Attendant's Drawer at Handover (ADR 0005, #278). */
+export interface DrawerReconciliation {
+  attendantId: string;
+  attendantName: string | null;
+  duId: string;
+  duName: string | null;
+  openingFloat: number;
+  /** Null until the Attendant hands over. */
+  cashSales: number | null;
+  cashDrops: number;
+  expectedCash: number | null;
+  cashHandedOver: number | null;
+  /** Attendant variance: declared + drops − expected. Null until handed over. */
+  variance: number | null;
+  /** Drops at close naming this Drawer (#287); set on the close snapshot only. */
+  closeCashDrops?: number;
 }
 
 export interface ShiftReconciliationReader {
@@ -206,6 +248,24 @@ export interface CreditSaleRecord {
 
 export interface CreditSalesReader {
   listByShift(shiftId: string): Promise<CreditSaleRecord[]>;
+}
+
+/**
+ * Everything CloseShift needs to READ, in one round-trip (#229): the shift row
+ * (locked FOR UPDATE), its nozzle readings, the station's nozzles, the drawer
+ * reconciliation totals, and the shift's credit sales. The previous five
+ * port reads each cost a round-trip while the station advisory lock was held.
+ */
+export interface CloseShiftContext {
+  shift: Shift | null;
+  readings: NozzleReading[];
+  nozzles: { id: string; productId: string; tankId: string | null }[];
+  totals: ShiftReconciliationTotals;
+  creditSales: CreditSaleRecord[];
+}
+
+export interface CloseShiftContextReader {
+  load(organizationId: string, shiftId: string): Promise<CloseShiftContext>;
 }
 
 export interface StockMovementInput {

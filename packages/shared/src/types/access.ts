@@ -14,6 +14,13 @@
 export type ProductPlanKey = 'CORE';
 
 /**
+ * Capability keys the client gates on. The *definition* (title, message,
+ * resolution) still lives in the core registry — only the key is shared, so a
+ * client gate and a server guard cannot drift apart on the string itself.
+ */
+export const ATTENDANT_REPORT_CAPABILITY = 'reports.attendant';
+
+/**
  * A numeric allowance supplied by a Product Plan. `station_count` is the only
  * Limit in E1: every Station row an Organization owns consumes one.
  */

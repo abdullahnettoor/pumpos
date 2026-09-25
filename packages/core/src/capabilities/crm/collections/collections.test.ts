@@ -1,36 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import {
-  FixedClock,
-  InMemoryEventStore,
-  InProcessEventDispatcher,
-  SequentialIdGenerator,
-  BusinessEvents,
-} from '../../../kernel/index.js';
-import type { DocumentNumberGenerator, ExecutionContext } from '../../../kernel/index.js';
+import { BusinessEvents } from '../../../kernel/index.js';
+import type { DocumentNumberGenerator } from '../../../kernel/index.js';
 import { RecordCollection } from './index.js';
-import type {
-  Collection,
-  CollectionRepository,
-  CustomerLedgerEntry,
-  CustomerLedgerRepository,
-} from './index.js';
+import type { Collection, CollectionRepository } from './index.js';
 import type { Customer, CustomerRepository } from '../customers/index.js';
-import type { Shift, ShiftRepository } from '../../station-ops/shifts/index.js';
-import type {
-  BusinessDay,
-  BusinessDayWriteRepository,
-} from '../../station-ops/business-days/index.js';
+import {
+  AccountRepo,
+  eventBus,
+  officeCtx,
+  terminal,
+  TerminalLookup,
+} from '../../finance/__tests__/office.js';
 
 class CollRepo implements CollectionRepository {
   readonly rows: Collection[] = [];
   async save(c: Collection) {
     this.rows.push(c);
-  }
-}
-class LedgerRepo implements CustomerLedgerRepository {
-  readonly rows: CustomerLedgerEntry[] = [];
-  async save(e: CustomerLedgerEntry) {
-    this.rows.push(e);
   }
 }
 class CustomerRepo implements CustomerRepository {
@@ -46,58 +31,12 @@ class CustomerRepo implements CustomerRepository {
     return this.rows;
   }
 }
-class ShiftRepo implements ShiftRepository {
-  constructor(readonly rows: Shift[]) {}
-  async findById(id: string) {
-    return this.rows.find((r) => r.id === id) ?? null;
-  }
-  async findByIdWithoutLock(id: string) {
-    return this.findById(id);
-  }
-  async save() {}
-  async findOpenByStation() {
-    return null;
-  }
-  async addStaffAssignments() {}
-  async addTerminalLinks() {}
-}
-class BdRepo implements BusinessDayWriteRepository {
-  constructor(readonly rows: BusinessDay[]) {}
-  async findById(id: string) {
-    return this.rows.find((r) => r.id === id) ?? null;
-  }
-  async save() {}
-  async findOpenByStation(orgId: string, stationId: string) {
-    return (
-      this.rows.find(
-        (r) => r.organizationId === orgId && r.stationId === stationId && r.status === 'OPEN',
-      ) ?? null
-    );
-  }
-  async findByStationAndDate(orgId: string, stationId: string, _date: string) {
-    return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId) ?? null;
-  }
-  async lockStation() {}
-  async lockById() {}
-  async lockByStationAndDate() {}
-}
 const docNumbers: DocumentNumberGenerator = {
   async next() {
     return 'COLL-000001';
   },
 };
 
-function ctx(): ExecutionContext {
-  return {
-    organizationId: 'org-1',
-    stationId: 'st-1',
-    businessDayId: null,
-    actorId: 'u',
-    correlationId: null,
-    clock: new FixedClock(new Date('2026-03-15T10:00:00Z')),
-    ids: new SequentialIdGenerator('c'),
-  };
-}
 function customer(): Customer {
   return {
     id: 'cust-1',
@@ -117,220 +56,77 @@ function customer(): Customer {
     updatedAt: '',
   };
 }
-function shift(): Shift {
-  return {
-    id: 'sh-1',
-    organizationId: 'org-1',
-    stationId: 'st-1',
-    businessDayId: 'bd-1',
-    shiftTemplateId: 't',
-    status: 'OPEN',
-    openedBy: 'u',
-    openedAt: '',
-    closedBy: null,
-    closedAt: null,
-    lockedAt: null,
-    openingCash: '0',
-    closingCash: null,
-    createdAt: '',
-    updatedAt: '',
-  };
-}
-function bday(): BusinessDay {
-  return {
-    id: 'bd-9',
-    organizationId: 'org-1',
-    stationId: 'st-1',
-    businessDate: '2026-03-15',
-    status: 'OPEN',
-    openedBy: 'u',
-    openedAt: '',
-    closedBy: null,
-    closedAt: null,
-    createdAt: '',
-    updatedAt: '',
-  };
+
+function run(input: Record<string, unknown>, terminals?: TerminalLookup, now?: string) {
+  const collections = new CollRepo();
+  const { store, events } = eventBus();
+  const result = new RecordCollection({
+    collections,
+    customers: new CustomerRepo([customer()]),
+    accounts: new AccountRepo(),
+    terminals,
+    docNumbers,
+    events,
+  }).execute(
+    { customerId: 'cust-1', amount: 5000, paymentMethod: 'Cash', ...input } as any,
+    officeCtx(now),
+  );
+  return { result, collections, store };
 }
 
-describe('RecordCollection (decoupled)', () => {
-  it('CASH at counter attaches to shift + drawer', async () => {
-    const collections = new CollRepo();
-    const ledger = new LedgerRepo();
-    const store = new InMemoryEventStore();
-    const result = await new RecordCollection({
-      collections,
-      ledger,
-      customers: new CustomerRepo([customer()]),
-      shifts: new ShiftRepo([shift()]),
-      businessDays: new BdRepo([{ ...bday(), id: 'bd-1' }]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store }),
-    }).execute(
-      { customerId: 'cust-1', amount: 5000, paymentMethod: 'Cash', shiftId: 'sh-1' },
-      ctx(),
-    );
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.shiftId).toBe('sh-1');
-      expect(result.data.businessDayId).toBe('bd-1');
-    }
-    expect(ledger.rows[0].transactionType).toBe('Collection');
-    expect(store.events[0].eventType).toBe(BusinessEvents.CREDIT_PAYMENT_RECEIVED);
-  });
-
-  it('BANK TRANSFER (no shift) is business-day anchored with no shift link', async () => {
-    const collections = new CollRepo();
-    const ledger = new LedgerRepo();
-    const result = await new RecordCollection({
-      collections,
-      ledger,
-      customers: new CustomerRepo([customer()]),
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([bday()]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
-      { customerId: 'cust-1', amount: 5000, paymentMethod: 'BankTransfer', stationId: 'st-1' },
-      ctx(),
-    );
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.shiftId).toBeNull();
-      expect(result.data.businessDayId).toBe('bd-9');
-    }
-    expect(ledger.rows[0].shiftId).toBeNull();
-    expect(collections.rows[0].metadata).toEqual({});
-  });
-
-  it('accepts a closed-day collection and marks the record, ledger row, and event as late', async () => {
-    const collections = new CollRepo();
-    const ledger = new LedgerRepo();
-    const store = new InMemoryEventStore();
-    const closedDay = { ...bday(), status: 'CLOSED' as const, closedAt: '2026-03-15T09:00:00Z' };
-    const result = await new RecordCollection({
-      collections,
-      ledger,
-      customers: new CustomerRepo([customer()]),
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([closedDay]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store }),
-    }).execute(
-      { customerId: 'cust-1', amount: 5000, paymentMethod: 'BankTransfer', stationId: 'st-1' },
-      ctx(),
-    );
-
-    expect(result.success).toBe(true);
-    expect(collections.rows[0].metadata).toEqual({ lateEntry: true });
-    expect(ledger.rows[0].metadata).toEqual({ lateEntry: true });
-    expect(store.events[0].metadata).toMatchObject({
-      lateEntry: true,
-      lateEntryPrimary: true,
-      grouping: { role: 'primary' },
+describe('RecordCollection (Office Record, ADR 0005)', () => {
+  it('records a cash collection into Cash in Hand on the Entry Date, never a shift', async () => {
+    const { result, collections, store } = run({ fundingAccountId: 'cash' });
+    const r = await result;
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(collections.rows[0]).toMatchObject({
+      stationId: 'st-1',
+      entryDate: '2026-03-15',
+      fundingAccountId: 'cash',
+      terminalId: null,
     });
+    const [event] = store.events;
+    expect(event.eventType).toBe(BusinessEvents.CREDIT_PAYMENT_RECEIVED);
+    expect(event.businessDayId).toBeNull();
+    expect(event.payload).toMatchObject({ entryDate: '2026-03-15', fundingAccountId: 'cash' });
+    expect(event.payload).not.toHaveProperty('shiftId');
+    expect((event.metadata as any).presentation.templateId).toBe('credit-payment-received.v2');
   });
 
-  it('retains a closed shift on a non-drawer late collection', async () => {
-    const collections = new CollRepo();
-    const closedDay = {
-      ...bday(),
-      id: 'bd-1',
-      status: 'CLOSED' as const,
-      closedAt: '2026-03-15T09:00:00Z',
-    };
-    const closedShift = {
-      ...shift(),
-      status: 'CLOSED' as const,
-      closedAt: '2026-03-15T08:30:00Z',
-      closedBy: 'u',
-    };
-    const result = await new RecordCollection({
-      collections,
-      ledger: new LedgerRepo(),
-      customers: new CustomerRepo([customer()]),
-      shifts: new ShiftRepo([closedShift]),
-      businessDays: new BdRepo([closedDay]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
-      { customerId: 'cust-1', amount: 500, paymentMethod: 'Card', shiftId: 'sh-1' },
-      ctx(),
-    );
-
-    expect(result.success).toBe(true);
-    if (result.success)
-      expect(result.data).toMatchObject({ shiftId: 'sh-1', metadata: { lateEntry: true } });
+  it('dates a 03:00 collection on the 15th the 15th, despite a 06:00 Day Start', async () => {
+    const r = await run({ fundingAccountId: 'cash' }, undefined, '2026-03-14T21:30:00Z').result;
+    expect(r.success && r.data.entryDate).toBe('2026-03-15');
   });
 
-  it('rejects a cash collection without an open shift', async () => {
-    const collections = new CollRepo();
-    const result = await new RecordCollection({
-      collections,
-      ledger: new LedgerRepo(),
-      customers: new CustomerRepo([customer()]),
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([bday()]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
-      { customerId: 'cust-1', amount: 500, paymentMethod: 'Cash', stationId: 'st-1' },
-      ctx(),
-    );
-
-    expect(result.success).toBe(false);
-    expect(collections.rows).toHaveLength(0);
+  it('refuses an account that does not suit the method', async () => {
+    const cashIntoBank = await run({ fundingAccountId: 'hdfc' }).result;
+    expect(cashIntoBank.success).toBe(false);
+    const upiIntoCash = await run({ paymentMethod: 'UPI', fundingAccountId: 'cash' }).result;
+    expect(upiIntoCash.success).toBe(false);
+    const neftIntoBank = await run({ paymentMethod: 'BankTransfer', fundingAccountId: 'hdfc' })
+      .result;
+    expect(neftIntoBank.success).toBe(true);
   });
 
-  it('rejects a drawer collection against a closed shift and closed day', async () => {
-    const collections = new CollRepo();
-    const closedDay = {
-      ...bday(),
-      id: 'bd-1',
-      status: 'CLOSED' as const,
-      closedAt: '2026-03-15T09:00:00Z',
-    };
-    const closedShift = {
-      ...shift(),
-      status: 'CLOSED' as const,
-      closedAt: '2026-03-15T08:30:00Z',
-      closedBy: 'u',
-    };
-    const result = await new RecordCollection({
-      collections,
-      ledger: new LedgerRepo(),
-      customers: new CustomerRepo([customer()]),
-      shifts: new ShiftRepo([closedShift]),
-      businessDays: new BdRepo([closedDay]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
-      { customerId: 'cust-1', amount: 500, paymentMethod: 'Cash', shiftId: 'sh-1' },
-      ctx(),
-    );
-
-    expect(result.success).toBe(false);
-    if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
-    expect(collections.rows).toHaveLength(0);
-  });
-
-  it('retains optional shift attribution for a non-drawer collection', async () => {
-    const collections = new CollRepo();
-    const result = await new RecordCollection({
-      collections,
-      ledger: new LedgerRepo(),
-      customers: new CustomerRepo([customer()]),
-      shifts: new ShiftRepo([shift()]),
-      businessDays: new BdRepo([{ ...bday(), id: 'bd-1' }]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
-      { customerId: 'cust-1', amount: 1000, paymentMethod: 'Card', shiftId: 'sh-1' },
-      ctx(),
-    );
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.shiftId).toBe('sh-1');
-      expect(result.data.businessDayId).toBe('bd-1');
+  it('routes a UPI collection through a terminal to its clearing account (#276)', async () => {
+    const terminals = new TerminalLookup([terminal('pos-1', { clearingAccountId: 'clearing' })]);
+    const r = await run({ paymentMethod: 'UPI', terminalId: 'pos-1' }, terminals).result;
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.terminalId).toBe('pos-1');
+      expect(r.data.fundingAccountId).toBe('clearing');
     }
+  });
+
+  it('rejects a terminal from another station (#276)', async () => {
+    const terminals = new TerminalLookup([terminal('pos-9', { stationId: 'st-2' })]);
+    const r = await run({ paymentMethod: 'Card', terminalId: 'pos-9' }, terminals).result;
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects an unknown customer', async () => {
+    const r = await run({ customerId: 'nope', fundingAccountId: 'cash' }).result;
+    expect(r.success).toBe(false);
   });
 });

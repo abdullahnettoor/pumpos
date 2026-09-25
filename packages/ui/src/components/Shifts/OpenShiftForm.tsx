@@ -1,9 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FileText, Info, Play } from 'lucide-react';
-import { Panel, Button, Form } from '../../pump-ds/index.js';
+import { Panel, Button, Chip, Form } from '../../pump-ds/index.js';
 import { Field, Select, NumberInput, DateField } from '../primitives/Field.js';
+import { inr } from '../../utils/format.js';
 import type { BusinessDayStatusItem } from '../../services/cloud.js';
-import { formatStationDateTime } from '@pump/shared';
+import {
+  compareByDispenserThenNozzle,
+  dispenserLabel,
+  formatStationDateTime,
+  shiftDisplayLabel,
+} from '@pump/shared';
 import { createOpenShiftFormSchema, type OpenShiftFormValues } from '@pump/shared';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 import { useZodForm } from '../../forms/useZodForm.js';
@@ -24,9 +30,10 @@ interface OpenShiftFormProps {
   businessDate: string;
   currentBusinessDate: string;
   timeZone?: string;
-  openingCash: number;
-  staffAssignments: { userId: string; duId: string }[];
+  staffAssignments: { userId: string; duId: string; openingFloat: number }[];
   onStaffAssignmentChange: (duId: string, userId: string) => void;
+  /** Opening Float per dispenser Drawer (ADR 0005). */
+  onOpeningFloatChange: (duId: string, openingFloat: number) => void;
   initialReadings: { nozzleId: string; openingReading: number }[];
   onInitialReadingChange: (nozzleId: string, value: number) => void;
   isOpening: boolean;
@@ -34,10 +41,185 @@ interface OpenShiftFormProps {
   onViewLastShiftSummary: () => void;
 }
 
+const sectionHeading: React.CSSProperties = {
+  fontSize: '12px',
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  color: 'var(--text-muted)',
+  marginBottom: '6px',
+};
+
 const sectionNote: React.CSSProperties = {
   fontSize: '12px',
   color: 'var(--text-muted)',
   marginBottom: '12px',
+};
+
+/** The dispenser fields this form reads. Narrower than the API row on purpose. */
+interface DispenserOption {
+  id: string;
+  code?: string | null;
+  name?: string | null;
+}
+
+/** The terminal fields this form reads. */
+interface TerminalOption {
+  id: string;
+  label: string;
+  supportsCard?: boolean | null;
+  supportsUpi?: boolean | null;
+}
+
+/** The staff fields this form reads. `email` distinguishes a back-office user. */
+interface StaffOption {
+  id: string;
+  fullName: string;
+  email?: string | null;
+  role?: string | null;
+}
+
+/** "POS A (Card + UPI)" — the rails matter when deciding which pump it belongs to. */
+function terminalLabel(term: TerminalOption): string {
+  const rails = [term.supportsCard ? 'Card' : null, term.supportsUpi ? 'UPI' : null]
+    .filter(Boolean)
+    .join(' + ');
+  return `${term.label}${rails ? ` (${rails})` : ''}`;
+}
+
+/**
+ * One dispenser unit's assignment: the attendant accountable for it this
+ * shift, and the POS terminals that sit with them.
+ *
+ * Grouped per dispenser because that is the unit the operator actually thinks
+ * in — "who is on pump 2 and which POS is with them". Two flat lists, one of
+ * attendants and one of terminals, made that mapping something they had to
+ * hold in their head while reading down both (#223).
+ *
+ * `role="group"` rather than a bare panel: these are related form controls,
+ * and the dispenser's label is the only thing that tells two otherwise
+ * identical "Attendant" selects apart — for a screen reader and for a test.
+ */
+const DispenserAssignmentCard: React.FC<{
+  du: DispenserOption;
+  dispensers: DispenserOption[];
+  staff: StaffOption[];
+  terminals: TerminalOption[];
+  assignedUserId: string;
+  openingFloat: number;
+  terminalAssignments: { terminalId: string; duId: string }[];
+  onStaffAssignmentChange: (duId: string, userId: string) => void;
+  onOpeningFloatChange: (duId: string, openingFloat: number) => void;
+  onTerminalAssignmentChange: (terminalId: string, duId: string) => void;
+}> = ({
+  du,
+  dispensers,
+  staff,
+  terminals,
+  assignedUserId,
+  openingFloat,
+  terminalAssignments,
+  onStaffAssignmentChange,
+  onOpeningFloatChange,
+  onTerminalAssignmentChange,
+}) => {
+  const label = `Dispenser ${dispenserLabel({ duCode: du.code, duName: du.name })}`;
+  const duIdOf = (terminalId: string) =>
+    terminalAssignments.find((t) => t.terminalId === terminalId)?.duId ?? '';
+  const mine = terminals.filter((term) => duIdOf(term.id) === du.id);
+  const attachable = terminals.filter((term) => duIdOf(term.id) !== du.id);
+  const nameOfDu = (duId: string) => {
+    const other = dispensers.find((d) => d.id === duId);
+    return other ? dispenserLabel({ duCode: other.code, duName: other.name }) : null;
+  };
+
+  return (
+    <Panel title={label} role="group" aria-label={label}>
+      {/* `htmlFor` + `id` are not decoration here: every card renders an
+          identically-labelled "Attendant" select, so without the association
+          the dispenser's name is the only thing distinguishing them and
+          nothing carries it to the control. */}
+      <Field label="Attendant" htmlFor={`attendant-${du.id}`}>
+        <Select
+          id={`attendant-${du.id}`}
+          value={assignedUserId}
+          onChange={(e) => onStaffAssignmentChange(du.id, e.target.value)}
+        >
+          <option value="">— Unassigned —</option>
+          {staff?.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.fullName}
+              {u.role ? ` (${u.role})` : ''}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      {assignedUserId && (
+        <Field label="Opening float (₹)" htmlFor={`float-${du.id}`}>
+          <NumberInput
+            id={`float-${du.id}`}
+            min="0"
+            // Blank for 0/unset so the operator types into an empty box; submit
+            // still sends 0 (#302).
+            value={Number.isFinite(openingFloat) && openingFloat !== 0 ? openingFloat : ''}
+            placeholder="0"
+            invalid={openingFloat < 0}
+            onChange={(e) => {
+              const v = e.target.value === '' ? 0 : Number(e.target.value);
+              onOpeningFloatChange(du.id, Number.isFinite(v) && v >= 0 ? v : 0);
+            }}
+          />
+        </Field>
+      )}
+
+      {terminals && terminals.length > 0 && (
+        <div style={{ marginTop: '10px' }}>
+          {mine.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+              {mine.map((term) => (
+                <Chip
+                  key={term.id}
+                  size="sm"
+                  tone="info"
+                  variant="soft"
+                  // Detaching returns it to the shift-wide pool, which is where
+                  // an unassigned POS lives — it is never removed from the shift.
+                  onRemove={() => onTerminalAssignmentChange(term.id, '')}
+                  removeLabel={`Detach ${term.label} from ${label}`}
+                >
+                  {terminalLabel(term)}
+                </Chip>
+              ))}
+            </div>
+          )}
+          <Field label="Attach POS" htmlFor={`attach-pos-${du.id}`}>
+            <Select
+              id={`attach-pos-${du.id}`}
+              value=""
+              onChange={(e) => {
+                if (e.target.value) onTerminalAssignmentChange(e.target.value, du.id);
+              }}
+            >
+              <option value="">
+                {mine.length > 0 ? '— Attach another POS —' : '— No POS attached —'}
+              </option>
+              {attachable.map((term) => {
+                // A POS already on another pump is offered, but never silently:
+                // moving it is one step, and the option says where it is now.
+                const heldBy = nameOfDu(duIdOf(term.id));
+                return (
+                  <option key={term.id} value={term.id}>
+                    {terminalLabel(term)}
+                    {heldBy ? ` — on ${heldBy}` : ''}
+                  </option>
+                );
+              })}
+            </Select>
+          </Field>
+        </div>
+      )}
+    </Panel>
+  );
 };
 
 /**
@@ -60,15 +242,57 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   businessDate,
   currentBusinessDate,
   timeZone,
-  openingCash,
   staffAssignments,
   onStaffAssignmentChange,
+  onOpeningFloatChange,
   initialReadings,
   onInitialReadingChange,
   isOpening,
   onSubmit,
   onViewLastShiftSummary,
 }) => {
+  /**
+   * Terminals on no dispenser. They keep their own panel rather than vanishing:
+   * a POS shared across pumps is a real configuration, and a station with no
+   * dispensers configured at all still has to see its terminals.
+   */
+  const sharedTerminals = useMemo(() => {
+    // "Not on a dispenser that exists", not merely "has no duId". A stale
+    // assignment naming a dispenser that is no longer configured matches
+    // neither a card's list nor this one, so the terminal would render
+    // nowhere at all while still being submitted with that stale link. The
+    // old flat panel was immune by construction — it listed every terminal
+    // unconditionally — so the invariant has to be stated here instead.
+    const knownDuIds = new Set((dispensers ?? []).map((du: any) => du.id));
+    return (terminals ?? []).filter((term: any) => {
+      const duId = terminalAssignments.find((t) => t.terminalId === term.id)?.duId;
+      return !duId || !knownDuIds.has(duId);
+    });
+  }, [dispensers, terminals, terminalAssignments]);
+
+  /**
+   * Dispensers being offered with nobody on them.
+   *
+   * This blocks the open rather than warning, because it is not correctable
+   * afterwards: `shift_staff_assignments` is written only by `OpenShift`, and
+   * no route adds one to a shift that is already running. An unassigned
+   * dispenser therefore cannot be handed over for the life of that shift, and
+   * the only way out is to close and re-open, discarding the opening
+   * readings (#258).
+   *
+   * There is deliberately no "skip this pump for now" here. A pump nobody is
+   * working is a pump that is not in use, which is what the dispenser's own
+   * MAINTENANCE status already means — and the shift-status read filters those
+   * out, so one never reaches this form. A short-staffed shift spreads one
+   * attendant across several pumps instead.
+   */
+  const unattendedDispensers = useMemo(
+    () =>
+      (dispensers ?? []).filter(
+        (du: any) => !staffAssignments.find((a) => a.duId === du.id)?.userId,
+      ),
+    [dispensers, staffAssignments],
+  );
   const [customDateMode, setCustomDateMode] = useState(false);
   // The date the business-day query follows: whatever the operator picked, else
   // the prop. Derived rather than synced, so a new prop reaches the query
@@ -89,12 +313,12 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
     setValue,
     formState: { errors },
   } = useZodForm<OpenShiftFormValues>(schema, {
-    defaultValues: { shiftTemplateId: selectedTemplateId, businessDate, openingCash },
+    defaultValues: { shiftTemplateId: selectedTemplateId, businessDate },
     // React Hook Form syncs these from props, replacing three hand-rolled
     // setValue effects. `keepDirtyValues` leaves a field the operator has
     // already edited alone — which those effects could not express, so an
     // unrelated parent re-render used to overwrite a half-filled form.
-    values: { shiftTemplateId: selectedTemplateId, businessDate, openingCash },
+    values: { shiftTemplateId: selectedTemplateId, businessDate },
     resetOptions: { keepDirtyValues: true },
   });
   const formTemplateId = watch('shiftTemplateId');
@@ -145,11 +369,13 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
             }}
           >
             <span>
-              Shift ID:{' '}
+              Shift:{' '}
               <strong style={{ color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>
-                {lastShiftSummary.shiftId?.slice(0, 8) ||
-                  lastShiftSummary.snapshotData?.shiftId?.slice(0, 8) ||
-                  '—'}
+                {shiftDisplayLabel({
+                  businessDate: lastShift?.businessDate ?? lastShiftSummary.businessDate,
+                  shiftSequence: lastShift?.shiftSequence ?? lastShiftSummary.shiftSequence,
+                  shiftId: lastShiftSummary.shiftId ?? lastShiftSummary.snapshotData?.shiftId,
+                })}
               </strong>
             </span>
             <span>
@@ -264,12 +490,14 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                 )}
               </Field>
             )}
-            <Field label="Opening cash float (₹)" error={errors.openingCash?.message} required>
-              <NumberInput
-                {...register('openingCash', { valueAsNumber: true })}
-                min="0"
-                invalid={!!errors.openingCash}
-              />
+            <Field label="Opening cash (Σ floats)">
+              <div className="font-mono" style={{ padding: '6px 0' }}>
+                {inr(
+                  staffAssignments
+                    .filter((a) => a.userId)
+                    .reduce((sum, a) => sum + (a.openingFloat || 0), 0),
+                )}
+              </div>
             </Field>
           </div>
         </Panel>
@@ -303,17 +531,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
               }}
             >
               {[...nozzles]
-                .sort((a: any, b: any) => {
-                  const du = String(a.duCode || a.duName || '').localeCompare(
-                    String(b.duCode || b.duName || ''),
-                    undefined,
-                    { numeric: true },
-                  );
-                  if (du !== 0) return du;
-                  return String(a.name || '').localeCompare(String(b.name || ''), undefined, {
-                    numeric: true,
-                  });
-                })
+                .sort(compareByDispenserThenNozzle(dispenserLabel, (n: any) => n.name))
                 .map((nz: any) => {
                   const initial = initialReadings.find((r) => r.nozzleId === nz.id);
                   return (
@@ -336,79 +554,82 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
         )}
 
         {dispensers && dispensers.length > 0 && (
-          <Panel title="Staff assignment">
-            <p style={sectionNote}>Assign attendants to dispenser units (optional).</p>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                gap: '14px',
-              }}
-            >
-              {dispensers.map((du: any) => {
-                const assigned = staffAssignments.find((a) => a.duId === du.id);
-                return (
-                  <Field key={du.id} label={`Dispenser ${du.code || du.name}`}>
-                    <Select
-                      value={assigned?.userId ?? ''}
-                      onChange={(e) => onStaffAssignmentChange(du.id, e.target.value)}
-                    >
-                      <option value="">— Unassigned —</option>
-                      {staff &&
-                        staff.map((u: any) => (
-                          <option key={u.id} value={u.id}>
-                            {u.fullName}
-                            {!u.email ? ' (Attendant)' : ''}
-                          </option>
-                        ))}
-                    </Select>
-                  </Field>
-                );
-              })}
-            </div>
-          </Panel>
-        )}
-
-        {terminals && terminals.length > 0 && (
-          <Panel title="Payment terminals (POS)">
+          // A plain section, not a Panel: each card below is already one, and
+          // nesting draws a second bordered box inside the first.
+          <section>
+            <h3 style={sectionHeading}>Dispenser assignment</h3>
             <p style={sectionNote}>
-              Assign each POS to a dispenser so attendants can declare its card/UPI batch at
-              handover; leave shift-wide if shared across pumps.
+              Who is on each pump, and which POS is with them. Every pump in service needs an
+              attendant — it cannot be given one after the shift opens. A POS is optional, and one
+              left shift-wide is shared across pumps.
             </p>
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                gap: '14px',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: '12px',
               }}
             >
-              {terminals.map((term: any) => {
-                const assigned = terminalAssignments.find((t) => t.terminalId === term.id);
-                const rails = [term.supportsCard ? 'Card' : null, term.supportsUpi ? 'UPI' : null]
-                  .filter(Boolean)
-                  .join(' + ');
-                return (
-                  <Field key={term.id} label={`${term.label}${rails ? ` (${rails})` : ''}`}>
-                    <Select
-                      value={assigned?.duId ?? ''}
-                      onChange={(e) => onTerminalAssignmentChange(term.id, e.target.value)}
-                    >
-                      <option value="">— Shift-wide (any pump) —</option>
-                      {dispensers &&
-                        dispensers.map((du: any) => (
-                          <option key={du.id} value={du.id}>
-                            Dispenser {du.code || du.name}
-                          </option>
-                        ))}
-                    </Select>
-                  </Field>
-                );
-              })}
+              {dispensers.map((du: any) => (
+                <DispenserAssignmentCard
+                  key={du.id}
+                  du={du}
+                  dispensers={dispensers}
+                  staff={staff}
+                  terminals={terminals}
+                  assignedUserId={staffAssignments.find((a) => a.duId === du.id)?.userId ?? ''}
+                  openingFloat={staffAssignments.find((a) => a.duId === du.id)?.openingFloat ?? 0}
+                  terminalAssignments={terminalAssignments}
+                  onStaffAssignmentChange={onStaffAssignmentChange}
+                  onOpeningFloatChange={onOpeningFloatChange}
+                  onTerminalAssignmentChange={onTerminalAssignmentChange}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {sharedTerminals.length > 0 && (
+          <Panel title="Shift-wide POS" role="group" aria-label="Shift-wide POS">
+            <p style={sectionNote}>
+              Not tied to a pump. Any attendant can declare these at handover — attach one to a
+              dispenser above if only that pump uses it.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {sharedTerminals.map((term: any) => (
+                <Chip key={term.id} size="sm" tone="neutral" variant="soft">
+                  {terminalLabel(term)}
+                </Chip>
+              ))}
             </div>
           </Panel>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            gap: '12px',
+          }}
+        >
+          {unattendedDispensers.length > 0 && (
+            <p
+              // A blocking validation message: announced, and the only stable
+              // handle on it — the text spans several nodes.
+              role="alert"
+              style={{ ...sectionNote, marginBottom: 0, textAlign: 'right' }}
+            >
+              {/* Named, not counted: the operator has to know which card to go
+                  back to, and on a wide grid "2 dispensers" does not say. */}
+              {unattendedDispensers
+                .map((du: any) => dispenserLabel({ duCode: du.code, duName: du.name }))
+                .join(', ')}{' '}
+              {unattendedDispensers.length === 1 ? 'needs an attendant' : 'need an attendant'} — a
+              dispenser cannot be assigned one after the shift opens. Put a pump that is not in use
+              into maintenance instead.
+            </p>
+          )}
           <Button
             type="submit"
             variant="primary"
@@ -418,7 +639,8 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
               formBusinessDate > currentBusinessDate ||
               businessDayState === 'CLOSED' ||
               businessDayState === 'UNKNOWN' ||
-              businessDayState === 'UNAVAILABLE'
+              businessDayState === 'UNAVAILABLE' ||
+              unattendedDispensers.length > 0
             }
             leftIcon={<Play style={{ fill: 'currentColor' }} />}
           >

@@ -24,14 +24,7 @@ import {
   type DomainEvent,
   type EventTone,
 } from '@pump/core';
-import { stationSetupRouter } from './routes/station-setup.js';
-import { paymentTerminalsRouter } from './routes/payment-terminals.js';
-import { productsRouter } from './routes/products.js';
-import { shiftsRouter } from './routes/shifts.js';
-import { transactionsRouter } from './routes/transactions.js';
-import { dssrRouter } from './routes/dssr.js';
-import { financeRouter } from './routes/finance.js';
-import { accessRouter } from './routes/access.js';
+import { TENANT_ROUTERS } from './routes/tenant-routers.js';
 import { platformAccessRouter } from './routes/platform-access.js';
 import { RestoreOrganization, SuspendOrganization } from '@pump/core';
 import type { AccessChangeResult } from '@pump/core';
@@ -796,16 +789,9 @@ api.get('/activity/:groupId', async (c) => {
 // Runs after auth (needs c.var.user) and skips GET/HEAD internally.
 api.use('*', idempotency);
 
-// Mount routes
-api.route('/setup', stationSetupRouter);
-api.route('/setup', paymentTerminalsRouter);
-api.route('/setup', productsRouter);
-api.route('/shifts', shiftsRouter);
-api.route('/transactions', transactionsRouter);
-api.route('/dssr', dssrRouter);
-api.route('/finance', financeRouter);
-// Organization access document (role-filtered, presentation only).
-api.route('/access', accessRouter);
+// Mount routes — through the shared list so every tenant router is also
+// enumerated by the station-tenancy coverage test (#235).
+for (const [prefix, router] of TENANT_ROUTERS) api.route(prefix, router);
 
 // Mount authenticated group
 app.route('/api', api);

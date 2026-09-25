@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { resolveEntryDate } from '@pump/shared';
 import type { ColumnDef } from '@tanstack/react-table';
 import { PageLayout } from '../primitives/PageLayout.js';
 import { Drawer } from '../Drawer.js';
@@ -19,6 +20,7 @@ import { DateRangeField, computeRange, type DateRange } from '../primitives/Date
 import { useToast } from '../primitives/ToastProvider.js';
 import { useFinancialAccounts, useAccountLedger, queryKeys } from '../../query/hooks.js';
 import { CloudFinanceService } from '../../services/cloud.js';
+import { ACCOUNT_TYPE_LABEL, LEDGER_SOURCE_LABEL } from '../../utils/ledgerLabels.js';
 import { inr } from '../../utils/format.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Wallet, ArrowLeft, ArrowLeftRight, Banknote } from 'lucide-react';
@@ -27,14 +29,7 @@ const financeSvc = new CloudFinanceService();
 
 type AccountType = 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
 
-const TYPE_LABEL: Record<AccountType, string> = {
-  CASH_IN_HAND: 'Cash in Hand',
-  PETTY_CASH: 'Petty Cash',
-  BANK: 'Bank',
-  MERCHANT_CLEARING: 'Card/UPI Clearing',
-  CMS: 'OMC Card Settlement (CMS)',
-  OWNER: 'Owner',
-};
+const TYPE_LABEL: Record<AccountType, string> = ACCOUNT_TYPE_LABEL;
 
 const TYPE_TONE: Record<
   AccountType,
@@ -46,23 +41,6 @@ const TYPE_TONE: Record<
   MERCHANT_CLEARING: 'warning',
   CMS: 'info',
   OWNER: 'brand',
-};
-
-const SOURCE_LABEL: Record<string, string> = {
-  OPENING: 'Opening balance',
-  SALE_CASH: 'Cash sale',
-  SALE_CARD: 'Card/UPI sale',
-  SALE_OMC: 'OMC card sale',
-  COLLECTION: 'Collection',
-  INCOME: 'Other income',
-  EXPENSE: 'Expense',
-  SUPPLIER_PAYMENT: 'Supplier payment',
-  DEPOSIT: 'Cash deposit',
-  TRANSFER: 'Transfer',
-  SETTLEMENT: 'Settlement',
-  BANK_CHARGE: 'Bank charge',
-  INTEREST: 'Interest',
-  ADJUSTMENT: 'Adjustment',
 };
 
 export interface AccountsPanelProps {
@@ -121,6 +99,8 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
   const stationId = selectedStation?.id ?? null;
   const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
+  // Bank work is an Office Record: default to the Entry Date, never the sales day (ADR 0005).
+  const todayEntry = () => resolveEntryDate({ timeZone: s.timezone });
 
   const { data: accounts, isLoading } = useFinancialAccounts(stationId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -199,7 +179,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
     setSettleBankId(banks[0]?.id ?? '');
     setSettleGross(selected ? String(Number(selected.balance) || '') : '');
     setSettleFee('');
-    setSettleDate('');
+    setSettleDate(todayEntry());
     setSettleNotes('');
     setSettleError(null);
     setSettleOpen(true);
@@ -232,7 +212,9 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
       });
       setSettleOpen(false);
       await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
+      await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
       await qc.invalidateQueries({ queryKey: ['account-ledger'] });
+      await qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() });
       toast.success('Settlement recorded.');
     } catch (err: any) {
       setSettleError(err.message || 'Failed to record settlement.');
@@ -259,7 +241,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
   const openEntry = () => {
     setEntryKind('CHARGE');
     setEntryAmount('');
-    setEntryDate('');
+    setEntryDate(todayEntry());
     setEntryNotes('');
     setEntryError(null);
     setEntryOpen(true);
@@ -295,7 +277,9 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
         });
         setEntryOpen(false);
         await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
+        await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
         await qc.invalidateQueries({ queryKey: ['account-ledger'] });
+        await qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() });
         toast.success('Opening balance updated.');
       } catch (err: any) {
         setEntryError(err.message || 'Failed to update opening balance.');
@@ -322,7 +306,9 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
       });
       setEntryOpen(false);
       await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
+      await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
       await qc.invalidateQueries({ queryKey: ['account-ledger'] });
+      await qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() });
       toast.success('Entry recorded.');
     } catch (err: any) {
       setEntryError(err.message || 'Failed to record entry.');
@@ -348,7 +334,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
     setFromAccountId(list[0]?.id ?? '');
     setToAccountId(list[1]?.id ?? '');
     setTransferAmount('');
-    setTransferDate('');
+    setTransferDate(todayEntry());
     setTransferNotes('');
     setTransferError(null);
     setTransferOpen(true);
@@ -379,7 +365,9 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
       });
       setTransferOpen(false);
       await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
+      await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
       await qc.invalidateQueries({ queryKey: ['account-ledger'] });
+      await qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() });
       toast.success('Transfer recorded.');
     } catch (err: any) {
       setTransferError(err.message || 'Failed to record transfer.');
@@ -412,6 +400,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
       });
       setDrawerOpen(false);
       await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
+      await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
       toast.success('Account created.');
     } catch (err: any) {
       setError(err.message || 'Failed to create account.');
@@ -490,7 +479,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
               id: e.id,
               date: e.entryDate,
               dateLabel: e.entryDate,
-              type: SOURCE_LABEL[e.sourceType] ?? e.sourceType,
+              type: LEDGER_SOURCE_LABEL[e.sourceType] ?? e.sourceType,
               notes:
                 e.sourceType === 'SALE_OMC'
                   ? [

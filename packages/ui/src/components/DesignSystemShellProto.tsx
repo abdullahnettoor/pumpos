@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import {
   TopBar,
+  StatusBar,
   CommandPalette,
   useCommandPalette,
   type CommandGroup,
@@ -257,14 +258,10 @@ export const DesignSystemShellProtoPanel: React.FC = () => {
         <div className="overflow-hidden rounded-card border border-border-soft">
           <TopBar
             onToggleSidebar={() => note('Toggle sidebar')}
-            businessDate="09 Jul"
-            businessDayStatus="open"
-            onBusinessDay={() => note('Business day menu')}
-            stationLabel="Indiranagar HP"
+            stationName="Indiranagar HP"
             onOpenSearch={() => setOpen(true)}
             quickCreate={quickCreate}
             notifications={notifications}
-            syncStatus="online"
             userInitials="RS"
             userName="Rekha"
             userRole="Manager"
@@ -276,6 +273,14 @@ export const DesignSystemShellProtoPanel: React.FC = () => {
               last action: <span className="text-ink-strong">{lastAction}</span>
             </span>
           </div>
+          <StatusBar
+            syncStatus="online"
+            businessDate="09 Jul 2026"
+            businessDayStatus="open"
+            onBusinessDay={() => note('Business day')}
+            openShiftLabel="Shift 2 · 6h 12m"
+            appVersion="1.4.2"
+          />
         </div>
       </Group>
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { compareByDispenserThenNozzle, dispenserLabel } from '@pump/shared';
 import { Panel } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
 
@@ -131,19 +132,7 @@ export const NozzleReadingsGrid: React.FC<NozzleReadingsGridProps> = ({
             </thead>
             <tbody>
               {[...nozzleReadings]
-                .sort((a: any, b: any) => {
-                  const du = String(a.duCode || a.duName || '').localeCompare(
-                    String(b.duCode || b.duName || ''),
-                    undefined,
-                    { numeric: true },
-                  );
-                  if (du !== 0) return du;
-                  return String(a.nozzleName || '').localeCompare(
-                    String(b.nozzleName || ''),
-                    undefined,
-                    { numeric: true },
-                  );
-                })
+                .sort(compareByDispenserThenNozzle(dispenserLabel, (r: any) => r.nozzleName))
                 .map((nr: any, idx: number) => {
                   const opening = Number(nr.openingReading);
                   const closing = closingReadings[nr.nozzleId] ?? opening;

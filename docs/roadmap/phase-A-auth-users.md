@@ -23,7 +23,7 @@ is no plan/billing gating yet.
   looks up `public.users WHERE auth_user_id = jwt.sub` → resolves org/role/stations
   (60s per-isolate cache). Unmatched/`INACTIVE` → 403.
 - **DB trigger (source of truth for linking):** `public.handle_new_user()`
-  (`supabase/migrations/20260719000001_rls.sql`) fires `AFTER INSERT ON auth.users`:
+  (`packages/db/migrations/0001_rls_and_triggers.sql`) fires `AFTER INSERT ON auth.users`:
   - **Link branch** — if `NEW.email` matches an existing `public.users` row → sets
     `auth_user_id`, `status='ACTIVE'`, role/full_name from metadata.
   - **Self-signup branch** — if no email match → **creates a new org + Owner user**
@@ -219,7 +219,7 @@ in the client) and emit audit events; routes are rate-limited.
 | --------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Supabase config | dashboard                                                                       | Disable public sign-ups (Phone provider **not** used — dashboard requires Twilio)                                                  |
 | Secret          | `apps/api` wrangler + `Bindings` (`src/index.ts`) + `worker-configuration.d.ts` | `SUPABASE_SECRET_KEY` (secret), `SUPABASE_URL` (var)                                                                               |
-| DB              | `supabase/migrations/<new>.sql`                                                 | `handle_new_user()`: gate self-signup branch by `signup_intent='owner'` (A0; no phone match)                                       |
+| DB              | `packages/db/migrations/<new>.sql`                                              | `handle_new_user()`: gate self-signup branch by `signup_intent='owner'` (A0; no phone match)                                       |
 | Admin adapter   | `apps/api/src/infra/supabase-admin.ts` (new)                                    | createUser / updateUserById / inviteUserByEmail                                                                                    |
 | API routes      | `apps/api/src/routes/station-setup.ts`                                          | `POST /users` (provision + set auth_user_id), `/users/:id/reset-password`, `/users/:id/deactivate`; `POST /platform/owners/invite` |
 | Core            | `packages/core/.../station-setup/users/index.ts`, `kernel/event-catalog.ts`     | password + identity in CreateUser, ResetUserPassword, new events                                                                   |
@@ -243,7 +243,7 @@ in the client) and emit audit events; routes are rate-limited.
 >    `SUPABASE_SECRET_KEY` (modern `sb_secret_...`) goes in `.dev.vars` for local dev and, per deployed
 >    env, `wrangler secret put SUPABASE_SECRET_KEY` (add `--env preview` for the
 >    preview worker). Never commit the service-role key. Redeploy the API after setting it.
->    The A0 trigger gate lives in `supabase/migrations/20260719000001_rls.sql` (`handle_new_user()`
+>    The A0 trigger gate lives in `packages/db/migrations/0001_rls_and_triggers.sql` (`handle_new_user()`
 >    self-signup branch fires only when `raw_user_meta_data.signup_intent = 'owner'`); the same file
 >    also adds a partial unique index on `users(auth_user_id)` (section 2b) so one auth user can never
 >    map to two profile rows.

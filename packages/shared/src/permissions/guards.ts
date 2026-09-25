@@ -47,12 +47,24 @@ export function isAttendant(role: Role): boolean {
 }
 
 /**
- * Who may record an attendant handover. Attendants may record only their OWN
- * handover (enforced at the route by forcing userId = self); operational roles
- * may record on behalf of any attendant.
+ * Who may record an attendant handover. Owners, Managers and Staff may record
+ * on behalf of anyone holding a Drawer. Attendants and Accountants may record
+ * only their OWN handover (`isHandoverSelfScoped`): an Accountant holds a Drawer
+ * only when covering a pump (#301) and hands it over themselves, on mobile.
  */
 export function canRecordHandover(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Staff' || role === 'Attendant';
+  return (
+    role === 'Owner' ||
+    role === 'Manager' ||
+    role === 'Staff' ||
+    role === 'Attendant' ||
+    role === 'Accountant'
+  );
+}
+
+/** Roles whose handover writes are limited to their own Drawer (#301). */
+export function isHandoverSelfScoped(role: Role): boolean {
+  return role === 'Attendant' || role === 'Accountant';
 }
 
 // ----------------------------------------------------
@@ -227,7 +239,41 @@ export function isManageableByManager(targetRole: Role): boolean {
 // Reporting
 // ----------------------------------------------------
 
+/**
+ * Back-office roles: the ones accountable for the station's numbers rather
+ * than for working a dispenser. Reaching Reports and exporting from it are the
+ * same answer, so they are the same list — written once, because three copies
+ * of `Owner | Manager | Accountant` in one file is more drift surface than the
+ * inline check this replaced.
+ */
+export const REPORTS_ROLES: readonly Role[] = ['Owner', 'Manager', 'Accountant'];
+
+/**
+ * Reach the Reports workspace at all.
+ *
+ * Exported because more than the nav needs the answer: anything that offers a
+ * route *into* Reports has to agree with the nav that gates it, or it sends
+ * the operator to a page their own sidebar does not list and whose reads
+ * refuse them. The "See older Business Days" affordance is one such caller
+ * (#244).
+ */
+export function canViewReports(role: Role): boolean {
+  return REPORTS_ROLES.includes(role);
+}
+
 export function canExportReports(role: Role): boolean {
+  return REPORTS_ROLES.includes(role);
+}
+
+/**
+ * View the Attendant Handover Report. Back-office roles only: an Attendant
+ * must not see a peer's variance history, and Staff have no accountability
+ * role over attendants.
+ *
+ * This is the Role axis only — the report is additionally gated on the
+ * `reports.attendant` Product Capability, which the server checks first.
+ */
+export function canViewAttendantReport(role: Role): boolean {
   return role === 'Owner' || role === 'Manager' || role === 'Accountant';
 }
 

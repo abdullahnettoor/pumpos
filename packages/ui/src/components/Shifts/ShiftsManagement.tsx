@@ -14,6 +14,8 @@ import { MerchandiseHandoversPanel } from './MerchandiseHandoversPanel.js';
 import { NozzleReadingsGrid } from './NozzleReadingsGrid.js';
 import { ShiftTotalsSummary } from './ShiftTotalsSummary.js';
 import { BusinessDayTab } from './BusinessDayTab.js';
+import { seedStaffAssignments } from './seedStaffAssignments.js';
+import { buildOpenShiftAssignments } from './openShiftAssignments.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { useToast } from '../primitives/ToastProvider.js';
@@ -37,7 +39,10 @@ import {
   type PendingTankDipWorkflow,
 } from '../../query/stockCountMutation.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
-import { Station } from '@pump/shared';
+import { Station, buildCloseCashSummary, parseDrawerKey } from '@pump/shared';
+import type { CloseCashDrawer, ShiftStaffAssignment } from '@pump/shared';
+import type { DrawerRow } from './DrawerReconciliationTable.js';
+import type { CloseDropRow } from './CloseShiftWizard.js';
 import type { OpenShiftFormValues } from '@pump/shared';
 import {
   FileText,
@@ -66,15 +71,12 @@ interface ShiftTotals {
   upiCollections: number;
   creditSales: number;
   expenseCount: number;
-  purchaseCount: number;
-  purchaseTotal: number;
 }
 
 /** Derive the live shift totals from a shift-transactions payload (pure). */
 function computeShiftTotals(txs: any): ShiftTotals {
   const collections = txs?.collections ?? [];
   const expenses = txs?.expenses ?? [];
-  const purchases = txs?.purchases ?? [];
   const byMethod = (method: string) =>
     collections
       .filter((c: any) => c.paymentMethod === method)
@@ -89,8 +91,6 @@ function computeShiftTotals(txs: any): ShiftTotals {
     ),
     cashExpenses: expenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0),
     expenseCount: expenses.length,
-    purchaseCount: purchases.length,
-    purchaseTotal: purchases.reduce((sum: number, p: any) => sum + Number(p.amount), 0),
   };
 }
 
@@ -98,7 +98,12 @@ interface ShiftsManagementProps {
   selectedStation: Station | null;
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
   userName: string;
-  onNavigate?: (path: string) => void;
+  /**
+   * Required, not optional (#244). Both shells pass it; making it mandatory
+   * means a future host cannot quietly drop the Business Day tab's "See older"
+   * affordance, which is the only route to a day beyond the recent window.
+   */
+  onNavigate: (path: string) => void;
 }
 
 export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
@@ -176,9 +181,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // Open Shift Form States
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [businessDate, setBusinessDate] = useState(currentBusinessDate);
-  const [openingCash, setOpeningCash] = useState(0);
   const [preserveNextShiftDate, setPreserveNextShiftDate] = useState(false);
-  const [staffAssignments, setStaffAssignments] = useState<{ userId: string; duId: string }[]>([]);
+  const [staffAssignments, setStaffAssignments] = useState<
+    { userId: string; duId: string; openingFloat: number }[]
+  >([]);
   // Terminal→DU assignment for the shift being opened. duId '' means shift-wide (any DU).
   const [terminalAssignments, setTerminalAssignments] = useState<
     { terminalId: string; duId: string }[]
@@ -194,6 +200,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [isPreparingClose, setIsPreparingClose] = useState(false);
   const [closeWizardOpen, setCloseWizardOpen] = useState(false);
   const [closingCash, setClosingCash] = useState(0);
+  // Cash Drops recorded at close (#287).
+  const [closeDrops, setCloseDrops] = useState<CloseDropRow[]>([]);
   const [confirmWarningsChecked, setConfirmWarningsChecked] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const inventoryStatusQ = useInventoryStatus(stationId);
@@ -309,7 +317,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const shiftTxQ = useShiftTransactions(data?.activeShift?.id ?? null);
   const shiftTotals = useMemo(() => computeShiftTotals(shiftTxQ.data), [shiftTxQ.data]);
 
-  const openingCashNum = data?.activeShift ? Number(data.activeShift.openingCash) : 0;
+  const recon = data?.activeShift?.reconciliation;
   const handovers = data?.activeShift?.handovers || [];
   const hasHandovers = handovers.length > 0;
 
@@ -341,45 +349,53 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const activeUpiCollections = hasHandovers ? totalUpiHandedOver : shiftTotals.upiCollections;
   const activeCreditSales = hasHandovers ? totalCreditHandedOver : shiftTotals.creditSales;
 
-  // Authoritative cash reconciliation from the server (same figures CloseShift
-  // uses). Preferred over the client estimate so the expected drawer includes
-  // non-attendant merchandise cash and reads the true station-level short/surplus.
-  const recon = data?.activeShift?.reconciliation;
-  const expectedCash = recon
-    ? openingCashNum +
-      Number(recon.cashSales || 0) +
-      Number(recon.cashCollections || 0) +
-      Number(recon.cashIncome || 0) -
-      Number(recon.drawerExpenses || 0) -
-      Number(recon.drawerSupplierPayments || 0)
-    : openingCashNum + activeCashCollections - shiftTotals.cashExpenses;
+  // Close-shift cash summary (#307, ADR 0005): the server recon when loaded,
+  // else Σ Opening Floats from the staff assignments. The two-level variance
+  // (#287) uses the same shared formula CloseShift uses.
+  const staffAssignmentRows: ShiftStaffAssignment[] = data?.activeShift?.staffAssignments ?? [];
+  const reconDrawers: any[] = Array.isArray(recon?.drawers) ? recon.drawers : [];
+  const closeDropEntries = closeDrops
+    .filter((r) => r.amount > 0)
+    .map((r) => ({ ...parseDrawerKey(r.drawerKey), amount: r.amount }));
+  const { lines: cashLines, closeCash } = buildCloseCashSummary<CloseCashDrawer & DrawerRow>({
+    recon,
+    staffAssignments: staffAssignmentRows,
+    closeDrops: closeDropEntries,
+    closingCash,
+    cashHandedOver: hasHandovers ? totalCashHandedOver : null,
+  });
+  const expectedCash = cashLines.expectedOfficeCash;
   const cashVariance = closingCash - expectedCash;
 
   // Station-level cash summary for the closing wizard (#4). Aggregate figures —
   // cross-attendant settlements (e.g. a borrowed POS) net out in the drawer total.
-  const cashSummary = recon
-    ? {
-        openingCash: openingCashNum,
-        cashSales: Number(recon.cashSales || 0),
-        handoverCash: Number(recon.handoverCash || 0),
-        merchCashOutsideHandover: Number(recon.merchCashOutsideHandover || 0),
-        cashCollections: Number(recon.cashCollections || 0),
-        cashIncome: Number(recon.cashIncome || 0),
-        drawerExpenses: Number(recon.drawerExpenses || 0),
-        drawerSupplierPayments: Number(recon.drawerSupplierPayments || 0),
-        expectedDrawer: expectedCash,
-        merchCashBreakdown: Array.isArray(recon.merchCashOutsideHandoverBreakdown)
-          ? recon.merchCashOutsideHandoverBreakdown
-          : [],
-        attendantVariance: totalAttendantVariance,
-        attendantVariances: handovers.map((h: any) => ({
-          name: h.attendantName || h.userName || 'Attendant',
-          du: h.duName || null,
-          variance: Number(h.varianceAmount || 0),
-        })),
-        hasHandovers,
-      }
-    : null;
+  const cashSummary =
+    recon && closeCash
+      ? {
+          merchCashOutsideHandover: Number(recon.merchCashOutsideHandover || 0),
+          drawers: closeCash.drawers,
+          merchCashBreakdown: Array.isArray(recon.merchCashOutsideHandoverBreakdown)
+            ? recon.merchCashOutsideHandoverBreakdown
+            : [],
+          attendantVariance: reconDrawers.length
+            ? closeCash.attendantVariance
+            : totalAttendantVariance,
+          attendantVariances: reconDrawers.length
+            ? closeCash.drawers
+                .filter((d: any) => d.variance !== null)
+                .map((d: any) => ({
+                  name: d.attendantName || 'Attendant',
+                  du: d.duName || null,
+                  variance: Number(d.variance || 0),
+                }))
+            : handovers.map((h: any) => ({
+                name: h.attendantName || h.userName || 'Attendant',
+                du: h.duName || null,
+                variance: Number(h.varianceAmount || 0),
+              })),
+          hasHandovers,
+        }
+      : null;
 
   // Reactively compute close warnings when close flow is active
   const warnings: string[] = [];
@@ -532,14 +548,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     if (statusData.templates && statusData.templates.length > 0) {
       setSelectedTemplateId((prev: string) => prev || statusData.templates[0].id);
     }
-    if (statusData.dispensers) {
-      setStaffAssignments(
-        statusData.dispensers.map((du: any) => ({
-          duId: du.id,
-          userId: statusData.staff?.[0]?.id ?? '',
-        })),
-      );
-    }
+    setStaffAssignments(seedStaffAssignments(statusData.dispensers));
     if (statusData.terminals) {
       setTerminalAssignments(
         statusData.terminals.map((t: any) => ({ terminalId: t.id, duId: '' })),
@@ -579,17 +588,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       setIsOpening(true);
       setBusinessDate(values.businessDate);
       setSelectedTemplateId(values.shiftTemplateId);
-      setOpeningCash(Number(values.openingCash));
       const payload: any = {
         stationId: selectedStation.id,
         shiftTemplateId: values.shiftTemplateId,
         businessDate: values.businessDate,
-        openingCash: Number(values.openingCash),
-        staffAssignments: staffAssignments.filter((a) => a.userId !== ''),
-        terminalLinks: terminalAssignments.map((t) => ({
-          terminalId: t.terminalId,
-          duId: t.duId || null,
-        })),
+        ...buildOpenShiftAssignments(staffAssignments, terminalAssignments),
       };
 
       // If no last shift exists, send the manual override initial readings
@@ -609,6 +612,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   const handleStaffAssignmentChange = (duId: string, userId: string) => {
     setStaffAssignments((prev) => prev.map((a) => (a.duId === duId ? { ...a, userId } : a)));
+  };
+
+  const handleOpeningFloatChange = (duId: string, openingFloat: number) => {
+    setStaffAssignments((prev) => prev.map((a) => (a.duId === duId ? { ...a, openingFloat } : a)));
   };
 
   const handleTerminalAssignmentChange = (terminalId: string, duId: string) => {
@@ -713,11 +720,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       const closeResult = await shiftService.closeShift(data.activeShift.id, {
         closingCash,
         nozzleReadings: readingsArray,
+        ...(closeDropEntries.length > 0 ? { closeCashDrops: closeDropEntries } : {}),
       });
+      setCloseDrops([]);
 
       setIsPreparingClose(false);
       setCloseWizardOpen(false);
-      await loadShiftStatus();
 
       const closedWorkflow: PendingTankDipWorkflow = {
         ...preparedWorkflow,
@@ -725,7 +733,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         closedAt: closeResult.shift.closedAt,
       };
       savePendingTankDipWorkflow(stationId!, closedWorkflow);
+      // The success card is rendered from the close response, which already
+      // carries everything it shows. Cache invalidation/refetch runs in the
+      // background so the operator is never made to wait on the slowest
+      // operational query for feedback the server has already given us.
       setClosedShiftSuccess(closedWorkflow);
+      runTask(loadShiftStatus(), 'Shift closed, but the screen could not be refreshed.');
       await saveTankDips(closedWorkflow).catch(() => undefined);
     } catch (err: any) {
       if (stationId && isAmbiguousMutationError(err)) {
@@ -870,6 +883,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           activeBusinessDayId={activeShift?.businessDayId ?? null}
           requestedBusinessDate={requestedBusinessDayDate}
           onBusinessDateSelected={() => setRequestedBusinessDayDate(null)}
+          onNavigate={onNavigate}
         />
       </div>
     );
@@ -907,7 +921,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         onSaveTankDips={() => saveTankDips()}
         onDiscardTankDips={discardTankDips}
         onStartNext={() => {
-          setOpeningCash(closedShiftSuccess.closingCash);
           setSelectedTemplateId(closedShiftSuccess.nextTemplateId);
           setBusinessDate(closedShiftSuccess.businessDate);
           setPreserveNextShiftDate(true);
@@ -1039,13 +1052,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           scheduledStartTime={activeShift.scheduledStartTime}
           scheduledEndTime={activeShift.scheduledEndTime}
           timeZone={stationSettings.timezone}
-          openingCash={openingCashNum}
-          cashCollections={activeCashCollections}
-          cashExpenses={shiftTotals.cashExpenses}
-          expectedCash={expectedCash}
+          cashLines={cashLines}
           closingCash={closingCash}
           onClosingCashChange={setClosingCash}
           cashSummary={cashSummary}
+          closeCashDrops={closeDrops}
+          onCloseCashDropsChange={setCloseDrops}
           stationTanks={stationTanks}
           dipReadings={dipReadings}
           onDipReadingsChange={setDipReadings}
@@ -1083,6 +1095,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               (activeShift.staffAssignments || []).find(
                 (sa: any) => sa.userId === selectedHandoverAssignment.userId,
               )?.attributed?.merchandiseCash ?? 0,
+            )}
+            openingFloat={Number(
+              (activeShift.staffAssignments || []).find(
+                (sa: any) =>
+                  sa.userId === selectedHandoverAssignment.userId &&
+                  sa.duId === selectedHandoverAssignment.duId,
+              )?.openingFloat ?? 0,
             )}
             merchandiseNonCash={(() => {
               const a = (activeShift.staffAssignments || []).find(
@@ -1150,9 +1169,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         businessDate={businessDate}
         currentBusinessDate={currentBusinessDate}
         timeZone={stationSettings.timezone}
-        openingCash={openingCash}
         staffAssignments={staffAssignments}
         onStaffAssignmentChange={handleStaffAssignmentChange}
+        onOpeningFloatChange={handleOpeningFloatChange}
         initialReadings={initialReadings}
         onInitialReadingChange={handleInitialReadingChange}
         isOpening={isOpening}

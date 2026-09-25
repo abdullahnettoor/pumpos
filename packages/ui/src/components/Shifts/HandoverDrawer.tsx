@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Checkbox } from '../primitives/Toggle.js';
+import { InfoTip } from '../primitives/InfoTip.js';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -22,6 +24,7 @@ import {
   useRecordHandoverMutation,
 } from '../../query/handoverMutation.js';
 import { inr } from '../../utils/format.js';
+import { compareNatural } from '@pump/shared';
 import { useRunTask } from '../../utils/runTask.js';
 
 const transactionService = new CloudTransactionService();
@@ -40,6 +43,7 @@ const genIdemKey = (): string =>
 // Define form validation schema using Zod
 const handoverFormSchema = z.object({
   cashHandedOver: z.coerce.number().nonnegative('Cash must be non-negative'),
+  cashDrops: z.coerce.number().nonnegative('Cash drops must be non-negative'),
   cardHandedOver: z.coerce.number().nonnegative('Card Swipe total must be non-negative'),
   upiHandedOver: z.coerce.number().nonnegative('UPI QR total must be non-negative'),
   nozzleReadings: z.record(
@@ -78,6 +82,8 @@ interface HandoverDrawerProps {
   merchandiseCash?: number;
   /** Walk-in merchandise paid by card/UPI on a terminal (informational; not in cash expected). */
   merchandiseNonCash?: number;
+  /** This Drawer's Opening Float, issued at shift open (ADR 0005). */
+  openingFloat?: number;
   /** Called after a credit line is added/voided so the parent can refetch status. */
   onCreditChanged?: () => void | Promise<void>;
   existingHandover: any;
@@ -111,6 +117,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   omcSales = [],
   merchandiseCash = 0,
   merchandiseNonCash = 0,
+  openingFloat = 0,
   onCreditChanged,
   existingHandover,
   onSaveSuccess,
@@ -134,6 +141,8 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   // Denomination counts for the handover cash (held here so re-opening the
   // popover preserves them). Reset when the drawer opens.
   const [cashBreakdown, setCashBreakdown] = useState<CashBreakdown>({});
+  // Starts open only when editing a handover that already has drops (#304).
+  const [hasDrops, setHasDrops] = useState(() => Number(existingHandover?.cashDrops) > 0);
   const {
     register,
     handleSubmit,
@@ -163,6 +172,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       }
       return {
         cashHandedOver: (Number(existingHandover?.cashHandedOver) || '') as any,
+        cashDrops: (Number(existingHandover?.cashDrops) || '') as any,
         cardHandedOver: (Number(existingHandover?.cardHandedOver) || '') as any,
         upiHandedOver: (Number(existingHandover?.upiHandedOver) || '') as any,
         nozzleReadings,
@@ -422,6 +432,16 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
     if (a > 0 && pr > 0) setCcQty((a / pr).toFixed(3));
   };
 
+  /**
+   * Started, never awaited. The credit line and the button's idle state come
+   * from the write's own response; the parent's invalidate + shift-status
+   * refetch only refreshes balances elsewhere on the screen. Awaiting it here
+   * is what kept the spinner running for seconds after the sale was recorded
+   * (#219), and the prefill latch already stops the refetch clobbering entry.
+   */
+  const refreshAfterCreditChange = () =>
+    runTask(onCreditChanged?.(), 'Sale recorded, but the screen could not be refreshed.');
+
   const addCreditLine = async () => {
     setError(null);
     const amt = Number(ccAmount);
@@ -475,7 +495,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       setAcceptedResult(null);
       handoverRequestRef.current = null;
       resetCcRow();
-      await onCreditChanged?.();
+      refreshAfterCreditChange();
     } catch (e: any) {
       setError(e.message || 'Failed to add sale');
     } finally {
@@ -492,7 +512,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       setCreditLines((prev) => prev.filter((l) => l.id !== id));
       setAcceptedResult(null);
       handoverRequestRef.current = null;
-      await onCreditChanged?.();
+      refreshAfterCreditChange();
     } catch (e: any) {
       setError(e.message || 'Failed to remove credit sale');
     } finally {
@@ -509,7 +529,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       setOmcLines((prev) => prev.filter((l) => l.id !== id));
       setAcceptedResult(null);
       handoverRequestRef.current = null;
-      await onCreditChanged?.();
+      refreshAfterCreditChange();
     } catch (e: any) {
       setError(e.message || 'Failed to remove OMC card sale');
     } finally {
@@ -517,28 +537,31 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
     }
   };
 
-  // Derived Calculations
-  const calculatedNozzles = nozzles.map((nz) => {
-    const opening = Number(nz.openingReading || 0);
-    const closing = Number(formNozzleReadings[nz.nozzleId] ?? opening);
-    const volume = Math.max(0, closing - opening);
-    const price = Number(nz.unitPrice || 0);
-    const testing = Number(formNozzleTesting[nz.nozzleId] || 0);
+  // Derived Calculations. Sorted at the point of display so the drawer reads
+  // N1, N2 … N10 whatever order the caller happened to hand them in (#218).
+  const calculatedNozzles = [...nozzles]
+    .sort((a: any, b: any) => compareNatural(a.nozzleName, b.nozzleName))
+    .map((nz) => {
+      const opening = Number(nz.openingReading || 0);
+      const closing = Number(formNozzleReadings[nz.nozzleId] ?? opening);
+      const volume = Math.max(0, closing - opening);
+      const price = Number(nz.unitPrice || 0);
+      const testing = Number(formNozzleTesting[nz.nozzleId] || 0);
 
-    const rawValue = volume * price;
-    const testingDeduction = testing * price;
+      const rawValue = volume * price;
+      const testingDeduction = testing * price;
 
-    return {
-      ...nz,
-      opening,
-      closing,
-      volume,
-      price,
-      testing,
-      rawValue,
-      testingDeduction,
-    };
-  });
+      return {
+        ...nz,
+        opening,
+        closing,
+        volume,
+        price,
+        testing,
+        rawValue,
+        testingDeduction,
+      };
+    });
 
   const totalVolumeSold = calculatedNozzles.reduce((sum, n) => sum + n.volume, 0);
   const totalRawSales = calculatedNozzles.reduce((sum, n) => sum + n.rawValue, 0);
@@ -592,7 +615,13 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   const merchandiseNonCashNum = Number(merchandiseNonCash) || 0;
   const expectedTotal = expectedSales + merchandiseCashNum;
   // Round to paise so floating-point dust (e.g. -1e-13) doesn't read as a shortage.
-  const variance = Math.round((totalDeclared - expectedTotal) * 100) / 100 || 0;
+  // The pouch also holds the Opening Float and is short what was dropped, so the
+  // Drawer variance is handed − (float + cash sales − drops). Preview only; the
+  // server's figure replaces it once accepted.
+  const openingFloatNum = Number(openingFloat) || 0;
+  const cashDropsNum = Number(formValues.cashDrops) || 0;
+  const variance =
+    Math.round((totalDeclared - expectedTotal - openingFloatNum + cashDropsNum) * 100) / 100 || 0;
 
   // Volume sanity: credit litres billed for a fuel must not exceed the litres
   // metered (and not testing) for that fuel at this DU. Reactive to the readings.
@@ -673,6 +702,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
         userId,
         duId,
         cashHandedOver: Number(values.cashHandedOver),
+        cashDrops: Number(values.cashDrops || 0),
         ...(aggregateAllowed
           ? {
               cardHandedOver: Number(values.cardHandedOver || 0),
@@ -1145,7 +1175,15 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                 alignItems: 'baseline',
               }}
             >
-              <span>3. Customer Sales</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                3. Customer Sales
+                <InfoTip label="About customer sales">
+                  Fuel billed to a customer's account (Credit / Fleet / Regular receivable) or paid
+                  by an OMC fleet card (settled to the CMS account — not a receivable). Each line is
+                  recorded immediately; the fuel is already metered, so it sits on the declared
+                  side.
+                </InfoTip>
+              </span>
               {creditTotal + omcTotal > 0 && (
                 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
                   {inr(creditTotal + omcTotal)}
@@ -1153,9 +1191,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
               )}
             </h3>
             <p style={{ fontSize: '11px', color: 'var(--text-faint)', marginBottom: '10px' }}>
-              Fuel billed to a customer's account (Credit / Fleet / Regular receivable) or paid by
-              an OMC fleet card (settled to the CMS account — not a receivable). Each line is
-              recorded immediately; the fuel is already metered, so it sits on the declared side.
+              Credit and OMC fleet-card sales from this pump.
             </p>
 
             {volumeOverages.length > 0 && (
@@ -1522,6 +1558,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                           type="number"
                           step="0.001"
                           min="0"
+                          placeholder="0"
                           value={ccQty}
                           onChange={(e) => handleCcQtyChange(e.target.value)}
                           disabled={ccBusy}
@@ -1553,6 +1590,9 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                           type="number"
                           step="0.01"
                           min="0"
+                          placeholder="0"
+                          name="ccAmount"
+                          aria-label="Customer sale amount"
                           value={ccAmount}
                           onChange={(e) => handleCcAmountChange(e.target.value)}
                           disabled={ccBusy}
@@ -1688,6 +1728,56 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                   <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
                     {errors.cashHandedOver.message}
                   </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+                {/* Most handovers have no mid-shift drop, so the field hides
+                    behind a toggle (#304). Turning it off zeroes the value so a
+                    hidden amount can never skew the variance. */}
+                <Checkbox
+                  label="Had cash drops"
+                  checked={hasDrops}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setHasDrops(on);
+                    if (!on)
+                      setValue('cashDrops', '' as any, { shouldValidate: true, shouldDirty: true });
+                  }}
+                />
+                {hasDrops && (
+                  <>
+                    <label
+                      htmlFor="handover-cash-drops"
+                      style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}
+                    >
+                      Cash Drops (₹)
+                    </label>
+                    <input
+                      id="handover-cash-drops"
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="0"
+                      {...register('cashDrops')}
+                      style={{
+                        height: '32px',
+                        padding: '0 8px',
+                        border: '1px solid var(--border-strong)',
+                        borderRadius: 'var(--radius-input)',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '13px',
+                        textAlign: 'right',
+                      }}
+                    />
+                    <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
+                      Cash taken from this pouch mid-shift (e.g. to the safe).
+                    </span>
+                    {errors.cashDrops && (
+                      <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
+                        {errors.cashDrops.message}
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
@@ -1849,6 +1939,23 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
               >
                 <span>of which OMC card (→ CMS):</span>
                 <strong style={{ fontFamily: 'var(--font-mono)' }}>{inr(omcTotal)}</strong>
+              </div>
+            )}
+            {(openingFloatNum > 0 || cashDropsNum > 0) && (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '13px',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                <span>
+                  Pouch: float {inr(openingFloatNum)} · dropped {inr(cashDropsNum)}
+                </span>
+                <strong style={{ fontFamily: 'var(--font-mono)' }}>
+                  {inr(openingFloatNum - cashDropsNum)}
+                </strong>
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>

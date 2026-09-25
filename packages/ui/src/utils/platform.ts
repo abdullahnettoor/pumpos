@@ -7,9 +7,9 @@
  * the convenience `window.__TAURI__` global is disabled, so we key off that
  * (same check `apps/desktop/src/main.tsx` uses to register the native PDF saver).
  *
- * Use it to hide browser-only affordances the webview can't perform — notably
- * `window.print()`, which is a no-op in the Tauri webview. Desktop users use the
- * cross-platform "Save PDF" action instead.
+ * Use it to hide browser-only affordances the webview can't perform (e.g.
+ * `window.print()` is a no-op in the Tauri webview; report printing goes
+ * through `printReactPdf` instead).
  */
 export const isDesktopApp = (): boolean =>
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;

@@ -8,7 +8,7 @@ import { createDispatcher } from '../infra/events.js';
 import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
 import { DrizzleStockMovementRepository } from '../infra/repositories/inventory-repositories.js';
 import { DrizzleBusinessDayRepository } from '../infra/repositories/station-ops-repositories.js';
-import { loadStationClock } from '../infra/station-clock.js';
+import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
 import { runInTransaction } from '../infra/transaction.js';
 import { sendResult } from '../infra/send-result.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
@@ -43,7 +43,8 @@ productsRouter.post('/products', writePolicyGuard('POST /setup/products'), async
   // Run in a transaction so the product row and any opening-stock movement commit
   // atomically. Load the station clock so opening stock resolves to the correct
   // business day (timezone / day-start aware) when a stationId is supplied.
-  const stationClock = body?.stationId ? await loadStationClock(db, body.stationId) : {};
+  const stationClock = await loadStationClock(db, c.var.user.organizationId, body?.stationId);
+  if (!stationClock) return stationNotFound(c);
   const result = await runInTransaction(db, (tx, events) =>
     new CreateProduct({
       repository: new DrizzleProductRepository(tx),
@@ -91,7 +92,8 @@ productsRouter.post(
     }
     const db = c.var.db;
     const stationId = body?.stationId ?? undefined;
-    const stationClock = stationId ? await loadStationClock(db, stationId) : {};
+    const stationClock = await loadStationClock(db, c.var.user.organizationId, stationId);
+    if (!stationClock) return stationNotFound(c);
     const created: Array<{ id: string; code: string }> = [];
     const failed: Array<{ code?: string; name?: string; error: string }> = [];
     for (const row of rows) {

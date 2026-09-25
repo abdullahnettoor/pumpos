@@ -3,11 +3,12 @@ import React from 'react';
 import path from 'node:path';
 import fs from 'node:fs';
 import zlib from 'node:zlib';
-import { Font, pdf } from '@react-pdf/renderer';
+import { Font, pdf, Text } from '@react-pdf/renderer';
 import { ShiftSummaryDoc, LetterheadBand, C } from './shiftSummaryDoc.js';
 import { DssrDoc } from './dssrDoc.js';
 import { InvoiceDoc } from './invoiceDoc.js';
 import { LedgerDoc } from './ledgerDoc.js';
+import { AttendantReportDoc, dayPageTitle } from './attendantReportDoc.js';
 import { MARK_PATH, MARK_VIEWBOX } from '../../pump-ds/brand/Brand.js';
 
 async function streamToBuffer(stream: any): Promise<Buffer> {
@@ -208,6 +209,31 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     assertPdfContainsVectorMark(buffer);
   });
 
+  // #308: an older snapshot that stored purchases keeps its "Supplier Fuel
+  // Intakes" section; a new snapshot (no purchases) renders none.
+  it('renders stored purchases from an older Shift Summary snapshot only', () => {
+    const texts = (node: any): string[] => {
+      if (node == null || typeof node === 'boolean') return [];
+      if (typeof node === 'string' || typeof node === 'number') return [String(node)];
+      if (Array.isArray(node)) return node.flatMap(texts);
+      if (typeof node.type === 'function' && node.type !== Text) {
+        return texts((node.type as any)(node.props));
+      }
+      return texts(node.props?.children);
+    };
+    const config = { sections: ['meta', 'signatures'] as any[], paper: 'A4' as const };
+    const base = { shiftId: 'shift-1', nozzleReadings: [], handovers: [] };
+    const old = {
+      ...base,
+      purchases: [{ supplierName: 'IOCL Depot', documentNumber: 'PUR-7', amount: 450000 }],
+    };
+    const oldText = texts((ShiftSummaryDoc as any)({ snapshot: old, config })).join(' ');
+    expect(oldText).toContain('SUPPLIER FUEL INTAKES');
+    expect(oldText).toContain('IOCL Depot');
+    const newText = texts((ShiftSummaryDoc as any)({ snapshot: base, config })).join(' ');
+    expect(newText).not.toContain('SUPPLIER FUEL INTAKES');
+  });
+
   it('generates real PDF buffer for DSSR Report with verified vector mark and showLogo=false', async () => {
     const dssr = {
       businessDate: '2026-09-18',
@@ -311,5 +337,144 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
 
     assertPdfContainsVectorMark(buffer);
+  });
+
+  /**
+   * #221: a statement covering several business days is read a day at a time,
+   * so it paginates — a cover carrying the range's collective figures, then
+   * one page per day. A single-day statement is one document and gains no
+   * cover from the same code path.
+   */
+  describe('attendant statement pagination', () => {
+    const attendantShift = (businessDate: string, over: Record<string, unknown> = {}) => ({
+      shiftId: `sh-${businessDate}`,
+      businessDate,
+      shiftTemplateName: 'Morning',
+      closedAt: `${businessDate}T14:00:00.000Z`,
+      dispensers: [],
+      cashHandedOver: 1000,
+      cardHandedOver: 200,
+      upiHandedOver: 300,
+      creditHandedOver: 100,
+      expectedFuelSales: 1650,
+      billedSales: 0,
+      handoverProductSales: 0,
+      creditSales: 800,
+      creditSaleLines: [
+        {
+          transactionId: `ct-${businessDate}`,
+          customerId: 'cust-1',
+          customerName: 'Kerala Roadways',
+          vehicleRegistration: 'KL-07-AB-1234',
+          productName: 'Diesel',
+          quantity: 20,
+          unitPrice: 40,
+          amount: 800,
+        },
+      ],
+      varianceAmount: -50,
+      testingVolume: 5,
+      ...over,
+    });
+
+    const statement = (dates: string[]) => ({
+      attendantId: 'att-1',
+      attendantName: 'Ravi',
+      shiftsWorked: dates.length,
+      handoverCount: dates.length,
+      totals: {
+        cashHandedOver: 1000 * dates.length,
+        cardHandedOver: 200 * dates.length,
+        upiHandedOver: 300 * dates.length,
+        creditHandedOver: 100 * dates.length,
+        expectedFuelSales: 1650 * dates.length,
+        billedSales: 0,
+        handoverProductSales: 0,
+        creditSales: 800 * dates.length,
+        varianceAmount: -50 * dates.length,
+      },
+      shifts: dates.map((d) => attendantShift(d)),
+      from: dates[0],
+      to: dates[dates.length - 1],
+      generatedAt: '2026-03-04T06:00:00.000Z',
+    });
+
+    const config = {
+      sections: [
+        'header',
+        'summary',
+        'fuelSales',
+        'merchandise',
+        'creditSales',
+        'terminals',
+        'variance',
+        'signature',
+      ] as any[],
+      paper: 'A4' as const,
+      letterhead: mockLetterhead,
+    };
+
+    const render = async (dates: string[]) => {
+      const doc = React.createElement(AttendantReportDoc, {
+        data: statement(dates) as any,
+        config,
+      });
+      const stream = await pdf(doc as any).toBuffer();
+      return streamToBuffer(stream);
+    };
+
+    /*
+     * Counted off the raw PDF objects: @react-pdf exposes no page count, and
+     * rendering to text loses it. If a future renderer writes pages into
+     * object streams this stops matching — it would under-count, not silently
+     * pass, so the test still fails loudly.
+     */
+    const pageCount = (buffer: Buffer) =>
+      (buffer.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
+
+    it('gives a single-day statement no separate cover page', async () => {
+      const buffer = await render(['2026-03-01']);
+      expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+      expect(pageCount(buffer)).toBe(1);
+    });
+
+    it('covers a multi-day statement, then one page per business day', async () => {
+      const buffer = await render(['2026-03-01', '2026-03-02', '2026-03-03']);
+      expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+      // 1 cover + 3 day pages.
+      expect(pageCount(buffer)).toBe(4);
+    });
+
+    /*
+     * PDF text is font-encoded, so the name is asserted on the element tree:
+     * every bold Text node's string content, walked without invoking
+     * components (the letterhead is not the subject here).
+     */
+    const boldTexts = (node: any, out: string[] = []): string[] => {
+      if (node == null || typeof node !== 'object') return out;
+      if (Array.isArray(node)) {
+        node.forEach((n) => boldTexts(n, out));
+        return out;
+      }
+      const props = node.props ?? {};
+      if (props.style?.fontWeight === 700) {
+        const flat = ([] as any[]).concat(props.children).flat(Infinity);
+        out.push(flat.filter((c) => typeof c === 'string').join(''));
+      }
+      boldTexts(props.children, out);
+      return out;
+    };
+
+    it('titles the header and every day page with the attendant name', () => {
+      const tree = (AttendantReportDoc as any)({
+        data: statement(['2026-03-01', '2026-03-02']),
+        config,
+      });
+      const headerTree = tree.props.children[0].props.children;
+      const titles = boldTexts(tree);
+      expect(boldTexts(headerTree)).toContain('Ravi');
+      expect(titles).toContain(dayPageTitle('Ravi', '2026-03-01'));
+      expect(titles).toContain('Ravi · 2026-03-02');
+    });
   });
 });

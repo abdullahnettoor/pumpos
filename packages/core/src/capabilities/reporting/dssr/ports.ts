@@ -20,39 +20,15 @@ export interface DssrShiftSummary {
   shiftId: string;
   templateName?: string | null;
   closedAt?: string | null;
+  /**
+   * The shift's position within its business day — the `N` of the human
+   * `YYYYMMDD-N` label (see `formatShiftLabel` in `@pump/shared`). Counted over
+   * every shift of the day, voided included, so labels never renumber.
+   */
+  shiftSequence?: number | null;
   snapshot: Record<string, unknown>;
 }
-export interface DssrCollection {
-  paymentMethod: string;
-  amount: number;
-}
-export interface DssrExpense {
-  affectsDrawer: boolean;
-  paidFrom: string;
-  amount: number;
-  status: string;
-}
-/** Other/indirect income (rentals, commission, scrap, interest). */
-export interface DssrIncome {
-  affectsDrawer: boolean;
-  receivedInto: string;
-  amount: number;
-  status: string;
-  categoryName?: string | null;
-  /** FI4 — GST split frozen on the entry ('GST' | 'EXEMPT' | 'NON_TAXABLE'). */
-  taxCategory?: string | null;
-  taxableAmount?: number | null;
-  cgst?: number | null;
-  sgst?: number | null;
-  igst?: number | null;
-  cess?: number | null;
-}
 export interface DssrPurchase {
-  amount: number;
-}
-export interface DssrSupplierPayment {
-  affectsDrawer: boolean;
-  paidFrom: string;
   amount: number;
 }
 export interface DssrSale {
@@ -98,14 +74,14 @@ export interface DssrStockVariance {
   reason: string | null;
 }
 
-/** Everything anchored to a single business day, used to compose the DSSR. */
+/**
+ * Everything anchored to a single business day, used to compose the DSSR.
+ * Sales-only (ADR 0005): Office Records (collections, expenses, income,
+ * supplier payments) are dated by Entry Date and live in the Daily Cash Book.
+ */
 export interface DssrSourceData {
   shiftSummaries: DssrShiftSummary[];
-  collections: DssrCollection[];
-  expenses: DssrExpense[];
-  income: DssrIncome[];
   purchases: DssrPurchase[];
-  supplierPayments: DssrSupplierPayment[];
   sales: DssrSale[];
   creditSales: DssrCreditSale[];
   stockVariances: DssrStockVariance[];

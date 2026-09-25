@@ -15,6 +15,7 @@ import {
   type Col,
   type Cell,
 } from './shiftSummaryDoc.js';
+import { shiftDisplayLabel } from '@pump/shared';
 import type { DssrSection, DssrReportConfig } from './reportConfig.js';
 import { DEFAULT_DSSR_CONFIG } from './reportConfig.js';
 
@@ -45,12 +46,6 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
         Business Date {d.businessDate}
         {d.generatedAt ? ` \u2022 Generated ${fmtDateTime(d.generatedAt)}` : ''}
       </Text>
-      {d.generatedAt && (
-        <Text style={s.sub}>
-          Financial sections include records available as of {fmtDateTime(d.generatedAt)}. Financial
-          entries recorded later are not included.
-        </Text>
-      )}
     </View>
   ),
   meta: (d) => {
@@ -87,12 +82,12 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     );
   },
   kpis: (d) => {
-    const col = d.collections || {};
     const credit = d.credit || {};
+    const pnl = d.pnl || {};
     return (
       <View key="kpis" style={s.kpiRow}>
-        <Kpi l="Total Collections" v={inr(col.total)} c={C.success} />
-        <Kpi l="Cash Collections" v={inr(col.Cash)} c={C.ink} />
+        <Kpi l="Total Revenue" v={inr(pnl.revenue)} c={C.ink} />
+        <Kpi l="Gross Margin" v={inr(pnl.grossMargin)} c={C.success} />
         <Kpi
           l="Credit (Normal + Fleet)"
           v={inr(Number(credit.normalCredit || 0) + Number(credit.fleetCredit || 0))}
@@ -102,12 +97,9 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     );
   },
   financial: (d) => {
-    const col = d.collections || {};
     const credit = d.credit || {};
-    const exp = d.expenses || {};
-    const inc = d.income || {};
     const pur = d.purchases || {};
-    const sup = d.supplierPayments || {};
+    const pnl = d.pnl || {};
     const merch = d.merchandise || {};
     const sTax = (d.salesTax || {}) as {
       gst?: Record<string, number>;
@@ -115,30 +107,12 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     };
     return (
       <View key="financial">
-        <Text style={s.h2}>FINANCIAL SUMMARY</Text>
+        <Text style={s.h2}>SALES SUMMARY</Text>
         <View style={s.reconBox}>
-          <ReconRow label="Cash Collections" value={inr(col.Cash)} />
-          <ReconRow label="Card Collections" value={inr(col.Card)} />
-          <ReconRow label="UPI Collections" value={inr(col.UPI)} />
-          <ReconRow label="Bank Transfer Collections" value={inr(col.BankTransfer)} />
           <ReconRow label="Merchandise Sales" value={inr(merch.salesValue)} />
           <ReconRow label="Normal Credit Sales" value={inr(credit.normalCredit)} color={C.amber} />
           <ReconRow label="Fleet Credit Sales" value={inr(credit.fleetCredit)} color={C.amber} />
           <ReconRow label="Purchases" value={inr(pur.total)} />
-          <ReconRow
-            label="Supplier Payments (Drawer / Bank)"
-            value={`${inr(sup.drawer)} / ${inr(sup.bank)}`}
-          />
-          <ReconRow label="Drawer Expenses" value={inr(exp.drawer)} />
-          <ReconRow label="Business Expenses" value={inr(exp.business)} />
-          <ReconRow label="Total Expenses" value={inr(exp.total)} color={C.danger} />
-          {Number(inc.total || 0) > 0 && (
-            <ReconRow
-              label="Other Income (Cash / Bank)"
-              value={`${inr(inc.drawer)} / ${inr(inc.business)}`}
-              color={C.green}
-            />
-          )}
           {/* T5 — output tax on sales: GST (merchandise) and VAT (fuel) kept apart. */}
           {Number(sTax.gst?.total || 0) > 0 && (
             <>
@@ -162,27 +136,12 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
           {Number(sTax.vat?.vat || 0) > 0 && (
             <ReconRow label="Output VAT on Fuel" value={inr(Number(sTax.vat?.vat || 0))} />
           )}
-          {/* FI4 — output GST collected on other income. */}
-          {Number(inc.tax?.total || 0) > 0 && (
-            <>
-              <ReconRow
-                label="Other Income — Taxable Value"
-                value={inr(Number(inc.tax?.taxable || 0))}
-              />
-              {Number(inc.tax?.igst || 0) > 0 ? (
-                <ReconRow
-                  label="Output GST on Income (IGST)"
-                  value={inr(Number(inc.tax?.igst || 0))}
-                />
-              ) : (
-                <ReconRow
-                  label="Output GST on Income (CGST / SGST)"
-                  value={`${inr(Number(inc.tax?.cgst || 0))} / ${inr(Number(inc.tax?.sgst || 0))}`}
-                />
-              )}
-            </>
-          )}
+          <ReconRow label="Gross Margin" value={inr(pnl.grossMargin)} color={C.green} />
         </View>
+        <Text style={[s.label, { marginTop: 4 }]}>
+          Sales only. Collections, expenses, income and supplier payments are in the Daily Cash
+          Book.
+        </Text>
       </View>
     );
   },
@@ -338,11 +297,21 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     if (list.length === 0) return null;
     const rows: Cell[][] = list.map((sh) => {
       const v = Number(sh.cashVariance || 0);
+      const av = sh.attendantVariance == null ? null : Number(sh.attendantVariance);
       return [
-        { text: `${String(sh.shiftId || '').slice(0, 8)}\u2026` },
+        {
+          text: shiftDisplayLabel({
+            businessDate: d.businessDate as string | null | undefined,
+            shiftSequence: sh.shiftSequence,
+            shiftId: sh.shiftId,
+          }),
+        },
         { text: sh.templateName || 'Custom' },
         { text: sh.closedAt ? fmtDateTime(sh.closedAt) : '-' },
         { text: vol3(sh.netVolume) },
+        av == null
+          ? { text: '—' }
+          : { text: `${av > 0 ? '+' : ''}${inr(av)}`, color: varColor(av) },
         { text: `${v > 0 ? '+' : ''}${inr(v)}`, color: varColor(v) },
       ];
     });
@@ -351,12 +320,35 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
       { header: 'Template', flex: 1.6 },
       { header: 'Closed At', flex: 2 },
       { header: 'Net Volume', flex: 1.3, align: 'right', mono: true },
-      { header: 'Cash Variance', flex: 1.4, align: 'right', mono: true },
+      { header: 'Attendant Var.', flex: 1.4, align: 'right', mono: true },
+      { header: 'Office Count Var.', flex: 1.5, align: 'right', mono: true },
     ];
+    // Attendant (Handover) variance per Attendant/DU across the day (#287).
+    const attendants = (d.drawer?.attendants || []) as any[];
     return (
       <View key="shifts">
         <Text style={s.h2}>INCLUDED SHIFTS</Text>
         <TableView columns={cols} rows={rows} />
+        {attendants.length > 0 && (
+          <>
+            <Text style={s.h2}>ATTENDANT VARIANCE</Text>
+            <TableView
+              columns={[
+                { header: 'Attendant', flex: 3, strong: true },
+                { header: 'Variance', flex: 1.4, align: 'right', mono: true },
+              ]}
+              rows={attendants.map((a) => {
+                const av = Number(a.variance || 0);
+                return [
+                  { text: `${a.attendantName ?? 'Attendant'}${a.duName ? ` · ${a.duName}` : ''}` },
+                  av == null
+                    ? { text: '—' }
+                    : { text: `${av > 0 ? '+' : ''}${inr(av)}`, color: varColor(av) },
+                ];
+              })}
+            />
+          </>
+        )}
       </View>
     );
   },

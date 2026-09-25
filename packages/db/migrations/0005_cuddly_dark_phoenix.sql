@@ -1,1 +1,0 @@
-ALTER TABLE "tanks" ADD COLUMN "status" varchar(20) DEFAULT 'ACTIVE' NOT NULL;

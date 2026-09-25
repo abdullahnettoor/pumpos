@@ -1,6 +1,6 @@
 import React from 'react';
 import { useShiftStatus, useShiftSummaries, generateShiftSummaryPdf, inr } from '@pump/ui';
-import { resolveBusinessDate } from '@pump/shared';
+import { resolveBusinessDate, shiftDisplayLabel } from '@pump/shared';
 import type { Station } from '@pump/shared';
 import { ShareButton } from '../components/ShareButton.js';
 
@@ -226,7 +226,8 @@ export const ShiftsScreen: React.FC<Props> = ({ station }) => {
                     {s.templateName || 'Shift'}
                   </p>
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {timeFmt(s.openedAt)}
+                    {/* Readable shift name (#228), same string as the PDF. */}
+                    {shiftDisplayLabel(s)} · {timeFmt(s.openedAt)}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -247,6 +248,7 @@ export const ShiftsScreen: React.FC<Props> = ({ station }) => {
                         s.snapshotData,
                         s.shiftId ?? s.id,
                         s.templateName,
+                        { businessDate: s.businessDate, shiftSequence: s.shiftSequence },
                       )
                     }
                   />

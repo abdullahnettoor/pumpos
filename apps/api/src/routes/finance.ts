@@ -1,6 +1,11 @@
 import { Hono } from 'hono';
 import { type DbClient } from '@pump/db';
-import { canManageFinancialAccounts, isAuthorizedForStation } from '@pump/shared';
+import {
+  canCreateExpense,
+  canManageFinancialAccounts,
+  isAuthorizedForStation,
+  isValidBusinessDate,
+} from '@pump/shared';
 import {
   CreateFinancialAccount,
   UpdateFinancialAccount,
@@ -12,7 +17,7 @@ import {
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
-import { loadStationClock } from '../infra/station-clock.js';
+import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
 import { runInTransaction } from '../infra/transaction.js';
 import { sendResult } from '../infra/send-result.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
@@ -89,6 +94,57 @@ financeRouter.get('/movements', async (c) => {
   return c.json({ success: true, data });
 });
 
+// GET /finance/funding-accounts?stationId= — active accounts an Office Record
+// may name as its Funding Account (ADR 0005). Open to every office role, since
+// Staff record expenses and collections too.
+financeRouter.get('/funding-accounts', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!canCreateExpense(user.role)) return forbidden(c);
+  const stationId = c.req.query('stationId');
+  if (!stationId)
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } },
+      400,
+    );
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId }))
+    return forbidden(c);
+  const data = await new DrizzleFinancialAccountReader(db).listFundingAccounts(
+    user.organizationId,
+    stationId,
+  );
+  return c.json({ success: true, data });
+});
+
+// GET /finance/cash-book?stationId=&date= — the live Daily Cash Book: each
+// account's opening, in, out and closing on one Entry Date (ADR 0005).
+financeRouter.get('/cash-book', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+  const stationId = c.req.query('stationId');
+  const date = c.req.query('date');
+  if (!stationId || !date || !isValidBusinessDate(date))
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'stationId and date (YYYY-MM-DD) are required',
+        },
+      },
+      400,
+    );
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId }))
+    return forbidden(c);
+  const data = await new DrizzleFinancialAccountReader(db).dailyCashBook(
+    user.organizationId,
+    stationId,
+    date,
+  );
+  return c.json({ success: true, data });
+});
+
 // POST /finance/accounts — create a money account (seeds an OPENING entry).
 financeRouter.post('/accounts', writePolicyGuard('POST /finance/accounts'), async (c) => {
   const db = c.var.db;
@@ -105,7 +161,8 @@ financeRouter.post('/accounts', writePolicyGuard('POST /finance/accounts'), asyn
       403,
     );
   }
-  const clock = stationId ? await loadStationClock(db, stationId) : {};
+  const clock = await loadStationClock(db, user.organizationId, stationId);
+  if (!clock) return stationNotFound(c);
   const result = await runInTransaction(db, (tx, events) =>
     new CreateFinancialAccount({
       accounts: new DrizzleFinancialAccountRepository(tx),

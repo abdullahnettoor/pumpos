@@ -106,3 +106,4 @@ coverage/
 
 # local scratch
 /tmp/
+/.scratch/

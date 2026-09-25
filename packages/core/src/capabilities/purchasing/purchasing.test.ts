@@ -7,6 +7,7 @@ import {
   BusinessEvents,
 } from '../../kernel/index.js';
 import type { DocumentNumberGenerator, ExecutionContext } from '../../kernel/index.js';
+import { AccountRepo, eventBus, officeCtx } from '../finance/__tests__/office.js';
 import { RecordPurchase, RecordSupplierPayment } from './index.js';
 import type {
   Purchase,
@@ -128,8 +129,12 @@ class BdRepo implements BusinessDayWriteRepository {
       ) ?? null
     );
   }
-  async findByStationAndDate(orgId: string, stationId: string, _date: string) {
-    return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId) ?? null;
+  async findByStationAndDate(orgId: string, stationId: string, date: string) {
+    return (
+      this.rows.find(
+        (r) => r.organizationId === orgId && r.stationId === stationId && r.businessDate === date,
+      ) ?? null
+    );
   }
   async lockStation() {}
   async lockById() {}
@@ -220,25 +225,6 @@ function station(): Station {
     settings: {},
     onboardingStatus: 'READY_FOR_OPERATIONS',
     isActive: true,
-    createdAt: '',
-    updatedAt: '',
-  };
-}
-function shift(): Shift {
-  return {
-    id: 'sh-1',
-    organizationId: 'org-1',
-    stationId: 'st-1',
-    businessDayId: 'bd-1',
-    shiftTemplateId: 't',
-    status: 'OPEN',
-    openedBy: 'u',
-    openedAt: '',
-    closedBy: null,
-    closedAt: null,
-    lockedAt: null,
-    openingCash: '0',
-    closingCash: null,
     createdAt: '',
     updatedAt: '',
   };
@@ -337,8 +323,83 @@ describe('RecordPurchase', () => {
     expect(stock.movements[0].quantity).toBe('5000');
     expect(stock.movements[0].tankId).toBe('tank-1');
     expect(supplierTxns.rows[0].transactionType).toBe('Purchase');
-    expect(supplierTxns.rows[0].affectsDrawer).toBe(false);
+    // The payable moves no money and is dated on the purchase's Business Date.
+    expect(supplierTxns.rows[0].fundingAccountId).toBeNull();
+    expect(supplierTxns.rows[0].entryDate).toBe('2026-03-15');
     expect(store.events.map((e) => e.eventType)).toContain(BusinessEvents.GOODS_RECEIVED);
+  });
+
+  // ADR 0005 / #308: a purchase never stores a Shift. A legacy queued payload
+  // that sends only a shiftId (no date) must land on that Shift's business day
+  // (bd-8, yesterday), not today's (bd-9), whether or not ctx carries a station.
+  const yesterdayShift: Shift = {
+    id: 'sh-1',
+    organizationId: 'org-1',
+    stationId: 'st-1',
+    businessDayId: 'bd-8',
+    shiftTemplateId: 't',
+    status: 'OPEN',
+    openedBy: 'u',
+    openedAt: '',
+    closedBy: null,
+    closedAt: null,
+    lockedAt: null,
+    openingCash: '0',
+    closingCash: null,
+    createdAt: '',
+    updatedAt: '',
+  };
+  const twoDays = () => [{ ...bday(), id: 'bd-8', businessDate: '2026-03-14' }, bday()];
+  const recordWith = (cmd: Record<string, unknown>, context: ExecutionContext) =>
+    new RecordPurchase({
+      purchases: new PurchaseRepo(),
+      stock: new StockRepo(),
+      supplierTxns: new SupplierTxnRepo(),
+      suppliers: new SupplierRepo([supplier()]),
+      purchaseItems: new PurchaseItemRepo(),
+      products: new ProductRepo([fuelProduct()]),
+      stations: new StationRepo([station()]),
+      shifts: new ShiftRepo([yesterdayShift]),
+      businessDays: new BdRepo(twoDays()),
+      docNumbers,
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute(
+      {
+        supplierId: 'sup-1',
+        productId: 'petrol-1',
+        quantity: 1000,
+        unitPrice: 90,
+        tankAllocations: [{ tankId: 'tank-1', quantity: 1000 }],
+        ...cmd,
+      },
+      context,
+    );
+
+  it.each([
+    ['with ctx.stationId', ctx()],
+    ['without ctx.stationId', { ...ctx(), stationId: null }],
+  ])(
+    "replays a legacy shiftId-only payload onto the Shift's business day (%s)",
+    async (_label, context) => {
+      const result = await recordWith({ shiftId: 'sh-1' }, context as ExecutionContext);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.purchase.businessDayId).toBe('bd-8');
+        expect(result.data.purchase.shiftId).toBeNull();
+      }
+    },
+  );
+
+  it('anchors station + date to that date, ignoring a stale shiftId, and stores no Shift', async () => {
+    const result = await recordWith(
+      { stationId: 'st-1', shiftId: 'sh-1', transactionDate: '2026-03-15' },
+      ctx(),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.purchase.businessDayId).toBe('bd-9');
+      expect(result.data.purchase.shiftId).toBeNull();
+    }
   });
 
   it('updates the product cost basis as a weighted average of existing stock and the purchase', async () => {
@@ -479,101 +540,50 @@ describe('RecordPurchase', () => {
   });
 });
 
-describe('RecordSupplierPayment', () => {
-  it('a SHIFT_CASH payment touches the drawer (shiftId set)', async () => {
+describe('RecordSupplierPayment (Office Record, ADR 0005)', () => {
+  function pay(input: Record<string, unknown>) {
     const supplierTxns = new SupplierTxnRepo();
-    const store = new InMemoryEventStore();
-    const result = await new RecordSupplierPayment({
+    const { store, events } = eventBus();
+    const result = new RecordSupplierPayment({
       supplierTxns,
       suppliers: new SupplierRepo([supplier()]),
-      shifts: new ShiftRepo([shift()]),
-      businessDays: new BdRepo([{ ...bday(), id: 'bd-1' }]),
-      events: new InProcessEventDispatcher({ store }),
-    }).execute(
-      { supplierId: 'sup-1', amount: 10000, paidFrom: 'SHIFT_CASH', shiftId: 'sh-1' },
-      ctx(),
-    );
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.shiftId).toBe('sh-1');
-      expect(result.data.affectsDrawer).toBe(true);
+      accounts: new AccountRepo(),
+      events,
+    }).execute({ supplierId: 'sup-1', amount: 10000, ...input } as any, officeCtx());
+    return { result, supplierTxns, store };
+  }
+
+  it('pays from the Funding Account on the Entry Date, with no shift or business day', async () => {
+    const { result, supplierTxns, store } = pay({ fundingAccountId: 'hdfc' });
+    const r = await result;
+    expect(r.success).toBe(true);
+    expect(supplierTxns.rows[0]).toMatchObject({
+      transactionType: 'Payment',
+      stationId: 'st-1',
+      entryDate: '2026-03-15',
+      fundingAccountId: 'hdfc',
+    });
+    expect(store.events.map((e) => e.eventType)).toEqual([
+      BusinessEvents.SUPPLIER_PAID,
+      BusinessEvents.PAYMENT_MADE,
+    ]);
+    for (const e of store.events) {
+      expect(e.businessDayId).toBeNull();
+      expect(e.payload).toMatchObject({ entryDate: '2026-03-15', fundingAccountId: 'hdfc' });
     }
-    expect(store.events.map((e) => e.eventType)).toContain(BusinessEvents.SUPPLIER_PAID);
+    expect((store.events[0].metadata as any).presentation).toMatchObject({
+      templateId: 'supplier-paid.v2',
+      values: { accountName: 'HDFC Current' },
+    });
   });
 
-  it('a BANK payment is business-day anchored with no drawer impact', async () => {
-    const supplierTxns = new SupplierTxnRepo();
-    const result = await new RecordSupplierPayment({
-      supplierTxns,
-      suppliers: new SupplierRepo([supplier()]),
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([bday()]),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ supplierId: 'sup-1', amount: 10000, paidFrom: 'BANK', stationId: 'st-1' }, ctx());
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.shiftId).toBeNull();
-      expect(result.data.affectsDrawer).toBe(false);
-      expect(result.data.businessDayId).toBe('bd-9');
-    }
+  it('rejects a future Entry Date', async () => {
+    const r = await pay({ fundingAccountId: 'cash', entryDate: '2027-01-01' }).result;
+    expect(r.success).toBe(false);
   });
 
-  it('preserves explicit non-drawer handling for a petty-cash account', async () => {
-    const result = await new RecordSupplierPayment({
-      supplierTxns: new SupplierTxnRepo(),
-      suppliers: new SupplierRepo([supplier()]),
-      shifts: new ShiftRepo([shift()]),
-      businessDays: new BdRepo([{ ...bday(), id: 'bd-1' }]),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
-      {
-        supplierId: 'sup-1',
-        amount: 1000,
-        paidFrom: 'SHIFT_CASH',
-        affectsDrawer: false,
-        shiftId: 'sh-1',
-      },
-      ctx(),
-    );
-    expect(result.success).toBe(true);
-    if (result.success) expect(result.data.affectsDrawer).toBe(false);
-  });
-
-  it('rejects a drawer supplier payment after its shift closes', async () => {
-    const payments = new SupplierTxnRepo();
-    const result = await new RecordSupplierPayment({
-      supplierTxns: payments,
-      suppliers: new SupplierRepo([supplier()]),
-      shifts: new ShiftRepo([{ ...shift(), status: 'CLOSED', closedAt: '2026-03-15T09:00:00Z' }]),
-      businessDays: new BdRepo([{ ...bday(), id: 'bd-1' }]),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
-      { supplierId: 'sup-1', amount: 1000, paidFrom: 'SHIFT_CASH', shiftId: 'sh-1' },
-      ctx(),
-    );
-
-    expect(result.success).toBe(false);
-    if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
-    expect(payments.rows).toHaveLength(0);
-  });
-
-  it('retains a closed shift on a non-drawer late supplier payment', async () => {
-    const result = await new RecordSupplierPayment({
-      supplierTxns: new SupplierTxnRepo(),
-      suppliers: new SupplierRepo([supplier()]),
-      shifts: new ShiftRepo([{ ...shift(), status: 'CLOSED', closedAt: '2026-03-15T09:00:00Z' }]),
-      businessDays: new BdRepo([
-        { ...bday(), id: 'bd-1', status: 'CLOSED', closedAt: '2026-03-15T09:30:00Z' },
-      ]),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ supplierId: 'sup-1', amount: 1000, paidFrom: 'BANK', shiftId: 'sh-1' }, ctx());
-
-    expect(result.success).toBe(true);
-    if (result.success)
-      expect(result.data).toMatchObject({
-        shiftId: 'sh-1',
-        affectsDrawer: false,
-        metadata: { lateEntry: true },
-      });
+  it('requires a Funding Account', async () => {
+    const r = await pay({}).result;
+    expect(r.success).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { resolveBusinessDate } from '@pump/shared';
+import { resolveEntryDate } from '@pump/shared';
 import {
   BusinessEvents,
   conflictError,
@@ -11,6 +11,10 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
+
+/** Today's Entry Date in the station timezone (ADR 0005): the office-record date default. */
+const entryDateOf = (ctx: ExecutionContext): string =>
+  resolveEntryDate({ now: ctx.clock.now(), timeZone: ctx.timeZone });
 
 export type FinancialAccountType =
   'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
@@ -83,19 +87,6 @@ export const DEFAULT_ACCOUNT_NAME: Record<FinancialAccountType, string> = {
   CMS: 'OMC Card Settlement (CMS)',
   OWNER: 'Owner',
 };
-
-/** Which account a collection lands in, by payment method (cash → drawer, else bank). */
-export function accountTypeForPaymentMethod(method: string): FinancialAccountType {
-  return method === 'Cash' ? 'CASH_IN_HAND' : 'BANK';
-}
-
-/** Which account an expense / supplier payment comes out of, by funding source. */
-export function accountTypeForPaidFrom(paidFrom: string): FinancialAccountType {
-  if (paidFrom === 'SHIFT_CASH') return 'CASH_IN_HAND';
-  if (paidFrom === 'OWNER') return 'OWNER';
-  if (paidFrom === 'CMS') return 'CMS';
-  return 'BANK';
-}
 
 export interface LedgerEntryRepository {
   saveMany(entries: LedgerEntry[]): Promise<void>;
@@ -202,13 +193,7 @@ export class CreateFinancialAccount implements UseCase<
 
     const now = ctx.clock.now().toISOString();
     const openingBalance = cmd.openingBalance != null ? Number(cmd.openingBalance) : 0;
-    const openingDate =
-      cmd.openingDate ??
-      resolveBusinessDate({
-        now: ctx.clock.now(),
-        timeZone: ctx.timeZone,
-        dayStartsAt: ctx.businessDayStartsAt,
-      });
+    const openingDate = cmd.openingDate ?? entryDateOf(ctx);
 
     const account: FinancialAccount = {
       id: ctx.ids.newId(),
@@ -357,14 +342,7 @@ export class SetOpeningBalance implements UseCase<SetOpeningBalanceCommand, Fina
 
     const now = ctx.clock.now().toISOString();
     const opening = round2(Number(cmd.openingBalance));
-    const openingDate =
-      cmd.openingDate ??
-      existing.openingDate ??
-      resolveBusinessDate({
-        now: ctx.clock.now(),
-        timeZone: ctx.timeZone,
-        dayStartsAt: ctx.businessDayStartsAt,
-      });
+    const openingDate = cmd.openingDate ?? existing.openingDate ?? entryDateOf(ctx);
 
     const updated: FinancialAccount = {
       ...existing,
@@ -468,13 +446,7 @@ export class RecordTransfer implements UseCase<RecordTransferCommand, TransferRe
       return err(notFoundError('FinancialAccount', cmd.toAccountId));
 
     const now = ctx.clock.now().toISOString();
-    const entryDate =
-      cmd.date ??
-      resolveBusinessDate({
-        now: ctx.clock.now(),
-        timeZone: ctx.timeZone,
-        dayStartsAt: ctx.businessDayStartsAt,
-      });
+    const entryDate = cmd.date ?? entryDateOf(ctx);
     const transferId = ctx.ids.newId();
     const amount = String(cmd.amount);
     const stationId = from.stationId ?? to.stationId ?? null;
@@ -600,13 +572,7 @@ export class RecordSettlement implements UseCase<RecordSettlementCommand, Settle
       return err(notFoundError('FinancialAccount', cmd.bankAccountId));
 
     const now = ctx.clock.now().toISOString();
-    const entryDate =
-      cmd.date ??
-      resolveBusinessDate({
-        now: ctx.clock.now(),
-        timeZone: ctx.timeZone,
-        dayStartsAt: ctx.businessDayStartsAt,
-      });
+    const entryDate = cmd.date ?? entryDateOf(ctx);
     const settlementId = ctx.ids.newId();
     const net = round2(cmd.grossAmount - fee);
     const stationId = clearing.stationId ?? bank.stationId ?? null;
@@ -743,13 +709,7 @@ export class RecordLedgerAdjustment implements UseCase<RecordLedgerAdjustmentCom
       return err(notFoundError('FinancialAccount', cmd.accountId));
 
     const now = ctx.clock.now().toISOString();
-    const entryDate =
-      cmd.date ??
-      resolveBusinessDate({
-        now: ctx.clock.now(),
-        timeZone: ctx.timeZone,
-        dayStartsAt: ctx.businessDayStartsAt,
-      });
+    const entryDate = cmd.date ?? entryDateOf(ctx);
     const entry: LedgerEntry = {
       id: ctx.ids.newId(),
       organizationId: ctx.organizationId,

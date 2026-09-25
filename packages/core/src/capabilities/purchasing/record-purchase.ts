@@ -50,6 +50,9 @@ export interface RecordPurchaseCommand {
   notes?: string;
   /** Line items of the supplier invoice. */
   lines?: PurchaseLineInput[];
+  /** @deprecated Purchases never carry a Shift (ADR 0005, #308). Accepted
+   *  only so queued clients still replay: it locates the station when no
+   *  stationId is sent, and is never stored. */
   shiftId?: string;
   stationId?: string;
   transactionDate?: string;
@@ -162,24 +165,23 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     const requestedStationId = cmd.stationId ?? ctx.stationId ?? null;
     if (!cmd.shiftId && !requestedStationId)
       return err(validationError('Either shiftId or stationId is required'));
+    // Purchases are forecourt stock events anchored to the business day only,
+    // never a Shift (ADR 0005, #308): resolve the day by station + date. A
+    // legacy replay that sends a shiftId but no date resolves through its Shift,
+    // so it lands on that Shift's day rather than today's; the Shift is still
+    // not stored.
+    const legacyShiftReplay = !!cmd.shiftId && !cmd.transactionDate;
     const anchor = await resolveFinancialAnchor(
       this.deps,
       ctx,
-      {
-        shiftId: cmd.shiftId,
-        stationId: requestedStationId,
-        transactionDate: cmd.transactionDate,
-      },
+      legacyShiftReplay
+        ? { shiftId: cmd.shiftId }
+        : { stationId: requestedStationId, transactionDate: cmd.transactionDate },
       { kind: 'STOCK' },
     );
     if (!anchor.success) return anchor;
     const businessDayId = anchor.data.businessDayId;
     const stationId = anchor.data.stationId;
-    // A purchase is always anchored to the business day. When it is recorded from
-    // within an open shift we ALSO stamp the shift id — purchases never touch the
-    // drawer (so this is pure attribution, not a reconciliation input), but storing
-    // it keeps shift-level provenance available for future reporting.
-    const shiftIdToStore = anchor.data.shiftId;
 
     // Resolve inter-state status from supplier state vs buyer (station) state.
     const supplierStateCode = supplier.metadata?.stateCode as string | undefined;
@@ -331,7 +333,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     const purchase: Purchase = {
       id: purchaseId,
       documentNumber,
-      shiftId: shiftIdToStore,
+      shiftId: null,
       businessDayId,
       supplierId: supplier.id,
       invoiceNumber: cmd.invoiceNumber ?? null,
@@ -363,15 +365,17 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
 
     await this.deps.stock.saveMany(movements);
 
+    // The payable moves no money (no Funding Account); it is dated on the
+    // purchase's Business Date — purchases stay forecourt stock events (ADR 0005).
     const payable: SupplierTransaction = {
       id: ctx.ids.newId(),
-      shiftId: shiftIdToStore,
-      businessDayId,
+      organizationId: ctx.organizationId,
+      stationId,
+      entryDate: anchor.data.businessDate,
       supplierId: supplier.id,
       transactionType: 'Purchase',
       amount: String(headerTotals.grand),
-      paidFrom: 'BANK',
-      affectsDrawer: false,
+      fundingAccountId: null,
       referenceType: 'PURCHASE',
       referenceId: purchase.id,
       notes: cmd.invoiceNumber ?? null,

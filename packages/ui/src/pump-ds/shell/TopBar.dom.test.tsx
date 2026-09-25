@@ -7,9 +7,6 @@ import { TopBar, type TitleBarIntegration } from './TopBar.js';
 afterEach(cleanup);
 
 const baseProps = {
-  businessDate: '09 Jul 2026',
-  businessDayStatus: 'open' as const,
-  syncStatus: 'online' as const,
   onToggleSidebar: () => {},
   brand: 'PumpOS',
   userName: 'Asha Menon',
@@ -148,47 +145,66 @@ describe('the brand slot as part of the drag region', () => {
 });
 
 /**
- * The shell now renders before the station list arrives, so the station chip
- * is absent for the first moment of every sign-in. It sits in a flex row to
- * the left of the search bar: appearing late would shove everything after it
- * sideways, which is exactly the shell-pop the shell-first change is supposed
- * to avoid.
+ * The station name is quiet text next to the brand (no chip). Business day,
+ * station chip, and the sync pulse moved to the bottom StatusBar, so the top
+ * bar is navigation + actions only and never wraps.
  */
-describe('TopBar while the station list is still loading', () => {
-  const chipOf = (c: HTMLElement) => c.querySelector('[data-testid="topbar-station"]');
-
-  it('holds the chip slot open with a skeleton instead of leaving a gap', () => {
-    const { container } = render(<TopBar {...baseProps} stationsLoading />);
-
-    const chip = chipOf(container);
-    expect(chip).toBeTruthy();
-    expect(chip?.querySelector('.pump-skeleton')).toBeTruthy();
+describe('TopBar station name', () => {
+  it('renders the station name as plain text', () => {
+    render(<TopBar {...baseProps} stationName="Hosur Road HP" />);
+    const el = screen.getByTestId('topbar-station');
+    expect(el.textContent).toContain('Hosur Road HP');
+    // It is a text label, not the old bordered/skeleton chip.
+    expect(el.querySelector('.pump-skeleton')).toBeNull();
   });
 
-  it('keeps the slot the same shape once the real name arrives', () => {
-    // jsdom does no layout, so this compares the box the chip is drawn in
-    // rather than measuring pixels: same element, same classes, same sibling
-    // position. If those hold, the only thing that changed inside is text.
-    const loading = render(<TopBar {...baseProps} stationsLoading />);
-    const before = chipOf(loading.container) as HTMLElement;
-    const beforeClasses = before.className;
-    const beforeIndex = Array.from(before.parentElement!.children).indexOf(before);
-    cleanup();
+  it('renders no station element when there is no station to name', () => {
+    render(<TopBar {...baseProps} />);
+    expect(screen.queryByTestId('topbar-station')).toBeNull();
+  });
+});
 
-    const loaded = render(<TopBar {...baseProps} stationLabel="Hosur Road HP" />);
-    const after = chipOf(loaded.container) as HTMLElement;
+describe('TopBar no longer carries ambient status', () => {
+  it('renders no business-day chip or sync pulse (those live in the StatusBar)', () => {
+    render(<TopBar {...baseProps} stationName="Hosur Road HP" />);
+    // No sync-status role element in the top bar anymore.
+    expect(screen.queryByRole('status')).toBeNull();
+    // No business-day trigger text.
+    expect(screen.queryByText(/Business Day/i)).toBeNull();
+  });
+});
 
-    expect(after.className).toBe(beforeClasses);
-    expect(Array.from(after.parentElement!.children).indexOf(after)).toBe(beforeIndex);
-    expect(after.querySelector('.pump-skeleton')).toBeNull();
-    expect(after.textContent).toContain('Hosur Road HP');
+describe('TopBar search trigger', () => {
+  const observed: Array<(entries: any[]) => void> = [];
+
+  function mockWidth(width: number) {
+    observed.length = 0;
+    (globalThis as any).ResizeObserver = class {
+      constructor(cb: (entries: any[]) => void) {
+        observed.push(cb);
+      }
+      observe() {
+        // Deliver the width synchronously on observe.
+        observed[observed.length - 1]([{ contentRect: { width } }]);
+      }
+      disconnect() {}
+    };
+  }
+
+  it('shows the full centered search when the bar is wide', () => {
+    mockWidth(1200);
+    render(<TopBar {...baseProps} stationName="Hosur Road HP" />);
+    const search = screen.getByLabelText('Search');
+    // The full trigger carries the placeholder text; the icon fallback does not.
+    expect(search.textContent).toContain('Search');
+    expect(search.className).toContain('left-1/2');
   });
 
-  it('renders no chip at all when there is genuinely no station to name', () => {
-    // Not loading and no label is a real state (org-level console views), and
-    // must not leave a permanent skeleton shimmering in the bar.
-    const { container } = render(<TopBar {...baseProps} />);
-
-    expect(chipOf(container)).toBeNull();
+  it('collapses to an icon-only search button when the bar is narrow', () => {
+    mockWidth(700);
+    render(<TopBar {...baseProps} stationName="Hosur Road HP" />);
+    const search = screen.getByLabelText('Search');
+    // Icon button: no centered-absolute positioning, sits in the right cluster.
+    expect(search.className).not.toContain('left-1/2');
   });
 });

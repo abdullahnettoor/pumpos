@@ -1,10 +1,10 @@
 import React from 'react';
 import { ArrowLeft, Printer, Download, AlertTriangle, Info } from 'lucide-react';
-import { DEFAULT_DSSR_CONFIG, paperFromStation } from '../services/reports/reportConfig.js';
-import { letterheadFromStation } from '../services/reports/letterhead.js';
 import { Button } from '../pump-ds/index.js';
 import { formatDateTime, formatMoney, inr } from '../utils/format.js';
-import { isDesktopApp } from '../utils/platform.js';
+import { ReportNote } from './reports/ReportNote.js';
+import { useRunTask } from '../utils/runTask.js';
+import { shiftDisplayLabel } from '@pump/shared';
 
 interface DailyDssrViewProps {
   dailyDssr: any;
@@ -13,19 +13,15 @@ interface DailyDssrViewProps {
 }
 
 export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack, station }) => {
-  const printRef = React.useRef<HTMLDivElement>(null);
+  const runTask = useRunTask();
   const snapshot = dailyDssr?.snapshotData || {};
 
   const fuel = snapshot.fuel || {};
   const byProduct = (fuel.byProduct || []) as Array<any>;
   const nozzles = (fuel.nozzles || []) as Array<any>;
-  const collections = snapshot.collections || {};
   const credit = snapshot.credit || {};
   const merchandise = snapshot.merchandise || {};
-  const expenses = snapshot.expenses || {};
   const purchases = snapshot.purchases || {};
-  const supplierPayments = snapshot.supplierPayments || {};
-  const income = snapshot.income || {};
   const fuelStockVariance = (snapshot.fuelStockVariance || []) as Array<any>;
   const merchandiseStockVariance = (snapshot.merchandiseStockVariance || []) as Array<any>;
   const shifts = snapshot.shifts || [];
@@ -51,18 +47,8 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
       ? entries.map(([u, v]) => `${Number(v).toFixed(dec)} ${u}`).join(' \u00b7 ')
       : `${(0).toFixed(dec)} L`;
   };
-  const totalCashCollections = Number(collections.Cash || 0);
-  const totalCardCollections = Number(collections.Card || 0);
-  const totalUpiCollections = Number(collections.UPI || 0);
-  const totalBankCollections = Number(collections.BankTransfer || 0);
-  const totalCollections = Number(collections.total || 0);
   const normalCredit = Number(credit.normalCredit || 0);
   const fleetCredit = Number(credit.fleetCredit || 0);
-  const totalExpenses = Number(expenses.total || 0);
-  const totalOtherIncome = Number(income.total || 0);
-  // FI4 — output GST collected on other income, frozen per entry at capture.
-  const incomeTax = (income.tax || {}) as Record<string, number>;
-  const incomeTaxTotal = Number(incomeTax.total || 0);
   // T5 — output tax on sales. GST (merchandise) and VAT (fuel) stay on separate
   // lines: fuel VAT is outside GST and carries no input credit for the buyer.
   const salesTax = (snapshot.salesTax || {}) as {
@@ -72,9 +58,13 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   const salesGstTotal = Number(salesTax.gst?.total || 0);
   const salesVatTotal = Number(salesTax.vat?.vat || 0);
   const pnl = snapshot.pnl || {};
+  // Save PDF and Print render the same DssrDoc, so they match page for page (#309).
+  const printOrSave = async (output: 'save' | 'print') => {
+    const { generateDssrPdf } = await import('../services/reports/generate.js');
+    await generateDssrPdf(station, dailyDssr, output);
+  };
   return (
     <div
-      ref={printRef}
       className="card card-comfortable print-area"
       style={{ maxWidth: '920px', margin: '0 auto' }}
     >
@@ -98,40 +88,19 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
             variant="secondary"
             size="sm"
             leftIcon={<Download />}
-            onClick={async () => {
-              const [{ exportReactPdf }, doc] = await Promise.all([
-                import('../services/exportPdf.js'),
-                import('../services/reports/dssrDoc.js'),
-              ]);
-              const sections = station?.settings?.report_config?.dssr?.length
-                ? station.settings.report_config.dssr
-                : DEFAULT_DSSR_CONFIG.sections;
-              const config = {
-                ...DEFAULT_DSSR_CONFIG,
-                sections: sections,
-                stationName: station?.name,
-                letterhead: letterheadFromStation(station),
-                paper: paperFromStation(station),
-              };
-              await exportReactPdf(
-                React.createElement(doc.DssrDoc, { dssr: dailyDssr, config }),
-                `Daily_DSSR_${dailyDssr?.businessDate || ''}`,
-              );
-            }}
+            onClick={() => runTask(printOrSave('save'), 'Could not create the PDF.')}
           >
             Save PDF
           </Button>
-          {/* window.print() is a no-op in the Tauri webview — desktop uses Save PDF. */}
-          {!isDesktopApp() && (
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<Printer />}
-              onClick={() => window.print()}
-            >
-              Print Daily DSSR
-            </Button>
-          )}
+          {/* Prints the same PDF Save PDF writes, on web and desktop (#309). */}
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<Printer />}
+            onClick={() => runTask(printOrSave('print'), 'Could not print the DSSR.')}
+          >
+            Print Daily DSSR
+          </Button>
         </div>
       </div>
 
@@ -192,8 +161,8 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
       >
         <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
         <span>
-          Financial sections include records available as of {formatDateTime(generatedAt)}.
-          Financial entries recorded later are not included in this report.
+          Sales-only report for this business day. Collections, expenses, income and supplier
+          payments are office records by entry date — see Reports → Daily Cash Book.
         </span>
       </div>
 
@@ -291,7 +260,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
               fontWeight: 600,
             }}
           >
-            Total Collections
+            Gross Margin
           </span>
           <strong
             style={{
@@ -300,7 +269,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
               fontFamily: 'var(--font-mono)',
             }}
           >
-            {inr(totalCollections)}
+            {inr(Number(pnl.grossMargin || 0))}
           </strong>
           <span
             style={{
@@ -310,8 +279,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
               fontFamily: 'var(--font-mono)',
             }}
           >
-            Cash {inr(totalCashCollections)} · Non-cash{' '}
-            {inr(totalCardCollections + totalUpiCollections + totalBankCollections)}
+            Revenue {inr(Number(pnl.revenue || 0))} − COGS {inr(Number(pnl.cogs || 0))}
           </span>
         </div>
       </div>
@@ -355,7 +323,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           letterSpacing: '0.02em',
         }}
       >
-        Profitability (P&amp;L)
+        Gross Margin
       </h3>
       <div
         style={{
@@ -384,20 +352,6 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
               color: 'var(--brand-warning)',
             },
             { label: 'Gross Margin', value: inr(Number(pnl.grossMargin || 0)), strong: true },
-            {
-              label: 'Operating Expenses',
-              value: `(${inr(Number(pnl.expenses ?? totalExpenses))})`,
-              color: 'var(--brand-warning)',
-            },
-            ...(Number(pnl.otherIncome ?? totalOtherIncome) > 0
-              ? [
-                  {
-                    label: 'Other Income',
-                    value: inr(Number(pnl.otherIncome ?? totalOtherIncome)),
-                    color: 'var(--brand-success)',
-                  },
-                ]
-              : []),
           ] as Array<{ label: string; value: string; color?: string; strong?: boolean }>
         ).map((r, i) => (
           <div
@@ -422,36 +376,11 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
             </span>
           </div>
         ))}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            padding: '13px 16px',
-            backgroundColor: 'var(--bg-surface-alt)',
-          }}
-        >
-          <span style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-            Net Profit
-          </span>
-          <span
-            style={{
-              fontWeight: 700,
-              fontFamily: 'var(--font-mono)',
-              fontSize: '15px',
-              color:
-                Number(pnl.netProfit || 0) < 0
-                  ? 'var(--state-danger-fg)'
-                  : 'var(--state-success-fg)',
-            }}
-          >
-            {inr(Number(pnl.netProfit || 0))}
-          </span>
-        </div>
       </div>
-      <p style={{ fontSize: '10px', color: 'var(--text-faint)', marginBottom: '24px' }}>
+      <ReportNote className="mb-6">
         COGS uses each product&apos;s weighted-average cost at day close. Fuel VAT is output tax
         (excluded from cost); merchandise cost is pre-tax.
-      </p>
+      </ReportNote>
 
       <h3
         style={{
@@ -463,7 +392,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           letterSpacing: '0.02em',
         }}
       >
-        Financial Summary
+        Sales Summary
       </h3>
       <div
         style={{
@@ -478,10 +407,6 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
       >
         {(
           [
-            { label: 'Cash Collections', value: inr(totalCashCollections) },
-            { label: 'Card Collections', value: inr(totalCardCollections) },
-            { label: 'UPI Collections', value: inr(totalUpiCollections) },
-            { label: 'Bank Transfer Collections', value: inr(totalBankCollections) },
             { label: 'Merchandise Sales', value: inr(Number(merchandise.salesValue || 0)) },
             {
               label: 'Normal Credit Sales',
@@ -490,21 +415,6 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
             },
             { label: 'Fleet Credit Sales', value: inr(fleetCredit), color: 'var(--brand-warning)' },
             { label: 'Purchases', value: inr(Number(purchases.total || 0)) },
-            {
-              label: 'Supplier Payments (Drawer / Bank)',
-              value: `${inr(Number(supplierPayments.drawer || 0))} / ${inr(Number(supplierPayments.bank || 0))}`,
-            },
-            { label: 'Drawer Expenses', value: inr(Number(expenses.drawer || 0)) },
-            { label: 'Business Expenses', value: inr(Number(expenses.business || 0)) },
-            ...(totalOtherIncome > 0
-              ? [
-                  {
-                    label: 'Other Income (Cash / Bank)',
-                    value: `${inr(Number(income.drawer || 0))} / ${inr(Number(income.business || 0))}`,
-                    color: 'var(--brand-success)',
-                  },
-                ]
-              : []),
             ...(salesGstTotal > 0
               ? [
                   {
@@ -524,23 +434,6 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
               : []),
             ...(salesVatTotal > 0
               ? [{ label: 'Output VAT on Fuel', value: inr(salesVatTotal) }]
-              : []),
-            ...(incomeTaxTotal > 0
-              ? [
-                  {
-                    label: 'Other Income — Taxable Value',
-                    value: inr(Number(incomeTax.taxable || 0)),
-                  },
-                  Number(incomeTax.igst || 0) > 0
-                    ? {
-                        label: 'Output GST on Income (IGST)',
-                        value: inr(Number(incomeTax.igst || 0)),
-                      }
-                    : {
-                        label: 'Output GST on Income (CGST / SGST)',
-                        value: `${inr(Number(incomeTax.cgst || 0))} / ${inr(Number(incomeTax.sgst || 0))}`,
-                      },
-                ]
               : []),
           ] as Array<{ label: string; value: string; color?: string }>
         ).map((r, i) => (
@@ -565,25 +458,6 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
             </span>
           </div>
         ))}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            padding: '12px 16px',
-            backgroundColor: 'var(--bg-surface-alt)',
-          }}
-        >
-          <span style={{ fontWeight: 700 }}>Total Expenses</span>
-          <span
-            style={{
-              fontWeight: 700,
-              fontFamily: 'var(--font-mono)',
-              color: 'var(--brand-danger)',
-            }}
-          >
-            {inr(totalExpenses)}
-          </span>
-        </div>
       </div>
 
       <h3
@@ -677,7 +551,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           ) : (
             <tr>
               <td
-                colSpan={5}
+                colSpan={6}
                 style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}
               >
                 No fuel sales in this daily DSSR.
@@ -828,7 +702,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           ) : (
             <tr>
               <td
-                colSpan={5}
+                colSpan={6}
                 style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}
               >
                 No nozzle data in this daily DSSR.
@@ -1078,14 +952,17 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
               color: 'var(--text-muted)',
             }}
           >
-            <th style={{ padding: '8px 12px', fontWeight: 600 }}>Shift ID</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600 }}>Shift</th>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Template</th>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Closed At</th>
             <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
               Net Volume (L)
             </th>
             <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
-              Cash Variance (₹)
+              Attendant Var. (₹)
+            </th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
+              Office Count Var. (₹)
             </th>
           </tr>
         </thead>
@@ -1108,7 +985,11 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
                       color: 'var(--text-strong)',
                     }}
                   >
-                    {(shift.shiftId || '').slice(0, 8)}...
+                    {shiftDisplayLabel({
+                      businessDate: dailyDssr?.businessDate ?? snapshot.businessDate,
+                      shiftSequence: shift.shiftSequence,
+                      shiftId: shift.shiftId,
+                    })}
                   </td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>
                     {shift.templateName || 'Custom'}
@@ -1124,6 +1005,22 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
                     }}
                   >
                     {Number(shift.netVolume || 0).toFixed(3)}
+                  </td>
+                  {/* Null for pre-#287 shifts (their Cash Variance already includes it). */}
+                  <td
+                    style={{
+                      padding: '10px 12px',
+                      textAlign: 'right',
+                      fontFamily: 'var(--font-mono)',
+                      color:
+                        Number(shift.attendantVariance || 0) < 0
+                          ? 'var(--brand-danger)'
+                          : 'var(--text-default)',
+                    }}
+                  >
+                    {shift.attendantVariance == null
+                      ? '—'
+                      : `${Number(shift.attendantVariance) > 0 ? '+' : ''}${formatMoney(Number(shift.attendantVariance), { symbol: false })}`}
                   </td>
                   <td
                     style={{
@@ -1143,7 +1040,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           ) : (
             <tr>
               <td
-                colSpan={5}
+                colSpan={6}
                 style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}
               >
                 No shifts were included for this day.
@@ -1152,6 +1049,50 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           )}
         </tbody>
       </table>
+
+      {/* Attendant (Handover) variance per Attendant/DU for the day (#287). */}
+      {Array.isArray(snapshot.drawer?.attendants) && snapshot.drawer.attendants.length > 0 && (
+        <>
+          <h3
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: 'var(--text-strong)',
+              marginBottom: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.02em',
+            }}
+          >
+            Attendant Variance
+          </h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <tbody>
+              {snapshot.drawer.attendants.map((a: any, i: number) => {
+                const v = Number(a.variance || 0);
+                return (
+                  <tr key={i} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                    <td style={{ padding: '8px 12px' }}>
+                      {a.attendantName ?? 'Attendant'}
+                      {a.duName ? ` · ${a.duName}` : ''}
+                    </td>
+                    <td
+                      style={{
+                        padding: '8px 12px',
+                        textAlign: 'right',
+                        fontFamily: 'var(--font-mono)',
+                        color: v < 0 ? 'var(--brand-danger)' : 'var(--text-default)',
+                      }}
+                    >
+                      {v > 0 ? '+' : ''}
+                      {formatMoney(v, { symbol: false })}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
     </div>
   );
 };

@@ -41,6 +41,7 @@ const { HandoverDrawer } = await import('./HandoverDrawer.js');
 // `nozzleReadings` keys are validated as UUIDs, so fixtures must be real ones.
 const NOZZLE_A = '11111111-1111-4111-8111-111111111111';
 const NOZZLE_B = '22222222-2222-4222-8222-222222222222';
+const NOZZLE_C = '33333333-3333-4333-8333-333333333333';
 
 const nozzle = (id: string, over: Record<string, unknown> = {}) => ({
   nozzleId: id,
@@ -123,6 +124,27 @@ describe('HandoverDrawer', () => {
   it('identifies the attendant and their dispenser unit', () => {
     renderWithProviders(<HandoverDrawer {...baseProps()} />);
     expect(screen.getByText('Attendant Handover: Ravi (DU-1)')).toBeDefined();
+  });
+
+  it('lists nozzles in natural order whatever order they arrive in', () => {
+    // #218: the shift-status query has no deterministic order, so the drawer
+    // used to re-shuffle on each open — and N10 sorted between N1 and N2.
+    renderWithProviders(
+      <HandoverDrawer
+        {...baseProps({
+          nozzles: [
+            nozzle(NOZZLE_B, { nozzleName: 'N10' }),
+            nozzle(NOZZLE_C, { nozzleName: 'N2' }),
+            nozzle(NOZZLE_A, { nozzleName: 'N1' }),
+          ],
+        })}
+      />,
+    );
+
+    const rendered = [...document.querySelectorAll('input[name^="nozzleReadings."]')].map(
+      (el) => (el as HTMLInputElement).name.split('.')[1],
+    );
+    expect(rendered).toEqual([NOZZLE_A, NOZZLE_C, NOZZLE_B]);
   });
 
   describe('expected sales from meter readings', () => {
@@ -372,6 +394,59 @@ describe('HandoverDrawer', () => {
     });
   });
 
+  describe('recording a customer sale', () => {
+    // #219: the button's busy state belongs to the write, not to the parent's
+    // cache refresh. Tying it to the refresh left the spinner running for
+    // seconds after the sale was already recorded.
+    const openOmcRow = async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Add customer sale/ }));
+      fireEvent.click(await screen.findByText('OMC card → CMS'));
+      fireEvent.change(input('ccAmount'), { target: { value: '500' } });
+    };
+    const addButton = () =>
+      screen.getByRole('button', {
+        name: /Add (?:OMC card|credit) sale/,
+      }) as HTMLButtonElement;
+
+    it('returns the button to idle without waiting for the parent refresh', async () => {
+      recordCollection.mockResolvedValue({ id: 'collection-1' });
+      let releaseRefresh!: () => void;
+      const refreshed = new Promise<void>((resolve) => {
+        releaseRefresh = resolve;
+      });
+      const onCreditChanged = vi.fn(() => refreshed);
+
+      renderWithProviders(<HandoverDrawer {...baseProps({ onCreditChanged })} />);
+      await openOmcRow();
+      fireEvent.click(addButton());
+
+      // The recorded line lands and the row is idle again while the parent's
+      // refresh is still in flight.
+      await waitFor(() =>
+        expect(screen.getAllByText(/OMC card \(no customer\)/).length).toBeGreaterThan(0),
+      );
+      expect(addButton().getAttribute('aria-busy')).toBeNull();
+      expect(onCreditChanged).toHaveBeenCalledTimes(1);
+      releaseRefresh();
+      await refreshed;
+    });
+
+    it('keeps the button actionable and reports the error when the write fails', async () => {
+      recordCollection.mockRejectedValue(new Error('Collection rejected'));
+      const onCreditChanged = vi.fn();
+
+      renderWithProviders(<HandoverDrawer {...baseProps({ onCreditChanged })} />);
+      await openOmcRow();
+      fireEvent.click(addButton());
+
+      await waitFor(() =>
+        expect(screen.getAllByText(/Collection rejected/).length).toBeGreaterThan(0),
+      );
+      expect(addButton().disabled).toBe(false);
+      expect(onCreditChanged).not.toHaveBeenCalled();
+    });
+  });
+
   describe('submit guards', () => {
     it('refuses a closing reading below the opening reading', async () => {
       renderWithProviders(<HandoverDrawer {...baseProps()} />);
@@ -387,5 +462,57 @@ describe('HandoverDrawer', () => {
       setReading(NOZZLE_A, '1050');
       await waitFor(() => expect(saveButton().disabled).toBe(false));
     });
+  });
+
+  // #304: most handovers have no drop, so the field hides behind a toggle.
+  describe('cash drops toggle', () => {
+    const toggle = () => screen.getByLabelText('Had cash drops') as HTMLInputElement;
+
+    it('hides the drops field on a new handover until the toggle is on', () => {
+      renderWithProviders(<HandoverDrawer {...baseProps()} />);
+      expect(toggle().checked).toBe(false);
+      expect(input('cashDrops')).toBeNull();
+      fireEvent.click(toggle());
+      expect(input('cashDrops')).not.toBeNull();
+    });
+
+    it('starts open showing the drops of an edited handover that had them', async () => {
+      renderWithProviders(
+        <HandoverDrawer
+          {...baseProps({ existingHandover: { cashHandedOver: '4000', cashDrops: '1000' } })}
+        />,
+      );
+      expect(toggle().checked).toBe(true);
+      await waitFor(() => expect(input('cashDrops').value).toBe('1000'));
+    });
+
+    it('zeroes the drops when turned off, and the variance follows', async () => {
+      renderWithProviders(<HandoverDrawer {...baseProps()} />);
+      setReading(NOZZLE_A, '1050'); // expects ₹5,000
+      setField('cashHandedOver', '4000');
+      fireEvent.click(toggle());
+      setField('cashDrops', '1000'); // 4,000 + 1,000 dropped = balanced
+      await waitFor(() => expect(screen.getByText(/Balanced/)).toBeDefined());
+      fireEvent.click(toggle());
+      expect(input('cashDrops')).toBeNull();
+      await waitFor(() => expect(screen.getByText(/Shortage/)).toBeDefined());
+      fireEvent.click(toggle());
+      expect(input('cashDrops').value).toBe('');
+    });
+  });
+
+  // #303: the long explainer sits behind an info icon.
+  it('keeps the customer-sales explainer in an info tip that opens on focus and tap', () => {
+    renderWithProviders(<HandoverDrawer {...baseProps()} />);
+    expect(screen.queryByText(/settled to the CMS account/)).toBeNull();
+    const tip = screen.getByRole('button', { name: 'About customer sales' });
+    fireEvent.focus(tip);
+    expect(screen.getByRole('tooltip').textContent).toMatch(/settled to the CMS account/);
+    fireEvent.blur(tip);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.click(tip);
+    expect(screen.getByRole('tooltip')).toBeTruthy();
+    fireEvent.keyDown(tip, { key: 'Escape' });
+    expect(screen.queryByRole('tooltip')).toBeNull();
   });
 });

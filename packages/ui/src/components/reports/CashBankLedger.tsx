@@ -3,6 +3,7 @@ import { useFinanceMovements } from '../../query/hooks.js';
 import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { Segmented } from '../primitives/Segmented.js';
+import { LEDGER_SOURCE_LABEL } from '../../utils/ledgerLabels.js';
 import { inr } from '../../utils/format.js';
 import { KpiStrip, KpiTile, Panel, DateText } from '../../pump-ds/index.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
@@ -15,21 +16,6 @@ const GROUP: Record<string, 'Cash' | 'Bank'> = {
   CASH_IN_HAND: 'Cash',
   PETTY_CASH: 'Cash',
   BANK: 'Bank',
-};
-
-const SOURCE_LABEL: Record<string, string> = {
-  OPENING: 'Opening balance',
-  SALE_CASH: 'Cash sales',
-  SALE_CARD: 'Card/UPI sales',
-  COLLECTION: 'Collection',
-  INCOME: 'Other income',
-  EXPENSE: 'Expense',
-  SUPPLIER_PAYMENT: 'Supplier payment',
-  DEPOSIT: 'Deposit',
-  TRANSFER: 'Transfer',
-  SETTLEMENT: 'Settlement',
-  BANK_CHARGE: 'Bank charge',
-  ADJUSTMENT: 'Adjustment',
 };
 
 /**
@@ -69,7 +55,7 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
           id: m.id,
           date: m.entryDate,
           label: m.accountName,
-          source: SOURCE_LABEL[m.sourceType] ?? m.sourceType,
+          source: LEDGER_SOURCE_LABEL[m.sourceType] ?? m.sourceType,
           direction: m.direction,
           amount: Number(m.amount || 0),
         }))
@@ -117,6 +103,13 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
         value={range}
         onChange={setRange}
         clock={clock}
+        note={
+          <>
+            Live {account.toLowerCase()} movements from the money ledger (shift sales, collections,
+            expenses, transfers &amp; settlements). Opening balance carries the closing position
+            from before the selected range; closing = opening + in − out.
+          </>
+        }
         actions={
           <div style={{ minWidth: 200 }}>
             <Segmented
@@ -148,12 +141,6 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
           value={inr(totals.closing)}
         />
       </KpiStrip>
-
-      <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-        Live {account.toLowerCase()} movements from the money ledger (shift sales, collections,
-        expenses, transfers &amp; settlements). Opening balance carries the closing position from
-        before the selected range; closing = opening + in − out.
-      </div>
 
       <Panel flush title={`${account} ledger`}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>

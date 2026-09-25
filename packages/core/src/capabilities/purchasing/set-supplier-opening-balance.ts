@@ -92,15 +92,14 @@ export class SetSupplierOpeningBalance implements UseCase<
     const now = ctx.clock.now().toISOString();
     const entry: SupplierTransaction = {
       id: ctx.ids.newId(),
-      shiftId: null,
-      businessDayId: bd.id,
+      organizationId: ctx.organizationId,
+      stationId: cmd.stationId,
+      entryDate: date,
       supplierId: supplier.id,
       transactionType: 'Opening Balance',
       amount: String(cmd.amount),
-      // Opening balances never touch cash — paidFrom is a neutral placeholder and
-      // affectsDrawer is false so drawer reconciliation is untouched.
-      paidFrom: 'BANK',
-      affectsDrawer: false,
+      // Opening balances move no money, so there is no Funding Account.
+      fundingAccountId: null,
       referenceType: 'OPENING_BALANCE',
       referenceId: null,
       notes: 'Opening balance (carried forward at onboarding)',

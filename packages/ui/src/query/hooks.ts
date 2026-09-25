@@ -21,7 +21,13 @@ import {
   CloudPaymentTerminalService,
   CloudAccessService,
 } from '../services/cloud.js';
-import type { AccessDocument } from '@pump/shared';
+import type {
+  BusinessDayStatusResponse,
+  DailyCashBook,
+  FundingAccount,
+  ProfitLossReport,
+} from '../services/cloud.js';
+import type { AccessDocument, AttendantHandoverReport, AttendantReportFilters } from '@pump/shared';
 
 /**
  * Centralised query hooks. These replace the hand-rolled
@@ -80,6 +86,8 @@ export const queryKeys = {
   dssrPreview: (stationId: string, date: string) => ['dssr-preview', stationId, date] as const,
   dssrRange: (stationId: string, from: string, to: string) =>
     ['dssr-range', stationId, from, to] as const,
+  attendantHandoverReport: (stationId: string, from: string, to: string) =>
+    ['attendant-handover-report', stationId, from, to] as const,
   expenseCategories: () => ['expense-categories'] as const,
   incomeCategories: () => ['income-categories'] as const,
   products: () => ['products'] as const,
@@ -108,10 +116,19 @@ export const queryKeys = {
   incomeGstRegister: (stationId: string, from: string, to: string) =>
     ['income-gst-register', stationId, from, to] as const,
   financialAccounts: (stationId: string) => ['financial-accounts', stationId] as const,
+  /** Accounts an Office Record may use (no balances) — semi tier, persisted. */
+  fundingAccounts: (stationId: string) => ['funding-accounts', stationId] as const,
+  fundingAccountsAll: () => ['funding-accounts'] as const,
+  profitLoss: (stationId: string, from: string, to: string) =>
+    ['profit-loss', stationId, from, to] as const,
+  profitLossAll: () => ['profit-loss'] as const,
   accountLedger: (accountId: string, from: string, to: string) =>
     ['account-ledger', accountId, from, to] as const,
   financeMovements: (stationId: string, from: string, to: string) =>
     ['finance-movements', stationId, from, to] as const,
+  /** Daily Cash Book (ADR 0005) — live per-account opening/in/out/closing for a date. */
+  dailyCashBook: (stationId: string, date: string) => ['daily-cash-book', stationId, date] as const,
+  dailyCashBookPrefix: () => ['daily-cash-book'] as const,
 } as const;
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -170,6 +187,16 @@ export function useStations(options?: Options<any[]>) {
     ...stationsQueryOptions(),
     ...options,
   });
+}
+
+/**
+ * The station's IANA timezone from the (static, persisted) stations cache, for
+ * defaulting an Office Record's entry date with `resolveEntryDate`.
+ */
+export function useStationTimeZone(stationId: string | null | undefined): string | undefined {
+  const { data } = useStations();
+  const station = (data ?? []).find((s: any) => s.id === stationId);
+  return (station?.settings as { timezone?: string } | undefined)?.timezone;
 }
 
 export function useUsers(options?: Options<any[]>) {
@@ -453,6 +480,23 @@ export function useFinancialAccounts(
   });
 }
 
+/**
+ * Active funding accounts (station + org-shared) for the Office Record pickers.
+ * Readable by every role except Attendant, unlike `useFinancialAccounts`.
+ */
+export function useFundingAccounts(
+  stationId: string | null | undefined,
+  options?: Options<FundingAccount[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.fundingAccounts(stationId ?? ''),
+    queryFn: () => financeSvc.getFundingAccounts(stationId!),
+    enabled: !!stationId,
+    ...TIER.semi,
+    ...options,
+  });
+}
+
 export function useAccountLedger(
   accountId: string | null | undefined,
   params?: { from?: string; to?: string },
@@ -485,6 +529,21 @@ export function useFinanceMovements(
   });
 }
 
+/** Daily Cash Book for one station-calendar date — operational tier, not persisted. */
+export function useDailyCashBook(
+  stationId: string | null | undefined,
+  date: string,
+  options?: Options<DailyCashBook>,
+) {
+  return useQuery({
+    queryKey: queryKeys.dailyCashBook(stationId ?? '', date),
+    queryFn: () => financeSvc.getDailyCashBook(stationId!, date),
+    enabled: !!stationId && !!date,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 export function useTanks(stationId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.tanks(stationId ?? ''),
@@ -512,7 +571,7 @@ export function useShiftStatus(
 export function useBusinessDayStatus(
   stationId: string | null | undefined,
   businessDate?: string,
-  options?: Options<any>,
+  options?: Options<BusinessDayStatusResponse>,
 ) {
   return useQuery({
     queryKey: queryKeys.businessDayStatus(stationId ?? '', businessDate),
@@ -744,6 +803,22 @@ export function useDailyDssrPreview(
   });
 }
 
+/** Period P&L (ADR 0005), computed server-side. Operational tier. */
+export function useProfitLoss(
+  stationId: string | null | undefined,
+  from: string,
+  to: string,
+  options?: Options<ProfitLossReport>,
+) {
+  return useQuery({
+    queryKey: queryKeys.profitLoss(stationId ?? '', from, to),
+    queryFn: () => shiftService.getProfitLoss(stationId!, from, to),
+    enabled: !!stationId && !!from && !!to,
+    staleTime: TIER.operational.staleTime,
+    ...options,
+  });
+}
+
 export function useDailyDssrRange(
   stationId: string | null | undefined,
   from: string,
@@ -754,6 +829,29 @@ export function useDailyDssrRange(
     queryKey: queryKeys.dssrRange(stationId ?? '', from, to),
     queryFn: () => shiftService.getDailyDssrRange(stationId!, from, to),
     enabled: !!stationId && !!from && !!to,
+    ...options,
+  });
+}
+
+/**
+ * Attendant Handover Report over a Business-Date range. Operational tier: it
+ * reads live operational rows, so it must never serve same-session stale data.
+ *
+ * Entitlement is NOT checked here — callers mount this behind the capability
+ * gate, and the server refuses regardless of what the client believes.
+ */
+export function useAttendantHandoverReport(
+  filters: Partial<AttendantReportFilters> & { stationId: string | null | undefined },
+  options?: Options<AttendantHandoverReport>,
+) {
+  // The period is fetched whole; callers filter by attendant in memory. The
+  // endpoint's own `attendantId` is for consumers that want the narrow read.
+  const { stationId, from = '', to = '' } = filters;
+  return useQuery({
+    queryKey: queryKeys.attendantHandoverReport(stationId ?? '', from, to),
+    queryFn: () => shiftService.getAttendantHandoverReport({ stationId: stationId!, from, to }),
+    enabled: !!stationId && !!from && !!to,
+    ...TIER.operational,
     ...options,
   });
 }
@@ -783,6 +881,9 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['shift-transactions'] }),
       qc.invalidateQueries({ queryKey: ['merchandise-handovers'] }),
       qc.invalidateQueries({ queryKey: ['merchandise-sales'] }),
+      // The Attendant Handover Report reads closed-shift handovers, so closing
+      // a shift (or correcting one) changes it within the same session.
+      qc.invalidateQueries({ queryKey: ['attendant-handover-report'] }),
       // Business Day cockpit + P&L read the live DSSR preview — refresh it too.
       qc.invalidateQueries({ queryKey: ['dssr'] }),
       qc.invalidateQueries({ queryKey: ['dssr-preview'] }),
@@ -796,6 +897,8 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['financial-accounts'] }),
       qc.invalidateQueries({ queryKey: ['account-ledger'] }),
       qc.invalidateQueries({ queryKey: ['finance-movements'] }),
+      qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() }),
+      qc.invalidateQueries({ queryKey: queryKeys.profitLossAll() }),
       qc.invalidateQueries({ queryKey: ['money-movements'] }),
       // Suppliers carry computed payable balances that move with purchases/payments,
       // and new suppliers are created from PurchasesList — keep them fresh too.

@@ -81,6 +81,30 @@ export function resolveBusinessDate(opts: BusinessDateOptions = {}): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+/**
+ * Resolve the Entry Date (`YYYY-MM-DD`) of an Office Record: the plain
+ * station-timezone calendar date of the instant. Unlike a business date, Day
+ * Start never applies — an office entry at 03:00 on the 15th is dated the 15th
+ * even when the sales day starts at 06:00 (ADR 0005).
+ */
+export function resolveEntryDate(opts: { now?: Date; timeZone?: string | null } = {}): string {
+  return resolveBusinessDate({ now: opts.now, timeZone: opts.timeZone, dayStartsAt: '00:00' });
+}
+
+/**
+ * A business date shifted by whole days, staying in `YYYY-MM-DD`.
+ *
+ * Business dates are calendar labels, not instants, so the arithmetic is done
+ * in UTC deliberately — it must not be perturbed by a timezone or by a DST
+ * transition in the station's zone. Rolling a month or year boundary is the
+ * point: naive `${y}-${m}-${d - 13}` produces `2026-03-(-8)`.
+ */
+export function shiftBusinessDate(businessDate: string, deltaDays: number): string {
+  const d = new Date(`${businessDate}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Extract date-resolution settings from a station `settings` JSONB blob. */
 export function businessDateSettings(settings: unknown): { timeZone: string; dayStartsAt: string } {
   const s = (settings ?? {}) as Record<string, unknown>;

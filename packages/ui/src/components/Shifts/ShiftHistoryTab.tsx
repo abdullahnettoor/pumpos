@@ -4,7 +4,7 @@ import { Eye } from 'lucide-react';
 import { Panel, Button, StatusChip, DateText } from '../../pump-ds/index.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { inr } from '../../utils/format.js';
-import { formatStationDateTime } from '@pump/shared';
+import { formatStationDateTime, shiftDisplayLabel } from '@pump/shared';
 import { useShiftSummaries } from '../../query/hooks.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
 import { useRunTask } from '../../utils/runTask.js';
@@ -58,27 +58,51 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
 
   const columns = useMemo<ColumnDef<any, any>[]>(
     () => [
-      {
-        accessorKey: 'generatedAt',
-        header: 'Closure Date',
-        cell: ({ row }) => <span>{formatStationDateTime(row.original.generatedAt, timeZone)}</span>,
-      },
+      // Business Day leads, and it is the primary read (#226). A shift closing
+      // 05:11 on the 17th belongs to the 16th; leading with the closure
+      // timestamp invited reading that row as the 17th's.
       {
         id: 'businessDate',
         header: 'Business Day',
         cell: ({ row }) =>
           row.original.businessDate ? (
-            <DateText value={row.original.businessDate} />
+            <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
+              <DateText value={row.original.businessDate} />
+            </span>
           ) : (
             <span style={{ color: 'var(--text-faint)' }}>—</span>
           ),
+      },
+      // Demoted, not dropped: still the answer to "when was this reconciled?".
+      {
+        accessorKey: 'generatedAt',
+        header: 'Closed At',
+        cell: ({ row }) => (
+          <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+            {formatStationDateTime(row.original.generatedAt, timeZone)}
+          </span>
+        ),
+      },
+      // The shift's readable name (#228) — `YYYYMMDD-N`, the same string the
+      // shift-summary PDF and the attendant statement print.
+      {
+        id: 'shiftLabel',
+        header: 'Shift',
+        cell: ({ row }) => (
+          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
+            {shiftDisplayLabel(row.original)}
+          </span>
+        ),
       },
       {
         id: 'template',
         header: 'Template',
         cell: ({ row }) => (
           <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
-            {row.original.snapshotData?.templateName || 'Custom'}
+            {/* The list endpoint joins the template and returns its live name
+                top-level. The snapshot copy is the fallback, not the source:
+                reading it first made every row say "Custom". */}
+            {row.original.templateName || row.original.snapshotData?.templateName || 'Custom'}
           </span>
         ),
       },
@@ -86,7 +110,9 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
         id: 'status',
         header: 'Status',
         cell: ({ row }) => {
-          const s = row.original.shiftStatus || row.original.snapshotData?.shiftStatus || 'CLOSED';
+          // The endpoint returns `status`. Reading `shiftStatus` matched
+          // nothing, so a Locked shift rendered as merely Closed.
+          const s = row.original.status || row.original.snapshotData?.shiftStatus || 'CLOSED';
           return <StatusChip status={s === 'LOCKED' ? 'locked' : 'closed'} size="sm" />;
         },
       },

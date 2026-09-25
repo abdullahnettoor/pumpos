@@ -57,9 +57,7 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
 
   const snap: any = previewQ.data?.snapshotData ?? previewQ.data ?? {};
   const fuel = snap.fuel || {};
-  const collections = snap.collections || {};
   const credit = snap.credit || {};
-  const expenses = snap.expenses || {};
   const purchases = snap.purchases || {};
   const drawer = snap.drawer || {};
   const pnl = snap.pnl || {};
@@ -67,12 +65,10 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
 
   const fuelSales = Number(fuel.totalSalesValue || 0);
   const volume = Number(fuel.totalNetVolume ?? fuel.totalVolume ?? 0);
-  const collectionsTotal = Number(collections.total || 0);
-  const expensesTotal = Number(expenses.total || 0);
   const creditTotal = Number(credit.total || 0);
   const purchasesTotal = Number(purchases.total || 0);
   const cashVariance = Number(drawer.totalCashVariance || 0);
-  const netProfit = Number(pnl.netProfit || 0);
+  const grossMargin = Number(pnl.grossMargin || 0);
   const hasCostBasis = Number(pnl.cogs || 0) > 0;
 
   const receivables = (customersQ.data || []).reduce(
@@ -174,12 +170,6 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
           sub={`${numberFmt(volume, 2)} L net`}
           tone="positive"
         />
-        <Kpi label="Collections" value={inr(collectionsTotal)} />
-        <Kpi
-          label="Expenses"
-          value={inr(expensesTotal)}
-          tone={expensesTotal > 0 ? 'warning' : 'default'}
-        />
         <Kpi label="Purchases" value={inr(purchasesTotal)} />
         <Kpi label="Credit sales" value={inr(creditTotal)} sub="Receivable" />
         <Kpi
@@ -201,14 +191,10 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
           tone={payables > 0 ? 'warning' : 'default'}
         />
         <Kpi
-          label={hasCostBasis ? 'Net profit' : 'Net (proxy)'}
-          value={inr(
-            hasCostBasis
-              ? netProfit
-              : fuelSales + collectionsTotal - expensesTotal - purchasesTotal,
-          )}
-          sub={hasCostBasis ? 'After COGS' : 'Set product costs for true P&L'}
-          tone={(hasCostBasis ? netProfit : 0) < 0 ? 'negative' : 'default'}
+          label="Gross margin"
+          value={hasCostBasis ? inr(grossMargin) : '—'}
+          sub={hasCostBasis ? 'Sales − COGS' : 'Set product costs for margin'}
+          tone={hasCostBasis && grossMargin < 0 ? 'negative' : 'default'}
         />
       </div>
 

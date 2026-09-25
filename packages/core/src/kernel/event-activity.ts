@@ -207,6 +207,11 @@ export const EventActivityCatalog = {
   ),
   [BusinessEvents.SHIFT_OPENED]: success(BusinessEvents.SHIFT_OPENED, 'Shift opened', [
     template('shift-opened.v1', 'Opened a shift with {openingCash}.', { openingCash: 'inr' }),
+    template(
+      'shift-opened.v2',
+      'Opened a shift with {openingCash} in Opening Floats across {drawerCount} drawers.',
+      { openingCash: 'inr', drawerCount: 'integer' },
+    ),
   ]),
   [BusinessEvents.SHIFT_CLOSED]: success(BusinessEvents.SHIFT_CLOSED, 'Shift closed', [
     template('shift-closed.v1', 'Closed a shift with a cash variance of {cashVariance}.', {
@@ -329,6 +334,12 @@ export const EventActivityCatalog = {
       amount: 'inr',
       accountName: 'text',
     }),
+    // v2 (ADR 0005): accountName is the Funding Account's own name.
+    template('supplier-paid.v2', 'Paid {supplierName} {amount} from {accountName}.', {
+      supplierName: 'text',
+      amount: 'inr',
+      accountName: 'text',
+    }),
   ]),
   [BusinessEvents.SUPPLIER_OPENING_BALANCE_SET]: info(
     BusinessEvents.SUPPLIER_OPENING_BALANCE_SET,
@@ -387,6 +398,16 @@ export const EventActivityCatalog = {
           paymentMethod: 'text',
         },
       ),
+      template(
+        'credit-payment-received.v2',
+        'Received {amount} from {customerName} via {paymentMethod} into {accountName}.',
+        {
+          amount: 'inr',
+          customerName: 'text',
+          paymentMethod: 'text',
+          accountName: 'text',
+        },
+      ),
     ],
   ),
   [BusinessEvents.OMC_CARD_SALE_CREATED]: success(
@@ -402,13 +423,27 @@ export const EventActivityCatalog = {
       amount: 'inr',
       accountName: 'text',
     }),
+    template('expense.v2', 'Recorded an expense of {amount} from {accountName}.', {
+      amount: 'inr',
+      accountName: 'text',
+    }),
   ]),
   [BusinessEvents.EXPENSE_VOIDED]: danger(BusinessEvents.EXPENSE_VOIDED, 'Expense voided'),
-  [BusinessEvents.INCOME_RECORDED]: success(BusinessEvents.INCOME_RECORDED, 'Income recorded'),
+  [BusinessEvents.INCOME_RECORDED]: success(BusinessEvents.INCOME_RECORDED, 'Income recorded', [
+    template('income.v2', 'Recorded income of {amount} into {accountName}.', {
+      amount: 'inr',
+      accountName: 'text',
+    }),
+  ]),
   [BusinessEvents.INCOME_VOIDED]: danger(BusinessEvents.INCOME_VOIDED, 'Income voided'),
   [BusinessEvents.PAYMENT_RECEIVED]: success(BusinessEvents.PAYMENT_RECEIVED, 'Payment received'),
   [BusinessEvents.PAYMENT_MADE]: warning(BusinessEvents.PAYMENT_MADE, 'Payment made', [
     template('payment-made.v1', 'Paid {amount} to {partyName} from {accountName}.', {
+      amount: 'inr',
+      partyName: 'text',
+      accountName: 'text',
+    }),
+    template('payment-made.v2', 'Paid {amount} to {partyName} from {accountName}.', {
       amount: 'inr',
       partyName: 'text',
       accountName: 'text',

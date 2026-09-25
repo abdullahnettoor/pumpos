@@ -1,21 +1,30 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFieldArray } from 'react-hook-form';
-import { purchaseEntryFormSchema, type PurchaseEntryFormValues } from '@pump/shared';
+import {
+  purchaseEntryFormSchema,
+  resolveEntryDate,
+  type PurchaseEntryFormValues,
+} from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { inr } from '../../utils/format.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
 import { Combobox } from '../primitives/Combobox.js';
-import { AccountSelect } from '../primitives/AccountSelect.js';
+import { FundingAccountSelect } from '../primitives/FundingAccountSelect.js';
+import { SUPPLIER_PAYMENT_ACCOUNT_TYPES } from '../../utils/fundingAccounts.js';
 import { Checkbox } from '../primitives/Toggle.js';
 import { Button } from '../../pump-ds/index.js';
+import { Banner } from '../primitives/Banner.js';
+import { useBusinessDayStatus } from '../../query/hooks.js';
 
-export interface ShiftOption {
-  id: string;
-  label: string;
+/** Optional pay-now recorded with the purchase — a supplier payment (Office Record). */
+export interface PurchasePayNow {
+  amount: number;
+  fundingAccountId: string;
+  entryDate?: string;
+  notes?: string;
 }
 
 export interface PurchaseEntryFormProps {
-  shiftOptions: ShiftOption[];
   suppliers: any[];
   products: any[];
   /** All station tanks; the form filters to each line's product tanks. */
@@ -26,12 +35,11 @@ export interface PurchaseEntryFormProps {
   /** Inter-state supply (supplier state ≠ station state) → IGST instead of CGST+SGST. */
   interState?: boolean;
   onCancel: () => void;
-  onSubmit: (
-    values: PurchaseEntryFormValues,
-    payment?: { amount: number; accountId?: string | null },
-  ) => void | Promise<void>;
+  onSubmit: (values: PurchaseEntryFormValues, payment?: PurchasePayNow) => void | Promise<void>;
   /** Station for the pay-from account picker (required when enablePayment). */
   stationId?: string | null;
+  /** Station timezone — the pay-now entry date defaults to today there. */
+  timeZone?: string | null;
   /** Show the optional "record payment now" section. */
   enablePayment?: boolean;
   submitLabel?: string;
@@ -40,8 +48,6 @@ export interface PurchaseEntryFormProps {
   invoicePlaceholder?: string;
   notesPlaceholder?: string;
   supplierEmptyMessage?: string;
-  showShiftHintWhenSingle?: boolean;
-  showDateField?: boolean;
   dateLabel?: string;
 }
 
@@ -53,7 +59,6 @@ const labelStyle: React.CSSProperties = {
 const errorTextStyle: React.CSSProperties = { fontSize: '11px', color: 'var(--brand-danger)' };
 
 const EMPTY_DEFAULTS: PurchaseEntryFormValues = {
-  targetShiftId: '',
   transactionDate: '',
   supplierId: '',
   invoiceNumber: '',
@@ -80,7 +85,6 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = (props) => (
 );
 
 const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
-  shiftOptions,
   suppliers,
   products,
   tanks,
@@ -96,13 +100,12 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
   invoicePlaceholder,
   notesPlaceholder,
   supplierEmptyMessage = 'No active suppliers found. Please add or enable suppliers in the Supplier Registry tab.',
-  showShiftHintWhenSingle = true,
-  showDateField = false,
   dateLabel = 'Purchase Date',
   stationId,
+  timeZone,
   enablePayment = false,
 }) => {
-  const hasMultipleShiftOptions = shiftOptions.length > 1;
+  const today = resolveEntryDate({ timeZone });
 
   const {
     register,
@@ -115,6 +118,15 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
+
+  // A closed business day seals its stock (ADR 0003), and a closed day cannot be
+  // reopened, so the server refuses a purchase dated on one. Say so as soon as
+  // the date is picked instead of after submit (#308).
+  const purchaseDate = watch('transactionDate') || '';
+  const dayStatusQ = useBusinessDayStatus(stationId, purchaseDate, {
+    enabled: !!stationId && !!purchaseDate,
+  });
+  const closedDate = dayStatusQ.data?.requestedState === 'CLOSED' ? purchaseDate : null;
 
   // Tank allocations the operator has typed, keyed by field-array row id then
   // tankId. What the form uses is derived below: an explicit split wins,
@@ -133,6 +145,12 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
   const [recordPayment, setRecordPayment] = useState(false);
   const [paymentAccountId, setPaymentAccountId] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentDate, setPaymentDate] = useState(today);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const onPaymentAccountChange = useCallback((v: string) => {
+    setPaymentAccountId(v);
+    if (v) setPaymentError(null);
+  }, []);
 
   // React Hook Form mutates the watched array in place, so its identity is
   // stable even as the values change — which makes it useless as a dependency.
@@ -241,10 +259,19 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
       }
       return { ...ln, unitPrice, tankAllocations };
     });
-    const payment =
-      enablePayment && recordPayment && Number(paymentAmount) > 0
-        ? { amount: Number(paymentAmount), accountId: paymentAccountId || null }
-        : undefined;
+    const paysNow = enablePayment && recordPayment && Number(paymentAmount) > 0;
+    if (paysNow && !paymentAccountId) {
+      setPaymentError('Choose the account');
+      return;
+    }
+    const payment: PurchasePayNow | undefined = paysNow
+      ? {
+          amount: Number(paymentAmount),
+          fundingAccountId: paymentAccountId,
+          entryDate: paymentDate || undefined,
+        }
+      : undefined;
+    if (closedDate) return;
     return onSubmit({ ...values, lines }, payment);
   };
 
@@ -257,34 +284,16 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
       }}
       style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
     >
-      {showDateField && (
-        <Field label={dateLabel}>
-          <DateField disabled={submitting} {...register('transactionDate')} />
-        </Field>
+      {/* Dated by business day only; a purchase never belongs to a Shift (#308). */}
+      <Field label={dateLabel}>
+        <DateField disabled={submitting} {...register('transactionDate')} />
+      </Field>
+      {closedDate && (
+        <Banner severity="warning" title={`${closedDate} is closed.`}>
+          Its stock is sealed, so a purchase cannot be recorded on it. Record this purchase on an
+          open day; the missing delivery will show as stock variance on {closedDate}.
+        </Banner>
       )}
-      {hasMultipleShiftOptions ? (
-        <Field label="Target Shift">
-          <Select disabled={submitting} {...register('targetShiftId')}>
-            {shiftOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      ) : showShiftHintWhenSingle && shiftOptions.length === 1 ? (
-        <div
-          style={{
-            backgroundColor: 'var(--state-info-bg)',
-            color: 'var(--state-info-fg)',
-            padding: '10px 12px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-          }}
-        >
-          Logging to shift: <strong>{shiftOptions[0].label}</strong>
-        </div>
-      ) : null}
 
       <Field label="Supplier" error={errors.supplierId?.message}>
         {suppliers.length === 0 ? (
@@ -701,12 +710,22 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
           />
           {recordPayment && (
             <>
-              <Field label="Pay from account">
-                <AccountSelect
+              <Field label="Entry date">
+                <DateField
+                  max={today}
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  disabled={submitting}
+                />
+              </Field>
+              <Field label="Paid from" error={paymentError ?? undefined}>
+                <FundingAccountSelect
+                  types={SUPPLIER_PAYMENT_ACCOUNT_TYPES}
                   stationId={stationId}
                   value={paymentAccountId}
-                  onChange={setPaymentAccountId}
+                  onChange={onPaymentAccountChange}
                   disabled={submitting}
+                  invalid={!!paymentError}
                 />
               </Field>
               <Field label="Amount paid (₹)">
@@ -771,7 +790,13 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
         >
           Cancel
         </Button>
-        <Button type="submit" variant="primary" size="md" loading={submitting}>
+        <Button
+          type="submit"
+          variant="primary"
+          size="md"
+          loading={submitting}
+          disabled={!!closedDate}
+        >
           {submitLabel}
         </Button>
       </div>

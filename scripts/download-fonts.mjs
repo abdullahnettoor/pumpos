@@ -26,6 +26,7 @@ const targets = [
   'apps/console/public/fonts',
   'apps/mobile/public/fonts',
   'apps/desktop/public/fonts',
+  'apps/platform/public/fonts',
 ];
 
 for (const t of targets) await mkdir(join(root, t), { recursive: true });

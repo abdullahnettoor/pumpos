@@ -66,13 +66,15 @@ export class DrizzleSupplierTransactionRepository implements SupplierTransaction
   async save(t: SupplierTransaction): Promise<void> {
     await this.db.insert(schema.supplierTransactions).values({
       id: t.id,
-      shiftId: t.shiftId,
-      businessDayId: t.businessDayId,
+      organizationId: t.organizationId,
+      stationId: t.stationId,
+      entryDate: t.entryDate,
+      fundingAccountId: t.fundingAccountId,
       supplierId: t.supplierId,
       transactionType: t.transactionType,
       amount: t.amount,
-      paidFrom: t.paidFrom,
-      affectsDrawer: t.affectsDrawer,
+      // Office records never touch the Drawer (ADR 0005).
+      affectsDrawer: false,
       referenceType: t.referenceType,
       referenceId: t.referenceId,
       notes: t.notes,

@@ -35,8 +35,10 @@ export type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
 export { DEFAULT_SHIFT_SUMMARY_CONFIG, SHIFT_SUMMARY_SECTION_LABELS } from './reportConfig.js';
 export type { Letterhead } from './letterhead.js';
 export { letterheadFromStation } from './letterhead.js';
+import { shiftDisplayLabel } from '@pump/shared';
 import type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
 import { DEFAULT_SHIFT_SUMMARY_CONFIG } from './reportConfig.js';
+import { legacyPurchases } from './legacyPurchases.js';
 import type { Letterhead } from './letterhead.js';
 
 export const C = {
@@ -357,6 +359,9 @@ export const LetterheadBand = ({
   );
 };
 
+/** Pre-#287 snapshots keep a single Cash Variance line (snapshots are immutable). */
+const twoLevel = (d: any) => Number(d?.cashVarianceModel ?? 0) >= 2;
+
 const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React.ReactNode> = {
   header: (d, cfg) => (
     <View key="header">
@@ -375,8 +380,14 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
   meta: (d) => (
     <View key="meta" style={s.metaBox}>
       <View style={s.metaCell}>
-        <Text style={s.label}>SHIFT ID</Text>
-        <Text style={s.valMono}>{String(d.shiftId || '').slice(0, 8)}...</Text>
+        <Text style={s.label}>SHIFT</Text>
+        <Text style={s.valMono}>
+          {shiftDisplayLabel({
+            businessDate: d.businessDate,
+            shiftSequence: d.shiftSequence,
+            shiftId: d.shiftId,
+          })}
+        </Text>
       </View>
       <View style={s.metaCell}>
         <Text style={s.label}>SHIFT TEMPLATE</Text>
@@ -667,16 +678,33 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
       <Text style={s.h2}>CASH RECONCILIATION & VARIANCES</Text>
       <View style={s.reconBox}>
         {[
-          { l: 'Opening Cash Float', v: inr(d.openingCash), c: C.ink },
+          { l: 'Opening Floats', v: inr(d.openingCash), c: C.ink },
           {
             l: '(+) Cash Sales (Attendant Handovers)',
             v: `+ ${inr(d.cashSalesSum)}`,
             c: C.success,
           },
-          { l: '(+) Cash Collections', v: `+ ${inr(d.cashCollectionsSum)}`, c: C.success },
-          { l: '(-) Petty Cash Expenses', v: `- ${inr(d.cashExpensesSum)}`, c: C.danger },
-          { l: 'Expected Cash in Drawer', v: inr(d.expectedCash), c: C.ink },
+          {
+            l: '(-) Handover Drops',
+            v: `- ${inr(d.handoverCashDrops ?? d.cashDrops)}`,
+            c: C.danger,
+          },
+          { l: '(-) Drops at Close', v: `- ${inr(d.closeCashDrops ?? 0)}`, c: C.danger },
+          {
+            l: twoLevel(d) ? 'Expected Office Cash' : 'Expected Cash in Drawer',
+            v: inr(d.expectedCash),
+            c: C.ink,
+          },
           { l: 'Actual Closing Cash (Entered)', v: inr(d.closingCash), c: C.ink },
+          ...(twoLevel(d)
+            ? [
+                {
+                  l: 'Attendant Variance (Handover)',
+                  v: `${Number(d.attendantVariance || 0) > 0 ? '+' : ''}${inr(d.attendantVariance ?? 0)}`,
+                  c: Number(d.attendantVariance || 0) < 0 ? C.danger : C.ink,
+                },
+              ]
+            : []),
         ].map((r, i) => (
           <View key={i} style={s.reconRow}>
             <Text style={{ fontSize: 9, color: r.c }}>{r.l}</Text>
@@ -702,7 +730,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
               color: Math.abs(Number(d.cashVariance || 0)) > 100 ? C.danger : C.ink,
             }}
           >
-            Cash Variance
+            {twoLevel(d) ? 'Office Count Variance' : 'Cash Variance'}
           </Text>
           <Text
             style={{
@@ -724,71 +752,40 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
       </View>
     </View>
   ),
-  nonCash: (d) => (
-    <View key="nonCash">
-      <Text style={s.h2}>NON-CASH COLLECTIONS</Text>
-      <View style={s.kpiRow}>
-        <Kpi l="Card Collections" v={inr(d.cardCollectionsSum)} />
-        <Kpi l="UPI/QR Collections" v={inr(d.upiCollectionsSum)} />
-        <Kpi l="Bank Transfer Collections" v={inr(d.bankCollectionsSum)} />
-      </View>
-    </View>
-  ),
-  expenses: (d) =>
-    d.expenses && d.expenses.length > 0 ? (
-      <View key="expenses">
-        <Text style={s.h2}>SHIFT PETTY CASH EXPENSES</Text>
+  // Office Records (collections, expenses) never appear on a Shift Summary
+  // (ADR 0005); saved configs naming those old sections simply skip them.
+  drawers: (d) =>
+    Array.isArray(d.drawers) && d.drawers.length > 0 ? (
+      <View key="drawers">
+        <Text style={s.h2}>DRAWERS</Text>
         <TableView
           columns={[
-            { header: 'Category', flex: 1.6, strong: true },
-            { header: 'Description', flex: 2.6 },
-            { header: 'Amount', flex: 1.2, align: 'right', mono: true },
+            { header: 'Attendant', flex: 2, strong: true },
+            { header: 'Float', flex: 1, align: 'right', mono: true },
+            { header: 'Cash Sales', flex: 1.2, align: 'right', mono: true },
+            { header: 'Handover Drops', flex: 1.1, align: 'right', mono: true },
+            { header: 'Close Drops', flex: 1, align: 'right', mono: true },
+            { header: 'Expected', flex: 1.2, align: 'right', mono: true },
+            { header: 'Handed Over', flex: 1.2, align: 'right', mono: true },
+            { header: 'Variance', flex: 1.2, align: 'right', mono: true },
           ]}
-          rows={(d.expenses || []).map((e: any) => [
-            { text: e.categoryName || 'General' },
-            { text: e.description || '—' },
-            { text: `- ${inr(e.amount)}`, color: C.danger },
-          ])}
-        />
-      </View>
-    ) : null,
-  purchases: (d) =>
-    d.purchases && d.purchases.length > 0 ? (
-      <View key="purchases">
-        <Text style={s.h2}>SUPPLIER FUEL INTAKES</Text>
-        <TableView
-          columns={[
-            { header: 'Supplier', flex: 1.8, strong: true },
-            { header: 'Ref / Invoice', flex: 1.8, mono: true },
-            { header: 'Notes', flex: 2 },
-            { header: 'Amount', flex: 1.2, align: 'right', mono: true },
-          ]}
-          rows={(d.purchases || []).map((p: any) => [
-            { text: p.supplierName || 'Unknown Supplier' },
-            { text: `${p.documentNumber || ''}${p.invoiceNumber ? ` (${p.invoiceNumber})` : ''}` },
-            { text: p.notes || '—' },
-            { text: inr(p.amount) },
-          ])}
-        />
-      </View>
-    ) : null,
-  collections: (d) =>
-    d.collections && d.collections.length > 0 ? (
-      <View key="collections">
-        <Text style={s.h2}>COLLECTIONS & ACCOUNT SALES LOGS</Text>
-        <TableView
-          columns={[
-            { header: 'Customer', flex: 1.8, strong: true },
-            { header: 'Method', flex: 1.1 },
-            { header: 'Notes', flex: 2.2 },
-            { header: 'Amount', flex: 1.2, align: 'right', mono: true },
-          ]}
-          rows={(d.collections || []).map((c: any) => [
-            { text: c.customerName || 'Walk-in Customer' },
-            { text: c.paymentMethod || '' },
-            { text: c.notes || '—' },
-            { text: inr(c.amount), color: c.paymentMethod === 'Credit' ? C.muted : C.success },
-          ])}
+          rows={d.drawers.map((r: any) => {
+            const m = (v: unknown) => (v == null ? '—' : inr(v));
+            const v = r.variance == null ? null : Number(r.variance);
+            return [
+              { text: `${r.attendantName ?? 'Attendant'}${r.duName ? ` · ${r.duName}` : ''}` },
+              { text: m(r.openingFloat) },
+              { text: m(r.cashSales) },
+              { text: m(r.cashDrops) },
+              { text: m(r.closeCashDrops ?? 0) },
+              { text: m(r.expectedCash) },
+              { text: m(r.cashHandedOver) },
+              {
+                text: v == null ? 'Not handed over' : inr(v),
+                color: v == null || v === 0 ? C.muted : v < 0 ? C.danger : C.success,
+              },
+            ];
+          })}
         />
       </View>
     ) : null,
@@ -800,13 +797,51 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
   ),
 };
 
+/**
+ * Older snapshots stored the shift's purchases; render them as they were saved.
+ * New snapshots carry none (#308), so this renders nothing for them.
+ */
+function legacyPurchasesSection(d: any): React.ReactNode {
+  const rows = legacyPurchases(d);
+  if (rows.length === 0) return null;
+  return (
+    <View key="purchases">
+      <Text style={s.h2}>SUPPLIER FUEL INTAKES</Text>
+      <TableView
+        columns={[
+          { header: 'Supplier', flex: 1.8, strong: true },
+          { header: 'Ref / Invoice', flex: 1.8, mono: true },
+          { header: 'Notes', flex: 2 },
+          { header: 'Amount', flex: 1.2, align: 'right', mono: true },
+        ]}
+        rows={rows.map((p: any) => [
+          { text: p.supplierName || 'Unknown Supplier' },
+          { text: `${p.documentNumber || ''}${p.invoiceNumber ? ` (${p.invoiceNumber})` : ''}` },
+          { text: p.notes || '—' },
+          { text: inr(p.amount) },
+        ])}
+      />
+    </View>
+  );
+}
+
 export const ShiftSummaryDoc: React.FC<{ snapshot: any; config?: ReportConfig }> = ({
   snapshot,
   config = DEFAULT_SHIFT_SUMMARY_CONFIG,
 }) => (
   <Document>
     <Page size={config.paper} style={s.page}>
-      {config.sections.map((key) => builders[key]?.(snapshot, config))}
+      {config.sections.map((key) =>
+        key === 'signatures' ? (
+          <React.Fragment key="signatures">
+            {legacyPurchasesSection(snapshot)}
+            {builders.signatures(snapshot, config)}
+          </React.Fragment>
+        ) : (
+          builders[key]?.(snapshot, config)
+        ),
+      )}
+      {!config.sections.includes('signatures') && legacyPurchasesSection(snapshot)}
       <View style={s.foot} fixed>
         <Text>Generated {new Date().toLocaleString('en-IN')}</Text>
         <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />

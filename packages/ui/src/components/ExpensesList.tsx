@@ -12,6 +12,7 @@ import { useToast } from './primitives/ToastProvider.js';
 import { useAsk } from './primitives/ConfirmDialog.js';
 import { Drawer } from './Drawer.js';
 import { ExpenseEntryForm } from './transactions/ExpenseEntryForm.js';
+import { expensePayload } from '../utils/officeRecordPayloads.js';
 import {
   useExpenses,
   useShiftStatus,
@@ -32,6 +33,7 @@ import {
 import { buildExpenseColumns } from './expenses/columns.js';
 import { ExpenseAnalytics } from './expenses/ExpenseAnalytics.js';
 import { CategoryManagerDrawer } from './expenses/CategoryManagerDrawer.js';
+import { CASH_ACCOUNT_TYPES } from '../utils/ledgerLabels.js';
 import { useRunTask } from '../utils/runTask.js';
 
 const transactionService = new CloudTransactionService();
@@ -64,6 +66,8 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
     () => ({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at }),
     [s.timezone, s.business_day_starts_at],
   );
+  // Office records are dated by entry date: the plain station calendar date (ADR 0005).
+  const entryClock = useMemo(() => ({ timeZone: s.timezone }), [s.timezone]);
 
   const expenses = useMemo(() => expensesQ.data ?? [], [expensesQ.data]);
   const categories = categoriesQ.data ?? [];
@@ -73,7 +77,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
   const canVoid = canVoidExpense((userRole as any) ?? 'Staff');
 
   const [activeTab, setActiveTab] = useState<TabType>('ledger');
-  const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
+  const [range, setRange] = useState<DateRange>(() => computeRange('this-month', entryClock));
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
 
@@ -85,24 +89,10 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const resolvePreferredShiftId = (active: any | null, closedList: any[]) => {
-    if (
-      defaultShiftId &&
-      (active?.id === defaultShiftId || closedList.some((sh) => sh.id === defaultShiftId))
-    )
-      return defaultShiftId;
-    if (active) return active.id;
-    if (closedList.length > 0) return closedList[0].id;
-    return '';
-  };
-  const preferredShiftId = resolvePreferredShiftId(activeShift, recentClosedShifts);
-
   const openDrawer = () => {
     setFormError(null);
     setFormDefaults({
       categoryId: categories[0]?.id ?? '',
-      targetShiftId: preferredShiftId,
-      transactionDate: new Date().toISOString().slice(0, 10),
       amount: undefined as unknown as number,
       description: '',
     });
@@ -114,15 +104,8 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
     try {
       setSubmitting(true);
       setFormError(null);
-      await transactionService.recordExpense({
-        stationId: stationId ?? undefined,
-        transactionDate: values.transactionDate || undefined,
-        paidFrom: 'BANK',
-        categoryId: values.categoryId,
-        amount: Number(values.amount),
-        description: values.description || undefined,
-        accountId: values.accountId || undefined,
-      });
+      if (!stationId) return;
+      await transactionService.recordExpense(expensePayload(stationId, values));
       closeDrawer();
       toast.success('Expense recorded.');
       await invalidateOperational(stationId);
@@ -174,11 +157,11 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
 
   // KPIs — fixed windows (today / this month), independent of the table range filter.
   const kpis = useMemo(() => {
-    const today = computeRange('today', clock);
-    const month = computeRange('this-month', clock);
+    const today = computeRange('today', entryClock);
+    const month = computeRange('this-month', entryClock);
     const active = expenses.filter((e: any) => e.status !== 'VOIDED');
     const inWindow = (e: any, r: DateRange) => {
-      const d = e.businessDate ?? e.shiftDate;
+      const d = e.entryDate;
       return d && d >= r.from && d <= r.to;
     };
     const monthRows = active.filter((e: any) => inWindow(e, month));
@@ -186,12 +169,12 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
       .filter((e: any) => inWindow(e, today))
       .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
     const spentMonth = monthRows.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
-    const drawerMonth = monthRows
-      .filter((e: any) => e.paidFrom === 'SHIFT_CASH')
+    const cashMonth = monthRows
+      .filter((e: any) => CASH_ACCOUNT_TYPES.includes(e.accountType))
       .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
-    const otherMonth = spentMonth - drawerMonth;
-    return { spentToday, spentMonth, entriesMonth: monthRows.length, drawerMonth, otherMonth };
-  }, [expenses, clock]);
+    const otherMonth = spentMonth - cashMonth;
+    return { spentToday, spentMonth, entriesMonth: monthRows.length, cashMonth, otherMonth };
+  }, [expenses, entryClock]);
 
   const filteredExpenses = useMemo(
     () =>
@@ -203,7 +186,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
           const catMatch = e.categoryName ? e.categoryName.toLowerCase().includes(q) : false;
           if (!descMatch && !catMatch) return false;
         }
-        const d = e.businessDate ?? e.shiftDate;
+        const d = e.entryDate;
         if (d && (d < range.from || d > range.to)) return false;
         return true;
       }),
@@ -269,7 +252,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                 valueTone="danger"
                 label="Spent Today"
                 value={inr(kpis.spentToday)}
-                hint="business day"
+                hint="entry date"
               />
               <KpiTile
                 dot="danger"
@@ -280,8 +263,8 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
               />
               <KpiTile
                 dot="warning"
-                label="From Cash Drawer"
-                value={inr(kpis.drawerMonth)}
+                label="Cash in Hand / Petty"
+                value={inr(kpis.cashMonth)}
                 hint="this month"
               />
               <KpiTile
@@ -293,7 +276,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
             </KpiStrip>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px' }}>
-              <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
+              <DateRangeField value={range} onChange={setRange} clock={entryClock} size="sm" />
               <div style={{ flex: 1 }} />
               <SearchInput
                 inputSize="sm"
@@ -319,7 +302,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
               </div>
               <button
                 type="button"
-                title="Business expenses post to the selected business day — no open shift required. Cash-drawer expenses are entered from the shift workspace so they reconcile against the drawer."
+                title="Expenses are office records: dated by entry date and paid from the chosen account. They never touch a shift drawer."
                 aria-label="About expense anchoring"
                 style={{
                   display: 'inline-flex',
@@ -369,7 +352,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                   error={expensesQ.error}
                   emptyMessage="No matching expenses found."
                   getRowId={(r: any) => r.id}
-                  initialSorting={[{ id: 'businessDate', desc: true }]}
+                  initialSorting={[{ id: 'entryDate', desc: true }]}
                 />
               )}
             </Panel>
@@ -381,13 +364,10 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
 
       <Drawer isOpen={isDrawerOpen} onClose={closeDrawer} title="Log New Expense">
         <ExpenseEntryForm
-          shiftOptions={[]}
           categories={categories}
           stationId={stationId}
+          timeZone={clock.timeZone}
           defaultValues={formDefaults}
-          showDateField
-          dateLabel="Expense Date"
-          showShiftHintWhenSingle={false}
           submitting={submitting}
           error={formError}
           submittingLabel="Recording..."

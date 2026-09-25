@@ -1,3 +1,4 @@
+import { ATTENDANT_REPORT_CAPABILITY } from '@pump/shared';
 import type { LimitKey, ProductPlanKey, ResolutionCode } from '@pump/shared';
 
 /**
@@ -41,10 +42,16 @@ export interface AccessRegistry {
 /** Plan assigned to an Organization whose stored plan is missing or unknown. */
 export const DEFAULT_PRODUCT_PLAN: ProductPlanKey = 'CORE';
 
+/** The Attendant Handover Report — per-Attendant accountability over a period. */
+export { ATTENDANT_REPORT_CAPABILITY } from '@pump/shared';
+
 /**
  * Production registry. `CORE` is the ungated baseline: all existing PumpOS
- * behaviour, one Station. No Product Capability is registered yet — every
- * current feature ships to every Organization.
+ * behaviour, one Station.
+ *
+ * `reports.attendant` is registered but belongs to no plan: until the
+ * second-tier Product Plan exists, an Organization obtains it only through an
+ * explicit platform capability grant.
  */
 export const PRODUCT_ACCESS_REGISTRY: AccessRegistry = {
   plans: {
@@ -54,7 +61,16 @@ export const PRODUCT_ACCESS_REGISTRY: AccessRegistry = {
       limits: { station_count: 1 },
     },
   },
-  capabilities: {},
+  capabilities: {
+    [ATTENDANT_REPORT_CAPABILITY]: {
+      key: ATTENDANT_REPORT_CAPABILITY,
+      title: 'Attendant Handover Report',
+      unavailableMessage:
+        'The Attendant Handover Report is not part of your current plan. It tracks each attendant’s handovers and variance over a date range.',
+      resolution: 'CONTACT_PUMPOS',
+      upgradable: true,
+    },
+  },
 };
 
 /** True when `key` names a Product Capability this build implements. */

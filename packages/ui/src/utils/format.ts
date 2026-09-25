@@ -62,6 +62,21 @@ export function toDate(value: string | number | Date | null | undefined): Date |
 
 const DATE_FULL: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', year: 'numeric' };
 
+/**
+ * Format a business date (`YYYY-MM-DD`) as `09 Jul 2026`.
+ *
+ * Business dates are a bare calendar day with no time or zone (see
+ * AGENTS.md "Business-Day Date Resolution"), so this formats in UTC: building a
+ * local-midnight Date would let a negative-offset timezone roll the label back
+ * to the previous day. Returns the input unchanged if it isn't a valid date.
+ */
+export function formatBusinessDate(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.toLocaleDateString('en-IN', { ...DATE_FULL, timeZone: 'UTC' });
+}
+
 /** Canonical date: `11 Jul 2026`. Pass `compact` for a 2-digit year (`11 Jul 26`). */
 export function formatDate(
   value: string | number | Date | null | undefined,
@@ -93,4 +108,20 @@ export function formatTime(
   const d = toDate(value);
   if (!d) return opts.fallback ?? '—';
   return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Elapsed time since a shift opened, as `Nh Nm` (e.g. `6h 12m`) — the format
+ * operators read for a shift's age in the status bar and the shift control bar.
+ * Always includes the hours segment so both surfaces print the same shape.
+ * Clamps negatives to `0h 0m`; returns the fallback for an unparseable input.
+ */
+export function formatElapsedSince(
+  openedAt: string | number | Date | null | undefined,
+  opts: { fallback?: string } = {},
+): string {
+  const d = toDate(openedAt);
+  if (!d) return opts.fallback ?? '—';
+  const mins = Math.floor(Math.max(0, Date.now() - d.getTime()) / 60_000);
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }

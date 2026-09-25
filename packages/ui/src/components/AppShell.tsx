@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AppTopBar } from './AppTopBar.js';
+import { AppStatusBar } from './AppStatusBar.js';
 import { cn } from '../pump-ds/lib/cn.js';
 import { Icon, type IconName, ICON_REGISTRY } from '../pump-ds/icon/index.js';
 import { Station } from '@pump/shared';
@@ -46,6 +47,15 @@ export interface AppShellProps {
    * grow a menu item it has no way to honour.
    */
   userMenuExtras?: UserMenuAction[];
+  /** Installed app version, shown in the bottom status bar (desktop AND web). */
+  appVersion?: string | null;
+  /** Newer version available (desktop only): shows an update chip in the
+   *  status bar. In-app updates exist only in the packaged desktop app. */
+  updateAvailableVersion?: string | null;
+  /** Phase-aware update-chip label (desktop only). Falls back to "Update to v…". */
+  updateLabel?: string;
+  /** Clicked when the status-bar update chip is used. Desktop only. */
+  onUpdate?: () => void;
 }
 
 /**
@@ -143,6 +153,10 @@ export const AppShell: React.FC<AppShellProps> = ({
   environmentTag = null,
   stationReady = true,
   userMenuExtras,
+  appVersion,
+  updateAvailableVersion,
+  updateLabel,
+  onUpdate,
 }) => {
   // Sidebar expanded by default; the top-bar hamburger collapses it to an icon rail.
   const [collapsed, setCollapsed] = useState(false);
@@ -196,11 +210,10 @@ export const AppShell: React.FC<AppShellProps> = ({
         overflow: 'hidden',
       }}
     >
-      {/* Full-width top bar (pump-ds): hamburger + brand · business day · search · + New · notifications · sync · user */}
+      {/* Full-width top bar (pump-ds): hamburger + brand · station · search · + New · notifications · user */}
       <div className="no-print" style={{ flexShrink: 0 }}>
         <AppTopBar
           selectedStation={selectedStation}
-          stationsLoading={stationsLoading}
           navItems={navItems}
           userRole={(userRole as 'Owner' | 'Manager' | 'Accountant' | 'Staff') || 'Staff'}
           userName={userName}
@@ -279,13 +292,11 @@ export const AppShell: React.FC<AppShellProps> = ({
           style={{
             flex: 1,
             overflowY: 'auto',
+            // Keep the full padding on every side: full-bleed children (e.g. the
+            // sticky shift control bar's backdrop) extend by exactly
+            // var(--space-6), so a trimmed right padding would overflow and add a
+            // horizontal scroll.
             padding: 'var(--space-6)',
-            // Draw the (6px) scrollbar within the right padding instead of adding
-            // to it: reserve a stable gutter and trim the right padding by its
-            // width, so the content inset stays a symmetric 24px with no layout
-            // shift when the scrollbar toggles.
-            paddingRight: 'calc(var(--space-6) - 6px)',
-            scrollbarGutter: 'stable',
             position: 'relative',
           }}
         >
@@ -319,6 +330,21 @@ export const AppShell: React.FC<AppShellProps> = ({
           <SubscriptionNotice />
           {children}
         </main>
+      </div>
+
+      {/* Bottom status bar (pump-ds): sync · business day · warnings · shift · version/update */}
+      <div className="no-print" style={{ flexShrink: 0 }}>
+        <AppStatusBar
+          selectedStation={selectedStation}
+          syncStatus={syncStatus}
+          pendingSyncCount={pendingSyncCount}
+          onNavigate={onNavigate}
+          stationReady={stationReady}
+          appVersion={appVersion}
+          updateAvailableVersion={updateAvailableVersion}
+          updateLabel={updateLabel}
+          onUpdate={onUpdate}
+        />
       </div>
     </div>
   );

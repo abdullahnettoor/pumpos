@@ -4,6 +4,7 @@ import {
   type RecordHandoverPayload,
   type RecordHandoverResult,
 } from '../services/cloud.js';
+import { useRunTask } from '../utils/runTask.js';
 import { queryKeys } from './hooks.js';
 
 const shiftService = new CloudShiftService();
@@ -100,17 +101,77 @@ export function handoverInvalidationKeys(stationId: string): readonly (readonly 
   ];
 }
 
-export function useRecordHandoverMutation() {
-  const queryClient = useQueryClient();
-  return useMutation({
+export interface HandoverInvalidationClient {
+  invalidateQueries(filters: { queryKey: readonly unknown[] }): Promise<unknown>;
+}
+
+/**
+ * Refreshes every projection a Handover moves. Deliberately separate from the
+ * mutation's `onSuccess` so the submit path can start it without awaiting it.
+ */
+export async function refreshAfterHandover(
+  queryClient: HandoverInvalidationClient,
+  stationId: string,
+): Promise<void> {
+  await Promise.all(
+    handoverInvalidationKeys(stationId).map((queryKey) =>
+      queryClient.invalidateQueries({ queryKey }),
+    ),
+  );
+}
+
+/**
+ * What the operator is told when the post-handover refresh fails.
+ *
+ * It must say the handover itself was recorded. The write succeeded; a bare
+ * "something went wrong" here would invite a duplicate handover on a
+ * shift-close screen.
+ */
+export const HANDOVER_REFRESH_FAILED = 'Handover recorded, but the screen could not be refreshed.';
+
+/**
+ * Starts a background task and reports it if it fails — the shape of
+ * `useRunTask`, taken as a parameter so this module does not need a React
+ * hook in scope.
+ */
+export type BackgroundTaskRunner = (
+  task: void | undefined | Promise<unknown>,
+  message: string,
+) => void;
+
+/**
+ * Mutation options as a value so the "never gate success on the refetch"
+ * convention is assertable in a test rather than only readable in review.
+ *
+ * `onSuccess` must stay synchronous: React Query awaits whatever it returns
+ * before settling `mutateAsync`, so returning the invalidation cascade would
+ * make the submitting spinner and the drawer close wait on five dependent
+ * queries the operator's feedback does not need.
+ *
+ * `runBackgroundTask` is required rather than defaulted to a console sink
+ * (#244). A default is exactly how the silence got here: the refresh runs
+ * unawaited, so if it fails the operator keeps looking at stale balances with
+ * nothing to tell them. Making it a parameter forces each caller to name a
+ * surface; `useRecordHandoverMutation` supplies the toasting one.
+ */
+export function recordHandoverMutationOptions(
+  queryClient: HandoverInvalidationClient,
+  runBackgroundTask: BackgroundTaskRunner,
+) {
+  return {
     mutationFn: ({ payload, idempotencyKey }: RecordHandoverMutationInput) =>
       shiftService.recordHandover(payload, { idempotencyKey }),
-    onSuccess: async (_result, { stationId }) => {
-      await Promise.all(
-        handoverInvalidationKeys(stationId).map((queryKey) =>
-          queryClient.invalidateQueries({ queryKey }),
-        ),
-      );
+    onSuccess: (
+      _result: RecordHandoverResult,
+      { stationId }: RecordHandoverMutationInput,
+    ): void => {
+      runBackgroundTask(refreshAfterHandover(queryClient, stationId), HANDOVER_REFRESH_FAILED);
     },
-  });
+  };
+}
+
+export function useRecordHandoverMutation() {
+  const queryClient = useQueryClient();
+  const runBackgroundTask = useRunTask();
+  return useMutation(recordHandoverMutationOptions(queryClient, runBackgroundTask));
 }

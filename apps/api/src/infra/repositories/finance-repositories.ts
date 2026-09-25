@@ -12,12 +12,12 @@ import type {
 function toExpense(r: typeof schema.expenses.$inferSelect): Expense {
   return {
     id: r.id,
-    shiftId: r.shiftId,
-    businessDayId: r.businessDayId,
+    organizationId: r.organizationId,
+    stationId: r.stationId,
+    entryDate: r.entryDate,
+    fundingAccountId: r.fundingAccountId,
     categoryId: r.categoryId,
     amount: r.amount,
-    paidFrom: r.paidFrom as Expense['paidFrom'],
-    affectsDrawer: r.affectsDrawer,
     description: r.description ?? null,
     status: r.status,
     metadata: (r.metadata as Record<string, unknown>) ?? {},
@@ -41,12 +41,14 @@ export class DrizzleExpenseRepository implements ExpenseRepository {
       .insert(schema.expenses)
       .values({
         id: e.id,
-        shiftId: e.shiftId,
-        businessDayId: e.businessDayId,
+        organizationId: e.organizationId,
+        stationId: e.stationId,
+        entryDate: e.entryDate,
+        fundingAccountId: e.fundingAccountId,
         categoryId: e.categoryId,
         amount: e.amount,
-        paidFrom: e.paidFrom,
-        affectsDrawer: e.affectsDrawer,
+        // Office records never touch the Drawer (ADR 0005).
+        affectsDrawer: false,
         description: e.description,
         status: e.status,
         metadata: e.metadata ?? {},
@@ -57,8 +59,6 @@ export class DrizzleExpenseRepository implements ExpenseRepository {
         target: schema.expenses.id,
         set: {
           amount: e.amount,
-          paidFrom: e.paidFrom,
-          affectsDrawer: e.affectsDrawer,
           description: e.description,
           status: e.status,
           metadata: e.metadata ?? {},
@@ -71,12 +71,13 @@ export class DrizzleExpenseRepository implements ExpenseRepository {
 function toIncome(r: typeof schema.otherIncome.$inferSelect): OtherIncome {
   return {
     id: r.id,
-    shiftId: r.shiftId,
-    businessDayId: r.businessDayId,
+    organizationId: r.organizationId,
+    stationId: r.stationId,
+    entryDate: r.entryDate,
+    fundingAccountId: r.fundingAccountId,
+    terminalId: r.terminalId ?? null,
     categoryId: r.categoryId,
     amount: r.amount,
-    receivedInto: r.receivedInto as OtherIncome['receivedInto'],
-    affectsDrawer: r.affectsDrawer,
     payer: r.payer ?? null,
     referenceType: r.referenceType ?? null,
     referenceId: r.referenceId ?? null,
@@ -113,12 +114,15 @@ export class DrizzleIncomeRepository implements IncomeRepository {
       .insert(schema.otherIncome)
       .values({
         id: i.id,
-        shiftId: i.shiftId,
-        businessDayId: i.businessDayId,
+        organizationId: i.organizationId,
+        stationId: i.stationId,
+        entryDate: i.entryDate,
+        fundingAccountId: i.fundingAccountId,
+        terminalId: i.terminalId,
         categoryId: i.categoryId,
         amount: i.amount,
-        receivedInto: i.receivedInto,
-        affectsDrawer: i.affectsDrawer,
+        // Office records never touch the Drawer (ADR 0005).
+        affectsDrawer: false,
         payer: i.payer,
         referenceType: i.referenceType,
         referenceId: i.referenceId,
@@ -142,8 +146,6 @@ export class DrizzleIncomeRepository implements IncomeRepository {
         target: schema.otherIncome.id,
         set: {
           amount: i.amount,
-          receivedInto: i.receivedInto,
-          affectsDrawer: i.affectsDrawer,
           payer: i.payer,
           description: i.description,
           status: i.status,

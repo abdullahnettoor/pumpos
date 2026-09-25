@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeIndianMobile, INDIAN_MOBILE_MESSAGE } from '../utils/phone-auth.js';
 import { isValidBusinessDate } from '../utils/business-date.js';
 
 const timeStringSchema = z
@@ -26,7 +27,6 @@ export function createOpenShiftFormSchema(
     .object({
       shiftTemplateId: z.string().min(1, 'Choose a Shift Template'),
       businessDate: z.string().refine(isValidBusinessDate, 'Choose a valid Business Date'),
-      openingCash: z.coerce.number().nonnegative('Opening cash cannot be negative'),
     })
     .superRefine((values, ctx) => {
       if (values.businessDate > currentBusinessDate) {
@@ -133,6 +133,7 @@ export const stationSchema = z.object({
         .object({
           shiftSummary: z.array(z.string()).optional(),
           dssr: z.array(z.string()).optional(),
+          attendantReport: z.array(z.string()).optional(),
           paper: z.enum(['A4', 'LETTER']).optional(),
           showLogo: z.boolean().optional(),
           showStationLogo: z.boolean().optional(),
@@ -155,7 +156,12 @@ export const stationSchema = z.object({
 export const userBaseSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
   email: z.string().email('Invalid email address').or(z.literal('')).optional().nullable(),
-  phone: z.string().optional().nullable(),
+  /** Blank, or a valid Indian mobile in any common spelling (#300). */
+  phone: z
+    .string()
+    .refine((v) => v.trim() === '' || normalizeIndianMobile(v) !== null, INDIAN_MOBILE_MESSAGE)
+    .optional()
+    .nullable(),
   role: z.enum(['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant']).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
   /** When true, provision a login account (needs an identity + password). */
@@ -199,18 +205,18 @@ export const expenseSchema = z.object({
 
 export const shiftSchema = z.object({
   shiftTemplateId: z.string().uuid('Invalid shift template ID'),
-  openingCash: z.number().nonnegative('Opening cash must be non-negative'),
 });
 
 export const shiftOpenSchema = z.object({
   stationId: z.string().uuid('Invalid station ID'),
   shiftTemplateId: z.string().uuid('Invalid shift template ID'),
-  openingCash: z.number().nonnegative('Opening cash must be non-negative'),
+  // The Shift's opening cash is the sum of these Opening Floats (ADR 0005).
   staffAssignments: z
     .array(
       z.object({
         userId: z.string().uuid('Invalid user ID'),
         duId: z.string().uuid('Invalid dispenser unit ID'),
+        openingFloat: z.number().nonnegative('Opening float must be non-negative').default(0),
       }),
     )
     .optional(),
@@ -477,6 +483,8 @@ export const attendantHandoverSchema = z
     userId: z.string().uuid('Invalid user ID').optional(),
     duId: z.string().uuid('Invalid DU ID'),
     cashHandedOver: handoverAmountSchema,
+    /** Cash taken from this Drawer mid-shift (ADR 0005). */
+    cashDrops: handoverAmountSchema.optional(),
     cardHandedOver: handoverAmountSchema.optional(),
     upiHandedOver: handoverAmountSchema.optional(),
     nozzleReadings: z
@@ -524,31 +532,47 @@ export const supplierPaymentSchema = z.object({
 // drawer shift.
 // ---------------------------------------------------------------------------
 
+const entryDateField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose the entry date');
+
+/** Expense / other income — an Office Record (ADR 0005): entry date + funding account. */
 export const expenseEntryFormSchema = z.object({
-  targetShiftId: z.string().optional().default(''),
-  transactionDate: z.string().optional().default(''),
+  entryDate: entryDateField,
   categoryId: z.string().min(1, 'Category is required'),
   amount: z.coerce
     .number({ invalid_type_error: 'Amount is required' })
     .positive('Amount must be positive'),
   description: z.string().max(255).optional().default(''),
-  /** Which money account it's paid from (empty = auto by context). */
-  accountId: z.string().optional().default(''),
+  /** The money account it is paid from / received into. */
+  fundingAccountId: z.string().min(1, 'Choose the account'),
 });
 export type ExpenseEntryFormValues = z.infer<typeof expenseEntryFormSchema>;
 
-export const collectionEntryFormSchema = z.object({
-  targetShiftId: z.string().optional().default(''),
-  transactionDate: z.string().optional().default(''),
-  customerId: z.string().optional().default(''),
-  amount: z.coerce
-    .number({ invalid_type_error: 'Amount is required' })
-    .positive('Amount must be positive'),
-  paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'BankTransfer']).default('Cash'),
-  notes: z.string().max(500).optional().default(''),
-  /** Bank account a non-cash collection lands in (empty = auto/default). */
-  accountId: z.string().optional().default(''),
-});
+/** Customer collection — an Office Record (ADR 0005). */
+export const collectionEntryFormSchema = z
+  .object({
+    entryDate: entryDateField,
+    customerId: z.string().optional().default(''),
+    amount: z.coerce
+      .number({ invalid_type_error: 'Amount is required' })
+      .positive('Amount must be positive'),
+    paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'BankTransfer']).default('Cash'),
+    notes: z.string().max(500).optional().default(''),
+    /** Account the money lands in. Not needed when a terminal is chosen. */
+    fundingAccountId: z.string().optional().default(''),
+    /** Card/UPI terminal; the server posts to its clearing account. */
+    terminalId: z.string().optional().default(''),
+  })
+  .superRefine((data, ctx) => {
+    const usesTerminal =
+      !!data.terminalId && (data.paymentMethod === 'Card' || data.paymentMethod === 'UPI');
+    if (!usesTerminal && !data.fundingAccountId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['fundingAccountId'],
+        message: 'Choose the account',
+      });
+    }
+  });
 export type CollectionEntryFormValues = z.infer<typeof collectionEntryFormSchema>;
 
 export const purchaseLineFormSchema = z.object({
@@ -567,8 +591,8 @@ export const purchaseLineFormSchema = z.object({
 });
 export type PurchaseLineFormValues = z.infer<typeof purchaseLineFormSchema>;
 
+// A purchase is anchored to the business day by date, never a Shift (#308).
 export const purchaseEntryFormSchema = z.object({
-  targetShiftId: z.string().optional().default(''),
   transactionDate: z.string().optional().default(''),
   supplierId: z.string().min(1, 'Supplier is required'),
   invoiceNumber: z.string().max(100).optional().default(''),
@@ -609,3 +633,22 @@ export const merchandiseSaleEntryFormSchema = z
     path: ['customerId'],
   });
 export type MerchandiseSaleEntryFormValues = z.infer<typeof merchandiseSaleEntryFormSchema>;
+
+/**
+ * An Indian mobile number (#300), normalized to `+91XXXXXXXXXX`. Accepts
+ * spaces/dashes and a leading +91, 91 or 0; rejects anything else.
+ */
+export const indianMobileSchema = z.string().transform((v, ctx) => {
+  const n = normalizeIndianMobile(v);
+  if (!n) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: INDIAN_MOBILE_MESSAGE });
+    return z.NEVER;
+  }
+  return n;
+});
+
+/** Optional phone: blank/absent → null; otherwise a valid Indian mobile. */
+export const optionalIndianMobileSchema = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+  indianMobileSchema.nullish().transform((v) => v ?? null),
+);
