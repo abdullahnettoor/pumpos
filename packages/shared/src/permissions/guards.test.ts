@@ -7,6 +7,8 @@ import {
   canEditExpense,
   canCreatePurchase,
   isAuthorizedForStation,
+  canRecordHandover,
+  isHandoverSelfScoped,
   UserContext,
   ResourceContext,
 } from './guards.js';
@@ -90,5 +92,27 @@ describe('Station onboarding guard', () => {
 
   it('refuses Attendants, who are mobile-only', () => {
     expect(canOnboardStation('Attendant')).toBe(false);
+  });
+});
+
+// #301: anyone may cover a pump and hold its Drawer. Attendants and
+// Accountants hand over only their own Drawer; the other operational roles may
+// record on anyone's behalf.
+describe('handover guards', () => {
+  it.each(['Owner', 'Manager', 'Staff', 'Attendant', 'Accountant'] as const)(
+    'lets a %s record a handover',
+    (role) => {
+      expect(canRecordHandover(role)).toBe(true);
+    },
+  );
+
+  it.each([
+    ['Attendant', true],
+    ['Accountant', true],
+    ['Owner', false],
+    ['Manager', false],
+    ['Staff', false],
+  ] as const)('self-scopes a %s: %s', (role, selfScoped) => {
+    expect(isHandoverSelfScoped(role)).toBe(selfScoped);
   });
 });

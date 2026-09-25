@@ -70,6 +70,14 @@ interface DuProduct {
   price: number;
 }
 
+/**
+ * An amount as the input shows it: blank for zero or missing, so the operator
+ * types into an empty box (placeholder "0") instead of deleting a 0 first (#302).
+ * Submitting a blank still sends 0 (`num`).
+ */
+const blankZero = (v: string | number | null | undefined): string =>
+  v != null && v !== '' && Number(v) !== 0 && Number.isFinite(Number(v)) ? String(Number(v)) : '';
+
 const num = (v: string | number | null | undefined) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -533,17 +541,14 @@ function seedForm(du: any): DuFormState {
   const testing: Record<string, string> = {};
   for (const nz of du.nozzles) {
     readings[nz.nozzleId] = String(nz.closingReading ?? nz.openingReading ?? 0);
-    testing[nz.nozzleId] =
-      nz.testingVolume != null && Number(nz.testingVolume) > 0
-        ? String(Number(nz.testingVolume))
-        : '';
+    testing[nz.nozzleId] = blankZero(nz.testingVolume);
   }
   const terminals: TerminalState = {};
   for (const t of du.terminals) {
     const entry = (du.terminalEntries || []).find((e: any) => e.terminalId === t.terminalId);
     terminals[t.terminalId] = {
-      card: entry?.cardAmount != null ? String(Number(entry.cardAmount)) : '',
-      upi: entry?.upiAmount != null ? String(Number(entry.upiAmount)) : '',
+      card: blankZero(entry?.cardAmount),
+      upi: blankZero(entry?.upiAmount),
       batch: entry?.batchRef ?? '',
     };
   }
@@ -551,16 +556,10 @@ function seedForm(du: any): DuFormState {
     readings,
     testing,
     terminals,
-    aggregateCard:
-      du.terminals.length === 0 && du.handover?.cardHandedOver != null
-        ? String(Number(du.handover.cardHandedOver))
-        : '',
-    aggregateUpi:
-      du.terminals.length === 0 && du.handover?.upiHandedOver != null
-        ? String(Number(du.handover.upiHandedOver))
-        : '',
-    cash: du.handover?.cashHandedOver != null ? String(Number(du.handover.cashHandedOver)) : '',
-    drops: Number(du.handover?.cashDrops) ? String(Number(du.handover.cashDrops)) : '',
+    aggregateCard: du.terminals.length === 0 ? blankZero(du.handover?.cardHandedOver) : '',
+    aggregateUpi: du.terminals.length === 0 ? blankZero(du.handover?.upiHandedOver) : '',
+    cash: blankZero(du.handover?.cashHandedOver),
+    drops: blankZero(du.handover?.cashDrops),
   };
 }
 
@@ -998,12 +997,10 @@ export const HandoverPanel: React.FC = () => {
           ...current,
           [du.duId]: {
             ...(current[du.duId] ?? forms[du.duId]),
-            cash: String(Number(result.handover.cashHandedOver)),
-            drops: Number(result.handover.cashDrops)
-              ? String(Number(result.handover.cashDrops))
-              : '',
-            aggregateCard: String(Number(result.handover.cardHandedOver)),
-            aggregateUpi: String(Number(result.handover.upiHandedOver)),
+            cash: blankZero(result.handover.cashHandedOver),
+            drops: blankZero(result.handover.cashDrops),
+            aggregateCard: blankZero(result.handover.cardHandedOver),
+            aggregateUpi: blankZero(result.handover.upiHandedOver),
             readings: Object.fromEntries(
               result.nozzleReadings.map((reading) => [
                 reading.nozzleId,
@@ -1013,7 +1010,7 @@ export const HandoverPanel: React.FC = () => {
             testing: Object.fromEntries(
               result.nozzleReadings.map((reading) => [
                 reading.nozzleId,
-                String(reading.testingVolume),
+                blankZero(reading.testingVolume),
               ]),
             ),
             terminals: Object.fromEntries(
@@ -1024,8 +1021,8 @@ export const HandoverPanel: React.FC = () => {
                 return [
                   terminal.terminalId,
                   {
-                    card: entry ? String(Number(entry.cardAmount)) : '',
-                    upi: entry ? String(Number(entry.upiAmount)) : '',
+                    card: blankZero(entry?.cardAmount),
+                    upi: blankZero(entry?.upiAmount),
                     batch: entry?.batchRef ?? '',
                   },
                 ];

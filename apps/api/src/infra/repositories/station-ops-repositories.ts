@@ -823,7 +823,7 @@ export class DrizzleShiftSummaryWriter implements ShiftSummaryStore {
 
 // ---------------- Staff directory (who may be put on a dispenser) ----------------
 
-/** Who may be put on a dispenser: see `assignableStaffWhere` (#286, #291). */
+/** Who may be put on a dispenser: see `assignableStaffWhere` (#286, #301). */
 export class DrizzleStaffDirectory implements StaffDirectory {
   constructor(private readonly db: DbClient) {}
 

@@ -13,6 +13,7 @@ import {
   dispenserLabel,
   isAuthorizedForStation,
   isAttendant,
+  isHandoverSelfScoped,
   resolveBusinessDate,
   type Role,
 } from '@pump/shared';
@@ -1340,9 +1341,20 @@ shiftsRouter.post(
       nozzleReadings,
       terminalEntries,
     } = parsed.data;
-    const attendantId = isAttendant(user.role) ? user.id : userId;
-    // Attendants derive userId from their own session, so only shiftId + duId are
-    // required from them; operational roles must name the attendant (userId).
+    // Attendants, and Accountants covering a pump (#301), hand over only their
+    // own Drawer: userId comes from the session, and naming someone else is
+    // refused rather than silently rewritten. Other operational roles must name
+    // the Drawer holder (userId).
+    if (isHandoverSelfScoped(user.role) && userId && userId !== user.id) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'You may record only your own handover' },
+        },
+        403,
+      );
+    }
+    const attendantId = isHandoverSelfScoped(user.role) ? user.id : userId;
     if (!attendantId) {
       return c.json(
         {

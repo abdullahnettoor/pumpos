@@ -76,6 +76,7 @@ interface StaffOption {
   id: string;
   fullName: string;
   email?: string | null;
+  role?: string | null;
 }
 
 /** "POS A (Card + UPI)" — the rails matter when deciding which pump it belongs to. */
@@ -148,7 +149,7 @@ const DispenserAssignmentCard: React.FC<{
           {staff?.map((u) => (
             <option key={u.id} value={u.id}>
               {u.fullName}
-              {!u.email ? ' (Attendant)' : ''}
+              {u.role ? ` (${u.role})` : ''}
             </option>
           ))}
         </Select>
@@ -158,10 +159,13 @@ const DispenserAssignmentCard: React.FC<{
           <NumberInput
             id={`float-${du.id}`}
             min="0"
-            value={Number.isFinite(openingFloat) ? openingFloat : 0}
+            // Blank for 0/unset so the operator types into an empty box; submit
+            // still sends 0 (#302).
+            value={Number.isFinite(openingFloat) && openingFloat !== 0 ? openingFloat : ''}
+            placeholder="0"
             invalid={openingFloat < 0}
             onChange={(e) => {
-              const v = Number(e.target.value);
+              const v = e.target.value === '' ? 0 : Number(e.target.value);
               onOpeningFloatChange(du.id, Number.isFinite(v) && v >= 0 ? v : 0);
             }}
           />
