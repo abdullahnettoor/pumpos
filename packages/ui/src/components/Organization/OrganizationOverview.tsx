@@ -281,7 +281,7 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
         </div>
       )}
 
-      {tab === 'team' && <UserRolesAssignment />}
+      {tab === 'team' && <UserRolesAssignment currentStationId={selectedStation?.id ?? null} />}
 
       {tab === 'activity' && <ActivityFeed stations={stations} />}
 

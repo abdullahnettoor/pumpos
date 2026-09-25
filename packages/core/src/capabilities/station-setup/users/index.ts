@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Role } from '@pump/shared';
+import { optionalIndianMobileSchema } from '@pump/shared';
 import {
   BusinessEvents,
   err,
@@ -69,7 +70,7 @@ const roleEnum = z.enum(['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant']
 const createSchema = z.object({
   fullName: z.string().trim().min(1, 'fullName is required').max(255),
   email: z.string().email().nullish().or(z.literal('')),
-  phone: z.string().max(50).nullish(),
+  phone: optionalIndianMobileSchema,
   role: roleEnum.optional(),
   status: z.string().max(20).optional(),
   stationIds: z.array(z.string()).optional(),
@@ -79,7 +80,7 @@ const updateSchema = z.object({
   id: z.string().min(1),
   fullName: z.string().trim().min(1).max(255).optional(),
   email: z.string().email().nullish().or(z.literal('')),
-  phone: z.string().max(50).nullish(),
+  phone: optionalIndianMobileSchema.optional(),
   role: roleEnum.optional(),
   status: z.string().max(20).optional(),
   stationIds: z.array(z.string()).optional(),
