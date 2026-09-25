@@ -463,4 +463,56 @@ describe('HandoverDrawer', () => {
       await waitFor(() => expect(saveButton().disabled).toBe(false));
     });
   });
+
+  // #304: most handovers have no drop, so the field hides behind a toggle.
+  describe('cash drops toggle', () => {
+    const toggle = () => screen.getByLabelText('Had cash drops') as HTMLInputElement;
+
+    it('hides the drops field on a new handover until the toggle is on', () => {
+      renderWithProviders(<HandoverDrawer {...baseProps()} />);
+      expect(toggle().checked).toBe(false);
+      expect(input('cashDrops')).toBeNull();
+      fireEvent.click(toggle());
+      expect(input('cashDrops')).not.toBeNull();
+    });
+
+    it('starts open showing the drops of an edited handover that had them', async () => {
+      renderWithProviders(
+        <HandoverDrawer
+          {...baseProps({ existingHandover: { cashHandedOver: '4000', cashDrops: '1000' } })}
+        />,
+      );
+      expect(toggle().checked).toBe(true);
+      await waitFor(() => expect(input('cashDrops').value).toBe('1000'));
+    });
+
+    it('zeroes the drops when turned off, and the variance follows', async () => {
+      renderWithProviders(<HandoverDrawer {...baseProps()} />);
+      setReading(NOZZLE_A, '1050'); // expects ₹5,000
+      setField('cashHandedOver', '4000');
+      fireEvent.click(toggle());
+      setField('cashDrops', '1000'); // 4,000 + 1,000 dropped = balanced
+      await waitFor(() => expect(screen.getByText(/Balanced/)).toBeDefined());
+      fireEvent.click(toggle());
+      expect(input('cashDrops')).toBeNull();
+      await waitFor(() => expect(screen.getByText(/Shortage/)).toBeDefined());
+      fireEvent.click(toggle());
+      expect(input('cashDrops').value).toBe('');
+    });
+  });
+
+  // #303: the long explainer sits behind an info icon.
+  it('keeps the customer-sales explainer in an info tip that opens on focus and tap', () => {
+    renderWithProviders(<HandoverDrawer {...baseProps()} />);
+    expect(screen.queryByText(/settled to the CMS account/)).toBeNull();
+    const tip = screen.getByRole('button', { name: 'About customer sales' });
+    fireEvent.focus(tip);
+    expect(screen.getByRole('tooltip').textContent).toMatch(/settled to the CMS account/);
+    fireEvent.blur(tip);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.click(tip);
+    expect(screen.getByRole('tooltip')).toBeTruthy();
+    fireEvent.keyDown(tip, { key: 'Escape' });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
 });

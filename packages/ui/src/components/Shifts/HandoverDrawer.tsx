@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Checkbox } from '../primitives/Toggle.js';
+import { InfoTip } from '../primitives/InfoTip.js';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -139,6 +141,8 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   // Denomination counts for the handover cash (held here so re-opening the
   // popover preserves them). Reset when the drawer opens.
   const [cashBreakdown, setCashBreakdown] = useState<CashBreakdown>({});
+  // Starts open only when editing a handover that already has drops (#304).
+  const [hasDrops, setHasDrops] = useState(() => Number(existingHandover?.cashDrops) > 0);
   const {
     register,
     handleSubmit,
@@ -1171,7 +1175,15 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                 alignItems: 'baseline',
               }}
             >
-              <span>3. Customer Sales</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                3. Customer Sales
+                <InfoTip label="About customer sales">
+                  Fuel billed to a customer's account (Credit / Fleet / Regular receivable) or paid
+                  by an OMC fleet card (settled to the CMS account — not a receivable). Each line is
+                  recorded immediately; the fuel is already metered, so it sits on the declared
+                  side.
+                </InfoTip>
+              </span>
               {creditTotal + omcTotal > 0 && (
                 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
                   {inr(creditTotal + omcTotal)}
@@ -1179,9 +1191,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
               )}
             </h3>
             <p style={{ fontSize: '11px', color: 'var(--text-faint)', marginBottom: '10px' }}>
-              Fuel billed to a customer's account (Credit / Fleet / Regular receivable) or paid by
-              an OMC fleet card (settled to the CMS account — not a receivable). Each line is
-              recorded immediately; the fuel is already metered, so it sits on the declared side.
+              Credit and OMC fleet-card sales from this pump.
             </p>
 
             {volumeOverages.length > 0 && (
@@ -1548,6 +1558,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                           type="number"
                           step="0.001"
                           min="0"
+                          placeholder="0"
                           value={ccQty}
                           onChange={(e) => handleCcQtyChange(e.target.value)}
                           disabled={ccBusy}
@@ -1579,6 +1590,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                           type="number"
                           step="0.01"
                           min="0"
+                          placeholder="0"
                           name="ccAmount"
                           aria-label="Customer sale amount"
                           value={ccAmount}
@@ -1719,36 +1731,53 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                 )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-                <label
-                  htmlFor="handover-cash-drops"
-                  style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}
-                >
-                  Cash Drops (₹)
-                </label>
-                <input
-                  id="handover-cash-drops"
-                  type="number"
-                  step="any"
-                  min="0"
-                  placeholder="0"
-                  {...register('cashDrops')}
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    border: '1px solid var(--border-strong)',
-                    borderRadius: 'var(--radius-input)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '13px',
-                    textAlign: 'right',
+                {/* Most handovers have no mid-shift drop, so the field hides
+                    behind a toggle (#304). Turning it off zeroes the value so a
+                    hidden amount can never skew the variance. */}
+                <Checkbox
+                  label="Had cash drops"
+                  checked={hasDrops}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setHasDrops(on);
+                    if (!on)
+                      setValue('cashDrops', '' as any, { shouldValidate: true, shouldDirty: true });
                   }}
                 />
-                <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
-                  Cash taken from this pouch mid-shift (e.g. to the safe).
-                </span>
-                {errors.cashDrops && (
-                  <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
-                    {errors.cashDrops.message}
-                  </span>
+                {hasDrops && (
+                  <>
+                    <label
+                      htmlFor="handover-cash-drops"
+                      style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}
+                    >
+                      Cash Drops (₹)
+                    </label>
+                    <input
+                      id="handover-cash-drops"
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="0"
+                      {...register('cashDrops')}
+                      style={{
+                        height: '32px',
+                        padding: '0 8px',
+                        border: '1px solid var(--border-strong)',
+                        borderRadius: 'var(--radius-input)',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '13px',
+                        textAlign: 'right',
+                      }}
+                    />
+                    <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
+                      Cash taken from this pouch mid-shift (e.g. to the safe).
+                    </span>
+                    {errors.cashDrops && (
+                      <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
+                        {errors.cashDrops.message}
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
