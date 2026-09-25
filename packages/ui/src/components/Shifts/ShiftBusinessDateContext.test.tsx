@@ -96,8 +96,6 @@ describe('ShiftBusinessDateContext', () => {
           upiCollections: 0,
           creditSales: 0,
           expenseCount: 0,
-          purchaseCount: 0,
-          purchaseTotal: 0,
         }}
         handoversCompleted={0}
         handoversAssigned={0}

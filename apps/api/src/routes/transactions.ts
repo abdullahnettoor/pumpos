@@ -2841,64 +2841,52 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
   // totals consume (#149 / #113) — full-row selects made this payload scale
   // with every column of every table. Names are joined here (category /
   // supplier / customer) because the raw tables store only ids.
-  const [purchases, creditSales] = await Promise.all([
-    db
-      .select({
-        id: schema.purchases.id,
-        amount: schema.purchases.amount,
-        documentNumber: schema.purchases.documentNumber,
-        invoiceNumber: schema.purchases.invoiceNumber,
-        notes: schema.purchases.notes,
-        createdAt: schema.purchases.createdAt,
-        supplierName: schema.suppliers.name,
-      })
-      .from(schema.purchases)
-      .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.purchases.supplierId))
-      .where(eq(schema.purchases.shiftId, shiftId)),
-    // Stage B fuel-on-credit sales live in customer_transactions (a receivable),
-    // not the collections table — surface them so totals/reconciliation/summary see them.
-    db
-      .select({
-        id: schema.customerTransactions.id,
-        transactionType: schema.customerTransactions.transactionType,
-        amount: schema.customerTransactions.amount,
-        quantity: schema.customerTransactions.quantity,
-        unitPrice: schema.customerTransactions.unitPrice,
-        notes: schema.customerTransactions.notes,
-        createdAt: schema.customerTransactions.createdAt,
-        shiftId: schema.customerTransactions.shiftId,
-        duId: schema.customerTransactions.duId,
-        attendantId: schema.customerTransactions.attendantId,
-        customerId: schema.customerTransactions.customerId,
-        vehicleId: schema.customerTransactions.vehicleId,
-        productId: schema.customerTransactions.productId,
-        customerName: schema.customers.name,
-        productName: schema.products.name,
-        productCode: schema.products.code,
-        vehicleNumber: schema.customerVehicles.registrationNumber,
-      })
-      .from(schema.customerTransactions)
-      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
-      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
-      .leftJoin(
-        schema.customerVehicles,
-        eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId),
-      )
-      .where(
-        and(
-          eq(schema.customerTransactions.shiftId, shiftId),
-          eq(schema.customerTransactions.transactionType, 'Credit Sale'),
-          eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
-        ),
+  // Purchases anchor to the business day, never a Shift (ADR 0005, #308),
+  // so a shift has none; the empty list keeps the response shape stable.
+  // Stage B fuel-on-credit sales live in customer_transactions (a receivable),
+  // not the collections table — surface them so totals/reconciliation/summary see them.
+  const creditSales = await db
+    .select({
+      id: schema.customerTransactions.id,
+      transactionType: schema.customerTransactions.transactionType,
+      amount: schema.customerTransactions.amount,
+      quantity: schema.customerTransactions.quantity,
+      unitPrice: schema.customerTransactions.unitPrice,
+      notes: schema.customerTransactions.notes,
+      createdAt: schema.customerTransactions.createdAt,
+      shiftId: schema.customerTransactions.shiftId,
+      duId: schema.customerTransactions.duId,
+      attendantId: schema.customerTransactions.attendantId,
+      customerId: schema.customerTransactions.customerId,
+      vehicleId: schema.customerTransactions.vehicleId,
+      productId: schema.customerTransactions.productId,
+      customerName: schema.customers.name,
+      productName: schema.products.name,
+      productCode: schema.products.code,
+      vehicleNumber: schema.customerVehicles.registrationNumber,
+    })
+    .from(schema.customerTransactions)
+    .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
+    .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
+    .leftJoin(
+      schema.customerVehicles,
+      eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId),
+    )
+    .where(
+      and(
+        eq(schema.customerTransactions.shiftId, shiftId),
+        eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+        eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
       ),
-  ]);
+    );
   // `sales` has no UI consumer on this payload (fuel is metered via readings;
   // merchandise renders from the status/merch endpoints). Expenses and
-  // collections are Office Records with no Shift (ADR 0005). All three keys
+  // collections are Office Records and purchases are day-anchored, so none has
+  // a Shift (ADR 0005, #308). All four keys
   // stay for contract stability and are always empty.
   return c.json({
     success: true,
-    data: { expenses: [], purchases, collections: [], sales: [], creditSales },
+    data: { expenses: [], purchases: [], collections: [], sales: [], creditSales },
   });
 });
 

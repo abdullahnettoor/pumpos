@@ -21,8 +21,6 @@ interface ShiftControlBarProps {
     upiCollections: number;
     creditSales: number;
     expenseCount: number;
-    purchaseCount: number;
-    purchaseTotal: number;
   };
   handoversCompleted: number;
   handoversAssigned: number;

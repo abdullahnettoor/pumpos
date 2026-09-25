@@ -14,7 +14,6 @@ export type ShiftSummarySection =
   | 'creditSales'
   | 'cashRecon'
   | 'drawers'
-  | 'purchases'
   | 'signatures';
 
 export type DssrSection =
@@ -73,7 +72,6 @@ export const DEFAULT_SHIFT_SUMMARY_CONFIG: ReportConfig = {
     'creditSales',
     'cashRecon',
     'drawers',
-    'purchases',
     'signatures',
   ],
   showLogo: true,
@@ -122,7 +120,6 @@ export const SHIFT_SUMMARY_SECTION_LABELS: Record<ShiftSummarySection, string> =
   creditSales: 'Fuel-on-Credit Sales',
   cashRecon: 'Cash Reconciliation',
   drawers: 'Drawers (per attendant)',
-  purchases: 'Purchases',
   signatures: 'Signatures',
 };
 

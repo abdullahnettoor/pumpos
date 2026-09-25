@@ -788,26 +788,6 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
         />
       </View>
     ) : null,
-  purchases: (d) =>
-    d.purchases && d.purchases.length > 0 ? (
-      <View key="purchases">
-        <Text style={s.h2}>SUPPLIER FUEL INTAKES</Text>
-        <TableView
-          columns={[
-            { header: 'Supplier', flex: 1.8, strong: true },
-            { header: 'Ref / Invoice', flex: 1.8, mono: true },
-            { header: 'Notes', flex: 2 },
-            { header: 'Amount', flex: 1.2, align: 'right', mono: true },
-          ]}
-          rows={(d.purchases || []).map((p: any) => [
-            { text: p.supplierName || 'Unknown Supplier' },
-            { text: `${p.documentNumber || ''}${p.invoiceNumber ? ` (${p.invoiceNumber})` : ''}` },
-            { text: p.notes || '—' },
-            { text: inr(p.amount) },
-          ])}
-        />
-      </View>
-    ) : null,
   signatures: () => (
     <View key="signatures" style={s.signRow}>
       <Text style={s.sign}>Operator / Reconciliation Staff Signature</Text>

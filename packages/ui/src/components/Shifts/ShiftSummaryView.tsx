@@ -98,7 +98,6 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
     attendantVariance = null,
     cashVarianceModel = 1,
     drawers = [],
-    purchases = [],
     handovers = [],
     terminalBreakdown = [],
     creditSales = [],
@@ -1419,54 +1418,6 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
         </div>
       )}
 
-      {/* Shift Transaction Logs Breakdown */}
-      {purchases.length > 0 && (
-        <div style={{ marginBottom: '28px' }}>
-          <h4
-            style={{
-              fontSize: '12px',
-              fontWeight: 600,
-              color: 'var(--text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '8px',
-            }}
-          >
-            Supplier Fuel Intakes
-          </h4>
-          <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr
-                style={{
-                  borderBottom: '1px solid var(--border-strong)',
-                  textAlign: 'left',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                <th style={{ padding: '6px 8px' }}>Supplier</th>
-                <th style={{ padding: '6px 8px' }}>Ref / Invoice</th>
-                <th style={{ padding: '6px 8px' }}>Notes</th>
-                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {purchases.map((p: any, idx: number) => (
-                <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                  <td style={{ padding: '6px 8px', fontWeight: 600 }}>{p.supplierName}</td>
-                  <td style={{ padding: '6px 8px', color: 'var(--text-default)' }}>
-                    {p.documentNumber} {p.invoiceNumber ? `(${p.invoiceNumber})` : ''}
-                  </td>
-                  <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{p.notes}</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>
-                    {inr(p.amount)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
       {/* Late Transaction Auditing Console (Visible to Owner, Manager, Accountant when CLOSED, read-only when LOCKED) */}
       {userRole !== 'Staff' && (
         <div style={{ marginTop: '32px', marginBottom: '32px' }} className="no-print">
@@ -1484,7 +1435,6 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
           </h3>
           <ShiftTransactionsPanel
             shiftId={shiftId}
-            nozzles={nozzleReadings}
             onTransactionAdded={onTransactionAdded}
             isReadOnly={shiftStatus === 'LOCKED'}
           />
