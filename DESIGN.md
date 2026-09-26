@@ -7,28 +7,28 @@ description: >-
   packages/ui/src/index.css and are mirrored into Tailwind by
   packages/ui/src/pump-ds/tailwind.css. Full spec: docs/PUMP-ERP-DESIGN-SYSTEM.md.
 colors:
-  primary: "#1F6A53"
-  secondary: "#2E5E88"
-  tertiary: "#B7811E"
-  error: "#B44A3F"
-  neutral: "#F6F7F4"
-  on-primary: "#FFFFFF"
-  surface: "#FFFFFF"
-  surface-alt: "#F1F3EF"
-  border-soft: "#D9DED6"
-  border-strong: "#B9C1B7"
-  on-surface: "#18201A"
-  text-default: "#2B342D"
-  text-muted: "#5E6A61"
-  text-faint: "#7A857C"
-  success-bg: "#E8F4EE"
-  success-fg: "#1E6A4E"
-  warning-bg: "#F9F0DA"
-  warning-fg: "#8A6116"
-  danger-bg: "#F8E3E0"
-  danger-fg: "#9F3F36"
-  info-bg: "#E8F0F7"
-  info-fg: "#2E5E88"
+  primary: '#1F6A53'
+  secondary: '#2E5E88'
+  tertiary: '#B7811E'
+  error: '#B44A3F'
+  neutral: '#F6F7F4'
+  on-primary: '#FFFFFF'
+  surface: '#FFFFFF'
+  surface-alt: '#F1F3EF'
+  border-soft: '#D9DED6'
+  border-strong: '#B9C1B7'
+  on-surface: '#18201A'
+  text-default: '#2B342D'
+  text-muted: '#5E6A61'
+  text-faint: '#7A857C'
+  success-bg: '#E8F4EE'
+  success-fg: '#1E6A4E'
+  warning-bg: '#F9F0DA'
+  warning-fg: '#8A6116'
+  danger-bg: '#F8E3E0'
+  danger-fg: '#9F3F36'
+  info-bg: '#E8F0F7'
+  info-fg: '#2E5E88'
 typography:
   headline-display:
     fontFamily: Plus Jakarta Sans
@@ -119,10 +119,10 @@ spacing:
   form-max: 960px
 components:
   button-primary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
-    typography: "{typography.label-md}"
-    rounded: "{rounded.sm}"
+    backgroundColor: '{colors.primary}'
+    textColor: '{colors.on-primary}'
+    typography: '{typography.label-md}'
+    rounded: '{rounded.sm}'
     height: 36px
     padding: 12px
   button-primary-sm:
@@ -130,101 +130,101 @@ components:
   button-primary-lg:
     height: 40px
   button-secondary:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.on-surface}"
-    typography: "{typography.label-md}"
-    rounded: "{rounded.sm}"
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.on-surface}'
+    typography: '{typography.label-md}'
+    rounded: '{rounded.sm}'
     height: 36px
     padding: 12px
   button-destructive:
-    backgroundColor: "{colors.error}"
-    textColor: "{colors.on-primary}"
-    typography: "{typography.label-md}"
-    rounded: "{rounded.sm}"
+    backgroundColor: '{colors.error}'
+    textColor: '{colors.on-primary}'
+    typography: '{typography.label-md}'
+    rounded: '{rounded.sm}'
     height: 36px
     padding: 12px
   input:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.on-surface}"
-    typography: "{typography.body-md}"
-    rounded: "{rounded.sm}"
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.on-surface}'
+    typography: '{typography.body-md}'
+    rounded: '{rounded.sm}'
     height: 36px
     padding: 10px
   input-dense:
     height: 32px
   input-disabled:
-    backgroundColor: "{colors.surface-alt}"
-    textColor: "{colors.text-faint}"
+    backgroundColor: '{colors.surface-alt}'
+    textColor: '{colors.text-faint}'
   app-canvas:
-    backgroundColor: "{colors.neutral}"
-    textColor: "{colors.text-default}"
+    backgroundColor: '{colors.neutral}'
+    textColor: '{colors.text-default}'
   divider:
-    backgroundColor: "{colors.border-soft}"
+    backgroundColor: '{colors.border-soft}'
     height: 1px
   control-outline:
-    backgroundColor: "{colors.border-strong}"
+    backgroundColor: '{colors.border-strong}'
     height: 1px
   card:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text-default}"
-    rounded: "{rounded.md}"
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.text-default}'
+    rounded: '{rounded.md}'
     padding: 16px
   drawer:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text-default}"
-    rounded: "{rounded.lg}"
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.text-default}'
+    rounded: '{rounded.lg}'
     width: 420px
     padding: 20px
   top-bar:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.on-surface}"
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.on-surface}'
     height: 56px
   nav-rail:
-    backgroundColor: "{colors.surface-alt}"
-    textColor: "{colors.text-muted}"
+    backgroundColor: '{colors.surface-alt}'
+    textColor: '{colors.text-muted}'
     width: 220px
   table-header:
-    backgroundColor: "{colors.surface-alt}"
-    textColor: "{colors.text-muted}"
-    typography: "{typography.caption}"
+    backgroundColor: '{colors.surface-alt}'
+    textColor: '{colors.text-muted}'
+    typography: '{typography.caption}'
     height: 32px
   table-row:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text-default}"
-    typography: "{typography.body-sm}"
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.text-default}'
+    typography: '{typography.body-sm}'
     height: 36px
   table-cell-numeric:
-    textColor: "{colors.on-surface}"
-    typography: "{typography.data-dense}"
+    textColor: '{colors.on-surface}'
+    typography: '{typography.data-dense}'
   chip-success:
-    backgroundColor: "{colors.success-bg}"
-    textColor: "{colors.success-fg}"
-    typography: "{typography.label-caps}"
-    rounded: "{rounded.full}"
+    backgroundColor: '{colors.success-bg}'
+    textColor: '{colors.success-fg}'
+    typography: '{typography.label-caps}'
+    rounded: '{rounded.full}'
     padding: 6px
   chip-warning:
-    backgroundColor: "{colors.warning-bg}"
-    textColor: "{colors.warning-fg}"
-    typography: "{typography.label-caps}"
-    rounded: "{rounded.full}"
+    backgroundColor: '{colors.warning-bg}'
+    textColor: '{colors.warning-fg}'
+    typography: '{typography.label-caps}'
+    rounded: '{rounded.full}'
     padding: 6px
   chip-danger:
-    backgroundColor: "{colors.danger-bg}"
-    textColor: "{colors.danger-fg}"
-    typography: "{typography.label-caps}"
-    rounded: "{rounded.full}"
+    backgroundColor: '{colors.danger-bg}'
+    textColor: '{colors.danger-fg}'
+    typography: '{typography.label-caps}'
+    rounded: '{rounded.full}'
     padding: 6px
   chip-info:
-    backgroundColor: "{colors.info-bg}"
-    textColor: "{colors.info-fg}"
-    typography: "{typography.label-caps}"
-    rounded: "{rounded.full}"
+    backgroundColor: '{colors.info-bg}'
+    textColor: '{colors.info-fg}'
+    typography: '{typography.label-caps}'
+    rounded: '{rounded.full}'
     padding: 6px
   kpi-card:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.on-surface}"
-    typography: "{typography.data-md}"
-    rounded: "{rounded.md}"
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.on-surface}'
+    typography: '{typography.data-md}'
+    rounded: '{rounded.md}'
     padding: 16px
 ---
 
