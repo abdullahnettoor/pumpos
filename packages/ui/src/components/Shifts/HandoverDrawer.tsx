@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Checkbox } from '../primitives/Toggle.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -1731,56 +1730,6 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                 )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-                {/* Most handovers have no mid-shift drop, so the field hides
-                    behind a toggle (#304). Turning it off zeroes the value so a
-                    hidden amount can never skew the variance. */}
-                <Checkbox
-                  label="Had cash drops"
-                  checked={hasDrops}
-                  onChange={(e) => {
-                    const on = e.target.checked;
-                    setHasDrops(on);
-                    if (!on)
-                      setValue('cashDrops', '' as any, { shouldValidate: true, shouldDirty: true });
-                  }}
-                />
-                {hasDrops && (
-                  <>
-                    <label
-                      htmlFor="handover-cash-drops"
-                      style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}
-                    >
-                      Cash Drops (₹)
-                    </label>
-                    <input
-                      id="handover-cash-drops"
-                      type="number"
-                      step="any"
-                      min="0"
-                      placeholder="0"
-                      {...register('cashDrops')}
-                      style={{
-                        height: '32px',
-                        padding: '0 8px',
-                        border: '1px solid var(--border-strong)',
-                        borderRadius: 'var(--radius-input)',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '13px',
-                        textAlign: 'right',
-                      }}
-                    />
-                    <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
-                      Cash taken from this pouch mid-shift (e.g. to the safe).
-                    </span>
-                    {errors.cashDrops && (
-                      <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
-                        {errors.cashDrops.message}
-                      </span>
-                    )}
-                  </>
-                )}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
                 <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>
                   Credit Chits Total (₹)
                 </label>
@@ -1806,6 +1755,85 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                   Auto from credit sales above
                 </span>
               </div>
+            </div>
+            {/* Most handovers have no mid-shift drop, so the field sits on its own
+                row behind "+ Add cash drop" (#304, #324). Removing it zeroes the
+                value so a hidden amount can never skew the variance. */}
+            <div style={{ marginTop: '12px' }}>
+              {!hasDrops ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<Icon name="plus" size="xs" />}
+                  onClick={() => setHasDrops(true)}
+                >
+                  Add cash drop
+                </Button>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label
+                    htmlFor="handover-cash-drops"
+                    style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}
+                  >
+                    Cash Drops (₹)
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      id="handover-cash-drops"
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="0"
+                      autoFocus={!existingHandover}
+                      {...register('cashDrops')}
+                      style={{
+                        height: '32px',
+                        padding: '0 8px',
+                        width: 'calc(50% - 6px)',
+                        minWidth: 0,
+                        border: '1px solid var(--border-strong)',
+                        borderRadius: 'var(--radius-input)',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '13px',
+                        textAlign: 'right',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      aria-label="Remove cash drop"
+                      title="Remove cash drop"
+                      onClick={() => {
+                        setHasDrops(false);
+                        setValue('cashDrops', '' as any, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                        });
+                      }}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--brand-danger)',
+                        cursor: 'pointer',
+                        padding: '2px 4px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Icon name="x" size="xs" />
+                    </button>
+                  </div>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
+                    Cash taken from this pouch mid-shift (e.g. to the safe).
+                  </span>
+                  {errors.cashDrops && (
+                    <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
+                      {errors.cashDrops.message}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
