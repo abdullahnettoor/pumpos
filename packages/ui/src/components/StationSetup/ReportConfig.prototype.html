@@ -1,0 +1,215 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Question: "What should report configuration look like, and where should it live?"
+  Three structurally different variants, switchable via ?variant=A|B|C (bottom bar or ← →).
+  State is in memory and shared across variants; nothing is saved.
+  Open: double-click this file, or `open packages/ui/src/components/StationSetup/ReportConfig.prototype.html`.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>PROTOTYPE · Report configuration</title>
+<style>
+  :root{--bg:#f6f6f3;--surface:#fff;--alt:#f1f1ed;--border:#e4e4df;--strong:#d4d4cd;--ink:#1f2421;--muted:#6b716c;--faint:#9aa09b;--brand:#2f6b52;--brand-bg:#e7f0eb;--warn-bg:#fbf1dc;--warn:#8a5a0b;--danger:#b4412f;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+  *{box-sizing:border-box}body{margin:0;font:13px/1.4 -apple-system,BlinkMacSystemFont,"Inter",sans-serif;color:var(--ink);background:var(--bg)}
+  button{font:inherit;cursor:pointer}
+  .app{display:grid;grid-template-columns:200px 1fr;height:100vh}
+  .side{background:var(--alt);border-right:1px solid var(--border);padding:12px 8px;overflow:auto}
+  .side h6{margin:12px 8px 4px;font:600 10px var(--mono);letter-spacing:.08em;color:var(--faint)}
+  .nav{display:block;padding:6px 8px;border-radius:6px;color:var(--ink)}.nav.on{background:var(--brand-bg);color:var(--brand);font-weight:600}
+  .main{overflow:auto;padding:20px 24px 90px}
+  h1{font-size:18px;margin:0}.sub{color:var(--muted);margin:2px 0 14px}
+  .tabs{display:flex;gap:18px;border-bottom:1px solid var(--border);margin-bottom:16px}.tabs span{padding:8px 0;color:var(--muted)}.tabs .on{color:var(--ink);border-bottom:2px solid var(--brand);font-weight:600}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:8px}
+  .btn{height:30px;padding:0 12px;border:1px solid var(--strong);background:var(--surface);border-radius:6px}
+  .btn.pri{background:var(--brand);color:#fff;border-color:var(--brand)}.btn.ghost{border-color:transparent;background:transparent}
+  .btn:disabled{opacity:.45;cursor:default}
+  .chip{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 8px;border-radius:10px;font-size:11px;background:var(--alt);color:var(--muted)}
+  .chip.warn{background:var(--warn-bg);color:var(--warn)}.chip.ok{background:var(--brand-bg);color:var(--brand)}
+  .seg{display:inline-flex;border:1px solid var(--strong);border-radius:6px;overflow:hidden}.seg button{border:0;background:var(--surface);padding:4px 10px}.seg .on{background:var(--brand);color:#fff}
+  .sw{position:relative;width:28px;height:16px;border-radius:8px;background:var(--strong);border:0;flex:none}.sw::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:.15s}.sw.on{background:var(--brand)}.sw.on::after{left:14px}.sw:disabled{opacity:.5}
+  .row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border)}.row:last-child{border-bottom:0}
+  .row.off .lbl{color:var(--faint);text-decoration:line-through}.row.hl{background:var(--brand-bg)}
+  .lbl{flex:1}.desc{display:block;font-size:11px;color:var(--muted)}
+  .ord{display:flex;gap:2px}.ord button{border:1px solid var(--border);background:var(--surface);border-radius:4px;width:22px;height:22px;padding:0;color:var(--muted)}
+  .mut{color:var(--muted)}.small{font-size:11px}
+  /* mock paper */
+  .paper{background:#fff;border:1px solid var(--strong);box-shadow:0 2px 10px rgba(0,0,0,.06);padding:18px;aspect-ratio:210/297;overflow:hidden;font-size:9px}
+  .paper.letter{aspect-ratio:8.5/11}
+  .lh{display:flex;gap:8px;align-items:center;border-bottom:2px solid var(--brand);padding-bottom:6px;margin-bottom:8px}.logo{width:22px;height:22px;border-radius:5px;background:var(--brand)}
+  .ps{margin-bottom:8px;padding:4px;border-radius:4px;border:1px dashed transparent}.ps h5{margin:0 0 3px;font:600 8px var(--mono);letter-spacing:.06em;color:var(--brand);text-transform:uppercase}
+  .ps.hl{border-color:var(--brand);background:var(--brand-bg)}
+  .ln{height:4px;background:var(--alt);border-radius:2px;margin:2px 0}.tbl{display:grid;grid-template-columns:repeat(4,1fr);gap:2px}.tbl i{height:6px;background:var(--alt)}.tbl i:nth-child(-n+4){background:#dfe7e2}
+  .kp{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}.kp b{display:block;height:18px;background:var(--alt);border-radius:3px}
+  .sig{display:flex;gap:20px;margin-top:10px}.sig i{flex:1;border-top:1px solid var(--ink);padding-top:2px;font-style:normal;color:var(--muted)}
+  /* switcher */
+  .proto{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:#111;color:#fff;padding:6px 10px;border-radius:999px;box-shadow:0 6px 24px rgba(0,0,0,.3);z-index:99;font-size:12px}
+  .proto button{background:#333;color:#fff;border:0;border-radius:50%;width:26px;height:26px}.proto b{color:#ffd166}
+  .note{background:#fff8e1;border:1px solid #f1d58a;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px}
+  /* drawer */
+  .scrim{position:fixed;inset:0;background:rgba(20,24,22,.25)}.drawer{position:fixed;top:0;right:0;bottom:0;width:min(880px,70vw);background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column}
+  .dh{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}.db{flex:1;overflow:auto;display:grid;grid-template-columns:1fr 300px;gap:18px;padding:16px 18px}.df{padding:10px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px}
+  .thumb{height:170px;overflow:hidden;border-radius:4px;background:var(--alt);padding:10px 30px 0}
+  .preset{border:1px solid var(--border);border-radius:6px;padding:8px 10px;background:var(--surface);text-align:left}.preset.on{border-color:var(--brand);background:var(--brand-bg)}
+  .sec-tools{display:none;gap:4px;position:absolute;right:4px;top:3px}.ps{position:relative}.ps:hover .sec-tools{display:flex}
+  .sec-tools button{font-size:9px;border:1px solid var(--strong);background:#fff;border-radius:3px;padding:1px 5px}
+  .tray{display:flex;flex-wrap:wrap;gap:6px}.tray button{border:1px dashed var(--strong);background:var(--surface);border-radius:14px;padding:3px 10px;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const REPORTS = {
+  ss:{name:'Shift Summary',when:'Printed when a shift is closed',sections:[
+    ['header','Header / Letterhead','Station name, address, GSTIN, logo',true],
+    ['meta','Shift Meta','Shift no., business day, opened/closed by, times'],
+    ['warnings','Warnings','Unresolved readings, open drawers, anomalies'],
+    ['nozzles','Nozzle Reconciliation','Opening/closing reading, litres, amount per nozzle'],
+    ['handovers','Attendant Handovers','Each attendant\u2019s declared cash and variance'],
+    ['terminals','POS Terminals','Card/UPI settlement by terminal'],
+    ['creditSales','Fuel-on-Credit Sales','Customer, vehicle, litres, amount'],
+    ['cashRecon','Cash Reconciliation','Expected vs counted cash, office variance'],
+    ['drawers','Drawers (per attendant)','Float, sales, drops, declared per drawer'],
+    ['signatures','Signatures','Manager and attendant sign-off lines']]},
+  dssr:{name:'Daily DSSR',when:'Printed when a business day is closed',sections:[
+    ['header','Header / Letterhead','Station name, address, GSTIN, logo',true],
+    ['meta','Day Meta','Business date, shifts, closed by'],
+    ['kpis','KPIs','Litres, revenue, credit, variance at a glance'],
+    ['financial','Financial Summary','Cash, card/UPI, credit totals'],
+    ['fuelByProduct','Fuel Sales by Product','Petrol / Diesel litres and value'],
+    ['nozzles','Nozzle Aggregation','Day totals per nozzle'],
+    ['fuelStockVariance','Tank Dip & Fuel Variance','Book vs dip stock per tank'],
+    ['merchandiseStockVariance','Merchandise Variance','Lubes and accessories stock'],
+    ['shifts','Included Shifts','Each shift of the day with totals']]},
+  att:{name:'Attendant Handover Report',when:'Printed per attendant for a period',sections:[
+    ['header','Header / Letterhead','Station name, address, GSTIN, logo',true],
+    ['summary','Period Summary','Shifts worked, litres, cash, variance'],
+    ['fuelSales','Fuel Sales by Shift','Litres and value per shift'],
+    ['merchandise','Merchandise (Billed + Handover)','Product sales by the attendant'],
+    ['creditSales','Fuel-on-Credit Sales','Credit sales recorded'],
+    ['terminals','Payment Terminals','Card/UPI taken'],
+    ['variance','Variance by Shift','Shortage / excess per shift'],
+    ['signature','Acknowledgement & Signatures','Attendant acknowledgement']]},
+};
+const PRESETS = {
+  full:{name:'Full',desc:'Every section',pick:()=>true},
+  compact:{name:'Compact',desc:'One page, totals only',pick:k=>['header','meta','kpis','financial','fuelByProduct','summary','cashRecon','nozzles','signatures','signature','variance'].includes(k)},
+  cash:{name:'Cash desk',desc:'Cash and drawers only',pick:k=>['header','meta','handovers','cashRecon','drawers','financial','summary','variance','signatures','signature'].includes(k)},
+};
+const fresh = () => Object.fromEntries(Object.entries(REPORTS).map(([id,r])=>[id,r.sections.map(([k,l,d,locked])=>({k,l,d,locked:!!locked,on:true}))]));
+let S = {cfg:fresh(), saved:null, paper:'A4', logo:true, report:'ss', hl:null, drawer:null, variant:new URLSearchParams(location.search).get('variant')||'A'};
+S.saved = JSON.stringify([S.cfg,S.paper,S.logo]);
+const dirty = () => JSON.stringify([S.cfg,S.paper,S.logo]) !== S.saved;
+const set = p => {Object.assign(S,p);render();};
+const list = id => S.cfg[id];
+function toggle(id,k){const s=list(id).find(x=>x.k===k);if(!s.locked)s.on=!s.on;render();}
+function move(id,k,d){const a=list(id);const i=a.findIndex(x=>x.k===k);const j=i+d;if(j<1||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];render();}
+function preset(id,p){list(id).forEach(s=>{if(!s.locked)s.on=PRESETS[p].pick(s.k)});render();}
+function presetOf(id){return Object.keys(PRESETS).find(p=>list(id).every(s=>s.locked||s.on===PRESETS[p].pick(s.k)));}
+function reset(id){S.cfg[id]=fresh()[id];render();}
+const save=()=>{S.saved=JSON.stringify([S.cfg,S.paper,S.logo]);render();};
+const onCount = id => list(id).filter(s=>s.on).length;
+
+function body(k){ // fake content by section kind
+  if(k==='kpis'||k==='summary') return '<div class="kp"><b></b><b></b><b></b><b></b></div>';
+  if(k==='meta') return '<div class="ln" style="width:70%"></div><div class="ln" style="width:50%"></div>';
+  if(k==='warnings') return '<div class="ln" style="width:60%;background:#fbe9d0"></div>';
+  if(k.startsWith('signature')) return '<div class="sig"><i>Manager</i><i>Attendant</i></div>';
+  return '<div class="tbl">'+'<i></i>'.repeat(16)+'</div>';
+}
+function paper(id,{tools=false,scale=1}={}){
+  const r=REPORTS[id];
+  const secs=list(id).filter(s=>s.on).map(s=>s.k==='header'
+    ? `<div class="lh" data-k="header">${S.logo?'<div class="logo"></div>':''}<div><b style="font-size:11px">Agent Test Station</b><div class="mut">${r.name.toUpperCase()} · 29 Sep 2026</div></div></div>`
+    : `<div class="ps ${S.hl===s.k?'hl':''}" onmouseenter="S.hl='${s.k}';hlOnly()" onmouseleave="S.hl=null;hlOnly()" data-k="${s.k}"><h5>${s.l}</h5>${body(s.k)}
+       ${tools?`<span class="sec-tools"><button onclick="move('${id}','${s.k}',-1)">↑</button><button onclick="move('${id}','${s.k}',1)">↓</button><button onclick="toggle('${id}','${s.k}')">Hide</button></span>`:''}</div>`).join('');
+  return `<div class="paper ${S.paper==='LETTER'?'letter':''}" style="${scale!==1?`zoom:${scale}`:''}">${secs}</div>`;
+}
+function hlOnly(){document.querySelectorAll('[data-k]').forEach(e=>e.classList.toggle('hl',e.dataset.k===S.hl));}
+function rows(id,{desc=true}={}){
+  const a=list(id);
+  return a.map((s,i)=>`<div class="row ${s.on?'':'off'} ${S.hl===s.k?'hl':''}" data-k="${s.k}" onmouseenter="S.hl='${s.k}';hlOnly()" onmouseleave="S.hl=null;hlOnly()">
+    <button class="sw ${s.on?'on':''}" ${s.locked?'disabled title="Always printed"':''} onclick="toggle('${id}','${s.k}')"></button>
+    <span class="lbl">${s.l}${s.locked?' <span class="chip">Always</span>':''}${desc?`<span class="desc">${s.d}</span>`:''}</span>
+    ${s.locked?'':`<span class="ord"><button ${i<=1?'disabled':''} onclick="move('${id}','${s.k}',-1)">↑</button><button ${i===a.length-1?'disabled':''} onclick="move('${id}','${s.k}',1)">↓</button></span>`}
+  </div>`).join('');
+}
+const paperSeg=()=>`<span class="seg"><button class="${S.paper==='A4'?'on':''}" onclick="set({paper:'A4'})">A4</button><button class="${S.paper==='LETTER'?'on':''}" onclick="set({paper:'LETTER'})">Letter</button></span>`;
+const logoSw=()=>`<label style="display:inline-flex;gap:6px;align-items:center"><button class="sw ${S.logo?'on':''}" onclick="set({logo:!S.logo})"></button>Logo on letterhead</label>`;
+const saveBar=()=>`${dirty()?'<span class="chip warn">Unsaved changes</span>':'<span class="chip ok">Saved</span>'}<button class="btn pri" ${dirty()?'':'disabled'} onclick="save()">Save</button>`;
+
+function shell(active,content){
+  const nav=(n,on)=>`<span class="nav ${on?'on':''}">${n}</span>`;
+  return `<div class="app"><aside class="side"><h6>OPERATIONS</h6>${nav('Dashboard')}${nav('Shifts')}${nav('Inventory')}<h6>FINANCE</h6>${nav('Accounts')}${nav('Expenses')}${nav('Reports',active==='reports')}<h6>SETUP</h6>${nav('Station Overview',active==='station')}${nav('Organization')}</aside><main class="main">${content}</main></div>`;
+}
+
+/* ---------- A: Report picker + side-by-side editor, stays in Station Overview ---------- */
+function VariantA(){
+  const id=S.report;
+  const left=Object.entries(REPORTS).map(([k,r])=>`<button class="row" style="width:100%;border:0;border-bottom:1px solid var(--border);text-align:left;background:${k===id?'var(--brand-bg)':'var(--surface)'}" onclick="set({report:'${k}'})"><span class="lbl"><b>${r.name}</b><span class="desc">${r.when}</span></span><span class="chip">${onCount(k)}/${list(k).length}</span></button>`).join('');
+  return shell('station',`
+    <div class="note"><b>A · Master–detail, stays in Station Overview.</b> Pick a report on the left; edit sections in the middle with plain-language descriptions; the preview on the right follows your hover. One report at a time instead of three long lists.</div>
+    <h1>Station Setup &amp; Administration</h1><div class="sub">Review and modify station components.</div>
+    <div class="tabs"><span>General Info</span><span>Business &amp; Branding</span><span class="on">Reports</span><span>Products</span><span>Tanks</span><span>Dispensers</span></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><b>Printed reports</b><span class="mut">Paper</span>${paperSeg()}${logoSw()}<span style="flex:1"></span>${saveBar()}</div>
+    <div style="display:grid;grid-template-columns:240px 1fr 320px;gap:16px;align-items:start">
+      <div class="panel" style="overflow:hidden">${left}</div>
+      <div class="panel"><div class="row" style="background:var(--alt)"><span class="lbl"><b>${REPORTS[id].name} sections</b><span class="desc">Toggle to include · ↑↓ to reorder · hover to find it in the preview</span></span><button class="btn ghost small" onclick="reset('${id}')">Reset</button></div>${rows(id)}</div>
+      <div style="position:sticky;top:0"><div class="small mut" style="margin-bottom:6px">PREVIEW · ${S.paper}</div>${paper(id)}</div>
+    </div>`);
+}
+
+/* ---------- B: Moves to Reports → Templates; gallery + drawer with presets ---------- */
+function VariantB(){
+  const cards=Object.entries(REPORTS).map(([k,r])=>`<div class="card"><div class="thumb">${paper(k,{scale:.55})}</div>
+    <div><b>${r.name}</b><div class="small mut">${r.when}</div></div>
+    <div style="display:flex;gap:6px;align-items:center"><span class="chip">${onCount(k)} of ${list(k).length} sections</span><span class="chip ${presetOf(k)?'ok':''}">${presetOf(k)?PRESETS[presetOf(k)].name:'Custom'}</span><span style="flex:1"></span><button class="btn" onclick="set({drawer:'${k}',report:'${k}'})">Customize</button></div></div>`).join('');
+  const d=S.drawer;
+  const drawer=!d?'':`<div class="scrim" onclick="set({drawer:null})"></div><div class="drawer">
+    <div class="dh"><b style="font-size:15px">${REPORTS[d].name}</b><span class="mut">${REPORTS[d].when}</span><span style="flex:1"></span><button class="btn ghost" onclick="set({drawer:null})">✕</button></div>
+    <div class="db"><div>
+      <div class="small mut" style="margin-bottom:6px">START FROM</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">${Object.entries(PRESETS).map(([p,v])=>`<button class="preset ${presetOf(d)===p?'on':''}" onclick="preset('${d}','${p}')"><b>${v.name}</b><div class="small mut">${v.desc}</div></button>`).join('')}</div>
+      <div class="small mut" style="margin-bottom:6px">SECTIONS</div><div class="panel">${rows(d)}</div></div>
+      <div><div class="small mut" style="margin-bottom:6px">PREVIEW</div>${paper(d)}</div></div>
+    <div class="df"><button class="btn ghost" onclick="reset('${d}')">Reset to default</button><span style="flex:1"></span>${saveBar()}</div></div>`;
+  return shell('reports',`
+    <div class="note"><b>B · Moves to Reports → Templates.</b> Each report is a card with a live thumbnail. "Customize" opens a drawer (List → Drawer → Edit) with presets so most stations click once and are done. Paper and logo are shared page settings; letterhead details stay in Station → Business &amp; Branding.</div>
+    <h1>Reports</h1><div class="sub">Generate and print station reports.</div>
+    <div class="tabs"><span>Shift Summaries</span><span>DSSR</span><span>Attendant</span><span class="on">Templates</span></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><span class="mut">Paper for all reports</span>${paperSeg()}${logoSw()}</div>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px">${cards}</div>${drawer}`);
+}
+
+/* ---------- C: Edit on the document itself (WYSIWYG), opened from the report ---------- */
+function VariantC(){
+  const id=S.report;
+  const hidden=list(id).filter(s=>!s.on);
+  return shell('reports',`
+    <div class="note"><b>C · Edit on the page, opened from the report itself.</b> Operators meet the layout while looking at a real Shift Summary / DSSR, so "Customize layout" sits next to Print. Hover a section on the paper to move or hide it; hidden sections wait in a tray to be added back. No separate list to map to the preview.</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span class="mut">Reports ›</span><b style="font-size:16px">Customize layout</b>
+      <span class="seg" style="margin-left:8px">${Object.entries(REPORTS).map(([k,r])=>`<button class="${k===id?'on':''}" onclick="set({report:'${k}'})">${r.name.replace('Attendant Handover Report','Attendant')}</button>`).join('')}</span>
+      <span style="flex:1"></span>${paperSeg()}${logoSw()}<button class="btn ghost" onclick="reset('${id}')">Reset</button>${saveBar()}</div>
+    <div style="display:grid;grid-template-columns:1fr 260px;gap:18px;align-items:start">
+      <div style="max-width:620px;margin:0 auto;width:100%;font-size:14px">${paper(id,{tools:true}).replace('class="paper','class="paper" style="font-size:12px" data-x="')}</div>
+      <div class="panel" style="padding:12px;position:sticky;top:0">
+        <div class="small mut" style="margin-bottom:6px">HIDDEN SECTIONS (${hidden.length})</div>
+        <div class="tray">${hidden.length?hidden.map(s=>`<button onclick="toggle('${id}','${s.k}')">+ ${s.l}</button>`).join(''):'<span class="small mut">Everything is printed.</span>'}</div>
+        <div class="small mut" style="margin:14px 0 6px">TIP</div><div class="small mut">Hover a section on the paper for ↑ ↓ Hide. The letterhead always prints.</div>
+      </div></div>`);
+}
+
+const V={A:['Master–detail (Station)',VariantA],B:['Templates gallery + drawer (Reports)',VariantB],C:['Edit on the page (Reports)',VariantC]};
+const keys=Object.keys(V);
+function go(d){const i=(keys.indexOf(S.variant)+d+keys.length)%keys.length;S.variant=keys[i];S.drawer=null;history.replaceState(null,'','?variant='+S.variant);render();}
+addEventListener('keydown',e=>{if(e.target.closest('input,textarea,[contenteditable]'))return;if(e.key==='ArrowLeft')go(-1);if(e.key==='ArrowRight')go(1);if(e.key==='Escape'&&S.drawer)set({drawer:null});});
+function render(){
+  if(!V[S.variant])S.variant='A';
+  document.getElementById('root').innerHTML=V[S.variant][1]()+`<div class="proto"><button onclick="go(-1)">‹</button><span>PROTOTYPE <b>${S.variant}</b> · ${V[S.variant][0]}</span><button onclick="go(1)">›</button></div>`;
+}
+render();
+</script>
+</body>
+</html>
