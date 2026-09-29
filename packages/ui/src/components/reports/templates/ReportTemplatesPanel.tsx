@@ -5,9 +5,8 @@ import { CloudStationService } from '../../../services/cloud.js';
 import { queryKeys } from '../../../query/hooks.js';
 import { useCapability } from '../../../access/CapabilityGate.js';
 import { useToast } from '../../primitives/ToastProvider.js';
-import { Segmented } from '../../primitives/Segmented.js';
 import { Switch } from '../../primitives/Toggle.js';
-import { Button, Chip, Panel } from '../../../pump-ds/index.js';
+import { Button, Chip, Panel, SegmentedControl } from '../../../pump-ds/index.js';
 import { paperFromStation } from '../../../services/reports/reportConfig.js';
 import { showLogoFromStation } from '../../../services/reports/letterhead.js';
 import {
@@ -84,12 +83,11 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({ sele
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <span className="flex items-center gap-2">
           <span className="text-[12px] text-ink-muted">Paper for all reports</span>
-          <Segmented<Paper>
-            size="sm"
+          <SegmentedControl<Paper>
             aria-label="Paper size"
             disabled={savingPage}
             value={paper}
-            onChange={(next) => next !== paper && void savePage({ paper: next })}
+            onChange={(next) => void savePage({ paper: next })}
             options={[
               { value: 'A4', label: 'A4' },
               { value: 'LETTER', label: 'Letter' },
@@ -148,35 +146,38 @@ const TemplateCard: React.FC<{
   const sections = sectionsFromStation(template, station);
   const isPreset = presetOf(template, sections) !== null;
   return (
-    <Panel data-testid={`template-card-${template.id}`} className="gap-3 p-3.5">
-      <ReportPaperPreview
-        template={template}
-        sections={sections}
-        station={station}
-        paper={paper}
-        showLogo={showLogo}
-        thumbnail
-      />
-      <div>
-        <div className="text-[13px] font-semibold text-ink-strong">{template.name}</div>
-        <div className="text-[12px] text-ink-muted">{template.when}</div>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <Chip size="xs">
-          {enabledCount(sections)} of {sections.length} sections
-        </Chip>
-        <Chip size="xs" tone={isPreset ? 'brand' : 'neutral'}>
-          {presetLabel(template, sections)}
-        </Chip>
-        <span className="flex-1" />
-        <Button
-          variant="secondary"
-          size="xs"
-          onClick={onCustomize}
-          aria-label={`Customize ${template.name}`}
-        >
-          Customize
-        </Button>
+    <Panel data-testid={`template-card-${template.id}`}>
+      {/* Panel wraps children in its own body, so the spacing lives here. */}
+      <div className="flex flex-col gap-4">
+        <ReportPaperPreview
+          template={template}
+          sections={sections}
+          station={station}
+          paper={paper}
+          showLogo={showLogo}
+          thumbnail
+        />
+        <div className="flex flex-col gap-0.5">
+          <div className="text-[13px] font-semibold text-ink-strong">{template.name}</div>
+          <div className="text-[12px] text-ink-muted">{template.when}</div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Chip size="xs">
+            {enabledCount(sections)} of {sections.length} sections
+          </Chip>
+          <Chip size="xs" tone={isPreset ? 'brand' : 'neutral'}>
+            {presetLabel(template, sections)}
+          </Chip>
+          <span className="flex-1" />
+          <Button
+            variant="secondary"
+            size="xs"
+            onClick={onCustomize}
+            aria-label={`Customize ${template.name}`}
+          >
+            Customize
+          </Button>
+        </div>
       </div>
     </Panel>
   );
