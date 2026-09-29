@@ -90,7 +90,29 @@ describe('DesktopUpdateCoordinator — checking', () => {
       phase: 'up-to-date',
       currentVersion: '1.0.0',
       checkedAt: 1_700_000,
+      manual: true,
     });
+  });
+
+  it('marks an automatic check as silent, and a manual click joining it as manual', async () => {
+    let resolve!: (v: null) => void;
+    const coordinator = new DesktopUpdateCoordinator(
+      fakeUpdater({ check: () => new Promise<null>((r) => (resolve = r)) }),
+      readiness(),
+    );
+    const auto = coordinator.checkOnceAtStartup();
+    expect(coordinator.getState()).toMatchObject({ phase: 'checking', manual: false });
+    const joined = coordinator.check();
+    expect(coordinator.getState()).toMatchObject({ phase: 'checking', manual: true });
+    resolve(null);
+    await Promise.all([auto, joined]);
+    expect(coordinator.getState()).toMatchObject({ phase: 'up-to-date', manual: true });
+  });
+
+  it('reports an automatic check that finds nothing as not manual', async () => {
+    const coordinator = new DesktopUpdateCoordinator(fakeUpdater(), readiness());
+    await coordinator.checkOnceAtStartup();
+    expect(coordinator.getState()).toMatchObject({ phase: 'up-to-date', manual: false });
   });
 
   it('offers a newer version with sanitized plain-text notes', async () => {
@@ -164,15 +186,15 @@ describe('DesktopUpdateCoordinator — checking', () => {
       }),
       readiness(),
     );
-    await expect(coordinator.checkOnceAfterShellReady()).resolves.toBeUndefined();
+    await expect(coordinator.checkOnceAtStartup()).resolves.toBeUndefined();
   });
 
   it('runs the automatic check exactly once per session', async () => {
     const check = vi.fn(async () => null);
     const coordinator = new DesktopUpdateCoordinator(fakeUpdater({ check }), readiness());
-    await coordinator.checkOnceAfterShellReady();
-    await coordinator.checkOnceAfterShellReady();
-    await coordinator.checkOnceAfterShellReady();
+    await coordinator.checkOnceAtStartup();
+    await coordinator.checkOnceAtStartup();
+    await coordinator.checkOnceAtStartup();
     expect(check).toHaveBeenCalledTimes(1);
   });
 
@@ -467,7 +489,7 @@ describe('DesktopUpdateCoordinator — who asked', () => {
     const seen: string[] = [];
     coordinator.subscribe((state) => seen.push(state.phase));
 
-    await coordinator.checkOnceAfterShellReady();
+    await coordinator.checkOnceAtStartup();
 
     expect(coordinator.getState().phase).toBe('idle');
     expect(seen).not.toContain('failed');
@@ -490,7 +512,7 @@ describe('DesktopUpdateCoordinator — who asked', () => {
       fakeUpdater({ check: async () => fakeHandle() }),
       readiness(),
     );
-    await coordinator.checkOnceAfterShellReady();
+    await coordinator.checkOnceAtStartup();
     expect(coordinator.getState().phase).toBe('available');
   });
 
@@ -499,7 +521,7 @@ describe('DesktopUpdateCoordinator — who asked', () => {
       fakeUpdater({ check: async () => fakeHandle({ version: 'latest-build' }) }),
       readiness(),
     );
-    await coordinator.checkOnceAfterShellReady();
+    await coordinator.checkOnceAtStartup();
     expect(coordinator.getState().phase).toBe('idle');
   });
 });

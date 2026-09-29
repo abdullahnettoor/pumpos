@@ -42,6 +42,8 @@ export class DesktopUpdateCoordinator {
   private handle: UpdateHandle | null = null;
   private checkInFlight: Promise<void> | null = null;
   private automaticCheckStarted = false;
+  /** Whether the check in flight was asked for; a manual click joining an automatic check upgrades it. */
+  private checkIsManual = false;
 
   constructor(
     private readonly updater: UpdaterAdapter,
@@ -63,14 +65,15 @@ export class DesktopUpdateCoordinator {
   }
 
   /**
-   * The once-per-session check, fired after the authenticated shell is ready.
+   * The once-per-session check, fired at app start whether or not anyone is
+   * signed in (#328): a signed-out build must still be able to update itself.
    *
    * It is a no-op on every later call, so a re-render or a session refresh
    * cannot turn "check once" into a poll. It never throws: a boot-time check
    * that could reject would be a way for update infrastructure to break the
    * shell, which is exactly what this feature must not do.
    */
-  async checkOnceAfterShellReady(): Promise<void> {
+  async checkOnceAtStartup(): Promise<void> {
     if (this.automaticCheckStarted) return;
     this.automaticCheckStarted = true;
     await this.check({ manual: false });
@@ -79,7 +82,8 @@ export class DesktopUpdateCoordinator {
   /**
    * Check the stable channel.
    *
-   * `manual` changes exactly one thing: whether a *failure* is shown. An
+   * `manual` changes what is shown when there is no offer: a failure, the
+   * "checking" notice and "up to date" appear only for a manual check. An
    * operator who clicked "Check for updates" is owed an answer, including a bad
    * one. An operator who merely signed in did not ask, and cannot act on
    * "the update server did not respond" — showing it every morning at a station
@@ -89,7 +93,13 @@ export class DesktopUpdateCoordinator {
   async check({ manual = true }: { manual?: boolean } = {}): Promise<void> {
     // A manual click while the automatic check is still in flight should join
     // that check rather than start a second one against the same endpoint.
-    if (this.checkInFlight) return this.checkInFlight;
+    if (this.checkInFlight) {
+      if (manual && !this.checkIsManual) {
+        this.checkIsManual = true;
+        if (this.state.phase === 'checking') this.emit({ ...this.state, manual: true });
+      }
+      return this.checkInFlight;
+    }
     // A postponed offer comes back rather than being re-fetched: the operator
     // asked to be reminded, not to spend a station's bandwidth twice.
     if (this.state.phase === 'postponed') {
@@ -107,7 +117,8 @@ export class DesktopUpdateCoordinator {
       return;
     }
 
-    const run = this.runCheck(manual);
+    this.checkIsManual = manual;
+    const run = this.runCheck();
     this.checkInFlight = run;
     try {
       await run;
@@ -116,13 +127,17 @@ export class DesktopUpdateCoordinator {
     }
   }
 
-  private async runCheck(manual: boolean): Promise<void> {
-    this.emit({ phase: 'checking', currentVersion: this.updater.currentVersion });
+  private async runCheck(): Promise<void> {
+    this.emit({
+      phase: 'checking',
+      currentVersion: this.updater.currentVersion,
+      manual: this.checkIsManual,
+    });
     let handle: UpdateHandle | null;
     try {
       handle = await this.updater.check();
     } catch (cause) {
-      this.failCheck(normalizeUpdateError(cause), manual);
+      this.failCheck(normalizeUpdateError(cause), this.checkIsManual);
       return;
     }
 
@@ -132,6 +147,7 @@ export class DesktopUpdateCoordinator {
         phase: 'up-to-date',
         currentVersion: this.updater.currentVersion,
         checkedAt: this.now(),
+        manual: this.checkIsManual,
       });
       return;
     }
@@ -143,7 +159,7 @@ export class DesktopUpdateCoordinator {
           kind: 'malformed',
           message: `The update server offered an unreadable version ("${handle.version}").`,
         },
-        manual,
+        this.checkIsManual,
       );
       return;
     }
@@ -156,6 +172,7 @@ export class DesktopUpdateCoordinator {
         phase: 'up-to-date',
         currentVersion: this.updater.currentVersion,
         checkedAt: this.now(),
+        manual: this.checkIsManual,
       });
       return;
     }

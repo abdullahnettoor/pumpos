@@ -48,8 +48,12 @@ export interface DownloadProgress {
  */
 export type UpdateState =
   | { phase: 'idle'; currentVersion: string }
-  | { phase: 'checking'; currentVersion: string }
-  | { phase: 'up-to-date'; currentVersion: string; checkedAt: number }
+  /**
+   * `manual` is whether the operator asked. An automatic launch check that is
+   * still running, or finds nothing, stays silent (#327).
+   */
+  | { phase: 'checking'; currentVersion: string; manual: boolean }
+  | { phase: 'up-to-date'; currentVersion: string; checkedAt: number; manual: boolean }
   | { phase: 'available'; currentVersion: string; update: AvailableUpdate }
   /**
    * The operator said "not now". The offer is kept — including a finished

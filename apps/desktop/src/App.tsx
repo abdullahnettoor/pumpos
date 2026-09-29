@@ -202,25 +202,14 @@ const App: React.FC = () => {
   }, []);
 
   /**
-   * In-app updates (desktop only). The automatic check fires once the
-   * authenticated shell is up — never during boot, and never from a dev or web
-   * build. A failed check lands in the coordinator's state, so nothing here can
-   * delay or break the operator's start-up.
+   * In-app updates (desktop only). The automatic check fires once at app
+   * start, signed in or not (#328), so a build that can no longer sign in can
+   * still update itself. It stays silent unless it finds an update (#327), and
+   * a failed check lands in the coordinator's state, so nothing here can delay
+   * or break the operator's start-up. The manual check lives on the status-bar
+   * version.
    */
-  const shellReady = !!session && !!userRole && !profileError;
-  const updates = useDesktopUpdates(shellReady);
-  const updateMenuEntries = updates.enabled
-    ? [
-        {
-          id: 'check-updates',
-          label: 'Check for updates',
-          // The installed version rides in the shortcut slot, so one entry both
-          // reports where the operator is and offers the check.
-          shortcut: updates.currentVersion ? `v${updates.currentVersion}` : undefined,
-          onSelect: updates.check,
-        },
-      ]
-    : undefined;
+  const updates = useDesktopUpdates();
 
   // Status-bar version/update. The version shows on desktop (web passes none).
   // The chip's label and click follow the updater phase, so it reports progress
@@ -565,8 +554,15 @@ const App: React.FC = () => {
 
   // Login, the profile-error card with its sign-out escape hatch, or the
   // onboarding notice — each owns the viewport, so no shell around it.
+  // The update notice rides along: a signed-out app must still be offered its
+  // update (#328). Only one UpdateNotice is ever mounted.
   if (gate === 'takeover') {
-    return renderContent();
+    return (
+      <>
+        {renderContent()}
+        <UpdateNotice updates={updates} />
+      </>
+    );
   }
 
   return (
@@ -584,11 +580,12 @@ const App: React.FC = () => {
       stationsLoading={stationsLoading}
       onStationChange={handleStationChange}
       environmentTag={environmentTag}
-      userMenuExtras={updateMenuEntries}
       appVersion={updates.currentVersion}
       updateAvailableVersion={update.version}
       updateLabel={update.label}
       onUpdate={update.onClick}
+      onCheckUpdates={updates.enabled ? updates.check : undefined}
+      checkingUpdates={updateState?.phase === 'checking' && updateState.manual}
     >
       {renderContent()}
       <QuickEntryHost selectedStation={selectedStation} />

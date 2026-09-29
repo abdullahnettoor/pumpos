@@ -58,7 +58,11 @@ describe('UpdateNotice rendering', () => {
   });
 
   it('announces state to assistive technology without stealing focus', () => {
-    render(<UpdateNotice updates={updates({ phase: 'checking', currentVersion: '1.0.0' })} />);
+    render(
+      <UpdateNotice
+        updates={updates({ phase: 'checking', currentVersion: '1.0.0', manual: true })}
+      />,
+    );
     // `role="status"` is an implicit polite live region, so the state is
     // announced where it changes rather than by moving the operator's focus.
     expect(screen.getByRole('status')).toBeTruthy();
@@ -309,11 +313,23 @@ describe('describeUpdateState', () => {
 
   it('confirms the installed version when a manual check finds nothing', () => {
     const view = describeUpdateState(
-      { phase: 'up-to-date', currentVersion: '1.2.3', checkedAt: 0 },
+      { phase: 'up-to-date', currentVersion: '1.2.3', checkedAt: 0, manual: true },
       actions,
     );
     expect(view?.title).toBe('PumpOS is up to date');
     expect(view?.detail).toMatch('1.2.3');
+  });
+
+  it('says nothing when an automatic check is running or finds nothing (#327)', () => {
+    expect(
+      describeUpdateState({ phase: 'checking', currentVersion: '1.0.0', manual: false }, actions),
+    ).toBeNull();
+    expect(
+      describeUpdateState(
+        { phase: 'up-to-date', currentVersion: '1.0.0', checkedAt: 0, manual: false },
+        actions,
+      ),
+    ).toBeNull();
   });
 
   it('never offers a restart until installation has succeeded', () => {
@@ -394,8 +410,10 @@ describe('UpdateNotice severity', () => {
         ?.onDismiss?.label,
     ).toBe('Not now');
     expect(
-      describeUpdateState({ phase: 'up-to-date', currentVersion: '1.0.0', checkedAt: 0 }, actions)
-        ?.onDismiss?.label,
+      describeUpdateState(
+        { phase: 'up-to-date', currentVersion: '1.0.0', checkedAt: 0, manual: true },
+        actions,
+      )?.onDismiss?.label,
     ).toBe('Dismiss');
   });
 });

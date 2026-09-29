@@ -70,6 +70,13 @@ export interface StatusBarProps {
    * inviting a click that does nothing.
    */
   onUpdate?: () => void;
+  /**
+   * Makes the plain version a button that runs a manual update check (desktop
+   * only). Web passes nothing and keeps a static version.
+   */
+  onCheckUpdates?: () => void;
+  /** A manual check is running: the version reads "Checking…". */
+  checkingUpdates?: boolean;
 
   className?: string;
 }
@@ -134,6 +141,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   updateAvailableVersion,
   updateLabel,
   onUpdate,
+  onCheckUpdates,
+  checkingUpdates = false,
   className,
 }) => {
   const sync = SYNC_META[syncStatus];
@@ -277,6 +286,17 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             >
               <Icon name="arrow-up" size="xs" />
               <span>{updateLabel ?? `Update to v${updateAvailableVersion}`}</span>
+            </button>
+          ) : onCheckUpdates ? (
+            <button
+              type="button"
+              data-testid="statusbar-version"
+              title="Check for updates"
+              onClick={onCheckUpdates}
+              disabled={checkingUpdates}
+              className="inline-flex h-full items-center px-2.5 text-[11.5px] text-ink-muted transition-colors hover:bg-surface hover:text-ink-strong disabled:cursor-default"
+            >
+              <span>{checkingUpdates ? 'Checking\u2026' : `v${appVersion}`}</span>
             </button>
           ) : (
             <Segment data-testid="statusbar-version">
