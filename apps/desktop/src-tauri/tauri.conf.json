@@ -15,7 +15,10 @@
         "label": "main",
         "title": "PumpOS",
         "width": 1024,
-        "height": 768
+        "height": 768,
+        "minWidth": 1024,
+        "minHeight": 680,
+        "center": true
       }
     ],
     "security": {
