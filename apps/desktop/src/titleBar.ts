@@ -3,15 +3,15 @@ import { setDesktopTitleBar, type DesktopWindowState } from '@pump/ui';
 /**
  * Registers the desktop window's title-bar integration (#117).
  *
- * The window hides its native title strip so the app's top bar becomes the
- * title bar. What that requires differs by platform:
+ * macOS only. There the window keeps a native overlay title bar
+ * (`titleBarStyle: "Overlay"` + `hiddenTitle`), so the OS draws the traffic
+ * lights on the left, floating over our top bar (`trafficLightPosition`
+ * centres them on it). The app only reserves room for them.
  *
- *   - macOS keeps a native overlay title bar (`titleBarStyle: "Overlay"` +
- *     `hiddenTitle`), so the traffic lights are still drawn by the OS, on the
- *     left, floating over our bar. The app only reserves room for them.
- *   - Windows/Linux have no overlay mode, so the window is undecorated
- *     (`decorations: false`) and the app draws the buttons itself on the right,
- *     wired to the native window commands.
+ * Windows and Linux use the native title bar (#326): the app's own buttons
+ * existed only inside the signed-in shell, so the login and other takeover
+ * screens had no way to move, minimise or close the window. Nothing is
+ * registered there, so the top bar draws no buttons and no drag region.
  *
  * In full screen the OS hides its controls; the reported state drives the top
  * bar to drop both the reserved inset and its own buttons, so the bar lays out
@@ -21,10 +21,9 @@ import { setDesktopTitleBar, type DesktopWindowState } from '@pump/ui';
  * console bundle.
  */
 export async function installDesktopTitleBar(): Promise<void> {
+  if (!/Mac/i.test(navigator.userAgent)) return;
   const { getCurrentWindow } = await import('@tauri-apps/api/window');
   const appWindow = getCurrentWindow();
-
-  const isMac = /Mac/i.test(navigator.userAgent);
 
   let state: DesktopWindowState = { fullscreen: false, maximized: false };
   const listeners = new Set<() => void>();
@@ -46,17 +45,11 @@ export async function installDesktopTitleBar(): Promise<void> {
   void refresh();
 
   setDesktopTitleBar({
-    controlsSide: isMac ? 'left' : 'right',
-    // Room for the macOS traffic lights (3 buttons + window padding). Zero
-    // elsewhere: our own buttons take real layout space instead.
-    controlsInset: isMac ? 78 : 0,
-    controls: isMac
-      ? null
-      : {
-          minimize: () => appWindow.minimize(),
-          toggleMaximize: () => appWindow.toggleMaximize(),
-          close: () => appWindow.close(),
-        },
+    controlsSide: 'left',
+    // Room for the traffic lights (3 buttons, starting at x=16) plus the gap
+    // before the menu icon.
+    controlsInset: 84,
+    controls: null,
     getState: () => state,
     subscribe: (onChange) => {
       listeners.add(onChange);
