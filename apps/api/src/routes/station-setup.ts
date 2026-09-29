@@ -4,6 +4,7 @@ import { schema, DbClient } from '@pump/db';
 import {
   canManageProduct,
   canManageInfrastructure,
+  canManageReportTemplates,
   canManageStaff,
   isManageableByManager,
   isAuthorizedForStation,
@@ -170,6 +171,25 @@ stationSetupRouter.put(
       );
     }
     const body = c.req.valid('json');
+    // Report templates decide what prints for everyone (#332): only Owner and
+    // Manager may change `settings.report_config`. Write access already implies
+    // one of those roles today; this keeps the rule if write access widens.
+    if (
+      body.settings &&
+      'report_config' in (body.settings as Record<string, unknown>) &&
+      !canManageReportTemplates(user.role)
+    ) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Only an Owner or Manager can change report templates',
+          },
+        },
+        403,
+      );
+    }
     const db = c.var.db;
     const useCase = new UpdateStation({
       repository: new DrizzleStationRepository(db),

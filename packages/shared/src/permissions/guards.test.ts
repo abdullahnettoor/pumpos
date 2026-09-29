@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   canOnboardStation,
+  canManageReportTemplates,
   canOpenShift,
   canCloseShift,
   canReopenShift,
@@ -114,5 +115,15 @@ describe('handover guards', () => {
     ['Staff', false],
   ] as const)('self-scopes a %s: %s', (role, selfScoped) => {
     expect(isHandoverSelfScoped(role)).toBe(selfScoped);
+  });
+});
+
+describe('canManageReportTemplates (#332)', () => {
+  it('allows Owner and Manager only', () => {
+    expect(canManageReportTemplates('Owner')).toBe(true);
+    expect(canManageReportTemplates('Manager')).toBe(true);
+    expect(canManageReportTemplates('Accountant')).toBe(false);
+    expect(canManageReportTemplates('Staff')).toBe(false);
+    expect(canManageReportTemplates('Attendant' as never)).toBe(false);
   });
 });
