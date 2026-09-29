@@ -118,6 +118,29 @@ describe('StatusBar version / update', () => {
     expect(onUpdate).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the version static when no check handler is given (web)', () => {
+    render(<StatusBar {...baseProps} appVersion="1.4.2" />);
+    expect(screen.getByTestId('statusbar-version').tagName).not.toBe('BUTTON');
+  });
+
+  it('runs a manual check when the version is clicked (desktop)', () => {
+    const onCheckUpdates = vi.fn();
+    render(<StatusBar {...baseProps} appVersion="1.4.2" onCheckUpdates={onCheckUpdates} />);
+    const version = screen.getByRole('button', { name: 'v1.4.2' });
+    expect(version.getAttribute('title')).toBe('Check for updates');
+    fireEvent.click(version);
+    expect(onCheckUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads "Checking…" while a manual check runs', () => {
+    render(
+      <StatusBar {...baseProps} appVersion="1.4.2" onCheckUpdates={() => {}} checkingUpdates />,
+    );
+    const version = screen.getByTestId('statusbar-version') as HTMLButtonElement;
+    expect(version.textContent).toBe('Checking\u2026');
+    expect(version.disabled).toBe(true);
+  });
+
   it('renders no version segment when the version is unknown', () => {
     render(<StatusBar {...baseProps} />);
     expect(screen.queryByTestId('statusbar-version')).toBeNull();

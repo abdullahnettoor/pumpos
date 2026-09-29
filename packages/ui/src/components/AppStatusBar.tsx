@@ -34,6 +34,10 @@ export interface AppStatusBarProps {
   updateLabel?: string;
   /** Clicked when an update is available. Desktop only. */
   onUpdate?: () => void;
+  /** Clicking the plain version runs a manual update check. Desktop only. */
+  onCheckUpdates?: () => void;
+  /** A manual check is running: the version reads "Checking…". */
+  checkingUpdates?: boolean;
 }
 
 export const AppStatusBar: React.FC<AppStatusBarProps> = ({
@@ -46,6 +50,8 @@ export const AppStatusBar: React.FC<AppStatusBarProps> = ({
   updateAvailableVersion,
   updateLabel,
   onUpdate,
+  onCheckUpdates,
+  checkingUpdates,
 }) => {
   const stationId = selectedStation?.id;
 
@@ -102,6 +108,8 @@ export const AppStatusBar: React.FC<AppStatusBarProps> = ({
       updateAvailableVersion={updateAvailableVersion}
       updateLabel={updateLabel}
       onUpdate={onUpdate}
+      onCheckUpdates={onCheckUpdates}
+      checkingUpdates={checkingUpdates}
     />
   );
 };

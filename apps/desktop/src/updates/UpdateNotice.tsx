@@ -211,8 +211,11 @@ export function describeUpdateState(
     case 'postponed':
       return null;
     case 'checking':
+      // An automatic launch check is silent unless it finds something (#327).
+      if (!state.manual) return null;
       return { key: state.phase, severity: 'info', title: 'Checking for updates…' };
     case 'up-to-date':
+      if (!state.manual) return null;
       return {
         key: state.phase,
         severity: 'success',
