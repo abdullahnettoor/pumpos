@@ -1,0 +1,24 @@
+---
+// Stand-in for the customer statement screenshot (#339). Mirrors the console's
+// customer statement drawer. Replace with a real capture when one exists.
+const rows = [
+  ['22 Sep 26', 'Collection', 'UPI · Part payment', '', '15,000.00', '41,850.00'],
+  ['21 Sep 26', 'Credit Sale', 'KL-11-AB-4521 · HSD 92.5 L', '8,918.85', '', '56,850.00'],
+  ['20 Sep 26', 'Credit Sale', 'KL-11-AB-4521 · HSD 140 L', '13,498.80', '', '47,931.15'],
+  ['18 Sep 26', 'Collection', 'Bank transfer', '', '20,000.00', '34,432.35'],
+  ['15 Sep 26', 'Credit Sale', 'KL-11-CD-7790 · HSD 210 L', '20,248.20', '', '54,432.35'],
+];
+---
+<div class="screen-replica product-replica" role="img" aria-label="PumpOS customer statement for Malabar Logistics Pvt Ltd: outstanding ₹41,850.00 against a ₹1,00,000 credit limit, with recent credit sales and collections.">
+  <div class="sr-top"><strong>PumpOS</strong><span>Hilltop Fuels Kozhikode</span><span class="sr-user">AN</span></div>
+  <div class="sr-body">
+    <div class="sr-side" aria-hidden="true"><span>Dashboard</span><span>Shifts</span><span>Inventory</span><span class="on">Customers</span><span>Purchases</span><span>Accounts</span><span>Reports</span></div>
+    <div class="sr-main">
+      <div class="sr-head"><div><h4>Malabar Logistics Pvt Ltd</h4><span class="sr-badge">Fleet</span> <span class="sr-muted">GSTIN 32AAECM4325F1ZP</span></div><span class="sr-btn">Record collection</span></div>
+      <div class="sr-kpis"><div><span>Outstanding</span><strong class="due">₹41,850.00</strong></div><div><span>Credit limit</span><strong>₹1,00,000.00</strong></div><div><span>Available</span><strong>₹58,150.00</strong></div></div>
+      <table class="sr-table"><thead><tr><th>Date</th><th>Type</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
+        <tbody>{rows.map(([d, t, n, dr, cr, bal]) => <tr><td>{d}</td><td>{t}<small>{n}</small></td><td>{dr || '—'}</td><td class={cr ? 'cr' : undefined}>{cr || '—'}</td><td>{bal}</td></tr>)}</tbody>
+      </table>
+    </div>
+  </div>
+</div>

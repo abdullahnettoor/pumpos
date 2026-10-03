@@ -1,0 +1,21 @@
+---
+// Stand-in for the mobile attendant screenshot (#339). Mirrors the mobile
+// HandoverPanel (apps/mobile/src/components/HandoverPanel.tsx). Replace with a
+// real capture inside the same phone frame when one exists.
+---
+<div class="phone-frame" role="img" aria-label="PumpOS attendant handover on a phone: Suresh Kumar on DU-1 enters closing readings, HDFC POS card and UPI, and cash handed over.">
+  <div class="phone-screen product-replica">
+    <div class="pf-bar"><strong>PumpOS</strong><span>Suresh Kumar</span></div>
+    <div class="pf-card"><small>Hilltop Fuels Kozhikode · Morning Shift</small><strong>Shift open · record as you go</strong></div>
+    <div class="pf-card">
+      <h5>Dispenser 1 <span>· DU-1</span></h5>
+      <p class="pf-label">Closing readings</p>
+      <div class="pf-grid"><div class="pf-field"><span>N1 · Petrol</span><b>528912.40</b><small>Opening 528438.20 · 474.20 L</small></div><div class="pf-field"><span>Testing (L)</span><b>5</b></div></div>
+      <div class="pf-grid"><div class="pf-field"><span>N2 · Diesel</span><b>412904.10</b><small>Opening 412876.00 · 28.10 L</small></div><div class="pf-field"><span>Testing (L)</span><b>0</b></div></div>
+      <p class="pf-label">Card / UPI by terminal</p>
+      <div class="pf-term"><span>HDFC Bank POS 1</span><div class="pf-grid"><div class="pf-field"><span>Card</span><b>18,500</b></div><div class="pf-field"><span>UPI</span><b>12,350</b></div></div></div>
+      <div class="pf-field"><span>Cash handed over</span><b>21,400</b></div>
+    </div>
+    <div class="pf-submit">Submit handover</div>
+  </div>
+</div>
