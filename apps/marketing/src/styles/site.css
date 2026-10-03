@@ -260,3 +260,13 @@ summary:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
  .docs-shell { padding-block: 30px 55px; gap: 32px; } .docs-content h1 { font-size: 44px; } .docs-content > p { font-size: 14px; } .error-page { padding-block: 70px; } .error-page h1 { font-size: 53px; }
 }
 @media (prefers-reduced-motion: reduce) { .desktop-nav a::after,.access-list > a > span:last-child,.mobile-menu summary span { transition: none; } }
+
+.product-screens { padding-block: 90px; }
+.product-screens h2 { font: 600 clamp(38px,4vw,56px)/1.06 var(--display); letter-spacing: -.025em; }
+.product-screens h2 > span { color: var(--brand); }
+.product-screens-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 44px; }
+.product-screens-grid figure.is-lead { grid-column: 1 / -1; }
+.product-screens-grid img { width: 100%; height: auto; border: 1px solid #d9ded6; border-radius: 10px; box-shadow: 0 18px 40px -24px rgba(24,32,26,.35); }
+.product-screens-grid figcaption { margin-top: 12px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.product-screens-grid figcaption strong { color: var(--deep); font-weight: 600; margin-right: 6px; }
+@media (max-width: 900px) { .product-screens-grid { grid-template-columns: 1fr; } }
