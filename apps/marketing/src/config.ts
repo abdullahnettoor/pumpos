@@ -24,3 +24,9 @@ function bookingUrl(value: string | undefined): string | null {
   catch { return null; }
 }
 export const DEMO_BOOKING_URL = bookingUrl(import.meta.env.PUBLIC_DEMO_BOOKING_URL);
+
+/** WhatsApp contact (international format, digits only for wa.me). */
+export const WHATSAPP_NUMBER = '+919061904860';
+export const WHATSAPP_DISPLAY = '+91 90619 04860';
+export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER.replace(/\D/g, '')}?text=${encodeURIComponent('Hi, I run a pump in <town> and want to see PumpOS')}`;
+export const STARTING_PRICE = 'From ₹999/station/month + GST, billed yearly. Pilot pricing on request.';

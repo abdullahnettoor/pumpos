@@ -260,3 +260,10 @@ summary:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
  .docs-shell { padding-block: 30px 55px; gap: 32px; } .docs-content h1 { font-size: 44px; } .docs-content > p { font-size: 14px; } .error-page { padding-block: 70px; } .error-page h1 { font-size: 53px; }
 }
 @media (prefers-reduced-motion: reduce) { .desktop-nav a::after,.access-list > a > span:last-child,.mobile-menu summary span { transition: none; } }
+
+/* WhatsApp contact + starting price */
+.header-whatsapp { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.footer-price, .pilot-price { font-weight: 600; }
+.footer-price { margin-top: 10px; font-size: 11px; }
+.whatsapp-fab { position: fixed; right: 16px; bottom: 16px; z-index: 40; padding: 12px 18px; border-radius: 999px; background: #25d366; color: #fff; font-weight: 700; font-size: 14px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.25); text-decoration: none; }
+@media (max-width: 900px) { .header-whatsapp { display: none; } }
