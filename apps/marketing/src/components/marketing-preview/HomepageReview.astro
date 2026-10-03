@@ -1,6 +1,7 @@
 ---
 import BrandMark from './BrandMark.astro';
 import CollectionWalkthrough from './CollectionWalkthrough.astro';
+import { STARTING_PRICE } from '../../config';
 import previewStyles from '../../styles/site.css?url';
 ---
 <!doctype html>
@@ -29,7 +30,7 @@ import previewStyles from '../../styles/site.css?url';
         <div class="opening-footer"><span>The operating system for fuel retail.</span><p>Shifts <span>/</span> Stock <span>/</span> Credit <span>/</span> Financials</p></div>
     </div>
     <div class="content-wrap"><CollectionWalkthrough /></div>
-    <section id="pilot" class="pilot-preview" aria-labelledby="pilot-title"><div><p class="section-context">The PumpOS guided pilot</p><h2 id="pilot-title">Let's look at<br />your station.</h2></div><div class="pilot-description"><p>Walk through customer credit, collections and Shift close with us. We'll discuss your setup, onboarding and pricing during the demo.</p><a class="button-green" href="mailto:hello@pumpos.app?subject=PumpOS%20guided%20pilot">Email about the pilot <span aria-hidden="true">↗</span></a><p class="booking-note">Preview contact option. Calendar booking will be available once the demo schedule is configured.</p></div></section>
+    <section id="pilot" class="pilot-preview" aria-labelledby="pilot-title"><div><p class="section-context">The PumpOS guided pilot</p><h2 id="pilot-title">Let's look at<br />your station.</h2></div><div class="pilot-description"><p>Walk through customer credit, collections and Shift close with us. We'll discuss your setup and onboarding during the demo.</p><p class="pilot-price">{STARTING_PRICE}</p><a class="button-green" href="mailto:hello@pumpos.app?subject=PumpOS%20guided%20pilot">Email about the pilot <span aria-hidden="true">↗</span></a><p class="booking-note">Preview contact option. Calendar booking will be available once the demo schedule is configured.</p></div></section>
     </main>
     <footer class="marketing-footer"><a class="brand-wordmark" href="#main" aria-label="PumpOS home"><BrandMark /><span>Pump<span class="brand-os">OS</span></span></a><p>Creative checkpoint 2<br />Homepage opening and one complete product scene.</p><a href="#walkthrough">Back to the walkthrough ↑</a></footer>
     <script>
