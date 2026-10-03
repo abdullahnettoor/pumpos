@@ -3,6 +3,8 @@ import { Image } from 'astro:assets';
 import dayClose from '../../assets/screenshots/day-close.webp';
 import drawerHandover from '../../assets/screenshots/drawer-handover.webp';
 import dssr from '../../assets/screenshots/dssr.webp';
+import StatementScreen from './StatementScreen.astro';
+import AttendantPhone from './AttendantPhone.astro';
 
 const screens = [
   { src: dayClose, title: 'Day closing', caption: 'Volume, revenue, dues and every shift\'s cash difference on one screen.', alt: 'PumpOS day closing screen for Hilltop Fuels Kozhikode: 1,564.6 L sold, revenue ₹1,61,498.63, credit issued ₹9,000 and a cash variance of ₹0.00.' },
@@ -22,5 +24,10 @@ const screens = [
         <figcaption><strong>{s.title}</strong> {s.caption}</figcaption>
       </figure>
     ))}
+    {/* Stand-ins built from the product UI; swap for real captures (#339). */}
+    <div class="product-screens-pair">
+      <figure><StatementScreen /><figcaption><strong>Customer khata</strong> Every credit sale and payment, with the balance after each one.</figcaption></figure>
+      <figure class="is-phone"><AttendantPhone /><figcaption><strong>Works in your phone's browser</strong> Attendants hand over their own DU. No app to install.</figcaption></figure>
+    </div>
   </div>
 </section>
