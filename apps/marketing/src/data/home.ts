@@ -95,11 +95,10 @@ export const planFeatures = [
   // The first PRICING_KEY_ROWS rows show by default; the rest sit behind "Compare all features".
   { name: 'Logins: 3 on Core, 10 on Pro, custom on Scale', included: 'core', note: 'Owner, manager, accountant or attendant with phone access' },
   { name: 'Attendants without a login, unlimited', included: 'core' },
-  { name: 'Shifts, readings, drawers, stock, credit, books and the saved DSR', included: 'core' },
+  { name: 'Shifts, nozzle readings and handovers', included: 'core' },
   { name: 'Attendant handover on the phone', included: 'pro' },
   { name: 'WhatsApp reminders and daily summary', included: 'pro', note: 'Coming next' },
   { name: 'Several stations under one login', included: 'scale' },
-  { name: 'Shifts, nozzle readings and handovers', included: 'core' },
   { name: 'Stock, dips and purchases', included: 'core' },
   { name: 'Credit, collections and khata', included: 'core' },
   { name: 'Office books and P&L', included: 'core' },
