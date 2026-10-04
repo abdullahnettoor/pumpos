@@ -6,38 +6,36 @@ built as a TypeScript monorepo with a **ports & adapters** (hexagonal) core.
 ## Layers
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ apps/web · apps/desktop   React shells (thin)                │
-│   └─ @pump/ui             components + cloud.ts + query hooks │
-├─────────────────────────────────────────────────────────────┤
-│ apps/api                  Hono routes = thin ADAPTERS         │
-│   └─ infra/repositories   Drizzle implementations of ports    │
-│   └─ infra/transaction    runInTransaction (outbox)           │
-├─────────────────────────────────────────────────────────────┤
-│ @pump/core                FRAMEWORK-AGNOSTIC DOMAIN           │
-│   └─ kernel               Result, Clock, events, ports        │
-│   └─ capabilities         use-cases + repository PORTS         │
-├─────────────────────────────────────────────────────────────┤
-│ @pump/shared              Zod schemas, types, guards, Result  │
-│ @pump/db                  Drizzle schema + migrations         │
-├─────────────────────────────────────────────────────────────┤
-│ Supabase PostgreSQL (authoritative)  ·  local outbox/cache (future) │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│ apps/console · apps/desktop     React shells                         │
+│   └─ @pump/ui                   shared UI + services + query hooks    │
+├────────────────────────────────────────────────────────────────────┤
+│ apps/api                        Hono adapters + Drizzle repositories   │
+├────────────────────────────────────────────────────────────────────┤
+│ @pump/core                      framework-agnostic use-cases + ports   │
+├────────────────────────────────────────────────────────────────────┤
+│ @pump/shared                    schemas, types, guards, utilities      │
+│ @pump/db                        Drizzle schema + migrations            │
+├────────────────────────────────────────────────────────────────────┤
+│ Supabase PostgreSQL — authoritative source of truth                   │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 **Rule:** `@pump/core` never imports Hono, Drizzle, React or SQL. It declares
 repository _ports_ (interfaces); `apps/api` injects Drizzle _adapters_.
 
-## Business-day & shift anchoring (the core domain rule)
+## Business-day, Shift, and Entry Date anchoring
 
-Two anchors exist, and choosing the right one is the most important domain decision:
+Use the correct anchor for the record's business meaning:
 
-- **`business_day_id`** — the **universal anchor**. Every operational and financial
-  record belongs to a business day.
-- **`shift_id`** — an **optional** anchor. A shift is an attendant-accountability
-  window for drawer cash. Set by default when money touches the drawer; other
-  records may pass it explicitly (or preselect the open shift) when shift
-  attribution of historical data is useful.
+- **`business_day_id`** — the sales-day anchor for forecourt operations, Shift
+  Summaries, DSSR, and purchases/stock events.
+- **`shift_id`** — a Shift anchor for every Sale and Cash Drop. A Shift is the
+  attendant-accountability window for Drawer cash; credit Sales are receivables,
+  but remain Sales and therefore carry the Business Day and Shift.
+- **Entry Date** — a station-timezone calendar date for Office Records. Collections,
+  Supplier Payments, Expenses, Income, and bank work carry no `business_day_id`
+  or `shift_id` (ADR 0005).
 
 ```
 Business Day
@@ -53,17 +51,15 @@ DSSR                ← immutable snapshot, created on BUSINESS-DAY close (dssr_
 Reports
 ```
 
-| Record                                                                | shift_id        | Reason                                                         |
-| --------------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |
-| Fuel/merchandise sale                                                 | **set**         | operator accountability within a shift                         |
-| Cash collection, cash supplier payment, drawer (`SHIFT_CASH`) expense | **set**         | touches the drawer                                             |
-| Card / UPI / bank / online collection                                 | NULL by default | no drawer impact; passable/preselectable for shift attribution |
-| Bank/owner expense, purchase, supplier bank payment                   | NULL by default | business-day anchored; passable for shift attribution          |
-| Credit sale (receivable)                                              | NULL by default | not drawer cash; a customer-ledger debit                       |
+| Record                                                   | Anchor                 | Reason                                            |
+| -------------------------------------------------------- | ---------------------- | ------------------------------------------------- |
+| Fuel, product, and credit Sale                           | Business Day + Shift   | All Sales occur within a Shift                    |
+| Cash Drop                                                | Business Day + Shift   | Forecourt cash movement tied to a Drawer if known |
+| Collection, supplier payment, expense, income, bank work | Entry Date only        | Office Record; no Shift or Business Day           |
+| Purchase / stock receipt                                 | Business Day, no Shift | Forecourt stock event sealed with the day         |
 
-Drawer reconciliation keys off **movement kind**, never off `shift_id`
-presence — anchoring a card/UPI collection to a shift never pulls it into
-drawer math.
+Office Records never enter Drawer reconciliation, regardless of payment method
+or where a terminal is used.
 
 **Credit sales are receivables, not cash.** A fleet fuel-on-credit sale records only a
 customer-ledger debit; it never moves stock again (the fuel is already metered via
@@ -72,9 +68,10 @@ nozzle readings). Customer balance = Σ credit sales − Σ collections.
 ### Drawer reconciliation (at shift close)
 
 ```
-expectedDrawerCash =
-  openingCash + cashSales + cashCollections
-  − drawerExpenses − drawerSupplierPayments − cashDrops
+drawer.expectedCash = openingFloat + DU cash sales − that Drawer’s cash drops
+attendantVariance = Σ (declared drawer cash + drops − drawer.expectedCash)
+expectedDrawerCash = Σ declared drawer cash − unassigned cash drops
+officeCountVariance = counted cash − expectedDrawerCash
 ```
 
 Never force card/UPI/bank/credit movements into drawer reconciliation.
@@ -108,8 +105,9 @@ catalog of event types lives in `@pump/core` (`kernel/event-catalog.ts`,
 
 - **Shift Summary** (`shift_summaries`) — created when a shift is **closed**. Holds that
   shift's nozzle reconciliation, drawer reconciliation, totals.
-- **DSSR** (`dssr_snapshots`) — created when a business day is **closed** / generated on
-  demand. Composes the day's closed-shift summaries + business-day-anchored financials.
+- **DSSR** (`dssr_snapshots`) — created when a Business Day is **closed** / generated on
+  demand. Sales-only: composes the day's closed-Shift summaries, Sales, purchases, and
+  stock. Office Records are excluded and shown in the live Daily Cash Book.
 
 Both are immutable: stored permanently, never recalculated historically. Regeneration
 is explicit and idempotent (`GenerateDssr` returns the existing snapshot unless forced).
@@ -120,16 +118,18 @@ is explicit and idempotent (`GenerateDssr` returns the existing snapshot unless 
   `station_id`. RLS is enabled in the DB; the Worker connects with a privileged role
   and **also enforces org isolation in application code** (every use-case checks
   `ctx.organizationId`).
-- Roles: **Owner, Manager, Accountant, Staff** (see
-  [`docs/initial/Permissions & Authorization Matrix (v1).md`](<../initial/Permissions%20&%20Authorization%20Matrix%20(v1).md>)).
-  Guards live in `@pump/shared/permissions/guards.ts` and are applied in routes.
+- Roles: **Owner, Manager, Accountant, Staff, Attendant**. Current role
+  definitions are in `@pump/shared/permissions/guards.ts` and `CONTEXT.md`;
+  organization capabilities, limits, and subscription write policy are a
+  separate access axis (ADR 0004).
 
-## Resilience (Level 2 — graceful degradation, deferred)
+## Resilience (Level 2 — graceful degradation)
 
-PostgreSQL is authoritative. The target is **Level 2**: online-primary, tolerate
-transient connectivity drops (optimistic writes → durable outbox → retry;
-warm-cache reads; reconcile on reconnect) — **not** cold-start offline-first and
-**not** multi-day disconnected operation (Level 3, future). The event backbone +
-idempotency keys make this a later phase with no domain change. See
-[open-questions.md](open-questions.md) and
-[../roadmap/phase-O-offline-sync.md](../roadmap/phase-O-offline-sync.md).
+PostgreSQL is authoritative. The product target is **Level 2**: online-primary,
+tolerate transient connectivity drops (optimistic writes → durable client outbox
+→ retry; warm-cache reads; reconcile on reconnect) — **not** cold-start offline-first
+and **not** multi-day disconnected operation (Level 3, future). The durable client
+write outbox and replay are not yet implemented. See
+[`AGENTS.md`](../../AGENTS.md) for current resilience guarantees and
+[../roadmap/phase-O-offline-sync.md](../roadmap/phase-O-offline-sync.md) for
+remaining sync work.

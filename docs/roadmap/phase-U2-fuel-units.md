@@ -1,5 +1,8 @@
 # Phase U2 — Unit-aware fuels (kg for CNG / Auto-LPG)
 
+> **Historical phase plan.** The implementation notes below are not a current QA
+> checklist; verify the current UI, tests, and open GitHub Issues before acting.
+
 > **Status: 🟡 Mostly done (implemented; QA pass pending).** Despite the plan-style
 > wording below, this is substantially built: `projectShiftSummary` carries `unit` on
 > nozzle readings / `fuelByProduct` / credit lines, `ShiftSummaryView` handles L/kg,

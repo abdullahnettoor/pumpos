@@ -1,3 +1,5 @@
+> **Archived historical proposal — not current architecture guidance.** Current architecture is documented in `/AGENTS.md`, `/docs/v2/`, and `/packages/*/README.md`; verify details against code and configuration.
+
 ## Purpose
 
 This document defines the technical architecture required to implement the business architecture of the Fuel Pump ERP platform.

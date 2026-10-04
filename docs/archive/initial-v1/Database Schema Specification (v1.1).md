@@ -1,3 +1,5 @@
+> **Archived historical proposal — not current schema guidance.** The database schema in `packages/db/src/schema.ts` and generated migrations in `packages/db/migrations/` are authoritative.
+
 ## Purpose
 
 This document defines the logical database architecture for the Fuel Pump ERP platform.

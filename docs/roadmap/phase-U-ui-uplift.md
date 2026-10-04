@@ -1,5 +1,8 @@
 # Phase U — UI Uplift & Consistency
 
+> **Historical phase plan.** Verify completion and remaining work against current
+> code and GitHub Issues before treating this checklist as active.
+
 **Goal:** bring all screens to the depth/polish of Shifts, on the design system. No backend changes.
 
 ## What exists

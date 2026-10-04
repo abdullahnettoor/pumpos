@@ -1,10 +1,18 @@
-# PumpOS v2 Engineering Documentation
+# PumpOS Engineering Documentation
 
-The operating system for fuel retail. This folder is the **current source of truth**
-for how PumpOS v2 is built. The specs in [`../initial/`](../initial/) are the original
-v1 design documents — keep them for product/domain context, but where they conflict
-with these v2 docs (especially **shift-centric vs business-day anchoring**), the v2
-docs win. The root [`AGENTS.md`](../../AGENTS.md) is the short, authoritative rulebook.
+This folder contains maintained implementation guidance, not an independent source
+of product truth. The precedence order is:
+
+1. [`AGENTS.md`](../../AGENTS.md) for hard architecture, security, and operational
+   rules.
+2. [`CONTEXT.md`](../../CONTEXT.md) for canonical domain language.
+3. Accepted ADRs in [`docs/adr/`](../adr/) for decisions and their amendments.
+4. These docs for implementation patterns, verified against current code and
+   configuration. See the [documentation map](../README.md) for maintained,
+   reference, and archived document groups.
+
+Original design proposals live in [`docs/archive/initial-v1/`](../archive/initial-v1/)
+for historical traceability only. They are not implementation guidance.
 
 ## Read order
 
@@ -13,23 +21,23 @@ docs win. The root [`AGENTS.md`](../../AGENTS.md) is the short, authoritative ru
 | [architecture.md](architecture.md)                   | System overview, layers, anchoring model, request lifecycle, event/outbox flow      |
 | [backend-core-patterns.md](backend-core-patterns.md) | `packages/core` — capabilities, use-cases, ports, kernel, events, testing           |
 | [backend-api-patterns.md](backend-api-patterns.md)   | `apps/api` — Hono routes, adapters, transactional outbox, guards, idempotency       |
-| [frontend-patterns.md](frontend-patterns.md)         | `apps/web` + `packages/ui` — query layer, primitives, design system, navigation     |
-| [desktop-patterns.md](desktop-patterns.md)           | `apps/desktop` — Tauri shell, web-first strategy, platform seams                    |
+| [frontend-patterns.md](frontend-patterns.md)         | `apps/console` + `packages/ui` — query layer, primitives, design system, navigation |
+| [desktop-patterns.md](desktop-patterns.md)           | `apps/desktop` — Tauri shell, native integrations, platform seams                   |
 | [ui-assessment.md](ui-assessment.md)                 | Current UI gaps, design-quality review, refactor roadmap                            |
-| [open-questions.md](open-questions.md)               | Decisions still pending (prepaid top-up CMS, Level 2 resilience/sync, double-entry) |
+| [open-questions.md](open-questions.md)               | Decisions that remain unresolved or deferred                                        |
 
 ## The one rule that matters most
 
-> **`business_day_id` is the universal anchor. `shift_id` is an optional anchor:
-> set by default when money touches the physical cash drawer, passable or
-> preselected on other records when shift attribution is useful.**
+> **Forecourt records use Business Day; Office Records use Entry Date.** All Sales
+> and Cash Drops also carry a Shift; purchases are Business-Day stock events.
+> See [ADR 0005](../adr/0005-sales-day-vs-office-calendar-date.md) and
+> [`AGENTS.md`](../../AGENTS.md) for the full rule.
 
-A shift is an attendant-accountability window for drawer cash. Everything else
-(card/UPI/bank collections, purchases, credit sales, bank/owner expenses)
-defaults to `shift_id = NULL`, anchored to the **business day**. Drawer
-reconciliation keys off movement kind, never off `shift_id` presence. Getting
-this wrong is the single biggest source of modelling bugs. See
-[architecture.md](architecture.md).
+A Shift is an attendant-accountability window for Drawer cash. Collections,
+Supplier Payments, Expenses, Income, and bank work are Office Records: they use
+station-timezone Entry Date and have no `shift_id` or `business_day_id`. Purchases
+are forecourt stock events anchored to Business Day, not Shift. Drawer
+reconciliation follows cash movement kind.
 
 ## Monorepo map
 
@@ -41,8 +49,11 @@ packages/
   ui/        @pump/ui     — shared React components + cloud.ts HTTP service layer + query hooks + primitives
 apps/
   api/       Hono on Cloudflare Workers (Hyperdrive → Supabase). Thin route adapters → core.
-  web/       Vite + React shell consuming @pump/ui (the primary build target)
-  desktop/   Tauri shell consuming @pump/ui (web-first; pulled to desktop later)
+  console/    Vite + React operational shell consuming @pump/ui
+  mobile/     Attendant and supported mobile workflows
+  marketing/  Public marketing and download site
+  platform/   Internal organization administration surface
+  desktop/    Tauri shell consuming @pump/ui with native integrations
 ```
 
 Dependency direction: `apps/* → @pump/ui / @pump/core → @pump/shared`. `@pump/core`
@@ -55,14 +66,14 @@ implementations of the ports declared in `@pump/core`.
 npx tsc -b                                   # composite build of the whole monorepo
 npm run test --workspace=packages/core       # domain unit tests (deterministic, no DB)
 npm run test --workspace=packages/shared     # schema + guard tests
-npm run build --workspace=apps/web           # production web bundle
+npm run build --workspace=apps/console         # production console bundle
 # End-to-end operational-loop smoke against the live DB (rolled back, nothing persists):
 cd packages/db && set -a && . ./.env && set +a && node ../../apps/api/scripts/smoke-operational-loop.mjs
 ```
 
-> **Deploy note:** `apps/web` consumes `@pump/ui` as **built `dist`** (no vite src
+> **Deploy note:** `apps/console` consumes `@pump/ui` as **built `dist`** (no Vite
 > alias). After editing `@pump/shared`, `@pump/core`, or `@pump/ui`, run `npx tsc -b`
-> **and restart `npm run dev:web`** so vite picks up the rebuilt bundle. `apps/api`
+> **and restart the console dev server** so it picks up the rebuilt bundle. `apps/api`
 > (`wrangler dev`) hot-reloads `apps/api/src` automatically.
 
 ## Database access (for debugging / smoke tests)
@@ -74,5 +85,6 @@ before running scripts:
 cd packages/db && set -a && . ./.env && set +a && node -e "…postgres…"
 ```
 
-Migrations live in `packages/db/migrations/` (see `packages/db/README.md`). Apply them against the live DB
-with a small postgres-js script (the worker connects via Hyperdrive at runtime).
+Migrations live in `packages/db/migrations/` (see `packages/db/README.md`). Use
+the documented migration commands; production database writes must follow the
+approved release and migration workflow.

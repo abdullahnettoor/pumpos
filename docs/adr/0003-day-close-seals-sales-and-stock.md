@@ -26,3 +26,6 @@ regenerates the snapshot at the close moment. Late Entries never mutate an
 existing snapshot. The rejected alternative — hard-sealing the whole day —
 would force operators to misdate real transactions onto the wrong Business
 Day just to record them.
+
+> This is retained as decision history. For current anchoring and Entry Date
+> behavior, follow ADR 0005 and `AGENTS.md`.

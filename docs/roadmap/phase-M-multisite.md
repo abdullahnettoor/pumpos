@@ -1,27 +1,29 @@
 # Phase M — Multi-site topology (marketing + console + mobile)
 
-**Goal:** split PumpOS's web presence into three purpose-built surfaces so each
-one can be optimized independently: an SEO-first marketing/downloads site on
-the apex, the full operational SPA on `console.`, and a lightweight owner PWA
-on `m.`. The current `apps/web` is single-purpose (SPA) and served on the
-apex, which conflates marketing SEO, operational depth, and mobile suitability.
+> **Historical topology plan.** This records the migration from the former
+> `apps/web` name and old host targets. Current app names and deploy hosts are
+> defined by `apps/*` and workflow configuration; active work lives in GitHub Issues.
+
+**Original goal:** split PumpOS's web presence into purpose-built marketing,
+console, and mobile surfaces. This migration has shipped; the historical host
+table and implementation steps below are retained for context.
 
 Nothing about the domain model, API surface, or database schema changes in this
 phase.
 
 ---
 
-## Target topology
+## Target topology recorded by this plan (historical)
 
-| Surface   | Dev host                                                                      | Prod host            | Purpose                                                           |
-| --------- | ----------------------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------- |
-| Marketing | `pumpos.abdullahnettoor.com`                                                  | `pumpos.app`         | Landing, downloads, (later) docs/blog. Static, SEO-first.         |
-| Console   | `console.pumpos.abdullahnettoor.com`                                          | `console.pumpos.app` | Current `apps/web` — full operational SPA. Desktop browsers only. |
-| Mobile    | `m.pumpos.abdullahnettoor.com`                                                | `m.pumpos.app`       | Owner-focused PWA — read-mostly.                                  |
-| API       | `pumpos-api.abdullahnettoor.workers.dev` (unchanged) → later `api.pumpos.app` | `api.pumpos.app`     | Hono on Workers.                                                  |
+| Surface   | Dev host                                                                      | Prod host            | Purpose                                                      |
+| --------- | ----------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------ |
+| Marketing | `pumpos.abdullahnettoor.com`                                                  | `pumpos.app`         | Landing, downloads, (later) docs/blog. Static, SEO-first.    |
+| Console   | `console.pumpos.abdullahnettoor.com`                                          | `console.pumpos.app` | Operational console; was named `apps/web` before the rename. |
+| Mobile    | `m.pumpos.abdullahnettoor.com`                                                | `m.pumpos.app`       | Owner-focused PWA — read-mostly.                             |
+| API       | `pumpos-api.abdullahnettoor.workers.dev` (unchanged) → later `api.pumpos.app` | `api.pumpos.app`     | Hono on Workers.                                             |
 
-All three sites deploy as Cloudflare **Workers with Static Assets** (matches
-`apps/web` today; keeps the deploy model uniform).
+The plan proposed deploying the three web surfaces as Cloudflare Workers with
+Static Assets; current workflow configuration is authoritative.
 
 Auth is a single Supabase project; cookies scoped to `.pumpos.app` so console
 and mobile share the session.

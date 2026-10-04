@@ -1,5 +1,8 @@
 # Phase R — Reports & PDF Hardening
 
+> **Historical phase plan.** Verify implementation and open work against current
+> code and GitHub Issues; completion labels below are point-in-time notes.
+
 **Status:** mostly done (R1–R3 shipped; R4 server PDF + R5 distribution remain). **Goal:** branded, configurable, cross-platform reports (web, Windows, macOS, mobile) generated on demand from immutable snapshots.
 
 ## What exists

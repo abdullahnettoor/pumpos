@@ -1,6 +1,9 @@
 # PumpOS ── The Operating System for Fuel Retail
 
-PumpOS is a multi-tenant, offline-resilient fuel station management platform tailored primarily for retail outlets. It is designed to be a high-performance operational instrument for station managers and owners, emphasizing shift-based tracking, strong auditability, and absolute multi-tenant data isolation.
+PumpOS is a multi-tenant, online-primary operational platform for Indian fuel
+retail. It serves station operators, attendants, managers, accountants, and
+owners with auditable shift operations, inventory, customer credit, and office
+finance workflows.
 
 _Note: PumpOS is an operational operating system focused on fuel station management, NOT a POS system or traditional accounting software._
 
@@ -8,11 +11,11 @@ _Note: PumpOS is an operational operating system focused on fuel station managem
 
 ## 🚀 Core Architectural Principles
 
-- **Shift-Centric Operations**: Everything centers around shifts (Shift ➔ Operations ➔ DSSR ➔ Reports). All transactions—expenses, purchases, collections, credit sales, manual sales, and nozzle readings—must belong to an active shift.
-- **Cloud Authoritative with Offline Cache**: Supabase PostgreSQL is the source of truth. The desktop shell uses a local SQLite cache to remain operationally resilient offline, eventually reconciling events back to the cloud.
+- **Business Day, Shift, and Entry Date**: Forecourt Sales and Cash Drops belong to a Business Day and Shift; purchases and stock events belong to a Business Day; Office Records use station-timezone Entry Date with no Shift or Business Day (ADR 0005).
+- **Cloud Authoritative**: Supabase PostgreSQL is the source of truth. The product targets graceful handling of transient connectivity loss; durable local write queuing and replay are not yet complete.
 - **Event-Driven Architecture (EDA)**: Business actions trigger auditable events (e.g., `SHIFT_OPENED`, `SALE_RECORDED`) that drive synchronization, audit logs, and reporting.
 - **Nozzle-Derived Fuel Sales**: Fuel sales volume is strictly derived from closing and opening nozzle readings, not manual entries.
-- **DSSR Snapshot Preservation**: Daily Shift Summary Reports (DSSR) are generated during shift closure, stored permanently, and never recalculated or modified post-generation.
+- **Snapshot Preservation**: Shift Summaries are generated on Shift close; the sales-only DSSR is generated on Business Day close. Both are stored permanently and not recalculated historically.
 - **Variance Visibility**: Expected stock vs. actual stock variance is tracked as a first-class concept, never hidden within reports.
 
 ---
@@ -21,9 +24,9 @@ _Note: PumpOS is an operational operating system focused on fuel station managem
 
 | Layer              | Technologies                                                                                |
 | :----------------- | :------------------------------------------------------------------------------------------ |
-| **Desktop Client** | React 18, TypeScript, Vite, Tauri v2, TailwindCSS, shadcn/ui, TanStack Query/Table, Zustand |
+| **Clients**        | React 18, TypeScript, Vite, Tauri v2, TailwindCSS, shadcn/ui, TanStack Query/Table, Zustand |
 | **API Layer**      | Hono, TypeScript, Cloudflare Workers                                                        |
-| **Database & ORM** | Supabase (PostgreSQL), Drizzle ORM, SQLite (local desktop cache)                            |
+| **Database & ORM** | Supabase (PostgreSQL), Drizzle ORM                                                          |
 | **Validation**     | Zod, React Hook Form                                                                        |
 
 ---
@@ -34,13 +37,18 @@ _Note: PumpOS is an operational operating system focused on fuel station managem
 pump-erp/
 ├── apps/
 │   ├── api/             # Hono API Layer deployed to Cloudflare Workers
-│   └── desktop/         # Tauri v2 desktop application shell (Vite + React)
+│   ├── console/         # Operational Vite + React web application
+│   ├── desktop/         # Tauri v2 desktop shell
+│   ├── mobile/          # Attendant / mobile application
+│   ├── marketing/       # Public marketing site
+│   └── platform/        # Internal platform administration
 ├── packages/
-│   ├── db/              # Database schema, migrations, Drizzle Client
-│   ├── shared/          # Shared Zod validation schemas and common TypeScript types
-│   └── ui/              # Shared UI components (Shift Management, DSSR, Station Setup)
+│   ├── core/            # Framework-agnostic domain use-cases and ports
+│   ├── db/              # Database schema and generated migrations
+│   ├── shared/          # Shared schemas, types, permissions, and utilities
+│   └── ui/              # Shared React application and design system
 ├── brand/               # Canonical brand artwork, fanned into each app by `npm run brand`
-├── supabase/            # Supabase database configurations, seed data, and schema definitions
+├── supabase/            # Local Supabase config and derived migration copy
 ├── AGENTS.md            # Architectural, business, and engineering rules for AI contributors
 └── package.json         # Monorepo workspaces configuration
 ```
@@ -165,19 +173,27 @@ For local API setup (Hyperdrive local connection + required secrets) and product
 
 Every business-related table must include `organization_id` and, where applicable, `station_id`. Database security is enforced using PostgreSQL Row-Level Security (RLS) policies to guarantee absolute tenant isolation.
 
-MVP Roles supported:
+Current Roles:
 
 - **Owner**
 - **Manager**
 - **Accountant**
 - **Staff**
+- **Attendant** (mobile-only)
 
 ---
 
 ## 📝 Guidelines & Code Quality Standards
 
-Before contributing or adding new features, please review [AGENTS.md](file:///Users/abdullahnettoor/Projects/pump-erp/AGENTS.md) for full context:
+Before contributing or adding new features, review [AGENTS.md](AGENTS.md),
+[CONTEXT.md](CONTEXT.md), and the relevant accepted ADRs under `docs/adr/`:
 
 - **UI Design Pattern**: List ➔ Drawer ➔ Edit. Avoid modal-heavy workflows. Keep interfaces clean, compact, and information-dense.
 - **Component Reuse**: Check `packages/ui` for existing components (`PageLayout`, `DataTable`, `Drawer`, etc.) before creating new ones.
 - **Metadata Columns**: Frequently queried fields should reside in explicit tables columns. Rarely queried fields should use a `JSONB` metadata column to prevent schema clutter.
+
+## Documentation
+
+See [`docs/README.md`](docs/README.md) for the documentation map and source-of-truth
+order. Original v1 proposals are archived under `docs/archive/initial-v1/` and are
+historical context only.

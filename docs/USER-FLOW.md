@@ -23,11 +23,13 @@ dedicated pages so you also learn where records live afterwards.
 
 **Two anchors to keep in mind** (they explain most of the UI):
 
-- **Business day** — every financial record belongs to one. A fuel day
-  commonly runs 06:00 → 06:00.
-- **Shift** — an attendant-accountability window for drawer cash. Cash
-  entries attach to the shift; card/UPI/bank/credit entries attach to the
-  business day (shift optional).
+- **Business Day** — the station's sales day, starting at its configured Day
+  Start. Forecourt Sales, Cash Drops, and purchases/stock events use this anchor.
+- **Shift** — an attendant-accountability window for each Dispenser Unit's
+  Drawer. Every Sale and Cash Drop is also tied to a Shift.
+- **Entry Date** — station-timezone calendar date for Office Records such as
+  Collections, Supplier Payments, Expenses, Income, and bank work. It is not
+  rolled back at Day Start and has no Shift or Business Day (ADR 0005).
 
 ---
 
@@ -92,8 +94,9 @@ rate": product, Rate/L, effective-from) or **Merchandise** tab → **Set price**
 **Customers** (fleet/credit accounts): Sidebar → **Customers** → **Customer
 Registry** tab → **Register New Customer** → name, phone, account type,
 settlement cycle, **credit limit**, fleet code, opening due, GSTIN/billing
-details; optionally enable prepaid wallet. Add fleet vehicles under the
-**Vehicles** tab → **Add Vehicle**.
+details. Add fleet vehicles under the **Vehicles** tab → **Add Vehicle**. Customer
+records may show legacy prepaid fields; dealer-held prepaid wallet top-up/drawdown
+is not a supported workflow.
 
 **Suppliers** (OMC + merchandise vendors): Sidebar → **Purchases** →
 **Supplier Registry** tab → **Register New Supplier** → name, contact, GSTIN,
@@ -214,7 +217,8 @@ are stock events on the business day.
   **Record Income**.
 - **Collections**: Sidebar → **Customers** → **Collections** tab → **Log
   Customer Collection**. Customer statements: Registry → **Customer Account
-  Statement**. Prepaid customers: **Prepaid Wallet Top-Up**.
+  Statement**. OMC-CMS fleet-card settlement is supported; customer-owned
+  prepaid wallet top-up/drawdown is not currently available.
 - **Accounts** (cash, bank, petty cash, card/UPI clearing): Sidebar →
   **Accounts** → **New Account**, **Transfer Money** (e.g. safe cash →
   bank deposit), **Settle to Bank** (clear card/UPI settlements into the

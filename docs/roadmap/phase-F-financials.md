@@ -1,5 +1,9 @@
 # Phase F — Financials (Money Accounts + P&L)
 
+> **Historical phase plan.** Status notes and proposed data model below describe
+> the phase's planning context, not necessarily today's schema. Verify any claimed
+> remaining work against code and GitHub Issues before implementation.
+
 > **Status: 🟡 Mostly done (shipped + deployed).** Layer A **FA1–FA7** (accounts +
 > signed `ledger_entries`, live posting, shift-close posting, transfers, merchant
 > settlement + MDR, statements, Accounts UI), Layer B **FB1–FB3** (product

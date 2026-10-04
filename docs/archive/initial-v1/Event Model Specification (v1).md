@@ -1,3 +1,5 @@
+> **Archived historical proposal — not current event guidance.** The event catalog and emitted events in `packages/core` and `apps/api` are authoritative; architecture context lives in `/docs/v2/architecture.md`.
+
 ## Purpose
 
 This document defines all business events within the Fuel Pump ERP platform.

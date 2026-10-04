@@ -1,6 +1,8 @@
 # PumpOS marketing redesign
 
-Status: full-site redesign implemented and verified locally; preview delivery ready.
+**Decision and implementation record:** captures the agreed direction and design
+verification for the marketing redesign. It is not a live release checklist; use
+the current site, configuration, and GitHub Issues to assess launch readiness.
 
 ## Agreed direction
 
@@ -112,7 +114,7 @@ subject to runtime verification. Query stale times do not establish continuous
 refresh across devices. Do not promise instant phone updates. Fuel-sale dashboard
 totals use closed shifts; avoid presenting those as live nozzle telemetry.
 
-The older `docs/initial/Product Packaging & Pricing Strategy (v2).md` proposes
+The archived, unapproved proposal at `docs/archive/initial-v1/Product Packaging & Pricing Strategy (v2).md` proposes
 Core at ₹799/month, Pro at ₹1,999–₹2,399/month, and Enterprise at
 ₹4,999–₹5,999/month. These are not approved launch prices. Its Core exclusions
 also conflict with the proposed owner-financial-visibility story. The launch
