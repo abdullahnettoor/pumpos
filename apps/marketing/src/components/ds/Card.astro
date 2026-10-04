@@ -1,0 +1,36 @@
+---
+interface Props {
+  as?: 'div' | 'article' | 'section' | 'aside' | 'li';
+  tone?: 'light' | 'dark' | 'alt';
+  class?: string;
+  [key: string]: unknown;
+}
+
+const {
+  as: Component = 'div',
+  tone = 'light',
+  class: className = '',
+  ...rest
+} = Astro.props;
+
+const classes = [
+  'ds-card',
+  tone === 'dark' ? 'ds-card--dark' : tone === 'alt' ? 'ds-card--alt' : '',
+  className,
+].filter(Boolean).join(' ');
+---
+<Component class={classes} {...rest}>
+  <slot />
+</Component>
+
+<style>
+  .ds-card--dark {
+    background: var(--ds-deep);
+    color: #fff;
+    border-color: var(--ds-deep);
+  }
+  .ds-card--alt {
+    background: var(--ds-alt);
+    border-color: var(--ds-line);
+  }
+</style>

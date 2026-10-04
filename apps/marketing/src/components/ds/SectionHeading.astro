@@ -1,0 +1,50 @@
+---
+interface Props {
+  eyebrow?: string;
+  title?: string;
+  lead?: string;
+  align?: 'left' | 'center';
+  tone?: 'light' | 'dark';
+  class?: string;
+  id?: string;
+}
+
+const {
+  eyebrow,
+  title,
+  lead,
+  align = 'left',
+  tone = 'light',
+  class: className = '',
+  id,
+} = Astro.props;
+---
+<div class:list={['ds-heading', `ds-heading--${align}`, `ds-heading--${tone}`, className]}>
+  {eyebrow && <p class:list={['ds-ey', tone === 'dark' ? 'ds-ey--mint' : '']}>{eyebrow}</p>}
+  {title && <h2 class="ds-h2" id={id}>{title}</h2>}
+  {lead && <p class:list={['ds-lead', tone === 'dark' ? 'ds-lead--mint' : '']}>{lead}</p>}
+  <slot />
+</div>
+
+<style>
+  .ds-heading {
+    display: flex;
+    flex-direction: column;
+  }
+  .ds-heading--center {
+    align-items: center;
+    text-align: center;
+  }
+  .ds-heading--center .ds-lead {
+    margin-inline: auto;
+  }
+  .ds-heading--dark h2 {
+    color: #fff;
+  }
+  .ds-ey--mint {
+    color: var(--ds-mint);
+  }
+  .ds-lead--mint {
+    color: var(--ds-mint-ink);
+  }
+</style>

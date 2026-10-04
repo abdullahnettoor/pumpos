@@ -1,0 +1,44 @@
+---
+interface Props {
+  as?: 'section' | 'div';
+  id?: string;
+  tone?: 'light' | 'dark' | 'alt';
+  container?: boolean;
+  class?: string;
+  [key: string]: unknown;
+}
+
+const {
+  as: Component = 'section',
+  id,
+  tone = 'light',
+  container = true,
+  class: className = '',
+  ...rest
+} = Astro.props;
+
+const classes = [
+  'ds-sec',
+  tone === 'dark' ? 'ds-sec--dark h-dark' : tone === 'alt' ? 'ds-sec--alt' : '',
+  className,
+].filter(Boolean).join(' ');
+---
+<Component id={id} class={classes} {...rest}>
+  {container ? (
+    <div class="ds-w">
+      <slot />
+    </div>
+  ) : (
+    <slot />
+  )}
+</Component>
+
+<style>
+  .ds-sec--dark {
+    background: var(--ds-deep);
+    color: #fff;
+  }
+  .ds-sec--alt {
+    background: var(--ds-alt);
+  }
+</style>

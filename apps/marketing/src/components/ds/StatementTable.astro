@@ -1,0 +1,65 @@
+---
+import SampleDataBadge from './SampleDataBadge.astro';
+
+interface Entry {
+  date: string;
+  desc: string;
+  amount: string;
+  bal: string;
+  isCredit?: boolean;
+}
+
+interface Props {
+  customer?: string;
+  category?: string;
+  outstanding?: string;
+  entries?: Entry[];
+  note?: string;
+  class?: string;
+}
+
+const defaultEntries: Entry[] = [
+  { date: '28 Sep', desc: 'Credit sale · HSD 120 L', amount: '+ ₹11,400', bal: '₹31,100' },
+  { date: '01 Oct', desc: 'Credit sale · HSD 120 L', amount: '+ ₹11,400', bal: '₹42,500' },
+  { date: '04 Oct', desc: 'Payment received · NEFT', amount: '− ₹15,000', bal: '₹27,500', isCredit: true },
+];
+
+const {
+  customer = 'Malabar Transports',
+  category = 'Fleet · Credit limit ₹75,000',
+  outstanding = '₹27,500',
+  entries = defaultEntries,
+  note = 'Customer ledger statement with running balance.',
+  class: className = '',
+} = Astro.props;
+---
+<div class:list={['h-card ds-stmt h-stmt', className]} role="region" aria-label={`Customer statement preview for ${customer}`}>
+  <div class="h-st-h">
+    <div>
+      <b>{customer}</b>
+      <small>{category}</small>
+    </div>
+    <div style="text-align:right">
+      <small>Outstanding</small>
+      <strong>{outstanding}</strong>
+    </div>
+  </div>
+  <div class="h-tr h-tr--th">
+    <span>Date</span>
+    <span>Entry</span>
+    <span>Amount</span>
+    <span>Balance</span>
+  </div>
+  {entries.map((e) => (
+    <div class:list={['h-tr', e.isCredit ? 'h-tr--last' : '']}>
+      <span>{e.date}</span>
+      <span>{e.desc}</span>
+      <span>{e.amount}</span>
+      <span>{e.bal}</span>
+    </div>
+  ))}
+  <div class="h-st-f" style="display:flex; justify-content:space-between; align-items:center;">
+    <small>{note}</small>
+    <SampleDataBadge />
+  </div>
+</div>

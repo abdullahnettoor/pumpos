@@ -1,0 +1,37 @@
+---
+interface Props {
+  tone?: 'ok' | 'near' | 'over' | 'danger' | 'amber';
+  large?: boolean;
+  amount?: string;
+  label?: string;
+  class?: string;
+  [key: string]: unknown;
+}
+
+const {
+  tone = 'ok',
+  large = false,
+  amount,
+  label,
+  class: className = '',
+  ...rest
+} = Astro.props;
+---
+{large ? (
+  <div class:list={['ds-chip', tone === 'danger' ? 'ds-chip--danger' : 'ds-chip--amber', className]} {...rest}>
+    {label && <small>{label}</small>}
+    {amount && <strong>{amount}</strong>}
+    <slot />
+  </div>
+) : (
+  <span
+    class:list={[
+      'ds-st',
+      tone === 'near' ? 'ds-st--near' : tone === 'over' || tone === 'danger' ? 'ds-st--over' : '',
+      className,
+    ]}
+    {...rest}
+  >
+    <slot />
+  </span>
+)}
