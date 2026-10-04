@@ -1,0 +1,83 @@
+---
+// Numbered tab list with an autoplay track (left) and a panel with arrows (right).
+// Pass panels as children, each a direct child element with data-panel="0..n-1".
+// Autoplay advances every 5s only while the section is on screen, pauses on hover or
+// keyboard focus, and is off for prefers-reduced-motion.
+interface Props { id?: string; eyebrow: string; title: string; items: { title: string; body: string }[] }
+const { id, eyebrow, title, items } = Astro.props;
+const uid = id ?? title.toLowerCase().replace(/[^a-z]+/g, '-').slice(0, 24);
+---
+<section class="h-sec" id={id} aria-labelledby={`${uid}-title`} data-ptabs>
+  <div class="h-w">
+    <p class="h-ey">{eyebrow}</p>
+    <h2 class="h-h2" id={`${uid}-title`}>{title}</h2>
+    <div class="h-pt">
+      <div class="h-pt-list" role="tablist" aria-label={title}>
+        {items.map((it, i) => (
+          <button type="button" role="tab" id={`${uid}-tab-${i}`} aria-controls={`${uid}-panel-${i}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1} data-tab={i}>
+            <span class="h-pt-n">/{String(i + 1).padStart(2, '0')}</span>
+            <span class="h-pt-t">{it.title}</span>
+            <span class="h-pt-d">{it.body}</span>
+            <i class="h-pt-bar" aria-hidden="true"></i>
+          </button>
+        ))}
+      </div>
+      <div class="h-pt-panels" data-uid={uid}>
+        <slot />
+        <div class="h-pt-nav"><button type="button" data-step="-1" aria-label="Previous">‹</button><button type="button" data-step="1" aria-label="Next">›</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  const DURATION = 5000;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelectorAll<HTMLElement>('[data-ptabs]').forEach((sec) => {
+    const tabs = [...sec.querySelectorAll<HTMLElement>('[data-tab]')];
+    const wrap = sec.querySelector<HTMLElement>('.h-pt-panels')!;
+    const uid = wrap.dataset.uid!;
+    const panels = [...wrap.querySelectorAll<HTMLElement>(':scope > [data-panel]')];
+    panels.forEach((p, i) => { p.id = `${uid}-panel-${i}`; p.setAttribute('role', 'tabpanel'); p.setAttribute('aria-labelledby', `${uid}-tab-${i}`); p.hidden = i !== 0; });
+    let i = 0, t0 = performance.now(), visible = false, paused = false, progress = 0;
+    const show = (n: number) => {
+      i = (n + tabs.length) % tabs.length; t0 = performance.now(); progress = 0;
+      tabs.forEach((t, k) => { const on = k === i; t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1; t.style.setProperty('--p', '0'); });
+      panels.forEach((p, k) => (p.hidden = k !== i));
+    };
+    tabs.forEach((t, k) => {
+      t.addEventListener('click', () => show(k));
+      t.addEventListener('keydown', (e) => {
+        const d = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
+        if (d) { e.preventDefault(); show(i + d); tabs[i].focus(); }
+      });
+    });
+    wrap.querySelectorAll<HTMLElement>('[data-step]').forEach((b) => b.addEventListener('click', () => show(i + Number(b.dataset.step))));
+    sec.addEventListener('pointerenter', () => (paused = true));
+    sec.addEventListener('pointerleave', () => { paused = false; t0 = performance.now() - progress * DURATION; });
+    sec.addEventListener('focusin', () => (paused = true));
+    sec.addEventListener('focusout', () => { paused = false; t0 = performance.now() - progress * DURATION; });
+    new IntersectionObserver(([e]) => { visible = e.isIntersecting; t0 = performance.now() - progress * DURATION; }, { threshold: 0.35 }).observe(sec);
+    // Reserve the tallest panel's height so the page does not jump between tabs.
+    const size = () => {
+      wrap.style.minHeight = '';
+      panels.forEach((p) => (p.hidden = false));
+      const h = Math.max(...panels.map((p) => p.offsetHeight));
+      panels.forEach((p, k) => (p.hidden = k !== i));
+      const nav = wrap.querySelector<HTMLElement>('.h-pt-nav')!;
+      wrap.style.minHeight = `${h + nav.offsetHeight + 14}px`;
+    };
+    addEventListener('resize', size);
+    document.fonts?.ready.then(size);
+    size();
+    if (reduce) return;
+    const tick = (now: number) => {
+      if (visible && !paused) {
+        progress = (now - t0) / DURATION;
+        if (progress >= 1) show(i + 1); else tabs[i].style.setProperty('--p', String(progress));
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+</script>

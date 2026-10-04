@@ -1,0 +1,15 @@
+---
+import PricingTable from '../ui/PricingTable.astro';
+import { plans, planFeatures } from '../../data/home';
+import { DEMO_PATH, WA_URL } from './links';
+const withLinks = plans.map((p) => ({ ...p, href: p.level === 'scale' ? WA_URL : DEMO_PATH }));
+---
+<section class="h-sec h-pricing" id="pricing" style="padding-top:0" aria-labelledby="pricing-title">
+  <div class="h-w">
+    <p class="h-ey">Pricing</p>
+    <h2 class="h-h2" id="pricing-title">One price per station. Every attendant included.</h2>
+    <p class="h-lead">Logins are counted, not people. Add every attendant to Core, even without a phone.</p>
+    <PricingTable plans={withLinks} features={planFeatures} levels={['core', 'pro', 'scale']} defaultPlan="core" yearlyBadge="2 months free" />
+    <p class="h-note">Prices are per station and exclude GST.</p>
+  </div>
+</section>

@@ -1,0 +1,25 @@
+---
+import { dsrRows } from '../../data/home';
+import { DEMO_PATH } from './links';
+const ticks = ['Shortage named per DU', 'Day report saved, never changed', 'Every change logged with a name'];
+---
+<section class="h-hero">
+  <div class="h-w h-hero-in">
+    <div class="h-hero-copy">
+      <p class="h-ey">For pump owners and dealers</p>
+      <h1>Find the shortage today, not next month.</h1>
+      <p class="h-hero-lede">PumpOS reconciles nozzle readings, cash and dues at day closing. One DSR, your day report.</p>
+      <div class="h-hero-ctas">
+        <a class="h-btn h-btn--primary" href={DEMO_PATH}>Book a guided demo <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10" /></svg></a>
+        <a class="h-btn" href="#how">See how it works</a>
+      </div>
+      <ul class="h-ticks">{ticks.map((t) => <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>{t}</li>)}</ul>
+    </div>
+    <div class="h-card h-dsr" role="img" aria-label="Sample day closing report showing cash expected of ₹2,14,250 and a ₹350 shortage at DU-2">
+      <div class="h-dsr-h"><div><b>Day closing · DSR</b><small>Abne Fuels · 04 Oct 2026</small></div><span class="h-pill">Sample data</span></div>
+      <div class="h-dsr-rows">{dsrRows.map(([a, b]) => <div><span class="h-mut">{a}</span><b>{b}</b></div>)}<div><span>Cash expected</span><b>₹2,14,250</b></div></div>
+      <div class="h-short"><span class="h-av">AS</span><div><b>Short at DU-2 · Anitha S</b><small>Declared ₹1,21,100 against ₹1,21,450</small></div><strong>−₹350</strong></div>
+    </div>
+  </div>
+</section>
+<div class="h-w"><div class="h-omc"><strong>Configurable for any OMC dealership.</strong><p>Shifts, readings, drawers and dues work the same at every fuel station. You set up your own tanks, nozzles, products and prices, whichever oil company supplies you.</p></div></div>
