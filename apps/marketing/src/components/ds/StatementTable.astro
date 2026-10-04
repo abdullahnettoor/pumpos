@@ -1,6 +1,4 @@
 ---
-import SampleDataBadge from './SampleDataBadge.astro';
-
 interface Entry {
   date: string;
   desc: string;
@@ -16,6 +14,7 @@ interface Props {
   entries?: Entry[];
   note?: string;
   class?: string;
+  [key: string]: unknown;
 }
 
 const defaultEntries: Entry[] = [
@@ -29,11 +28,12 @@ const {
   category = 'Fleet · Credit limit ₹75,000',
   outstanding = '₹27,500',
   entries = defaultEntries,
-  note = 'Customer ledger statement with running balance.',
+  note = 'Customer ledger statement with running balance. Sample data.',
   class: className = '',
+  ...rest
 } = Astro.props;
 ---
-<div class:list={['h-card ds-stmt h-stmt', className]} role="region" aria-label={`Customer statement preview for ${customer}`}>
+<div class:list={['ds-card h-card ds-stmt h-stmt', className]} role="region" aria-label={`Customer statement preview for ${customer}`} {...rest}>
   <div class="h-st-h">
     <div>
       <b>{customer}</b>
@@ -58,8 +58,5 @@ const {
       <span>{e.bal}</span>
     </div>
   ))}
-  <div class="h-st-f" style="display:flex; justify-content:space-between; align-items:center;">
-    <small>{note}</small>
-    <SampleDataBadge />
-  </div>
+  <p class="h-st-f">{note}</p>
 </div>

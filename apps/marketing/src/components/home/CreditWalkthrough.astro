@@ -1,5 +1,8 @@
 ---
 import ProgressTabs from './ProgressTabs.astro';
+import StatementTable from '../ds/StatementTable.astro';
+import Receipt from '../ds/Receipt.astro';
+import PhoneFrame from '../ds/PhoneFrame.astro';
 import { creditSteps, statement } from '../../data/home';
 const views = [
   { panel: 0, outstanding: '₹42,500', rows: statement.slice(0, 2), foot: 'The customer owes ₹42,500 before this collection. Sample data.' },
@@ -8,27 +11,42 @@ const views = [
 ---
 <ProgressTabs id="credit" eyebrow="A closer look at customer credit" title="“Has that customer paid us yet?”" items={creditSteps}>
   {views.slice(0, 1).map((v) => (
-    <div data-panel={v.panel} class="h-card h-stmt">
-      <div class="h-st-h"><div><b>Malabar Transports</b><small>Fleet · Credit limit ₹75,000</small></div><div style="text-align:right"><small>Outstanding</small><strong>{v.outstanding}</strong></div></div>
-      <div class="h-tr h-tr--th"><span>Date</span><span>Entry</span><span>Amount</span><span>Balance</span></div>
-      {v.rows.map((r) => <div class="h-tr">{r.map((c) => <span>{c}</span>)}</div>)}
-      <p class="h-st-f">{v.foot}</p>
-    </div>
+    <StatementTable
+      data-panel={v.panel}
+      customer="Malabar Transports"
+      category="Fleet · Credit limit ₹75,000"
+      outstanding={v.outstanding}
+      entries={v.rows.map((r) => ({ date: r[0], desc: r[1], amount: r[2], bal: r[3] }))}
+      note={v.foot}
+    />
   ))}
-  <div data-panel="1" class="h-card h-rcpt">
-    <small class="h-mut">Collection · 03 Oct · Entry date</small>
-    <strong>₹15,000</strong>
-    <dl class="h-bd"><div><dt>From</dt><dd>Malabar Transports</dd></div><div><dt>Method</dt><dd>Bank transfer</dd></div><div><dt>Into</dt><dd>Station bank account</dd></div><div><dt>Drawer cash</dt><dd>Not touched</dd></div><div><dt>Due after</dt><dd>₹27,500</dd></div></dl>
-  </div>
+  <Receipt
+    data-panel="1"
+    eyebrow="Collection · 03 Oct · Entry date"
+    amount="₹15,000"
+    items={[
+      { label: 'From', value: 'Malabar Transports' },
+      { label: 'Method', value: 'Bank transfer' },
+      { label: 'Into', value: 'Station bank account' },
+      { label: 'Drawer cash', value: 'Not touched' },
+      { label: 'Due after', value: '₹27,500' },
+    ]}
+  />
   {views.slice(1).map((v) => (
-    <div data-panel={v.panel} class="h-card h-stmt">
-      <div class="h-st-h"><div><b>Malabar Transports</b><small>Fleet · Credit limit ₹75,000</small></div><div style="text-align:right"><small>Outstanding</small><strong>{v.outstanding}</strong></div></div>
-      <div class="h-tr h-tr--th"><span>Date</span><span>Entry</span><span>Amount</span><span>Balance</span></div>
-      {v.rows.map((r, i) => <div class:list={['h-tr', { 'h-tr--last': i === v.rows.length - 1 }]}>{r.map((c) => <span>{c}</span>)}</div>)}
-      <p class="h-st-f">{v.foot}</p>
-    </div>
+    <StatementTable
+      data-panel={v.panel}
+      customer="Malabar Transports"
+      category="Fleet · Credit limit ₹75,000"
+      outstanding={v.outstanding}
+      entries={v.rows.map((r, i) => ({ date: r[0], desc: r[1], amount: r[2], bal: r[3], isCredit: i === v.rows.length - 1 }))}
+      note={v.foot}
+    />
   ))}
-  <div data-panel="3" class="h-card h-phone-wrap">
-    <div class="h-phone"><small class="h-mut">Owner view · Sample</small><b>Malabar Transports</b><div class="h-r"><span>Outstanding</span><b>₹27,500</b></div><div class="h-r"><span>Last collection</span><b>₹15,000</b></div><div class="h-r"><span>Limit used</span><b>37%</b></div></div>
-  </div>
+  <PhoneFrame data-panel="3">
+    <small class="h-mut">Owner view · Sample</small>
+    <b>Malabar Transports</b>
+    <div class="h-r"><span>Outstanding</span><b>₹27,500</b></div>
+    <div class="h-r"><span>Last collection</span><b>₹15,000</b></div>
+    <div class="h-r"><span>Limit used</span><b>37%</b></div>
+  </PhoneFrame>
 </ProgressTabs>

@@ -1,4 +1,6 @@
 ---
+import Section from '../ds/Section.astro';
+import SectionHeading from '../ds/SectionHeading.astro';
 // Numbered tab list with an autoplay track (left) and a panel with arrows (right).
 // Pass panels as children, each a direct child element with data-panel="0..n-1".
 // Autoplay advances every 5s only while the section is on screen, pauses on hover or
@@ -7,28 +9,25 @@ interface Props { id?: string; eyebrow: string; title: string; items: { title: s
 const { id, eyebrow, title, items } = Astro.props;
 const uid = id ?? title.toLowerCase().replace(/[^a-z]+/g, '-').slice(0, 24);
 ---
-<section class="h-sec" id={id} aria-labelledby={`${uid}-title`} data-ptabs>
-  <div class="h-w">
-    <p class="h-ey">{eyebrow}</p>
-    <h2 class="h-h2" id={`${uid}-title`}>{title}</h2>
-    <div class="h-pt">
-      <div class="h-pt-list" role="tablist" aria-label={title}>
-        {items.map((it, i) => (
-          <button type="button" role="tab" id={`${uid}-tab-${i}`} aria-controls={`${uid}-panel-${i}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1} data-tab={i}>
-            <span class="h-pt-n">/{String(i + 1).padStart(2, '0')}</span>
-            <span class="h-pt-t">{it.title}</span>
-            <span class="h-pt-d">{it.body}</span>
-            <i class="h-pt-bar" aria-hidden="true"></i>
-          </button>
-        ))}
-      </div>
-      <div class="h-pt-panels" data-uid={uid}>
-        <slot />
-        <div class="h-pt-nav"><button type="button" data-step="-1" aria-label="Previous">‹</button><button type="button" data-step="1" aria-label="Next">›</button></div>
-      </div>
+<Section id={id} aria-labelledby={`${uid}-title`} data-ptabs>
+  <SectionHeading eyebrow={eyebrow} title={title} id={`${uid}-title`} />
+  <div class="h-pt">
+    <div class="h-pt-list" role="tablist" aria-label={title}>
+      {items.map((it, i) => (
+        <button type="button" role="tab" id={`${uid}-tab-${i}`} aria-controls={`${uid}-panel-${i}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1} data-tab={i}>
+          <span class="h-pt-n">/{String(i + 1).padStart(2, '0')}</span>
+          <span class="h-pt-t">{it.title}</span>
+          <span class="h-pt-d">{it.body}</span>
+          <i class="h-pt-bar" aria-hidden="true"></i>
+        </button>
+      ))}
+    </div>
+    <div class="h-pt-panels" data-uid={uid}>
+      <slot />
+      <div class="h-pt-nav"><button type="button" data-step="-1" aria-label="Previous">‹</button><button type="button" data-step="1" aria-label="Next">›</button></div>
     </div>
   </div>
-</section>
+</Section>
 
 <script>
   const DURATION = 5000;
