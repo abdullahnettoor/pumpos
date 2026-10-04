@@ -262,3 +262,62 @@
   .h-offer dl div { padding: 16px; } .h-offer dt { font-size: 26px; }
   .h-offer-btns .h-btn { flex: 1 1 100%; }
 }
+
+/* ---------- Background texture: subtle, CSS-only, still for reduced motion ---------- */
+/* Hero: faint meter grid fading out from the centre, with a slow mint glow drifting behind the copy. */
+.h-hero { position: relative; isolation: isolate; }
+.h-hero::before, .h-hero::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: -1; }
+.h-hero::before {
+  background-image: linear-gradient(#ffffff17 1px, transparent 1px), linear-gradient(90deg, #ffffff17 1px, transparent 1px);
+  background-size: 56px 56px; background-position: center top;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 75%);
+}
+.h-hero::after {
+  bottom: 20%;
+  background: radial-gradient(40% 55% at 30% 40%, #1f6a5366, transparent 70%), radial-gradient(35% 50% at 72% 30%, #8fd1b42e, transparent 70%);
+  background-size: 130% 130%; animation: h-drift 22s ease-in-out infinite alternate;
+}
+/* Animates background position, not transform, so nothing grows past the section and causes sideways scroll. */
+@keyframes h-drift { from { background-position: 0% 0%; } to { background-position: 100% 60%; } }
+
+/* Dark timeline: dotted field that fades towards the edges. */
+.h-dark { position: relative; isolation: isolate; }
+.h-dark::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background-image: radial-gradient(#8fd1b426 1px, transparent 1.4px); background-size: 22px 22px;
+  mask-image: linear-gradient(180deg, transparent, #000 25%, #000 70%, transparent);
+}
+
+/* Light sections: a soft mint wash under the features and pricing headings. */
+#features, .h-pricing { position: relative; isolation: isolate; }
+#features::before, .h-pricing::before {
+  content: ''; position: absolute; inset: 0 0 auto; height: 520px; z-index: -1; pointer-events: none;
+  background: radial-gradient(60% 70% at 15% 0%, #e5f0eb, transparent 70%);
+}
+.h-pricing::before { background: radial-gradient(50% 70% at 85% 0%, #e5f0eb, transparent 70%); }
+
+/* Offer card: glow in one corner and a slow sheen across the border. */
+.h-offer { position: relative; isolation: isolate; overflow: hidden; }
+.h-offer::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(45% 60% at 85% 10%, #1f6a5380, transparent 70%) 0 0 / 130% 130%; animation: h-drift 18s ease-in-out infinite alternate;
+}
+.h-offer::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, #8fd1b466 50%, transparent 65%) 0 0 / 250% 100%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: h-sheen 7s linear infinite;
+}
+@keyframes h-sheen { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+
+/* Leak cards: the dark day-close card gets the same dotted texture as the timeline. */
+.h-final { position: relative; isolation: isolate; overflow: hidden; }
+.h-final::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background-image: radial-gradient(#8fd1b41f 1px, transparent 1.4px); background-size: 20px 20px;
+  mask-image: linear-gradient(120deg, transparent 20%, #000);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .h-hero::after, .h-offer::before, .h-offer::after { animation: none; }
+}
