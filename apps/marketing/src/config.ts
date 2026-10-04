@@ -29,6 +29,6 @@ export const DEMO_BOOKING_URL = bookingUrl(import.meta.env.PUBLIC_DEMO_BOOKING_U
 export const WHATSAPP_NUMBER = '+919061904860';
 export const WHATSAPP_DISPLAY = '+91 90619 04860';
 export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER.replace(/\D/g, '')}?text=${encodeURIComponent('Hi, I run a pump in <town> and want to see PumpOS')}`;
-export const STARTING_PRICE = 'Core from ₹999/station/month + GST. ₹0 for the first 3 months.';
+export const STARTING_PRICE = 'From ₹999/station/month + GST. Pilot stations get the first 3 months free on any plan.';
 
 export const LINKEDIN_URL = 'https://www.linkedin.com/company/pumpos/';

@@ -85,7 +85,7 @@ export const compareRows: [string, string, string, string][] = [
 ];
 
 export const plans = [
-  { name: 'Core', level: 'core', price: { monthly: 999, yearly: 9990 }, intro: { price: 0, label: 'for your first 3 months', then: 'then' } },
+  { name: 'Core', level: 'core', price: { monthly: 999, yearly: 9990 } },
   { name: 'Pro', level: 'pro', price: { monthly: 1599, yearly: 15990 }, popular: true, footnote: "Pro price may vary with your station's configuration." },
   { name: 'Scale', level: 'scale', price: { monthly: null, yearly: null } },
 ];
@@ -118,6 +118,6 @@ export const faqs: [string, string][] = [
   ["Will it work with my accountant's Tally?", 'Not yet. Tally export is planned. Today you can download shift summaries and the DSR as PDF and send them to your accountant.'],
   ["Is my station's data private?", 'Each station’s records are kept separate from every other customer’s, and each person sees only what their role allows. Your data is yours; you can ask us for a copy at any time.'],
   ['How long does setup take?', 'A few minutes once your tank, nozzle, product and opening-balance details are ready. We do it with you, then stay with your team for the first shift closings.'],
-  ['What does it cost after the first 3 months?', 'Core is ₹999 a month per station, or ₹9,990 a year (two months free). Pro is ₹1,599 a month, which can vary with your station’s setup. Attendants without a login are never counted.'],
+  ['What does it cost after the first 3 months?', 'Pilot stations get the first 3 months free on any plan. After that, Pro is ₹1,599 a month per station, which can vary with your station’s setup. Core is ₹999 a month per station, or ₹9,990 a year (two months free). Attendants without a login are never counted.'],
   ['Does it work for my oil company?', 'Yes. Shifts, readings, drawers and dues work the same at every fuel station. You set up your own tanks, nozzles, products and prices, whichever company supplies you.'],
 ];

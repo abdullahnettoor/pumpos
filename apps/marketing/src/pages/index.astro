@@ -22,7 +22,7 @@ const appLd = {
   offers: plans.filter((p) => p.price.monthly !== null).map((p) => ({ '@type': 'Offer', name: p.name, price: p.price.monthly, priceCurrency: 'INR', description: 'Per station per month, excluding GST' })),
 };
 ---
-<BaseLayout title="PumpOS | Find the shortage today, not next month" description="PumpOS reconciles nozzle readings, cash and dues at day closing. Fuel station management for Indian pump owners. Core is ₹0 for the first 3 months." green>
+<BaseLayout title="PumpOS | Find the shortage today, not next month" description="PumpOS reconciles nozzle readings, cash and dues at day closing. Fuel station management for Indian pump owners. Pilot stations get the first 3 months free on any plan." green>
   <Fragment slot="head"><script type="application/ld+json" set:html={JSON.stringify(faqLd)} /><script type="application/ld+json" set:html={JSON.stringify(appLd)} /></Fragment>
   <div class="home">
     <Hero />

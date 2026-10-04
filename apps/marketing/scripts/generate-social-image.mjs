@@ -32,7 +32,7 @@ ${renderMark(LOCKUP.x, LOCKUP.y, LOCKUP.height, '#fff')}
 <path d="M70 125H1130" stroke="#70a38e" stroke-width="1"/>
 <g font-family="Arial, sans-serif" font-size="68" font-weight="700" fill="white"><text x="70" y="253">Find the shortage today,</text><text x="70" y="345" fill="${MINT}">not next month.</text></g>
 <text x="73" y="440" fill="white" font-family="Arial, sans-serif" font-size="28">Nozzle readings, cash and dues reconciled at day closing.</text>
-<text x="73" y="555" fill="${MINT}" font-family="Arial, sans-serif" font-size="24" font-weight="700">PumpOS Core: ₹0 for the first 3 months</text>
+<text x="73" y="555" fill="${MINT}" font-family="Arial, sans-serif" font-size="24" font-weight="700">Pilot stations: first 3 months free on any plan</text>
 ${renderMark(WATERMARK.x, WATERMARK.y, WATERMARK.height, MINT, WATERMARK.opacity)}
 </svg>`;
 

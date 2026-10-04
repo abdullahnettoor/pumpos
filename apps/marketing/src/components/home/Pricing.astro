@@ -9,6 +9,7 @@ const withLinks = plans.map((p) => ({ ...p, href: p.level === 'scale' ? WA_URL :
     <p class="h-ey">Pricing</p>
     <h2 class="h-h2" id="pricing-title">One price per station. Every attendant included.</h2>
     <p class="h-lead">Logins are counted, not people. Add every attendant, even without a phone.</p>
+    <p class="h-pilot"><b>Pilot station offer</b> Your first 3 months are free on any plan.</p>
     <PricingTable plans={withLinks} features={planFeatures} levels={['core', 'pro', 'scale']} defaultPlan="pro" popularLabel="Recommended" note="Prices are per station and exclude GST." yearlyBadge="2 months free" visibleRows={PRICING_KEY_ROWS} />
   </div>
 </section>
