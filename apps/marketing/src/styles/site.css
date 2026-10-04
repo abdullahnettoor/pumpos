@@ -89,7 +89,7 @@ summary:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
 .pilot-inclusions h3 { font-size: 16px; font-weight: 500; }
 .pilot-inclusions ul { list-style: none; padding: 0; margin: 24px 0; }
 .pilot-inclusions li { position: relative; padding: 9px 0 9px 23px; font-size: 12px; color: #e1ece5; }
-.pilot-inclusions li::before { content: '\u2713'; position: absolute; left: 0; color: var(--mint); }
+.pilot-inclusions li::before { content: '✓'; position: absolute; left: 0; color: var(--mint); }
 .pilot-inclusions > p { padding-top: 23px; border-top: 1px solid #ffffff38; font-size: 14px; }
 .pilot-inclusions > span { display: block; font-size: 10px; color: var(--mint); margin-top: 8px; }
 .faq-section { padding-block: 85px 65px; display: grid; grid-template-columns: 1fr 1.4fr; gap: 80px; }
