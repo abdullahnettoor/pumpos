@@ -276,14 +276,14 @@
 .h-hero::after {
   bottom: 20%; z-index: -2;
   background: radial-gradient(40% 55% at 30% 40%, #1f6a5366, transparent 70%), radial-gradient(35% 50% at 72% 30%, #8fd1b42e, transparent 70%);
-  background-size: 130% 130%; animation: h-drift 22s ease-in-out infinite alternate;
+  background-size: 130% 130%; animation: h-drift 12s ease-in-out infinite alternate;
 }
 @keyframes h-drift { from { background-position: 0% 0%; } to { background-position: 100% 60%; } }
 /* Orbiting glows on top of the drift, inside a clipped layer so the rotation never widens
    the page and the DSR card can still overhang the section below. */
 .h-hero-bg { position: absolute; inset: 0; overflow: hidden; z-index: -3; pointer-events: none; }
-.h-orbit { position: absolute; left: 50%; top: 35%; width: min(1100px, 120vw); aspect-ratio: 1; translate: -50% -50%; animation: h-spin 60s linear infinite; }
-.h-orbit--rev { width: min(800px, 100vw); animation-duration: 45s; animation-direction: reverse; }
+.h-orbit { position: absolute; left: 50%; top: 35%; width: min(1100px, 120vw); aspect-ratio: 1; translate: -50% -50%; animation: h-spin 28s linear infinite; }
+.h-orbit--rev { width: min(800px, 100vw); animation-duration: 22s; animation-direction: reverse; }
 .h-orbit i { position: absolute; width: 42%; aspect-ratio: 1; border-radius: 50%; filter: blur(80px); }
 .h-orbit i:nth-child(1) { left: 4%; top: 18%; background: #1f6a5340; }
 .h-orbit i:nth-child(2) { right: 6%; bottom: 14%; width: 34%; background: #8fd1b41a; }
