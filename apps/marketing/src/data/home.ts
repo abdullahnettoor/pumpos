@@ -81,7 +81,7 @@ export const dayline: [string, string, string, string][] = [
   ['6:00', 'Manager', 'Opens the shift', 'Assigns each attendant a DU and an opening float. Opening readings carry over.'],
   ['6:05 – 14:00', 'Attendant', 'Sells from their DU', 'Cash, card and UPI. The manager takes cash drops to the office.'],
   ['14:00', 'Attendant', 'Hands over the drawer', 'Declares cash, card and UPI for their own drawer, from the phone on Pro or through the manager on Core. Shortage shows at once.'],
-  ['11:00', 'Accountant', 'Keeps the office books', 'Collections, supplier payments, expenses, by entry date.'],
+  ['15:00', 'Accountant', 'Keeps the office books', 'Collections, supplier payments, expenses, by entry date.'],
   ['22:30', 'Owner', 'Closes the day', 'Reads the DSR from anywhere. Once closed, it is saved and never recalculated.'],
 ];
 
