@@ -1,9 +1,42 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import {getCollection,render} from 'astro:content';
-export async function getStaticPaths(){return(await getCollection('blog',({data})=>!data.draft)).map(post=>({params:{slug:post.id},props:{post}}));}
-const {post}=Astro.props;
-const {Content}=await render(post);
-const fmt=(d:Date)=>d.toLocaleDateString('en-IN',{year:'numeric',month:'short',day:'numeric',timeZone:'UTC'});
+import ProseLayout from '../../layouts/ProseLayout.astro';
+import Button from '../../components/ds/Button.astro';
+import { getCollection, render } from 'astro:content';
+import '../../styles/content-pages.css';
+
+export async function getStaticPaths() {
+  return (await getCollection('blog', ({ data }) => !data.draft)).map((post) => ({
+    params: { slug: post.id },
+    props: { post },
+  }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+const fmt = (date: Date) =>
+  date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
 ---
-<BaseLayout title={`${post.data.title} | PumpOS`} description={post.data.description} path={`/blog/${post.id}`} article><Fragment slot="head"><meta property="article:published_time" content={post.data.publishedAt.toISOString()} />{post.data.updatedAt&&<meta property="article:modified_time" content={post.data.updatedAt.toISOString()} />}</Fragment><article class="reading-page" data-pagefind-body><a class="article-back" href="/blog">← Journal</a><p class="article-meta"><time datetime={post.data.publishedAt.toISOString()}>{fmt(post.data.publishedAt)}</time>{post.data.updatedAt&&` · Updated ${fmt(post.data.updatedAt)}`}</p><h1>{post.data.title}</h1><p class="article-description">{post.data.description}</p><div class="article-tags">{post.data.tags.map(t=><span>{t}</span>)}</div><div class="prose-pump"><Content /></div><div class="article-next">See the record for yourself. <a href="/product">Explore PumpOS →</a></div></article></BaseLayout>
+<ProseLayout
+  title={post.data.title}
+  description={post.data.description}
+  path={`/blog/${post.id}`}
+  eyebrow="Journal"
+  backHref="/blog"
+  backLabel="Journal"
+  article
+>
+  <Fragment slot="head">
+    <meta property="article:published_time" content={post.data.publishedAt.toISOString()} />
+    {post.data.updatedAt && <meta property="article:modified_time" content={post.data.updatedAt.toISOString()} />}
+  </Fragment>
+  <div slot="meta" class="prose-meta">
+    <time datetime={post.data.publishedAt.toISOString()}>{fmt(post.data.publishedAt)}</time>
+    {post.data.updatedAt && <span>Updated {fmt(post.data.updatedAt)}</span>}
+    <div class="prose-tags">{post.data.tags.map((tag) => <span>{tag}</span>)}</div>
+  </div>
+  <Content />
+  <div slot="after" class="prose-after">
+    <span>See the record for yourself.</span>
+    <Button href="/product" variant="secondary">Explore PumpOS <span aria-hidden="true">→</span></Button>
+  </div>
+</ProseLayout>

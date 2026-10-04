@@ -100,6 +100,7 @@ export const planFeatures = [
   { name: 'WhatsApp reminders and daily summary', included: 'pro', note: 'Coming next' },
   { name: 'Several stations under one login', included: 'scale' },
   { name: 'Stock, dips and purchases', included: 'core' },
+  { name: 'Fuel and product sales by cash, card or UPI', included: 'core' },
   { name: 'Credit, collections and khata', included: 'core' },
   { name: 'Office books and P&L', included: 'core' },
   { name: 'Saved DSR, VAT and GST', included: 'core' },
