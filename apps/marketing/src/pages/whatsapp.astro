@@ -1,0 +1,23 @@
+---
+// Redirect to the WhatsApp chat. Site links point here instead of wa.me because
+// content blockers hide links to wa.me. `?q=` carries a question from the FAQ search.
+import { WHATSAPP_DIRECT_URL, WHATSAPP_NUMBER } from '../config';
+const base = `https://wa.me/${WHATSAPP_NUMBER.replace(/\D/g, '')}`;
+---
+<!doctype html>
+<html lang="en-IN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="robots" content="noindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Opening WhatsApp · PumpOS</title>
+    <noscript><meta http-equiv="refresh" content={`0;url=${WHATSAPP_DIRECT_URL}`} /></noscript>
+    <script is:inline define:vars={{ direct: WHATSAPP_DIRECT_URL, base }}>
+      const q = new URLSearchParams(location.search).get('q');
+      location.replace(q ? `${base}?text=${encodeURIComponent(`Question about PumpOS: ${q}`)}` : direct);
+    </script>
+  </head>
+  <body style="font-family: system-ui, sans-serif; padding: 40px;">
+    <p>Opening WhatsApp… <a href={WHATSAPP_DIRECT_URL}>Continue to WhatsApp</a></p>
+  </body>
+</html>

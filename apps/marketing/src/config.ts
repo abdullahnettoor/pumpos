@@ -28,7 +28,10 @@ export const DEMO_BOOKING_URL = bookingUrl(import.meta.env.PUBLIC_DEMO_BOOKING_U
 /** WhatsApp contact (international format, digits only for wa.me). */
 export const WHATSAPP_NUMBER = '+919061904860';
 export const WHATSAPP_DISPLAY = '+91 90619 04860';
-export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER.replace(/\D/g, '')}?text=${encodeURIComponent('Hi, I run a pump in <town> and want to see PumpOS')}`;
+/** Direct wa.me link with the prefilled message. Used only by the /whatsapp redirect. */
+export const WHATSAPP_DIRECT_URL = `https://wa.me/${WHATSAPP_NUMBER.replace(/\D/g, '')}?text=${encodeURIComponent("Hi, I'd like to see PumpOS for my fuel station.")}`;
+/** Links point at our own /whatsapp redirect: content blockers hide links to wa.me. */
+export const WHATSAPP_URL = '/whatsapp';
 export const STARTING_PRICE = 'From ₹999/station/month + GST. Pilot stations get the first 3 months free on any plan.';
 
 export const LINKEDIN_URL = 'https://www.linkedin.com/company/pumpos/';

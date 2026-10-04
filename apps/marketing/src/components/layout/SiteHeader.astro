@@ -14,7 +14,7 @@ const current = (href: string) => (!href.includes('#') && path.startsWith(href) 
     <nav class="sh-nav" aria-label="Main navigation">{nav.map((n) => <a href={n.href} aria-current={current(n.href)}>{n.label}</a>)}</nav>
     <div class="sh-acts">
       <a class="sh-signin" href={CONSOLE_URL}>Sign in</a>
-      <a class="sh-wa" href={WHATSAPP_URL} target="_blank" rel="noopener" aria-label={`WhatsApp us on ${WHATSAPP_DISPLAY}`} title={`WhatsApp ${WHATSAPP_DISPLAY}`}><Fragment set:html={wa} /></a>
+      <a class="sh-chat" href={WHATSAPP_URL} target="_blank" rel="noopener" aria-label={`Chat with us on ${WHATSAPP_DISPLAY}`} title={`WhatsApp ${WHATSAPP_DISPLAY}`}><Fragment set:html={wa} /></a>
       <details class="mobile-menu sh-menu">
         <summary aria-label="Open navigation"><span></span><span></span></summary>
         <nav aria-label="Mobile navigation">{nav.map((n) => <a href={n.href} aria-current={current(n.href)}>{n.label}</a>)}<a href="/demo">Book a demo</a><a href={WHATSAPP_URL} target="_blank" rel="noopener">WhatsApp {WHATSAPP_DISPLAY}</a><a href={CONSOLE_URL}>Sign in ↗</a></nav>
@@ -37,19 +37,19 @@ const current = (href: string) => (!href.includes('#') && path.startsWith(href) 
   .sh-nav a:hover { color: #18201a; } .sh--dark .sh-nav a:hover { color: #fff; }
   .sh-acts { display: flex; gap: 8px; align-items: center; font-weight: 600; font-size: 15px; }
   .sh-signin { padding-inline: 12px; }
-  .sh-wa { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; background: #25d366; color: #fff; }
-  .sh-wa:hover { background: #1ebe5b; }
-  .sh-wa:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
-  .sh-wa :global(svg) { width: 22px; height: 22px; }
+  .sh-chat { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; background: #25d366; color: #fff; }
+  .sh-chat:hover { background: #1ebe5b; }
+  .sh-chat:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+  .sh-chat :global(svg) { width: 22px; height: 22px; }
   .sh-menu { display: none; }
   .sh-menu nav { position: absolute; right: 0; top: calc(100% + 8px); min-width: 220px; display: flex; flex-direction: column; padding: 8px; border-radius: 12px; background: #fff; color: #18201a; border: 1px solid #d9ded6; box-shadow: 0 18px 40px -20px rgba(15,42,33,.4); }
   .sh-menu nav a { padding: 10px 12px; border-radius: 8px; font-weight: 600; } .sh-menu nav a:hover { background: #eef0ec; }
-  @media (max-width: 1080px) { .sh-nav { gap: 20px; } .sh-signin { display: none; } }
+  @media (max-width: 1080px) { .sh-nav { gap: 20px; } }
   @media (max-width: 900px) {
     .sh { position: sticky; top: 0; }
     .sh-in { padding: 12px 20px; }
     .sh-nav { display: none; }
-    .sh-wa { width: 38px; height: 38px; }
+    .sh-chat { width: 38px; height: 38px; }
     .sh-menu { display: block; position: relative; }
   }
 </style>
