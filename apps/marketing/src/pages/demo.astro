@@ -1,8 +1,324 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { DEMO_BOOKING_URL, WHATSAPP_URL, WHATSAPP_DISPLAY, STARTING_PRICE } from '../config';
+import { DEMO_BOOKING_URL, WHATSAPP_URL, WHATSAPP_DISPLAY } from '../config';
+import '../styles/home.css';
+
+// WhatsApp icon SVG (Simple Icons / CC0) matching SiteHeader and OfferCta
+const waIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.26-.46-2.39-1.47-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.21 3.07.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.7.63.71.22 1.36.19 1.87.12.57-.09 1.76-.72 2.01-1.42.25-.7.25-1.29.17-1.42-.07-.12-.27-.2-.57-.34M12.05 21.8h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.44-9.88 9.89-9.88a9.82 9.82 0 0 1 6.99 2.9 9.82 9.82 0 0 1 2.89 6.99c0 5.45-4.43 9.88-9.88 9.88m8.41-18.3A11.81 11.81 0 0 0 12.05 0C5.5 0 .16 5.34.16 11.89c0 2.1.55 4.14 1.59 5.95L.06 24l6.3-1.65a11.88 11.88 0 0 0 5.68 1.45h.01c6.55 0 11.89-5.34 11.89-11.89 0-3.18-1.24-6.16-3.48-8.41Z"/></svg>';
+
+const stats = [
+  ['₹0', 'first 3 months on Core, full feature access'],
+  ['₹999', 'a month per station after, + GST'],
+  ['1-on-1', 'setup of tanks, nozzles & opening balances'],
+  ['Zero', 'hardware or app installations needed'],
+];
 ---
-<BaseLayout title="Book a guided demo | PumpOS" description="Walk through your station's credit, collections and Shift close. Discuss the PumpOS pilot, onboarding and pricing with us." path="/demo">
- <section class="page-heading site-container"><p class="section-context">Let's talk about your station</p><h1>Bring the questions.<br />We'll open the record.</h1><p>A guided look at PumpOS, with room to discuss how your station works today.</p></section>
- <div class="demo-layout site-container"><ol class="demo-agenda"><li><span>1</span><div><h2>Start with your current workflow.</h2><p>Tell us how you track Shifts, customer credit and daily reporting. Registers, spreadsheets or existing software are all useful starting points.</p></div></li><li><span>2</span><div><h2>Follow the work in PumpOS.</h2><p>We'll look at customer dues, recorded collections and Shift reconciliation, including the owner's view.</p></div></li><li><span>3</span><div><h2>Discuss a practical pilot.</h2><p>Review setup, connectivity, onboarding and the price for your station before deciding on next steps.</p></div></li></ol><aside class="booking-panel"><h2>{DEMO_BOOKING_URL ? 'Choose a time to talk.' : 'Arrange your guided demo.'}</h2><p>{DEMO_BOOKING_URL ? 'Select a time on our booking page. A short description of your station will help us prepare.' : 'Email us your name, station name and a convenient time to talk. We will arrange the demo with you.'}</p><a class="button-light" href={DEMO_BOOKING_URL ?? 'mailto:hello@pumpos.app?subject=PumpOS%20guided%20demo&body=Name%3A%0AStation%20name%3A%0APreferred%20time%20to%20talk%3A%0A'}>{DEMO_BOOKING_URL ? 'Choose a demo time' : 'Email to arrange a demo'} <span aria-hidden="true">↗</span></a><a class="button-light" href={WHATSAPP_URL} target="_blank" rel="noopener">WhatsApp {WHATSAPP_DISPLAY}</a><p class="booking-help">{STARTING_PRICE}</p><p class="booking-help">No customer records or financial files needed. We use sample data for the walkthrough.</p><a href="/#walkthrough">Explore the product before we talk →</a></aside></div>
+<BaseLayout
+  title="Book a guided demo | PumpOS"
+  description="See how PumpOS reconciles nozzle readings, cash collections, and customer credit at day closing. 1-on-1 walkthrough with your station's numbers."
+  path="/demo"
+  green
+>
+  <div class="home demo-page">
+    <!-- Top Hero with 3 Steps: What happens in the demo -->
+    <section class="h-hero d-hero">
+      <div class="h-hero-bg" aria-hidden="true">
+        <div class="h-orbit"><i></i><i></i></div>
+        <div class="h-orbit h-orbit--rev"><i></i></div>
+      </div>
+      <div class="h-w d-hero-in">
+        <div class="d-hero-copy">
+          <p class="h-ey">Book a guided demo</p>
+          <h1>Bring the questions.<br />We'll open the record.</h1>
+          <p class="d-hero-lede">A 20-minute guided walkthrough with your station's numbers. See how meter readings, attendant cash, and customer credit reconcile in PumpOS.</p>
+          <ul class="d-hero-ticks">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>One-on-one walkthrough</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Your station's numbers</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Zero commitment</li>
+          </ul>
+        </div>
+
+        <div class="d-steps-wrap" aria-labelledby="steps-heading">
+          <div class="d-steps-head">
+            <p class="h-ey" id="steps-heading">What happens in the demo</p>
+          </div>
+          <ol class="d-steps">
+            <li class="d-step">
+              <div class="d-step-top">
+                <span class="d-step-num">01</span>
+                <span class="d-step-pill">Step 1</span>
+              </div>
+              <h3>We ask about your station</h3>
+              <p>Tell us how you track shifts, nozzles, and credit today. Registers, spreadsheets, or existing software — whatever you use right now.</p>
+            </li>
+            <li class="d-step">
+              <div class="d-step-top">
+                <span class="d-step-num">02</span>
+                <span class="d-step-pill">Step 2</span>
+              </div>
+              <h3>We show a shift close with your numbers</h3>
+              <p>We walk through meter readings, attendant cash collections, card/UPI slips, and credit ledgers so you see how shortages surface immediately.</p>
+            </li>
+            <li class="d-step">
+              <div class="d-step-top">
+                <span class="d-step-num">03</span>
+                <span class="d-step-pill">Step 3</span>
+              </div>
+              <h3>We set up Core with you</h3>
+              <p>We configure your tanks, nozzles, products, and opening balances together, so your team can run their first live shift with confidence.</p>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- Booking Form & WhatsApp Alternative -->
+    <section class="h-sec d-booking-sec" id="book" aria-labelledby="form-heading">
+      <div class="h-w">
+        <div class="d-booking-grid">
+          <!-- Form Card -->
+          <div class="h-card d-form-card">
+            <h2 class="d-form-h2" id="form-heading">Request your walkthrough</h2>
+            <p class="d-form-lede">Share your station details below. We'll set up a walkthrough tailored to your pump configuration.</p>
+
+            <form
+              id="demo-booking-form"
+              class="d-form"
+              action={DEMO_BOOKING_URL ?? 'mailto:hello@pumpos.app'}
+              method="GET"
+            >
+              <div class="d-field">
+                <label for="demo-name">Your name <span class="d-req" aria-hidden="true">*</span></label>
+                <input
+                  type="text"
+                  id="demo-name"
+                  name="name"
+                  required
+                  placeholder="e.g. Ramesh Patel"
+                  autocomplete="name"
+                />
+              </div>
+
+              <div class="d-field">
+                <label for="demo-station">Station name & town <span class="d-req" aria-hidden="true">*</span></label>
+                <input
+                  type="text"
+                  id="demo-station"
+                  name="station"
+                  required
+                  placeholder="e.g. National Fuels, Pune"
+                  autocomplete="organization"
+                />
+              </div>
+
+              <div class="d-field">
+                <label for="demo-phone">Phone number (WhatsApp) <span class="d-req" aria-hidden="true">*</span></label>
+                <input
+                  type="tel"
+                  id="demo-phone"
+                  name="phone"
+                  required
+                  placeholder="e.g. +91 98765 43210"
+                  autocomplete="tel"
+                />
+                <small class="d-hint">We'll message you here to coordinate a convenient time.</small>
+              </div>
+
+              <div class="d-setup-box">
+                <div class="d-setup-head">
+                  <strong>Station setup</strong>
+                  <span>Optional — helps us prepare your demo</span>
+                </div>
+                <div class="d-setup-cols">
+                  <div class="d-setup-item">
+                    <label for="demo-tanks">Tanks</label>
+                    <input
+                      type="number"
+                      id="demo-tanks"
+                      name="tanks"
+                      min="1"
+                      max="30"
+                      placeholder="e.g. 3"
+                      inputmode="numeric"
+                    />
+                  </div>
+                  <div class="d-setup-item">
+                    <label for="demo-nozzles">Nozzles</label>
+                    <input
+                      type="number"
+                      id="demo-nozzles"
+                      name="nozzles"
+                      min="1"
+                      max="64"
+                      placeholder="e.g. 12"
+                      inputmode="numeric"
+                    />
+                  </div>
+                  <div class="d-setup-item">
+                    <label for="demo-attendants">Attendants</label>
+                    <input
+                      type="number"
+                      id="demo-attendants"
+                      name="attendants"
+                      min="1"
+                      max="100"
+                      placeholder="e.g. 8"
+                      inputmode="numeric"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" class="h-btn h-btn--primary d-submit-btn" id="demo-submit-btn">
+                <span>{DEMO_BOOKING_URL ? 'Continue to choose demo time' : 'Book guided demo'}</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              </button>
+
+              <p class="d-form-trust">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span>No sensitive financial books required. We use sample numbers for the walkthrough.</span>
+              </p>
+
+              <div id="demo-form-feedback" class="d-feedback" hidden aria-live="polite"></div>
+            </form>
+          </div>
+
+          <!-- Side / WhatsApp Alternative -->
+          <aside class="d-side">
+            <div class="h-card d-wa-card">
+              <div class="d-wa-badge">Direct option</div>
+              <h3>Prefer WhatsApp? Text us directly</h3>
+              <p>Skip the form and message us directly on WhatsApp. We can talk about your station, answer questions, or coordinate a demo time right in chat.</p>
+              <a class="h-btn h-btn--wa d-wa-btn" href={WHATSAPP_URL} target="_blank" rel="noopener">
+                <Fragment set:html={waIcon} />
+                <span>WhatsApp {WHATSAPP_DISPLAY}</span>
+              </a>
+              <span class="d-wa-note">Opens WhatsApp with a prefilled message.</span>
+            </div>
+
+            <div class="h-card d-expect-card">
+              <h4>What to expect</h4>
+              <ul class="d-expect-list">
+                <li>
+                  <strong>20 minutes, 1-on-1:</strong> Walk through daily shift closing, meter readings, and drawer handovers on video or phone.
+                </li>
+                <li>
+                  <strong>Truthful numbers:</strong> We calculate cash variance and shortage tracking live on sample station data.
+                </li>
+                <li>
+                  <strong>No pressure or contracts:</strong> Pilot stations get 3 months free on Core. Decide only after seeing it work.
+                </li>
+              </ul>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. The Offer -->
+    <section class="h-sec d-offer-sec" aria-labelledby="offer-title">
+      <div class="h-w">
+        <div class="h-offer">
+          <div class="h-offer-copy">
+            <p class="h-ey">Pilot station offer</p>
+            <h2 id="offer-title">Core is <span>₹0</span> for your first 3 months. Then ₹999/month.</h2>
+            <p>Every pilot station gets 3 full months of PumpOS Core at zero software fees. We configure your tanks, nozzles, and opening balances with you, then stay with your team through your first shift closings.</p>
+            <div class="h-offer-btns">
+              <a class="h-btn h-btn--primary" href="#book">Book your guided demo</a>
+              <a class="h-btn h-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener">
+                <Fragment set:html={waIcon} />
+                <span>WhatsApp {WHATSAPP_DISPLAY}</span>
+              </a>
+            </div>
+          </div>
+          <dl>
+            {stats.map(([val, desc]) => (
+              <div>
+                <dt>{val}</dt>
+                <dd>{desc}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script is:inline define:vars={{ bookingUrl: DEMO_BOOKING_URL }}>
+    const form = document.getElementById('demo-booking-form');
+    const feedback = document.getElementById('demo-form-feedback');
+
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        const name = (form.elements['name']?.value || '').trim();
+        const station = (form.elements['station']?.value || '').trim();
+        const phone = (form.elements['phone']?.value || '').trim();
+        const tanks = (form.elements['tanks']?.value || '').trim();
+        const nozzles = (form.elements['nozzles']?.value || '').trim();
+        const attendants = (form.elements['attendants']?.value || '').trim();
+
+        if (!name || !station || !phone) {
+          if (feedback) {
+            feedback.hidden = false;
+            feedback.className = 'd-feedback d-feedback--err';
+            feedback.textContent = 'Please fill in your name, station name, and phone number.';
+          }
+          return;
+        }
+
+        if (bookingUrl) {
+          try {
+            const url = new URL(bookingUrl);
+            url.searchParams.set('name', name);
+            url.searchParams.set('phone', phone);
+            const notes = [
+              `Station: ${station}`,
+              tanks ? `${tanks} tanks` : '',
+              nozzles ? `${nozzles} nozzles` : '',
+              attendants ? `${attendants} attendants` : '',
+            ].filter(Boolean).join(', ');
+            if (notes) url.searchParams.set('notes', notes);
+
+            if (feedback) {
+              feedback.hidden = false;
+              feedback.className = 'd-feedback d-feedback--info';
+              feedback.innerHTML = `Redirecting to calendar… <a href="${url.toString()}">Click here if not redirected</a>`;
+            }
+            window.location.href = url.toString();
+            return;
+          } catch {
+            // fall through to email if URL parse fails
+          }
+        }
+
+        // Email fallback
+        const setupParts = [
+          tanks ? `${tanks} tanks` : '',
+          nozzles ? `${nozzles} nozzles` : '',
+          attendants ? `${attendants} attendants` : '',
+        ].filter(Boolean).join(', ');
+
+        const lines = [
+          `Name: ${name}`,
+          `Station / Town: ${station}`,
+          `Phone (WhatsApp): ${phone}`,
+          setupParts ? `Station setup: ${setupParts}` : '',
+        ].filter(Boolean);
+
+        const subject = `PumpOS guided demo - ${station || name}`;
+        const body = lines.join('\n');
+        const mailtoUrl = `mailto:hello@pumpos.app?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+        if (feedback) {
+          feedback.hidden = false;
+          feedback.className = 'd-feedback d-feedback--info';
+          feedback.innerHTML = `Opening your email client… <a href="${mailtoUrl}">Click here if your email didn't open</a>`;
+        }
+
+        window.location.href = mailtoUrl;
+      });
+    }
+  </script>
 </BaseLayout>
