@@ -2,6 +2,7 @@
 import ProseLayout from '../../layouts/ProseLayout.astro';
 import Button from '../../components/ds/Button.astro';
 import { getCollection, render } from 'astro:content';
+import '../../styles/content-pages.css';
 
 export async function getStaticPaths() {
   return (await getCollection('blog', ({ data }) => !data.draft)).map((post) => ({

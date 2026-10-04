@@ -5,6 +5,7 @@ import Card from '../../components/ds/Card.astro';
 import Button from '../../components/ds/Button.astro';
 import BrandMark from '../../components/marketing-preview/BrandMark.astro';
 import { getCollection } from 'astro:content';
+import '../../styles/content-pages.css';
 
 const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
   (a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),

@@ -7,6 +7,7 @@ import Button from '../components/ds/Button.astro';
 import PricingTable from '../components/ui/PricingTable.astro';
 import { plans, planFeatures } from '../data/home';
 import { WHATSAPP_URL } from '../config';
+import '../styles/content-pages.css';
 
 const pricingPlans = plans.map((plan) => ({
   ...plan,
@@ -26,7 +27,7 @@ const billingQuestions = [
   {
     question: 'What happens after the first 3 months?',
     answer:
-      'The guided pilot starts at ₹0 for the first 3 months. Before that period ends, choose whether to continue on Core or Pro and confirm monthly or yearly billing. Core is ₹999 per station per month; Pro is ₹1,599 per station per month. Scale pricing is agreed with our team.',
+      'Pilot stations pay ₹0 for the first 3 months on any plan. Before that period ends, choose whether to continue on Core or Pro and confirm monthly or yearly billing. Core is ₹999 per station per month; Pro is ₹1,599 per station per month. Scale pricing is agreed with our team.',
   },
   {
     question: 'How do I upgrade?',
@@ -45,6 +46,7 @@ const billingQuestions = [
       eyebrow="Pricing"
       title="One price per station. Every attendant included."
       lead="Choose monthly or yearly billing. Start with a guided pilot, then continue on the plan that fits your station."
+      level="h1"
       id="pricing-title"
     />
     <div class="pricing-seat-rules" aria-label="Plan login limits">
@@ -71,7 +73,7 @@ const billingQuestions = [
       <SectionHeading
         eyebrow="Compare plans"
         title="Everything your station needs, in one view."
-        lead="The Core pilot offer is ₹0 for the first 3 months. The standard rate begins only after you confirm how you want to continue."
+        lead="Pilot stations pay ₹0 for the first 3 months on any plan. The standard rate begins only after you confirm how you want to continue."
         id="pricing-compare-title"
       />
       <p class="pricing-tax-note">Prices are per station and exclude GST. GST is added to invoices.</p>

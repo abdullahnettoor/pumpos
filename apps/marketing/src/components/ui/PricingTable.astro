@@ -40,7 +40,14 @@ const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
         {p.intro ? (
           <>
             <span class="pt-price"><b class="pt-intro">{inr(p.intro.price)}</b><small>{p.intro.label}</small></span>
-            <small class="pt-sub pt-then">{p.intro.then ?? 'then'} <span data-pm={p.price.monthly} data-py={p.price.yearly}>{inr(defaultInterval === 'yearly' ? p.price.yearly! : p.price.monthly!)}</span><span data-unit>/{defaultInterval === 'yearly' ? 'year' : 'month'}</span></small>
+            <small class="pt-sub pt-then">
+              {p.intro.then ?? 'then'}{' '}
+              <span data-pm={p.price.monthly} data-py={p.price.yearly}>
+                {inr(defaultInterval === 'yearly' ? p.price.yearly! : p.price.monthly!)}
+              </span>
+              <span data-unit>/{defaultInterval === 'yearly' ? 'year' : 'month'}</span>
+              {p.footnote && <sup>*</sup>}
+            </small>
           </>
         ) : p.price.monthly === null ? (
           <span class="pt-price"><b>Talk to us</b></span>

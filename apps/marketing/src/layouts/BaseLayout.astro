@@ -3,7 +3,6 @@ import SiteHeader from '../components/layout/SiteHeader.astro';
 import SiteFooter from '../components/layout/SiteFooter.astro';
 import '../styles/tokens.css';
 import '../styles/site.css';
-import '../styles/content-pages.css';
 interface Props { title: string; description?: string; path?: string; green?: boolean; noindex?: boolean; article?: boolean; }
 const { title, description = 'Fuel station management for Indian owners. Inspect customer dues, collections, stock and Shift reports with PumpOS.', path = '/', green = false, noindex = false, article = false } = Astro.props;
 const canonical = new URL(path, Astro.site).toString();
