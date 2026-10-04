@@ -284,10 +284,10 @@
 .h-hero-bg { position: absolute; inset: 0; overflow: hidden; z-index: -3; pointer-events: none; }
 .h-orbit { position: absolute; left: 50%; top: 35%; width: min(1100px, 120vw); aspect-ratio: 1; translate: -50% -50%; animation: h-spin 60s linear infinite; }
 .h-orbit--rev { width: min(800px, 100vw); animation-duration: 45s; animation-direction: reverse; }
-.h-orbit i { position: absolute; width: 42%; aspect-ratio: 1; border-radius: 50%; filter: blur(60px); }
-.h-orbit i:nth-child(1) { left: 4%; top: 18%; background: #1f6a5380; }
-.h-orbit i:nth-child(2) { right: 6%; bottom: 14%; width: 34%; background: #8fd1b42e; }
-.h-orbit--rev i { right: 0; top: 10%; width: 38%; background: #2f8a6d55; }
+.h-orbit i { position: absolute; width: 42%; aspect-ratio: 1; border-radius: 50%; filter: blur(80px); }
+.h-orbit i:nth-child(1) { left: 4%; top: 18%; background: #1f6a5340; }
+.h-orbit i:nth-child(2) { right: 6%; bottom: 14%; width: 34%; background: #8fd1b41a; }
+.h-orbit--rev i { right: 0; top: 10%; width: 38%; background: #2f8a6d2b; }
 @keyframes h-spin { to { rotate: 360deg; } }
 
 /* Dark timeline: dotted field that fades towards the edges. */

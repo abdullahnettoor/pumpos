@@ -5,7 +5,6 @@ interface Props { path: string; tone?: 'light' | 'dark' }
 const { path, tone = 'light' } = Astro.props;
 const nav = [{ href: '/product', label: 'Product' }, { href: '/#pricing', label: 'Pricing' }, { href: '/docs', label: 'Docs' }, { href: '/blog', label: 'Journal' }, { href: '/download', label: 'Download' }];
 const current = (href: string) => (!href.includes('#') && path.startsWith(href) ? 'page' : undefined);
-const wa = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>';
 ---
 <header class:list={['sh', `sh--${tone}`]}>
   <div class="sh-in">
@@ -14,10 +13,9 @@ const wa = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1
     <div class="sh-acts">
       <a class="sh-signin" href={CONSOLE_URL}>Sign in</a>
       <a class="sh-demo" href="/demo">Book a demo</a>
-      <a class="sh-wa" href={WHATSAPP_URL} target="_blank" rel="noopener" aria-label={`WhatsApp ${WHATSAPP_DISPLAY}`}><Fragment set:html={wa} /><span class="sh-wa-num">{WHATSAPP_DISPLAY}</span><span class="sh-wa-short">WhatsApp</span></a>
       <details class="mobile-menu sh-menu">
         <summary aria-label="Open navigation"><span></span><span></span></summary>
-        <nav aria-label="Mobile navigation">{nav.map((n) => <a href={n.href} aria-current={current(n.href)}>{n.label}</a>)}<a href="/demo">Book a demo</a><a href={CONSOLE_URL}>Sign in ↗</a></nav>
+        <nav aria-label="Mobile navigation">{nav.map((n) => <a href={n.href} aria-current={current(n.href)}>{n.label}</a>)}<a href="/demo">Book a demo</a><a href={WHATSAPP_URL} target="_blank" rel="noopener">WhatsApp {WHATSAPP_DISPLAY}</a><a href={CONSOLE_URL}>Sign in ↗</a></nav>
       </details>
     </div>
   </div>
@@ -39,9 +37,6 @@ const wa = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1
   .sh-signin { padding-inline: 12px; }
   .sh-demo { height: 40px; display: flex; align-items: center; padding-inline: 18px; border-radius: 8px; background: #18201a; color: #fff; }
   .sh--dark .sh-demo { background: #fff; color: #18201a; }
-  .sh-wa { height: 40px; display: flex; align-items: center; gap: 8px; padding-inline: 14px; border-radius: 8px; background: #fff; border: 1px solid #d9ded6; color: #18201a; font-weight: 700; font-size: 14px; }
-  .sh-wa :global(svg) { width: 16px; height: 16px; color: #1f9d55; }
-  .sh-wa-short { display: none; }
   .sh-menu { display: none; }
   .sh-menu nav { position: absolute; right: 0; top: calc(100% + 8px); min-width: 220px; display: flex; flex-direction: column; padding: 8px; border-radius: 12px; background: #fff; color: #18201a; border: 1px solid #d9ded6; box-shadow: 0 18px 40px -20px rgba(15,42,33,.4); }
   .sh-menu nav a { padding: 10px 12px; border-radius: 8px; font-weight: 600; } .sh-menu nav a:hover { background: #eef0ec; }
@@ -49,9 +44,8 @@ const wa = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1
   @media (max-width: 900px) {
     .sh { position: sticky; top: 0; }
     .sh-in { padding: 12px 20px; }
-    .sh-nav, .sh-demo { display: none; }
-    .sh-wa { height: 38px; padding-inline: 12px; font-size: 13px; }
-    .sh-wa-num { display: none; } .sh-wa-short { display: inline; }
-    .sh-menu { display: block; position: relative; }
+    .sh-nav { display: none; }
+    .sh-demo { height: 38px; padding-inline: 14px; font-size: 14px; }
+        .sh-menu { display: block; position: relative; }
   }
 </style>
