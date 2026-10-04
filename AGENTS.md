@@ -580,18 +580,24 @@ Mandatory rules:
 - Persist only static/semi (`PERSIST_PREFIXES`); bump `CACHE_BUSTER` on payload shape changes.
 - Never use `refetchOnMount: 'always'` on tiered queries.
 
-Full plan + audit: `docs/roadmap/phase-P-performance.md`. Practice + review checklist:
+Historical performance plan (verify against code/issues): `docs/roadmap/phase-P-performance.md`.
+Practice + review checklist:
 `.agents/skills/pump-data-caching/SKILL.md`.
 
 ---
 
 # Resilience Rules (Level 2 — online-primary, graceful degradation)
 
-PumpOS is used **mostly online**. Connectivity problems must never block the
-operator: the app degrades gracefully and reconciles when the network returns.
-This is **not** offline-first (cold start with no internet) and **not** multi-day
-disconnected operation — those are an explicitly-future **Level 3** (see
-`docs/roadmap/phase-O-offline-sync.md`).
+**Product target:** PumpOS is used mostly online; a mid-session connectivity drop
+must not block core operator actions. The intended design is graceful degradation
+and reconciliation after reconnect. This is **not** cold-start offline-first or
+multi-day disconnected operation (Level 3, future).
+
+**Current implementation status:** the API has a transactional event outbox and
+idempotency support, but the client does **not yet** have a durable local write
+queue/replay path. `navigator.onLine` indicators report connectivity; they do not
+prove that a write is safely queued or synchronized. Treat offline queued writes
+as planned behavior, not shipped capability. See `docs/roadmap/phase-O-offline-sync.md`.
 
 Desktop (Tauri) is the resilience tier: its UI, code, and assets (incl. fonts)
 are bundled locally via `frontendDist`, so the shell always loads — only data/API
@@ -599,12 +605,13 @@ calls need the network. Mobile is online-only.
 
 Rules when connectivity drops mid-session:
 
-- Never block a core operator action (sale, expense, collection, shift
-  open/**close**) on the network — queue it, don't gate it.
-- Writes: optimistic apply → durable local outbox → retry/backoff → idempotent
-  replay (via `idempotency_keys` + unique `event_id`).
-- Reads: serve from the warm TanStack Query cache; show honest sync state
-  (online / pending N / failed).
+- Required when implementing the client outbox: never block a core operator
+  action (sale, expense, collection, shift open/**close**) on connectivity — queue
+  it rather than gating it.
+- Target write path: optimistic apply → durable local outbox → retry/backoff →
+  idempotent replay (via `idempotency_keys` + unique `event_id`).
+- Reads: serve from the warm TanStack Query cache; show honest sync state only
+  when pending/failed work is actually tracked.
 - Cloud stays authoritative; last-writer-wins on projections; flag only
   money-sensitive collisions (drawer / shift-close) for review.
 
@@ -743,7 +750,13 @@ Single-context: one `CONTEXT.md` at the repo root plus `docs/adr/`. See `docs/ag
 
 ### User flow
 
-For any "how does an operator do X in the app" question — which screen, which button, the end-to-end order of onboarding → shifts → day close — see `docs/USER-FLOW.md` (navigation map: `docs/screenshots/FLOWS.md`).
+For any "how does an operator do X in the app" question — which screen, which button, the end-to-end order of onboarding → shifts → day close — see `docs/USER-FLOW.md` (navigation map: `docs/screenshots/FLOWS.md`). Verify labels and steps against the current UI; the screenshots and walkthrough can lag changes.
+
+### Documentation authority
+
+Use `docs/README.md` for the documentation map. Original v1 proposals are
+archived in `docs/archive/initial-v1/` and are historical context only. Current
+task status lives in GitHub Issues, not roadmap phase status labels.
 
 <!-- graft:start -->
 

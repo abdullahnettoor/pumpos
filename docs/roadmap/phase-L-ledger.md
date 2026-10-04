@@ -1,5 +1,8 @@
 # Phase L — Ledger / Money Visibility
 
+> **Historical phase plan.** Verify completion and remaining work against current
+> code and GitHub Issues before treating this checklist as active.
+
 **Goal:** Tally-style running-balance statements for every money entity, reusing one component. **No DB changes for L1–L4.**
 
 ## What exists

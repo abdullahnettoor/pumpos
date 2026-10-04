@@ -1,5 +1,8 @@
 # Phase HR: Historical replay and manual day close
 
+> **Proposal, not approved implementation guidance.** Check current product
+> direction and GitHub Issues before starting work from this document.
+
 **Status:** Proposed for review
 
 **Goal:** load a historical pump dataset as staged drafts, let an Owner or Manager select which operations to apply, prefill the normal shift UI, and manually close every shift and business day through the standard PumpOS domain workflows.

@@ -1,5 +1,8 @@
 # Phase D — Data Access & Pagination
 
+> **Historical phase plan.** Verify completion and remaining work against current
+> code and GitHub Issues before treating this checklist as active.
+
 **Goal:** stop fetching unbounded lists all at once. Add server-side **keyset pagination**
 (+ sensible default windows and search) to the high-growth list endpoints so the app stays fast
 as operational data accumulates. Work each API independently and validate before moving on.

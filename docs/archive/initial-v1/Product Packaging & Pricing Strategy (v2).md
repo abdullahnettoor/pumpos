@@ -1,3 +1,5 @@
+> **Archived unapproved commercial proposal — not current pricing or packaging.** Use `/PRODUCT.md` and the current marketing brief for product positioning; pricing requires an explicit current decision.
+
 ## Product Philosophy
 
 The pricing model is designed around the operational maturity of a fuel station rather than arbitrary feature restrictions.

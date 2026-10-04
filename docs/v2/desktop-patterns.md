@@ -1,20 +1,17 @@
 # Desktop Patterns (`apps/desktop`)
 
-The desktop app is a **Tauri v2** shell that renders the exact same React tree as the web
-app, consuming `@pump/ui`. It is currently a thin wrapper — the strategy is **web-first**:
-build and verify on `apps/web`, then pull to desktop with near-zero effort because both
-shells consume the same component library.
+The desktop app is a **Tauri v2** shell that shares `@pump/ui` with the operational
+console. It also owns native window behavior, signed in-app updates, and bundled
+desktop assets. Keep business UI shared; put native behavior behind explicit platform
+seams.
 
 ```
 apps/desktop/
-  src/                 App.tsx (≈ identical to apps/web), main.tsx, vite-env.d.ts
-  src-tauri/           Rust shell
-    tauri.conf.json    window + build config
-    capabilities/      permission capabilities (default.json)
-    src/               Rust entry (scaffolding)
+  src/                 React shell, environment selection, title bar, update flow
+  src-tauri/           Rust shell, platform config, capabilities and plugins
 ```
 
-## What it shares with web
+## Shared with the console
 
 - Same `@pump/ui` components, `cloud.ts` service layer, query hooks, Supabase auth.
 - Same `main.tsx` wrapping: `<ErrorBoundary><QueryProvider><App/></QueryProvider></ErrorBoundary>`.
@@ -29,24 +26,24 @@ npm run dev --workspace=apps/desktop      # vite dev (Tauri devUrl)
 `tauri.conf.json` sets `frontendDist: ../dist`, a single main window, and
 `capabilities: ["default"]`.
 
-## Where platform seams go (when needed)
+## Platform seams
 
-Today the desktop app uses no native APIs. When platform-specific behavior is required,
-**abstract it behind an interface in `@pump/ui`** with a web implementation now and a
-Tauri implementation later — so screens never call Tauri APIs directly. Likely seams:
+Native behavior is registered by the desktop shell through interfaces exposed by
+`@pump/ui`; shared screens do not import Tauri APIs directly. Existing seams include
+the title bar and PDF output. Keep future platform-specific behavior behind the same
+injection pattern.
 
-| Capability                        | Web impl           | Desktop (Tauri) impl      |
-| --------------------------------- | ------------------ | ------------------------- |
-| Printing (shift summary / DSSR)   | `window.print()`   | native print / PDF export |
-| Local storage / resilience outbox | IndexedDB (future) | SQLite via Tauri (future) |
-| File export (reports)             | download blob      | native save dialog        |
-| Keyboard shortcuts                | web handlers       | native menu accelerators  |
+| Capability             | Console behavior       | Desktop behavior                          |
+| ---------------------- | ---------------------- | ----------------------------------------- |
+| Title bar              | Browser chrome         | Native overlay/custom controls + dragging |
+| Report PDF output      | Browser download/print | Native save/print integration             |
+| App updates            | Web deployment         | Signed Tauri updater                      |
+| Connectivity indicator | Browser network events | WebView network events                    |
 
 ## Guidance
 
-- Keep desktop-specific logic out of `@pump/ui` components; inject platform capabilities
-  via props/context with a default web implementation.
-- The only expected long-term divergence is **network resilience** (Level 2 —
-  graceful degradation, deferred — see [open-questions.md](open-questions.md)).
-  Not offline-first. Until then, desktop == web in a window.
-- Reconcile the desktop shell after web feature work lands; do not fork screens.
+- Keep desktop-specific logic out of shared business screens; register it at the shell
+  boundary and retain a browser-safe behavior where relevant.
+- The desktop ships its UI and assets locally. Durable queued writes and replay are still
+  planned work; `navigator.onLine` is only a connectivity signal, not proof of sync state.
+- Verify both console and Tauri builds when changing shared shell components.

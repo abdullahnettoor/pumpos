@@ -1,72 +1,64 @@
-# Open Questions & Deferred Decisions
+# Deferred Work & Open Questions
 
-Tracked decisions that are intentionally not built yet. Resolve before implementing.
+This is a short index of deferred work, not a second product rulebook. Current
+rules are in `AGENTS.md`, `CONTEXT.md`, and accepted ADRs. Confirm an item is still
+open in code and GitHub Issues before planning against it.
 
-## 1. Prepaid / fleet wallet top-up (needs discovery)
+## 1. Dealer-held prepaid wallet (product decision still needed)
 
 In Indian fuel retail, prepaid and fleet wallets are frequently owned by the **OMC**
 (IOCL/BPCL/HPCL) loyalty/fleet CMS (e.g. XTRAPOWER, SmartFleet, Fleetcard), **not the
 dealer**. A dealer-side "top-up" may be meaningless or conflict with the OMC system.
 
-Decisions required:
+The OMC-CMS fleet-card sale/settlement path is implemented. Separately, Customer
+records still have prepaid flags/balance fields and the UI retains a legacy top-up
+drawer, but there is no working top-up endpoint. The workflow is not available to
+operators and must not be described as supported.
 
-- **Ownership:** dealer-managed prepaid (our ledger authoritative) vs OMC-CMS-managed
-  (we mirror / only record a charge against an external balance)?
-- **Integration mode:** manual entry, file/CSV reconciliation, or live OMC API? (Most
-  dealers have no API; reconciliation files are common.)
-- **What we record:** if OMC-owned, likely only a `Prepaid Charge` (a sale settled against
-  an external wallet), never a `Prepaid Top-up`; the balance becomes informational.
-- **Card-present overlap:** fleet cards usually authorize at the POS terminal — this
-  overlaps the **payment terminal** model, not a separate wallet.
+If reconsidered, decide:
 
-**Current state:** deferred. The UI `topupCustomer(...)` calls an unimplemented endpoint.
-**Likely v2 path:** model fleet card settlement as `paymentMethod: 'FleetCard'` on
-`CreateSale` (settles like card, no drawer impact) rather than a dealer wallet — unless
-discovery shows dealers genuinely run their own prepaid.
+- Whether a dealer-held balance is a real customer workflow and who owns its source
+  of truth.
+- Whether to implement it, migrate away the legacy fields/UI, or first run customer
+  discovery. OMC-CMS fleet-card settlement is already a separate supported flow.
 
-## 2. Resilience (Level 2 — graceful degradation, deferred)
+## 2. Durable client write outbox and replay
 
-Target is **Level 2**: the app is used **mostly online** and must degrade gracefully
-on connectivity drops — never blocking the operator — then reconcile when back. It is
-**not** cold-start offline-first, and **not** multi-day disconnected operation
-(that is Level 3, future, gated behind real customer demand).
+The product target is **Level 2**: online-primary operation with graceful
+degradation during transient outages. Core operator actions must not be blocked by
+connectivity. This is not cold-start offline-first or multi-day disconnected use
+(Level 3, future, dependent on customer demand).
 
-PostgreSQL is authoritative; the local store is a durable **write outbox + warm read
-cache** (desktop = Tauri SQLite, web = IndexedDB), never the source of truth (mobile
-stays online-only). The event backbone + idempotency keys are designed so this slots
-in later with **no domain change**:
+PostgreSQL remains authoritative. The API has a transactional event outbox and
+idempotency support, but a durable **client write outbox and replay are not yet
+implemented**. Current online/offline indicators reflect connectivity; they do not
+prove a write is durably queued or synchronized. Mobile is online-only.
 
-- Optimistic write → durable local outbox → retry/backoff → cloud confirmation.
-- Core actions (incl. shift / business-day **close**) **queue and reconcile** — never
-  blocked on the network.
-- Every sync operation is idempotent (the `Idempotency-Key` mechanism + unique
-  `event_id` already support replay-safety).
-
-Open: conflict-resolution policy (light: last-writer-wins on projections, flag only
-drawer/shift-close collisions), local store schema, sync cursor/queue, real network
-detection, and the Tauri SQLite seam (see [desktop-patterns.md](desktop-patterns.md)
-and [../roadmap/phase-O-offline-sync.md](../roadmap/phase-O-offline-sync.md)).
+Remaining: local persistence, retry/backoff and replay protocol, honest pending/failed
+state, conflict handling for money-sensitive writes, and offline acceptance tests.
+See [Phase O](../roadmap/phase-O-offline-sync.md). `AGENTS.md` states the required
+operator-facing guarantees.
 
 ## 3. Double-entry ledger (deferred)
 
-v2 emits financial events and anchors everything to the business day, but does **not** run
-a double-entry general ledger. Customer/supplier balances are projections
+PumpOS records Office Records on Entry Date and forecourt activity on Business Day
+and Shift, but does **not** run a double-entry general ledger. Customer/supplier balances are projections
 (Σ debits − Σ credits). A formal GL (chart of accounts, journals) is a later
 "Advanced Accounting" module that should **extend**, not replace, the event model.
 
-## 4. Typed API client (recommended)
+## 4. Typed API client (candidate improvement)
 
 Screens currently treat API responses as `any` (e.g. the rich `/shifts/status` shape).
 A generated or hand-written **typed client** in `@pump/ui/services` would remove this
 coupling and catch backend-shape changes at compile time. Pairs well with finishing the
 UI refactor.
 
-## 5. ShiftsManagement structural split (in progress)
+## 5. Large component refactors (candidate improvement)
 
-The remaining large blocks should be extracted **with the dev server running** for visual
-verification. See [ui-assessment.md](ui-assessment.md) item #1.
+The shift-management UI has historically been large. Reassess the current component
+structure before splitting it; do not treat the old extraction list as current work.
 
-## 6. Bundle code-splitting (deferred)
+## 6. Bundle code-splitting (candidate improvement)
 
-The web bundle is ~1 MB (single chunk). Add route-level dynamic `import()` /
-`build.rollupOptions.output.manualChunks` when load time matters.
+Measure current console bundle size and startup performance before adding route-level
+dynamic imports or manual chunks.

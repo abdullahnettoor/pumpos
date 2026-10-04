@@ -1,5 +1,9 @@
 # Phase X — Expansion Modules
 
+> **Exploration backlog.** These are candidate extensions, not committed product
+> promises. Check GitHub Issues and current commercial/product decisions before
+> treating any item as planned work.
+
 **Goal:** add modules by extending existing entities/events; no core redesign. Each is independent.
 
 ## X1 — Attendance

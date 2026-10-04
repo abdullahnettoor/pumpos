@@ -1,3 +1,5 @@
+> **Archived historical proposal — not current authorization guidance.** Current role and organization-access rules live in `/AGENTS.md`, `/CONTEXT.md`, `/docs/adr/0004-organization-access-control.md`, and the guards/registries in code.
+
 ## Purpose
 
 This document defines role-based access control (RBAC) for the Fuel Pump ERP platform.

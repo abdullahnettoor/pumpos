@@ -1,3 +1,5 @@
+> **Archived historical proposal — not current domain guidance.** Use `/CONTEXT.md`, `/AGENTS.md`, and accepted ADRs under `/docs/adr/` for current terminology and rules.
+
 ## Purpose
 
 This document defines the core business entities, relationships, ownership rules, and operational boundaries of the Fuel Pump ERP system.

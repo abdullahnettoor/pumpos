@@ -1,5 +1,8 @@
 # Phase E - Organization access controls
 
+> **Historical implementation plan.** Accepted access rules are in ADR 0004 and
+> `AGENTS.md`; verify task status in GitHub Issues and behavior against code.
+
 **Goal:** let PumpOS assign optional Product Capabilities and numeric Limits to
 an Organization without confusing customer access with user Roles or temporary
 Feature Flags. Phase one establishes the access model and enforces the one-Station

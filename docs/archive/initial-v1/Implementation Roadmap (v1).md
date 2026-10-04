@@ -1,3 +1,5 @@
+> **Archived historical roadmap — not current work status.** Current planning lives in GitHub Issues; phase context is in `/docs/roadmap/`.
+
 ## Purpose
 
 This document defines the implementation sequence for the Fuel Pump ERP platform.

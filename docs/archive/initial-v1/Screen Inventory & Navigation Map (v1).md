@@ -1,3 +1,5 @@
+> **Archived historical proposal — not current screen inventory.** Verify current navigation and operator workflows in code and `/docs/USER-FLOW.md`.
+
 ## Purpose
 
 This document defines:

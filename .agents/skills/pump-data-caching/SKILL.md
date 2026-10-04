@@ -77,4 +77,4 @@ Auth/session and anything live are operational (or uncached); never persist them
 ## Key files
 - `packages/ui/src/query/hooks.ts` — `TIER`, `queryKeys`, hooks, `useInvalidateOperational`.
 - `packages/ui/src/query/queryClient.tsx` — `createQueryClient`, persistence, `PERSIST_PREFIXES`, buster.
-- `docs/roadmap/phase-P-performance.md` — full performance plan + the static/semi audit table.
+- `docs/roadmap/phase-P-performance.md` — historical performance plan; verify any proposed task against current code and GitHub Issues.

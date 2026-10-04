@@ -1,3 +1,5 @@
+> **Archived historical proposal — not current product guidance.** Current rules live in `/AGENTS.md`, `/CONTEXT.md`, and accepted ADRs under `/docs/adr/`. This document may contain superseded assumptions.
+
 ## Purpose
 
 This document defines how the Fuel Pump ERP operates from a business and operational perspective.
