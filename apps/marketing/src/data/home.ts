@@ -64,19 +64,6 @@ export const statement: [string, string, string, string][] = [
   ['03 Oct', 'Collection · Bank transfer', '− ₹15,000', '₹27,500'],
 ];
 
-export const screens = [
-  { title: 'Customer khata', body: 'Every credit sale and payment, with the balance after each one.' },
-  { title: 'Attendant handover', body: 'On Pro, attendants hand over their own DU from the phone browser. On Core, the manager records it.' },
-  { title: 'Day closing · DSR', body: 'Fuel by readings, less credit and card/UPI, gives the cash you should hold.' },
-];
-
-export const khata: [string, string, string, 'In limit' | 'Near limit' | 'Overdue'][] = [
-  ['Malabar Transports', 'Fleet', '₹27,500', 'In limit'],
-  ['KSRTC Depot Aluva', 'Govt', '₹1,12,800', 'Near limit'],
-  ['Joseph Constructions', 'Contractor', '₹64,200', 'Overdue'],
-  ['Green Valley School', 'Institution', '₹8,900', 'In limit'],
-];
-
 export const dayline: [string, string, string, string][] = [
   ['6:00', 'Manager', 'Opens the shift', 'Assigns each attendant a DU and an opening float. Opening readings carry over.'],
   ['6:05 – 14:00', 'Attendant', 'Sells from their DU', 'Cash, card and UPI. The manager takes cash drops to the office.'],
@@ -105,22 +92,25 @@ export const plans = [
 
 // Logins are limited per plan; attendants without a login are not (issue #335 limits).
 export const planFeatures = [
+  // The first PRICING_KEY_ROWS rows show by default; the rest sit behind "Compare all features".
   { name: 'Logins: 3 on Core, 10 on Pro, custom on Scale', included: 'core', note: 'Owner, manager, accountant or attendant with phone access' },
   { name: 'Attendants without a login, unlimited', included: 'core' },
+  { name: 'Shifts, readings, drawers, stock, credit, books and the saved DSR', included: 'core' },
+  { name: 'Attendant handover on the phone', included: 'pro' },
+  { name: 'WhatsApp reminders and daily summary', included: 'pro', note: 'Coming next' },
+  { name: 'Several stations under one login', included: 'scale' },
   { name: 'Shifts, nozzle readings and handovers', included: 'core' },
   { name: 'Stock, dips and purchases', included: 'core' },
   { name: 'Credit, collections and khata', included: 'core' },
   { name: 'Office books and P&L', included: 'core' },
   { name: 'Saved DSR, VAT and GST', included: 'core' },
   { name: 'Tally, GSTR and Excel export', included: 'core', note: 'Coming next' },
-  { name: 'Attendant handover on the phone', included: 'pro' },
-  { name: 'WhatsApp reminders and daily summary', included: 'pro', note: 'Coming next' },
   { name: 'Customer statement link', included: 'pro', note: 'Coming next' },
   { name: 'Owner alerts on your phone', included: 'pro', note: 'Coming next' },
   { name: 'Attendance, advances and shortage recovery', included: 'pro', note: 'Coming next' },
-  { name: 'Several stations under one login', included: 'scale' },
   { name: 'Reports across stations', included: 'scale', note: 'Coming next' },
 ];
+export const PRICING_KEY_ROWS = 6;
 
 export const faqs: [string, string][] = [
   ['Does it work when the internet goes down?', 'PumpOS is online-first. The desktop app itself loads from your computer, so it stays open, but new entries need a connection to save. Saving entries offline is planned, not shipped.'],

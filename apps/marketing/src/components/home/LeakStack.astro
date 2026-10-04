@@ -19,7 +19,7 @@ import { leaks, dayClose } from '../../data/home';
                 <div class={`h-chip h-chip--${l.tone}`}>
                   <small>{l.who} · {l.sub}</small>
                   <strong>{l.value}</strong>
-                  <dl class="h-bd">{l.rows.map(([a, b]) => <div><dt>{a}</dt><dd>{b}</dd></div>)}</dl>
+                  <details class="h-work" open><summary>See the working</summary><dl class="h-bd">{l.rows.map(([a, b]) => <div><dt>{a}</dt><dd>{b}</dd></div>)}</dl></details>
                 </div>
                 <small class="h-lf">{l.foot}</small>
               </article>
@@ -59,6 +59,9 @@ import { leaks, dayClose } from '../../data/home';
       deckWrap.style.marginBottom = `${-lift}px`;
       spacer.style.height = `${lift}px`;
     };
+    // Phones start with the working folded away to keep the stack short; desktop shows it.
+    if (matchMedia('(max-width: 900px)').matches) sec.querySelectorAll<HTMLDetailsElement>('.h-work').forEach((d) => (d.open = false));
+    sec.querySelectorAll('.h-work').forEach((d) => d.addEventListener('toggle', fit));
     addEventListener('resize', fit);
     document.fonts?.ready.then(fit);
     fit();

@@ -14,9 +14,12 @@ interface Props {
   defaultPlan?: PlanLevel;
   defaultInterval?: 'monthly' | 'yearly';
   yearlyBadge?: string;
+  /** Show only the first N feature rows; the rest open with a "Compare all features" button. */
+  visibleRows?: number;
   class?: string;
 }
-const { features, plans, levels = plans.map((p) => p.level), defaultPlan = plans[1]?.level, defaultInterval = 'monthly', yearlyBadge, class: className } = Astro.props;
+const { features, plans, levels = plans.map((p) => p.level), defaultPlan = plans[1]?.level, defaultInterval = 'monthly', yearlyBadge, visibleRows, class: className } = Astro.props;
+const collapsible = visibleRows !== undefined && visibleRows < features.length;
 const shows = (inc: PlanLevel | null, level: PlanLevel) => inc !== null && levels.indexOf(level) >= levels.indexOf(inc);
 const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
 ---
@@ -52,8 +55,8 @@ const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
     <div class="pt-scroll">
       <div class="pt-grid" style={`--cols:${plans.length}`}>
         <div class="pt-row pt-head"><div>Features</div>{plans.map((p) => <div data-col={p.level}>{p.name}</div>)}</div>
-        {features.map((f) => (
-          <div class="pt-row" data-inc={f.included ?? ''}>
+        {features.map((f, i) => (
+          <div class:list={['pt-row', { 'pt-extra': collapsible && i >= visibleRows! }]} data-inc={f.included ?? ''}>
             <div>{f.name}{f.note && <small class="pt-note">{f.note}</small>}</div>
             {plans.map((p) => (
               <div data-col={p.level}>{shows(f.included, p.level)
@@ -65,6 +68,8 @@ const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
       </div>
     </div>
   </div>
+
+  {collapsible && <button type="button" class="pt-all" aria-expanded="false" data-all><span data-closed>Compare all {features.length} features</span><span data-open hidden>Show fewer features</span></button>}
 
   {plans.filter((p) => p.footnote).map((p) => <p class="pt-foot">*{p.footnote}</p>)}
   <div class="pt-cta">
@@ -101,6 +106,11 @@ const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
       root.querySelectorAll<HTMLElement>('[data-go]').forEach((a) => (a.hidden = a.dataset.go !== plan));
     };
     root.querySelectorAll<HTMLElement>('[data-iv]').forEach((b) => b.addEventListener('click', () => { root.dataset.interval = b.dataset.iv; sync(); }));
+    root.querySelector<HTMLElement>('[data-all]')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget as HTMLElement, open = btn.getAttribute('aria-expanded') !== 'true';
+      btn.setAttribute('aria-expanded', String(open)); root.classList.toggle('pt-expanded', open);
+      btn.querySelector<HTMLElement>('[data-closed]')!.hidden = open; btn.querySelector<HTMLElement>('[data-open]')!.hidden = !open;
+    });
     root.querySelectorAll<HTMLElement>('[data-level]').forEach((b) => b.addEventListener('click', () => { root.dataset.plan = b.dataset.level; sync(); }));
     root.querySelectorAll<HTMLElement>('[data-pm]').forEach((b) => (b.dataset.now = root.dataset.interval === 'yearly' ? b.dataset.py : b.dataset.pm));
     sync();
@@ -137,6 +147,12 @@ const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
   .pt-row svg { width: 20px; height: 20px; color: var(--pt-accent); }
   .pt-dash { color: #c4cbc3; }
   .pt-note { display: block; font-size: 12px; color: var(--pt-muted); }
+  .pt-table:has(+ .pt-all) { border-radius: 14px 14px 0 0; }
+  .pt-extra { display: none; }
+  .pt-expanded .pt-extra { display: grid; }
+  .pt-all { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; text-align: center; padding: 14px; margin-top: -1px; border: 1px solid var(--pt-line); border-radius: 0 0 14px 14px; background: #fff; font-weight: 700; font-size: 14px; color: var(--pt-accent); }
+  .pt-all:hover { background: #f1f7f4; }
+  .pt-all:focus-visible { outline: 2px solid var(--pt-accent); outline-offset: 2px; }
   .pt-foot { font-size: 12px; color: var(--pt-muted); margin: 12px 0 0; }
   .pt-cta { margin-top: 24px; text-align: center; }
   .pt-go { display: inline-flex; align-items: center; gap: 8px; height: 50px; padding-inline: 28px; border-radius: 12px; background: var(--pt-accent); color: #fff; font-weight: 700; text-decoration: none; }

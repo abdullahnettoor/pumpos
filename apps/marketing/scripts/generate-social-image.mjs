@@ -17,11 +17,11 @@ const renderMark = (x, y, height, fill, opacity = 1) =>
   `<path fill-rule="evenodd" d="${markPath}"/></g>`;
 
 /** Site palette. The card introduces no colour of its own. */
-const BRAND = '#1f6a53';
+const BRAND = '#0f2a21';
 const MINT = '#d5e8dd';
 
 const LOCKUP = { x: 70, y: 45, height: 44, gap: 18, baseline: 80 };
-const WATERMARK = { x: 875, y: 175, height: 300, opacity: 0.12 };
+const WATERMARK = { x: 945, y: 190, height: 270, opacity: 0.1 };
 
 const wordmarkX = Math.round(LOCKUP.x + (markWidth / markHeight) * LOCKUP.height + LOCKUP.gap);
 
@@ -30,8 +30,9 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" v
 ${renderMark(LOCKUP.x, LOCKUP.y, LOCKUP.height, '#fff')}
 <text x="${wordmarkX}" y="${LOCKUP.baseline}" fill="white" font-family="Arial, sans-serif" font-size="34" font-weight="600">PumpOS</text>
 <path d="M70 125H1130" stroke="#70a38e" stroke-width="1"/>
-<g font-family="Arial, sans-serif" font-size="76" font-weight="700" fill="white"><text x="70" y="253">Your station.</text><text x="70" y="348">Your numbers.</text><text x="70" y="443" fill="${MINT}">No waiting.</text></g>
-<text x="73" y="555" fill="${MINT}" font-family="Arial, sans-serif" font-size="22">The operating system for fuel retail.</text>
+<g font-family="Arial, sans-serif" font-size="68" font-weight="700" fill="white"><text x="70" y="253">Find the shortage today,</text><text x="70" y="345" fill="${MINT}">not next month.</text></g>
+<text x="73" y="440" fill="white" font-family="Arial, sans-serif" font-size="28">Nozzle readings, cash and dues reconciled at day closing.</text>
+<text x="73" y="555" fill="${MINT}" font-family="Arial, sans-serif" font-size="24" font-weight="700">PumpOS Core: ₹0 for the first 3 months</text>
 ${renderMark(WATERMARK.x, WATERMARK.y, WATERMARK.height, MINT, WATERMARK.opacity)}
 </svg>`;
 
