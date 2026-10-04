@@ -54,7 +54,7 @@
 .h-lk-head { position: sticky; top: 0; z-index: 0; background: var(--h-canvas); padding-block: 32px 28px; display: flex; justify-content: space-between; align-items: end; gap: 40px; }
 .h-lk-head p { max-width: 380px; font-size: 17px; line-height: 1.55; color: var(--h-muted); }
 .h-deck { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 32px; }
-.h-deck::after { content: ''; height: 35vh; }
+.h-deck::after { content: ''; height: 8vh; }
 .h-deck > li { position: sticky; top: calc(var(--hh, 200px) + var(--i) * 18px); z-index: calc(var(--i) + 1); }
 .h-leak { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px 48px; align-items: center; padding: 44px; box-shadow: 0 -12px 30px -24px rgba(24,32,26,.4); }
 .h-leak .h-k { font-size: 12px; letter-spacing: .08em; font-weight: 700; color: var(--h-muted); text-transform: uppercase; }
@@ -359,7 +359,7 @@
   .h-work summary, .h-work[open] summary { display: block; cursor: pointer; font-size: 13px; font-weight: 700; color: var(--h-primary); list-style: none; padding-top: 6px; }
   .h-work summary::-webkit-details-marker { display: none; }
   .h-work summary::after { content: ' ↓'; } .h-work[open] summary::after { content: ' ↑'; }
-  .h-deck::after { height: 12vh; }
+  .h-deck::after { height: 4vh; }
   .h-leak { gap: 10px; } .h-leak > p { display: none; }
   /* Feature cards become a swipe row */
   .home .h-bento.bento-grid { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 12px; margin-inline: -20px; padding: 0 20px 8px; scrollbar-width: none; }
