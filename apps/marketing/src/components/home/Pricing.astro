@@ -8,8 +8,7 @@ const withLinks = plans.map((p) => ({ ...p, href: p.level === 'scale' ? WA_URL :
   <div class="h-w">
     <p class="h-ey">Pricing</p>
     <h2 class="h-h2" id="pricing-title">One price per station. Every attendant included.</h2>
-    <p class="h-lead">Logins are counted, not people. Add every attendant to Core, even without a phone.</p>
-    <PricingTable plans={withLinks} features={planFeatures} levels={['core', 'pro', 'scale']} defaultPlan="core" yearlyBadge="2 months free" visibleRows={PRICING_KEY_ROWS} />
-    <p class="h-note">Prices are per station and exclude GST.</p>
+    <p class="h-lead">Logins are counted, not people. Add every attendant, even without a phone.</p>
+    <PricingTable plans={withLinks} features={planFeatures} levels={['core', 'pro', 'scale']} defaultPlan="pro" popularLabel="Recommended" note="Prices are per station and exclude GST." yearlyBadge="2 months free" visibleRows={PRICING_KEY_ROWS} />
   </div>
 </section>

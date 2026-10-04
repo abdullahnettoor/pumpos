@@ -14,11 +14,15 @@ interface Props {
   defaultPlan?: PlanLevel;
   defaultInterval?: 'monthly' | 'yearly';
   yearlyBadge?: string;
+  /** Badge on the plan marked popular. */
+  popularLabel?: string;
+  /** Extra sentence appended to the footnote line, e.g. tax terms. */
+  note?: string;
   /** Show only the first N feature rows; the rest open with a "Compare all features" button. */
   visibleRows?: number;
   class?: string;
 }
-const { features, plans, levels = plans.map((p) => p.level), defaultPlan = plans[1]?.level, defaultInterval = 'monthly', yearlyBadge, visibleRows, class: className } = Astro.props;
+const { features, plans, levels = plans.map((p) => p.level), defaultPlan = plans[1]?.level, defaultInterval = 'monthly', yearlyBadge, popularLabel = 'Popular', note, visibleRows, class: className } = Astro.props;
 const collapsible = visibleRows !== undefined && visibleRows < features.length;
 const shows = (inc: PlanLevel | null, level: PlanLevel) => inc !== null && levels.indexOf(level) >= levels.indexOf(inc);
 const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
@@ -31,8 +35,8 @@ const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
 
   <div class="pt-plans">
     {plans.map((p) => (
-      <button type="button" class="pt-plan" data-level={p.level} aria-pressed={String(p.level === defaultPlan)}>
-        <span class="pt-name">{p.name}{p.popular && <span class="pt-pop">Popular</span>}</span>
+      <button type="button" class:list={['pt-plan', { 'pt-plan--pop': p.popular }]} data-level={p.level} aria-pressed={String(p.level === defaultPlan)}>
+        <span class="pt-name">{p.name}{p.popular && <span class="pt-pop">{popularLabel}</span>}</span>
         {p.intro ? (
           <>
             <span class="pt-price"><b class="pt-intro">{inr(p.intro.price)}</b><small>{p.intro.label}</small></span>
@@ -71,7 +75,7 @@ const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
 
   {collapsible && <button type="button" class="pt-all" aria-expanded="false" data-all><span data-closed>Compare all {features.length} features</span><span data-open hidden>Show fewer features</span></button>}
 
-  {plans.filter((p) => p.footnote).map((p) => <p class="pt-foot">*{p.footnote}</p>)}
+  {(note || plans.some((p) => p.footnote)) && <p class="pt-foot">{[...plans.filter((p) => p.footnote).map((p) => `*${p.footnote}`), note].filter(Boolean).join(' ')}</p>}
   <div class="pt-cta">
     {plans.map((p) => (
       <a class="pt-go" data-go={p.level} href={p.href ?? '#'} hidden={p.level !== defaultPlan}>
@@ -128,7 +132,9 @@ const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
   .pt-plan:focus-visible { outline: 2px solid var(--pt-accent); outline-offset: 2px; }
   .pt-plan[aria-pressed="true"] { border-color: var(--pt-accent); box-shadow: 0 0 0 2px var(--pt-accent); }
   .pt-name { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 15px; }
-  .pt-pop { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--pt-soft); color: var(--pt-accent); }
+  .pt-plan--pop { background: linear-gradient(180deg, var(--pt-soft), #fff 70%); }
+  .pt-plan--pop .pt-price b { color: var(--pt-accent); }
+  .pt-pop { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--pt-accent); color: #fff; }
   .pt-price { display: flex; align-items: baseline; gap: 4px; }
   .pt-price b { font-size: 30px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
   .pt-intro { color: var(--pt-accent); }
