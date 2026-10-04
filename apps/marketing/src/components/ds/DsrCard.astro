@@ -1,0 +1,68 @@
+---
+import SampleDataBadge from './SampleDataBadge.astro';
+
+interface Row {
+  label: string;
+  value: string;
+  isTotal?: boolean;
+}
+
+interface Props {
+  title?: string;
+  station?: string;
+  date?: string;
+  rows?: Row[];
+  shortageLabel?: string;
+  shortageSubtext?: string;
+  shortageAmount?: string;
+  avatar?: string;
+  class?: string;
+}
+
+const defaultRows: Row[] = [
+  { label: 'Fuel by nozzle readings', value: '₹4,38,920' },
+  { label: 'Lubes & products', value: '₹6,240' },
+  { label: 'Credit sales (khata)', value: '− ₹38,500' },
+  { label: 'Card + UPI', value: '− ₹1,92,410' },
+  { label: 'Cash expected', value: '₹2,14,250', isTotal: true },
+];
+
+const {
+  title = 'Day closing · DSR',
+  station = 'Abne Fuels',
+  date = '04 Oct 2026',
+  rows = defaultRows,
+  shortageLabel = 'Short at DU-2 · Anitha S',
+  shortageSubtext = 'Declared ₹1,21,100 against ₹1,21,450',
+  shortageAmount = '−₹350',
+  avatar = 'AS',
+  class: className = '',
+} = Astro.props;
+---
+<div class:list={['h-card ds-dsr h-dsr', className]} role="img" aria-label={`Sample day closing report for ${station}`}>
+  <div class="h-dsr-h">
+    <div>
+      <strong>{title}</strong>
+      <small>{station} · {date}</small>
+    </div>
+    <SampleDataBadge />
+  </div>
+  <div class="h-dsr-rows">
+    {rows.map((r) => (
+      <div>
+        <span>{r.label}</span>
+        <b>{r.value}</b>
+      </div>
+    ))}
+  </div>
+  {shortageAmount && (
+    <div class="h-short">
+      <span class="h-av">{avatar}</span>
+      <div>
+        <small>{shortageLabel}</small>
+        <small>{shortageSubtext}</small>
+      </div>
+      <strong>{shortageAmount}</strong>
+    </div>
+  )}
+</div>

@@ -13,7 +13,7 @@ npm run preview
 ## Configuration
 
 | Variable | Purpose |
-| --- | --- |
+| --- | --- |\
 | `SITE` | Canonical origin, sitemap and sharing URLs |
 | `PUBLIC_CONSOLE_URL` | Web console destination |
 | `PUBLIC_DOWNLOAD_MANIFEST_URL` | Runtime installer availability manifest |
@@ -28,14 +28,14 @@ The confirmed brief and verification record live in
 `../../docs/marketing-redesign-brief.md`.
 
 - `src/styles/site.css` composes the marketing styles and product illustrations.
+- `src/styles/tokens.css` and `src/styles/ds.css` define the design system tokens and component styles.
+- `src/components/ds/` contains the design system Astro components.
 - `src/components/marketing-preview` contains the selected, shared site components.
 - `src/scripts/collection-tour.ts` owns the sample-data walkthrough state and motion.
 - `src/content` contains the MDX documentation and journal entries.
 - `src/brand-mark.mjs` parses the canonical mark that `npm run brand` copies into
   `public/brand/`. It is the only reader of that artwork; nothing restates the path.
-- `/design-review/home` is a development-only study. The identity study that sat
-  beside it is retired: it compared three candidate marks, and the chosen mark
-  now ships from `public/brand/pumpos-mark.svg`.
+- `/design-system` is a development-only showcase of design tokens, components, and rules.
 
 The customer walkthrough is a labelled product illustration. It does not call
 the API or create transactions. Autoplay begins once on entry into the viewport,
@@ -48,6 +48,3 @@ JavaScript.
 node scripts/download-brand-fonts.mjs
 node scripts/generate-social-image.mjs
 ```
-
-Font licences are stored beside the WOFF2 files. The image generator uses Astro's
-installed Sharp dependency to produce the 1200 × 630 raster social card.

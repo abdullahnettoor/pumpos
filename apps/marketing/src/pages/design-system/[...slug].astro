@@ -1,0 +1,488 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Section from '../../components/ds/Section.astro';
+import SectionHeading from '../../components/ds/SectionHeading.astro';
+import Button from '../../components/ds/Button.astro';
+import Card from '../../components/ds/Card.astro';
+import Pill from '../../components/ds/Pill.astro';
+import StatusChip from '../../components/ds/StatusChip.astro';
+import SampleDataBadge from '../../components/ds/SampleDataBadge.astro';
+import DsrCard from '../../components/ds/DsrCard.astro';
+import StatementTable from '../../components/ds/StatementTable.astro';
+import PhoneFrame from '../../components/ds/PhoneFrame.astro';
+import Receipt from '../../components/ds/Receipt.astro';
+import TankGauge from '../../components/ds/TankGauge.astro';
+import '../../styles/home.css';
+
+// Dev-only route: excluded from production builds, sitemap, and search index.
+export function getStaticPaths() {
+  return import.meta.env.DEV ? [{ params: { slug: undefined } }] : [];
+}
+
+const colors = [
+  { name: '--ds-primary', hex: '#1f6a53', role: 'Main brand, primary CTAs, links' },
+  { name: '--ds-deep', hex: '#0f2a21', role: 'Dark hero background, deep contrast' },
+  { name: '--ds-ink', hex: '#18201a', role: 'Primary text, heavy headings' },
+  { name: '--ds-canvas', hex: '#f6f7f4', role: 'Page background' },
+  { name: '--ds-line', hex: '#d9ded6', role: 'Borders, subtle dividers' },
+  { name: '--ds-muted', hex: '#5e6a61', role: 'Secondary body text, captions' },
+  { name: '--ds-alt', hex: '#eef0ec', role: 'Alternate card background, pill fill' },
+  { name: '--ds-amber', hex: '#b7811e', role: 'Variance warning border & accent' },
+  { name: '--ds-amber-ink', hex: '#8f6414', role: 'Variance text and values' },
+  { name: '--ds-danger', hex: '#b44a3f', role: 'Shortages, critical discrepancies' },
+  { name: '--ds-primary-soft', hex: '#e5f0eb', role: 'Soft green background for reconciled chips' },
+  { name: '--ds-danger-soft', hex: '#f7e7e4', role: 'Soft red background for shortage highlights' },
+  { name: '--ds-amber-soft', hex: '#f6eedb', role: 'Soft amber background for dip variances' },
+  { name: '--ds-mint', hex: '#8fd1b4', role: 'Accent on dark surfaces, hero badges' },
+  { name: '--ds-mint-ink', hex: '#b9cdc4', role: 'Secondary text on dark surfaces' },
+  { name: '--ds-wa', hex: '#168a4a', role: 'WhatsApp buttons and badges' },
+];
+
+const rules = [
+  {
+    num: '01',
+    title: 'Color Discipline',
+    desc: 'Green is reserved strictly for primary calls to action and "reconciled" states. Amber is used for variance (e.g. dip vs book stock). Red is used only for shortages.',
+    tag: 'Strict semantic',
+  },
+  {
+    num: '02',
+    title: 'Sample Data Label',
+    desc: 'Every single figure or transaction displayed in marketing mockups must be labelled with the "Sample data" badge. Never present unlabelled simulated data.',
+    tag: 'Truth in UI',
+  },
+  {
+    num: '03',
+    title: 'Domain Words from CONTEXT.md',
+    desc: 'Always use pump domain vocabulary: attendant (never cashier), Drawer (the cashbox), Handover (end-of-shift transfer), business day (24-hr station cycle), and DSR (Daily Station Sales Report).',
+    tag: 'Domain-driven',
+  },
+  {
+    num: '04',
+    title: 'Online-First Copy',
+    desc: 'Never make offline-queue or offline-sync promises. PumpOS is an online-first architecture with resilient client caching, designed for high reliability over real network conditions.',
+    tag: 'Architecture',
+  },
+  {
+    num: '05',
+    title: 'Reduced Motion',
+    desc: 'All transitions and interactive animations must strictly check and respect prefers-reduced-motion. Essential content must remain fully visible and usable without animation.',
+    tag: 'Accessibility',
+  },
+];
+---
+<BaseLayout title="PumpOS Design System" description="Design tokens, reusable components, and UI rules for PumpOS." path="/design-system" green noindex>
+  <div class="home ds-showcase">
+    <!-- Showcase Hero -->
+    <header class="ds-show-hero">
+      <div class="h-w ds-show-hero-in">
+        <Pill tone="mint">Development Only · Internal Design System</Pill>
+        <h1>PumpOS Design System</h1>
+        <p class="ds-lead" style="color: var(--ds-mint-ink); max-width: 64ch; margin-top: 12px;">
+          The component language and design tokens extracted from the new homepage. Mobile-first, light-first, operator-tested.
+        </p>
+        <nav class="ds-show-nav" aria-label="Design system sections">
+          <a href="#rules">Rules</a>
+          <a href="#tokens">Tokens</a>
+          <a href="#components">Components</a>
+          <a href="#mocks">Product Mocks</a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- 1. System Rules -->
+    <Section id="rules">
+      <SectionHeading
+        eyebrow="Guidelines"
+        title="Five rules for all marketing & product UI"
+        lead="Clear operational constraints ensure our marketing copy and UI components remain honest, accessible, and grounded in daily fuel station reality."
+      />
+      <div class="ds-rules-grid">
+        {rules.map((r) => (
+          <Card class="ds-rule-card">
+            <div class="ds-rule-top">
+              <span class="ds-rule-num">{r.num}</span>
+              <Pill tone="primary">{r.tag}</Pill>
+            </div>
+            <h3>{r.title}</h3>
+            <p>{r.desc}</p>
+          </Card>
+        ))}
+      </div>
+    </Section>
+
+    <!-- 2. Tokens: Colors, Typography, Spacing -->
+    <Section id="tokens" tone="alt">
+      <SectionHeading
+        eyebrow="Design Tokens"
+        title="Colors, typography & spacing"
+        lead="Defined globally in tokens.css and shared across marketing pages and components."
+      />
+
+      <!-- Color Swatches -->
+      <h3 class="ds-subhead">Color Palette</h3>
+      <div class="ds-swatches-grid">
+        {colors.map((c) => (
+          <div class="ds-swatch-item">
+            <div class="ds-swatch-box" style={`background: ${c.hex}; border: 1px solid ${c.hex === '#f6f7f4' ? '#d9ded6' : 'transparent'}`}></div>
+            <div class="ds-swatch-meta">
+              <strong>{c.name}</strong>
+              <code>{c.hex}</code>
+              <span>{c.role}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <!-- Typography -->
+      <h3 class="ds-subhead" style="margin-top: 56px;">Typography Scale</h3>
+      <Card class="ds-type-card">
+        <div class="ds-type-row">
+          <span class="ds-type-label">Hero H1 · clamp(48–92px)</span>
+          <div class="ds-hero-h1" style="font-size: clamp(38px, 4vw, 56px);">Find the shortage today.</div>
+        </div>
+        <div class="ds-type-row">
+          <span class="ds-type-label">Section H2 · clamp(34–52px)</span>
+          <div class="ds-h2" style="margin: 0;">Three leaks. Each one found the same day.</div>
+        </div>
+        <div class="ds-type-row">
+          <span class="ds-type-label">Card Title H3 · 20–22px</span>
+          <div style="font-size: 21px; font-weight: 800; letter-spacing: -.02em;">Attendant Drawer Handover</div>
+        </div>
+        <div class="ds-type-row">
+          <span class="ds-type-label">Lead paragraph · 17px / 1.55</span>
+          <p class="ds-lead" style="margin: 0;">PumpOS reconciles nozzle readings, cash and dues at day closing. One DSR, your day report.</p>
+        </div>
+        <div class="ds-type-row">
+          <span class="ds-type-label">Body text · 15px / 1.5</span>
+          <p style="font-size: 15px; line-height: 1.5; color: var(--ds-ink);">Opening readings carry over automatically from the previous closed shift. No manual typing of meter totals.</p>
+        </div>
+        <div class="ds-type-row">
+          <span class="ds-type-label">Eyebrow · 13px / 700 / 0.1em</span>
+          <p class="ds-ey" style="margin: 0;">For pump owners and dealers</p>
+        </div>
+        <div class="ds-type-row">
+          <span class="ds-type-label">Tabular Figures · Geist Mono</span>
+          <div style="font-family: var(--ds-font-mono); font-size: 18px; font-weight: 600;">₹4,38,920.00 · 14,202 L · −₹350</div>
+        </div>
+      </Card>
+    </Section>
+
+    <!-- 3. Reusable Components -->
+    <Section id="components">
+      <SectionHeading
+        eyebrow="Components"
+        title="Shared UI building blocks"
+        lead="Lightweight, accessible Astro components in components/ds/."
+      />
+
+      <div class="ds-comp-grid">
+        <!-- Buttons -->
+        <Card class="ds-comp-card">
+          <h4>Buttons</h4>
+          <p class="ds-comp-desc">Primary action, secondary outline, and WhatsApp direct messaging button.</p>
+          <div class="ds-demo-row">
+            <Button variant="primary">Book a guided demo</Button>
+            <Button variant="secondary">Explore product</Button>
+            <Button variant="wa" href="/whatsapp" target="_blank" rel="noopener">WhatsApp us</Button>
+          </div>
+        </Card>
+
+        <!-- Pills & Badges -->
+        <Card class="ds-comp-card">
+          <h4>Pills & Badges</h4>
+          <p class="ds-comp-desc">Small tags for metadata, offer callouts, and sample indicator.</p>
+          <div class="ds-demo-row">
+            <Pill>Default pill</Pill>
+            <Pill tone="primary">Core ₹0 offer</Pill>
+            <Pill tone="mint">On dark</Pill>
+            <Pill tone="amber">Variance note</Pill>
+            <Pill tone="danger">Shortage alert</Pill>
+            <SampleDataBadge />
+          </div>
+        </Card>
+
+        <!-- Status Chips -->
+        <Card class="ds-comp-card">
+          <h4>Status Chips</h4>
+          <p class="ds-comp-desc">Indicators for reconciled balances, limits, and large shortage stats.</p>
+          <div class="ds-demo-row" style="align-items: center;">
+            <StatusChip tone="ok">Reconciled</StatusChip>
+            <StatusChip tone="near">Near limit</StatusChip>
+            <StatusChip tone="over">Over limit</StatusChip>
+          </div>
+          <div class="ds-demo-row" style="margin-top: 16px;">
+            <StatusChip large tone="danger" label="Daily shortage" amount="−₹350" />
+            <StatusChip large tone="amber" label="Tank dip variance" amount="−18 L" />
+          </div>
+        </Card>
+
+        <!-- Cards -->
+        <Card class="ds-comp-card">
+          <h4>Card Container</h4>
+          <p class="ds-comp-desc">Flexible surface card with light, dark, and alt tones.</p>
+          <div class="ds-demo-row" style="display: grid; grid-template-columns: repeat(3, 1fr); width: 100%;">
+            <Card style="padding: 20px;"><strong>Light card</strong><p style="font-size: 13px; color: var(--ds-muted); margin-top: 6px;">Default white container</p></Card>
+            <Card tone="alt" style="padding: 20px;"><strong>Alt card</strong><p style="font-size: 13px; color: var(--ds-muted); margin-top: 6px;">Muted gray container</p></Card>
+            <Card tone="dark" style="padding: 20px;"><strong>Dark card</strong><p style="font-size: 13px; color: var(--ds-mint-ink); margin-top: 6px;">Deep background</p></Card>
+          </div>
+        </Card>
+      </div>
+    </Section>
+
+    <!-- 4. Product Mockups -->
+    <Section id="mocks" tone="alt">
+      <SectionHeading
+        eyebrow="Product Mockups"
+        title="Accurate forecourt artifacts"
+        lead="Product illustrations representing authentic station workflows: DSR close, customer ledgers, attendant mobile, receipts, and tank gauges."
+      />
+
+      <div class="ds-mocks-grid">
+        <!-- DSR Card -->
+        <div class="ds-mock-item">
+          <h4>DsrCard</h4>
+          <p class="ds-comp-desc">Day closing Daily Station Sales Report with itemized lines and attendant shortage flag.</p>
+          <DsrCard />
+        </div>
+
+        <!-- Customer Statement Table -->
+        <div class="ds-mock-item">
+          <h4>StatementTable</h4>
+          <p class="ds-comp-desc">Customer credit ledger table showing sales, payment received, and running balance.</p>
+          <StatementTable />
+        </div>
+
+        <!-- Mobile Phone Frame -->
+        <div class="ds-mock-item">
+          <h4>PhoneFrame</h4>
+          <p class="ds-comp-desc">Attendant and owner mobile view mockup.</p>
+          <PhoneFrame />
+        </div>
+
+        <!-- Receipt -->
+        <div class="ds-mock-item">
+          <h4>Receipt</h4>
+          <p class="ds-comp-desc">Customer collection payment receipt.</p>
+          <Receipt />
+        </div>
+
+        <!-- Tank Gauge -->
+        <div class="ds-mock-item">
+          <h4>TankGauge</h4>
+          <p class="ds-comp-desc">Tank dip measurement against book stock with temperature variance log.</p>
+          <TankGauge />
+        </div>
+      </div>
+    </Section>
+  </div>
+</BaseLayout>
+
+<style>
+  .ds-showcase {
+    background: var(--ds-canvas);
+  }
+  .ds-show-hero {
+    background: var(--ds-deep);
+    color: #fff;
+    padding-block: 80px 60px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .ds-show-hero-in {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .ds-show-hero h1 {
+    font-size: clamp(36px, 5vw, 64px);
+    font-weight: 800;
+    letter-spacing: -.035em;
+    line-height: 1.05;
+    margin: 0;
+  }
+  .ds-show-nav {
+    display: flex;
+    gap: 16px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .ds-show-nav a {
+    color: var(--ds-mint);
+    font-weight: 700;
+    font-size: 14px;
+    padding: 8px 16px;
+    border-radius: var(--ds-radius-pill);
+    background: rgba(143, 209, 180, 0.12);
+    text-decoration: none;
+    transition: background .18s;
+  }
+  .ds-show-nav a:hover {
+    background: rgba(143, 209, 180, 0.24);
+  }
+
+  /* Rules Grid */
+  .ds-rules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 36px;
+  }
+  .ds-rule-card {
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .ds-rule-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .ds-rule-num {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ds-primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .ds-rule-card h3 {
+    font-size: 19px;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: -.02em;
+  }
+  .ds-rule-card p {
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--ds-muted);
+    margin: 0;
+  }
+
+  /* Swatches */
+  .ds-subhead {
+    font-size: 20px;
+    font-weight: 800;
+    margin: 32px 0 16px;
+    letter-spacing: -.02em;
+  }
+  .ds-swatches-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .ds-swatch-item {
+    background: #fff;
+    border: 1px solid var(--ds-line);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .ds-swatch-box {
+    height: 72px;
+    width: 100%;
+  }
+  .ds-swatch-meta {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .ds-swatch-meta strong {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ds-ink);
+  }
+  .ds-swatch-meta code {
+    font-size: 11px;
+    color: var(--ds-primary);
+    font-family: var(--ds-font-mono);
+  }
+  .ds-swatch-meta span {
+    font-size: 11px;
+    color: var(--ds-muted);
+    line-height: 1.35;
+  }
+
+  /* Typography card */
+  .ds-type-card {
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .ds-type-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--ds-line);
+  }
+  .ds-type-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .ds-type-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ds-muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+
+  /* Components Grid */
+  .ds-comp-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 28px;
+    margin-top: 36px;
+  }
+  .ds-comp-card {
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .ds-comp-card h4 {
+    font-size: 18px;
+    font-weight: 800;
+    margin: 0;
+  }
+  .ds-comp-desc {
+    font-size: 14px;
+    color: var(--ds-muted);
+    margin: 0;
+  }
+  .ds-demo-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+    margin-top: 12px;
+  }
+
+  /* Mocks Grid */
+  .ds-mocks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 28px;
+    margin-top: 36px;
+    align-items: start;
+  }
+  .ds-mock-item {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .ds-mock-item h4 {
+    font-size: 18px;
+    font-weight: 800;
+    margin: 0;
+  }
+
+  @media (max-width: 900px) {
+    .ds-mocks-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

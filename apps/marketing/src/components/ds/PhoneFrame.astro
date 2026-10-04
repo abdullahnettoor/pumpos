@@ -1,0 +1,39 @@
+---
+import SampleDataBadge from './SampleDataBadge.astro';
+
+interface Props {
+  title?: string;
+  customer?: string;
+  label?: string;
+  amount?: string;
+  actionText?: string;
+  class?: string;
+}
+
+const {
+  title = 'PumpOS',
+  customer = 'Malabar Transports',
+  label = 'Owes you',
+  amount = '₹27,500',
+  actionText = 'Collect payment',
+  class: className = '',
+} = Astro.props;
+---
+<div class:list={['h-phone-wrap ds-phone-wrap', className]}>
+  <div class="h-phone ds-phone">
+    <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; font-weight:700;">
+      <span>{title}</span>
+      <SampleDataBadge />
+    </div>
+    <slot>
+      <div class="h-r">
+        <div>
+          <strong style="display:block">{customer}</strong>
+          <small class="h-mut">{label}</small>
+        </div>
+        <b style="font-size:18px; color:var(--ds-primary);">{amount}</b>
+      </div>
+      {actionText && <div class="h-go">{actionText}</div>}
+    </slot>
+  </div>
+</div>

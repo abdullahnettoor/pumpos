@@ -1,10 +1,11 @@
 ---
 import { dsrRows } from '../../data/home';
 import { DEMO_PATH } from './links';
+import HeroBg from './HeroBg.astro';
 const ticks = ['Shortage named per DU', 'Day report saved, never changed', 'Every change logged with a name'];
 ---
 <section class="h-hero">
-  <div class="h-hero-bg" aria-hidden="true"><div class="h-orbit"><i></i><i></i></div><div class="h-orbit h-orbit--rev"><i></i></div></div>
+  <HeroBg />
   <div class="h-w h-hero-in">
     <div class="h-hero-copy">
       <p class="h-ey">For pump owners and dealers</p>
@@ -23,4 +24,3 @@ const ticks = ['Shortage named per DU', 'Day report saved, never changed', 'Ever
     </div>
   </div>
 </section>
-<div class="h-w"><div class="h-omc"><strong>Configurable for any OMC dealership.</strong><p>Shifts, readings, drawers and dues work the same at every fuel station. You set up your own tanks, nozzles, products and prices, whichever oil company supplies you.</p></div></div>

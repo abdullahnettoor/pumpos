@@ -1,3 +1,5 @@
+@import './tokens.css';
+@import './ds.css';
 @import './marketing-preview.css';
 @import './product-illustrations.css';
 @font-face { font-family: 'Plus Jakarta Sans'; font-weight: 200 800; font-style: normal; font-display: swap; src: url('/fonts/brand/plus-jakarta-sans-variable.woff2') format('woff2'); }
@@ -215,7 +217,7 @@ summary:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
 .docs-content > p { font-size: 15px; line-height: 1.9; color: var(--muted); margin-top: 18px; }
 .docs-content .prose-pump { margin-top: 35px; }
 .docs-mobile { display: none; }
-.docs-search { --pagefind-ui-scale: .8; --pagefind-ui-primary: #1f6a53; --pagefind-ui-text: #172c23; --pagefind-ui-background: #fff; --pagefind-ui-border: #b9c1b7; --pagefind-ui-border-radius: 4px; --pagefind-ui-font: 'Public Sans',Arial,sans-serif; }
+.docs-search { --pagefind-ui-scale: .8; --pagefind-ui-primary: #1f6a53; --pagefind-ui-text: #172c23; --pagefind-ui-background: #fff; --pagefind-ui-border: #b9c1b7; --pagefind-ui-border-radius: 4px; --pagefind-ui-font: 'Plus Jakarta Sans',Arial,sans-serif; }
 .legal-notice { background: var(--mint); padding: 22px; margin-top: 30px; font-size: 13px; line-height: 1.9; }
 .error-page { padding-block: 110px; min-height: 60vh; }
 .error-page > p:first-child { font-size: 12px; color: var(--brand); }
