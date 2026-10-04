@@ -216,7 +216,7 @@
   .h-short { margin: 0 12px 12px; padding: 12px; gap: 10px; } .h-short strong { font-size: 18px; }
   .h-hero .h-dsr { margin-bottom: -60px; }
   .h-omc { padding-top: 92px; flex-direction: column; align-items: flex-start; gap: 8px; }
-  .h-lk-head { top: 62px; padding-block: 14px; } .h-lk-head p { display: none; } .h-lk-head .h-h2 { font-size: 24px; margin-top: 6px; }
+  .h-lk-head { top: 62px; padding-block: 14px; } .h-lk-head p { display: none; } .h-lk-head .ds-h2 { font-size: 24px; margin-top: 6px; }
   .h-deck { gap: 16px; }
   .h-leak { display: flex; flex-direction: column; align-items: stretch; gap: 12px; padding: 20px; border-radius: 16px; }
   .h-leak h3 { font-size: 21px; line-height: 1.2; } .h-leak > p { font-size: 14px; }
