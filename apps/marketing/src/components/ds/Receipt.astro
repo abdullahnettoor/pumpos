@@ -1,6 +1,4 @@
 ---
-import SampleDataBadge from './SampleDataBadge.astro';
-
 interface LineItem {
   label: string;
   value: string;
@@ -12,38 +10,42 @@ interface Props {
   status?: string;
   items?: LineItem[];
   class?: string;
+  [key: string]: unknown;
 }
 
 const defaultItems: LineItem[] = [
-  { label: 'Customer', value: 'Malabar Transports' },
-  { label: 'Mode', value: 'Bank transfer (NEFT)' },
-  { label: 'Reference', value: 'UTR9823412' },
-  { label: 'Balance after', value: '₹27,500' },
+  { label: 'From', value: 'Malabar Transports' },
+  { label: 'Method', value: 'Bank transfer' },
+  { label: 'Into', value: 'Station bank account' },
+  { label: 'Drawer cash', value: 'Not touched' },
+  { label: 'Due after', value: '₹27,500' },
 ];
 
 const {
-  eyebrow = 'Collection receipt',
+  eyebrow = 'Collection · 03 Oct · Entry date',
   amount = '₹15,000',
-  status = 'Recorded',
+  status,
   items = defaultItems,
   class: className = '',
+  ...rest
 } = Astro.props;
 ---
-<div class:list={['h-card ds-rcpt h-rcpt', className]} role="region" aria-label={`${eyebrow} preview`}>
-  <div style="display:flex; justify-content:space-between; align-items:center;">
-    <span class="ds-ey">{eyebrow}</span>
-    <div style="display:flex; align-items:center; gap:8px;">
-      {status && <span class="ds-st">{status}</span>}
-      <SampleDataBadge />
+<div class:list={['ds-card h-card ds-rcpt h-rcpt', className]} role="region" aria-label={`${eyebrow} preview`} {...rest}>
+  {status ? (
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span class="ds-ey h-ey">{eyebrow}</span>
+      <span class="ds-st h-st">{status}</span>
     </div>
-  </div>
+  ) : (
+    <small class="h-mut">{eyebrow}</small>
+  )}
   <strong>{amount}</strong>
-  <div class="h-bd">
+  <dl class="h-bd">
     {items.map((it) => (
       <div>
         <dt>{it.label}</dt>
         <dd>{it.value}</dd>
       </div>
     ))}
-  </div>
+  </dl>
 </div>

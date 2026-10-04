@@ -1,44 +1,45 @@
 ---
+import Section from '../ds/Section.astro';
+import SectionHeading from '../ds/SectionHeading.astro';
+import Card from '../ds/Card.astro';
 import { leaks, dayClose } from '../../data/home';
 ---
-<section class="h-sec h-leaks" id="how" aria-labelledby="leaks-title" data-leaks>
-  <div class="h-w">
-    <div class="h-lk-wrap">
-      <div class="h-lk-head">
-        <div><p class="h-ey">Where a pump loses money</p><h2 class="h-h2" id="leaks-title">Three leaks. Each one found the same day.</h2></div>
-        <p>Not a monthly surprise. A number, a nozzle and a name, before you lock the office.</p>
-      </div>
-      <div class="h-deck-wrap">
-        <ol class="h-deck">
-          {leaks.map((l, i) => (
-            <li style={`--i:${i}`}>
-              <article class="h-card h-leak">
-                <span class="h-k">0{i + 1} · {l.kicker}</span>
-                <h3>{l.title}</h3>
-                <p>{l.body}</p>
-                <div class={`h-chip h-chip--${l.tone}`}>
-                  <small>{l.who} · {l.sub}</small>
-                  <strong>{l.value}</strong>
-                  <details class="h-work" open><summary>See the working</summary><dl class="h-bd">{l.rows.map(([a, b]) => <div><dt>{a}</dt><dd>{b}</dd></div>)}</dl></details>
-                </div>
-                <small class="h-lf">{l.foot}</small>
-              </article>
-            </li>
-          ))}
-          <li style="--i:3">
-            <article class="h-card h-leak h-final">
-              <span class="h-k">PumpOS · Day close</span>
-              <h3>One day. One saved report.</h3>
-              <p>Readings, handovers, tank dips and fleet credit close together into the day's DSR. Nothing is recalculated later.</p>
-              <ul class="h-res">{dayClose.map(([a, b, s, kind]) => <li><div>{a}<span>{b}</span></div><em class:list={{ 'is-var': kind === 'variance' }}>{s}</em></li>)}</ul>
-            </article>
-          </li>
-        </ol>
-      </div>
+<Section id="how" class="h-leaks" aria-labelledby="leaks-title" data-leaks>
+  <div class="h-lk-wrap">
+    <div class="h-lk-head">
+      <SectionHeading eyebrow="Where a pump loses money" title="Three leaks. Each one found the same day." id="leaks-title" />
+      <p>Not a monthly surprise. A number, a nozzle and a name, before you lock the office.</p>
     </div>
-    <div class="h-lk-spacer" aria-hidden="true"></div>
+    <div class="h-deck-wrap">
+      <ol class="h-deck">
+        {leaks.map((l, i) => (
+          <li style={`--i:${i}`}>
+            <Card as="article" class="h-leak">
+              <span class="h-k">0{i + 1} · {l.kicker}</span>
+              <h3>{l.title}</h3>
+              <p>{l.body}</p>
+              <div class={`ds-chip h-chip ds-chip--${l.tone} h-chip--${l.tone}`}>
+                <small>{l.who} · {l.sub}</small>
+                <strong>{l.value}</strong>
+                <details class="h-work" open><summary>See the working</summary><dl class="h-bd">{l.rows.map(([a, b]) => <div><dt>{a}</dt><dd>{b}</dd></div>)}</dl></details>
+              </div>
+              <small class="h-lf">{l.foot}</small>
+            </Card>
+          </li>
+        ))}
+        <li style="--i:3">
+          <Card as="article" tone="dark" class="h-leak h-final">
+            <span class="h-k">PumpOS · Day close</span>
+            <h3>One day. One saved report.</h3>
+            <p>Readings, handovers, tank dips and fleet credit close together into the day's DSR. Nothing is recalculated later.</p>
+            <ul class="h-res">{dayClose.map(([a, b, s, kind]) => <li><div>{a}<span>{b}</span></div><em class:list={{ 'is-var': kind === 'variance' }}>{s}</em></li>)}</ul>
+          </Card>
+        </li>
+      </ol>
+    </div>
   </div>
-</section>
+  <div class="h-lk-spacer" aria-hidden="true"></div>
+</Section>
 
 <script>
   // Cards pin below the sticky heading and share the tallest card's height. The heading's

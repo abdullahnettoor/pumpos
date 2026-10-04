@@ -1,11 +1,12 @@
 ---
 // Phone-only bar with the two ways to start. Appears after the hero, hides again once
 // the closing offer (which has the same buttons) is reached.
+import Button from '../ds/Button.astro';
 import { DEMO_PATH, WA_URL } from './links';
 ---
 <div class="h-mbar" data-mbar aria-hidden="true">
-  <a class="h-btn h-btn--primary" href={DEMO_PATH} tabindex="-1">Book a demo</a>
-  <a class="h-btn h-btn--wa" href={WA_URL} target="_blank" rel="noopener" tabindex="-1">WhatsApp</a>
+  <Button variant="primary" href={DEMO_PATH} tabindex="-1">Book a demo</Button>
+  <Button variant="wa" href={WA_URL} target="_blank" rel="noopener" tabindex="-1">WhatsApp</Button>
 </div>
 
 <script>

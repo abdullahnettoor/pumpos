@@ -1,32 +1,33 @@
 ---
+import Section from '../ds/Section.astro';
+import SectionHeading from '../ds/SectionHeading.astro';
+import Button from '../ds/Button.astro';
 import { faqs } from '../../data/home';
 import { WA_URL } from './links';
 ---
-<section class="h-sec" id="faq" style="padding-top:0" aria-labelledby="faq-title" data-faq>
-  <div class="h-w">
-    <div class="h-faq-h">
-      <div><p class="h-ey">Questions dealers ask</p><h2 class="h-h2" id="faq-title">Straight answers.</h2></div>
-      <p>Something else? <a href={WA_URL} target="_blank" rel="noopener">Message us on WhatsApp</a>. You talk to the people who build PumpOS.</p>
-    </div>
-    <label class="h-search">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2" /><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
-      <input type="search" placeholder="Search questions, e.g. Tally, offline, attendants" aria-label="Search questions" aria-controls="faq-list" />
-    </label>
-    <div class="h-acc" id="faq-list">
-      {faqs.map(([q, a], i) => (
-        <details name="faq" data-text={`${q} ${a}`.toLowerCase()} open={i === 0}>
-          <summary><span class="h-n">{String(i + 1).padStart(2, '0')}</span><span class="h-q">{q}</span><i class="h-pm" aria-hidden="true"></i></summary>
-          <p>{a}</p>
-        </details>
-      ))}
-    </div>
-    <div class="h-none" hidden>
-      <p>No answer for “<b data-echo></b>” yet.</p>
-      <a class="h-btn h-btn--wa" data-ask href={WA_URL} target="_blank" rel="noopener">Ask this on WhatsApp</a>
-    </div>
-    <p class="sr-only" role="status" aria-live="polite" data-count></p>
+<Section id="faq" style="padding-top:0" aria-labelledby="faq-title" data-faq>
+  <div class="h-faq-h">
+    <SectionHeading eyebrow="Questions dealers ask" title="Straight answers." id="faq-title" />
+    <p>Something else? <a href={WA_URL} target="_blank" rel="noopener">Message us on WhatsApp</a>. You talk to the people who build PumpOS.</p>
   </div>
-</section>
+  <label class="h-search">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2" /><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+    <input type="search" placeholder="Search questions, e.g. Tally, offline, attendants" aria-label="Search questions" aria-controls="faq-list" />
+  </label>
+  <div class="h-acc" id="faq-list">
+    {faqs.map(([q, a], i) => (
+      <details name="faq" data-text={`${q} ${a}`.toLowerCase()} open={i === 0}>
+        <summary><span class="h-n">{String(i + 1).padStart(2, '0')}</span><span class="h-q">{q}</span><i class="h-pm" aria-hidden="true"></i></summary>
+        <p>{a}</p>
+      </details>
+    ))}
+  </div>
+  <div class="h-none" hidden>
+    <p>No answer for “<b data-echo></b>” yet.</p>
+    <Button variant="wa" data-ask href={WA_URL} target="_blank" rel="noopener">Ask this on WhatsApp</Button>
+  </div>
+  <p class="sr-only" role="status" aria-live="polite" data-count></p>
+</Section>
 
 <script>
   import { waAsk } from './links';

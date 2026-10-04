@@ -1,6 +1,4 @@
 ---
-import SampleDataBadge from './SampleDataBadge.astro';
-
 interface Props {
   title?: string;
   customer?: string;
@@ -8,6 +6,7 @@ interface Props {
   amount?: string;
   actionText?: string;
   class?: string;
+  [key: string]: unknown;
 }
 
 const {
@@ -17,15 +16,16 @@ const {
   amount = '₹27,500',
   actionText = 'Collect payment',
   class: className = '',
+  ...rest
 } = Astro.props;
 ---
-<div class:list={['h-phone-wrap ds-phone-wrap', className]}>
-  <div class="h-phone ds-phone">
-    <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; font-weight:700;">
-      <span>{title}</span>
-      <SampleDataBadge />
-    </div>
+<div class:list={['ds-card h-card ds-phone-wrap h-phone-wrap', className]} {...rest}>
+  <div class="ds-phone h-phone">
     <slot>
+      <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; font-weight:700;">
+        <span>{title}</span>
+        <span class="ds-sample-tag">Sample data</span>
+      </div>
       <div class="h-r">
         <div>
           <strong style="display:block">{customer}</strong>

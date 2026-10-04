@@ -1,4 +1,6 @@
 ---
+import Section from '../ds/Section.astro';
+import SectionHeading from '../ds/SectionHeading.astro';
 import BentoGrid from '../ui/BentoGrid.astro';
 import BentoCard from '../ui/BentoCard.astro';
 import { comingNext } from '../../data/home';
@@ -13,35 +15,36 @@ const icons = {
   file: svg('<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/>'),
 };
 ---
-<section class="h-sec" id="features" aria-labelledby="features-title">
-  <div class="h-w">
-    <div class="h-fh"><div><p class="h-ey">Everything in one place</p><h2 class="h-h2" id="features-title">The whole station, not just the shift.</h2></div><a href="/product">Explore the product →</a></div>
-    <BentoGrid class="h-bento">
-      <BentoCard title="Shifts and nozzle readings" description="Fuel sales come from opening and closing readings, never typed-in totals." colSpan={2} href="/product#shifts">
-        <Fragment slot="icon" set:html={icons.gauge} />
-        <div class="h-bp-tbl">{[['N1 · MS', '48,210.4', '49,102.9', '892.5 L'], ['N2 · HSD', '71,880.0', '73,214.6', '1,334.6 L'], ['N3 · HSD', '22,104.2', '22,986.0', '881.8 L']].map((r) => <div>{r.map((c) => <span>{c}</span>)}</div>)}<small>Opening carried from last close · Sample data</small></div>
-      </BentoCard>
-      <BentoCard title="Drawers and handovers" description="Each attendant hands over their own DU. A shortage has a name." href="/product#shifts">
-        <Fragment slot="icon" set:html={icons.wallet} />
-        <div class="h-bp-big"><small>Anitha S · DU-2</small><strong class="h-neg">−₹350</strong><span>Declared ₹1,21,100 of ₹1,21,450</span></div>
-      </BentoCard>
-      <BentoCard title="Stock and dips" description="Expected stock against the dip, with the reason kept." href="/product#stock">
-        <Fragment slot="icon" set:html={icons.drop} />
-        <div class="h-bp-tank"><div class="h-tk"><i style="height:71%"></i></div><div class="h-bp-big"><small>HSD Tank 2</small><strong class="h-amb">−18 L</strong><span>14,202 of 14,220 L</span></div></div>
-      </BentoCard>
-      <BentoCard title="Credit and khata" description="Credit sales by customer and vehicle, with a running balance." href="/product#owner">
-        <Fragment slot="icon" set:html={icons.users} />
-        <div class="h-bp-big"><small>KSRTC Depot Aluva</small><strong>₹1,12,800</strong><div class="h-bar"><i style="width:94%"></i></div><span>94% of ₹1,20,000 limit</span></div>
-      </BentoCard>
-      <BentoCard title="Office books" description="Collections, expenses, income and supplier payments by entry date." href="/product#reports">
-        <Fragment slot="icon" set:html={icons.book} />
-        <div class="h-bp-list">{[['Collection · NEFT', '+ ₹30,000'], ['Supplier payment', '− ₹4,82,000'], ['Expense · Power', '− ₹18,400']].map(([a, b]) => <div><span>{a}</span><b>{b}</b></div>)}</div>
-      </BentoCard>
-      <BentoCard title="DSR, VAT and GST" description="Saved at day close, never recalculated. VAT on fuel, GST on lubes split by state." colSpan={2} tone="dark" href="/product#reports">
-        <Fragment slot="icon" set:html={icons.file} />
-        <div class="h-bp-dsr"><div><small>Day closing · 04 Oct</small><strong>₹2,14,250</strong><span>Cash expected</span></div><div class="h-saved">Saved · 22:41 by Owner</div></div>
-      </BentoCard>
-    </BentoGrid>
-    <div class="h-soon"><b id="soon-label">Coming next</b><ul aria-labelledby="soon-label">{comingNext.map((x) => <li>{x}</li>)}</ul></div>
+<Section id="features" aria-labelledby="features-title">
+  <div class="h-fh">
+    <SectionHeading eyebrow="Everything in one place" title="The whole station, not just the shift." id="features-title" />
+    <a href="/product">Explore the product &rarr;</a>
   </div>
-</section>
+  <BentoGrid class="h-bento">
+    <BentoCard title="Shifts and nozzle readings" description="Fuel sales come from opening and closing readings, never typed-in totals." colSpan={2} href="/product#shifts">
+      <Fragment slot="icon" set:html={icons.gauge} />
+      <div class="h-bp-tbl">{[['N1 · MS', '48,210.4', '49,102.9', '892.5 L'], ['N2 · HSD', '71,880.0', '73,214.6', '1,334.6 L'], ['N3 · HSD', '22,104.2', '22,986.0', '881.8 L']].map((r) => <div>{r.map((c) => <span>{c}</span>)}</div>)}<small>Opening carried from last close · Sample data</small></div>
+    </BentoCard>
+    <BentoCard title="Drawers and handovers" description="Each attendant hands over their own DU. A shortage has a name." href="/product#shifts">
+      <Fragment slot="icon" set:html={icons.wallet} />
+      <div class="h-bp-big"><small>Anitha S · DU-2</small><strong class="h-neg">−₹350</strong><span>Declared ₹1,21,100 of ₹1,21,450</span></div>
+    </BentoCard>
+    <BentoCard title="Stock and dips" description="Expected stock against the dip, with the reason kept." href="/product#stock">
+      <Fragment slot="icon" set:html={icons.drop} />
+      <div class="h-bp-tank"><div class="h-tk"><i style="height:71%"></i></div><div class="h-bp-big"><small>HSD Tank 2</small><strong class="h-amb">−18 L</strong><span>14,202 of 14,220 L</span></div></div>
+    </BentoCard>
+    <BentoCard title="Credit and khata" description="Credit sales by customer and vehicle, with a running balance." href="/product#owner">
+      <Fragment slot="icon" set:html={icons.users} />
+      <div class="h-bp-big"><small>KSRTC Depot Aluva</small><strong>₹1,12,800</strong><div class="h-bar"><i style="width:94%"></i></div><span>94% of ₹1,20,000 limit</span></div>
+    </BentoCard>
+    <BentoCard title="Office books" description="Collections, expenses, income and supplier payments by entry date." href="/product#reports">
+      <Fragment slot="icon" set:html={icons.book} />
+      <div class="h-bp-list">{[['Collection · NEFT', '+ ₹30,000'], ['Supplier payment', '− ₹4,82,000'], ['Expense · Power', '− ₹18,400']].map(([a, b]) => <div><span>{a}</span><b>{b}</b></div>)}</div>
+    </BentoCard>
+    <BentoCard title="DSR, VAT and GST" description="Saved at day close, never recalculated. VAT on fuel, GST on lubes split by state." colSpan={2} tone="dark" href="/product#reports">
+      <Fragment slot="icon" set:html={icons.file} />
+      <div class="h-bp-dsr"><div><small>Day closing · 04 Oct</small><strong>₹2,14,250</strong><span>Cash expected</span></div><div class="h-saved">Saved · 22:41 by Owner</div></div>
+    </BentoCard>
+  </BentoGrid>
+  <div class="h-soon"><b id="soon-label">Coming next</b><ul aria-labelledby="soon-label">{comingNext.map((x) => <li>{x}</li>)}</ul></div>
+</Section>
