@@ -96,6 +96,7 @@ export const planFeatures = [
   { name: 'Logins: 3 on Core, 10 on Pro, custom on Scale', included: 'core', note: 'Owner, manager, accountant or attendant with phone access' },
   { name: 'Attendants without a login, unlimited', included: 'core' },
   { name: 'Shifts, nozzle readings and handovers', included: 'core' },
+  { name: 'Fuel and product sales by cash, card or UPI', included: 'core' },
   { name: 'Attendant handover on the phone', included: 'pro' },
   { name: 'WhatsApp reminders and daily summary', included: 'pro', note: 'Coming next' },
   { name: 'Several stations under one login', included: 'scale' },

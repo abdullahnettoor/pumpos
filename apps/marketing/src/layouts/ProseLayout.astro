@@ -1,0 +1,46 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import Section from '../components/ds/Section.astro';
+
+interface Props {
+  title: string;
+  metaTitle?: string;
+  description?: string;
+  path: string;
+  eyebrow?: string;
+  backHref?: string;
+  backLabel?: string;
+  article?: boolean;
+  noindex?: boolean;
+}
+
+const {
+  title,
+  metaTitle = `${title} | PumpOS`,
+  description,
+  path,
+  eyebrow,
+  backHref,
+  backLabel = 'Back',
+  article = false,
+  noindex = false,
+} = Astro.props;
+---
+<BaseLayout title={metaTitle} description={description} path={path} article={article} noindex={noindex}>
+  <Fragment slot="head"><slot name="head" /></Fragment>
+  <Section class="prose-section" container={false} aria-label={title}>
+    <div class="ds-w">
+      <article class="prose-page" data-pagefind-body>
+        {backHref && <a class="prose-back" href={backHref}>← {backLabel}</a>}
+        <header class="prose-header">
+          {eyebrow && <p class="ds-ey">{eyebrow}</p>}
+          <h1>{title}</h1>
+          {description && <p class="prose-description">{description}</p>}
+          <slot name="meta" />
+        </header>
+        <div class="prose-pump"><slot /></div>
+        <slot name="after" />
+      </article>
+    </div>
+  </Section>
+</BaseLayout>

@@ -1,4 +1,22 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
+import ProseLayout from '../../layouts/ProseLayout.astro';
+import Card from '../../components/ds/Card.astro';
 ---
-<BaseLayout title="Pilot terms | PumpOS" description="Information about the PumpOS guided pilot and where to ask about participation terms." path="/legal/terms" noindex><article class="reading-page"><p class="section-context">PumpOS pilot</p><h1>Terms of service</h1><div class="legal-notice">Final terms of service are being prepared for launch. This page is not a complete service agreement.</div><div class="prose-pump"><h2>Joining the pilot</h2><p>We discuss your station's setup, the capabilities included, onboarding and pricing before you decide to participate.</p><h2>Product demonstrations</h2><p>The website's walkthroughs use illustrative sample data. Planned capabilities are identified separately from the pilot offer.</p><h2>Questions about participation</h2><p>Email <a href="mailto:hello@pumpos.app?subject=Pilot%20terms">hello@pumpos.app</a> to discuss the terms for your station.</p></div></article></BaseLayout>
+<ProseLayout
+  title="Terms of service"
+  metaTitle="Pilot terms | PumpOS"
+  description="Information about the PumpOS guided pilot and where to ask about participation terms."
+  path="/legal/terms"
+  eyebrow="PumpOS pilot"
+  noindex
+>
+  <Card as="aside" class="prose-callout" role="note">
+    Final terms of service are being prepared for launch. This page is not a complete service agreement.
+  </Card>
+  <h2>Joining the pilot</h2>
+  <p>We discuss your station's setup, the capabilities included, onboarding and pricing before you decide to participate.</p>
+  <h2>Product demonstrations</h2>
+  <p>The website's walkthroughs use illustrative sample data. Planned capabilities are identified separately from the pilot offer.</p>
+  <h2>Questions about participation</h2>
+  <p>Email <a href="mailto:hello@pumpos.app?subject=Pilot%20terms">hello@pumpos.app</a> to discuss the terms for your station.</p>
+</ProseLayout>

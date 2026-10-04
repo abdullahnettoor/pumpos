@@ -1,4 +1,27 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import Section from '../components/ds/Section.astro';
+import Button from '../components/ds/Button.astro';
+import { WHATSAPP_URL } from '../config';
 ---
-<BaseLayout title="Page not found | PumpOS" description="This PumpOS page could not be found. Return to the homepage or browse the product." path="/404" noindex><section class="error-page site-container"><p>404 · Page not found</p><h1>This page isn't here.</h1><p>The link may have changed. You can head back to PumpOS or explore the product.</p><a class="button-green" href="/">Back to home ↗</a></section></BaseLayout>
+<BaseLayout
+  title="Page not found | PumpOS"
+  description="This PumpOS page could not be found. Return to the homepage, compare pricing or contact us on WhatsApp."
+  path="/404"
+  noindex
+>
+  <Section class="not-found-section" container={false} aria-labelledby="not-found-title">
+    <div class="ds-w">
+      <div class="not-found">
+        <p class="ds-ey">404 · Page not found</p>
+        <h1 id="not-found-title">This page isn't here.</h1>
+        <p>The link may have changed. Head back to PumpOS, compare plans or message us and we’ll help you find what you need.</p>
+        <div class="not-found-actions">
+          <Button href="/">Back to home <span aria-hidden="true">↗</span></Button>
+          <Button href="/pricing" variant="secondary">View pricing</Button>
+          <Button href={WHATSAPP_URL} variant="wa" target="_blank" rel="noopener">WhatsApp us</Button>
+        </div>
+      </div>
+    </div>
+  </Section>
+</BaseLayout>

@@ -1,12 +1,64 @@
 ---
 import BaseLayout from './BaseLayout.astro';
+import Section from '../components/ds/Section.astro';
+import Card from '../components/ds/Card.astro';
+import Button from '../components/ds/Button.astro';
 import { getCollection } from 'astro:content';
 import Search from 'astro-pagefind/components/Search.astro';
-interface Props { title:string; description?:string; currentId:string }
-const {title,description,currentId}=Astro.props;
-const docs=(await getCollection('docs')).sort((a,b)=>a.data.order-b.data.order||a.data.title.localeCompare(b.data.title));
-const groups=[...new Set(docs.map(d=>d.data.category??'Guides'))].map(category=>({category,items:docs.filter(d=>(d.data.category??'Guides')===category)}));
+interface Props { title: string; description?: string; currentId: string }
+const { title, description, currentId } = Astro.props;
+const docs = (await getCollection('docs')).sort(
+  (a, b) => a.data.order - b.data.order || a.data.title.localeCompare(b.data.title),
+);
+const groups = [...new Set(docs.map((doc) => doc.data.category ?? 'Guides'))].map((category) => ({
+  category,
+  items: docs.filter((doc) => (doc.data.category ?? 'Guides') === category),
+}));
 ---
 <BaseLayout title={`${title} | PumpOS Docs`} description={description} path={`/docs/${currentId}`}>
- <div class="docs-shell site-container"><aside class="docs-sidebar"><Search id="docs-search" className="docs-search" uiOptions={{showImages:false}} /><nav aria-label="Documentation">{groups.map(g=><div><h2>{g.category}</h2><ul>{g.items.map(item=><li><a href={`/docs/${item.id}`} aria-current={item.id===currentId?'page':undefined}>{item.data.title}</a></li>)}</ul></div>)}</nav><details class="docs-mobile"><summary>Browse the guides</summary><nav aria-label="Mobile documentation">{docs.map(item=><a href={`/docs/${item.id}`} aria-current={item.id===currentId?'page':undefined}>{item.data.title}</a>)}</nav></details></aside><article class="docs-content" data-pagefind-body><h1>{title}</h1>{description&&<p>{description}</p>}<div class="prose-pump"><slot /></div><div class="article-next">Need help setting up your station? <a href="/demo">Talk to us.</a></div></article></div>
+  <Section class="docs-section" container={false} aria-label="PumpOS documentation">
+    <div class="ds-w docs-layout">
+      <aside class="docs-sidebar">
+        <Search id="docs-search" className="docs-search" uiOptions={{ showImages: false }} />
+        <nav aria-label="Documentation">
+          {groups.map((group) => (
+            <div>
+              <h2>{group.category}</h2>
+              <ul>
+                {group.items.map((item) => (
+                  <li>
+                    <a href={`/docs/${item.id}`} aria-current={item.id === currentId ? 'page' : undefined}>
+                      {item.data.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+        <details class="docs-mobile">
+          <summary>Browse the guides</summary>
+          <nav aria-label="Mobile documentation">
+            {docs.map((item) => (
+              <a href={`/docs/${item.id}`} aria-current={item.id === currentId ? 'page' : undefined}>
+                {item.data.title}
+              </a>
+            ))}
+          </nav>
+        </details>
+      </aside>
+      <article class="docs-content" data-pagefind-body>
+        <header class="docs-header">
+          <p class="ds-ey">Documentation</p>
+          <h1>{title}</h1>
+          {description && <p>{description}</p>}
+        </header>
+        <div class="prose-pump"><slot /></div>
+        <Card class="docs-help">
+          <span>Need help setting up your station?</span>
+          <Button href="/demo" variant="secondary">Talk to us <span aria-hidden="true">↗</span></Button>
+        </Card>
+      </article>
+    </div>
+  </Section>
 </BaseLayout>

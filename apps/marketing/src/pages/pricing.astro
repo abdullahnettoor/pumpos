@@ -1,0 +1,115 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Section from '../components/ds/Section.astro';
+import SectionHeading from '../components/ds/SectionHeading.astro';
+import Card from '../components/ds/Card.astro';
+import Button from '../components/ds/Button.astro';
+import PricingTable from '../components/ui/PricingTable.astro';
+import { plans, planFeatures } from '../data/home';
+import { WHATSAPP_URL } from '../config';
+
+const pricingPlans = plans.map((plan) => ({
+  ...plan,
+  intro:
+    plan.level === 'scale'
+      ? undefined
+      : { price: 0, label: 'first 3 months', then: 'then' },
+  href: plan.level === 'scale' ? WHATSAPP_URL : '/demo',
+}));
+
+const billingQuestions = [
+  {
+    question: 'How does yearly billing work?',
+    answer:
+      'Yearly billing is priced at ten months of the monthly rate, so you get two months free. The total is paid per station, with GST added.',
+  },
+  {
+    question: 'What happens after the first 3 months?',
+    answer:
+      'The guided pilot starts at ₹0 for the first 3 months. Before that period ends, choose whether to continue on Core or Pro and confirm monthly or yearly billing. Core is ₹999 per station per month; Pro is ₹1,599 per station per month. Scale pricing is agreed with our team.',
+  },
+  {
+    question: 'How do I upgrade?',
+    answer:
+      'Contact us on WhatsApp or book a demo. We will confirm the plan and station setup with you before changing access or billing.',
+  },
+];
+---
+<BaseLayout
+  title="Pricing | PumpOS for fuel stations"
+  description="Compare PumpOS Core, Pro and Scale plans for your fuel station. Pilot stations start at ₹0 for the first 3 months."
+  path="/pricing"
+>
+  <Section class="pricing-intro" aria-labelledby="pricing-title">
+    <SectionHeading
+      eyebrow="Pricing"
+      title="One price per station. Every attendant included."
+      lead="Choose monthly or yearly billing. Start with a guided pilot, then continue on the plan that fits your station."
+      id="pricing-title"
+    />
+    <div class="pricing-seat-rules" aria-label="Plan login limits">
+      <Card class="pricing-seat-rule">
+        <span class="ds-ey">Core</span>
+        <strong>3 logins</strong>
+        <p>For owners, managers, accountants or attendants with phone access.</p>
+      </Card>
+      <Card class="pricing-seat-rule">
+        <span class="ds-ey">Pro</span>
+        <strong>10 logins</strong>
+        <p>More access for your station team as the workflow grows.</p>
+      </Card>
+      <Card class="pricing-seat-rule pricing-seat-rule--attendants">
+        <span class="ds-ey">Attendants</span>
+        <strong>Unlimited without a login</strong>
+        <p>Attendants without phone access do not use a login. Scale login limits are agreed with our team.</p>
+      </Card>
+    </div>
+  </Section>
+
+  <Section class="pricing-compare" aria-labelledby="pricing-compare-title">
+    <div class="pricing-compare-heading">
+      <SectionHeading
+        eyebrow="Compare plans"
+        title="Everything your station needs, in one view."
+        lead="The Core pilot offer is ₹0 for the first 3 months. The standard rate begins only after you confirm how you want to continue."
+        id="pricing-compare-title"
+      />
+      <p class="pricing-tax-note">Prices are per station and exclude GST. GST is added to invoices.</p>
+    </div>
+    <PricingTable
+      plans={pricingPlans}
+      features={planFeatures}
+      levels={['core', 'pro', 'scale']}
+      defaultPlan="pro"
+      defaultInterval="yearly"
+      popularLabel="Recommended"
+      yearlyBadge="2 months free"
+      note="Attendants without a login are unlimited."
+      visibleRows={planFeatures.length}
+    />
+    <div class="pricing-cta">
+      <p>Not sure which plan fits your station?</p>
+      <Button href="/demo">Talk through your setup <span aria-hidden="true">↗</span></Button>
+    </div>
+  </Section>
+
+  <Section class="pricing-faq" aria-labelledby="pricing-faq-title">
+    <div class="pricing-faq-heading">
+      <SectionHeading
+        eyebrow="Billing FAQ"
+        title="Know what happens next."
+        lead="No self-serve checkout or automatic plan changes. We will confirm the details with you."
+        id="pricing-faq-title"
+      />
+      <Button variant="secondary" href={WHATSAPP_URL} target="_blank" rel="noopener">Ask on WhatsApp ↗</Button>
+    </div>
+    <div class="pricing-faq-list">
+      {billingQuestions.map(({ question, answer }, index) => (
+        <details open={index === 0}>
+          <summary>{question}<span aria-hidden="true">+</span></summary>
+          <p>{answer}</p>
+        </details>
+      ))}
+    </div>
+  </Section>
+</BaseLayout>
