@@ -4,6 +4,8 @@ import { CONSOLE_URL, WHATSAPP_URL, WHATSAPP_DISPLAY } from '../../config';
 interface Props { path: string; tone?: 'light' | 'dark' }
 const { path, tone = 'light' } = Astro.props;
 const nav = [{ href: '/product', label: 'Product' }, { href: '/#pricing', label: 'Pricing' }, { href: '/docs', label: 'Docs' }, { href: '/blog', label: 'Journal' }, { href: '/download', label: 'Download' }];
+// WhatsApp glyph from simple-icons (CC0).
+const wa = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.26-.46-2.39-1.47-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.21 3.07.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.7.63.71.22 1.36.19 1.87.12.57-.09 1.76-.72 2.01-1.42.25-.7.25-1.29.17-1.42-.07-.12-.27-.2-.57-.34M12.05 21.8h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.44-9.88 9.89-9.88a9.82 9.82 0 0 1 6.99 2.9 9.82 9.82 0 0 1 2.89 6.99c0 5.45-4.43 9.88-9.88 9.88m8.41-18.3A11.81 11.81 0 0 0 12.05 0C5.5 0 .16 5.34.16 11.89c0 2.1.55 4.14 1.59 5.95L.06 24l6.3-1.65a11.88 11.88 0 0 0 5.68 1.45h.01c6.55 0 11.89-5.34 11.89-11.89 0-3.18-1.24-6.16-3.48-8.41Z"/></svg>';
 const current = (href: string) => (!href.includes('#') && path.startsWith(href) ? 'page' : undefined);
 ---
 <header class:list={['sh', `sh--${tone}`]}>
@@ -12,7 +14,7 @@ const current = (href: string) => (!href.includes('#') && path.startsWith(href) 
     <nav class="sh-nav" aria-label="Main navigation">{nav.map((n) => <a href={n.href} aria-current={current(n.href)}>{n.label}</a>)}</nav>
     <div class="sh-acts">
       <a class="sh-signin" href={CONSOLE_URL}>Sign in</a>
-      <a class="sh-demo" href="/demo">Book a demo</a>
+      <a class="sh-wa" href={WHATSAPP_URL} target="_blank" rel="noopener" aria-label={`WhatsApp us on ${WHATSAPP_DISPLAY}`} title={`WhatsApp ${WHATSAPP_DISPLAY}`}><Fragment set:html={wa} /></a>
       <details class="mobile-menu sh-menu">
         <summary aria-label="Open navigation"><span></span><span></span></summary>
         <nav aria-label="Mobile navigation">{nav.map((n) => <a href={n.href} aria-current={current(n.href)}>{n.label}</a>)}<a href="/demo">Book a demo</a><a href={WHATSAPP_URL} target="_blank" rel="noopener">WhatsApp {WHATSAPP_DISPLAY}</a><a href={CONSOLE_URL}>Sign in ↗</a></nav>
@@ -35,8 +37,10 @@ const current = (href: string) => (!href.includes('#') && path.startsWith(href) 
   .sh-nav a:hover { color: #18201a; } .sh--dark .sh-nav a:hover { color: #fff; }
   .sh-acts { display: flex; gap: 8px; align-items: center; font-weight: 600; font-size: 15px; }
   .sh-signin { padding-inline: 12px; }
-  .sh-demo { height: 40px; display: flex; align-items: center; padding-inline: 18px; border-radius: 8px; background: #18201a; color: #fff; }
-  .sh--dark .sh-demo { background: #fff; color: #18201a; }
+  .sh-wa { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; background: #25d366; color: #fff; }
+  .sh-wa:hover { background: #1ebe5b; }
+  .sh-wa:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+  .sh-wa :global(svg) { width: 22px; height: 22px; }
   .sh-menu { display: none; }
   .sh-menu nav { position: absolute; right: 0; top: calc(100% + 8px); min-width: 220px; display: flex; flex-direction: column; padding: 8px; border-radius: 12px; background: #fff; color: #18201a; border: 1px solid #d9ded6; box-shadow: 0 18px 40px -20px rgba(15,42,33,.4); }
   .sh-menu nav a { padding: 10px 12px; border-radius: 8px; font-weight: 600; } .sh-menu nav a:hover { background: #eef0ec; }
@@ -45,7 +49,7 @@ const current = (href: string) => (!href.includes('#') && path.startsWith(href) 
     .sh { position: sticky; top: 0; }
     .sh-in { padding: 12px 20px; }
     .sh-nav { display: none; }
-    .sh-demo { height: 38px; padding-inline: 14px; font-size: 14px; }
+    .sh-wa { width: 38px; height: 38px; }
     .sh-menu { display: block; position: relative; }
   }
 </style>
