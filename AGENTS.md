@@ -530,8 +530,9 @@ Migrations have one source: `packages/db/migrations`, generated from
 - `supabase/migrations` is written only by `npm run db:sync-supabase -w @pump/db`.
 - `npm run db:check -w @pump/db` proves all of the above; CI runs it.
 
-Apply the `drizzle-orm` skill before editing `schema.ts`, adding a migration,
-touching `supabase/migrations`, or writing `CREATE POLICY/TRIGGER/FUNCTION` SQL.
+Apply the globally installed Drizzle skill before editing `schema.ts`, adding a
+migration, touching `supabase/migrations`, or writing `CREATE
+POLICY/TRIGGER/FUNCTION` SQL.
 
 Never optimize prematurely.
 
