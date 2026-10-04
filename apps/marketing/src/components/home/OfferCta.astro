@@ -1,0 +1,23 @@
+---
+import { DEMO_PATH, WA_URL } from './links';
+import { WHATSAPP_DISPLAY } from '../../config';
+const stats = [
+  ['₹0', 'for your first 3 months, any plan'],
+  ['Minutes', 'to set up once your tank and nozzle details are ready'],
+  ['0', 'apps for attendants to install'],
+  ['₹1,599', 'a month after on Pro, per station'],
+];
+---
+<section class="h-sec" style="padding-top:0" aria-labelledby="offer-title">
+  <div class="h-w">
+    <div class="h-offer">
+      <div class="h-offer-copy">
+        <p class="h-ey">Start this week</p>
+        <h2 id="offer-title">Run your first 3 months on PumpOS for <span>₹0</span>.</h2>
+        <p>As a pilot station, your first 3 months are free on any plan. We set up your tanks, nozzles and opening balances with you, then stay with your team for the first shift closings.</p>
+        <div class="h-offer-btns"><a class="h-btn h-btn--primary" href={DEMO_PATH}>Book a guided demo</a><a class="h-btn h-btn--wa" href={WA_URL} target="_blank" rel="noopener">WhatsApp {WHATSAPP_DISPLAY}</a></div>
+      </div>
+      <dl>{stats.map(([t, d]) => <div><dt>{t}</dt><dd>{d}</dd></div>)}</dl>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,31 @@
+---
+// Astro port of the shadcn/framer-motion BentoGrid. Same API (class, children) and the same
+// staggered reveal (0.1s per card, once, when the grid enters view), but done with CSS and a
+// tiny IntersectionObserver, so the static marketing site ships no React or framer-motion.
+interface Props { class?: string }
+const { class: className } = Astro.props;
+---
+<div class:list={['bento-grid', className]} data-bento>
+  <slot />
+</div>
+
+<script>
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelectorAll<HTMLElement>('[data-bento]').forEach((grid) => {
+    [...grid.children].forEach((c, i) => (c as HTMLElement).style.setProperty('--d', `${i * 0.1}s`));
+    if (reduce) return grid.classList.add('is-in');
+    grid.classList.add('is-armed');
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) { grid.classList.add('is-in'); io.disconnect(); }
+    }, { rootMargin: '-50px' });
+    io.observe(grid);
+  });
+</script>
+
+<style>
+  .bento-grid { display: grid; grid-template-columns: 1fr; gap: 16px; width: 100%; max-width: 1280px; margin-inline: auto; }
+  @media (min-width: 768px) { .bento-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1024px) { .bento-grid { grid-template-columns: repeat(4, 1fr); } }
+  .bento-grid.is-armed > :global(*) { opacity: 0; transform: translateY(20px); }
+  .bento-grid.is-in > :global(*) { opacity: 1; transform: none; transition: opacity .5s ease var(--d, 0s), transform .5s ease var(--d, 0s); }
+</style>

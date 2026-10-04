@@ -1,0 +1,174 @@
+---
+// Astro port of the shadcn PricingTable (pricing-table.tsx). Same props shape and behaviour:
+// Monthly/Yearly toggle, selectable plan cards (ring on the selected one, "Popular" badge),
+// feature rows highlighted for the selected plan, and a "Get started with …" button.
+// NumberFlow's animated price is replaced by a short count tween; no React, no npm deps.
+export type PlanLevel = string;
+export interface PricingFeature { name: string; included: PlanLevel | null; note?: string }
+export interface PricingPlan { name: string; level: PlanLevel; price: { monthly: number | null; yearly: number | null }; intro?: { price: number; label: string; then?: string }; popular?: boolean; footnote?: string; href?: string }
+interface Props {
+  features: PricingFeature[];
+  plans: PricingPlan[];
+  /** Plan order, lowest first. A feature included at a level is included in every later level. */
+  levels?: PlanLevel[];
+  defaultPlan?: PlanLevel;
+  defaultInterval?: 'monthly' | 'yearly';
+  yearlyBadge?: string;
+  /** Badge on the plan marked popular. */
+  popularLabel?: string;
+  /** Extra sentence appended to the footnote line, e.g. tax terms. */
+  note?: string;
+  /** Show only the first N feature rows; the rest open with a "Compare all features" button. */
+  visibleRows?: number;
+  class?: string;
+}
+const { features, plans, levels = plans.map((p) => p.level), defaultPlan = plans[1]?.level, defaultInterval = 'monthly', yearlyBadge, popularLabel = 'Popular', note, visibleRows, class: className } = Astro.props;
+const collapsible = visibleRows !== undefined && visibleRows < features.length;
+const shows = (inc: PlanLevel | null, level: PlanLevel) => inc !== null && levels.indexOf(level) >= levels.indexOf(inc);
+const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
+---
+<div class:list={['pt', className]} data-pt data-plan={defaultPlan} data-interval={defaultInterval}>
+  <div class="pt-toggle" role="group" aria-label="Billing period">
+    <button type="button" data-iv="monthly" aria-pressed={String(defaultInterval === 'monthly')}>Monthly</button>
+    <button type="button" data-iv="yearly" aria-pressed={String(defaultInterval === 'yearly')}>Yearly {yearlyBadge && <em>{yearlyBadge}</em>}</button>
+  </div>
+
+  <div class="pt-plans">
+    {plans.map((p) => (
+      <button type="button" class:list={['pt-plan', { 'pt-plan--pop': p.popular }]} data-level={p.level} aria-pressed={String(p.level === defaultPlan)}>
+        <span class="pt-name">{p.name}{p.popular && <span class="pt-pop">{popularLabel}</span>}</span>
+        {p.intro ? (
+          <>
+            <span class="pt-price"><b class="pt-intro">{inr(p.intro.price)}</b><small>{p.intro.label}</small></span>
+            <small class="pt-sub pt-then">{p.intro.then ?? 'then'} <span data-pm={p.price.monthly} data-py={p.price.yearly}>{inr(defaultInterval === 'yearly' ? p.price.yearly! : p.price.monthly!)}</span><span data-unit>/{defaultInterval === 'yearly' ? 'year' : 'month'}</span></small>
+          </>
+        ) : p.price.monthly === null ? (
+          <span class="pt-price"><b>Talk to us</b></span>
+        ) : (
+          <span class="pt-price">
+            <b data-pm={p.price.monthly} data-py={p.price.yearly}>{inr(defaultInterval === 'yearly' ? p.price.yearly! : p.price.monthly)}</b>{p.footnote && <sup>*</sup>}
+            <small data-unit>/{defaultInterval === 'yearly' ? 'year' : 'month'}</small>
+          </span>
+        )}
+        {!p.intro && p.price.yearly !== null && <small class="pt-sub" data-permonth={Math.round(p.price.yearly / 12)}>{defaultInterval === 'yearly' ? `${inr(Math.round(p.price.yearly / 12))} a month` : 'per station'}</small>}
+      </button>
+    ))}
+  </div>
+
+  <div class="pt-table">
+    <div class="pt-scroll">
+      <div class="pt-grid" style={`--cols:${plans.length}`}>
+        <div class="pt-row pt-head"><div>Features</div>{plans.map((p) => <div data-col={p.level}>{p.name}</div>)}</div>
+        {features.map((f, i) => (
+          <div class:list={['pt-row', { 'pt-extra': collapsible && i >= visibleRows! }]} data-inc={f.included ?? ''}>
+            <div>{f.name}{f.note && <small class="pt-note">{f.note}</small>}</div>
+            {plans.map((p) => (
+              <div data-col={p.level}>{shows(f.included, p.level)
+                ? <svg viewBox="0 0 15 15" aria-label="Included"><path d="M11.5 3.5 6 10 3.5 7.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                : <span class="pt-dash" aria-label="Not included">–</span>}</div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+
+  {collapsible && <button type="button" class="pt-all" aria-expanded="false" data-all><span data-closed>Compare all {features.length} features</span><span data-open hidden>Show fewer features</span></button>}
+
+  {(note || plans.some((p) => p.footnote)) && <p class="pt-foot">{[...plans.filter((p) => p.footnote).map((p) => `*${p.footnote}`), note].filter(Boolean).join(' ')}</p>}
+  <div class="pt-cta">
+    {plans.map((p) => (
+      <a class="pt-go" data-go={p.level} href={p.href ?? '#'} hidden={p.level !== defaultPlan}>
+        Get started with {p.name}
+        <svg viewBox="0 0 15 15" aria-hidden="true"><path d="M3 7.5h9M8.5 4l3.5 3.5L8.5 11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </a>
+    ))}
+  </div>
+</div>
+
+<script>
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const inr = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN');
+  const tween = (el: HTMLElement, to: number) => {
+    const from = Number(el.dataset.now ?? to); el.dataset.now = String(to);
+    if (reduce || from === to) { el.textContent = inr(to); return; }
+    const t0 = performance.now();
+    const step = (t: number) => { const k = Math.min((t - t0) / 450, 1), e = 1 - (1 - k) ** 3; el.textContent = inr(from + (to - from) * e); if (k < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+    setTimeout(() => { if (el.dataset.now === String(to)) el.textContent = inr(to); }, 500); // background tabs pause rAF
+  };
+  document.querySelectorAll<HTMLElement>('[data-pt]').forEach((root) => {
+    const sync = () => {
+      const yearly = root.dataset.interval === 'yearly', plan = root.dataset.plan;
+      root.querySelectorAll<HTMLElement>('[data-iv]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.iv === 'yearly') === yearly)));
+      root.querySelectorAll<HTMLElement>('[data-pm]').forEach((b) => tween(b, Number(yearly ? b.dataset.py : b.dataset.pm)));
+      root.querySelectorAll<HTMLElement>('[data-unit]').forEach((u) => (u.textContent = yearly ? '/year' : '/month'));
+      root.querySelectorAll<HTMLElement>('[data-permonth]').forEach((s) => (s.textContent = yearly ? `${inr(Number(s.dataset.permonth))} a month` : 'per station'));
+      root.querySelectorAll<HTMLElement>('[data-level]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.level === plan)));
+      root.querySelectorAll<HTMLElement>('[data-col]').forEach((c) => c.classList.toggle('is-sel', c.dataset.col === plan));
+      root.querySelectorAll<HTMLElement>('[data-inc]').forEach((r) => r.classList.toggle('is-sel', r.dataset.inc === plan));
+      root.querySelectorAll<HTMLElement>('[data-go]').forEach((a) => (a.hidden = a.dataset.go !== plan));
+    };
+    root.querySelectorAll<HTMLElement>('[data-iv]').forEach((b) => b.addEventListener('click', () => { root.dataset.interval = b.dataset.iv; sync(); }));
+    root.querySelector<HTMLElement>('[data-all]')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget as HTMLElement, open = btn.getAttribute('aria-expanded') !== 'true';
+      btn.setAttribute('aria-expanded', String(open)); root.classList.toggle('pt-expanded', open);
+      btn.querySelector<HTMLElement>('[data-closed]')!.hidden = open; btn.querySelector<HTMLElement>('[data-open]')!.hidden = !open;
+    });
+    root.querySelectorAll<HTMLElement>('[data-level]').forEach((b) => b.addEventListener('click', () => { root.dataset.plan = b.dataset.level; sync(); }));
+    root.querySelectorAll<HTMLElement>('[data-pm]').forEach((b) => (b.dataset.now = root.dataset.interval === 'yearly' ? b.dataset.py : b.dataset.pm));
+    sync();
+  });
+</script>
+
+<style>
+  .pt { --pt-accent: #1f6a53; --pt-soft: #e5f0eb; --pt-line: #d9ded6; --pt-muted: #5e6a61; width: 100%; max-width: none; margin-inline: auto; color: #18201a; }
+  .pt-toggle { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; border: 1px solid var(--pt-line); background: #fff; margin-bottom: 20px; }
+  .pt-toggle button { all: unset; cursor: pointer; padding: 8px 16px; border-radius: 999px; font-weight: 700; font-size: 14px; color: var(--pt-muted); display: inline-flex; gap: 8px; align-items: center; }
+  .pt-toggle button[aria-pressed="true"] { background: #18201a; color: #fff; }
+  .pt-toggle em { font-style: normal; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--pt-soft); color: var(--pt-accent); }
+  .pt-plans { display: flex; gap: 12px; margin-bottom: 24px; }
+  .pt-plan { all: unset; box-sizing: border-box; cursor: pointer; flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 18px; border-radius: 14px; border: 1px solid var(--pt-line); background: #fff; transition: box-shadow .2s, border-color .2s; }
+  .pt-plan:focus-visible { outline: 2px solid var(--pt-accent); outline-offset: 2px; }
+  .pt-plan[aria-pressed="true"] { border-color: var(--pt-accent); box-shadow: 0 0 0 2px var(--pt-accent); }
+  .pt-name { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 15px; }
+  .pt-plan--pop { background: linear-gradient(180deg, var(--pt-soft), #fff 70%); }
+  .pt-plan--pop .pt-price b { color: var(--pt-accent); }
+  .pt-pop { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--pt-accent); color: #fff; }
+  .pt-price { display: flex; align-items: baseline; gap: 4px; }
+  .pt-price b { font-size: 30px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .pt-intro { color: var(--pt-accent); }
+  .pt-then span { font-weight: 700; color: #18201a; }
+  .pt-price sup { color: var(--pt-muted); font-weight: 700; }
+  .pt-price small, .pt-sub { font-size: 13px; color: var(--pt-muted); }
+  .pt-table { border: 1px solid var(--pt-line); border-radius: 14px; overflow: hidden; background: #fff; }
+  .pt-scroll { overflow-x: auto; }
+  .pt-grid { min-width: 560px; }
+  .pt-row { display: grid; grid-template-columns: 1fr repeat(var(--cols), minmax(88px, 18%)); align-items: center; border-top: 1px solid #eef0ec; font-size: 14px; transition: background .2s; }
+  .pt-row:first-child { border-top: 0; }
+  .pt-row > div { padding: 13px 16px; } .pt-row > div:not(:first-child) { display: flex; justify-content: center; padding-inline: 0; }
+  .pt-head { background: #f6f7f4; font-weight: 700; }
+  .pt-row.is-sel { background: #f1f7f4; }
+  .pt-row .is-sel { font-weight: 700; background: #1f6a530d; }
+  .pt-row svg { width: 20px; height: 20px; color: var(--pt-accent); }
+  .pt-dash { color: #c4cbc3; }
+  .pt-note { display: block; font-size: 12px; color: var(--pt-muted); }
+  .pt-table:has(+ .pt-all) { border-radius: 14px 14px 0 0; }
+  .pt-extra { display: none; }
+  .pt-expanded .pt-extra { display: grid; }
+  .pt-all { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; text-align: center; padding: 14px; margin-top: -1px; border: 1px solid var(--pt-line); border-radius: 0 0 14px 14px; background: #fff; font-weight: 700; font-size: 14px; color: var(--pt-accent); }
+  .pt-all:hover { background: #f1f7f4; }
+  .pt-all:focus-visible { outline: 2px solid var(--pt-accent); outline-offset: 2px; }
+  .pt-foot { font-size: 12px; color: var(--pt-muted); margin: 12px 0 0; }
+  .pt-cta { margin-top: 24px; text-align: center; }
+  .pt-go { display: inline-flex; align-items: center; gap: 8px; height: 50px; padding-inline: 28px; border-radius: 12px; background: var(--pt-accent); color: #fff; font-weight: 700; text-decoration: none; }
+  .pt-go[hidden] { display: none; }
+  .pt-go svg { width: 16px; height: 16px; }
+  @media (max-width: 640px) {
+    .pt-plans { flex-direction: column; }
+    .pt-plan { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: space-between; padding: 14px 16px; }
+    .pt-name { width: 100%; } .pt-price b { font-size: 24px; }
+    .pt-go { width: 100%; justify-content: center; }
+    .pt-grid { min-width: 0; } .pt-row { grid-template-columns: 1fr repeat(var(--cols), 54px); font-size: 13px; } .pt-row > div:first-child { padding-inline: 12px; }
+  }
+</style>

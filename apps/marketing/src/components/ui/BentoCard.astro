@@ -1,0 +1,30 @@
+---
+// Card for BentoGrid. Props mirror the React BentoCard used in the shadcn demo:
+// title, description, an icon (named slot "icon"), colSpan (1 or 2) and a preview (default slot).
+interface Props { title: string; description: string; colSpan?: 1 | 2; href?: string; tone?: 'light' | 'dark' }
+const { title, description, colSpan = 1, href, tone = 'light' } = Astro.props;
+const Tag = href ? 'a' : 'article';
+---
+<Tag href={href} class:list={['bento-card', `tone-${tone}`, { 'span-2': colSpan === 2 }]}>
+  <div class="bento-preview"><slot /></div>
+  <div class="bento-text">
+    <span class="bento-icon"><slot name="icon" /></span>
+    <div><h3>{title}</h3><p>{description}</p></div>
+  </div>
+</Tag>
+
+<style>
+  .bento-card { display: flex; flex-direction: column; gap: 18px; padding: 20px; border-radius: 20px; background: #fff; border: 1px solid #d9ded6; color: #18201a; text-decoration: none; min-height: 300px; transition: border-color .2s, box-shadow .2s; }
+  a.bento-card:hover { border-color: #1f6a53; box-shadow: 0 18px 40px -28px rgba(15,42,33,.45); }
+  @media (min-width: 768px) { .span-2 { grid-column: span 2; } }
+  .tone-dark { background: #0f2a21; border-color: #0f2a21; color: #fff; }
+  .bento-preview { flex: 1; display: flex; flex-direction: column; justify-content: center; border-radius: 14px; background: #f6f7f4; padding: 16px; overflow: hidden; }
+  .tone-dark .bento-preview { background: #ffffff0f; }
+  .bento-text { display: flex; gap: 12px; align-items: flex-start; }
+  .bento-icon { flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: #e5f0eb; color: #1f6a53; }
+  .tone-dark .bento-icon { background: #ffffff14; color: #8fd1b4; }
+  .bento-icon :global(svg) { width: 18px; height: 18px; }
+  h3 { font-size: 17px; font-weight: 800; letter-spacing: -.015em; margin: 0 0 4px; }
+  p { margin: 0; font-size: 14px; line-height: 1.5; color: #5e6a61; }
+  .tone-dark p { color: #b9cdc4; }
+</style>

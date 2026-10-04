@@ -1,30 +1,40 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import HomeHero from '../components/marketing-preview/HomeHero.astro';
-import CollectionWalkthrough from '../components/marketing-preview/CollectionWalkthrough.astro';
-import OperationsStory from '../components/marketing-preview/OperationsStory.astro';
-import ProductScreens from '../components/marketing-preview/ProductScreens.astro';
-import WhyPumpos from '../components/marketing-preview/WhyPumpos.astro';
-import FeatureGrid from '../components/marketing-preview/FeatureGrid.astro';
-import PilotOffer from '../components/marketing-preview/PilotOffer.astro';
-const questions = [
-  ['Who is the pilot for?', 'Owners of Indian fuel stations who want to move daily operations out of scattered registers and spreadsheets. We start with your station and its existing workflow.'],
-  ['Can I check customer dues myself?', 'Yes. Owners can inspect customer balances and entries in the web console and online mobile owner view. The information reflects activity recorded in PumpOS.'],
-  ['Does PumpOS replace my accountant?', 'Your accountant still handles the work that needs accounting judgement. PumpOS gives you and your team access to station operations, financial accounts and reports without reassembling the same records.'],
-  ['Do I need to connect my dispensers?', 'The current workflow uses nozzle readings entered by your team. Direct hardware integration is planned, not a pilot requirement.'],
-  ['What can I export today?', 'Shift summaries and the daily sales report save as PDF. Excel export, Tally export and GSTR data are planned and marked "Coming soon" above.'],
-  ['What if my internet drops?', 'PumpOS is online-first. The desktop app loads from your computer, and entries you make while the connection is down are saved and sent when it returns. Working for days with no internet is not part of the pilot.'],
-];
+import Hero from '../components/home/Hero.astro';
+import LeakStack from '../components/home/LeakStack.astro';
+import CreditWalkthrough from '../components/home/CreditWalkthrough.astro';
+import DayTimeline from '../components/home/DayTimeline.astro';
+import FeatureBento from '../components/home/FeatureBento.astro';
+import CompareScores from '../components/home/CompareScores.astro';
+import Pricing from '../components/home/Pricing.astro';
+import HomeFaq from '../components/home/HomeFaq.astro';
+import OfferCta from '../components/home/OfferCta.astro';
+import ShortageCalc from '../components/home/ShortageCalc.astro';
+import MobileCtaBar from '../components/home/MobileCtaBar.astro';
+import { faqs, plans } from '../data/home';
+import '../styles/home.css';
+
+// Structured data so search results can show the FAQ and the plan prices.
+const faqLd = { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faqs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) };
+const appLd = {
+  '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'PumpOS', applicationCategory: 'BusinessApplication', operatingSystem: 'Windows, macOS, Linux, Web',
+  description: 'Fuel station management for Indian pump owners: nozzle readings, attendant drawers, stock, credit and the day report.',
+  offers: plans.filter((p) => p.price.monthly !== null).map((p) => ({ '@type': 'Offer', name: p.name, price: p.price.monthly, priceCurrency: 'INR', description: 'Per station per month, excluding GST' })),
+};
 ---
-<BaseLayout title="PumpOS | Find the shortage today, not next month" description="PumpOS reconciles nozzle readings, cash and dues at day closing. Fuel station management for Indian pump owners." green>
-  <HomeHero />
-  <section class="owner-thesis site-container" id="solutions"><p>Your team runs the shift.<br /><strong>You should still know where things stand.</strong></p><div>See what customers owe. Follow recorded collections. Review the day's work with the entries in front of you.</div></section>
-  <div class="content-wrap"><CollectionWalkthrough /></div>
-  <OperationsStory />
-  <WhyPumpos />
-  <ProductScreens />
-  <FeatureGrid />
-  <section class="owner-access" id="security"><div class="site-container owner-access-inner"><div><p class="section-context">Access that fits the work</p><h2>At the station.<br />Away from the desk.<br /><span>Still your business.</span></h2></div><div class="access-list"><a href="/product#desktop"><span>Desktop</span><div><h3>For the team running the shift.</h3><p>Readings, collections and drawer reconciliation in a focused workspace.</p></div><span aria-hidden="true">↗</span></a><a href="/product#owner"><span>Web & mobile</span><div><h3>For the owner checking the record.</h3><p>Inspect customer dues and recent financial entries yourself.</p></div><span aria-hidden="true">↗</span></a><a href="/product#reports"><span>Reports</span><div><h3>For the questions that come later.</h3><p>Return to saved shift reports and the day's DSR, your day report.</p></div><span aria-hidden="true">↗</span></a></div></div></section>
-  <PilotOffer />
-  <section class="faq-section site-container" id="faq"><div><p class="section-context">Before we talk</p><h2>A few practical<br />questions.</h2><a href="mailto:hello@pumpos.app" class="inline-link">Ask us something else ↗</a></div><div class="faq-list">{questions.map(([q,a]) => <details><summary>{q}<span aria-hidden="true">+</span></summary><p>{a}</p></details>)}</div></section>
+<BaseLayout title="PumpOS | Find the shortage today, not next month" description="PumpOS reconciles nozzle readings, cash and dues at day closing. Fuel station management for Indian pump owners. Pilot stations get the first 3 months free on any plan." green>
+  <Fragment slot="head"><script type="application/ld+json" set:html={JSON.stringify(faqLd)} /><script type="application/ld+json" set:html={JSON.stringify(appLd)} /></Fragment>
+  <div class="home">
+    <Hero />
+    <LeakStack />
+    <ShortageCalc />
+    <CreditWalkthrough />
+    <DayTimeline />
+    <FeatureBento />
+    <CompareScores />
+    <Pricing />
+    <HomeFaq />
+    <OfferCta />
+    <MobileCtaBar />
+  </div>
 </BaseLayout>

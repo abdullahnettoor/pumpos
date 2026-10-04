@@ -1,0 +1,23 @@
+---
+import { compareRows } from '../../data/home';
+const cols = [
+  { name: 'Registers & Excel', col: 1, mark: '✗', label: 'No', cls: '' },
+  { name: 'Typical pump software', col: 2, mark: '~', label: 'Partly', cls: 'h-sc--mid' },
+  { name: 'PumpOS', col: 3, mark: '✓', label: 'Yes', cls: 'h-sc--us' },
+] as const;
+---
+<section class="h-sec" style="padding-top:0" aria-labelledby="compare-title">
+  <div class="h-w">
+    <p class="h-ey">Before you compare</p>
+    <h2 class="h-h2" id="compare-title">Feature lists look alike. Ask these instead.</h2>
+    <div class="h-score">
+      {cols.map((c) => (
+        <div class:list={['h-card', 'h-sc', c.cls]}>
+          <h3>{c.name}</h3>
+          <ul>{compareRows.map((r) => <li><i aria-label={c.label}>{c.mark}</i><div><small>{r[0]}</small>{r[c.col]}</div></li>)}</ul>
+        </div>
+      ))}
+    </div>
+    <p class="h-note">"Typical pump software" reflects common patterns we hear from dealers, not any one product.</p>
+  </div>
+</section>
