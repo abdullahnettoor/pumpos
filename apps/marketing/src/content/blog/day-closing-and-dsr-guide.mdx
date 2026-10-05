@@ -1,0 +1,117 @@
+---
+title: "Day closing and DSR for any OMC dealership"
+description: "A practical guide to end-of-day reconciliation for Indian fuel stations: nozzle readings, attendant drawers, tank dips, credit sales and generating an unalterable DSR."
+publishedAt: 2026-10-05
+updatedAt: 2026-10-05
+tags: ["operations", "guide", "reconciliation"]
+---
+
+At 10:30 PM on a typical forecourt in India, the manager's desk is covered in meter slips, paper chits, credit sale vouchers, and crumpled rupee bundles.
+
+Whether your station operates under an Indian Oil Corporation (IOCL), Bharat Petroleum (BPCL), Hindustan Petroleum (HPCL), Nayara Energy, Jio-bp, or Shell dealership agreement, the physical mechanics of retail fuel never change. Every single litre of motor spirit (petrol) or high-speed diesel dispensed through your nozzles either entered a customer's fuel tank or leaked into the ground. Every rupee collected was either handed over in cash, swiped at a payment terminal, or booked to customer credit.
+
+Yet at thousands of stations across the country, day closing remains an agonizing two-hour guessing game. If the cash is ₹600 short, who was accountable? If Tank 2 is 40 litres lower than the book, did the tanker decant short, did temperature drop, or did someone siphon fuel?
+
+Here is a practical, step-by-step guide to closing the day cleanly, finding shortages before your staff leaves the station, and producing an unalterable Daily Station Sales Report (DSSR).
+
+---
+
+## 1. Nozzle readings are the only source of truth
+
+Fuel sales cannot be estimated, and they should never be typed in as a lump-sum rupee total. The volume of fuel sold during a Shift derives exclusively from meter deltas:
+
+`Fuel Volume (L) = Closing Nozzle Reading − Opening Nozzle Reading`
+
+When opening a new Shift:
+- **Carry forward opening readings automatically.** The opening reading of Nozzle 1 must equal the closing reading recorded at the end of the previous Shift. If there is a jump, someone pumped fuel between shifts or manipulated the meter.
+- **Account for pump testing (density checks).** When testing nozzles for statutory delivery checks, return the dispensed fuel directly to the underground tank. Log this volume as a pump test return, which subtracts from gross nozzle volume so your team is not charged for testing fuel.
+- **Derive sales value.** Multiply the net volume by the active selling rate for that Business Day.
+
+Never let attendants write meter totals on random chits of paper. The opening and closing readings must sit on the Shift record permanently.
+
+---
+
+## 2. Attendant drawers: one dispenser, one attendant, one pouch
+
+The single biggest source of cash leakage at Indian fuel stations is **pooled cash**.
+
+When three attendants deposit cash into the same table drawer throughout the shift, accountability vanishes. When the drawer ends up ₹800 short at 10 PM, nobody accepts responsibility. Attendants point fingers, managers get frustrated, and the shortage is either deducted arbitrarily or absorbed by the station owner.
+
+The rule must be absolute: **One attendant, one Dispenser Unit (DU), one Drawer.**
+
+During the Shift:
+1. **Issue an Opening Float.** Record the exact change money given to the attendant at the start of their Shift (e.g., ₹5,000).
+2. **Log mid-shift Cash Drops.** When an attendant's cash bag exceeds safe limits (say, ₹25,000 during morning rush), the manager takes a Cash Drop to the station safe. Record that drop immediately against that attendant's DU.
+3. **Reconcile at Handover.** When the Shift ends, run the drawer reconciliation formula:
+
+`Expected Drawer Cash = Opening Float + DU Cash Sales − Cash Drops`
+
+The attendant then makes their **Cash Declaration**—counting and handing over physical currency.
+
+`Attendant Variance = Cash Declared − Expected Drawer Cash`
+
+If Anitha on DU-2 declared ₹1,21,100 against expected cash of ₹1,21,450, the ₹350 shortage is flagged immediately at handover. It has a name, a DU, and a timestamp. It is settled before she walks out the station gate.
+
+Card and UPI collections are reconciled separately against the settlement slips from the payment terminal, never commingled with physical drawer cash.
+
+---
+
+## 3. Tank dips: compare the rod against expected book stock
+
+Taking daily tank dips with a brass dip rod is mandatory under dealership operating guidelines. But at many stations, the dip reading is simply jotted in a notebook and never checked against the ledger.
+
+A physical dip reading is useless unless compared with **Expected Book Stock**:
+
+`Expected Stock = Opening Stock + Tanker Purchases (Decanted) − Nozzle Sales`
+
+Once you measure the liquid depth with the dip rod and convert it to litres using the tank's calibration chart:
+
+`Stock Variance = Actual Dip Volume − Expected Stock`
+
+Differences happen. Petrol expands in midday heat and contracts at night; underground tanks have slight calibration variations; normal transit handling causes minor loss.
+
+The key is that **every variance requires a recorded reason**. Was it temperature shrinkage? Normal evaporation? Or a decanting discrepancy from the morning tanker? When reasons are required on the record, mysterious fuel disappearances stop.
+
+---
+
+## 4. Customer credit (Khata): keep the forecourt separate from the office
+
+If you supply credit to local transport fleets, buses, or commercial vehicle operators, keep credit sales strictly separated from cash drawers:
+
+- **Record vehicle numbers at the time of fill.** When fuel is issued on credit, capture the customer account and vehicle registration number immediately.
+- **Credit sales never enter the drawer.** A credit sale debits the customer's ledger balance. It does not add cash to the attendant's pouch.
+- **Record bank collections by Entry Date.** When a fleet customer sends ₹50,000 via NEFT or RTGS, log it in the office ledger against the station's bank account with that day's Entry Date. Collections lower customer dues; they never touch forecourt shift cash.
+
+By keeping credit entries clean, customer statements with running balances can be shared immediately when an invoice dispute arises.
+
+---
+
+## 5. Day close and the immutable DSSR snapshot
+
+At the end of the Business Day, once all Shifts are closed and the evening tank dips are recorded, the manager closes the Business Day.
+
+This generates the **Daily Station Sales Report (DSSR)**:
+- **Sales totals:** Total MS, HSD, and lubricants sold across all shifts.
+- **Collection breakdown:** Total cash expected, card/UPI card settlements, and credit sales.
+- **Tax split:** State VAT applied to motor fuels; GST (CGST/SGST/IGST) split on engine oils, coolants, and grease.
+- **Shortage summary:** Net attendant shortages and office count variances.
+
+### The rule of snapshot immutability
+
+In traditional spreadsheet setups, someone inevitably edits a formula or adjusts a past number next week, silently breaking the historical record.
+
+In PumpOS, a closed Business Day generates an **immutable snapshot**. Once the DSSR is saved at day close, it is frozen permanently. Subsequent office expenses, supplier payments, or bank reconciliations carry their own audit trail and never rewrite yesterday's closed sales figures.
+
+---
+
+## Station manager's daily closing checklist
+
+Before turning off the office lights, verify these five checks:
+
+1. **Nozzle readings:** Closing reading on every nozzle recorded; test fuel returned to tank.
+2. **Attendant handovers:** Cash declared, payment terminal slips matched, variance signed off for every DU.
+3. **Underground dips:** Physical dip taken for every tank; expected stock calculated; variance logged with reason.
+4. **Credit sales:** Every credit slip checked against vehicle registration numbers and customer accounts.
+5. **Business Day close:** Day closed in the system; DSSR generated, reviewed, and saved.
+
+When these five steps happen every evening, month-end reconciliation takes ten minutes instead of four days. You know your exact cash position, your inventory variance, and your customer receivables every single day.

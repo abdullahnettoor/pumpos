@@ -1,5 +1,6 @@
 @import './tokens.css';
 @import './ds.css';
+@import './features.css';
 
 .prose-section {
   padding-block: 36px 88px;

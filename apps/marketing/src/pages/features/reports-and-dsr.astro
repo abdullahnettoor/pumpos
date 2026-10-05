@@ -1,0 +1,232 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Section from '../../components/ds/Section.astro';
+import SectionHeading from '../../components/ds/SectionHeading.astro';
+import Card from '../../components/ds/Card.astro';
+import Button from '../../components/ds/Button.astro';
+import DsrCard from '../../components/ds/DsrCard.astro';
+import SampleDataBadge from '../../components/ds/SampleDataBadge.astro';
+import FeatureCta from '../../components/features/FeatureCta.astro';
+import { DEMO_PATH, WA_URL } from '../../components/home/links';
+import { WHATSAPP_DISPLAY } from '../../config';
+
+const checkIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
+const arrowIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+
+const faqs = [
+  {
+    q: 'Can a closed DSSR report be changed or recalculated later?',
+    a: 'No. PumpOS enforces snapshot immutability. When you close a Business Day, the system generates a permanent snapshot of sales, collections, and meter readings. Later office entries, vendor payments, or corrections carry their own audit trail and never rewrite yesterday’s signed-off day report.',
+  },
+  {
+    q: 'How does PumpOS handle the tax difference between fuel and lubricants?',
+    a: 'Motor fuels (MS and HSD) are outside GST and subject to State VAT. Engine lubricants, grease, and accessories are subject to GST (CGST/SGST or IGST based on the customer’s state). PumpOS keeps these tax ledgers strictly separated so your accountant has clean numbers for both VAT and GSTR filings.',
+  },
+  {
+    q: 'How are card and UPI settlements tracked in the DSR?',
+    a: 'Card and UPI transactions recorded at shift handovers post to a Merchant Clearing account. The DSR deducts these electronic settlements from gross forecourt sales, showing the exact physical cash expected in the manager’s safe.',
+  },
+  {
+    q: 'Can we export reports to Tally or Excel spreadsheets?',
+    a: 'You can currently download formatted, print-ready PDF reports for every Shift Summary and Daily Station Sales Report. Direct Tally XML voucher export and Excel/CSV downloads are currently in active development under our product roadmap.',
+  },
+  {
+    q: 'What is the exact difference between a Shift Summary and the DSSR?',
+    a: 'A Shift Summary covers an individual 8-hour forecourt shift (meter readings, attendant handovers, cash drops for that specific crew). The Daily Station Sales Report (DSSR) consolidates all closed shifts, daily tank dips, and credit sales for the entire Business Date into a single immutable station record.',
+  },
+];
+---
+<BaseLayout
+  title="Reports & DSR | Daily Station Sales Report & books | PumpOS"
+  description="Generate unalterable Daily Station Sales Reports (DSSR) upon day close. State VAT on fuel, GST on lubricants, and live Daily Cash Book."
+  path="/features/reports-and-dsr"
+>
+  <!-- Hero Section -->
+  <Section class="feature-hero">
+    <div class="feature-hero-grid">
+      <div>
+        <SectionHeading
+          eyebrow="Reporting & Compliance"
+          title="The day report saved as it was. Never recalculated."
+          lead="Generate immutable Daily Station Sales Reports (DSSR) upon day close. State VAT on fuel, GST on lubricants, and a live Daily Cash Book for office records."
+          level="h1"
+        />
+        <div class="feature-hero-actions">
+          <Button variant="primary" href={DEMO_PATH}>Book a guided demo</Button>
+          <Button variant="wa" href={WA_URL} target="_blank" rel="noopener">WhatsApp {WHATSAPP_DISPLAY}</Button>
+          <a href="/product" class="card-link" style="margin-left: 8px;">View all features <Fragment set:html={arrowIcon} /></a>
+        </div>
+        <div class="feature-hero-badges">
+          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> Immutable DSSR snapshot</span>
+          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> State VAT vs GST tax split</span>
+          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> Daily Cash Book for office</span>
+          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> Print-ready PDF exports</span>
+        </div>
+      </div>
+
+      <!-- DSR Live Mockup -->
+      <div class="feature-hero-mockup">
+        <DsrCard />
+
+        <!-- Tax Separation Breakdown Mini-card -->
+        <Card class="ds-card--alt" style="margin-top: 16px; padding: 18px 24px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <span class="ds-ey" style="margin: 0;">Statutory Tax Separation</span>
+            <SampleDataBadge />
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 13px;">
+            <div style="padding: 10px; background: #fff; border: 1px solid var(--ds-line); border-radius: var(--ds-radius-sm);">
+              <span style="font-size: 11px; font-weight: 700; color: var(--ds-muted); text-transform: uppercase; display: block;">Fuel (State VAT)</span>
+              <strong style="display: block; margin-top: 4px; font-size: 15px;">₹4,38,920</strong>
+              <span style="font-size: 11px; color: var(--ds-muted);">VAT Output @ State Rate</span>
+            </div>
+            <div style="padding: 10px; background: #fff; border: 1px solid var(--ds-line); border-radius: var(--ds-radius-sm);">
+              <span style="font-size: 11px; font-weight: 700; color: var(--ds-muted); text-transform: uppercase; display: block;">Lubes (GST 18%)</span>
+              <strong style="display: block; margin-top: 4px; font-size: 15px;">₹6,240</strong>
+              <span style="font-size: 11px; color: var(--ds-muted);">CGST ₹475.83 + SGST ₹475.83</span>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </div>
+  </Section>
+
+  <!-- Problem Section -->
+  <Section tone="alt" class="feature-problem">
+    <SectionHeading
+      eyebrow="The Reporting Problem"
+      title="Why traditional daily reports cannot be trusted"
+      lead="Spreadsheets and legacy desktop software let past records shift silently, turning monthly accounts into a forensic audit."
+    />
+    <div class="feature-problem-grid">
+      <Card class="feature-problem-card">
+        <span class="problem-num">Problem 01</span>
+        <h3>Shifting historical reports</h3>
+        <p>In most spreadsheets or legacy systems, editing an entry weeks later recalculates past daily totals. You print a DSR today, and next month the numbers for the same day don’t match what you signed off.</p>
+      </Card>
+      <Card class="feature-problem-card">
+        <span class="problem-num">Problem 02</span>
+        <h3>Mixing VAT fuel and GST lubricants</h3>
+        <p>Petrol and diesel carry State VAT, while motor oils carry GST. When software combines them into generic sales buckets, reconciling quarterly tax returns becomes a nightmare for the station accountant.</p>
+      </Card>
+      <Card class="feature-problem-card">
+        <span class="problem-num">Problem 03</span>
+        <h3>Forecourt cash mixed with office entries</h3>
+        <p>Attendant cash from fuel dispensers gets mingled with bank NEFT receipts, supplier payments, and electricity bills. Nobody can trace whether cash in the safe came from fuel sales or customer dues.</p>
+      </Card>
+    </div>
+  </Section>
+
+  <!-- Workflow Section -->
+  <Section class="feature-workflow">
+    <SectionHeading
+      eyebrow="How PumpOS Works"
+      title="From shift close to an unalterable station record"
+      lead="A structured closing sequence that permanently seals your station’s daily operational and financial records."
+    />
+    <div class="feature-workflow-steps">
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 01</span>
+        <h3>Assemble Closed Shifts</h3>
+        <p>All forecourt shifts for the Business Date are closed. Nozzle deltas, attendant drawers, and credit sales roll up automatically.</p>
+      </Card>
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 02</span>
+        <h3>Business Day Close</h3>
+        <p>The manager or owner reviews sales totals, card/UPI slips, and tank dips, then executes the official Business Day close.</p>
+      </Card>
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 03</span>
+        <h3>Immutable DSSR Snapshot</h3>
+        <p>The system freezes the Daily Station Sales Report into an immutable snapshot. Yesterday’s report is locked and cannot be rewritten.</p>
+      </Card>
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 04</span>
+        <h3>Daily Cash Book Tracking</h3>
+        <p>Office financial records (expenses, collections, supplier payments) maintain their own independent ledger by Entry Date.</p>
+      </Card>
+    </div>
+  </Section>
+
+  <!-- Plan Inclusions Section -->
+  <Section tone="alt" class="feature-plans">
+    <SectionHeading
+      eyebrow="Plan Inclusions"
+      title="Audit-ready reporting on every plan"
+      lead="Full daily closing reports, PDF exports and tax separation on Core, with automated accounting exports coming next."
+    />
+    <div class="feature-plans-grid">
+      <Card class="feature-plan-card">
+        <div class="feature-plan-head">
+          <h3>Core</h3>
+          <span style="font-weight: 700; color: var(--ds-primary);">₹999 / mo</span>
+        </div>
+        <p class="plan-price">Up to 3 user logins · Unlimited attendants</p>
+        <ul>
+          <li><Fragment set:html={checkIcon} /> Immutable Shift Summary PDF exports</li>
+          <li><Fragment set:html={checkIcon} /> Immutable Daily Station Sales Report (DSSR) snapshot</li>
+          <li><Fragment set:html={checkIcon} /> Daily Cash Book for office expenses & collections</li>
+          <li><Fragment set:html={checkIcon} /> Statutory State VAT vs GST sales separation</li>
+          <li><Fragment set:html={checkIcon} /> Merchant Clearing reconciliation for card & UPI</li>
+          <li><Fragment set:html={checkIcon} /> Attendant shortage audit trail</li>
+        </ul>
+      </Card>
+
+      <Card class="feature-plan-card is-popular">
+        <div class="feature-plan-head">
+          <h3>Pro</h3>
+          <span style="font-weight: 700; color: var(--ds-primary);">₹1,599 / mo</span>
+        </div>
+        <p class="plan-price">Up to 10 user logins · Unlimited attendants</p>
+        <ul>
+          <li><Fragment set:html={checkIcon} /> Everything in Core</li>
+          <li><Fragment set:html={checkIcon} /> Attendant productivity & variance analytics</li>
+          <li><Fragment set:html={checkIcon} /> Station profit and loss summary</li>
+          <li><Fragment set:html={checkIcon} /> <span>Owner WhatsApp day-close summary <span class="feature-tag-coming">Coming next</span></span></li>
+          <li><Fragment set:html={checkIcon} /> <span>Excel/CSV report export <span class="feature-tag-coming">Coming next</span></span></li>
+          <li><Fragment set:html={checkIcon} /> <span>Tally XML vouchers export <span class="feature-tag-coming">Coming next</span></span></li>
+        </ul>
+      </Card>
+
+      <Card class="feature-plan-card">
+        <div class="feature-plan-head">
+          <h3>Scale</h3>
+          <span style="font-weight: 700; color: var(--ds-primary);">Custom</span>
+        </div>
+        <p class="plan-price">Custom user seats · Multiple stations</p>
+        <ul>
+          <li><Fragment set:html={checkIcon} /> Everything in Pro</li>
+          <li><Fragment set:html={checkIcon} /> Multi-station consolidated DSSR reports</li>
+          <li><Fragment set:html={checkIcon} /> Group-wide P&L and financial roll-up</li>
+          <li><Fragment set:html={checkIcon} /> Comparative outlet performance benchmarks</li>
+          <li><Fragment set:html={checkIcon} /> Dedicated financial onboarding support</li>
+        </ul>
+      </Card>
+    </div>
+  </Section>
+
+  <!-- FAQ Section -->
+  <Section class="feature-faq">
+    <div class="feature-faq-heading">
+      <SectionHeading
+        eyebrow="Common Questions"
+        title="Frequently asked questions about reports and DSR"
+      />
+      <Button variant="secondary" href="/blog/day-closing-and-dsr-guide">Read our day-closing practical guide</Button>
+    </div>
+    <div class="pricing-faq-list" style="margin-top: 32px;">
+      {faqs.map((f) => (
+        <details>
+          <summary>
+            {f.q}
+            <span aria-hidden="true">+</span>
+          </summary>
+          <p>{f.a}</p>
+        </details>
+      ))}
+    </div>
+  </Section>
+
+  <!-- CTA Banner -->
+  <FeatureCta />
+</BaseLayout>

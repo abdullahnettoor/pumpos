@@ -1,0 +1,237 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Section from '../../components/ds/Section.astro';
+import SectionHeading from '../../components/ds/SectionHeading.astro';
+import Card from '../../components/ds/Card.astro';
+import Button from '../../components/ds/Button.astro';
+import StatementTable from '../../components/ds/StatementTable.astro';
+import SampleDataBadge from '../../components/ds/SampleDataBadge.astro';
+import FeatureCta from '../../components/features/FeatureCta.astro';
+import { DEMO_PATH, WA_URL } from '../../components/home/links';
+import { WHATSAPP_DISPLAY } from '../../config';
+
+const checkIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
+const arrowIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+
+const faqs = [
+  {
+    q: 'Does a credit sale count toward an attendant’s cash drawer?',
+    a: 'No. Credit sales debit the customer’s ledger balance directly. They never enter the attendant’s physical cash drawer and do not affect forecourt cash reconciliation.',
+  },
+  {
+    q: 'Can a customer have multiple registered vehicles?',
+    a: 'Yes. You can link any number of vehicles to a customer account. When recording a credit fill, the attendant selects the vehicle registration number, ensuring accurate vehicle-wise statements.',
+  },
+  {
+    q: 'How are customer bank collections (NEFT/RTGS/Cheque) recorded?',
+    a: 'Customer collections are logged as an Office Record with an Entry Date directly into your station’s Bank or Clearing account. They credit the customer ledger to reduce outstanding dues without mixing with forecourt cash.',
+  },
+  {
+    q: 'Can we enforce credit limits on fleet customers?',
+    a: 'Yes. You configure a sanctioned credit limit for each customer. The system displays current outstanding dues and percentage of limit utilized, helping managers prevent unauthorized over-limit fueling.',
+  },
+  {
+    q: 'Can we share itemized statements directly with fleet owners?',
+    a: 'Yes. You can view or print full itemized statements showing date, vehicle number, fuel quantity, amount, and payment history. Direct WhatsApp statement links are currently in development as a Pro feature.',
+  },
+];
+---
+<BaseLayout
+  title="Credit & Khata | Fleet & customer credit ledger | PumpOS"
+  description="Manage customer credit sales by vehicle number. Real-time customer balances, dispute-free statements, and clean bank collection records."
+  path="/features/credit-and-khata"
+>
+  <!-- Hero Section -->
+  <Section class="feature-hero">
+    <div class="feature-hero-grid">
+      <div>
+        <SectionHeading
+          eyebrow="Receivables & Fleet Accounts"
+          title="Credit sales by vehicle. Clear statements without disputes."
+          lead="Manage customer credit, vehicle limits, and bank collections with a live running balance. Disputes end when every entry shows the date, vehicle number, and attendant."
+          level="h1"
+        />
+        <div class="feature-hero-actions">
+          <Button variant="primary" href={DEMO_PATH}>Book a guided demo</Button>
+          <Button variant="wa" href={WA_URL} target="_blank" rel="noopener">WhatsApp {WHATSAPP_DISPLAY}</Button>
+          <a href="/product" class="card-link" style="margin-left: 8px;">View all features <Fragment set:html={arrowIcon} /></a>
+        </div>
+        <div class="feature-hero-badges">
+          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> Vehicle-wise credit sales</span>
+          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> Running ledger balance</span>
+          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> Office bank collections</span>
+          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> Sanctioned credit limits</span>
+        </div>
+      </div>
+
+      <!-- Statement Live Mockup -->
+      <div class="feature-hero-mockup">
+        <Card class="ds-card--alt" style="padding: 24px;">
+          <StatementTable
+            customer="Malabar Transports"
+            category="Fleet · Credit limit ₹75,000"
+            outstanding="₹27,500"
+          />
+
+          <!-- Vehicle Slip Details -->
+          <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--ds-line);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <span class="ds-ey" style="margin: 0;">Recent Credit Slip</span>
+              <SampleDataBadge />
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: #fff; border: 1px solid var(--ds-line); border-radius: var(--ds-radius-sm); font-size: 13px;">
+              <div>
+                <strong>KL 07 CD 8412</strong>
+                <span style="color: var(--ds-muted); display: block; font-size: 12px;">Driver: Suresh · Indent: 1042 · HSD 120 L</span>
+              </div>
+              <div style="text-align: right;">
+                <span style="font-size: 11px; color: var(--ds-muted); display: block;">Debited</span>
+                <strong style="color: var(--ds-ink); font-family: var(--ds-font-mono);">+ ₹11,400</strong>
+              </div>
+            </div>
+            <span class="forecourt-table-note">Entered during morning shift on DU-2. Ledger updated in real-time.</span>
+          </div>
+        </Card>
+      </div>
+    </div>
+  </Section>
+
+  <!-- Problem Section -->
+  <Section tone="alt" class="feature-problem">
+    <SectionHeading
+      eyebrow="The Khata Problem"
+      title="Why paper credit books create friction and unpaid dues"
+      lead="Commercial credit is essential for retail fuel volume in India, but paper notebooks bleed time and cash flow."
+    />
+    <div class="feature-problem-grid">
+      <Card class="feature-problem-card">
+        <span class="problem-num">Problem 01</span>
+        <h3>Illegible counter notebooks and diesel smudges</h3>
+        <p>Credit slips scribbled in counter registers frequently have smudged vehicle numbers, missing driver signatures, or unclear dates. When billing arrives, verifying entries requires digging through oily paper chits.</p>
+      </Card>
+      <Card class="feature-problem-card">
+        <span class="problem-num">Problem 02</span>
+        <h3>Disputes delay payments by weeks</h3>
+        <p>Fleet operators and transporters contest fuel quantities or claim an unapproved truck was filled. When proof takes days to produce, the customer holds back payment on the entire monthly invoice.</p>
+      </Card>
+      <Card class="feature-problem-card">
+        <span class="problem-num">Problem 03</span>
+        <h3>Exceeded credit limits without warning</h3>
+        <p>Attendants on the forecourt have no way of knowing whether a transport company has exceeded its credit limit. Vehicles continue fueling long after credit should have been paused.</p>
+      </Card>
+    </div>
+  </Section>
+
+  <!-- Workflow Section -->
+  <Section class="feature-workflow">
+    <SectionHeading
+      eyebrow="How PumpOS Works"
+      title="Dispute-free credit management from forecourt to bank"
+      lead="A four-step credit cycle that maintains transparent customer ledgers without mixing with forecourt cash."
+    />
+    <div class="feature-workflow-steps">
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 01</span>
+        <h3>Customer & Vehicle Registry</h3>
+        <p>Register credit customers with their sanctioned credit limit, billing cycle, and authorized vehicle registration numbers.</p>
+      </Card>
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 02</span>
+        <h3>Record Credit Sale at DU</h3>
+        <p>Attendant logs fuel volume against the specific customer and vehicle. Customer balance updates immediately; drawer cash is unaffected.</p>
+      </Card>
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 03</span>
+        <h3>Record Bank Collections</h3>
+        <p>When the customer pays via NEFT, RTGS, or Cheque, record the collection with that day’s Entry Date directly into the station bank account.</p>
+      </Card>
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 04</span>
+        <h3>Itemized Statements</h3>
+        <p>Generate clear, itemized customer statements showing date, slip reference, vehicle number, volume, and running balance.</p>
+      </Card>
+    </div>
+  </Section>
+
+  <!-- Plan Inclusions Section -->
+  <Section tone="alt" class="feature-plans">
+    <SectionHeading
+      eyebrow="Plan Inclusions"
+      title="Full credit ledger control on every plan"
+      lead="Complete customer masters, vehicle tracking and ledger statements on Core, with automated customer reminders coming next."
+    />
+    <div class="feature-plans-grid">
+      <Card class="feature-plan-card">
+        <div class="feature-plan-head">
+          <h3>Core</h3>
+          <span style="font-weight: 700; color: var(--ds-primary);">₹999 / mo</span>
+        </div>
+        <p class="plan-price">Up to 3 user logins · Unlimited attendants</p>
+        <ul>
+          <li><Fragment set:html={checkIcon} /> Complete customer accounts master</li>
+          <li><Fragment set:html={checkIcon} /> Multi-vehicle registration per customer</li>
+          <li><Fragment set:html={checkIcon} /> Forecourt credit sales logging</li>
+          <li><Fragment set:html={checkIcon} /> Bank & cheque collection recording</li>
+          <li><Fragment set:html={checkIcon} /> Real-time running balance customer ledgers</li>
+          <li><Fragment set:html={checkIcon} /> Itemized customer statement view & PDF export</li>
+        </ul>
+      </Card>
+
+      <Card class="feature-plan-card is-popular">
+        <div class="feature-plan-head">
+          <h3>Pro</h3>
+          <span style="font-weight: 700; color: var(--ds-primary);">₹1,599 / mo</span>
+        </div>
+        <p class="plan-price">Up to 10 user logins · Unlimited attendants</p>
+        <ul>
+          <li><Fragment set:html={checkIcon} /> Everything in Core</li>
+          <li><Fragment set:html={checkIcon} /> Mobile customer dues lookup for owners</li>
+          <li><Fragment set:html={checkIcon} /> Forecourt credit limit enforcement warnings</li>
+          <li><Fragment set:html={checkIcon} /> <span>WhatsApp payment reminders <span class="feature-tag-coming">Coming next</span></span></li>
+          <li><Fragment set:html={checkIcon} /> <span>Customer statement shareable links <span class="feature-tag-coming">Coming next</span></span></li>
+          <li><Fragment set:html={checkIcon} /> <span>Tally XML credit voucher export <span class="feature-tag-coming">Coming next</span></span></li>
+        </ul>
+      </Card>
+
+      <Card class="feature-plan-card">
+        <div class="feature-plan-head">
+          <h3>Scale</h3>
+          <span style="font-weight: 700; color: var(--ds-primary);">Custom</span>
+        </div>
+        <p class="plan-price">Custom user seats · Multiple stations</p>
+        <ul>
+          <li><Fragment set:html={checkIcon} /> Everything in Pro</li>
+          <li><Fragment set:html={checkIcon} /> Multi-station fleet credit network</li>
+          <li><Fragment set:html={checkIcon} /> Centralized credit limits across all outlets</li>
+          <li><Fragment set:html={checkIcon} /> Consolidated customer billing & aging analysis</li>
+          <li><Fragment set:html={checkIcon} /> Dedicated account manager</li>
+        </ul>
+      </Card>
+    </div>
+  </Section>
+
+  <!-- FAQ Section -->
+  <Section class="feature-faq">
+    <div class="feature-faq-heading">
+      <SectionHeading
+        eyebrow="Common Questions"
+        title="Frequently asked questions about credit and khata"
+      />
+      <Button variant="secondary" href="/docs/getting-started">Getting started guide</Button>
+    </div>
+    <div class="pricing-faq-list" style="margin-top: 32px;">
+      {faqs.map((f) => (
+        <details>
+          <summary>
+            {f.q}
+            <span aria-hidden="true">+</span>
+          </summary>
+          <p>{f.a}</p>
+        </details>
+      ))}
+    </div>
+  </Section>
+
+  <!-- CTA Banner -->
+  <FeatureCta />
+</BaseLayout>
