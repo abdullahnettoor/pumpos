@@ -26,6 +26,7 @@ import {
 } from '@pump/core';
 import { TENANT_ROUTERS } from './routes/tenant-routers.js';
 import { platformAccessRouter } from './routes/platform-access.js';
+import { expireDemoOrganizations, platformDemosRouter } from './routes/platform-demos.js';
 import { RestoreOrganization, SuspendOrganization } from '@pump/core';
 import type { AccessChangeResult } from '@pump/core';
 import { DrizzleOrganizationSubscriptionRepository } from './infra/repositories/organization-access.repo.js';
@@ -94,6 +95,7 @@ type Bindings = {
   // outages. Set via: `wrangler secret put SUPABASE_DIRECT_URL`.
   SUPABASE_DIRECT_URL?: string;
   ENVIRONMENT?: string;
+  ALLOW_DEMO_ORGS?: string;
   // Supabase Auth Admin (Phase A). Server-only secrets used to provision staff
   // login accounts, reset passwords, and ban/unban users. Set via:
   //   wrangler secret put SUPABASE_SECRET_KEY
@@ -1187,6 +1189,8 @@ platform.get('/owners', async (c) => {
         subscriptionPlan: org.subscriptionPlan,
         subscriptionStatus: org.subscriptionStatus,
         createdAt: org.createdAt,
+        isDemo: org.isDemo,
+        demoExpiresAt: org.demoExpiresAt?.toISOString() ?? null,
         owner: owner
           ? {
               userId: owner.id,
@@ -1482,7 +1486,23 @@ platform.post('/owners/:orgId/reactivate', (c) => setOwnerActive(c, true));
 
 // Organization access administration (grants + Limit overrides).
 platform.route('/organizations', platformAccessRouter);
+platform.route('/demos', platformDemosRouter);
 
 app.route('/platform', platform);
 
-export default app;
+// Daily demo expiry maintenance; the handler also runs for scheduled test events.
+export async function runDemoExpiry(db: DbClient, env: Bindings, now = new Date()) {
+  const admin =
+    env.SUPABASE_URL && env.SUPABASE_SECRET_KEY
+      ? new SupabaseAdmin({ url: env.SUPABASE_URL, secretKey: env.SUPABASE_SECRET_KEY })
+      : null;
+  await expireDemoOrganizations(db, admin, now);
+}
+
+export default {
+  fetch: app.fetch,
+  async scheduled(_controller: ScheduledController, env: Bindings, _ctx: ExecutionContext) {
+    if (env.ALLOW_DEMO_ORGS !== 'true') return;
+    await runDemoExpiry(getDbFromHyperdrive(env), env);
+  },
+};

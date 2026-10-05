@@ -109,6 +109,7 @@ const OwnerTab: React.FC<{ row: OwnerRow; target: ApiTarget; onRun: RunFn }> = (
   const signedIn = !!owner?.lastSignInAt;
   const hasStations = row.stationCount > 0;
   const deactivated = owner?.status === 'deactivated';
+  const invalidate = useInvalidatePlatform(target);
 
   return (
     <Section>
@@ -122,8 +123,51 @@ const OwnerTab: React.FC<{ row: OwnerRow; target: ApiTarget; onRun: RunFn }> = (
           ['Last sign-in', owner?.lastSignInAt ?? 'never'],
           ['Stations', `${row.readyStationCount} of ${row.stationCount} ready`],
           ['Created', row.createdAt],
+          ...(row.isDemo
+            ? [['Demo expires', row.demoExpiresAt ?? 'not set'] as [string, string]]
+            : []),
         ]}
       />
+      {row.isDemo && !target.production && (
+        <>
+          <PlatformAction
+            label="Reset demo"
+            organizationName={name}
+            confirmationText={name}
+            description="Rebuilds the demo station and resets its operational story. Existing demo records will be replaced."
+            reason="none"
+            onConfirm={async () => {
+              await commands.resetDemo(target, orgId);
+              invalidate();
+              return `${name} reset`;
+            }}
+          />
+          <PlatformAction
+            label="Extend demo"
+            organizationName={name}
+            description="Adds 7 days of access to this demo."
+            reason="none"
+            onConfirm={async () => {
+              await commands.extendDemo(target, orgId, 7);
+              invalidate();
+              return `${name} extended by 7 days`;
+            }}
+          />
+          <PlatformAction
+            label="Delete demo"
+            organizationName={name}
+            variant="danger"
+            confirmationText={name}
+            description="Permanently deletes this disposable demo and its login. This cannot be undone."
+            reason="none"
+            onConfirm={async () => {
+              await commands.deleteDemo(target, orgId);
+              invalidate();
+              return `${name} deleted`;
+            }}
+          />
+        </>
+      )}
       <PlatformAction
         label="Resend invite"
         organizationName={name}

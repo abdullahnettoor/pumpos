@@ -15,6 +15,13 @@
       "when": 1790222393636,
       "tag": "0001_rls_and_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791194390079,
+      "tag": "0002_common_wildside",
+      "breakpoints": true
     }
   ]
 }

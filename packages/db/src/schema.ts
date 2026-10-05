@@ -26,6 +26,8 @@ export const organizations = pgTable('organizations', {
   // plain varchar so a deploy can add a plan without a schema migration.
   subscriptionPlan: varchar('subscription_plan', { length: 50 }).default('CORE').notNull(),
   subscriptionStatus: varchar('subscription_status', { length: 50 }).default('ACTIVE').notNull(),
+  isDemo: boolean('is_demo').default(false).notNull(),
+  demoExpiresAt: timestamp('demo_expires_at', { withTimezone: true }),
   /** Instant access is paid through. Null means no dated grace. */
   accessUntil: timestamp('access_until', { withTimezone: true }),
   /**

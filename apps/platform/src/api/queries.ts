@@ -13,7 +13,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from './client.js';
 import type { ApiTarget } from './targets.js';
-import type { AccessChange, InviteResult, OrganizationAccess, OwnerRow } from './types.js';
+import type {
+  AccessChange,
+  DemoCreateInput,
+  DemoCreateResult,
+  InviteResult,
+  OrganizationAccess,
+  OwnerRow,
+} from './types.js';
 
 export const platformKeys = {
   owners: (targetId: string, includeRevoked: boolean) =>
@@ -90,6 +97,16 @@ export interface InviteInput {
 }
 
 export const commands = {
+  createDemo: (target: ApiTarget, input: DemoCreateInput) =>
+    request<DemoCreateResult>(target, 'POST', '/platform/demos', input),
+  resetDemo: (target: ApiTarget, orgId: string) =>
+    request<{ reset: boolean }>(target, 'POST', `/platform/demos/${orgId}/reset`, {}),
+  extendDemo: (target: ApiTarget, orgId: string, expiresInDays: 2 | 7 | 30) =>
+    request<{ demoExpiresAt: string }>(target, 'POST', `/platform/demos/${orgId}/extend`, {
+      expiresInDays,
+    }),
+  deleteDemo: (target: ApiTarget, orgId: string) =>
+    request<{ deleted: boolean }>(target, 'DELETE', `/platform/demos/${orgId}`),
   invite: (target: ApiTarget, input: InviteInput) =>
     request<InviteResult>(target, 'POST', '/platform/owners/invite', {
       email: input.email.trim().toLowerCase(),

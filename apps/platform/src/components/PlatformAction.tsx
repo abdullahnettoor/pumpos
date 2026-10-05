@@ -14,6 +14,7 @@ export interface PlatformActionProps {
   disabled?: boolean;
   /** Why the action is unavailable, shown in place of the button when disabled. */
   disabledHint?: string;
+  confirmationText?: string;
   /**
    * Performs the command. The string it resolves with is toasted, so a handler
    * can report "no change — already in effect" rather than claiming success.
@@ -38,6 +39,7 @@ export const PlatformAction: React.FC<PlatformActionProps> = ({
   variant = 'secondary',
   disabled,
   disabledHint,
+  confirmationText,
   onConfirm,
 }) => {
   const toast = useToast();
@@ -53,6 +55,10 @@ export const PlatformAction: React.FC<PlatformActionProps> = ({
 
   const commit = async () => {
     const trimmed = reasonText.trim();
+    if (confirmationText && trimmed !== confirmationText) {
+      setError(`Type “${confirmationText}” exactly to confirm.`);
+      return;
+    }
     if (reason === 'required' && !trimmed) {
       setError('A reason is required for this action.');
       return;
@@ -111,7 +117,23 @@ export const PlatformAction: React.FC<PlatformActionProps> = ({
       </div>
       <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{description}</div>
 
-      {reason !== 'none' && (
+      {confirmationText && (
+        <Field label={`Type “${confirmationText}” to confirm`} required>
+          <input
+            aria-label="Type the organization name to confirm"
+            value={reasonText}
+            onChange={(event) => setReasonText(event.target.value)}
+            style={{
+              width: '100%',
+              padding: '8px',
+              border: '1px solid var(--border-soft)',
+              borderRadius: 'var(--radius-control)',
+            }}
+          />
+        </Field>
+      )}
+
+      {reason !== 'none' && !confirmationText && (
         <Field
           label="Reason"
           required={reason === 'required'}

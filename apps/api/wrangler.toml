@@ -81,6 +81,7 @@ ENVIRONMENT = "preview"
 SUPABASE_URL = "https://gpfqiesflrpmndhkfvhg.supabase.co"
 PLATFORM_ADMIN_EMAILS = "abdullahnettoor@gmail.com"
 INVITE_REDIRECT_URL = "https://console.pumpos.abdullahnettoor.com/accept-invite"
+ALLOW_DEMO_ORGS = "true"
 
 [[env.preview.routes]]
 pattern = "api.pumpos.abdullahnettoor.com"
@@ -92,3 +93,6 @@ id = "44db8c2a98344989a2a2c572638deb63"
 
 [env.preview.observability]
 enabled = true
+
+[env.preview.triggers]
+crons = ["0 2 * * *"]
