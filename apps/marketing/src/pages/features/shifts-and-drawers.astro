@@ -1,0 +1,267 @@
+---
+import '../../styles/content-pages.css';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Section from '../../components/ds/Section.astro';
+import SectionHeading from '../../components/ds/SectionHeading.astro';
+import Card from '../../components/ds/Card.astro';
+import Button from '../../components/ds/Button.astro';
+import SampleDataBadge from '../../components/ds/SampleDataBadge.astro';
+import FeatureCta from '../../components/features/FeatureCta.astro';
+import FeaturePlans from '../../components/features/FeaturePlans.astro';
+import CheckIcon from '../../components/features/CheckIcon.astro';
+import { DEMO_PATH, WA_URL } from '../../components/home/links';
+import { WHATSAPP_DISPLAY } from '../../config';
+
+const arrowIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+
+const nozzleRows = [
+  { nozzle: 'N1 · MS', open: '48,210.4', close: '49,102.9', volume: '892.5 L', rate: '₹107.50', total: '₹95,943.75' },
+  { nozzle: 'N2 · HSD', open: '71,880.0', close: '73,214.6', volume: '1,334.6 L', rate: '₹96.20', total: '₹1,28,388.52' },
+  { nozzle: 'N3 · HSD', open: '22,104.2', close: '22,986.0', volume: '881.8 L', rate: '₹96.20', total: '₹84,829.16' },
+];
+
+const faqs = [
+  {
+    q: 'Do attendants need to download an app on their phones?',
+    a: 'No. On the Pro plan, attendants open a secure link in any mobile browser (Chrome, Safari) to record their handover. There is no app to download or update from an app store.',
+  },
+  {
+    q: 'What if an attendant does not have a smartphone or prefers not to use one?',
+    a: 'Attendants do not need phones or logins. On all plans (including Core), the station manager enters the attendant’s declared cash and terminal receipts directly from the desktop application or manager console during handover.',
+  },
+  {
+    q: 'How does opening meter carry-forward work between shifts?',
+    a: 'When opening a shift, PumpOS locks the opening reading of each nozzle to the closing reading from the previous shift. Attendants and managers do not retype opening numbers, preventing manipulation and transcription errors.',
+  },
+  {
+    q: 'Can meter readings or drawer handovers be changed after a shift is closed?',
+    a: 'No. When a shift is closed, PumpOS saves the shift summary permanently. Yesterday’s numbers cannot be rewritten. Any subsequent office correction is logged as an independent entry with an audit trail.',
+  },
+  {
+    q: 'Does shift management work if our internet connection drops?',
+    a: 'PumpOS is online-first. The desktop application stays open and displays previously loaded records if your connection drops, but saving new shift entries or closing a handover requires an active internet connection to ensure immediate data synchronization.',
+  },
+];
+
+const corePlanFeatures = [
+  'Logins: 3 on Core',
+  'Attendants without a login, unlimited',
+  'Shifts, nozzle readings and handovers',
+  'Fuel and product sales by cash, card or UPI',
+  'Saved DSR, VAT and GST',
+];
+
+const proPlanFeatures = [
+  'Logins: 10 on Pro',
+  'Attendant handover on the phone',
+  { name: 'Attendance, advances and shortage recovery', note: 'Coming next' },
+  { name: 'Owner alerts on your phone', note: 'Coming next' },
+  { name: 'WhatsApp reminders and daily summary', note: 'Coming next' },
+];
+
+const scalePlanFeatures = [
+  'Custom logins',
+  'Several stations under one login',
+  { name: 'Reports across stations', note: 'Coming next' },
+];
+---
+<BaseLayout
+  title="Shifts & Drawers | Fuel station attendant accountability | PumpOS"
+  description="Reconcile nozzle meter readings and attendant drawers per DU. Eliminate pooled cash and discover cash shortages at shift handover, not at month-end."
+  path="/features/shifts-and-drawers"
+>
+  <!-- Hero Section -->
+  <Section class="feature-hero">
+    <div class="feature-hero-grid">
+      <div>
+        <SectionHeading
+          eyebrow="Operations & Cash Control"
+          title="Every attendant holds their own drawer. A shortage has a name."
+          lead="Fuel sales derived from opening and closing nozzle readings. Individual drawer handovers per dispenser unit. Discover cash shortages at shift handover, not at month-end."
+          level="h1"
+        />
+        <div class="feature-hero-actions">
+          <Button variant="primary" href={DEMO_PATH}>Book a guided demo</Button>
+          <Button variant="wa" href={WA_URL} target="_blank" rel="noopener">WhatsApp {WHATSAPP_DISPLAY}</Button>
+          <a href="/product" class="card-link" style="margin-left: 8px;">View all features <Fragment set:html={arrowIcon} /></a>
+        </div>
+        <div class="feature-hero-badges">
+          <span class="feature-hero-badge"><CheckIcon /> Automatic meter carry-forward</span>
+          <span class="feature-hero-badge"><CheckIcon /> One drawer per DU</span>
+          <span class="feature-hero-badge"><CheckIcon /> Mid-shift cash drops</span>
+          <span class="feature-hero-badge"><CheckIcon /> Saved shift records</span>
+        </div>
+      </div>
+
+      <!-- Forecourt Live Mockup -->
+      <div class="feature-hero-mockup">
+        <Card class="ds-card--alt" style="padding: 24px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <div>
+              <p class="ds-ey" style="margin: 0;">Forecourt Shift · Morning</p>
+              <h2 style="font-size: 18px; font-weight: 800; margin: 2px 0 0;">DU-2 Handover · Anitha S</h2>
+            </div>
+            <SampleDataBadge />
+          </div>
+
+          <!-- Nozzle Meter Readings Table -->
+          <div class="forecourt-table-wrap">
+            <table class="forecourt-table">
+              <thead>
+                <tr>
+                  <th>Nozzle</th>
+                  <th class="num">Opening</th>
+                  <th class="num">Closing</th>
+                  <th class="num">Volume</th>
+                  <th class="num">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {nozzleRows.map((r) => (
+                  <tr>
+                    <td><strong>{r.nozzle}</strong></td>
+                    <td class="num">{r.open}</td>
+                    <td class="num">{r.close}</td>
+                    <td class="num" style="color: var(--ds-primary); font-weight: 700;">{r.volume}</td>
+                    <td class="num">{r.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <span class="forecourt-table-note">Opening readings automatically carried from previous closed shift.</span>
+
+          <!-- Handover Reconciliation Details -->
+          <div style="margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--ds-line);">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+              <div>
+                <span style="color: var(--ds-muted);">Opening Float:</span>
+                <strong style="float: right;">₹5,000</strong>
+              </div>
+              <div>
+                <span style="color: var(--ds-muted);">Cash Drops to Safe:</span>
+                <strong style="float: right;">−₹10,000</strong>
+              </div>
+              <div>
+                <span style="color: var(--ds-muted);">DU Cash Sales:</span>
+                <strong style="float: right;">₹1,26,450</strong>
+              </div>
+              <div>
+                <span style="color: var(--ds-muted);">Expected in Drawer:</span>
+                <strong style="float: right; color: var(--ds-ink);">₹1,21,450</strong>
+              </div>
+            </div>
+
+            <div style="margin-top: 16px; padding: 14px; background: #fff; border: 1px solid var(--ds-line); border-radius: var(--ds-radius-sm); display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <span style="font-size: 12px; color: var(--ds-muted); display: block;">Declared by Attendant</span>
+                <strong style="font-size: 18px; font-family: var(--ds-font-mono);">₹1,21,100</strong>
+              </div>
+              <div style="text-align: right;">
+                <span style="font-size: 11px; font-weight: 700; color: var(--ds-danger); text-transform: uppercase; letter-spacing: .05em; display: block;">Shortage</span>
+                <strong style="font-size: 18px; color: var(--ds-danger); font-family: var(--ds-font-mono);">−₹350</strong>
+              </div>
+            </div>
+            <p style="font-size: 12px; color: var(--ds-muted); margin-top: 8px; margin-bottom: 0;">Variance flagged on screen before shift sign-off. Logged under Anitha S.</p>
+          </div>
+        </Card>
+      </div>
+    </div>
+  </Section>
+
+  <!-- The Problem Section -->
+  <Section tone="alt" class="feature-problem">
+    <SectionHeading
+      eyebrow="The Forecourt Problem"
+      title="Where cash vanishes at Indian fuel stations"
+      lead="Traditional forecourt routines make it almost impossible to pinpoint who lost money. Here is why daily reconciliation breaks down."
+    />
+    <div class="feature-problem-grid">
+      <Card class="feature-problem-card">
+        <span class="problem-num">Problem 01</span>
+        <h3>Pooled cash in a single desk drawer</h3>
+        <p>When multiple attendants toss cash into the same table drawer, individual accountability is gone. If the drawer is ₹600 short at 10 PM, every attendant denies it, leaving the dealer or manager to absorb the loss.</p>
+      </Card>
+      <Card class="feature-problem-card">
+        <span class="problem-num">Problem 02</span>
+        <h3>Handwritten meter chits and scrap paper</h3>
+        <p>Attendants scribble closing meter numbers on receipt rolls or scrap paper. Opening numbers get miscopied, subtraction errors happen, and mistakes are discovered days later after shifts have already rotated.</p>
+      </Card>
+      <Card class="feature-problem-card">
+        <span class="problem-num">Problem 03</span>
+        <h3>Late shortage discovery</h3>
+        <p>When reconciliation only happens at weekly or monthly intervals, you cannot recover missing cash from staff who have already taken salary advances or left for another job.</p>
+      </Card>
+    </div>
+  </Section>
+
+  <!-- How PumpOS Handles It (Workflow) -->
+  <Section class="feature-workflow">
+    <SectionHeading
+      eyebrow="How PumpOS Works"
+      title="From meter reading to sealed handover"
+      lead="A four-step operational workflow designed specifically for retail petroleum forecourts."
+    />
+    <div class="feature-workflow-steps">
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 01</span>
+        <h3>Assign DUs & Opening Float</h3>
+        <p>At shift start, the manager assigns attendants to Dispenser Units and issues their change float. Opening meter readings are carried forward from the previous shift.</p>
+      </Card>
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 02</span>
+        <h3>Log Mid-Shift Cash Drops</h3>
+        <p>When an attendant's pouch accumulates excess cash, a cash drop to the safe is recorded immediately against that specific DU drawer.</p>
+      </Card>
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 03</span>
+        <h3>Record Closing Readings & Cash</h3>
+        <p>Closing nozzle readings derive sales volume. The attendant declares their physical cash count, card payment slips, and UPI settlements.</p>
+      </Card>
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 04</span>
+        <h3>Instant Reconciliation & Lock</h3>
+        <p>PumpOS computes expected drawer cash. Any shortage or excess is surfaced immediately and recorded on the shift summary, saved at close and never recalculated.</p>
+      </Card>
+    </div>
+  </Section>
+
+  <!-- Plan Inclusion Section -->
+  <Section tone="alt" class="feature-plans">
+    <SectionHeading
+      eyebrow="Plan Inclusions"
+      title="Choose the right shift workflow for your forecourt"
+      lead="Start on Core with manager-entered handovers, or step up to Pro for mobile browser attendant self-handovers."
+    />
+    <FeaturePlans
+      coreFeatures={corePlanFeatures}
+      proFeatures={proPlanFeatures}
+      scaleFeatures={scalePlanFeatures}
+    />
+  </Section>
+
+  <!-- FAQ Section -->
+  <Section class="feature-faq">
+    <div class="feature-faq-heading">
+      <SectionHeading
+        eyebrow="Common Questions"
+        title="Frequently asked questions about shifts and drawers"
+      />
+      <Button variant="secondary" href="/docs/getting-started">Getting started guide</Button>
+    </div>
+    <div class="pricing-faq-list" style="margin-top: 32px;">
+      {faqs.map((f) => (
+        <details>
+          <summary>
+            {f.q}
+            <span aria-hidden="true">+</span>
+          </summary>
+          <p>{f.a}</p>
+        </details>
+      ))}
+    </div>
+  </Section>
+
+  <!-- CTA Banner -->
+  <FeatureCta />
+</BaseLayout>

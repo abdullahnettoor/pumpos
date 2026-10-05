@@ -1,5 +1,6 @@
 @import './tokens.css';
 @import './ds.css';
+@import './features.css';
 
 .prose-section {
   padding-block: 36px 88px;
@@ -274,15 +275,23 @@
   margin-top: 28px;
 }
 
-.pricing-cta {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 10px 20px;
-  margin-top: 28px;
+.pricing-helper {
+  font-size: 14px;
   color: var(--ds-muted);
+  margin-top: 4px;
   text-align: center;
+}
+
+.pricing-helper a {
+  color: var(--ds-primary);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color .18s;
+}
+
+.pricing-helper a:hover {
+  color: var(--ds-ink);
 }
 
 .pricing-cta .ds-btn,
@@ -581,12 +590,14 @@
   margin-top: 36px;
 }
 
-.journal-card {
+.journal-card,
+.journal-card.journal-entry {
   display: grid;
   grid-template-columns: minmax(230px, .7fr) minmax(0, 1.3fr);
   gap: 24px;
   align-items: stretch;
   padding: 16px;
+  border-top: 1px solid var(--ds-line);
 }
 
 .journal-art {
@@ -740,7 +751,8 @@
     display: block;
   }
 
-  .journal-card {
+  .journal-card,
+  .journal-card.journal-entry {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
     padding: 12px;

@@ -1,0 +1,34 @@
+---
+import Section from '../ds/Section.astro';
+import Button from '../ds/Button.astro';
+import { DEMO_PATH, WA_URL } from '../home/links';
+import { WHATSAPP_DISPLAY } from '../../config';
+
+const stats = [
+  ['₹0', 'for your first 3 months, any plan'],
+  ['Minutes', 'to set up once tank and nozzle details are ready'],
+  ['0', 'apps for attendants to install'],
+  ['₹1,599', 'a month after on Pro, per station'],
+];
+---
+<Section class="feature-cta-banner" aria-labelledby="cta-heading">
+  <div class="feature-cta-card">
+    <div class="feature-cta-copy">
+      <p class="ds-ey" style="color: var(--ds-mint)">Pilot offer</p>
+      <h2 id="cta-heading">Run your first 3 months on PumpOS for <span>₹0</span>.</h2>
+      <p>As a pilot station, your first 3 months are free on any plan. We configure your tanks, nozzles and opening balances with you, then support your managers through the first live shift closings.</p>
+      <div class="feature-cta-btns">
+        <Button variant="primary" href={DEMO_PATH}>Book a guided demo</Button>
+        <Button variant="wa" href={WA_URL} target="_blank" rel="noopener">WhatsApp {WHATSAPP_DISPLAY}</Button>
+      </div>
+    </div>
+    <div class="feature-cta-stats">
+      {stats.map(([num, label]) => (
+        <div class="feature-cta-stat">
+          <strong>{num}</strong>
+          <span>{label}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+</Section>

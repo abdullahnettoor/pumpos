@@ -1,16 +1,156 @@
 ---
+import '../styles/content-pages.css';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import CollectionWalkthrough from '../components/marketing-preview/CollectionWalkthrough.astro';
-import OperationsStory from '../components/marketing-preview/OperationsStory.astro';
-import PilotOffer from '../components/marketing-preview/PilotOffer.astro';
+import Section from '../components/ds/Section.astro';
+import SectionHeading from '../components/ds/SectionHeading.astro';
+import Card from '../components/ds/Card.astro';
+import Button from '../components/ds/Button.astro';
+import FeatureCta from '../components/features/FeatureCta.astro';
+import { DEMO_PATH, WA_URL } from '../components/home/links';
+import { WHATSAPP_DISPLAY } from '../config';
+
+const svg = (d: string) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const icons = {
+  gauge: svg('<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>'),
+  drop: svg('<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>'),
+  users: svg('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
+  file: svg('<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/>'),
+  arrow: svg('<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>'),
+  desktop: svg('<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>'),
+  phone: svg('<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><line x1="12" x2="12.01" y1="18" y2="18"/>'),
+  shield: svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
+};
+
+const featureList = [
+  {
+    icon: icons.gauge,
+    title: 'Shifts & Drawers',
+    eyebrow: 'Operations & Cash Control',
+    href: '/features/shifts-and-drawers',
+    description: 'Derived nozzle reading sales, individual attendant drawers per Dispenser Unit (DU), mid-shift cash drops, and immediate shortage accountability before shift sign-off.',
+    bullets: ['Automatic meter carry-forward', 'One drawer per DU', 'Mid-shift safe cash drops', 'Saved shift summary'],
+  },
+  {
+    icon: icons.drop,
+    title: 'Stock & Tank Dips',
+    eyebrow: 'Fuel & Lube Inventory',
+    href: '/features/stock-and-dips',
+    description: 'Track physical dip measurements against expected book stock. Reconcile inward tanker decanting, nozzle sales, and record mandatory reason codes for every variance.',
+    bullets: ['Expected book stock calculation', 'Mandatory variance reasons', 'Tanker decanting inward log', 'Packaged lube inventory'],
+  },
+  {
+    icon: icons.users,
+    title: 'Credit & Khata',
+    eyebrow: 'Receivables & Fleet Accounts',
+    href: '/features/credit-and-khata',
+    description: 'Manage fleet credit sales linked to vehicle registration numbers. Running customer balances updated when saved, dispute-free itemized statements, and bank collections separated from forecourt cash.',
+    bullets: ['Vehicle-wise credit sales', 'Running ledger balance', 'Bank & NEFT collections', 'Sanctioned credit limits'],
+  },
+  {
+    icon: icons.file,
+    title: 'Reports & DSR',
+    eyebrow: 'Reporting & Compliance',
+    href: '/features/reports-and-dsr',
+    description: 'Generate your Daily Station Sales Report (DSR) upon day close, saved and never recalculated. State VAT on petrol and diesel, GST on lubricants, and a Daily Cash Book for office entries.',
+    bullets: ['Saved DSR snapshot', 'State VAT vs GST tax split', 'Daily Cash Book for office', 'Print-ready PDF exports'],
+  },
+];
 ---
-<BaseLayout title="The product | PumpOS fuel station management" description="Explore customer credit, Shift reconciliation, stock records and daily reports. See how PumpOS connects the work at your fuel station." path="/product">
- <section class="page-heading page-heading--split site-container"><div><p class="section-context">Inside PumpOS</p><h1>From the forecourt<br />to the financial record.</h1></div><p>Your station runs on readings, handovers, collections and decisions. Keep the record of that work together.</p></section>
- <nav class="product-links site-container" aria-label="Product sections"><a href="#walkthrough">Credit & collections ↓</a><a href="#shifts">Shifts ↓</a><a href="#stock">Stock ↓</a><a href="#reports">Reports ↓</a><a href="#owner">Owner access ↓</a></nav>
- <div class="content-wrap"><CollectionWalkthrough /></div>
- <div id="shifts"><OperationsStory detailed /></div>
- <section id="stock" class="product-detail site-container"><div><p class="section-context">Stock accountability</p><h2>Know what should be there.<br />Record what actually is.</h2><p>Keep purchase and stock records alongside physical checks. A difference stays visible, with a reason to follow up.</p><ul><li>Fuel Sales derived from Nozzle Readings</li><li>Purchases and stock movements</li><li>Tank Dips, Stock Counts and recorded variance</li></ul><a class="inline-link" href="/demo">See inventory in a demo ↗</a></div><div class="stock-example product-replica" data-product-reveal><div class="replica-title"><span>Tank stock check</span><span>Sample data</span></div><div><h3>Diesel · Tank 1</h3><table><thead><tr><th scope="col">Stock position</th><th scope="col">Litres</th></tr></thead><tbody><tr><td>Expected stock</td><td>12,450.00 L</td></tr><tr><td>Actual stock</td><td>12,420.00 L</td></tr><tr><td>Variance</td><td class="variance-cell">−30.00 L</td></tr></tbody></table><p>Sample check. Investigate and record the reason for the difference.</p></div></div></section>
- <section id="reports" class="product-detail site-container"><div><p class="section-context">Reports with a history</p><h2>The day's report.<br />Kept as it was generated.</h2><p>A Shift Summary records a closed Shift. The Daily Station Sales Report brings together closed-shift summaries and the Business Day's financial records.</p><p style="margin-top:18px">Later financial entries do not silently rewrite the saved DSSR. You can distinguish what was known at generation from what was recorded later.</p><a class="inline-link" href="/docs/running-shifts">Read about Shift close ↗</a></div><div class="report-example product-replica" data-product-reveal><div class="report-example-top"><strong>PumpOS</strong><span>Sample station</span></div><h3>Daily Station<br />Sales Report</h3><p>Business date · 14 Sep 2026</p><dl><div><dt>Shift summaries</dt><dd>2 closed Shifts</dd></div><div><dt>Sales & stock</dt><dd>Recorded for the day</dd></div><div><dt>Financials</dt><dd>As of generation</dd></div><div><dt>Report state</dt><dd>Saved snapshot</dd></div></dl><p>Illustrative report layout · Sample data</p></div></section>
- <section class="access-explainer site-container"><div id="desktop"><p class="section-context">For the station team</p><h2>A focused desktop workspace.</h2><p>Use the desktop app for daily operations, or the web console from a supported browser. Your team records activity and reconciles the Shift in the same system.</p><a href="/download" class="inline-link">Get PumpOS ↗</a></div><div id="owner"><p class="section-context">For the owner</p><h2>Open the record yourself.</h2><p>Review customer balances, financial accounts and reports in the console. The online mobile owner view provides recent financial entries when you're away from your desk. Availability depends on recorded activity and connectivity.</p><a href="/demo" class="inline-link">See the owner view ↗</a></div></section>
- <PilotOffer compact />
+<BaseLayout
+  title="The Product | Inside PumpOS fuel station management"
+  description="Explore shifts, nozzle meter readings, attendant drawers, tank dips, fleet credit and the Daily Station Sales Report (DSR)."
+  path="/product"
+>
+  <!-- Product Index Hero -->
+  <Section class="product-index-hero">
+    <SectionHeading
+      eyebrow="Inside PumpOS"
+      title="From the forecourt to the financial record."
+      lead="Your station runs on nozzle readings, attendant handovers, underground dips, fleet credit and daily reconciliations. Explore the four core systems below."
+      level="h1"
+    >
+      <div class="feature-hero-actions">
+        <Button variant="primary" href={DEMO_PATH}>Book a guided demo</Button>
+        <Button variant="wa" href={WA_URL} target="_blank" rel="noopener">WhatsApp {WHATSAPP_DISPLAY}</Button>
+        <Button variant="secondary" href="/pricing">View plan pricing</Button>
+      </div>
+    </SectionHeading>
+
+    <!-- 4 Feature Cards Grid -->
+    <div class="product-features-grid">
+      {featureList.map((f) => (
+        <Card as="a" href={f.href} class="product-feature-card">
+          <div>
+            <div class="product-feature-card-top">
+              <span class="ds-ey" style="margin: 0;">{f.eyebrow}</span>
+              <div class="product-feature-icon" aria-hidden="true">
+                <Fragment set:html={f.icon} />
+              </div>
+            </div>
+            <h2>{f.title}</h2>
+            <p>{f.description}</p>
+            <ul class="product-feature-bullets">
+              {f.bullets.map((b) => (
+                <li>
+                  <span style="color: var(--ds-primary); font-weight: 800;">✓</span> {b}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div class="card-link">
+            Explore {f.title} <Fragment set:html={icons.arrow} />
+          </div>
+        </Card>
+      ))}
+    </div>
+
+    <!-- Practical Day Closing Guide Feature Callout -->
+    <div class="product-guide-banner">
+      <div>
+        <p class="ds-ey" style="margin: 0 0 6px 0;">Practical Forecourt Guide</p>
+        <h3>Day closing and DSR for any OMC dealership</h3>
+        <p>A practical guide to end-of-day reconciliation for Indian fuel stations: readings → drawers → dips → credit → day close. Built for OMC dealers across India.</p>
+      </div>
+      <div>
+        <Button variant="secondary" href="/blog/day-closing-and-dsr-guide">
+          Read the practical guide <Fragment set:html={icons.arrow} />
+        </Button>
+      </div>
+    </div>
+  </Section>
+
+  <!-- Unified Architecture Summary Section -->
+  <Section tone="alt" class="product-arch-section">
+    <SectionHeading
+      eyebrow="System Architecture"
+      title="How the pieces fit together every day"
+      lead="PumpOS ties forecourt operations directly into your financial books without double-entry or Excel recalculation errors."
+    />
+    <div class="product-arch-grid">
+      <Card class="product-arch-card">
+        <div class="product-arch-icon" aria-hidden="true">
+          <Fragment set:html={icons.desktop} />
+        </div>
+        <h3>Forecourt Cash & Shift Handover</h3>
+        <p>Managers assign DUs, opening floats, and nozzle meters. Attendants declare cash and electronic card slips. Variances are caught before attendants leave the premises.</p>
+      </Card>
+      <Card class="product-arch-card">
+        <div class="product-arch-icon" aria-hidden="true">
+          <Fragment set:html={icons.shield} />
+        </div>
+        <h3>Inventory & Underground Storage</h3>
+        <p>Tank dips compare physical rod measurements against opening stock, tanker consignments, and nozzle sales. Every variance requires a mandatory reason code.</p>
+      </Card>
+      <Card class="product-arch-card">
+        <div class="product-arch-icon" aria-hidden="true">
+          <Fragment set:html={icons.phone} />
+        </div>
+        <h3>Audit-Proof DSR Day Reports</h3>
+        <p>Closing the business day creates a permanent DSR snapshot. State VAT and GST ledgers are cleanly separated, and yesterday's report is saved and never recalculated.</p>
+      </Card>
+    </div>
+  </Section>
+
+  <!-- CTA Banner -->
+  <FeatureCta />
 </BaseLayout>

@@ -1,0 +1,82 @@
+---
+import Card from '../ds/Card.astro';
+import CheckIcon from './CheckIcon.astro';
+import ComingNextTag from './ComingNextTag.astro';
+
+export interface PlanFeatureItem {
+  name: string;
+  note?: string;
+}
+
+interface Props {
+  coreFeatures: (PlanFeatureItem | string)[];
+  proFeatures: (PlanFeatureItem | string)[];
+  scaleFeatures: (PlanFeatureItem | string)[];
+}
+
+const { coreFeatures, proFeatures, scaleFeatures } = Astro.props;
+
+const normalize = (item: PlanFeatureItem | string): PlanFeatureItem =>
+  typeof item === 'string' ? { name: item } : item;
+---
+<div class="feature-plans-grid">
+  <Card class="feature-plan-card">
+    <div class="feature-plan-head">
+      <h3>Core</h3>
+      <span style="font-weight: 700; color: var(--ds-primary);">₹999 / mo</span>
+    </div>
+    <p class="plan-price">3 logins · Unlimited attendants without a login</p>
+    <ul>
+      {coreFeatures.map(normalize).map((f) => (
+        <li>
+          <CheckIcon />
+          <span>
+            {f.name}
+            {f.note === 'Coming next' && <ComingNextTag />}
+            {f.note && f.note !== 'Coming next' && <small class="plan-feature-note"> · {f.note}</small>}
+          </span>
+        </li>
+      ))}
+    </ul>
+  </Card>
+
+  <Card class="feature-plan-card is-popular">
+    <div class="feature-plan-head">
+      <h3>Pro</h3>
+      <span style="font-weight: 700; color: var(--ds-primary);">₹1,599 / mo</span>
+    </div>
+    <p class="plan-price">10 logins · Unlimited attendants without a login</p>
+    <ul>
+      {proFeatures.map(normalize).map((f) => (
+        <li>
+          <CheckIcon />
+          <span>
+            {f.name}
+            {f.note === 'Coming next' && <ComingNextTag />}
+            {f.note && f.note !== 'Coming next' && <small class="plan-feature-note"> · {f.note}</small>}
+          </span>
+        </li>
+      ))}
+    </ul>
+  </Card>
+
+  <Card class="feature-plan-card">
+    <div class="feature-plan-head">
+      <h3>Scale</h3>
+      <span style="font-weight: 700; color: var(--ds-primary);">Custom</span>
+    </div>
+    <p class="plan-price">Custom logins · Multiple stations</p>
+    <ul>
+      {scaleFeatures.map(normalize).map((f) => (
+        <li>
+          <CheckIcon />
+          <span>
+            {f.name}
+            {f.note === 'Coming next' && <ComingNextTag />}
+            {f.note && f.note !== 'Coming next' && <small class="plan-feature-note"> · {f.note}</small>}
+          </span>
+        </li>
+      ))}
+    </ul>
+  </Card>
+</div>

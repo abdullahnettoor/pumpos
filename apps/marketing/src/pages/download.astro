@@ -10,20 +10,18 @@ const platforms = [
   { key: 'windows-x64', label: 'Windows', sub: 'Windows 10/11 · 64-bit', icon: 'M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z' },
   { key: 'macos-arm64', label: 'macOS', sub: 'Apple Silicon', icon: 'M4 3h16v14H4zM8 21h8M12 17v4' },
   { key: 'macos-x64', label: 'macOS', sub: 'Intel', icon: 'M4 3h16v14H4zM8 21h8M12 17v4' },
-  { key: 'linux-x64-appimage', label: 'Linux', sub: 'AppImage · 64-bit', icon: 'M3 4h18v16H3zM7 9l3 3-3 3m6 0h4' },
-  { key: 'linux-x64-deb', label: 'Linux', sub: '.deb · Debian / Ubuntu', icon: 'M3 4h18v16H3zM7 9l3 3-3 3m6 0h4' },
 ];
 ---
 <BaseLayout
   title="Download PumpOS | Desktop & web"
-  description="Get the PumpOS desktop app for your station or open the web console. Check installer availability for Windows, macOS and Linux."
+  description="Get the PumpOS desktop app for your station or open the web console. Check installer availability for Windows and macOS."
   path="/download"
 >
   <Section class="download-section" container={false}>
     <div class="ds-w">
       <header class="download-heading">
         <p class="ds-ey">Your station workspace</p>
-        <h1 class="ds-h1">Ready for the next Shift.</h1>
+        <h1 class="ds-h1">Ready for the next shift.</h1>
         <p class="ds-lead">Use the desktop app at your station, or open PumpOS in your browser. Pilot access is arranged during onboarding.</p>
       </header>
       <div data-manifest-url={DOWNLOAD_MANIFEST_URL}>

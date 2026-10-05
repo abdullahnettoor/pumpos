@@ -17,7 +17,7 @@ import '../styles/home.css';
 // Structured data so search results can show the FAQ and the plan prices.
 const faqLd = { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faqs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) };
 const appLd = {
-  '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'PumpOS', applicationCategory: 'BusinessApplication', operatingSystem: 'Windows, macOS, Linux, Web',
+  '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'PumpOS', applicationCategory: 'BusinessApplication', operatingSystem: 'Windows, macOS, Web',
   description: 'Fuel station management for Indian pump owners: nozzle readings, attendant drawers, stock, credit and the day report.',
   offers: plans.filter((p) => p.price.monthly !== null).map((p) => ({ '@type': 'Offer', name: p.name, price: p.price.monthly, priceCurrency: 'INR', description: 'Per station per month, excluding GST' })),
 };

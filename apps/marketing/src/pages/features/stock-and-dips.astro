@@ -1,0 +1,234 @@
+---
+import '../../styles/content-pages.css';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Section from '../../components/ds/Section.astro';
+import SectionHeading from '../../components/ds/SectionHeading.astro';
+import Card from '../../components/ds/Card.astro';
+import Button from '../../components/ds/Button.astro';
+import TankGauge from '../../components/ds/TankGauge.astro';
+import SampleDataBadge from '../../components/ds/SampleDataBadge.astro';
+import FeatureCta from '../../components/features/FeatureCta.astro';
+import FeaturePlans from '../../components/features/FeaturePlans.astro';
+import CheckIcon from '../../components/features/CheckIcon.astro';
+import { DEMO_PATH, WA_URL } from '../../components/home/links';
+import { WHATSAPP_DISPLAY } from '../../config';
+
+const arrowIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+
+const faqs = [
+  {
+    q: 'How does PumpOS record tank dips?',
+    a: 'Take the dip reading in litres using your dip rod and station chart, then enter the litres into PumpOS. The system compares actual litres against expected book stock and records any variance with your reason.',
+  },
+  {
+    q: 'Can we track packaged lubricants, DEF, and distilled water stock?',
+    a: 'Yes. PumpOS maintains independent inventory for packaged engine oils, grease, DEF (AdBlue), and accessories. You record inward purchases, forecourt sales, and conduct physical stock counts directly in the system.',
+  },
+  {
+    q: 'What happens if a tanker delivery arrives in the middle of a shift?',
+    a: 'Tanker purchases are logged as an inward delivery with the date, invoice number, supplier, invoice volume, and destination tank allocations. The inward volume updates that tank’s expected book stock when saved.',
+  },
+  {
+    q: 'Does PumpOS connect directly to Automatic Tank Gauging (ATG) consoles?',
+    a: 'Automated ATG console sync is planned as a future integration. Currently, managers enter the daily dip reading taken from either physical brass dip rods or your existing electronic ATG console display.',
+  },
+  {
+    q: 'Why does PumpOS require a reason for stock variance?',
+    a: 'Underground fuel expands and contracts with ambient temperature, and minor transit discrepancies occur during tanker decanting. Requiring a reason for every variance ensures genuine evaporation or decanting differences are distinguished from leaks or unrecorded sales.',
+  },
+];
+
+const corePlanFeatures = [
+  'Logins: 3 on Core',
+  'Attendants without a login, unlimited',
+  'Stock, dips and purchases',
+  'Shifts, nozzle readings and handovers',
+  'Saved DSR, VAT and GST',
+  { name: 'Tally, GSTR and Excel export', note: 'Coming next' },
+];
+
+const proPlanFeatures = [
+  'Logins: 10 on Pro',
+  'Attendant handover on the phone',
+  { name: 'Owner alerts on your phone', note: 'Coming next' },
+  { name: 'WhatsApp reminders and daily summary', note: 'Coming next' },
+];
+
+const scalePlanFeatures = [
+  'Custom logins',
+  'Several stations under one login',
+  { name: 'Reports across stations', note: 'Coming next' },
+];
+---
+<BaseLayout
+  title="Stock & Tank Dips | Fuel station inventory tracking | PumpOS"
+  description="Track physical tank dips against book stock. Reconcile tanker decanting, nozzle sales, and volume variance with recorded reasons on every check."
+  path="/features/stock-and-dips"
+>
+  <!-- Hero Section -->
+  <Section class="feature-hero">
+    <div class="feature-hero-grid">
+      <div>
+        <SectionHeading
+          eyebrow="Fuel & Lube Inventory"
+          title="Know what should be in the tank. Record what actually is."
+          lead="Track tank dips against expected book stock. Reconcile tanker decanting, nozzle sales, and inventory variance with recorded reasons on every check."
+          level="h1"
+        />
+        <div class="feature-hero-actions">
+          <Button variant="primary" href={DEMO_PATH}>Book a guided demo</Button>
+          <Button variant="wa" href={WA_URL} target="_blank" rel="noopener">WhatsApp {WHATSAPP_DISPLAY}</Button>
+          <a href="/product" class="card-link" style="margin-left: 8px;">View all features <Fragment set:html={arrowIcon} /></a>
+        </div>
+        <div class="feature-hero-badges">
+          <span class="feature-hero-badge"><CheckIcon /> Expected book stock calculation</span>
+          <span class="feature-hero-badge"><CheckIcon /> Mandatory variance reasons</span>
+          <span class="feature-hero-badge"><CheckIcon /> Tanker decanting inward log</span>
+          <span class="feature-hero-badge"><CheckIcon /> Packaged lube inventory</span>
+        </div>
+      </div>
+
+      <!-- Inventory Live Mockup -->
+      <div class="feature-hero-mockup">
+        <Card class="ds-card--alt" style="padding: 24px;">
+          <TankGauge
+            fuel="HSD"
+            tank="Tank 2 (20 KL)"
+            fillPercent={71}
+            actual="14,202 L"
+            expected="14,220 L"
+            variance="−18 L"
+            reason="temperature / evaporation"
+          />
+
+          <!-- Tanker Decanting Inward Table -->
+          <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--ds-line);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <span class="ds-ey" style="margin: 0;">Recent Inward Delivery</span>
+              <SampleDataBadge />
+            </div>
+            <div class="forecourt-table-wrap">
+              <table class="forecourt-table">
+                <thead>
+                  <tr>
+                    <th>Invoice / Tanker</th>
+                    <th>Product</th>
+                    <th class="num">Invoice Qty</th>
+                    <th class="num">Decanted</th>
+                    <th>Destination</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>INV-8412 · KL 07 CD 8412</strong></td>
+                    <td>HSD</td>
+                    <td class="num">12,000 L</td>
+                    <td class="num" style="color: var(--ds-primary); font-weight: 700;">12,000 L</td>
+                    <td>Tank 1 & Tank 2</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <span class="forecourt-table-note">Decanted into Tank 1 (6,000 L) and Tank 2 (6,000 L). Stock updated when saved.</span>
+          </div>
+        </Card>
+      </div>
+    </div>
+  </Section>
+
+  <!-- Problem Section -->
+  <Section tone="alt" class="feature-problem">
+    <SectionHeading
+      eyebrow="The Stock Problem"
+      title="Where fuel inventory quietly bleeds away"
+      lead="Petroleum retail handles volatile liquid underground. When dip rods are treated as routine paperwork, real leaks stay hidden."
+    />
+    <div class="feature-problem-grid">
+      <Card class="feature-problem-card">
+        <span class="problem-num">Problem 01</span>
+        <h3>Dips written down without book stock comparison</h3>
+        <p>Attendants dip tanks daily and write numbers in a counter register, but nobody calculates what should be in the tank based on sales and purchases. Physical dips without expected stock arithmetic reveal nothing.</p>
+      </Card>
+      <Card class="feature-problem-card">
+        <span class="problem-num">Problem 02</span>
+        <h3>Unaccounted tanker decanting shortfalls</h3>
+        <p>When an oil company tanker unloads, minor shortages from pipeline line-fill, temperature shrinkage, or decanting errors are often glossed over, turning into unexpected book losses weeks later.</p>
+      </Card>
+      <Card class="feature-problem-card">
+        <span class="problem-num">Problem 03</span>
+        <h3>No recorded reason for variances</h3>
+        <p>When a tank has 35 litres missing, managers rarely record whether it was noon heat evaporation, cold night contraction, or meter calibration. Without mandatory reason codes, unexplained shortages compound unnoticed.</p>
+      </Card>
+    </div>
+  </Section>
+
+  <!-- Workflow Section -->
+  <Section class="feature-workflow">
+    <SectionHeading
+      eyebrow="How PumpOS Works"
+      title="Accurate inventory from tanker decanting to evening dip"
+      lead="A simple, disciplined routine that ties physical dips to nozzle sales and tanker deliveries every single day."
+    />
+    <div class="feature-workflow-steps">
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 01</span>
+        <h3>Tank Setup</h3>
+        <p>Underground tanks are mapped with products and storage capacity in litres.</p>
+      </Card>
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 02</span>
+        <h3>Tanker Decanting Inward</h3>
+        <p>Record inward fuel consignments with invoice volume, tanker registration, and destination tanks. Stock balances update when saved.</p>
+      </Card>
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 03</span>
+        <h3>Log Physical Dip Reading</h3>
+        <p>Log physical dip volume in litres taken from your dip rod or gauge. PumpOS calculates expected stock from opening stock + purchases − nozzle reading sales.</p>
+      </Card>
+      <Card class="feature-step-card">
+        <span class="feature-step-num">STEP 04</span>
+        <h3>Mandatory Variance Reason</h3>
+        <p>If physical dip differs from book stock, a reason code (temperature variation, evaporation, transit discrepancy) is permanently attached to the record.</p>
+      </Card>
+    </div>
+  </Section>
+
+  <!-- Plan Inclusions Section -->
+  <Section tone="alt" class="feature-plans">
+    <SectionHeading
+      eyebrow="Plan Inclusions"
+      title="Complete inventory tracking on every plan"
+      lead="Manage all your underground tanks, tanker purchases and lubricants on Core, with advanced exports and multi-station tools coming next."
+    />
+    <FeaturePlans
+      coreFeatures={corePlanFeatures}
+      proFeatures={proPlanFeatures}
+      scaleFeatures={scalePlanFeatures}
+    />
+  </Section>
+
+  <!-- FAQ Section -->
+  <Section class="feature-faq">
+    <div class="feature-faq-heading">
+      <SectionHeading
+        eyebrow="Common Questions"
+        title="Frequently asked questions about stock and tank dips"
+      />
+      <Button variant="secondary" href="/docs/getting-started">Getting started guide</Button>
+    </div>
+    <div class="pricing-faq-list" style="margin-top: 32px;">
+      {faqs.map((f) => (
+        <details>
+          <summary>
+            {f.q}
+            <span aria-hidden="true">+</span>
+          </summary>
+          <p>{f.a}</p>
+        </details>
+      ))}
+    </div>
+  </Section>
+
+  <!-- CTA Banner -->
+  <FeatureCta />
+</BaseLayout>

@@ -23,7 +23,7 @@ const fmt = (date: Date) =>
       </header>
       <div class="journal-list" aria-label="Journal articles">
         {posts.map((post) => (
-          <Card as="article" class="journal-entry">
+          <Card as="article" class="journal-card journal-entry">
             <a class="journal-art" href={`/blog/${post.id}`} aria-label={post.data.title}>
               <p>Your station.<br />Your record.</p>
               <BrandMark />
