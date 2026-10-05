@@ -28,14 +28,14 @@ const featureList = [
     eyebrow: 'Operations & Cash Control',
     href: '/features/shifts-and-drawers',
     description: 'Derived nozzle reading sales, individual attendant drawers per Dispenser Unit (DU), mid-shift cash drops, and immediate shortage accountability before shift sign-off.',
-    bullets: ['Automatic meter carry-forward', 'One drawer per DU', 'Mid-shift safe cash drops', 'Immutable shift summary'],
+    bullets: ['Automatic meter carry-forward', 'One drawer per DU', 'Mid-shift safe cash drops', 'Saved shift summary'],
   },
   {
     icon: icons.drop,
     title: 'Stock & Tank Dips',
     eyebrow: 'Fuel & Lube Inventory',
     href: '/features/stock-and-dips',
-    description: 'Track physical dip rod measurements against calculated book stock. Reconcile inward tanker decanting, density checks at 15°C, and record mandatory reason codes for every variance.',
+    description: 'Track physical dip measurements against expected book stock. Reconcile inward tanker decanting, nozzle sales, and record mandatory reason codes for every variance.',
     bullets: ['Expected book stock calculation', 'Mandatory variance reasons', 'Tanker decanting inward log', 'Packaged lube inventory'],
   },
   {
@@ -43,7 +43,7 @@ const featureList = [
     title: 'Credit & Khata',
     eyebrow: 'Receivables & Fleet Accounts',
     href: '/features/credit-and-khata',
-    description: 'Manage fleet credit sales linked to vehicle registration numbers. Live customer balances, dispute-free itemized statements, and bank collections separated from forecourt cash.',
+    description: 'Manage fleet credit sales linked to vehicle registration numbers. Running customer balances updated when saved, dispute-free itemized statements, and bank collections separated from forecourt cash.',
     bullets: ['Vehicle-wise credit sales', 'Running ledger balance', 'Bank & NEFT collections', 'Sanctioned credit limits'],
   },
   {
@@ -51,14 +51,14 @@ const featureList = [
     title: 'Reports & DSR',
     eyebrow: 'Reporting & Compliance',
     href: '/features/reports-and-dsr',
-    description: 'Generate immutable Daily Station Sales Reports (DSSR) upon day close. State VAT on petrol and diesel, GST on lubricants, and a live Daily Cash Book for office entries.',
-    bullets: ['Immutable DSSR snapshot', 'State VAT vs GST tax split', 'Daily Cash Book for office', 'Print-ready PDF exports'],
+    description: 'Generate your Daily Station Sales Report (DSR) upon day close, saved and never recalculated. State VAT on petrol and diesel, GST on lubricants, and a Daily Cash Book for office entries.',
+    bullets: ['Saved DSR snapshot', 'State VAT vs GST tax split', 'Daily Cash Book for office', 'Print-ready PDF exports'],
   },
 ];
 ---
 <BaseLayout
   title="The Product | Inside PumpOS fuel station management"
-  description="Explore shifts, nozzle meter readings, attendant drawers, tank dips, fleet credit and the Daily Station Sales Report (DSSR)."
+  description="Explore shifts, nozzle meter readings, attendant drawers, tank dips, fleet credit and the Daily Station Sales Report (DSR)."
   path="/product"
 >
   <!-- Product Index Hero -->
@@ -89,9 +89,9 @@ const featureList = [
             </div>
             <h2>{f.title}</h2>
             <p>{f.description}</p>
-            <ul style="list-style: none; padding: 0; margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: var(--ds-ink);">
+            <ul class="product-feature-bullets">
               {f.bullets.map((b) => (
-                <li style="display: flex; align-items: center; gap: 6px;">
+                <li>
                   <span style="color: var(--ds-primary); font-weight: 800;">✓</span> {b}
                 </li>
               ))}
@@ -109,7 +109,7 @@ const featureList = [
       <div>
         <p class="ds-ey" style="margin: 0 0 6px 0;">Practical Forecourt Guide</p>
         <h3>Day closing and DSR for any OMC dealership</h3>
-        <p>A practical guide to end-of-day reconciliation for Indian fuel stations: readings → drawers → dips → credit → day close. Built for dealers under IOCL, BPCL, HPCL, Nayara, Jio-bp, or Shell.</p>
+        <p>A practical guide to end-of-day reconciliation for Indian fuel stations: readings → drawers → dips → credit → day close. Built for OMC dealers across India.</p>
       </div>
       <div>
         <Button variant="secondary" href="/blog/day-closing-and-dsr-guide">
@@ -119,45 +119,34 @@ const featureList = [
     </div>
   </Section>
 
-  <!-- Station Workspaces Section -->
-  <Section tone="alt" class="product-workspaces">
+  <!-- Unified Architecture Summary Section -->
+  <Section tone="alt" class="product-arch-section">
     <SectionHeading
-      eyebrow="Station Workspaces"
-      title="Built for the roles at your station"
-      lead="Dedicated interfaces for managers at the desk, attendants at the dispenser, and owners on the move."
+      eyebrow="System Architecture"
+      title="How the pieces fit together every day"
+      lead="PumpOS ties forecourt operations directly into your financial books without double-entry or Excel recalculation errors."
     />
-    <div class="product-workspaces-grid">
-      <Card class="product-workspace-card">
-        <div class="product-feature-icon" aria-hidden="true">
+    <div class="product-arch-grid">
+      <Card class="product-arch-card">
+        <div class="product-arch-icon" aria-hidden="true">
           <Fragment set:html={icons.desktop} />
         </div>
-        <h3>Manager Desktop App</h3>
-        <p>The primary station operating console. Managers open shifts, carry forward meter readings, log tanker purchases, record dips, and close the Business Day.</p>
-        <div style="margin-top: 16px;">
-          <a href="/download" class="card-link" style="margin: 0; font-size: 13px;">Download desktop app <Fragment set:html={icons.arrow} /></a>
-        </div>
+        <h3>Forecourt Cash & Shift Handover</h3>
+        <p>Managers assign DUs, opening floats, and nozzle meters. Attendants declare cash and electronic card slips. Variances are caught before attendants leave the premises.</p>
       </Card>
-
-      <Card class="product-workspace-card">
-        <div class="product-feature-icon" aria-hidden="true">
-          <Fragment set:html={icons.phone} />
-        </div>
-        <h3>Owner Mobile View</h3>
-        <p>Review customer dues, recent bank collections, and closed DSSR snapshots directly from your phone's browser when away from the forecourt.</p>
-        <div style="margin-top: 16px;">
-          <a href={DEMO_PATH} class="card-link" style="margin: 0; font-size: 13px;">Schedule walkthrough <Fragment set:html={icons.arrow} /></a>
-        </div>
-      </Card>
-
-      <Card class="product-workspace-card">
-        <div class="product-feature-icon" aria-hidden="true">
+      <Card class="product-arch-card">
+        <div class="product-arch-icon" aria-hidden="true">
           <Fragment set:html={icons.shield} />
         </div>
-        <h3>Attendant Self-Handover</h3>
-        <p>On the Pro plan, attendants submit their cash, card, and UPI declarations directly from their phone browser at shift change. Zero app store downloads.</p>
-        <div style="margin-top: 16px;">
-          <a href="/pricing" class="card-link" style="margin: 0; font-size: 13px;">Compare plan features <Fragment set:html={icons.arrow} /></a>
+        <h3>Inventory & Underground Storage</h3>
+        <p>Tank dips compare physical rod measurements against opening stock, tanker consignments, and nozzle sales. Every variance requires a mandatory reason code.</p>
+      </Card>
+      <Card class="product-arch-card">
+        <div class="product-arch-icon" aria-hidden="true">
+          <Fragment set:html={icons.phone} />
         </div>
+        <h3>Audit-Proof DSR Day Reports</h3>
+        <p>Closing the business day creates a permanent DSR snapshot. State VAT and GST ledgers are cleanly separated, and yesterday's report is saved and never recalculated.</p>
       </Card>
     </div>
   </Section>

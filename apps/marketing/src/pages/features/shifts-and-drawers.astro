@@ -7,10 +7,11 @@ import Card from '../../components/ds/Card.astro';
 import Button from '../../components/ds/Button.astro';
 import SampleDataBadge from '../../components/ds/SampleDataBadge.astro';
 import FeatureCta from '../../components/features/FeatureCta.astro';
+import FeaturePlans from '../../components/features/FeaturePlans.astro';
+import CheckIcon from '../../components/features/CheckIcon.astro';
 import { DEMO_PATH, WA_URL } from '../../components/home/links';
 import { WHATSAPP_DISPLAY } from '../../config';
 
-const checkIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
 const arrowIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
 
 const nozzleRows = [
@@ -29,17 +30,39 @@ const faqs = [
     a: 'Attendants do not need phones or logins. On all plans (including Core), the station manager enters the attendant’s declared cash and terminal receipts directly from the desktop application or manager console during handover.',
   },
   {
-    q: 'How are statutory pump testing (density check) litres handled?',
-    a: 'Fuel drawn for testing and returned to the underground tank is recorded as a pump test return. The system subtracts test litres from gross nozzle volume so your team is not charged for testing fuel.',
+    q: 'How does opening meter carry-forward work between shifts?',
+    a: 'When opening a shift, PumpOS locks the opening reading of each nozzle to the closing reading from the previous shift. Attendants and managers do not retype opening numbers, preventing manipulation and transcription errors.',
   },
   {
     q: 'Can meter readings or drawer handovers be changed after a shift is closed?',
-    a: 'No. When a Shift is closed, PumpOS saves an immutable Shift Summary snapshot. Yesterday’s numbers cannot be rewritten. Any subsequent office correction is logged as an independent entry with an audit trail.',
+    a: 'No. When a shift is closed, PumpOS saves the shift summary permanently. Yesterday’s numbers cannot be rewritten. Any subsequent office correction is logged as an independent entry with an audit trail.',
   },
   {
     q: 'Does shift management work if our internet connection drops?',
     a: 'PumpOS is online-first. The desktop application stays open and displays previously loaded records if your connection drops, but saving new shift entries or closing a handover requires an active internet connection to ensure immediate data synchronization.',
   },
+];
+
+const corePlanFeatures = [
+  'Logins: 3 on Core',
+  'Attendants without a login, unlimited',
+  'Shifts, nozzle readings and handovers',
+  'Fuel and product sales by cash, card or UPI',
+  'Saved DSR, VAT and GST',
+];
+
+const proPlanFeatures = [
+  'Logins: 10 on Pro',
+  'Attendant handover on the phone',
+  { name: 'Attendance, advances and shortage recovery', note: 'Coming next' },
+  { name: 'Owner alerts on your phone', note: 'Coming next' },
+  { name: 'WhatsApp reminders and daily summary', note: 'Coming next' },
+];
+
+const scalePlanFeatures = [
+  'Custom logins',
+  'Several stations under one login',
+  { name: 'Reports across stations', note: 'Coming next' },
 ];
 ---
 <BaseLayout
@@ -63,10 +86,10 @@ const faqs = [
           <a href="/product" class="card-link" style="margin-left: 8px;">View all features <Fragment set:html={arrowIcon} /></a>
         </div>
         <div class="feature-hero-badges">
-          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> Automatic meter carry-forward</span>
-          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> One drawer per DU</span>
-          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> Mid-shift cash drops</span>
-          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> Immutable shift records</span>
+          <span class="feature-hero-badge"><CheckIcon /> Automatic meter carry-forward</span>
+          <span class="feature-hero-badge"><CheckIcon /> One drawer per DU</span>
+          <span class="feature-hero-badge"><CheckIcon /> Mid-shift cash drops</span>
+          <span class="feature-hero-badge"><CheckIcon /> Saved shift records</span>
         </div>
       </div>
 
@@ -183,7 +206,7 @@ const faqs = [
       <Card class="feature-step-card">
         <span class="feature-step-num">STEP 01</span>
         <h3>Assign DUs & Opening Float</h3>
-        <p>At shift start, the manager assigns attendants to Dispenser Units and issues their change float. Opening meter readings are locked from the previous shift.</p>
+        <p>At shift start, the manager assigns attendants to Dispenser Units and issues their change float. Opening meter readings are carried forward from the previous shift.</p>
       </Card>
       <Card class="feature-step-card">
         <span class="feature-step-num">STEP 02</span>
@@ -198,7 +221,7 @@ const faqs = [
       <Card class="feature-step-card">
         <span class="feature-step-num">STEP 04</span>
         <h3>Instant Reconciliation & Lock</h3>
-        <p>PumpOS computes expected drawer cash. Any shortage or excess is surfaced immediately and recorded on the immutable shift summary.</p>
+        <p>PumpOS computes expected drawer cash. Any shortage or excess is surfaced immediately and recorded on the shift summary, saved at close and never recalculated.</p>
       </Card>
     </div>
   </Section>
@@ -210,54 +233,11 @@ const faqs = [
       title="Choose the right shift workflow for your forecourt"
       lead="Start on Core with manager-entered handovers, or step up to Pro for mobile browser attendant self-handovers."
     />
-    <div class="feature-plans-grid">
-      <Card class="feature-plan-card">
-        <div class="feature-plan-head">
-          <h3>Core</h3>
-          <span style="font-weight: 700; color: var(--ds-primary);">₹999 / mo</span>
-        </div>
-        <p class="plan-price">Up to 3 user logins · Unlimited attendants</p>
-        <ul>
-          <li><Fragment set:html={checkIcon} /> Full shift open and close workflows</li>
-          <li><Fragment set:html={checkIcon} /> Automatic nozzle reading carry-forward</li>
-          <li><Fragment set:html={checkIcon} /> Manager-entered attendant handovers on desktop</li>
-          <li><Fragment set:html={checkIcon} /> Mid-shift cash drop logging</li>
-          <li><Fragment set:html={checkIcon} /> Density check & pump test fuel subtraction</li>
-          <li><Fragment set:html={checkIcon} /> Immutable Shift Summary PDF export</li>
-        </ul>
-      </Card>
-
-      <Card class="feature-plan-card is-popular">
-        <div class="feature-plan-head">
-          <h3>Pro</h3>
-          <span style="font-weight: 700; color: var(--ds-primary);">₹1,599 / mo</span>
-        </div>
-        <p class="plan-price">Up to 10 user logins · Unlimited attendants</p>
-        <ul>
-          <li><Fragment set:html={checkIcon} /> Everything in Core</li>
-          <li><Fragment set:html={checkIcon} /> Attendant mobile self-handover in phone browser</li>
-          <li><Fragment set:html={checkIcon} /> No app installation required for staff</li>
-          <li><Fragment set:html={checkIcon} /> <span>Staff attendance & advances <span class="feature-tag-coming">Coming next</span></span></li>
-          <li><Fragment set:html={checkIcon} /> <span>Automated shortage recovery <span class="feature-tag-coming">Coming next</span></span></li>
-          <li><Fragment set:html={checkIcon} /> <span>Owner WhatsApp shortage alerts <span class="feature-tag-coming">Coming next</span></span></li>
-        </ul>
-      </Card>
-
-      <Card class="feature-plan-card">
-        <div class="feature-plan-head">
-          <h3>Scale</h3>
-          <span style="font-weight: 700; color: var(--ds-primary);">Custom</span>
-        </div>
-        <p class="plan-price">Custom user seats · Multiple stations</p>
-        <ul>
-          <li><Fragment set:html={checkIcon} /> Everything in Pro</li>
-          <li><Fragment set:html={checkIcon} /> Multi-station attendant rosters</li>
-          <li><Fragment set:html={checkIcon} /> Centralized cross-station shift audit log</li>
-          <li><Fragment set:html={checkIcon} /> Custom role permissions & approval flows</li>
-          <li><Fragment set:html={checkIcon} /> Dedicated onboarding manager</li>
-        </ul>
-      </Card>
-    </div>
+    <FeaturePlans
+      coreFeatures={corePlanFeatures}
+      proFeatures={proPlanFeatures}
+      scaleFeatures={scalePlanFeatures}
+    />
   </Section>
 
   <!-- FAQ Section -->
@@ -267,7 +247,7 @@ const faqs = [
         eyebrow="Common Questions"
         title="Frequently asked questions about shifts and drawers"
       />
-      <Button variant="secondary" href="/docs/running-shifts">Read the documentation</Button>
+      <Button variant="secondary" href="/docs/getting-started">Getting started guide</Button>
     </div>
     <div class="pricing-faq-list" style="margin-top: 32px;">
       {faqs.map((f) => (

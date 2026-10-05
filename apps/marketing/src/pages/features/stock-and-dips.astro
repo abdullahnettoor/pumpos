@@ -8,16 +8,17 @@ import Button from '../../components/ds/Button.astro';
 import TankGauge from '../../components/ds/TankGauge.astro';
 import SampleDataBadge from '../../components/ds/SampleDataBadge.astro';
 import FeatureCta from '../../components/features/FeatureCta.astro';
+import FeaturePlans from '../../components/features/FeaturePlans.astro';
+import CheckIcon from '../../components/features/CheckIcon.astro';
 import { DEMO_PATH, WA_URL } from '../../components/home/links';
 import { WHATSAPP_DISPLAY } from '../../config';
 
-const checkIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
 const arrowIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
 
 const faqs = [
   {
-    q: 'How does PumpOS convert dip rod centimeters to litres?',
-    a: 'During initial station setup, we enter your statutory dip calibration chart (dip depth in cm to volume in litres) for each underground tank. When your manager logs the dip reading in cm or litres, PumpOS calculates the calibrated volume automatically.',
+    q: 'How does PumpOS record tank dips?',
+    a: 'Take the dip reading in litres using your dip rod and station chart, then enter the litres into PumpOS. The system compares actual litres against expected book stock and records any variance with your reason.',
   },
   {
     q: 'Can we track packaged lubricants, DEF, and distilled water stock?',
@@ -25,16 +26,38 @@ const faqs = [
   },
   {
     q: 'What happens if a tanker delivery arrives in the middle of a shift?',
-    a: 'Tanker purchases are logged as an Inward Delivery with the date, invoice volume, density check, and tank allocation. The inward volume updates that tank’s expected book stock immediately without disrupting active shift sales.',
+    a: 'Tanker purchases are logged as an inward delivery with the date, invoice number, supplier, invoice volume, and destination tank allocations. The inward volume updates that tank’s expected book stock when saved.',
   },
   {
     q: 'Does PumpOS connect directly to Automatic Tank Gauging (ATG) consoles?',
     a: 'Automated ATG console sync is planned as a future integration. Currently, managers enter the daily dip reading taken from either physical brass dip rods or your existing electronic ATG console display.',
   },
   {
-    q: 'Can we record water dip checks?',
-    a: 'Yes. Water paste dip checks can be recorded against each tank. If water is detected above allowable operational thresholds, the system flags the tank for manager attention.',
+    q: 'Why does PumpOS require a reason for stock variance?',
+    a: 'Underground fuel expands and contracts with ambient temperature, and minor transit discrepancies occur during tanker decanting. Requiring a reason for every variance ensures genuine evaporation or decanting differences are distinguished from leaks or unrecorded sales.',
   },
+];
+
+const corePlanFeatures = [
+  'Logins: 3 on Core',
+  'Attendants without a login, unlimited',
+  'Stock, dips and purchases',
+  'Shifts, nozzle readings and handovers',
+  'Saved DSR, VAT and GST',
+  { name: 'Tally, GSTR and Excel export', note: 'Coming next' },
+];
+
+const proPlanFeatures = [
+  'Logins: 10 on Pro',
+  'Attendant handover on the phone',
+  { name: 'Owner alerts on your phone', note: 'Coming next' },
+  { name: 'WhatsApp reminders and daily summary', note: 'Coming next' },
+];
+
+const scalePlanFeatures = [
+  'Custom logins',
+  'Several stations under one login',
+  { name: 'Reports across stations', note: 'Coming next' },
 ];
 ---
 <BaseLayout
@@ -58,10 +81,10 @@ const faqs = [
           <a href="/product" class="card-link" style="margin-left: 8px;">View all features <Fragment set:html={arrowIcon} /></a>
         </div>
         <div class="feature-hero-badges">
-          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> Expected book stock calculation</span>
-          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> Mandatory variance reasons</span>
-          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> Tanker decanting inward log</span>
-          <span class="feature-hero-badge"><Fragment set:html={checkIcon} /> Packaged lube inventory</span>
+          <span class="feature-hero-badge"><CheckIcon /> Expected book stock calculation</span>
+          <span class="feature-hero-badge"><CheckIcon /> Mandatory variance reasons</span>
+          <span class="feature-hero-badge"><CheckIcon /> Tanker decanting inward log</span>
+          <span class="feature-hero-badge"><CheckIcon /> Packaged lube inventory</span>
         </div>
       </div>
 
@@ -92,7 +115,7 @@ const faqs = [
                     <th>Product</th>
                     <th class="num">Invoice Qty</th>
                     <th class="num">Decanted</th>
-                    <th>Density @ 15°C</th>
+                    <th>Destination</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -101,12 +124,12 @@ const faqs = [
                     <td>HSD</td>
                     <td class="num">12,000 L</td>
                     <td class="num" style="color: var(--ds-primary); font-weight: 700;">12,000 L</td>
-                    <td>831.2 kg/m³</td>
+                    <td>Tank 1 & Tank 2</td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <span class="forecourt-table-note">Decanted into Tank 1 (6,000 L) and Tank 2 (6,000 L). Stock updated upon entry.</span>
+            <span class="forecourt-table-note">Decanted into Tank 1 (6,000 L) and Tank 2 (6,000 L). Stock updated when saved.</span>
           </div>
         </Card>
       </div>
@@ -149,23 +172,23 @@ const faqs = [
     <div class="feature-workflow-steps">
       <Card class="feature-step-card">
         <span class="feature-step-num">STEP 01</span>
-        <h3>Tank & Dip Chart Setup</h3>
-        <p>Underground tanks are mapped with products and calibrated dip charts. Liquid depth in cm maps directly to volume in litres.</p>
+        <h3>Tank Setup</h3>
+        <p>Underground tanks are mapped with products and storage capacity in litres.</p>
       </Card>
       <Card class="feature-step-card">
         <span class="feature-step-num">STEP 02</span>
         <h3>Tanker Decanting Inward</h3>
-        <p>Record inward fuel consignments with invoice volume, vehicle number, and observed density. Stock balances update immediately.</p>
+        <p>Record inward fuel consignments with invoice volume, tanker registration, and destination tanks. Stock balances update when saved.</p>
       </Card>
       <Card class="feature-step-card">
         <span class="feature-step-num">STEP 03</span>
         <h3>Log Physical Dip Reading</h3>
-        <p>Take the daily dip with the calibrated rod. PumpOS calculates expected stock from opening stock + purchases − nozzle reading sales.</p>
+        <p>Log physical dip volume in litres taken from your dip rod or gauge. PumpOS calculates expected stock from opening stock + purchases − nozzle reading sales.</p>
       </Card>
       <Card class="feature-step-card">
         <span class="feature-step-num">STEP 04</span>
         <h3>Mandatory Variance Reason</h3>
-        <p>If physical dip differs from book stock, a reason code (temperature variation, evaporation, calibration curve) is permanently attached to the record.</p>
+        <p>If physical dip differs from book stock, a reason code (temperature variation, evaporation, transit discrepancy) is permanently attached to the record.</p>
       </Card>
     </div>
   </Section>
@@ -175,56 +198,13 @@ const faqs = [
     <SectionHeading
       eyebrow="Plan Inclusions"
       title="Complete inventory tracking on every plan"
-      lead="Manage all your underground tanks, tanker purchases and lubricants on Core, with advanced analytics coming next."
+      lead="Manage all your underground tanks, tanker purchases and lubricants on Core, with advanced exports and multi-station tools coming next."
     />
-    <div class="feature-plans-grid">
-      <Card class="feature-plan-card">
-        <div class="feature-plan-head">
-          <h3>Core</h3>
-          <span style="font-weight: 700; color: var(--ds-primary);">₹999 / mo</span>
-        </div>
-        <p class="plan-price">Up to 3 user logins · Unlimited attendants</p>
-        <ul>
-          <li><Fragment set:html={checkIcon} /> Unlimited underground fuel tanks</li>
-          <li><Fragment set:html={checkIcon} /> Daily dip entry with cm-to-litre calibration</li>
-          <li><Fragment set:html={checkIcon} /> Automatic expected book stock calculation</li>
-          <li><Fragment set:html={checkIcon} /> Inward tanker purchase & decanting logging</li>
-          <li><Fragment set:html={checkIcon} /> Density check logging at 15°C conversion</li>
-          <li><Fragment set:html={checkIcon} /> Packaged lubricants & accessories inventory</li>
-        </ul>
-      </Card>
-
-      <Card class="feature-plan-card is-popular">
-        <div class="feature-plan-head">
-          <h3>Pro</h3>
-          <span style="font-weight: 700; color: var(--ds-primary);">₹1,599 / mo</span>
-        </div>
-        <p class="plan-price">Up to 10 user logins · Unlimited attendants</p>
-        <ul>
-          <li><Fragment set:html={checkIcon} /> Everything in Core</li>
-          <li><Fragment set:html={checkIcon} /> Multi-user tank dip logging permissions</li>
-          <li><Fragment set:html={checkIcon} /> Historical stock trend & variance analytics</li>
-          <li><Fragment set:html={checkIcon} /> <span>High-variance threshold alerts <span class="feature-tag-coming">Coming next</span></span></li>
-          <li><Fragment set:html={checkIcon} /> <span>Automated tank dip history export <span class="feature-tag-coming">Coming next</span></span></li>
-          <li><Fragment set:html={checkIcon} /> <span>Automatic Tank Gauge (ATG) sync <span class="feature-tag-coming">Coming next</span></span></li>
-        </ul>
-      </Card>
-
-      <Card class="feature-plan-card">
-        <div class="feature-plan-head">
-          <h3>Scale</h3>
-          <span style="font-weight: 700; color: var(--ds-primary);">Custom</span>
-        </div>
-        <p class="plan-price">Custom user seats · Multiple stations</p>
-        <ul>
-          <li><Fragment set:html={checkIcon} /> Everything in Pro</li>
-          <li><Fragment set:html={checkIcon} /> Centralized multi-station tank dashboard</li>
-          <li><Fragment set:html={checkIcon} /> Cross-station bulk supply reconciliation</li>
-          <li><Fragment set:html={checkIcon} /> Custom procurement workflows & approvals</li>
-          <li><Fragment set:html={checkIcon} /> Dedicated technical onboarding</li>
-        </ul>
-      </Card>
-    </div>
+    <FeaturePlans
+      coreFeatures={corePlanFeatures}
+      proFeatures={proPlanFeatures}
+      scaleFeatures={scalePlanFeatures}
+    />
   </Section>
 
   <!-- FAQ Section -->
