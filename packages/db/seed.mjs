@@ -11,6 +11,8 @@
  */
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
+import { eq } from 'drizzle-orm';
+import { resolveBusinessDate } from '@pump/shared';
 import * as schema from './dist/schema.js';
 
 const url = process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL;
@@ -24,12 +26,16 @@ const db = drizzle(client, { schema });
 
 // ---- Deterministic IDs ----
 const ID = {
-  org: '00000000-0000-4000-8000-000000000001',
+  org: process.env.DEMO_ORG_ID || '36500000-0000-4000-8000-000000000001',
   station: '00000000-0000-4000-8000-000000000010',
   userOwner: '00000000-0000-4000-8000-000000000101',
   userManager: '00000000-0000-4000-8000-000000000102',
   userAccountant: '00000000-0000-4000-8000-000000000103',
   userStaff: '00000000-0000-4000-8000-000000000104',
+  attendantAnitha: '00000000-0000-4000-8000-000000000105',
+  attendantRavi: '00000000-0000-4000-8000-000000000106',
+  attendantMeera: '00000000-0000-4000-8000-000000000107',
+  attendantJomon: '00000000-0000-4000-8000-000000000108',
   prodPetrol: '00000000-0000-4000-8000-000000000201',
   prodDiesel: '00000000-0000-4000-8000-000000000202',
   prodCng: '00000000-0000-4000-8000-000000000203',
@@ -41,10 +47,13 @@ const ID = {
   tankDiesel: '00000000-0000-4000-8000-000000000302',
   du1: '00000000-0000-4000-8000-000000000401',
   du2: '00000000-0000-4000-8000-000000000402',
+  du3: '00000000-0000-4000-8000-000000000403',
   nzP1: '00000000-0000-4000-8000-000000000501',
   nzP2: '00000000-0000-4000-8000-000000000502',
   nzD1: '00000000-0000-4000-8000-000000000503',
   nzD2: '00000000-0000-4000-8000-000000000504',
+  nzP3: '00000000-0000-4000-8000-000000000505',
+  nzD3: '00000000-0000-4000-8000-000000000506',
   term1: '00000000-0000-4000-8000-000000000601',
   term2: '00000000-0000-4000-8000-000000000602',
   tplMorning: '00000000-0000-4000-8000-000000000701',
@@ -57,6 +66,12 @@ const ID = {
   custRegular: '00000000-0000-4000-8000-000000000a01',
   custCredit: '00000000-0000-4000-8000-000000000a02',
   custFleet: '00000000-0000-4000-8000-000000000a03',
+  custKsrtc: '00000000-0000-4000-8000-000000000a04',
+  custMalabar: '00000000-0000-4000-8000-000000000a05',
+  custPeriyar: '00000000-0000-4000-8000-000000000a06',
+  custCoastal: '00000000-0000-4000-8000-000000000a07',
+  custGreenline: '00000000-0000-4000-8000-000000000a08',
+  custMetro: '00000000-0000-4000-8000-000000000a09',
   vehFleet1: '00000000-0000-4000-8000-000000000b01',
   vehFleet2: '00000000-0000-4000-8000-000000000b02',
   bday: '00000000-0000-4000-8000-000000000c01',
@@ -75,9 +90,15 @@ const ID = {
   accPetty: '00000000-0000-4000-8000-000000001402',
   accBank: '00000000-0000-4000-8000-000000001403',
 };
+// Keep this fixture's deterministic IDs disjoint from the general-purpose
+// development seed, which uses the 00000000 UUID namespace.
+for (const key of Object.keys(ID)) {
+  if (key !== 'org') ID[key] = ID[key].replace(/^00000000/, '36500000');
+}
 
-const today = new Date();
-const businessDate = today.toISOString().slice(0, 10); // YYYY-MM-DD
+const timeZone = 'Asia/Kolkata';
+const dayStartsAt = '05:00';
+const businessDate = resolveBusinessDate({ timeZone, dayStartsAt });
 const nz = (v) => String(v);
 
 async function main() {
@@ -85,7 +106,7 @@ async function main() {
     .insert(schema.organizations)
     .values({
       id: ID.org,
-      name: 'Demo Fuels Pvt Ltd',
+      name: 'Sample Fuels (Demo)',
       subscriptionPlan: 'CORE',
       subscriptionStatus: 'ACTIVE',
     })
@@ -98,7 +119,7 @@ async function main() {
         id: ID.userOwner,
         organizationId: ID.org,
         fullName: 'Asha Owner',
-        email: 'owner@demo.test',
+        email: 'owner@demo.pumpos.invalid',
         role: 'Owner',
         status: 'ACTIVE',
       },
@@ -106,7 +127,7 @@ async function main() {
         id: ID.userManager,
         organizationId: ID.org,
         fullName: 'Mani Manager',
-        email: 'manager@demo.test',
+        email: 'manager@demo.pumpos.invalid',
         role: 'Manager',
         status: 'ACTIVE',
       },
@@ -114,18 +135,31 @@ async function main() {
         id: ID.userAccountant,
         organizationId: ID.org,
         fullName: 'Anita Accountant',
-        email: 'accountant@demo.test',
+        email: 'accountant@demo.pumpos.invalid',
         role: 'Accountant',
         status: 'ACTIVE',
       },
       {
         id: ID.userStaff,
         organizationId: ID.org,
-        fullName: 'Sita Staff',
-        email: 'staff@demo.test',
-        role: 'Staff',
+        fullName: 'Anitha S',
+        email: 'attendant@demo.pumpos.invalid',
+        phone: '+91 00000 00101',
+        role: 'Attendant',
         status: 'ACTIVE',
       },
+      ...[
+        [ID.attendantRavi, 'Ravi K', '+91 00000 00102'],
+        [ID.attendantMeera, 'Meera P', '+91 00000 00103'],
+        [ID.attendantJomon, 'Jomon T', '+91 00000 00104'],
+      ].map(([id, fullName, phone]) => ({
+        id,
+        organizationId: ID.org,
+        fullName,
+        phone,
+        role: 'Attendant',
+        status: 'ACTIVE',
+      })),
     ])
     .onConflictDoNothing();
 
@@ -134,10 +168,18 @@ async function main() {
     .values({
       id: ID.station,
       organizationId: ID.org,
-      name: 'Demo Highway Station',
-      code: 'STN-01',
-      address: 'NH-44, Demo City',
-      phone: '+91 90000 00000',
+      name: 'Sample Fuels, Thrissur',
+      code: 'SAMPLE-01',
+      address: 'Thrissur, Kerala',
+      phone: '+91 00000 00000',
+      settings: {
+        shift_grace_minutes: 15,
+        shift_lock_grace_days: 3,
+        offline_warning_days: 3,
+        offline_critical_days: 7,
+        business_day_starts_at: dayStartsAt,
+        timezone: timeZone,
+      },
       onboardingStatus: 'COMPLETED',
       isActive: true,
     })
@@ -148,9 +190,12 @@ async function main() {
     .values([
       { userId: ID.userOwner, stationId: ID.station },
       { userId: ID.userManager, stationId: ID.station },
-      { userId: ID.userStaff, stationId: ID.station },
+      ...[ID.userStaff, ID.attendantRavi, ID.attendantMeera, ID.attendantJomon]
+        .map((userId) => ({ userId, stationId: ID.station })),
     ])
     .onConflictDoNothing();
+
+  await syncDemoAuthUsers();
 
   await db
     .insert(schema.products)
@@ -276,6 +321,14 @@ async function main() {
         code: 'DU2',
         status: 'ACTIVE',
       },
+      {
+        id: ID.du3,
+        organizationId: ID.org,
+        stationId: ID.station,
+        name: 'Dispenser 3',
+        code: 'DU-3',
+        status: 'ACTIVE',
+      },
     ])
     .onConflictDoNothing();
 
@@ -321,6 +374,26 @@ async function main() {
         productId: ID.prodDiesel,
         name: 'DU2-Diesel',
         currentReading: nz(45000),
+      },
+      {
+        id: ID.nzP3,
+        organizationId: ID.org,
+        stationId: ID.station,
+        duId: ID.du3,
+        tankId: ID.tankPetrol,
+        productId: ID.prodPetrol,
+        name: 'DU3-Petrol',
+        currentReading: nz(42000),
+      },
+      {
+        id: ID.nzD3,
+        organizationId: ID.org,
+        stationId: ID.station,
+        duId: ID.du3,
+        tankId: ID.tankDiesel,
+        productId: ID.prodDiesel,
+        name: 'DU3-Diesel',
+        currentReading: nz(38000),
       },
     ])
     .onConflictDoNothing();
@@ -390,7 +463,7 @@ async function main() {
         organizationId: ID.org,
         stationId: ID.station,
         name: 'Indian Oil Corp',
-        phone: '+91 80000 00001',
+        phone: '+91 00000 00301',
         isActive: true,
       },
       {
@@ -398,7 +471,7 @@ async function main() {
         organizationId: ID.org,
         stationId: ID.station,
         name: 'Servo Distributors',
-        phone: '+91 80000 00002',
+        phone: '+91 00000 00302',
         isActive: true,
       },
     ])
@@ -435,6 +508,23 @@ async function main() {
         creditLimit: nz(500000),
         isActive: true,
       },
+      ...[
+        [ID.custKsrtc, 'KSRTC Depot Aluva', '+91 00000 00201', 100000],
+        [ID.custMalabar, 'Malabar Transports', '+91 00000 00202', 200000],
+        [ID.custPeriyar, 'Periyar Logistics', '+91 00000 00203', 150000],
+        [ID.custCoastal, 'Coastal Carriers', '+91 00000 00204', 125000],
+        [ID.custGreenline, 'Greenline Tours', '+91 00000 00205', 90000],
+        [ID.custMetro, 'Metro Freight', '+91 00000 00206', 175000],
+      ].map(([id, name, phone, creditLimit]) => ({
+        id,
+        organizationId: ID.org,
+        stationId: ID.station,
+        customerType: 'Credit',
+        name,
+        phone,
+        creditLimit: nz(creditLimit),
+        isActive: true,
+      })),
     ])
     .onConflictDoNothing();
 
@@ -497,7 +587,6 @@ async function main() {
         openedBy: ID.userStaff,
         closedBy: ID.userManager,
         closedAt: new Date(),
-        openingCash: nz(5000),
         closingCash: nz(18650),
       },
       {
@@ -508,7 +597,6 @@ async function main() {
         shiftTemplateId: ID.tplEvening,
         status: 'OPEN',
         openedBy: ID.userStaff,
-        openingCash: nz(8000),
       },
     ])
     .onConflictDoNothing();
@@ -516,8 +604,11 @@ async function main() {
   await db
     .insert(schema.shiftStaffAssignments)
     .values([
-      { shiftId: ID.shiftMorning, userId: ID.userStaff, duId: ID.du1 },
-      { shiftId: ID.shiftEvening, userId: ID.userStaff, duId: ID.du1 },
+      { shiftId: ID.shiftMorning, userId: ID.userStaff, duId: ID.du2, openingFloat: nz(5000) },
+      { shiftId: ID.shiftMorning, userId: ID.attendantRavi, duId: ID.du1, openingFloat: nz(5000) },
+      { shiftId: ID.shiftEvening, userId: ID.attendantRavi, duId: ID.du1, openingFloat: nz(5000) },
+      { shiftId: ID.shiftEvening, userId: ID.attendantMeera, duId: ID.du2, openingFloat: nz(5000) },
+      { shiftId: ID.shiftEvening, userId: ID.attendantJomon, duId: ID.du3, openingFloat: nz(5000) },
     ])
     .onConflictDoNothing();
 
@@ -611,6 +702,16 @@ async function main() {
 
   // Expenses are Office Records on an Entry Date: petty cash (tea) + bank (electricity)
   const office = { organizationId: ID.org, stationId: ID.station, entryDate: businessDate };
+  await db.insert(schema.supplierTransactions).values({
+    id: '36500000-0000-4000-8000-000000001801',
+    ...office,
+    supplierId: ID.supplierIoc,
+    transactionType: 'Payment',
+    amount: nz(25000),
+    fundingAccountId: ID.accBank,
+    affectsDrawer: false,
+    notes: 'Bank payment against previous fuel invoice',
+  }).onConflictDoNothing();
   await db
     .insert(schema.expenses)
     .values([
@@ -668,19 +769,57 @@ async function main() {
       notes: 'Credit fuel sale',
     })
     .onConflictDoNothing();
+  await db.insert(schema.customerTransactions).values({
+    id: '36500000-0000-4000-8000-000000001703',
+    shiftId: ID.shiftMorning,
+    businessDayId: ID.bday,
+    customerId: ID.custMalabar,
+    productId: ID.prodDiesel,
+    attendantId: ID.attendantRavi,
+    duId: ID.du1,
+    transactionType: 'Credit Sale',
+    amount: nz(60000),
+    quantity: nz(669),
+    unitPrice: nz(89.7),
+    notes: 'Fleet credit sale; collection recorded separately',
+  }).onConflictDoNothing();
+  await db.insert(schema.customerTransactions).values({
+    id: '36500000-0000-4000-8000-000000001701',
+    shiftId: ID.shiftMorning,
+    businessDayId: ID.bday,
+    customerId: ID.custKsrtc,
+    productId: ID.prodDiesel,
+    attendantId: ID.userStaff,
+    duId: ID.du2,
+    transactionType: 'Credit Sale',
+    amount: nz(94000),
+    quantity: nz(1048),
+    unitPrice: nz(89.7),
+    notes: 'Fleet credit sale near the agreed limit',
+  }).onConflictDoNothing();
   await db
     .insert(schema.collections)
     .values({
       id: ID.collection1,
       documentNumber: 'COL-000001',
       ...office,
-      fundingAccountId: ID.accCash,
+      fundingAccountId: ID.accBank,
       customerId: ID.custCredit,
-      amount: nz(5000),
-      paymentMethod: 'Cash',
-      notes: 'Part payment',
+      amount: nz(15000),
+      paymentMethod: 'Bank Transfer',
+      notes: 'Bank collection',
     })
     .onConflictDoNothing();
+  await db.insert(schema.collections).values({
+    id: '36500000-0000-4000-8000-000000001702',
+    documentNumber: 'COL-000002',
+    ...office,
+    fundingAccountId: ID.accBank,
+    customerId: ID.custMalabar,
+    amount: nz(15000),
+    paymentMethod: 'Bank Transfer',
+    notes: 'Bank collection against fleet balance',
+  }).onConflictDoNothing();
 
   // Stock movements: purchase (day-anchored, no shift) + fuel sale (shift)
   await db
@@ -713,6 +852,78 @@ async function main() {
     ])
     .onConflictDoNothing();
 
+  await db.insert(schema.attendantHandovers).values({
+    id: '36500000-0000-4000-8000-000000001501',
+    organizationId: ID.org,
+    stationId: ID.station,
+    shiftId: ID.shiftMorning,
+    userId: ID.userStaff,
+    duId: ID.du2,
+    cashHandedOver: nz(7650),
+    openingFloat: nz(5000),
+    expectedCash: nz(8000),
+    varianceAmount: nz(-350),
+    expectedSales: nz(3000),
+  }).onConflictDoNothing();
+  await db.insert(schema.attendantHandovers).values({
+    id: '36500000-0000-4000-8000-000000001505',
+    organizationId: ID.org,
+    stationId: ID.station,
+    shiftId: ID.shiftMorning,
+    userId: ID.attendantRavi,
+    duId: ID.du1,
+    cashHandedOver: nz(8000),
+    openingFloat: nz(5000),
+    expectedCash: nz(8000),
+    varianceAmount: nz(0),
+    expectedSales: nz(3000),
+  }).onConflictDoNothing();
+
+  await db.insert(schema.stockVariances).values({
+    id: '36500000-0000-4000-8000-000000001502',
+    businessDayId: ID.bday,
+    productId: ID.prodDiesel,
+    tankId: ID.tankDiesel,
+    expectedQuantity: nz(8200),
+    actualQuantity: nz(8182),
+    varianceQuantity: nz(-18),
+    reason: 'Measured dip is 18 L below book stock; meter and dip cross-check required.',
+    approvedBy: ID.userManager,
+  }).onConflictDoNothing();
+
+  await db.insert(schema.shiftSummaries).values({
+    id: '36500000-0000-4000-8000-000000001503',
+    shiftId: ID.shiftMorning,
+    snapshotData: {
+      source: 'demo-seed',
+      cash: { expectedDrawerCash: 8000, declaredCash: 7650, attendantVariance: -350 },
+      variance: { amount: -350, attendant: 'Anitha S', dispenser: 'DU-2' },
+    },
+  }).onConflictDoNothing();
+
+  const eventRows = [
+    ['36500000-0000-4000-8000-000000001601', 'SHIFT_OPENED', 'shift', ID.shiftEvening],
+    ['36500000-0000-4000-8000-000000001602', 'SHIFT_CLOSED', 'shift', ID.shiftMorning],
+    ['36500000-0000-4000-8000-000000001604', 'EXPENSE_RECORDED', 'expense', ID.expDrawer],
+    ['36500000-0000-4000-8000-000000001605', 'PURCHASE_RECORDED', 'purchase', ID.purchaseFuel],
+    ['36500000-0000-4000-8000-000000001606', 'SALE_RECORDED', 'customer_transaction', ID.creditTxn],
+    ['36500000-0000-4000-8000-000000001607', 'COLLECTION_RECORDED', 'collection', ID.collection1],
+  ].map(([eventId, eventType, aggregateType, aggregateId]) => ({
+    eventId,
+    eventType,
+    organizationId: ID.org,
+    stationId: ID.station,
+    businessDayId: ID.bday,
+    aggregateType,
+    aggregateId,
+    occurredAt: new Date(),
+    payload: { source: 'demo-seed', businessDate },
+    metadata: { source: 'demo-seed' },
+  }));
+  await db.insert(schema.events).values(eventRows).onConflictDoNothing();
+
+  await seedClosedHistory();
+
   // Summary counts
   const counts = {};
   for (const t of [
@@ -731,11 +942,159 @@ async function main() {
     'purchases',
     'collections',
     'stockMovements',
+    'events',
   ]) {
     const rows = await db.select().from(schema[t]);
     counts[t] = rows.length;
   }
   console.log('SEED OK', JSON.stringify(counts));
+}
+
+function dateOffset(yyyyMmDd, days) {
+  const [year, month, day] = yyyyMmDd.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function demoUuid(sequence) {
+  return `36500000-0000-4000-8000-${String(sequence).padStart(12, '0')}`;
+}
+
+async function seedClosedHistory() {
+  let sequence = 2000;
+  const businessDays = [];
+  const shifts = [];
+  const assignments = [];
+  const handovers = [];
+  const readings = [];
+  const summaries = [];
+  const snapshots = [];
+  const historyEvents = [];
+  const openingByNozzle = new Map([
+    [ID.nzP1, 118000], [ID.nzP2, 56000], [ID.nzD1, 93000], [ID.nzD2, 42000],
+    [ID.nzP3, 39000], [ID.nzD3, 35000],
+  ]);
+  const nozzleSetup = [
+    [ID.nzP1, ID.prodPetrol, 102.5], [ID.nzD1, ID.prodDiesel, 89.7],
+    [ID.nzP2, ID.prodPetrol, 102.5], [ID.nzD2, ID.prodDiesel, 89.7],
+    [ID.nzP3, ID.prodPetrol, 102.5], [ID.nzD3, ID.prodDiesel, 89.7],
+  ];
+  const assignmentsForDay = [
+    [ID.userStaff, ID.du2], [ID.attendantRavi, ID.du1], [ID.attendantJomon, ID.du3],
+  ];
+
+  for (let age = 7; age >= 1; age -= 1) {
+    const date = dateOffset(businessDate, -age);
+    const businessDayId = demoUuid(sequence++);
+    businessDays.push({
+      id: businessDayId, organizationId: ID.org, stationId: ID.station,
+      businessDate: date, status: 'CLOSED', openedBy: ID.userManager,
+      closedBy: ID.userManager, closedAt: new Date(),
+    });
+    const daySales = [];
+    for (let part = 0; part < 2; part += 1) {
+      const shiftId = demoUuid(sequence++);
+      const attendant = assignmentsForDay[part === 0 ? 0 : 1];
+      shifts.push({
+        id: shiftId, organizationId: ID.org, stationId: ID.station, businessDayId,
+        shiftTemplateId: part === 0 ? ID.tplMorning : ID.tplEvening,
+        status: 'CLOSED', openedBy: attendant[0], closedBy: ID.userManager,
+        closedAt: new Date(), closingCash: nz(18000 + age * 100 + part * 250),
+      });
+      assignments.push({ shiftId, userId: attendant[0], duId: attendant[1], openingFloat: nz(5000) });
+      handovers.push({
+        id: demoUuid(sequence++), organizationId: ID.org, stationId: ID.station,
+        shiftId, userId: attendant[0], duId: attendant[1],
+        cashHandedOver: nz(17800 + age * 100 + part * 250),
+        openingFloat: nz(5000), cashDrops: nz(500),
+        expectedCash: nz(17800 + age * 100 + part * 250), varianceAmount: nz(0),
+        expectedSales: nz(17800 + age * 100 + part * 250),
+      });
+      const dayVolume = [];
+      for (const [nozzleId, productId, unitPrice] of nozzleSetup) {
+        const opening = openingByNozzle.get(nozzleId);
+        const volume = 120 + age * 7 + part * 40;
+        const closing = opening + volume;
+        readings.push({ shiftId, nozzleId, openingReading: nz(opening), closingReading: nz(closing), volumeSold: nz(volume), unitPrice: nz(unitPrice) });
+        openingByNozzle.set(nozzleId, closing);
+        dayVolume.push({ nozzleId, productId, volumeLitres: volume });
+      }
+      const snapshotId = demoUuid(sequence++);
+      summaries.push({
+        id: snapshotId, shiftId,
+        snapshotData: { source: 'demo-seed', businessDate: date, readings: dayVolume, drawer: { declaredCash: 17800 + age * 100, variance: 0 } },
+      });
+      daySales.push(...dayVolume);
+      historyEvents.push({
+        eventId: demoUuid(sequence++), eventType: 'SHIFT_CLOSED', organizationId: ID.org,
+        stationId: ID.station, businessDayId, aggregateType: 'shift', aggregateId: shiftId,
+        occurredAt: new Date(), payload: { businessDate: date, source: 'demo-seed' }, metadata: { source: 'demo-seed' },
+      });
+    }
+    snapshots.push({
+      id: demoUuid(sequence++), organizationId: ID.org, stationId: ID.station,
+      businessDate: date,
+      snapshotData: { source: 'demo-seed', fuel: { byProduct: daySales }, purchases: { total: 0 }, credit: { total: age === 3 ? 94000 : 8970 } },
+    });
+    historyEvents.push({
+      eventId: demoUuid(sequence++), eventType: 'DSSR_GENERATED', organizationId: ID.org,
+      stationId: ID.station, businessDayId, aggregateType: 'business_day', aggregateId: businessDayId,
+      occurredAt: new Date(), payload: { businessDate: date, source: 'demo-seed' }, metadata: { source: 'demo-seed' },
+    });
+  }
+
+  await db.insert(schema.businessDays).values(businessDays).onConflictDoNothing();
+  await db.insert(schema.shifts).values(shifts).onConflictDoNothing();
+  await db.insert(schema.shiftStaffAssignments).values(assignments).onConflictDoNothing();
+  await db.insert(schema.attendantHandovers).values(handovers).onConflictDoNothing();
+  await db.insert(schema.nozzleReadings).values(readings).onConflictDoNothing();
+  await db.insert(schema.shiftSummaries).values(summaries).onConflictDoNothing();
+  await db.insert(schema.dssrSnapshots).values(snapshots).onConflictDoNothing();
+  await db.insert(schema.events).values(historyEvents).onConflictDoNothing();
+}
+
+async function syncDemoAuthUsers() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const authUsers = [
+    { id: ID.userOwner, email: 'owner@demo.pumpos.invalid', password: process.env.DEMO_OWNER_PASSWORD, name: 'Asha Owner' },
+    { id: ID.userManager, email: 'manager@demo.pumpos.invalid', password: process.env.DEMO_MANAGER_PASSWORD, name: 'Mani Manager' },
+    { id: ID.userAccountant, email: 'accountant@demo.pumpos.invalid', password: process.env.DEMO_ACCOUNTANT_PASSWORD, name: 'Anita Accountant' },
+    { id: ID.userStaff, email: 'attendant@demo.pumpos.invalid', password: process.env.DEMO_ATTENDANT_PASSWORD, name: 'Anitha S' },
+  ];
+  if (!supabaseUrl || !serviceKey || authUsers.some((user) => !user.password)) {
+    throw new Error('Auth provisioning requires SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and DEMO_OWNER_PASSWORD, DEMO_MANAGER_PASSWORD, DEMO_ACCOUNTANT_PASSWORD and DEMO_ATTENDANT_PASSWORD.');
+  }
+
+  for (const user of authUsers) {
+    const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/admin/users`, {
+      method: 'POST',
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: user.email, password: user.password, email_confirm: true, user_metadata: { full_name: user.name } }),
+    });
+    let authUser;
+    if (response.ok) {
+      authUser = await response.json();
+    } else if (response.status === 422 || response.status === 409) {
+      const list = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/admin/users?page=1&per_page=1000`, {
+        headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+      });
+      if (!list.ok) throw new Error(`Could not find existing demo Auth users: ${list.status}`);
+      const body = await list.json();
+      authUser = (body.users ?? body).find((candidate) => candidate.email?.toLowerCase() === user.email);
+      if (!authUser) throw new Error(`Auth user create failed for ${user.email}: ${response.status}`);
+      const update = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/admin/users/${authUser.id}`, {
+        method: 'PUT',
+        headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: user.password, email_confirm: true, user_metadata: { full_name: user.name } }),
+      });
+      if (!update.ok) throw new Error(`Auth user update failed for ${user.email}: ${update.status}`);
+    } else {
+      throw new Error(`Auth user create failed for ${user.email}: ${response.status} ${await response.text()}`);
+    }
+    await db.update(schema.users).set({ authUserId: authUser.id }).where(eq(schema.users.id, user.id));
+  }
+  console.log('Demo Auth users created/updated and linked to the demo organization.');
 }
 
 main()

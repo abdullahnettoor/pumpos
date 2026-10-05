@@ -1,0 +1,35 @@
+name: Reset demo station
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 02:00 Asia/Kolkata (20:30 UTC on the previous calendar day).
+    - cron: '30 20 * * *'
+
+jobs:
+  reset-demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build shared date helper and database package
+        run: npm run build --workspace=@pump/shared && npm run build --workspace=@pump/db
+      - name: Reset the dev-only demo organization
+        run: npm run demo:reset --workspace=@pump/db
+        env:
+          DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }}
+          DIRECT_DATABASE_URL: ${{ secrets.DEMO_DIRECT_DATABASE_URL }}
+          DEMO_ALLOWED_PROJECT_REF: ${{ secrets.DEMO_ALLOWED_PROJECT_REF }}
+          PROD_PROJECT_REF: ${{ secrets.PROD_PROJECT_REF }}
+          DEMO_ORG_ID: ${{ secrets.DEMO_ORG_ID }}
+          SUPABASE_URL: ${{ secrets.DEMO_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.DEMO_SUPABASE_SERVICE_ROLE_KEY }}
+          DEMO_OWNER_PASSWORD: ${{ secrets.DEMO_OWNER_PASSWORD }}
+          DEMO_MANAGER_PASSWORD: ${{ secrets.DEMO_MANAGER_PASSWORD }}
+          DEMO_ACCOUNTANT_PASSWORD: ${{ secrets.DEMO_ACCOUNTANT_PASSWORD }}
+          DEMO_ATTENDANT_PASSWORD: ${{ secrets.DEMO_ATTENDANT_PASSWORD }}

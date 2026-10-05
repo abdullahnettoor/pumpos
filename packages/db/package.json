@@ -11,11 +11,13 @@
     "db:generate": "drizzle-kit generate && node scripts/sync-supabase-migrations.mjs",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "node seed.mjs",
+    "demo:reset": "npm run build --workspace=@pump/shared && npm run build --workspace=@pump/db && node demo/seed-demo.mjs",
     "db:generate:custom": "node scripts/generate-custom.mjs",
     "db:sync-supabase": "node scripts/sync-supabase-migrations.mjs",
     "db:check": "node scripts/check-migration-chain.mjs && node scripts/sync-supabase-migrations.mjs --check"
   },
   "dependencies": {
+    "@pump/shared": "*",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.9"
   },
