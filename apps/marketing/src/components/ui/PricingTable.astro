@@ -180,4 +180,14 @@ const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
   .pt-go:hover { background: #185240; }
   .pt-go[hidden] { display: none; }
   .pt-go svg { width: 16px; height: 16px; }
-  @media (max-width: 640px) {\n    .pt-plans { flex-direction: column; }\n    .pt-plan { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: space-between; padding: 14px 16px; }\n    .pt-name { width: 100%; } .pt-price b { font-size: 24px; }\n    .pt-go { width: 100%; justify-content: center; }\n    .pt-grid { min-width: 0; } .pt-row { grid-template-columns: 1fr repeat(var(--cols), 54px); font-size: 13px; } .pt-row > div:first-child { padding-inline: 12px; }\n  }\n</style>\n
+  @media (max-width: 640px) {
+    .pt-plans { flex-direction: column; }
+    .pt-plan { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: space-between; padding: 14px 16px; }
+    .pt-name { width: 100%; }
+    .pt-price b { font-size: 24px; }
+    .pt-go { width: 100%; justify-content: center; }
+    .pt-grid { min-width: 0; }
+    .pt-row { grid-template-columns: 1fr repeat(var(--cols), 54px); font-size: 13px; }
+    .pt-row > div:first-child { padding-inline: 12px; }
+  }
+</style>
