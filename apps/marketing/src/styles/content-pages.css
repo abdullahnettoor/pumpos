@@ -582,12 +582,14 @@
   margin-top: 36px;
 }
 
-.journal-card {
+.journal-card,
+.journal-card.journal-entry {
   display: grid;
   grid-template-columns: minmax(230px, .7fr) minmax(0, 1.3fr);
   gap: 24px;
   align-items: stretch;
   padding: 16px;
+  border-top: 1px solid var(--ds-line);
 }
 
 .journal-art {
@@ -741,7 +743,8 @@
     display: block;
   }
 
-  .journal-card {
+  .journal-card,
+  .journal-card.journal-entry {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
     padding: 12px;

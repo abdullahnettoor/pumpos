@@ -26,6 +26,8 @@
   min-height: 48px;
   height: auto;
   padding-inline: 22px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .feature-hero-badges {
@@ -232,6 +234,11 @@
   gap: 24px;
 }
 
+.feature-faq-heading .ds-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* Forecourt mock-up tables */
 .forecourt-table-wrap {
   overflow-x: auto;
@@ -373,10 +380,12 @@
   color: var(--ds-ink);
 }
 
+.product-arch-section,
 .product-workspaces {
   padding-block: 64px;
 }
 
+.product-arch-grid,
 .product-workspaces-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -384,17 +393,36 @@
   margin-top: 36px;
 }
 
+.product-arch-card,
 .product-workspace-card {
   padding: 24px;
 }
 
+.product-arch-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-primary-soft);
+  color: var(--ds-primary);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.product-arch-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.product-arch-card h3,
 .product-workspace-card h3 {
   font-size: 18px;
   font-weight: 700;
-  margin-top: 10px;
+  margin-top: 14px;
   letter-spacing: -.02em;
 }
 
+.product-arch-card p,
 .product-workspace-card p {
   font-size: 14px;
   line-height: 1.55;
@@ -518,6 +546,7 @@
   .feature-problem-grid,
   .feature-plans-grid,
   .product-features-grid,
+  .product-arch-grid,
   .product-workspaces-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -541,6 +570,7 @@
   .feature-workflow,
   .feature-plans,
   .feature-faq,
+  .product-arch-section,
   .product-workspaces {
     padding-block: 40px;
   }
