@@ -275,15 +275,23 @@
   margin-top: 28px;
 }
 
-.pricing-cta {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 10px 20px;
-  margin-top: 28px;
+.pricing-helper {
+  font-size: 14px;
   color: var(--ds-muted);
+  margin-top: 4px;
   text-align: center;
+}
+
+.pricing-helper a {
+  color: var(--ds-primary);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color .18s;
+}
+
+.pricing-helper a:hover {
+  color: var(--ds-ink);
 }
 
 .pricing-cta .ds-btn,

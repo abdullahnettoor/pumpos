@@ -88,11 +88,11 @@ const billingQuestions = [
       yearlyBadge="2 months free"
       note="Attendants without a login are unlimited."
       visibleRows={planFeatures.length}
-    />
-    <div class="pricing-cta">
-      <p>Not sure which plan fits your station?</p>
-      <Button href="/demo">Talk through your setup <span aria-hidden="true">↗</span></Button>
-    </div>
+    >
+      <p slot="cta-helper" class="pricing-helper">
+        Not sure which plan fits your station? <a href="/demo">Talk through your setup <span aria-hidden="true">↗</span></a>
+      </p>
+    </PricingTable>
   </Section>
 
   <Section class="pricing-faq" aria-labelledby="pricing-faq-title">

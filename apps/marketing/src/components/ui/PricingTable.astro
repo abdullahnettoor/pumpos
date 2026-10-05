@@ -82,14 +82,21 @@ const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
 
   {collapsible && <button type="button" class="pt-all" aria-expanded="false" data-all><span data-closed>Compare all {features.length} features</span><span data-open hidden>Show fewer features</span></button>}
 
-  {(note || plans.some((p) => p.footnote)) && <p class="pt-foot">{[...plans.filter((p) => p.footnote).map((p) => `*${p.footnote}`), note].filter(Boolean).join(' ')}</p>}
   <div class="pt-cta">
-    {plans.map((p) => (
-      <a class="pt-go" data-go={p.level} href={p.href ?? '#'} hidden={p.level !== defaultPlan}>
-        Get started with {p.name}
-        <svg viewBox="0 0 15 15" aria-hidden="true"><path d="M3 7.5h9M8.5 4l3.5 3.5L8.5 11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
-      </a>
-    ))}
+    <div class="pt-cta-actions">
+      {plans.map((p) => (
+        <a class="pt-go" data-go={p.level} href={p.href ?? '#'} hidden={p.level !== defaultPlan}>
+          Get started with {p.name}
+          <svg viewBox="0 0 15 15" aria-hidden="true"><path d="M3 7.5h9M8.5 4l3.5 3.5L8.5 11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </a>
+      ))}
+    </div>
+    <slot name="cta-helper" />
+    {(note || plans.some((p) => p.footnote)) && (
+      <p class="pt-foot">
+        {[...plans.filter((p) => p.footnote).map((p) => `*${p.footnote}`), note].filter(Boolean).join(' ')}
+      </p>
+    )}
   </div>
 </div>
 
@@ -166,16 +173,11 @@ const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
   .pt-all { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; text-align: center; padding: 14px; margin-top: -1px; border: 1px solid var(--pt-line); border-radius: 0 0 var(--ds-radius-md) var(--ds-radius-md); background: #fff; font-weight: 700; font-size: 14px; color: var(--pt-accent); }
   .pt-all:hover { background: var(--ds-primary-soft); }
   .pt-all:focus-visible { outline: 2px solid var(--pt-accent); outline-offset: 2px; }
-  .pt-foot { font-size: 12px; color: var(--pt-muted); margin: 12px 0 0; }
-  .pt-cta { margin-top: 24px; text-align: center; }
-  .pt-go { display: inline-flex; align-items: center; gap: 8px; height: 50px; padding-inline: 28px; border-radius: var(--ds-radius-sm); background: var(--pt-accent); color: #fff; font-weight: 700; text-decoration: none; }
+  .pt-foot { font-size: 12px; color: var(--pt-muted); margin: 6px 0 0; text-align: center; max-width: 72ch; }
+  .pt-cta { margin-top: 32px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; }
+  .pt-cta-actions { display: flex; align-items: center; justify-content: center; gap: 12px; }
+  .pt-go { display: inline-flex; align-items: center; gap: 8px; height: 50px; padding-inline: 28px; border-radius: var(--ds-radius-sm); background: var(--pt-accent); color: #fff; font-weight: 700; text-decoration: none; white-space: nowrap; transition: background .18s; }
+  .pt-go:hover { background: #185240; }
   .pt-go[hidden] { display: none; }
   .pt-go svg { width: 16px; height: 16px; }
-  @media (max-width: 640px) {
-    .pt-plans { flex-direction: column; }
-    .pt-plan { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: space-between; padding: 14px 16px; }
-    .pt-name { width: 100%; } .pt-price b { font-size: 24px; }
-    .pt-go { width: 100%; justify-content: center; }
-    .pt-grid { min-width: 0; } .pt-row { grid-template-columns: 1fr repeat(var(--cols), 54px); font-size: 13px; } .pt-row > div:first-child { padding-inline: 12px; }
-  }
-</style>
+  @media (max-width: 640px) {\n    .pt-plans { flex-direction: column; }\n    .pt-plan { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: space-between; padding: 14px 16px; }\n    .pt-name { width: 100%; } .pt-price b { font-size: 24px; }\n    .pt-go { width: 100%; justify-content: center; }\n    .pt-grid { min-width: 0; } .pt-row { grid-template-columns: 1fr repeat(var(--cols), 54px); font-size: 13px; } .pt-row > div:first-child { padding-inline: 12px; }\n  }\n</style>\n
