@@ -1,0 +1,42 @@
+---
+// Fade-up on scroll for the homepage, matching the feature bento's reveal.
+// "Single" targets fade in as one block; "group" targets fade their children in one after
+// another. Runs once per target. Nothing is hidden without JS, and reduced motion skips it.
+// Hero, leak stack and credit tabs are left out: they are on screen at load or animate already.
+---
+<script>
+  const SINGLE = ['.h-calc', '.h-offer-copy'];
+  const GROUP: [string, number][] = [
+    ['.h-dayline', 0.1],
+    ['.h-score', 0.12],
+    ['.pt-plans', 0.1],
+    ['.h-acc', 0.05],
+    ['.h-offer dl', 0.08],
+  ];
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window) {
+    const home = document.querySelector('.home');
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('rv-in'); io.unobserve(e.target); } });
+    }, { rootMargin: '0px 0px -12% 0px' });
+    const arm = (el: Element, cls: string) => { el.classList.add(cls); io.observe(el); };
+    // Hero card zoom (CSS in home.css) plays on load on desktop; on phones it waits for view.
+    const card = document.querySelector('.h-hero-card');
+    if (card && matchMedia('(max-width: 900px)').matches) {
+      const r = card.getBoundingClientRect();
+      if (r.top > innerHeight * 0.88) arm(card, 'rv-wait');
+    }
+    if (home) {
+      home.querySelectorAll('.ds-heading').forEach((h) => { if (!h.closest('.h-leaks, #credit, .h-hero')) arm(h, 'rv-one'); });
+      SINGLE.forEach((s) => home.querySelectorAll(s).forEach((el) => arm(el, 'rv-one')));
+      GROUP.forEach(([s, step]) => home.querySelectorAll<HTMLElement>(s).forEach((el) => {
+        [...el.children].forEach((c, i) => (c as HTMLElement).style.setProperty('--rv-d', `${i * step}s`));
+        arm(el, 'rv-group');
+      }));
+    }
+  }
+</script>
+
+<style is:global>
+  .rv-one:not(.rv-in), .rv-group:not(.rv-in) > * { opacity: 0; transform: translateY(18px); }
+  .rv-one.rv-in, .rv-group.rv-in > * { opacity: 1; transform: none; transition: opacity .55s ease var(--rv-d, 0s), transform .55s ease var(--rv-d, 0s); }
+</style>

@@ -6,8 +6,8 @@ import Button from '../components/ds/Button.astro';
 import '../styles/content-pages.css';
 import { getCollection } from 'astro:content';
 import Search from 'astro-pagefind/components/Search.astro';
-interface Props { title: string; description?: string; currentId: string }
-const { title, description, currentId } = Astro.props;
+interface Props { title: string; description?: string; currentId?: string }
+const { title, description, currentId = '' } = Astro.props;
 const docs = (await getCollection('docs')).sort(
   (a, b) => a.data.order - b.data.order || a.data.title.localeCompare(b.data.title),
 );
@@ -16,7 +16,7 @@ const groups = [...new Set(docs.map((doc) => doc.data.category ?? 'Guides'))].ma
   items: docs.filter((doc) => (doc.data.category ?? 'Guides') === category),
 }));
 ---
-<BaseLayout title={`${title} | PumpOS Docs`} description={description} path={`/docs/${currentId}`}>
+<BaseLayout title={`${title} | PumpOS Docs`} description={description} path={currentId ? `/docs/${currentId}` : '/docs'}>
   <Section class="docs-section" container={false} aria-label="PumpOS documentation">
     <div class="ds-w docs-layout">
       <aside class="docs-sidebar">

@@ -46,5 +46,22 @@ const icons = {
       <div class="h-bp-dsr"><div><small>Day closing · 04 Oct</small><strong>₹2,14,250</strong><span>Cash expected</span></div><div class="h-saved">Saved · 22:41 by Owner</div></div>
     </BentoCard>
   </BentoGrid>
+  <div class="h-bento-dots" aria-hidden="true" data-bento-dots></div>
   <div class="h-soon"><b id="soon-label">Coming next</b><ul aria-labelledby="soon-label">{comingNext.map((x) => <li>{x}</li>)}</ul></div>
 </Section>
+
+<script>
+  // Phones only: the bento is a swipe row (see home.css). Dots show which card is in view.
+  document.querySelectorAll<HTMLElement>('.h-bento').forEach((row) => {
+    const dots = row.parentElement?.querySelector<HTMLElement>('[data-bento-dots]');
+    if (!dots) return;
+    const cards = [...row.children] as HTMLElement[];
+    dots.innerHTML = cards.map(() => '<i></i>').join('');
+    const marks = [...dots.children] as HTMLElement[];
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.intersectionRatio > 0.6) marks.forEach((m, k) => m.classList.toggle('is-on', cards[k] === e.target)); });
+    }, { root: row, threshold: [0.6] });
+    cards.forEach((c) => io.observe(c));
+    marks[0]?.classList.add('is-on');
+  });
+</script>
