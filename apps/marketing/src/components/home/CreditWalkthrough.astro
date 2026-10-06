@@ -1,52 +1,26 @@
 ---
+// Real screens from the demo station (Abne Fuels), captured from the console and the
+// owner's phone view. All four share one 4:3 canvas so the panel never changes height.
+import { Image } from 'astro:assets';
 import ProgressTabs from './ProgressTabs.astro';
-import StatementTable from '../ds/StatementTable.astro';
-import Receipt from '../ds/Receipt.astro';
-import PhoneFrame from '../ds/PhoneFrame.astro';
-import { creditSteps, statement } from '../../data/home';
-const views = [
-  { panel: 0, outstanding: '₹42,500', rows: statement.slice(0, 2), foot: 'The customer owes ₹42,500 before this collection. Sample data.' },
-  { panel: 2, outstanding: '₹27,500', rows: statement, foot: '₹42,500 − ₹15,000 = ₹27,500 outstanding. Sample data.' },
+import { creditSteps } from '../../data/home';
+import dues from '../../assets/screenshots/credit-1-dues.webp';
+import collection from '../../assets/screenshots/credit-2-collection.webp';
+import statement from '../../assets/screenshots/credit-3-statement.webp';
+import phone from '../../assets/screenshots/credit-4-phone.webp';
+
+const shots = [
+  { src: dues, alt: 'PumpOS customer registry showing each fleet customer with credit limit and amount outstanding.' },
+  { src: collection, alt: 'PumpOS collections list showing a ₹15,000 bank transfer from Malabar Transports recorded on its entry date.' },
+  { src: statement, alt: 'Malabar Transports account statement: a ₹20,000 credit sale, a ₹15,000 collection and ₹5,000 outstanding.' },
+  { src: phone, alt: 'PumpOS owner view on a phone showing Malabar Transports owing ₹5,000 with its latest payment and credit sale.' },
 ];
 ---
 <ProgressTabs id="credit" eyebrow="A closer look at customer credit" title="“Has that customer paid us yet?”" items={creditSteps}>
-  {views.slice(0, 1).map((v) => (
-    <StatementTable
-      data-panel={v.panel}
-      customer="Malabar Transports"
-      category="Fleet · Credit limit ₹75,000"
-      outstanding={v.outstanding}
-      entries={v.rows.map((r) => ({ date: r[0], desc: r[1], amount: r[2], bal: r[3] }))}
-      note={v.foot}
-    />
+  {shots.map((s, i) => (
+    <figure data-panel={i} class="h-shot">
+      <Image src={s.src} alt={s.alt} widths={[640, 960, 1280, 1600]} sizes="(max-width: 900px) 100vw, 645px" loading={i === 0 ? 'eager' : 'lazy'} />
+      <figcaption>Real screen · Sample data</figcaption>
+    </figure>
   ))}
-  <Receipt
-    data-panel="1"
-    eyebrow="Collection · 03 Oct · Entry date"
-    amount="₹15,000"
-    items={[
-      { label: 'From', value: 'Malabar Transports' },
-      { label: 'Method', value: 'Bank transfer' },
-      { label: 'Into', value: 'Station bank account' },
-      { label: 'Drawer cash', value: 'Not touched' },
-      { label: 'Due after', value: '₹27,500' },
-    ]}
-  />
-  {views.slice(1).map((v) => (
-    <StatementTable
-      data-panel={v.panel}
-      customer="Malabar Transports"
-      category="Fleet · Credit limit ₹75,000"
-      outstanding={v.outstanding}
-      entries={v.rows.map((r, i) => ({ date: r[0], desc: r[1], amount: r[2], bal: r[3], isCredit: i === v.rows.length - 1 }))}
-      note={v.foot}
-    />
-  ))}
-  <PhoneFrame data-panel="3">
-    <small class="h-mut">Owner view · Sample</small>
-    <b>Malabar Transports</b>
-    <div class="h-r"><span>Outstanding</span><b>₹27,500</b></div>
-    <div class="h-r"><span>Last collection</span><b>₹15,000</b></div>
-    <div class="h-r"><span>Limit used</span><b>37%</b></div>
-  </PhoneFrame>
 </ProgressTabs>
