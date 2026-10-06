@@ -18,7 +18,7 @@ import { leaks, dayClose } from '../../data/home';
               <span class="h-k">0{i + 1} · {l.kicker}</span>
               <h3>{l.title}</h3>
               <p>{l.body}</p>
-              <div class={`ds-chip h-chip ds-chip--${l.tone} h-chip--${l.tone}`}>
+              <div class={`ds-chip ds-chip--${l.tone}`}>
                 <small>{l.who} · {l.sub}</small>
                 <strong>{l.value}</strong>
                 <details class="h-work" open><summary>See the working</summary><dl class="h-bd">{l.rows.map(([a, b]) => <div><dt>{a}</dt><dd>{b}</dd></div>)}</dl></details>

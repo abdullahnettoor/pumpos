@@ -9,7 +9,7 @@ const inr = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN');
 <Section class="h-calc-wrap" aria-labelledby="calc-title" data-calc>
   <Card class="h-calc">
     <div>
-      <p class="ds-ey h-ey">Small gaps add up</p>
+      <p class="ds-ey">Small gaps add up</p>
       <h2 id="calc-title">If a drawer comes back short by <output data-daily>{inr(start)}</output> a day…</h2>
       <label class="h-calc-range"><span class="sr-only">Daily shortage in rupees</span><input type="range" min="50" max="2000" step="50" value={start} data-input aria-valuetext={`${inr(start)} a day`} /></label>
       <div class="h-calc-scale" aria-hidden="true"><span>₹50</span><span>₹2,000 a day</span></div>
