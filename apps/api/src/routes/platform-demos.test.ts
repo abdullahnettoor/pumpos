@@ -8,9 +8,22 @@ function app() {
     c.set(
       'db' as never,
       {
+        transaction: async (run: (tx: unknown) => Promise<unknown>) =>
+          run({
+            select: () => ({
+              from: () => ({
+                where: () => ({
+                  for: () => ({ limit: async () => [{ id: 'org-1', isDemo: false }] }),
+                }),
+              }),
+            }),
+          }),
         select: () => ({
           from: () => ({
-            where: () => ({ limit: async () => [{ id: 'org-1', isDemo: false }] }),
+            where: () =>
+              Object.assign(Promise.resolve([]), {
+                limit: async () => [{ id: 'org-1', isDemo: false }],
+              }),
           }),
         }),
       } as never,
@@ -52,10 +65,10 @@ describe('platform demo deployment guard', () => {
       { method: 'DELETE' },
       { ALLOW_DEMO_ORGS: 'true' },
     );
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({
       success: false,
-      error: { code: 'NOT_FOUND' },
+      error: { code: 'NOT_A_DEMO_ORGANIZATION' },
     });
   });
 

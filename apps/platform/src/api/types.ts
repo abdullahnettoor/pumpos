@@ -1,3 +1,5 @@
+import type { DEMO_EXPIRY_DAYS } from '@pump/shared';
+
 /**
  * Wire shapes of the `/platform/*` routes, transcribed from
  * `apps/api/src/index.ts` and `apps/api/src/routes/platform-access.ts`.
@@ -40,7 +42,7 @@ export interface DemoCreateInput {
   nozzles: number;
   attendants: number;
   prospectEmail?: string;
-  expiresInDays: 2 | 7 | 30;
+  expiresInDays: (typeof DEMO_EXPIRY_DAYS)[number];
 }
 
 export interface DemoCreateResult {

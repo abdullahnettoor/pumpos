@@ -1,8 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { resolveBusinessDate } from '@pump/shared';
 import * as schema from '../schema.js';
-import type { PostgresJsQueryResultHKT } from 'drizzle-orm/postgres-js/session';
-import type { PgTransaction } from 'drizzle-orm/pg-core';
+import type { DbExecutor } from '../client.js';
 
 export interface SeedDemoStationOptions {
   organizationId: string;
@@ -12,7 +10,6 @@ export interface SeedDemoStationOptions {
   tanks?: number;
   nozzles?: number;
   attendants?: number;
-  today?: string;
 }
 
 const DEFAULTS = {
@@ -23,11 +20,16 @@ const DEFAULTS = {
   attendants: 3,
 };
 
-/** Provision isolated station master data using generated IDs inside the caller's transaction. */
-export async function seedDemoStation(
-  tx: PgTransaction<PostgresJsQueryResultHKT, typeof schema, any>,
-  input: SeedDemoStationOptions,
-) {
+/**
+ * Provision a demo station's master data (setup, people, customers, suppliers)
+ * with generated IDs inside the caller's transaction.
+ *
+ * Operational history is NOT written here: it goes through the core use-cases
+ * in `apps/api/src/services/demo/demo-history.ts`, so snapshots, ledger
+ * entries and events have the shapes the app writes. Not used by
+ * `npm run db:seed`.
+ */
+export async function seedDemoStation(tx: DbExecutor, input: SeedDemoStationOptions) {
   const options = { ...DEFAULTS, ...input };
   for (const [name, value, min, max] of [
     ['tanks', options.tanks, 1, 20],
@@ -52,6 +54,11 @@ export async function seedDemoStation(
         offline_critical_days: 7,
         business_day_starts_at: '05:00',
         timezone: 'Asia/Kolkata',
+        demo_setup: {
+          tanks: options.tanks,
+          nozzles: options.nozzles,
+          attendants: options.attendants,
+        },
       },
       onboardingStatus: 'COMPLETED',
       isActive: true,
@@ -85,6 +92,7 @@ export async function seedDemoStation(
         fullName: ['Anitha S', 'Ravi K', 'Meera P'][index] ?? `Attendant ${index + 1}`,
         email: index === 0 ? 'attendant@demo.pumpos.invalid' : null,
         phone: `+91 00000 ${String(100 + index).padStart(5, '0')}`,
+        status: 'ACTIVE',
         role: 'Attendant',
       })),
     ])
@@ -118,10 +126,35 @@ export async function seedDemoStation(
         unit: 'L',
         isActive: true,
       },
+    ])
+    .returning();
+  await tx
+    .insert(schema.products)
+    .values([
       {
         organizationId: options.organizationId,
-        name: 'Engine Oil',
+        name: 'Engine Oil 1L',
         code: `DEMO-OIL-${crypto.randomUUID().slice(0, 6)}`,
+        productType: 'LUBRICANT',
+        inventoryType: 'ITEM',
+        stockTracked: true,
+        unit: 'PCS',
+        isActive: true,
+      },
+      {
+        organizationId: options.organizationId,
+        name: 'Coolant',
+        code: `DEMO-COOL-${crypto.randomUUID().slice(0, 6)}`,
+        productType: 'LUBRICANT',
+        inventoryType: 'ITEM',
+        stockTracked: true,
+        unit: 'PCS',
+        isActive: true,
+      },
+      {
+        organizationId: options.organizationId,
+        name: 'Grease',
+        code: `DEMO-GREASE-${crypto.randomUUID().slice(0, 6)}`,
         productType: 'LUBRICANT',
         inventoryType: 'ITEM',
         stockTracked: true,
@@ -163,76 +196,75 @@ export async function seedDemoStation(
       provider: 'Demo Bank',
     },
   ]);
-  await tx.insert(schema.financialAccounts).values([
-    {
-      organizationId: options.organizationId,
-      stationId: station.id,
-      accountType: 'CASH_IN_HAND',
-      name: 'Cash in Hand',
-    },
-    {
-      organizationId: options.organizationId,
-      stationId: station.id,
-      accountType: 'BANK',
-      name: 'Demo Current Account',
-    },
-    {
-      organizationId: options.organizationId,
-      stationId: station.id,
-      accountType: 'PETTY_CASH',
-      name: 'Petty Cash',
-    },
-  ]);
-  await tx.insert(schema.customers).values([
-    {
-      organizationId: options.organizationId,
-      stationId: station.id,
-      customerType: 'Fleet',
-      name: 'KSRTC Depot Aluva',
-      phone: '+91 00000 01001',
-      creditLimit: '100000',
-      fleetCode: 'KSRTC-ALV',
-    },
-    {
-      organizationId: options.organizationId,
-      stationId: station.id,
-      customerType: 'Fleet',
-      name: 'Malabar Transports',
-      phone: '+91 00000 01002',
-      creditLimit: '200000',
-      fleetCode: 'MAL-TRN',
-    },
-    ...['Thrissur Cabs', 'Kerala Logistics', 'City Motors', 'Greenline Tours'].map(
-      (name, index) => ({
+  const financialAccounts = await tx
+    .insert(schema.financialAccounts)
+    .values([
+      {
         organizationId: options.organizationId,
-        customerType: 'Credit',
-        name,
-        phone: `+91 00000 ${String(1010 + index).slice(-5)}`,
-        creditLimit: '50000',
-      }),
-    ),
-  ]);
-  await tx.insert(schema.suppliers).values([
-    {
-      organizationId: options.organizationId,
-      stationId: station.id,
-      name: 'Indian Oil Corporation',
-      phone: '+91 00000 02001',
-    },
-    {
-      organizationId: options.organizationId,
-      stationId: station.id,
-      name: 'Malabar Lubricants',
-      phone: '+91 00000 02002',
-    },
-  ]);
-  const [expenseCategory] = await tx
-    .insert(schema.expenseCategories)
-    .values({ organizationId: options.organizationId, name: 'Utilities', isSystem: true })
+        stationId: station.id,
+        accountType: 'CASH_IN_HAND',
+        name: 'Cash in Hand',
+      },
+      {
+        organizationId: options.organizationId,
+        stationId: station.id,
+        accountType: 'BANK',
+        name: 'Demo Current Account',
+      },
+    ])
     .returning();
-  const [incomeCategory] = await tx
-    .insert(schema.incomeCategories)
-    .values({ organizationId: options.organizationId, name: 'Other income', isSystem: true })
+  const demoCustomers = await tx
+    .insert(schema.customers)
+    .values([
+      {
+        organizationId: options.organizationId,
+        stationId: station.id,
+        customerType: 'Fleet',
+        name: 'KSRTC Depot Aluva',
+        phone: '+91 00000 01001',
+        creditLimit: '100000',
+        fleetCode: 'KSRTC-ALV',
+      },
+      {
+        organizationId: options.organizationId,
+        stationId: station.id,
+        customerType: 'Fleet',
+        name: 'Malabar Transports',
+        phone: '+91 00000 01002',
+        creditLimit: '200000',
+        fleetCode: 'MAL-TRN',
+      },
+      ...[
+        ['Thrissur Logistics', 'Fleet', '75000'],
+        ['St. Thomas School Buses', 'Credit', '50000'],
+        ['Green Valley Cabs', 'Fleet', '40000'],
+        ['Kerala Agro Traders', 'Credit', '30000'],
+      ].map(([name, customerType, creditLimit], index) => ({
+        organizationId: options.organizationId,
+        stationId: station.id,
+        customerType,
+        name,
+        phone: `+91 00000 0100${index + 3}`,
+        creditLimit,
+      })),
+    ])
+    .returning();
+  const demoSuppliers = await tx
+    .insert(schema.suppliers)
+    .values([
+      {
+        organizationId: options.organizationId,
+        stationId: station.id,
+        name: 'Indian Oil Corporation',
+        phone: '+91 00000 02001',
+      },
+      {
+        organizationId: options.organizationId,
+        stationId: station.id,
+        name: 'Malabar Lubricants',
+        phone: '+91 00000 02002',
+      },
+    ])
     .returning();
   const tanks = await tx
     .insert(schema.tanks)
@@ -267,369 +299,30 @@ export async function seedDemoStation(
         tankId: tank.id,
         productId: tank.productId,
         name: `N-${index + 1}`,
-        currentReading: '0',
+        currentReading: String(100_000 + index * 7_315),
         meterSerial: `DEMO-${crypto.randomUUID().slice(0, 8)}`,
       };
     }),
   );
-  const daysAgo = (age: number) => {
-    const instant = new Date(Date.now() - age * 86_400_000);
-    const resolvedToday =
-      options.today ??
-      resolveBusinessDate({
-        now: new Date(),
-        timeZone: 'Asia/Kolkata',
-        dayStartsAt: '05:00',
-      });
-    if (age === 0) return resolvedToday;
-    const [year, month, day] = resolvedToday.split('-').map(Number);
-    const todayAtUtc = new Date(Date.UTC(year, month - 1, day));
-    const shifted = new Date(todayAtUtc.getTime() - age * 86_400_000);
-    return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}-${String(shifted.getUTCDate()).padStart(2, '0')}`;
-  };
+  await tx.insert(schema.expenseCategories).values({
+    organizationId: options.organizationId,
+    name: 'Electricity',
+  });
   const nozzles = await tx
     .select()
     .from(schema.nozzles)
-    .where(eq(schema.nozzles.organizationId, options.organizationId));
-  const historicalDays: Array<{ businessDayId: string; shiftId: string; businessDate: string }> =
-    [];
-  for (let age = 7; age >= 1; age--) {
-    const [closedDay] = await tx
-      .insert(schema.businessDays)
-      .values({
-        organizationId: options.organizationId,
-        stationId: station.id,
-        businessDate: daysAgo(age),
-        status: 'CLOSED',
-        openedBy: options.ownerUserId,
-        closedBy: options.ownerUserId,
-        closedAt: new Date(Date.now() - age * 86_400_000 + 86_400_000),
-      })
-      .returning();
-    const [pastShift] = await tx
-      .insert(schema.shifts)
-      .values({
-        organizationId: options.organizationId,
-        stationId: station.id,
-        businessDayId: closedDay.id,
-        shiftTemplateId: templates.find((template) => template.name === 'Morning')!.id,
-        status: 'CLOSED',
-        openedBy: options.ownerUserId,
-        closedBy: options.ownerUserId,
-        closedAt: new Date(Date.now() - age * 86_400_000 + 50_000_000),
-      })
-      .returning();
-    historicalDays.push({
-      businessDayId: closedDay.id,
-      shiftId: pastShift.id,
-      businessDate: closedDay.businessDate,
-    });
-    await tx.insert(schema.nozzleReadings).values(
-      nozzles.map((nozzle, index) => {
-        const opening = 100_000 + (7 - age) * (350 + index * 35) + index * 2_000;
-        const volume = 350 + index * 35;
-        return {
-          shiftId: pastShift.id,
-          nozzleId: nozzle.id,
-          openingReading: String(opening),
-          closingReading: String(opening + volume),
-          volumeSold: String(volume),
-          unitPrice: nozzle.productId === fuels[1].id ? '89.70' : '102.50',
-        };
-      }),
-    );
-    await tx.insert(schema.stockMovements).values(
-      nozzles.map((nozzle, index) => ({
-        businessDayId: closedDay.id,
-        productId: nozzle.productId,
-        tankId: nozzle.tankId,
-        movementType: 'Sale',
-        quantity: String(-(350 + index * 35)),
-        referenceType: 'demo-seed',
-        notes: 'Fuel sale recorded from demo nozzle readings',
-      })),
-    );
-    await tx.insert(schema.shiftSummaries).values({
-      shiftId: pastShift.id,
-      snapshotData: {
-        generatedAt: pastShift.closedAt?.toISOString() ?? new Date().toISOString(),
-        businessDate: closedDay.businessDate,
-        status: 'CLOSED',
-        nozzleReadings: nozzles.map((nozzle) => ({ nozzleId: nozzle.id, volumeSold: 385 })),
-        drawer: { declaredCash: 17800, variance: 0 },
-        source: 'demo-template',
-      },
-    });
-    await tx.insert(schema.dssrSnapshots).values({
-      organizationId: options.organizationId,
-      stationId: station.id,
-      businessDate: closedDay.businessDate,
-      snapshotData: {
-        generatedAt: closedDay.closedAt?.toISOString() ?? new Date().toISOString(),
-        businessDate: closedDay.businessDate,
-        stationId: station.id,
-        organizationId: options.organizationId,
-        status: 'CLOSED',
-        live: false,
-        sales: { gross: 50000 + (7 - age) * 1000, fuelVolume: nozzles.length * 385 },
-        stock: { expected: 12000, actual: 12000, variance: 0 },
-        source: 'demo-template',
-      },
-    });
-    if (age === 3) {
-      const [ksrtc] = await tx
-        .select()
-        .from(schema.customers)
-        .where(eq(schema.customers.name, 'KSRTC Depot Aluva'))
-        .limit(1);
-      await tx.insert(schema.customerTransactions).values({
-        shiftId: pastShift.id,
-        businessDayId: closedDay.id,
-        customerId: ksrtc.id,
-        productId: fuels[1].id,
-        transactionType: 'Credit Sale',
-        amount: '94000',
-        quantity: '1048',
-        unitPrice: '89.70',
-        attendantId: options.ownerUserId,
-        notes: 'Fleet credit sale near the agreed limit',
-      });
-    }
-  }
-  const [businessDay] = await tx
-    .insert(schema.businessDays)
-    .values({
-      organizationId: options.organizationId,
-      stationId: station.id,
-      businessDate: daysAgo(0),
-      status: 'OPEN',
-      openedBy: options.ownerUserId,
-    })
-    .returning();
-  const [bankAccount] = await tx
-    .select()
-    .from(schema.financialAccounts)
-    .where(eq(schema.financialAccounts.organizationId, options.organizationId))
-    .limit(1);
-  await tx.insert(schema.collections).values({
-    documentNumber: `COL-${crypto.randomUUID().slice(0, 8)}`,
-    organizationId: options.organizationId,
-    stationId: station.id,
-    entryDate: daysAgo(0),
-    customerId: (
-      await tx
-        .select()
-        .from(schema.customers)
-        .where(eq(schema.customers.name, 'Malabar Transports'))
-        .limit(1)
-    )[0].id,
-    amount: '15000',
-    paymentMethod: 'Bank Transfer',
-    fundingAccountId: bankAccount.id,
-    notes: 'Bank collection against Malabar fleet credit',
-  });
-  await tx.insert(schema.expenses).values({
-    organizationId: options.organizationId,
-    stationId: station.id,
-    entryDate: daysAgo(0),
-    categoryId: expenseCategory.id,
-    amount: '12000',
-    fundingAccountId: bankAccount.id,
-    affectsDrawer: false,
-    description: 'Electricity bill',
-  });
-  const [firstSupplier] = await tx
-    .select()
-    .from(schema.suppliers)
-    .where(eq(schema.suppliers.organizationId, options.organizationId))
-    .limit(1);
-  await tx.insert(schema.supplierTransactions).values({
-    organizationId: options.organizationId,
-    stationId: station.id,
-    entryDate: daysAgo(0),
-    supplierId: firstSupplier.id,
-    transactionType: 'Payment',
-    amount: '25000',
-    fundingAccountId: bankAccount.id,
-    affectsDrawer: false,
-    notes: 'Bank payment against previous lubricant invoice',
-  });
-  await tx.insert(schema.otherIncome).values({
-    organizationId: options.organizationId,
-    stationId: station.id,
-    entryDate: options.today ?? daysAgo(0),
-    categoryId: incomeCategory.id,
-    amount: '500',
-    fundingAccountId: bankAccount.id,
-    affectsDrawer: false,
-    description: 'Supplier promotional rebate',
-  });
-  const [morning] = await tx
-    .insert(schema.shifts)
-    .values({
-      organizationId: options.organizationId,
-      stationId: station.id,
-      businessDayId: businessDay.id,
-      shiftTemplateId: templates.find((template) => template.name === 'Morning')!.id,
-      status: 'CLOSED',
-      openedBy: options.ownerUserId,
-      closedBy: options.ownerUserId,
-      closedAt: new Date(),
-    })
-    .returning();
-  await tx.insert(schema.shiftSummaries).values({
-    shiftId: morning.id,
-    snapshotData: {
-      generatedAt: new Date().toISOString(),
-      businessDate: businessDay.businessDate,
-      status: 'CLOSED',
-      nozzleReadings: [],
-      drawer: { declaredCash: 0, variance: 0 },
-      source: 'demo-template',
-    },
-  });
-  const [evening] = await tx
-    .insert(schema.shifts)
-    .values({
-      organizationId: options.organizationId,
-      stationId: station.id,
-      businessDayId: businessDay.id,
-      shiftTemplateId: templates.find((template) => template.name === 'Evening')!.id,
-      status: 'OPEN',
-      openedBy: options.ownerUserId,
-    })
-    .returning();
-  let eventOrdinal = 0;
-  const appendSeedEvent = async (
-    eventType: string,
-    aggregateType: string,
-    aggregateId: string,
-    businessDayId: string,
-    occurredAt: Date,
-    payload: Record<string, unknown>,
-  ) => {
-    eventOrdinal += 1;
-    await tx.insert(schema.events).values({
-      eventId: crypto.randomUUID(),
-      eventType,
-      organizationId: options.organizationId,
-      stationId: station.id,
-      businessDayId,
-      aggregateType,
-      aggregateId,
-      occurredAt,
-      actorId: options.ownerUserId,
-      correlationId: crypto.randomUUID(),
-      payload: { ...payload, source: 'demo-template', ordinal: eventOrdinal },
-      metadata: {
-        grouping: { role: 'primary' },
-        source: 'demo-template',
-      },
-    });
-  };
-  for (const [index, historical] of historicalDays.entries()) {
-    const occurredAt = new Date(Date.now() - (7 - index) * 86_400_000);
-    await appendSeedEvent(
-      'SHIFT_CLOSED',
-      'shift',
-      historical.shiftId,
-      historical.businessDayId,
-      occurredAt,
-      { businessDate: historical.businessDate },
-    );
-    await appendSeedEvent(
-      'DSSR_GENERATED',
-      'business_day',
-      historical.businessDayId,
-      historical.businessDayId,
-      occurredAt,
-      { businessDate: historical.businessDate },
-    );
-  }
-  await appendSeedEvent('SHIFT_OPENED', 'shift', morning.id, businessDay.id, new Date(), {
-    businessDate: businessDay.businessDate,
-  });
-  await appendSeedEvent('SHIFT_CLOSED', 'shift', morning.id, businessDay.id, new Date(), {
-    businessDate: businessDay.businessDate,
-  });
-  await appendSeedEvent('SHIFT_OPENED', 'shift', evening.id, businessDay.id, new Date(), {
-    businessDate: businessDay.businessDate,
-  });
-  await appendSeedEvent(
-    'SALE_RECORDED',
-    'customer_transaction',
-    (
-      await tx
-        .select()
-        .from(schema.customerTransactions)
-        .where(eq(schema.customerTransactions.shiftId, evening.id))
-        .limit(1)
-    )[0].id,
-    businessDay.id,
-    new Date(),
-    { transactionType: 'Credit Sale' },
-  );
-  const attendantsOnly = people.filter((person) => person.role === 'Attendant');
-  await tx.insert(schema.shiftStaffAssignments).values(
-    dispensers.map((du, index) => ({
-      shiftId: evening.id,
-      userId: attendantsOnly[index % attendantsOnly.length].id,
-      duId: du.id,
-      openingFloat: '5000',
-    })),
-  );
-  const [anitha] = attendantsOnly;
-  await tx.insert(schema.attendantHandovers).values({
-    organizationId: options.organizationId,
-    stationId: station.id,
-    shiftId: evening.id,
-    userId: anitha.id,
-    duId: dispensers[Math.min(1, dispensers.length - 1)].id,
-    cashHandedOver: '7650',
-    expectedCash: '8000',
-    varianceAmount: '-350',
-    openingFloat: '5000',
-    expectedSales: '3000',
-  });
-  const hsdTank = tanks.find((tank) => tank.productId === fuels[1].id);
-  await tx.insert(schema.stockVariances).values({
-    businessDayId: businessDay.id,
-    productId: fuels[1].id,
-    tankId: hsdTank?.id ?? tanks[0].id,
-    expectedQuantity: '12000',
-    actualQuantity: '11982',
-    varianceQuantity: '-18',
-    reason: 'Dip reading differs from expected stock',
-    approvedBy: options.ownerUserId,
-  });
-  const malabarCreditCustomer = (
-    await tx
-      .select()
-      .from(schema.customers)
-      .where(eq(schema.customers.name, 'Malabar Transports'))
-      .limit(1)
-  )[0];
-  await tx.insert(schema.customerTransactions).values({
-    shiftId: evening.id,
-    businessDayId: businessDay.id,
-    customerId: malabarCreditCustomer.id,
-    productId: fuels[1].id,
-    transactionType: 'Credit Sale',
-    amount: '60000',
-    quantity: '669',
-    unitPrice: '89.70',
-    attendantId: attendantsOnly[0].id,
-    duId: dispensers[1]?.id ?? dispensers[0].id,
-    notes: 'Fleet credit sale for Malabar Transports',
-  });
+    .where(eq(schema.nozzles.stationId, station.id));
   return {
     station,
     owner,
     people,
     tanks,
     dispensers,
+    nozzles,
     products,
-    businessDay,
-    eveningShift: evening,
+    customers: demoCustomers,
+    suppliers: demoSuppliers,
+    financialAccounts,
+    templates,
   };
 }

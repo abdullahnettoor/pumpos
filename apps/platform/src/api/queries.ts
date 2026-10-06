@@ -11,6 +11,7 @@
  * memory only.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { DEMO_EXPIRY_DAYS } from '@pump/shared';
 import { request } from './client.js';
 import type { ApiTarget } from './targets.js';
 import type {
@@ -101,7 +102,11 @@ export const commands = {
     request<DemoCreateResult>(target, 'POST', '/platform/demos', input),
   resetDemo: (target: ApiTarget, orgId: string) =>
     request<{ reset: boolean }>(target, 'POST', `/platform/demos/${orgId}/reset`, {}),
-  extendDemo: (target: ApiTarget, orgId: string, expiresInDays: 2 | 7 | 30) =>
+  extendDemo: (
+    target: ApiTarget,
+    orgId: string,
+    expiresInDays: (typeof DEMO_EXPIRY_DAYS)[number],
+  ) =>
     request<{ demoExpiresAt: string }>(target, 'POST', `/platform/demos/${orgId}/extend`, {
       expiresInDays,
     }),

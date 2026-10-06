@@ -19,4 +19,18 @@ the demo routes even while production and preview share a database. Once
 production has its own database, the same explicit-off default preserves the
 boundary without application code changes.
 
+Reset and delete lock the organization row (`SELECT … FOR UPDATE`) and re-check
+`is_demo` inside the transaction; the final delete also filters on
+`is_demo = true`. Because a hard delete removes the organization's own `events`,
+the record of each create, reset, extend, expiry and delete is a structured
+Worker log line (`[platform-demo] DEMO_ORGANIZATION_*`), not an organization
+event. Demo organizations skip billing and Limits: the access reader treats them
+as ACTIVE with no paid-through date and lifts every Limit; suspension still
+applies, which is how expiry cuts access.
+
+Demo history is written through the core use-cases (open shift, handover, close
+shift, close business day, purchase, credit sale, office records, stock count)
+with a fixed clock per day, so snapshots, ledger entries and events have the
+shapes the app writes.
+
 Status: accepted.

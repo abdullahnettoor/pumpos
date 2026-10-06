@@ -154,6 +154,27 @@ const OwnerTab: React.FC<{ row: OwnerRow; target: ApiTarget; onRun: RunFn }> = (
             }}
           />
           <PlatformAction
+            label={deactivated ? 'Reactivate demo owner' : 'Deactivate demo owner'}
+            organizationName={name}
+            variant={deactivated ? 'secondary' : 'danger'}
+            description={
+              deactivated
+                ? 'Restore the existing demo Owner login.'
+                : 'Suspend the demo Owner login while keeping demo data.'
+            }
+            reason="none"
+            disabled={!owner}
+            onConfirm={async () => {
+              await onRun(
+                commands.ownerAction(target, {
+                  orgId,
+                  verb: deactivated ? 'reactivate' : 'deactivate',
+                }),
+              );
+              return `${name} ${deactivated ? 'reactivated' : 'deactivated'}`;
+            }}
+          />
+          <PlatformAction
             label="Delete demo"
             organizationName={name}
             variant="danger"
