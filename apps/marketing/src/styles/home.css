@@ -118,6 +118,7 @@
 .h-fh { display: flex; justify-content: space-between; align-items: end; gap: 24px; }
 .h-fh > a { font-weight: 700; color: var(--h-primary); }
 .h-bento { margin-top: 48px; max-width: none; }
+.h-bento-dots { display: none; }
 .h-bp-tbl { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-variant-numeric: tabular-nums; }
 .h-bp-tbl div { display: grid; grid-template-columns: 1fr 1fr 1fr .9fr; padding: 8px 10px; background: #fff; border-radius: 8px; }
 .h-bp-tbl div span:last-child { font-weight: 800; text-align: right; color: var(--h-primary); }
@@ -343,8 +344,16 @@
   .h-deck::after { height: 4vh; }
   .h-leak { gap: 10px; } .h-leak > p { display: none; }
   /* Feature cards become a swipe row */
-  .home .h-bento.bento-grid { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 12px; margin-inline: -20px; padding: 0 20px 8px; scrollbar-width: none; }
-  .home .h-bento.bento-grid > * { flex: 0 0 84%; scroll-snap-align: start; min-height: 280px; }
+  .home .h-bento.bento-grid { width: auto; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 20px; gap: 12px; margin-inline: -20px; padding: 0 20px 8px; scrollbar-width: none; }
+  .home .h-bento.bento-grid > * { flex: 0 0 88%; scroll-snap-align: start; min-height: 280px; }
+  /* Card text under the icon, full width */
+  .home .h-bento .bento-text { flex-direction: column; gap: 10px; }
+  /* Nozzle preview: nozzle and litres only */
+  .h-bp-tbl div { grid-template-columns: 1fr auto; }
+  .h-bp-tbl div span:nth-child(2), .h-bp-tbl div span:nth-child(3) { display: none; }
+  .h-bento-dots { display: flex; justify-content: center; gap: 6px; margin-top: 14px; }
+  .h-bento-dots i { width: 6px; height: 6px; border-radius: 99px; background: var(--h-line); transition: width .25s, background .25s; }
+  .h-bento-dots i.is-on { width: 18px; background: var(--h-primary); }
   /* Tighter day timeline */
   .h-dayline li { padding-bottom: 18px; gap: 2px; display: grid; grid-template-columns: auto 1fr; column-gap: 10px; }
   .h-dayline li > :nth-child(n+3) { grid-column: 1 / -1; }

@@ -831,3 +831,12 @@
     transition: none;
   }
 }
+
+/* Docs home: guide cards */
+.docs-index { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.prose-pump .docs-index-card, .docs-index-card { display: flex; flex-direction: column; gap: 6px; padding: 20px; border-radius: var(--ds-radius-md); border: 1px solid var(--ds-line); background: #fff; color: var(--ds-ink); text-decoration: none; transition: border-color .2s, box-shadow .2s; }
+.prose-pump .docs-index-card:hover { border-color: var(--ds-primary); box-shadow: 0 14px 30px -24px #0f2a2173; }
+.docs-index-card small { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ds-primary); }
+.docs-index-card b { font-size: 18px; letter-spacing: -.01em; }
+.docs-index-card span { font-size: 14px; line-height: 1.5; color: var(--ds-muted); flex: 1; }
+.docs-index-card i { font-style: normal; font-weight: 700; font-size: 14px; color: var(--ds-primary); margin-top: 6px; }

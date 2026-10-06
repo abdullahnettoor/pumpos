@@ -1,14 +1,28 @@
 ---
 import { getCollection } from 'astro:content';
+import DocsLayout from '../../layouts/DocsLayout.astro';
 
-// Send /docs to the first doc (lowest order in the first category).
+// Docs home: a real page instead of a bare redirect. Lists every guide by category,
+// plus the day-closing guide from the Journal.
 const docs = (await getCollection('docs')).sort(
   (a, b) =>
-    (a.data.category ?? 'Docs').localeCompare(b.data.category ?? 'Docs') ||
+    (a.data.category ?? 'Guides').localeCompare(b.data.category ?? 'Guides') ||
     a.data.order - b.data.order,
 );
-const first = docs[0];
-if (first) return Astro.redirect(`/docs/${first.id}`);
+const guides = [
+  ...docs.map((d) => ({ href: `/docs/${d.id}`, kicker: d.data.category ?? 'Guides', title: d.data.title, body: d.data.description ?? '' })),
+  { href: '/blog/day-closing-and-dsr-guide', kicker: 'Guide', title: 'Day closing and DSR', body: 'Readings, drawers, dips and credit, step by step to a saved day report.' },
+];
 ---
-
-<p>No documentation yet.</p>
+<DocsLayout title="PumpOS documentation" description="How to set up your station and run shifts, handovers and day closing in PumpOS.">
+  <div class="docs-index">
+    {guides.map((g) => (
+      <a class="docs-index-card" href={g.href}>
+        <small>{g.kicker}</small>
+        <b>{g.title}</b>
+        <span>{g.body}</span>
+        <i aria-hidden="true">Read →</i>
+      </a>
+    ))}
+  </div>
+</DocsLayout>
