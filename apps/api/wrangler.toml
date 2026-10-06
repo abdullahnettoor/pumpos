@@ -96,4 +96,3 @@ enabled = true
 
 [env.preview.triggers]
 crons = ["0 2 * * *"]
-

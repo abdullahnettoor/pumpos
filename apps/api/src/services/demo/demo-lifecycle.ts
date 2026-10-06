@@ -442,8 +442,8 @@ export async function resetDemo(
     const setup = station
       ? storedDemoSetup(station)
       : { stationName: 'Sample Fuels', town: 'Thrissur', tanks: 2, nozzles: 6, attendants: 3 };
-    await clearDemoData(tx, organizationId, { keepOwner: true });
     await limitAbandonedTransaction(tx);
+    await clearDemoData(tx, organizationId, { keepOwner: true });
     await seedDemoOrganization(tx, organizationId, owner.id, setup, { now: options.now });
     return ok({ organizationId, reset: true as const });
   });
