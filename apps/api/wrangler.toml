@@ -96,3 +96,9 @@ enabled = true
 
 [env.preview.triggers]
 crons = ["0 2 * * *"]
+
+# Creating a demo seeds 7 days of history through the core use-cases in one
+# request; that exceeds the default 30 s CPU budget. Workers Paid allows up to
+# 5 min per invocation (fetch and cron). Preview only.
+[env.preview.limits]
+cpu_ms = 300000

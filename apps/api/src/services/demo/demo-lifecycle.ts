@@ -230,6 +230,14 @@ export interface CreatedDemo {
   demoExpiresAt: string;
 }
 
+/**
+ * If the Worker is killed mid-seed, Postgres would keep the transaction (and
+ * its locks) open. End it after 60 s of client silence instead.
+ */
+async function limitAbandonedTransaction(tx: DbClient) {
+  await tx.execute(sql`set local idle_in_transaction_session_timeout = '60s'`);
+}
+
 const OWNER_PROFILE_ATTEMPTS = 5;
 
 /** Bounded poll for the owner profile the auth trigger creates. */
@@ -305,6 +313,7 @@ export async function createDemo(
             status: 'ACTIVE',
           })
           .returning();
+        await limitAbandonedTransaction(tx);
         await seedDemoOrganization(tx, organization.id, owner.id, setup, { now });
         return ok({ organizationId: organization.id, ownerId: owner.id });
       });
@@ -350,11 +359,14 @@ export async function createDemo(
     const owner = await waitForOwnerProfile(db, authUserId);
     if (!owner) throw new Error('Owner profile was not created by the auth provisioning trigger');
     organizationId = owner.organizationId;
+    // Mark it a demo in its own commit first, so a failed or killed seed
+    // leaves an org that the demo Delete/expiry can always remove.
+    await db
+      .update(schema.organizations)
+      .set({ isDemo: true, demoExpiresAt: expiresAt })
+      .where(eq(schema.organizations.id, owner.organizationId));
     const seeded = await runInTransaction(db, async (tx) => {
-      await tx
-        .update(schema.organizations)
-        .set({ isDemo: true, demoExpiresAt: expiresAt })
-        .where(eq(schema.organizations.id, owner.organizationId));
+      await limitAbandonedTransaction(tx);
       await seedDemoOrganization(tx, owner.organizationId, owner.id, setup, { now });
       return ok(true);
     });
@@ -431,6 +443,7 @@ export async function resetDemo(
       ? storedDemoSetup(station)
       : { stationName: 'Sample Fuels', town: 'Thrissur', tanks: 2, nozzles: 6, attendants: 3 };
     await clearDemoData(tx, organizationId, { keepOwner: true });
+    await limitAbandonedTransaction(tx);
     await seedDemoOrganization(tx, organizationId, owner.id, setup, { now: options.now });
     return ok({ organizationId, reset: true as const });
   });
