@@ -31,6 +31,8 @@ export interface StockMovementRepository {
 
 export interface StockVariance {
   id: string;
+  organizationId: string;
+  stationId: string;
   shiftId: string | null;
   businessDayId: string;
   productId: string;

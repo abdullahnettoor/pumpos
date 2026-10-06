@@ -674,6 +674,12 @@ export const stockMovements = pgTable('stock_movements', {
 
 export const stockVariances = pgTable('stock_variances', {
   id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id')
+    .references(() => organizations.id)
+    .notNull(),
+  stationId: uuid('station_id')
+    .references(() => stations.id)
+    .notNull(),
   // Nullable: a dip/physical count is a business-day reconciliation, not a
   // shift-bound event. shift_id is set only for shift-scoped variance capture.
   shiftId: uuid('shift_id').references(() => shifts.id),

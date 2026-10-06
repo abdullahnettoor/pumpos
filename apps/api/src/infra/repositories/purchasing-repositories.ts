@@ -1,4 +1,4 @@
-import { schema, type DbClient } from '@pump/db';
+import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type {
   Purchase,
   PurchaseItem,
@@ -9,7 +9,7 @@ import type {
 } from '@pump/core';
 
 export class DrizzlePurchaseRepository implements PurchaseRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   async save(p: Purchase): Promise<void> {
     await this.db.insert(schema.purchases).values({
       id: p.id,
@@ -32,7 +32,7 @@ export class DrizzlePurchaseRepository implements PurchaseRepository {
 }
 
 export class DrizzlePurchaseItemRepository implements PurchaseItemRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   async saveMany(items: PurchaseItem[]): Promise<void> {
     if (items.length === 0) return;
     await this.db.insert(schema.purchaseItems).values(
@@ -62,7 +62,7 @@ export class DrizzlePurchaseItemRepository implements PurchaseItemRepository {
 }
 
 export class DrizzleSupplierTransactionRepository implements SupplierTransactionRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   async save(t: SupplierTransaction): Promise<void> {
     await this.db.insert(schema.supplierTransactions).values({
       id: t.id,

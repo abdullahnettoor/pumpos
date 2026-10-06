@@ -22,6 +22,13 @@
       "when": 1791194390079,
       "tag": "0002_common_wildside",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791213078001,
+      "tag": "0003_acoustic_bloodstrike",
+      "breakpoints": true
     }
   ]
 }

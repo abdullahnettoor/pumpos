@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { schema, type DbClient } from '@pump/db';
+import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type {
   DssrDataReader,
   DssrSnapshot,
@@ -9,7 +9,7 @@ import type {
 import { shiftSequenceSql } from '../shift-sequence-sql.js';
 
 export class DrizzleDssrSnapshotRepository implements DssrSnapshotRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   private toEntity(r: typeof schema.dssrSnapshots.$inferSelect): DssrSnapshot {
     return {
       id: r.id,
@@ -61,7 +61,7 @@ export class DrizzleDssrSnapshotRepository implements DssrSnapshotRepository {
 }
 
 export class DrizzleDssrDataReader implements DssrDataReader {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   async readBusinessDay(businessDayId: string): Promise<DssrSourceData> {
     const [businessDay] = await this.db
       .select({
