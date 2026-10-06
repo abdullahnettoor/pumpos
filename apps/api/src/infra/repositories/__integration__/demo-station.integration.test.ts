@@ -171,6 +171,14 @@ describe.skipIf(!CONNECTION)('demo stations against real Postgres', () => {
       demo = await seed('Template Demo');
     }, 120_000);
 
+    it('marks the station ready for operations, so the console skips onboarding', async () => {
+      const stations = await db
+        .select({ onboardingStatus: schema.stations.onboardingStatus })
+        .from(schema.stations)
+        .where(eq(schema.stations.organizationId, demo.organizationId));
+      expect(stations).toEqual([{ onboardingStatus: 'READY_FOR_OPERATIONS' }]);
+    });
+
     it('saves seven DSSRs, one per closed business day before today', async () => {
       const dssrs = await db
         .select()

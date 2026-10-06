@@ -60,7 +60,7 @@ export async function seedDemoStation(tx: DbExecutor, input: SeedDemoStationOpti
           attendants: options.attendants,
         },
       },
-      onboardingStatus: 'COMPLETED',
+      onboardingStatus: 'READY_FOR_OPERATIONS',
       isActive: true,
     })
     .returning();
