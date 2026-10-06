@@ -364,3 +364,8 @@
 /* Pilot offer above the plan cards */
 .h-pilot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 20px 0 4px; padding: 12px 16px; border-radius: 12px; background: #e4f1ea; color: #18201a; font-size: 15px; }
 .h-pilot b { padding: 3px 10px; border-radius: 999px; background: #1f6a53; color: #fff; font-size: 12px; letter-spacing: .02em; }
+
+/* Real screenshots in the progress-tab panels (credit walkthrough) */
+.h-shot { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.h-shot img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; border-radius: 16px; }
+.h-shot figcaption { font-size: 12px; color: var(--h-muted); text-align: right; }

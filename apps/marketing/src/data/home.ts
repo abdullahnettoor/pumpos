@@ -52,16 +52,10 @@ export const dsrRows: [string, string][] = [
 ];
 
 export const creditSteps = [
-  { title: 'Start with what is owed.', body: 'Open a customer statement. See the outstanding balance, credit limit and last payment.' },
-  { title: 'See exactly what came in.', body: 'A ₹15,000 bank collection is recorded against the customer. It lowers their dues without touching drawer cash.' },
-  { title: 'See where every rupee came from.', body: 'The statement shows the collection and the ₹27,500 still outstanding. Earlier entries stay there to inspect.' },
+  { title: 'Start with what is owed.', body: 'Open your customer list. See each customer’s credit limit and what they owe right now.' },
+  { title: 'See exactly what came in.', body: 'A ₹15,000 bank collection is recorded against the customer by entry date. It lowers their dues without touching drawer cash.' },
+  { title: 'See where every rupee came from.', body: 'The statement shows the ₹20,000 credit sale, the ₹15,000 collection and the ₹5,000 still outstanding.' },
   { title: 'Check it yourself. Wherever you are.', body: 'Open the customer’s recent entries on your phone. No need to ask someone for an update.' },
-];
-
-export const statement: [string, string, string, string][] = [
-  ['28 Sep', 'Credit sale · HSD 120 L', '+ ₹11,400', '₹31,100'],
-  ['01 Oct', 'Credit sale · HSD 120 L', '+ ₹11,400', '₹42,500'],
-  ['03 Oct', 'Collection · Bank transfer', '− ₹15,000', '₹27,500'],
 ];
 
 export const dayline: [string, string, string, string][] = [
