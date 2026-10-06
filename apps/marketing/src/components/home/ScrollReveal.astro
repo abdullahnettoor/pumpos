@@ -19,6 +19,12 @@
       entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('rv-in'); io.unobserve(e.target); } });
     }, { rootMargin: '0px 0px -12% 0px' });
     const arm = (el: Element, cls: string) => { el.classList.add(cls); io.observe(el); };
+    // Hero card zoom (CSS in home.css) plays on load on desktop; on phones it waits for view.
+    const card = document.querySelector('.h-hero-card');
+    if (card && matchMedia('(max-width: 900px)').matches) {
+      const r = card.getBoundingClientRect();
+      if (r.top > innerHeight * 0.88) arm(card, 'rv-wait');
+    }
     if (home) {
       home.querySelectorAll('.ds-heading').forEach((h) => { if (!h.closest('.h-leaks, #credit, .h-hero')) arm(h, 'rv-one'); });
       SINGLE.forEach((s) => home.querySelectorAll(s).forEach((el) => arm(el, 'rv-one')));

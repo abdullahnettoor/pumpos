@@ -373,3 +373,13 @@
 /* Pilot offer above the plan cards */
 .h-pilot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 20px 0 4px; padding: 12px 16px; border-radius: 12px; background: #e4f1ea; color: #18201a; font-size: 15px; }
 .h-pilot b { padding: 3px 10px; border-radius: 999px; background: #1f6a53; color: #fff; font-size: 12px; letter-spacing: .02em; }
+
+/* Hero DSR card: zoom-in on load, then the shortage row flashes once. */
+@keyframes h-fly { from { opacity: 0; transform: translateY(24px) scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes h-flash { 0% { opacity: 0; transform: translateY(6px); } 40% { opacity: 1; transform: none; box-shadow: 0 0 0 0 #b44a3f55; } 100% { box-shadow: 0 0 0 10px #b44a3f00; } }
+@media (prefers-reduced-motion: no-preference) {
+  .h-hero-card { transform-origin: 50% 30%; animation: h-fly .7s cubic-bezier(.16, 1, .3, 1) .25s both; }
+  .h-hero-card .h-short { animation: h-flash .9s ease .95s both; }
+  /* Phones: the card is below the fold, so ScrollReveal holds it until it is in view. */
+  .h-hero-card.rv-wait:not(.rv-in), .h-hero-card.rv-wait:not(.rv-in) .h-short { animation-play-state: paused; }
+}
