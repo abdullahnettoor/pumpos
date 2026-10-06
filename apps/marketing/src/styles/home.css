@@ -66,25 +66,29 @@
 .h-res em.is-var { background: var(--h-amber); }
 
 /* Progress tabs: numbered list with an autoplay track, panel with arrows */
-.h-pt { display: grid; grid-template-columns: minmax(300px, .9fr) 1.2fr; gap: 56px; align-items: center; margin-top: 40px; }
+.h-pt { display: grid; grid-template-columns: minmax(280px, .8fr) 1.4fr; gap: 56px; align-items: center; margin-top: 40px; }
 .h-pt-list { display: flex; flex-direction: column; border-left: 2px solid var(--h-alt); }
-.h-pt-list button { all: unset; box-sizing: border-box; cursor: pointer; position: relative; display: block; padding: 22px 0 22px 26px; }
+.h-pt-list button { all: unset; box-sizing: border-box; cursor: pointer; position: relative; display: block; padding: 18px 0 18px 24px; }
 .h-pt-list button + button { border-top: 1px solid var(--h-alt); }
 .h-pt-list button:focus-visible { outline: 2px solid var(--h-primary); outline-offset: 2px; }
 .h-pt-n { display: block; font-size: 12px; font-weight: 600; color: #9aa39b; margin-bottom: 6px; }
-.h-pt-t { display: block; font-size: clamp(22px, 2.2vw, 32px); font-weight: 700; letter-spacing: -.03em; line-height: 1.15; color: #9aa39b; transition: color .25s; }
+.h-pt-t { display: block; font-size: clamp(19px, 1.7vw, 24px); font-weight: 700; letter-spacing: -.03em; line-height: 1.15; color: #9aa39b; transition: color .25s; }
 .h-pt-list button:hover .h-pt-t { color: var(--h-muted); }
 .h-pt-list button[aria-selected="true"] .h-pt-t { color: var(--h-ink); }
 .h-pt-d { display: none; font-size: 15px; color: var(--h-muted); margin-top: 10px; max-width: 46ch; line-height: 1.5; }
 .h-pt-list button[aria-selected="true"] .h-pt-d { display: block; }
 .h-pt-bar { position: absolute; left: -2px; top: 0; width: 2px; height: 0; background: var(--h-ink); }
 .h-pt-list button[aria-selected="true"] .h-pt-bar { height: calc(var(--p, 0) * 100%); }
-.h-pt-panels { display: flex; flex-direction: column; justify-content: center; }
+.h-pt-panels { position: relative; display: flex; flex-direction: column; justify-content: center; }
 .h-pt-panels > [data-panel] { animation: h-in .35s ease both; }
 @keyframes h-in { from { opacity: 0; transform: translateY(10px); } }
-.h-pt-nav { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; order: 9; }
-.h-pt-nav button { width: 44px; height: 44px; border-radius: 99px; border: 1px solid var(--h-line); background: #fff; font-size: 22px; line-height: 1; cursor: pointer; color: var(--h-ink); }
-.h-pt-nav button:hover { border-color: var(--h-ink); }
+/* Arrows sit inside the image, bottom-right, above the caption line. */
+.h-pt-nav { position: absolute; right: 14px; bottom: 40px; z-index: 2; display: flex; gap: 8px; }
+.h-pt-nav button { width: 40px; height: 40px; display: grid; place-items: center; padding: 0; border-radius: 99px; border: 0; background: #ffffffeb; box-shadow: 0 4px 14px -4px #0f2a2166; cursor: pointer; color: var(--h-ink); }
+.h-pt-nav button svg { width: 20px; height: 20px; }
+.h-pt-nav button:hover { background: #fff; }
+.h-pt-nav button:focus-visible { outline: 2px solid var(--h-primary); outline-offset: 2px; }
+.h-pt-cap { display: none; }
 
 /* Panels */
 .h-stmt { overflow: hidden; }
@@ -222,9 +226,22 @@
   .h-leak h3 { font-size: 21px; line-height: 1.2; } .h-leak > p { font-size: 14px; }
   .h-chip { padding: 16px; } .h-chip strong { font-size: 34px; }
   .h-bd { font-size: 12px; } .h-bd div { padding-block: 5px; }
-  .h-pt { display: flex; flex-direction: column-reverse; gap: 20px; align-items: stretch; margin-top: 24px; }
-  .h-pt-list button { padding: 14px 0 14px 18px; } .h-pt-t { font-size: 20px; } .h-pt-d { font-size: 14px; }
-  .h-pt-nav { margin-top: 10px; } .h-pt-nav button { width: 38px; height: 38px; }
+  /* Phones: image first, then a 4-step progress strip, then the active step's text. */
+  .h-pt { display: flex; flex-direction: column; gap: 16px; align-items: stretch; margin-top: 24px; }
+  .h-pt-panels { order: 1; }
+  .h-pt-list { order: 2; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; border-left: 0; }
+  .h-pt-list button { padding: 12px 0 4px; }
+  .h-pt-list button + button { border-top: 0; }
+  .h-pt-list button::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; border-radius: 3px; background: var(--h-alt); }
+  .h-pt-list .h-pt-t, .h-pt-list button[aria-selected="true"] .h-pt-d { display: none; }
+  .h-pt-n { margin: 0; text-align: center; }
+  .h-pt-list button[aria-selected="true"] .h-pt-n { color: var(--h-ink); }
+  .h-pt-bar { top: 0; left: 0; height: 3px; width: 0; border-radius: 3px; }
+  .h-pt-list button[aria-selected="true"] .h-pt-bar { height: 3px; width: calc(var(--p, 0) * 100%); }
+  .h-pt-cap { order: 3; display: flex; flex-direction: column; gap: 6px; min-height: 7.5em; }
+  .h-pt-cap b { font-size: 20px; letter-spacing: -.02em; line-height: 1.2; }
+  .h-pt-cap span { font-size: 15px; line-height: 1.5; color: var(--h-muted); }
+  .h-pt-nav { right: 10px; bottom: 36px; } .h-pt-nav button { width: 36px; height: 36px; }
   .h-st-h { padding: 16px 14px; } .h-st-h strong { font-size: 22px; }
   .h-tr { grid-template-columns: 52px 1fr 76px 76px; padding-inline: 14px; font-size: 12px; gap: 6px; }
     .h-phone { width: 100%; max-width: 260px; } .h-phone-wrap { padding: 20px; }

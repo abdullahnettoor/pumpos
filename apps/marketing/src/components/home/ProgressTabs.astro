@@ -22,9 +22,10 @@ const uid = id ?? title.toLowerCase().replace(/[^a-z]+/g, '-').slice(0, 24);
         </button>
       ))}
     </div>
+    <div class="h-pt-cap" aria-hidden="true"><b data-cap-t>{items[0].title}</b><span data-cap-d>{items[0].body}</span></div>
     <div class="h-pt-panels" data-uid={uid}>
       <slot />
-      <div class="h-pt-nav"><button type="button" data-step="-1" aria-label="Previous">‹</button><button type="button" data-step="1" aria-label="Next">›</button></div>
+      <div class="h-pt-nav"><button type="button" data-step="-1" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><button type="button" data-step="1" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div>
     </div>
   </div>
 </Section>
@@ -36,6 +37,7 @@ const uid = id ?? title.toLowerCase().replace(/[^a-z]+/g, '-').slice(0, 24);
     const tabs = [...sec.querySelectorAll<HTMLElement>('[data-tab]')];
     const wrap = sec.querySelector<HTMLElement>('.h-pt-panels')!;
     const uid = wrap.dataset.uid!;
+    const capT = sec.querySelector<HTMLElement>('[data-cap-t]')!, capD = sec.querySelector<HTMLElement>('[data-cap-d]')!;
     const panels = [...wrap.querySelectorAll<HTMLElement>(':scope > [data-panel]')];
     panels.forEach((p, i) => { p.id = `${uid}-panel-${i}`; p.setAttribute('role', 'tabpanel'); p.setAttribute('aria-labelledby', `${uid}-tab-${i}`); p.hidden = i !== 0; });
     let i = 0, t0 = performance.now(), visible = false, paused = false, progress = 0;
@@ -43,6 +45,7 @@ const uid = id ?? title.toLowerCase().replace(/[^a-z]+/g, '-').slice(0, 24);
       i = (n + tabs.length) % tabs.length; t0 = performance.now(); progress = 0;
       tabs.forEach((t, k) => { const on = k === i; t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1; t.style.setProperty('--p', '0'); });
       panels.forEach((p, k) => (p.hidden = k !== i));
+      capT.textContent = tabs[i].querySelector('.h-pt-t')!.textContent; capD.textContent = tabs[i].querySelector('.h-pt-d')!.textContent;
     };
     tabs.forEach((t, k) => {
       t.addEventListener('click', () => show(k));
@@ -63,8 +66,7 @@ const uid = id ?? title.toLowerCase().replace(/[^a-z]+/g, '-').slice(0, 24);
       panels.forEach((p) => (p.hidden = false));
       const h = Math.max(...panels.map((p) => p.offsetHeight));
       panels.forEach((p, k) => (p.hidden = k !== i));
-      const nav = wrap.querySelector<HTMLElement>('.h-pt-nav')!;
-      wrap.style.minHeight = `${h + nav.offsetHeight + 14}px`;
+      wrap.style.minHeight = `${h}px`;
     };
     addEventListener('resize', size);
     document.fonts?.ready.then(size);
