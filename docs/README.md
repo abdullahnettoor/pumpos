@@ -34,3 +34,4 @@ Use these sources in this order when they disagree:
   troubleshooting.
 - [`rollback-runbook.md`](rollback-runbook.md) — production rollback decisions.
 - Root [`RELEASING.md`](../RELEASING.md) — release and deployment process.
+- [`demo-walkthrough.md`](demo-walkthrough.md) — platform-managed demo call flow and prospect sandbox.

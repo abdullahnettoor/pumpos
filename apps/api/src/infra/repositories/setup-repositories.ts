@@ -1,5 +1,5 @@
 import { and, eq, inArray, desc } from 'drizzle-orm';
-import { schema, type DbClient } from '@pump/db';
+import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type { Role } from '@pump/shared';
 import type {
   InServiceDispenserReader,
@@ -103,7 +103,7 @@ export class DrizzleTankRepository implements TankRepository {
 
 // ---------------- Dispensers ----------------
 export class DrizzleDispenserRepository implements DispenserRepository, InServiceDispenserReader {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
 
   /**
    * Dispensers the station is actually running on. MAINTENANCE and INACTIVE
@@ -184,7 +184,7 @@ export class DrizzleDispenserRepository implements DispenserRepository, InServic
 
 // ---------------- Nozzles ----------------
 export class DrizzleNozzleRepository implements NozzleRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   private toEntity(r: typeof schema.nozzles.$inferSelect): Nozzle {
     return {
       id: r.id,
@@ -310,7 +310,7 @@ export class DrizzleShiftTemplateRepository implements ShiftTemplateRepository {
 
 // ---------------- Stations ----------------
 export class DrizzleStationRepository implements StationRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   private toEntity(r: typeof schema.stations.$inferSelect): Station {
     return {
       id: r.id,
@@ -476,7 +476,7 @@ export class DrizzleUserRepository implements UserRepository {
 
 // ---------------- Fuel Prices ----------------
 export class DrizzleFuelPriceRepository implements FuelPriceRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   private toEntity(r: typeof schema.fuelPrices.$inferSelect): FuelPrice {
     return {
       id: r.id,

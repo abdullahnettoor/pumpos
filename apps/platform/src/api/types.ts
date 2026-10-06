@@ -1,3 +1,5 @@
+import type { DEMO_EXPIRY_DAYS } from '@pump/shared';
+
 /**
  * Wire shapes of the `/platform/*` routes, transcribed from
  * `apps/api/src/index.ts` and `apps/api/src/routes/platform-access.ts`.
@@ -29,6 +31,26 @@ export interface OwnerRow {
   } | null;
   stationCount: number;
   readyStationCount: number;
+  isDemo: boolean;
+  demoExpiresAt: string | null;
+}
+
+export interface DemoCreateInput {
+  stationName: string;
+  town: string;
+  tanks: number;
+  nozzles: number;
+  attendants: number;
+  prospectEmail?: string;
+  expiresInDays: (typeof DEMO_EXPIRY_DAYS)[number];
+}
+
+export interface DemoCreateResult {
+  organizationId: string;
+  ownerEmail: string | null;
+  authUserId: string;
+  password?: string;
+  demoExpiresAt: string;
 }
 
 export interface InviteResult {

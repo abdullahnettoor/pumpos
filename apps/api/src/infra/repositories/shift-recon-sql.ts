@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { DbClient } from '@pump/db';
+import type { DbClient, DbExecutor } from '@pump/db';
 import type { CreditSaleRecord, DrawerReconciliation, ShiftReconciliationTotals } from '@pump/core';
 
 /**
@@ -224,7 +224,7 @@ export function toCreditSaleRecord(r: CreditSaleLineRow): CreditSaleRecord {
  * provided (handover path), preserving the stored value otherwise.
  */
 export async function updateReadingColumns(
-  db: DbClient,
+  db: DbExecutor,
   rows: { id: string; closingReading: string; volumeSold: string; testingVolume?: string }[],
 ): Promise<void> {
   if (rows.length === 0) return;

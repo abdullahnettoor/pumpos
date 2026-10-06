@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { schema, type DbClient } from '@pump/db';
+import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import {
   DEFAULT_ACCOUNT_NAME,
   type FinancialAccountType,
@@ -32,7 +32,7 @@ export interface OfficeRecordPosting {
  * extended (extra banks, petty cash) later via the accounts UI.
  */
 export class LedgerPostingService {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
 
   private async businessDayMeta(
     businessDayId: string,

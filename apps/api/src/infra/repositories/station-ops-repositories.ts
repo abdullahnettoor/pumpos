@@ -1,5 +1,5 @@
 import { and, eq, getTableColumns, gte, inArray, desc, ne, or, sql } from 'drizzle-orm';
-import { schema, type DbClient } from '@pump/db';
+import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type {
   BusinessDay,
   BusinessDayRepository,
@@ -277,7 +277,7 @@ const shiftColumns = {
 type ShiftRow = typeof schema.shifts.$inferSelect & { openingCash: string };
 
 export class DrizzleShiftRepository implements ShiftRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   async hasOpenShift(businessDayId: string): Promise<boolean> {
     const [row] = await this.db
       .select({ id: schema.shifts.id })
@@ -388,7 +388,7 @@ export class DrizzleShiftRepository implements ShiftRepository {
 
 // ---------------- Nozzle Readings ----------------
 export class DrizzleNozzleReadingRepository implements NozzleReadingRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   private toEntity(r: typeof schema.nozzleReadings.$inferSelect): NozzleReading {
     return {
       id: r.id,
@@ -452,7 +452,7 @@ export class DrizzleNozzleReadingRepository implements NozzleReadingRepository {
 
 // ---------------- Attendant Handover ----------------
 export class DrizzleHandoverContextReader implements HandoverContextReader {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
 
   async load(
     organizationId: string,
@@ -588,7 +588,7 @@ export class DrizzleHandoverContextReader implements HandoverContextReader {
 }
 
 export class DrizzleHandoverRepository implements HandoverRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
 
   async replaceCurrent(handover: AttendantHandover, terminalEntries: HandoverTerminalEntry[]) {
     await this.db.execute(
@@ -742,7 +742,7 @@ export class DrizzleHandoverRepository implements HandoverRepository {
  * instead of five sequential port reads under the station advisory lock.
  */
 export class DrizzleCloseShiftContextReader implements CloseShiftContextReader {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
 
   async load(organizationId: string, shiftId: string): Promise<CloseShiftContext> {
     const [row] = (await this.db.execute(sql`
@@ -774,7 +774,7 @@ export class DrizzleCloseShiftContextReader implements CloseShiftContextReader {
 
 // ---------------- Stock Movements ----------------
 export class DrizzleStockMovementWriter implements StockMovementWriter {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   async saveMany(movements: StockMovementInput[]): Promise<void> {
     if (movements.length === 0) return;
     await this.db.insert(schema.stockMovements).values(
@@ -796,7 +796,7 @@ export class DrizzleStockMovementWriter implements StockMovementWriter {
 
 // ---------------- Shift Summaries ----------------
 export class DrizzleShiftSummaryWriter implements ShiftSummaryStore {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   async save(shiftId: string, snapshot: Record<string, unknown>): Promise<void> {
     // Replace-in-one-statement: shift_summaries has no unique index on shift_id,
     // so the swap is a data-modifying CTE instead of a delete + insert pair (#229).

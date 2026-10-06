@@ -1,5 +1,5 @@
 import { and, eq, ne, sql } from 'drizzle-orm';
-import { schema, type DbClient } from '@pump/db';
+import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type {
   Customer,
   CustomerRepository,
@@ -17,7 +17,7 @@ type Json = Record<string, unknown> | null;
 
 // ---------------- Customers ----------------
 export class DrizzleCustomerRepository implements CustomerRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   private toEntity(r: typeof schema.customers.$inferSelect): Customer {
     return {
       id: r.id,
@@ -114,7 +114,7 @@ export class DrizzleCustomerRepository implements CustomerRepository {
 
 // ---------------- Customer Ledger ----------------
 export class DrizzleCustomerLedgerRepository implements CustomerLedgerRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   async save(e: CustomerLedgerEntry): Promise<void> {
     await this.db.insert(schema.customerTransactions).values({
       id: e.id,
@@ -191,7 +191,7 @@ export class DrizzleCustomerLedgerRepository implements CustomerLedgerRepository
 
 // ---------------- Collections ----------------
 export class DrizzleCollectionRepository implements CollectionRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   async save(c: Collection): Promise<void> {
     await this.db.insert(schema.collections).values({
       id: c.id,
@@ -214,7 +214,7 @@ export class DrizzleCollectionRepository implements CollectionRepository {
 
 // ---------------- Suppliers ----------------
 export class DrizzleSupplierRepository implements SupplierRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   private toEntity(r: typeof schema.suppliers.$inferSelect): Supplier {
     return {
       id: r.id,
