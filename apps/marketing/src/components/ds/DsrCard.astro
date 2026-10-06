@@ -1,4 +1,6 @@
 ---
+import Pill from './Pill.astro';
+
 interface Row {
   label: string;
   value: string;
@@ -41,28 +43,28 @@ const {
   ...rest
 } = Astro.props;
 ---
-<div class:list={['ds-card ds-dsr', className]} role="region" aria-label={ariaLabel} {...rest}>
+<div class:list={['ds-card ds-dsr', className]} role="img" aria-label={ariaLabel} {...rest}>
   <div class="ds-dsr-h">
     <div>
       <b>{title}</b>
       <small>{station} · {date}</small>
     </div>
-    <span class="ds-sample-tag">Sample numbers</span>
+    <Pill>Sample data</Pill>
   </div>
   <div class="ds-dsr-rows">
     {rows.map((r) => (
       <div>
-        <span class:list={r.isTotal ? '' : 'ds-mut'}>{r.label}</span>
+        <span class={r.isTotal ? '' : 'ds-mut'}>{r.label}</span>
         <b>{r.value}</b>
       </div>
     ))}
   </div>
   {shortageAmount && (
     <div class="ds-short">
-      {avatar && <span class="ds-av" aria-hidden="true">{avatar}</span>}
+      <span class="ds-av">{avatar}</span>
       <div>
-        <small class="ds-mut">{shortageLabel}</small>
-        <span class="ds-mut" style="font-size: 13px;">{shortageSubtext}</span>
+        <b>{shortageLabel}</b>
+        <small>{shortageSubtext}</small>
       </div>
       <strong>{shortageAmount}</strong>
     </div>

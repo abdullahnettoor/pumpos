@@ -30,17 +30,21 @@ const {
   ...rest
 } = Astro.props;
 ---
-<div class:list={['ds-card ds-rcpt', className]} role="region" aria-label={`Receipt preview: ${amount} from ${items[0]?.value ?? 'customer'}`} {...rest}>
-  <div style="display: flex; justify-content: space-between; align-items: baseline;">
-    <p class="ds-ey" style="margin: 0;">{eyebrow}</p>
-    {status && <span class="ds-st">{status}</span>}
-  </div>
+<div class:list={['ds-card ds-rcpt', className]} role="region" aria-label={`${eyebrow} preview`} {...rest}>
+  {status ? (
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span class="ds-ey">{eyebrow}</span>
+      <span class="ds-st">{status}</span>
+    </div>
+  ) : (
+    <small class="ds-mut">{eyebrow}</small>
+  )}
   <strong>{amount}</strong>
   <dl class="ds-bd">
     {items.map((it) => (
       <div>
-        <dt class="ds-mut">{it.label}</dt>
-        <dd style="margin: 0; font-weight: 600;">{it.value}</dd>
+        <dt>{it.label}</dt>
+        <dd>{it.value}</dd>
       </div>
     ))}
   </dl>

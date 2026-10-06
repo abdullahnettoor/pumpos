@@ -469,41 +469,6 @@
   .ds-ey {
     font-size: 12px;
   }
-  .ds-dsr-h,
-  .ds-dsr-rows {
-    padding-inline: 16px;
-  }
-  .ds-dsr-rows div {
-    padding-block: 11px;
-    font-size: 14px;
-  }
-  .ds-short {
-    margin: 0 12px 12px;
-    padding: 12px;
-    gap: 10px;
-  }
-  .ds-short strong {
-    font-size: 18px;
-  }
-  .ds-st-h {
-    padding: 16px 14px;
-  }
-  .ds-st-h strong {
-    font-size: 22px;
-  }
-  .ds-tr {
-    grid-template-columns: 52px 1fr 76px 76px;
-    padding-inline: 14px;
-    font-size: 12px;
-    gap: 6px;
-  }
-  .ds-phone {
-    width: 100%;
-    max-width: 260px;
-  }
-  .ds-phone-wrap {
-    padding: 20px;
-  }
 }
 
 @media (max-width: 480px) {

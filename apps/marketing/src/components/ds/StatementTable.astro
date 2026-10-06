@@ -44,21 +44,19 @@ const {
       <strong>{outstanding}</strong>
     </div>
   </div>
-  <div role="table" aria-label="Recent transactions">
-    <div class="ds-tr ds-tr--th" role="row">
-      <span role="columnheader">Date</span>
-      <span role="columnheader">Particulars</span>
-      <span role="columnheader">Amount</span>
-      <span role="columnheader">Balance</span>
-    </div>
-    {entries.map((e, i) => (
-      <div class:list={['ds-tr', i === entries.length - 1 ? 'ds-tr--last' : '']} role="row">
-        <span role="cell">{e.date}</span>
-        <span role="cell">{e.desc}</span>
-        <span role="cell" style={e.isCredit ? 'color: var(--ds-primary);' : ''}>{e.amount}</span>
-        <span role="cell"><b>{e.bal}</b></span>
-      </div>
-    ))}
+  <div class="ds-tr ds-tr--th">
+    <span>Date</span>
+    <span>Entry</span>
+    <span>Amount</span>
+    <span>Balance</span>
   </div>
-  <div class="ds-st-f">{note}</div>
+  {entries.map((e) => (
+    <div class:list={['ds-tr', e.isCredit ? 'ds-tr--last' : '']}>
+      <span>{e.date}</span>
+      <span>{e.desc}</span>
+      <span>{e.amount}</span>
+      <span>{e.bal}</span>
+    </div>
+  ))}
+  <p class="ds-st-f">{note}</p>
 </div>
