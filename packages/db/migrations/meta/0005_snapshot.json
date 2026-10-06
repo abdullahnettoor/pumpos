@@ -1,6 +1,6 @@
 {
-  "id": "a61bc06f-b29c-439f-aaba-a8b4a70c3dac",
-  "prevId": "f26e9b31-b27a-40aa-b02f-cf16d7c41cb0",
+  "id": "03f2d1a4-fe48-486f-ad68-719c006ce2a6",
+  "prevId": "ca39253a-45a0-4bcc-8d2e-43d42f786f07",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5845,13 +5845,13 @@
           "name": "organization_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "station_id": {
           "name": "station_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "shift_id": {
           "name": "shift_id",
