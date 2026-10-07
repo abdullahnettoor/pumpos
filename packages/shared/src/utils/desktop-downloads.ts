@@ -4,13 +4,13 @@
  * options for the user's OS). Pure: no fetch, no React.
  */
 
-export const DESKTOP_PLATFORMS = ['windows-x64', 'macos-arm64', 'macos-x64'] as const;
+export const DESKTOP_PLATFORMS = ['windows-x64', 'macos'] as const;
 export type DesktopPlatform = (typeof DESKTOP_PLATFORMS)[number];
 
 export const DESKTOP_PLATFORM_LABELS: Record<DesktopPlatform, string> = {
   'windows-x64': 'Windows',
-  'macos-arm64': 'macOS (Apple Silicon)',
-  'macos-x64': 'macOS (Intel)',
+  // One universal build runs on both Apple Silicon and Intel Macs.
+  macos: 'macOS',
 };
 
 /** The slice of a GitHub release this module needs. */
@@ -40,10 +40,8 @@ export function platformForAsset(name: string): DesktopPlatform | null {
   // Updater payloads and signatures are never installers.
   if (lower.endsWith('.sig') || lower.endsWith('.json') || lower.endsWith('.tar.gz')) return null;
   if (lower.endsWith('-setup.exe')) return 'windows-x64';
-  if (lower.endsWith('.dmg')) {
-    if (lower.includes('aarch64') || lower.includes('arm64')) return 'macos-arm64';
-    if (lower.includes('x64') || lower.includes('x86_64')) return 'macos-x64';
-  }
+  // Releases ship one universal .dmg for every Mac.
+  if (lower.endsWith('.dmg')) return 'macos';
   return null;
 }
 
@@ -58,7 +56,11 @@ export function resolveDesktopDownloads(
   releases: ReadonlyArray<GithubReleaseLike>,
 ): DesktopDownloads {
   const published = releases.filter((r) => !r.draft && !r.prerelease);
-  const newestTag = published[0]?.tag_name;
+  // "Latest" is the newest release that ships any installer, so a release with
+  // no installers at all doesn't mark every platform as a fallback.
+  const newestTag = published.find((r) =>
+    r.assets.some((a) => platformForAsset(a.name) !== null),
+  )?.tag_name;
   const result = Object.fromEntries(
     DESKTOP_PLATFORMS.map((p) => [p, { available: false }]),
   ) as DesktopDownloads;
@@ -94,47 +96,24 @@ export interface DownloadOption {
   label: string;
   download: DesktopDownload;
   recommended: boolean;
-  /** Shown on both Mac options when the chip is unknown. */
-  hint?: string;
 }
 
-export interface BuildDownloadOptionsInput {
-  downloads: DesktopDownloads;
-  os: DetectedOs;
-  /** Known only when the browser exposes it; undefined means "can't tell". */
-  macArch?: 'arm64' | 'x64';
-}
-
-const MAC_HINT = 'Apple menu → About This Mac shows your chip.';
-
-/**
- * Ordered download options: the recommended platform(s) first, then the rest in
- * a stable order. An unknown Mac chip recommends both Mac options with a hint
- * rather than guessing.
- */
+/** Ordered download options: the platform for this OS first, then the rest. */
 export function buildDownloadOptions({
   downloads,
   os,
-  macArch,
-}: BuildDownloadOptionsInput): DownloadOption[] {
-  const recommendedPlatforms: DesktopPlatform[] =
-    os === 'windows'
-      ? ['windows-x64']
-      : os === 'macos'
-        ? macArch === 'arm64'
-          ? ['macos-arm64']
-          : macArch === 'x64'
-            ? ['macos-x64']
-            : ['macos-arm64', 'macos-x64']
-        : [];
-  const bothMacs = os === 'macos' && !macArch;
+}: {
+  downloads: DesktopDownloads;
+  os: DetectedOs;
+}): DownloadOption[] {
+  const recommendedPlatform: DesktopPlatform | null =
+    os === 'windows' ? 'windows-x64' : os === 'macos' ? 'macos' : null;
 
   const options = DESKTOP_PLATFORMS.map<DownloadOption>((platform) => ({
     platform,
     label: DESKTOP_PLATFORM_LABELS[platform],
     download: downloads[platform],
-    recommended: recommendedPlatforms.includes(platform),
-    ...(bothMacs && platform.startsWith('macos') ? { hint: MAC_HINT } : {}),
+    recommended: platform === recommendedPlatform,
   }));
 
   return [...options.filter((o) => o.recommended), ...options.filter((o) => !o.recommended)];

@@ -14,12 +14,14 @@ const asset = (name: string, size = 1000) => ({
 const full = (v: string): GithubReleaseLike => ({
   tag_name: `v${v}`,
   assets: [
+    // The real asset set a release publishes (v1.6.0).
     asset(`PumpOS_${v}_x64-setup.exe`),
-    asset(`PumpOS_${v}_aarch64.dmg`),
-    asset(`PumpOS_${v}_x64.dmg`),
     asset(`PumpOS_${v}_x64-setup.exe.sig`),
+    asset(`PumpOS_${v}_universal.dmg`),
+    asset(`PumpOS_${v}_x64_en-US.msi`),
+    asset('PumpOS.app.tar.gz'),
+    asset('PumpOS.app.tar.gz.sig'),
     asset('latest.json'),
-    asset('PumpOS_aarch64.app.tar.gz'),
   ],
 });
 
@@ -27,9 +29,10 @@ describe('resolveDesktopDownloads', () => {
   it('uses the newest release when it has every installer', () => {
     const d = resolveDesktopDownloads([full('1.6.0'), full('1.5.0')]);
     expect(d['windows-x64']).toMatchObject({ available: true, version: '1.6.0', isLatest: true });
-    expect(d['macos-arm64']).toMatchObject({
+    expect(d.macos).toMatchObject({
+      available: true,
       version: '1.6.0',
-      url: 'https://dl/PumpOS_1.6.0_aarch64.dmg',
+      url: 'https://dl/PumpOS_1.6.0_universal.dmg',
     });
   });
 
@@ -40,7 +43,14 @@ describe('resolveDesktopDownloads', () => {
     };
     const d = resolveDesktopDownloads([winOnly, full('1.5.0')]);
     expect(d['windows-x64']).toMatchObject({ version: '1.6.0', isLatest: true });
-    expect(d['macos-arm64']).toMatchObject({ version: '1.5.0', isLatest: false });
+    expect(d.macos).toMatchObject({ version: '1.5.0', isLatest: false });
+  });
+
+  it('measures "latest" against the newest release that ships an installer', () => {
+    const noInstallers: GithubReleaseLike = { tag_name: 'v1.7.0', assets: [asset('latest.json')] };
+    const d = resolveDesktopDownloads([noInstallers, full('1.6.0')]);
+    expect(d['windows-x64']).toMatchObject({ version: '1.6.0', isLatest: true });
+    expect(d.macos).toMatchObject({ version: '1.6.0', isLatest: true });
   });
 
   it('reports not available when no release has the platform', () => {
@@ -48,7 +58,7 @@ describe('resolveDesktopDownloads', () => {
       tag_name: 'v1.6.0',
       assets: [asset('PumpOS_1.6.0_x64-setup.exe')],
     };
-    expect(resolveDesktopDownloads([winOnly])['macos-x64']).toEqual({ available: false });
+    expect(resolveDesktopDownloads([winOnly]).macos).toEqual({ available: false });
   });
 
   it('ignores drafts and prereleases', () => {
@@ -66,7 +76,8 @@ describe('resolveDesktopDownloads', () => {
       assets: [
         asset('PumpOS_1.6.0_x64-setup.exe.sig'),
         asset('latest.json'),
-        asset('PumpOS_aarch64.app.tar.gz'),
+        asset('PumpOS.app.tar.gz'),
+        asset('PumpOS_1.6.0_x64_en-US.msi'),
       ],
     };
     const d = resolveDesktopDownloads([only]);
@@ -89,25 +100,16 @@ describe('buildDownloadOptions', () => {
     expect(o[0]).toMatchObject({ platform: 'windows-x64', recommended: true });
     expect(o.filter((x) => x.recommended)).toHaveLength(1);
   });
-  it('recommends the known Mac arch only', () => {
-    const o = buildDownloadOptions({ downloads, os: 'macos', macArch: 'arm64' });
-    expect(o[0].platform).toBe('macos-arm64');
-    expect(o.filter((x) => x.recommended)).toHaveLength(1);
-  });
-  it('recommends both Macs with a hint when the chip is unknown', () => {
+  it('recommends the single universal macOS build for a Mac user', () => {
     const o = buildDownloadOptions({ downloads, os: 'macos' });
-    expect(o.filter((x) => x.recommended).map((x) => x.platform)).toEqual([
-      'macos-arm64',
-      'macos-x64',
-    ]);
-    expect(o[0].hint).toBeTruthy();
-    expect(o[2].hint).toBeUndefined();
+    expect(o[0]).toMatchObject({ platform: 'macos', label: 'macOS', recommended: true });
+    expect(o.filter((x) => x.recommended)).toHaveLength(1);
   });
   it('recommends nothing for Linux or unknown', () => {
     expect(buildDownloadOptions({ downloads, os: 'other' }).some((x) => x.recommended)).toBe(false);
   });
   it('keeps unavailable platforms in the list', () => {
     const d = resolveDesktopDownloads([]);
-    expect(buildDownloadOptions({ downloads: d, os: 'windows' })).toHaveLength(3);
+    expect(buildDownloadOptions({ downloads: d, os: 'windows' })).toHaveLength(2);
   });
 });

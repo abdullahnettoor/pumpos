@@ -34,8 +34,7 @@ beforeEach(() => {
   vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' });
   state.data = {
     'windows-x64': avail('1.6.0'),
-    'macos-arm64': avail('1.5.0', false),
-    'macos-x64': { available: false },
+    macos: avail('1.5.0', false),
   };
 });
 afterEach(() => {
@@ -52,10 +51,17 @@ describe('DesktopAppPanel', () => {
     expect(rows[0].textContent).toContain('Recommended');
   });
 
-  it('labels a fallback version and shows no link for a missing platform', () => {
+  it('labels a fallback version', () => {
     render(<DesktopAppPanel />);
-    expect(screen.getByTestId('desktop-option-macos-arm64').textContent).toContain('Version 1.5.0');
-    const missing = screen.getByTestId('desktop-option-macos-x64');
+    const mac = screen.getByTestId('desktop-option-macos').textContent;
+    expect(mac).toContain('Version 1.5.0');
+    expect(mac).toContain("newer releases don't include a macOS installer yet");
+  });
+
+  it('shows no link for a platform that has never shipped', () => {
+    state.data = { ...state.data!, macos: { available: false } };
+    render(<DesktopAppPanel />);
+    const missing = screen.getByTestId('desktop-option-macos');
     expect(missing.textContent).toContain('Not available yet');
     expect(missing.querySelector('button')).toBeNull();
   });

@@ -20,21 +20,27 @@ const OptionRow: React.FC<{ option: DownloadOption; onDownloaded?: () => void }>
       data-testid={`desktop-option-${option.platform}`}
     >
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
+        <span
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '13px',
+            fontWeight: 600,
+            color: 'var(--text-strong)',
+          }}
+        >
           {option.label}
           {option.recommended && (
-            <span style={{ marginLeft: 8 }}>
-              <Chip tone="success" size="xs">
-                Recommended
-              </Chip>
-            </span>
+            <Chip tone="success" size="xs">
+              Recommended
+            </Chip>
           )}
         </span>
         {d.available ? (
           <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
             Version {d.version} · {formatFileSize(d.sizeBytes)}
-            {!d.isLatest && ' · latest installer for this platform'}
-            {option.hint && ` · ${option.hint}`}
+            {!d.isLatest && ` · newer releases don't include a ${option.label} installer yet`}
           </span>
         ) : (
           <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
