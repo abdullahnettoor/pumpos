@@ -116,9 +116,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       return false;
     }
   });
-  const { skipped: skippedSteps, skip: skipStep, undoSkip: undoSkipStep } = useChecklistSkips(
-    selectedStation?.organizationId ?? 'no-organization',
-  );
+  const {
+    skipped: skippedSteps,
+    skip: skipStep,
+    undoSkip: undoSkipStep,
+  } = useChecklistSkips(selectedStation?.organizationId ?? 'no-organization');
   const dismissGettingStarted = () => {
     try {
       localStorage.setItem('pumpos_gs_dismissed', '1');
