@@ -16,7 +16,12 @@ import {
 } from '../../query/hooks.js';
 import { useStationAlerts } from '../../query/useStationAlerts.js';
 import { SkeletonGrid } from '../primitives/Skeleton.js';
-import { GettingStartedChecklist, type ChecklistStep } from './GettingStartedChecklist.js';
+import {
+  GettingStartedChecklist,
+  isStepComplete,
+  type ChecklistStep,
+} from './GettingStartedChecklist.js';
+import { useChecklistSkips } from './checklistStorage.js';
 import {
   KpiStrip,
   KpiTile,
@@ -61,6 +66,8 @@ interface DashboardOverviewProps {
   userName: string;
   onNavigate: (path: string, intent?: NavIntent) => void;
 }
+
+const OPTIONAL_STEP_IDS = ['team', 'suppliers', 'customers'];
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   selectedStation,
@@ -109,6 +116,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       return false;
     }
   });
+  const { skipped: skippedSteps, skip: skipStep, undoSkip: undoSkipStep } = useChecklistSkips();
   const dismissGettingStarted = () => {
     try {
       localStorage.setItem('pumpos_gs_dismissed', '1');
@@ -197,7 +205,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       actionLabel: 'Add',
       onAction: () => onNavigate('/customers', { open: 'new-customer' }),
     },
-  ];
+  ].map((step) =>
+    OPTIONAL_STEP_IDS.includes(step.id)
+      ? {
+          ...step,
+          skippable: true,
+          skipped: skippedSteps.includes(step.id),
+          onSkip: () => skipStep(step.id),
+          onUndoSkip: () => undoSkipStep(step.id),
+        }
+      : step,
+  );
 
   // No station yet OR a station that isn't operational → native getting-started
   // hero on the dashboard (home). Owner/Manager can act on it; other roles just
@@ -324,7 +342,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   // until the essentials are done or the user dismisses it. Reuses
   // `canManageOnboarding` rather than recomputing it — the checklist's primary
   // step routes into the wizard, so it is the same decision, not a similar one.
-  const showGettingStarted = canManageOnboarding && !gsDismissed && gsSteps.some((s) => !s.done);
+  const showGettingStarted =
+    canManageOnboarding && !gsDismissed && gsSteps.some((s) => !isStepComplete(s));
 
   // Business-day-aware "today so far" rollups (client-summed; timezone honoured).
   const stationSettings: any = (selectedStation as any).settings || {};
