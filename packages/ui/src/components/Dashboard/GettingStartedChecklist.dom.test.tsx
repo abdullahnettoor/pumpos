@@ -21,8 +21,8 @@ beforeEach(() => {
 
 const OPTIONAL = ['team', 'suppliers'];
 
-const Harness: React.FC = () => {
-  const { skipped, skip, undoSkip } = useChecklistSkips();
+const Harness: React.FC<{ org?: string }> = ({ org = 'org-a' }) => {
+  const { skipped, skip, undoSkip } = useChecklistSkips(org);
   const base: ChecklistStep[] = [
     {
       id: 'org',
@@ -97,5 +97,14 @@ describe('GettingStartedChecklist skipping', () => {
     render(<Harness />);
     expect(screen.getByText('2 of 4 done')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Undo skip' })).toBeTruthy();
+  });
+
+  it('keeps skips separate per Organization', () => {
+    const { unmount } = render(<Harness org="org-a" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skip Team' }));
+    unmount();
+    render(<Harness org="org-b" />);
+    expect(screen.getByText('1 of 4 done')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Skip Team' })).toBeTruthy();
   });
 });
