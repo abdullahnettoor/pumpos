@@ -1,0 +1,70 @@
+---
+import Section from '../ds/Section.astro';
+import SectionHeading from '../ds/SectionHeading.astro';
+import Card from '../ds/Card.astro';
+import { leaks, dayClose } from '../../data/home';
+---
+<Section id="how" class="h-leaks" aria-labelledby="leaks-title" data-leaks>
+  <div class="h-lk-wrap">
+    <div class="h-lk-head">
+      <SectionHeading eyebrow="Where a pump loses money" title="Three leaks. Each one found the same day." id="leaks-title" />
+      <p>Not a monthly surprise. A number, a nozzle and a name, before you lock the office.</p>
+    </div>
+    <div class="h-deck-wrap">
+      <ol class="h-deck">
+        {leaks.map((l, i) => (
+          <li style={`--i:${i}`}>
+            <Card as="article" class="h-leak">
+              <span class="h-k">0{i + 1} · {l.kicker}</span>
+              <h3>{l.title}</h3>
+              <p>{l.body}</p>
+              <div class={`ds-chip ds-chip--${l.tone}`}>
+                <small>{l.who} · {l.sub}</small>
+                <strong>{l.value}</strong>
+                <details class="h-work" open><summary>See the working</summary><dl class="h-bd">{l.rows.map(([a, b]) => <div><dt>{a}</dt><dd>{b}</dd></div>)}</dl></details>
+              </div>
+              <small class="h-lf">{l.foot}</small>
+            </Card>
+          </li>
+        ))}
+        <li style="--i:3">
+          <Card as="article" tone="dark" class="h-leak h-final">
+            <span class="h-k">PumpOS · Day close</span>
+            <h3>One day. One saved report.</h3>
+            <p>Readings, handovers, tank dips and fleet credit close together into the day's DSR. Nothing is recalculated later.</p>
+            <ul class="h-res">{dayClose.map(([a, b, s, kind]) => <li><div>{a}<span>{b}</span></div><em class:list={{ 'is-var': kind === 'variance' }}>{s}</em></li>)}</ul>
+          </Card>
+        </li>
+      </ol>
+    </div>
+  </div>
+  <div class="h-lk-spacer" aria-hidden="true"></div>
+</Section>
+
+<script>
+  // Cards pin below the sticky heading and share the tallest card's height. The heading's
+  // container ends where the last card unpins, so heading and cards scroll away together.
+  document.querySelectorAll<HTMLElement>('[data-leaks]').forEach((sec) => {
+    const head = sec.querySelector<HTMLElement>('.h-lk-head')!;
+    const cards = [...sec.querySelectorAll<HTMLElement>('.h-leak')];
+    const lastLi = sec.querySelector<HTMLElement>('.h-deck > li:last-child')!;
+    const deckWrap = sec.querySelector<HTMLElement>('.h-deck-wrap')!;
+    const spacer = sec.querySelector<HTMLElement>('.h-lk-spacer')!;
+    const fit = () => {
+      const top = parseFloat(getComputedStyle(head).top) || 0;
+      sec.style.setProperty('--hh', `${top + head.offsetHeight}px`);
+      cards.forEach((c) => (c.style.minHeight = ''));
+      const h = Math.max(...cards.map((c) => c.offsetHeight));
+      cards.forEach((c) => (c.style.minHeight = `${h}px`));
+      const lift = (parseFloat(getComputedStyle(lastLi).top) || 0) - (top + head.offsetHeight) + h;
+      deckWrap.style.marginBottom = `${-lift}px`;
+      spacer.style.height = `${lift}px`;
+    };
+    // Phones start with the working folded away to keep the stack short; desktop shows it.
+    if (matchMedia('(max-width: 900px)').matches) sec.querySelectorAll<HTMLDetailsElement>('.h-work').forEach((d) => (d.open = false));
+    sec.querySelectorAll('.h-work').forEach((d) => d.addEventListener('toggle', fit));
+    addEventListener('resize', fit);
+    document.fonts?.ready.then(fit);
+    fit();
+  });
+</script>

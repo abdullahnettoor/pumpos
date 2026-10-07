@@ -464,16 +464,17 @@ describe('HandoverDrawer', () => {
     });
   });
 
-  // #304: most handovers have no drop, so the field hides behind a toggle.
-  describe('cash drops toggle', () => {
-    const toggle = () => screen.getByLabelText('Had cash drops') as HTMLInputElement;
+  // #304/#324: most handovers have no drop, so the field hides behind "+ Add cash drop".
+  describe('cash drops row', () => {
+    const addButton = () => screen.queryByRole('button', { name: /Add cash drop/ });
+    const removeButton = () => screen.getByRole('button', { name: 'Remove cash drop' });
 
-    it('hides the drops field on a new handover until the toggle is on', () => {
+    it('hides the drops field on a new handover until "Add cash drop" is clicked', () => {
       renderWithProviders(<HandoverDrawer {...baseProps()} />);
-      expect(toggle().checked).toBe(false);
       expect(input('cashDrops')).toBeNull();
-      fireEvent.click(toggle());
+      fireEvent.click(addButton()!);
       expect(input('cashDrops')).not.toBeNull();
+      expect(addButton()).toBeNull();
     });
 
     it('starts open showing the drops of an edited handover that had them', async () => {
@@ -482,21 +483,21 @@ describe('HandoverDrawer', () => {
           {...baseProps({ existingHandover: { cashHandedOver: '4000', cashDrops: '1000' } })}
         />,
       );
-      expect(toggle().checked).toBe(true);
+      expect(addButton()).toBeNull();
       await waitFor(() => expect(input('cashDrops').value).toBe('1000'));
     });
 
-    it('zeroes the drops when turned off, and the variance follows', async () => {
+    it('zeroes the drops when removed, and the variance follows', async () => {
       renderWithProviders(<HandoverDrawer {...baseProps()} />);
       setReading(NOZZLE_A, '1050'); // expects ₹5,000
       setField('cashHandedOver', '4000');
-      fireEvent.click(toggle());
+      fireEvent.click(addButton()!);
       setField('cashDrops', '1000'); // 4,000 + 1,000 dropped = balanced
       await waitFor(() => expect(screen.getByText(/Balanced/)).toBeDefined());
-      fireEvent.click(toggle());
+      fireEvent.click(removeButton());
       expect(input('cashDrops')).toBeNull();
       await waitFor(() => expect(screen.getByText(/Shortage/)).toBeDefined());
-      fireEvent.click(toggle());
+      fireEvent.click(addButton()!);
       expect(input('cashDrops').value).toBe('');
     });
   });

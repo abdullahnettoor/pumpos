@@ -940,6 +940,10 @@ select:disabled {
   max-width: 620px;
 }
 
+.drawer-container--xwide {
+  max-width: min(920px, 92vw);
+}
+
 @keyframes drawerFadeIn {
   to {
     opacity: 1;

@@ -1,0 +1,51 @@
+---
+interface LineItem {
+  label: string;
+  value: string;
+}
+
+interface Props {
+  eyebrow?: string;
+  amount?: string;
+  status?: string;
+  items?: LineItem[];
+  class?: string;
+  [key: string]: unknown;
+}
+
+const defaultItems: LineItem[] = [
+  { label: 'From', value: 'Malabar Transports' },
+  { label: 'Method', value: 'Bank transfer' },
+  { label: 'Into', value: 'Station bank account' },
+  { label: 'Drawer cash', value: 'Not touched' },
+  { label: 'Due after', value: '₹27,500' },
+];
+
+const {
+  eyebrow = 'Collection · 03 Oct · Entry date',
+  amount = '₹15,000',
+  status,
+  items = defaultItems,
+  class: className = '',
+  ...rest
+} = Astro.props;
+---
+<div class:list={['ds-card ds-rcpt', className]} role="region" aria-label={`${eyebrow} preview`} {...rest}>
+  {status ? (
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span class="ds-ey">{eyebrow}</span>
+      <span class="ds-st">{status}</span>
+    </div>
+  ) : (
+    <small class="ds-mut">{eyebrow}</small>
+  )}
+  <strong>{amount}</strong>
+  <dl class="ds-bd">
+    {items.map((it) => (
+      <div>
+        <dt>{it.label}</dt>
+        <dd>{it.value}</dd>
+      </div>
+    ))}
+  </dl>
+</div>

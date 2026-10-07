@@ -8,7 +8,8 @@ export interface DrawerProps {
   title: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  widthVariant?: 'default' | 'wide';
+  /** `xwide` fits an editor beside a preview (e.g. report templates). */
+  widthVariant?: 'default' | 'wide' | 'xwide';
 }
 
 // Tracks the stack of currently-open drawers so that pressing Escape only
@@ -51,7 +52,7 @@ export const Drawer: React.FC<DrawerProps> = ({
 
       {/* Drawer Canvas */}
       <div
-        className={`drawer-container${widthVariant === 'wide' ? ' drawer-container--wide' : ''}`}
+        className={`drawer-container${widthVariant === 'default' ? '' : ` drawer-container--${widthVariant}`}`}
       >
         {/* Header */}
         <div className="drawer-header">

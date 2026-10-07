@@ -1,0 +1,74 @@
+/* PumpOS Design System Tokens (global)
+   Extracted from the homepage design system for site-wide use. */
+
+:root {
+  /* Brand & Neutrals */
+  --ds-primary: #1f6a53;
+  --ds-primary-hover: #185743;
+  --ds-deep: #0f2a21;
+  --ds-ink: #18201a;
+  --ds-canvas: #f6f7f4;
+  --ds-line: #d9ded6;
+  --ds-muted: #5e6a61;
+  --ds-alt: #eef0ec;
+
+  /* Semantic / States */
+  --ds-amber: #b7811e;
+  --ds-amber-ink: #8f6414;
+  --ds-danger: #b44a3f;
+  --ds-wa: #168a4a;
+
+  /* Soft Fills */
+  --ds-primary-soft: #e5f0eb;
+  --ds-danger-soft: #f7e7e4;
+  --ds-amber-soft: #f6eedb;
+
+  /* Dark Theme Accents (on deep) */
+  --ds-mint: #8fd1b4;
+  --ds-mint-ink: #b9cdc4;
+
+  /* Typography */
+  --ds-font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --ds-font-mono: 'Geist Mono', monospace;
+
+  /* Type Scale */
+  --ds-text-hero: clamp(48px, 6.4vw, 92px);
+  --ds-text-h2: clamp(34px, 4vw, 52px);
+  --ds-text-h3: clamp(22px, 2.2vw, 32px);
+  --ds-text-lead: 17px;
+  --ds-text-body: 15px;
+  --ds-text-eyebrow: 13px;
+  --ds-text-small: 12px;
+
+  /* Spacing */
+  --ds-section-py: 112px;
+  --ds-section-py-mobile: 64px;
+  --ds-page-px: 32px;
+  --ds-page-px-mobile: 20px;
+  --ds-container-w: min(1248px, 100%);
+
+  /* Radii */
+  --ds-radius-sm: 10px;
+  --ds-radius-md: 14px;
+  --ds-radius-lg: 20px;
+  --ds-radius-xl: 28px;
+  --ds-radius-pill: 999px;
+
+  /* Aliases for backwards compatibility with h- styles */
+  --h-primary: var(--ds-primary);
+  --h-deep: var(--ds-deep);
+  --h-ink: var(--ds-ink);
+  --h-canvas: var(--ds-canvas);
+  --h-line: var(--ds-line);
+  --h-muted: var(--ds-muted);
+  --h-alt: var(--ds-alt);
+  --h-amber: var(--ds-amber);
+  --h-amber-ink: var(--ds-amber-ink);
+  --h-danger: var(--ds-danger);
+  --h-danger-soft: var(--ds-danger-soft);
+  --h-amber-soft: var(--ds-amber-soft);
+  --h-primary-soft: var(--ds-primary-soft);
+  --h-mint: var(--ds-mint);
+  --h-mint-ink: var(--ds-mint-ink);
+  --h-wa: var(--ds-wa);
+}

@@ -1,0 +1,62 @@
+---
+interface Entry {
+  date: string;
+  desc: string;
+  amount: string;
+  bal: string;
+  isCredit?: boolean;
+}
+
+interface Props {
+  customer?: string;
+  category?: string;
+  outstanding?: string;
+  entries?: Entry[];
+  note?: string;
+  class?: string;
+  [key: string]: unknown;
+}
+
+const defaultEntries: Entry[] = [
+  { date: '28 Sep', desc: 'Credit sale · HSD 120 L', amount: '+ ₹11,400', bal: '₹31,100' },
+  { date: '01 Oct', desc: 'Credit sale · HSD 120 L', amount: '+ ₹11,400', bal: '₹42,500' },
+  { date: '04 Oct', desc: 'Payment received · NEFT', amount: '− ₹15,000', bal: '₹27,500', isCredit: true },
+];
+
+const {
+  customer = 'Malabar Transports',
+  category = 'Fleet · Credit limit ₹75,000',
+  outstanding = '₹27,500',
+  entries = defaultEntries,
+  note = 'Customer ledger statement with running balance. Sample data.',
+  class: className = '',
+  ...rest
+} = Astro.props;
+---
+<div class:list={['ds-card ds-stmt', className]} role="region" aria-label={`Customer statement preview for ${customer}`} {...rest}>
+  <div class="ds-st-h">
+    <div>
+      <b>{customer}</b>
+      <small>{category}</small>
+    </div>
+    <div style="text-align:right">
+      <small>Outstanding</small>
+      <strong>{outstanding}</strong>
+    </div>
+  </div>
+  <div class="ds-tr ds-tr--th">
+    <span>Date</span>
+    <span>Entry</span>
+    <span>Amount</span>
+    <span>Balance</span>
+  </div>
+  {entries.map((e) => (
+    <div class:list={['ds-tr', e.isCredit ? 'ds-tr--last' : '']}>
+      <span>{e.date}</span>
+      <span>{e.desc}</span>
+      <span>{e.amount}</span>
+      <span>{e.bal}</span>
+    </div>
+  ))}
+  <p class="ds-st-f">{note}</p>
+</div>

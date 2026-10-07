@@ -8,12 +8,13 @@
  */
 import React, { useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Banner, Button, Checkbox, DataTable, PageLayout, TextInput } from '@pump/ui';
+import { Banner, Button, Checkbox, DataTable, PageLayout, Select, TextInput } from '@pump/ui';
 import { useOwners } from '../api/queries.js';
 import type { ApiTarget } from '../api/targets.js';
 import type { OwnerRow } from '../api/types.js';
 import { OrganizationDrawer } from '../components/OrganizationDrawer.js';
 import { InviteOwnerDrawer } from '../components/InviteOwnerDrawer.js';
+import { CreateDemoDrawer } from '../components/CreateDemoDrawer.js';
 
 export interface OrganizationsScreenProps {
   target: ApiTarget;
@@ -26,24 +27,38 @@ const STATUS_TONE: Record<string, string> = {
   unlinked: 'var(--state-warning-fg)',
 };
 
+function expiryLabel(value: string | null): string {
+  if (!value) return 'no expiry';
+  const remaining = Date.parse(value) - Date.now();
+  if (remaining <= 0) return 'expired';
+  const hours = Math.floor(remaining / 3_600_000);
+  const days = Math.floor(hours / 24);
+  return days ? `expires in ${days}d ${hours % 24}h` : `expires in ${hours}h`;
+}
+
 export const OrganizationsScreen: React.FC<OrganizationsScreenProps> = ({ target }) => {
   const [includeRevoked, setIncludeRevoked] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
+  const [creatingDemo, setCreatingDemo] = useState(false);
+  const [demoFilter, setDemoFilter] = useState('all');
 
   const owners = useOwners(target, includeRevoked, true);
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return owners.data;
-    return owners.data?.filter(
+    const filtered = owners.data?.filter(
+      (row) => demoFilter === 'all' || row.isDemo === (demoFilter === 'demo'),
+    );
+    if (!term) return filtered;
+    return filtered?.filter(
       (row) =>
         row.organizationName.toLowerCase().includes(term) ||
         (row.owner?.email ?? '').toLowerCase().includes(term) ||
         row.organizationId.startsWith(term),
     );
-  }, [owners.data, search]);
+  }, [owners.data, search, demoFilter]);
 
   // The selected row is read back out of the list so it follows an
   // invalidation; holding the row object would freeze it at click time.
@@ -57,6 +72,11 @@ export const OrganizationsScreen: React.FC<OrganizationsScreenProps> = ({ target
         cell: ({ row }) => (
           <div>
             <div style={{ fontWeight: 500 }}>{row.original.organizationName}</div>
+            {row.original.isDemo && (
+              <div style={{ color: 'var(--state-warning-fg)', fontSize: '11px' }}>
+                Demo · {expiryLabel(row.original.demoExpiresAt)}
+              </div>
+            )}
             <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
               {row.original.owner?.email ?? 'no owner'}
             </div>
@@ -97,7 +117,16 @@ export const OrganizationsScreen: React.FC<OrganizationsScreenProps> = ({ target
       <PageLayout
         title="Organizations"
         subtitle={`Platform back-office — ${target.label}`}
-        actions={<Button onClick={() => setInviting(true)}>Invite owner</Button>}
+        actions={
+          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+            {!target.production && (
+              <Button variant="secondary" onClick={() => setCreatingDemo(true)}>
+                Create demo station
+              </Button>
+            )}
+            <Button onClick={() => setInviting(true)}>Invite owner</Button>
+          </div>
+        }
         toolbar={
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
             <TextInput
@@ -106,6 +135,15 @@ export const OrganizationsScreen: React.FC<OrganizationsScreenProps> = ({ target
               placeholder="Filter by name, owner email or id"
               style={{ width: 320 }}
             />
+            <Select
+              value={demoFilter}
+              onChange={(e) => setDemoFilter(e.target.value)}
+              aria-label="Filter organization type"
+            >
+              <option value="all">All organizations</option>
+              <option value="demo">Demo</option>
+              <option value="real">Real</option>
+            </Select>
             <Checkbox
               checked={includeRevoked}
               onChange={(e) => setIncludeRevoked(e.target.checked)}
@@ -132,6 +170,7 @@ export const OrganizationsScreen: React.FC<OrganizationsScreenProps> = ({ target
 
       <OrganizationDrawer target={target} row={selected} onClose={() => setSelectedId(null)} />
       {inviting && <InviteOwnerDrawer target={target} onClose={() => setInviting(false)} />}
+      {creatingDemo && <CreateDemoDrawer target={target} onClose={() => setCreatingDemo(false)} />}
     </>
   );
 };

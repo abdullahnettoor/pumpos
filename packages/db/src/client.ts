@@ -2,7 +2,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema.js';
 
-export function createDb(connectionString: string) {
+export function createDb(connectionString: string): DrizzleDb {
   const queryClient = postgres(connectionString, {
     // ONE connection per request-scoped client (#155): every additional
     // connection pays a full Postgres auth handshake — SCRAM-SHA-256 runs
@@ -27,7 +27,7 @@ export function createDb(connectionString: string) {
 export function createDbWithOptions(
   connectionString: string,
   options?: { prepare?: boolean; max?: number },
-) {
+): DrizzleDb {
   const queryClient = postgres(connectionString, {
     prepare: options?.prepare,
     max: options?.max ?? 1,
@@ -38,5 +38,9 @@ export function createDbWithOptions(
   return drizzle(queryClient, { schema });
 }
 
-export type DbClient = ReturnType<typeof createDb>;
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+export type DrizzleDb = PostgresJsDatabase<typeof schema>;
+export type DbClient = DrizzleDb;
+export type DbTransaction = Parameters<Parameters<DbClient['transaction']>[0]>[0];
+export type DbExecutor = DbClient | DbTransaction;
 export * as schema from './schema.js';

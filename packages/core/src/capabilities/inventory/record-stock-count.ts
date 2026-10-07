@@ -173,6 +173,8 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     const now = ctx.clock.now().toISOString();
     const variance: StockVariance = {
       id: ctx.ids.newId(),
+      organizationId: ctx.organizationId,
+      stationId: cmd.stationId,
       shiftId: cmd.shiftId ?? null,
       businessDayId: bd.id,
       productId,

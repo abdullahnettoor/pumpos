@@ -26,6 +26,8 @@ export const organizations = pgTable('organizations', {
   // plain varchar so a deploy can add a plan without a schema migration.
   subscriptionPlan: varchar('subscription_plan', { length: 50 }).default('CORE').notNull(),
   subscriptionStatus: varchar('subscription_status', { length: 50 }).default('ACTIVE').notNull(),
+  isDemo: boolean('is_demo').default(false).notNull(),
+  demoExpiresAt: timestamp('demo_expires_at', { withTimezone: true }),
   /** Instant access is paid through. Null means no dated grace. */
   accessUntil: timestamp('access_until', { withTimezone: true }),
   /**
@@ -672,6 +674,12 @@ export const stockMovements = pgTable('stock_movements', {
 
 export const stockVariances = pgTable('stock_variances', {
   id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id')
+    .references(() => organizations.id)
+    .notNull(),
+  stationId: uuid('station_id')
+    .references(() => stations.id)
+    .notNull(),
   // Nullable: a dip/physical count is a business-day reconciliation, not a
   // shift-bound event. shift_id is set only for shift-scoped variance capture.
   shiftId: uuid('shift_id').references(() => shifts.id),

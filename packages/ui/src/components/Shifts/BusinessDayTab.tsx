@@ -62,9 +62,10 @@ const money: React.CSSProperties = { fontFamily: 'var(--font-mono)', color: 'var
 
 /**
  * Business Day cockpit. The Shifts page is shift-centric; this tab
- * surfaces the *business-day* layer — the universal anchor — so day-level
- * activity is visible even when no shift is open. Composed live from the DSSR
- * preview (all closed shifts + day-level credit, purchases and gross margin),
+ * surfaces the forecourt sales-day layer so activity is visible even when no
+ * shift is open. Office Records use Entry Date and appear in the Daily Cash
+ * Book instead. Composed live from the DSSR preview (closed shifts + sales,
+ * purchases and stock),
  * without writing a snapshot.
  * Owner/Manager closure generates the immutable DSSR snapshot and locks the
  * selected day. A day can close when it has no open Shift.
@@ -399,7 +400,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
               <DateText value={businessDate} tone="strong" icon={false} />
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Business day · the universal anchor for all records
+              Business Day · forecourt sales and stock
             </div>
           </div>
         </div>

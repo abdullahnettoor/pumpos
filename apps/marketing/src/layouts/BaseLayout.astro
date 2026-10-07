@@ -1,12 +1,12 @@
 ---
-import BrandMark from '../components/marketing-preview/BrandMark.astro';
-import { CONSOLE_URL } from '../config';
+import SiteHeader from '../components/layout/SiteHeader.astro';
+import SiteFooter from '../components/layout/SiteFooter.astro';
+import '../styles/tokens.css';
 import '../styles/site.css';
 interface Props { title: string; description?: string; path?: string; green?: boolean; noindex?: boolean; article?: boolean; }
 const { title, description = 'Fuel station management for Indian owners. Inspect customer dues, collections, stock and Shift reports with PumpOS.', path = '/', green = false, noindex = false, article = false } = Astro.props;
 const canonical = new URL(path, Astro.site).toString();
 const ogImage = new URL('/og-default.png', Astro.site).toString();
-const nav = [{ href: '/product', label: 'Product' }, { href: '/docs', label: 'Docs' }, { href: '/blog', label: 'Journal' }, { href: '/download', label: 'Download' }];
 ---
 <!doctype html>
 <html lang="en-IN">
@@ -17,9 +17,8 @@ const nav = [{ href: '/product', label: 'Product' }, { href: '/docs', label: 'Do
     {noindex && <meta name="robots" content="noindex, follow" />}
     <link rel="icon" type="image/svg+xml" href="/brand/pumpos-mark.svg" />
     <link rel="canonical" href={canonical} />
-    <link rel="preload" href="/fonts/brand/public-sans-variable.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/brand/barlow-semi-condensed-600.woff2" as="font" type="font/woff2" crossorigin />
-    <meta property="og:type" content={article ? 'article' : 'website'} /><meta property="og:title" content={title} /><meta property="og:description" content={description} /><meta property="og:url" content={canonical} /><meta property="og:image" content={ogImage} /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" /><meta property="og:image:alt" content="PumpOS. Your station. Your numbers. No waiting." /><meta property="og:site_name" content="PumpOS" /><meta property="og:locale" content="en_IN" />
+    <link rel="preload" href="/fonts/brand/plus-jakarta-sans-variable.woff2" as="font" type="font/woff2" crossorigin />
+    <meta property="og:type" content={article ? 'article' : 'website'} /><meta property="og:title" content={title} /><meta property="og:description" content={description} /><meta property="og:url" content={canonical} /><meta property="og:image" content={ogImage} /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" /><meta property="og:image:alt" content="PumpOS. Find the shortage today, not next month. First 3 months free for pilot stations." /><meta property="og:site_name" content="PumpOS" /><meta property="og:locale" content="en_IN" />
     <meta name="twitter:card" content="summary_large_image" /><meta name="twitter:title" content={title} /><meta name="twitter:description" content={description} /><meta name="twitter:image" content={ogImage} />
     <link rel="alternate" type="application/rss+xml" title="PumpOS Journal" href="/rss.xml" />
     <meta name="generator" content={Astro.generator} />
@@ -27,11 +26,9 @@ const nav = [{ href: '/product', label: 'Product' }, { href: '/docs', label: 'Do
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
-    <header class:list={['site-top', { 'site-top--green': green }]}>
-      <div class="site-top-inner"><a class="brand-wordmark" href="/" aria-label="PumpOS home"><BrandMark /><span>Pump<span class="brand-os">OS</span></span></a><nav class="desktop-nav" aria-label="Main navigation">{nav.map(item => <a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}>{item.label}</a>)}</nav><div class="header-actions"><a class="console-link" href={CONSOLE_URL}>Sign in ↗</a><a class="nav-demo" href="/demo">Book a demo <span aria-hidden="true">↗</span></a><details class="mobile-menu"><summary aria-label="Open navigation"><span></span><span></span></summary><nav aria-label="Mobile navigation">{nav.map(item => <a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}>{item.label}</a>)}<a href={CONSOLE_URL}>Sign in ↗</a></nav></details></div></div>
-    </header>
+    <SiteHeader path={path} tone={green ? 'dark' : 'light'} />
     <main id="main"><slot /></main>
-    <footer class="site-footer"><div class="footer-main"><div><a class="brand-wordmark" href="/" aria-label="PumpOS home"><BrandMark /><span>Pump<span class="brand-os">OS</span></span></a><p>The operating system<br />for fuel retail.</p><a class="footer-contact" href="mailto:hello@pumpos.app">hello@pumpos.app ↗</a></div><nav aria-label="Footer product links"><h2>PumpOS</h2><a href="/product">Explore the product</a><a href="/demo">Book a guided demo</a><a href="/#pilot">Pilot & pricing</a><a href="/download">Download</a></nav><nav aria-label="Footer resources"><h2>Resources</h2><a href="/docs">Documentation</a><a href="/blog">Journal</a><a href={CONSOLE_URL}>Web console ↗</a></nav><div class="footer-note"><span>Built for Indian fuel stations.</span><p>From the first Nozzle Reading<br />to the day's final report.</p></div></div><div class="footer-bottom"><span>© {new Date().getFullYear()} PumpOS</span><div><a href="/legal/privacy">Privacy</a><a href="/legal/terms">Terms</a><a href="#main">Back to top ↑</a></div></div></footer>
+    <SiteFooter />
     <script>
       import { initialiseSiteMotion } from '../scripts/site-motion';
       initialiseSiteMotion();

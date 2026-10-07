@@ -1,5 +1,8 @@
 # Phase A — Auth, Owner Onboarding & Team Management
 
+> **Historical implementation plan.** The baseline and status below are snapshots;
+> current auth behavior is defined by code, `AGENTS.md`, ADR 0004, and open GitHub Issues.
+
 **Goal:** turn today's manual "create the user in Supabase by hand" process into two
 first-class, self-serve flows:
 
@@ -12,8 +15,10 @@ first-class, self-serve flows:
 This phase deliberately keeps PumpOS **invite-only** (no open self-signup) because there
 is no plan/billing gating yet.
 
-> Related: `AGENTS.md` (Authorization Rules, Multi-Tenancy), `phase-MB-mobile-owner.md`
-> (light user writes), Permissions & Authorization Matrix (`docs/initial`).
+> Related: `AGENTS.md` (Authorization Rules, Multi-Tenancy),
+> `phase-MB-mobile-owner.md` (mobile workflows), and ADR 0004
+> (`docs/adr/0004-organization-access-control.md`). The old v1 permissions
+> matrix is archived and is not current authorization guidance.
 
 ---
 

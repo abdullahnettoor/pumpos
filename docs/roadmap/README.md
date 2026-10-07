@@ -1,46 +1,37 @@
-# PumpOS Roadmap
+# PumpOS Roadmap Archive and Phase Index
 
-Detailed implementation plans for the post-MVP phases. Each phase is independently
-shippable and extends existing domain entities (per `AGENTS.md`) rather than redesigning core.
+These files preserve phase plans and design context. Their status text can lag the
+code: **GitHub Issues are the source of truth for current task status**, and code,
+configuration, `AGENTS.md`, `CONTEXT.md`, and accepted ADRs are authoritative for
+shipped behavior. Verify a phase's remaining work before acting on it.
 
-## Phase index
+## Phase documents
 
-| Phase                               | Theme                                                                       | Status                                                      | Depends on               |
-| ----------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------ |
-| [L](phase-L-ledger.md)              | Ledger / money visibility                                                   | ✅ Done                                                     | R (PDF export reuse)     |
-| [U](phase-U-ui-uplift.md)           | UI uplift & consistency                                                     | ✅ Done                                                     | —                        |
-| [F](phase-F-financials.md)          | Financials — money accounts + P&L/COGS + Other Income + CMS/OMC             | 🟡 Mostly done (only FG1 GL deferred)                       | L                        |
-| [R](phase-R-reports-pdf.md)         | Reports & PDF hardening                                                     | 🟡 Mostly done (R4 server PDF pending)                      | —                        |
-| [P](phase-P-performance.md)         | Performance & caching                                                       | 🟡 Mostly done                                              | —                        |
-| [T](phase-T-tax.md)                 | Product tax restructure & GST invoicing                                     | ✅ Done (columns folded into `0000_baseline`)               | R, L                     |
-| [U2](phase-U2-fuel-units.md)        | Unit-aware fuels (kg / L, e.g. CNG)                                         | 🟡 Mostly done (QA pass pending)                            | —                        |
-| [M](phase-M-multisite.md)           | Multi-site topology (marketing + console + mobile)                          | 🟡 Code done; deploy/ops remain                             | —                        |
-| [MB](phase-MB-mobile-owner.md)      | Mobile owner app (owner-first PWA)                                          | 🟡 Partial (attendant handover done)                        | M, R (R4), F, L          |
-| [D](phase-D-data-pagination.md)     | Data access & pagination                                                    | ⬜ Planned (not started)                                    | P (complementary)        |
-| [A](phase-A-auth-users.md)          | Auth, owner onboarding & team management (email/phone + owner-set password) | 🟡 Mostly done (A0–A4 shipped; config verification pending) | —                        |
-| [O](phase-O-offline-sync.md)        | Resilience & sync (Level 2, desktop)                                        | ⬜ Foundations only (idempotency + outbox)                  | —                        |
-| [HR](phase-HR-historical-replay.md) | Historical replay, selective apply & manual day close                       | ⬜ Proposed for review                                      | Core lifecycle hardening |
-| [X](phase-X-expansion.md)           | Expansion modules                                                           | ⬜ Future (X4 prepaid/OMC partly seeded)                    | core stable              |
+The phase documents are design and implementation history, grouped by theme. Their
+status labels, suggested sequences, and “remaining” checklists are not current project
+status. Before taking work from one, check the linked/current GitHub Issues and verify
+the relevant code/configuration.
 
-Recently shipped (this line supersedes the old sequence): **Customer Sales** in the
-handover (Credit / Fleet / Regular receivables + inline customer/vehicle create),
-customer **settlement cycle** (EOD/OPEN) with an EOD-due dashboard chip + day-close
-warning, and the **OMC fleet-card → CMS** flow (new `CMS` money account, OMC sales
-posting money-in to CMS with per-line traceability, supplier pay-from-CMS), plus
-mobile handover parity and per-line idempotency keys. These span Phase F/L and seed X4.
-
-## Suggested sequence
-
-**Done:** L, U, and the bulk of F (FA money accounts → FB P&L/COGS → FI Other Income →
-CMS/OMC), P, T, M, U2. **Remaining priority order:** F finish (Void UI for
-Expenses/Income, FI4 GST-on-income) → R4 (server-side PDF) → D (pagination) →
-MB owner cockpit → O (offline). X is future.
-Phase M's remaining work is deployment/ops (Cloudflare domains, Supabase Auth URLs,
-icons), independent of the domain-model phases.
+| Phase | Theme                                  | Document                                                       |
+| ----- | -------------------------------------- | -------------------------------------------------------------- |
+| L     | Ledger / money visibility              | [phase-L-ledger.md](phase-L-ledger.md)                         |
+| U     | UI consistency                         | [phase-U-ui-uplift.md](phase-U-ui-uplift.md)                   |
+| F     | Financial accounts, P&L, COGS, OMC/CMS | [phase-F-financials.md](phase-F-financials.md)                 |
+| R     | Reports and PDF                        | [phase-R-reports-pdf.md](phase-R-reports-pdf.md)               |
+| P     | Performance and caching                | [phase-P-performance.md](phase-P-performance.md)               |
+| T     | Tax and GST                            | [phase-T-tax.md](phase-T-tax.md)                               |
+| U2    | Unit-aware fuels                       | [phase-U2-fuel-units.md](phase-U2-fuel-units.md)               |
+| M     | Marketing, console, mobile topology    | [phase-M-multisite.md](phase-M-multisite.md)                   |
+| MB    | Mobile workflows                       | [phase-MB-mobile-owner.md](phase-MB-mobile-owner.md)           |
+| D     | Data pagination                        | [phase-D-data-pagination.md](phase-D-data-pagination.md)       |
+| A     | Authentication and team                | [phase-A-auth-users.md](phase-A-auth-users.md)                 |
+| O     | Resilience and sync                    | [phase-O-offline-sync.md](phase-O-offline-sync.md)             |
+| HR    | Historical replay                      | [phase-HR-historical-replay.md](phase-HR-historical-replay.md) |
+| X     | Expansion                              | [phase-X-expansion.md](phase-X-expansion.md)                   |
 
 ## Principles
 
-- `business_day_id` universal anchor; `shift_id` only when cash drawer involved.
+- Forecourt Sales use Business Day + Shift; Office Records use Entry Date; purchases are Business-Day stock events (ADR 0005).
 - Snapshots immutable; reports derive from snapshots/events/operational records.
 - Multi-tenant: every table has `organization_id`, RLS mandatory.
 - Extend entities; never duplicate validation; UI: list → drawer → edit.

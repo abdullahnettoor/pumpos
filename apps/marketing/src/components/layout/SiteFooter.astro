@@ -1,0 +1,48 @@
+---
+import BrandMark from '../marketing-preview/BrandMark.astro';
+import { WHATSAPP_URL, LINKEDIN_URL } from '../../config';
+// Compact footer for now. Switch to a column footer once Docs, Journal and the
+// learning sections have more pages. Legal name, address and GSTIN go in here
+// once available.
+const links = [
+  ['Product', '/product'],
+  ['Pricing', '/pricing'],
+  ['Docs', '/docs'],
+  ['Journal', '/blog'],
+  ['Day-closing guide', '/blog/day-closing-and-dsr-guide'],
+  ['Privacy', '/legal/privacy'],
+  ['Terms', '/legal/terms'],
+];
+const icons = {
+  wa: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+  li: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.34V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>',
+  mail: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="m22 7-10 6L2 7" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
+};
+---
+<footer class="sf">
+  <div class="sf-in">
+    <a class="sf-brand" href="/" aria-label="PumpOS home"><BrandMark /><span>PumpOS</span></a>
+    <nav aria-label="Footer">{links.map(([t, u]) => <a href={u}>{t}</a>)}</nav>
+    <div class="sf-social">
+      <a href={WHATSAPP_URL} target="_blank" rel="noopener" aria-label="WhatsApp PumpOS"><Fragment set:html={icons.wa} /></a>
+      <a href={LINKEDIN_URL} target="_blank" rel="noopener" aria-label="PumpOS on LinkedIn"><Fragment set:html={icons.li} /></a>
+      <a href="mailto:hello@pumpos.app" aria-label="Email hello@pumpos.app"><Fragment set:html={icons.mail} /></a>
+    </div>
+    <span class="sf-copy">© {new Date().getFullYear()} PumpOS</span>
+  </div>
+</footer>
+
+<style>
+  .sf { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; background: #f6f7f4; color: #18201a; }
+  .sf-in { width: min(1248px, 100%); margin-inline: auto; padding: 28px 32px; display: flex; align-items: center; gap: 28px; flex-wrap: wrap; border-top: 1px solid #d9ded6; }
+  .sf-brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; letter-spacing: -.02em; }
+  .sf-brand :global(svg) { height: 26px; width: auto; color: #1f6a53; }
+  nav { display: flex; gap: 20px; flex: 1; flex-wrap: wrap; color: #5e6a61; }
+  nav a:hover { color: #18201a; }
+  .sf-social { display: flex; gap: 8px; }
+  .sf-social a { width: 36px; height: 36px; border-radius: 10px; border: 1px solid #d9ded6; display: grid; place-items: center; background: #fff; }
+  .sf-social a:hover { border-color: #1f6a53; color: #1f6a53; }
+  .sf-social :global(svg) { width: 17px; height: 17px; }
+  .sf-copy { color: #5e6a61; font-size: 13px; }
+  @media (max-width: 900px) { .sf-in { flex-direction: column; align-items: flex-start; gap: 18px; padding: 28px 20px; } }
+</style>

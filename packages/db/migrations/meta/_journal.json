@@ -15,6 +15,34 @@
       "when": 1790222393636,
       "tag": "0001_rls_and_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791194390079,
+      "tag": "0002_common_wildside",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791271100237,
+      "tag": "0003_flashy_santa_claus",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791271108641,
+      "tag": "0004_backfill_stock_variance_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791271115513,
+      "tag": "0005_worried_havok",
+      "breakpoints": true
     }
   ]
 }

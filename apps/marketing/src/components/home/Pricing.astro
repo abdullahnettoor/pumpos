@@ -1,0 +1,18 @@
+---
+import Section from '../ds/Section.astro';
+import SectionHeading from '../ds/SectionHeading.astro';
+import PricingTable from '../ui/PricingTable.astro';
+import { plans, planFeatures, PRICING_KEY_ROWS } from '../../data/home';
+import { DEMO_PATH, WA_URL } from './links';
+const withLinks = plans.map((p) => ({ ...p, href: p.level === 'scale' ? WA_URL : DEMO_PATH }));
+---
+<Section id="pricing" class="h-pricing" style="padding-top:0" aria-labelledby="pricing-title">
+  <SectionHeading
+    eyebrow="Pricing"
+    title="One price per station. Every attendant included."
+    lead="Logins are counted, not people. Add every attendant, even without a phone."
+    id="pricing-title"
+  />
+  <p class="h-pilot"><b>Pilot station offer</b> Your first 3 months are free on any plan.</p>
+  <PricingTable plans={withLinks} features={planFeatures} levels={['core', 'pro', 'scale']} defaultPlan="pro" popularLabel="Recommended" note="Prices are per station and exclude GST." yearlyBadge="2 months free" visibleRows={PRICING_KEY_ROWS} />
+</Section>

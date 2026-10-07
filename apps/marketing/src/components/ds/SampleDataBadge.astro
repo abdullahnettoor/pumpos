@@ -1,0 +1,8 @@
+---
+interface Props {
+  class?: string;
+}
+
+const { class: className = '' } = Astro.props;
+---
+<span class:list={['ds-sample-tag', className]}>Sample data</span>

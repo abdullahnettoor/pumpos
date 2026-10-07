@@ -36,13 +36,13 @@ const DISABLED: DesktopUpdates = {
 /**
  * Wire the update coordinator to React for the desktop shell.
  *
- * `shellReady` is the gate: the automatic check fires once the authenticated
- * shell is on screen, never during boot. Update infrastructure must not be able
- * to delay or break a station's morning start-up, so nothing here is awaited on
- * the render path and every failure lands in the coordinator's `failed` state
- * rather than in an exception.
+ * The automatic check fires once, as soon as the updater is available, whether
+ * or not anyone is signed in (#328): a build that can no longer sign in must
+ * still be able to update itself. It runs in the background and is never
+ * awaited on the render path, so it cannot delay or break a station's start-up;
+ * it stays silent unless it finds an update (#327).
  */
-export function useDesktopUpdates(shellReady: boolean): DesktopUpdates {
+export function useDesktopUpdates(): DesktopUpdates {
   const [coordinator, setCoordinator] = useState<DesktopUpdateCoordinator | null>(null);
   const enabled = useMemo(
     () =>
@@ -75,10 +75,10 @@ export function useDesktopUpdates(shellReady: boolean): DesktopUpdates {
 
   const startedRef = useRef(false);
   useEffect(() => {
-    if (!coordinator || !shellReady || startedRef.current) return;
+    if (!coordinator || startedRef.current) return;
     startedRef.current = true;
-    void coordinator.checkOnceAfterShellReady();
-  }, [coordinator, shellReady]);
+    void coordinator.checkOnceAtStartup();
+  }, [coordinator]);
 
   const state = useCoordinatorState(coordinator);
 

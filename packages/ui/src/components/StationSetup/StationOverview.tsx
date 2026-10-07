@@ -14,7 +14,6 @@ import { LoadingSpinner } from '../LoadingSpinner.js';
 import { PageHeader, Panel, Button, EmptyState, Chip, Form } from '../../pump-ds/index.js';
 import { Building2 } from 'lucide-react';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
-import { ReportConfigPanel } from './ReportConfigPanel.js';
 import { useRunTask } from '../../utils/runTask.js';
 
 const stationService = new CloudStationService();
@@ -50,14 +49,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
   const [editing, setEditing] = useState(false);
   const [editingBusiness, setEditingBusiness] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    | 'general'
-    | 'business'
-    | 'reports'
-    | 'products'
-    | 'tanks'
-    | 'dispensers'
-    | 'terminals'
-    | 'shifts'
+    'general' | 'business' | 'products' | 'tanks' | 'dispensers' | 'terminals' | 'shifts'
   >('general');
 
   // General tab form states
@@ -185,7 +177,6 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
             tabs={[
               { id: 'general', label: 'General Info' },
               { id: 'business', label: 'Business & Branding' },
-              { id: 'reports', label: 'Reports' },
               { id: 'products', label: 'Products Catalog' },
               { id: 'tanks', label: 'Storage Tanks' },
               { id: 'dispensers', label: 'Dispenser Units' },
@@ -604,8 +595,8 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
 
                     <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        Report paper size and which sections appear on each PDF are configured in
-                        the <strong>Reports</strong> tab.
+                        Report paper size and which sections print on each report are set in{' '}
+                        <strong>Reports → Templates</strong>.
                       </span>
                     </div>
 
@@ -790,16 +781,6 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                   </div>
                 )}
               </div>
-            )}
-
-            {activeTab === 'reports' && (
-              <ReportConfigPanel
-                selectedStation={selectedStation}
-                onSaved={(updated) => {
-                  onStationSelected(updated);
-                  runTask(loadStations(), 'Could not refresh the station list.');
-                }}
-              />
             )}
 
             {activeTab === 'products' && <ProductsCatalog selectedStation={selectedStation} />}

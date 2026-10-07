@@ -1,5 +1,9 @@
 # Phase O — Resilience & Sync (Desktop)
 
+> **Planning record, not implementation status.** The product requirements are
+> in `AGENTS.md`; this plan is incomplete. Client durable write queue/replay has
+> not shipped. GitHub Issues are the live work tracker.
+
 **Target: Level 2 — online-primary, graceful degradation.** The app is used mostly
 online; a connectivity drop must never block the operator, and queued work
 reconciles when the network returns. This is **not** cold-start offline-first and
@@ -23,9 +27,10 @@ Desktop bundles the built assets locally (`frontendDist`), so the UI, code, and
 fonts already cold-start offline — only data/API calls need the network. This is
 the desktop reliability differentiator over the pure web app.
 
-## Foundations present
+## Server foundations present (not a client write queue)
 
-- Event-driven core; transactional outbox (`events`); `idempotency_keys`; UUID ids; `SyncIndicator` component.
+- Event-driven core; transactional outbox (`events`); `idempotency_keys`; UUID ids.
+- Connectivity indicators observe `navigator.onLine`; they do not prove a write is queued or synchronized.
 
 ## O1 — Durable write outbox (highest ROI, do first)
 
@@ -54,7 +59,7 @@ the desktop reliability differentiator over the pure web app.
 ## O4 — UX (never block)
 
 - Online/offline + pending count (extend `SyncIndicator`). Core actions — including
-  **business-day / shift close** — must **queue and reconcile**, never be blocked on
+  **Business Day / Shift close** — must **queue and reconcile**, never be blocked on
   the network. Show honest sync state (online / pending N / failed) + retry/backoff.
 
 ## Expansion — Level 3 (future, gated behind real demand)

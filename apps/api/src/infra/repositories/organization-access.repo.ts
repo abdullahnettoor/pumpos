@@ -14,6 +14,9 @@ import type {
 import { isLimitKey } from '@pump/core';
 import type { LimitKey, ProductPlanKey, SubscriptionStatus } from '@pump/shared';
 
+/** Limit value used for demo Organizations, which are not metered. */
+const DEMO_UNLIMITED = 1_000_000;
+
 type GrantRow = typeof schema.organizationCapabilityGrants.$inferSelect;
 type OverrideRow = typeof schema.organizationLimitOverrides.$inferSelect;
 
@@ -65,6 +68,7 @@ export class DrizzleOrganizationAccessReader implements OrganizationAccessReader
         subscriptionStatus: schema.organizations.subscriptionStatus,
         accessUntil: schema.organizations.accessUntil,
         suspendedAt: schema.organizations.suspendedAt,
+        isDemo: schema.organizations.isDemo,
       })
       .from(schema.organizations)
       .where(eq(schema.organizations.id, organizationId));
@@ -104,10 +108,19 @@ export class DrizzleOrganizationAccessReader implements OrganizationAccessReader
       if (isLimitKey(override.limitKey)) limitOverrides[override.limitKey] = override.value;
     }
 
+    // Demo Organizations skip billing and Limits (#368): they are always read
+    // as ACTIVE with no paid-through date, and every Limit is lifted. Suspension
+    // still applies, so the demo expiry job can cut access.
+    if (organization?.isDemo) {
+      limitOverrides.station_count = DEMO_UNLIMITED;
+    }
+
     return {
       plan: organization?.subscriptionPlan ?? null,
-      subscriptionStatus: organization?.subscriptionStatus ?? null,
-      accessUntil: organization?.accessUntil?.toISOString() ?? null,
+      subscriptionStatus: organization?.isDemo
+        ? 'ACTIVE'
+        : (organization?.subscriptionStatus ?? null),
+      accessUntil: organization?.isDemo ? null : (organization?.accessUntil?.toISOString() ?? null),
       suspendedAt: organization?.suspendedAt?.toISOString() ?? null,
       grantedCapabilities: grants.map((grant) => grant.capabilityKey),
       limitOverrides,

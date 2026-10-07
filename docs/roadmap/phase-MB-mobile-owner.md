@@ -1,5 +1,9 @@
 # Phase MB — Mobile owner app (owner-first PWA)
 
+> **Historical phase plan.** This document contains older product scope and status
+> notes. Current mobile role support and workflows must be verified in `apps/mobile`
+> and current GitHub Issues before being treated as requirements.
+
 **Status:** 🟡 Partial. The read-only owner MVP (Home / Shifts / DSSR / Ledger /
 More + role gating) exists, and the **attendant track (MB8) is largely done** — the
 mobile `HandoverPanel` now has full **Customer Sales + OMC fleet-card** parity with

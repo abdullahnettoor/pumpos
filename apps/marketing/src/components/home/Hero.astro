@@ -1,0 +1,26 @@
+---
+import { DEMO_PATH } from './links';
+import HeroBg from './HeroBg.astro';
+import Button from '../ds/Button.astro';
+import DsrCard from '../ds/DsrCard.astro';
+const ticks = ['Shortage named per DU', 'Day report saved, never changed', 'Every change logged with a name'];
+---
+<section class="h-hero">
+  <HeroBg />
+  <div class="ds-w h-hero-in">
+    <div class="h-hero-copy">
+      <p class="ds-ey">For pump owners and dealers</p>
+      <h1>Find the shortage today, not next month.</h1>
+      <p class="h-hero-lede">PumpOS reconciles nozzle readings, cash and dues at day closing. One DSR, your day report.</p>
+      <div class="h-hero-ctas">
+        <Button variant="primary" href={DEMO_PATH}>
+          Book a guided demo
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10" /></svg>
+        </Button>
+        <Button variant="secondary" href="#how">See how it works</Button>
+      </div>
+      <ul class="h-ticks">{ticks.map((t) => <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>{t}</li>)}</ul>
+    </div>
+    <DsrCard class="h-hero-card" />
+  </div>
+</section>

@@ -1,0 +1,15 @@
+---
+import Section from '../ds/Section.astro';
+import SectionHeading from '../ds/SectionHeading.astro';
+import { dayline } from '../../data/home';
+---
+<Section tone="dark" aria-labelledby="roles-title">
+  <SectionHeading
+    tone="dark"
+    eyebrow="Who uses it"
+    title="One record. Each person sees their part of it."
+    lead="Roles decide who can do what. Nobody edits a closed day, and every change is logged with a name."
+    id="roles-title"
+  />
+  <ol class="h-dayline">{dayline.map(([time, role, title, body]) => <li><time>{time}</time><small>{role}</small><h3>{title}</h3><p>{body}</p></li>)}</ol>
+</Section>

@@ -446,6 +446,8 @@ describe('RecordStockCount', () => {
       varianceQuantity: '25',
       reason: 'Delivery meter difference',
       shiftId: null,
+      organizationId: 'org-1',
+      stationId: 'st-1',
     });
     expect(movements.rows[0]).toMatchObject({ quantity: '25', notes: 'Delivery meter difference' });
   });

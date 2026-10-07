@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { schema, type DbClient } from '@pump/db';
+import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type {
   Expense,
   ExpenseRepository,
@@ -27,7 +27,7 @@ function toExpense(r: typeof schema.expenses.$inferSelect): Expense {
 }
 
 export class DrizzleExpenseRepository implements ExpenseRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   async findById(id: string): Promise<Expense | null> {
     const [r] = await this.db
       .select()
@@ -100,7 +100,7 @@ function toIncome(r: typeof schema.otherIncome.$inferSelect): OtherIncome {
 }
 
 export class DrizzleIncomeRepository implements IncomeRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
   async findById(id: string): Promise<OtherIncome | null> {
     const [r] = await this.db
       .select()

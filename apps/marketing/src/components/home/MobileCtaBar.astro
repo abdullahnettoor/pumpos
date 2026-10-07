@@ -1,0 +1,27 @@
+---
+// Phone-only bar with the two ways to start. Appears after the hero, hides again once
+// the closing offer (which has the same buttons) is reached.
+import Button from '../ds/Button.astro';
+import { DEMO_PATH, WA_URL } from './links';
+---
+<div class="h-mbar" data-mbar aria-hidden="true">
+  <Button variant="primary" href={DEMO_PATH} tabindex="-1">Book a demo</Button>
+  <Button variant="wa" href={WA_URL} target="_blank" rel="noopener" tabindex="-1">WhatsApp</Button>
+</div>
+
+<script>
+  const bar = document.querySelector<HTMLElement>('[data-mbar]');
+  const hero = document.querySelector('.h-hero');
+  const offer = document.querySelector('.h-offer');
+  if (bar && hero) {
+    let pastHero = false, offerOn = false;
+    const update = () => {
+      const show = pastHero && !offerOn;
+      bar.classList.toggle('is-on', show);
+      bar.setAttribute('aria-hidden', String(!show));
+      bar.querySelectorAll('a').forEach((a) => (a.tabIndex = show ? 0 : -1));
+    };
+    new IntersectionObserver(([e]) => { pastHero = !e.isIntersecting && e.boundingClientRect.top < 0; update(); }).observe(hero);
+    if (offer) new IntersectionObserver(([e]) => { offerOn = e.isIntersecting || e.boundingClientRect.top < 0; update(); }).observe(offer);
+  }
+</script>

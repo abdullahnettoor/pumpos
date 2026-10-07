@@ -1,6 +1,6 @@
 import { InProcessEventDispatcher, consoleLogger } from '@pump/core';
 import type { DomainEvent, EventStore } from '@pump/core';
-import { schema, type DbClient } from '@pump/db';
+import { schema, type DbClient, type DbExecutor } from '@pump/db';
 
 /**
  * Persists domain events to the canonical append-only `events` table. In a
@@ -8,7 +8,7 @@ import { schema, type DbClient } from '@pump/db';
  * insertion commit or roll back together.
  */
 export class DrizzleEventStore implements EventStore {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
 
   async append(events: ReadonlyArray<DomainEvent>): Promise<void> {
     if (events.length === 0) return;

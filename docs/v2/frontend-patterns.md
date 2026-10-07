@@ -1,18 +1,17 @@
-# Frontend Patterns (`apps/web` + `packages/ui`)
+# Frontend Patterns (`apps/console` + `packages/ui`)
 
-The web app is a Vite + React 18 shell. All reusable UI lives in `@pump/ui`; the app
-shells (`apps/web`, `apps/desktop`) are thin. **Web-first:** build and iterate on
-`apps/web`; the desktop Tauri wrapper consumes the same `@pump/ui` (see
-[desktop-patterns.md](desktop-patterns.md)).
+The operational console is a Vite + React shell. Reusable UI lives in `@pump/ui`;
+the console and desktop shells share it, with desktop-only native integrations
+kept behind platform seams (see [desktop-patterns.md](desktop-patterns.md)).
 
 ## Stack
 
 React · TypeScript · Vite · TanStack Query · TanStack Table · React Hook Form · Zod ·
 lucide-react · Supabase JS. Tauri for desktop.
 
-> `apps/web` consumes `@pump/ui` as its **built `dist`** (no vite src alias). After
+> `apps/console` consumes `@pump/ui` as its **built `dist`** (no Vite src alias). After
 > editing `@pump/ui`/`@pump/shared`/`@pump/core`, run `npx tsc -b` **and restart
-> `dev:web`**.
+> the console dev server**.
 
 ## Layout
 

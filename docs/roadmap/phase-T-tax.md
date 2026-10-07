@@ -1,6 +1,9 @@
 # Phase T — Product Tax Restructure & GST Invoicing
 
-**Status:** T1–T5 done. Tax-split columns live in `0000_baseline` (**re-apply the baseline / reset the DB before use**). **Depends on:** R (PDF kit), L (ledger) helpful but not required.
+> **Historical phase plan.** Tax work was recorded as implemented when this plan
+> was last updated. Do not reset/reapply the baseline based on this note; follow
+> `packages/db/README.md` and the current migration workflow. Check code and GitHub
+> Issues for any remaining work.
 
 **Goal:** Model Indian fuel-retail taxation correctly and enable **B2B GST tax invoices** with CGST/SGST/IGST line splits, while keeping fuel (VAT, outside GST) distinct from merchandise/lubes (GST).
 

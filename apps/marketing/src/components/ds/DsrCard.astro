@@ -1,0 +1,72 @@
+---
+import Pill from './Pill.astro';
+
+interface Row {
+  label: string;
+  value: string;
+  isTotal?: boolean;
+}
+
+interface Props {
+  title?: string;
+  station?: string;
+  date?: string;
+  rows?: Row[];
+  shortageLabel?: string;
+  shortageSubtext?: string;
+  shortageAmount?: string;
+  avatar?: string;
+  ariaLabel?: string;
+  class?: string;
+  [key: string]: unknown;
+}
+
+const defaultRows: Row[] = [
+  { label: 'Fuel by nozzle readings', value: '₹4,38,920' },
+  { label: 'Lubes & products', value: '₹6,240' },
+  { label: 'Credit sales (khata)', value: '− ₹38,500' },
+  { label: 'Card + UPI', value: '− ₹1,92,410' },
+  { label: 'Cash expected', value: '₹2,14,250', isTotal: true },
+];
+
+const {
+  title = 'Day closing · DSR',
+  station = 'Abne Fuels',
+  date = '04 Oct 2026',
+  rows = defaultRows,
+  shortageLabel = 'Short at DU-2 · Anitha S',
+  shortageSubtext = 'Declared ₹1,21,100 against ₹1,21,450',
+  shortageAmount = '−₹350',
+  avatar = 'AS',
+  ariaLabel = 'Sample day closing report showing cash expected of ₹2,14,250 and a ₹350 shortage at DU-2',
+  class: className = '',
+  ...rest
+} = Astro.props;
+---
+<div class:list={['ds-card ds-dsr', className]} role="img" aria-label={ariaLabel} {...rest}>
+  <div class="ds-dsr-h">
+    <div>
+      <b>{title}</b>
+      <small>{station} · {date}</small>
+    </div>
+    <Pill>Sample data</Pill>
+  </div>
+  <div class="ds-dsr-rows">
+    {rows.map((r) => (
+      <div>
+        <span class={r.isTotal ? '' : 'ds-mut'}>{r.label}</span>
+        <b>{r.value}</b>
+      </div>
+    ))}
+  </div>
+  {shortageAmount && (
+    <div class="ds-short">
+      <span class="ds-av">{avatar}</span>
+      <div>
+        <b>{shortageLabel}</b>
+        <small>{shortageSubtext}</small>
+      </div>
+      <strong>{shortageAmount}</strong>
+    </div>
+  )}
+</div>

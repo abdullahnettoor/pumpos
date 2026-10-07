@@ -1,0 +1,67 @@
+---
+import Section from '../ds/Section.astro';
+import SectionHeading from '../ds/SectionHeading.astro';
+import BentoGrid from '../ui/BentoGrid.astro';
+import BentoCard from '../ui/BentoCard.astro';
+import { comingNext } from '../../data/home';
+const svg = (d: string) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+// Paths from lucide (ISC): gauge, wallet, droplet, users, book, file-check.
+const icons = {
+  gauge: svg('<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>'),
+  wallet: svg('<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>'),
+  drop: svg('<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>'),
+  users: svg('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
+  book: svg('<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>'),
+  file: svg('<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/>'),
+};
+---
+<Section id="features" aria-labelledby="features-title">
+  <div class="h-fh">
+    <SectionHeading eyebrow="Everything in one place" title="The whole station, not just the shift." id="features-title" />
+    <a href="/product">Explore the product &rarr;</a>
+  </div>
+  <BentoGrid class="h-bento">
+    <BentoCard title="Shifts and nozzle readings" description="Fuel sales come from opening and closing readings, never typed-in totals." colSpan={2} href="/features/shifts-and-drawers">
+      <Fragment slot="icon" set:html={icons.gauge} />
+      <div class="h-bp-tbl">{[['N1 · MS', '48,210.4', '49,102.9', '892.5 L'], ['N2 · HSD', '71,880.0', '73,214.6', '1,334.6 L'], ['N3 · HSD', '22,104.2', '22,986.0', '881.8 L']].map((r) => <div>{r.map((c) => <span>{c}</span>)}</div>)}<small>Opening carried from last close · Sample data</small></div>
+    </BentoCard>
+    <BentoCard title="Drawers and handovers" description="Each attendant hands over their own DU. A shortage has a name." href="/features/shifts-and-drawers">
+      <Fragment slot="icon" set:html={icons.wallet} />
+      <div class="h-bp-big"><small>Anitha S · DU-2</small><strong class="h-neg">−₹350</strong><span>Declared ₹1,21,100 of ₹1,21,450</span></div>
+    </BentoCard>
+    <BentoCard title="Stock and dips" description="Expected stock against the dip, with the reason kept." href="/features/stock-and-dips">
+      <Fragment slot="icon" set:html={icons.drop} />
+      <div class="h-bp-tank"><div class="h-tk"><i style="height:71%"></i></div><div class="h-bp-big"><small>HSD Tank 2</small><strong class="h-amb">−18 L</strong><span>14,202 of 14,220 L</span></div></div>
+    </BentoCard>
+    <BentoCard title="Credit and khata" description="Credit sales by customer and vehicle, with a running balance." href="/features/credit-and-khata">
+      <Fragment slot="icon" set:html={icons.users} />
+      <div class="h-bp-big"><small>KSRTC Depot Aluva</small><strong>₹1,12,800</strong><div class="h-bar"><i style="width:94%"></i></div><span>94% of ₹1,20,000 limit</span></div>
+    </BentoCard>
+    <BentoCard title="Office books" description="Collections, expenses, income and supplier payments by entry date." href="/features/reports-and-dsr">
+      <Fragment slot="icon" set:html={icons.book} />
+      <div class="h-bp-list">{[['Collection · NEFT', '+ ₹30,000'], ['Supplier payment', '− ₹4,82,000'], ['Expense · Power', '− ₹18,400']].map(([a, b]) => <div><span>{a}</span><b>{b}</b></div>)}</div>
+    </BentoCard>
+    <BentoCard title="DSR, VAT and GST" description="Saved at day close, never recalculated. VAT on fuel, GST on lubes split by state." colSpan={2} tone="dark" href="/features/reports-and-dsr">
+      <Fragment slot="icon" set:html={icons.file} />
+      <div class="h-bp-dsr"><div><small>Day closing · 04 Oct</small><strong>₹2,14,250</strong><span>Cash expected</span></div><div class="h-saved">Saved · 22:41 by Owner</div></div>
+    </BentoCard>
+  </BentoGrid>
+  <div class="h-bento-dots" aria-hidden="true" data-bento-dots></div>
+  <div class="h-soon"><b id="soon-label">Coming next</b><ul aria-labelledby="soon-label">{comingNext.map((x) => <li>{x}</li>)}</ul></div>
+</Section>
+
+<script>
+  // Phones only: the bento is a swipe row (see home.css). Dots show which card is in view.
+  document.querySelectorAll<HTMLElement>('.h-bento').forEach((row) => {
+    const dots = row.parentElement?.querySelector<HTMLElement>('[data-bento-dots]');
+    if (!dots) return;
+    const cards = [...row.children] as HTMLElement[];
+    dots.innerHTML = cards.map(() => '<i></i>').join('');
+    const marks = [...dots.children] as HTMLElement[];
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.intersectionRatio > 0.6) marks.forEach((m, k) => m.classList.toggle('is-on', cards[k] === e.target)); });
+    }, { root: row, threshold: [0.6] });
+    cards.forEach((c) => io.observe(c));
+    marks[0]?.classList.add('is-on');
+  });
+</script>

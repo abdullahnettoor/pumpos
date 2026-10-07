@@ -10,26 +10,29 @@ web
 
 ## Users
 
-**Primary — Pump operators (desktop, Tauri shell).** Frontline staff running shifts at Indian fuel retail stations. On their feet, often under time pressure at shift change, entering nozzle readings, cash counts, expenses, and credit sales. They live inside a single active shift for hours at a time. Many are keyboard-first once trained. Network is unreliable; the app must keep working offline and reconcile later.
+**Primary — Station operators and Attendants (console and mobile).** Frontline staff running shifts at Indian fuel retail stations. They work under time pressure at shift change, entering nozzle readings, handovers, cash counts, expenses, and credit sales. The console runs on desktop; Attendants also have a mobile workflow. Connectivity is online-primary with a product target of graceful degradation during transient outages; durable local write queuing is still planned work.
 
-**Secondary — Station managers (desktop + web).** Review DSSR (Daily Station Sales Report), reconcile variances, manage products/customers/suppliers, chase outstanding receivables, run station setup. They alternate between review workflows and administrative tasks.
+**Secondary — Station managers and accountants (console + desktop).** Review Shift Summaries and DSSR (Daily Station Sales Report), reconcile variances, manage products/customers/suppliers, handle Office Records, and run station setup.
 
-**Tertiary — Owners (web, mobile view later).** Cross-station oversight: performance, exceptions, outstanding balances, monthly reports. Read-mostly, decision-oriented.
+**Tertiary — Owners (console and supported mobile views).** Review performance, exceptions, outstanding balances, and reports for the Stations their Organization can access. Read-oriented, decision-focused.
 
-The job to be done, in order of frequency: open/close shifts cleanly, record every rupee that moved (fuel, manual sales, expenses, purchases, collections, credit sales), see variance the moment it appears, and close the business day with a snapshot that will never lie later.
+The job to be done, in order of frequency: open/close shifts cleanly, record forecourt Sales and Office Records on their correct anchors, see variance when it appears, and close the Business Day with a snapshot that remains historically stable.
 
 ## Product Purpose
 
-PumpOS is the operating system for fuel retail. It replaces the spreadsheet + Tally + WhatsApp stack that most Indian fuel stations run today with a single, event-driven, multi-tenant platform anchored on the two truths of the business: the **business day** and the **shift**.
+PumpOS is the operating system for fuel retail. It replaces the spreadsheet + Tally + WhatsApp stack that most Indian fuel stations run today with a single, event-driven, multi-tenant platform grounded in the **Business Day**, **Shift**, and station-timezone **Entry Date** (ADR 0005).
 
 Success looks like:
 
 - An operator can open a shift, work through it, and close it with drawer reconciliation in under a minute of ceremony.
 - A manager can trust the DSSR the day after — and the year after — because snapshots are immutable and every number traces back to an auditable event.
-- An owner sees today's numbers across every station without asking anyone.
-- The system stays honest offline and reconciles without duplicates when the network returns.
+- An owner sees today's numbers across the Stations available to their Organization without waiting for a manual update.
+- During transient connectivity loss, the product reports connection/sync state honestly; the durable queue-and-replay behavior is a stated resilience target, not a claim of complete offline operation.
 
-This is explicitly **not** a POS, **not** a general accounting package, and **not** a marketing website. It is an operational instrument.
+The station-management product is explicitly **not** a POS and **not** a general
+accounting package. The public marketing website is an official PumpOS surface,
+maintained separately from the station-management applications in this repository.
+The operational product is an instrument for station work.
 
 ## Brand Personality
 

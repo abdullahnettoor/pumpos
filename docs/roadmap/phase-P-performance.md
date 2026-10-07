@@ -1,5 +1,10 @@
 # Phase P — Performance & Caching
 
+> **Historical phase plan.** TanStack Query tiers, persistence, and invalidation
+> are implemented. Treat the checklist below as original planning evidence; check
+> `docs/DATA-CACHING.md`, `packages/ui/src/query/`, and current GitHub Issues before
+> treating an item as open.
+
 **Goal:** make the app feel instant. Tier client caching by data volatility, lazy-load page
 sections, parallelize slow API routes, and measure everything. Low-risk, incremental.
 

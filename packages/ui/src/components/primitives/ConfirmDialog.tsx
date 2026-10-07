@@ -93,7 +93,8 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 1000,
+            // Above drawers (1001): a confirm is often asked from inside one.
+            zIndex: 1100,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

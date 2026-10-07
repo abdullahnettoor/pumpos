@@ -18,7 +18,12 @@ import { TaxRegisterPanel } from './reports/TaxRegisterPanel.js';
 import { ProfitLossView } from './reports/ProfitLossView.js';
 import { AttendantHandoverReportPanel } from './reports/AttendantHandoverReportPanel.js';
 import { useCapability } from '../access/CapabilityGate.js';
-import { ATTENDANT_REPORT_CAPABILITY, canViewAttendantReport } from '@pump/shared';
+import {
+  ATTENDANT_REPORT_CAPABILITY,
+  canManageReportTemplates,
+  canViewAttendantReport,
+} from '@pump/shared';
+import { ReportTemplatesPanel } from './reports/templates/ReportTemplatesPanel.js';
 import { inr } from '../utils/format.js';
 import { resolveBusinessDate } from '@pump/shared';
 import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText } from '../pump-ds/index.js';
@@ -33,6 +38,7 @@ import {
   Percent,
   Users,
   BookText,
+  LayoutTemplate,
 } from 'lucide-react';
 import { useRunTask } from '../utils/runTask.js';
 
@@ -101,7 +107,8 @@ type ReportsTab =
   | 'expense-register'
   | 'cash-bank'
   | 'cash-book'
-  | 'attendant-handovers';
+  | 'attendant-handovers'
+  | 'templates';
 
 export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStation, userRole }) => {
   const qc = useQueryClient();
@@ -123,6 +130,9 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
   const showAttendantReport =
     canViewAttendantReport(userRole) && attendantReport.status !== 'hidden';
   const { intent, token: intentToken } = useNavIntentEntry();
+  // Report layouts decide what prints for everyone, so only Owner and Manager
+  // may change them (#332). Others print with the saved layout.
+  const showTemplates = canManageReportTemplates(userRole);
   const activeTab: ReportsTab = intent?.openDssrDate ? 'daily-dssr' : selectedTab;
   const setActiveTab = (tab: ReportsTab) => {
     clearNavIntent();
@@ -262,6 +272,9 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
                   },
                 ]
               : []),
+            ...(showTemplates
+              ? [{ id: 'templates', label: 'Templates', icon: <LayoutTemplate size={13} /> }]
+              : []),
           ]}
         />
       }
@@ -371,6 +384,10 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
       )}
 
       {activeTab === 'cash-bank' && <CashBankLedger selectedStation={selectedStation} />}
+
+      {activeTab === 'templates' && showTemplates && (
+        <ReportTemplatesPanel selectedStation={selectedStation} />
+      )}
 
       {activeTab === 'attendant-handovers' && showAttendantReport && (
         <AttendantHandoverReportPanel selectedStation={selectedStation} />

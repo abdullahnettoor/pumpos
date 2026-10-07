@@ -56,6 +56,10 @@ export interface AppShellProps {
   updateLabel?: string;
   /** Clicked when the status-bar update chip is used. Desktop only. */
   onUpdate?: () => void;
+  /** Clicking the plain version runs a manual update check. Desktop only. */
+  onCheckUpdates?: () => void;
+  /** A manual check is running: the version reads "Checking…". */
+  checkingUpdates?: boolean;
 }
 
 /**
@@ -157,6 +161,8 @@ export const AppShell: React.FC<AppShellProps> = ({
   updateAvailableVersion,
   updateLabel,
   onUpdate,
+  onCheckUpdates,
+  checkingUpdates,
 }) => {
   // Sidebar expanded by default; the top-bar hamburger collapses it to an icon rail.
   const [collapsed, setCollapsed] = useState(false);
@@ -344,6 +350,8 @@ export const AppShell: React.FC<AppShellProps> = ({
           updateAvailableVersion={updateAvailableVersion}
           updateLabel={updateLabel}
           onUpdate={onUpdate}
+          onCheckUpdates={onCheckUpdates}
+          checkingUpdates={checkingUpdates}
         />
       </div>
     </div>

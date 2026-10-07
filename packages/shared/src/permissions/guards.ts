@@ -273,6 +273,15 @@ export function canExportReports(role: Role): boolean {
  * This is the Role axis only — the report is additionally gated on the
  * `reports.attendant` Product Capability, which the server checks first.
  */
+/**
+ * Report templates (#332): which sections each printed report shows and in
+ * what order. Owner and Manager only, so other staff can't change what prints;
+ * everyone who can print a report still prints it with the saved layout.
+ */
+export function canManageReportTemplates(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager';
+}
+
 export function canViewAttendantReport(role: Role): boolean {
   return role === 'Owner' || role === 'Manager' || role === 'Accountant';
 }

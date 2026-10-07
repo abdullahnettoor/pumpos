@@ -1,8 +1,48 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import Section from '../../components/ds/Section.astro';
+import Card from '../../components/ds/Card.astro';
+import Button from '../../components/ds/Button.astro';
 import BrandMark from '../../components/marketing-preview/BrandMark.astro';
 import { getCollection } from 'astro:content';
-const posts=(await getCollection('blog',({data})=>!data.draft)).sort((a,b)=>b.data.publishedAt.valueOf()-a.data.publishedAt.valueOf());
-const fmt=(d:Date)=>d.toLocaleDateString('en-IN',{year:'numeric',month:'short',day:'numeric',timeZone:'UTC'});
+import '../../styles/content-pages.css';
+
+const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),
+);
+const fmt = (date: Date) =>
+  date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
 ---
-<BaseLayout title="Journal | Notes on building PumpOS" description="Product notes and practical explanations of fuel station operations from PumpOS." path="/blog"><section class="page-heading site-container"><p class="section-context">The PumpOS journal</p><h1>Notes from the build.</h1><p>What we're building, why it works this way, and the station workflows behind it.</p></section><section class="journal-list site-container" aria-label="Journal articles">{posts.map(post=><article class="journal-entry"><a class="journal-art" href={`/blog/${post.id}`} aria-label={post.data.title}><p>Your station.<br />Your record.</p><BrandMark /></a><div class="journal-entry-content"><p class="article-meta"><time datetime={post.data.publishedAt.toISOString()}>{fmt(post.data.publishedAt)}</time> · Product notes</p><h2><a href={`/blog/${post.id}`}>{post.data.title}</a></h2><p>{post.data.description}</p><a class="inline-link" href={`/blog/${post.id}`}>Read the story <span aria-hidden="true">↗</span></a></div></article>)}{posts.length===0&&<p>Our first product notes will appear here.</p>}</section></BaseLayout>
+<BaseLayout title="Journal | Notes on building PumpOS" description="Product notes and practical explanations of fuel station operations from PumpOS." path="/blog">
+  <Section class="journal-section" aria-label="The PumpOS journal">
+    <div class="ds-w">
+      <header class="journal-intro">
+        <p class="ds-ey">The PumpOS journal</p>
+        <h1 class="ds-h1">Notes from the build.</h1>
+        <p class="ds-lead">What we're building, why it works this way, and the station workflows behind it.</p>
+      </header>
+      <div class="journal-list" aria-label="Journal articles">
+        {posts.map((post) => (
+          <Card as="article" class="journal-card journal-entry">
+            <a class="journal-art" href={`/blog/${post.id}`} aria-label={post.data.title}>
+              <p>Your station.<br />Your record.</p>
+              <BrandMark />
+            </a>
+            <div class="journal-entry-content">
+              <p class="article-meta">
+                <time datetime={post.data.publishedAt.toISOString()}>{fmt(post.data.publishedAt)}</time>
+                · Product notes
+              </p>
+              <h2><a href={`/blog/${post.id}`}>{post.data.title}</a></h2>
+              <p>{post.data.description}</p>
+              <Button href={`/blog/${post.id}`} variant="secondary">
+                Read the story <span aria-hidden="true">↗</span>
+              </Button>
+            </div>
+          </Card>
+        ))}
+        {posts.length === 0 && <Card class="journal-empty">Our first product notes will appear here.</Card>}
+      </div>
+    </div>
+  </Section>
+</BaseLayout>

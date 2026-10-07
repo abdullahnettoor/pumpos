@@ -1,0 +1,39 @@
+---
+interface Props {
+  title?: string;
+  customer?: string;
+  label?: string;
+  amount?: string;
+  actionText?: string;
+  class?: string;
+  [key: string]: unknown;
+}
+
+const {
+  title = 'PumpOS',
+  customer = 'Malabar Transports',
+  label = 'Owes you',
+  amount = '₹27,500',
+  actionText = 'Collect payment',
+  class: className = '',
+  ...rest
+} = Astro.props;
+---
+<div class:list={['ds-card ds-phone-wrap', className]} {...rest}>
+  <div class="ds-phone">
+    <slot>
+      <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; font-weight:700;">
+        <span>{title}</span>
+        <span class="ds-sample-tag">Sample data</span>
+      </div>
+      <div class="ds-r">
+        <div>
+          <strong style="display:block">{customer}</strong>
+          <small class="ds-mut">{label}</small>
+        </div>
+        <b style="font-size:18px; color:var(--ds-primary);">{amount}</b>
+      </div>
+      {actionText && <div class="ds-go">{actionText}</div>}
+    </slot>
+  </div>
+</div>

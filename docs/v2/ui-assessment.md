@@ -1,12 +1,13 @@
 # UI Assessment & Refactor Roadmap
 
-A living record of the frontend's state, the design-quality review, and the migration
-backlog. Updated as the v2 UI refactor proceeds.
+Historical assessment of the UI refactor. Its findings and migration checklist are
+not a live backlog; verify against the current implementation and GitHub Issues before
+acting on them.
 
 ## Design quality (vs the design system)
 
 **Foundation: strong.** Tokenized "Calm Industrial Precision" palette (Petrol Green /
-Diesel Blue / Amber / Red), IBM Plex Sans/Mono, 4px spacing grid, compact radii,
+Diesel Blue / Amber / Red), Plus Jakarta Sans / Geist Mono, 4px spacing grid, compact radii,
 light-first, drawers over modals, `StatusBadge`/`SyncIndicator` for state-forwardness.
 Genuinely aligned with the spec; avoids the "generic purple SaaS" trap.
 
@@ -73,4 +74,4 @@ shared data layer + primitives + utility classes.
 2. Wrap in `PageLayout`; render lists with `DataTable`.
 3. Move forms to RHF + Zod inside a `Drawer`.
 4. Swap inline styles for tokens/utility classes; cover loading/empty/error.
-5. `npx tsc -b` + `npm run build --workspace=apps/web`; restart `dev:web`; verify visually.
+5. `npx tsc -b` + `npm run build --workspace=apps/console`; restart the console dev server; verify visually.

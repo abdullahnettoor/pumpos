@@ -1,5 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm';
-import { schema, type DbClient } from '@pump/db';
+import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type {
   StockMovement,
   StockMovementRepository,
@@ -8,7 +8,7 @@ import type {
 } from '@pump/core';
 
 export class DrizzleStockMovementRepository implements StockMovementRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
 
   async save(m: StockMovement): Promise<void> {
     await this.db.insert(schema.stockMovements).values({
@@ -63,11 +63,13 @@ export class DrizzleStockMovementRepository implements StockMovementRepository {
 }
 
 export class DrizzleStockVarianceRepository implements StockVarianceRepository {
-  constructor(private readonly db: DbClient) {}
+  constructor(private readonly db: DbExecutor) {}
 
   async save(v: StockVariance): Promise<void> {
     await this.db.insert(schema.stockVariances).values({
       id: v.id,
+      organizationId: v.organizationId,
+      stationId: v.stationId,
       shiftId: v.shiftId,
       businessDayId: v.businessDayId,
       productId: v.productId,

@@ -1,0 +1,26 @@
+---
+// Real screens from the demo station (Abne Fuels), captured from the console and the
+// owner's phone view. All four share one 4:3 canvas so the panel never changes height.
+import { Image } from 'astro:assets';
+import ProgressTabs from './ProgressTabs.astro';
+import { creditSteps } from '../../data/home';
+import dues from '../../assets/screenshots/credit-1-dues.webp';
+import collection from '../../assets/screenshots/credit-2-collection.webp';
+import statement from '../../assets/screenshots/credit-3-statement.webp';
+import phone from '../../assets/screenshots/credit-4-phone.webp';
+
+const shots = [
+  { src: dues, alt: 'PumpOS customer registry showing each fleet customer with credit limit and amount outstanding.' },
+  { src: collection, alt: 'PumpOS collections list showing a ₹15,000 bank transfer from Malabar Transports recorded on its entry date.' },
+  { src: statement, alt: 'Malabar Transports account statement: a ₹20,000 credit sale, a ₹15,000 collection and ₹5,000 outstanding.' },
+  { src: phone, alt: 'PumpOS owner view on a phone showing Malabar Transports owing ₹5,000 with its latest payment and credit sale.' },
+];
+---
+<ProgressTabs id="credit" eyebrow="A closer look at customer credit" title="“Has that customer paid us yet?”" items={creditSteps}>
+  {shots.map((s, i) => (
+    <figure data-panel={i} class="h-shot">
+      <Image src={s.src} alt={s.alt} widths={[640, 960, 1280, 1600]} sizes="(max-width: 900px) 100vw, 645px" loading={i === 0 ? 'eager' : 'lazy'} />
+      <figcaption>Real screen · Sample data</figcaption>
+    </figure>
+  ))}
+</ProgressTabs>

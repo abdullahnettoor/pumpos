@@ -1,8 +1,425 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { DEMO_BOOKING_URL } from '../config';
+import Button from '../components/ds/Button.astro';
+import HeroBg from '../components/home/HeroBg.astro';
+import { DEMO_BOOKING_URL, WHATSAPP_URL, WHATSAPP_DISPLAY } from '../config';
+import '../styles/home.css';
+
+const stats = [
+  ['₹0', 'for your first 3 months, any plan'],
+  ['₹1,599', 'a month after on Pro, per station'],
+  ['1-on-1', 'setup of tanks, nozzles & opening balances'],
+  ['No hardware', 'Nothing for attendants to install'],
+];
 ---
-<BaseLayout title="Book a guided demo | PumpOS" description="Walk through your station's credit, collections and Shift close. Discuss the PumpOS pilot, onboarding and pricing with us." path="/demo">
- <section class="page-heading site-container"><p class="section-context">Let's talk about your station</p><h1>Bring the questions.<br />We'll open the record.</h1><p>A guided look at PumpOS, with room to discuss how your station works today.</p></section>
- <div class="demo-layout site-container"><ol class="demo-agenda"><li><span>1</span><div><h2>Start with your current workflow.</h2><p>Tell us how you track Shifts, customer credit and daily reporting. Registers, spreadsheets or existing software are all useful starting points.</p></div></li><li><span>2</span><div><h2>Follow the work in PumpOS.</h2><p>We'll look at customer dues, recorded collections and Shift reconciliation, including the owner's view.</p></div></li><li><span>3</span><div><h2>Discuss a practical pilot.</h2><p>Review setup, connectivity, onboarding and the price for your station before deciding on next steps.</p></div></li></ol><aside class="booking-panel"><h2>{DEMO_BOOKING_URL ? 'Choose a time to talk.' : 'Arrange your guided demo.'}</h2><p>{DEMO_BOOKING_URL ? 'Select a time on our booking page. A short description of your station will help us prepare.' : 'Email us your name, station name and a convenient time to talk. We will arrange the demo with you.'}</p><a class="button-light" href={DEMO_BOOKING_URL ?? 'mailto:hello@pumpos.app?subject=PumpOS%20guided%20demo&body=Name%3A%0AStation%20name%3A%0APreferred%20time%20to%20talk%3A%0A'}>{DEMO_BOOKING_URL ? 'Choose a demo time' : 'Email to arrange a demo'} <span aria-hidden="true">↗</span></a><p class="booking-help">No customer records or financial files needed. We use sample data for the walkthrough.</p><a href="/#walkthrough">Explore the product before we talk →</a></aside></div>
+<BaseLayout
+  title="Book a guided demo | PumpOS"
+  description="See how PumpOS reconciles nozzle readings, drawer cash, and customer credit at day closing. 1-on-1 walkthrough with sample station data."
+  path="/demo"
+  green
+>
+  <div class="home demo-page">
+    <!-- Top Hero with 3 Steps: What happens in the demo -->
+    <section class="h-hero d-hero">
+      <HeroBg />
+      <div class="ds-w d-hero-in">
+        <div class="d-hero-copy">
+          <p class="ds-ey">Book a guided demo</p>
+          <h1>Bring the questions.<br />We'll open the record.</h1>
+          <p class="d-hero-lede">A 20-minute guided walkthrough using sample station data. See how meter readings, attendant cash sales, and customer credit reconcile in PumpOS.</p>
+          <ul class="d-hero-ticks">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>One-on-one walkthrough</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Sample station data</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Zero commitment</li>
+          </ul>
+        </div>
+
+        <div class="d-steps-wrap" aria-labelledby="steps-heading">
+          <div class="d-steps-head">
+            <p class="ds-ey" id="steps-heading">What happens in the demo</p>
+          </div>
+          <ol class="d-steps">
+            <li class="d-step">
+              <div class="d-step-top">
+                <span class="d-step-num">01</span>
+                <span class="d-step-pill">Step 1</span>
+              </div>
+              <h3>We ask about your station</h3>
+              <p>Tell us how you track shifts, nozzles, and credit today. Registers, spreadsheets, or existing software — whatever you use right now.</p>
+            </li>
+            <li class="d-step">
+              <div class="d-step-top">
+                <span class="d-step-num">02</span>
+                <span class="d-step-pill">Step 2</span>
+              </div>
+              <h3>We show a shift close with sample numbers</h3>
+              <p>We walk through meter readings, drawer cash, card/UPI slips, and credit ledgers on realistic sample numbers so you see how shortages surface immediately.</p>
+            </li>
+            <li class="d-step">
+              <div class="d-step-top">
+                <span class="d-step-num">03</span>
+                <span class="d-step-pill">Step 3</span>
+              </div>
+              <h3>We set up your station with you</h3>
+              <p>We configure your tanks, nozzles, products, and opening balances together, so your team can run their first live shift with confidence.</p>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- Booking Form & WhatsApp Alternative -->
+    <section class="ds-sec d-booking-sec" id="book" aria-labelledby="form-heading">
+      <div class="ds-w">
+        <div class="d-booking-grid">
+          <!-- Form Card -->
+          <div class="ds-card d-form-card">
+            <h2 class="d-form-h2" id="form-heading">Request your walkthrough</h2>
+            <p class="d-form-lede">Share your station details below. We'll set up a walkthrough tailored to your pump configuration.</p>
+
+            <form
+              id="demo-booking-form"
+              class="d-form"
+              action={DEMO_BOOKING_URL ?? 'mailto:hello@pumpos.app'}
+              method="GET"
+            >
+              <div class="d-field">
+                <label for="demo-name">Your name <span class="d-req" aria-hidden="true">*</span></label>
+                <input
+                  type="text"
+                  id="demo-name"
+                  name="name"
+                  required
+                  placeholder="e.g. Ramesh Patel"
+                  autocomplete="name"
+                />
+              </div>
+
+              <div class="d-field">
+                <label for="demo-station">Station name & town <span class="d-req" aria-hidden="true">*</span></label>
+                <input
+                  type="text"
+                  id="demo-station"
+                  name="station"
+                  required
+                  placeholder="e.g. National Fuels, Pune"
+                  autocomplete="organization"
+                />
+              </div>
+
+              <div class="d-field">
+                <label for="demo-phone">Phone number (WhatsApp) <span class="d-req" aria-hidden="true">*</span></label>
+                <input
+                  type="tel"
+                  id="demo-phone"
+                  name="phone"
+                  required
+                  placeholder="e.g. +91 98765 43210"
+                  autocomplete="tel"
+                />
+                <small class="d-hint">We'll message you here to coordinate a convenient time.</small>
+              </div>
+
+              <div class="d-setup-box">
+                <div class="d-setup-head">
+                  <strong>Station setup</strong>
+                  <span>Optional — helps us prepare your demo</span>
+                </div>
+                <div class="d-setup-cols">
+                  <div class="d-setup-item">
+                    <label for="demo-tanks">Tanks</label>
+                    <input
+                      type="number"
+                      id="demo-tanks"
+                      name="tanks"
+                      min="1"
+                      max="30"
+                      placeholder="e.g. 3"
+                      inputmode="numeric"
+                    />
+                  </div>
+                  <div class="d-setup-item">
+                    <label for="demo-nozzles">Nozzles</label>
+                    <input
+                      type="number"
+                      id="demo-nozzles"
+                      name="nozzles"
+                      min="1"
+                      max="64"
+                      placeholder="e.g. 12"
+                      inputmode="numeric"
+                    />
+                  </div>
+                  <div class="d-setup-item">
+                    <label for="demo-attendants">Attendants</label>
+                    <input
+                      type="number"
+                      id="demo-attendants"
+                      name="attendants"
+                      min="1"
+                      max="100"
+                      placeholder="e.g. 8"
+                      inputmode="numeric"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" class="ds-btn ds-btn--primary d-submit-btn" id="demo-submit-btn">
+                <span>{DEMO_BOOKING_URL ? 'Continue to choose demo time' : 'Book guided demo'}</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              </button>
+
+              <p class="d-form-trust">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span>No sensitive financial books required. We use sample numbers for the walkthrough.</span>
+              </p>
+
+              <div id="demo-form-feedback" class="d-feedback" hidden aria-live="polite"></div>
+            </form>
+          </div>
+
+          <!-- Side / WhatsApp Alternative -->
+          <aside class="d-side">
+            <div class="ds-card d-wa-card">
+              <div class="d-wa-badge">Direct option</div>
+              <h3>Prefer WhatsApp? Text us directly</h3>
+              <p>Skip the form and message us directly on WhatsApp. We can talk about your station, answer questions, or coordinate a demo time right in chat.</p>
+              <Button variant="wa" href={WHATSAPP_URL} target="_blank" rel="noopener" class="d-wa-btn">
+                <span>WhatsApp {WHATSAPP_DISPLAY}</span>
+              </Button>
+              <span class="d-wa-note">Opens WhatsApp directly to our team.</span>
+            </div>
+
+            <div class="ds-card d-expect-card">
+              <h4>What to expect</h4>
+              <ul class="d-expect-list">
+                <li>
+                  <strong>20 minutes, 1-on-1:</strong> Walk through daily shift closing, meter readings, and drawer handovers on video or phone.
+                </li>
+                <li>
+                  <strong>Live calculation:</strong> We calculate cash variance and shortage tracking live on sample station data.
+                </li>
+                <li>
+                  <strong>No pressure or contracts:</strong> Pilot stations get their first 3 months free on any plan. Decide only after seeing it work.
+                </li>
+              </ul>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. The Offer -->
+    <section class="ds-sec d-offer-sec" aria-labelledby="offer-title">
+      <div class="ds-w">
+        <div class="h-offer">
+          <div class="h-offer-copy">
+            <p class="ds-ey">Pilot station offer</p>
+            <h2 id="offer-title">Run your first 3 months on PumpOS for <span>₹0</span>.</h2>
+            <p>As a pilot station, your first 3 months are free on any plan. We configure your tanks, nozzles, and opening balances with you, then stay with your team through your first shift closings.</p>
+            <div class="h-offer-btns">
+              <a class="ds-btn ds-btn--primary" href="#book">Book your guided demo</a>
+              <Button variant="wa" href={WHATSAPP_URL} target="_blank" rel="noopener">
+                <span>WhatsApp {WHATSAPP_DISPLAY}</span>
+              </Button>
+            </div>
+          </div>
+          <dl>
+            {stats.map(([val, desc]) => (
+              <div>
+                <dt>{val}</dt>
+                <dd>{desc}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script is:inline define:vars={{ bookingUrl: DEMO_BOOKING_URL }}>
+    const form = document.getElementById('demo-booking-form');
+    const feedback = document.getElementById('demo-form-feedback');
+
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        const name = (form.elements['name']?.value || '').trim();
+        const station = (form.elements['station']?.value || '').trim();
+        const phone = (form.elements['phone']?.value || '').trim();
+        const tanks = (form.elements['tanks']?.value || '').trim();
+        const nozzles = (form.elements['nozzles']?.value || '').trim();
+        const attendants = (form.elements['attendants']?.value || '').trim();
+
+        if (!name || !station || !phone) {
+          if (feedback) {
+            feedback.hidden = false;
+            feedback.className = 'd-feedback d-feedback--err';
+            feedback.textContent = 'Please fill in your name, station name, and phone number.';
+          }
+          return;
+        }
+
+        if (bookingUrl) {
+          try {
+            const url = new URL(bookingUrl);
+            url.searchParams.set('name', name);
+            url.searchParams.set('phone', phone);
+            const notes = [
+              `Station: ${station}`,
+              tanks ? `${tanks} tanks` : '',
+              nozzles ? `${nozzles} nozzles` : '',
+              attendants ? `${attendants} attendants` : '',
+            ].filter(Boolean).join(', ');
+            if (notes) url.searchParams.set('notes', notes);
+
+            if (feedback) {
+              feedback.hidden = false;
+              feedback.className = 'd-feedback d-feedback--info';
+              feedback.replaceChildren();
+              feedback.appendChild(document.createTextNode('Redirecting to calendar… '));
+              const link = document.createElement('a');
+              link.href = url.toString();
+              link.textContent = 'Click here if not redirected';
+              feedback.appendChild(link);
+            }
+            window.location.href = url.toString();
+            return;
+          } catch {
+            // fall through to email if URL parse fails
+          }
+        }
+
+        // Email fallback
+        const setupParts = [
+          tanks ? `${tanks} tanks` : '',
+          nozzles ? `${nozzles} nozzles` : '',
+          attendants ? `${attendants} attendants` : '',
+        ].filter(Boolean).join(', ');
+
+        const lines = [
+          `Name: ${name}`,
+          `Station / Town: ${station}`,
+          `Phone (WhatsApp): ${phone}`,
+          setupParts ? `Station setup: ${setupParts}` : '',
+        ].filter(Boolean);
+
+        const subject = `PumpOS guided demo - ${station || name}`;
+        const body = lines.join('\n');
+        const mailtoUrl = `mailto:hello@pumpos.app?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+        if (feedback) {
+          feedback.hidden = false;
+          feedback.className = 'd-feedback d-feedback--info';
+          feedback.replaceChildren();
+          feedback.appendChild(document.createTextNode('Opening your email client… '));
+          const link = document.createElement('a');
+          link.href = mailtoUrl;
+          link.textContent = "Click here if your email didn't open";
+          feedback.appendChild(link);
+        }
+
+        window.location.href = mailtoUrl;
+      });
+    }
+  </script>
 </BaseLayout>
+
+<style>
+  /* Demo page styles scoped to demo.astro */
+  .d-hero { text-align: center; }
+  .d-hero-in { padding-block: 88px 72px; display: flex; flex-direction: column; align-items: center; gap: 48px; }
+  .d-hero-copy { max-width: 820px; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+  .d-hero-copy .ds-ey { color: var(--h-mint); }
+  .d-hero-copy h1 { font-size: clamp(38px, 5.2vw, 68px); line-height: 1.04; letter-spacing: -.035em; font-weight: 800; color: #fff; margin: 0; }
+  .d-hero-lede { font-size: 19px; line-height: 1.55; color: var(--h-mint-ink); max-width: 620px; margin: 0; }
+  .d-hero-ticks { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; font-size: 14px; font-weight: 600; color: var(--h-mint-ink); list-style: none; padding: 0; margin: 0; }
+  .d-hero-ticks li { display: inline-flex; align-items: center; gap: 8px; }
+  .d-hero-ticks svg { width: 16px; height: 16px; color: var(--h-mint); flex-shrink: 0; }
+
+  .d-steps-wrap { width: 100%; text-align: left; margin-top: 12px; }
+  .d-steps-head { text-align: center; margin-bottom: 24px; }
+  .d-steps-head .ds-ey { color: var(--h-mint); }
+  .d-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; list-style: none; padding: 0; margin: 0; }
+  .d-step { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; padding: 28px 24px; display: flex; flex-direction: column; gap: 14px; backdrop-filter: blur(8px); }
+  .d-step-top { display: flex; justify-content: space-between; align-items: center; }
+  .d-step-num { font-size: 26px; font-weight: 800; letter-spacing: -.03em; color: var(--h-mint); font-variant-numeric: tabular-nums; }
+  .d-step-pill { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 3px 10px; border-radius: 99px; background: rgba(143, 209, 180, 0.16); color: var(--h-mint); }
+  .d-step h3 { font-size: 18px; font-weight: 700; line-height: 1.25; color: #fff; margin: 0; }
+  .d-step p { font-size: 14px; line-height: 1.55; color: var(--h-mint-ink); margin: 0; }
+
+  /* Booking section */
+  .d-booking-sec { padding-block: 88px 104px; }
+  .d-booking-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 40px; align-items: start; }
+
+  .d-form-card { padding: 40px; background: #fff; border: 1px solid var(--h-line); border-radius: 24px; box-shadow: 0 16px 40px -24px rgba(24, 32, 26, 0.1); }
+  .d-form-h2 { font-size: clamp(26px, 2.6vw, 36px); font-weight: 800; letter-spacing: -.03em; line-height: 1.15; margin: 0 0 10px; color: var(--h-ink); }
+  .d-form-lede { color: var(--h-muted); font-size: 15px; line-height: 1.55; margin: 0 0 28px; }
+  .d-form { display: flex; flex-direction: column; gap: 20px; }
+  .d-field { display: flex; flex-direction: column; gap: 8px; }
+  .d-field label { font-size: 14px; font-weight: 700; color: var(--h-ink); display: flex; align-items: center; justify-content: space-between; }
+  .d-req { color: var(--h-danger); }
+  .d-field input { box-sizing: border-box; width: 100%; height: 50px; border: 1px solid var(--h-line); border-radius: 10px; padding: 0 16px; font-size: 15px; font-family: inherit; color: var(--h-ink); background: #fff; transition: border-color .18s, box-shadow .18s; }
+  .d-field input:focus { outline: none; border-color: var(--h-primary); box-shadow: 0 0 0 3px var(--h-primary-soft); }
+  .d-hint { font-size: 12px; color: var(--h-muted); }
+
+  .d-setup-box { background: var(--h-canvas); border: 1px solid var(--h-line); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .d-setup-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px; }
+  .d-setup-head strong { font-size: 13px; font-weight: 700; color: var(--h-ink); }
+  .d-setup-head span { font-size: 12px; color: var(--h-muted); }
+  .d-setup-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .d-setup-item { display: flex; flex-direction: column; gap: 6px; }
+  .d-setup-item label { font-size: 12px; font-weight: 600; color: var(--h-muted); }
+  .d-setup-item input { box-sizing: border-box; width: 100%; height: 44px; border: 1px solid var(--h-line); border-radius: 8px; padding: 0 12px; font-size: 14px; font-family: inherit; color: var(--h-ink); background: #fff; font-variant-numeric: tabular-nums; transition: border-color .18s, box-shadow .18s; }
+  .d-setup-item input:focus { outline: none; border-color: var(--h-primary); box-shadow: 0 0 0 3px var(--h-primary-soft); }
+
+  .d-submit-btn { width: 100%; cursor: pointer; border: none; font-size: 16px; font-weight: 700; height: 52px; border-radius: 10px; }
+  .d-form-trust { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--h-muted); margin: 4px 0 0; }
+  .d-form-trust svg { width: 16px; height: 16px; color: var(--h-primary); flex-shrink: 0; }
+
+  .d-feedback { padding: 14px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; line-height: 1.45; }
+  .d-feedback--err { background: var(--h-danger-soft); color: var(--h-danger); }
+  .d-feedback--info { background: var(--h-primary-soft); color: var(--h-primary); }
+  .d-feedback :global(a) { text-decoration: underline; font-weight: 700; color: inherit; }
+
+  .d-side { display: flex; flex-direction: column; gap: 24px; }
+  .d-wa-card { padding: 32px; background: #fff; border: 1px solid var(--h-line); border-radius: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .d-wa-badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--h-wa); }
+  .d-wa-card h3 { font-size: 21px; font-weight: 800; letter-spacing: -.02em; line-height: 1.2; margin: 0; color: var(--h-ink); }
+  .d-wa-card p { color: var(--h-muted); font-size: 14px; line-height: 1.55; margin: 0; }
+  .d-wa-btn { width: 100%; }
+  .d-wa-note { font-size: 12px; color: var(--h-muted); text-align: center; }
+
+  .d-expect-card { padding: 28px; background: var(--h-alt); border: 1px solid var(--h-line); border-radius: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .d-expect-card h4 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--h-primary); margin: 0; }
+  .d-expect-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+  .d-expect-list li { font-size: 13px; line-height: 1.5; color: var(--h-muted); position: relative; padding-left: 20px; }
+  .d-expect-list li::before { content: '✓'; position: absolute; left: 0; top: 0; font-weight: 800; color: var(--h-primary); }
+  .d-expect-list strong { color: var(--h-ink); font-weight: 700; }
+
+  .d-offer-sec { padding-top: 0; }
+
+  @media (max-width: 900px) {
+    .d-hero-in { padding-block: 48px 40px; gap: 32px; }
+    .d-hero-copy { gap: 16px; }
+    .d-hero-copy h1 { font-size: 34px; line-height: 1.08; }
+    .d-hero-lede { font-size: 16px; }
+    .d-steps-wrap { margin-top: 24px; }
+    .d-steps { grid-template-columns: 1fr; gap: 12px; }
+    .d-step { padding: 20px 18px; border-radius: 16px; }
+    .d-step h3 { font-size: 17px; }
+    .d-booking-sec { padding-block: 48px 64px; }
+    .d-booking-grid { grid-template-columns: 1fr; gap: 24px; }
+    .d-form-card { padding: 22px 18px; border-radius: 20px; }
+    .d-form-h2 { font-size: 24px; }
+    .d-form-lede { font-size: 14px; margin-bottom: 20px; }
+    .d-field input { font-size: 16px; height: 48px; }
+    .d-setup-box { padding: 14px; }
+    .d-setup-cols { gap: 8px; }
+    .d-setup-item input { font-size: 16px; height: 42px; padding: 0 10px; }
+    .d-wa-card { padding: 22px 18px; border-radius: 18px; }
+    .d-expect-card { padding: 22px 18px; border-radius: 18px; }
+  }
+</style>
