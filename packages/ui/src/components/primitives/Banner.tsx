@@ -26,6 +26,8 @@ export interface BannerProps {
   /** Inline action button (e.g. "View Stock"). */
   actionLabel?: string;
   onAction?: () => void;
+  /** Optional extra action controls rendered alongside the primary action. */
+  actions?: React.ReactNode;
   /**
    * When true, renders a dismiss (×) button and hides itself on click. Omit for
    * a persistent banner that stays until its underlying condition clears (e.g.
@@ -60,6 +62,7 @@ export const Banner: React.FC<BannerProps> = ({
   children,
   actionLabel,
   onAction,
+  actions,
   dismissible = false,
   onDismiss,
   dismissLabel = 'Dismiss',
@@ -97,11 +100,12 @@ export const Banner: React.FC<BannerProps> = ({
           </span>
         )}
         <span>
-          {title && <strong style={{ marginRight: '6px' }}>{title}</strong>}
+          {title && <strong style={{ marginRight: children ? '6px' : 0 }}>{title}</strong>}
           {children}
         </span>
       </span>
       <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+        {actions}
         {actionLabel && onAction && (
           <Button variant="secondary" size="sm" onClick={onAction}>
             {actionLabel}

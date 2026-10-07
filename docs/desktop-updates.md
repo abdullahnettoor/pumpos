@@ -140,7 +140,7 @@ build, from the web console, or from mobile.
 | ----------------- | ----------------------------------------------------- | ----------------------------------------------- |
 | Checking          | "Checking for updates…"                               | keep working                                    |
 | Up to date        | the installed version                                 | dismiss                                         |
-| Available         | the new version and one line of the release summary   | **Download update**, **What's new**, or dismiss |
+| Available         | the new version                                       | **Download update**, **What's new**, or dismiss |
 | Downloading       | MB downloaded, or a percentage when the size is known | keep working                                    |
 | Ready             | "ready to install"                                    | **Install and restart**, or dismiss             |
 | Restart postponed | the concrete reason local writes are unsafe           | Try again, or dismiss                           |
@@ -155,10 +155,10 @@ asked and is owed an answer.
 
 Release notes are an **operator summary written for the station**, not the
 developer changelog — see [RELEASING.md](../RELEASING.md#write-the-operator-summary)
-for where it is written and what is stripped from it. The notice carries one
-line of it; **What's new** opens the whole thing in the standard drawer, which
-also repeats the primary action so reading never puts the decision out of reach.
-A release with no summary shows no notes section and no affordance. Notes are
+for where it is written and what is stripped from it. The notice carries the version and action buttons; **What's new** opens the
+full release notes in the standard drawer, which also repeats the primary action
+so reading never puts the decision out of reach. A release with no notes shows
+no "What's new" affordance. Notes are
 plain text rendered as text nodes and contain no links, so a manifest can
 neither inject markup nor send an operator to a repository.
 

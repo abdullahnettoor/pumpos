@@ -69,18 +69,21 @@ describe('UpdateNotice rendering', () => {
     expect(document.activeElement).toBe(document.body);
   });
 
-  it('shows the offered version, the installed version and one line of summary', () => {
+  it('shows the offered version in the title and buttons, without inline summary or installed version', () => {
     render(
       <UpdateNotice
         updates={updates({ phase: 'available', currentVersion: '1.0.0', update: offered })}
       />,
     );
     expect(screen.getByText('PumpOS 1.1.0 is available')).toBeTruthy();
-    expect(screen.getByText(/You are on 1\.0\.0/)).toBeTruthy();
-    expect(screen.getByText('Fixes drawer rounding.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Download update' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: "What's new" })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Not now' })).toBeTruthy();
+    expect(screen.queryByText(/You are on 1\.0\.0/)).toBeNull();
+    expect(screen.queryByText('Fixes drawer rounding.')).toBeNull();
   });
 
-  it('keeps the notice compact: the body lives in the drawer, not in the notice', () => {
+  it('keeps the notice compact: release notes live only in the drawer, not in the notice', () => {
     const long = ['Drawer rounding is fixed.', '', ...Array(20).fill('Another paragraph.')].join(
       '\n',
     );
@@ -94,13 +97,42 @@ describe('UpdateNotice rendering', () => {
       />,
     );
     const notice = screen.getByRole('status');
-    // The notice carries the first line only, and nothing that scrolls.
+    // Release notes are reachable only via What's new, not inline in the notice.
+    expect(notice.textContent).not.toMatch('Drawer rounding is fixed.');
     expect(notice.textContent).not.toMatch('Another paragraph.');
     expect(notice.innerHTML).not.toMatch(/overflow:\s*auto/);
     expect(notice.innerHTML).not.toMatch(/max-height/);
 
     fireEvent.click(screen.getByRole('button', { name: "What's new" }));
     expect(screen.getByText(/Another paragraph\./)).toBeTruthy();
+    expect(screen.getByText(/Drawer rounding is fixed\./)).toBeTruthy();
+  });
+
+  it('never renders inline summary or installed version even with a multi-sentence summary', () => {
+    const multiSentence =
+      'Fuel sales now round to the paise so the drawer matches the till at close every single shift. Attendants can hand over with confidence. Hardware printer issues resolved.';
+    render(
+      <UpdateNotice
+        updates={updates({
+          phase: 'available',
+          currentVersion: '1.0.0',
+          update: { version: '1.6.0', notes: multiSentence },
+        })}
+      />,
+    );
+    const notice = screen.getByRole('status');
+    expect(screen.getByText('PumpOS 1.6.0 is available')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Download update' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: "What's new" })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Not now' })).toBeTruthy();
+    // Multi-sentence summary is NOT in the notice
+    expect(notice.textContent).not.toMatch('Fuel sales now round');
+    expect(notice.textContent).not.toMatch('Attendants can hand over');
+    expect(notice.textContent).not.toMatch('You are on');
+
+    // But it is in the drawer
+    fireEvent.click(screen.getByRole('button', { name: "What's new" }));
+    expect(screen.getByText(multiSentence)).toBeTruthy();
   });
 
   it('closes the notes drawer without losing the update action', () => {
@@ -138,7 +170,7 @@ describe('UpdateNotice rendering', () => {
     expect(screen.getByRole('button', { name: 'Download update' })).toBeTruthy();
   });
 
-  it('offers no "What\'s new" affordance when the release has no notes', () => {
+  it('shows just the title and Download update when the release has no notes', () => {
     render(
       <UpdateNotice
         updates={updates({
@@ -148,6 +180,9 @@ describe('UpdateNotice rendering', () => {
         })}
       />,
     );
+    expect(screen.getByText('PumpOS 1.1.0 is available')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Download update' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Not now' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: "What's new" })).toBeNull();
   });
 
@@ -163,7 +198,8 @@ describe('UpdateNotice rendering', () => {
       />,
     );
     expect(screen.getByRole('status').querySelector('img')).toBeNull();
-    expect(screen.getAllByText(markup).length).toBeGreaterThan(0);
+    // Notes are not rendered in the notice at all.
+    expect(screen.queryByText(markup)).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: "What's new" }));
     expect(document.querySelector('.drawer-body img')).toBeNull();
@@ -347,32 +383,42 @@ describe('describeUpdateState', () => {
     // Nothing to dismiss: the new binary is already on disk.
     expect(ready?.onDismiss).toBeUndefined();
   });
+
+  it('offers title and download action without inline summary or installed version for available update', () => {
+    const view = describeUpdateState(
+      { phase: 'available', currentVersion: '1.0.0', update: offered },
+      actions,
+    );
+    expect(view?.title).toBe('PumpOS 1.1.0 is available');
+    expect(view?.action?.label).toBe('Download update');
+    expect(view?.onDismiss?.label).toBe('Not now');
+    expect(view?.notes).toBe('Fixes drawer rounding.');
+    expect(view?.detail).toBeUndefined();
+  });
 });
 
-describe('the summary line the notice can afford', () => {
-  it('has no notes section at all when the release summary is empty', () => {
+describe('release notes handling in update states', () => {
+  it('has no notes section when the release notes are empty', () => {
     const view = describeUpdateState(
       { phase: 'available', currentVersion: '1.0.0', update: { version: '1.1.0', notes: '  ' } },
       actions,
     );
-    expect(view?.summary).toBeUndefined();
     expect(view?.notes).toBeUndefined();
+    expect(view?.detail).toBeUndefined();
   });
 
-  it('shortens a long summary to one readable line and keeps the body whole', () => {
+  it('keeps release notes for the drawer while leaving the notice uncluttered', () => {
     const body = `${'Fuel sales now round to the paise so the drawer matches the till at close every single shift.'}\nAnd more.`;
     const view = describeUpdateState(
       { phase: 'available', currentVersion: '1.0.0', update: { version: '1.1.0', notes: body } },
       actions,
     );
-    expect(view?.summary?.length).toBeLessThanOrEqual(91);
-    expect(view?.summary?.endsWith('…')).toBe(true);
-    expect(view?.summary).not.toMatch('And more.');
-    // The compact notice never carries the full body; the drawer does.
+    // The notice carries no inline summary or detail; the drawer carries the notes.
     expect(view?.notes).toBe(body);
+    expect(view?.detail).toBeUndefined();
   });
 
-  it('reads past a bullet marker to the first real sentence', () => {
+  it('reads past a bullet marker to the first real sentence (releaseSummaryLine utility)', () => {
     expect(releaseSummaryLine('\n- Drawer rounding is fixed.\n- Faster reports.')).toBe(
       'Drawer rounding is fixed.',
     );

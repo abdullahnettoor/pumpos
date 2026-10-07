@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Banner, Button, Drawer, MeterRow, type BannerSeverity } from '@pump/ui';
 import type { DesktopUpdates } from './useDesktopUpdates.js';
 import type { UpdateState } from './types.js';
-import { releaseNotesBody, releaseSummaryLine } from './version.js';
+import { releaseNotesBody } from './version.js';
 
 /**
  * The operator-facing surface for desktop updates.
@@ -13,12 +13,12 @@ import { releaseNotesBody, releaseSummaryLine } from './version.js';
  * dismisses on any click, so "Download update" would dismiss the notice that
  * offers it.
  *
- * The notice is genuinely compact: the offered version, at most one line of
- * summary, and the one thing the operator can do. It never scrolls inside
- * itself and never grows to hold the full release notes — those live behind
- * "What's new", in the `Drawer` this repository already uses for detail. Banner
- * is therefore used as designed, with placement (corner, width) as the only
- * styling here; nothing about its internal layout is overridden.
+ * The notice is genuinely compact: the offered version and the actions the
+ * operator can take. It never scrolls inside itself and never grows to hold
+ * the full release notes — those live behind "What's new", in the `Drawer` this
+ * repository already uses for detail. Banner is therefore used as designed,
+ * with placement (corner, width) as the only styling here; nothing about its
+ * internal layout is overridden.
  *
  * Deliberately pinned to the bottom corner rather than shown as a startup
  * modal: an update is never more important than the shift in front of the
@@ -55,65 +55,50 @@ export const UpdateNotice: React.FC<{ updates: DesktopUpdates }> = ({ updates })
         title={view.title}
         actionLabel={view.action?.label}
         onAction={view.action?.onClick}
+        actions={
+          view.notes ? (
+            <Button variant="ghost" size="sm" onClick={() => setNotesOpenFor(offer)}>
+              What&apos;s new
+            </Button>
+          ) : null
+        }
         dismissible={!!view.onDismiss}
         onDismiss={view.onDismiss?.onClick}
         dismissLabel={view.onDismiss?.label}
         style={{
           position: 'fixed',
-          bottom: 'var(--space-4)',
+          bottom: 'calc(26px + var(--space-4))',
           right: 'var(--space-4)',
           zIndex: 60,
-          width: '360px',
+          minWidth: '360px',
           maxWidth: 'calc(100vw - var(--space-8))',
           // No background override: Banner's severity colour is the whole point
           // of passing a severity, and cancelling it would make a failed update
           // look exactly like an available one.
         }}
       >
-        <span style={{ display: 'block' }}>
-          {view.detail && !view.progress?.totalBytes ? (
-            <span style={{ display: 'block', fontWeight: 400 }}>{view.detail}</span>
-          ) : null}
+        {view.detail || view.progress?.totalBytes ? (
+          <span style={{ display: 'block' }}>
+            {view.detail && !view.progress?.totalBytes ? (
+              <span style={{ display: 'block', fontWeight: 400 }}>{view.detail}</span>
+            ) : null}
 
-          {/* One line, never the body. Release notes are plain text from an
-              external manifest: rendered as a text node, never as markup. */}
-          {view.summary ? (
-            <span
-              style={{
-                display: 'block',
-                fontWeight: 400,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {view.summary}
-            </span>
-          ) : null}
-
-          {view.notes ? (
-            <span style={{ display: 'block', marginTop: 'var(--space-1)' }}>
-              <Button variant="ghost" size="xs" onClick={() => setNotesOpenFor(offer)}>
-                What&apos;s new
-              </Button>
-            </span>
-          ) : null}
-
-          {/* Determinate downloads get the design system's meter. An unknown
-              content length gets the honest readout above and no bar at all,
-              rather than one creeping toward a number nobody measured. */}
-          {view.progress?.totalBytes ? (
-            <span style={{ display: 'block', marginTop: 'var(--space-1)' }}>
-              <MeterRow
-                label="Downloading"
-                value={view.progress.downloadedBytes}
-                max={view.progress.totalBytes}
-                valueLabel={view.detail}
-                tone="brand"
-              />
-            </span>
-          ) : null}
-        </span>
+            {/* Determinate downloads get the design system's meter. An unknown
+                content length gets the honest readout above and no bar at all,
+                rather than one creeping toward a number nobody measured. */}
+            {view.progress?.totalBytes ? (
+              <span style={{ display: 'block', marginTop: 'var(--space-1)' }}>
+                <MeterRow
+                  label="Downloading"
+                  value={view.progress.downloadedBytes}
+                  max={view.progress.totalBytes}
+                  valueLabel={view.detail}
+                  tone="brand"
+                />
+              </span>
+            ) : null}
+          </span>
+        ) : null}
       </Banner>
 
       {view.notes ? (
@@ -174,8 +159,6 @@ interface NoticeView {
   /** Names the notes drawer. Present only where notes are, i.e. with an offer. */
   version?: string;
   detail?: string;
-  /** At most one line, for the compact notice. Never the whole body. */
-  summary?: string;
   /** The full release notes, shown only in the drawer. */
   notes?: string;
   progress?: { downloadedBytes: number; totalBytes: number | null };
@@ -229,8 +212,6 @@ export function describeUpdateState(
         severity: 'info',
         title: `PumpOS ${state.update.version} is available`,
         version: state.update.version,
-        detail: `You are on ${state.currentVersion}. Download when it suits the station.`,
-        summary: releaseSummaryLine(state.update.notes),
         notes: releaseNotesBody(state.update.notes),
         action: { label: 'Download update', onClick: actions.download },
         onDismiss: { label: 'Not now', onClick: actions.postpone },
