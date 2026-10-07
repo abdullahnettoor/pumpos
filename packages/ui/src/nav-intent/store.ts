@@ -47,6 +47,8 @@ export interface NavIntent {
    * business-day-close snapshot.
    */
   openShiftSummaryId?: string;
+  /** Open a specific tab on the Organization page. */
+  openOrganizationTab?: 'desktop';
 }
 
 export interface NavIntentState {

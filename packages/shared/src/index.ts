@@ -14,3 +14,4 @@ export * from './utils/onboarding-tax.js';
 export * from './constants/payment.js';
 export * from './utils/shift-close-cash.js';
 export * from './constants/demo.js';
+export * from './utils/desktop-downloads.js';

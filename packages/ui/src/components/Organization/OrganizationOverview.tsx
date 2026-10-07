@@ -7,7 +7,12 @@ import { UserRolesAssignment } from '../StationSetup/UserRolesAssignment.js';
 import { OrgProfile } from './OrgProfile.js';
 import { ActivityFeed } from './ActivityFeed.js';
 import { Check, Fuel, Users, Plus } from 'lucide-react';
+import { DesktopAppPanel } from '../Desktop/DesktopAppPanel.js';
+import { isDesktopApp } from '../../utils/platform.js';
 import { useAccess } from '../../query/hooks.js';
+import { clearNavIntent, useNavIntent } from '../../nav-intent/store.js';
+
+type OrgTab = 'stations' | 'team' | 'activity' | 'profile' | 'desktop';
 
 export interface OrganizationOverviewProps {
   stations: Station[];
@@ -51,7 +56,18 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
   onStationChange,
   onNavigate,
 }) => {
-  const [tab, setTab] = useState<'stations' | 'team' | 'activity' | 'profile'>('stations');
+  const [chosenTab, setChosenTab] = useState<OrgTab>('stations');
+  const showDesktopTab = !isDesktopApp();
+
+  // Deep link from the dashboard's Desktop app step ("See options"): derived
+  // from the pending intent until the user picks a tab themselves.
+  const intent = useNavIntent();
+  const tab: OrgTab =
+    intent?.openOrganizationTab === 'desktop' && showDesktopTab ? 'desktop' : chosenTab;
+  const setTab = (next: OrgTab) => {
+    if (intent?.openOrganizationTab) clearNavIntent();
+    setChosenTab(next);
+  };
 
   // Station capacity comes from the Access Document. The server already
   // decided what this user may see: only Owners and Managers receive the plan
@@ -79,12 +95,13 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
           variant="underline"
           aria-label="Organization"
           activeId={tab}
-          onChange={(id) => setTab(id as 'stations' | 'team' | 'activity' | 'profile')}
+          onChange={(id) => setTab(id as OrgTab)}
           tabs={[
             { id: 'stations', label: 'Stations', badge: stations.length },
             { id: 'team', label: 'Team' },
             { id: 'activity', label: 'Activity' },
             { id: 'profile', label: 'Profile' },
+            ...(showDesktopTab ? [{ id: 'desktop', label: 'Desktop app' }] : []),
           ]}
         />
       }
@@ -286,6 +303,8 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
       {tab === 'activity' && <ActivityFeed stations={stations} />}
 
       {tab === 'profile' && <OrgProfile />}
+
+      {tab === 'desktop' && showDesktopTab && <DesktopAppPanel />}
     </PageLayout>
   );
 };
