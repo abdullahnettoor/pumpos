@@ -7,24 +7,9 @@ import {
 
 const DOWNLOADED_KEY = 'pumpos_desktop_downloaded';
 
-/**
- * Chip architecture for Macs, when the browser exposes it. Safari and Firefox
- * hide it, so undefined is the common case and the UI shows both Mac options.
- */
-function detectMacArch(nav: Navigator): 'arm64' | 'x64' | undefined {
-  const arch = (nav as any).userAgentData?.architecture;
-  if (arch === 'arm') return 'arm64';
-  if (arch === 'x86') return 'x64';
-  return undefined;
-}
-
 export function desktopOptionsForThisBrowser(downloads: DesktopDownloads): DownloadOption[] {
-  const nav = typeof navigator !== 'undefined' ? navigator : undefined;
-  return buildDownloadOptions({
-    downloads,
-    os: detectOs(nav?.userAgent ?? ''),
-    macArch: nav ? detectMacArch(nav) : undefined,
-  });
+  const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  return buildDownloadOptions({ downloads, os: detectOs(userAgent) });
 }
 
 export function readDesktopDownloaded(): boolean {
