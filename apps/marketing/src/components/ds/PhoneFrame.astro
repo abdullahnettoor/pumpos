@@ -19,21 +19,21 @@ const {
   ...rest
 } = Astro.props;
 ---
-<div class:list={['ds-card h-card ds-phone-wrap h-phone-wrap', className]} {...rest}>
-  <div class="ds-phone h-phone">
+<div class:list={['ds-card ds-phone-wrap', className]} {...rest}>
+  <div class="ds-phone">
     <slot>
       <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; font-weight:700;">
         <span>{title}</span>
         <span class="ds-sample-tag">Sample data</span>
       </div>
-      <div class="h-r">
+      <div class="ds-r">
         <div>
           <strong style="display:block">{customer}</strong>
-          <small class="h-mut">{label}</small>
+          <small class="ds-mut">{label}</small>
         </div>
         <b style="font-size:18px; color:var(--ds-primary);">{amount}</b>
       </div>
-      {actionText && <div class="h-go">{actionText}</div>}
+      {actionText && <div class="ds-go">{actionText}</div>}
     </slot>
   </div>
 </div>

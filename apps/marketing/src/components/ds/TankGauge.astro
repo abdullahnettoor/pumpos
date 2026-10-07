@@ -23,13 +23,13 @@ const {
   class: className = '',
 } = Astro.props;
 ---
-<div class:list={['h-card ds-tank-gauge', className]} style="padding: 24px;">
+<div class:list={['ds-card ds-tank-gauge', className]} style="padding: 24px;">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
     <span class="ds-ey">{fuel} · {tank}</span>
     <SampleDataBadge />
   </div>
-  <div class="h-bp-tank">
-    <div class="h-tk" aria-hidden="true">
+  <div class="ds-bp-tank">
+    <div class="ds-tk" aria-hidden="true">
       <i style={`height: ${fillPercent}%;`}></i>
     </div>
     <div style="display:flex; flex-direction:column; gap:6px;">

@@ -43,25 +43,25 @@ const {
   ...rest
 } = Astro.props;
 ---
-<div class:list={['ds-card h-card ds-dsr h-dsr', className]} role="img" aria-label={ariaLabel} {...rest}>
-  <div class="h-dsr-h">
+<div class:list={['ds-card ds-dsr', className]} role="img" aria-label={ariaLabel} {...rest}>
+  <div class="ds-dsr-h">
     <div>
       <b>{title}</b>
       <small>{station} · {date}</small>
     </div>
     <Pill>Sample data</Pill>
   </div>
-  <div class="h-dsr-rows">
+  <div class="ds-dsr-rows">
     {rows.map((r) => (
       <div>
-        <span class={r.isTotal ? '' : 'h-mut'}>{r.label}</span>
+        <span class={r.isTotal ? '' : 'ds-mut'}>{r.label}</span>
         <b>{r.value}</b>
       </div>
     ))}
   </div>
   {shortageAmount && (
-    <div class="h-short">
-      <span class="h-av">{avatar}</span>
+    <div class="ds-short">
+      <span class="ds-av">{avatar}</span>
       <div>
         <b>{shortageLabel}</b>
         <small>{shortageSubtext}</small>
