@@ -12,6 +12,7 @@ import {
   useCustomers,
   useSuppliers,
   useDailyDssrPreview,
+  useDesktopDownloads,
   useUsers,
 } from '../../query/hooks.js';
 import { useStationAlerts } from '../../query/useStationAlerts.js';
@@ -22,6 +23,13 @@ import {
   type ChecklistStep,
 } from './GettingStartedChecklist.js';
 import { useChecklistSkips } from './checklistStorage.js';
+import {
+  desktopOptionsForThisBrowser,
+  markDesktopDownloaded,
+  readDesktopDownloaded,
+  startDownload,
+} from '../Desktop/desktopDownload.js';
+import { isDesktopApp } from '../../utils/platform.js';
 import {
   KpiStrip,
   KpiTile,
@@ -67,7 +75,7 @@ interface DashboardOverviewProps {
   onNavigate: (path: string, intent?: NavIntent) => void;
 }
 
-const OPTIONAL_STEP_IDS = ['team', 'suppliers', 'customers'];
+const OPTIONAL_STEP_IDS = ['team', 'suppliers', 'customers', 'desktop'];
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   selectedStation,
@@ -160,6 +168,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const stationInProgress =
     !!selectedStation && (selectedStation as any).onboardingStatus === 'IN_PROGRESS';
   const canManageOnboarding = canOnboardStation(userRole);
+  const showDesktopStep = canManageOnboarding && isReadyStation && !isDesktopApp();
+  const { data: desktopDownloads } = useDesktopDownloads({ enabled: showDesktopStep });
+  const [desktopDownloaded, setDesktopDownloaded] = useState(readDesktopDownloaded);
+  const recommendedDesktop = desktopDownloads
+    ? desktopOptionsForThisBrowser(desktopDownloads).find(
+        (o) => o.recommended && o.download.available,
+      )
+    : undefined;
   const gsSteps: ChecklistStep[] = [
     {
       id: 'org',
@@ -205,6 +221,26 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       actionLabel: 'Add',
       onAction: () => onNavigate('/customers', { open: 'new-customer' }),
     },
+    ...(showDesktopStep
+      ? [
+          {
+            id: 'desktop',
+            label: 'Install the desktop app',
+            description: 'Faster on the counter PC, and it updates itself.',
+            done: desktopDownloaded,
+            actionLabel: recommendedDesktop ? 'Download' : 'See options',
+            onAction: () => {
+              if (recommendedDesktop && recommendedDesktop.download.available) {
+                markDesktopDownloaded();
+                setDesktopDownloaded(true);
+                startDownload(recommendedDesktop.download.url);
+              } else {
+                onNavigate('/organization');
+              }
+            },
+          } satisfies ChecklistStep,
+        ]
+      : []),
   ].map((step) =>
     OPTIONAL_STEP_IDS.includes(step.id)
       ? {

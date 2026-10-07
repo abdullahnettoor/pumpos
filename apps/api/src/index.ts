@@ -24,6 +24,7 @@ import {
   type DomainEvent,
   type EventTone,
 } from '@pump/core';
+import { desktopDownloadsRouter } from './routes/desktop-downloads.js';
 import { TENANT_ROUTERS } from './routes/tenant-routers.js';
 import { platformAccessRouter } from './routes/platform-access.js';
 import { expireDemoOrganizations, platformDemosRouter } from './routes/platform-demos.js';
@@ -794,6 +795,9 @@ api.use('*', idempotency);
 // Mount routes — through the shared list so every tenant router is also
 // enumerated by the station-tenancy coverage test (#235).
 for (const [prefix, router] of TENANT_ROUTERS) api.route(prefix, router);
+
+// Read-only, authenticated, not tenant data: kept out of TENANT_ROUTERS.
+api.route('/desktop-downloads', desktopDownloadsRouter);
 
 // Mount authenticated group
 app.route('/api', api);

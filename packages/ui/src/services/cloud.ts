@@ -21,6 +21,7 @@ import {
   FinalizeOnboardingPayload,
   FinalizeOnboardingResult,
   AccessDocument,
+  DesktopDownloads,
   AttendantHandoverReport,
   AttendantReportFilters,
 } from '@pump/shared';
@@ -1309,6 +1310,13 @@ export class CloudAccessService {
   /** The caller's role-filtered Access Document. Presentation data only. */
   async getAccess(): Promise<AccessDocument> {
     return request<AccessDocument>('/access');
+  }
+}
+
+export class CloudDesktopDownloadsService {
+  /** Per-platform desktop installers resolved from GitHub Releases (cached server-side). */
+  async getDesktopDownloads(): Promise<DesktopDownloads> {
+    return request<DesktopDownloads>('/desktop-downloads');
   }
 }
 

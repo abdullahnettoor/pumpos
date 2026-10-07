@@ -20,6 +20,7 @@ import {
   CloudFinanceService,
   CloudPaymentTerminalService,
   CloudAccessService,
+  CloudDesktopDownloadsService,
 } from '../services/cloud.js';
 import type {
   BusinessDayStatusResponse,
@@ -27,7 +28,12 @@ import type {
   FundingAccount,
   ProfitLossReport,
 } from '../services/cloud.js';
-import type { AccessDocument, AttendantHandoverReport, AttendantReportFilters } from '@pump/shared';
+import type {
+  AccessDocument,
+  DesktopDownloads,
+  AttendantHandoverReport,
+  AttendantReportFilters,
+} from '@pump/shared';
 
 /**
  * Centralised query hooks. These replace the hand-rolled
@@ -52,6 +58,7 @@ const eventsSvc = new CloudEventsService();
 const financeSvc = new CloudFinanceService();
 const terminalSvc = new CloudPaymentTerminalService();
 const accessSvc = new CloudAccessService();
+const desktopDownloadsSvc = new CloudDesktopDownloadsService();
 
 export const queryKeys = {
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
@@ -102,6 +109,7 @@ export const queryKeys = {
   pricingHistory: (stationId: string) => ['pricing-history', stationId] as const,
   organization: () => ['organization'] as const,
   access: () => ['access'] as const,
+  desktopDownloads: () => ['desktop-downloads'] as const,
   activityGroups: (stationId: string, type: string, limit: number) =>
     ['activity-groups', stationId, type, limit] as const,
   activityGroup: (groupId: string) => ['activity-group', groupId] as const,
@@ -288,6 +296,22 @@ export function useAccess(options?: Options<AccessDocument>) {
     queryFn: () => accessSvc.getAccess(),
     ...TIER.semi,
     refetchOnWindowFocus: true,
+    ...options,
+  });
+}
+
+/**
+ * Desktop installers per platform. Changes only when a desktop release is
+ * published, so it is neither static nor operational: a short stale time,
+ * never persisted (not in PERSIST_PREFIXES).
+ */
+export function useDesktopDownloads(options?: Options<DesktopDownloads>) {
+  return useQuery({
+    queryKey: queryKeys.desktopDownloads(),
+    queryFn: () => desktopDownloadsSvc.getDesktopDownloads(),
+    staleTime: 5 * 60_000,
+    gcTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
     ...options,
   });
 }
