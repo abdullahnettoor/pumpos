@@ -161,6 +161,7 @@ export * from './pump-ds/boot/index.js';
 // Used by the desktop update surface: a design-system meter instead of a
 // native <progress>, and the design-system button inside its drawer.
 export * from './pump-ds/meter/index.js';
+export { STATUS_BAR_HEIGHT_PX } from './pump-ds/shell/index.js';
 export * from './pump-ds/button/index.js';
 
 // Post-sign-in boot: the branded wait screen and the parallel resolve behind it.

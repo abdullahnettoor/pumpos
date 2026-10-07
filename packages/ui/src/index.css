@@ -91,6 +91,9 @@
   --space-6: 24px;
   --space-8: 32px;
   --space-10: 40px;
+
+  /* Shell dimensions */
+  --status-bar-height: 26px;
 }
 
 /* Base Resets */
