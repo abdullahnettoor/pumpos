@@ -15,7 +15,16 @@ export interface ChecklistStep {
   lockedHint?: string;
   actionLabel: string;
   onAction: () => void;
+  /** Optional steps can be deferred. Required steps never show a Skip control. */
+  skippable?: boolean;
+  skipped?: boolean;
+  onSkip?: () => void;
+  onUndoSkip?: () => void;
 }
+
+/** A step is complete when done, or when the user chose to skip it. */
+export const isStepComplete = (step: Pick<ChecklistStep, 'done' | 'skipped'>): boolean =>
+  step.done || !!step.skipped;
 
 export interface GettingStartedChecklistProps {
   steps: ChecklistStep[];
@@ -36,7 +45,7 @@ export const GettingStartedChecklist: React.FC<GettingStartedChecklistProps> = (
   dismissible = false,
   onDismiss,
 }) => {
-  const doneCount = steps.filter((s) => s.done).length;
+  const doneCount = steps.filter(isStepComplete).length;
 
   return (
     <Panel
@@ -80,7 +89,7 @@ export const GettingStartedChecklist: React.FC<GettingStartedChecklistProps> = (
               alignItems: 'center',
               gap: '12px',
               padding: '12px 16px',
-              opacity: step.locked && !step.done ? 0.6 : 1,
+              opacity: (step.locked && !step.done) || step.skipped ? 0.6 : 1,
             }}
           >
             <span
@@ -95,12 +104,20 @@ export const GettingStartedChecklist: React.FC<GettingStartedChecklistProps> = (
                 borderRadius: '999px',
                 fontSize: '11px',
                 fontWeight: 700,
-                backgroundColor: step.done ? 'var(--state-success-bg)' : 'var(--bg-surface-alt)',
-                color: step.done ? 'var(--state-success-fg)' : 'var(--text-muted)',
-                border: step.done ? 'none' : '1px solid var(--border-strong)',
+                backgroundColor: isStepComplete(step)
+                  ? 'var(--state-success-bg)'
+                  : 'var(--bg-surface-alt)',
+                color: isStepComplete(step) ? 'var(--state-success-fg)' : 'var(--text-muted)',
+                border: isStepComplete(step) ? 'none' : '1px solid var(--border-strong)',
               }}
             >
-              {step.done ? <Check size={14} /> : step.locked ? <Lock size={12} /> : i + 1}
+              {isStepComplete(step) ? (
+                <Check size={14} />
+              ) : step.locked ? (
+                <Lock size={12} />
+              ) : (
+                i + 1
+              )}
             </span>
 
             <span
@@ -111,7 +128,7 @@ export const GettingStartedChecklist: React.FC<GettingStartedChecklistProps> = (
                   fontSize: '13px',
                   fontWeight: 600,
                   color: 'var(--text-strong)',
-                  textDecoration: step.done ? 'line-through' : 'none',
+                  textDecoration: isStepComplete(step) ? 'line-through' : 'none',
                 }}
               >
                 {step.label}
@@ -123,7 +140,23 @@ export const GettingStartedChecklist: React.FC<GettingStartedChecklistProps> = (
               </span>
             </span>
 
-            {step.done ? (
+            {step.skipped && !step.done ? (
+              <>
+                <Chip tone="neutral" size="xs">
+                  Skipped
+                </Chip>
+                {step.onUndoSkip && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    style={{ flexShrink: 0 }}
+                    onClick={step.onUndoSkip}
+                  >
+                    Undo skip
+                  </Button>
+                )}
+              </>
+            ) : step.done ? (
               <Chip tone="success" size="xs">
                 Done
               </Chip>
@@ -132,14 +165,27 @@ export const GettingStartedChecklist: React.FC<GettingStartedChecklistProps> = (
                 Locked
               </Chip>
             ) : (
-              <Button
-                variant="secondary"
-                size="sm"
-                style={{ flexShrink: 0 }}
-                onClick={step.onAction}
-              >
-                {step.actionLabel}
-              </Button>
+              <>
+                {step.skippable && step.onSkip && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    style={{ flexShrink: 0 }}
+                    onClick={step.onSkip}
+                    aria-label={`Skip ${step.label}`}
+                  >
+                    Skip
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  style={{ flexShrink: 0 }}
+                  onClick={step.onAction}
+                >
+                  {step.actionLabel}
+                </Button>
+              </>
             )}
           </li>
         ))}
