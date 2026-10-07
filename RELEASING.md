@@ -341,8 +341,9 @@ steps already exist and are **skipped until `R2_BUCKET` is set**.
       `downloads.pumpos.app`, or the `r2.dev` URL).
 - [ ] Add a **CORS** rule allowing `GET` from the marketing origin.
 - [ ] Ensure `CLOUDFLARE_API_TOKEN` includes **R2 read/write**.
-- [ ] Repo variables: `R2_BUCKET`, `R2_PUBLIC_BASE`,
-      `DOWNLOAD_MANIFEST_URL=<R2_PUBLIC_BASE>/downloads/manifest.json`.
+- [ ] Repo variables: `R2_BUCKET`, `R2_PUBLIC_BASE`. The marketing site no
+      longer reads this manifest; the console's desktop download comes from
+      GitHub Releases through `GET /api/desktop-downloads`.
 
 Then every release uploads installers + refreshes the public manifest the
 download page reads. (While the repo is **public**, GitHub Release assets are

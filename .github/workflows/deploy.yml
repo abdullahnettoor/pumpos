@@ -28,7 +28,6 @@ name: Deploy
 #   PREVIEW_CONSOLE_URL     defaults to https://console.pumpos.abdullahnettoor.com
 #   PREVIEW_MARKETING_SITE  defaults to https://pumpos.abdullahnettoor.com
 #   PREVIEW_MOBILE_URL      defaults to https://m.pumpos.abdullahnettoor.com
-#   DOWNLOAD_MANIFEST_URL   empty => bundled placeholder manifest
 #
 # Every deploy job ends with a smoke check (scripts/smoke-deploy.mjs). Upload
 # success is not health: a Worker that builds, uploads and then throws on every
@@ -207,7 +206,6 @@ jobs:
         env:
           SITE: ${{ needs.changes.outputs.mode == 'production' && (vars.MARKETING_SITE || 'https://pumpos.app') || 'https://pumpos.abdullahnettoor.com' }}
           PUBLIC_CONSOLE_URL: ${{ needs.changes.outputs.mode == 'production' && (vars.CONSOLE_URL || 'https://console.pumpos.app') || 'https://console.pumpos.abdullahnettoor.com' }}
-          PUBLIC_DOWNLOAD_MANIFEST_URL: ${{ vars.DOWNLOAD_MANIFEST_URL }}
       - name: Deploy marketing
         working-directory: apps/marketing
         run: |
