@@ -108,24 +108,3 @@ export function releaseNotesBody(notes: string | null | undefined): string | und
   const text = sanitizeReleaseNotes(notes);
   return text.length > 0 ? text : undefined;
 }
-
-const SUMMARY_MAX = 90;
-/** Below this, cutting back to a word boundary loses more than it gains. */
-const SUMMARY_MIN_WORD_BOUNDARY = 40;
-
-/**
- * The one line the compact update notice can afford: the first sentence of the
- * release summary, shortened. The body stays in the drawer, so the notice can
- * never grow to hold it however long a release manager writes.
- */
-export function releaseSummaryLine(notes: string | null | undefined): string | undefined {
-  const first = (releaseNotesBody(notes) ?? '')
-    .split('\n')
-    .map((line) => line.replace(/^\s*[-*\u2022]\s*/, '').trim())
-    .find((line) => line.length > 0);
-  if (!first) return undefined;
-  if (first.length <= SUMMARY_MAX) return first;
-  const cut = first.slice(0, SUMMARY_MAX);
-  const lastSpace = cut.lastIndexOf(' ');
-  return `${(lastSpace > SUMMARY_MIN_WORD_BOUNDARY ? cut.slice(0, lastSpace) : cut).trimEnd()}\u2026`;
-}

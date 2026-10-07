@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { Banner, Button, Drawer, MeterRow, type BannerSeverity } from '@pump/ui';
+import {
+  Banner,
+  Button,
+  Drawer,
+  MeterRow,
+  STATUS_BAR_HEIGHT_PX,
+  type BannerSeverity,
+} from '@pump/ui';
 import type { DesktopUpdates } from './useDesktopUpdates.js';
 import type { UpdateState } from './types.js';
 import { releaseNotesBody } from './version.js';
@@ -43,6 +50,8 @@ export const UpdateNotice: React.FC<{ updates: DesktopUpdates }> = ({ updates })
   if (!view) return null;
   const offer = `${view.key}:${view.version ?? ''}`;
   const notesOpen = notesOpenFor === offer;
+  const hasMeter = Boolean(view.progress?.totalBytes);
+  const showTextDetail = Boolean(view.detail) && !hasMeter;
 
   return (
     <>
@@ -67,26 +76,29 @@ export const UpdateNotice: React.FC<{ updates: DesktopUpdates }> = ({ updates })
         dismissLabel={view.onDismiss?.label}
         style={{
           position: 'fixed',
-          bottom: 'calc(26px + var(--space-4))',
+          // Stay above the bottom status bar strip. Both read the shared CSS
+          // variable `--status-bar-height` (fallback to STATUS_BAR_HEIGHT_PX) so
+          // resizing the status bar never brings back the overlap from #380.
+          bottom: `calc(var(--status-bar-height, ${STATUS_BAR_HEIGHT_PX}px) + var(--space-4))`,
           right: 'var(--space-4)',
           zIndex: 60,
-          minWidth: '360px',
+          width: '360px',
           maxWidth: 'calc(100vw - var(--space-8))',
           // No background override: Banner's severity colour is the whole point
           // of passing a severity, and cancelling it would make a failed update
           // look exactly like an available one.
         }}
       >
-        {view.detail || view.progress?.totalBytes ? (
+        {showTextDetail || hasMeter ? (
           <span style={{ display: 'block' }}>
-            {view.detail && !view.progress?.totalBytes ? (
+            {showTextDetail ? (
               <span style={{ display: 'block', fontWeight: 400 }}>{view.detail}</span>
             ) : null}
 
             {/* Determinate downloads get the design system's meter. An unknown
                 content length gets the honest readout above and no bar at all,
                 rather than one creeping toward a number nobody measured. */}
-            {view.progress?.totalBytes ? (
+            {hasMeter && view.progress && view.progress.totalBytes ? (
               <span style={{ display: 'block', marginTop: 'var(--space-1)' }}>
                 <MeterRow
                   label="Downloading"

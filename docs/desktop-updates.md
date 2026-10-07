@@ -155,12 +155,12 @@ asked and is owed an answer.
 
 Release notes are an **operator summary written for the station**, not the
 developer changelog — see [RELEASING.md](../RELEASING.md#write-the-operator-summary)
-for where it is written and what is stripped from it. The notice carries the version and action buttons; **What's new** opens the
-full release notes in the standard drawer, which also repeats the primary action
-so reading never puts the decision out of reach. A release with no notes shows
-no "What's new" affordance. Notes are
-plain text rendered as text nodes and contain no links, so a manifest can
-neither inject markup nor send an operator to a repository.
+for where it is written and what is stripped from it. The notice carries the
+version and action buttons; **What's new** opens the full release notes in the
+standard drawer, which also repeats the primary action so reading never puts
+the decision out of reach. A release with no notes shows no "What's new"
+affordance. Notes are plain text rendered as text nodes and contain no links,
+so a manifest can neither inject markup nor send an operator to a repository.
 
 The notice is a compact panel in the corner, never a modal: an update is never
 more important than the shift in front of the operator. Dismissing it puts the
@@ -255,8 +255,8 @@ same file, exactly as `scripts/gen-download-manifest.mjs` already does for the
 download page.
 
 This is what broke v1.3.1: the manifest listed `darwin-universal`, and every Mac
-reported _"None of the fallback platforms `["darwin-aarch64-app",
-"darwin-aarch64"]` were found"_. Validation passed because the validator, the
+reported _"None of the fallback platforms `[\"darwin-aarch64-app\",
+\"darwin-aarch64\"]` were found"_. Validation passed because the validator, the
 generator, the tests and the smoke check all read one constant that encoded the
 same wrong assumption. The fix is tested against the client's lookup rule stated
 independently, not against that constant.

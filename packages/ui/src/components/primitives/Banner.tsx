@@ -26,7 +26,7 @@ export interface BannerProps {
   /** Inline action button (e.g. "View Stock"). */
   actionLabel?: string;
   onAction?: () => void;
-  /** Optional extra action controls rendered alongside the primary action. */
+  /** Secondary action buttons (e.g. ghost, sm), rendered before the primary action. */
   actions?: React.ReactNode;
   /**
    * When true, renders a dismiss (×) button and hides itself on click. Omit for
@@ -99,7 +99,7 @@ export const Banner: React.FC<BannerProps> = ({
             {icon ?? DEFAULT_ICON[severity]}
           </span>
         )}
-        <span>
+        <span style={{ minWidth: 0, overflowWrap: 'break-word' }}>
           {title && <strong style={{ marginRight: children ? '6px' : 0 }}>{title}</strong>}
           {children}
         </span>

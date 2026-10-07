@@ -27,6 +27,13 @@ import type { BusinessDayOption } from './TopBar.js';
  * is desktop-only, gated by the container.
  */
 
+/**
+ * Height of the bottom status bar strip in pixels.
+ * Matches `--status-bar-height` in CSS so floating overlays (e.g. desktop update notice)
+ * stay clear of the status bar.
+ */
+export const STATUS_BAR_HEIGHT_PX = 26;
+
 export type BusinessDayStatus = 'open' | 'closed' | 'not-created' | 'unknown' | 'unavailable';
 
 export interface StatusBarProps {
@@ -162,7 +169,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       role="status"
       aria-label="App status"
       className={cn(
-        'flex h-[26px] items-center border-t border-border-soft bg-surface-alt px-2 text-ink-muted',
+        'flex h-[var(--status-bar-height,26px)] items-center border-t border-border-soft bg-surface-alt px-2 text-ink-muted',
         className,
       )}
     >

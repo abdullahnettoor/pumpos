@@ -4,7 +4,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { UpdateNotice, describeUpdateState } from './UpdateNotice.js';
-import { releaseSummaryLine } from './version.js';
 import type { DesktopUpdates } from './useDesktopUpdates.js';
 import type { UpdateState } from './types.js';
 
@@ -84,33 +83,11 @@ describe('UpdateNotice rendering', () => {
   });
 
   it('keeps the notice compact: release notes live only in the drawer, not in the notice', () => {
-    const long = ['Drawer rounding is fixed.', '', ...Array(20).fill('Another paragraph.')].join(
-      '\n',
-    );
-    render(
-      <UpdateNotice
-        updates={updates({
-          phase: 'available',
-          currentVersion: '1.0.0',
-          update: { version: '1.1.0', notes: long },
-        })}
-      />,
-    );
-    const notice = screen.getByRole('status');
-    // Release notes are reachable only via What's new, not inline in the notice.
-    expect(notice.textContent).not.toMatch('Drawer rounding is fixed.');
-    expect(notice.textContent).not.toMatch('Another paragraph.');
-    expect(notice.innerHTML).not.toMatch(/overflow:\s*auto/);
-    expect(notice.innerHTML).not.toMatch(/max-height/);
-
-    fireEvent.click(screen.getByRole('button', { name: "What's new" }));
-    expect(screen.getByText(/Another paragraph\./)).toBeTruthy();
-    expect(screen.getByText(/Drawer rounding is fixed\./)).toBeTruthy();
-  });
-
-  it('never renders inline summary or installed version even with a multi-sentence summary', () => {
-    const multiSentence =
-      'Fuel sales now round to the paise so the drawer matches the till at close every single shift. Attendants can hand over with confidence. Hardware printer issues resolved.';
+    const multiSentence = [
+      'Fuel sales now round to the paise so the drawer matches the till at close every single shift. Attendants can hand over with confidence. Hardware printer issues resolved.',
+      '',
+      ...Array(20).fill('Another paragraph.'),
+    ].join('\n');
     render(
       <UpdateNotice
         updates={updates({
@@ -125,14 +102,20 @@ describe('UpdateNotice rendering', () => {
     expect(screen.getByRole('button', { name: 'Download update' })).toBeTruthy();
     expect(screen.getByRole('button', { name: "What's new" })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Not now' })).toBeTruthy();
-    // Multi-sentence summary is NOT in the notice
+
+    // Release notes and installed version never appear inline in the notice,
+    // even with a multi-sentence summary.
     expect(notice.textContent).not.toMatch('Fuel sales now round');
     expect(notice.textContent).not.toMatch('Attendants can hand over');
+    expect(notice.textContent).not.toMatch('Another paragraph.');
     expect(notice.textContent).not.toMatch('You are on');
+    expect(notice.innerHTML).not.toMatch(/overflow:\s*auto/);
+    expect(notice.innerHTML).not.toMatch(/max-height/);
 
-    // But it is in the drawer
+    // Full notes are reachable only via What's new.
     fireEvent.click(screen.getByRole('button', { name: "What's new" }));
-    expect(screen.getByText(multiSentence)).toBeTruthy();
+    expect(screen.getByText(/Fuel sales now round/)).toBeTruthy();
+    expect(screen.getByText(/Another paragraph\./)).toBeTruthy();
   });
 
   it('closes the notes drawer without losing the update action', () => {
@@ -416,12 +399,6 @@ describe('release notes handling in update states', () => {
     // The notice carries no inline summary or detail; the drawer carries the notes.
     expect(view?.notes).toBe(body);
     expect(view?.detail).toBeUndefined();
-  });
-
-  it('reads past a bullet marker to the first real sentence (releaseSummaryLine utility)', () => {
-    expect(releaseSummaryLine('\n- Drawer rounding is fixed.\n- Faster reports.')).toBe(
-      'Drawer rounding is fixed.',
-    );
   });
 });
 
