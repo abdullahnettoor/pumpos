@@ -17,7 +17,8 @@ export const fetchGithubReleases: FetchReleases = async () => {
     { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'pumpos-api' } },
   );
   if (!res.ok) throw new Error(`GitHub releases request failed (${res.status})`);
-  return (await res.json()) as GithubReleaseLike[];
+  const releases: GithubReleaseLike[] = await res.json();
+  return releases;
 };
 
 export interface DesktopDownloadsService {

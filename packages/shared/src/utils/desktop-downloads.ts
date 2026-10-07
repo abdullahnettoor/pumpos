@@ -60,7 +60,7 @@ export function resolveDesktopDownloads(
   const published = releases.filter((r) => !r.draft && !r.prerelease);
   const newestTag = published[0]?.tag_name;
   const result = Object.fromEntries(
-    DESKTOP_PLATFORMS.map((p) => [p, { available: false } as DesktopDownload]),
+    DESKTOP_PLATFORMS.map((p) => [p, { available: false }]),
   ) as DesktopDownloads;
 
   for (const platform of DESKTOP_PLATFORMS) {
