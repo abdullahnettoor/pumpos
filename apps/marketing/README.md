@@ -16,11 +16,11 @@ npm run preview
 | --- | --- |\
 | `SITE` | Canonical origin, sitemap and sharing URLs |
 | `PUBLIC_CONSOLE_URL` | Web console destination |
-| `PUBLIC_DOWNLOAD_MANIFEST_URL` | Runtime installer availability manifest |
 | `PUBLIC_DEMO_BOOKING_URL` | Optional HTTPS Cal.com booking URL |
 
-Without a booking URL, `/demo` offers email-based scheduling. Unavailable
-installers have no download link. Final legal copy is a publication dependency.
+Without a booking URL, `/demo` offers email-based scheduling. The desktop
+installer is offered inside the console, not on this site. Final legal copy is a
+publication dependency.
 
 ## Design and content
 
