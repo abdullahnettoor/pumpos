@@ -255,8 +255,8 @@ same file, exactly as `scripts/gen-download-manifest.mjs` already does for the
 download page.
 
 This is what broke v1.3.1: the manifest listed `darwin-universal`, and every Mac
-reported _"None of the fallback platforms `[\"darwin-aarch64-app\",
-\"darwin-aarch64\"]` were found"_. Validation passed because the validator, the
+reported _"None of the fallback platforms `["darwin-aarch64-app",
+"darwin-aarch64"]` were found"_. Validation passed because the validator, the
 generator, the tests and the smoke check all read one constant that encoded the
 same wrong assumption. The fix is tested against the client's lookup rule stated
 independently, not against that constant.
