@@ -14,17 +14,29 @@
 # previews used to run forever (#252, #296, #104).
 set -euo pipefail
 
+# Delete one Worker. One that is already gone counts as done: the close-event
+# run and the sweep can race for the same Worker (Cloudflare code 10090).
 delete_worker() {
   echo "Deleting $1"
-  npx --yes wrangler@4 delete --name "$1" --force
+  local out
+  if out=$(npx --yes wrangler@4 delete --name "$1" --force 2>&1); then
+    echo "$out" | tail -1
+    return 0
+  fi
+  if grep -q "10090" <<<"$out"; then
+    echo "  $1 was already deleted"
+    return 0
+  fi
+  echo "$out"
+  return 1
 }
 
 if [[ $# -ge 1 ]]; then
   pr="$1"
   for app in console mobile marketing; do
     name="pr-${pr}-pumpos-${app}"
-    # Ignore "not found": not every PR deploys every app.
-    delete_worker "$name" || echo "  $name: nothing to delete"
+    # Not every PR deploys every app; a missing Worker is fine.
+    delete_worker "$name"
   done
   exit 0
 fi
