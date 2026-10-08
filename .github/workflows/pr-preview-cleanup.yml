@@ -1,0 +1,43 @@
+name: PR preview cleanup
+
+# Tears down the per-PR preview Workers that pr-preview.yml deploys.
+#
+# Two triggers, because neither is enough alone:
+# - `pull_request_target: closed` removes a PR's previews as soon as it closes.
+#   It runs from the base branch's workflow, so unlike `pull_request` it still
+#   fires when the PR has merge conflicts. It never checks out PR code.
+# - A daily sweep deletes any pr-<n>-pumpos-* Worker whose PR is not open.
+#   That catches what no close event reaches: a stacked PR auto-closed because
+#   its base branch was deleted, a deploy that finished after the close, or a
+#   failed delete.
+
+on:
+  pull_request_target:
+    types: [closed]
+  schedule:
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: pr-preview-cleanup-${{ github.event.number || 'sweep' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  cleanup:
+    name: Remove preview workers
+    runs-on: ubuntu-latest
+    steps:
+      # Base branch only (the default for pull_request_target): the script is
+      # trusted code, and nothing from the PR is checked out or executed.
+      - uses: actions/checkout@v7
+      - name: Delete preview Workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.number }}
+        run: scripts/pr-preview-sweep.sh ${PR_NUMBER}
