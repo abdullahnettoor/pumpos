@@ -890,12 +890,17 @@ export class CloudTransactionService {
     });
   }
 
+  /**
+   * The API updates only the fields sent, so a caller changing one thing (the
+   * mobile credit-limit sheet) sends just that. Pass an `idempotencyKey` so a
+   * retried save cannot apply twice.
+   */
   async updateCustomer(
     id: string,
     payload: {
-      name: string;
+      name?: string;
       phone?: string | null;
-      customerType: 'Regular' | 'Credit' | 'Fleet';
+      customerType?: 'Regular' | 'Credit' | 'Fleet';
       creditLimit?: number | null;
       fleetCode?: string | null;
       isPrepaid?: boolean;
@@ -909,11 +914,16 @@ export class CloudTransactionService {
         billingAddress?: string | null;
       } | null;
     },
+    opts?: { idempotencyKey?: string },
   ): Promise<any> {
-    return request<any>(`/transactions/customers/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
+    return request<any>(
+      `/transactions/customers/${id}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async topupCustomer(
