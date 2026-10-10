@@ -56,6 +56,8 @@ const SUPPLIER = '00000000-0000-0000-0000-00000000b115';
 const CATEGORY = '00000000-0000-0000-0000-00000000b116';
 const INCOME_CATEGORY = '00000000-0000-0000-0000-00000000b117';
 const CASH_ACCOUNT = '00000000-0000-0000-0000-00000000b118';
+const SALE_1 = '00000000-0000-0000-0000-00000000b119';
+const SALE_2 = '00000000-0000-0000-0000-00000000b11a';
 
 const BOOTSTRAP = `
   do $$ begin
@@ -282,6 +284,7 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
     // → 100 must be added to drawer cash with a per-seller breakdown line.
     await db.insert(schema.sales).values([
       {
+        id: SALE_1,
         documentNumber: 'SAL-1',
         shiftId: SHIFT,
         businessDayId: DAY,
@@ -293,6 +296,7 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
         totalAmount: '120',
       },
       {
+        id: SALE_2,
         documentNumber: 'SAL-2',
         shiftId: SHIFT,
         businessDayId: DAY,
@@ -305,6 +309,16 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
         nonCashAmount: '20',
       },
     ]);
+    await db.insert(schema.saleItems).values(
+      [SALE_1, SALE_2].map((saleId) => ({
+        saleId,
+        productId: OIL,
+        quantity: '1',
+        unitPrice: '120',
+        taxAmount: '0',
+        lineTotal: '120',
+      })),
+    );
 
     await db.insert(schema.customers).values({
       id: CUSTOMER,
@@ -542,6 +556,14 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
     });
     expect(snap.creditSalesTotal).toBe(2000);
     expect(snap.cashSalesSum).toBe(5100);
+    // Figures the mobile Shift Summary page reads straight from the snapshot.
+    expect(snap.productSales).toEqual({
+      total: 240,
+      lines: [{ productId: OIL, productName: 'Engine Oil', quantity: 2, value: 240 }],
+    });
+    expect(snap.totalSalesValue).toBe(50 * 100 + 60 * 90 + 240);
+    expect(snap.payments).toEqual({ cash: 5100, upi: 100, card: 400, credit: 2000 });
+    expect(snap.nozzleReadings.map((r: any) => r.duName)).toEqual(['DU-1', 'DU-1']);
     expect(snap).not.toHaveProperty('cardCollectionsSum'); // collections are Office Records
   });
 

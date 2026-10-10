@@ -60,12 +60,21 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
       </>
     );
 
-  // Home lays out its own sections (cards inset 12px, labels 16px); the rest still use the padded page.
+  // Home and Shifts lay out their own sections (cards inset 12px, labels 16px); the rest still use the padded page.
   if (tab === 'home')
     return (
       <>
         {header}
         <HomeScreen station={station} />
+      </>
+    );
+
+  // Shifts, like Home, lays out its own sections.
+  if (tab === 'shifts')
+    return (
+      <>
+        {header}
+        <ShiftsScreen station={station} />
       </>
     );
 
@@ -86,10 +95,6 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
       </>
     );
 
-  return (
-    <>
-      {header}
-      <Padded>{tab === 'shifts' && <ShiftsScreen station={station} />}</Padded>
-    </>
-  );
+  // Every tab is wired above; a new TabKey lands here with just its header.
+  return <>{header}</>;
 };

@@ -20,6 +20,9 @@ interface Props {
   /** Override the fuel / products totals when they are known more exactly than the line sums. */
   fuelTotal?: number;
   productsTotal?: number;
+  /** Replace the default empty-state lines (a closed Shift with no product sales, a read still loading). */
+  fuelEmpty?: string;
+  productsEmpty?: string;
 }
 
 /** Fuel grades take these in turn; a swatch is colour plus the grade name beside it. */
@@ -74,6 +77,8 @@ export const SalesByProduct: React.FC<Props> = ({
   productsTitle = 'Lubes & others',
   fuelTotal,
   productsTotal,
+  fuelEmpty = 'Fuel appears once a Shift closes.',
+  productsEmpty = 'No product sales yet.',
 }) => {
   const {
     total,
@@ -111,7 +116,7 @@ export const SalesByProduct: React.FC<Props> = ({
       </div>
 
       <GroupHeader title="Fuel" note={fuelNote} />
-      {fuel.length === 0 && <Empty>Fuel appears once a Shift closes.</Empty>}
+      {fuel.length === 0 && <Empty>{fuelEmpty}</Empty>}
       {fuel.map((f, i) => (
         <Row
           key={f.key}
@@ -128,7 +133,7 @@ export const SalesByProduct: React.FC<Props> = ({
       ))}
 
       <GroupHeader title={productsTitle} note={productsNote} />
-      {products.length === 0 && <Empty>No product sales yet.</Empty>}
+      {products.length === 0 && <Empty>{productsEmpty}</Empty>}
       {products.map((p) => (
         <Row
           key={p.key}
