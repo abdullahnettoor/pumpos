@@ -1,4 +1,4 @@
-import { drawerKey, isTwoLevelVarianceSnapshot } from '@pump/shared';
+import { drawerKey, isTwoLevelVarianceSnapshot, type ProductType } from '@pump/shared';
 import type { DssrSourceData } from './ports.js';
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
@@ -244,10 +244,10 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     kind: 'fuel' | 'merchandise';
     /**
      * The product's category (its `productType`), frozen with the day. Set on
-     * merchandise lines only; absent for an unknown product and on snapshots
-     * frozen before #392.
+     * merchandise lines only, null for an unknown product; absent on fuel lines
+     * and on snapshots frozen before #392.
      */
-    productType?: string;
+    productType?: ProductType | null;
     quantity: number;
     revenue: number;
     cogs: number;
@@ -287,7 +287,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       name: prod?.name ?? 'Unknown',
       code: prod?.code ?? '',
       kind: 'merchandise',
-      ...(prod?.productType ? { productType: prod.productType } : {}),
+      productType: prod?.productType ?? null,
       quantity: round2(m.qty),
       revenue: rev,
       cogs: c,

@@ -6,6 +6,7 @@
  * each deriver says what it does then (`products: null`, payments summed from
  * the Handovers, the Dispenser Unit from today's setup).
  */
+import { productCategoryOf } from '@pump/shared';
 import { num, round2 } from '../home/num.js';
 import { unitLabel, type FuelLine, type ProductLine, type Snapshot } from '../home/sales.js';
 import { deriveShiftVariance, drawerName, type ShiftVariance } from './variance.js';
@@ -170,15 +171,13 @@ export function deriveShiftProducts(snap: Snapshot): ShiftProducts | null {
   const ps = snap.productSales as Snapshot | undefined;
   if (!ps) return null;
   return {
-    lines: list(ps.lines)
-      .map((l) => ({
-        key: String(l.productId ?? l.productName),
-        name: String(l.productName ?? 'Product'),
-        productType: typeof l.productType === 'string' ? l.productType : null,
-        quantity: num(l.quantity),
-        value: num(l.value),
-      }))
-      .sort((a, b) => b.value - a.value),
+    lines: list(ps.lines).map((l) => ({
+      key: String(l.productId ?? l.productName),
+      name: String(l.productName ?? 'Product'),
+      productType: productCategoryOf(l.productType),
+      quantity: num(l.quantity),
+      value: num(l.value),
+    })),
     total: num(ps.total),
   };
 }

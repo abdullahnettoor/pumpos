@@ -6,6 +6,7 @@ import {
   MIN_SEGMENT_SHARE,
   unitsLabel,
 } from './byProduct.js';
+import type { ProductType } from '@pump/shared';
 import type { FuelLine, ProductLine } from './sales.js';
 
 const fuel = (key: string, value: number, quantity = 100): FuelLine => ({
@@ -19,6 +20,7 @@ const fuel = (key: string, value: number, quantity = 100): FuelLine => ({
 const product = (key: string, value: number, quantity = 1): ProductLine => ({
   key,
   name: key,
+  productType: null,
   quantity,
   value,
 });
@@ -84,7 +86,7 @@ describe('labels', () => {
 describe('groupByCategory (#392)', () => {
   const line = (
     key: string,
-    productType: string | null | undefined,
+    productType: ProductType | null,
     quantity: number,
     value: number,
   ): ProductLine => ({ key, name: key, productType, quantity, value });
@@ -105,20 +107,38 @@ describe('groupByCategory (#392)', () => {
     ]);
   });
 
-  it('keeps Other last however large it is, and files unrecognised types there', () => {
+  it('keeps Other last however large it is', () => {
     const rows = groupByCategory([
       line('a', 'OTHER', 1, 9000),
-      line('b', 'MERCHANDISE', 1, 100),
+      line('b', 'ACCESSORY', 1, 100),
       line('c', 'CONSUMABLE', 1, 50),
     ]);
     expect(rows.map((r) => [r.name, r.value])).toEqual([
+      ['Accessories', 100],
       ['Consumables', 50],
-      ['Other', 9100],
+      ['Other', 9000],
     ]);
   });
 
+  it('folds a FUEL-typed Product Sale into Other, never a "Fuel" row', () => {
+    const rows = groupByCategory([
+      line('oil', 'LUBRICANT', 1, 500),
+      line('diesel-can', 'FUEL', 2, 300),
+      line('misc', 'OTHER', 1, 20),
+    ]);
+    expect(rows.map((r) => [r.name, r.quantity, r.value])).toEqual([
+      ['Lubricants', 1, 500],
+      ['Other', 3, 320],
+    ]);
+  });
+
+  it('shows a FUEL-typed line alone as Other, not as the legacy Products row', () => {
+    const rows = groupByCategory([line('diesel-can', 'FUEL', 2, 300)]);
+    expect(rows.map((r) => [r.key, r.name])).toEqual([['OTHER', 'Other']]);
+  });
+
   it('puts a line with no category under Other when its siblings have one', () => {
-    const rows = groupByCategory([line('a', 'LUBRICANT', 1, 500), line('b', undefined, 2, 70)]);
+    const rows = groupByCategory([line('a', 'LUBRICANT', 1, 500), line('b', null, 2, 70)]);
     expect(rows.map((r) => [r.name, r.quantity, r.value])).toEqual([
       ['Lubricants', 1, 500],
       ['Other', 2, 70],
@@ -126,7 +146,7 @@ describe('groupByCategory (#392)', () => {
   });
 
   it('falls back to one Products row when no line has a category (a legacy snapshot)', () => {
-    const rows = groupByCategory([line('a', undefined, 3, 500), line('b', null, 2, 70)]);
+    const rows = groupByCategory([line('a', null, 3, 500), line('b', null, 2, 70)]);
     expect(rows).toEqual([{ key: 'products', name: 'Products', quantity: 5, value: 570 }]);
   });
 

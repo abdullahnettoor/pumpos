@@ -25,6 +25,10 @@ const USER = '00000000-0000-0000-0000-00000000c103';
 const PRODUCT = '00000000-0000-0000-0000-00000000c104';
 const TANK = '00000000-0000-0000-0000-00000000c105';
 const TANK_2 = '00000000-0000-0000-0000-00000000c106';
+const OIL = '00000000-0000-0000-0000-00000000c107';
+const TEMPLATE = '00000000-0000-0000-0000-00000000c300';
+const SHIFT_2 = '00000000-0000-0000-0000-00000000c301';
+const SALE = '00000000-0000-0000-0000-00000000c302';
 const DAY_1 = '00000000-0000-0000-0000-00000000c201';
 const DAY_2 = '00000000-0000-0000-0000-00000000c202';
 const DAY_3 = '00000000-0000-0000-0000-00000000c203';
@@ -113,6 +117,15 @@ describe.skipIf(!CONNECTION)('DSSR tank stock movement against real Postgres', (
       inventoryType: 'BULK',
       unit: 'Litre',
     } as never);
+    await db.insert(schema.products).values({
+      id: OIL,
+      organizationId: ORG,
+      name: 'Engine Oil',
+      code: 'EO',
+      productType: 'LUBRICANT',
+      inventoryType: 'DISCRETE',
+      unit: 'pcs',
+    } as never);
     for (const [id, name] of [
       [TANK, 'Tank 1'],
       [TANK_2, 'Tank 2'],
@@ -139,6 +152,44 @@ describe.skipIf(!CONNECTION)('DSSR tank stock movement against real Postgres', (
         status: 'CLOSED',
         openedBy: USER,
       });
+
+    // Day 2 also sold one Engine Oil (a merchandise line, #392).
+    await db.insert(schema.shiftTemplates).values({
+      id: TEMPLATE,
+      organizationId: ORG,
+      name: 'Morning',
+      startTime: '06:00',
+      endTime: '14:00',
+    });
+    await db.insert(schema.shifts).values({
+      id: SHIFT_2,
+      shiftTemplateId: TEMPLATE,
+      organizationId: ORG,
+      stationId: STATION,
+      businessDayId: DAY_2,
+      status: 'CLOSED',
+      openedBy: USER,
+    } as never);
+    await db.insert(schema.sales).values({
+      id: SALE,
+      documentNumber: 'SAL-1',
+      shiftId: SHIFT_2,
+      businessDayId: DAY_2,
+      saleType: 'Product',
+      paymentMethod: 'Cash',
+      attendantId: USER,
+      subtotalAmount: '120',
+      taxAmount: '0',
+      totalAmount: '120',
+    } as never);
+    await db.insert(schema.saleItems).values({
+      saleId: SALE,
+      productId: OIL,
+      quantity: '1',
+      unitPrice: '120',
+      taxAmount: '0',
+      lineTotal: '120',
+    } as never);
 
     // Day 1: opening balance 10000 and a purchase of 6000, 1500 sold, dip posts -50.
     await move(DAY_1, TANK, 'OpeningBalance', 10000);
@@ -216,9 +267,13 @@ describe.skipIf(!CONNECTION)('DSSR tank stock movement against real Postgres', (
     expect(row.tankMovement.closingQuantity).toBe(12559.5);
   });
 
-  it("loads each product's type with the products it already reads (#392)", async () => {
+  it("freezes a merchandise line's category, read from the product's type (#392)", async () => {
     const source = await new DrizzleDssrDataReader(db).readBusinessDay(DAY_2);
-    expect(Object.values(source.products).map((p) => p.productType)).toContain('FUEL');
+    expect(source.products[PRODUCT]?.productType).toBe('FUEL');
+    expect(source.products[OIL]?.productType).toBe('LUBRICANT');
+    const payload = composeDssr(source) as { pnl: { byProduct: Record<string, any>[] } };
+    const line = payload.pnl.byProduct.find((r) => r.kind === 'merchandise' && r.productId === OIL);
+    expect(line).toMatchObject({ name: 'Engine Oil', quantity: 1, productType: 'LUBRICANT' });
   });
 
   it('leaves a day with no dips without a movement read', async () => {

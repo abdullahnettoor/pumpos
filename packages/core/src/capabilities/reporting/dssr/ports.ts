@@ -1,3 +1,5 @@
+import type { ProductType } from '@pump/shared';
+
 export interface DssrSnapshot {
   id: string;
   organizationId: string;
@@ -117,11 +119,18 @@ export interface DssrSourceData {
   saleItems: DssrSaleItem[];
   /**
    * productId → { name, code, costBasis } for fuel roll-up + COGS, plus the
-   * `productType` merchandise lines are grouped under (#392).
+   * category merchandise lines are grouped under (#392): the product's
+   * `productType`, normalised by the reader through `productCategoryOf`.
    */
   products: Record<
     string,
-    { name: string; code: string; unit: string; costBasis: number; productType?: string }
+    {
+      name: string;
+      code: string;
+      unit: string;
+      costBasis: number;
+      productType?: ProductType | null;
+    }
   >;
   /** nozzleId → nozzle name. */
   nozzles: Record<string, string>;

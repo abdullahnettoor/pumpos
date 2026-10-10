@@ -65,21 +65,21 @@ describe('composeDssr product categories (#392)', () => {
     expect(lines.reduce((s: number, r: any) => s + r.revenue, 0)).toBe(2670);
   });
 
-  it('leaves productType off a product the catalogue no longer resolves', () => {
+  it('records a null productType for a product the catalogue no longer resolves', () => {
     const d = composeDssr(source({ products, saleItems: [item('gone', 1, 99)] })) as any;
     const [line] = merch(d);
     expect(line).toMatchObject({ name: 'Unknown', revenue: 99 });
-    expect(line).not.toHaveProperty('productType');
+    expect(line).toMatchObject({ productType: null });
   });
 
-  it('leaves productType off when the source carries none (the pre-#392 reader shape)', () => {
+  it('records a null productType when the source carries none (the pre-#392 reader shape)', () => {
     const d = composeDssr(
       source({
         products: { oil: { name: 'Engine Oil', code: 'EO', unit: 'Pc', costBasis: 400 } },
         saleItems: [item('oil', 1, 840)],
       }),
     ) as any;
-    expect(merch(d)[0]).not.toHaveProperty('productType');
+    expect(merch(d)[0]).toMatchObject({ productType: null });
   });
 
   it('does not tag fuel rows', () => {

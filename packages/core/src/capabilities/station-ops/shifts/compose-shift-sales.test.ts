@@ -103,6 +103,22 @@ describe('composeShiftProductSales', () => {
     expect(out.lines[0]).toMatchObject({ productName: 'Product', productType: null });
   });
 
+  it('reads an unrecognised product type as Other', () => {
+    const out = composeShiftProductSales(
+      [
+        {
+          productId: 'x',
+          productName: 'X',
+          productType: 'MERCHANDISE',
+          quantity: 1,
+          lineTotal: 10,
+        },
+      ],
+      10,
+    );
+    expect(out.lines[0]?.productType).toBe('OTHER');
+  });
+
   it('is empty for a Shift with no Product Sales', () => {
     expect(composeShiftProductSales([], 0)).toEqual({ total: 0, lines: [] });
   });

@@ -1,3 +1,5 @@
+import { productCategoryOf, type ProductType } from '@pump/shared';
+
 /**
  * The sales figures a Shift Summary snapshot carries beyond the fuel totals the
  * close writes: Product Sales, the payment split and the Shift's total sales.
@@ -19,7 +21,7 @@ export interface ShiftProductSaleLine {
   productId: string;
   productName: string;
   /** The product's category (its `productType`); null when the product is unknown. */
-  productType: string | null;
+  productType: ProductType | null;
   quantity: number;
   value: number;
 }
@@ -40,7 +42,7 @@ export interface ShiftPayments {
 interface ProductRow {
   productId?: string | null;
   productName?: string | null;
-  productType?: string | null;
+  productType?: unknown;
   quantity?: number | string | null;
   lineTotal?: number | string | null;
 }
@@ -59,7 +61,7 @@ export function composeShiftProductSales(
     const line = byProduct.get(productId) ?? {
       productId,
       productName: r.productName ?? 'Product',
-      productType: r.productType ?? null,
+      productType: productCategoryOf(r.productType),
       quantity: 0,
       value: 0,
     };

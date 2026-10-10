@@ -149,7 +149,7 @@ export const SalesByProduct: React.FC<Props> = ({
           value={c.value}
         />
       ))}
-      {categories.length > 1 && (
+      {categories.length > 0 && (
         <div className="grid grid-cols-[12px_1fr_auto_auto] items-center gap-2.5 border-t border-line bg-card-alt px-3 py-2.5">
           <span />
           <span className="text-[13px] font-semibold text-text-high">Products total</span>

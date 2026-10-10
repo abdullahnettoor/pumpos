@@ -6,7 +6,7 @@
  * Shift Summaries; a running Shift's fuel is "counted at close"), while Product
  * Sales are live and include the open Shift.
  */
-import { shiftBusinessDate } from '@pump/shared';
+import { productCategoryOf, shiftBusinessDate, type ProductType } from '@pump/shared';
 import { businessWeekday } from './dates.js';
 import { num } from './num.js';
 
@@ -31,10 +31,10 @@ export interface ProductLine {
   name: string;
   /**
    * The product's category (its `productType`), frozen into snapshots from #392
-   * on. Absent on older snapshots: the Sales by product block then shows one
+   * on. Null on older snapshots: the Sales by product block then shows one
    * "Products" line rather than guessing.
    */
-  productType?: string | null;
+  productType: ProductType | null;
   /** Units sold; 0 when the line has no quantity detail. */
   quantity: number;
   value: number;
@@ -83,14 +83,21 @@ function productLines(snap: Snapshot, productsValue: number): ProductLine[] {
     .map((p) => ({
       key: String(p.productId ?? p.name),
       name: String(p.name ?? 'Product'),
-      productType: typeof p.productType === 'string' ? p.productType : null,
+      productType: productCategoryOf(p.productType),
       quantity: num(p.quantity),
       value: num(p.revenue),
-    }))
-    .sort((a, b) => b.value - a.value);
+    }));
   if (lines.length === 0)
     return productsValue > 0
-      ? [{ key: 'products', name: 'Products', quantity: 0, value: productsValue }]
+      ? [
+          {
+            key: 'products',
+            name: 'Products',
+            productType: null,
+            quantity: 0,
+            value: productsValue,
+          },
+        ]
       : [];
   return lines;
 }
