@@ -97,7 +97,7 @@ export const Pane: React.FC<Props> = ({
       onScroll={(e) => {
         if (active) savedTop.current = e.currentTarget.scrollTop;
       }}
-      className={`absolute overflow-y-auto overscroll-contain scroll-pt-[var(--pinned-header-h,0px)] ${BOTTOM[bottom]} ${active ? '' : 'hidden'}`}
+      className={`no-scrollbar absolute overflow-y-auto overscroll-contain scroll-pt-[var(--pinned-header-h,0px)] ${BOTTOM[bottom]} ${active ? '' : 'hidden'}`}
       aria-hidden={!active}
     >
       <PaneChromeContext.Provider value={chrome}>

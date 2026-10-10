@@ -130,7 +130,7 @@ export const AttendantScreen: React.FC<{
         onOpenAccount={() => setAccountOpen(true)}
         edgeClass={scrollEdgeClass(scrolled)}
       />
-      <main ref={setScroller} className="flex-1 overflow-y-auto px-4 pt-4">
+      <main ref={setScroller} className="no-scrollbar flex-1 overflow-y-auto px-4 pt-4">
         {isForm ? body : <div className="pb-8">{body}</div>}
       </main>
       <AccountSheet

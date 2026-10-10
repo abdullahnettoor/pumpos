@@ -106,7 +106,7 @@ const SheetLayer: React.FC<Omit<Props, 'open' | 'backLayer'>> = ({
         aria-modal="true"
         aria-label={label}
         tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 max-h-[88%] overflow-y-auto rounded-t-[26px] border-t border-line bg-background pt-2 shadow-sheet outline-none"
+        className="no-scrollbar absolute inset-x-0 bottom-0 max-h-[88%] overflow-y-auto rounded-t-[26px] border-t border-line bg-background pt-2 shadow-sheet outline-none"
         style={{ paddingBottom: 'calc(24px + env(safe-area-inset-bottom))' }}
       >
         <div className="mx-auto mb-3 mt-0.5 h-[5px] w-[38px] rounded-full bg-line-strong" />
