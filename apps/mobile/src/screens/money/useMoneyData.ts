@@ -9,11 +9,9 @@ import {
   useSupplierStatement,
   useSuppliers,
 } from '@pump/ui';
-import { businessDateSettings, resolveBusinessDate, type Station } from '@pump/shared';
 import type { CustomerReceivable, SupplierPayable } from '@pump/shared';
 import type { MoneyCustomer, MoneySupplier } from '../../lib/money/parties.js';
-import { STATEMENT_END, statementWindowStart } from '../../lib/money/statement.js';
-import { useNow } from '../../lib/useNow.js';
+import type { DateRange } from '../../lib/money/statementRange.js';
 
 /**
  * The only place the Money tab's queries are read: the customers and suppliers
@@ -60,33 +58,15 @@ export function useCustomerReceivableData(
 }
 
 /**
- * The statement window: the last `months` calendar months up to the open end.
- * The start is the first of a month, so the query key is stable until the month
- * rolls over. Shared by the customer and supplier statements.
+ * A customer's statement over a date range (the ranged ledger: server opening
+ * balance, enriched rows).
  */
-function useStatementRange(station: Station | null | undefined, months: number) {
-  const { timeZone, dayStartsAt } = businessDateSettings(station?.settings);
-  const now = useNow(60 * 60_000);
-  const today = resolveBusinessDate({ now: new Date(now), timeZone, dayStartsAt });
-  return { from: statementWindowStart(today, months), to: STATEMENT_END };
-}
-
-/**
- * A customer's statement over the last `months` calendar months (the ranged
- * ledger: server opening balance, enriched rows).
- */
-export function useCustomerStatementData(
-  customerId: string,
-  station: Station | null | undefined,
-  months: number,
-) {
-  const { from, to } = useStatementRange(station, months);
-  const q = useCustomerStatement(customerId, { from, to });
+export function useCustomerStatementData(customerId: string, range: DateRange) {
+  const q = useCustomerStatement(customerId, range);
   return {
-    from,
     ledger: q.data ?? null,
     isLoading: q.isLoading,
-    /** A wider window is on its way; `ledger` still holds the previous one. */
+    /** A window reaching further back is on its way; `ledger` still holds the previous one. */
     isFetchingMore: q.isPlaceholderData,
     isError: q.isError,
     refetch: q.refetch,
@@ -119,19 +99,13 @@ export function useSupplierPayableData(
   return { summary: q.data ?? null, isLoading: q.isLoading, isError: q.isError };
 }
 
-/** A supplier's statement over the last `months` calendar months, like the customer's. */
-export function useSupplierStatementData(
-  supplierId: string,
-  station: Station | null | undefined,
-  months: number,
-) {
-  const { from, to } = useStatementRange(station, months);
-  const q = useSupplierStatement(supplierId, { from, to });
+/** A supplier's statement over a date range, like the customer's. */
+export function useSupplierStatementData(supplierId: string, range: DateRange) {
+  const q = useSupplierStatement(supplierId, range);
   return {
-    from,
     ledger: q.data ?? null,
     isLoading: q.isLoading,
-    /** A wider window is on its way; `ledger` still holds the previous one. */
+    /** A window reaching further back is on its way; `ledger` still holds the previous one. */
     isFetchingMore: q.isPlaceholderData,
     isError: q.isError,
     refetch: q.refetch,

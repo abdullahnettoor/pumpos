@@ -14,13 +14,15 @@ import { SectionLabel } from '../../ui/SectionLabel.js';
 import { SeeAllButton } from '../../ui/SeeAllButton.js';
 import { StatementList } from './StatementList.js';
 
-/** A statement that covers only the months since `from`; what came before is carried in as a balance. */
+/** A statement that covers one date range; what came before is carried in as a balance. */
 export interface StatementWindow {
-  /** First day of the window (`YYYY-MM-DD`). */
+  /** First day of the range (`YYYY-MM-DD`). */
   from: string;
+  /** "October 2026": the range in words. */
+  label: string;
   /** Owed just before `from` (the ranged ledger's periodOpeningBalance). */
   openingBalance: number;
-  /** Fetch an earlier window; absent when there is no entry before `from` at all. */
+  /** Add an earlier month; absent when there is no entry before `from`, or the range was picked by hand. */
   onEarlier?: () => void;
   /** An earlier window is being fetched: the rows stay, the button says so. */
   isLoadingEarlier?: boolean;
@@ -34,8 +36,10 @@ interface Props {
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
-  /** Set for a windowed statement (the customer's ranged ledger); unset = the rows are the whole ledger. */
+  /** Set for a ranged statement (the ranged ledger); unset = the rows are the whole ledger. */
   period?: StatementWindow;
+  /** Opens the range Filter; absent = no Filter button. */
+  onFilter?: () => void;
 }
 
 /** What a windowed statement says about everything before its first row. */
@@ -72,6 +76,7 @@ export const StatementSection: React.FC<Props> = ({
   isError,
   onRetry,
   period,
+  onFilter,
 }) => {
   const [visible, setVisible] = useState(STATEMENT_PAGE);
   const statement = useMemo(
@@ -81,7 +86,24 @@ export const StatementSection: React.FC<Props> = ({
 
   return (
     <>
-      <SectionLabel>Statement</SectionLabel>
+      <SectionLabel
+        right={
+          onFilter && (
+            <button
+              type="button"
+              onClick={onFilter}
+              // A 44px touch target around the small label, without growing the row.
+              className="-mx-2 -my-3.5 inline-flex min-h-11 min-w-11 items-center justify-center px-2"
+              aria-label={period ? `Filter statement, showing ${period.label}` : 'Filter statement'}
+            >
+              Filter ▾
+            </button>
+          )
+        }
+      >
+        Statement
+      </SectionLabel>
+      {period && <p className="-mt-1 px-4 pb-2 text-[11.5px] text-text-muted">{period.label}</p>}
       {isLoading ? (
         <Note>Loading statement…</Note>
       ) : isError ? (
@@ -95,7 +117,7 @@ export const StatementSection: React.FC<Props> = ({
         <Note>
           {statement.reconciled
             ? period
-              ? `No transactions since ${fullDayLabel(period.from)}.`
+              ? `No transactions in ${period.label}.`
               : 'No transactions yet.'
             : 'No statement entries to show for this balance.'}
         </Note>

@@ -7,6 +7,7 @@
  * Sales are live and include the open Shift.
  */
 import { productCategoryOf, shiftBusinessDate, type ProductType } from '@pump/shared';
+import { unitLabel } from '@pump/ui';
 import { businessWeekday } from './dates.js';
 import { num } from './num.js';
 
@@ -61,12 +62,8 @@ export interface SalesFigures {
   closedShifts: ClosedShift[];
 }
 
-export const unitLabel = (unit: unknown): string => {
-  const u = typeof unit === 'string' ? unit.trim() : '';
-  if (!u || /^(l|ltr|litre|liter)s?$/i.test(u)) return 'L';
-  if (/^(kg|kilogram)s?$/i.test(u)) return 'kg';
-  return u;
-};
+// One unit wording for Home, Shift Summary and the Money statements (and its PDF).
+export { unitLabel };
 
 const groupedInt = (n: number) => Math.round(n).toLocaleString('en-IN');
 
