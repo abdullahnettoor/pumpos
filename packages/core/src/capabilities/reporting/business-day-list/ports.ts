@@ -1,5 +1,6 @@
 export type {
   BusinessDayList,
+  BusinessDayListComparison,
   BusinessDayListItem,
   BusinessDayListStatus,
   BusinessDayListWeek,
@@ -14,19 +15,22 @@ export interface BusinessDayListQuery {
   monthTo: string;
   /** Inclusive start of the previous 7-day window (the earliest week day needed). */
   weekFrom: string;
-  /** Current Business Date: end of the week window, and the Draft boundary. */
+  /** Current Business Date: the Draft boundary (the week windows end the day before). */
   currentBusinessDate: string;
 }
 
 /**
  * One Business Day's figures. For a closed day they come from its DSSR
- * snapshot; for an open day (or a closed day whose snapshot is missing) from
- * its closed Shift Summaries plus its Product Sales. The live DSSR preview is
- * never built for this list.
+ * snapshot; for an open day from its closed Shift Summaries plus its Product
+ * Sales. A closed day with no snapshot has no trustworthy figures: the reader
+ * reports `hasSnapshot: false` and the use-case ignores the rest. The live DSSR
+ * preview is never built for this list.
  */
 export interface BusinessDayListSourceDay {
   businessDate: string;
   dayStatus: 'OPEN' | 'CLOSED';
+  /** A DSSR snapshot exists for this date (only looked up for CLOSED days). */
+  hasSnapshot: boolean;
   fuelSales: number;
   productSales: number;
   volume: number;

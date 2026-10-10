@@ -12,7 +12,7 @@ export const ReportDayPage: React.FC<{ station: Station; businessDate: string }>
   station,
   businessDate,
 }) => (
-  <DetailPage title="Daily report" subtitle={shortDate(businessDate)}>
+  <DetailPage title="DSSR" subtitle={shortDate(businessDate)}>
     <div className="px-4">
       <DssrScreen station={station} businessDate={businessDate} />
     </div>

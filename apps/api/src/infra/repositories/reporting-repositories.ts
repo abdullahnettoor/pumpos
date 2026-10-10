@@ -1,5 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { schema, type DbClient, type DbExecutor } from '@pump/db';
+import { dssrFuelSalesValue, dssrNetVolume, dssrProductSalesValue } from '../dssr-snapshot-sql.js';
 import type {
   BusinessDayListQuery,
   BusinessDayListReader,
@@ -238,15 +239,16 @@ export class DrizzleDssrDataReader implements DssrDataReader {
  * Business Day list reader (#394): the Reports tab's month page in ONE
  * statement, whatever the number of days, Shifts or Sales.
  *
- * - SEALED days (a CLOSED day with a DSSR snapshot): scalars are extracted from
- *   `dssr_snapshots.snapshot_data` with `->` / `->>`; the snapshot JSON never
- *   reaches the Worker.
- * - Every other day (OPEN, or CLOSED without a snapshot): rolled up from that
- *   day's Shift Summaries plus its Sales, grouped in SQL. This is the same
- *   arithmetic `composeDssr` does (net fuel litres, Σ fuel sales value, Σ office
- *   cash variance, Σ sale totals), minus everything the list does not show.
- *   The live DSSR preview is deliberately not built here — only for the one day
- *   a user opens.
+ * - CLOSED days: scalars are extracted from `dssr_snapshots.snapshot_data` (a
+ *   snapshot exists iff the day was closed); the snapshot JSON never reaches the
+ *   Worker. The paths live in `infra/dssr-snapshot-sql.ts`. A CLOSED day with no
+ *   snapshot is reported `hasSnapshot: false` with no figures — it is not rolled
+ *   up, because it is not Sealed.
+ * - OPEN days: rolled up from that day's Shift Summaries plus its Sales,
+ *   grouped in SQL. This is the same arithmetic `composeDssr` does (net fuel
+ *   litres, Σ fuel sales value, Σ office cash variance, Σ sale totals), minus
+ *   everything the list does not show. The live DSSR preview is deliberately not
+ *   built here — only for the one day a user opens.
  *
  * Every table is reached through an organization/station-scoped `business_days`
  * row, so a foreign stationId yields no rows.
@@ -273,8 +275,7 @@ export class DrizzleBusinessDayListReader implements BusinessDayListReader {
       unsealed AS (
         SELECT d.id, d.business_date
         FROM days d
-        LEFT JOIN snap sn ON sn.business_date = d.business_date
-        WHERE d.status <> 'CLOSED' OR sn.business_date IS NULL
+        WHERE d.status <> 'CLOSED'
       ),
       shift_roll AS (
         SELECT s.business_day_id AS id,
@@ -299,16 +300,14 @@ export class DrizzleBusinessDayListReader implements BusinessDayListReader {
         SELECT
           d.business_date AS "businessDate",
           d.status AS "dayStatus",
+          (sn.business_date IS NOT NULL) AS "hasSnapshot",
           COALESCE(CASE WHEN sn.business_date IS NOT NULL
-            THEN (sn.data -> 'fuel' ->> 'totalSalesValue')::numeric ELSE sh.fuel_sales END, 0)
-            AS "fuelSales",
+            THEN ${dssrFuelSalesValue('sn.data')} ELSE sh.fuel_sales END, 0) AS "fuelSales",
           COALESCE(CASE WHEN sn.business_date IS NOT NULL
-            THEN (sn.data -> 'merchandise' ->> 'salesValue')::numeric ELSE sl.product_sales END, 0)
+            THEN ${dssrProductSalesValue('sn.data')} ELSE sl.product_sales END, 0)
             AS "productSales",
           COALESCE(CASE WHEN sn.business_date IS NOT NULL
-            THEN COALESCE((sn.data -> 'fuel' ->> 'totalNetVolume')::numeric,
-                          (sn.data -> 'fuel' ->> 'totalVolume')::numeric)
-            ELSE sh.volume END, 0) AS "volume",
+            THEN ${dssrNetVolume('sn.data')} ELSE sh.volume END, 0) AS "volume",
           COALESCE(CASE WHEN sn.business_date IS NOT NULL
             THEN (sn.data -> 'drawer' ->> 'totalCashVariance')::numeric ELSE sh.cash_variance END, 0)
             AS "cashVariance",
@@ -337,6 +336,7 @@ export class DrizzleBusinessDayListReader implements BusinessDayListReader {
       days: (row?.days ?? []).map((d) => ({
         businessDate: String(d.businessDate),
         dayStatus: d.dayStatus === 'CLOSED' ? 'CLOSED' : 'OPEN',
+        hasSnapshot: d.hasSnapshot === true,
         fuelSales: Number(d.fuelSales ?? 0),
         productSales: Number(d.productSales ?? 0),
         volume: Number(d.volume ?? 0),

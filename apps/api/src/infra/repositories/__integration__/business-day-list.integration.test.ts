@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { schema, type DbClient } from '@pump/db';
-import { composeDssr, ListBusinessDays } from '@pump/core';
+import { FixedClock, SequentialIdGenerator, composeDssr, ListBusinessDays } from '@pump/core';
 import type { DssrSourceData, ExecutionContext } from '@pump/core';
 import { DrizzleBusinessDayListReader } from '../reporting-repositories.js';
 
@@ -32,7 +32,18 @@ const USER = '00000000-0000-0000-0000-00000000b103';
 const TEMPLATE = '00000000-0000-0000-0000-00000000b104';
 const CURRENT = '2026-10-09';
 
-const ctx = { organizationId: ORG, stationId: STATION } as ExecutionContext;
+// 09:00 IST on 2026-10-09, Day Start 06:00 -> the Current Business Date is CURRENT.
+const ctx: ExecutionContext = {
+  organizationId: ORG,
+  stationId: STATION,
+  businessDayId: null,
+  actorId: USER,
+  correlationId: null,
+  timeZone: 'Asia/Kolkata',
+  businessDayStartsAt: '06:00',
+  clock: new FixedClock(new Date('2026-10-09T09:00:00+05:30')),
+  ids: new SequentialIdGenerator(),
+};
 
 const BOOTSTRAP = `
   do $$ begin
@@ -194,6 +205,24 @@ describe.skipIf(!CONNECTION)('Business Day list reader against real Postgres', (
     }
   }
 
+  /** A closed day with only a hand-built (older-shape) DSSR snapshot. */
+  async function seedLegacySealedDay(businessDate: string, fields: Record<string, unknown>) {
+    await db.insert(schema.businessDays).values({
+      id: uuid(),
+      organizationId: ORG,
+      stationId: STATION,
+      businessDate,
+      status: 'CLOSED',
+      openedBy: USER,
+    });
+    await db.insert(schema.dssrSnapshots).values({
+      organizationId: ORG,
+      stationId: STATION,
+      businessDate,
+      snapshotData: { businessDate, shiftsIncluded: 1, ...fields },
+    });
+  }
+
   async function seed() {
     for (const [id, name] of [
       [ORG, 'Tenant A'],
@@ -226,8 +255,14 @@ describe.skipIf(!CONNECTION)('Business Day list reader against real Postgres', (
     await seedDay(ORG, STATION, '2026-10-07', 'OPEN', two, [1200, 300], false);
     // Live today: one closed shift so far.
     await seedDay(ORG, STATION, CURRENT, 'OPEN', [shiftSnapshot({ cashVariance: 0 })], [], false);
-    // A CLOSED day whose snapshot is missing falls back to the rollup instead of zeros.
+    // A CLOSED day whose snapshot is missing is Report missing, not Sealed.
     await seedDay(ORG, STATION, '2026-10-03', 'CLOSED', [shiftSnapshot()], [], false);
+    // A Sealed day frozen before net volume existed: gross 520, testing 20 -> 500 L.
+    await seedLegacySealedDay('2026-10-04', {
+      fuel: { totalVolume: 520, totalTestingVolume: 20, totalSalesValue: 1000 },
+    });
+    // Its like-for-like partner for 10-06 (same weekday, a week earlier).
+    await seedDay(ORG, STATION, '2026-09-29', 'CLOSED', two, [100], true);
     // Previous month (older page) and a pre-testing snapshot without totalNetVolume.
     await seedDay(
       ORG,
@@ -245,7 +280,7 @@ describe.skipIf(!CONNECTION)('Business Day list reader against real Postgres', (
 
   const list = async (month?: string) => {
     const result = await new ListBusinessDays(new DrizzleBusinessDayListReader(db)).execute(
-      { stationId: STATION, currentBusinessDate: CURRENT, month },
+      { stationId: STATION, month },
       ctx,
     );
     if (!result.success) throw new Error(result.error.message);
@@ -259,7 +294,8 @@ describe.skipIf(!CONNECTION)('Business Day list reader against real Postgres', (
       ['2026-10-09', 'LIVE'],
       ['2026-10-07', 'DRAFT'],
       ['2026-10-06', 'SEALED'],
-      ['2026-10-03', 'SEALED'],
+      ['2026-10-04', 'SEALED'],
+      ['2026-10-03', 'REPORT_MISSING'],
     ]);
   });
 
@@ -285,30 +321,42 @@ describe.skipIf(!CONNECTION)('Business Day list reader against real Postgres', (
     expect(live).toMatchObject({ shiftCount: 1, fuelSales: 100000, cashVariance: 0 });
   });
 
-  it('rolls up a closed day with no snapshot rather than reporting zeros', async () => {
+  it('shows a closed day with no snapshot as Report missing, with no figures', async () => {
     const day = (await list()).days.find((d) => d.businessDate === '2026-10-03')!;
-    expect(day).toMatchObject({ status: 'SEALED', fuelSales: 100000, shiftCount: 1 });
+    expect(day).toEqual({
+      businessDate: '2026-10-03',
+      status: 'REPORT_MISSING',
+      totalSales: 0,
+      fuelSales: 0,
+      productSales: 0,
+      volume: 0,
+      cashVariance: 0,
+      shiftCount: 0,
+    });
   });
 
-  it('computes the week tiles across the month boundary and counts Past Open Days', async () => {
+  it('reads net volume (gross minus testing) from a sealed snapshot without totalNetVolume', async () => {
+    const day = (await list()).days.find((d) => d.businessDate === '2026-10-04')!;
+    expect(day).toMatchObject({ status: 'SEALED', fuelSales: 1000, volume: 500 });
+  });
+
+  it('builds the week tiles from Sealed days of the 7 completed dates, leaving Live out', async () => {
     const { week } = await list();
-    // Window 10-03..10-09: 10-03 (100000) + 10-06 (151500) + 10-07 (151500) + live (100000).
-    expect(week.total).toBe(503000);
-    // Previous window 09-26..10-02: 09-30 (40000, volume derived without totalNetVolume).
-    expect(week.previousTotal).toBe(40000);
+    // Window 10-02..10-08: sealed 10-06 (151500) + 10-04 (1000). The Draft 10-07, the
+    // Report-missing 10-03 and the Live 10-09 are not in it.
+    expect(week.total).toBe(152500);
+    expect(week.sealedDays).toBe(2);
+    // Only 10-06 has a Sealed partner a week earlier (09-29: 150000 + 100).
+    expect(week.comparison).toEqual({ total: 151500, previousTotal: 150100, days: 1 });
     // 09-30 and 10-07 are OPEN and before the Current Business Date.
     expect(week.openPastDays).toBe(2);
   });
 
-  it('derives volume from gross minus testing for a snapshot without net volume', async () => {
+  it('derives volume from gross minus testing for a rolled-up day without net volume', async () => {
     const page = await list('2026-09');
-    expect(page.days).toHaveLength(1);
-    expect(page.days[0]).toMatchObject({
-      businessDate: '2026-09-30',
-      status: 'DRAFT',
-      volume: 500,
-      cashVariance: 5,
-    });
+    expect(page.days.map((d) => d.businessDate)).toEqual(['2026-09-30', '2026-09-29']);
+    expect(page.days[0]).toMatchObject({ status: 'DRAFT', volume: 500, cashVariance: 5 });
+    expect(page.days[1]).toMatchObject({ status: 'SEALED', volume: 1480 });
   });
 
   it('points to the next older month that has days, skipping empty ones', async () => {
@@ -321,13 +369,13 @@ describe.skipIf(!CONNECTION)('Business Day list reader against real Postgres', (
   it('never returns another organization’s days, even for the same dates', async () => {
     const { week, days } = await list();
     expect(days.find((d) => d.businessDate === '2026-10-06')?.status).toBe('SEALED');
-    expect(week.total).toBe(503000);
+    expect(week.total).toBe(152500);
     const foreign = await new DrizzleBusinessDayListReader(db).load({
       organizationId: ORG,
       stationId: OTHER_STATION,
       monthFrom: '2026-10-01',
       monthTo: '2026-10-31',
-      weekFrom: '2026-09-26',
+      weekFrom: '2026-09-25',
       currentBusinessDate: CURRENT,
     });
     expect(foreign).toEqual({ days: [], openPastDays: 0, olderBusinessDate: null });

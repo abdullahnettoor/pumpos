@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { isAuthorizedForStation, canExportReports, resolveBusinessDate } from '@pump/shared';
+import { isAuthorizedForStation, canExportReports } from '@pump/shared';
 import {
   GenerateDssr,
   ListBusinessDays,
@@ -304,15 +304,12 @@ dssrRouter.get('/days', async (c) => {
     );
   }
   // Resolves the station under the caller's organization (a foreign station is
-  // a 404) and yields the clock the Current Business Date is read from.
+  // a 404); the clock goes into the context, and the use-case derives the
+  // Current Business Date from it.
   const clock = await loadStationClock(c.var.db, user.organizationId, stationId);
   if (!clock) return stationNotFound(c);
-  const currentBusinessDate = resolveBusinessDate({
-    timeZone: clock.timeZone,
-    dayStartsAt: clock.businessDayStartsAt,
-  });
   const result = await new ListBusinessDays(new DrizzleBusinessDayListReader(c.var.db)).execute(
-    { stationId, currentBusinessDate, month: c.req.query('month') },
+    { stationId, month: c.req.query('month') },
     buildContext(user, { stationId, ...clock }),
   );
   return sendResult(c, result);
