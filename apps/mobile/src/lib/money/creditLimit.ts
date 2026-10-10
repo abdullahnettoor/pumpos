@@ -1,23 +1,16 @@
 /**
  * Editing a Customer's credit limit: the rules, with no React and no fetching.
  *
- * The amount is checked by the same `creditLimit` rule the Customer form uses
- * (`customerCreateSchema`, non-negative); only what that rule cannot know is
- * added here: the text → number step and the `numeric(12,2)` column's range.
+ * The amount is checked by `creditLimitSchema` from `@pump/shared`: the one rule
+ * the Customer form and the server's create/update use-cases hold a limit to
+ * (0 or more, 2 decimals, within numeric(12,2)). Only the text → number step is
+ * added here.
  * Who may edit, and what a refusal says, are decided here too so the sheet and
  * the Customer page cannot disagree (and `creditLimit.test.ts` pins them).
  */
 import { z } from 'zod';
-import {
-  canChangeCreditLimit,
-  customerCreateSchema,
-  type AccessMode,
-  type Role,
-} from '@pump/shared';
+import { canChangeCreditLimit, creditLimitSchema, type AccessMode, type Role } from '@pump/shared';
 import { standing, type MoneyCustomer, type Standing } from './parties.js';
-
-/** `customers.credit_limit` is numeric(12,2). */
-const MAX_LIMIT = 9_999_999_999.99;
 
 export type ParsedLimit = { ok: true; value: number | null } | { ok: false; message: string };
 
@@ -30,20 +23,28 @@ export function parseCreditLimit(text: string): ParsedLimit {
   if (raw === '') return { ok: true, value: null };
   const n = Number(raw);
   if (!Number.isFinite(n)) return { ok: false, message: 'Enter a number.' };
-  const checked = customerCreateSchema.shape.creditLimit.safeParse(n);
-  if (!checked.success) return { ok: false, message: 'Enter 0 or more.' };
-  if (n > MAX_LIMIT) return { ok: false, message: 'That is more than a limit can hold.' };
-  if (Math.abs(n * 100 - Math.round(n * 100)) > 1e-6)
-    return { ok: false, message: 'Use at most 2 decimal places.' };
+  const checked = creditLimitSchema.safeParse(n);
+  if (!checked.success)
+    return { ok: false, message: checked.error.issues[0]?.message ?? 'Enter a valid amount.' };
   return { ok: true, value: n === 0 ? null : n };
 }
 
-/** React Hook Form's resolver schema: one text field, checked by `parseCreditLimit`. */
+/** Longest note the server accepts (`UpdateCustomer`). */
+export const LIMIT_NOTE_MAX = 500;
+
+/** The note to send: trimmed, and nothing at all when blank. */
+export const noteToSend = (text: string): string | undefined => text.trim() || undefined;
+
+/**
+ * React Hook Form's resolver schema: the limit as text, checked by
+ * `parseCreditLimit`, and an optional note (why the limit changed).
+ */
 export const creditLimitFormSchema = z.object({
   creditLimit: z.string().superRefine((text, ctx) => {
     const parsed = parseCreditLimit(text);
     if (!parsed.ok) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.message });
   }),
+  note: z.string().max(LIMIT_NOTE_MAX, `Keep the note to ${LIMIT_NOTE_MAX} characters.`),
 });
 export type CreditLimitForm = z.infer<typeof creditLimitFormSchema>;
 
@@ -61,9 +62,9 @@ export type CreditLimitAccess =
 /**
  * May this user change this Customer's limit from here?
  *
- *  - Role: `canChangeCreditLimit` (Owner, Manager). The API's route guard is
- *    wider (Accountants may edit a Customer), so this is the stricter, intended
- *    rule; the API stays the authority for everything else.
+ *  - Role: `canChangeCreditLimit` (Owner, Manager). The server enforces the
+ *    same rule (`UpdateCustomer` refuses anyone else with FORBIDDEN); this only
+ *    decides what to show.
  *  - Only Credit and Fleet Customers carry a limit.
  *  - `PUT /transactions/customers/:id` is BLOCKED under Restricted Access and
  *    Suspension, so the action is disabled with the reason. An Access Document

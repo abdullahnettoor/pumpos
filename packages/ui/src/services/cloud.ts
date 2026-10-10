@@ -906,6 +906,8 @@ export class CloudTransactionService {
       isPrepaid?: boolean;
       settlementCycle?: 'OPEN' | 'EOD';
       isActive?: boolean;
+      /** Why the edit was made; recorded on the audit event, not on the customer. */
+      note?: string;
       metadata?: {
         gstin?: string | null;
         stateCode?: string | null;

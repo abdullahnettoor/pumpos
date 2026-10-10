@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { inr } from '@pump/ui';
 import { standing, type MoneyCustomer, type StandingState } from '../../lib/money/parties.js';
 import { StatusBadge } from '../../ui/StatusBadge.js';
@@ -45,6 +45,8 @@ export const BalanceCard: React.FC<{ customer: MoneyCustomer; limitAction?: Limi
   const amount = s.state === 'advance' ? -s.balance : s.balance;
   const hasLimit = s.limit !== null;
   const owes = s.state === 'over' || s.state === 'near' || s.state === 'under';
+  const reasonId = useId();
+  const paused = Boolean(limitAction?.disabledReason);
 
   return (
     <HeroCard
@@ -90,17 +92,19 @@ export const BalanceCard: React.FC<{ customer: MoneyCustomer; limitAction?: Limi
       )}
       {limitAction && (
         <div className="mt-2.5 flex flex-col items-end gap-1 border-t border-line pt-2">
+          {/* aria-disabled, not disabled: it stays focusable, so a screen reader reaches
+              the button and hears the reason it is paused. */}
           <button
             type="button"
-            onClick={limitAction.onPress}
-            disabled={Boolean(limitAction.disabledReason)}
-            aria-describedby={limitAction.disabledReason ? 'limit-action-reason' : undefined}
-            className="min-h-[36px] rounded-lg px-2 text-[12.5px] font-bold text-accent disabled:opacity-50"
+            onClick={paused ? undefined : limitAction.onPress}
+            aria-disabled={paused || undefined}
+            aria-describedby={paused ? reasonId : undefined}
+            className="min-h-[36px] rounded-lg px-2 text-[12.5px] font-bold text-accent aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
           >
             {hasLimit ? 'Edit limit' : 'Set limit'}
           </button>
           {limitAction.disabledReason && (
-            <p id="limit-action-reason" className="m-0 text-[11px] text-text-muted">
+            <p id={reasonId} className="m-0 text-[11px] text-text-muted">
               {limitAction.disabledReason}
             </p>
           )}

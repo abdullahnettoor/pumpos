@@ -107,8 +107,13 @@ describe('who sees the edit action', () => {
     async (mode) => {
       accessMode = mode;
       mount();
-      await waitFor(() => expect((editButton() as HTMLButtonElement).disabled).toBe(true));
-      expect(within(balance()).getByText(/paused|restricted/i)).toBeTruthy();
+      await waitFor(() => expect(editButton()?.getAttribute('aria-disabled')).toBe('true'));
+      const reason = within(balance()).getByText(/paused|restricted/i);
+      // Focusable (not `disabled`) and described by the reason, so a screen reader hears why.
+      expect((editButton() as HTMLButtonElement).disabled).toBe(false);
+      expect(editButton()!.getAttribute('aria-describedby')).toBe(reason.id);
+      editButton()!.focus();
+      expect(document.activeElement).toBe(editButton());
       fireEvent.click(editButton()!);
       expect(screen.queryByRole('dialog')).toBeNull();
     },
@@ -185,6 +190,21 @@ describe('saving', () => {
     expect(qc.getQueryState(ui.queryKeys.customers(true))?.isInvalidated).toBeDefined();
   });
 
+  it('sends the note with the change, trimmed, and leaves it out when blank', async () => {
+    mount();
+    await openSheet();
+    type('120000');
+    fireEvent.change(screen.getByLabelText('Note (optional)'), {
+      target: { value: '  Raised after the March audit  ' },
+    });
+    save();
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    expect(update.mock.calls[0][1]).toEqual({
+      creditLimit: 120000,
+      note: 'Raised after the March audit',
+    });
+  });
+
   it('blank removes the limit', async () => {
     mount();
     await openSheet();
@@ -212,9 +232,8 @@ describe('saving', () => {
     // The action behind the sheet greys out.
     await waitFor(() =>
       expect(
-        (screen.getByRole('button', { name: 'Edit limit', hidden: true }) as HTMLButtonElement)
-          .disabled,
-      ).toBe(true),
+        screen.getByRole('button', { name: 'Edit limit', hidden: true }).getAttribute('aria-disabled'),
+      ).toBe('true'),
     );
   });
 

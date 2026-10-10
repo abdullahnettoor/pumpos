@@ -4,6 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { inr, useToast } from '@pump/ui';
 import {
   creditLimitFormSchema,
+  LIMIT_NOTE_MAX,
+  noteToSend,
   parseCreditLimit,
   previewStanding,
   type CreditLimitForm,
@@ -38,6 +40,8 @@ const Form: React.FC<Omit<Props, 'open'>> = ({ customer, onClose }) => {
   const current = limitOf(customer);
   const fieldId = useId();
   const hintId = `${fieldId}-hint`;
+  const noteId = `${fieldId}-note`;
+  const noteHintId = `${noteId}-hint`;
 
   const {
     register,
@@ -46,7 +50,7 @@ const Form: React.FC<Omit<Props, 'open'>> = ({ customer, onClose }) => {
     formState: { errors },
   } = useForm<CreditLimitForm>({
     resolver: zodResolver(creditLimitFormSchema),
-    defaultValues: { creditLimit: current === null ? '' : String(current) },
+    defaultValues: { creditLimit: current === null ? '' : String(current), note: '' },
   });
 
   const text = watch('creditLimit');
@@ -54,12 +58,13 @@ const Form: React.FC<Omit<Props, 'open'>> = ({ customer, onClose }) => {
   const unchanged = parsed.ok && parsed.value === current;
   const preview = previewLine(customer, text);
   const error = errors.creditLimit?.message;
+  const noteError = errors.note?.message;
 
   const submit = handleSubmit(async (data) => {
     setRefusal(null);
     const limit = parseCreditLimit(data.creditLimit);
     if (!limit.ok) return;
-    const result = await save(limit.value);
+    const result = await save(limit.value, noteToSend(data.note));
     if (result.ok) {
       toast.success(limit.value === null ? 'Credit limit removed.' : 'Credit limit updated.');
       onClose();
@@ -99,6 +104,28 @@ const Form: React.FC<Omit<Props, 'open'>> = ({ customer, onClose }) => {
         />
         <p id={hintId} className={`m-0 text-[11px] ${error ? 'text-bad-fg' : 'text-text-muted'}`}>
           {error ?? preview ?? 'Leave blank for no limit.'}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={noteId} className="text-[11.5px] font-semibold text-text-muted">
+          Note (optional)
+        </label>
+        <textarea
+          id={noteId}
+          rows={2}
+          maxLength={LIMIT_NOTE_MAX}
+          placeholder="Why the limit is changing"
+          aria-invalid={noteError ? true : undefined}
+          aria-describedby={noteHintId}
+          className={`${inputClass(Boolean(noteError), 'min-h-[64px]')} resize-none py-2 !font-sans !text-sm !font-normal`}
+          {...register('note', { onChange: () => setRefusal(null) })}
+        />
+        <p
+          id={noteHintId}
+          className={`m-0 text-[11px] ${noteError ? 'text-bad-fg' : 'text-text-muted'}`}
+        >
+          {noteError ?? 'Kept with the change in the activity log.'}
         </p>
       </div>
 

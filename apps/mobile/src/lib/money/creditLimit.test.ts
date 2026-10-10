@@ -3,6 +3,8 @@ import {
   creditLimitAccess,
   creditLimitFailure,
   parseCreditLimit,
+  creditLimitFormSchema,
+  noteToSend,
   previewStanding,
   reusesIdempotencyKey,
 } from './creditLimit.js';
@@ -29,12 +31,30 @@ describe('parseCreditLimit', () => {
   });
 
   it('rejects more than the column holds (numeric 12,2) and more than 2 decimals', () => {
-    expect(parseCreditLimit('10000000000').ok).toBe(false);
+    expect(parseCreditLimit('10000000000')).toEqual({
+      ok: false,
+      message: 'That is more than a limit can hold.',
+    });
     expect(parseCreditLimit('9999999999.99')).toEqual({ ok: true, value: 9999999999.99 });
     expect(parseCreditLimit('10.123')).toEqual({
       ok: false,
       message: 'Use at most 2 decimal places.',
     });
+  });
+});
+
+describe('the note', () => {
+  it('is trimmed, and absent when blank', () => {
+    expect(noteToSend('  Raised after audit ')).toBe('Raised after audit');
+    expect(noteToSend('   ')).toBeUndefined();
+    expect(noteToSend('')).toBeUndefined();
+  });
+
+  it('is optional on the form but capped at 500 characters', () => {
+    expect(creditLimitFormSchema.safeParse({ creditLimit: '100', note: '' }).success).toBe(true);
+    expect(
+      creditLimitFormSchema.safeParse({ creditLimit: '100', note: 'x'.repeat(501) }).success,
+    ).toBe(false);
   });
 });
 
