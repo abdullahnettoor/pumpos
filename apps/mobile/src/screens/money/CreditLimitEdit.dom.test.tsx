@@ -232,7 +232,9 @@ describe('saving', () => {
     // The action behind the sheet greys out.
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'Edit limit', hidden: true }).getAttribute('aria-disabled'),
+        screen
+          .getByRole('button', { name: 'Edit limit', hidden: true })
+          .getAttribute('aria-disabled'),
       ).toBe('true'),
     );
   });
