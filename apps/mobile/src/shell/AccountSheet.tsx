@@ -4,6 +4,7 @@ import type { Role, Station } from '@pump/shared';
 import { AppearanceControl } from '../theme/index.js';
 import { Avatar } from '../ui/Avatar.js';
 import { BottomSheet } from '../ui/BottomSheet.js';
+import { BrandFooter } from '../ui/BrandFooter.js';
 import { ListGroup, ListRow } from '../ui/ListRow.js';
 import { SectionLabel } from '../ui/SectionLabel.js';
 import { BuildingIcon, CheckIcon, SignOutIcon } from '../ui/icons.js';
@@ -162,6 +163,8 @@ const SheetBody: React.FC<Omit<Props, 'open'>> = ({
           <span className="text-[13px] font-semibold">Sign out</span>
         </button>
       </ListGroup>
+
+      <BrandFooter />
     </div>
   );
 };

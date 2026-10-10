@@ -1,10 +1,10 @@
 import React from 'react';
-import { Avatar, BottomSheet, ListGroup } from '../../ui/index.js';
+import { Avatar, BottomSheet, BrandFooter, ListGroup } from '../../ui/index.js';
 import { SignOutIcon } from '../../ui/icons.js';
 
 /**
- * The attendant's account sheet: who they are, where, and Sign out. Nothing
- * else belongs here (no team, station switcher or appearance setting).
+ * The attendant's account sheet: who they are, where, and Sign out (plus the
+ * quiet brand footer). Nothing else belongs here (no team, station switcher or appearance setting).
  */
 export const AccountSheet: React.FC<{
   open: boolean;
@@ -31,5 +31,6 @@ export const AccountSheet: React.FC<{
         <span className="text-[13px] font-semibold">Sign out</span>
       </button>
     </ListGroup>
+    <BrandFooter />
   </BottomSheet>
 );

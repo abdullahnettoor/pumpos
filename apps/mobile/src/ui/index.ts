@@ -2,6 +2,7 @@
 export { ActionBar, type ActionSlot } from './ActionBar.js';
 export { Avatar } from './Avatar.js';
 export { BottomSheet } from './BottomSheet.js';
+export { BrandFooter } from './BrandFooter.js';
 export { DetailHeader } from './DetailHeader.js';
 export { DetailPage } from './DetailPage.js';
 export { IconButton } from './IconButton.js';

@@ -212,6 +212,18 @@ describe('AttendantScreen', () => {
     expect(screen.getByText('Sajid P · Attendant')).toBeDefined();
   });
 
+  it('carries the PumpOS mark as decoration; the header keeps its name', () => {
+    assignment.data = makeAssignment();
+    renderScreen();
+    const header = screen.getByRole('banner');
+    const mark = header.querySelector('svg');
+    expect(mark?.getAttribute('aria-hidden')).toBe('true');
+    expect(mark?.getAttribute('aria-label')).toBeNull();
+    // Leading edge: before the Station initials and the heading.
+    expect(header.firstElementChild).toBe(mark);
+    expect(within(header).getByRole('heading', { level: 1, name: 'Highway Fuels' })).toBeDefined();
+  });
+
   describe('no shift assigned', () => {
     it('explains, and Refresh re-reads the assignment', () => {
       renderScreen();
@@ -471,6 +483,7 @@ describe('AttendantScreen', () => {
           .getAllByRole('button')
           .map((b) => b.textContent),
       ).toEqual(['Sign out']);
+      expect(within(sheet).getByText(/^PumpOS · v\d/)).toBeDefined();
     });
 
     it('signs out from the sheet', () => {
