@@ -29,6 +29,8 @@ export interface AssignedNozzle {
   /** Set once a Handover has recorded it; null before. */
   closingReading?: number | null;
   testingVolume?: number | null;
+  /** Litres the Handover recorded for this nozzle, net of testing (server-computed). */
+  netVolume?: number | null;
   unitPrice: number | null;
 }
 
@@ -40,12 +42,28 @@ export interface AssignedTerminal {
   supportsUpi?: boolean;
 }
 
-/** The Handover already recorded for a DU, if any. */
-export interface RecordedHandover {
-  cashHandedOver?: string | number | null;
-  cashDrops?: string | number | null;
-  cardHandedOver?: string | number | null;
-  upiHandedOver?: string | number | null;
+type Amount = string | number | null | undefined;
+
+/**
+ * The Handover already recorded for a DU, as the `attendant_handovers` row the
+ * server stores (and `RecordHandoverResult.handover` returns): numerics arrive
+ * as strings. Every recorded figure the recap shows comes from here.
+ */
+export interface HandoverRow {
+  id?: string;
+  duId?: string;
+  cashHandedOver?: Amount;
+  cardHandedOver?: Amount;
+  upiHandedOver?: Amount;
+  /** The DU's credit slips total, snapshotted by the server at save. */
+  creditHandedOver?: Amount;
+  /** The metered fuel value the server computed at save. */
+  expectedSales?: Amount;
+  openingFloat?: Amount;
+  cashDrops?: Amount;
+  expectedCash?: Amount;
+  varianceAmount?: Amount;
+  createdAt?: string | null;
 }
 
 export interface RecordedTerminalEntry {
@@ -63,7 +81,7 @@ export interface AssignedDu {
   openingFloat?: number;
   nozzles: AssignedNozzle[];
   terminals: AssignedTerminal[];
-  handover?: RecordedHandover | null;
+  handover?: HandoverRow | null;
   terminalEntries?: RecordedTerminalEntry[];
   creditSales?: CreditLine[];
   omcSales?: CreditLine[];
@@ -73,7 +91,12 @@ export interface AssignedDu {
 export interface MyAssignment {
   userId?: string;
   station?: { id?: string; name?: string } | null;
-  shift?: { id?: string; templateName?: string; stationId?: string } | null;
+  shift?: {
+    id?: string;
+    templateName?: string | null;
+    stationId?: string;
+    openedAt?: string | null;
+  } | null;
   stationHasConfiguredTerminals?: boolean;
   dispenserUnits?: AssignedDu[];
 }
