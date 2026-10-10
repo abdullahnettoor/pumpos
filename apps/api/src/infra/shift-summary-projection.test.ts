@@ -17,7 +17,7 @@ type Rows = Map<unknown, unknown[]>;
  * (#229); the stub serves that statement's row, populating the template and
  * closed-user slots from the rows registered per table.
  */
-function stubDb(rows: Rows) {
+function stubDb(rows: Rows, extra: Record<string, unknown> = {}) {
   const first = (table: unknown) => (rows.get(table) ?? [])[0] ?? null;
   return {
     execute: async () => [
@@ -31,6 +31,9 @@ function stubDb(rows: Rows) {
         expense_rows: [],
         collection_rows: [],
         credit_rows: [],
+        product_rows: [],
+        product_total: 0,
+        ...extra,
       },
     ],
   };
@@ -55,8 +58,11 @@ const closeSnapshot = {
   cashVariance: 300,
 };
 
-const project = (rows: Rows, snapshot: unknown = closeSnapshot) =>
-  projectShiftSummary(stubDb(rows) as never, shift, snapshot);
+const project = (
+  rows: Rows,
+  snapshot: unknown = closeSnapshot,
+  extra: Record<string, unknown> = {},
+) => projectShiftSummary(stubDb(rows, extra) as never, shift, snapshot);
 
 describe('projectShiftSummary', () => {
   const populated: Rows = new Map<unknown, unknown[]>([
@@ -123,5 +129,85 @@ describe('projectShiftSummary', () => {
     });
     const again = await project(populated, out);
     expect(again).toMatchObject({ cashVarianceModel: 2, attendantVariance: -200 });
+  });
+
+  describe('sales figures the Shift Summary page reads', () => {
+    const reading = (nozzleId: string, duName: string | null) => ({
+      nr: {
+        nozzleId,
+        openingReading: '100',
+        closingReading: '200',
+        volumeSold: '100',
+        testingVolume: '0',
+        unitPrice: '100',
+      },
+      nz: { name: 'N1' },
+      prod: { name: 'Petrol', code: 'MS', unit: 'L' },
+      duName,
+    });
+    const handover = (id: string, upi: string, card: string) => ({
+      h: { id, upiHandedOver: upi, cardHandedOver: card, creditHandedOver: '0' },
+      userName: 'Ravi',
+      duName: 'DU1',
+    });
+
+    it('carries Product Sales grouped by product id, with the total sales', async () => {
+      const out = await project(
+        populated,
+        { ...closeSnapshot, totalFuelSalesValue: 10000 },
+        {
+          product_rows: [
+            { productId: 'p1', productName: 'Engine Oil', quantity: 3, lineTotal: 900 },
+            { productId: 'p2', productName: 'Engine Oil', quantity: 1, lineTotal: 450 },
+          ],
+          product_total: 1416,
+        },
+      );
+      expect(out.productSales).toEqual({
+        total: 1416,
+        lines: [
+          { productId: 'p1', productName: 'Engine Oil', quantity: 3, value: 900 },
+          { productId: 'p2', productName: 'Engine Oil', quantity: 1, value: 450 },
+        ],
+      });
+      expect(out.totalProductSalesValue).toBe(1416);
+      expect(out.totalSalesValue).toBe(11416);
+    });
+
+    it('has zero Product Sales (not a missing field) for a Shift with none', async () => {
+      const out = await project(populated, { ...closeSnapshot, totalFuelSalesValue: 500 });
+      expect(out.productSales).toEqual({ total: 0, lines: [] });
+      expect(out.totalSalesValue).toBe(500);
+    });
+
+    it('carries the payment split from the Handovers, the cash sales and the credit sales', async () => {
+      const out = await project(
+        populated,
+        { ...closeSnapshot, reconciliation: { cashSales: 3000 } },
+        {
+          ho_rows: [handover('h1', '100', '40'), handover('h2', '60', '0')],
+          credit_rows: [{ id: 'c1', amount: '250', customerId: 'cu1' }],
+        },
+      );
+      expect(out.payments).toEqual({ cash: 3000, upi: 160, card: 40, credit: 250 });
+    });
+
+    it('names the Dispenser Unit on each reading', async () => {
+      const out = await project(populated, closeSnapshot, {
+        nr_rows: [reading('n1', 'DU1'), reading('n2', null)],
+      });
+      expect((out.nozzleReadings as { duName: string | null }[]).map((r) => r.duName)).toEqual([
+        'DU1',
+        null,
+      ]);
+    });
+
+    it('is idempotent over its own output', async () => {
+      const extra = { product_rows: [], product_total: 0 };
+      const once = await project(populated, { ...closeSnapshot, totalFuelSalesValue: 500 }, extra);
+      const twice = await project(populated, once, extra);
+      expect(twice.totalSalesValue).toBe(once.totalSalesValue);
+      expect(twice.payments).toEqual(once.payments);
+    });
   });
 });

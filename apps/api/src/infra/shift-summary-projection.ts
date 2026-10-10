@@ -6,6 +6,9 @@ import { rowJson, rowJsonNullable } from './sql-json.js';
 import { creditSaleLinesJson } from './repositories/shift-recon-sql.js';
 import {
   RefreshShiftSummary,
+  composeShiftPayments,
+  composeShiftProductSales,
+  composeShiftTotalSales,
   type EventPublisher,
   type Shift,
   type ShiftSummaryProjector,
@@ -60,10 +63,12 @@ export async function projectShiftSummary(
       COALESCE((SELECT jsonb_agg(jsonb_build_object(
           'nr', ${rowJson(S.nozzleReadings, 'nr')},
           'nz', ${rowJsonNullable(S.nozzles, 'nz')},
-          'prod', ${rowJsonNullable(S.products, 'prod')}
+          'prod', ${rowJsonNullable(S.products, 'prod')},
+          'duName', du.name
         ) ORDER BY nr.created_at, nr.id)
         FROM nozzle_readings nr
         LEFT JOIN nozzles nz ON nz.id = nr.nozzle_id
+        LEFT JOIN dispenser_units du ON du.id = nz.du_id
         LEFT JOIN products prod ON prod.id = nz.product_id
         WHERE nr.shift_id = ${shift.id}), '[]'::jsonb) AS nr_rows,
       COALESCE((SELECT jsonb_agg(jsonb_build_object(
@@ -84,6 +89,26 @@ export async function projectShiftSummary(
         FROM handover_terminal_entries e
         LEFT JOIN payment_terminals pt ON pt.id = e.terminal_id
         WHERE e.shift_id = ${shift.id}), '[]'::jsonb) AS te_rows,
+      -- Product Sales: every non-fuel sale of the Shift (bulk Handover and billed),
+      -- grouped by product id, plus the sales' own total (what the DSSR counts).
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+          'productId', t.product_id,
+          'productName', t.name,
+          'quantity', t.quantity,
+          'lineTotal', t.line_total
+        ) ORDER BY t.name, t.product_id)
+        FROM (
+          SELECT si.product_id, p.name,
+            SUM(si.quantity)::float8 AS quantity,
+            SUM(si.line_total)::float8 AS line_total
+          FROM sales s
+          JOIN sale_items si ON si.sale_id = s.id
+          LEFT JOIN products p ON p.id = si.product_id
+          WHERE s.shift_id = ${shift.id} AND s.sale_type <> 'Fuel'
+          GROUP BY si.product_id, p.name
+        ) t), '[]'::jsonb) AS product_rows,
+      (SELECT COALESCE(SUM(s.total_amount), 0)::float8 FROM sales s
+        WHERE s.shift_id = ${shift.id} AND s.sale_type <> 'Fuel') AS product_total,
       -- Expenses, collections and purchases have no Shift (ADR 0005, #308):
       -- a Shift Summary never shows them.
       ${creditSaleLinesJson(shift.id)} AS credit_rows
@@ -96,16 +121,20 @@ export async function projectShiftSummary(
   const hoRows: any[] = row.ho_rows ?? [];
   const teRows: any[] = row.te_rows ?? [];
   const creditSaleRows: any[] = row.credit_rows ?? [];
+  const productRows: any[] = row.product_rows ?? [];
 
   const template = templateRows[0];
   const closedByName = closedUserRows[0]?.fullName ?? 'System';
   const openedByName = openedUserRows[0]?.fullName ?? 'System';
-  const nozzleReadings = nrRows.map(({ nr, nz, prod }) => {
+  const nozzleReadings = nrRows.map(({ nr, nz, prod, duName }) => {
     const gross = Number(nr.volumeSold ?? 0);
     const testing = Math.min(Math.max(Number(nr.testingVolume ?? 0), 0), gross);
     return {
       nozzleId: nr.nozzleId,
       nozzleName: nz?.name ?? 'Unknown',
+      // The Dispenser Unit the nozzle belonged to when the Shift was summarised
+      // (null for an unknown nozzle), so the page never maps through today's setup.
+      duName: duName ?? null,
       productName: prod?.name ?? 'Unknown',
       productCode: prod?.code ?? '',
       openingReading: Number(nr.openingReading),
@@ -200,6 +229,23 @@ export async function projectShiftSummary(
   }
   const terminalBreakdown = Array.from(terminalBreakdownMap.values());
 
+  // Sales figures every reader of the Shift Summary shares (core compose), so the
+  // page, its Shift rows and the day totals can never disagree on "total sales".
+  const creditSalesTotal = creditSaleRows.reduce(
+    (sum: number, r: any) => sum + Number(r.amount),
+    0,
+  );
+  const fuelSalesValue =
+    snap.totalFuelSalesValue != null
+      ? Number(snap.totalFuelSalesValue)
+      : fuelByProduct.reduce((a, f) => a + f.salesValue, 0);
+  const productSales = composeShiftProductSales(productRows, Number(row.product_total ?? 0));
+  const payments = composeShiftPayments({
+    cashSales: Number(recon.cashSales ?? 0),
+    handovers: hoRows.map(({ h }) => h),
+    creditSalesTotal,
+  });
+
   const openingCash = Number(snap.openingCash ?? 0);
   const twoLevel = isTwoLevelVarianceSnapshot(snap);
   const drawers: any[] = Array.isArray(snap.drawers) ? snap.drawers : (recon.drawers ?? []);
@@ -242,10 +288,11 @@ export async function projectShiftSummary(
       unit: r.unit ?? 'L',
       vehicleNumber: r.vehicleNumber ?? null,
     })),
-    creditSalesTotal: (creditSaleRows ?? []).reduce(
-      (sum: number, r: any) => sum + Number(r.amount),
-      0,
-    ),
+    creditSalesTotal,
+    productSales,
+    totalProductSalesValue: productSales.total,
+    totalSalesValue: composeShiftTotalSales(fuelSalesValue, productSales.total),
+    payments,
     expectedCash: Number(snap.expectedDrawerCash ?? openingCash),
     cashVariance: Number(snap.cashVariance ?? 0),
     cashSalesSum: Number(recon.cashSales ?? 0),

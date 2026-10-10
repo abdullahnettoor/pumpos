@@ -77,6 +77,9 @@ export const queryKeys = {
   businessDayStatusPrefix: (stationId: string) => ['business-day-status', stationId] as const,
   myAssignment: () => ['my-assignment'] as const,
   shiftSummaries: (stationId: string) => ['shift-summaries', stationId] as const,
+  // Both sit under the 'shift-summaries' prefix, so useInvalidateOperational refreshes them.
+  shiftSummaryHistory: (stationId: string) => ['shift-summaries', 'history', stationId] as const,
+  shiftSummary: (shiftId: string) => ['shift-summaries', 'one', shiftId] as const,
   dashboardSummary: (stationId: string) => ['dashboard-summary', stationId] as const,
   shiftTransactions: (shiftId: string) => ['shift-transactions', shiftId] as const,
   merchandiseHandovers: (shiftId: string) => ['merchandise-handovers', shiftId] as const,
@@ -624,6 +627,41 @@ export function useShiftSummaries(stationId: string | null | undefined, options?
     queryKey: queryKeys.shiftSummaries(stationId ?? ''),
     queryFn: () => shiftService.getShiftSummaries(stationId!),
     enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/** Summaries per page of the closed-Shift history. */
+export const SHIFT_SUMMARY_PAGE_SIZE = 50;
+
+/**
+ * Closed-Shift history, newest first, one cursor page at a time (the cursor is the
+ * oldest `generatedAt` loaded). Operational tier, not persisted.
+ */
+export function useShiftSummaryHistory(stationId: string | null | undefined) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.shiftSummaryHistory(stationId ?? ''),
+    queryFn: ({ pageParam }) =>
+      shiftService.getShiftSummaryPage(stationId!, SHIFT_SUMMARY_PAGE_SIZE, pageParam ?? undefined),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page: any[]) =>
+      page.length < SHIFT_SUMMARY_PAGE_SIZE
+        ? undefined
+        : (page[page.length - 1]?.generatedAt ?? undefined),
+    ...TIER.operational,
+  });
+}
+
+/**
+ * One Shift's stored summary by id, whatever its age. `placeholderData` lets a
+ * caller that already holds the row paint it at once while the read confirms it.
+ */
+export function useShiftSummaryById(shiftId: string | null | undefined, options?: Options<any>) {
+  return useQuery({
+    queryKey: queryKeys.shiftSummary(shiftId ?? ''),
+    queryFn: () => shiftService.getShiftSummary(shiftId!),
+    enabled: !!shiftId,
     ...TIER.operational,
     ...options,
   });

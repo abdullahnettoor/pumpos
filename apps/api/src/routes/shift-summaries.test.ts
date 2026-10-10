@@ -38,7 +38,7 @@ function makeFakeDb(listRows: any[]) {
   return { db, counter };
 }
 
-function makeApp(db: unknown) {
+function makeApp(db: unknown, user: Record<string, unknown> = {}) {
   const app = new Hono<{ Variables: { db: any; user: any } }>();
   app.use('*', async (c, next) => {
     c.set('db', db);
@@ -49,6 +49,7 @@ function makeApp(db: unknown) {
       organizationId: 'org-1',
       role: 'Owner',
       assignedStationIds: [],
+      ...user,
     });
     await next();
   });
@@ -104,5 +105,45 @@ describe('GET /shift-summaries query-count regression', () => {
     const { db } = makeFakeDb([]);
     const res = await makeApp(db).request('/shift-summaries?stationId=st-1&before=not-a-date');
     expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /shift-summaries/:shiftId', () => {
+  it('reads one Shift Summary in a single statement', async () => {
+    const { db, counter } = makeFakeDb([summaryRow(7)]);
+    const res = await makeApp(db).request('/shift-summaries/sh-7');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(counter.selects).toBe(1);
+    expect(body.data).toMatchObject({
+      shiftId: 'sh-7',
+      businessDate: '2026-03-15',
+      templateName: 'Morning',
+      snapshotData: { totalFuelSalesValue: 1007 },
+    });
+  });
+
+  it('answers 404 when no summary matches the id within the organization', async () => {
+    const { db } = makeFakeDb([]);
+    const res = await makeApp(db).request('/shift-summaries/other-orgs-shift');
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as any).success).toBe(false);
+  });
+
+  it('answers 404 for a station the caller is not assigned to', async () => {
+    const { db } = makeFakeDb([summaryRow(1)]);
+    const res = await makeApp(db, {
+      role: 'Manager',
+      assignedStationIds: ['st-other'],
+    }).request('/shift-summaries/sh-1');
+    expect(res.status).toBe(404);
+  });
+
+  it('serves an assigned manager', async () => {
+    const { db } = makeFakeDb([summaryRow(1)]);
+    const res = await makeApp(db, { role: 'Manager', assignedStationIds: ['st-1'] }).request(
+      '/shift-summaries/sh-1',
+    );
+    expect(res.status).toBe(200);
   });
 });
