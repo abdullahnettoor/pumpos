@@ -633,6 +633,8 @@ export const sales = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (t) => ({
+    // A Business Day's Sales (mobile Reports Business Day list, #394).
+    businessDayIdx: index('sales_business_day_idx').on(t.businessDayId),
     shiftAttendantIdx: index('sales_shift_attendant_idx').on(t.shiftId, t.attendantId),
   }),
 );
