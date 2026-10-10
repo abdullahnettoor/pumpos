@@ -28,6 +28,7 @@ const feed = vi.hoisted(() => ({
   suppliers: [] as unknown[],
   alerts: [] as unknown[],
   previewError: false,
+  assignment: null as unknown,
 }));
 
 vi.mock('@pump/ui', async (importOriginal) => {
@@ -40,6 +41,7 @@ vi.mock('@pump/ui', async (importOriginal) => {
     },
     useDailyDssrRange: () => q(feed.range),
     useShiftStatus: () => q(feed.status),
+    useMyAssignment: () => q(feed.assignment),
     useInventoryStatus: () => q(feed.tanks),
     useCustomers: () => q(feed.customers),
     useSuppliers: () => q(feed.suppliers),
@@ -180,6 +182,7 @@ beforeEach(() => {
   vi.setSystemTime(AFTERNOON);
   lastToday = '2026-10-09';
   Object.assign(feed, {
+    assignment: null,
     previewCalls: [],
     preview: {
       '2026-10-09': todayPreview('2026-10-09'),
@@ -233,6 +236,98 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+});
+
+const myAssignment = (over: Record<string, unknown> = {}) => ({
+  userId: 'u1',
+  station: { id: 'st-1', name: 'Highway Fuels' },
+  shift: { id: 's2', templateName: 'Shift 2', openedAt: '2026-10-09T08:30:00.000Z' },
+  dispenserUnits: [{ duId: 'du-2', duName: 'DU2', nozzles: [], terminals: [] }],
+  ...over,
+});
+
+describe('Home: your handover card', () => {
+  it('is absent when the user holds no Dispenser Unit', () => {
+    renderHome();
+    expect(screen.queryByText(/Your handover/)).toBeNull();
+    feed.assignment = myAssignment({ dispenserUnits: [] });
+    cleanup();
+    renderHome();
+    expect(screen.queryByText(/Your handover/)).toBeNull();
+  });
+
+  it('is the first thing on Home and names the DU, the Shift and what the server knows', () => {
+    feed.assignment = myAssignment();
+    const { container } = renderHome();
+    const card = screen.getByRole('button', { name: /Your handover · DU2/ });
+    expect(card.textContent).toContain('Shift 2 · Not saved yet');
+    expect(card.textContent).toContain('Continue');
+    expect(container.querySelector('button, section')).toBe(card);
+  });
+
+  it('counts the credit and fuel-card slips already recorded', () => {
+    const slip = { id: 'a', customerId: 'c', customerName: 'KTC', amount: 100 };
+    feed.assignment = myAssignment({
+      dispenserUnits: [
+        {
+          duId: 'du-2',
+          duName: 'DU2',
+          nozzles: [],
+          terminals: [],
+          creditSales: [slip, { ...slip, id: 'b' }],
+        },
+      ],
+    });
+    renderHome();
+    expect(screen.getByRole('button', { name: /Your handover/ }).textContent).toContain(
+      'Not saved yet · 2 credit slips',
+    );
+  });
+
+  it('shows a saved handover with its variance', () => {
+    feed.assignment = myAssignment({
+      dispenserUnits: [
+        {
+          duId: 'du-2',
+          duName: 'DU2',
+          nozzles: [],
+          terminals: [],
+          handover: {
+            cashHandedOver: '900',
+            varianceAmount: '-340',
+            createdAt: '2026-10-09T12:10:00Z',
+          },
+        },
+      ],
+    });
+    renderHome();
+    const text = screen.getByRole('button', { name: /Your handover/ }).textContent;
+    expect(text).toMatch(/Saved \d{1,2}:\d{2} [ap]m · −₹340/);
+    expect(text).toContain('Edit');
+  });
+
+  it('opens the handover as a detail page on Home', () => {
+    feed.assignment = myAssignment();
+    renderHome();
+    expect(nav.depth).toBe(0);
+    fireEvent.click(screen.getByRole('button', { name: /Your handover/ }));
+    expect(nav.depth).toBe(1);
+    expect(nav.active).toBe('home');
+    expect(nav.stacks.home?.at(-1)?.id).toBe('handover');
+  });
+
+  it('goes when the Shift closes, because the assignment does', () => {
+    feed.assignment = myAssignment();
+    const { rerender } = renderHome();
+    expect(screen.getByText(/Your handover/)).toBeTruthy();
+    feed.assignment = null;
+    rerender(
+      <NavProvider tabs={['home']}>
+        <HomeScreen station={station(IST)} />
+      </NavProvider>,
+    );
+    expect(screen.queryByText(/Your handover/)).toBeNull();
+  });
 });
 
 describe('Home: honest sales headline', () => {

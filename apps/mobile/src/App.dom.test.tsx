@@ -12,6 +12,10 @@ const clearClientSessionData = vi.fn();
 const supabaseSignOut = vi.fn(async () => {
   await onSession(null);
 });
+const ASSIGNED = {
+  shift: { id: 's1', templateName: 'Shift 2' },
+  dispenserUnits: [{ duId: 'du-2', duName: 'DU2', nozzles: [], terminals: [] }],
+};
 const stations = [{ id: 'st-1', name: 'Highway Fuels', settings: {} }];
 
 vi.mock('@pump/ui', async (importOriginal) => {
@@ -91,30 +95,41 @@ describe('App Role routing', () => {
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy();
   });
 
-  it('Staff assigned to a Dispenser Unit get a dock with only My handover', async () => {
+  it('Staff assigned to a Dispenser Unit get a dock with only Home, for the handover card', async () => {
     who.role = 'Staff';
-    who.assignment = { shiftId: 's1' };
+    who.assignment = ASSIGNED;
     renderApp();
     await screen.findByText('tab root');
-    expect(dockLabels()).toEqual(['My handover']);
-    expect(screen.getByRole('button', { name: 'My handover' }).getAttribute('aria-current')).toBe(
-      'page',
-    );
+    expect(dockLabels()).toEqual(['Home']);
   });
 
-  it('a Manager assigned to a Dispenser Unit gets My handover after their tabs', async () => {
+  it('a Manager assigned to a Dispenser Unit gets Home first, and no My handover tab', async () => {
     who.role = 'Manager';
-    who.assignment = { shiftId: 's1' };
+    who.assignment = ASSIGNED;
     renderApp();
     await screen.findByText('tab root');
-    expect(dockLabels()).toEqual(['Shifts', 'Reports', 'Money', 'Insights', 'My handover']);
+    expect(dockLabels()).toEqual(['Home', 'Shifts', 'Reports', 'Money', 'Insights']);
   });
 
-  it('a Manager with no assignment has no My handover tab', async () => {
+  it('an Owner assigned to a Dispenser Unit gets the same dock as any Owner', async () => {
+    who.assignment = ASSIGNED;
+    renderApp();
+    await screen.findByText('tab root');
+    expect(dockLabels()).toEqual(['Home', 'Shifts', 'Reports', 'Money', 'Insights']);
+  });
+
+  it('a Manager with no assignment has no Home', async () => {
     who.role = 'Manager';
     renderApp();
     await screen.findByText('tab root');
     expect(dockLabels()).toEqual(['Shifts', 'Reports', 'Money', 'Insights']);
+  });
+
+  it('an assignment holding no Dispenser Unit does not count', async () => {
+    who.role = 'Staff';
+    who.assignment = { shift: { id: 's1' }, dispenserUnits: [] };
+    renderApp();
+    await screen.findByText('Mobile access is limited');
   });
 });
 

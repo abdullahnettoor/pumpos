@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { BootScreen, Login, useStations, useMyAssignment, runTask } from '@pump/ui';
+import { BootScreen, Login, useStations, runTask } from '@pump/ui';
 import type { Station } from '@pump/shared';
+import { useOwnHandover } from './lib/handover/useOwnHandover.js';
 import { useSession, signOut } from './lib/session.js';
 import { MobileShell } from './shell/MobileShell.js';
 import { NavProvider } from './shell/nav.js';
@@ -35,11 +36,10 @@ export const App: React.FC = () => {
   const stationsQ = useStations({ enabled: status === 'ready' });
   const stations = useMemo(() => (stationsQ.data || []) as Station[], [stationsQ.data]);
 
-  // Non-attendant roles who happen to be assigned to a DU on an open shift get an
-  // extra "My handover" tab with the same self-service UI as the Attendant shell.
-  const myAssignmentQ = useMyAssignment({ enabled: status === 'ready' && role !== 'Attendant' });
-  const hasHandoverTab = role !== 'Attendant' && !!myAssignmentQ.data;
-  const allowedTabs = useMemo(() => tabsForRole(role, hasHandoverTab), [role, hasHandoverTab]);
+  // Non-attendant roles who happen to be assigned to a DU on an open shift get a
+  // pinned handover card on Home (the same self-service form as the Attendant shell).
+  const hasHandover = useOwnHandover(status === 'ready' && role !== 'Attendant') !== null;
+  const allowedTabs = useMemo(() => tabsForRole(role, hasHandover), [role, hasHandover]);
 
   // The operator's pick, falling back to the first station until stations load.
   // Derived rather than synced by an effect, so the fallback is right on first render.

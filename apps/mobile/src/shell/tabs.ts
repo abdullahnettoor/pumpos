@@ -13,17 +13,11 @@ import {
   type Role,
 } from '@pump/shared';
 
-export type TabKey = 'home' | 'shifts' | 'reports' | 'money' | 'insights' | 'handover';
+export type TabKey = 'home' | 'shifts' | 'reports' | 'money' | 'insights';
 
 export interface TabDef {
   key: TabKey;
   label: string;
-  /**
-   * The tab's page ends above the floating dock instead of scrolling under it.
-   * For a screen with its own sticky bottom bar (My handover, until the
-   * handover ticket turns it into a detail page with an action bar).
-   */
-  reserveDock?: boolean;
 }
 
 /** Dock order. */
@@ -33,7 +27,6 @@ export const TAB_DEFS: readonly TabDef[] = [
   { key: 'reports', label: 'Reports' },
   { key: 'money', label: 'Money' },
   { key: 'insights', label: 'Insights' },
-  { key: 'handover', label: 'My handover', reserveDock: true },
 ];
 
 export const tabDef = (key: TabKey): TabDef => TAB_DEFS.find((t) => t.key === key)!;
@@ -42,10 +35,9 @@ export const tabDef = (key: TabKey): TabDef => TAB_DEFS.find((t) => t.key === ke
  * Whether a Role may open each tab, answered by the shared permission guards
  * (`@pump/shared`), never re-derived here. Reports and Money follow their
  * existing guards; Home, Shifts and Insights have mobile guards of their own.
- * Staff and Attendant get no tabs (Attendant has its own shell). My handover is
- * not Role-based: it is added for anyone assigned to a Dispenser Unit.
+ * Staff and Attendant get no tabs (Attendant has its own shell).
  */
-const CAN_OPEN: Record<Exclude<TabKey, 'handover'>, (role: Role) => boolean> = {
+const CAN_OPEN: Record<TabKey, (role: Role) => boolean> = {
   home: canViewMobileHome,
   shifts: canViewMobileShifts,
   reports: canViewReports,
@@ -54,12 +46,15 @@ const CAN_OPEN: Record<Exclude<TabKey, 'handover'>, (role: Role) => boolean> = {
 };
 
 /**
- * The dock for a Role, in dock order. A user who is also assigned to a Dispenser
- * Unit on an open shift gets the extra "My handover" tab.
+ * The dock for a Role, in dock order. A user assigned to a Dispenser Unit on an
+ * open Shift reaches their handover from a pinned card on Home, so Home is in
+ * their dock even when the Role has no Home overview (a Manager, Accountant or
+ * Staff member who mans a pump). Home then holds only that card
+ * (`TabRoot`). There is no handover tab of its own.
  */
-export function tabsForRole(role: Role | null, hasHandoverTab: boolean): TabKey[] {
+export function tabsForRole(role: Role | null, hasHandover: boolean): TabKey[] {
   if (!role) return [];
   return TAB_DEFS.map((t) => t.key).filter((key) =>
-    key === 'handover' ? hasHandoverTab && !isAttendant(role) : CAN_OPEN[key](role),
+    key === 'home' && hasHandover && !isAttendant(role) ? true : CAN_OPEN[key](role),
   );
 }
