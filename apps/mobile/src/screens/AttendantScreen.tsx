@@ -123,7 +123,7 @@ export const AttendantScreen: React.FC<{
   }
 
   return (
-    <div className="flex h-[100dvh] flex-col bg-background text-text-default">
+    <div className="app-column flex h-[100dvh] flex-col bg-background text-text-default">
       <AttendantHeader
         stationName={stationName}
         userName={userName}

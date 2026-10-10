@@ -3,6 +3,9 @@ import { TAB_ICONS } from './tabIcons.js';
 import { tabDef } from './tabs.js';
 import type { TabKey } from '../lib/tabKey.js';
 
+/** Width each tab gets in the dock (54px button + breathing room). */
+const DOCK_TAB_PX = 62;
+
 interface Props {
   tabs: readonly TabKey[];
   active: TabKey;
@@ -19,8 +22,14 @@ export const Dock: React.FC<Props> = ({ tabs, active, onSelect }) => {
   return (
     <nav
       aria-label="Main"
-      className="absolute inset-x-3.5 z-20 grid rounded-[22px] border border-dock-line bg-dock p-[7px] shadow-float backdrop-blur-xl"
-      style={{ bottom: 'var(--dock-gap)', gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}
+      className="absolute inset-x-3.5 z-20 mx-auto grid rounded-[22px] border border-dock-line bg-dock p-[7px] shadow-float backdrop-blur-xl"
+      style={{
+        bottom: 'var(--dock-gap)',
+        gridTemplateColumns: `repeat(${tabs.length}, 1fr)`,
+        // Hugs its tabs (62px each + padding), centred: a floating capsule on a phone,
+        // and it does not stretch with a wider window.
+        maxWidth: `calc(${tabs.length} * ${DOCK_TAB_PX}px + 16px)`,
+      }}
     >
       <span
         aria-hidden="true"

@@ -30,6 +30,23 @@ body {
   display: none;
 }
 
+/* The app is laid out for a phone. On a wider window (tablet, laptop, desktop
+ * responsive mode) it stays a centred phone-width column instead of stretching,
+ * with the canvas either side and a hairline edge. */
+:root {
+  --app-max-w: 480px;
+}
+.app-column {
+  width: 100%;
+  max-width: var(--app-max-w);
+  margin-inline: auto;
+}
+@media (min-width: 481px) {
+  .app-column {
+    border-inline: 1px solid var(--line);
+  }
+}
+
 /* Safe-area padding for notched devices. */
 .mobile-safe-top {
   padding-top: max(env(safe-area-inset-top), 12px);
