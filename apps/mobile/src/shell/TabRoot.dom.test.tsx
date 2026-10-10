@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import React from 'react';
+import React, { useLayoutEffect } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Role, Station } from '@pump/shared';
@@ -33,7 +33,10 @@ const assigned = {
 
 const seen = { depth: 0 };
 const DepthProbe: React.FC = () => {
-  seen.depth = useNav().depth;
+  const { depth } = useNav();
+  useLayoutEffect(() => {
+    seen.depth = depth;
+  });
   return null;
 };
 
