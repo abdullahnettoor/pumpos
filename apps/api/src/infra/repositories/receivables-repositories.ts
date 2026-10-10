@@ -176,7 +176,7 @@ export class DrizzleReceivablesReader implements ReceivablesReader {
       credit_ranges AS (
         SELECT c.customer_id, c.date, c.kind,
           ROW_NUMBER() OVER w AS rn,
-          SUM(c.amount) OVER w AS hi
+          SUM(c.credit_amount) OVER w AS hi
         FROM credits c
         WINDOW w AS (
           PARTITION BY c.customer_id ORDER BY c.date, c.created_at, c.id
@@ -236,7 +236,7 @@ export class DrizzleReceivablesReader implements ReceivablesReader {
         WHERE d.type = 'Credit Sale' AND d.date >= ${q.creditFrom} AND d.date <= ${q.creditTo}
       ),
       month_paid AS (
-        SELECT COALESCE(SUM(amount), 0) AS paid
+        SELECT COALESCE(SUM(credit_amount), 0) AS paid
         FROM credits
         WHERE kind = 'COLLECTION' AND date >= ${q.paidFrom} AND date <= ${q.paidTo}
       ),

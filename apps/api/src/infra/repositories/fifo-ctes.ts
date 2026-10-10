@@ -6,7 +6,9 @@ export function fifoCtes(input: { ledger: SQL; entityColumn: 'customer_id' | 'su
   return sql`
     source_ledger AS (${input.ledger}),
     ledger AS (SELECT * FROM source_ledger),
-    credits AS (SELECT *, -signed AS amount FROM source_ledger WHERE signed < 0),
+    -- A credit's positive size is credit_amount: source_ledger already has an
+    -- \`amount\` column, and re-aliasing it would make it ambiguous.
+    credits AS (SELECT *, -signed AS credit_amount FROM source_ledger WHERE signed < 0),
     debit_cum AS (
       SELECT l.*,
         SUM(l.signed) OVER (
