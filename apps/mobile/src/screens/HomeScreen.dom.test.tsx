@@ -97,8 +97,22 @@ const todayPreview = (date: string) => ({
       cogs: 198000,
       grossMargin: 21720,
       byProduct: [
-        { productId: 'm1', kind: 'merchandise', name: 'Engine oil', quantity: 14, revenue: 4920 },
-        { productId: 'm2', kind: 'merchandise', name: 'Coolant', quantity: 6, revenue: 1920 },
+        {
+          productId: 'm1',
+          kind: 'merchandise',
+          name: 'Engine oil',
+          productType: 'LUBRICANT',
+          quantity: 14,
+          revenue: 4920,
+        },
+        {
+          productId: 'm2',
+          kind: 'merchandise',
+          name: 'Coolant',
+          productType: 'ADDITIVE',
+          quantity: 6,
+          revenue: 1920,
+        },
       ],
     },
     credit: { total: 27520, count: 4 },
@@ -374,7 +388,10 @@ describe('Home: honest sales headline', () => {
     expect(within(card).getByText('Live')).toBeTruthy();
     expect(within(card).getByText('Shift 1 · closed')).toBeTruthy();
     expect(within(card).getByText('Petrol')).toBeTruthy();
-    expect(within(card).getByText('Engine oil')).toBeTruthy();
+    // Lubes & others is grouped by product category (#392), not listed per product.
+    expect(within(card).getByText('Lubricants')).toBeTruthy();
+    expect(within(card).getByText('Additives')).toBeTruthy();
+    expect(within(card).queryByText('Engine oil')).toBeNull();
   });
 });
 

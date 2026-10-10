@@ -154,9 +154,21 @@ describe('Product Sales (from the snapshot)', () => {
     productSales: {
       total: 1416,
       lines: [
-        { productId: 'p1', productName: 'Engine Oil', quantity: 3, value: 900 },
+        {
+          productId: 'p1',
+          productName: 'Engine Oil',
+          productType: 'LUBRICANT',
+          quantity: 3,
+          value: 900,
+        },
         // A second product sharing the name stays its own line.
-        { productId: 'p2', productName: 'Engine Oil', quantity: 1, value: 450 },
+        {
+          productId: 'p2',
+          productName: 'Engine Oil',
+          productType: 'ACCESSORY',
+          quantity: 1,
+          value: 450,
+        },
       ],
     },
   };
@@ -168,6 +180,22 @@ describe('Product Sales (from the snapshot)', () => {
       ['p2', 'Engine Oil', 1, 450],
     ]);
     expect(p?.total).toBe(1416);
+  });
+
+  it('carries each line category, and none for a snapshot line frozen without one', () => {
+    const p = deriveShiftProducts({
+      productSales: {
+        total: 150,
+        lines: [
+          { productId: 'a', productName: 'Oil', productType: 'LUBRICANT', quantity: 1, value: 100 },
+          { productId: 'b', productName: 'Old line', quantity: 1, value: 50 },
+        ],
+      },
+    });
+    expect(p?.lines.map((l) => [l.name, l.productType])).toEqual([
+      ['Oil', 'LUBRICANT'],
+      ['Old line', null],
+    ]);
   });
 
   it('is an empty list (not missing) for a Shift with no Product Sales', () => {

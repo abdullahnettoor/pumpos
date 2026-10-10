@@ -6,7 +6,7 @@
  * Shift Summaries; a running Shift's fuel is "counted at close"), while Product
  * Sales are live and include the open Shift.
  */
-import { shiftBusinessDate } from '@pump/shared';
+import { productCategoryOf, shiftBusinessDate, type ProductType } from '@pump/shared';
 import { unitLabel } from '@pump/ui';
 import { businessWeekday } from './dates.js';
 import { num } from './num.js';
@@ -30,6 +30,12 @@ export interface FuelLine {
 export interface ProductLine {
   key: string;
   name: string;
+  /**
+   * The product's category (its `productType`), frozen into snapshots from #392
+   * on. Null on older snapshots: the Sales by product block then shows one
+   * "Products" line rather than guessing.
+   */
+  productType: ProductType | null;
   /** Units sold; 0 when the line has no quantity detail. */
   quantity: number;
   value: number;
@@ -56,9 +62,6 @@ export interface SalesFigures {
   closedShifts: ClosedShift[];
 }
 
-/** Product lines shown before the tail is rolled into one "N other products" line. */
-export const MAX_PRODUCT_LINES = 5;
-
 // One unit wording for Home, Shift Summary and the Money statements (and its PDF).
 export { unitLabel };
 
@@ -77,32 +80,23 @@ function productLines(snap: Snapshot, productsValue: number): ProductLine[] {
     .map((p) => ({
       key: String(p.productId ?? p.name),
       name: String(p.name ?? 'Product'),
+      productType: productCategoryOf(p.productType),
       quantity: num(p.quantity),
       value: num(p.revenue),
-    }))
-    .sort((a, b) => b.value - a.value);
+    }));
   if (lines.length === 0)
     return productsValue > 0
-      ? [{ key: 'products', name: 'Products', quantity: 0, value: productsValue }]
+      ? [
+          {
+            key: 'products',
+            name: 'Products',
+            productType: null,
+            quantity: 0,
+            value: productsValue,
+          },
+        ]
       : [];
-  return rollUpProducts(lines);
-}
-
-/** Largest lines first; the tail past `MAX_PRODUCT_LINES` becomes one "N other products" line. */
-export function rollUpProducts(lines: readonly ProductLine[]): ProductLine[] {
-  const sorted = [...lines].sort((a, b) => b.value - a.value);
-  if (sorted.length <= MAX_PRODUCT_LINES) return sorted;
-  const head = sorted.slice(0, MAX_PRODUCT_LINES);
-  const tail = sorted.slice(MAX_PRODUCT_LINES);
-  return [
-    ...head,
-    {
-      key: 'other-products',
-      name: `${tail.length} other products`,
-      quantity: tail.reduce((s, l) => s + l.quantity, 0),
-      value: tail.reduce((s, l) => s + l.value, 0),
-    },
-  ];
+  return lines;
 }
 
 export function deriveSales(snap: Snapshot): SalesFigures {

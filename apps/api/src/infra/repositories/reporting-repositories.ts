@@ -1,5 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { schema, type DbClient, type DbExecutor } from '@pump/db';
+import { productCategoryOf, type ProductType } from '@pump/shared';
 import { dssrFuelSalesValue, dssrNetVolume, dssrProductSalesValue } from '../dssr-snapshot-sql.js';
 import type {
   BusinessDayListQuery,
@@ -176,6 +177,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
             code: schema.products.code,
             unit: schema.products.unit,
             costBasis: schema.products.costBasis,
+            productType: schema.products.productType,
           })
           .from(schema.products)
           .where(eq(schema.products.organizationId, organizationId))
@@ -189,7 +191,13 @@ export class DrizzleDssrDataReader implements DssrDataReader {
 
     const products: Record<
       string,
-      { name: string; code: string; unit: string; costBasis: number }
+      {
+        name: string;
+        code: string;
+        unit: string;
+        costBasis: number;
+        productType: ProductType | null;
+      }
     > = {};
     for (const p of productRows)
       products[p.id] = {
@@ -197,6 +205,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         code: p.code ?? '',
         unit: p.unit ?? 'L',
         costBasis: Number(p.costBasis ?? 0),
+        productType: productCategoryOf(p.productType),
       };
     const nozzles: Record<string, string> = {};
     for (const n of nozzleRows) nozzles[n.id] = n.name;

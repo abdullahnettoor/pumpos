@@ -3,6 +3,7 @@
  * stacked bar's segments and the row labels. Pure, so every screen that shows
  * the card (Home, Shift Summary, DSSR) gets the same arithmetic.
  */
+import { PRODUCT_CATEGORY_LABEL, type ProductType } from '@pump/shared';
 import { plural } from './format.js';
 import { round2 } from './num.js';
 import type { FuelLine, ProductLine } from './sales.js';
@@ -70,3 +71,51 @@ export const unitsLabel = (n: number): string => plural(round2(n), 'unit');
 /** "1,240 L" for a fuel grade. */
 export const fuelQuantityLabel = (f: Pick<FuelLine, 'quantity' | 'unit'>): string =>
   `${Math.round(f.quantity).toLocaleString('en-IN')} ${f.unit}`;
+
+/** One row of the non-fuel group: a product category, or the single "Products" fallback. */
+export interface CategoryRow {
+  key: string;
+  name: string;
+  /** Units across the category's products. */
+  quantity: number;
+  value: number;
+}
+
+/** What a snapshot frozen before categories existed is shown as. */
+export const UNCATEGORISED_NAME = 'Products';
+
+/**
+ * Product lines grouped by category, largest value first with Other last. A
+ * line whose snapshot recorded no category lands in Other when its siblings do
+ * have one; when NO line has a category (a snapshot frozen before #392) the
+ * whole group is one "Products" row, since nothing says what they are. A
+ * product typed FUEL that was sold as a Product Sale is not a fuel grade, so it
+ * folds into Other rather than showing a "Fuel" row under Lubes & others.
+ */
+export function groupByCategory(lines: readonly ProductLine[]): CategoryRow[] {
+  if (lines.length === 0) return [];
+  if (lines.every((l) => l.productType === null))
+    return [
+      {
+        key: 'products',
+        name: UNCATEGORISED_NAME,
+        quantity: lines.reduce((s, l) => s + l.quantity, 0),
+        value: sumValues(lines),
+      },
+    ];
+  const rows = new Map<string, CategoryRow>();
+  for (const l of lines) {
+    const cat: ProductType = !l.productType || l.productType === 'FUEL' ? 'OTHER' : l.productType;
+    const row = rows.get(cat) ?? {
+      key: cat,
+      name: PRODUCT_CATEGORY_LABEL[cat],
+      quantity: 0,
+      value: 0,
+    };
+    row.quantity += l.quantity;
+    row.value += l.value;
+    rows.set(cat, row);
+  }
+  const rank = (r: CategoryRow) => (r.key === 'OTHER' ? 1 : 0);
+  return [...rows.values()].sort((a, b) => rank(a) - rank(b) || b.value - a.value);
+}

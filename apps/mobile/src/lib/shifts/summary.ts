@@ -6,14 +6,9 @@
  * each deriver says what it does then (`products: null`, payments summed from
  * the Handovers, the Dispenser Unit from today's setup).
  */
+import { productCategoryOf } from '@pump/shared';
 import { num, round2 } from '../home/num.js';
-import {
-  unitLabel,
-  rollUpProducts,
-  type FuelLine,
-  type ProductLine,
-  type Snapshot,
-} from '../home/sales.js';
+import { unitLabel, type FuelLine, type ProductLine, type Snapshot } from '../home/sales.js';
 import { deriveShiftVariance, drawerName, type ShiftVariance } from './variance.js';
 
 export interface NozzleLine {
@@ -176,14 +171,13 @@ export function deriveShiftProducts(snap: Snapshot): ShiftProducts | null {
   const ps = snap.productSales as Snapshot | undefined;
   if (!ps) return null;
   return {
-    lines: rollUpProducts(
-      list(ps.lines).map((l) => ({
-        key: String(l.productId ?? l.productName),
-        name: String(l.productName ?? 'Product'),
-        quantity: num(l.quantity),
-        value: num(l.value),
-      })),
-    ),
+    lines: list(ps.lines).map((l) => ({
+      key: String(l.productId ?? l.productName),
+      name: String(l.productName ?? 'Product'),
+      productType: productCategoryOf(l.productType),
+      quantity: num(l.quantity),
+      value: num(l.value),
+    })),
     total: num(ps.total),
   };
 }

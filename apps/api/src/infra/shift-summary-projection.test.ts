@@ -157,8 +157,20 @@ describe('projectShiftSummary', () => {
         { ...closeSnapshot, totalFuelSalesValue: 10000 },
         {
           product_rows: [
-            { productId: 'p1', productName: 'Engine Oil', quantity: 3, lineTotal: 900 },
-            { productId: 'p2', productName: 'Engine Oil', quantity: 1, lineTotal: 450 },
+            {
+              productId: 'p1',
+              productName: 'Engine Oil',
+              productType: 'LUBRICANT',
+              quantity: 3,
+              lineTotal: 900,
+            },
+            {
+              productId: 'p2',
+              productName: 'Engine Oil',
+              productType: 'ACCESSORY',
+              quantity: 1,
+              lineTotal: 450,
+            },
           ],
           product_total: 1416,
         },
@@ -166,12 +178,40 @@ describe('projectShiftSummary', () => {
       expect(out.productSales).toEqual({
         total: 1416,
         lines: [
-          { productId: 'p1', productName: 'Engine Oil', quantity: 3, value: 900 },
-          { productId: 'p2', productName: 'Engine Oil', quantity: 1, value: 450 },
+          {
+            productId: 'p1',
+            productName: 'Engine Oil',
+            productType: 'LUBRICANT',
+            quantity: 3,
+            value: 900,
+          },
+          {
+            productId: 'p2',
+            productName: 'Engine Oil',
+            productType: 'ACCESSORY',
+            quantity: 1,
+            value: 450,
+          },
         ],
       });
       expect(out.totalProductSalesValue).toBe(1416);
       expect(out.totalSalesValue).toBe(11416);
+    });
+
+    it('groups the Product Sales SQL by product type in the one statement', async () => {
+      const { PgDialect } = await import('drizzle-orm/pg-core');
+      const statements: unknown[] = [];
+      const db = {
+        execute: async (q: unknown) => {
+          statements.push(q);
+          return [{ nr_rows: [], ho_rows: [], te_rows: [], credit_rows: [], product_rows: [] }];
+        },
+      };
+      await projectShiftSummary(db as never, shift, closeSnapshot);
+      expect(statements).toHaveLength(1);
+      const { sql: text } = new PgDialect().sqlToQuery(statements[0] as never);
+      expect(text).toContain('GROUP BY si.product_id, p.name, p.product_type');
+      expect(text).toContain(`'productType', t.product_type`);
     });
 
     it('has zero Product Sales (not a missing field) for a Shift with none', async () => {
