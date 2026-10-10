@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  limitTone,
+  balanceState,
   matchName,
   overLimitCount,
   owing,
@@ -19,7 +19,7 @@ const c = (name: string, currentBalance: number, creditLimit?: number | null) =>
 describe('standing against the credit limit', () => {
   it('is over when the balance passes the limit, with how far and the percent', () => {
     const s = standing(c('KTC', 214600, 200000));
-    expect(s).toMatchObject({ state: 'over', overBy: 14600, usedPct: 107, room: 0 });
+    expect(s).toMatchObject({ state: 'over', tone: 'bad', overBy: 14600, usedPct: 107, room: 0 });
   });
 
   it('is not over at exactly the limit: near, 100%', () => {
@@ -57,12 +57,35 @@ describe('standing against the credit limit', () => {
   });
 });
 
-describe('limitTone', () => {
-  it('is accent under 80%, warn at 80–100%, bad over 100%', () => {
-    expect(limitTone(79)).toBe('accent');
-    expect(limitTone(80)).toBe('warn');
-    expect(limitTone(100)).toBe('warn');
-    expect(limitTone(101)).toBe('bad');
+describe('limit bands (state and bar tone come from one ratio)', () => {
+  const at = (pct: number) => standing(c('A', pct * 1000, 100000));
+
+  it.each([
+    [79, 'under', 'accent', 79],
+    [79.6, 'under', 'accent', 79],
+    [80, 'near', 'warn', 80],
+    [99.6, 'near', 'warn', 99],
+    [100, 'near', 'warn', 100],
+    [100.4, 'over', 'bad', 101],
+    [107.3, 'over', 'bad', 107],
+  ] as const)('%s%% of the limit is %s with a %s bar, shown as %s%%', (pct, state, tone, shown) => {
+    expect(at(pct)).toMatchObject({ state, tone, usedPct: shown });
+  });
+
+  it('has no bar tone without a limit or when nothing is owed', () => {
+    expect(standing(c('A', 5000, null)).tone).toBeNull();
+    expect(standing(c('B', 0, 100000)).tone).toBeNull();
+    expect(standing(c('C', -5, 100000)).tone).toBeNull();
+  });
+});
+
+describe('balanceState', () => {
+  it('splits owes / advance / settled, treating paise dust as settled', () => {
+    expect(balanceState(10)).toBe('owes');
+    expect(balanceState(-10)).toBe('advance');
+    expect(balanceState(0)).toBe('settled');
+    expect(balanceState(0.004)).toBe('settled');
+    expect(balanceState(-0.004)).toBe('settled');
   });
 });
 

@@ -39,15 +39,7 @@ export const MoneyScreen: React.FC<Props> = ({ renderSupplierPage }) => {
 
   return (
     <div className="flex flex-col gap-2.5 pb-4">
-      <div className="px-3">
-        <SegmentedControl
-          label="Money list"
-          options={LISTS}
-          value={list}
-          onChange={switchList}
-          className=""
-        />
-      </div>
+      <SegmentedControl label="Money list" options={LISTS} value={list} onChange={switchList} />
       <SearchField
         value={query}
         onChange={setQuery}

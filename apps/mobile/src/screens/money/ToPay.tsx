@@ -10,9 +10,10 @@ import {
 } from '../../lib/money/parties.js';
 import { Avatar } from '../../ui/Avatar.js';
 import { ListGroup, ListRow } from '../../ui/ListRow.js';
+import { Note } from '../../ui/Note.js';
 import { SectionLabel } from '../../ui/SectionLabel.js';
-import { MoneyHero } from './MoneyHero.js';
-import { Note } from './parts.js';
+import { BalanceFigure } from './BalanceFigure.js';
+import { HeroCard } from './HeroCard.js';
 import { useSuppliersData } from './useMoneyData.js';
 
 interface Props {
@@ -24,7 +25,10 @@ interface Props {
   onOpenSupplier?: (supplier: MoneySupplier) => void;
 }
 
-/** A supplier carries no category or payment terms, so the line under the name is its trade name or phone. */
+/**
+ * Suppliers carry no category or payment terms (metadata is gstin, pan,
+ * tradeName, billingAddress), so the line under the name is its trade name or phone.
+ */
 const metaOf = (s: MoneySupplier): string => s.metadata?.tradeName || s.phone || '';
 
 /**
@@ -42,7 +46,7 @@ export const ToPay: React.FC<Props> = ({ query, onOpenSupplier }) => {
 
   return (
     <>
-      <MoneyHero
+      <HeroCard
         label={`Payables · ${owedNow.length} ${owedNow.length === 1 ? 'supplier' : 'suppliers'}`}
         value={inr(totalOwed(suppliers))}
       />
@@ -53,25 +57,16 @@ export const ToPay: React.FC<Props> = ({ query, onOpenSupplier }) => {
         </Note>
       ) : (
         <ListGroup>
-          {rows.map((s) => {
-            const balance = balanceOf(s);
-            return (
-              <ListRow
-                key={s.id}
-                leading={<Avatar name={s.name} />}
-                title={s.name}
-                meta={metaOf(s)}
-                end={
-                  balance < 0 ? (
-                    <span className="num text-good">{inr(-balance)} advance</span>
-                  ) : (
-                    <span className="num">{inr(balance)}</span>
-                  )
-                }
-                onPress={onOpenSupplier && (() => onOpenSupplier(s))}
-              />
-            );
-          })}
+          {rows.map((s) => (
+            <ListRow
+              key={s.id}
+              leading={<Avatar name={s.name} />}
+              title={s.name}
+              meta={metaOf(s)}
+              end={<BalanceFigure balance={balanceOf(s)} />}
+              onPress={onOpenSupplier && (() => onOpenSupplier(s))}
+            />
+          ))}
         </ListGroup>
       )}
     </>

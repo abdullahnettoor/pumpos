@@ -63,6 +63,15 @@ export const matchName = <T extends Party>(parties: readonly T[], query: string)
   return q ? parties.filter((p) => p.name.toLowerCase().includes(q)) : [...parties];
 };
 
+/** What a party's balance means on its own, with or without a credit limit. */
+export type BalanceState = 'owes' | 'advance' | 'settled';
+
+export function balanceState(balance: number): BalanceState {
+  if (balance <= -SETTLED_BELOW) return 'advance';
+  if (balance < SETTLED_BELOW) return 'settled';
+  return 'owes';
+}
+
 export type StandingState =
   /** Owes more than the credit limit. */
   | 'over'
@@ -73,13 +82,20 @@ export type StandingState =
   | 'advance'
   | 'settled';
 
+/** Colour of the credit-limit bar: accent under 80%, amber at 80–100%, red over 100%. */
 export type LimitTone = 'accent' | 'warn' | 'bad';
 
 export interface Standing {
   state: StandingState;
+  /** The bar colour; always agrees with `state` (null when there is no bar: no limit or nothing owed). */
+  tone: LimitTone | null;
   balance: number;
   limit: number | null;
-  /** Balance as a whole percent of the limit; null without a limit or when nothing is owed. */
+  /**
+   * Balance as a whole percent of the limit; null without a limit or when nothing is owed.
+   * Rounded, but never across a band edge: 79.6% reads 79 (not near yet), 99.6% reads 99
+   * (not at the limit), 100.4% reads 101 (over).
+   */
   usedPct: number | null;
   /** How far past the limit (0 unless `over`). */
   overBy: number;
@@ -89,28 +105,46 @@ export interface Standing {
 
 export const NEAR_LIMIT_PCT = 80;
 
-/** Colour of the credit-limit bar: accent under 80%, amber at 80–100%, red over 100%. */
-export function limitTone(usedPct: number): LimitTone {
-  if (usedPct > 100) return 'bad';
-  if (usedPct >= NEAR_LIMIT_PCT) return 'warn';
-  return 'accent';
+/**
+ * The one place the limit bands are decided, on the exact ratio: the row bar,
+ * the "Near limit" / "Over limit" badge and the page's balance card all read
+ * `state` and `tone` from here, so they cannot disagree at an edge (79.6%).
+ */
+function band(
+  balance: number,
+  limit: number,
+): { state: 'over' | 'near' | 'under'; tone: LimitTone } {
+  const ratio = (balance / limit) * 100;
+  if (balance > limit) return { state: 'over', tone: 'bad' };
+  if (ratio >= NEAR_LIMIT_PCT) return { state: 'near', tone: 'warn' };
+  return { state: 'under', tone: 'accent' };
+}
+
+/** Round to a whole percent without crossing the band edge: 79.6% reads 79, 99.6% reads 99. */
+function bandedPct(state: 'near' | 'under', ratio: number, atLimit: boolean): number {
+  const pct = Math.round(ratio);
+  if (state === 'under') return Math.min(NEAR_LIMIT_PCT - 1, pct);
+  return atLimit ? 100 : Math.min(99, Math.max(NEAR_LIMIT_PCT, pct));
 }
 
 /** Where a Customer stands against their credit limit (the row bar and the page's balance card). */
 export function standing(c: Pick<MoneyCustomer, 'currentBalance' | 'creditLimit'>): Standing {
   const balance = balanceOf(c);
   const limit = limitOf(c);
-  if (balance <= -SETTLED_BELOW)
-    return { state: 'advance', balance, limit, usedPct: null, overBy: 0, room: 0 };
-  if (balance < SETTLED_BELOW)
-    return { state: 'settled', balance: 0, limit, usedPct: null, overBy: 0, room: 0 };
-  if (limit === null) return { state: 'under', balance, limit, usedPct: null, overBy: 0, room: 0 };
+  const kind = balanceState(balance);
+  if (kind === 'advance')
+    return { state: 'advance', tone: null, balance, limit, usedPct: null, overBy: 0, room: 0 };
+  if (kind === 'settled')
+    return { state: 'settled', tone: null, balance: 0, limit, usedPct: null, overBy: 0, room: 0 };
+  if (limit === null)
+    return { state: 'under', tone: null, balance, limit, usedPct: null, overBy: 0, room: 0 };
 
+  const { state, tone } = band(balance, limit);
   const ratio = (balance / limit) * 100;
-  if (balance > limit) {
-    // 100.4% must not read "100%" next to an Over limit badge.
+  if (state === 'over') {
     return {
-      state: 'over',
+      state,
+      tone,
       balance,
       limit,
       usedPct: Math.max(101, Math.round(ratio)),
@@ -119,10 +153,11 @@ export function standing(c: Pick<MoneyCustomer, 'currentBalance' | 'creditLimit'
     };
   }
   return {
-    state: ratio >= NEAR_LIMIT_PCT ? 'near' : 'under',
+    state,
+    tone,
     balance,
     limit,
-    usedPct: Math.round(ratio),
+    usedPct: bandedPct(state, ratio, balance >= limit),
     overBy: 0,
     room: limit - balance,
   };

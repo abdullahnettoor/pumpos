@@ -9,10 +9,11 @@ import {
   type MoneyCustomer,
 } from '../../lib/money/parties.js';
 import { ListGroup } from '../../ui/ListRow.js';
+import { Note } from '../../ui/Note.js';
 import { SectionLabel } from '../../ui/SectionLabel.js';
+import { SeeAllButton } from '../../ui/SeeAllButton.js';
 import { CustomerRow } from './CustomerRow.js';
-import { MoneyHero } from './MoneyHero.js';
-import { SeeAllButton, Note } from './parts.js';
+import { HeroCard } from './HeroCard.js';
 import { useCustomersData } from './useMoneyData.js';
 
 /** Customers shown before "See all". */
@@ -42,15 +43,16 @@ export const ToCollect: React.FC<Props> = ({ query, onOpenCustomer }) => {
 
   return (
     <>
-      <MoneyHero
+      <HeroCard
         label={`Receivables · ${owingNow.length} ${owingNow.length === 1 ? 'customer' : 'customers'}`}
         value={inr(totalOwed(customers))}
-        sub={
-          overCount > 0 && (
-            <span className="font-semibold text-bad-fg">{overCount} over credit limit</span>
-          )
-        }
-      />
+      >
+        {overCount > 0 && (
+          <p className="mt-1 text-[11.5px] font-semibold text-bad-fg">
+            {overCount} over credit limit
+          </p>
+        )}
+      </HeroCard>
       <SectionLabel>{searching ? 'Customers' : 'Highest balances'}</SectionLabel>
       {rows.length === 0 ? (
         <Note>

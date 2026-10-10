@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { useCustomerLedger } from '@pump/ui';
 import { buildStatement, STATEMENT_PAGE, type LedgerRow } from '../../lib/money/statement.js';
-import type { MoneyCustomer } from '../../lib/money/parties.js';
+import { balanceOf, type MoneyCustomer } from '../../lib/money/parties.js';
 import { DetailPage } from '../../ui/DetailPage.js';
 import { PhoneIcon } from '../../ui/icons.js';
+import { Note } from '../../ui/Note.js';
 import { SectionLabel } from '../../ui/SectionLabel.js';
 import { BalanceCard } from './BalanceCard.js';
-import { Note } from './parts.js';
 import { StatementList } from './StatementList.js';
 import { useCustomersData } from './useMoneyData.js';
 
@@ -42,8 +42,8 @@ export const CustomerPage: React.FC<{ customer: MoneyCustomer }> = ({ customer: 
   const ledgerQ = useCustomerLedger(customer.id);
   const [visible, setVisible] = useState(STATEMENT_PAGE);
   const statement = useMemo(
-    () => buildStatement((ledgerQ.data ?? []) as LedgerRow[], visible),
-    [ledgerQ.data, visible],
+    () => buildStatement((ledgerQ.data ?? []) as LedgerRow[], visible, balanceOf(customer)),
+    [ledgerQ.data, visible, customer],
   );
 
   const subtitle = [customer.customerType, customer.fleetCode, customer.phone]
@@ -74,7 +74,11 @@ export const CustomerPage: React.FC<{ customer: MoneyCustomer }> = ({ customer: 
           </button>
         </Note>
       ) : statement.total === 0 ? (
-        <Note>No transactions yet.</Note>
+        <Note>
+          {statement.reconciled
+            ? 'No transactions yet.'
+            : 'No statement entries to show for this balance.'}
+        </Note>
       ) : (
         <StatementList
           statement={statement}

@@ -6,7 +6,10 @@
  * Rows come oldest-first from `GET /transactions/customers/:id/ledger`
  * (Business Date for a sale, Entry Date for a Collection). They carry no
  * running balance, so it is accumulated here from zero over the whole
- * (all-time) ledger. The ranged / enriched ledger (#413) replaces this input.
+ * (all-time) ledger. That figure is only shown when it ends on the server's
+ * `currentBalance` (`reconciled`); otherwise the statement is partial and the
+ * rows carry no running balance, rather than a wrong one. The ranged / enriched
+ * ledger (#413) replaces this input.
  */
 
 /** A ledger row as the API returns it. */
@@ -21,14 +24,14 @@ export interface LedgerRow {
 
 export interface StatementEntry {
   key: string;
-  /** "Credit sale", "Payment received", ... */
+  /** "Credit Sale", "Payment received", ... */
   label: string;
   /** "9 Oct", or "9 Oct · note". */
   meta: string;
   /** Signed effect on what the customer owes: a Collection is negative. */
   delta: number;
-  /** What they owed right after this row. */
-  balance: number;
+  /** What they owed right after this row; null when the statement does not reconcile. */
+  balance: number | null;
 }
 
 export interface StatementMonth {
@@ -47,13 +50,22 @@ export interface Statement {
   hasMore: boolean;
   /** Balance after the newest row (the ledger's running total), or null when there are none. */
   closingBalance: number | null;
+  /**
+   * The ledger's running total ends on the server balance it was checked against
+   * (or nothing was checked). When false the statement is partial: its rows
+   * show no running balance and the screen shows the server balance instead.
+   */
+  reconciled: boolean;
 }
+
+/** Within half a paisa: the ledger and the balance are numeric(14,2) sums. */
+const RECONCILE_TOLERANCE = 0.005;
 
 export const STATEMENT_PAGE = 20;
 
 /** Friendly names for the ledger's raw transaction types. */
 const LABEL: Record<string, string> = {
-  'Credit Sale': 'Credit sale',
+  'Credit Sale': 'Credit Sale',
   Collection: 'Payment received',
   Adjustment: 'Adjustment',
   'Opening Balance': 'Opening balance',
@@ -99,9 +111,15 @@ export const dayLabel = (iso: string): string => {
   return p ? `${p[2]} ${MONTHS[p[1] - 1].slice(0, 3)}` : iso;
 };
 
+/**
+ * @param expectedBalance the server's `currentBalance` for the party. The
+ * running balance is trusted only if the ledger closes on it. Pass `undefined`
+ * to skip the check (tests of the arithmetic alone).
+ */
 export function buildStatement(
   rows: readonly LedgerRow[],
   visible: number = STATEMENT_PAGE,
+  expectedBalance?: number,
 ): Statement {
   let running = 0;
   const entries = rows.map((r, i): StatementEntry & { date: string } => {
@@ -120,6 +138,11 @@ export function buildStatement(
     };
   });
 
+  const closingBalance = entries.length ? running : null;
+  const reconciled =
+    expectedBalance === undefined ||
+    Math.abs((closingBalance ?? 0) - expectedBalance) < RECONCILE_TOLERANCE;
+
   const newestFirst = entries.slice().reverse();
   const shownEntries = newestFirst.slice(0, Math.max(0, visible));
 
@@ -128,6 +151,7 @@ export function buildStatement(
     const key = e.date.slice(0, 7);
     const last = months[months.length - 1];
     const { date: _date, ...entry } = e;
+    if (!reconciled) entry.balance = null;
     if (last && last.key === key) last.entries.push(entry);
     else months.push({ key, label: e.date ? monthLabel(e.date) : 'Undated', entries: [entry] });
   }
@@ -137,6 +161,7 @@ export function buildStatement(
     shown: shownEntries.length,
     total: entries.length,
     hasMore: shownEntries.length < entries.length,
-    closingBalance: entries.length ? running : null,
+    closingBalance,
+    reconciled,
   };
 }

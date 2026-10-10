@@ -2,6 +2,7 @@ import React from 'react';
 import { inr } from '@pump/ui';
 import { standing, type MoneyCustomer, type StandingState } from '../../lib/money/parties.js';
 import { StatusBadge } from '../../ui/StatusBadge.js';
+import { HeroCard } from './HeroCard.js';
 import { LimitBar } from './LimitBar.js';
 
 const SURFACE: Record<StandingState, string> = {
@@ -36,22 +37,20 @@ export const BalanceCard: React.FC<{ customer: MoneyCustomer }> = ({ customer })
   const owes = s.state === 'over' || s.state === 'near' || s.state === 'under';
 
   return (
-    <section
-      aria-label="Balance"
-      data-state={s.state}
-      className={`mx-3 rounded-[14px] border p-3.5 ${SURFACE[s.state]}`}
+    <HeroCard
+      ariaLabel="Balance"
+      state={s.state}
+      surface={SURFACE[s.state]}
+      label={LABEL[s.state]}
+      value={inr(amount)}
+      badge={
+        s.state === 'over' ? (
+          <StatusBadge tone="bad">Over limit</StatusBadge>
+        ) : s.state === 'near' ? (
+          <StatusBadge tone="warn">Near limit</StatusBadge>
+        ) : undefined
+      }
     >
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[11px] font-medium text-text-muted">{LABEL[s.state]}</p>
-          <p className="num mt-1 text-[30px] font-semibold tracking-[-0.03em] text-text-high">
-            {inr(amount)}
-          </p>
-        </div>
-        {s.state === 'over' && <StatusBadge tone="bad">Over limit</StatusBadge>}
-        {s.state === 'near' && <StatusBadge tone="warn">Near limit</StatusBadge>}
-      </div>
-
       {s.state === 'settled' && <p className="mt-1 text-[11.5px] text-text-muted">Nothing due.</p>}
       {s.state === 'advance' && (
         <p className="mt-1 text-[11.5px] text-text-muted">
@@ -59,9 +58,9 @@ export const BalanceCard: React.FC<{ customer: MoneyCustomer }> = ({ customer })
         </p>
       )}
 
-      {owes && hasLimit && s.usedPct !== null && (
+      {owes && hasLimit && s.usedPct !== null && s.tone && (
         <div className="mt-3">
-          <LimitBar usedPct={s.usedPct} className="!h-2" />
+          <LimitBar usedPct={s.usedPct} tone={s.tone} className="!h-2" />
           <div className="mt-1.5 flex justify-between text-[11.5px] text-text-muted">
             <span className="num">Limit {inr(s.limit)}</span>
             {s.state === 'over' ? (
@@ -79,6 +78,6 @@ export const BalanceCard: React.FC<{ customer: MoneyCustomer }> = ({ customer })
       {owes && !hasLimit && (
         <p className="mt-3 text-[11.5px] text-text-muted">No credit limit set.</p>
       )}
-    </section>
+    </HeroCard>
   );
 };

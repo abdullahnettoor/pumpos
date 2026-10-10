@@ -9,6 +9,15 @@ export const StatementList: React.FC<{ statement: Statement; onLoadMore: () => v
   onLoadMore,
 }) => (
   <div className="mx-3 overflow-hidden rounded-[14px] border border-line bg-card">
+    {!statement.reconciled && (
+      <p
+        role="note"
+        className="border-b border-warn-line bg-warn-soft px-3 py-2 text-[11.5px] text-text-high"
+      >
+        Partial statement: these entries don’t add up to the current balance, so running balances
+        are hidden. The balance above is the one on record.
+      </p>
+    )}
     {statement.months.map((m) => (
       <section key={m.key} aria-label={m.label}>
         <h3 className="border-b border-line bg-card-alt px-3 py-1.5 text-[10.5px] font-bold uppercase tracking-[0.1em] text-text-muted [section:not(:first-child)>&]:border-t">
@@ -38,7 +47,9 @@ export const StatementList: React.FC<{ statement: Statement; onLoadMore: () => v
                     {reduces ? '−' : '+'}
                     {inr(Math.abs(e.delta))}
                   </p>
-                  <p className="num text-[11px] text-text-muted">Bal {signedRupees(e.balance)}</p>
+                  {e.balance !== null && (
+                    <p className="num text-[11px] text-text-muted">Bal {signedRupees(e.balance)}</p>
+                  )}
                 </div>
               </li>
             );

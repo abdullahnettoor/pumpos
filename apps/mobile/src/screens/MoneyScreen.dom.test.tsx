@@ -143,7 +143,8 @@ describe('To collect', () => {
 
   it('colours the limit bar by usage and the balance red only over the limit', () => {
     mount();
-    const bar = (name: string) => within(row(name)).getByRole('progressbar');
+    // The row's bar is decorative (aria-hidden): the button's label carries the meaning.
+    const bar = (name: string) => row(name).querySelector('[data-tone]')!;
     expect(bar('Calicut Cabs').getAttribute('data-tone')).toBe('accent'); // 61%
     expect(bar('Malabar Travels').getAttribute('data-tone')).toBe('warn'); // 86%
     expect(bar('KTC Logistics').getAttribute('data-tone')).toBe('bad'); // 107%
@@ -154,13 +155,28 @@ describe('To collect', () => {
       'text-bad-fg',
     );
     // 107% fills the bar to 100%, not past it
-    expect(bar('KTC Logistics').getAttribute('aria-valuenow')).toBe('100');
+    expect((bar('KTC Logistics').firstElementChild as HTMLElement).style.width).toBe('100%');
+  });
+
+  it('labels each row for assistive tech and hides the bar inside the button', () => {
+    mount();
+    expect(row('KTC Logistics').getAttribute('aria-label')).toBe(
+      'KTC Logistics, ₹2,14,600.00 owed, over limit',
+    );
+    expect(row('Malabar Travels').getAttribute('aria-label')).toBe(
+      'Malabar Travels, ₹1,28,900.00 owed, near limit',
+    );
+    expect(row('Calicut Cabs').getAttribute('aria-label')).toBe('Calicut Cabs, ₹61,400.00 owed');
+    for (const b of screen.getAllByRole('button').filter((b) => b.querySelector('[data-tone]'))) {
+      expect(within(b).queryByRole('progressbar')).toBeNull();
+      expect(b.querySelector('[data-tone]')!.getAttribute('aria-hidden')).toBe('true');
+    }
   });
 
   it('has no bar for a customer without a credit limit', () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'See all 6 customers' }));
-    expect(within(row('Ravi Autos')).queryByRole('progressbar')).toBeNull();
+    expect(row('Ravi Autos').querySelector('[data-tone]')).toBeNull();
   });
 
   it('describes a row as type and limit', () => {
@@ -233,6 +249,18 @@ describe('Customer page', () => {
     open('Calicut Cabs');
     expect(screen.getByRole('heading', { name: 'Calicut Cabs' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: /Call/ })).toBeNull();
+  });
+
+  it('at 79.6% of the limit the bar and the state agree: not near', () => {
+    customers.push(cust({ name: 'Edge Ed', creditLimit: '100000', currentBalance: '79600' }));
+    mount();
+    fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'edge' } });
+    expect(row('Edge Ed').querySelector('[data-tone]')!.getAttribute('data-tone')).toBe('accent');
+    expect(row('Edge Ed').getAttribute('aria-label')).not.toMatch(/near limit/);
+    open('Edge Ed');
+    expect(balance().getAttribute('data-state')).toBe('under');
+    expect(within(balance()).queryByText('Near limit')).toBeNull();
+    expect(within(balance()).getByText('₹20,400.00 left · 79% used')).toBeTruthy();
   });
 
   it('shows near-limit and under-limit balances with the room left', () => {
@@ -347,7 +375,7 @@ describe('Customer page', () => {
       fireEvent.click(screen.getByRole('button', { name: 'See all 6 customers' }));
       open('Ravi Autos');
       const m = screen.getByRole('region', { name: 'September 2026' });
-      expect(within(m).getByText('Credit sale')).toBeTruthy();
+      expect(within(m).getByText('Credit Sale')).toBeTruthy();
       expect(within(m).getByText('Bal ₹5,000.00')).toBeTruthy();
     });
 
@@ -371,7 +399,7 @@ describe('Customer page', () => {
       expect(items[0]).toContain('Adjustment');
       expect(items[0]).toContain('+₹100.00');
       expect(items[0]).toContain('Bal ₹17,225.00');
-      expect(items[1]).toContain('Credit sale');
+      expect(items[1]).toContain('Credit Sale');
       expect(items[1]).toContain('Bal ₹17,125.00');
       const sep = within(months[1])
         .getAllByRole('listitem')
@@ -385,8 +413,34 @@ describe('Customer page', () => {
       expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
     });
 
+    it('does not show a running balance that disagrees with the server balance', () => {
+      // Server says Ledger Lou owes ₹20,000; the ledger rows only add up to ₹17,225.
+      customers.push(cust({ name: 'Ledger Lou', currentBalance: '20000', creditLimit: '100000' }));
+      ledgers['Ledger Lou'] = LEDGER;
+      mount();
+      fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
+      open('Ledger Lou');
+
+      // The balance card is the server figure.
+      expect(within(balance()).getByText('₹20,000.00')).toBeTruthy();
+      expect(screen.getByRole('note').textContent).toMatch(/Partial statement/);
+      // Rows keep their amounts but no running balance.
+      expect(screen.getAllByRole('listitem')).toHaveLength(5);
+      expect(document.body.textContent).toContain('+₹100.00');
+      expect(document.body.textContent).not.toMatch(/Bal ₹/);
+    });
+
+    it('shows no partial note when the ledger reconciles', () => {
+      customers.push(cust({ name: 'Ledger Lou', currentBalance: '17225', creditLimit: '100000' }));
+      ledgers['Ledger Lou'] = LEDGER;
+      mount();
+      fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
+      open('Ledger Lou');
+      expect(screen.queryByRole('note')).toBeNull();
+    });
+
     it('pages with Load more', () => {
-      customers.push(cust({ name: 'Ledger Lou', currentBalance: '30', creditLimit: '100000' }));
+      customers.push(cust({ name: 'Ledger Lou', currentBalance: '45', creditLimit: '100000' }));
       ledgers['Ledger Lou'] = Array.from({ length: 45 }, (_, i) => ({
         id: `r${i}`,
         transactionType: 'Credit Sale',
@@ -414,8 +468,14 @@ describe('Customer page', () => {
 
       ledgerState.isLoading = false;
       mount();
-      open('KTC Logistics');
+      fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'sam' } });
+      open('Settled Sam');
       expect(screen.getByText('No transactions yet.')).toBeTruthy();
+      cleanup();
+
+      mount();
+      open('KTC Logistics');
+      expect(screen.getByText('No statement entries to show for this balance.')).toBeTruthy();
       cleanup();
 
       ledgerState.isError = true;

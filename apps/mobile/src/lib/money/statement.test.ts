@@ -28,6 +28,42 @@ describe('buildStatement', () => {
     expect(all.map((e) => e.balance)).toEqual([27425, 18915, 6375, 10375, 5000]);
   });
 
+  describe('reconciling with the server balance', () => {
+    const CLOSING = 27425;
+
+    it('shows running balances when the ledger closes on the server balance', () => {
+      const s = buildStatement(LEDGER, 20, CLOSING);
+      expect(s.reconciled).toBe(true);
+      expect(s.months.flatMap((m) => m.entries).map((e) => e.balance)).toEqual([
+        27425, 18915, 6375, 10375, 5000,
+      ]);
+    });
+
+    it('tolerates float dust', () => {
+      expect(buildStatement(LEDGER, 20, CLOSING + 0.004).reconciled).toBe(true);
+    });
+
+    it('is partial, with no running balance on any row, when the ledger closes elsewhere', () => {
+      const s = buildStatement(LEDGER, 20, 31000);
+      expect(s.reconciled).toBe(false);
+      expect(s.closingBalance).toBe(CLOSING);
+      const entries = s.months.flatMap((m) => m.entries);
+      expect(entries).toHaveLength(5);
+      expect(entries.every((e) => e.balance === null)).toBe(true);
+      // The amounts of each row are still shown.
+      expect(entries[0]).toMatchObject({ key: 'd', delta: 8510 });
+    });
+
+    it('is partial when there are no rows but a balance is owed, and fine at zero', () => {
+      expect(buildStatement([], 20, 1200).reconciled).toBe(false);
+      expect(buildStatement([], 20, 0).reconciled).toBe(true);
+    });
+
+    it('does not check when no expected balance is given', () => {
+      expect(buildStatement(LEDGER).reconciled).toBe(true);
+    });
+  });
+
   it('lists newest first, grouped by month with a heading', () => {
     const s = buildStatement(LEDGER);
     expect(s.months.map((m) => m.label)).toEqual(['October 2026', 'September 2026', 'August 2026']);
@@ -39,7 +75,7 @@ describe('buildStatement', () => {
     const entries = buildStatement(LEDGER).months.flatMap((m) => m.entries);
     const byKey = Object.fromEntries(entries.map((e) => [e.key, e]));
     expect(byKey.o.label).toBe('Opening balance');
-    expect(byKey.a.label).toBe('Credit sale');
+    expect(byKey.a.label).toBe('Credit Sale');
     expect(byKey.b).toMatchObject({
       label: 'Payment received',
       delta: -4000,
