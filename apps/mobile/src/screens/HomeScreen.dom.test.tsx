@@ -51,7 +51,6 @@ vi.mock('../lib/alerts.js', () => ({ useMobileAlerts: () => feed.alerts }));
 
 const { HomeScreen } = await import('./HomeScreen.js');
 const { NavProvider, useNav } = await import('../shell/nav.js');
-const { HOME_ATTENTION_ID } = await import('../shell/attention.js');
 
 let lastToday = '';
 const station = (settings: Record<string, unknown> = {}) =>
@@ -152,7 +151,7 @@ const openShift = (businessDate: string) => ({
 const alert = (id: string, severity: string, title: string, action?: unknown) => ({
   id,
   severity,
-  category: action ? 'day' : 'stock',
+  category: (action as { kind: string } | undefined)?.kind ?? 'stock',
   title,
   action,
 });
@@ -429,7 +428,7 @@ describe('Home: attention', () => {
   const four = [
     alert('a1', 'danger', 'HSD critically low'),
     alert('a2', 'danger', 'Fleet Co over credit limit', {
-      kind: 'customer',
+      kind: 'credit',
       customer: { id: 'c1', name: 'Fleet Co' },
     }),
     alert('a3', 'warning', 'Wed, 7 Oct not closed', { kind: 'day', businessDate: '2026-10-07' }),
@@ -446,12 +445,36 @@ describe('Home: attention', () => {
     expect(within(section).getByRole('button', { name: 'All 4 alerts' })).toBeTruthy();
   });
 
-  it('keeps the section the header bell scrolls to, even with nothing to report', () => {
+  it('keeps the section on screen, even with nothing to report', () => {
     renderHome();
-    const section = document.getElementById(HOME_ATTENTION_ID)!;
-    expect(section).toBeTruthy();
-    expect(section.getAttribute('tabindex')).toBe('-1');
+    const section = screen.getByRole('region', { name: 'Needs attention' });
     expect(within(section).getByText('Nothing needs attention')).toBeTruthy();
+  });
+
+  it('leaves the own unsaved handover to the pinned card, but counts it in "All N"', () => {
+    feed.alerts = [
+      alert('a1', 'danger', 'Fleet Co over credit limit'),
+      alert('handover-own', 'warning', 'Your handover is not saved', { kind: 'handover' }),
+      alert('a3', 'warning', 'Wed, 7 Oct not closed'),
+      alert('a4', 'warning', 'Tue, 6 Oct not closed'),
+    ];
+    renderHome();
+    const section = screen.getByRole('region', { name: 'Needs attention' });
+    expect(within(section).queryByText('Your handover is not saved')).toBeNull();
+    expect(within(section).getByText('Fleet Co over credit limit')).toBeTruthy();
+    expect(within(section).getByText('Wed, 7 Oct not closed')).toBeTruthy();
+    expect(within(section).queryByText('Tue, 6 Oct not closed')).toBeNull();
+    expect(within(section).getByRole('button', { name: 'All 4 alerts' })).toBeTruthy();
+  });
+
+  it('says so when only the own handover is open', () => {
+    feed.alerts = [
+      alert('handover-own', 'warning', 'Your handover is not saved', { kind: 'handover' }),
+    ];
+    renderHome();
+    const section = screen.getByRole('region', { name: 'Needs attention' });
+    expect(within(section).getByText('Nothing else needs attention')).toBeTruthy();
+    expect(within(section).getByRole('button', { name: 'All 1 alerts' })).toBeTruthy();
   });
 
   it('opens the page an alert explains, on top of Home', () => {
@@ -472,7 +495,7 @@ describe('Home: attention', () => {
   it('does not offer a page whose tab the Role cannot open', () => {
     feed.alerts = [
       alert('a1', 'danger', 'Fleet Co over credit limit', {
-        kind: 'customer',
+        kind: 'credit',
         customer: { id: 'c1', name: 'Fleet Co' },
       }),
     ];

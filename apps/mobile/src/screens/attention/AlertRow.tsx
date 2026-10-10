@@ -1,5 +1,5 @@
 import React from 'react';
-import { actionLabelFor } from '../../lib/attention/groups.js';
+import { ALERT_KINDS } from '../../lib/attention/groups.js';
 import type { MobileAlert } from '../../lib/alerts.js';
 import { ChevronRightIcon } from '../../ui/icons.js';
 
@@ -24,7 +24,7 @@ interface Props {
  */
 export const AlertRow: React.FC<Props> = ({ alert, onOpen, showAction = false }) => {
   const tone = TONE[alert.severity];
-  const word = showAction ? actionLabelFor(alert.category) : '';
+  const word = showAction ? ALERT_KINDS[alert.category].actionLabel : undefined;
   const body = (
     <>
       <span aria-hidden="true" className={`h-2 w-2 flex-shrink-0 rounded-full ${tone.dot}`} />

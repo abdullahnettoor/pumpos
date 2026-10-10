@@ -79,7 +79,7 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
       category: 'credit',
       title: `${c.name} over credit limit`,
       meta: `${rupees(s.balance)} of ${rupees(s.limit ?? 0)}`,
-      action: { kind: 'customer', customer: c },
+      action: { kind: 'credit', customer: c },
     });
   }
 
@@ -98,7 +98,7 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
       category: 'variance',
       title: `${shiftLabel(s)} ${v.headline < 0 ? 'short' : 'over'} by ${rupees(Math.abs(num(v.headline)))}`,
       meta: [v.headlineNote, date].filter(Boolean).join(' · '),
-      action: { kind: 'shift', shiftId: String(s.shiftId) },
+      action: { kind: 'variance', shiftId: String(s.shiftId) },
     });
   }
 

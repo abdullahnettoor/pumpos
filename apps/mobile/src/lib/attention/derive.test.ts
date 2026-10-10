@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveAlerts, type AlertSources } from './derive.js';
-import { ALERT_KINDS, groupAlerts } from './groups.js';
+import { ALERT_KINDS, groupAlerts, homeAlerts } from './groups.js';
 
 const none: AlertSources = {
   stock: [],
@@ -77,7 +77,7 @@ describe('deriveAlerts', () => {
       title: 'KTC Logistics over credit limit',
       severity: 'danger',
       action: {
-        kind: 'customer',
+        kind: 'credit',
         customer: expect.objectContaining({ id: 'c4', name: 'KTC Logistics' }),
       },
     });
@@ -97,7 +97,7 @@ describe('deriveAlerts', () => {
         category: 'variance',
         severity: 'danger',
         title: 'Shift 1 short by ₹340',
-        action: { kind: 'shift', shiftId: 's1' },
+        action: { kind: 'variance', shiftId: 's1' },
       });
       expect(a.meta).toContain('Short');
     });
@@ -199,13 +199,20 @@ describe('groupAlerts', () => {
     expect(groups.reduce((n, g) => n + g.alerts.length, 0)).toBe(alerts.length);
   });
 
-  it('knows the five kinds', () => {
-    expect(ALERT_KINDS.map((k) => k.category)).toEqual([
-      'stock',
-      'day',
-      'credit',
-      'variance',
-      'handover',
-    ]);
+  it('knows the five kinds, in page order', () => {
+    expect(Object.keys(ALERT_KINDS)).toEqual(['stock', 'day', 'credit', 'variance', 'handover']);
+  });
+});
+
+describe('homeAlerts', () => {
+  it('takes the top alerts but skips the own handover, which the pinned card shows', () => {
+    const alerts = deriveAlerts({
+      ...none,
+      pastOpenDates: ['2026-10-07', '2026-10-08'],
+      ownHandover: own(false),
+    });
+    expect(alerts.map((a) => a.id)).toEqual(['day-2026-10-08', 'day-2026-10-07', 'handover-own']);
+    expect(homeAlerts(alerts, 3).map((a) => a.id)).toEqual(['day-2026-10-08', 'day-2026-10-07']);
+    expect(homeAlerts(alerts.slice(2), 2)).toEqual([]);
   });
 });

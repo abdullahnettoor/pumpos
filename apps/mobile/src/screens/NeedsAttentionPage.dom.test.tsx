@@ -29,6 +29,7 @@ const { HomeHeader } = await import('../shell/HomeHeader.js');
 const { ShellContext } = await import('../shell/context.js');
 const { NavProvider, useNav } = await import('../shell/nav.js');
 const { stackOf } = await import('../shell/navStack.js');
+const { useOpenAttention } = await import('./attention/useOpenAttention.js');
 
 const station = { id: 'st-1', name: 'Highway Fuels', settings: {} } as unknown as Station;
 
@@ -53,7 +54,7 @@ const credit: MobileAlert = {
   category: 'credit',
   title: 'KTC Logistics over credit limit',
   meta: '₹2,15,000 of ₹2,00,000',
-  action: { kind: 'customer', customer: { id: 'c1', name: 'KTC Logistics' } },
+  action: { kind: 'credit', customer: { id: 'c1', name: 'KTC Logistics' } },
 };
 const variance: MobileAlert = {
   id: 'var-s1',
@@ -61,7 +62,7 @@ const variance: MobileAlert = {
   category: 'variance',
   title: 'Shift 1 short by ₹340',
   meta: 'DU3 short · Fri, 9 Oct',
-  action: { kind: 'shift', shiftId: 's1' },
+  action: { kind: 'variance', shiftId: 's1' },
 };
 const handover: MobileAlert = {
   id: 'handover-own',
@@ -85,13 +86,14 @@ const Probe: React.FC = () => {
 /** Home's root plus whatever page is on top of its stack (the shell does this with Panes). */
 const Stage: React.FC = () => {
   const n = useNav();
+  const openAttention = useOpenAttention();
   const stack = stackOf({ active: n.active, stacks: n.stacks, visited: [...n.visited] }, 'home');
   const top = stack[stack.length - 1];
   return top ? (
     <>{top.element}</>
   ) : (
     <>
-      <HomeHeader />
+      <HomeHeader onOpenAttention={openAttention} />
       <HomeAttention alerts={feed.alerts as MobileAlert[]} station={station} />
     </>
   );

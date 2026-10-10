@@ -1,10 +1,11 @@
 import React from 'react';
-import { HOME_ATTENTION_ID, useOpenAttention } from '../../shell/attention.js';
 import { SectionLabel } from '../../ui/index.js';
 import type { Station } from '@pump/shared';
 import type { MobileAlert } from '../../lib/alerts.js';
+import { homeAlerts } from '../../lib/attention/groups.js';
 import { AlertRow } from '../attention/AlertRow.js';
 import { useAlertOpener } from '../attention/useAlertOpener.js';
+import { useOpenAttention } from '../attention/useOpenAttention.js';
 
 /** Alerts shown on Home; the rest are behind "All N". */
 export const HOME_ALERT_LIMIT = 2;
@@ -17,7 +18,7 @@ interface Props {
 }
 
 /**
- * The top alerts by severity, with "All N ›" to the Needs attention page (the
+ * The top alerts by severity (not the own handover: the pinned card shows it), with "All N ›" to the Needs attention page (the
  * same page the header bell opens, the same count). A row opens the page that
  * explains it; stock rows have none. The section stays on screen when there is
  * nothing to report.
@@ -25,15 +26,10 @@ interface Props {
 export const HomeAttention: React.FC<Props> = ({ alerts, station }) => {
   const openAll = useOpenAttention();
   const open = useAlertOpener(station);
-  const top = alerts.slice(0, HOME_ALERT_LIMIT);
+  const top = homeAlerts(alerts, HOME_ALERT_LIMIT);
 
   return (
-    <section
-      id={HOME_ATTENTION_ID}
-      tabIndex={-1}
-      aria-label="Needs attention"
-      className="scroll-mt-2 outline-none"
-    >
+    <section aria-label="Needs attention">
       <SectionLabel
         right={
           alerts.length > 0 ? (
@@ -47,7 +43,7 @@ export const HomeAttention: React.FC<Props> = ({ alerts, station }) => {
       </SectionLabel>
       {top.length === 0 ? (
         <p className="mx-3 rounded-[14px] border border-good-line bg-good-soft px-3 py-2.5 text-xs font-medium text-good">
-          Nothing needs attention
+          {alerts.length === 0 ? 'Nothing needs attention' : 'Nothing else needs attention'}
         </p>
       ) : (
         <div className="flex flex-col gap-2">

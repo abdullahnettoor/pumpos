@@ -58,7 +58,6 @@ const { NavProvider, useNav } = await import('./nav.js');
 const { tabsForRole } = await import('./tabs.js');
 const { HomeHeader } = await import('./HomeHeader.js');
 const { TabHeader } = await import('./TabHeader.js');
-const { HOME_ATTENTION_ID } = await import('./attention.js');
 const { DetailPage } = await import('../ui/DetailPage.js');
 const { ThemeProvider } = await import('../theme/index.js');
 
@@ -93,15 +92,14 @@ const Root: React.FC<{ tab: string; stationName: string }> = ({ tab, stationName
   const n = useNav();
   return (
     <div data-testid={`root-${tab}`}>
-      {tab === 'home' ? <HomeHeader /> : <TabHeader title={tab} />}
+      {tab === 'home' ? (
+        <HomeHeader onOpenAttention={() => n.push(<Detail name="attention" />, 'attention')} />
+      ) : (
+        <TabHeader title={tab} />
+      )}
       <p>
         {tab} list · {stationName}
       </p>
-      {tab === 'home' && (
-        <button type="button" id={HOME_ATTENTION_ID}>
-          2 items need attention
-        </button>
-      )}
       <button type="button" onClick={() => n.push(<Detail name={`${tab} item`} />, `${tab}:1`)}>
         Open {tab} item
       </button>
@@ -220,15 +218,18 @@ describe('header', () => {
     expect(screen.getByRole('button', { name: 'Alerts, 2 open' })).toBeTruthy();
   });
 
-  it('the bell opens the Needs attention page, listing what the badge counts', async () => {
+  it('hides the badge text from assistive tech (the button label carries the count)', () => {
+    render(<Harness />);
+    const badge = screen.getByRole('button', { name: 'Alerts, 2 open' }).querySelector('.num');
+    expect(badge?.textContent).toBe('2');
+    expect(badge?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('the bell calls onOpenAttention: the page it pushes replaces the dock, back returns', async () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Alerts, 2 open' }));
     expect(holder.nav.active).toBe('home');
     expect(holder.nav.depth).toBe(1);
-    expect(screen.getByText('2 open')).toBeTruthy();
-    expect(screen.getByText('HSD critically low')).toBeTruthy();
-    expect(screen.getByText('Thu, 8 Oct not closed')).toBeTruthy();
-    // A pushed page replaces the dock; back returns to Home.
     expect(dock()).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     await waitFor(() => expect(holder.nav.depth).toBe(0));

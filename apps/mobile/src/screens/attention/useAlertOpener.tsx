@@ -1,20 +1,12 @@
 import { useCallback } from 'react';
 import type { MobileAlert } from '../../lib/alerts.js';
+import { ALERT_KINDS } from '../../lib/attention/groups.js';
 import type { Station } from '@pump/shared';
 import { useNav } from '../../shell/nav.js';
-import type { TabKey } from '../../shell/tabs.js';
 import { HandoverPage } from '../HandoverPage.js';
 import { ShiftSummaryPage } from '../ShiftSummaryPage.js';
 import { CustomerPage } from '../money/CustomerPage.js';
 import { ReportDayPage } from '../reports/ReportDayPage.js';
-
-/** The tab a page belongs to: a Role without it may not open the page. */
-const OWNING_TAB: Record<string, TabKey | null> = {
-  day: 'reports',
-  customer: 'money',
-  shift: 'shifts',
-  handover: null,
-};
 
 /**
  * Opens the one page an alert explains, pushed on the current tab so back
@@ -35,7 +27,8 @@ export function useAlertOpener(
     (alert) => {
       const action = alert.action;
       if (!action) return null;
-      const tab = OWNING_TAB[action.kind];
+      // The tab the page belongs to: a Role without it may not open the page.
+      const tab = ALERT_KINDS[action.kind].tab;
       if (tab && !nav.tabs.includes(tab)) return null;
 
       switch (action.kind) {
@@ -46,14 +39,14 @@ export function useAlertOpener(
               <ReportDayPage station={station} businessDate={action.businessDate} />,
               `report:${action.businessDate}`,
             );
-        case 'shift':
+        case 'variance':
           if (!station) return null;
           return () =>
             nav.push(
               <ShiftSummaryPage station={station} shiftId={action.shiftId} />,
               `shift:${action.shiftId}`,
             );
-        case 'customer':
+        case 'credit':
           // A snapshot row, like the Money list's: the page reads the live entry itself.
           return () =>
             nav.push(<CustomerPage customer={action.customer} />, `customer:${action.customer.id}`);

@@ -6,9 +6,6 @@ import type { MoneyCustomer } from '../money/parties.js';
  */
 export type AlertSeverity = 'danger' | 'warning' | 'info';
 
-/** The five kinds, in the order the page groups them. */
-export type AlertCategory = 'stock' | 'day' | 'credit' | 'variance' | 'handover';
-
 /**
  * The one page an alert can open. Stock has none (no purchasing on mobile).
  * Whether the signed-in Role may open it is decided where the alert is shown
@@ -16,9 +13,16 @@ export type AlertCategory = 'stock' | 'day' | 'credit' | 'variance' | 'handover'
  */
 export type AlertAction =
   | { kind: 'day'; businessDate: string }
-  | { kind: 'customer'; customer: MoneyCustomer }
-  | { kind: 'shift'; shiftId: string }
+  | { kind: 'credit'; customer: MoneyCustomer }
+  | { kind: 'variance'; shiftId: string }
   | { kind: 'handover' };
+
+/**
+ * The five kinds. An action's kind is its alert's category, so the one
+ * `ALERT_KINDS` map (labels, action word, owning tab) is exhaustive over both:
+ * a new kind does not compile until it has an entry.
+ */
+export type AlertCategory = 'stock' | AlertAction['kind'];
 
 export interface MobileAlert {
   id: string;
