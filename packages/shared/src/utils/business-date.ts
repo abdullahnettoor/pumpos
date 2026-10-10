@@ -152,6 +152,19 @@ export function partyMonthWindows(input: {
   };
 }
 
+/** Current Business Date used when a read needs only the aging anchor. */
+export function currentBusinessDateOf(input: {
+  now: Date;
+  timeZone?: string | null;
+  dayStartsAt?: string | null;
+}): string {
+  return resolveBusinessDate({
+    now: input.now,
+    timeZone: input.timeZone ?? DEFAULT_TIMEZONE,
+    dayStartsAt: input.dayStartsAt ?? '00:00',
+  });
+}
+
 /** Extract date-resolution settings from a station `settings` JSONB blob. */
 export function businessDateSettings(settings: unknown): { timeZone: string; dayStartsAt: string } {
   const s = (settings ?? {}) as Record<string, unknown>;

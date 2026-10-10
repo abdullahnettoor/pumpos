@@ -2,6 +2,7 @@ import { err, notFoundError, ok, validationError } from '../../../kernel/index.j
 import type { ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import {
   isValidBusinessDate,
+  currentBusinessDateOf,
   partyMonthWindows,
   type PayablesSummary,
   type SupplierPayableSummary,
@@ -42,7 +43,15 @@ function windowsOf(ctx: ExecutionContext) {
     purchasedMonth: windows.months.businessMonth,
     paidMonth: windows.months.entryMonth,
   };
-  return { currentBusinessDate: windows.currentBusinessDate, query, months };
+  return {
+    currentBusinessDate: currentBusinessDateOf({
+      now,
+      timeZone: ctx.timeZone,
+      dayStartsAt: ctx.businessDayStartsAt,
+    }),
+    query,
+    months,
+  };
 }
 
 /**
