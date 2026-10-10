@@ -2,7 +2,7 @@ import React from 'react';
 import type { TankMovementRow } from '../../lib/reports/dssr.js';
 import { ListGroup, ListRow, TONE_TEXT } from '../../ui/index.js';
 
-/** Fuel stock per tank at close: book against the dip, with the variance in litres. */
+/** Fuel stock per tank: opening → closing litres, sold and the dip, with the variance in litres. */
 export const StockMovement: React.FC<{ tanks: readonly TankMovementRow[] }> = ({ tanks }) => (
   <ListGroup>
     {tanks.map((t) => (
@@ -12,7 +12,7 @@ export const StockMovement: React.FC<{ tanks: readonly TankMovementRow[] }> = ({
         meta={
           <span className="num">
             <span className="block">{t.movement}</span>
-            {t.sold && <span className="block">{t.sold}</span>}
+            {t.detail && <span className="block">{t.detail}</span>}
           </span>
         }
         end={

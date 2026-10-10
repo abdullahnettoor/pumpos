@@ -6,6 +6,18 @@ import { deriveTiles } from '../../lib/home/figures.js';
 import { deriveSales, readSnapshot } from '../../lib/home/sales.js';
 import { deriveShiftRows, deriveTankMovement } from '../../lib/reports/dssr.js';
 
+/** What the two DSSR reads return (the services are untyped): a stored snapshot row or a preview. */
+interface DssrRow {
+  generatedAt?: string;
+  /** Set by the preview: the day is still open, so the figures are a draft. */
+  live?: boolean;
+  snapshotData?: unknown;
+}
+
+/** Where a day's DSSR comes from: Sealed → the snapshot; Draft or not in the list → the preview; Live / Report missing → none. */
+const dssrSource = (status: BusinessDayListStatus | undefined): 'snapshot' | 'preview' | null =>
+  status === 'SEALED' ? 'snapshot' : status === undefined || status === 'DRAFT' ? 'preview' : null;
+
 /**
  * One Business Day's DSSR for the page. A Sealed day reads its immutable DSSR
  * snapshot; any other day with a report (Draft, or a date the list has not
@@ -20,13 +32,11 @@ export function useDssrDay(
   status: BusinessDayListStatus | undefined,
 ) {
   const { timeZone } = businessDateSettings(station.settings);
-  const sealed = status === 'SEALED';
-  const readsPreview = status === undefined || status === 'DRAFT';
-  const snapshotQ = useDailyDssr(station.id, date, { enabled: sealed });
-  const previewQ = useDailyDssrPreview(station.id, date, { enabled: readsPreview });
-  const q = sealed ? snapshotQ : previewQ;
-  const row = (sealed || readsPreview ? q.data : null) as
-    { generatedAt?: string; live?: boolean; snapshotData?: unknown } | null | undefined;
+  const source = dssrSource(status);
+  const snapshotQ = useDailyDssr(station.id, date, { enabled: source === 'snapshot' });
+  const previewQ = useDailyDssrPreview(station.id, date, { enabled: source === 'preview' });
+  const q = source === 'snapshot' ? snapshotQ : previewQ;
+  const row: DssrRow | null | undefined = source ? q.data : null;
 
   const model = useMemo(() => {
     if (!row) return null;
@@ -43,11 +53,10 @@ export function useDssrDay(
     };
   }, [row, timeZone]);
 
-  const hasReport = sealed || readsPreview;
   return {
     model,
-    loading: hasReport && q.isLoading,
-    error: hasReport && q.isError && !row,
+    loading: source !== null && q.isLoading,
+    error: source !== null && q.isError && !row,
     refetch: () => void q.refetch(),
   };
 }

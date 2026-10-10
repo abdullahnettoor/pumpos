@@ -28,6 +28,8 @@ const feed = vi.hoisted(() => ({
   reads: [] as string[],
   pdf: [] as unknown[][],
   failPdf: false,
+  /** fetchNextPage fails the way react-query does: it resolves with isError, hasNextPage unchanged. */
+  failFetch: false,
   fetchNext: vi.fn(),
 }));
 
@@ -44,6 +46,16 @@ vi.mock('@pump/ui', async (importOriginal) => {
         hasNextPage,
         fetchNextPage: async () => {
           feed.fetchNext();
+          if (feed.failFetch) {
+            // Never loops for ever in a test: a regression fails after a few calls, not a hang.
+            if (feed.fetchNext.mock.calls.length > 5) throw new Error('fetchNextPage retried');
+            return {
+              data: { pages: [...feed.pages, ...feed.olderPages.slice(0, loaded)] },
+              hasNextPage: true,
+              isError: true,
+              error: new Error('offline'),
+            };
+          }
           const next = [...feed.pages, ...feed.olderPages.slice(0, loaded + 1)];
           setLoaded(loaded + 1);
           return { data: { pages: next }, hasNextPage: loaded + 1 < feed.olderPages.length };
@@ -191,6 +203,7 @@ afterEach(() => {
   feed.reads = [];
   feed.pdf = [];
   feed.failPdf = false;
+  feed.failFetch = false;
   feed.fetchNext.mockClear();
 });
 
@@ -202,7 +215,7 @@ describe('ReportDayPage', () => {
     expect(screen.getByText('Draft · day not closed')).toBeTruthy();
     expect(screen.getByText(/can change until the day is closed on desktop/)).toBeTruthy();
     expect(screen.getByText('DSSR · Thu, 8 Oct')).toBeTruthy();
-    expect(screen.getByText('2 shifts · Highway Fuels')).toBeTruthy();
+    expect(screen.getByText('2 Shifts · Highway Fuels')).toBeTruthy();
   });
 
   it('reads the immutable snapshot for a Sealed day, with no banner', () => {
@@ -221,11 +234,29 @@ describe('ReportDayPage', () => {
     expect(screen.getByText('Purchases')).toBeTruthy();
     expect(screen.getByText('Total sales')).toBeTruthy();
     expect(screen.getByText('Engine oil')).toBeTruthy();
+    expect(screen.getByText('Included Shifts')).toBeTruthy();
     expect(screen.getByText('Morning')).toBeTruthy();
     expect(screen.getByText('Closed 1:58 pm · 2,210 L')).toBeTruthy();
     expect(screen.getByText('Tank 1 · Petrol')).toBeTruthy();
     expect(screen.getByText('Book 14,820 → Dip 14,802 L')).toBeTruthy();
     expect(screen.getByText('Sold 2,210 L')).toBeTruthy();
+    expect(screen.getByText('−18 L').className).toMatch(/text-bad-fg/);
+  });
+
+  it('shows each tank opening → closing, sold and the dip when the snapshot carries them', () => {
+    const snap = payload('2026-10-06', false) as { snapshotData: Record<string, any> };
+    snap.snapshotData.fuelStockVariance[0].tankMovement = {
+      tankId: 't1',
+      openingQuantity: 17030,
+      receivedQuantity: 0,
+      soldQuantity: 2210,
+      adjustedQuantity: 0,
+      closingQuantity: 14820,
+    };
+    feed.snapshots['2026-10-06'] = snap;
+    mount('2026-10-06');
+    expect(screen.getByText('Opening 17,030 → Closing 14,820 L')).toBeTruthy();
+    expect(screen.getByText('Sold 2,210 L · Dip 14,802 L')).toBeTruthy();
     expect(screen.getByText('−18 L').className).toMatch(/text-bad-fg/);
   });
 
@@ -273,6 +304,21 @@ describe('ReportDayPage', () => {
       await waitFor(() => expect(screen.getByText(/^DSSR · Wed, 30 Sep/)).toBeTruthy());
       expect(feed.fetchNext).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('stops and says so when an older month fails to load, instead of retrying for ever', async () => {
+    feed.olderPages = [{ days: [{ businessDate: '2026-09-30', status: 'SEALED' }] }];
+    feed.failFetch = true;
+    mount('2026-10-06');
+    fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
+    await waitFor(() => expect(screen.getByText('Could not load older days.')).toBeTruthy());
+    expect(feed.fetchNext).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('DSSR · Tue, 6 Oct')).toBeTruthy();
+    // The button is usable again, and a retry that now succeeds steps back.
+    feed.failFetch = false;
+    feed.snapshots['2026-09-30'] = payload('2026-09-30', false);
+    fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
+    await waitFor(() => expect(screen.getByText(/^DSSR · Wed, 30 Sep/)).toBeTruthy());
   });
 
   describe('action bar', () => {

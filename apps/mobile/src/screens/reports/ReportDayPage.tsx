@@ -10,10 +10,10 @@ import { useNav } from '../../shell/nav.js';
 import { DetailPage, Note, SectionLabel } from '../../ui/index.js';
 import { ShiftSummaryPage } from '../ShiftSummaryPage.js';
 import { DayStepper } from './DayStepper.js';
-import { DraftBanner } from './DraftBanner.js';
+import { DssrDraftBanner } from './DssrDraftBanner.js';
 import { IncludedShifts } from './IncludedShifts.js';
 import { StockMovement } from './StockMovement.js';
-import { useDssrDay } from './useDssrDay.js';
+import { useDssrDay, type DssrDay } from './useDssrDay.js';
 
 interface Props {
   station: Station;
@@ -57,9 +57,15 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
     setStepping(true);
     try {
       let t = targets.older;
+      let loadedPages = list.data?.pages.length ?? 0;
       while (t?.kind === 'load') {
         const res = await list.fetchNextPage();
-        const loaded: BusinessDayListItem[] = (res.data?.pages ?? []).flatMap((p) => p.days);
+        const pages = res.data?.pages ?? [];
+        // A failed fetch RESOLVES (it does not throw) and leaves hasNextPage as it was,
+        // so looping on it would retry for ever: stop when no new page arrived.
+        if (res.isError || pages.length <= loadedPages) throw res.error ?? new Error('No page');
+        loadedPages = pages.length;
+        const loaded: BusinessDayListItem[] = pages.flatMap((p) => p.days);
         t = stepTargets(loaded, date, { hasOlderMonths: !!res.hasNextPage, canGoHome }).older;
       }
       goTo(t);
@@ -73,14 +79,14 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
   const openShift = (shiftId: string) =>
     nav.push(<ShiftSummaryPage station={station} shiftId={shiftId} />, `shift:${shiftId}`);
 
-  const pdf = (output: 'save' | 'download') =>
+  const pdf = (day: DssrDay, output: 'save' | 'download') =>
     generateDssrPdf(
       station,
       {
-        snapshotData: model!.snap,
+        snapshotData: day.snap,
         businessDate: date,
-        generatedAt: model!.row.generatedAt ?? new Date().toISOString(),
-        draft: model!.draft,
+        generatedAt: day.row.generatedAt ?? new Date().toISOString(),
+        draft: day.draft,
       },
       output,
     );
@@ -117,7 +123,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
 
     return (
       <>
-        {model.draft && <DraftBanner />}
+        {model.draft && <DssrDraftBanner />}
 
         <SectionLabel right={model.draft ? undefined : 'Sealed'}>Summary</SectionLabel>
         <div className="grid grid-cols-2 gap-2 px-3">
@@ -138,7 +144,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
 
         {model.shifts.length > 0 && (
           <>
-            <SectionLabel right={plural(shiftCount, 'closed Shift')}>Included shifts</SectionLabel>
+            <SectionLabel right={plural(shiftCount, 'closed Shift')}>Included Shifts</SectionLabel>
             <IncludedShifts shifts={model.shifts} onOpen={openShift} />
           </>
         )}
@@ -160,7 +166,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
   return (
     <DetailPage
       title={`DSSR · ${businessDateLabel(date)}`}
-      subtitle={[model ? plural(shiftCount, 'shift') : '', station.name]
+      subtitle={[model ? plural(shiftCount, 'Shift') : '', station.name]
         .filter(Boolean)
         .join(' · ')}
       right={
@@ -172,8 +178,10 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
           onNewer={() => goTo(targets.newer)}
         />
       }
-      share={model ? { onPress: () => pdf('save') } : undefined}
-      download={model ? { onPress: () => pdf('download'), label: 'Download PDF' } : undefined}
+      share={model ? { onPress: () => pdf(model, 'save') } : undefined}
+      download={
+        model ? { onPress: () => pdf(model, 'download'), label: 'Download PDF' } : undefined
+      }
       onActionError={(message) => toast.error(message)}
     >
       <div ref={top} />

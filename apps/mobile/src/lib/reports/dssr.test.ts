@@ -96,65 +96,126 @@ describe('deriveShiftRows', () => {
 });
 
 describe('deriveTankMovement', () => {
+  const movement = {
+    tankId: 't1',
+    openingQuantity: 14450,
+    receivedQuantity: 300,
+    soldQuantity: 2210.5,
+    adjustedQuantity: 20,
+    closingQuantity: 12559.5,
+  };
   const tank = (over: Record<string, unknown>) => ({
     tankName: 'Tank 1',
     productName: 'Petrol',
     unit: 'Litre',
-    expectedQuantity: 14820,
-    actualQuantity: 14802,
+    expectedQuantity: 12559.5,
+    actualQuantity: 12541.5,
     varianceQuantity: -18,
+    tankMovement: movement,
     ...over,
   });
-  const snap = {
-    fuel: {
-      byProduct: [
-        { productName: 'Petrol', netVolume: 2210, grossVolume: 2214 },
-        { productName: 'Diesel', netVolume: 2380 },
+
+  describe('a snapshot that carries the tank movement', () => {
+    it('shows opening → closing, sold, received, the dip and the variance in litres', () => {
+      const [row] = deriveTankMovement({ fuelStockVariance: [tank({})] });
+      expect(row).toMatchObject({
+        title: 'Tank 1 · Petrol',
+        movement: 'Opening 14,450 → Closing 12,559.5 L',
+        detail: 'Sold 2,210.5 L · Received 300 L · Dip 12,541.5 L',
+        variance: '−18 L',
+        tone: 'bad', // 18 L is 0.81% of 2,210.5 L sold: over the 0.5% tolerance
+      });
+    });
+    it('judges the variance against what THIS tank sold, per the shared tolerance', () => {
+      const big = deriveTankMovement({
+        fuelStockVariance: [
+          tank({ tankMovement: { ...movement, soldQuantity: 4000 } }), // 18 L of 4,000 L = 0.45%
+        ],
+      })[0];
+      expect(big.tone).toBe('default');
+      const small = deriveTankMovement({ fuelStockVariance: [tank({})] })[0];
+      expect(small.tone).toBe('bad');
+      const over = deriveTankMovement({
+        fuelStockVariance: [tank({ varianceQuantity: 25 })],
+      })[0];
+      expect(over).toMatchObject({ variance: '+25 L', tone: 'warn' });
+    });
+    it('omits Received when nothing was delivered, and tolerates no variance when nothing sold', () => {
+      const [row] = deriveTankMovement({
+        fuelStockVariance: [
+          tank({
+            varianceQuantity: -1,
+            tankMovement: { ...movement, receivedQuantity: 0, soldQuantity: 0 },
+          }),
+        ],
+      });
+      expect(row.detail).toBe('Sold 0 L · Dip 12,541.5 L');
+      expect(row.tone).toBe('bad');
+    });
+  });
+
+  describe('a snapshot frozen before the tank movement was recorded', () => {
+    const old = (over: Record<string, unknown>) => ({
+      tankName: 'Tank 1',
+      productName: 'Petrol',
+      unit: 'Litre',
+      expectedQuantity: 14820,
+      actualQuantity: 14802,
+      varianceQuantity: -18,
+      ...over,
+    });
+    const snap = {
+      fuel: {
+        byProduct: [
+          { productName: 'Petrol', netVolume: 2210, grossVolume: 2214 },
+          { productName: 'Diesel', netVolume: 2380 },
+        ],
+      },
+      fuelStockVariance: [
+        old({}),
+        old({
+          tankName: 'Tank 2',
+          productName: 'Diesel',
+          expectedQuantity: 8620,
+          actualQuantity: 8620,
+          varianceQuantity: 0,
+        }),
+        old({
+          tankName: 'Tank 3',
+          productName: 'Diesel',
+          expectedQuantity: 100,
+          actualQuantity: 105,
+          varianceQuantity: 5,
+        }),
       ],
-    },
-    fuelStockVariance: [
-      tank({}),
-      tank({
-        tankName: 'Tank 2',
-        productName: 'Diesel',
-        expectedQuantity: 8620,
-        actualQuantity: 8620,
-        varianceQuantity: 0,
-      }),
-      tank({
-        tankName: 'Tank 3',
-        productName: 'Diesel',
-        expectedQuantity: 100,
-        actualQuantity: 105,
-        varianceQuantity: 5,
-      }),
-    ],
-  };
-  it('shows book against dip, the variance in litres and its tone', () => {
-    const [a, , c] = deriveTankMovement(snap);
-    expect(a).toMatchObject({
-      title: 'Tank 1 · Petrol',
-      movement: 'Book 14,820 → Dip 14,802 L',
-      variance: '−18 L',
-      tone: 'bad',
+    };
+    it('falls back to book against dip with the variance and its tone', () => {
+      const [a, b, c] = deriveTankMovement(snap);
+      expect(a).toMatchObject({
+        movement: 'Book 14,820 → Dip 14,802 L',
+        variance: '−18 L',
+        tone: 'bad',
+      });
+      expect(b).toMatchObject({ variance: '0 L', tone: 'default' });
+      expect(c).toMatchObject({ variance: '+5 L', tone: 'warn' });
     });
-    expect(c).toMatchObject({ variance: '+5 L', tone: 'warn' });
-  });
-  it('is level within tolerance', () => {
-    const [row] = deriveTankMovement({
-      fuelStockVariance: [tank({ varianceQuantity: -0.5 })],
+    it('shows Sold only when the product has a single tank', () => {
+      const rows = deriveTankMovement(snap);
+      expect(rows[0].detail).toBe('Sold 2,210 L');
+      expect(rows[1].detail).toBeUndefined();
+      expect(rows[2].detail).toBeUndefined();
     });
-    expect(row.tone).toBe('default');
-    expect(
-      deriveTankMovement({ fuelStockVariance: [tank({ varianceQuantity: 0 })] })[0].variance,
-    ).toBe('0 L');
+    it('tolerates a variance against the one-tank product sales, else none', () => {
+      const one = (varianceQuantity: number) =>
+        deriveTankMovement({
+          fuel: { byProduct: [{ productName: 'Petrol', netVolume: 4000 }] },
+          fuelStockVariance: [old({ varianceQuantity })],
+        })[0].tone;
+      expect(one(-18)).toBe('default'); // 0.45% of 4,000 L
+      expect(one(-25)).toBe('bad');
+    });
   });
-  it('shows Sold only when the product has a single tank', () => {
-    const rows = deriveTankMovement(snap);
-    expect(rows[0].sold).toBe('Sold 2,210 L');
-    expect(rows[1].sold).toBeUndefined();
-    expect(rows[2].sold).toBeUndefined();
-  });
+
   it('is empty without tank reconciliation (no dips that day)', () => {
     expect(deriveTankMovement({})).toEqual([]);
   });

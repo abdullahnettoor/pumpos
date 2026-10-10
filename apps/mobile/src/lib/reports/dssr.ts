@@ -5,14 +5,12 @@
  * derivers as Home (`deriveTiles`, `deriveSales`), so one day never reads two
  * ways on two screens.
  */
+import { isStockVarianceWithinTolerance } from '@pump/shared';
 import type { BusinessDayListItem } from '@pump/shared';
 import { stationTime } from '../home/dates.js';
 import { num } from '../home/num.js';
 import { shiftLabel, unitLabel, type Snapshot } from '../home/sales.js';
 import { varianceBadge, type VarianceBadgeView } from '../variance.js';
-
-/** A tank whose book-vs-dip variance is inside this many litres reads as level. */
-export const STOCK_VARIANCE_TOLERANCE = 1;
 
 const grouped = (n: number, decimals = 0) =>
   n.toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
@@ -59,23 +57,27 @@ export interface TankMovementRow {
   key: string;
   /** "Tank 1 · Petrol". */
   title: string;
-  /** "Book 14,820 → Dip 14,802 L". */
+  /** "Opening 14,450 → Closing 12,560 L"; a snapshot frozen before #395: "Book 14,820 → Dip 14,802 L". */
   movement: string;
-  /** "Sold 2,210 L" when the product sold from this tank alone; otherwise absent. */
-  sold?: string;
+  /** "Sold 2,210 L · Received 300 L · Dip 12,290 L"; an old snapshot: "Sold 2,210 L" for a one-tank product. */
+  detail?: string;
   /** "−18 L", "+4 L", "0 L". */
   variance: string;
   tone: 'bad' | 'warn' | 'default';
 }
 
+const litres = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 1 });
 const signedLitres = (v: number, unit: string) =>
-  `${v < 0 ? '−' : v > 0 ? '+' : ''}${grouped(Math.abs(v), 1).replace(/\.0$/, '')} ${unit}`;
+  `${v < 0 ? '−' : v > 0 ? '+' : ''}${litres(Math.abs(v))} ${unit}`;
 
 /**
- * Fuel stock per tank at day close: book (expected) against the dip (actual) and
- * the variance in litres, red when short beyond tolerance. "Sold" is the
- * product's net volume and is shown only when the product has a single tank,
- * because the snapshot does not split sales by tank.
+ * Fuel stock per tank at day close, from the snapshot's `fuelStockVariance`
+ * rows. Newer snapshots carry the tank's `tankMovement` (opening, received,
+ * sold, closing book): shown as opening → closing with Sold, Received and the
+ * Dip. A snapshot frozen earlier has book / dip only, so it shows Book → Dip
+ * and "Sold" (the product's net volume) only when the product has one tank. The
+ * variance is red when short, amber when over, beyond the shared tolerance
+ * (a share of the litres the tank sold; unknown sales tolerate no variance).
  */
 export function deriveTankMovement(snap: Snapshot): TankMovementRow[] {
   const rows = (snap.fuelStockVariance ?? []) as Snapshot[];
@@ -90,15 +92,36 @@ export function deriveTankMovement(snap: Snapshot): TankMovementRow[] {
     const unit = unitLabel(r.unit);
     const v = num(r.varianceQuantity);
     const product = String(r.productName ?? '');
-    const sold = tanksOfProduct.get(product) === 1 ? soldByProduct.get(product) : undefined;
+    const m = r.tankMovement as Snapshot | undefined;
+    const productSold = tanksOfProduct.get(product) === 1 ? soldByProduct.get(product) : undefined;
+    const sold = m
+      ? num(m.soldQuantity)
+      : productSold
+        ? num(productSold.netVolume ?? productSold.grossVolume)
+        : null;
+
+    let movement: string;
+    let detail: string | undefined;
+    if (m) {
+      movement = `Opening ${litres(num(m.openingQuantity))} → Closing ${litres(num(m.closingQuantity))} ${unit}`;
+      detail = [
+        `Sold ${litres(num(m.soldQuantity))} ${unit}`,
+        num(m.receivedQuantity) > 0 ? `Received ${litres(num(m.receivedQuantity))} ${unit}` : '',
+        `Dip ${litres(num(r.actualQuantity))} ${unit}`,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+    } else {
+      movement = `Book ${litres(num(r.expectedQuantity))} → Dip ${litres(num(r.actualQuantity))} ${unit}`;
+      detail = sold === null ? undefined : `Sold ${litres(sold)} ${unit}`;
+    }
     return {
       key: `${r.tankName ?? 'tank'}-${i}`,
       title: [r.tankName, r.productName].filter(Boolean).join(' · ') || 'Tank',
-      movement: `Book ${grouped(num(r.expectedQuantity))} → Dip ${grouped(num(r.actualQuantity))} ${unit}`,
-      sold: sold ? `Sold ${grouped(num(sold.netVolume ?? sold.grossVolume))} ${unit}` : undefined,
+      movement,
+      detail,
       variance: signedLitres(v, unit),
-      tone:
-        v < -STOCK_VARIANCE_TOLERANCE ? 'bad' : v > STOCK_VARIANCE_TOLERANCE ? 'warn' : 'default',
+      tone: isStockVarianceWithinTolerance(v, sold) ? 'default' : v < 0 ? 'bad' : 'warn',
     };
   });
 }

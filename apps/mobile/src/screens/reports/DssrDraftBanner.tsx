@@ -2,7 +2,7 @@ import React from 'react';
 import { LockIcon } from '../../ui/icons.js';
 
 /** Shown only while the Business Day is open: its DSSR is a preview, not the sealed record. */
-export const DraftBanner: React.FC = () => (
+export const DssrDraftBanner: React.FC = () => (
   <div
     role="note"
     className="mx-3 flex items-center gap-2.5 rounded-xl border border-warn-line bg-warn-soft px-3 py-2.5"
