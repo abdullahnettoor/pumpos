@@ -1,10 +1,10 @@
 import React from 'react';
 import type { Station } from '@pump/shared';
+import { DayTiles } from '../components/DayTiles.js';
 import { SalesByProduct } from '../components/SalesByProduct.js';
-import { compactRupees, signedRupees } from '../lib/home/format.js';
 import { comparisonView, type Comparison } from '../lib/home/sales.js';
 import { useNav } from '../shell/nav.js';
-import { SectionLabel, StatTile } from '../ui/index.js';
+import { SectionLabel } from '../ui/index.js';
 import { HomeAttention } from './home/HomeAttention.js';
 import { LiveShiftStrip } from './home/LiveShiftStrip.js';
 import { MoneyPosition } from './home/MoneyPosition.js';
@@ -61,31 +61,7 @@ export const HomeScreen: React.FC<Props> = ({ station }) => {
             openShift={m.openShiftInDay ? m.live : null}
             trend={m.trend}
           />
-          <StatTile
-            label="Cash variance"
-            value={t.variance.value === null ? '—' : signedRupees(t.variance.value)}
-            sub={t.variance.detail}
-            note={t.variance.secondary}
-            tone={t.variance.tone}
-          />
-          <StatTile
-            label="Gross margin"
-            value={t.margin.value === null ? '—' : compactRupees(t.margin.value)}
-            sub={t.margin.detail}
-            tone={t.margin.tone}
-          />
-          <StatTile
-            label="Credit sales"
-            value={compactRupees(t.credit.value ?? 0)}
-            sub={t.credit.detail}
-            tone={t.credit.tone}
-          />
-          <StatTile
-            label="Purchases"
-            value={compactRupees(t.purchases.value ?? 0)}
-            sub={t.purchases.detail}
-            tone={t.purchases.tone}
-          />
+          <DayTiles tiles={t} />
         </div>
       )}
 

@@ -24,7 +24,11 @@ interface StationReportSettings {
  * dynamically at call time so they never land in the main bundle.
  */
 
-/** DSSR PDF. `dssr` = { snapshotData, businessDate, generatedAt }. */
+/**
+ * DSSR PDF. `dssr` = { snapshotData, businessDate, generatedAt, draft? }. A
+ * `draft` DSSR (a Business Day that is not closed yet) is marked as one in the
+ * document and in the file name; a sealed one is unchanged.
+ */
 export async function generateDssrPdf(
   station: any,
   dssr: any,
@@ -44,7 +48,7 @@ export async function generateDssrPdf(
   };
   await outputReactPdf(
     React.createElement(doc.DssrDoc, { dssr, config }),
-    `Daily_DSSR_${dssr?.businessDate || ''}`,
+    `Daily_DSSR_${dssr?.businessDate || ''}${dssr?.draft === true ? '_DRAFT' : ''}`,
     output,
   );
 }

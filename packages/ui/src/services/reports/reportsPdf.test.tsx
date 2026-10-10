@@ -256,6 +256,25 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     assertPdfContainsVectorMark(buffer);
   });
 
+  it('marks a draft DSSR as not closed, outside the configurable sections, and leaves a sealed one unmarked', () => {
+    const texts = (node: any): string[] => {
+      if (node == null || typeof node === 'boolean') return [];
+      if (typeof node === 'string' || typeof node === 'number') return [String(node)];
+      if (Array.isArray(node)) return node.flatMap(texts);
+      if (typeof node.type === 'function' && node.type !== Text) {
+        return texts((node.type as any)(node.props));
+      }
+      return texts(node.props?.children);
+    };
+    // A layout that prints no header at all must still carry the draft mark.
+    const config = { sections: ['meta'] as any[], paper: 'A4' as const };
+    const base = { businessDate: '2026-10-08', snapshotData: { shiftsIncluded: 2 } };
+    const draft = texts((DssrDoc as any)({ dssr: { ...base, draft: true }, config })).join(' ');
+    expect(draft).toContain('DRAFT \u2014 DAY NOT CLOSED');
+    const sealed = texts((DssrDoc as any)({ dssr: base, config })).join(' ');
+    expect(sealed).not.toContain('DRAFT');
+  });
+
   it('generates real PDF buffer for Tax Invoice with verified vector mark in PDF stream', async () => {
     const invoice = {
       invoiceNumber: 'INV-2026-001',
