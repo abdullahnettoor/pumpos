@@ -1,3 +1,4 @@
+export * from './age.js';
 export * from './dssr/ports.js';
 export * from './dssr/generate-dssr.js';
 export * from './dssr/compose.js';
@@ -17,3 +18,6 @@ export * from './receivables/get-receivables.js';
 export * from './insights/get-insights-attendant-variance.js';
 export * from './insights/get-insights-stock-loss.js';
 export * from './insights/get-insights-credit-health.js';
+export * from './payables/ports.js';
+export * from './payables/compose.js';
+export * from './payables/get-payables.js';

@@ -1,4 +1,6 @@
 import { formatShiftLabel, isBalancedVariance } from '@pump/shared';
+import { accountTypeLabel } from '@pump/ui';
+import { ledgerQuantityLabel } from './quantity.js';
 
 /**
  * The party statement (Customer or Supplier): the ledger rows turned into a running balance,
@@ -36,6 +38,10 @@ export interface LedgerRow {
   vehicleRegistration?: string | null;
   method?: string | null;
   reference?: string | null;
+  /** Supplier rows (ranged ledger): the Funding Account a Payment came from, the invoice and tanker of a Purchase. */
+  fundingAccountName?: string | null;
+  invoiceNumber?: string | null;
+  tankerNumber?: string | null;
 }
 
 export interface StatementEntry {
@@ -114,14 +120,6 @@ const METHOD: Record<string, string> = {
   BankTransfer: 'Bank transfer',
 };
 
-/** `120 L Diesel`, `2.5 L Diesel`, `4 Nos Oil 1L`; nothing when there is no quantity. */
-function quantityLabel(r: LedgerRow): string | null {
-  const qty = Number(r.quantity);
-  if (r.quantity == null || !Number.isFinite(qty) || qty <= 0) return null;
-  const shown = Number(qty.toFixed(2)).toLocaleString('en-IN');
-  return [shown, r.unit?.trim(), r.productName?.trim()].filter(Boolean).join(' ');
-}
-
 /**
  * What a customer row says beyond its date: a Credit Sale names its Shift, what
  * was sold and the Vehicle; a Collection its method and reference. A row without
@@ -138,13 +136,46 @@ function describeCustomerRow(r: LedgerRow, day: string): { meta: string; detail:
   } else {
     const shift = formatShiftLabel(r.shiftBusinessDate, r.shiftSequence);
     facts = shift ? [`Shift ${shift}`] : [];
-    detail = [quantityLabel(r), r.vehicleRegistration?.trim()].filter(Boolean).join(' · ') || null;
+    detail =
+      [ledgerQuantityLabel(r), r.vehicleRegistration?.trim()].filter(Boolean).join(' · ') || null;
   }
   // With nothing to say about the row, the note stays beside the date (the legacy layout);
   // otherwise it moves to the second line, after what the row says.
   const enriched = facts.length > 0 || detail !== null;
   if (!enriched) return { meta: [day, note].filter(Boolean).join(' · '), detail: null };
   return { meta: [day, ...facts].join(' · '), detail: detail ?? (note || null) };
+}
+
+/**
+ * What a supplier row says beyond its date. A Purchase names its invoice and how
+ * much came in, and the tanker when one was recorded; a Payment its method (the
+ * Funding Account's type) and "From <account>". A row without the enrichment
+ * (the legacy all-time ledger, Adjustments, an Opening Balance) shows just its note.
+ */
+function describeSupplierRow(r: LedgerRow, day: string): { meta: string; detail: string | null } {
+  const note = r.notes?.trim();
+  let facts: string[];
+  let detail: string | null;
+  if (r.transactionType === 'Payment') {
+    facts = r.method ? [accountTypeLabel(r.method)] : [];
+    const from = r.fundingAccountName?.trim();
+    detail = from ? `From ${from}` : null;
+  } else {
+    const invoice = r.invoiceNumber?.trim();
+    const tanker = r.tankerNumber?.trim();
+    facts = [invoice, ledgerQuantityLabel(r, false)].filter((x): x is string => !!x);
+    detail = tanker ? `Tanker ${tanker}` : null;
+  }
+  const enriched = facts.length > 0 || detail !== null;
+  if (!enriched) return { meta: [day, note].filter(Boolean).join(' · '), detail: null };
+  return { meta: [day, ...facts].join(' · '), detail: detail ?? (note || null) };
+}
+
+/** "Purchase · Diesel" when the row names what was bought, else the plain type label. */
+function supplierLabel(r: LedgerRow): string {
+  const base = LABEL[r.transactionType ?? ''] ?? r.transactionType ?? 'Entry';
+  const product = r.transactionType === 'Purchase' ? r.productName?.trim() : null;
+  return product ? `${base} · ${product}` : base;
 }
 
 /** `YYYY-MM-DD` that is later than any Business or Entry Date: the open end of a statement window. */
@@ -226,14 +257,14 @@ export function buildStatement(
     const delta = deltaOf(r.transactionType, Number(r.amount ?? 0) || 0, kind);
     running = Math.round((running + delta) * 100) / 100;
     const day = date ? dayLabel(date) : '';
-    const note = r.notes?.trim();
     const described =
-      kind === 'customer'
-        ? describeCustomerRow(r, day)
-        : { meta: [day, note].filter(Boolean).join(' · '), detail: null };
+      kind === 'customer' ? describeCustomerRow(r, day) : describeSupplierRow(r, day);
     return {
       key: r.id ?? `row-${i}`,
-      label: LABEL[r.transactionType ?? ''] ?? r.transactionType ?? 'Entry',
+      label:
+        kind === 'supplier'
+          ? supplierLabel(r)
+          : (LABEL[r.transactionType ?? ''] ?? r.transactionType ?? 'Entry'),
       ...described,
       delta,
       balance: running,

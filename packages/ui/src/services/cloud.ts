@@ -30,8 +30,10 @@ import {
   InsightsRangeDays,
   InsightsSales,
   CustomerReceivableSummary,
+  PayablesSummary,
   RangedPartyLedger,
   ReceivablesSummary,
+  SupplierPayableSummary,
   InsightsStockLoss,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
@@ -800,6 +802,20 @@ export class CloudShiftService {
     );
   }
 
+  /** What the Organization owes its suppliers: total, this month and a row per supplier owed. */
+  async getPayables(stationId: string): Promise<PayablesSummary> {
+    const query = new URLSearchParams({ stationId });
+    return request<PayablesSummary>(`/reports/payables?${query.toString()}`);
+  }
+
+  /** One supplier's payable plus last payment, this month and purchases by product. */
+  async getSupplierPayable(stationId: string, supplierId: string): Promise<SupplierPayableSummary> {
+    const query = new URLSearchParams({ stationId });
+    return request<SupplierPayableSummary>(
+      `/reports/payables/${encodeURIComponent(supplierId)}?${query.toString()}`,
+    );
+  }
+
   /**
    * Cash variance by Attendant over the same range (#402). Refused with
    * CAPABILITY_NOT_ENTITLED unless the Organization has `reports.attendant`.
@@ -1293,6 +1309,17 @@ export class CloudTransactionService {
     const query = new URLSearchParams(range);
     return request<RangedPartyLedger>(
       `/transactions/customers/${encodeURIComponent(customerId)}/ledger?${query.toString()}`,
+    );
+  }
+
+  /** The supplier's statement for a date range: opening balance, enriched rows, closing balance. */
+  async getSupplierLedgerRange(
+    supplierId: string,
+    range: { from: string; to: string },
+  ): Promise<RangedPartyLedger> {
+    const query = new URLSearchParams(range);
+    return request<RangedPartyLedger>(
+      `/transactions/suppliers/${encodeURIComponent(supplierId)}/ledger?${query.toString()}`,
     );
   }
 

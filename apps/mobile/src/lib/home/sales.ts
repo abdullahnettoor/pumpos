@@ -60,7 +60,7 @@ export const MAX_PRODUCT_LINES = 5;
 
 export const unitLabel = (unit: unknown): string => {
   const u = typeof unit === 'string' ? unit.trim() : '';
-  if (!u || /^(l|litre|liter)s?$/i.test(u)) return 'L';
+  if (!u || /^(l|ltr|litre|liter)s?$/i.test(u)) return 'L';
   if (/^(kg|kilogram)s?$/i.test(u)) return 'kg';
   return u;
 };

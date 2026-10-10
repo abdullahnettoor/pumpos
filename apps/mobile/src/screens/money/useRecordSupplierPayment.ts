@@ -15,17 +15,21 @@ const service = new CloudTransactionService();
  * Idempotency-Key rules are `useOfficePayment`'s: the suppliers list takes the
  * lower payable at once and is then re-read; `useInvalidateOperational` also
  * refreshes purchases, account balances and the Daily Cash Book, and the
- * supplier ledger (the statement) is invalidated through its own key.
- *
- * TODO(#399): the payables summary (oldest unpaid, purchased vs paid) adds its
- * keys to `refreshKeys` when it lands.
+ * supplier's own queries are invalidated through their centralized keys: the
+ * ledger, every statement window, the Station's payables list and this
+ * supplier's payable summary (oldest unpaid, purchased vs paid).
  */
 export function useRecordSupplierPayment(stationId: string, supplierId: string) {
   return useOfficePayment<SupplierPaymentForm>({
     stationId,
     partyId: supplierId,
     partyListKey: 'suppliers',
-    refreshKeys: [queryKeys.supplierLedger(supplierId)],
+    refreshKeys: [
+      queryKeys.supplierLedger(supplierId),
+      queryKeys.supplierStatements(supplierId),
+      queryKeys.payables(stationId),
+      queryKeys.supplierPayable(stationId, supplierId),
+    ],
     send: (form, idempotencyKey) =>
       service.recordSupplierPayment(supplierPaymentRequest(stationId, supplierId, form), {
         idempotencyKey,

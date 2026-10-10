@@ -56,6 +56,9 @@ describe('useInvalidateOperational', () => {
       // Receivables move with every credit sale and collection, like a customer's balance.
       'receivables',
       'customer-statement',
+      // Payables move with every purchase and supplier payment, like a supplier's balance.
+      'payables',
+      'supplier-statement',
       // Insights part 2: closed-day Shift Summaries, Tank Dips, Credit Sales and
       // (by Entry Date) Collections all move with a write.
       'insights-attendant-variance',

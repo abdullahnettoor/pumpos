@@ -96,6 +96,7 @@ import {
   DrizzlePaymentTerminalLookup,
 } from '../infra/repositories/finance-account-repositories.js';
 import { onCustomerLedger } from '../infra/customer-ledger-sql.js';
+import { supplierSignedAmount } from '../infra/supplier-ledger-sql.js';
 import { sendResult } from '../infra/send-result.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
 import {
@@ -295,7 +296,7 @@ transactionsRouter.get('/suppliers', async (c) => {
     db
       .select({
         supplierId: schema.supplierTransactions.supplierId,
-        balance: sql<string>`COALESCE(SUM(CASE WHEN ${schema.supplierTransactions.transactionType} = 'Payment' THEN -${schema.supplierTransactions.amount} ELSE ${schema.supplierTransactions.amount} END), 0)`,
+        balance: sql<string>`COALESCE(SUM(${supplierSignedAmount('supplier_transactions')}), 0)`,
       })
       .from(schema.supplierTransactions)
       .where(eq(schema.supplierTransactions.organizationId, user.organizationId))

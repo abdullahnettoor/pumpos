@@ -33,7 +33,7 @@ let accounts: any[];
 let accessMode: AccessMode | undefined;
 const record = vi.spyOn(ui.CloudTransactionService.prototype, 'recordSupplierPayment');
 const getSuppliers = vi.spyOn(ui.CloudTransactionService.prototype, 'getSuppliers');
-const getLedger = vi.spyOn(ui.CloudTransactionService.prototype, 'getSupplierLedger');
+const getLedger = vi.spyOn(ui.CloudTransactionService.prototype, 'getSupplierLedgerRange');
 
 const refusal = (code: string, message: string, status = 403) =>
   Object.assign(new Error(message), { code, status });
@@ -96,7 +96,12 @@ beforeEach(() => {
   accounts = ACCOUNTS;
   accessMode = 'NORMAL';
   getSuppliers.mockImplementation(async () => list);
-  getLedger.mockResolvedValue([]);
+  getLedger.mockResolvedValue({
+    periodOpeningBalance: '0',
+    closingBalance: '0',
+    hasEarlier: false,
+    entries: [],
+  } as any);
   vi.spyOn(ui.CloudFinanceService.prototype, 'getFundingAccounts').mockImplementation(
     async () => accounts,
   );
@@ -300,6 +305,22 @@ describe('saving', () => {
     expect(screen.getByText('₹43,200.00 paid to Bharat Petroleum.')).toBeTruthy();
     await waitFor(() => expect(getSuppliers.mock.calls.length).toBeGreaterThan(1));
     await waitFor(() => expect(getLedger.mock.calls.length).toBeGreaterThan(ledgerCalls));
+  });
+
+  it('refreshes the payables list, this supplier\u2019s payable and every statement window', async () => {
+    const { qc } = mount();
+    await waitFor(() => expect(balance().getAttribute('data-state')).toBe('owes'));
+    const invalidate = vi.spyOn(qc, 'invalidateQueries');
+
+    await fillBank('43200');
+    submit();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    const keys = invalidate.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));
+    expect(keys).toContain(JSON.stringify(ui.queryKeys.payables('st-1')));
+    expect(keys).toContain(JSON.stringify(ui.queryKeys.supplierPayable('st-1', 's1')));
+    expect(keys).toContain(JSON.stringify(ui.queryKeys.supplierStatements('s1')));
+    expect(keys).toContain(JSON.stringify(ui.queryKeys.supplierLedger('s1')));
   });
 
   it('paying more than is owed leaves an advance', async () => {

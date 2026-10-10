@@ -25,6 +25,13 @@ const openings: Record<string, string> = {};
 /** Whether a customer has any entry before the window; unset = whenever the opening balance is not 0. */
 const earlier: Record<string, boolean> = {};
 const statementCalls: Array<{ id: string; from: string; to: string }> = [];
+const supplierStatementCalls: Array<{ id: string; from: string; to: string }> = [];
+/** The payables summary for the list and per supplier; `undefined` = not (yet) available. */
+const payables: { list: any; bySupplier: Record<string, any>; failed: boolean } = {
+  list: undefined,
+  bySupplier: {},
+  failed: false,
+};
 
 vi.mock('@pump/ui', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -33,11 +40,32 @@ vi.mock('@pump/ui', async (importOriginal) => {
     useAccess: () => ({ data: undefined }),
     useCustomers: () => ({ data: customers, isLoading: false }),
     useSuppliers: () => ({ data: suppliers, isLoading: false }),
-    useSupplierLedger: (id: string) => ({
-      data: supplierLedgers[id] ?? [],
-      isLoading: ledgerState.isLoading,
-      isError: ledgerState.isError,
-      refetch: vi.fn(),
+    useSupplierStatement: (id: string, range: { from: string; to: string }) => {
+      supplierStatementCalls.push({ id, ...range });
+      return {
+        data: ledgerState.isLoading
+          ? undefined
+          : {
+              periodOpeningBalance: openings[id] ?? '0',
+              closingBalance: '0',
+              hasEarlier: earlier[id] ?? Number(openings[id] ?? '0') !== 0,
+              entries: supplierLedgers[id] ?? [],
+            },
+        isPlaceholderData: ledgerState.placeholder,
+        isLoading: ledgerState.isLoading,
+        isError: ledgerState.isError,
+        refetch: vi.fn(),
+      };
+    },
+    usePayables: (stationId: string | null) => ({
+      data: stationId && !payables.failed ? payables.list : undefined,
+      isLoading: false,
+      isError: payables.failed,
+    }),
+    useSupplierPayable: (stationId: string | null, id: string) => ({
+      data: stationId && !payables.failed ? payables.bySupplier[id] : undefined,
+      isLoading: false,
+      isError: payables.failed,
     }),
     useCustomerStatement: (id: string, range: { from: string; to: string }) => {
       statementCalls.push({ id, ...range });
@@ -145,6 +173,10 @@ beforeEach(() => {
   receivables.byCustomer = {};
   receivables.failed = false;
   statementCalls.length = 0;
+  supplierStatementCalls.length = 0;
+  payables.list = undefined;
+  payables.bySupplier = {};
+  payables.failed = false;
   ledgerState.isLoading = false;
   ledgerState.isError = false;
   ledgerState.placeholder = false;
@@ -401,6 +433,102 @@ describe('To pay', () => {
     toPay();
     fireEvent.click(screen.getByRole('button', { name: /HPCL/ }));
     expect(screen.getByText('Supplier page for HPCL Kozhikode Depot')).toBeTruthy();
+  });
+});
+
+describe('To pay with the payables summary', () => {
+  const toPay = () => fireEvent.click(screen.getByRole('radio', { name: 'To pay' }));
+  const summary = () => ({
+    total: 1081600,
+    supplierCount: 2,
+    month: { purchased: 2140000, paid: 1020000, purchasedMonth: '2026-10', paidMonth: '2026-10' },
+    suppliers: [
+      {
+        supplierId: 's1',
+        balance: 1043200,
+        unpaidCount: 1,
+        oldestUnpaidDate: '2026-10-09',
+        oldestUnpaidDays: 0,
+      },
+      {
+        supplierId: 's2',
+        balance: 38400,
+        unpaidCount: 2,
+        oldestUnpaidDate: '2026-09-29',
+        oldestUnpaidDays: 10,
+      },
+    ],
+  });
+
+  it('shows paid vs purchased this month in the hero', () => {
+    payables.list = summary();
+    mount({ station: STATION });
+    toPay();
+    const hero = screen.getByText('Payables · 2 suppliers').closest('section') as HTMLElement;
+    expect(within(hero).getByText('₹10,81,600.00')).toBeTruthy();
+    expect(within(hero).getByText('Paid this month').nextSibling?.textContent).toBe('₹10.2L');
+    expect(within(hero).getByText('Purchased this month').nextSibling?.textContent).toBe('₹21.4L');
+  });
+
+  it('says which month each figure covers only when the two differ', () => {
+    payables.list = summary();
+    mount({ station: STATION });
+    toPay();
+    expect(document.body.textContent).not.toMatch(/Business Date\)/);
+    cleanup();
+
+    payables.list = {
+      ...summary(),
+      month: { ...summary().month, purchasedMonth: '2026-10', paidMonth: '2026-11' },
+    };
+    mount({ station: STATION });
+    toPay();
+    expect(
+      screen.getByText(
+        'Purchases: October 2026 (Business Date) · Payments: November 2026 (Entry Date)',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('says on each row how many are unpaid and since when', () => {
+    payables.list = summary();
+    mount({ station: STATION, renderSupplierPage: () => null });
+    toPay();
+    const hpcl = screen.getByRole('button', { name: /HPCL/ });
+    expect(hpcl.textContent).toContain('HPCL · 1 unpaid');
+    expect(hpcl.textContent).toContain('since 9 Oct');
+    const gulf = screen.getByRole('button', { name: /Gulf/ });
+    expect(gulf.textContent).toContain('2 unpaid');
+    expect(gulf.textContent).toContain('since 29 Sep');
+    // suppliers have no payment terms: never a due date
+    expect(document.body.textContent).not.toMatch(/\bdue\b|overdue/i);
+  });
+
+  it('leaves a supplier the summary does not know without the caption (hidden, not zero)', () => {
+    payables.list = { ...summary(), suppliers: [summary().suppliers[0]] };
+    mount({ station: STATION, renderSupplierPage: () => null });
+    toPay();
+    const gulf = screen.getByRole('button', { name: /Gulf/ });
+    expect(gulf.textContent).not.toMatch(/unpaid|since/);
+  });
+
+  it('shows plain rows and no month figures until the summary arrives, without a station, or when it fails', () => {
+    mount({ station: STATION });
+    toPay();
+    expect(document.body.textContent).not.toMatch(/Paid this month|unpaid|since \d/);
+    cleanup();
+
+    payables.list = summary();
+    mount();
+    toPay();
+    expect(document.body.textContent).not.toMatch(/Paid this month|unpaid|since \d/);
+    cleanup();
+
+    payables.failed = true;
+    mount({ station: STATION });
+    toPay();
+    expect(document.body.textContent).not.toMatch(/Paid this month|unpaid|since \d/);
+    expect(screen.getByText('₹10,81,600.00')).toBeTruthy();
   });
 });
 
@@ -909,8 +1037,10 @@ describe('Customer page', () => {
 
 describe('Supplier page', () => {
   const mountSupplier = () =>
-    mount({ renderSupplierPage: (s) => <SupplierPage supplier={s} /> }) &&
-    fireEvent.click(screen.getByRole('radio', { name: 'To pay' }));
+    mount({
+      station: STATION,
+      renderSupplierPage: (s) => <SupplierPage supplier={s} station={STATION as any} />,
+    }) && fireEvent.click(screen.getByRole('radio', { name: 'To pay' }));
   const openSupplier = (name: string) => {
     mountSupplier();
     fireEvent.change(screen.getByLabelText('Search suppliers'), { target: { value: name } });
@@ -990,6 +1120,214 @@ describe('Supplier page', () => {
     expect(document.body.textContent).not.toMatch(
       /Purchased this month|Paid this month|Purchases by product|Oldest unpaid/i,
     );
+  });
+
+  describe('payables summary', () => {
+    const HPCL = {
+      supplierId: 's1',
+      balance: 1043200,
+      unpaidCount: 1,
+      oldestUnpaidDate: '2026-10-09',
+      oldestUnpaidDays: 0,
+      lastPayment: {
+        amount: 980000,
+        entryDate: '2026-10-06',
+        method: 'BANK',
+        fundingAccountName: 'SBI current a/c',
+      },
+      month: {
+        purchased: 2072200,
+        paid: 980000,
+        purchasedMonth: '2026-10',
+        paidMonth: '2026-10',
+        purchaseCount: 2,
+        quantity: 22000,
+      },
+      purchasesByProduct: [
+        { productId: 'p1', name: 'HSD', unit: 'L', quantity: 12000, value: 1043200 },
+        { productId: 'p2', name: 'MS', unit: 'L', quantity: 10000, value: 1029000 },
+      ],
+    };
+
+    it('names the oldest unpaid Purchase under the balance', () => {
+      payables.bySupplier.s1 = HPCL;
+      openSupplier('HPCL');
+      expect(within(balance()).getByText('1 unpaid purchase · oldest 9 Oct (today)')).toBeTruthy();
+      // no due dates
+      expect(document.body.textContent).not.toMatch(/overdue|due on|due in/i);
+    });
+
+    it('shows purchased vs paid this month with the litres and the last payment', () => {
+      payables.bySupplier.s1 = HPCL;
+      openSupplier('HPCL');
+      const tiles = within(screen.getByRole('group', { name: 'This month' }));
+      expect(tiles.getByText('Purchased this month')).toBeTruthy();
+      expect(tiles.getByText('₹20.72L')).toBeTruthy();
+      expect(tiles.getByText('2 purchases · 22,000 L')).toBeTruthy();
+      expect(tiles.getByText('Paid this month')).toBeTruthy();
+      expect(tiles.getByText('₹9.8L')).toBeTruthy();
+      expect(tiles.getByText('Last: 6 Oct · Bank')).toBeTruthy();
+    });
+
+    it('says which month each tile covers only when they differ', () => {
+      payables.bySupplier.s1 = HPCL;
+      openSupplier('HPCL');
+      expect(document.body.textContent).not.toMatch(/\(Business Date\)/);
+      cleanup();
+
+      payables.bySupplier.s1 = {
+        ...HPCL,
+        month: { ...HPCL.month, purchasedMonth: '2026-10', paidMonth: '2026-11' },
+      };
+      openSupplier('HPCL');
+      expect(
+        screen.getByText(
+          'Purchases: October 2026 (Business Date) · Payments: November 2026 (Entry Date)',
+        ),
+      ).toBeTruthy();
+    });
+
+    it('lists purchases by product with quantity and value', () => {
+      payables.bySupplier.s1 = HPCL;
+      openSupplier('HPCL');
+      const list = within(screen.getByRole('region', { name: 'Purchases by product this month' }));
+      const items = list.getAllByRole('listitem').map((li) => li.textContent);
+      expect(items[0]).toContain('HSD');
+      expect(items[0]).toContain('12,000 L');
+      expect(items[0]).toContain('₹10.43L');
+      expect(items[1]).toContain('MS');
+      expect(items[1]).toContain('10,000 L');
+    });
+
+    it('leaves out the product list when nothing was bought this month, and the oldest line when nothing is unpaid', () => {
+      payables.bySupplier.s1 = {
+        ...HPCL,
+        unpaidCount: 0,
+        oldestUnpaidDate: null,
+        oldestUnpaidDays: null,
+        lastPayment: null,
+        month: {
+          purchased: 0,
+          paid: 0,
+          purchasedMonth: '2026-10',
+          paidMonth: '2026-10',
+          purchaseCount: 0,
+          quantity: 0,
+        },
+        purchasesByProduct: [],
+      };
+      openSupplier('HPCL');
+      expect(screen.queryByRole('region', { name: 'Purchases by product this month' })).toBeNull();
+      expect(document.body.textContent).not.toMatch(/unpaid purchase|oldest/);
+      expect(screen.getByText('No payment yet')).toBeTruthy();
+    });
+
+    it('shows an advance as an advance, with no oldest-unpaid line', () => {
+      suppliers.push(sup({ name: 'Prepaid Petro', currentBalance: '-16800' }));
+      payables.bySupplier['Prepaid Petro'] = {
+        ...HPCL,
+        supplierId: 'Prepaid Petro',
+        balance: -16800,
+        unpaidCount: 0,
+        oldestUnpaidDate: null,
+        oldestUnpaidDays: null,
+      };
+      openSupplier('Prepaid');
+      expect(balance().getAttribute('data-state')).toBe('advance');
+      expect(document.body.textContent).not.toMatch(/unpaid purchase/);
+    });
+
+    it('keeps the balance and the statement standing when the summary fails or there is no station', () => {
+      payables.failed = true;
+      openSupplier('HPCL');
+      expect(within(balance()).getByText('₹10,43,200.00')).toBeTruthy();
+      expect(screen.queryByRole('group', { name: 'This month' })).toBeNull();
+      expect(screen.getByText('Statement')).toBeTruthy();
+    });
+  });
+
+  describe('enriched statement', () => {
+    const PURCHASE = {
+      id: 'p1',
+      transactionType: 'Purchase',
+      amount: '1043200',
+      businessDate: '2026-10-09',
+      createdAt: '2026-10-09T10:00:00Z',
+      invoiceNumber: 'INV-55821',
+      productName: 'HSD',
+      quantity: 12000,
+      unit: 'L',
+      tankerNumber: null,
+    };
+    const PAYMENT = {
+      id: 'y1',
+      transactionType: 'Payment',
+      amount: '980000',
+      businessDate: '2026-10-06',
+      createdAt: '2026-10-06T10:00:00Z',
+      method: 'BANK',
+      fundingAccountName: 'SBI current a/c',
+    };
+
+    it('shows the invoice, quantity and product on a Purchase, method and Funding Account on a Payment', () => {
+      suppliers.push(sup({ name: 'Ledger Lal', currentBalance: '63200' }));
+      supplierLedgers['Ledger Lal'] = [PAYMENT, PURCHASE];
+      openSupplier('Ledger');
+      const oct = within(screen.getByRole('region', { name: 'October 2026' }));
+      expect(oct.getByText('Purchase · HSD')).toBeTruthy();
+      expect(oct.getByText('9 Oct · INV-55821 · 12,000 L')).toBeTruthy();
+      expect(oct.getByText('Payment made')).toBeTruthy();
+      expect(oct.getByText('6 Oct · Bank')).toBeTruthy();
+      expect(oct.getByText('From SBI current a/c')).toBeTruthy();
+      // the tanker is only shown when one was recorded
+      expect(document.body.textContent).not.toMatch(/Tanker/);
+    });
+
+    it('shows the tanker when one was recorded', () => {
+      suppliers.push(sup({ name: 'Ledger Lal', currentBalance: '1043200' }));
+      supplierLedgers['Ledger Lal'] = [{ ...PURCHASE, tankerNumber: 'KL-58-H-2210' }];
+      openSupplier('Ledger');
+      expect(screen.getByText('Tanker KL-58-H-2210')).toBeTruthy();
+    });
+
+    it('asks for the last 6 months and carries the earlier balance in (an advance reads signed)', () => {
+      suppliers.push(sup({ name: 'Ledger Lal', currentBalance: '-1000' }));
+      openings['Ledger Lal'] = '-1500';
+      supplierLedgers['Ledger Lal'] = [{ ...PURCHASE, amount: '500' }];
+      openSupplier('Ledger');
+      expect(supplierStatementCalls.at(-1)).toEqual({
+        id: 'Ledger Lal',
+        from: '2026-05-01',
+        to: '9999-12-31',
+      });
+      expect(screen.getByText('Balance brought forward from before 1 May 2026')).toBeTruthy();
+      expect(screen.getByText('−₹1,500.00')).toBeTruthy();
+      expect(screen.getByText('Bal −₹1,000.00')).toBeTruthy();
+    });
+
+    it('widens the window by 6 months on "Earlier months" and keeps the rows while it loads', () => {
+      suppliers.push(sup({ name: 'Ledger Lal', currentBalance: '500' }));
+      openings['Ledger Lal'] = '0';
+      earlier['Ledger Lal'] = true;
+      supplierLedgers['Ledger Lal'] = [{ ...PURCHASE, amount: '500' }];
+      openSupplier('Ledger');
+      fireEvent.click(screen.getByRole('button', { name: 'Earlier months' }));
+      expect(supplierStatementCalls.at(-1)).toMatchObject({ from: '2025-11-01' });
+      ledgerState.placeholder = true;
+      cleanup();
+      openSupplier('Ledger');
+      expect(screen.getByRole('button', { name: 'Loading earlier months…' })).toBeTruthy();
+      expect(screen.getByText('Purchase · HSD')).toBeTruthy();
+    });
+
+    it('offers "Earlier months" only when the server says something is older', () => {
+      suppliers.push(sup({ name: 'Ledger Lal', currentBalance: '500' }));
+      openings['Ledger Lal'] = '0';
+      earlier['Ledger Lal'] = false;
+      supplierLedgers['Ledger Lal'] = [{ ...PURCHASE, amount: '500' }];
+      openSupplier('Ledger');
+      expect(screen.queryByRole('button', { name: /Earlier months/ })).toBeNull();
+    });
   });
 
   describe('statement', () => {
@@ -1074,7 +1412,7 @@ describe('Supplier page', () => {
       ledgerState.isLoading = false;
       suppliers.push(sup({ name: 'Brand New', currentBalance: '0' }));
       openSupplier('Brand');
-      expect(screen.getByText('No transactions yet.')).toBeTruthy();
+      expect(screen.getByText('No transactions since 1 May 2026.')).toBeTruthy();
       cleanup();
 
       ledgerState.isError = true;

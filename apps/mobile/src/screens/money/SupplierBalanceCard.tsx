@@ -1,5 +1,7 @@
 import React, { useId } from 'react';
 import { inr } from '@pump/ui';
+import type { SupplierPayable } from '@pump/shared';
+import { oldestUnpaidLine } from '../../lib/money/payables.js';
 import { balanceOf, balanceState, type MoneySupplier } from '../../lib/money/parties.js';
 import { SURFACE } from './BalanceCard.js';
 import { HeroCard } from './HeroCard.js';
@@ -20,17 +22,20 @@ const NOTE = {
  * The quiet "Record payment" outline button (a Supplier Payment) sits in its
  * footer when this user may record one; the action bar stays Share / Download.
  *
- * Seam for #399 (payables summary): oldest unpaid, purchased vs paid this month
- * and purchases by product go under this card.
+ * When the payables summary is there, a line under the figure names the oldest
+ * unpaid Purchase (`1 unpaid purchase · oldest 9 Oct (today)`); without it
+ * (loading, failed, no Station) the card is just the balance.
  */
 export const SupplierBalanceCard: React.FC<{
   supplier: MoneySupplier;
+  payable?: Pick<SupplierPayable, 'unpaidCount' | 'oldestUnpaidDate' | 'oldestUnpaidDays'> | null;
   paymentAction?: PaymentAction;
-}> = ({ supplier, paymentAction }) => {
+}> = ({ supplier, payable, paymentAction }) => {
   const reasonId = useId();
   const balance = balanceOf(supplier);
   const state = balanceState(balance);
   const amount = state === 'advance' ? -balance : state === 'settled' ? 0 : balance;
+  const oldest = state === 'owes' ? oldestUnpaidLine(payable) : null;
   return (
     <HeroCard
       ariaLabel="Balance"
@@ -40,6 +45,7 @@ export const SupplierBalanceCard: React.FC<{
       value={inr(amount)}
     >
       {NOTE[state] && <p className="mt-1 text-[11.5px] text-text-muted">{NOTE[state]}</p>}
+      {oldest && <p className="mt-1 text-[11.5px] text-text-muted">{oldest}</p>}
       {paymentAction && (
         <div className="mt-2.5 flex flex-col gap-1 border-t border-line pt-2">
           <div className="flex items-center justify-between gap-2">

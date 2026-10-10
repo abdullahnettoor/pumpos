@@ -288,6 +288,17 @@ Business Day (sealed with it), never to a Shift. Paying for it is a separate
 Supplier Payment.
 _Avoid_: procurement, inward
 
+**Payables**:
+What the Organization owes its suppliers (Σ Purchases − Σ Supplier Payments). A
+Supplier Payment or a credit Adjustment pays the oldest unpaid amount first; an
+**unpaid Purchase** is a Purchase not yet fully paid that way, and its Business
+Date is how long it has waited. An Opening Balance takes its turn in that order
+but is not "an unpaid Purchase". Organization-wide, like the Supplier balance. An
+overpayment is an advance (a negative Supplier balance), not a negative payable.
+"This month": Purchases by their Business Date, Supplier Payments by their Entry
+Date.
+_Avoid_: dues, overdue (suppliers have no payment terms, so no due date exists)
+
 **Credit Sale**:
 A receivable: fuel sold on credit records only a customer-ledger debit. It is
 not Drawer cash and never moves stock again.
