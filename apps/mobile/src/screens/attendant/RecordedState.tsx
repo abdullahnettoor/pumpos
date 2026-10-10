@@ -1,17 +1,9 @@
 import React from 'react';
 import { inr } from '@pump/ui';
 import { ListGroup, ListRow, SectionLabel, StatusBadge } from '../../ui/index.js';
-import { varianceBadge, type HandoverRecap } from './recap.js';
+import { formatRecordedTime, varianceBadge, type HandoverRecap } from './recap.js';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-
-const formatTime = (iso: string | null): string | null => {
-  if (!iso) return null;
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? null
-    : d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
-};
 
 /**
  * After a recorded Handover: confirmation, the attendant's own figures, and the
@@ -23,7 +15,7 @@ export const RecordedState: React.FC<{
   onEdit: () => void;
 }> = ({ recap, shiftName, onEdit }) => {
   const badge = varianceBadge(recap.variance);
-  const time = formatTime(recap.recordedAt);
+  const time = formatRecordedTime(recap.recordedAt);
   const subtitle = [recap.duNames.join(', '), shiftName, time, badge.label]
     .filter(Boolean)
     .join(' · ');

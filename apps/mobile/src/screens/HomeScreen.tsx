@@ -5,6 +5,7 @@ import { compactRupees, signedRupees } from '../lib/home/format.js';
 import { comparisonView, type Comparison } from '../lib/home/sales.js';
 import { useNav } from '../shell/nav.js';
 import { SectionLabel, StatTile } from '../ui/index.js';
+import { HandoverCard } from './home/HandoverCard.js';
 import { HomeAttention } from './home/HomeAttention.js';
 import { LiveShiftStrip } from './home/LiveShiftStrip.js';
 import { MoneyPosition } from './home/MoneyPosition.js';
@@ -32,7 +33,8 @@ const ComparisonNote: React.FC<{ c: Comparison }> = ({ c }) => {
 };
 
 /**
- * Home, the Control Room's first tab: live Shift, an honest sales headline
+ * Home, the Control Room's first tab: the pinned handover card (only for a user
+ * assigned to a Dispenser Unit), live Shift, an honest sales headline
  * (fuel from closed Shifts only, Product Sales live), the day's tiles, the top
  * alerts, Sales by product, tank gauges and the money position.
  */
@@ -44,6 +46,7 @@ export const HomeScreen: React.FC<Props> = ({ station }) => {
 
   return (
     <div className="pb-2">
+      <HandoverCard />
       <LiveShiftStrip shift={m.live} loading={m.shiftLoading} />
 
       <SectionLabel right={m.comparison ? <ComparisonNote c={m.comparison} /> : undefined}>

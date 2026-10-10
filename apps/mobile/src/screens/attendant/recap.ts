@@ -153,6 +153,15 @@ export function varianceBadge(variance: number): { label: string; tone: Variance
     : { label: `Over ${inr(variance)}`, tone: 'warn' };
 }
 
+/** "5:40 pm" in the device's time zone; null for a missing or unreadable ISO time. */
+export function formatRecordedTime(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? null
+    : d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+}
+
 /** Whole minutes since the shift opened; null when the opening time is unknown. */
 export function minutesOnShift(openedAt: string | null | undefined, now: number): number | null {
   if (!openedAt) return null;

@@ -6,14 +6,15 @@
  * working until their ticket replaces them.
  */
 import React from 'react';
-import type { Station } from '@pump/shared';
-import { HandoverPanel } from '../components/HandoverPanel.js';
+import { canViewMobileHome, type Station } from '@pump/shared';
 import { HomeScreen } from '../screens/HomeScreen.js';
+import { HandoverCard } from '../screens/home/HandoverCard.js';
 import { InsightsScreen } from '../screens/InsightsScreen.js';
 import { MoneyScreen } from '../screens/MoneyScreen.js';
 import { ReportsScreen } from '../screens/ReportsScreen.js';
 import { SupplierPage } from '../screens/money/SupplierPage.js';
 import { ShiftsScreen } from '../screens/ShiftsScreen.js';
+import { useShell } from './context.js';
 import { HomeHeader } from './HomeHeader.js';
 import { TabHeader } from './TabHeader.js';
 import { tabDef, type TabKey } from './tabs.js';
@@ -31,15 +32,18 @@ const Padded: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
-  const header = tab === 'home' ? <HomeHeader /> : <TabHeader title={tabDef(tab).label} />;
+  const { role } = useShell();
+  // Home is the owner's overview. A Manager, Accountant or Staff member who man a
+  // pump have Home only for their handover card (see `tabsForRole`).
+  const handoverOnlyHome = tab === 'home' && !canViewMobileHome(role);
+  const header =
+    tab === 'home' && !handoverOnlyHome ? <HomeHeader /> : <TabHeader title={tabDef(tab).label} />;
 
-  if (tab === 'handover')
+  if (handoverOnlyHome)
     return (
       <>
         {header}
-        <Padded>
-          <HandoverPanel />
-        </Padded>
+        <HandoverCard />
       </>
     );
   if (tab === 'money')

@@ -140,7 +140,7 @@ Attendant.
 When an Attendant is absent, any active user of the station (Owner, Manager,
 Accountant or Staff) may be put on the Dispenser Unit instead. That person is
 the Attendant for that Shift: they hold the Drawer and hand it over exactly as
-an Attendant would, on mobile ("My handover") or recorded by the office on
+an Attendant would, on mobile (the "Your handover" card on Home) or recorded by the office on
 desktop. An Accountant, like an Attendant, may record only their own Handover
 (#301).
 _Avoid_: operator, pumper

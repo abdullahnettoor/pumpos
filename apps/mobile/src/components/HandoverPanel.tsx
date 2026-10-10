@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   useMyAssignment,
   useProducts,
@@ -50,8 +51,9 @@ import { useHandoverSubmission } from './handover/useHandoverSubmission.js';
  * signed-in user's OWN active DU assignment and lets them record closing readings
  * (+ per-nozzle testing), per-terminal card/UPI for the DU's assigned POS,
  * fuel-on-credit lines, cash, and a merchandise closing. Used both by the
- * dedicated Attendant shell and by the "My handover" tab that appears for any
- * other role when they are assigned to a dispenser unit on an open shift.
+ * dedicated Attendant shell and by the handover detail page an Owner / Manager
+ * opens from the pinned Home card when they are assigned to a dispenser unit on
+ * an open shift.
  *
  * Presentation: five collapsible step cards per DU under a sticky
  * Expected · Declared · Variance strip, with one Save handover action (there is
@@ -73,7 +75,14 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 export const HandoverPanel: React.FC<{
   /** Called after a save in which every DU's Handover was accepted. */
   onRecorded?: (results: RecordHandoverResult[]) => void;
-}> = ({ onRecorded }) => {
+  /**
+   * Where the Save handover bar goes. Left out, the bar sticks to the bottom of
+   * the panel (the Attendant app). A detail page passes the element inside its
+   * own bottom action bar (`DetailPage` `actions`); `null` is that element not
+   * being mounted yet, and the bar waits for it.
+   */
+  actionBarTarget?: HTMLElement | null;
+}> = ({ onRecorded, actionBarTarget }) => {
   const assignmentQ = useMyAssignment();
   const productsQ = useProducts();
   const customersQ = useCustomers(true);
@@ -427,6 +436,50 @@ export const HandoverPanel: React.FC<{
     </StepCard>
   );
 
+  const barBody = (
+    <>
+      {error && (
+        <p role="alert" className="text-center text-xs text-bad-fg">
+          {error}
+        </p>
+      )}
+      {formInvalid && !error && (
+        <p className="text-center text-[11px] text-bad-fg">
+          Fix {failingSteps.join(', ')} to save.
+        </p>
+      )}
+      {savedAt && !saving && (
+        <p className="text-center text-[11px] text-good">
+          Saved at {savedAt}. You can edit and save again until the shift closes.
+        </p>
+      )}
+      <div className="flex items-center gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-text-faint">
+            Variance
+          </p>
+          <p
+            className={`num text-[17px] font-semibold ${varianceTone(shownSummary.varianceAmount)}`}
+          >
+            {formatVariance(shownSummary.varianceAmount)}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            runTask(submission.save(), (error: unknown) =>
+              console.error('Failed to save handover:', error),
+            )
+          }
+          disabled={saving || formInvalid}
+          className="h-12 flex-1 rounded-xl bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
+        >
+          {saving ? 'Saving…' : 'Save handover'}
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <div className="flex flex-col gap-3">
       <SummaryStrip
@@ -579,48 +632,14 @@ export const HandoverPanel: React.FC<{
         );
       })}
 
-      {/* Sticky bar: running variance + the one Save action */}
-      <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-1.5 border-t border-dock-line bg-dock px-4 pb-3 pt-2.5 backdrop-blur">
-        {error && (
-          <p role="alert" className="text-center text-xs text-bad-fg">
-            {error}
-          </p>
-        )}
-        {formInvalid && !error && (
-          <p className="text-center text-[11px] text-bad-fg">
-            Fix {failingSteps.join(', ')} to save.
-          </p>
-        )}
-        {savedAt && !saving && (
-          <p className="text-center text-[11px] text-good">
-            Saved at {savedAt}. You can edit and save again until the shift closes.
-          </p>
-        )}
-        <div className="flex items-center gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-text-faint">
-              Variance
-            </p>
-            <p
-              className={`num text-[17px] font-semibold ${varianceTone(shownSummary.varianceAmount)}`}
-            >
-              {formatVariance(shownSummary.varianceAmount)}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() =>
-              runTask(submission.save(), (error: unknown) =>
-                console.error('Failed to save handover:', error),
-              )
-            }
-            disabled={saving || formInvalid}
-            className="h-12 flex-1 rounded-xl bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
-          >
-            {saving ? 'Saving…' : 'Save handover'}
-          </button>
+      {/* Running variance + the one Save action: sticky here, or in the page's action bar */}
+      {actionBarTarget === undefined ? (
+        <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-1.5 border-t border-dock-line bg-dock px-4 pb-3 pt-2.5 backdrop-blur">
+          {barBody}
         </div>
-      </div>
+      ) : actionBarTarget ? (
+        createPortal(<div className="flex flex-col gap-1.5">{barBody}</div>, actionBarTarget)
+      ) : null}
 
       <CashCountSheet
         open={sheetDuId != null}

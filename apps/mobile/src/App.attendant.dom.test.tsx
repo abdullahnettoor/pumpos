@@ -5,7 +5,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 /**
  * An Attendant signed in lands in the Attendant app and nowhere else: the
  * owner/manager shell (tabs, station picker, business-day pill) never mounts,
- * and the roles' extra "My handover" assignment lookup is not made for them.
+ * and the roles' extra own-handover assignment lookup is not made for them.
  */
 const useMyAssignment = vi.fn((_options?: { enabled?: boolean }) => ({
   data: null,
@@ -48,7 +48,7 @@ describe('App as an Attendant', () => {
     expect(screen.getByText('Sajid P · Attendant')).toBeDefined();
     expect(screen.getByText('No shift assigned')).toBeDefined();
     expect(screen.queryByRole('navigation')).toBeNull();
-    // The shared "My handover tab" lookup is for other roles; the Attendant app reads its own.
+    // The shared own-handover lookup (Home card) is for other roles; the Attendant app reads its own.
     expect(useMyAssignment).toHaveBeenCalledWith({ enabled: false });
   });
 });

@@ -28,10 +28,13 @@ const shiftStatus = {
   },
 };
 
+const mine = vi.hoisted(() => ({ assignment: null as unknown }));
+
 vi.mock('@pump/ui', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
+    useMyAssignment: () => query(mine.assignment),
     useUsers: () => query(users),
     useShiftStatus: () => query(shiftStatus),
     useOrganization: () => query({ name: 'Malabar Fuels Pvt Ltd' }),
@@ -198,7 +201,32 @@ describe('dock', () => {
   });
 });
 
+const du = (handover?: unknown) => ({
+  shift: { id: 's2', templateName: 'Shift 2' },
+  dispenserUnits: [{ duId: 'du-2', duName: 'DU2', nozzles: [], terminals: [], handover }],
+});
+
 describe('header', () => {
+  afterEach(() => {
+    mine.assignment = null;
+  });
+
+  it('counts an unsaved own handover on the bell', () => {
+    mine.assignment = du();
+    render(<Harness />);
+    expect(screen.getByRole('button', { name: 'Alerts, 3 open' })).toBeTruthy();
+  });
+
+  it('does not count an own handover that is saved', () => {
+    mine.assignment = du({
+      cashHandedOver: '10',
+      varianceAmount: '0',
+      createdAt: '2026-10-09T12:00:00Z',
+    });
+    render(<Harness />);
+    expect(screen.getByRole('button', { name: 'Alerts, 2 open' })).toBeTruthy();
+  });
+
   it('shows the open-alert count on the bell', () => {
     render(<Harness />);
     expect(screen.getByRole('button', { name: 'Alerts, 2 open' })).toBeTruthy();
