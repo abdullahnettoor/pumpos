@@ -53,7 +53,7 @@ vi.mock('./shell/TabRoot.js', async () => {
   return {
     TabRoot: () => (
       <>
-        <HomeHeader />
+        <HomeHeader onOpenAttention={() => {}} />
         <p>tab root</p>
       </>
     ),
