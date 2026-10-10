@@ -2,16 +2,24 @@ import { Hono } from 'hono';
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import { isAuthorizedForStation, canExportReports } from '@pump/shared';
-import { GenerateDssr, composeDssr, composeProfitLoss, type Result } from '@pump/core';
+import {
+  GenerateDssr,
+  ListBusinessDays,
+  composeDssr,
+  composeProfitLoss,
+  type Result,
+} from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { runInTransaction } from '../infra/transaction.js';
 import {
+  DrizzleBusinessDayListReader,
   DrizzleDssrSnapshotRepository,
   DrizzleDssrDataReader,
 } from '../infra/repositories/reporting-repositories.js';
 import { DrizzleBusinessDayRepository } from '../infra/repositories/station-ops-repositories.js';
 import { sendResult } from '../infra/send-result.js';
+import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
 
 type Variables = {
@@ -273,6 +281,38 @@ dssrRouter.get('/daily/preview', async (c) => {
     return c.json({ success: true, data: snapshot });
   }
   return c.json({ success: true, data: await buildLiveDssrPreview(db, user, bd) });
+});
+
+// GET /api/dssr/days?stationId=&month=YYYY-MM — the Reports tab's Business Day
+// list (#394): one month page (default: the month of the Current Business Date),
+// newest first, with Live / Draft / Sealed status and the week tiles. Aggregated
+// in SQL from stored snapshots and closed Shift Summaries — it never builds the
+// live DSSR preview.
+dssrRouter.get('/days', async (c) => {
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  if (!stationId) {
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } },
+      400,
+    );
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
+  }
+  // Resolves the station under the caller's organization (a foreign station is
+  // a 404); the clock goes into the context, and the use-case derives the
+  // Current Business Date from it.
+  const clock = await loadStationClock(c.var.db, user.organizationId, stationId);
+  if (!clock) return stationNotFound(c);
+  const result = await new ListBusinessDays(new DrizzleBusinessDayListReader(c.var.db)).execute(
+    { stationId, month: c.req.query('month') },
+    buildContext(user, { stationId, ...clock }),
+  );
+  return sendResult(c, result);
 });
 
 // GET /api/dssr/daily/range?stationId=&from=&to=

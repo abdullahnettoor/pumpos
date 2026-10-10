@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { dssrDaySales, dssrNetVolume, dssrProductSalesValue } from '../dssr-snapshot-sql.js';
 import type { DbClient } from '@pump/db';
 import { insightsRangeCtes } from './insights-range.js';
 import type {
@@ -43,11 +44,9 @@ export class DrizzleInsightsSalesReader implements InsightsSalesReader {
         SELECT
           ds.business_date AS date,
           (ds.business_date >= b."from") AS current_period,
-          COALESCE((ds.snapshot_data -> 'fuel' ->> 'totalSalesValue')::numeric, 0)
-            + COALESCE((ds.snapshot_data -> 'merchandise' ->> 'salesValue')::numeric, 0) AS sales,
-          COALESCE((ds.snapshot_data -> 'merchandise' ->> 'salesValue')::numeric, 0) AS other_sales,
-          COALESCE((ds.snapshot_data -> 'fuel' ->> 'totalNetVolume')::numeric,
-                   (ds.snapshot_data -> 'fuel' ->> 'totalVolume')::numeric, 0) AS volume,
+          ${dssrDaySales('ds.snapshot_data')} AS sales,
+          ${dssrProductSalesValue('ds.snapshot_data')} AS other_sales,
+          ${dssrNetVolume('ds.snapshot_data')} AS volume,
           ${jsonArray(sql.raw(`ds.snapshot_data -> 'fuel' -> 'byProduct'`))} AS fuel_by_product,
           ${jsonArray(sql.raw(`ds.snapshot_data -> 'pnl' -> 'byProduct'`))} AS pnl_by_product
         FROM bounds b
