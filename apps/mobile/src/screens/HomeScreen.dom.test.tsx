@@ -557,7 +557,7 @@ describe('Home: tanks, money, removed sections', () => {
     renderHome();
     const collect = screen.getByText('To collect').closest('button')!;
     expect(within(collect).getByText('₹6.82L')).toBeTruthy();
-    expect(within(collect).getByText('2 customers with dues')).toBeTruthy();
+    expect(within(collect).getByText('2 customers to collect')).toBeTruthy();
     fireEvent.click(collect);
     expect(nav.active).toBe('money');
     expect(within(screen.getByText('To pay').closest('button')!).getByText('₹10.43L')).toBeTruthy();

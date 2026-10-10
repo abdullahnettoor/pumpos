@@ -33,7 +33,8 @@ export interface MoneySupplier {
   currentBalance?: number | string | null;
 }
 
-interface Party {
+/** Anything with a name and a running balance: a customer or a supplier row. */
+export interface MoneyParty {
   name: string;
   currentBalance?: number | string | null;
 }
@@ -41,7 +42,7 @@ interface Party {
 /** Below half a paisa the balance is settled (numeric(14,2) sums can carry float dust). */
 const SETTLED_BELOW = 0.005;
 
-export const balanceOf = (p: Pick<Party, 'currentBalance'>): number => {
+export const balanceOf = (p: Pick<MoneyParty, 'currentBalance'>): number => {
   const n = Number(p.currentBalance ?? 0);
   return Number.isFinite(n) ? n : 0;
 };
@@ -52,19 +53,19 @@ export const limitOf = (c: Pick<MoneyCustomer, 'creditLimit'>): number | null =>
 };
 
 /** Parties that are owed money (balance above zero), the To collect / To pay lists. */
-export const owing = <T extends Party>(parties: readonly T[]): T[] =>
+export const owing = <T extends MoneyParty>(parties: readonly T[]): T[] =>
   parties.filter((p) => balanceOf(p) >= SETTLED_BELOW);
 
 /** What all of them add up to: advances never offset what others owe. */
-export const totalOwed = (parties: readonly Party[]): number =>
+export const totalOwed = (parties: readonly MoneyParty[]): number =>
   parties.reduce((sum, p) => sum + Math.max(0, balanceOf(p)), 0);
 
 /** Largest balance first; ties by name so the order is stable across refetches. */
-export const sortByBalance = <T extends Party>(parties: readonly T[]): T[] =>
+export const sortByBalance = <T extends MoneyParty>(parties: readonly T[]): T[] =>
   [...parties].sort((a, b) => balanceOf(b) - balanceOf(a) || a.name.localeCompare(b.name));
 
 /** Case-insensitive name match; a blank query keeps everyone. */
-export const matchName = <T extends Party>(parties: readonly T[], query: string): T[] => {
+export const matchName = <T extends MoneyParty>(parties: readonly T[], query: string): T[] => {
   const q = query.trim().toLowerCase();
   return q ? parties.filter((p) => p.name.toLowerCase().includes(q)) : [...parties];
 };
