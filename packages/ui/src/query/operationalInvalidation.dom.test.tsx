@@ -56,6 +56,11 @@ describe('useInvalidateOperational', () => {
       // Receivables move with every credit sale and collection, like a customer's balance.
       'receivables',
       'customer-statement',
+      // Insights part 2: closed-day Shift Summaries, Tank Dips, Credit Sales and
+      // (by Entry Date) Collections all move with a write.
+      'insights-attendant-variance',
+      'insights-stock-loss',
+      'insights-credit-health',
     ]) {
       expect(keys).toContain(key);
     }

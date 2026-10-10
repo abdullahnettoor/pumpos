@@ -25,11 +25,14 @@ import {
   AttendantHandoverReport,
   AttendantReportFilters,
   BusinessDayList,
+  InsightsAttendantVariance,
+  InsightsCreditHealth,
   InsightsRangeDays,
   InsightsSales,
   CustomerReceivableSummary,
   RangedPartyLedger,
   ReceivablesSummary,
+  InsightsStockLoss,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -780,6 +783,38 @@ export class CloudShiftService {
     return request<CustomerReceivableSummary>(
       `/reports/receivables/${encodeURIComponent(customerId)}?${query.toString()}`,
     );
+  }
+
+  /**
+   * Cash variance by Attendant over the same range (#402). Refused with
+   * CAPABILITY_NOT_ENTITLED unless the Organization has `reports.attendant`.
+   */
+  async getInsightsAttendantVariance(
+    stationId: string,
+    days: InsightsRangeDays,
+  ): Promise<InsightsAttendantVariance[]> {
+    const query = new URLSearchParams({ stationId, days: String(days) });
+    return request<InsightsAttendantVariance[]>(
+      `/reports/insights/attendant-variance?${query.toString()}`,
+    );
+  }
+
+  /** Tank Dip variance per tank over the same range (#402). */
+  async getInsightsStockLoss(
+    stationId: string,
+    days: InsightsRangeDays,
+  ): Promise<InsightsStockLoss[]> {
+    const query = new URLSearchParams({ stationId, days: String(days) });
+    return request<InsightsStockLoss[]>(`/reports/insights/stock-loss?${query.toString()}`);
+  }
+
+  /** Credit Sales given vs Collections received over the same range (#402). */
+  async getInsightsCreditHealth(
+    stationId: string,
+    days: InsightsRangeDays,
+  ): Promise<InsightsCreditHealth> {
+    const query = new URLSearchParams({ stationId, days: String(days) });
+    return request<InsightsCreditHealth>(`/reports/insights/credit-health?${query.toString()}`);
   }
 }
 

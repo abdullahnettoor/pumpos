@@ -4,7 +4,7 @@ import { FixedClock, SequentialIdGenerator } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
 import { composeInsightsSales, eachDate, percentChange, periodChange } from './compose.js';
 import { GetInsightsSales } from './get-insights-sales.js';
-import type { InsightsSalesQuery, InsightsSalesReader, InsightsSalesSource } from './ports.js';
+import type { InsightsRangeQuery, InsightsSalesReader, InsightsSalesSource } from './ports.js';
 
 const ORG = 'org-1';
 const STATION = 'station-1';
@@ -254,7 +254,7 @@ describe('composeInsightsSales', () => {
 });
 
 describe('GetInsightsSales', () => {
-  function readerFor(seen: InsightsSalesQuery[]): InsightsSalesReader {
+  function readerFor(seen: InsightsRangeQuery[]): InsightsSalesReader {
     return {
       async read(q) {
         seen.push(q);
@@ -264,7 +264,7 @@ describe('GetInsightsSales', () => {
   }
 
   it('reads under the caller organization and the requested range length', async () => {
-    const seen: InsightsSalesQuery[] = [];
+    const seen: InsightsRangeQuery[] = [];
     const res = await new GetInsightsSales({ reader: readerFor(seen) }).execute(
       { stationId: STATION, days: 30 },
       ctx(),

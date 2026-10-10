@@ -14,3 +14,6 @@ export * from './insights/get-insights-sales.js';
 export * from './receivables/ports.js';
 export * from './receivables/compose.js';
 export * from './receivables/get-receivables.js';
+export * from './insights/get-insights-attendant-variance.js';
+export * from './insights/get-insights-stock-loss.js';
+export * from './insights/get-insights-credit-health.js';
