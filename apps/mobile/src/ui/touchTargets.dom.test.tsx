@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import React from 'react';
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
