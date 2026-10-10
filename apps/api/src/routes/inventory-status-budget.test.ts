@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { transactionsRouter } from './transactions.js';
@@ -116,6 +116,27 @@ describe('GET /transactions/inventory/status', () => {
     expect(body.data[0]).toMatchObject({ avgDailyVolume7d: null, daysOfCover: null });
   });
 
+  it('keeps the tank levels, without cover, when the window read throws', async () => {
+    const { db } = makeFakeDb(2, WINDOW);
+    db.execute = async () => {
+      throw new Error('statement timeout');
+    };
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await makeApp(db).request(`/transactions/inventory/status?stationId=${STATION}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.success).toBe(true);
+    expect(body.data).toHaveLength(2);
+    expect(body.data[0]).toMatchObject({
+      id: 't1',
+      currentVolume: 2600,
+      avgDailyVolume7d: null,
+      daysOfCover: null,
+    });
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
+  });
+
   it('makes no window read for a Station without tanks', async () => {
     const { db, counter } = makeFakeDb(0, WINDOW);
     const res = await makeApp(db).request(`/transactions/inventory/status?stationId=${STATION}`);
@@ -132,6 +153,7 @@ describe('GET /transactions/inventory/status', () => {
     expect(params).toContain(7);
     expect(text).toContain("bd.status = 'CLOSED'");
     expect(text).toContain("sm.movement_type = 'Sale'");
+    expect(text).toContain("sm.reference_type = 'reading'");
     expect(text).toContain('t.organization_id');
     expect(text).toContain('t.station_id');
   });

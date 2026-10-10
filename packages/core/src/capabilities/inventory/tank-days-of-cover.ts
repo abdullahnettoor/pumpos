@@ -11,7 +11,7 @@ import type { ExecutionContext, Result, UseCase } from '../../kernel/index.js';
  *   newest by business date, not "the last 7 calendar days". Open days are
  *   excluded, so the rate never changes once its days are closed.
  * - Sold volume per tank = Σ Sale stock movements booked to THAT tank in the
- *   window (metered fuel, written when a Shift closes; stock_movements is the
+ *   window (metered fuel, written from the nozzle readings when a Shift closes; stock_movements is the
  *   inventory source of truth). Per tank, not per product: with several tanks
  *   of one product each is judged by what it actually dispensed through its
  *   nozzles, so a product average is never divided over the wrong tank.

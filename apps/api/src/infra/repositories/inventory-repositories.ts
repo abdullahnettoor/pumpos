@@ -160,8 +160,11 @@ export async function readInventoryLevels(db: DbClient, organizationId: string, 
  * Per-tank sold volume over a Station's newest closed Business Days, in ONE
  * statement (core `GetTankDaysOfCover`; averaging rules are documented there).
  *
- * Source: `stock_movements` Sale rows with a tank (metered fuel, booked when a
- * Shift closes), the inventory source of truth. DSSR snapshots are not used:
+ * Source: `stock_movements` Sale rows with a tank that Shift close wrote from
+ * the nozzle readings (`reference_type = 'reading'`), the inventory source of
+ * truth. Fuel is metered, so a POS sale line that names a tank (create-sale
+ * accepts one, `reference_type = 'SALE'`) is NOT counted: that would count the
+ * same litres twice. DSSR snapshots are not used:
  * they carry no tank id (sold litres are per product), so they cannot tell two
  * tanks of one product apart.
  *
@@ -191,7 +194,8 @@ export class DrizzleTankSalesWindowReader implements TankSalesWindowReader {
         JOIN window_days wd ON wd.id = sm.business_day_id
         JOIN tanks t ON t.id = sm.tank_id
           AND t.organization_id = ${q.organizationId} AND t.station_id = ${q.stationId}
-        WHERE sm.movement_type = 'Sale' AND sm.tank_id IS NOT NULL
+        WHERE sm.movement_type = 'Sale' AND sm.reference_type = 'reading'
+          AND sm.tank_id IS NOT NULL
         GROUP BY sm.tank_id
       )
       SELECT

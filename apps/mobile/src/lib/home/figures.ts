@@ -158,7 +158,7 @@ export function deriveTanks(rows: readonly unknown[] | undefined): TankGauge[] {
       fill: pct === null ? 0 : Math.min(100, pct),
       level: pct === null ? 'unknown' : tankLevel(pct),
       volume: volumeLabel(volume, t.productUnit),
-      cover: formatDaysOfCover(typeof t.daysOfCover === 'number' ? t.daysOfCover : null),
+      cover: formatDaysOfCover(t.daysOfCover),
     };
   });
 }

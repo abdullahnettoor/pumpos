@@ -59,7 +59,7 @@ export function deriveStationAlerts(tanks: any[] = [], items: any[] = []): Stati
           : [
               `${t.productName} · ${pct.toFixed(0)}% · ${formatQty(vol, 0)} L`,
               // Days of cover from the server; absent without sales history.
-              daysOfCoverLeft(typeof t.daysOfCover === 'number' ? t.daysOfCover : null),
+              daysOfCoverLeft(t.daysOfCover),
             ]
               .filter(Boolean)
               .join(' · '),

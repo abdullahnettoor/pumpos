@@ -3007,19 +3007,26 @@ transactionsRouter.get('/inventory/status', async (c) => {
   }));
 
   // Days of cover: ONE more aggregate statement (per-tank volume sold over the
-  // last 7 closed Business Days), however many tanks the Station has.
-  const cover = await new GetTankDaysOfCover({
-    reader: new DrizzleTankSalesWindowReader(db),
-  }).execute(
-    { stationId, tanks: levels.map((t) => ({ tankId: t.id, currentVolume: t.currentVolume })) },
-    buildContext(user, { stationId }),
-  );
-  if (!cover.success) return sendResult(c, cover);
+  // last 7 closed Business Days), however many tanks the Station has. It is an
+  // enrichment: if the read fails the tank levels still go out, without cover.
+  let cover: Record<string, { avgDailyVolume7d: number | null; daysOfCover: number | null }> = {};
+  try {
+    const res = await new GetTankDaysOfCover({
+      reader: new DrizzleTankSalesWindowReader(db),
+    }).execute(
+      { stationId, tanks: levels.map((t) => ({ tankId: t.id, currentVolume: t.currentVolume })) },
+      buildContext(user, { stationId }),
+    );
+    if (res.success) cover = res.data;
+    else console.error('inventory/status: days of cover unavailable', res.error);
+  } catch (error) {
+    console.error('inventory/status: days of cover unavailable', error);
+  }
 
   const enriched = levels.map((t) => ({
     ...t,
-    avgDailyVolume7d: cover.data[t.id]?.avgDailyVolume7d ?? null,
-    daysOfCover: cover.data[t.id]?.daysOfCover ?? null,
+    avgDailyVolume7d: cover[t.id]?.avgDailyVolume7d ?? null,
+    daysOfCover: cover[t.id]?.daysOfCover ?? null,
   }));
   return c.json({ success: true, data: enriched });
 });

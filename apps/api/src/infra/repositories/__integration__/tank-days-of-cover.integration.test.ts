@@ -142,6 +142,8 @@ describe.skipIf(!CONNECTION)('Tank days of cover window against real Postgres', 
     productId: string,
     movementType: string,
     quantity: number,
+    // Metered fuel is booked at shift close with reference_type 'reading'.
+    referenceType: string | null = movementType === 'Sale' && tankId ? 'reading' : null,
   ) {
     await db.insert(schema.stockMovements).values({
       businessDayId,
@@ -149,6 +151,7 @@ describe.skipIf(!CONNECTION)('Tank days of cover window against real Postgres', 
       tankId,
       movementType,
       quantity: String(quantity),
+      referenceType,
     });
   }
 
@@ -208,7 +211,14 @@ describe.skipIf(!CONNECTION)('Tank days of cover window against real Postgres', 
       // T2 (same product) sells 70 L on three of the window's days only.
       if (d === 3 || d === 5 || d === 9) await move(bd, T2, PRODUCT, 'Sale', -70);
       // Merchandise sale: no tank, never counted.
-      await move(bd, null, MERCH, 'Sale', -3);
+      await move(bd, null, MERCH, 'Sale', -3, 'SALE');
+      // A POS sale line that names a tank (create-sale accepts one) writes its
+      // own tank 'Sale' movement: the nozzle readings already metered that
+      // fuel, so counting it too would double-count. Never counted.
+      if (d >= 3) {
+        await move(bd, T1, PRODUCT, 'Sale', -40, 'SALE');
+        await move(bd, T2, PRODUCT, 'Sale', -40, 'SALE');
+      }
     }
     // Stock that arrives or is counted is not "sold".
     const bd5 = await day(ORG, STATION, '2026-10-10', 'OPEN');
@@ -240,8 +250,9 @@ describe.skipIf(!CONNECTION)('Tank days of cover window against real Postgres', 
     const w = await reader().read({ organizationId: ORG, stationId: STATION, days: 7 });
     expect(w.closedDays).toBe(7);
     const byTank = Object.fromEntries(w.sold.map((s) => [s.tankId, s.volume]));
-    // 10-03..10-09 = 7 days x 100 L (the 10000 L days and the open day are outside).
-    expect(byTank[T1]).toBe(700);
+    // 10-03..10-09 = 7 days x 100 L metered (the 10000 L days and the open day
+    // are outside; the reference_type 'SALE' tank lines are not fuel readings).
+    expect(byTank[T1]).toBe(700); // the POS tank lines (-40 a day) are not added
     // Same product, other tank: its own 3 x 70 L.
     expect(byTank[T2]).toBe(210);
     // Never sold, merchandise (no tank), purchases/counts: absent.
