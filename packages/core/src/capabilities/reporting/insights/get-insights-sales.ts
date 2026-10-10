@@ -13,11 +13,9 @@ export interface GetInsightsSalesCommand {
 
 const schema = z.object({
   stationId: z.string().min(1, 'stationId is required'),
-  days: z
-    .number()
-    .refine((n) => (INSIGHTS_RANGE_DAYS as readonly number[]).includes(n), {
-      message: `days must be one of ${INSIGHTS_RANGE_DAYS.join(', ')}`,
-    }),
+  days: z.number().refine((n) => (INSIGHTS_RANGE_DAYS as readonly number[]).includes(n), {
+    message: `days must be one of ${INSIGHTS_RANGE_DAYS.join(', ')}`,
+  }),
 });
 
 export interface GetInsightsSalesDeps {

@@ -15,7 +15,7 @@ export function eachDate(from: string, to: string): string[] {
   const [y, m, d] = from.split('-').map(Number);
   const cursor = new Date(Date.UTC(y, m - 1, d));
   const out: string[] = [];
-  for (let date = from; date <= to; ) {
+  for (let date = from; date <= to;) {
     out.push(date);
     cursor.setUTCDate(cursor.getUTCDate() + 1);
     date = cursor.toISOString().slice(0, 10);

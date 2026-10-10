@@ -161,16 +161,14 @@ export class DrizzleInsightsSalesReader implements InsightsSalesReader {
           ? { name: String(row.top_other.name), quantity: num(row.top_other.quantity) }
           : null,
       },
-      templates: ((row.templates ?? []) as any[]).map(
-        (t): InsightsTemplateRow => ({
-          templateId: t.templateId ?? null,
-          name: String(t.name),
-          shifts: num(t.shifts),
-          totalSales: num(t.totalSales),
-          totalVolume: num(t.totalVolume),
-          totalCashVariance: num(t.totalCashVariance),
-        }),
-      ),
+      templates: ((row.templates ?? []) as any[]).map((t): InsightsTemplateRow => ({
+        templateId: t.templateId ?? null,
+        name: String(t.name),
+        shifts: num(t.shifts),
+        totalSales: num(t.totalSales),
+        totalVolume: num(t.totalVolume),
+        totalCashVariance: num(t.totalCashVariance),
+      })),
     };
   }
 }
