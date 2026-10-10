@@ -429,6 +429,16 @@ _Avoid_: gauging, stick reading
 A counted stock-take of non-fuel items, compared against book stock.
 _Avoid_: stock audit
 
+**Days of Cover**:
+How long a Tank's current book stock lasts at its recent selling rate: current
+stock ÷ average daily volume sold from that Tank over the Station's last 7
+closed Business Days (divisor = closed days found, 1–7, zero-sale days
+included; per Tank, from Sale stock movements, so two Tanks of one product are
+judged by what each dispensed). No figure (hidden) when the Station has no
+closed Business Day or the Tank sold nothing in the window. Read-only, computed
+on the server; shown as "2.6 days" / "0.9 day".
+_Avoid_: runway, stock days
+
 **Tank Transfer**:
 Fuel moved between two Tanks without a sale.
 _Avoid_: inter-tank move, decanting

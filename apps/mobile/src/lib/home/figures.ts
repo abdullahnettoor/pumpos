@@ -3,7 +3,7 @@
  * payloads the existing read endpoints return (DSSR preview, inventory status,
  * customer and supplier lists); the screen only renders them.
  */
-import { isBalancedVariance } from '@pump/shared';
+import { formatDaysOfCover, isBalancedVariance } from '@pump/shared';
 import { num, round2 } from './num.js';
 import { plural, signedRupees } from '../format.js';
 import { offLabel } from '../variance.js';
@@ -128,6 +128,12 @@ export interface TankGauge {
   fill: number;
   level: TankGaugeLevel;
   volume: string;
+  /**
+   * "2.6 days" / "0.9 day": how long the stock lasts at the last 7 closed days'
+   * selling rate. Computed by the server; '' when there is no sales history
+   * (the gauge shows nothing).
+   */
+  cover: string;
 }
 
 const unitText = (unit: unknown): string => (typeof unit === 'string' ? unit.trim() : '');
@@ -152,6 +158,7 @@ export function deriveTanks(rows: readonly unknown[] | undefined): TankGauge[] {
       fill: pct === null ? 0 : Math.min(100, pct),
       level: pct === null ? 'unknown' : tankLevel(pct),
       volume: volumeLabel(volume, t.productUnit),
+      cover: formatDaysOfCover(t.daysOfCover),
     };
   });
 }
