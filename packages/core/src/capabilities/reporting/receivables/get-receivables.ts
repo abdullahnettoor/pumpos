@@ -2,8 +2,6 @@ import { err, notFoundError, ok, validationError } from '../../../kernel/index.j
 import type { ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import {
   isValidBusinessDate,
-  resolveBusinessDate,
-  resolveEntryDate,
   partyMonthWindows,
   type CustomerReceivableSummary,
   type ReceivablesSummary,
@@ -24,18 +22,11 @@ export interface GetCustomerReceivableCommand extends GetReceivablesCommand {
  * The Current Business Date from the Station's clock (timezone + Day Start):
  * the instant an open debit's age is measured to. Never the UTC date.
  */
-const currentBusinessDateOf = (ctx: ExecutionContext) =>
-  resolveBusinessDate({
-    now: ctx.clock.now(),
-    timeZone: ctx.timeZone,
-    dayStartsAt: ctx.businessDayStartsAt,
-  });
-
 const partyWindowsOf = (ctx: ExecutionContext) =>
   partyMonthWindows({
     now: ctx.clock.now(),
-    timeZone: ctx.timeZone ?? 'Asia/Kolkata',
-    dayStartsAt: ctx.businessDayStartsAt ?? '00:00',
+    timeZone: ctx.timeZone,
+    dayStartsAt: ctx.businessDayStartsAt,
   });
 
 /**
@@ -51,7 +42,7 @@ export class GetReceivables implements UseCase<GetReceivablesCommand, Receivable
     input: GetReceivablesCommand,
     ctx: ExecutionContext,
   ): Promise<Result<ReceivablesSummary>> {
-    const currentBusinessDate = currentBusinessDateOf(ctx);
+    const { currentBusinessDate } = partyWindowsOf(ctx);
     if (!input.stationId || !isValidBusinessDate(currentBusinessDate)) {
       return err(validationError('Receivables require a Station'));
     }
@@ -83,12 +74,12 @@ export class GetCustomerReceivable implements UseCase<
     input: GetCustomerReceivableCommand,
     ctx: ExecutionContext,
   ): Promise<Result<CustomerReceivableSummary>> {
-    const currentBusinessDate = currentBusinessDateOf(ctx);
+    const windows = partyWindowsOf(ctx);
+    const currentBusinessDate = windows.currentBusinessDate;
     if (!input.stationId || !input.customerId || !isValidBusinessDate(currentBusinessDate)) {
       return err(validationError('Customer receivable requires a Station and a customer'));
     }
-    const entryDate = resolveEntryDate({ now: ctx.clock.now(), timeZone: ctx.timeZone });
-    const windows = partyWindowsOf(ctx);
+    const entryDate = windows.entryDate;
     const credit = windows.businessMonth;
     const paid = windows.entryMonth;
 

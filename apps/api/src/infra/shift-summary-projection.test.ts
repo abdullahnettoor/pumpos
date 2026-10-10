@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { schema } from '@pump/db';
 import { projectShiftSummary, type ProjectableShift } from './shift-summary-projection.js';
+import { netNozzleVolume, shiftSummaryNetVolume } from './shift-summary-sql.js';
 
 /**
  * #224: the Closed & Locked Shifts history reads `templateName`, `closedByName`
@@ -11,6 +12,19 @@ import { projectShiftSummary, type ProjectableShift } from './shift-summary-proj
  */
 
 type Rows = Map<unknown, unknown[]>;
+
+describe('shared Shift Summary volume rules', () => {
+  it('uses one gross-minus-testing fallback for legacy snapshots', () => {
+    expect(shiftSummaryNetVolume({ totalVolume: 125, totalTesting: 5 })).toBe(120);
+    expect(shiftSummaryNetVolume({ totalVolume: 125, totalTestingVolume: 5 })).toBe(120);
+  });
+
+  it('uses readings before the snapshot total and clamps testing to the metered volume', () => {
+    expect(shiftSummaryNetVolume({ totalNetVolume: 999 }, [{ netVolume: 45 }])).toBe(45);
+    expect(netNozzleVolume(10, 12)).toBe(0);
+    expect(netNozzleVolume(10, -2)).toBe(10);
+  });
+});
 
 /**
  * The projection fetches all of its slices in ONE consolidated statement

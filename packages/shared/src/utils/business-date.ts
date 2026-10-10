@@ -125,13 +125,19 @@ export function monthBounds(month: string): { from: string; to: string } {
 }
 
 /** Current sales-month and calendar-month windows used by party finance reads. */
-export function partyMonthWindows(input: { now: Date; timeZone: string; dayStartsAt: string }) {
+export function partyMonthWindows(input: {
+  now: Date;
+  timeZone?: string | null;
+  dayStartsAt?: string | null;
+}) {
+  const timeZone = input.timeZone ?? DEFAULT_TIMEZONE;
+  const dayStartsAt = input.dayStartsAt ?? '00:00';
   const currentBusinessDate = resolveBusinessDate({
     now: input.now,
-    timeZone: input.timeZone,
-    dayStartsAt: input.dayStartsAt,
+    timeZone,
+    dayStartsAt,
   });
-  const entryDate = resolveEntryDate({ now: input.now, timeZone: input.timeZone });
+  const entryDate = resolveEntryDate({ now: input.now, timeZone });
   const businessMonth = monthBounds(currentBusinessDate.slice(0, 7));
   const entryMonth = monthBounds(entryDate.slice(0, 7));
   return {

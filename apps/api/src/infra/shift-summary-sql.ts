@@ -16,7 +16,11 @@ export function shiftSummaryNetVolume(
 ): number {
   if (readings.length > 0) return readings.reduce((sum, row) => sum + row.netVolume, 0);
   if (snapshot.totalNetVolume != null) return Number(snapshot.totalNetVolume);
-  return Math.max(0, Number(snapshot.totalVolume ?? 0) - Number(snapshot.totalTesting ?? 0));
+  return Math.max(
+    0,
+    Number(snapshot.totalVolume ?? 0) -
+      Number(snapshot.totalTesting ?? snapshot.totalTestingVolume ?? 0),
+  );
 }
 
 /** Stored Shift Summary equivalent of shiftSummaryNetVolume. */
@@ -26,7 +30,8 @@ export function shiftSummaryNetVolumeSql(ref: string): SQL {
   return sql`COALESCE(
     (SELECT SUM(COALESCE((r.value ->> 'netVolume')::numeric,
       COALESCE((r.value ->> 'volumeSold')::numeric, 0)
-        - COALESCE((r.value ->> 'testingVolume')::numeric, 0)))
+        - LEAST(COALESCE((r.value ->> 'volumeSold')::numeric, 0),
+          GREATEST(0, COALESCE((r.value ->> 'testingVolume')::numeric, 0)))))
       FROM jsonb_array_elements(CASE WHEN jsonb_typeof(${data} -> 'readings') = 'array'
         THEN ${data} -> 'readings' ELSE '[]'::jsonb END) r
       WHERE jsonb_typeof(${data} -> 'readings') = 'array'),

@@ -3,7 +3,6 @@ import type { ExecutionContext, Result, UseCase } from '../../../kernel/index.js
 import {
   isValidBusinessDate,
   partyMonthWindows,
-  resolveBusinessDate,
   type PayablesSummary,
   type SupplierPayableSummary,
 } from '@pump/shared';
@@ -30,8 +29,8 @@ function windowsOf(ctx: ExecutionContext) {
   const now = ctx.clock.now();
   const windows = partyMonthWindows({
     now,
-    timeZone: ctx.timeZone ?? 'Asia/Kolkata',
-    dayStartsAt: ctx.businessDayStartsAt ?? '00:00',
+    timeZone: ctx.timeZone,
+    dayStartsAt: ctx.businessDayStartsAt,
   });
   const query: Omit<PayablesQuery, 'organizationId'> = {
     purchasedFrom: windows.businessMonth.from,
@@ -43,15 +42,7 @@ function windowsOf(ctx: ExecutionContext) {
     purchasedMonth: windows.months.businessMonth,
     paidMonth: windows.months.entryMonth,
   };
-  return {
-    currentBusinessDate: resolveBusinessDate({
-      now,
-      timeZone: ctx.timeZone,
-      dayStartsAt: ctx.businessDayStartsAt,
-    }),
-    query,
-    months,
-  };
+  return { currentBusinessDate: windows.currentBusinessDate, query, months };
 }
 
 /**
