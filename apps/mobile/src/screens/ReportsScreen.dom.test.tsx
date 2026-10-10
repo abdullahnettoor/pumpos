@@ -27,8 +27,8 @@ vi.mock('@pump/ui', async (importOriginal) => {
     }),
   };
 });
-vi.mock('./DssrScreen.js', () => ({
-  DssrScreen: ({ businessDate }: { businessDate: string }) => <p>DSSR for {businessDate}</p>,
+vi.mock('./reports/ReportDayPage.js', () => ({
+  ReportDayPage: ({ businessDate }: { businessDate: string }) => <p>DSSR for {businessDate}</p>,
 }));
 
 const { ReportsScreen } = await import('./ReportsScreen.js');
