@@ -25,8 +25,11 @@ import {
   AttendantHandoverReport,
   AttendantReportFilters,
   BusinessDayList,
+  InsightsAttendantVariance,
+  InsightsCreditHealth,
   InsightsRangeDays,
   InsightsSales,
+  InsightsStockLoss,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -761,6 +764,38 @@ export class CloudShiftService {
     const query = new URLSearchParams({ stationId, days: String(days) });
     return request<InsightsSales>(`/reports/insights/sales?${query.toString()}`);
   }
+
+  /**
+   * Cash variance by Attendant over the same range (#402). Refused with
+   * CAPABILITY_NOT_ENTITLED unless the Organization has `reports.attendant`.
+   */
+  async getInsightsAttendantVariance(
+    stationId: string,
+    days: InsightsRangeDays,
+  ): Promise<InsightsAttendantVariance[]> {
+    const query = new URLSearchParams({ stationId, days: String(days) });
+    return request<InsightsAttendantVariance[]>(
+      `/reports/insights/attendant-variance?${query.toString()}`,
+    );
+  }
+
+  /** Tank Dip variance per tank over the same range (#402). */
+  async getInsightsStockLoss(
+    stationId: string,
+    days: InsightsRangeDays,
+  ): Promise<InsightsStockLoss[]> {
+    const query = new URLSearchParams({ stationId, days: String(days) });
+    return request<InsightsStockLoss[]>(`/reports/insights/stock-loss?${query.toString()}`);
+  }
+
+  /** Credit Sales given vs Collections received over the same range (#402). */
+  async getInsightsCreditHealth(
+    stationId: string,
+    days: InsightsRangeDays,
+  ): Promise<InsightsCreditHealth> {
+    const query = new URLSearchParams({ stationId, days: String(days) });
+    return request<InsightsCreditHealth>(`/reports/insights/credit-health?${query.toString()}`);
+  }
 }
 
 export class CloudTransactionService {
@@ -890,17 +925,24 @@ export class CloudTransactionService {
     });
   }
 
+  /**
+   * The API updates only the fields sent, so a caller changing one thing (the
+   * mobile credit-limit sheet) sends just that. Pass an `idempotencyKey` so a
+   * retried save cannot apply twice.
+   */
   async updateCustomer(
     id: string,
     payload: {
-      name: string;
+      name?: string;
       phone?: string | null;
-      customerType: 'Regular' | 'Credit' | 'Fleet';
+      customerType?: 'Regular' | 'Credit' | 'Fleet';
       creditLimit?: number | null;
       fleetCode?: string | null;
       isPrepaid?: boolean;
       settlementCycle?: 'OPEN' | 'EOD';
       isActive?: boolean;
+      /** Why the edit was made; recorded on the audit event, not on the customer. */
+      note?: string;
       metadata?: {
         gstin?: string | null;
         stateCode?: string | null;
@@ -909,11 +951,16 @@ export class CloudTransactionService {
         billingAddress?: string | null;
       } | null;
     },
+    opts?: { idempotencyKey?: string },
   ): Promise<any> {
-    return request<any>(`/transactions/customers/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
+    return request<any>(
+      `/transactions/customers/${id}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async topupCustomer(

@@ -97,6 +97,9 @@ const DECLARATIONS: Record<string, Tenancy> = {
 
   'GET /reports/attendant-handovers': 'org-scoped-query',
   'GET /reports/insights/sales': 'org-scoped-query',
+  'GET /reports/insights/attendant-variance': 'org-scoped-query',
+  'GET /reports/insights/stock-loss': 'org-scoped-query',
+  'GET /reports/insights/credit-health': 'org-scoped-query',
 
   'GET /access': 'not-station-scoped',
 };

@@ -101,3 +101,81 @@ export interface InsightsSales {
   otherProducts: InsightsOtherProducts;
   shiftTemplates: InsightsShiftTemplate[];
 }
+
+/**
+ * Insights part 2 (#402): cash variance by attendant, stock loss, credit health.
+ * Same `days` range and the same range end as the sales block
+ * (`GET /api/reports/insights/{attendant-variance,stock-loss,credit-health}`).
+ */
+
+/**
+ * One Attendant's cash variance over the range: the ATTENDANT level of the
+ * two-level drawer variance (ADR 0005), from the Drawers in closed Shift
+ * Summaries. Never summed with the office count variance.
+ */
+export interface InsightsAttendantVariance {
+  attendantId: string;
+  name: string;
+  /** Closed Shifts in which the Attendant handed over at least one Drawer. */
+  shifts: number;
+  /** Shifts whose summed Drawer variance was short (negative, not balanced). */
+  shortShifts: number;
+  /** Shifts whose summed Drawer variance was over (positive, not balanced). */
+  overShifts: number;
+  /** Signed net over the range: negative = short. */
+  netVariance: number;
+}
+
+/**
+ * One tank's Tank Dip variance over the range, as the DSSRs of the range's
+ * closed days state it (every dip, including one taken while a Shift was open),
+ * so it equals the DSSR / Inventory variances figures. Every active tank is listed.
+ */
+export interface InsightsStockLoss {
+  tankId: string;
+  tankName: string;
+  productCode: string;
+  /** Σ (actual dip − book) litres. Negative = loss, positive = gain. */
+  varianceLitres: number;
+  /** Net litres the tank dispensed over the range (Nozzle readings of closed days). */
+  soldLitres: number;
+  /** `varianceLitres` as a percent of `soldLitres` (signed, two decimals); null when nothing was sold. */
+  pctOfSold: number | null;
+  /** Tank Dips recorded in the range; 0 means nothing was measured (the variance is then 0 by absence). */
+  dips: number;
+  /**
+   * Σ variance × the product's cost basis AS FROZEN in each day's DSSR snapshot
+   * (signed: negative = money lost), so it never changes after the day closes.
+   * Null when a day's snapshot carries no cost (frozen before cost was stored).
+   */
+  valueAtCost: number | null;
+  /** |variance| is at most `STOCK_VARIANCE_TOLERANCE_PCT` of the litres sold. */
+  withinTolerance: boolean;
+}
+
+/**
+ * Credit health over the range. Credit Sales are placed by Business Date
+ * (closed days of the range) and Collections by Entry Date, so the two share a
+ * calendar window but not an anchor.
+ */
+export interface InsightsCreditHealth {
+  range: InsightsDateRange | null;
+  /** Credit Sales (receivables created) on closed Business Days of the range. */
+  creditGiven: number;
+  /** Collections whose Entry Date falls in the range. */
+  collected: number;
+  /**
+   * `creditGiven − collected`. Customer balance adjustments are not in it, so
+   * this is not the movement of the receivables book; label it as the difference.
+   */
+  receivablesChange: number;
+  /** Credit Sales as a percent of fuel + product sales (one decimal); null with no sales. */
+  creditShareOfSales: number | null;
+  closedDays: number;
+  previousCreditGiven: number;
+  /**
+   * Per-closed-day average of `creditGiven` vs the previous period; null unless
+   * BOTH periods have at least `INSIGHTS_MIN_COMPARABLE_DAYS` closed days.
+   */
+  creditGivenChangePct: number | null;
+}

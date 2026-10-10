@@ -12,11 +12,20 @@ const parts = (iso: string) => {
   return { y, m, d };
 };
 
-const trim = (n: number, dec: number) => String(Number(n.toFixed(dec)));
+/** `n` to at most `dec` decimals, without trailing zeros: 0.8, 12, 6.5. */
+export const trim = (n: number, dec: number) => String(Number(n.toFixed(dec)));
 
 /** 2,180 L, with Indian digit grouping. */
 export function litres(n: number): string {
   return `${Math.round(n).toLocaleString('en-IN')} L`;
+}
+
+/** `−42 L`, `+6.5 L`, `0 L` (true minus sign, grouping like the rest of the app). */
+export function signedLitres(n: number): string {
+  const a = Math.abs(n);
+  if (Number(trim(a, 1)) === 0) return '0 L';
+  const body = `${a.toLocaleString('en-IN', { maximumFractionDigits: 1 })} L`;
+  return n < 0 ? `−${body}` : `+${body}`;
 }
 
 /** "6.4%" for a percent figure (sign supplied by the caller's arrow). */

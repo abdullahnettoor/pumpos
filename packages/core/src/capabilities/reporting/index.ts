@@ -11,3 +11,6 @@ export * from './business-day-list/list-business-days.js';
 export * from './insights/ports.js';
 export * from './insights/compose.js';
 export * from './insights/get-insights-sales.js';
+export * from './insights/get-insights-attendant-variance.js';
+export * from './insights/get-insights-stock-loss.js';
+export * from './insights/get-insights-credit-health.js';
