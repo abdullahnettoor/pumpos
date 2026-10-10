@@ -46,7 +46,9 @@ export const AgingSplit: React.FC<Props> = ({
             ))}
         </div>
       )}
-      <ul className={`grid grid-cols-3 text-[11px] text-text-muted ${showBar ? 'mt-2' : ''}`}>
+      <ul
+        className={`grid list-none grid-cols-3 text-[11px] text-text-muted ${showBar ? 'mt-2' : ''}`}
+      >
         {segments.map((s) => (
           <li key={s.key} data-bucket={s.key}>
             <b

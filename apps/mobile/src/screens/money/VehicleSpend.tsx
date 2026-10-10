@@ -19,7 +19,7 @@ export const VehicleSpend: React.FC<{ vehicles: readonly CustomerVehicleSpend[] 
       <SectionLabel right={<span>{plural(vehicles.length, 'vehicle')}</span>}>
         Vehicles · this month
       </SectionLabel>
-      <ul className="mx-3 overflow-hidden rounded-[14px] border border-line bg-card [&>li+li]:border-t [&>li+li]:border-line">
+      <ul className="mx-3 list-none overflow-hidden rounded-[14px] border border-line bg-card [&>li+li]:border-t [&>li+li]:border-line">
         {bars.map((v) => (
           <li key={v.vehicleId} className="px-3 py-2.5">
             <div className="flex items-center gap-2">
