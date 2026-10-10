@@ -301,7 +301,7 @@ export const shifts = pgTable(
     oneOpenPerStation: uniqueIndex('shifts_station_open_uniq')
       .on(t.organizationId, t.stationId)
       .where(sql`${t.status} = 'OPEN'`),
-    // The Business Day list, DSSR compose and dashboard roll up a day's shifts.
+    // A Business Day's Shifts (Insights shift performance, day rollups).
     businessDayIdx: index('shifts_business_day_idx').on(t.businessDayId),
   }),
 );
@@ -634,8 +634,6 @@ export const sales = pgTable(
   },
   (t) => ({
     shiftAttendantIdx: index('sales_shift_attendant_idx').on(t.shiftId, t.attendantId),
-    // A Business Day's sales are summed for the DSSR and the Business Day list.
-    businessDayIdx: index('sales_business_day_idx').on(t.businessDayId),
   }),
 );
 
@@ -1056,7 +1054,6 @@ export const shiftSummaries = pgTable(
     generatedAt: timestamp('generated_at').defaultNow().notNull(),
   },
   (t) => ({
-    // Joined from a Business Day's shifts to read their stored snapshots.
     shiftIdx: index('shift_summaries_shift_idx').on(t.shiftId),
   }),
 );
@@ -1076,10 +1073,8 @@ export const dssrSnapshots = pgTable(
     generatedAt: timestamp('generated_at').defaultNow().notNull(),
   },
   (t) => ({
-    // Looked up by (station, date) for the DSSR and by month for the list. Not
-    // unique: `save` replaces by delete + insert, and a second row must not
-    // make a regeneration fail.
-    stationDateIdx: index('dssr_snapshots_org_station_date_idx').on(
+    // Date-range reads of a Station's sealed days (Insights, range DSSR).
+    orgStationDateIdx: index('dssr_snapshots_org_station_date_idx').on(
       t.organizationId,
       t.stationId,
       t.businessDate,

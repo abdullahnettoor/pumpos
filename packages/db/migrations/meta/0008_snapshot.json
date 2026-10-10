@@ -1,5 +1,5 @@
 {
-  "id": "e37d0f1a-cab2-4976-be60-0a04d31f2810",
+  "id": "27072d49-5bae-49a7-a1ba-bde4b63317cc",
   "prevId": "be87c91d-6643-4f91-8240-b06b609a31a0",
   "version": "7",
   "dialect": "postgresql",
@@ -5123,21 +5123,6 @@
             },
             {
               "expression": "attendant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "sales_business_day_idx": {
-          "name": "sales_business_day_idx",
-          "columns": [
-            {
-              "expression": "business_day_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
