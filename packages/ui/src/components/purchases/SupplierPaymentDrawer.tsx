@@ -8,10 +8,22 @@ import { SUPPLIER_PAYMENT_ACCOUNT_TYPES } from '../../utils/fundingAccounts.js';
 import { Button, Form } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
 import { CloudTransactionService } from '../../services/cloud.js';
+import { createIdempotencyKey } from '../../query/handoverMutation.js';
+import { supplierPaymentPayload } from '../../utils/officeRecordPayloads.js';
+import { keepsIdempotencyKey } from '../../utils/idempotency.js';
 import { useInvalidateOperational, useStationTimeZone } from '../../query/hooks.js';
 import { useToast } from '../primitives/ToastProvider.js';
 
 const transactionService = new CloudTransactionService();
+
+/**
+ * The Idempotency-Key of a payment whose outcome is still UNKNOWN (a network drop,
+ * a 5xx), per station + supplier. It outlives the drawer so closing and reopening
+ * it and saving again cannot record the payment twice: the API answers the same
+ * key with the first result (or refuses an edited retry as a conflict). A decided
+ * answer (success, or a 4xx) clears it.
+ */
+const pendingKeys = new Map<string, string>();
 
 interface SupplierPaymentDrawerProps {
   isOpen: boolean;
@@ -89,13 +101,17 @@ const SupplierPaymentForm: React.FC<Omit<SupplierPaymentDrawerProps, 'isOpen'>> 
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stationId || !resolvedSupplier?.id || !amount || Number(amount) <= 0) return;
-    // The same field rules as the mobile sheet and the server (amount range and
-    // 2 decimals, the account, the reference length).
+    if (submitting) return;
+    if (!stationId || !resolvedSupplier?.id) {
+      setError('Choose the supplier.');
+      return;
+    }
+    // The same field rules as the mobile sheet and the server (amount above 0 and
+    // within the column, 2 decimals, the account, the reference length).
     const checked = supplierPaymentEntryFormSchema.safeParse({
       entryDate,
       supplierId: resolvedSupplier.id,
-      amount,
+      amount: amount.trim() === '' ? undefined : amount.trim(),
       notes,
       fundingAccountId,
     });
@@ -104,25 +120,28 @@ const SupplierPaymentForm: React.FC<Omit<SupplierPaymentDrawerProps, 'isOpen'>> 
       const accountIssue = issues.find((i) => i.path[0] === 'fundingAccountId');
       const other = issues.find((i) => i.path[0] !== 'fundingAccountId');
       setAccountError(accountIssue?.message ?? null);
-      setError(other?.message ?? null);
+      setError(other?.message ?? (accountIssue ? null : 'Check the payment details.'));
       return;
     }
+    setAccountError(null);
+    const pendingKey = `${stationId}:${resolvedSupplier.id}`;
+    const idempotencyKey = pendingKeys.get(pendingKey) ?? createIdempotencyKey();
     try {
       setSubmitting(true);
       setError(null);
-      await transactionService.recordSupplierPayment({
-        stationId,
-        entryDate: entryDate || undefined,
-        fundingAccountId,
-        supplierId: resolvedSupplier.id,
-        amount: Number(amount),
-        notes: notes || undefined,
-      });
+      await transactionService.recordSupplierPayment(
+        supplierPaymentPayload(stationId, checked.data),
+        { idempotencyKey },
+      );
+      pendingKeys.delete(pendingKey);
       toast.success('Supplier payment recorded.');
       await invalidateOperational(stationId);
       onClose();
       await onDone?.();
     } catch (err: any) {
+      // Unknown outcome: keep the key so a retry cannot pay twice. Decided: drop it.
+      if (keepsIdempotencyKey(err)) pendingKeys.set(pendingKey, idempotencyKey);
+      else pendingKeys.delete(pendingKey);
       setError(err.message || 'Failed to record supplier payment');
     } finally {
       setSubmitting(false);

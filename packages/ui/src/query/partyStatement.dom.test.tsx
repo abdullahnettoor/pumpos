@@ -36,13 +36,29 @@ function setup() {
   return { wrapper };
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
-describe.each([
+const kinds: Array<{
+  kind: 'customer' | 'supplier';
+  method: string;
+  type: string;
+  p1: string;
+  p2: string;
+}> = [
   { kind: 'customer', method: 'getCustomerLedgerRange', type: 'Credit Sale', p1: 'c-1', p2: 'c-2' },
   { kind: 'supplier', method: 'getSupplierLedgerRange', type: 'Purchase', p1: 's-1', p2: 's-2' },
-] as const)('usePartyStatement ($kind)', ({ kind, method, type, p1, p2 }) => {
-  const spy = () => vi.spyOn(CloudTransactionService.prototype, method);
+];
+
+describe.each(kinds)('usePartyStatement ($kind)', ({ kind, method, type, p1, p2 }) => {
+  // Both ranged-ledger readers share one shape: (partyId, range) => ledger.
+  const spy = () =>
+    vi.spyOn(CloudTransactionService.prototype, method as 'getCustomerLedgerRange') as unknown as {
+      mockImplementation: (
+        fn: (id: string, range: { from: string; to: string }) => Promise<RangedPartyLedger>,
+      ) => void;
+    };
 
   it('keeps the previous range on screen while a wider one loads', async () => {
     let release: (v: RangedPartyLedger) => void = () => {};
