@@ -678,6 +678,7 @@ export function useShiftSummaryHistory(stationId: string | null | undefined) {
     queryKey: queryKeys.shiftSummaryHistory(stationId ?? ''),
     queryFn: ({ pageParam }) =>
       shiftService.getShiftSummaryPage(stationId!, SHIFT_SUMMARY_PAGE_SIZE, pageParam ?? undefined),
+    enabled: !!stationId,
     initialPageParam: null as string | null,
     getNextPageParam: (page: any[]) =>
       page.length < SHIFT_SUMMARY_PAGE_SIZE
@@ -1077,8 +1078,9 @@ export function useInsightsSales(
 
 /**
  * What customers owe (total, aging split, a row per customer that owes). One
- * statement over every ledger, so it does not refetch on window focus; a credit
- * sale or collection invalidates it (`useInvalidateOperational`). Not persisted.
+ * statement over every ledger. Plain operational tier (it refetches on window
+ * focus, like the statements beside it); a credit sale or collection invalidates
+ * it (`useInvalidateOperational`). Not persisted.
  */
 export function useReceivables(
   stationId: string | null | undefined,
@@ -1089,15 +1091,13 @@ export function useReceivables(
     queryFn: () => shiftService.getReceivables(stationId!),
     enabled: !!stationId,
     ...TIER.operational,
-    refetchOnWindowFocus: false,
     ...options,
   });
 }
 
 /**
  * One customer's receivable and payment behaviour (single indexed statement).
- * Same cache rule as the list: balances only move through a write, which
- * invalidates the key, so a window focus never refetches.
+ * Same cache rule as the list: plain operational tier; a write invalidates the key.
  */
 export function useCustomerReceivable(
   stationId: string | null | undefined,
@@ -1109,7 +1109,6 @@ export function useCustomerReceivable(
     queryFn: () => shiftService.getCustomerReceivable(stationId!, customerId!),
     enabled: !!stationId && !!customerId,
     ...TIER.operational,
-    refetchOnWindowFocus: false,
     ...options,
   });
 }
@@ -1117,8 +1116,9 @@ export function useCustomerReceivable(
 /**
  * What the Organization owes its suppliers (total, this month's purchased vs paid,
  * a row per supplier that is owed money). One statement over every supplier
- * ledger, so it does not refetch on window focus; a purchase or supplier payment
- * invalidates it (`useInvalidateOperational`). Not persisted.
+ * ledger. Plain operational tier (it refetches on window focus, like the statements
+ * beside it); a purchase or supplier payment invalidates it
+ * (`useInvalidateOperational`). Not persisted.
  */
 export function usePayables(
   stationId: string | null | undefined,
@@ -1129,15 +1129,14 @@ export function usePayables(
     queryFn: () => shiftService.getPayables(stationId!),
     enabled: !!stationId,
     ...TIER.operational,
-    refetchOnWindowFocus: false,
     ...options,
   });
 }
 
 /**
  * One supplier's payable, last payment, this month and purchases by product
- * (single indexed statement). Same cache rule as the list: no refetch on window
- * focus; a purchase or supplier payment invalidates it (`useInvalidateOperational`).
+ * (single indexed statement). Same cache rule as the list: plain operational tier;
+ * a purchase or supplier payment invalidates it (`useInvalidateOperational`).
  */
 export function useSupplierPayable(
   stationId: string | null | undefined,
@@ -1149,7 +1148,6 @@ export function useSupplierPayable(
     queryFn: () => shiftService.getSupplierPayable(stationId!, supplierId!),
     enabled: !!stationId && !!supplierId,
     ...TIER.operational,
-    refetchOnWindowFocus: false,
     ...options,
   });
 }
