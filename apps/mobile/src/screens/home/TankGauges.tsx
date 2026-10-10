@@ -15,12 +15,21 @@ const TEXT: Record<TankGaugeLevel, string> = {
 };
 const STATE: Partial<Record<TankGaugeLevel, string>> = { red: 'Low', amber: 'Getting low' };
 
+/** One tank takes the full width, two split it, three or more fill three columns. */
+const GAUGE_COLUMNS: Record<1 | 2 | 3, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-2',
+  3: 'grid-cols-3',
+};
+const gaugeColumns = (count: number): string =>
+  GAUGE_COLUMNS[Math.min(Math.max(count, 1), 3) as 1 | 2 | 3];
+
 /**
  * A tube gauge per tank: fill, percent, volume and days of cover (when the
  * tank has sales history); red below 25%, amber below 40%.
  */
 export const TankGauges: React.FC<{ tanks: readonly TankGauge[] }> = ({ tanks }) => (
-  <div className="grid grid-cols-3 gap-2 px-3">
+  <div className={`grid ${gaugeColumns(tanks.length)} gap-2 px-3`}>
     {tanks.map((t) => (
       <div
         key={t.id}

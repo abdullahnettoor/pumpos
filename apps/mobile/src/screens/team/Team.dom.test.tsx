@@ -483,6 +483,14 @@ describe('adding a member', () => {
 });
 
 describe('the member page', () => {
+  it('titles the header "Team member" and shows the name and Role once, in the identity block', async () => {
+    mount();
+    await openMember('Sajid Staff');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Team member');
+    expect(screen.getAllByText('Sajid Staff')).toHaveLength(1);
+    expect(screen.getByText(/^Staff · Highway Fuels$/)).toBeTruthy();
+  });
+
   it('edits details and Role, and repaints the list', async () => {
     mount();
     await openMember('Sajid Staff');
