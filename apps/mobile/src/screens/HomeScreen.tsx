@@ -68,7 +68,7 @@ export const HomeScreen: React.FC<Props> = ({ station }) => {
         </div>
       )}
 
-      <HomeAttention alerts={m.alerts} />
+      <HomeAttention alerts={m.alerts} station={station} />
 
       <SectionLabel
         right={

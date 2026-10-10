@@ -1,9 +1,11 @@
 import React from 'react';
-import { HOME_ATTENTION_ID, useOpenAttention } from '../../shell/attention.js';
-import { useNav } from '../../shell/nav.js';
 import { SectionLabel } from '../../ui/index.js';
-import { ChevronRightIcon } from '../../ui/icons.js';
+import type { Station } from '@pump/shared';
 import type { MobileAlert } from '../../lib/alerts.js';
+import { homeAlerts } from '../../lib/attention/groups.js';
+import { AlertRow } from '../attention/AlertRow.js';
+import { useAlertOpener } from '../attention/useAlertOpener.js';
+import { useOpenAttention } from '../attention/useOpenAttention.js';
 
 /** Alerts shown on Home; the rest are behind "All N". */
 export const HOME_ALERT_LIMIT = 2;
@@ -11,32 +13,23 @@ export const HOME_ALERT_LIMIT = 2;
 interface Props {
   /** Already sorted by severity (`useMobileAlerts`). */
   alerts: readonly MobileAlert[];
+  /** The pages an alert opens belong to this station. */
+  station: Station | null;
 }
 
-const TONE = {
-  danger: { row: 'border-bad-line bg-bad-soft', dot: 'bg-bad', text: 'text-bad-fg' },
-  warning: { row: 'border-warn-line bg-warn-soft', dot: 'bg-warn', text: 'text-warn-fg' },
-  info: { row: 'border-line bg-card-alt', dot: 'bg-text-faint', text: 'text-text-muted' },
-} as const;
-
 /**
- * The top alerts by severity. The section is also the header bell's target
- * (`HOME_ATTENTION_ID`, shell/attention.ts): it stays on screen when there is
- * nothing to report so the bell always has somewhere to land. "All N" goes
- * through `useOpenAttention`, which the Needs attention page will take over.
+ * The top alerts by severity (not the own handover: the pinned card shows it), with "All N ›" to the Needs attention page (the
+ * same page the header bell opens, the same count). A row opens the page that
+ * explains it; stock rows have none. The section stays on screen when there is
+ * nothing to report.
  */
-export const HomeAttention: React.FC<Props> = ({ alerts }) => {
-  const nav = useNav();
+export const HomeAttention: React.FC<Props> = ({ alerts, station }) => {
   const openAll = useOpenAttention();
-  const top = alerts.slice(0, HOME_ALERT_LIMIT);
+  const open = useAlertOpener(station);
+  const top = homeAlerts(alerts, HOME_ALERT_LIMIT);
 
   return (
-    <section
-      id={HOME_ATTENTION_ID}
-      tabIndex={-1}
-      aria-label="Needs attention"
-      className="scroll-mt-2 outline-none"
-    >
+    <section aria-label="Needs attention">
       <SectionLabel
         right={
           alerts.length > 0 ? (
@@ -50,45 +43,13 @@ export const HomeAttention: React.FC<Props> = ({ alerts }) => {
       </SectionLabel>
       {top.length === 0 ? (
         <p className="mx-3 rounded-[14px] border border-good-line bg-good-soft px-3 py-2.5 text-xs font-medium text-good">
-          Nothing needs attention
+          {alerts.length === 0 ? 'Nothing needs attention' : 'Nothing else needs attention'}
         </p>
       ) : (
         <div className="flex flex-col gap-2">
-          {top.map((a) => {
-            const tone = TONE[a.severity];
-            const target = a.tab && nav.tabs.includes(a.tab) ? a.tab : null;
-            const body = (
-              <>
-                <span
-                  aria-hidden="true"
-                  className={`h-2 w-2 flex-shrink-0 rounded-full ${tone.dot}`}
-                />
-                <span className="min-w-0 flex-1 text-left">
-                  <span className="block truncate text-[13px] font-semibold text-text-high">
-                    {a.title}
-                  </span>
-                  {a.meta && (
-                    <span className="block truncate text-[11px] text-text-muted">{a.meta}</span>
-                  )}
-                </span>
-                {target && (
-                  <span className={`flex-shrink-0 ${tone.text}`}>
-                    <ChevronRightIcon size={16} strokeWidth={2.2} />
-                  </span>
-                )}
-              </>
-            );
-            const cls = `mx-3 flex items-center gap-2.5 rounded-[14px] border px-3 py-[11px] ${tone.row}`;
-            return target ? (
-              <button key={a.id} type="button" onClick={() => nav.select(target)} className={cls}>
-                {body}
-              </button>
-            ) : (
-              <div key={a.id} className={cls}>
-                {body}
-              </div>
-            );
-          })}
+          {top.map((a) => (
+            <AlertRow key={a.id} alert={a} onOpen={open(a)} />
+          ))}
         </div>
       )}
     </section>

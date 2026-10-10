@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+import React, { useLayoutEffect } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Role, Station } from '@pump/shared';
 
 /**
@@ -22,12 +23,21 @@ vi.mock('../screens/HomeScreen.js', () => ({ HomeScreen: () => <p>owner overview
 
 const { TabRoot } = await import('./TabRoot.js');
 const { ShellContext } = await import('./context.js');
-const { NavProvider } = await import('./nav.js');
+const { NavProvider, useNav } = await import('./nav.js');
 
 const station = { id: 'st-1', name: 'Highway Fuels', settings: {} } as unknown as Station;
 const assigned = {
   shift: { id: 's2', templateName: 'Shift 2' },
   dispenserUnits: [{ duId: 'du-2', duName: 'DU2', nozzles: [], terminals: [] }],
+};
+
+const seen = { depth: 0 };
+const DepthProbe: React.FC = () => {
+  const { depth } = useNav();
+  useLayoutEffect(() => {
+    seen.depth = depth;
+  });
+  return null;
 };
 
 const renderHome = (role: Role) =>
@@ -36,6 +46,7 @@ const renderHome = (role: Role) =>
       value={{ station, stationName: station.name, userName: 'A B', role, openAccount: () => {} }}
     >
       <NavProvider tabs={['home']}>
+        <DepthProbe />
         <TabRoot tab="home" station={station} stationsLoading={false} />
       </NavProvider>
     </ShellContext.Provider>,
@@ -69,11 +80,12 @@ describe('Home root per Role', () => {
     expect(screen.getByText('Tank 2 low')).toBeTruthy();
   });
 
-  it('the unsaved handover is not counted: it is the card, not an alert', () => {
+  it('the bell pushes the Needs attention page on Home', () => {
     mine.assignment = assigned;
+    feed.alerts = [{ id: 'a1', severity: 'warning', category: 'stock', title: 'Tank 2 low' }];
     renderHome('Manager');
-    expect(screen.getByRole('button', { name: 'Alerts' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Alerts, \d+ open/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Alerts, 1 open' }));
+    expect(seen.depth).toBe(1);
   });
 
   it('an Accountant or Staff member who cannot see alerts gets the card only, no bell', () => {
