@@ -4,18 +4,12 @@ import { standing, type MoneyCustomer, type StandingState } from '../../lib/mone
 import { StatusBadge } from '../../ui/StatusBadge.js';
 import { HeroCard } from './HeroCard.js';
 import { LimitBar } from './LimitBar.js';
+import { PaymentReason, RecordPaymentButton, type PaymentAction } from './RecordPaymentButton.js';
 
 /** The credit-limit edit affordance; absent when this user may not change the limit. */
 export interface LimitAction {
   onPress: () => void;
   /** Set while the action is paused (Restricted Access): why, shown under the button. */
-  disabledReason?: string;
-}
-
-/** The quiet "Record payment" button; absent when this user may not record one. */
-export interface PaymentAction {
-  onPress: () => void;
-  /** Set while the action is paused (Suspension): why, shown under the button. */
   disabledReason?: string;
 }
 
@@ -56,7 +50,6 @@ export const BalanceCard: React.FC<{
   const reasonId = useId();
   const paymentReasonId = useId();
   const paused = Boolean(limitAction?.disabledReason);
-  const paymentPaused = Boolean(paymentAction?.disabledReason);
 
   return (
     <HeroCard
@@ -103,19 +96,8 @@ export const BalanceCard: React.FC<{
       {(paymentAction || limitAction) && (
         <div className="mt-2.5 flex flex-col gap-1 border-t border-line pt-2">
           <div className="flex items-center justify-between gap-2">
-            {/* Quiet on purpose: an outline, not the accent fill. The action bar stays Share / Download.
-                aria-disabled, not disabled: the button stays focusable, so a screen reader
-                reaches it and hears the reason it is paused. */}
             {paymentAction && (
-              <button
-                type="button"
-                onClick={paymentPaused ? undefined : paymentAction.onPress}
-                aria-disabled={paymentPaused || undefined}
-                aria-describedby={paymentPaused ? paymentReasonId : undefined}
-                className="min-h-[36px] rounded-lg border border-line-strong px-3 text-[12.5px] font-bold text-text-high aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
-              >
-                Record payment
-              </button>
+              <RecordPaymentButton action={paymentAction} reasonId={paymentReasonId} />
             )}
             {limitAction && (
               <button
@@ -129,11 +111,7 @@ export const BalanceCard: React.FC<{
               </button>
             )}
           </div>
-          {paymentAction?.disabledReason && (
-            <p id={paymentReasonId} className="m-0 text-[11px] text-text-muted">
-              {paymentAction.disabledReason}
-            </p>
-          )}
+          <PaymentReason action={paymentAction} reasonId={paymentReasonId} />
           {limitAction?.disabledReason && (
             <p id={reasonId} className="m-0 text-[11px] text-text-muted">
               {limitAction.disabledReason}

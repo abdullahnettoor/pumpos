@@ -569,8 +569,18 @@ export const expenseEntryFormSchema = z.object({
 });
 export type ExpenseEntryFormValues = z.infer<typeof expenseEntryFormSchema>;
 
-/** `collections.amount` is numeric(12,2): the largest payment it can hold. */
+/** `collections.amount` / `supplier_transactions.amount` are numeric(12,2): the largest payment they hold. */
 export const COLLECTION_AMOUNT_MAX = NUMERIC_12_2_MAX;
+
+/**
+ * The amount of an Office payment (a Collection or a Supplier Payment): above 0,
+ * within the column's range and at most 2 decimal places.
+ */
+const officePaymentAmountField = z.coerce
+  .number({ invalid_type_error: 'Amount is required' })
+  .positive('Amount must be positive')
+  .max(COLLECTION_AMOUNT_MAX, 'That is more than a payment can hold.')
+  .refine(hasAtMostTwoDecimals, 'Use at most 2 decimal places.');
 
 /**
  * Customer collection — an Office Record (ADR 0005). The one form rule for the
@@ -581,11 +591,7 @@ export const collectionEntryFormSchema = z
   .object({
     entryDate: entryDateField,
     customerId: z.string().optional().default(''),
-    amount: z.coerce
-      .number({ invalid_type_error: 'Amount is required' })
-      .positive('Amount must be positive')
-      .max(COLLECTION_AMOUNT_MAX, 'That is more than a payment can hold.')
-      .refine(hasAtMostTwoDecimals, 'Use at most 2 decimal places.'),
+    amount: officePaymentAmountField,
     paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'BankTransfer']).default('Cash'),
     notes: z.string().max(500).optional().default(''),
     /** Account the money lands in. Not needed when a terminal is chosen. */
@@ -605,6 +611,21 @@ export const collectionEntryFormSchema = z
     }
   });
 export type CollectionEntryFormValues = z.infer<typeof collectionEntryFormSchema>;
+
+/**
+ * Supplier payment — an Office Record (ADR 0005): the Entry Date and the
+ * Funding Account it is paid from, never a Shift. The mobile Record payment
+ * sheet checks its fields with this; the amount rule is the Collection's.
+ */
+export const supplierPaymentEntryFormSchema = z.object({
+  entryDate: entryDateField,
+  supplierId: z.string().optional().default(''),
+  amount: officePaymentAmountField,
+  notes: z.string().max(500).optional().default(''),
+  /** The money account it is paid from. */
+  fundingAccountId: z.string().min(1, 'Choose the account'),
+});
+export type SupplierPaymentEntryFormValues = z.infer<typeof supplierPaymentEntryFormSchema>;
 
 export const purchaseLineFormSchema = z.object({
   productId: z.string().min(1, 'Product is required'),

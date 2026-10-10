@@ -159,9 +159,10 @@ export {
   collectionAccountTypes,
   filterFundingAccounts,
   reconcileFundingSelection,
+  SUPPLIER_PAYMENT_ACCOUNT_TYPES,
   type CollectionMethod,
 } from './utils/fundingAccounts.js';
-export { collectionPayload } from './utils/officeRecordPayloads.js';
+export { collectionPayload, supplierPaymentPayload } from './utils/officeRecordPayloads.js';
 export { accountTypeLabel } from './utils/ledgerLabels.js';
 export { runTask, useRunTask } from './utils/runTask.js';
 export * from './pump-ds/icon/index.js';

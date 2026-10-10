@@ -1322,18 +1322,25 @@ export class CloudTransactionService {
   }
 
   /** Office Record (ADR 0005): entry date + funding account, no shift. */
-  async recordSupplierPayment(payload: {
-    stationId: string;
-    entryDate?: string;
-    fundingAccountId: string;
-    supplierId: string;
-    amount: number;
-    notes?: string;
-  }): Promise<any> {
-    return request<any>('/transactions/supplier-payments', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async recordSupplierPayment(
+    payload: {
+      stationId: string;
+      entryDate?: string;
+      fundingAccountId: string;
+      supplierId: string;
+      amount: number;
+      notes?: string;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/transactions/supplier-payments',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async recordSale(payload: {

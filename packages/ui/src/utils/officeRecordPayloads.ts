@@ -1,4 +1,8 @@
-import type { CollectionEntryFormValues, ExpenseEntryFormValues } from '@pump/shared';
+import type {
+  CollectionEntryFormValues,
+  ExpenseEntryFormValues,
+  SupplierPaymentEntryFormValues,
+} from '@pump/shared';
 import { methodUsesTerminal } from './fundingAccounts.js';
 
 /**
@@ -30,6 +34,18 @@ export function collectionPayload(stationId: string, v: CollectionEntryFormValue
     customerId: v.customerId || undefined,
     amount: Number(v.amount),
     paymentMethod: v.paymentMethod,
+    notes: v.notes || undefined,
+  };
+}
+
+/** `POST /transactions/supplier-payments`: station, Entry Date, the account paid from; never a shift. */
+export function supplierPaymentPayload(stationId: string, v: SupplierPaymentEntryFormValues) {
+  return {
+    stationId,
+    entryDate: v.entryDate || undefined,
+    fundingAccountId: v.fundingAccountId,
+    supplierId: v.supplierId,
+    amount: Number(v.amount),
     notes: v.notes || undefined,
   };
 }
