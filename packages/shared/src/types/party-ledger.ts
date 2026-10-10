@@ -27,6 +27,9 @@ export interface PartyLedgerEntry {
   method?: string | null;
   reference?: string | null;
   fundingAccountName?: string | null;
+  /** Supplier Purchase rows: the supplier's invoice and the tanker that delivered it (null when not recorded). */
+  invoiceNumber?: string | null;
+  tankerNumber?: string | null;
 }
 
 export interface RangedPartyLedger {
@@ -34,6 +37,11 @@ export interface RangedPartyLedger {
   periodOpeningBalance: string;
   /** What is owed after the last row of the range. */
   closingBalance: string;
+  /**
+   * Whether any ledger entry is dated before `from`. A party can be settled
+   * before the window (opening balance 0) and still have history to load.
+   */
+  hasEarlier: boolean;
   /** Oldest first. */
   entries: PartyLedgerEntry[];
 }

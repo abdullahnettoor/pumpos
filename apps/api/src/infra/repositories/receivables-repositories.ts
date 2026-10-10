@@ -1,10 +1,12 @@
 import { sql, type SQL } from 'drizzle-orm';
 import type { DbClient } from '@pump/db';
+import { onCustomerLedger } from '../customer-ledger-sql.js';
 import {
   RECEIVABLES_AGING_EDGES,
   RECEIVABLES_CUSTOMER_LIMIT,
   RECEIVABLES_SETTLED_SAMPLE,
   RECEIVABLES_VEHICLE_LIMIT,
+  type SettlementCycle,
 } from '@pump/shared';
 import type {
   CustomerReceivableQuery,
@@ -69,7 +71,7 @@ function fifoCtes(organizationId: string, currentBusinessDate: string, scope: SQ
         ON bd.id = ct.business_day_id AND bd.organization_id = ${organizationId}
       JOIN customers cu
         ON cu.id = ct.customer_id AND cu.organization_id = ${organizationId}
-      WHERE ct.transaction_type NOT IN ('OMC Sale', 'Collection')
+      WHERE ${onCustomerLedger('ct')}
         AND ct.amount > 0
         ${scope}
     ),
@@ -81,7 +83,7 @@ function fifoCtes(organizationId: string, currentBusinessDate: string, scope: SQ
         ON bd.id = ct.business_day_id AND bd.organization_id = ${organizationId}
       JOIN customers cu
         ON cu.id = ct.customer_id AND cu.organization_id = ${organizationId}
-      WHERE ct.transaction_type NOT IN ('OMC Sale', 'Collection')
+      WHERE ${onCustomerLedger('ct')}
         AND ct.amount < 0
         ${scope}
       UNION ALL
@@ -180,7 +182,7 @@ export class DrizzleReceivablesReader implements ReceivablesReader {
       WITH ${fifoCtes(org, q.currentBusinessDate, sql`AND cu.id = ${id}`)},
       credit_ranges AS (
         SELECT c.customer_id, c.date, c.kind,
-          SUM(c.amount) OVER w - c.amount AS lo,
+          ROW_NUMBER() OVER w AS rn,
           SUM(c.amount) OVER w AS hi
         FROM credits c
         WINDOW w AS (
@@ -188,16 +190,39 @@ export class DrizzleReceivablesReader implements ReceivablesReader {
           ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         )
       ),
-      settled AS (
-        -- A Credit Sale is settled by the credit whose running total first covers
-        -- the running debit up to it. Only a Collection counts as the customer
-        -- paying (a credit adjustment is the station writing a debt off); paid
-        -- ahead of the sale is 0 days.
-        SELECT GREATEST(0, cr.date::date - dc.date::date) AS days
+      -- Which credit settles a Credit Sale: the first whose running total (hi)
+      -- reaches the running debit up to that sale. Both running totals only grow,
+      -- so instead of joining every debit to every credit range (rows x rows) the
+      -- two are laid on one line, walked from the far end, and each sale takes the
+      -- nearest credit at or past it: one sort and one pass over the customer's
+      -- ledger. A credit sorts before a debit at the same position (a sale
+      -- exactly covered is settled by that credit). A sale beyond the total
+      -- credits has none: it is still open.
+      settle_events AS (
+        SELECT cr.hi AS pos, 0 AS side, cr.rn AS credit_rn, NULL::uuid AS debit_id
+        FROM credit_ranges cr
+        UNION ALL
+        SELECT dc.cum_debit AS pos, 1 AS side, NULL::bigint AS credit_rn, dc.id AS debit_id
         FROM debit_cum dc
-        JOIN credit_ranges cr
-          ON cr.customer_id = dc.customer_id AND dc.cum_debit > cr.lo AND dc.cum_debit <= cr.hi
-        WHERE dc.type = 'Credit Sale' AND cr.kind = 'COLLECTION'
+        WHERE dc.type = 'Credit Sale'
+      ),
+      settle_scan AS (
+        SELECT e.side, e.debit_id,
+          MIN(e.credit_rn) OVER (
+            ORDER BY e.pos DESC, e.side ASC
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+          ) AS settling_rn
+        FROM settle_events e
+      ),
+      settled AS (
+        -- Only a Collection counts as the customer paying (a credit adjustment is
+        -- the station writing a debt off); paid ahead of the sale is 0 days. The
+        -- sample is the last RECEIVABLES_SETTLED_SAMPLE by settle date.
+        SELECT GREATEST(0, cr.date::date - dc.date::date) AS days
+        FROM settle_scan ss
+        JOIN debit_cum dc ON dc.id = ss.debit_id
+        JOIN credit_ranges cr ON cr.rn = ss.settling_rn
+        WHERE ss.side = 1 AND cr.kind = 'COLLECTION'
         ORDER BY cr.date DESC, dc.date DESC, dc.id DESC
         LIMIT ${RECEIVABLES_SETTLED_SAMPLE}
       ),
@@ -259,7 +284,7 @@ export class DrizzleReceivablesReader implements ReceivablesReader {
       WHERE cu.id = ${id} AND cu.organization_id = ${org}
     `)) as unknown as Array<
       PerCustomerRow & {
-        settlementCycle: string;
+        settlementCycle: SettlementCycle;
         lastPayment: { amount: unknown; entryDate: string; method: string } | null;
         settledCount: number;
         settledMeanDays: unknown;

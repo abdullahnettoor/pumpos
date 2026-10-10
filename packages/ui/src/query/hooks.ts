@@ -768,6 +768,11 @@ export function useCustomerLedger(customerId: string | null | undefined, options
  * A customer's statement for a date range (enriched rows + opening balance),
  * from the ranged ledger API. Operational tier; every operational write
  * invalidates the `customer-statement` prefix.
+ *
+ * Widening the range ("Earlier months") changes the key; the previous range's
+ * rows stay on screen (`isPlaceholderData`) until the wider one arrives, so the
+ * list never collapses to a spinner. Only the SAME customer's rows are carried
+ * over, never another customer's.
  */
 export function useCustomerStatement(
   customerId: string | null | undefined,
@@ -778,6 +783,8 @@ export function useCustomerStatement(
     queryKey: queryKeys.customerStatement(customerId ?? '', range.from, range.to),
     queryFn: () => txService.getCustomerLedgerRange(customerId!, range),
     enabled: !!customerId,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === customerId ? previous : undefined,
     ...TIER.operational,
     ...options,
   });

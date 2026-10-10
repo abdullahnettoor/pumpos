@@ -86,7 +86,6 @@ const nextCreatedAt = () => new Date((tick += 1000));
 
 const summaryQuery = (over: Partial<ReceivablesQuery> = {}): ReceivablesQuery => ({
   organizationId: ORG,
-  stationId: STATION,
   currentBusinessDate: TODAY,
   ...over,
 });
@@ -549,6 +548,77 @@ describe.skipIf(!CONNECTION)('Receivables reader against real Postgres', () => {
       const one = await reader.customer(customerQuery(c));
       expect(one?.settled).toEqual({ count: 1, meanDays: 0 });
     });
+
+    it('picks the same last settled Credit Sales as a plain-JS FIFO over a long ledger', async () => {
+      // ~500 sales and ~300 payments, each on its own day (no ties), with write-offs and an
+      // opening balance mixed in: the settle date, not the sale date, decides the last 6.
+      const c = await customer('Long history');
+      let state = 19840817;
+      const rand = (n: number) => {
+        state = (state * 1103515245 + 12345) & 0x7fffffff;
+        return state % n;
+      };
+      const day = (offset: number) =>
+        new Date(Date.UTC(2024, 0, 1 + offset)).toISOString().slice(0, 10);
+
+      const debits: Array<{ date: string; amount: number; sale: boolean }> = [];
+      const credits: Array<{ date: string; amount: number; collection: boolean }> = [];
+      await txn(c, day(0), 40, { type: 'Opening Balance' });
+      debits.push({ date: day(0), amount: 40, sale: false });
+      for (let d = 1; d < 520; d++) {
+        const amount = 20 + rand(180);
+        await txn(c, day(d), amount);
+        debits.push({ date: day(d), amount, sale: true });
+      }
+      // Payments follow on their own dates, every 2-4 days. Every sale and every payment has
+      // its own date, so the "last 6 by settle date" has no tie to break.
+      for (let d = 2; d < 700; d += 2 + rand(3)) {
+        const amount = 30 + rand(260);
+        if (rand(9) === 0) {
+          await txn(c, day(d), -amount, { type: 'Adjustment' });
+          credits.push({ date: day(d), amount, collection: false });
+        } else {
+          await collect(c, day(d), amount);
+          credits.push({ date: day(d), amount, collection: true });
+        }
+      }
+
+      // Oracle: pair each sale with the credit whose running total first covers it.
+      let cumDebit = 0;
+      const ranges: Array<{ lo: number; hi: number; date: string; collection: boolean }> = [];
+      let cumCredit = 0;
+      for (const cr of credits) {
+        ranges.push({ lo: cumCredit, hi: (cumCredit += cr.amount), ...cr });
+      }
+      const settled: Array<{ settledOn: string; saleOn: string; days: number }> = [];
+      for (const d of debits) {
+        cumDebit += d.amount;
+        if (!d.sale) continue;
+        const cr = ranges.find((r) => cumDebit > r.lo && cumDebit <= r.hi);
+        if (cr?.collection) {
+          settled.push({
+            settledOn: cr.date,
+            saleOn: d.date,
+            days: Math.max(0, businessDateDiffDays(d.date, cr.date)),
+          });
+        }
+      }
+      settled.sort(
+        (a, b) => b.settledOn.localeCompare(a.settledOn) || b.saleOn.localeCompare(a.saleOn),
+      );
+      const last = settled.slice(0, RECEIVABLES_SETTLED_SAMPLE);
+      expect(last).toHaveLength(RECEIVABLES_SETTLED_SAMPLE);
+      const mean = last.reduce((n, x) => n + x.days, 0) / last.length;
+
+      const started = Date.now();
+      const one = await reader.customer(customerQuery(c));
+      const elapsed = Date.now() - started;
+      expect(one?.settled.count).toBe(RECEIVABLES_SETTLED_SAMPLE);
+      expect(one?.settled.meanDays).toBeCloseTo(mean, 6);
+      // A row-by-row join of ~500 sales against ~350 credit ranges is quick enough to hide a
+      // regression; this guards only against a blow-up, not a benchmark.
+      expect(elapsed).toBeLessThan(5_000);
+    }, 120_000);
 
     it('ignores Opening Balance and debit Adjustments in "usually pays in"', async () => {
       const c = await customer('Only a carried balance');

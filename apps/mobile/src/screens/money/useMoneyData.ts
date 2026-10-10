@@ -75,6 +75,8 @@ export function useCustomerStatementData(
     from,
     ledger: q.data ?? null,
     isLoading: q.isLoading,
+    /** A wider window is on its way; `ledger` still holds the previous one. */
+    isFetchingMore: q.isPlaceholderData,
     isError: q.isError,
     refetch: q.refetch,
   };

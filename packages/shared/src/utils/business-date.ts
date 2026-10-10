@@ -114,6 +114,16 @@ export function businessDateDiffDays(from: string, to: string): number {
   return Math.round(ms / 86_400_000);
 }
 
+const MONTH_KEY = /^(\d{4})-(0[1-9]|1[0-2])$/;
+
+/** First and last calendar date (`YYYY-MM-DD`) of a `YYYY-MM` month. Throws on a malformed month. */
+export function monthBounds(month: string): { from: string; to: string } {
+  const match = MONTH_KEY.exec(month);
+  if (!match) throw new Error(`Invalid month: ${month}`);
+  const lastDay = new Date(Date.UTC(Number(match[1]), Number(match[2]), 0)).getUTCDate();
+  return { from: `${month}-01`, to: `${month}-${String(lastDay).padStart(2, '0')}` };
+}
+
 /** Extract date-resolution settings from a station `settings` JSONB blob. */
 export function businessDateSettings(settings: unknown): { timeZone: string; dayStartsAt: string } {
   const s = (settings ?? {}) as Record<string, unknown>;

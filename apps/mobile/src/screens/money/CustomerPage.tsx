@@ -24,7 +24,8 @@ import { VehicleSpend } from './VehicleSpend.js';
  * and the statement standing on their own. The statement is the ranged ledger:
  * the last 6 months with each Credit Sale's Shift, product, litres and Vehicle
  * and each Collection's method and reference, and what came before carried in
- * as a balance ("Earlier months" fetches more).
+ * as a balance. "Earlier months" fetches 6 more whenever any older entry exists
+ * (the server says so), also for a customer settled before the window.
  *
  * Seam for #400 (statement PDF): pass `share` / `download` to `DetailPage`; with
  * neither, no action bar is shown.
@@ -70,10 +71,12 @@ export const CustomerPage: React.FC<{
             ? {
                 from: statement.from,
                 openingBalance: opening,
-                onEarlier:
-                  Math.abs(opening) >= 0.005
-                    ? () => setMonths((m) => m + STATEMENT_MONTHS)
-                    : undefined,
+                // Anything dated before the window can be loaded, even when it nets to 0:
+                // a customer settled before the window still has history to read.
+                onEarlier: statement.ledger.hasEarlier
+                  ? () => setMonths((m) => m + STATEMENT_MONTHS)
+                  : undefined,
+                isLoadingEarlier: statement.isFetchingMore,
               }
             : undefined
         }

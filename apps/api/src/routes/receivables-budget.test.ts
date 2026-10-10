@@ -15,7 +15,7 @@ import { makeFakeDb } from './test-fakes.js';
 
 const ORG = 'org-1';
 const STATION = 'st-1';
-const CUSTOMER = 'c-1';
+const CUSTOMER = '3f0c9b6e-5a1d-4c3e-9a7b-0d2e1f4a6b8c';
 const station = { settings: { timezone: 'Asia/Kolkata', business_day_starts_at: '06:00' } };
 const NO_WRITES = { inserts: 0, updates: 0, deletes: 0 };
 
@@ -269,8 +269,20 @@ describe('GET /reports/receivables/:customerId', () => {
 
   it('is a 404 for a customer outside the organization', async () => {
     const { db } = makeFakeDb([[station]], [[]]);
-    const res = await makeApp(db).request(`/reports/receivables/c-9?stationId=${STATION}`);
+    const res = await makeApp(db).request(
+      `/reports/receivables/3f0c9b6e-5a1d-4c3e-9a7b-0d2e1f4a6b99?stationId=${STATION}`,
+    );
     expect(res.status).toBe(404);
+  });
+
+  it('is a 404, not a 500, for an id that is not a uuid, and reads nothing', async () => {
+    const { db, counter } = makeFakeDb([[station]], [[]]);
+    for (const bad of ['c-1', 'not-a-uuid', '123']) {
+      const res = await makeApp(db).request(`/reports/receivables/${bad}?stationId=${STATION}`);
+      expect(res.status).toBe(404);
+      expect(((await res.json()) as any).error.code).toBe('NOT_FOUND');
+    }
+    expect(counter.selects + counter.executes).toBe(0);
   });
 
   it('refuses roles that cannot see Money and a foreign station before any read', async () => {

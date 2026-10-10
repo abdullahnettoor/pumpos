@@ -6,7 +6,6 @@ import {
   statementWindowStart,
   type LedgerRow,
 } from './statement.js';
-import { compactRupees, signedRupees } from './format.js';
 
 const row = (
   id: string,
@@ -278,21 +277,6 @@ describe('statement order', () => {
     expect(s.months.map((m) => m.label)).toEqual(['October 2026', 'September 2026']);
     expect(s.months[1].entries[0]).toMatchObject({ key: 'back', balance: 50 });
     expect(s.months[0].entries[0]).toMatchObject({ key: 'late', balance: 150 });
-  });
-});
-
-describe('money formatting', () => {
-  it('compacts to lakh and crore', () => {
-    expect(compactRupees(200000)).toBe('₹2L');
-    expect(compactRupees(150000)).toBe('₹1.5L');
-    expect(compactRupees(125000)).toBe('₹1.25L');
-    expect(compactRupees(24000000)).toBe('₹2.4Cr');
-    expect(compactRupees(8500)).toBe('₹8,500');
-  });
-
-  it('puts the sign before the rupee', () => {
-    expect(signedRupees(-125)).toBe('−₹125.00');
-    expect(signedRupees(125)).toBe('₹125.00');
   });
 });
 

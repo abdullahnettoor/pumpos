@@ -1,3 +1,5 @@
+import type { SettlementCycle } from './entities.js';
+
 /**
  * Receivables summary wire contract (`GET /api/reports/receivables`,
  * `GET /api/reports/receivables/:customerId`).
@@ -62,7 +64,7 @@ export interface CustomerLastPayment {
   /** Entry Date of the Collection. */
   entryDate: string;
   method: string;
-  /** Whole days from `entryDate` to the Current Business Date. */
+  /** Whole calendar days from `entryDate` to today's Entry Date (the station calendar date, no Day Start). */
   daysAgo: number;
 }
 
@@ -89,9 +91,12 @@ export interface CustomerVehicleSpend {
 /** `GET /reports/receivables/:customerId?stationId=` */
 export interface CustomerReceivableSummary extends CustomerReceivable {
   /** How the customer settles: 'OPEN' running account, 'EOD' by end of the Business Day. */
-  settlementCycle: string;
+  settlementCycle: SettlementCycle;
   lastPayment: CustomerLastPayment | null;
-  /** Mean days to settle their last 6 settled Credit Sales; null with fewer than 3. */
+  /**
+   * Mean days to settle their last `RECEIVABLES_SETTLED_SAMPLE` settled Credit Sales;
+   * null with fewer than `RECEIVABLES_MIN_SETTLED_SALES`.
+   */
   usuallyPaysInDays: number | null;
   month: CustomerMonthFigures;
   vehicles: CustomerVehicleSpend[];

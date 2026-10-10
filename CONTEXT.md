@@ -299,21 +299,19 @@ figure.
 _Avoid_: outstanding, khata
 
 **Receivable aging**:
-What a Customer owes, split by how old each unpaid debit is. Settled FIFO: a
-Collection or a credit Adjustment pays the oldest open debit (Credit Sale,
-Opening Balance, debit Adjustment) first, and the open remainder of each debit
-is aged from its Business Date to the Current Business Date into 0–7, 8–30 and
-30+ days (31 days and older). The ledger carries no allocation row: it is
-derived in SQL from a running sum of debits against total credits, so it is
-exactly as fresh as the Customer Balance. An overpayment is an advance, not a
-negative receivable.
+What a Customer owes, split by how long each unpaid amount has been waiting. A
+Collection or a credit Adjustment pays the oldest unpaid amount first; what is
+left of each Credit Sale, Opening Balance or debit Adjustment is aged from its
+Business Date to the Current Business Date into 0–7, 8–30 and 30+ days (31 days
+and older). Organization-wide, like the Customer Balance, and as fresh as it.
+An overpayment is an advance, not a negative receivable.
 _Avoid_: dues, overdue (no due date exists)
 
 **Usually pays in**:
-The mean number of days from a Credit Sale to the Collection that fully settles
-it (FIFO), over the Customer's last 6 settled Credit Sales; shown only with at
-least 3. A credit Adjustment that settles a sale is a write-off, not the
-Customer paying, so that sale is left out.
+The mean number of days from a Credit Sale to the Collection that settles it,
+over the Customer's last 6 settled Credit Sales; shown only with at least 3. A
+Credit Sale cleared by a credit Adjustment is a write-off, not the Customer
+paying, so it is left out.
 
 **Cash Drop**:
 Cash taken from one Attendant's Drawer mid-shift (e.g., to a safe), reducing

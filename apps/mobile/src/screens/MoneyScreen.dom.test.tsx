@@ -11,7 +11,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 const customers: any[] = [];
 const suppliers: any[] = [];
 const ledgers: Record<string, any[]> = {};
-const ledgerState = { isLoading: false, isError: false };
+const ledgerState = { isLoading: false, isError: false, placeholder: false };
 const supplierLedgers: Record<string, any[]> = {};
 /** The receivables summary for the list and per customer; `undefined` = not (yet) available. */
 const receivables: { list: any; byCustomer: Record<string, any>; failed: boolean } = {
@@ -21,6 +21,8 @@ const receivables: { list: any; byCustomer: Record<string, any>; failed: boolean
 };
 /** Opening balance of a customer's statement window, and the windows asked for. */
 const openings: Record<string, string> = {};
+/** Whether a customer has any entry before the window; unset = whenever the opening balance is not 0. */
+const earlier: Record<string, boolean> = {};
 const statementCalls: Array<{ id: string; from: string; to: string }> = [];
 
 vi.mock('@pump/ui', async (importOriginal) => {
@@ -43,8 +45,10 @@ vi.mock('@pump/ui', async (importOriginal) => {
           : {
               periodOpeningBalance: openings[id] ?? '0',
               closingBalance: '0',
+              hasEarlier: earlier[id] ?? Number(openings[id] ?? '0') !== 0,
               entries: ledgers[id] ?? [],
             },
+        isPlaceholderData: ledgerState.placeholder,
         isLoading: ledgerState.isLoading,
         isError: ledgerState.isError,
         refetch: vi.fn(),
@@ -117,6 +121,7 @@ beforeEach(() => {
   customers.length = 0;
   suppliers.length = 0;
   for (const k of Object.keys(ledgers)) delete ledgers[k];
+  for (const k of Object.keys(earlier)) delete earlier[k];
   for (const k of Object.keys(supplierLedgers)) delete supplierLedgers[k];
   for (const k of Object.keys(openings)) delete openings[k];
   receivables.list = undefined;
@@ -125,6 +130,7 @@ beforeEach(() => {
   statementCalls.length = 0;
   ledgerState.isLoading = false;
   ledgerState.isError = false;
+  ledgerState.placeholder = false;
   customers.push(
     cust({ name: 'Calicut Cabs', creditLimit: '100000', currentBalance: '61400' }),
     cust({
@@ -666,7 +672,7 @@ describe('Customer page', () => {
       expect(statementCalls.at(-1)).toMatchObject({ id: 'Ledger Lou', from: '2025-11-01' });
     });
 
-    it('says nothing is owed before the window, and offers no earlier months, when the opening balance is zero', () => {
+    it('says nothing is owed before the window, and offers no earlier months, when nothing is dated before it', () => {
       customers.push(cust({ name: 'Ledger Lou', currentBalance: '10750', creditLimit: '100000' }));
       openings['Ledger Lou'] = '0';
       ledgers['Ledger Lou'] = [SALE];
@@ -675,6 +681,35 @@ describe('Customer page', () => {
       open('Ledger Lou');
       expect(screen.getByText('Nothing owed before 1 May 2026.')).toBeTruthy();
       expect(screen.queryByRole('button', { name: 'Earlier months' })).toBeNull();
+    });
+
+    it('offers earlier months to a customer who was settled before the window', () => {
+      customers.push(cust({ name: 'Ledger Lou', currentBalance: '10750', creditLimit: '100000' }));
+      openings['Ledger Lou'] = '0';
+      earlier['Ledger Lou'] = true; // older entries that net to zero
+      ledgers['Ledger Lou'] = [SALE];
+      mount({ station: STATION });
+      fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
+      open('Ledger Lou');
+      expect(screen.getByText('Nothing owed before 1 May 2026.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Earlier months' }));
+      expect(statementCalls.at(-1)).toMatchObject({ id: 'Ledger Lou', from: '2025-11-01' });
+    });
+
+    it('keeps the rows on screen while earlier months load', () => {
+      customers.push(cust({ name: 'Ledger Lou', currentBalance: '11750', creditLimit: '100000' }));
+      openings['Ledger Lou'] = '1000';
+      ledgers['Ledger Lou'] = [SALE];
+      ledgerState.placeholder = true;
+      mount({ station: STATION });
+      fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
+      open('Ledger Lou');
+      expect(screen.queryByText('Loading statement…')).toBeNull();
+      expect(screen.getByText('Credit Sale')).toBeTruthy();
+      const more = screen.getByRole('button', { name: 'Loading earlier months…' });
+      expect((more as HTMLButtonElement).disabled).toBe(true);
+      // The footer names the window it was fetched for: it waits for the wider one.
+      expect(screen.queryByText(/Balance brought forward/)).toBeNull();
     });
 
     it('shows the balance brought forward when nothing happened in the window', () => {

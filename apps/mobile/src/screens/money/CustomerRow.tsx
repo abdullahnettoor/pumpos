@@ -1,6 +1,6 @@
 import React from 'react';
 import { inr } from '@pump/ui';
-import { compactRupees } from '../../lib/money/format.js';
+import { compactRupees } from '../../lib/format.js';
 import { limitOf, standing, type MoneyCustomer, type Standing } from '../../lib/money/parties.js';
 import { oldestCaption } from '../../lib/money/receivables.js';
 import { Avatar } from '../../ui/Avatar.js';

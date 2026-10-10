@@ -14,6 +14,7 @@ import { requireCapabilityGuard } from '../infra/capability-guard.js';
 import { DrizzleAttendantHandoverReportReader } from '../infra/repositories/attendant-report-repositories.js';
 import { DrizzleInsightsSalesReader } from '../infra/repositories/insights-repositories.js';
 import { DrizzleReceivablesReader } from '../infra/repositories/receivables-repositories.js';
+import { isUuid } from '../infra/is-uuid.js';
 import { requireStationRead } from '../infra/station-read-guard.js';
 import { sendResult } from '../infra/send-result.js';
 import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
@@ -92,10 +93,11 @@ reportsRouter.get('/insights/sales', async (c) => {
  * customers or ledger entries (the station lookup for the clock is the only
  * other read). Open to the Roles that see the Money tab.
  *
- * A customer is an Organization-level party and so is its balance (the customers
- * list's `currentBalance`): the receivable covers the customer's whole ledger,
- * not one station's slice of it. The station gates access and supplies the
- * timezone and Day Start the age is measured with.
+ * Organization-wide: a customer is an Organization-level party and so is its
+ * balance (the customers list's `currentBalance`), so the figures cover the
+ * customer's whole ledger across stations, not one station's slice. The station
+ * only gates access and supplies the timezone and Day Start the age is measured
+ * with.
  */
 reportsRouter.get('/receivables', async (c) => {
   const user = c.var.user;
@@ -120,8 +122,9 @@ reportsRouter.get('/receivables', async (c) => {
  * GET /api/reports/receivables/:customerId?stationId=
  *
  * One customer's receivable plus how they pay: last payment, usually-pays-in,
- * this month's credit vs paid and vehicle spend. One aggregate statement. A
- * customer outside the caller's Organization is a 404.
+ * this month's credit vs paid and vehicle spend. One aggregate statement.
+ * Organization-wide like the list. A customer outside the caller's Organization,
+ * or an id that is not a uuid, is a 404.
  */
 reportsRouter.get('/receivables/:customerId', async (c) => {
   const user = c.var.user;
@@ -133,10 +136,18 @@ reportsRouter.get('/receivables/:customerId', async (c) => {
   if (scope instanceof Response) return scope;
   const { stationId } = scope;
 
+  const customerId = c.req.param('customerId');
+  if (!isUuid(customerId)) {
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } },
+      404,
+    );
+  }
+
   const clock = await loadStationClock(c.var.db, user.organizationId, stationId);
   if (!clock) return stationNotFound(c);
   const result = await new GetCustomerReceivable(new DrizzleReceivablesReader(c.var.db)).execute(
-    { stationId, customerId: c.req.param('customerId') },
+    { stationId, customerId },
     buildContext(user, { stationId, ...clock }),
   );
   return sendResult(c, result);

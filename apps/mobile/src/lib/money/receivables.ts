@@ -6,11 +6,13 @@
  * missing stays missing: `null` in, `null` out, so the screens hide a figure
  * instead of showing a zero for it.
  */
-import type {
-  CustomerLastPayment,
-  CustomerMonthFigures,
-  CustomerVehicleSpend,
-  ReceivablesAging,
+import {
+  RECEIVABLES_AGING_EDGES,
+  RECEIVABLES_SETTLED_SAMPLE,
+  type CustomerLastPayment,
+  type CustomerMonthFigures,
+  type CustomerVehicleSpend,
+  type ReceivablesAging,
 } from '@pump/shared';
 import { compactRupees, plural } from '../format.js';
 import { dayLabel } from './statement.js';
@@ -27,10 +29,13 @@ export interface AgingSegment {
   tone: AgingTone;
 }
 
+const { recentMaxDays, midMaxDays } = RECEIVABLES_AGING_EDGES;
+
+// The labels and the caption tones cut at the edges the API aged with.
 const SEGMENTS: ReadonlyArray<{ key: AgingKey; label: string; tone: AgingTone }> = [
-  { key: 'd0_7', label: '0–7 days', tone: 'good' },
-  { key: 'd8_30', label: '8–30 days', tone: 'warn' },
-  { key: 'd30plus', label: '30+ days', tone: 'bad' },
+  { key: 'd0_7', label: `0–${recentMaxDays} days`, tone: 'good' },
+  { key: 'd8_30', label: `${recentMaxDays + 1}–${midMaxDays} days`, tone: 'warn' },
+  { key: 'd30plus', label: `${midMaxDays}+ days`, tone: 'bad' },
 ];
 
 /** The three buckets with their share of the total; null when nothing is owed (no split to draw). */
@@ -53,14 +58,14 @@ export const daysLabel = (days: number): string => (days <= 0 ? 'today' : plural
 export interface OldestCaption {
   /** `Oldest 18 days`, `Oldest today`. */
   text: string;
-  /** Red past 30 days (the 30+ bucket), amber from 8, muted otherwise: the same cuts as the aging split. */
+  /** Red in the oldest bucket, amber in the middle one, muted otherwise: the same cuts as the aging split. */
   tone: 'muted' | 'warn' | 'bad';
 }
 
 /** The caption under a row's balance; null when the oldest debt is unknown (hidden, never "0 days"). */
 export function oldestCaption(days: number | null | undefined): OldestCaption | null {
   if (days == null || !Number.isFinite(days)) return null;
-  const tone = days > 30 ? 'bad' : days > 7 ? 'warn' : 'muted';
+  const tone = days > midMaxDays ? 'bad' : days > recentMaxDays ? 'warn' : 'muted';
   return { text: `Oldest ${daysLabel(days)}`, tone };
 }
 
@@ -70,7 +75,7 @@ export interface Tile {
   sub: string;
 }
 
-/** "Last payment": the amount, then `18 Sep · UPI · 21 days ago`. Null before the first payment. */
+/** "Last payment": the amount, then `18 Sep · 21 days ago`. Null before the first payment. */
 export function lastPaymentTile(p: CustomerLastPayment | null | undefined): Tile | null {
   if (!p) return null;
   const when = p.daysAgo <= 0 ? 'today' : `${plural(p.daysAgo, 'day')} ago`;
@@ -87,7 +92,7 @@ export function usuallyPaysTile(days: number | null | undefined): Tile | null {
   return {
     label: 'Usually pays in',
     value: plural(days, 'day'),
-    sub: 'avg, last 6 settled sales',
+    sub: `avg, last ${RECEIVABLES_SETTLED_SAMPLE} settled sales`,
   };
 }
 

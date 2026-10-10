@@ -138,8 +138,8 @@ describe('usually pays in', () => {
 });
 
 describe('composeCustomerReceivable', () => {
-  it('adds how long ago they last paid, relative to the Current Business Date', () => {
-    const out = composeCustomerReceivable(customerSource(), '2026-10-09');
+  it('adds how long ago they last paid, Entry Date to Entry Date', () => {
+    const out = composeCustomerReceivable(customerSource(), '2026-10-09', '2026-10-09');
     expect(out.lastPayment).toEqual({
       amount: 40000,
       entryDate: '2026-09-18',
@@ -151,9 +151,24 @@ describe('composeCustomerReceivable', () => {
     expect(out.settlementCycle).toBe('OPEN');
   });
 
+  it('measures the last payment from its Entry Date to the current Entry Date, not the Business Date', () => {
+    // Between midnight and Day Start the Business Date is still yesterday while the Entry Date is
+    // today: a Collection taken yesterday is 1 day ago, not 0.
+    const source = customerSource({
+      lastPayment: { amount: 500, entryDate: '2026-10-09', method: 'Cash' },
+    });
+    expect(composeCustomerReceivable(source, '2026-10-09', '2026-10-10').lastPayment?.daysAgo).toBe(
+      1,
+    );
+    expect(composeCustomerReceivable(source, '2026-10-09', '2026-10-09').lastPayment?.daysAgo).toBe(
+      0,
+    );
+  });
+
   it('hides, rather than zeroes, what has no data', () => {
     const out = composeCustomerReceivable(
       customerSource({ lastPayment: null, settled: { count: 2, meanDays: 9 }, vehicles: [] }),
+      '2026-10-09',
       '2026-10-09',
     );
     expect(out.lastPayment).toBeNull();
@@ -169,6 +184,7 @@ describe('composeCustomerReceivable', () => {
           { vehicleId: 'v-2', registration: 'B', type: 'Bus', amount: 100, litres: 0 },
         ],
       }),
+      '2026-10-09',
       '2026-10-09',
     );
     expect(out.vehicles).toEqual([
@@ -188,7 +204,6 @@ describe('GetReceivables', () => {
     );
     expect(reader.summaryQuery).toEqual({
       organizationId: 'org-1',
-      stationId: 'station-1',
       currentBusinessDate: '2026-10-10',
     });
   });
@@ -237,6 +252,23 @@ describe('GetCustomerReceivable', () => {
       paidFrom: '2026-11-01',
       paidTo: '2026-11-30',
     });
+  });
+
+  it('ages the last payment by Entry Date in the midnight to Day Start window', async () => {
+    // 03:00 IST on 10 Oct: the Business Date is still the 9th (Day Start 06:00), the Entry Date is the 10th.
+    const source = customerSource({
+      lastPayment: { amount: 500, entryDate: '2026-10-09', method: 'Cash' },
+    });
+    const res = await new GetCustomerReceivable(new Reader(undefined, source)).execute(
+      { stationId: 'station-1', customerId: 'c-1' },
+      ctxAt('2026-10-09T21:30:00Z'),
+    );
+    expect(res.success).toBe(true);
+    if (res.success) {
+      expect(res.data.lastPayment?.daysAgo).toBe(1);
+      // Open debits still age against the Business Date (the 9th): 1 Oct is 8 days old.
+      expect(res.data.oldestUnpaidDays).toBe(8);
+    }
   });
 
   it('answers not found when the customer is not in the organization', async () => {

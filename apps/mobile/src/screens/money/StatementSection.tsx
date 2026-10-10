@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { inr } from '@pump/ui';
+import { isBalancedVariance } from '@pump/shared';
 import {
   buildStatement,
   fullDayLabel,
@@ -7,7 +8,7 @@ import {
   type LedgerRow,
   type PartyKind,
 } from '../../lib/money/statement.js';
-import { signedRupees } from '../../lib/money/format.js';
+import { signedMoney } from '../../lib/format.js';
 import { Note } from '../../ui/Note.js';
 import { SectionLabel } from '../../ui/SectionLabel.js';
 import { SeeAllButton } from '../../ui/SeeAllButton.js';
@@ -19,8 +20,10 @@ export interface StatementWindow {
   from: string;
   /** Owed just before `from` (the ranged ledger's periodOpeningBalance). */
   openingBalance: number;
-  /** Fetch an earlier window; absent when there is nothing earlier to show. */
+  /** Fetch an earlier window; absent when there is no entry before `from` at all. */
   onEarlier?: () => void;
+  /** An earlier window is being fetched: the rows stay, the button says so. */
+  isLoadingEarlier?: boolean;
 }
 
 interface Props {
@@ -37,7 +40,7 @@ interface Props {
 
 /** What a windowed statement says about everything before its first row. */
 const CarriedForward: React.FC<{ period: StatementWindow }> = ({ period }) => {
-  const settled = Math.abs(period.openingBalance) < 0.005;
+  const settled = isBalancedVariance(period.openingBalance);
   return (
     <div className="flex items-center gap-2.5 border-t border-line bg-card-alt px-3 py-2.5 text-[11.5px] text-text-muted">
       <p className="min-w-0 flex-1">
@@ -48,7 +51,7 @@ const CarriedForward: React.FC<{ period: StatementWindow }> = ({ period }) => {
       {!settled && (
         <p className="num flex-shrink-0 text-[13px] font-semibold text-text-high">
           {period.openingBalance < 0
-            ? signedRupees(period.openingBalance)
+            ? signedMoney(period.openingBalance)
             : inr(period.openingBalance)}
         </p>
       )}
@@ -88,7 +91,7 @@ export const StatementSection: React.FC<Props> = ({
             Retry
           </button>
         </Note>
-      ) : statement.total === 0 && !(period && Math.abs(period.openingBalance) >= 0.005) ? (
+      ) : statement.total === 0 && !(period && !isBalancedVariance(period.openingBalance)) ? (
         <Note>
           {statement.reconciled
             ? period
@@ -100,11 +103,15 @@ export const StatementSection: React.FC<Props> = ({
         <StatementList
           statement={statement}
           onLoadMore={() => setVisible((n) => n + STATEMENT_PAGE)}
-          trailing={period && <CarriedForward period={period} />}
+          // While a wider window loads, the rows (and their opening balance) are the previous
+          // window's: the footer would name the new `from`, so it waits for the data.
+          trailing={period && !period.isLoadingEarlier && <CarriedForward period={period} />}
         />
       )}
       {period?.onEarlier && !isLoading && !isError && !statement.hasMore && (
-        <SeeAllButton onClick={period.onEarlier}>Earlier months</SeeAllButton>
+        <SeeAllButton onClick={period.onEarlier} disabled={period.isLoadingEarlier}>
+          {period.isLoadingEarlier ? 'Loading earlier months…' : 'Earlier months'}
+        </SeeAllButton>
       )}
     </>
   );

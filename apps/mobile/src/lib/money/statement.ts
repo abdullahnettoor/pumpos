@@ -1,4 +1,4 @@
-import { formatShiftLabel } from '@pump/shared';
+import { formatShiftLabel, isBalancedVariance } from '@pump/shared';
 
 /**
  * The party statement (Customer or Supplier): the ledger rows turned into a running balance,
@@ -75,9 +75,6 @@ export interface Statement {
    */
   reconciled: boolean;
 }
-
-/** Within half a paisa: the ledger and the balance are numeric(14,2) sums. */
-const RECONCILE_TOLERANCE = 0.005;
 
 export const STATEMENT_PAGE = 20;
 
@@ -247,7 +244,7 @@ export function buildStatement(
   const closingBalance = entries.length ? running : null;
   const reconciled =
     expectedBalance === undefined ||
-    Math.abs((closingBalance ?? running) - expectedBalance) < RECONCILE_TOLERANCE;
+    isBalancedVariance((closingBalance ?? running) - expectedBalance);
 
   const newestFirst = entries.slice().reverse();
   const shownEntries = newestFirst.slice(0, Math.max(0, visible));

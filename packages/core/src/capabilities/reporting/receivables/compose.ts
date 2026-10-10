@@ -16,9 +16,9 @@ const roundAging = (a: ReceivablesAging): ReceivablesAging => ({
   d30plus: round2(a.d30plus),
 });
 
-/** Whole days an open debit has been waiting; never negative (a back-dated clock cannot age a debit below 0). */
-export const ageInDays = (oldestUnpaidDate: string, currentBusinessDate: string): number =>
-  Math.max(0, businessDateDiffDays(oldestUnpaidDate, currentBusinessDate));
+/** Whole calendar days from a date to a later one; never negative (a back-dated clock cannot age below 0). */
+export const ageInDays = (from: string, to: string): number =>
+  Math.max(0, businessDateDiffDays(from, to));
 
 function composeRow(row: ReceivableSourceRow, currentBusinessDate: string): CustomerReceivable {
   return {
@@ -53,9 +53,16 @@ export function usuallyPaysInDays(settled: { count: number; meanDays: number }):
   return settled.count >= RECEIVABLES_MIN_SETTLED_SALES ? Math.round(settled.meanDays) : null;
 }
 
+/**
+ * `currentEntryDate` is today's Entry Date (station calendar date, no Day
+ * Start): a Collection is an Office Record dated by it, so "last payment N days
+ * ago" is measured between two Entry Dates. Open debits are Business-Day dated
+ * and age against the Current Business Date.
+ */
 export function composeCustomerReceivable(
   source: CustomerReceivableSource,
   currentBusinessDate: string,
+  currentEntryDate: string,
 ): CustomerReceivableSummary {
   const { lastPayment, month } = source;
   return {
@@ -66,7 +73,7 @@ export function composeCustomerReceivable(
           amount: round2(lastPayment.amount),
           entryDate: lastPayment.entryDate,
           method: lastPayment.method,
-          daysAgo: ageInDays(lastPayment.entryDate, currentBusinessDate),
+          daysAgo: ageInDays(lastPayment.entryDate, currentEntryDate),
         }
       : null,
     usuallyPaysInDays: usuallyPaysInDays(source.settled),

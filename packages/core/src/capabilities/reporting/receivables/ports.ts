@@ -3,6 +3,7 @@ import type {
   CustomerMonthFigures,
   CustomerVehicleSpend,
   ReceivablesAging,
+  SettlementCycle,
 } from '@pump/shared';
 
 /**
@@ -15,9 +16,13 @@ import type {
  * many entries they have.
  */
 
+/**
+ * Receivables are Organization-wide: a customer and its balance belong to the
+ * Organization (like the customers list's `currentBalance`), so a query names no
+ * Station. The Station only gates access (the route) and supplies the clock.
+ */
 export interface ReceivablesQuery {
   organizationId: string;
-  stationId: string;
   /** The Current Business Date (station timezone + Day Start): the "now" an age is measured to. */
   currentBusinessDate: string;
 }
@@ -49,7 +54,7 @@ export interface CustomerReceivableQuery extends ReceivablesQuery {
 }
 
 export interface CustomerReceivableSource {
-  settlementCycle: string;
+  settlementCycle: SettlementCycle;
   receivable: ReceivableSourceRow;
   lastPayment: Omit<CustomerLastPayment, 'daysAgo'> | null;
   /** Their most recent settled Credit Sales: how many (up to the sample size) and the mean days to settle. */

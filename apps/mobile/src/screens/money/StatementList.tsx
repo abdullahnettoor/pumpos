@@ -1,6 +1,6 @@
 import React from 'react';
 import { inr } from '@pump/ui';
-import { signedRupees } from '../../lib/money/format.js';
+import { signedMoney } from '../../lib/format.js';
 import type { Statement } from '../../lib/money/statement.js';
 
 /** Statement of a Customer: months newest first, each row with its running balance. */
@@ -51,7 +51,7 @@ export const StatementList: React.FC<{
                     {inr(Math.abs(e.delta))}
                   </p>
                   {e.balance !== null && (
-                    <p className="num text-[11px] text-text-muted">Bal {signedRupees(e.balance)}</p>
+                    <p className="num text-[11px] text-text-muted">Bal {signedMoney(e.balance)}</p>
                   )}
                 </div>
               </li>
