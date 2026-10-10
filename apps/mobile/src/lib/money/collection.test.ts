@@ -215,6 +215,23 @@ describe('idempotency keys', () => {
     expect(isEarlierAttemptReceived(err('NETWORK', 'Network error'))).toBe(false);
   });
 
+  it('any other conflict is not "the earlier attempt arrived"', () => {
+    const business = err('CONFLICT', 'This customer was archived', 409);
+    expect(isEarlierAttemptReceived(business)).toBe(false);
+    expect(keepsIdempotencyKey(business)).toBe(false);
+    expect(
+      isEarlierAttemptReceived(
+        err('CONFLICT', 'This Idempotency-Key belongs to another user', 409),
+      ),
+    ).toBe(false);
+    expect(
+      isEarlierAttemptReceived(
+        err('CONFLICT', 'A request with this Idempotency-Key is already in progress', 409),
+      ),
+    ).toBe(false);
+    expect(collectionFailure(business).message).toBe('This customer was archived');
+  });
+
   it('compares entries as the server reads them (trimmed)', () => {
     const a = form({ amount: '5000', notes: 'ref' });
     expect(sameCollectionEntries(a, form({ amount: ' 5000 ', notes: ' ref ' }))).toBe(true);

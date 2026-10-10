@@ -46,6 +46,8 @@ const BIG_USER = id(22);
 const FUEL = id(30); // sold in litres
 const LUBE = id(31); // sold in units
 const OTHER_FUEL = id(32);
+const FUEL_LTR = id(33); // fuel whose unit was typed 'Ltr'
+const BULK_OIL = id(34); // not fuel, though its unit is 'L'
 const CASH_ACCOUNT = id(40);
 const OTHER_CASH_ACCOUNT = id(41);
 const BIG_CASH_ACCOUNT = id(42);
@@ -167,6 +169,22 @@ describe.skipIf(!CONNECTION)('Receivables reader against real Postgres', () => {
         code: 'OIL',
         productType: 'LUBRICANT',
         unit: 'Nos',
+      },
+      {
+        id: FUEL_LTR,
+        organizationId: ORG,
+        name: 'Speed diesel',
+        code: 'XHSD',
+        productType: 'FUEL',
+        unit: 'Ltr',
+      },
+      {
+        id: BULK_OIL,
+        organizationId: ORG,
+        name: 'Bulk engine oil',
+        code: 'BOIL',
+        productType: 'LUBRICANT',
+        unit: 'L',
       },
       {
         id: OTHER_FUEL,
@@ -627,18 +645,20 @@ describe.skipIf(!CONNECTION)('Receivables reader against real Postgres', () => {
       expect((await reader.customer(customerQuery(c)))?.settled.count).toBe(0);
     });
 
-    it('sums this month: credit, slips, litres (litre products only) and paid', async () => {
+    it('sums this month: credit, slips, litres (fuel products only, whatever their unit) and paid', async () => {
       const c = await customer('This month');
       await txn(c, '2026-09-30', 999, { quantity: 99, productId: FUEL }); // last month
       await txn(c, '2026-10-02', 1000, { quantity: 10.5, productId: FUEL });
       await txn(c, '2026-10-03', 500, { quantity: 4, productId: LUBE }); // units, not litres
       await txn(c, '2026-10-04', 250, { quantity: 2.25, productId: FUEL });
+      await txn(c, '2026-10-04', 90, { quantity: 1.5, productId: FUEL_LTR }); // fuel typed 'Ltr'
+      await txn(c, '2026-10-04', 300, { quantity: 3, productId: BULK_OIL }); // unit 'L', not fuel
       await txn(c, '2026-10-05', 777, { type: 'OMC Sale' });
       await txn(c, '2026-10-05', 40, { type: 'Adjustment' }); // not a slip
       await collect(c, '2026-10-06', 300);
       await collect(c, '2026-09-29', 11); // last month
       const one = await reader.customer(customerQuery(c));
-      expect(one?.month).toEqual({ credit: 1750, slips: 3, litres: 12.75, paid: 300 });
+      expect(one?.month).toEqual({ credit: 2140, slips: 5, litres: 14.25, paid: 300 });
     });
 
     it('measures credit by its own range and paid by its own range', async () => {

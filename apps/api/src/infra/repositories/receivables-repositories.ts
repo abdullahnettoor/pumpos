@@ -233,9 +233,11 @@ export class DrizzleReceivablesReader implements ReceivablesReader {
         ORDER BY co.entry_date DESC, co.created_at DESC
         LIMIT 1
       ),
+      -- Litres = fuel sold on credit. Fuel is told apart by product type, never by the
+      -- free-text unit ('L', 'Ltr', 'Litre' are all typed in the wild).
       month_sales AS (
         SELECT COALESCE(SUM(d.amount), 0) AS credit, COUNT(*)::int AS slips,
-          COALESCE(SUM(CASE WHEN p.unit = 'L' THEN d.quantity END), 0) AS litres
+          COALESCE(SUM(CASE WHEN p.product_type = 'FUEL' THEN d.quantity END), 0) AS litres
         FROM debits d
         LEFT JOIN products p ON p.id = d.product_id AND p.organization_id = ${org}
         WHERE d.type = 'Credit Sale' AND d.date >= ${q.creditFrom} AND d.date <= ${q.creditTo}
@@ -247,7 +249,7 @@ export class DrizzleReceivablesReader implements ReceivablesReader {
       ),
       vehicle_spend AS (
         SELECT cv.id, cv.registration_number, cv.vehicle_type, SUM(d.amount) AS amount,
-          COALESCE(SUM(CASE WHEN p.unit = 'L' THEN d.quantity END), 0) AS litres
+          COALESCE(SUM(CASE WHEN p.product_type = 'FUEL' THEN d.quantity END), 0) AS litres
         FROM debits d
         JOIN customer_vehicles cv
           ON cv.id = d.vehicle_id AND cv.organization_id = ${org} AND cv.customer_id = d.customer_id
