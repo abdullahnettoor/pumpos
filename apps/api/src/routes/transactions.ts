@@ -99,6 +99,11 @@ import {
   DrizzleShiftRepository,
   DrizzleBusinessDayRepository,
 } from '../infra/repositories/station-ops-repositories.js';
+import {
+  DrizzleCustomerLedgerReader,
+  DrizzleSupplierLedgerReader,
+  parsePartyLedgerRange,
+} from '../infra/repositories/party-ledger-readers.js';
 
 type Variables = {
   db: DbClient;
@@ -423,12 +428,32 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
       404,
     );
   }
-  // TODO (ledger scaling): this returns the supplier's ALL-TIME transactions and
-  // the client computes the period opening + in-range rows. Bounded per single
-  // supplier, so fine for now. When a supplier's history grows large, mirror the
-  // account-statement pattern: accept from/to, return
-  // { periodOpeningBalance: Σ(debit − credit) WHERE businessDate < from, entries: in-range only }
-  // and drop the client-side clampByDate/opening computation in UnifiedLedger.
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  const parsedRange = parsePartyLedgerRange(from, to);
+  if (parsedRange && 'error' in parsedRange) {
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: parsedRange.error } },
+      400,
+    );
+  }
+  if (parsedRange) {
+    const statement = await new DrizzleSupplierLedgerReader(db).statement(
+      user.organizationId,
+      supplierId,
+      parsedRange.range,
+    );
+    return c.json({
+      success: true,
+      data: {
+        periodOpeningBalance: statement.periodOpeningBalance,
+        closingBalance: statement.closingBalance,
+        entries: statement.entries,
+      },
+    });
+  }
+
+  // Keep the legacy all-time response shape for desktop and older mobile clients.
   const list = await db
     .select({
       id: schema.supplierTransactions.id,
@@ -617,12 +642,32 @@ transactionsRouter.get('/customers/:id/ledger', async (c) => {
       404,
     );
   }
-  // TODO (ledger scaling): this returns the customer's ALL-TIME transactions and
-  // the client computes the period opening + in-range rows. Bounded per single
-  // customer, so fine for now. When a customer's history grows large, mirror the
-  // account-statement pattern: accept from/to, return
-  // { periodOpeningBalance: Σ(debit − credit) WHERE businessDate < from, entries: in-range only }
-  // and drop the client-side clampByDate/opening computation in UnifiedLedger.
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  const parsedRange = parsePartyLedgerRange(from, to);
+  if (parsedRange && 'error' in parsedRange) {
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: parsedRange.error } },
+      400,
+    );
+  }
+  if (parsedRange) {
+    const statement = await new DrizzleCustomerLedgerReader(db).statement(
+      user.organizationId,
+      customerId,
+      parsedRange.range,
+    );
+    return c.json({
+      success: true,
+      data: {
+        periodOpeningBalance: statement.periodOpeningBalance,
+        closingBalance: statement.closingBalance,
+        entries: statement.entries,
+      },
+    });
+  }
+
+  // Keep the legacy all-time response shape for desktop and older mobile clients.
   // Credit sales / adjustments come from the customer ledger; collections are
   // Office Records read from `collections` (ADR 0005). `businessDate` is the
   // ledger date: Business Date for a sale, Entry Date for a collection.
