@@ -7,6 +7,8 @@ import { BottomSheet } from '../ui/BottomSheet.js';
 import { ListGroup, ListRow } from '../ui/ListRow.js';
 import { SectionLabel } from '../ui/SectionLabel.js';
 import { BuildingIcon, CheckIcon, SignOutIcon } from '../ui/icons.js';
+import { TeamPage } from '../screens/team/TeamPage.js';
+import { useNav } from './nav.js';
 import { activeMembers, onShiftNames } from './team.js';
 
 interface Props {
@@ -23,8 +25,11 @@ interface Props {
 const PLAN_LABEL: Record<string, string> = { CORE: 'Core' };
 const AVATARS_SHOWN = 4;
 
-/** Read-only team summary: member count and who is on the open shift here. */
-const TeamSummary: React.FC<{ stationId: string | null }> = ({ stationId }) => {
+/** Team summary (member count, who is on the open shift here) that opens the Team page. */
+const TeamSummary: React.FC<{ stationId: string | null; onOpen: () => void }> = ({
+  stationId,
+  onOpen,
+}) => {
   const usersQ = useUsers();
   const statusQ = useShiftStatus(stationId);
   const members = activeMembers<{ id: string; fullName?: string; status?: string }>(usersQ.data);
@@ -38,6 +43,7 @@ const TeamSummary: React.FC<{ stationId: string | null }> = ({ stationId }) => {
       <SectionLabel right={usersQ.isLoading ? undefined : count}>Team</SectionLabel>
       <ListGroup>
         <ListRow
+          onPress={onOpen}
           leading={
             <span className="flex">
               {shown.map((u, i) => (
@@ -66,6 +72,7 @@ const SheetBody: React.FC<Omit<Props, 'open'>> = ({
   // Mounted only while the sheet is open, so these fetch on open.
   const orgQ = useOrganization();
   const accessQ = useAccess();
+  const nav = useNav();
   const orgName: string | undefined = orgQ.data?.name;
   const plan = accessQ.data?.plan;
 
@@ -119,7 +126,13 @@ const SheetBody: React.FC<Omit<Props, 'open'>> = ({
         })}
       </ListGroup>
 
-      <TeamSummary stationId={selectedStationId} />
+      <TeamSummary
+        stationId={selectedStationId}
+        onOpen={() => {
+          onClose();
+          nav.push(<TeamPage />, 'team');
+        }}
+      />
 
       <div className="px-4 empty:hidden [&:not(:empty)]:pt-4">
         <AppearanceControl />
@@ -159,7 +172,7 @@ const stationButton = () =>
 
 /**
  * Bottom sheet behind the station name and avatar: who is signed in, the
- * station switcher, a read-only team summary, the Organization and Sign out.
+ * station switcher, the team summary (opens the Team page), the Organization and Sign out.
  * The Appearance row is mounted but renders nothing until it ships (theme/config.ts).
  */
 export const AccountSheet: React.FC<Props> = ({ open, onClose, ...body }) => (

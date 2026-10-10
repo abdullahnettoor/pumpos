@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import React, { useLayoutEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Role, Station } from '@pump/shared';
 import { THEME_COLORS, THEME_STORAGE_KEY } from '../theme/config.js';
@@ -36,6 +37,7 @@ vi.mock('@pump/ui', async (importOriginal) => {
     ...actual,
     useMyAssignment: () => query(mine.assignment),
     useUsers: () => query(users),
+    useStations: () => query([]),
     useShiftStatus: () => query(shiftStatus),
     useOrganization: () => query({ name: 'Malabar Fuels Pvt Ltd' }),
     useAccess: () => query({ plan: 'CORE' }),
@@ -100,6 +102,8 @@ const Root: React.FC<{ tab: string; stationName: string }> = ({ tab, stationName
   );
 };
 
+const queryClient = new QueryClient();
+
 const Harness: React.FC<{
   role?: Role;
   onSignOut?: () => void;
@@ -108,23 +112,25 @@ const Harness: React.FC<{
   const [stationId, setStationId] = useState('st-1');
   const name = stations.find((s) => s.id === stationId)!.name;
   return (
-    <ThemeProvider appearanceEnabled={false} devSwitchEnabled={false}>
-      <NavProvider tabs={tabsForRole(role, false)}>
-        <Probe />
-        <MobileShell
-          userName="Abdullah Nettoor"
-          role={role}
-          stations={stations}
-          selectedStationId={stationId}
-          onSelectStation={(id) => {
-            setStationId(id);
-            onStationChange?.(id);
-          }}
-          onSignOut={onSignOut}
-          renderRoot={(tab) => <Root tab={tab} stationName={name} />}
-        />
-      </NavProvider>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider appearanceEnabled={false} devSwitchEnabled={false}>
+        <NavProvider tabs={tabsForRole(role, false)}>
+          <Probe />
+          <MobileShell
+            userName="Abdullah Nettoor"
+            role={role}
+            stations={stations}
+            selectedStationId={stationId}
+            onSelectStation={(id) => {
+              setStationId(id);
+              onStationChange?.(id);
+            }}
+            onSignOut={onSignOut}
+            renderRoot={(tab) => <Root tab={tab} stationName={name} />}
+          />
+        </NavProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 };
 
@@ -303,16 +309,27 @@ describe('Account sheet', () => {
     expect(screen.getByText('shifts list · City Fuels')).toBeTruthy();
   });
 
-  it('shows a read-only team summary: member count and who is on shift now', () => {
+  it('shows the team summary: member count and who is on shift now', () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Account' }));
     const s = within(sheet()!);
     expect(s.getByText('3 members')).toBeTruthy(); // the inactive user is not counted
     expect(s.getByText('2 on shift now')).toBeTruthy(); // Ramesh is on two DUs, counted once
     expect(s.getByText('Ramesh K, Sajid P')).toBeTruthy();
-    // Read-only: no control in the Team group.
-    const team = s.getByText('2 on shift now').closest('div[class*="rounded-[14px]"]')!;
-    expect(within(team as HTMLElement).queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it('opens the Team page from the Team row and closes the sheet', async () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+    fireEvent.click(within(sheet()!).getByRole('button', { name: /2 on shift now/ }));
+    expect(sheet()).toBeNull();
+    expect(holder.nav.depth).toBe(1);
+    expect(await screen.findByRole('heading', { name: 'Team' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Ramesh K/ })).toBeTruthy();
+    // Back returns to the tab the person was on.
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await settle();
+    expect(holder.nav.depth).toBe(0);
   });
 
   it('shows the Organization name and plan', () => {

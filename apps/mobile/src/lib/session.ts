@@ -37,6 +37,8 @@ export interface SessionState {
   session: any;
   role: Role | null;
   userName: string;
+  /** The signed-in user's member id (`users.id`), for the Team page. */
+  userId: string | null;
   error: { message: string; code?: string } | null;
 }
 
@@ -52,6 +54,7 @@ export function useSession(): SessionState {
     session: null,
     role: null,
     userName: '',
+    userId: null,
     error: null,
   });
 
@@ -64,7 +67,14 @@ export function useSession(): SessionState {
         // user's persisted static data (stations, etc.) can't bleed into or
         // stale the next session.
         clearClientSessionData(qc);
-        setState({ status: 'signed-out', session: null, role: null, userName: '', error: null });
+        setState({
+          status: 'signed-out',
+          session: null,
+          role: null,
+          userName: '',
+          userId: null,
+          error: null,
+        });
         return;
       }
       setAuthToken(session.access_token);
@@ -82,6 +92,7 @@ export function useSession(): SessionState {
           session,
           role: ctx.user.role,
           userName: ctx.user.fullName?.trim() || ctx.user.email,
+          userId: ctx.user.id ?? null,
           error: null,
         });
       } catch (e: any) {
@@ -90,6 +101,7 @@ export function useSession(): SessionState {
           session,
           role: null,
           userName: '',
+          userId: null,
           error: { message: e?.message ?? 'Failed to load session', code: e?.code },
         });
       }
