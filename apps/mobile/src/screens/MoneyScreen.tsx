@@ -16,8 +16,8 @@ const LISTS = [
 
 interface Props {
   /**
-   * What a supplier row opens. The Supplier page (#397) passes itself in here
-   * from `TabRoot`; until then supplier rows are not tappable.
+   * What a supplier row opens. `TabRoot` passes the Supplier page in here;
+   * unset, supplier rows are plain, non-tappable rows.
    */
   renderSupplierPage?: (supplier: MoneySupplier) => React.ReactNode;
 }

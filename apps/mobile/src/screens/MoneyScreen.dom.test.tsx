@@ -12,6 +12,7 @@ const customers: any[] = [];
 const suppliers: any[] = [];
 const ledgers: Record<string, any[]> = {};
 const ledgerState = { isLoading: false, isError: false };
+const supplierLedgers: Record<string, any[]> = {};
 
 vi.mock('@pump/ui', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -19,6 +20,12 @@ vi.mock('@pump/ui', async (importOriginal) => {
     ...actual,
     useCustomers: () => ({ data: customers, isLoading: false }),
     useSuppliers: () => ({ data: suppliers, isLoading: false }),
+    useSupplierLedger: (id: string) => ({
+      data: supplierLedgers[id] ?? [],
+      isLoading: ledgerState.isLoading,
+      isError: ledgerState.isError,
+      refetch: vi.fn(),
+    }),
     useCustomerLedger: (id: string) => ({
       data: ledgers[id] ?? [],
       isLoading: ledgerState.isLoading,
@@ -29,6 +36,7 @@ vi.mock('@pump/ui', async (importOriginal) => {
 });
 
 const { MoneyScreen } = await import('./MoneyScreen.js');
+const { SupplierPage } = await import('./money/SupplierPage.js');
 const { NavProvider, useNav } = await import('../shell/nav.js');
 const { stackOf } = await import('../shell/navStack.js');
 
@@ -73,6 +81,7 @@ beforeEach(() => {
   customers.length = 0;
   suppliers.length = 0;
   for (const k of Object.keys(ledgers)) delete ledgers[k];
+  for (const k of Object.keys(supplierLedgers)) delete supplierLedgers[k];
   ledgerState.isLoading = false;
   ledgerState.isError = false;
   customers.push(
@@ -484,5 +493,194 @@ describe('Customer page', () => {
       expect(screen.getByText(/Couldn’t load the statement/)).toBeTruthy();
       expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
     });
+  });
+});
+
+describe('Supplier page', () => {
+  const mountSupplier = () =>
+    mount({ renderSupplierPage: (s) => <SupplierPage supplier={s} /> }) &&
+    fireEvent.click(screen.getByRole('radio', { name: 'To pay' }));
+  const openSupplier = (name: string) => {
+    mountSupplier();
+    fireEvent.change(screen.getByLabelText('Search suppliers'), { target: { value: name } });
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(name) }));
+  };
+  const balance = () => screen.getByRole('region', { name: 'Balance' });
+  const sup = (over: Record<string, unknown>) => ({
+    id: String(over.name),
+    phone: null,
+    metadata: null,
+    currentBalance: 0,
+    ...over,
+  });
+
+  it('opens from a To pay row with GSTIN, vendor code, call button and the amount owed', () => {
+    suppliers.push(
+      sup({
+        name: 'Indus Fuels',
+        phone: '0495 222 333',
+        currentBalance: '25000',
+        metadata: { gstin: '32AAACH1118R1Z5', vendorCode: 'V-014' },
+      }),
+    );
+    openSupplier('Indus');
+    expect(screen.getByRole('heading', { name: 'Indus Fuels' })).toBeTruthy();
+    expect(screen.getByText('GSTIN 32AAACH1118R1Z5 · Code V-014')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Call Indus Fuels' }).getAttribute('href')).toBe(
+      'tel:0495222333',
+    );
+    expect(balance().getAttribute('data-state')).toBe('owes');
+    expect(within(balance()).getByText('You owe')).toBeTruthy();
+    expect(within(balance()).getByText('₹25,000.00')).toBeTruthy();
+    // no credit limit, no due dates
+    expect(document.body.textContent).not.toMatch(/limit|overdue|due on|oldest/i);
+  });
+
+  it('omits GSTIN, vendor code and the call button when the supplier has none', () => {
+    openSupplier('Gulf');
+    expect(screen.getByRole('heading', { name: 'Gulf Oil Lubricants' })).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/GSTIN|Code /);
+    expect(screen.queryByRole('link', { name: /Call/ })).toBeNull();
+  });
+
+  it('shows only the part that is present: GSTIN without a code, a code without GSTIN', () => {
+    suppliers.push(
+      sup({ name: 'Only Gst', currentBalance: 1, metadata: { gstin: '29ABCDE1234F1Z5' } }),
+      sup({ name: 'Only Code', currentBalance: 1, metadata: { vendorCode: 'V-9' } }),
+    );
+    openSupplier('Only Gst');
+    expect(screen.getByText('GSTIN 29ABCDE1234F1Z5')).toBeTruthy();
+    cleanup();
+    openSupplier('Only Code');
+    expect(screen.getByText('Code V-9')).toBeTruthy();
+  });
+
+  it('shows an advance (negative balance) and a settled supplier', () => {
+    suppliers.push(
+      sup({ name: 'Prepaid Petro', currentBalance: '-16800' }),
+      sup({ name: 'Even Oil', currentBalance: '0' }),
+    );
+    openSupplier('Prepaid');
+    expect(balance().getAttribute('data-state')).toBe('advance');
+    expect(within(balance()).getByText('Advance')).toBeTruthy();
+    expect(within(balance()).getByText('₹16,800.00')).toBeTruthy();
+    cleanup();
+
+    openSupplier('Even');
+    expect(balance().getAttribute('data-state')).toBe('settled');
+    expect(within(balance()).getByText('Settled')).toBeTruthy();
+    expect(within(balance()).getByText('₹0.00')).toBeTruthy();
+    expect(within(balance()).getByText('Nothing due.')).toBeTruthy();
+  });
+
+  it('has no action bar yet and none of the payables-summary figures', () => {
+    openSupplier('HPCL');
+    expect(screen.queryByRole('button', { name: /Share|Download/ })).toBeNull();
+    expect(document.body.textContent).not.toMatch(
+      /Purchased this month|Paid this month|Purchases by product|Oldest unpaid/i,
+    );
+  });
+
+  describe('statement', () => {
+    const LEDGER = [
+      { id: 'o', transactionType: 'Opening Balance', amount: '50000', businessDate: '2026-08-31' },
+      {
+        id: 'p1',
+        transactionType: 'Purchase',
+        amount: '1043200',
+        notes: 'INV-1',
+        businessDate: '2026-09-27',
+      },
+      { id: 'y1', transactionType: 'Payment', amount: '1110000', businessDate: '2026-09-29' },
+      { id: 'p2', transactionType: 'Purchase', amount: '1029000', businessDate: '2026-10-03' },
+      { id: 'y2', transactionType: 'Payment', amount: '980000', businessDate: '2026-10-06' },
+      { id: 'p3', transactionType: 'Purchase', amount: '1043200', businessDate: '2026-10-09' },
+    ];
+    const months = () =>
+      screen.getAllByRole('region').filter((r) => r.getAttribute('aria-label') !== 'Balance');
+
+    it('groups by month, newest first, with a running balance that crosses into an advance', () => {
+      suppliers.push(sup({ name: 'Ledger Lal', currentBalance: '1075400' }));
+      supplierLedgers['Ledger Lal'] = LEDGER;
+      openSupplier('Ledger');
+      expect(months().map((r) => r.getAttribute('aria-label'))).toEqual([
+        'October 2026',
+        'September 2026',
+        'August 2026',
+      ]);
+      const oct = within(months()[0])
+        .getAllByRole('listitem')
+        .map((li) => li.textContent);
+      expect(oct[0]).toContain('Purchase');
+      expect(oct[0]).toContain('+₹10,43,200.00');
+      expect(oct[0]).toContain('Bal ₹10,75,400.00');
+      expect(oct[1]).toContain('Payment made');
+      expect(oct[1]).toContain('−₹9,80,000.00');
+      expect(oct[1]).toContain('6 Oct');
+      expect(oct[1]).toContain('Bal ₹32,200.00');
+      const sep = within(months()[1])
+        .getAllByRole('listitem')
+        .map((li) => li.textContent);
+      // paid more than owed: negative running balance = advance
+      expect(sep[0]).toContain('Payment made');
+      expect(sep[0]).toContain('Bal −₹16,800.00');
+      expect(sep[1]).toContain('27 Sep · INV-1');
+      expect(sep[1]).toContain('Bal ₹10,93,200.00');
+      expect(within(months()[2]).getByText('Opening balance')).toBeTruthy();
+      expect(screen.getByText(/Showing 6 of 6 entries/)).toBeTruthy();
+      expect(screen.queryByRole('note')).toBeNull();
+    });
+
+    it('drops the running balance when the rows do not add up to the supplier balance', () => {
+      suppliers.push(sup({ name: 'Ledger Lal', currentBalance: '999' }));
+      supplierLedgers['Ledger Lal'] = LEDGER;
+      openSupplier('Ledger');
+      expect(within(balance()).getByText('₹999.00')).toBeTruthy();
+      expect(screen.getByRole('note').textContent).toMatch(/Partial statement/);
+      expect(document.body.textContent).not.toMatch(/Bal [₹−]/);
+    });
+
+    it('pages with Load more', () => {
+      suppliers.push(sup({ name: 'Ledger Lal', currentBalance: '45' }));
+      supplierLedgers['Ledger Lal'] = Array.from({ length: 45 }, (_, i) => ({
+        id: `r${i}`,
+        transactionType: 'Purchase',
+        amount: '1',
+        businessDate: '2026-10-01',
+      }));
+      openSupplier('Ledger');
+      expect(screen.getByText(/Showing 20 of 45 entries/)).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+      expect(screen.getByText(/Showing 40 of 45 entries/)).toBeTruthy();
+    });
+
+    it('shows loading, empty and error states', () => {
+      ledgerState.isLoading = true;
+      openSupplier('HPCL');
+      expect(screen.getByText('Loading statement…')).toBeTruthy();
+      cleanup();
+
+      ledgerState.isLoading = false;
+      suppliers.push(sup({ name: 'Brand New', currentBalance: '0' }));
+      openSupplier('Brand');
+      expect(screen.getByText('No transactions yet.')).toBeTruthy();
+      cleanup();
+
+      ledgerState.isError = true;
+      openSupplier('HPCL');
+      expect(screen.getByText(/Couldn’t load the statement/)).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+    });
+  });
+
+  it('goes back to the Money tab', async () => {
+    openSupplier('HPCL');
+    await act(async () => {
+      holder.nav.back();
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    // (this harness remounts the root; the shell keeps it mounted)
+    expect(screen.getByRole('radio', { name: 'To pay' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'HPCL Kozhikode Depot' })).toBeNull();
   });
 });

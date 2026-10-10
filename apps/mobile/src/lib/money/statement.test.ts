@@ -121,6 +121,64 @@ describe('buildStatement', () => {
   });
 });
 
+describe('supplier statement', () => {
+  // Σ purchases − payments; a Payment reduces what you owe.
+  const SUPPLIER: LedgerRow[] = [
+    row('o', 'Opening Balance', 50000, '2026-08-31'),
+    row('p1', 'Purchase', 1043200, '2026-09-27', { notes: 'INV-1' }),
+    row('pay1', 'Payment', 1110000, '2026-09-29'),
+    row('p2', 'Purchase', 1029000, '2026-10-03'),
+    row('pay2', 'Payment', 980000, '2026-10-06'),
+    row('p3', 'Purchase', 1043200, '2026-10-09'),
+  ];
+
+  it('runs the balance with a Payment as the reduction and closes on the supplier balance', () => {
+    const s = buildStatement(SUPPLIER, 20, 1075400, 'supplier');
+    expect(s.reconciled).toBe(true);
+    expect(s.closingBalance).toBe(1075400);
+    expect(s.months.flatMap((m) => m.entries).map((e) => e.balance)).toEqual([
+      1075400, 32200, 1012200, -16800, 1093200, 50000,
+    ]);
+  });
+
+  it('goes negative (an advance) across months and keeps the sign', () => {
+    const s = buildStatement(SUPPLIER.slice(0, 3), 20, -16800, 'supplier');
+    expect(s.reconciled).toBe(true);
+    const entries = s.months.flatMap((m) => m.entries);
+    expect(entries[0]).toMatchObject({ key: 'pay1', delta: -1110000, balance: -16800 });
+    expect(s.months.map((m) => m.label)).toEqual(['September 2026', 'August 2026']);
+  });
+
+  it('labels purchases and payments, and a Collection does not reduce a supplier balance', () => {
+    const entries = buildStatement(SUPPLIER, 20, undefined, 'supplier').months.flatMap(
+      (m) => m.entries,
+    );
+    const byKey = Object.fromEntries(entries.map((e) => [e.key, e]));
+    expect(byKey.p1).toMatchObject({ label: 'Purchase', delta: 1043200, meta: '27 Sep · INV-1' });
+    expect(byKey.pay1).toMatchObject({ label: 'Payment made', delta: -1110000 });
+    expect(deltaOf('Payment', 5, 'supplier')).toBe(-5);
+    expect(deltaOf('Collection', 5, 'supplier')).toBe(5);
+    expect(deltaOf('Payment', 5)).toBe(5);
+  });
+});
+
+describe('statement order', () => {
+  it('orders by date, so a back-dated row lands in its own month and the balance follows', () => {
+    const s = buildStatement(
+      [
+        row('late', 'Credit Sale', 100, '2026-10-02', { createdAt: '2026-10-02T10:00:00Z' }),
+        // created last but dated in September
+        row('back', 'Credit Sale', 50, '2026-09-30', { createdAt: '2026-10-05T10:00:00Z' }),
+      ],
+      20,
+      150,
+    );
+    expect(s.months.map((m) => m.label)).toEqual(['October 2026', 'September 2026']);
+    expect(s.months[1].entries[0]).toMatchObject({ key: 'back', balance: 50 });
+    expect(s.months[0].entries[0]).toMatchObject({ key: 'late', balance: 150 });
+  });
+});
+
 describe('money formatting', () => {
   it('compacts to lakh and crore', () => {
     expect(compactRupees(200000)).toBe('₹2L');
