@@ -15,7 +15,10 @@ const TEXT: Record<TankGaugeLevel, string> = {
 };
 const STATE: Partial<Record<TankGaugeLevel, string>> = { red: 'Low', amber: 'Getting low' };
 
-/** A tube gauge per tank: fill, percent and volume; red below 25%, amber below 40%. */
+/**
+ * A tube gauge per tank: fill, percent, volume and days of cover (when the
+ * tank has sales history); red below 25%, amber below 40%.
+ */
 export const TankGauges: React.FC<{ tanks: readonly TankGauge[] }> = ({ tanks }) => (
   <div className="grid grid-cols-3 gap-2 px-3">
     {tanks.map((t) => (
@@ -44,6 +47,12 @@ export const TankGauges: React.FC<{ tanks: readonly TankGauge[] }> = ({ tanks })
             <br />
             <span className="block truncate">{t.tankName}</span>
           </p>
+          {t.cover && (
+            <p className="num mt-0.5 text-[10px] leading-snug text-text-muted">
+              <span className="sr-only">Cover </span>
+              {t.cover}
+            </p>
+          )}
         </div>
       </div>
     ))}
