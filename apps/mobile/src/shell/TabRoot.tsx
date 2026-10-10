@@ -6,14 +6,17 @@
  * working until their ticket replaces them.
  */
 import React from 'react';
-import type { Station } from '@pump/shared';
-import { HandoverPanel } from '../components/HandoverPanel.js';
+import { canViewMobileHome, canViewMobileInsights, type Station } from '@pump/shared';
 import { HomeScreen } from '../screens/HomeScreen.js';
+import { HandoverCard } from '../screens/home/HandoverCard.js';
+import { HomeAttention } from '../screens/home/HomeAttention.js';
+import { useMobileAlerts } from '../lib/alerts.js';
 import { InsightsScreen } from '../screens/InsightsScreen.js';
 import { MoneyScreen } from '../screens/MoneyScreen.js';
 import { ReportsScreen } from '../screens/ReportsScreen.js';
 import { SupplierPage } from '../screens/money/SupplierPage.js';
 import { ShiftsScreen } from '../screens/ShiftsScreen.js';
+import { useShell } from './context.js';
 import { HomeHeader } from './HomeHeader.js';
 import { TabHeader } from './TabHeader.js';
 import { tabDef, type TabKey } from './tabs.js';
@@ -25,21 +28,33 @@ interface Props {
   stationsLoading: boolean;
 }
 
-/** Pre-revamp screens assumed a padded page; keep that until they are rebuilt. */
-const Padded: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="px-4 pb-4">{children}</div>
-);
+/** Home's attention section for a Role whose Home is only its handover card. */
+const HandoverHomeAttention: React.FC<{ station: Station | null }> = ({ station }) => {
+  const alerts = useMobileAlerts(station);
+  return <HomeAttention alerts={alerts} />;
+};
 
 export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
-  const header = tab === 'home' ? <HomeHeader /> : <TabHeader title={tabDef(tab).label} />;
+  const { role } = useShell();
+  // Home is the owner's overview. A Manager, Accountant or Staff member who mans a
+  // pump gets Home only for their handover card (see `tabsForRole`).
+  const handoverOnlyHome = tab === 'home' && !canViewMobileHome(role);
+  // The bell needs an attention section to land on; a Role that may see alerts
+  // (Manager) gets both beside its card, any other gets neither.
+  const alertsOnHome = handoverOnlyHome && canViewMobileInsights(role);
+  const header =
+    tab === 'home' && (!handoverOnlyHome || alertsOnHome) ? (
+      <HomeHeader />
+    ) : (
+      <TabHeader title={tabDef(tab).label} />
+    );
 
-  if (tab === 'handover')
+  if (handoverOnlyHome)
     return (
       <>
         {header}
-        <Padded>
-          <HandoverPanel />
-        </Padded>
+        <HandoverCard />
+        {alertsOnHome && <HandoverHomeAttention station={station} />}
       </>
     );
   if (tab === 'money')
