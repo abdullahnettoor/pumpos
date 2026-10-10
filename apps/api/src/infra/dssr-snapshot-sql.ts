@@ -49,3 +49,43 @@ export const dssrNetVolume = (ref: string): SQL => {
              (${data} -> 'fuel' ->> 'totalVolume')::numeric, 0)
       - COALESCE((${data} -> 'fuel' ->> 'totalTestingVolume')::numeric, 0))`;
 };
+
+/** Credit Sales of the day: `credit.total`. */
+export const dssrCreditTotal = (ref: string): SQL => {
+  const data = column(ref);
+  return sql`COALESCE((${data} -> 'credit' ->> 'total')::numeric, 0)`;
+};
+
+/**
+ * Net litres of one `fuel.nozzles[]` / `fuel.byProduct[]` element read with
+ * `jsonb_to_recordset(... ) AS alias("netVolume" numeric, "grossVolume" numeric,
+ * "testingVolume" numeric)`: the stored net, else gross minus testing (a day
+ * frozen before net volume was stored). `alias` is a trusted identifier.
+ */
+export const dssrNetVolumeOfRecord = (alias: string): SQL => {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(alias)) {
+    throw new Error(`dssr-snapshot-sql: expected an identifier, got "${alias}"`);
+  }
+  const a = sql.raw(alias);
+  return sql`COALESCE(${a}."netVolume", COALESCE(${a}."grossVolume", 0) - COALESCE(${a}."testingVolume", 0))`;
+};
+
+/**
+ * A jsonb path that should hold an array: anything else (absent, null, an
+ * object: a snapshot frozen before the field existed) reads as empty, so
+ * `jsonb_to_recordset` never fails on it. `expr` is a SQL expression, e.g.
+ * `` sql`ds.snapshot_data -> 'fuel' -> 'nozzles'` ``.
+ */
+export const jsonbArray = (expr: SQL): SQL =>
+  sql`(CASE WHEN jsonb_typeof(${expr}) = 'array' THEN ${expr} ELSE '[]'::jsonb END)`;
+
+/**
+ * A uuid read from a snapshot as TEXT (declare the recordset column as `text`),
+ * NULL when it is not a well-formed uuid, so one malformed id in a frozen
+ * snapshot drops that element instead of failing the whole statement.
+ * `column` is a trusted `alias."column"` reference.
+ */
+export const uuidOrNull = (ref: string): SQL => {
+  const c = column(ref);
+  return sql`(CASE WHEN ${c} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN ${c}::uuid END)`;
+};

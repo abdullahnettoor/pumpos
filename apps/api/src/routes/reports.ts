@@ -4,12 +4,20 @@ import { canViewAttendantReport, canViewReports } from '@pump/shared';
 import {
   ATTENDANT_REPORT_CAPABILITY,
   GetAttendantHandoverReport,
+  GetInsightsAttendantVariance,
+  GetInsightsCreditHealth,
   GetInsightsSales,
+  GetInsightsStockLoss,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { requireCapabilityGuard } from '../infra/capability-guard.js';
 import { DrizzleAttendantHandoverReportReader } from '../infra/repositories/attendant-report-repositories.js';
+import {
+  DrizzleInsightsAttendantVarianceReader,
+  DrizzleInsightsCreditHealthReader,
+  DrizzleInsightsStockLossReader,
+} from '../infra/repositories/insights-blocks-repositories.js';
 import { DrizzleInsightsSalesReader } from '../infra/repositories/insights-repositories.js';
 import { requireStationRead } from '../infra/station-read-guard.js';
 import { sendResult } from '../infra/send-result.js';
@@ -74,6 +82,76 @@ reportsRouter.get('/insights/sales', async (c) => {
   const days = Number(c.req.query('days'));
   const result = await new GetInsightsSales({
     reader: new DrizzleInsightsSalesReader(c.var.db),
+  }).execute({ stationId, days }, buildContext(user, { stationId }));
+
+  return sendResult(c, result);
+});
+
+/**
+ * GET /api/reports/insights/attendant-variance?stationId=&days=7|30|90
+ *
+ * Cash variance by Attendant (the attendant level of the two-level drawer
+ * variance, ADR 0005) from the Drawers of closed Shift Summaries. Gated exactly
+ * like `/attendant-handovers`: the Organization's `reports.attendant`
+ * entitlement first (CAPABILITY_NOT_ENTITLED), then the attendant-report Role.
+ */
+reportsRouter.get(
+  '/insights/attendant-variance',
+  requireCapabilityGuard(ATTENDANT_REPORT_CAPABILITY),
+  async (c) => {
+    const user = c.var.user;
+    const scope = requireStationRead(
+      c,
+      canViewAttendantReport,
+      'Insufficient permissions to view the Attendant Handover Report',
+    );
+    if (scope instanceof Response) return scope;
+    const { stationId } = scope;
+
+    const days = Number(c.req.query('days'));
+    const result = await new GetInsightsAttendantVariance({
+      reader: new DrizzleInsightsAttendantVarianceReader(c.var.db),
+    }).execute({ stationId, days }, buildContext(user, { stationId }));
+
+    return sendResult(c, result);
+  },
+);
+
+/**
+ * GET /api/reports/insights/stock-loss?stationId=&days=7|30|90
+ *
+ * Tank Dip variance against book stock per tank over the range's closed days:
+ * litres, share of litres sold, rupees at cost basis, within / outside tolerance.
+ */
+reportsRouter.get('/insights/stock-loss', async (c) => {
+  const user = c.var.user;
+  const scope = requireStationRead(c, canViewReports, 'Insufficient permissions to view Insights');
+  if (scope instanceof Response) return scope;
+  const { stationId } = scope;
+
+  const days = Number(c.req.query('days'));
+  const result = await new GetInsightsStockLoss({
+    reader: new DrizzleInsightsStockLossReader(c.var.db),
+  }).execute({ stationId, days }, buildContext(user, { stationId }));
+
+  return sendResult(c, result);
+});
+
+/**
+ * GET /api/reports/insights/credit-health?stationId=&days=7|30|90
+ *
+ * Credit Sales given (Business Date) vs Collections received (Entry Date) over
+ * the range, the change in receivables and the credit share of sales.
+ */
+reportsRouter.get('/insights/credit-health', async (c) => {
+  const user = c.var.user;
+  const scope = requireStationRead(c, canViewReports, 'Insufficient permissions to view Insights');
+  if (scope instanceof Response) return scope;
+  const { stationId } = scope;
+
+  const days = Number(c.req.query('days'));
+  const result = await new GetInsightsCreditHealth({
+    reader: new DrizzleInsightsCreditHealthReader(c.var.db),
   }).execute({ stationId, days }, buildContext(user, { stationId }));
 
   return sendResult(c, result);
