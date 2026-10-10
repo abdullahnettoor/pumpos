@@ -41,3 +41,13 @@ body {
   --dock-gap: max(env(safe-area-inset-bottom), 12px);
   --dock-space: calc(var(--dock-gap) + 58px + 20px);
 }
+
+/* Hatched fill: a figure that is not final yet (a running Shift's fuel on Home,
+ * "counted at close"). Accent at partial strength over the track. */
+.bg-hatch {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--accent) 35%, transparent) 0 4px,
+    transparent 4px 8px
+  );
+}
