@@ -1,13 +1,15 @@
 import { Hono } from 'hono';
 import type { DbClient } from '@pump/db';
-import { canViewAttendantReport, canViewReports } from '@pump/shared';
+import { canManageFinancialAccounts, canViewAttendantReport, canViewReports } from '@pump/shared';
 import {
   ATTENDANT_REPORT_CAPABILITY,
   GetAttendantHandoverReport,
+  GetCustomerReceivable,
   GetInsightsAttendantVariance,
   GetInsightsCreditHealth,
   GetInsightsSales,
   GetInsightsStockLoss,
+  GetReceivables,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
@@ -19,8 +21,11 @@ import {
   DrizzleInsightsStockLossReader,
 } from '../infra/repositories/insights-blocks-repositories.js';
 import { DrizzleInsightsSalesReader } from '../infra/repositories/insights-repositories.js';
+import { DrizzleReceivablesReader } from '../infra/repositories/receivables-repositories.js';
+import { isUuid } from '../infra/is-uuid.js';
 import { requireStationRead } from '../infra/station-read-guard.js';
 import { sendResult } from '../infra/send-result.js';
+import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
 
 type Variables = {
   db: DbClient;
@@ -84,6 +89,75 @@ reportsRouter.get('/insights/sales', async (c) => {
     reader: new DrizzleInsightsSalesReader(c.var.db),
   }).execute({ stationId, days }, buildContext(user, { stationId }));
 
+  return sendResult(c, result);
+});
+
+/**
+ * GET /api/reports/receivables?stationId=
+ *
+ * What customers owe, settled FIFO and aged from each debit's Business Date to
+ * the Current Business Date: total, aging split and a row per customer that owes
+ * (largest first, capped). ONE aggregate statement whatever the number of
+ * customers or ledger entries (the station lookup for the clock is the only
+ * other read). Open to the Roles that see the Money tab.
+ *
+ * Organization-wide: a customer is an Organization-level party and so is its
+ * balance (the customers list's `currentBalance`), so the figures cover the
+ * customer's whole ledger across stations, not one station's slice. The station
+ * only gates access and supplies the timezone and Day Start the age is measured
+ * with.
+ */
+reportsRouter.get('/receivables', async (c) => {
+  const user = c.var.user;
+  const scope = requireStationRead(
+    c,
+    canManageFinancialAccounts,
+    'Insufficient permissions to view receivables',
+  );
+  if (scope instanceof Response) return scope;
+  const { stationId } = scope;
+
+  const clock = await loadStationClock(c.var.db, user.organizationId, stationId);
+  if (!clock) return stationNotFound(c);
+  const result = await new GetReceivables(new DrizzleReceivablesReader(c.var.db)).execute(
+    { stationId },
+    buildContext(user, { stationId, ...clock }),
+  );
+  return sendResult(c, result);
+});
+
+/**
+ * GET /api/reports/receivables/:customerId?stationId=
+ *
+ * One customer's receivable plus how they pay: last payment, usually-pays-in,
+ * this month's credit vs paid and vehicle spend. One aggregate statement.
+ * Organization-wide like the list. A customer outside the caller's Organization,
+ * or an id that is not a uuid, is a 404.
+ */
+reportsRouter.get('/receivables/:customerId', async (c) => {
+  const user = c.var.user;
+  const scope = requireStationRead(
+    c,
+    canManageFinancialAccounts,
+    'Insufficient permissions to view receivables',
+  );
+  if (scope instanceof Response) return scope;
+  const { stationId } = scope;
+
+  const customerId = c.req.param('customerId');
+  if (!isUuid(customerId)) {
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } },
+      404,
+    );
+  }
+
+  const clock = await loadStationClock(c.var.db, user.organizationId, stationId);
+  if (!clock) return stationNotFound(c);
+  const result = await new GetCustomerReceivable(new DrizzleReceivablesReader(c.var.db)).execute(
+    { stationId, customerId },
+    buildContext(user, { stationId, ...clock }),
+  );
   return sendResult(c, result);
 });
 

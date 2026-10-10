@@ -29,10 +29,9 @@ export type RecordCollectionResult = { ok: true } | { ok: false; failure: Collec
  * the lower balance into every cached list at once (the card and its Over /
  * Near limit state repaint in the same frame) and then `useInvalidateOperational`
  * refreshes the server's rows: customers, collections, account balances and the
- * Daily Cash Book. The Customer's ledger is invalidated through its own key.
- * The statement and the receivables summary (aging, last payment, usually-pays-in)
- * read the same collections: they arrive with #398, which adds their keys (and
- * its own invalidation) to the shared `queryKeys`. A refusal by the access mode
+ * Daily Cash Book. The Customer's ledger, statement (every cached window) and
+ * receivable (aging, last payment, usually-pays-in) are invalidated through their
+ * own centralized keys, so the page repaints even for a save from another screen. A refusal by the access mode
  * refreshes the Access Document on its own (the app's QueryClient does that for
  * every policy refusal).
  *
@@ -55,6 +54,9 @@ export function useRecordCollection(stationId: string, customerId: string) {
   const refreshBalances = () => {
     void invalidateOperational(stationId);
     void qc.invalidateQueries({ queryKey: queryKeys.customerLedger(customerId) });
+    void qc.invalidateQueries({ queryKey: queryKeys.customerStatements(customerId) });
+    void qc.invalidateQueries({ queryKey: queryKeys.customerReceivable(stationId, customerId) });
+    void qc.invalidateQueries({ queryKey: queryKeys.receivables(stationId) });
   };
 
   const mutation = useMutation({

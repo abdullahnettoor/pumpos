@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compactRupees, plural, rupees, signedRupees } from './format.js';
+import { compactRupees, plural, rupees, signedMoney, signedRupees } from './format.js';
 
 describe('rupees', () => {
   it('groups in lakhs and drops paise', () => {
@@ -23,6 +23,14 @@ describe('signedRupees', () => {
   });
 });
 
+describe('signedMoney', () => {
+  it('keeps paise and puts the minus before the rupee', () => {
+    expect(signedMoney(-125)).toBe('−₹125.00');
+    expect(signedMoney(125)).toBe('₹125.00');
+    expect(signedMoney(0.5)).toBe('₹0.50');
+  });
+});
+
 describe('compactRupees', () => {
   it('abbreviates from a lakh, whole rupees below', () => {
     expect(compactRupees(3227000)).toBe('₹32.27L');
@@ -33,6 +41,8 @@ describe('compactRupees', () => {
     expect(compactRupees(0)).toBe('₹0');
     expect(compactRupees(-340)).toBe('−₹340');
     expect(compactRupees(-250000)).toBe('−₹2.5L');
+    expect(compactRupees(125000)).toBe('₹1.25L');
+    expect(compactRupees(200000)).toBe('₹2L');
   });
 });
 

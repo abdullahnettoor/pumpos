@@ -35,6 +35,8 @@ let accessMode: AccessMode | undefined;
 const record = vi.spyOn(ui.CloudTransactionService.prototype, 'recordCollection');
 const getCustomers = vi.spyOn(ui.CloudTransactionService.prototype, 'getCustomers');
 const getLedger = vi.spyOn(ui.CloudTransactionService.prototype, 'getCustomerLedger');
+const getStatement = vi.spyOn(ui.CloudTransactionService.prototype, 'getCustomerLedgerRange');
+const getReceivable = vi.spyOn(ui.CloudShiftService.prototype, 'getCustomerReceivable');
 
 const refusal = (code: string, message: string, status = 403) =>
   Object.assign(new Error(message), { code, status });
@@ -97,6 +99,13 @@ beforeEach(() => {
   accessMode = 'NORMAL';
   getCustomers.mockImplementation(async () => list);
   getLedger.mockResolvedValue([]);
+  getStatement.mockResolvedValue({
+    periodOpeningBalance: '0',
+    closingBalance: '0',
+    hasEarlier: false,
+    entries: [],
+  } as any);
+  getReceivable.mockResolvedValue(null as any);
   vi.spyOn(ui.CloudFinanceService.prototype, 'getFundingAccounts').mockImplementation(
     async () => accounts,
   );
@@ -268,7 +277,10 @@ describe('saving', () => {
   it('records an Office Record with an Idempotency-Key, then the balance and caches refresh', async () => {
     mount();
     await waitFor(() => expect(balance().getAttribute('data-state')).toBe('under'));
-    const ledgerCalls = getLedger.mock.calls.length;
+    await waitFor(() => expect(getStatement).toHaveBeenCalled());
+    await waitFor(() => expect(getReceivable).toHaveBeenCalled());
+    const statementCalls = getStatement.mock.calls.length;
+    const receivableCalls = getReceivable.mock.calls.length;
 
     await pickCash('50000');
     fireEvent.change(dateField(), { target: { value: '2026-09-30' } });
@@ -297,7 +309,9 @@ describe('saving', () => {
     await waitFor(() => expect(within(balance()).getByText('₹1,00,000.00')).toBeTruthy());
     expect(screen.getByText('₹50,000.00 recorded from KTC Logistics.')).toBeTruthy();
     await waitFor(() => expect(getCustomers.mock.calls.length).toBeGreaterThan(1));
-    await waitFor(() => expect(getLedger.mock.calls.length).toBeGreaterThan(ledgerCalls));
+    // The statement and the receivable summary (aging, last payment) read the same collections.
+    await waitFor(() => expect(getStatement.mock.calls.length).toBeGreaterThan(statementCalls));
+    await waitFor(() => expect(getReceivable.mock.calls.length).toBeGreaterThan(receivableCalls));
   });
 
   it('sends the chosen method and account (UPI into a bank account)', async () => {

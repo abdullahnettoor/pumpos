@@ -1,13 +1,15 @@
 import React from 'react';
 import { inr } from '@pump/ui';
-import { signedRupees } from '../../lib/money/format.js';
+import { signedMoney } from '../../lib/format.js';
 import type { Statement } from '../../lib/money/statement.js';
 
 /** Statement of a Customer: months newest first, each row with its running balance. */
-export const StatementList: React.FC<{ statement: Statement; onLoadMore: () => void }> = ({
-  statement,
-  onLoadMore,
-}) => (
+export const StatementList: React.FC<{
+  statement: Statement;
+  onLoadMore: () => void;
+  /** After the last month and before the count: the balance brought forward of a windowed statement. */
+  trailing?: React.ReactNode;
+}> = ({ statement, onLoadMore, trailing }) => (
   <div className="mx-3 overflow-hidden rounded-[14px] border border-line bg-card">
     {!statement.reconciled && (
       <p
@@ -39,6 +41,7 @@ export const StatementList: React.FC<{ statement: Statement; onLoadMore: () => v
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] font-semibold text-text-high">{e.label}</p>
                   {e.meta && <p className="truncate text-[11px] text-text-muted">{e.meta}</p>}
+                  {e.detail && <p className="truncate text-[11px] text-text-muted">{e.detail}</p>}
                 </div>
                 <div className="flex-shrink-0 text-right">
                   <p
@@ -48,7 +51,7 @@ export const StatementList: React.FC<{ statement: Statement; onLoadMore: () => v
                     {inr(Math.abs(e.delta))}
                   </p>
                   {e.balance !== null && (
-                    <p className="num text-[11px] text-text-muted">Bal {signedRupees(e.balance)}</p>
+                    <p className="num text-[11px] text-text-muted">Bal {signedMoney(e.balance)}</p>
                   )}
                 </div>
               </li>
@@ -57,6 +60,7 @@ export const StatementList: React.FC<{ statement: Statement; onLoadMore: () => v
         </ul>
       </section>
     ))}
+    {!statement.hasMore && trailing}
     <div className="border-t border-line px-3 py-3 text-center text-[11.5px] text-text-muted">
       Showing {statement.shown} of {statement.total} {statement.total === 1 ? 'entry' : 'entries'}
       {statement.hasMore && (
