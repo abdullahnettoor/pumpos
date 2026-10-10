@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PinnedToolbar } from '../ui/PinnedHeader.js';
 import { SegmentedControl } from '../ui/SegmentedControl.js';
 import { useNav } from '../shell/nav.js';
 import type { Station } from '@pump/shared';
@@ -54,7 +55,10 @@ export const MoneyScreen: React.FC<Props> = ({ station = null, renderSupplierPag
 
   return (
     <div className="flex flex-col gap-2.5 pb-4">
-      <SegmentedControl label="Money list" options={LISTS} value={list} onChange={switchList} />
+      {/* Pinned with the tab header: the list switch stays in reach while the rows scroll. */}
+      <PinnedToolbar>
+        <SegmentedControl label="Money list" options={LISTS} value={list} onChange={switchList} />
+      </PinnedToolbar>
       <SearchField
         value={query}
         onChange={setQuery}

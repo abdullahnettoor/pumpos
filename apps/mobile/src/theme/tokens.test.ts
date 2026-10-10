@@ -43,6 +43,7 @@ const REQUIRED = [
   'scrim',
   'shadow-sheet',
   'shadow-chip',
+  'shadow-edge',
   'good-soft',
   'good-line',
   'bad-soft',
