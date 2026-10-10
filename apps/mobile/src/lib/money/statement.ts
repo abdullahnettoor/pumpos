@@ -1,6 +1,20 @@
-import { formatShiftLabel, isBalancedVariance } from '@pump/shared';
-import { accountTypeLabel } from '@pump/ui';
-import { ledgerQuantityLabel } from './quantity.js';
+import { isBalancedVariance } from '@pump/shared';
+import {
+  dateOf,
+  dayLabel,
+  deltaOf,
+  describeLedgerRow,
+  fullDayLabel,
+  monthLabel,
+  type LedgerRow,
+  type PartyKind,
+} from '@pump/ui';
+
+// How a ledger row reads (and its dates) is shared with the statement PDF and lives
+// in `@pump/ui` next to the document, so the screen and the PDF cannot word a row
+// differently. Re-exported here for the Money screens.
+export { dateOf, dayLabel, deltaOf, describeLedgerRow, fullDayLabel, monthLabel };
+export type { LedgerRow, PartyKind };
 
 /**
  * The party statement (Customer or Supplier): the ledger rows turned into a running balance,
@@ -11,38 +25,16 @@ import { ledgerQuantityLabel } from './quantity.js';
  * Business Date for a sale, Entry Date for a Collection; the ranged call adds the
  * Shift, product, quantity and Vehicle of a sale and the method and reference of
  * a Collection) or `/suppliers/:id/ledger` (Entry Date; a purchase carries its
- * Business Date). They carry no usable running balance for the window shown, so it
- * is accumulated here from the ledger's opening balance (0 for an all-time
- * ledger), oldest first by date. That figure is only shown when it ends on the
- * server's `currentBalance` (`reconciled`); otherwise the statement is partial
- * and the rows carry no running balance, rather than a wrong one.
+ * Business Date).
+ *
+ * The ranged ledger carries the server's running balance on every row: that is
+ * the figure shown (and the one the statement PDF prints), never a client sum, so
+ * the screen and the PDF have one source. The all-time legacy rows carry none, so
+ * for them it is accumulated here from the ledger's opening balance (0), oldest
+ * first by date, and only shown when it ends on the server's `currentBalance`
+ * (`reconciled`); otherwise the statement is partial and the rows carry no
+ * running balance, rather than a wrong one.
  */
-
-/**
- * A ledger row as the API returns it. The enrichment (Shift, product, quantity,
- * Vehicle, method, reference) comes only from the ranged customer ledger; the
- * all-time legacy rows (and the supplier rows) leave it out.
- */
-export interface LedgerRow {
-  id?: string;
-  transactionType?: string | null;
-  amount?: number | string | null;
-  notes?: string | null;
-  createdAt?: string | null;
-  businessDate?: string | null;
-  shiftBusinessDate?: string | null;
-  shiftSequence?: number | null;
-  productName?: string | null;
-  quantity?: number | string | null;
-  unit?: string | null;
-  vehicleRegistration?: string | null;
-  method?: string | null;
-  reference?: string | null;
-  /** Supplier rows (ranged ledger): the Funding Account a Payment came from, the invoice and tanker of a Purchase. */
-  fundingAccountName?: string | null;
-  invoiceNumber?: string | null;
-  tankerNumber?: string | null;
-}
 
 export interface StatementEntry {
   key: string;
@@ -84,121 +76,6 @@ export interface Statement {
 
 export const STATEMENT_PAGE = 20;
 
-/** Which ledger the rows belong to: decides which type reduces the balance. */
-export type PartyKind = 'customer' | 'supplier';
-
-/** The one transaction type that reduces what the party owes / what you owe them. */
-const REDUCING: Record<PartyKind, string> = { customer: 'Collection', supplier: 'Payment' };
-
-/** Friendly names for the ledger's raw transaction types (customer and supplier). */
-const LABEL: Record<string, string> = {
-  'Credit Sale': 'Credit Sale',
-  Collection: 'Payment received',
-  Purchase: 'Purchase',
-  Payment: 'Payment made',
-  Adjustment: 'Adjustment',
-  'Opening Balance': 'Opening balance',
-};
-
-/**
- * A Collection (customer) or a Payment (supplier) reduces the balance;
- * everything else adds to it.
- */
-export function deltaOf(
-  transactionType: string | null | undefined,
-  amount: number,
-  kind: PartyKind = 'customer',
-): number {
-  return transactionType === REDUCING[kind] ? -amount : amount;
-}
-
-/** The Collection payment methods, as the API stores them. */
-const METHOD: Record<string, string> = {
-  Cash: 'Cash',
-  Card: 'Card',
-  UPI: 'UPI',
-  BankTransfer: 'Bank transfer',
-};
-
-/**
- * What a customer row says beyond its date: a Credit Sale names its Shift, what
- * was sold and the Vehicle; a Collection its method and reference. A row without
- * the enrichment (legacy ledger, adjustments) shows just its note.
- */
-function describeCustomerRow(r: LedgerRow, day: string): { meta: string; detail: string | null } {
-  const note = r.notes?.trim();
-  let facts: string[];
-  let detail: string | null = null;
-  if (r.transactionType === 'Collection') {
-    const method = r.method ? (METHOD[r.method] ?? r.method) : null;
-    const ref = r.reference?.trim();
-    facts = [method, ref && `Ref ${ref}`].filter((x): x is string => !!x);
-  } else {
-    const shift = formatShiftLabel(r.shiftBusinessDate, r.shiftSequence);
-    facts = shift ? [`Shift ${shift}`] : [];
-    detail =
-      [ledgerQuantityLabel(r), r.vehicleRegistration?.trim()].filter(Boolean).join(' · ') || null;
-  }
-  // With nothing to say about the row, the note stays beside the date (the legacy layout);
-  // otherwise it moves to the second line, after what the row says.
-  const enriched = facts.length > 0 || detail !== null;
-  if (!enriched) return { meta: [day, note].filter(Boolean).join(' · '), detail: null };
-  return { meta: [day, ...facts].filter(Boolean).join(' · '), detail: detail ?? (note || null) };
-}
-
-/**
- * What a supplier row says beyond its date. A Purchase names its invoice and how
- * much came in, and the tanker when one was recorded; a Payment its method (the
- * Funding Account's type) and "From <account>". A row without the enrichment
- * (the legacy all-time ledger, Adjustments, an Opening Balance) shows just its note.
- */
-function describeSupplierRow(r: LedgerRow, day: string): { meta: string; detail: string | null } {
-  const note = r.notes?.trim();
-  let facts: string[];
-  let detail: string | null;
-  if (r.transactionType === 'Payment') {
-    facts = r.method ? [accountTypeLabel(r.method)] : [];
-    const from = r.fundingAccountName?.trim();
-    detail = from ? `From ${from}` : null;
-  } else {
-    const invoice = r.invoiceNumber?.trim();
-    const tanker = r.tankerNumber?.trim();
-    facts = [invoice, ledgerQuantityLabel(r, false)].filter((x): x is string => !!x);
-    detail = tanker ? `Tanker ${tanker}` : null;
-  }
-  const enriched = facts.length > 0 || detail !== null;
-  if (!enriched) return { meta: [day, note].filter(Boolean).join(' · '), detail: null };
-  return { meta: [day, ...facts].filter(Boolean).join(' · '), detail: detail ?? (note || null) };
-}
-
-/** "Purchase · Diesel" when the row names what was bought, else the plain type label. */
-function supplierLabel(r: LedgerRow): string {
-  const base = LABEL[r.transactionType ?? ''] ?? r.transactionType ?? 'Entry';
-  const product = r.transactionType === 'Purchase' ? r.productName?.trim() : null;
-  return product ? `${base} · ${product}` : base;
-}
-
-/**
- * How a ledger row reads: its label ("Credit Sale", "Purchase · HSD"), the line
- * under it (`day` first when given, then the Shift / invoice / method facts) and
- * an optional second line. One place, so the screen and the statement PDF word a
- * row the same way.
- */
-export function describeLedgerRow(
-  r: LedgerRow,
-  kind: PartyKind,
-  day = '',
-): { label: string; meta: string; detail: string | null } {
-  const described = kind === 'customer' ? describeCustomerRow(r, day) : describeSupplierRow(r, day);
-  return {
-    label:
-      kind === 'supplier'
-        ? supplierLabel(r)
-        : (LABEL[r.transactionType ?? ''] ?? r.transactionType ?? 'Entry'),
-    ...described,
-  };
-}
-
 /** The first day of the month `months - 1` months before the month of `today` (a Business Date). */
 export function statementWindowStart(today: string, months: number): string {
   const [y, m] = today.split('-').map(Number);
@@ -207,48 +84,6 @@ export function statementWindowStart(today: string, months: number): string {
   const month = (index % 12) + 1;
   return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-01`;
 }
-
-export const dateOf = (r: LedgerRow): string =>
-  String(r.businessDate ?? r.createdAt ?? '').slice(0, 10);
-
-const MONTHS = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-
-/** Parsed from the `YYYY-MM-DD` string, never through `Date`: a Business Date has no time zone. */
-const parts = (iso: string): [number, number, number] | null => {
-  const [y, m, d] = iso.split('-').map(Number);
-  return y && m >= 1 && m <= 12 && d ? [y, m, d] : null;
-};
-
-/** "October 2026". */
-export const monthLabel = (iso: string): string => {
-  const p = parts(iso);
-  return p ? `${MONTHS[p[1] - 1]} ${p[0]}` : iso;
-};
-
-/** "1 May 2026". */
-export const fullDayLabel = (iso: string): string => {
-  const p = parts(iso);
-  return p ? `${p[2]} ${MONTHS[p[1] - 1].slice(0, 3)} ${p[0]}` : iso;
-};
-
-/** "9 Oct". */
-export const dayLabel = (iso: string): string => {
-  const p = parts(iso);
-  return p ? `${p[2]} ${MONTHS[p[1] - 1].slice(0, 3)}` : iso;
-};
 
 /**
  * @param expectedBalance the server's `currentBalance` for the party. The
@@ -264,6 +99,9 @@ export function buildStatement(
   kind: PartyKind = 'customer',
   openingBalance = 0,
 ): Statement {
+  // Every row carries the server's balance (the ranged ledger): use it as it is.
+  const served =
+    rows.length > 0 && rows.every((r) => r.runningBalance != null && r.runningBalance !== '');
   let running = Math.round(openingBalance * 100) / 100;
   // Oldest first by date (stable, so same-day rows keep the API's order): a
   // back-dated row then lands in its own month, not between two others.
@@ -272,7 +110,7 @@ export function buildStatement(
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.i - b.i));
   const entries = ordered.map(({ r, i, date }): StatementEntry & { date: string } => {
     const delta = deltaOf(r.transactionType, Number(r.amount ?? 0) || 0, kind);
-    running = Math.round((running + delta) * 100) / 100;
+    running = served ? Number(r.runningBalance) : Math.round((running + delta) * 100) / 100;
     return {
       key: r.id ?? `row-${i}`,
       ...describeLedgerRow(r, kind, date ? dayLabel(date) : ''),
@@ -284,6 +122,7 @@ export function buildStatement(
 
   const closingBalance = entries.length ? running : null;
   const reconciled =
+    served ||
     expectedBalance === undefined ||
     isBalancedVariance((closingBalance ?? running) - expectedBalance);
 

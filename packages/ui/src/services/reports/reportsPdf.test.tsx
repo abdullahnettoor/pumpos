@@ -358,6 +358,37 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     assertPdfContainsVectorMark(buffer);
   });
 
+  it('renders a long party statement (opening line, detail lines, closing line) across pages', async () => {
+    const rows = Array.from({ length: 90 }, (_, i) => ({
+      dateLabel: `${(i % 28) + 1} Oct 2026`,
+      particulars: 'Credit Sale',
+      detail: 'Shift 20261007-1 \u00b7 50 L Diesel \u00b7 KL-11-AB-4521',
+      debit: 100,
+      credit: 0,
+      balance: 5100 + i * 100,
+    }));
+    const doc = React.createElement(LedgerDoc, {
+      title: 'CUSTOMER STATEMENT',
+      entityName: 'Acme Transport',
+      periodLabel: 'October 2026',
+      debitLabel: 'Sales',
+      creditLabel: 'Received',
+      balanceLabel: 'Balance',
+      rows,
+      totals: { debit: 9000, credit: 0, balance: 14000 },
+      partyLines: ['Fleet \u00b7 FL-001'],
+      partyAccount: true,
+      opening: 5000,
+      closing: { note: 'Due from customer' },
+      stationName: 'Apex Station',
+      letterhead: mockLetterhead,
+    });
+    const buffer = await streamToBuffer(await pdf(doc as any).toBuffer());
+    expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+    const count = /\/Type\s*\/Pages[\s\S]*?\/Count\s+(\d+)/.exec(buffer.toString('latin1'));
+    expect(Number(count?.[1])).toBeGreaterThan(1);
+  });
+
   /**
    * #221: a statement covering several business days is read a day at a time,
    * so it paginates — a cover carrying the range's collective figures, then

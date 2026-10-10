@@ -11,7 +11,12 @@ import { letterheadFromStation, showLogoFromStation } from './letterhead.js';
 import { formatShiftLabel, shiftDisplayLabel } from '@pump/shared';
 import type { AttendantReportEntry } from '@pump/shared';
 import type { AttendantReportSection } from './reportConfig.js';
-import { statementFileName, type StatementPdfData } from './statementPdf.js';
+import { ledgerFileName } from './ledgerFileName.js';
+import {
+  partyStatementDoc,
+  statementFilePrefix,
+  type PartyStatementInput,
+} from './partyStatement.js';
 
 /** The slice of station settings the report generators read. */
 interface StationReportSettings {
@@ -125,27 +130,33 @@ export async function generateAttendantReportPdf(
 }
 
 /**
- * Customer or Supplier statement PDF over one date range. `data` is built from
- * the ranged ledger (see `statementPdf.ts`): the server's opening, running and
- * closing balances, printed as they are. `output` 'save' = the platform saver
- * (the mobile share sheet), 'download' = always a browser download.
+ * Customer or Supplier statement PDF over one date range: the ranged ledger laid
+ * out by `LedgerDoc` (the same document as the desktop Unified Ledger), with the
+ * server's opening, running and closing balances printed as they are (see
+ * `partyStatement.ts`). `output` 'save' = the platform saver (the mobile share
+ * sheet), 'download' = always a browser download.
  */
 export async function generateStatementPdf(
   station: { name?: string; settings?: unknown } | null,
-  data: StatementPdfData,
+  input: PartyStatementInput,
   output: PdfOutput = 'save',
 ): Promise<void> {
-  const doc = await import('./statementDoc.js');
+  const doc = await import('./ledgerDoc.js');
   await outputReactPdf(
-    React.createElement(doc.StatementDoc, {
-      data,
+    React.createElement(doc.LedgerDoc, {
+      ...partyStatementDoc(input),
       stationName: station?.name,
       letterhead: letterheadFromStation(station),
       paper: paperFromStation(station),
       // A station that turned its logo off must not get one back.
       showLogo: showLogoFromStation(station),
     }),
-    statementFileName(data),
+    ledgerFileName(
+      statementFilePrefix(input.kind),
+      input.party.name,
+      input.range,
+      input.kind === 'customer' ? 'Customer' : 'Supplier',
+    ),
     output,
   );
 }

@@ -11,6 +11,8 @@ interface Props<T extends string> {
   onChange: (value: T) => void;
   /** Names the group for assistive tech ("Period"). */
   label: string;
+  /** `vertical` stacks the options as full-width rows (a short list of presets). */
+  orientation?: 'horizontal' | 'vertical';
   className?: string;
 }
 
@@ -24,6 +26,7 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   label,
+  orientation = 'horizontal',
   className = 'mx-3',
 }: Props<T>) {
   return (
@@ -34,7 +37,8 @@ export function SegmentedControl<T extends string>({
       onChange={onChange}
       stretch
       activeStyle="brand"
-      className={`h-10 ${className}`}
+      orientation={orientation}
+      className={`${orientation === 'vertical' ? '' : 'h-10 '}${className}`}
     />
   );
 }

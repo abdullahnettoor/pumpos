@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { RangedPartyLedger } from '@pump/shared';
-import { customerPdfParty, statementPdfData, supplierPdfParty } from './statementPdf.js';
+import {
+  customerStatementParty,
+  partyStatementDoc,
+  statementFilePrefix,
+  supplierStatementParty,
+  type PartyKind,
+} from './partyStatement.js';
+import { ledgerFileName, fileSlug } from './ledgerFileName.js';
 
 const entry = (
   id: string,
@@ -40,49 +47,49 @@ const customerLedger: RangedPartyLedger = {
   ],
 };
 
-const build = (ledger: RangedPartyLedger, kind: 'customer' | 'supplier' = 'customer') =>
-  statementPdfData({
+const build = (ledger: RangedPartyLedger, kind: PartyKind = 'customer') =>
+  partyStatementDoc({
     kind,
-    party: { name: 'Acme Transport', lines: [] },
+    party: { name: 'Acme Transport', lines: ['Fleet · FL-001'] },
     range: { from: '2026-10-01', to: '2026-10-31' },
+    periodLabel: 'October 2026',
     ledger,
-    now: new Date('2026-10-10T08:30:00.000Z'),
+    generatedAt: new Date('2026-10-10T08:30:00.000Z'),
   });
 
-const cents = (v: string | null) => (v === null ? 0 : Math.round(Number(v) * 100));
-
-describe('statementPdfData', () => {
-  it('carries the range, its label and the server opening and closing balances untouched', () => {
-    const d = build(customerLedger);
-    expect(d).toMatchObject({
-      kind: 'customer',
-      from: '2026-10-01',
-      to: '2026-10-31',
+describe('partyStatementDoc', () => {
+  it('carries the party, the range label and the server opening balance', () => {
+    expect(build(customerLedger)).toMatchObject({
+      title: 'CUSTOMER STATEMENT',
+      entityName: 'Acme Transport',
       periodLabel: 'October 2026',
-      openingBalance: '5000.00',
-      closingBalance: '9500.00',
+      partyLines: ['Fleet · FL-001'],
+      partyAccount: true,
+      opening: 5000,
+      totals: { debit: 8500, credit: 4000, balance: 9500 },
+      debitLabel: 'Sales',
+      creditLabel: 'Received',
       generatedAt: '2026-10-10T08:30:00.000Z',
     });
   });
 
   it('puts a sale in the debit column and a collection in the credit column, oldest first', () => {
-    const d = build(customerLedger);
-    expect(d.rows).toEqual([
+    expect(build(customerLedger).rows).toEqual([
       {
-        date: '7 Oct 2026',
-        title: 'Credit Sale',
+        dateLabel: '7 Oct 2026',
+        particulars: 'Credit Sale',
         detail: 'Shift 20261007-1 · 120 L Diesel · KL-11-AB-4521',
-        debit: '8500.00',
-        credit: null,
-        balance: '13500.00',
+        debit: 8500,
+        credit: 0,
+        balance: 13500,
       },
       {
-        date: '18 Oct 2026',
-        title: 'Payment received',
+        dateLabel: '18 Oct 2026',
+        particulars: 'Payment received',
         detail: 'UPI · Ref COL-000042',
-        debit: null,
-        credit: '4000.00',
-        balance: '9500.00',
+        debit: 0,
+        credit: 4000,
+        balance: 9500,
       },
     ]);
   });
@@ -93,16 +100,12 @@ describe('statementPdfData', () => {
       ...customerLedger,
       entries: customerLedger.entries.map((e) => ({ ...e, runningBalance: '777.00' })),
     };
-    expect(build(odd).rows.map((r) => r.balance)).toEqual(['777.00', '777.00']);
+    expect(build(odd).rows.map((r) => r.balance)).toEqual([777, 777]);
   });
 
-  it('opening + debits − credits reconciles to the closing balance', () => {
+  it('opening + debits - credits reconciles to the closing balance', () => {
     const d = build(customerLedger);
-    expect(d.totalDebits).toBe('8500.00');
-    expect(d.totalCredits).toBe('4000.00');
-    expect(cents(d.openingBalance) + cents(d.totalDebits) - cents(d.totalCredits)).toBe(
-      cents(d.closingBalance),
-    );
+    expect(d.opening! + d.totals.debit - d.totals.credit).toBe(d.totals.balance);
   });
 
   it('adds paise exactly (no float drift in the totals)', () => {
@@ -115,10 +118,10 @@ describe('statementPdfData', () => {
         entry('b', 'Credit Sale', '0.20', '2026-10-02', '0.30'),
       ],
     });
-    expect(d.totalDebits).toBe('0.30');
+    expect(d.totals.debit).toBe(0.3);
   });
 
-  it('treats a supplier Payment as the credit and an advance (negative) balance as is', () => {
+  it('treats a supplier Payment as the credit; a negative balance is an advance', () => {
     const d = build(
       {
         periodOpeningBalance: '1000.00',
@@ -137,14 +140,28 @@ describe('statementPdfData', () => {
       },
       'supplier',
     );
-    expect(d.rows.map((r) => [r.title, r.debit, r.credit, r.balance])).toEqual([
-      ['Purchase · HSD', '2000.00', null, '3000.00'],
-      ['Payment made', null, '3500.00', '-500.00'],
+    expect(d.title).toBe('SUPPLIER STATEMENT');
+    expect(d.rows.map((r) => [r.particulars, r.debit, r.credit, r.balance])).toEqual([
+      ['Purchase · HSD', 2000, 0, 3000],
+      ['Payment made', 0, 3500, -500],
     ]);
-    expect(d.closingBalance).toBe('-500.00');
-    expect(cents(d.openingBalance) + cents(d.totalDebits) - cents(d.totalCredits)).toBe(
-      cents(d.closingBalance),
-    );
+    expect(d.totals.balance).toBe(-500);
+    expect(d.closing).toEqual({ note: 'Advance' });
+  });
+
+  it('names an advance the same way for a customer who has paid ahead', () => {
+    const d = build({ ...customerLedger, closingBalance: '-1200.00' });
+    expect(d.closing).toEqual({ note: 'Advance' });
+  });
+
+  it('names what a positive balance means for each kind, and a zero one', () => {
+    expect(build(customerLedger).closing).toEqual({ note: 'Due from customer' });
+    expect(build({ ...customerLedger, closingBalance: '9500.00' }, 'supplier').closing).toEqual({
+      note: 'Payable to supplier',
+    });
+    expect(build({ ...customerLedger, closingBalance: '0.00' }).closing).toEqual({
+      note: 'Settled',
+    });
   });
 
   it('sends a negative Adjustment to the credit column and a positive one to the debit', () => {
@@ -158,11 +175,10 @@ describe('statementPdfData', () => {
       ],
     });
     expect(d.rows.map((r) => [r.debit, r.credit])).toEqual([
-      [null, '50.00'],
-      ['20.00', null],
+      [0, 50],
+      [20, 0],
     ]);
-    expect(d.totalDebits).toBe('20.00');
-    expect(d.totalCredits).toBe('50.00');
+    expect(d.totals).toMatchObject({ debit: 20, credit: 50 });
   });
 
   it('is an opening balance carried to closing when nothing happened in the range', () => {
@@ -173,17 +189,15 @@ describe('statementPdfData', () => {
       entries: [],
     });
     expect(d.rows).toEqual([]);
-    expect(d.totalDebits).toBe('0.00');
-    expect(d.totalCredits).toBe('0.00');
-    expect(d.openingBalance).toBe(d.closingBalance);
+    expect(d.totals).toEqual({ debit: 0, credit: 0, balance: 1200 });
+    expect(d.opening).toBe(1200);
   });
 });
 
 describe('party details', () => {
   it('names a customer by type and fleet code, GSTIN and phone', () => {
     expect(
-      customerPdfParty({
-        id: 'c',
+      customerStatementParty({
         name: 'Acme Transport',
         customerType: 'Fleet',
         fleetCode: 'FL-001',
@@ -197,13 +211,12 @@ describe('party details', () => {
   });
 
   it('leaves out what a customer does not have', () => {
-    expect(customerPdfParty({ id: 'c', name: 'Walk-in' })).toEqual({ name: 'Walk-in', lines: [] });
+    expect(customerStatementParty({ name: 'Walk-in' })).toEqual({ name: 'Walk-in', lines: [] });
   });
 
   it('names a supplier by trade name, GSTIN, vendor code and phone', () => {
     expect(
-      supplierPdfParty({
-        id: 's',
+      supplierStatementParty({
         name: 'IOCL Depot',
         phone: '0484 000',
         metadata: { tradeName: 'Indian Oil', gstin: '32AAACI1681G1ZY', vendorCode: 'V-9' },
@@ -212,5 +225,24 @@ describe('party details', () => {
       name: 'IOCL Depot',
       lines: ['Indian Oil', 'GSTIN 32AAACI1681G1ZY', 'Code V-9', 'Phone 0484 000'],
     });
+  });
+});
+
+describe('ledger file names (one helper for the desktop ledger and the statements)', () => {
+  it('slugs the name to ASCII words and carries the range', () => {
+    const range = { from: '2026-10-01', to: '2026-10-31' };
+    expect(ledgerFileName('Ledger', 'Acme Transport', range)).toBe(
+      'Ledger_Acme_Transport_2026-10-01_2026-10-31',
+    );
+    expect(
+      ledgerFileName(statementFilePrefix('supplier'), 'IOCL — Depot #4', range, 'Supplier'),
+    ).toBe('Supplier_Statement_IOCL_Depot_4_2026-10-01_2026-10-31');
+  });
+
+  it('falls back when the name has nothing ASCII', () => {
+    expect(fileSlug('गणेश', 'Customer')).toBe('Customer');
+    expect(ledgerFileName('Customer_Statement', '', { from: 'a', to: 'b' }, 'Customer')).toBe(
+      'Customer_Statement_Customer_a_b',
+    );
   });
 });

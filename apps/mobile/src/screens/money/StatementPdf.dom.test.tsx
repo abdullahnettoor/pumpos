@@ -155,7 +155,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const mount = (kind: Kind, station: any = STATION) => {
+const mount = (kind: Kind, station: any = STATION, role: string = 'Owner') => {
   const qc = ui.createQueryClient();
   return render(
     <QueryClientProvider client={qc}>
@@ -165,7 +165,7 @@ const mount = (kind: Kind, station: any = STATION) => {
             station,
             stationName: 'Apex Station',
             userName: 'Asha',
-            role: 'Owner',
+            role: role as any,
             openAccount: () => {},
           }}
         >
@@ -189,6 +189,7 @@ const lastAsked = () => asked[asked.length - 1];
 
 const openFilter = () => fireEvent.click(screen.getByRole('button', { name: /^Filter statement/ }));
 const pick = (name: string) => fireEvent.click(screen.getByRole('radio', { name }));
+const apply = () => fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
 
 describe.each<Kind>(['customer', 'supplier'])('%s statement range and PDF', (kind) => {
   const party = kind === 'customer' ? CUSTOMER : SUPPLIER;
@@ -196,9 +197,33 @@ describe.each<Kind>(['customer', 'supplier'])('%s statement range and PDF', (kin
   it('shows this month, in the station calendar, and has Share and Download statement', async () => {
     mount(kind);
     await ready();
-    expect(lastAsked()).toEqual({ id: party.id, from: '2026-10-01', to: '2026-10-31' });
-    expect(screen.getByText('October 2026', { selector: 'p' })).toBeTruthy();
+    // Never the end of the month ahead: this month runs to today.
+    expect(lastAsked()).toEqual({ id: party.id, from: '2026-10-01', to: '2026-10-09' });
+    expect(screen.getByText('1 Oct 2026 – 9 Oct 2026', { selector: 'p' })).toBeTruthy();
     expect(share()).toBeTruthy();
+  });
+
+  it("shows the server's running balance beside each entry, the same figures the PDF prints", async () => {
+    mount(kind);
+    await ready();
+    const first = kind === 'customer' ? 'Bal ₹13,500.00' : 'Bal ₹8,000.00';
+    expect(screen.getByText(first)).toBeTruthy();
+  });
+
+  it('gives the Accountant (Money tab) Share and Download statement too', async () => {
+    mount(kind, STATION, 'Accountant');
+    await ready();
+    expect(share()).toBeTruthy();
+    expect(download()).toBeTruthy();
+    expect((share() as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('keeps the Filter button a 44px touch target', async () => {
+    mount(kind);
+    await ready();
+    const button = screen.getByRole('button', { name: /^Filter statement/ });
+    expect(button.className).toContain('min-h-11');
+    expect(button.className).toContain('min-w-11');
   });
 
   it("follows the station's timezone across midnight, not UTC", async () => {
@@ -206,7 +231,7 @@ describe.each<Kind>(['customer', 'supplier'])('%s statement range and PDF', (kin
     vi.setSystemTime(new Date('2026-10-31T20:00:00Z'));
     mount(kind);
     await ready();
-    expect(lastAsked()).toMatchObject({ from: '2026-11-01', to: '2026-11-30' });
+    expect(lastAsked()).toMatchObject({ from: '2026-11-01', to: '2026-11-01' });
   });
 
   it('Download statement builds the PDF from the ledger on screen, always as a download', async () => {
@@ -219,16 +244,18 @@ describe.each<Kind>(['customer', 'supplier'])('%s statement range and PDF', (kin
     expect(station.name).toBe('Apex Station');
     expect(data).toMatchObject({
       kind,
-      from: '2026-10-01',
-      to: '2026-10-31',
-      periodLabel: 'October 2026',
-      // The server's figures, not a client sum.
-      openingBalance: '5000.00',
+      range: { from: '2026-10-01', to: '2026-10-09' },
+      // The label prints the end that was asked for, not the month's.
+      periodLabel: '1 Oct 2026 – 9 Oct 2026',
+    });
+    // The server's ranged ledger, handed over as it is: not a client sum.
+    expect(data.ledger).toMatchObject({
+      periodOpeningBalance: '5000.00',
       closingBalance: kind === 'customer' ? '9500.00' : '7000.00',
     });
     expect(data.party.name).toBe(party.name);
     expect(data.party.lines).toContain('GSTIN 32AAACH1118R1Z5');
-    expect(data.rows).toHaveLength(2);
+    expect(data.ledger.entries).toHaveLength(2);
   });
 
   it('Share goes through the platform saver (the share sheet on a phone)', async () => {
@@ -245,7 +272,7 @@ describe.each<Kind>(['customer', 'supplier'])('%s statement range and PDF', (kin
     await waitFor(() => expect(asked.length).toBeGreaterThan(0));
     expect((download() as HTMLButtonElement).disabled).toBe(true);
     expect((share() as HTMLButtonElement).disabled).toBe(true);
-    held.release(ledgerFor(kind, { from: '2026-10-01', to: '2026-10-31' }));
+    held.release(ledgerFor(kind, { from: '2026-10-01', to: '2026-10-09' }));
     await ready();
   });
 
@@ -270,6 +297,7 @@ describe.each<Kind>(['customer', 'supplier'])('%s statement range and PDF', (kin
       await ready();
       openFilter();
       pick('Last month');
+      apply();
       await waitFor(() =>
         expect(lastAsked()).toEqual({ id: party.id, from: '2026-09-01', to: '2026-09-30' }),
       );
@@ -279,8 +307,7 @@ describe.each<Kind>(['customer', 'supplier'])('%s statement range and PDF', (kin
       fireEvent.click(download());
       await waitFor(() => expect(pdfCalls).toHaveLength(1));
       expect(pdfCalls[0].data).toMatchObject({
-        from: '2026-09-01',
-        to: '2026-09-30',
+        range: { from: '2026-09-01', to: '2026-09-30' },
         periodLabel: 'September 2026',
       });
     });
@@ -291,6 +318,7 @@ describe.each<Kind>(['customer', 'supplier'])('%s statement range and PDF', (kin
       held = { release: () => {} };
       openFilter();
       pick('Last month');
+      apply();
       expect(await screen.findByText('Loading statement…')).toBeTruthy();
       expect((download() as HTMLButtonElement).disabled).toBe(true);
     });
@@ -302,7 +330,7 @@ describe.each<Kind>(['customer', 'supplier'])('%s statement range and PDF', (kin
       pick('Custom range');
       fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-09-05' } });
       fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-09-20' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Apply range' }));
+      apply();
       await waitFor(() =>
         expect(lastAsked()).toEqual({ id: party.id, from: '2026-09-05', to: '2026-09-20' }),
       );
@@ -310,13 +338,12 @@ describe.each<Kind>(['customer', 'supplier'])('%s statement range and PDF', (kin
       fireEvent.click(share());
       await waitFor(() => expect(pdfCalls).toHaveLength(1));
       expect(pdfCalls[0].data).toMatchObject({
-        from: '2026-09-05',
-        to: '2026-09-20',
+        range: { from: '2026-09-05', to: '2026-09-20' },
         periodLabel: '5 Sep 2026 – 20 Sep 2026',
       });
     });
 
-    it('refuses an end before the start and an end after today, and keeps the range', async () => {
+    it('refuses an end before the start and an end after today, on the field at fault, and keeps the range', async () => {
       mount(kind);
       await ready();
       const before = asked.length;
@@ -324,16 +351,57 @@ describe.each<Kind>(['customer', 'supplier'])('%s statement range and PDF', (kin
       pick('Custom range');
       fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-09-20' } });
       fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-09-05' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Apply range' }));
-      expect(screen.getByRole('alert').textContent).toBe(
+      apply();
+      expect((await screen.findByRole('alert')).textContent).toBe(
         'The end date can’t be before the start date.',
+      );
+      // Only the end field is marked invalid, and it names its own message.
+      const to = screen.getByLabelText('To');
+      expect(to.getAttribute('aria-invalid')).toBe('true');
+      expect(screen.getByLabelText('From').getAttribute('aria-invalid')).toBeNull();
+      expect(document.getElementById(to.getAttribute('aria-describedby')!)?.textContent).toContain(
+        'before the start',
       );
       fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-10-01' } });
       fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-10-20' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Apply range' }));
-      expect(screen.getByRole('alert').textContent).toBe('The end date can’t be after today.');
+      apply();
+      await waitFor(() =>
+        expect(screen.getByRole('alert').textContent).toBe('The end date can’t be after today.'),
+      );
       expect(asked.length).toBe(before);
       expect(screen.getByRole('dialog')).toBeTruthy();
+    });
+
+    it('marks a missing start date on the start field only', async () => {
+      mount(kind);
+      await ready();
+      openFilter();
+      pick('Custom range');
+      fireEvent.change(screen.getByLabelText('From'), { target: { value: '' } });
+      apply();
+      expect((await screen.findByRole('alert')).textContent).toBe('Pick a start date.');
+      expect(screen.getByLabelText('From').getAttribute('aria-invalid')).toBe('true');
+      expect(screen.getByLabelText('To').getAttribute('aria-invalid')).toBeNull();
+    });
+
+    it('moving through the presets with the arrow keys selects, but neither applies nor closes', async () => {
+      mount(kind);
+      await ready();
+      const before = asked.length;
+      openFilter();
+      const dialog = within(screen.getByRole('dialog'));
+      const group = dialog.getByRole('radiogroup', { name: 'Range' });
+      fireEvent.keyDown(group, { key: 'ArrowDown' });
+      expect(dialog.getByRole('radio', { name: 'Last month' }).getAttribute('aria-checked')).toBe(
+        'true',
+      );
+      expect(screen.getByRole('dialog')).toBeTruthy();
+      expect(asked.length).toBe(before);
+      apply();
+      await waitFor(() =>
+        expect(lastAsked()).toMatchObject({ from: '2026-09-01', to: '2026-09-30' }),
+      );
+      expect(screen.queryByRole('dialog')).toBeNull();
     });
 
     it('marks the range on screen as the checked option', async () => {
@@ -349,13 +417,14 @@ describe.each<Kind>(['customer', 'supplier'])('%s statement range and PDF', (kin
       );
     });
 
-    it('a financial-year preset runs 1 April to 31 March', async () => {
+    it('a financial-year preset runs from 1 April to today, never to next March', async () => {
       mount(kind);
       await ready();
       openFilter();
       pick('This financial year');
+      apply();
       await waitFor(() =>
-        expect(lastAsked()).toMatchObject({ from: '2026-04-01', to: '2027-03-31' }),
+        expect(lastAsked()).toMatchObject({ from: '2026-04-01', to: '2026-10-09' }),
       );
     });
   });
@@ -366,26 +435,29 @@ describe.each<Kind>(['customer', 'supplier'])('%s statement range and PDF', (kin
       await ready();
       fireEvent.click(screen.getByRole('button', { name: 'Earlier months' }));
       await waitFor(() =>
-        expect(lastAsked()).toEqual({ id: party.id, from: '2026-09-01', to: '2026-10-31' }),
+        expect(lastAsked()).toEqual({ id: party.id, from: '2026-09-01', to: '2026-10-09' }),
       );
       await ready();
       fireEvent.click(download());
       await waitFor(() => expect(pdfCalls).toHaveLength(1));
       expect(pdfCalls[0].data).toMatchObject({
-        from: '2026-09-01',
-        to: '2026-10-31',
-        periodLabel: '1 Sep 2026 – 31 Oct 2026',
+        range: { from: '2026-09-01', to: '2026-10-09' },
+        periodLabel: '1 Sep 2026 – 9 Oct 2026',
       });
     });
 
-    it('is not offered on a range picked by hand', async () => {
-      mount(kind);
-      await ready();
-      openFilter();
-      pick('Last month');
-      await waitFor(() => expect(lastAsked().from).toBe('2026-09-01'));
-      await ready();
-      expect(screen.queryByRole('button', { name: 'Earlier months' })).toBeNull();
-    });
+    it.each(['This month', 'Last month', 'Last 3 months', 'This financial year'])(
+      'is not offered on a range picked in the Filter (%s)',
+      async (preset) => {
+        mount(kind);
+        await ready();
+        openFilter();
+        pick(preset);
+        apply();
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        await ready();
+        expect(screen.queryByRole('button', { name: 'Earlier months' })).toBeNull();
+      },
+    );
   });
 });

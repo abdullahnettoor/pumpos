@@ -194,6 +194,20 @@ export const TIER = {
   operational: { staleTime: 15_000, gcTime: 5 * 60_000, refetchOnWindowFocus: true } as const,
 };
 
+/** The key of one party's statement window: `[prefix, partyId, from, to]`. */
+export type StatementKey =
+  ReturnType<typeof queryKeys.customerStatement> | ReturnType<typeof queryKeys.supplierStatement>;
+
+/** Whether `key` is a customer or supplier statement window (the shape the two builders above make). */
+export function isStatementKey(key: readonly unknown[] | undefined): key is StatementKey {
+  return (
+    !!key &&
+    key.length === 4 &&
+    (key[0] === 'customer-statement' || key[0] === 'supplier-statement') &&
+    key.slice(1).every((part) => typeof part === 'string')
+  );
+}
+
 export const stationsQueryOptions = () => ({
   queryKey: queryKeys.stations(),
   queryFn: () => stationSvc.getStations(),
@@ -795,13 +809,8 @@ function widensStatementWindow(
   partyId: string | null | undefined,
   range: { from: string; to: string },
 ): boolean {
-  if (!previousKey) return false;
-  const [, previousId, previousFrom, previousTo] = previousKey as [
-    unknown,
-    unknown,
-    string,
-    string,
-  ];
+  if (!isStatementKey(previousKey)) return false;
+  const [, previousId, previousFrom, previousTo] = previousKey;
   return previousId === partyId && previousTo === range.to && previousFrom > range.from;
 }
 

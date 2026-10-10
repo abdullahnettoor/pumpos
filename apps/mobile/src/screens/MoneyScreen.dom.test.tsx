@@ -808,7 +808,7 @@ describe('Customer page', () => {
       expect(statementCalls.at(-1)).toEqual({
         id: 'Ledger Lou',
         from: '2026-10-01',
-        to: '2026-10-31',
+        to: '2026-10-09',
       });
       expect(screen.getByText('Balance brought forward from before 1 Oct 2026')).toBeTruthy();
       // The row's running balance starts from the opening balance: 1000 + 10750.
@@ -826,7 +826,7 @@ describe('Customer page', () => {
       expect(statementCalls.at(-1)).toMatchObject({
         id: 'Ledger Lou',
         from: '2026-09-01',
-        to: '2026-10-31',
+        to: '2026-10-09',
       });
     });
 
@@ -854,7 +854,7 @@ describe('Customer page', () => {
       expect(statementCalls.at(-1)).toMatchObject({
         id: 'Ledger Lou',
         from: '2026-09-01',
-        to: '2026-10-31',
+        to: '2026-10-09',
       });
     });
 
@@ -1035,7 +1035,7 @@ describe('Customer page', () => {
       mount();
       fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'sam' } });
       open('Settled Sam');
-      expect(screen.getByText(/No transactions in October 2026/)).toBeTruthy();
+      expect(screen.getByText(/No transactions in 1 Oct 2026 – 9 Oct 2026/)).toBeTruthy();
       cleanup();
 
       mount();
@@ -1316,7 +1316,7 @@ describe('Supplier page', () => {
       expect(supplierStatementCalls.at(-1)).toEqual({
         id: 'Ledger Lal',
         from: '2026-10-01',
-        to: '2026-10-31',
+        to: '2026-10-09',
       });
       expect(screen.getByText('Balance brought forward from before 1 Oct 2026')).toBeTruthy();
       expect(screen.getByText('−₹1,500.00')).toBeTruthy();
@@ -1330,7 +1330,7 @@ describe('Supplier page', () => {
       supplierLedgers['Ledger Lal'] = [{ ...PURCHASE, amount: '500' }];
       openSupplier('Ledger');
       fireEvent.click(screen.getByRole('button', { name: 'Earlier months' }));
-      expect(supplierStatementCalls.at(-1)).toMatchObject({ from: '2026-09-01', to: '2026-10-31' });
+      expect(supplierStatementCalls.at(-1)).toMatchObject({ from: '2026-09-01', to: '2026-10-09' });
       ledgerState.placeholder = true;
       cleanup();
       openSupplier('Ledger');
@@ -1430,7 +1430,7 @@ describe('Supplier page', () => {
       ledgerState.isLoading = false;
       suppliers.push(sup({ name: 'Brand New', currentBalance: '0' }));
       openSupplier('Brand');
-      expect(screen.getByText('No transactions in October 2026.')).toBeTruthy();
+      expect(screen.getByText('No transactions in 1 Oct 2026 – 9 Oct 2026.')).toBeTruthy();
       cleanup();
 
       ledgerState.isError = true;

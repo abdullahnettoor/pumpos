@@ -193,6 +193,40 @@ describe('windowed statement (ranged ledger)', () => {
   });
 });
 
+describe('server running balance (ranged ledger)', () => {
+  const served = [
+    row('a', 'Credit Sale', 500, '2026-10-02', { runningBalance: '2000.00' }),
+    row('b', 'Collection', 200, '2026-10-05', { runningBalance: '1800.00' }),
+  ];
+
+  it("shows the server's running balance on every row, not a client sum", () => {
+    // The opening balance given here would make a client sum 1500 + 500 = 2000, 1800.
+    // The server's figures are deliberately different: they are what is shown.
+    const odd = served.map((r, i) => ({ ...r, runningBalance: i === 0 ? '777.00' : '555.00' }));
+    const s = buildStatement(odd, 20, undefined, 'customer', 1500);
+    expect(s.months.flatMap((m) => m.entries).map((e) => e.balance)).toEqual([555, 777]);
+    expect(s.closingBalance).toBe(555);
+  });
+
+  it('trusts them without checking against the balance on record (that one may be later)', () => {
+    // A past range does not end on today's balance.
+    const s = buildStatement(served, 20, 99999, 'customer', 1500);
+    expect(s.reconciled).toBe(true);
+    expect(s.months.flatMap((m) => m.entries).every((e) => e.balance !== null)).toBe(true);
+  });
+
+  it('keeps the signed effect of each row for its +/- display', () => {
+    const s = buildStatement(served, 20, undefined, 'customer', 1500);
+    expect(s.months.flatMap((m) => m.entries).map((e) => e.delta)).toEqual([-200, 500]);
+  });
+
+  it('falls back to the client sum, checked, when a row has no server balance (legacy ledger)', () => {
+    const mixed = [served[0], { ...served[1], runningBalance: null }];
+    expect(buildStatement(mixed, 20, 999, 'customer', 1500).reconciled).toBe(false);
+    expect(buildStatement(mixed, 20, 1800, 'customer', 1500).reconciled).toBe(true);
+  });
+});
+
 describe('enriched customer rows', () => {
   const sale = row('s', 'Credit Sale', 10750, '2026-10-09', {
     shiftBusinessDate: '2026-10-09',

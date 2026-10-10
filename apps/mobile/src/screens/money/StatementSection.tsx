@@ -92,6 +92,8 @@ export const StatementSection: React.FC<Props> = ({
             <button
               type="button"
               onClick={onFilter}
+              // A 44px touch target around the small label, without growing the row.
+              className="-mx-2 -my-3.5 inline-flex min-h-11 min-w-11 items-center justify-center px-2"
               aria-label={period ? `Filter statement, showing ${period.label}` : 'Filter statement'}
             >
               Filter ▾
