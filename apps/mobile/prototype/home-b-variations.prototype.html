@@ -1,0 +1,396 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Not wired to the app.
+  Question: "Variant B (dark control room) won. What's the best take on it?"
+  Three variations of B, same mock data. Switch with the floating bar, ←/→,
+  ?variant=B1|B2|B3, or ?variant=all (side by side). ?tall=1 shows full scroll.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PumpOS mobile — Control room variations (prototype)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root { --font-sans: 'Plus Jakarta Sans', -apple-system, sans-serif; --font-mono: 'Geist Mono', ui-monospace, monospace; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; font-family: var(--font-sans); color: #2b342d; background: #f6f7f4; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+  .num { font-family: var(--font-mono); font-feature-settings: 'tnum'; letter-spacing: -0.02em; }
+  .stage { display: flex; gap: 28px; align-items: flex-start; justify-content: center; padding: 8px 0 90px; flex-wrap: wrap; }
+  .phone { width: 375px; height: 780px; border-radius: 44px; padding: 10px; background: #000; box-shadow: 0 30px 60px -20px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.25); flex-shrink: 0; }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 35px; overflow: hidden; display: flex; flex-direction: column; }
+  .statusbar { height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 6px 28px 0; font-size: 14px; font-weight: 600; color: #fff; }
+  .statusbar .icons { display: flex; gap: 5px; align-items: center; }
+  .scroll { flex: 1; overflow-y: auto; scrollbar-width: none; padding-bottom: 100px; }
+  .scroll::-webkit-scrollbar { display: none; }
+  .notes { width: 300px; font-size: 13px; line-height: 1.55; color: #5e6a61; padding-top: 18px; }
+  .notes h2 { font-size: 20px; color: #18201a; margin: 0 0 2px; letter-spacing: -0.02em; }
+  .notes .tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #1f6a53; }
+  .notes ul { padding-left: 16px; margin: 10px 0; } .notes li { margin-bottom: 6px; } .notes b { color: #18201a; }
+  .switcher { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 999; display: flex; align-items: center; gap: 4px; padding: 5px; border-radius: 999px; background: #111; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.35); font-size: 13px; }
+  .switcher button { width: 34px; height: 34px; border-radius: 999px; color: #fff; font-size: 16px; text-align: center; }
+  .switcher .lbl { min-width: 210px; text-align: center; font-weight: 600; } .switcher .lbl span { opacity: .55; font-weight: 500; }
+  .dots { display: flex; gap: 4px; justify-content: center; margin-top: 2px; } .dots i { width: 5px; height: 5px; border-radius: 9px; background: #555; } .dots i.on { background: #fff; }
+
+  /* shared dark kit — each variant sets --acc / --bg / --card / --line */
+  .dk { background: var(--bg); color: #c9d2cc; }
+  .dk .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+  .dk .lbl { font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #66746c; padding: 18px 16px 8px; display: flex; justify-content: space-between; align-items: baseline; }
+  .dk .lbl .r { color: var(--acc); letter-spacing: .02em; text-transform: none; font-weight: 600; font-size: 11px; }
+  .dk .k { font-size: 11px; color: #7d8a83; font-weight: 500; }
+  .dk .w { color: #fff; }
+  .dk .s { font-size: 11px; color: #7d8a83; }
+  .dk .good { color: #3ddc97; } .dk .bad { color: #ff7a6b; } .dk .warn { color: #f5b74a; }
+  .dk .dock { z-index: 10; position: absolute; left: 14px; right: 14px; bottom: 22px; display: flex; justify-content: space-around; padding: 7px; border-radius: 22px; background: rgba(20,24,22,.86); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 12px 30px rgba(0,0,0,.55); }
+  .dk .dock button { width: 54px; height: 44px; border-radius: 14px; display: grid; place-items: center; color: #6f7c75; position: relative; }
+  .dk .dock button.on { background: var(--acc); color: var(--on-acc); }
+  .dk .pip { position: absolute; top: 8px; right: 12px; width: 7px; height: 7px; border-radius: 9px; background: #ff7a6b; border: 2px solid #161a18; }
+  .dk .hdr { padding: 2px 14px 10px; display: flex; align-items: center; gap: 8px; }
+  .dk .stbtn { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+  .dk .stbtn .lg { width: 24px; height: 24px; border-radius: 7px; background: var(--acc); color: var(--on-acc); display: grid; place-items: center; font-weight: 800; font-size: 11px; }
+  .dk .stbtn .nm { font-size: 13px; font-weight: 600; color: #fff; }
+  .dk .iconbtn { width: 36px; height: 36px; border-radius: 11px; border: 1px solid var(--line); display: grid; place-items: center; color: #9aa69f; position: relative; }
+
+  /* ---------- B1 Bento+ ---------- */
+  .B1 { --bg: #0a0d0c; --card: #111614; --line: #1c2421; --acc: #3ddc97; --on-acc: #04120b; }
+  .B1 .seg { margin: 0 14px; display: grid; grid-template-columns: repeat(3,1fr); padding: 3px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+  .B1 .seg button { text-align: center; padding: 7px 0; border-radius: 9px; font-size: 12px; font-weight: 600; color: #7d8a83; }
+  .B1 .seg button.on { background: #1f2a25; color: #fff; }
+  .B1 .live { display: flex; align-items: center; gap: 6px; }
+  .B1 .pulse { width: 7px; height: 7px; border-radius: 9px; background: var(--acc); box-shadow: 0 0 0 3px rgba(61,220,151,.2), 0 0 10px var(--acc); }
+  .B1 .hero { margin: 12px 14px 0; padding: 16px; border-radius: 20px; background: radial-gradient(140% 120% at 100% 0%, #133826 0%, #0f1a15 50%, #0d1210 100%); border: 1px solid #1d3a2c; display: flex; gap: 14px; align-items: center; }
+  .B1 .hero .v { font-size: 30px; font-weight: 600; color: #fff; letter-spacing: -0.04em; margin: 4px 0 2px; }
+  .B1 .bento { display: grid; grid-template-columns: repeat(6,1fr); gap: 8px; padding: 8px 14px 0; }
+  .B1 .bento .card { padding: 12px; }
+  .B1 .c3 { grid-column: span 3; } .B1 .c2 { grid-column: span 2; } .B1 .c6 { grid-column: span 6; }
+  .B1 .bento .v { font-size: 19px; font-weight: 600; margin-top: 4px; }
+  .B1 .c2 .v { font-size: 16px; }
+  .B1 .tankrow { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+  .B1 .tankrow:first-child { border-top: 0; padding-top: 2px; }
+  .B1 .tankrow .n { width: 38px; font-size: 12px; font-weight: 700; color: #fff; }
+  .B1 .bar { flex: 1; height: 8px; border-radius: 9px; background: #1c2421; overflow: hidden; }
+  .B1 .bar i { display: block; height: 100%; border-radius: 9px; }
+  .B1 .tankrow .p { width: 40px; text-align: right; font-size: 13px; font-weight: 600; }
+  .B1 .tankrow .d { width: 54px; text-align: right; font-size: 11px; color: #7d8a83; }
+  .B1 .feed { margin: 0 14px; }
+  .B1 .fi { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-top: 1px solid var(--line); }
+  .B1 .fi:first-child { border-top: 0; }
+  .B1 .fi .bul { width: 8px; height: 8px; border-radius: 9px; flex-shrink: 0; }
+  .B1 .fi .t { font-size: 13px; font-weight: 600; color: #fff; } .B1 .fi .m { font-size: 11px; color: #7d8a83; }
+  .B1 .fi .go { margin-left: auto; font-size: 11px; font-weight: 700; padding: 6px 10px; border-radius: 9px; background: #1c2421; color: #fff; }
+  .B1 .avs { display: flex; }
+  .B1 .avs span { width: 26px; height: 26px; border-radius: 99px; border: 2px solid var(--card); background: #24302a; color: #cfe; font-size: 10px; font-weight: 700; display: grid; place-items: center; margin-left: -7px; }
+  .B1 .avs span:first-child { margin-left: 0; }
+
+  /* ---------- B2 Forecourt ---------- */
+  .B2 { --bg: #080b10; --card: #0f141b; --line: #1b2330; --acc: #5ab4ff; --on-acc: #04101c; }
+  .B2 .ticker { margin: 0 14px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: #2a1414; border: 1px solid #4a2020; }
+  .B2 .ticker .t { font-size: 12.5px; font-weight: 600; color: #fff; } .B2 .ticker .m { font-size: 11px; color: #c49a94; }
+  .B2 .ticker .n { margin-left: auto; font-size: 10px; font-weight: 700; color: #ff9b8f; background: #3a1a1a; padding: 3px 7px; border-radius: 99px; }
+  .B2 .sum { display: flex; justify-content: space-between; align-items: flex-end; padding: 16px 16px 4px; }
+  .B2 .sum .v { font-size: 34px; font-weight: 600; color: #fff; letter-spacing: -0.04em; }
+  .B2 .split { display: flex; gap: 14px; padding: 2px 16px 0; font-size: 11px; color: #7d8a96; }
+  .B2 .split b { color: #dfe8f2; font-weight: 600; }
+  .B2 .yard { margin: 12px 14px 0; padding: 14px 12px 12px; border-radius: 20px; background:
+      repeating-linear-gradient(90deg, transparent 0 22px, rgba(255,255,255,.025) 22px 23px),
+      linear-gradient(180deg, #0f1620, #0b1017); border: 1px solid var(--line); position: relative; }
+  .B2 .canopy { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #4f6177; font-weight: 700; display: flex; justify-content: space-between; margin-bottom: 10px; }
+  .B2 .islands { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+  .B2 .isl { min-width: 0; border-radius: 14px; padding: 10px 8px; background: #131b26; border: 1px solid #22304a; position: relative; }
+  .B2 .isl.due { border-color: #6b4b14; background: #1d1910; }
+  .B2 .isl .id { font-size: 11px; font-weight: 800; color: var(--acc); letter-spacing: .04em; }
+  .B2 .isl.due .id { color: #f5b74a; }
+  .B2 .isl .who { font-size: 13px; font-weight: 600; color: #fff; margin-top: 6px; }
+  .B2 .noz { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 8px; }
+  .B2 .noz span { font-size: 9px; font-weight: 700; padding: 2px 4px; border-radius: 5px; background: #1c2737; color: #a9bbd0; }
+  .B2 .isl .dr { font-size: 10.5px; color: #7d8a96; margin-top: 8px; }
+  .B2 .isl .st { position: absolute; top: 9px; right: 9px; width: 7px; height: 7px; border-radius: 9px; background: #3ddc97; box-shadow: 0 0 8px #3ddc97; }
+  .B2 .isl.due .st { background: #f5b74a; box-shadow: 0 0 8px #f5b74a; }
+  .B2 .ground { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #24324a; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+  .B2 .ug { display: flex; flex-direction: column; gap: 5px; }
+  .B2 .ug .row { display: flex; justify-content: space-between; font-size: 11px; }
+  .B2 .ug .row b { color: #fff; font-weight: 700; }
+  .B2 .cyl { height: 30px; border-radius: 15px; background: #18222f; overflow: hidden; position: relative; border: 1px solid #22304a; }
+  .B2 .cyl i { position: absolute; left: 0; top: 0; bottom: 0; }
+  .B2 .ug .d { font-size: 10px; color: #7d8a96; }
+  .B2 .pills { display: flex; gap: 8px; overflow-x: auto; padding: 0 14px; scrollbar-width: none; }
+  .B2 .pills .card { flex-shrink: 0; width: 132px; padding: 12px; }
+  .B2 .pills .v { font-size: 18px; font-weight: 600; margin-top: 4px; }
+  .B2 .list { margin: 0 14px; }
+  .B2 .li { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-top: 1px solid var(--line); }
+  .B2 .li:first-child { border-top: 0; }
+  .B2 .li .t { font-size: 13px; font-weight: 600; color: #fff; } .B2 .li .m { font-size: 11px; color: #7d8a96; }
+  .B2 .li .v { margin-left: auto; font-size: 13px; font-weight: 600; color: #fff; }
+
+  /* ---------- B3 Instrument ---------- */
+  .B3 { --bg: #0d0d0c; --card: #161513; --line: #26241f; --acc: #ffb547; --on-acc: #1a1003; }
+  .B3 .top { display: flex; align-items: center; justify-content: space-between; padding: 2px 16px 0; }
+  .B3 .top .st { font-size: 13px; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 6px; }
+  .B3 .top .sh { font-size: 11px; color: #9a9384; display: flex; gap: 6px; align-items: center; margin-top: 2px; }
+  .B3 .pulse { width: 6px; height: 6px; border-radius: 9px; background: var(--acc); box-shadow: 0 0 8px var(--acc); }
+  .B3 .gauge { position: relative; width: 260px; height: 192px; margin: 12px auto 0; }
+  .B3 .gauge .c { position: absolute; left: 0; right: 0; top: 78px; text-align: center; }
+  .B3 .gauge .c .v { font-size: 32px; font-weight: 600; color: #fff; letter-spacing: -0.04em; }
+  .B3 .gauge .c .k { font-size: 11px; color: #9a9384; }
+  .B3 .scale { display: flex; justify-content: space-between; width: 236px; margin: -14px auto 0; font-size: 10px; color: #6b6558; }
+  .B3 .pace { margin: -6px 16px 0; display: flex; justify-content: center; gap: 8px; }
+  .B3 .chip { font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 99px; background: var(--card); border: 1px solid var(--line); color: #c9c2b3; }
+  .B3 .chip b { color: #fff; }
+  .B3 .tabs { display: flex; gap: 18px; padding: 20px 16px 10px; border-bottom: 1px solid var(--line); }
+  .B3 .tabs button { font-size: 14px; font-weight: 700; color: #6b6558; padding-bottom: 8px; margin-bottom: -11px; border-bottom: 2px solid transparent; }
+  .B3 .tabs button.on { color: #fff; border-color: var(--acc); }
+  .B3 .tabs .ct { font-size: 10px; background: #3a1f1a; color: #ff9b8f; padding: 1px 6px; border-radius: 99px; margin-left: 4px; vertical-align: 2px; }
+  .B3 .dials { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; padding: 14px 14px 0; }
+  .B3 .dial { padding: 12px 6px 10px; text-align: center; }
+  .B3 .dial .n { font-size: 12px; font-weight: 700; color: #fff; margin-top: 4px; }
+  .B3 .dial .d { font-size: 10.5px; color: #8a8475; margin-top: 1px; }
+  .B3 .rows { margin: 8px 14px 0; }
+  .B3 .r { display: flex; align-items: center; padding: 12px; border-top: 1px solid var(--line); gap: 10px; }
+  .B3 .r:first-child { border-top: 0; }
+  .B3 .r .t { font-size: 13px; color: #c9c2b3; } .B3 .r .v { margin-left: auto; font-size: 14px; font-weight: 600; color: #fff; }
+  .B3 .r .ic { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: #211f1b; color: #9a9384; }
+  .B3 .cta { width: calc(100% - 28px); margin: 10px 14px 0; display: flex; align-items: center; gap: 10px; padding: 13px 14px; border-radius: 16px; background: var(--acc); color: var(--on-acc); }
+  .B3 .cta .t { font-size: 14px; font-weight: 800; } .B3 .cta .m { font-size: 11.5px; opacity: .75; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage"></div>
+<div class="switcher" role="toolbar" aria-label="Prototype variant switcher">
+  <button id="prev" aria-label="Previous variant">‹</button>
+  <div><div class="lbl" id="lbl"></div><div class="dots" id="dots"></div></div>
+  <button id="next" aria-label="Next variant">›</button>
+</div>
+<script>
+const D = {
+  sales: 484528, volume: 5050, deltaPct: 9.8,
+  mix: [ { k: 'Cash', v: 231400, c: '#3ddc97' }, { k: 'UPI', v: 142300, c: '#2aa877' }, { k: 'Card', v: 57800, c: '#5ab4ff' }, { k: 'Credit', v: 53028, c: '#f5b74a' } ],
+  fuels: [ { k: 'MS', l: 2410, v: 248037 }, { k: 'HSD', l: 2640, v: 236491 } ],
+  trend: [402, 455, 431, 470, 512, 441, 485],
+  credit: 53028, purchases: 1043200, variance: -340, margin: 21450, products: 6840,
+  receivables: 682400, payables: 1043200, overdue: 4, pace: 712000, typical: 650000,
+  tanks: [ { k: 'MS', pct: 62, kl: '12.4 KL', days: '2.6 d' }, { k: 'HSD', pct: 18, kl: '3.6 KL', days: '0.9 d' }, { k: 'XP95', pct: 74, kl: '7.4 KL', days: '9 d' } ],
+  dus: [ { id: 'DU1', who: 'Ramesh K', ini: 'RK', noz: ['MS', 'MS', 'HSD'], drops: 0, due: false },
+         { id: 'DU2', who: 'Sajid P', ini: 'SP', noz: ['MS', 'HSD', 'HSD'], drops: 20000, due: false },
+         { id: 'DU3', who: 'Vinod M', ini: 'VM', noz: ['XP95', 'HSD'], drops: 10000, due: true } ],
+};
+const inr = (n, c) => { const a = Math.abs(n), s = n < 0 ? '−' : '';
+  if (c && a >= 1e5) return s + '₹' + (a / 1e5).toFixed(2).replace(/\.?0+$/, '') + 'L';
+  if (c && a >= 1e3) return s + '₹' + (a / 1e3).toFixed(1).replace(/\.0$/, '') + 'k';
+  return s + '₹' + a.toLocaleString('en-IN'); };
+const L = (n) => n.toLocaleString('en-IN') + ' L';
+const ic = (p, s = 20, w = 1.9) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const I = {
+  home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>',
+  pump: '<path d="M4 21V5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v16"/><path d="M3 21h11"/><path d="M7 8h3"/><path d="M13 10h3l3 3v5a1.5 1.5 0 0 1-3 0v-4h-3"/>',
+  doc: '<path d="M6 2h8l5 5v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v5h5"/><path d="M8 13h8M8 17h5"/>',
+  wallet: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="16.5" cy="14.5" r="1.2"/>',
+  bars: '<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M3 20h18"/>',
+  down: '<path d="m6 9 6 6 6-6"/>', chev: '<path d="m9 6 6 6-6 6"/>',
+  cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
+  drop: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
+  cash: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  truck: '<path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
+  card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+};
+const statusbar = () => `<div class="statusbar"><span>5:12</span><span class="icons">
+  <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+  <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x=".5" y=".5" width="21" height="11" rx="3" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="8" rx="1.6" fill="currentColor"/></svg></span></div>`;
+const spark = (vals, w, h, p = 3) => { const mx = Math.max(...vals), mn = Math.min(...vals);
+  return vals.map((v, i) => (i ? 'L' : 'M') + ((i / (vals.length - 1)) * w).toFixed(1) + ' ' + (h - p - ((v - mn) / (mx - mn || 1)) * (h - p * 2)).toFixed(1)).join(' '); };
+const tc = (p) => p < 25 ? '#ff7a6b' : p < 40 ? '#f5b74a' : '#3ddc97';
+const dock = (badgeIdx = 2) => `<nav class="dock">${[I.home, I.pump, I.doc, I.wallet, I.bars].map((p, i) => `<button class="${i ? '' : 'on'}">${ic(p, 21, 2)}${i === badgeIdx ? '<span class="pip"></span>' : ''}</button>`).join('')}</nav>`;
+const header = (initials) => `<div class="hdr">
+  <button class="stbtn"><div class="lg">${initials}</div><div class="nm">Highway Fuels</div><span style="color:#66746c">${ic(I.down, 14, 2.4)}</span></button>
+  <div style="flex:1"></div>
+  <button class="iconbtn">${ic(I.cal, 17)}</button>
+  <button class="iconbtn">${ic(I.bell, 17)}<span class="pip" style="top:7px;right:8px"></span></button></div>`;
+
+/* donut for payment mix */
+function donut(size, stroke) {
+  const r = (size - stroke) / 2, C = 2 * Math.PI * r, tot = D.mix.reduce((s, m) => s + m.v, 0); let off = 0;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform:rotate(-90deg)">
+    ${D.mix.map(m => { const len = (m.v / tot) * C - 2; const el = `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${m.c}" stroke-width="${stroke}" stroke-dasharray="${len} ${C}" stroke-dashoffset="${-off}" stroke-linecap="butt"/>`; off += (m.v / tot) * C; return el; }).join('')}</svg>`;
+}
+
+/* ================= B1 — Bento+ ================= */
+function B1() {
+  return `<div class="screen dk B1">${statusbar()}<div class="scroll">
+    ${header('HF')}
+    <div class="seg"><button class="on"><span class="live" style="justify-content:center"><span class="pulse"></span>Shift 2</span></button><button>Today</button><button>7 days</button></div>
+    <div class="hero">
+      <div style="flex:1;min-width:0">
+        <div class="k">Fuel sales · Shift 2 so far</div>
+        <div class="v num">${inr(271648)}</div>
+        <div class="s num">${L(2830)} · <span class="good">▲ 6.1%</span> vs avg shift</div>
+        <div style="display:flex;gap:10px;margin-top:12px;align-items:center">
+          <div class="avs"><span>RK</span><span>SP</span><span>VM</span></div>
+          <span class="s">On since 2:00 pm</span>
+        </div>
+      </div>
+      <div style="position:relative;width:86px;height:86px;flex-shrink:0">${donut(86, 10)}
+        <div style="position:absolute;inset:0;display:grid;place-items:center;text-align:center"><div><div class="num w" style="font-size:13px;font-weight:600">48%</div><div class="s" style="font-size:9.5px">cash</div></div></div></div>
+    </div>
+    <div class="bento">
+      <div class="card c3"><div class="k">Today total</div><div class="v num w">${inr(D.sales, true)}</div><div class="s num">${L(D.volume)}</div></div>
+      <div class="card c3"><div class="k">Gross margin</div><div class="v num good">${inr(D.margin, true)}</div><div class="s">4.4% of sales</div></div>
+      <div class="card c2"><div class="k">Variance</div><div class="v num bad">${inr(D.variance)}</div><div class="s">DU3</div></div>
+      <div class="card c2"><div class="k">Credit</div><div class="v num warn">${inr(D.credit, true)}</div><div class="s">7 slips</div></div>
+      <div class="card c2"><div class="k">Products</div><div class="v num w">${inr(D.products, true)}</div><div class="s">12 items</div></div>
+      <div class="card c6">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span class="k">Tank stock · days of cover</span><span class="s">Dip 6:00 am</span></div>
+        ${D.tanks.map(t => `<div class="tankrow"><span class="n">${t.k}</span><div class="bar"><i style="width:${t.pct}%;background:${tc(t.pct)}"></i></div><span class="p num" style="color:${tc(t.pct)}">${t.pct}%</span><span class="d num">${t.days}</span></div>`).join('')}
+      </div>
+    </div>
+    <div class="lbl"><span>Needs you</span><span class="r">3 open</span></div>
+    <div class="card feed">
+      <div class="fi"><span class="bul" style="background:#ff7a6b;box-shadow:0 0 8px #ff7a6b"></span><div><div class="t">HSD below 20%</div><div class="m">0.9 day of cover</div></div><span class="go">Order</span></div>
+      <div class="fi"><span class="bul" style="background:#f5b74a"></span><div><div class="t">7 & 8 Oct not closed</div><div class="m">DSSR pending</div></div><span class="go">Close</span></div>
+      <div class="fi"><span class="bul" style="background:#f5b74a"></span><div><div class="t">DU3 handover due</div><div class="m">Vinod M · ₹10,000 dropped</div></div><span class="go">View</span></div>
+    </div>
+    <div class="lbl"><span>Money position</span><span class="r">Money ›</span></div>
+    <div class="bento" style="padding-top:0">
+      <div class="card c3"><div class="k">To collect</div><div class="v num warn">${inr(D.receivables, true)}</div><div class="s">${D.overdue} overdue</div></div>
+      <div class="card c3"><div class="k">To pay</div><div class="v num w">${inr(D.payables, true)}</div><div class="s">HPCL · due Mon</div></div>
+    </div>
+  </div>${dock()}</div>`;
+}
+
+/* ================= B2 — Forecourt ================= */
+function B2() {
+  return `<div class="screen dk B2">${statusbar()}<div class="scroll">
+    ${header('HF')}
+    <div class="ticker"><span style="color:#ff7a6b">${ic(I.drop, 17)}</span><div><div class="t">HSD at 18% — 0.9 day of cover</div><div class="m">Order a load today</div></div><span class="n">1 / 3</span></div>
+    <div class="sum">
+      <div><div class="k">Fuel sales · Fri 9 Oct</div><div class="v num">${inr(D.sales)}</div></div>
+      <svg width="78" height="36" viewBox="0 0 78 36"><path d="${spark(D.trend, 78, 36)}" fill="none" stroke="#5ab4ff" stroke-width="2"/></svg>
+    </div>
+    <div class="split"><span>MS <b class="num">${L(2410)}</b></span><span>HSD <b class="num">${L(2640)}</b></span><span style="margin-left:auto;color:#3ddc97">▲ 9.8%</span></div>
+
+    <div class="yard">
+      <div class="canopy"><span>Forecourt · Shift 2</span><span style="color:#3ddc97">● Live 3h 12m</span></div>
+      <div class="islands">${D.dus.map(d => `<button class="isl ${d.due ? 'due' : ''}"><span class="st"></span>
+        <div class="id">${d.id}</div><div class="who">${d.who.split(' ')[0]}</div>
+        <div class="noz">${d.noz.map(n => `<span>${n}</span>`).join('')}</div>
+        <div class="dr num">${d.due ? 'Handover due' : 'Drops ' + inr(d.drops, true)}</div></button>`).join('')}</div>
+      <div class="ground">${D.tanks.map(t => `<div class="ug"><div class="row"><b>${t.k}</b><span class="num" style="color:${tc(t.pct)}">${t.pct}%</span></div>
+        <div class="cyl"><i style="width:${t.pct}%;background:linear-gradient(90deg, ${tc(t.pct)}55, ${tc(t.pct)})"></i></div>
+        <div class="d num">${t.kl} · ${t.days}</div></div>`).join('')}</div>
+    </div>
+
+    <div class="lbl"><span>Today</span><span class="r">Daily report ›</span></div>
+    <div class="pills">
+      <div class="card"><div class="k">Variance</div><div class="v num bad">${inr(D.variance)}</div><div class="s">Shift 1 · DU3</div></div>
+      <div class="card"><div class="k">Margin</div><div class="v num good">${inr(D.margin, true)}</div><div class="s">4.4%</div></div>
+      <div class="card"><div class="k">Credit</div><div class="v num warn">${inr(D.credit, true)}</div><div class="s">7 slips</div></div>
+      <div class="card"><div class="k">Purchases</div><div class="v num w">${inr(D.purchases, true)}</div><div class="s">1 tanker</div></div>
+    </div>
+    <div class="lbl"><span>Payments in</span><span class="r"></span></div>
+    <div class="card list">${D.mix.map(m => `<div class="li"><span style="width:8px;height:8px;border-radius:3px;background:${m.c}"></span><div class="t">${m.k}</div>
+      <div style="flex:1;margin:0 8px;height:4px;border-radius:9px;background:#1b2330"><div style="width:${(m.v / 231400) * 100}%;height:100%;border-radius:9px;background:${m.c}"></div></div>
+      <div class="v num">${inr(m.v, true)}</div></div>`).join('')}</div>
+    <div class="lbl"><span>Money position</span><span class="r">Money ›</span></div>
+    <div class="card list">
+      <div class="li"><div><div class="t">To collect</div><div class="m">${D.overdue} customers overdue</div></div><div class="v num warn">${inr(D.receivables, true)}</div></div>
+      <div class="li"><div><div class="t">To pay</div><div class="m">HPCL · due Mon</div></div><div class="v num">${inr(D.payables, true)}</div></div>
+    </div>
+  </div>${dock()}</div>`;
+}
+
+/* ================= B3 — Instrument ================= */
+function B3() {
+  // 240° arc gauge: sales so far vs pace projection
+  const W = 260, R = 100, cx = 130, cy = 122, a0 = 150, sweep = 240;
+  const pt = (a) => [cx + R * Math.cos(a * Math.PI / 180), cy + R * Math.sin(a * Math.PI / 180)];
+  const arc = (from, to) => { const [x1, y1] = pt(from), [x2, y2] = pt(to); return `M${x1} ${y1} A${R} ${R} 0 ${to - from > 180 ? 1 : 0} 1 ${x2} ${y2}`; };
+  const max = 800000, frac = D.sales / max, typ = D.typical / max, pace = D.pace / max;
+  const [tx, ty] = pt(a0 + sweep * typ);
+  const [px, py] = pt(a0 + sweep * pace);
+  const ticks = Array.from({ length: 25 }, (_, i) => { const a = (a0 + (sweep / 24) * i) * Math.PI / 180, r1 = R + 12, r2 = R + (i % 6 === 0 ? 20 : 16);
+    return `<line x1="${cx + r1 * Math.cos(a)}" y1="${cy + r1 * Math.sin(a)}" x2="${cx + r2 * Math.cos(a)}" y2="${cy + r2 * Math.sin(a)}" stroke="${i % 6 === 0 ? '#5a554a' : '#2f2c26'}" stroke-width="1.5"/>`; }).join('');
+  const dial = (t) => { const r = 26, C = 2 * Math.PI * r * 0.75; return `<svg width="64" height="56" viewBox="0 0 64 64">
+    <circle cx="32" cy="34" r="${r}" fill="none" stroke="#26241f" stroke-width="6" stroke-dasharray="${C} 999" transform="rotate(135 32 34)" stroke-linecap="round"/>
+    <circle cx="32" cy="34" r="${r}" fill="none" stroke="${tc(t.pct)}" stroke-width="6" stroke-dasharray="${C * t.pct / 100} 999" transform="rotate(135 32 34)" stroke-linecap="round"/>
+    <text x="32" y="39" text-anchor="middle" fill="#fff" font-family="Geist Mono" font-size="13" font-weight="600">${t.pct}%</text></svg>`; };
+  return `<div class="screen dk B3">${statusbar()}<div class="scroll">
+    <div class="top">
+      <div><button class="st">Highway Fuels ${ic(I.down, 14, 2.4)}</button><div class="sh"><span class="pulse"></span>Shift 2 · 3h 12m · Fri 9 Oct</div></div>
+      <div style="display:flex;gap:8px"><button class="iconbtn">${ic(I.cal, 17)}</button><button class="iconbtn">${ic(I.bell, 17)}<span class="pip" style="top:7px;right:8px"></span></button></div>
+    </div>
+    <div class="gauge">
+      <svg width="${W}" height="200" viewBox="0 0 ${W} 200" style="position:absolute;top:0;left:0;overflow:visible">
+        <defs><linearGradient id="g3" x1="0" x2="1"><stop offset="0" stop-color="#ff8a3d"/><stop offset="1" stop-color="#ffcf5c"/></linearGradient></defs>
+        ${ticks}
+        <path d="${arc(a0, a0 + sweep)}" fill="none" stroke="#1f1d19" stroke-width="14" stroke-linecap="round"/>
+        <path d="${arc(a0, a0 + sweep * frac)}" fill="none" stroke="url(#g3)" stroke-width="14" stroke-linecap="round" style="filter:drop-shadow(0 0 8px rgba(255,181,71,.35))"/>
+        <path d="${arc(a0 + sweep * frac, a0 + sweep * pace)}" fill="none" stroke="#ffb547" stroke-opacity=".28" stroke-width="14" stroke-dasharray="2 4"/>
+        <circle cx="${tx}" cy="${ty}" r="4" fill="#0d0d0c" stroke="#9a9384" stroke-width="2"/>
+      </svg>
+      <div class="c"><div class="k">Fuel sales today</div><div class="v num">${inr(D.sales)}</div><div class="k num">${L(D.volume)} · <span class="good">▲ 9.8%</span></div></div>
+    </div>
+    
+    <div class="pace"><span class="chip">On pace for <b class="num">${inr(D.pace, true)}</b></span><span class="chip">Typical Fri <b class="num">${inr(D.typical, true)}</b></span></div>
+
+    <div class="tabs"><button class="on">Stock</button><button>Cash</button><button>Money</button><button>Alerts<span class="ct">3</span></button></div>
+    <div class="dials">${D.tanks.map(t => `<div class="card dial">${dial(t)}<div class="n">${t.k}</div><div class="d num">${t.kl}<br/>${t.days} cover</div></div>`).join('')}</div>
+    <button class="cta">${ic(I.truck, 20, 2.2)}<div><div class="t">Order diesel</div><div class="m">HSD runs out ~Sat 4 am at current pace</div></div><span style="margin-left:auto">${ic(I.arrow, 18, 2.4)}</span></button>
+    <div class="card rows">
+      <div class="r"><span class="ic">${ic(I.drop, 15)}</span><span class="t">Sold today</span><span class="v num">${L(D.volume)}</span></div>
+      <div class="r"><span class="ic">${ic(I.truck, 15)}</span><span class="t">Received · HSD tanker</span><span class="v num">12,000 L</span></div>
+      <div class="r"><span class="ic">${ic(I.cash, 15)}</span><span class="t">Gross margin</span><span class="v num good">${inr(D.margin)}</span></div>
+      <div class="r"><span class="ic">${ic(I.lock, 15)}</span><span class="t">Cash variance</span><span class="v num bad">${inr(D.variance)}</span></div>
+    </div>
+  </div>${dock(4)}</div>`;
+}
+
+const VARIANTS = [
+  { key: 'B1', name: 'Bento+', render: B1, notes: `<div class="tag">B1</div><h2>Bento+</h2>
+    <p>The original B, refined. Same mint accent, tighter hierarchy.</p>
+    <ul><li>A <b>scope switch</b> (Shift 2 · Today · 7 days) re-scopes every number on the screen.</li>
+    <li>The hero shows the live shift with attendant avatars and a <b>payment-mix donut</b>.</li>
+    <li>A mixed-size bento: the important tiles are bigger, minor ones are thirds.</li>
+    <li>Tanks become <b>horizontal bars with days of cover</b>, which are quicker to compare than tubes.</li>
+    <li>Date and alerts move to header icons, so the date pill is gone.</li></ul>` },
+  { key: 'B2', name: 'Forecourt', render: B2, notes: `<div class="tag">B2</div><h2>Forecourt</h2>
+    <p>A spatial layout. The Home <b>looks like the station</b>, in a diesel-blue accent.</p>
+    <ul><li>A <b>forecourt card</b> shows the DU islands (attendant, nozzles, drops, handover state) above the underground tanks.</li>
+    <li>Tapping an island opens that DU's drawer.</li>
+    <li>The top alert is a ticker that cycles through 1 / 3.</li>
+    <li>KPI cards scroll sideways, and the payment mix shows as relative bars.</li>
+    <li>Good for stations with many DUs. Needs a sensible layout for 6+ islands.</li></ul>` },
+  { key: 'B3', name: 'Instrument', render: B3, notes: `<div class="tag">B3</div><h2>Instrument</h2>
+    <p>A car-dashboard feel in graphite with an amber accent.</p>
+    <ul><li>A <b>gauge</b> shows sales so far against a projection for the full day. The dotted arc is the projection and the marker is a typical Friday.</li>
+    <li>"On pace for ₹7.12L" is a <b>new derived insight</b>, projected from past days' hourly curves.</li>
+    <li>Tabs (Stock / Cash / Money / Alerts) replace one long scroll.</li>
+    <li>Tank dials plus a <b>predictive CTA</b>: "HSD runs out ~Sat 4 am".</li>
+    <li>The most distinctive of the three, but the pace and run-out figures need new calculations.</li></ul>` },
+];
+const params = new URLSearchParams(location.search);
+if (params.get('tall')) document.head.insertAdjacentHTML('beforeend', '<style>.phone{height:auto}.screen{height:auto}.scroll{overflow:visible}</style>');
+let idx = Math.max(0, VARIANTS.findIndex(v => v.key === (params.get('variant') || 'B1').toUpperCase()));
+function render() {
+  if (params.get('variant') === 'all' || innerWidth >= 1250) {
+    document.getElementById('stage').innerHTML = VARIANTS.map(x => `<div><div style="font:700 13px var(--font-sans);margin:0 0 10px 6px;color:#5e6a61">${x.key} · ${x.name}</div><div class="phone">${x.render()}</div></div>`).join('');
+    document.querySelector('.switcher').style.display = 'none'; return;
+  }
+  const v = VARIANTS[idx];
+  document.getElementById('stage').innerHTML = `<div class="phone">${v.render()}</div><div class="notes">${v.notes}</div>`;
+  document.getElementById('lbl').innerHTML = `${v.key} <span>(${v.name})</span>`;
+  document.getElementById('dots').innerHTML = VARIANTS.map((_, i) => `<i class="${i === idx ? 'on' : ''}"></i>`).join('');
+  try { const u = new URL(location.href); u.searchParams.set('variant', v.key); history.replaceState(null, '', u); } catch (e) {}
+}
+const go = (d) => { idx = (idx + d + VARIANTS.length) % VARIANTS.length; render(); };
+document.getElementById('prev').onclick = () => go(-1);
+document.getElementById('next').onclick = () => go(1);
+addEventListener('keydown', (e) => { const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1); });
+render();
+</script>
+</body>
+</html>
