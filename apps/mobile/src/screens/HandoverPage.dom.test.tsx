@@ -190,7 +190,7 @@ describe('HandoverPage', () => {
     expect(screen.getByText(/Loading your shift/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Save handover/i })).toBeNull();
     expect(document.querySelectorAll('.border-dock-line')).toHaveLength(0);
-    expect(document.querySelector('.sticky')).toBeNull();
+    expect(document.querySelector('.sticky:not([data-pinned-header])')).toBeNull();
   });
 
   it('loses the bar, and does not fall back to a sticky one, once the Shift closes', async () => {
@@ -209,7 +209,7 @@ describe('HandoverPage', () => {
     expect(screen.getByText(/No open shift assigned to you/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Save handover/i })).toBeNull();
     expect(document.querySelectorAll('.border-dock-line')).toHaveLength(0);
-    expect(document.querySelector('.sticky')).toBeNull();
+    expect(document.querySelector('.sticky:not([data-pinned-header])')).toBeNull();
   });
 
   it('a Shift with no Dispenser Unit of mine left has no Save, and no sticky bar of its own', () => {

@@ -61,6 +61,8 @@ const { tabsForRole } = await import('./tabs.js');
 const { HomeHeader } = await import('./HomeHeader.js');
 const { TabHeader } = await import('./TabHeader.js');
 const { DetailPage } = await import('../ui/DetailPage.js');
+const { PinnedToolbar } = await import('../ui/PinnedHeader.js');
+const { SummaryStrip } = await import('../components/handover/SummaryStrip.js');
 const { TeamPage } = await import('../screens/team/TeamPage.js');
 const { ThemeProvider } = await import('../theme/index.js');
 
@@ -96,6 +98,11 @@ const Root: React.FC<{ tab: string; stationName: string }> = ({ tab, stationName
   return (
     <div data-testid={`root-${tab}`}>
       {tab === 'home' ? <HomeHeader /> : <TabHeader title={tab} />}
+      {tab === 'money' && (
+        <PinnedToolbar>
+          <div role="radiogroup" aria-label="Money list" />
+        </PinnedToolbar>
+      )}
       <p>
         {tab} list · {stationName}
       </p>
@@ -294,6 +301,116 @@ describe('tab change animation', () => {
     expect(pill().style.transform).toBe('translateX(200%)');
     fireEvent.click(screen.getByRole('button', { name: 'Insights' }));
     expect(pill().style.transform).toBe('translateX(400%)');
+  });
+});
+
+describe('pinned headers', () => {
+  const header = (within_: HTMLElement) =>
+    within_.querySelector('[data-pinned-header]') as HTMLElement;
+  const edge = (h: HTMLElement) => ({
+    scrolled: h.getAttribute('data-scrolled'),
+    line: h.className.includes('border-line'),
+    shadow: h.className.includes('shadow-edge'),
+  });
+  const scrollTo = (pane: HTMLElement, top: number) => {
+    pane.scrollTop = top;
+    fireEvent.scroll(pane);
+  };
+
+  it.each([
+    ['Home', 'home'],
+    ['a tab root', 'shifts'],
+  ])('pins the header of %s to the top of its pane, on the canvas colour', (_n, tab) => {
+    render(<Harness />);
+    if (tab !== 'home') fireEvent.click(screen.getByRole('button', { name: 'Shifts' }));
+    const pane = paneOf(screen.getByText(new RegExp(`^${tab} list`)));
+    const h = header(pane);
+    expect(pane.contains(h)).toBe(true); // inside the scroller: it sticks to it
+    expect(h.className).toMatch(/\bsticky\b/);
+    expect(h.className).toContain('top-0');
+    expect(h.className).toContain('bg-background');
+    expect(h.className).toContain('z-20');
+    // Focus order: the header's controls come before the page's.
+    const firstStop = pane.querySelector('button, a, input') as HTMLElement;
+    expect(h.contains(firstStop)).toBe(true);
+  });
+
+  it('pins a detail page header (back, title, actions) and keeps the action bar at the bottom', () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open home item' }));
+    const pane = paneOf(screen.getByText('home item body'));
+    const h = header(pane);
+    expect(h.className).toMatch(/\bsticky\b/);
+    expect(h.className).toContain('top-0');
+    expect(h.className).toContain('bg-background');
+    expect(within(h).getByRole('button', { name: 'Back' })).toBeTruthy();
+    expect(within(h).getByRole('heading', { name: 'home item' })).toBeTruthy();
+    expect(pane.querySelector('.sticky.bottom-0')).toBeTruthy();
+    expect(pane.querySelector('button, a, input')).toBe(
+      within(h).getByRole('button', { name: 'Back' }),
+    );
+  });
+
+  it('shows the edge only once content has scrolled under the header, on tab roots and detail pages', () => {
+    render(<Harness />);
+    const pane = paneOf(screen.getByText(/^home list/));
+    expect(edge(header(pane))).toEqual({ scrolled: 'false', line: false, shadow: false });
+    // The border is always there (transparent), so the header never changes height.
+    expect(header(pane).className).toContain('border-b');
+    expect(header(pane).className).toContain('border-transparent');
+    scrollTo(pane, 40);
+    expect(edge(header(pane))).toEqual({ scrolled: 'true', line: true, shadow: true });
+    scrollTo(pane, 0);
+    expect(edge(header(pane))).toEqual({ scrolled: 'false', line: false, shadow: false });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open home item' }));
+    const page = paneOf(screen.getByText('home item body'));
+    expect(edge(header(page)).scrolled).toBe('false');
+    scrollTo(page, 12);
+    expect(edge(header(page))).toEqual({ scrolled: 'true', line: true, shadow: true });
+    // The pane underneath keeps its own state.
+    expect(edge(header(pane)).scrolled).toBe('false');
+  });
+
+  it('puts the handover strip below the pinned header, not under it', () => {
+    const height = vi
+      .spyOn(HTMLElement.prototype, 'offsetHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.hasAttribute('data-pinned-header') ? 64 : 0;
+      });
+    try {
+      render(<Harness />);
+      fireEvent.click(screen.getByRole('button', { name: 'Open home item' }));
+      const pane = paneOf(screen.getByText('home item body'));
+      expect(pane.style.getPropertyValue('--pinned-header-h')).toBe('64px');
+      // The strip sticks at that height (0 where there is no pinned header).
+      const { container } = render(
+        <SummaryStrip
+          summary={{ expectedTotal: 0, declaredTotal: 0, varianceAmount: 0 } as never}
+          accepted={false}
+        />,
+      );
+      expect(container.firstElementChild!.className).toContain('top-[var(--pinned-header-h,0px)]');
+      // Scrolling to a spot (scrollIntoView) leaves room for the header too.
+      expect(pane.className).toContain('scroll-pt-[var(--pinned-header-h,0px)]');
+    } finally {
+      height.mockRestore();
+    }
+  });
+
+  it('keeps a tab toolbar (the Money list switch) pinned inside the header', () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Money' }));
+    const pane = paneOf(screen.getByText(/^money list/));
+    const h = header(pane);
+    const toolbar = within(pane).getByRole('radiogroup', { name: 'Money list' });
+    expect(h.contains(toolbar)).toBe(true);
+    // After the title row, before the page content.
+    const order = [...pane.querySelectorAll('h1, [role="radiogroup"], p')];
+    expect(order.indexOf(toolbar)).toBeGreaterThan(order.findIndex((e) => e.tagName === 'H1'));
+    expect(order.indexOf(toolbar)).toBeLessThan(
+      order.findIndex((e) => e.textContent?.startsWith('money list')),
+    );
   });
 });
 
