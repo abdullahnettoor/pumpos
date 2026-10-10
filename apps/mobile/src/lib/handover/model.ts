@@ -155,11 +155,6 @@ export interface MerchRow {
 export const blankZero = (v: string | number | null | undefined): string =>
   v != null && v !== '' && Number(v) !== 0 && Number.isFinite(Number(v)) ? String(Number(v)) : '';
 
-export const num = (v: string | number | null | undefined) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-};
-
 /** What a DU's entry looks like before the attendant touches it. Pure over `du`. */
 export function seedForm(du: AssignedDu): DuFormState {
   const readings: Record<string, string> = {};

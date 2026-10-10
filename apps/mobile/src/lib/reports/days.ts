@@ -1,38 +1,17 @@
 import type { BusinessDayListItem, BusinessDayListStatus, BusinessDayListWeek } from '@pump/shared';
+import { dateParts, MONTH_NAMES, shortDate, weekdayOf } from '../dates.js';
+import { wholeQuantityLabel } from '../money/quantity.js';
 import { compactRupees, plural, signedRupees } from '../format.js';
-
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
-const MONTHS = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-] as const;
 
 /** Weekday and day of month from a `YYYY-MM-DD` Business Date (calendar label, no timezone). */
 export function dayParts(businessDate: string): { weekday: string; day: number } {
-  const [y, m, d] = businessDate.split('-').map(Number) as [number, number, number];
-  return { weekday: WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()], day: d };
+  return { weekday: weekdayOf(businessDate), day: dateParts(businessDate).d };
 }
 
 /** `2026-10` -> `October 2026`. */
 export function monthLabel(month: string): string {
-  const [y, m] = month.split('-').map(Number) as [number, number];
-  return `${MONTHS[m - 1]} ${y}`;
-}
-
-/** `2026-10-08` -> `8 Oct`. */
-export function shortDate(businessDate: string): string {
-  const [, m, d] = businessDate.split('-').map(Number) as [number, number, number];
-  return `${d} ${MONTHS[m - 1].slice(0, 3)}`;
+  const { y, m } = dateParts(month);
+  return `${MONTH_NAMES[m - 1]} ${y}`;
 }
 
 /** Percent change vs the previous window, one decimal; null when there is nothing to compare. */
@@ -121,8 +100,7 @@ export function dayView(day: BusinessDayListItem, liveTab: LiveTab | null): DayV
   const { label: statusLabel, tone } = presentation;
   const action = day.status === 'LIVE' && !liveTab ? 'none' : presentation.action;
   const final = hasFigures(day);
-  const volume =
-    final && day.shiftCount > 0 ? `${Math.round(day.volume).toLocaleString('en-IN')} L` : '—';
+  const volume = final && day.shiftCount > 0 ? wholeQuantityLabel(day.volume, 'L') : '—';
 
   let headline: string;
   let note: string;

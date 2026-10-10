@@ -1,8 +1,8 @@
 import { inr } from '@pump/ui';
-import { round2 } from '../num.js';
 import { reconcileDrawer, type DrawerReconciliation } from '@pump/shared';
+import { plural } from '../format.js';
+import { num, round2 } from '../num.js';
 import {
-  num,
   type AssignedDu,
   type AssignedNozzle,
   type CreditLine,
@@ -67,8 +67,6 @@ export function fieldErrorMap(errors: HandoverError[], duId: string): Record<str
 const NO_NEGATIVES = 'No negatives';
 
 const litres = (v: number) => `${Number(v.toFixed(2)).toLocaleString('en-IN')} L`;
-
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** Litres metered past the opening reading (testing not yet taken off), never below zero. */
 export const nozzleGrossVolume = (nz: AssignedNozzle, form: DuFormState): number =>

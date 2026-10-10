@@ -15,13 +15,13 @@ import {
 } from '@pump/ui';
 import { varianceBadge } from '../lib/variance.js';
 import { TONE_TEXT } from '../ui/index.js';
+import { num } from '../lib/num.js';
 import { CashCountSheet } from './CashCountSheet.js';
 import { CustomerSaleForm } from './handover/CustomerSaleForm.js';
 import { NumberField } from './handover/Fields.js';
 import { CalculatorIcon } from './handover/icons.js';
 import {
   blankZero,
-  num,
   seedForm,
   type AssignedDu,
   type DuFormState,

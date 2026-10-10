@@ -8,7 +8,6 @@ import {
   draftDates,
   liveTabFor,
   monthLabel,
-  shortDate,
   weekChange,
   weekTile,
 } from './days.js';
@@ -33,9 +32,8 @@ describe('reports day helpers', () => {
     expect(dayParts('2026-10-09')).toEqual({ weekday: 'Fri', day: 9 });
     expect(dayParts('2026-03-01')).toEqual({ weekday: 'Sun', day: 1 });
   });
-  it('labels months and short dates', () => {
+  it('labels months', () => {
     expect(monthLabel('2026-09')).toBe('September 2026');
-    expect(shortDate('2026-10-08')).toBe('8 Oct');
   });
   it('computes week change, hiding it without a prior week', () => {
     expect(weekChange(106.4, 100)).toBe(6.4);

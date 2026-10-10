@@ -1,6 +1,7 @@
 import React from 'react';
 import type { BusinessDayListItem, Station } from '@pump/shared';
 import { useBusinessDayList } from '@pump/ui';
+import { shortDate } from '../lib/dates.js';
 import { plural } from '../lib/format.js';
 import {
   barWidths,
@@ -8,7 +9,6 @@ import {
   draftDates,
   liveTabFor,
   monthLabel,
-  shortDate,
   weekTile,
   type DayView,
   type LiveTab,

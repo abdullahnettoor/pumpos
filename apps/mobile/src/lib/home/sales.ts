@@ -9,6 +9,7 @@
 import { productCategoryOf, shiftBusinessDate, type ProductType } from '@pump/shared';
 import { unitLabel } from '@pump/ui';
 import { businessWeekday } from '../dates.js';
+import { wholeQuantityLabel } from '../money/quantity.js';
 import { num } from '../num.js';
 
 export type Snapshot = Record<string, any>;
@@ -61,8 +62,6 @@ export interface SalesFigures {
   total: number;
   closedShifts: ClosedShift[];
 }
-
-const groupedInt = (n: number) => Math.round(n).toLocaleString('en-IN');
 
 export const shiftLabel = (s: Snapshot): string =>
   (typeof s.templateName === 'string' && s.templateName) ||
@@ -128,7 +127,7 @@ export function deriveSales(snap: Snapshot): SalesFigures {
     fuel,
     fuelValue,
     fuelVolumeLabel:
-      [...perUnit].map(([unit, qty]) => `${groupedInt(qty)} ${unit}`).join(' · ') || '0 L',
+      [...perUnit].map(([unit, qty]) => wholeQuantityLabel(qty, unit)).join(' · ') || '0 L',
     products,
     productsValue,
     productUnits: products.reduce((s, p) => s + p.quantity, 0),

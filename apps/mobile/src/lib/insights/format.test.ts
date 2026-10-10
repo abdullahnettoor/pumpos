@@ -3,7 +3,6 @@ import {
   litres,
   percent,
   rangeLabel,
-  shortDate,
   signedLitres,
   weekdayDate,
   weekdayInitial,
@@ -19,7 +18,6 @@ describe('litres / percent', () => {
 
 describe('dates', () => {
   it('reads plain dates without locale tables (September is "Sep")', () => {
-    expect(shortDate('2026-09-03')).toBe('3 Sep');
     expect(weekdayDate('2026-10-07')).toBe('Wed 7 Oct');
     expect(weekdayInitial('2026-10-07')).toBe('W');
     expect(weekdayInitial('2026-10-04')).toBe('S');

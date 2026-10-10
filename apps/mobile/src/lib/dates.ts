@@ -54,3 +54,45 @@ export const businessWeekday = (businessDate: string): string =>
     weekday: 'short',
     timeZone: 'UTC',
   });
+
+// Plain-calendar labels for a `YYYY-MM-DD` date, read by hand from fixed tables
+// (Node's ICU spells September "Sept", the app's does not, and `Date` locale
+// formatting would depend on the device).
+
+/** Weekday abbreviations, Sunday first (`Date#getUTCDay` order). */
+export const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+export const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const;
+
+/** Year, month (1-12) and day of a `YYYY-MM-DD` date. */
+export function dateParts(date: string): { y: number; m: number; d: number } {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  return { y, m, d };
+}
+
+/** `Sun` .. `Sat` for a `YYYY-MM-DD` date (calendar weekday, no timezone). */
+export function weekdayOf(date: string): (typeof WEEKDAYS)[number] {
+  const { y, m, d } = dateParts(date);
+  return WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+}
+
+/** `Oct`. */
+export const monthShort = (m: number): string => MONTH_NAMES[m - 1].slice(0, 3);
+
+/** `2026-10-08` -> `8 Oct`. */
+export function shortDate(date: string): string {
+  const { m, d } = dateParts(date);
+  return `${d} ${monthShort(m)}`;
+}
