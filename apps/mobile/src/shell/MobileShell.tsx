@@ -46,6 +46,11 @@ export const MobileShell: React.FC<MobileShellProps> = ({
   const openAccount = useCallback(() => setAccountOpen(true), []);
   const closeAccount = useCallback(() => setAccountOpen(false), []);
 
+  // Counts tab switches (0 = none yet); panes use it to play the enter animation once per switch.
+  const [switches, setSwitches] = useState({ tab: nav.active, count: 0 });
+  if (switches.tab !== nav.active) setSwitches({ tab: nav.active, count: switches.count + 1 });
+  const enterKey = switches.count;
+
   const station = stations.find((s) => s.id === selectedStationId) ?? null;
   const ctx = useMemo(
     () => ({
@@ -74,9 +79,16 @@ export const MobileShell: React.FC<MobileShellProps> = ({
             const tabActive = tab === nav.active;
             return (
               <React.Fragment key={tab}>
-                <Pane active={tabActive && stack.length === 0}>{renderRoot(tab)}</Pane>
+                <Pane active={tabActive && stack.length === 0} enterKey={enterKey} enterOnMount>
+                  {renderRoot(tab)}
+                </Pane>
                 {stack.map((entry, i) => (
-                  <Pane key={entry.id} active={tabActive && i === stack.length - 1} bottom="full">
+                  <Pane
+                    key={entry.id}
+                    active={tabActive && i === stack.length - 1}
+                    bottom="full"
+                    enterKey={enterKey}
+                  >
                     {entry.element}
                   </Pane>
                 ))}
