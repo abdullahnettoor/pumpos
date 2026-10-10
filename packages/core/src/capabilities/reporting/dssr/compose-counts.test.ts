@@ -56,4 +56,21 @@ describe('composeDssr document counts and per-shift fuel value (#391)', () => {
     expect(d.shifts.map((s: any) => s.fuelSalesValue)).toEqual([98000, 51000.5]);
     expect(d.fuel.totalSalesValue).toBe(149000.5);
   });
+
+  it('emits null, not 0, for a shift summary that recorded no fuel sales value', () => {
+    const d = composeDssr(
+      emptySource({
+        shiftSummaries: [
+          { shiftId: 'sh-1', shiftSequence: 1, snapshot: { totalNetVolume: 980 } },
+          {
+            shiftId: 'sh-2',
+            shiftSequence: 2,
+            snapshot: { totalNetVolume: 10, totalFuelSalesValue: 0 },
+          },
+        ],
+      }),
+    ) as any;
+    expect(d.shifts.map((s: any) => s.fuelSalesValue)).toEqual([null, 0]);
+    expect(d.fuel.totalSalesValue).toBe(0);
+  });
 });

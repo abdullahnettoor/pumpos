@@ -7,6 +7,7 @@
  * Sales are live and include the open Shift.
  */
 import { shiftBusinessDate } from '@pump/shared';
+import { businessWeekday } from './dates.js';
 import { num } from './num.js';
 
 export type Snapshot = Record<string, any>;
@@ -66,7 +67,7 @@ const unitLabel = (unit: unknown): string => {
 
 const groupedInt = (n: number) => Math.round(n).toLocaleString('en-IN');
 
-const shiftLabel = (s: Snapshot): string =>
+export const shiftLabel = (s: Snapshot): string =>
   (typeof s.templateName === 'string' && s.templateName) ||
   (s.shiftSequence ? `Shift ${s.shiftSequence}` : 'Shift');
 
@@ -178,12 +179,6 @@ export interface Comparison {
   against: string;
 }
 
-const weekday = (businessDate: string) =>
-  new Date(`${businessDate}T00:00:00Z`).toLocaleDateString('en-IN', {
-    weekday: 'short',
-    timeZone: 'UTC',
-  });
-
 /**
  * Today's closed-Shift fuel against the same number of Shifts, from the start,
  * of the previous Business Day. Null (so the UI hides it) whenever the
@@ -207,7 +202,7 @@ export function deriveComparison(
   return {
     pct,
     direction: pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat',
-    against: `${weekday(previousDate)} ${n === 1 ? shiftLabel(prevShifts[0]) : `Shifts 1–${n}`}`,
+    against: `${businessWeekday(previousDate)} ${n === 1 ? shiftLabel(prevShifts[0]) : `Shifts 1–${n}`}`,
   };
 }
 
@@ -246,3 +241,27 @@ export const trendWindow = (date: string) => ({
   from: shiftBusinessDate(date, -7),
   to: shiftBusinessDate(date, -1),
 });
+
+export interface ComparisonView {
+  /** Decorative glyph, or null for "level". */
+  arrow: '▲' | '▼' | null;
+  /** Spoken in place of the glyph. */
+  srLabel: 'Up' | 'Down' | null;
+  /** "4.2% fuel vs Thu Shift 1" or "Level with Thu Shift 1". */
+  text: string;
+  /** Only a fall is flagged. */
+  tone: 'bad' | 'default';
+}
+
+/** What the comparison line says; the component only lays it out. */
+export function comparisonView(c: Comparison): ComparisonView {
+  if (c.direction === 'flat')
+    return { arrow: null, srLabel: null, text: `Level with ${c.against}`, tone: 'default' };
+  const up = c.direction === 'up';
+  return {
+    arrow: up ? '▲' : '▼',
+    srLabel: up ? 'Up' : 'Down',
+    text: `${Math.abs(c.pct).toLocaleString('en-IN')}% fuel vs ${c.against}`,
+    tone: up ? 'default' : 'bad',
+  };
+}

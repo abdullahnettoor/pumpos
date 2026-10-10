@@ -34,20 +34,43 @@ describe('deriveTiles', () => {
     purchases: { total: 1043200, count: 1 },
   };
 
-  it('names the Dispenser Unit behind a cash variance', () => {
+  it('keeps the office and attendant levels apart: value is the office count only', () => {
     const t = deriveTiles(closed);
-    expect(t.variance).toMatchObject({ value: -340, detail: 'DU3 short', tone: 'bad' });
+    expect(t.variance.value).toBe(0);
+    expect(t.variance.detail).toBe('1 closed Shift');
+    expect(t.variance.secondary).toBe('Attendants −₹340 · DU3 short');
+    expect(t.variance.tone).toBe('default');
   });
 
-  it('adds the office count variance to the attendants', () => {
+  it('never adds the attendant variance into the office figure', () => {
     const t = deriveTiles({
       ...closed,
+      shifts: [{ shiftSequence: 1, templateName: 'Shift 1', cashVariance: -60 }],
       drawer: { ...closed.drawer, totalCashVariance: -60 },
     });
-    expect(t.variance.value).toBe(-400);
+    expect(t.variance.value).toBe(-60);
+    expect(t.variance.detail).toBe('Shift 1 short · office count');
+    expect(t.variance.secondary).toBe('Attendants −₹340 · DU3 short');
   });
 
-  it('counts the other DUs when several are off', () => {
+  it('names the Shift behind a large office variance and counts the others', () => {
+    const t = deriveTiles({
+      shifts: [
+        { shiftSequence: 1, templateName: 'Morning', cashVariance: 20 },
+        { shiftSequence: 2, cashVariance: -250 },
+        { shiftSequence: 3, cashVariance: 0 },
+      ],
+      drawer: { totalCashVariance: -230, attendants: [] },
+    });
+    expect(t.variance).toMatchObject({
+      value: -230,
+      detail: 'Shift 2 short +1 more · office count',
+      tone: 'bad',
+    });
+    expect(t.variance.secondary).toBeUndefined();
+  });
+
+  it('counts the other DUs when several are off, at the attendant level', () => {
     const t = deriveTiles({
       ...closed,
       drawer: {
@@ -60,11 +83,11 @@ describe('deriveTiles', () => {
         ],
       },
     });
-    expect(t.variance.detail).toBe('DU2 short +1 more');
-    expect(t.variance.tone).toBe('default');
+    expect(t.variance.secondary).toBe('Attendants −₹90 · DU2 short +1 more');
+    expect(t.variance.value).toBe(0);
   });
 
-  it('blames the office count when no DU is off', () => {
+  it('falls back to "Office count" when the office is off but no Shift row says which', () => {
     const t = deriveTiles({ ...closed, drawer: { totalCashVariance: -150, attendants: [] } });
     expect(t.variance).toMatchObject({ value: -150, detail: 'Office count', tone: 'bad' });
   });
@@ -73,6 +96,7 @@ describe('deriveTiles', () => {
     expect(deriveTiles({ ...closed, drawer: { totalCashVariance: 0 } }).variance).toMatchObject({
       value: 0,
       detail: '1 closed Shift',
+      secondary: undefined,
     });
     const none = deriveTiles({});
     expect(none.variance).toMatchObject({ value: null, detail: 'No closed Shift yet' });

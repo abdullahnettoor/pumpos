@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  comparisonView,
   deriveComparison,
   deriveSales,
   deriveSplitBar,
@@ -267,5 +268,32 @@ describe('deriveTrend / sparklinePath', () => {
 
   it('draws a flat line for equal values', () => {
     expect(sparklinePath([5, 5], 10, 10)).toBe('M0.0 5.0 L10.0 5.0');
+  });
+});
+
+describe('comparisonView', () => {
+  it('flags a fall, with a spoken direction beside the glyph', () => {
+    expect(comparisonView({ pct: -4.2, direction: 'down', against: 'Thu Shift 1' })).toEqual({
+      arrow: '▼',
+      srLabel: 'Down',
+      text: '4.2% fuel vs Thu Shift 1',
+      tone: 'bad',
+    });
+  });
+  it('does not flag a rise', () => {
+    expect(comparisonView({ pct: 1234.5, direction: 'up', against: 'Thu Shifts 1–2' })).toEqual({
+      arrow: '▲',
+      srLabel: 'Up',
+      text: '1,234.5% fuel vs Thu Shifts 1–2',
+      tone: 'default',
+    });
+  });
+  it('says level with no glyph', () => {
+    expect(comparisonView({ pct: 0, direction: 'flat', against: 'Thu Shift 1' })).toEqual({
+      arrow: null,
+      srLabel: null,
+      text: 'Level with Thu Shift 1',
+      tone: 'default',
+    });
   });
 });

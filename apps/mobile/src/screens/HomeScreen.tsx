@@ -2,7 +2,7 @@ import React from 'react';
 import type { Station } from '@pump/shared';
 import { SalesByProduct } from '../components/SalesByProduct.js';
 import { compactRupees, signedRupees } from '../lib/home/format.js';
-import type { Comparison } from '../lib/home/sales.js';
+import { comparisonView, type Comparison } from '../lib/home/sales.js';
 import { useNav } from '../shell/nav.js';
 import { SectionLabel, StatTile } from '../ui/index.js';
 import { HomeAttention } from './home/HomeAttention.js';
@@ -16,19 +16,20 @@ interface Props {
   station: Station;
 }
 
-const ComparisonNote: React.FC<{ c: Comparison }> = ({ c }) => (
-  <span className={c.direction === 'down' ? 'text-bad-fg' : ''}>
-    {c.direction === 'flat' ? (
-      <>Level with {c.against}</>
-    ) : (
-      <>
-        <span aria-hidden="true">{c.direction === 'up' ? '▲' : '▼'}</span>
-        <span className="sr-only">{c.direction === 'up' ? 'Up' : 'Down'}</span>{' '}
-        {Math.abs(c.pct).toLocaleString('en-IN')}% fuel vs {c.against}
-      </>
-    )}
-  </span>
-);
+const ComparisonNote: React.FC<{ c: Comparison }> = ({ c }) => {
+  const v = comparisonView(c);
+  return (
+    <span className={v.tone === 'bad' ? 'text-bad-fg' : ''}>
+      {v.arrow && (
+        <>
+          <span aria-hidden="true">{v.arrow}</span>
+          <span className="sr-only">{v.srLabel}</span>{' '}
+        </>
+      )}
+      {v.text}
+    </span>
+  );
+};
 
 /**
  * Home, the Control Room's first tab: live Shift, an honest sales headline
@@ -64,6 +65,7 @@ export const HomeScreen: React.FC<Props> = ({ station }) => {
             label="Cash variance"
             value={t.variance.value === null ? '—' : signedRupees(t.variance.value)}
             sub={t.variance.detail}
+            note={t.variance.secondary}
             tone={t.variance.tone}
           />
           <StatTile

@@ -18,12 +18,3 @@ export function compactRupees(n: number): string {
 
 export const plural = (n: number, one: string, many = `${one}s`): string =>
   `${n.toLocaleString('en-IN')} ${n === 1 ? one : many}`;
-
-/** `Fri, 9 Oct` for a `YYYY-MM-DD` Business Date (a calendar label, not an instant). */
-export const businessDateLabel = (businessDate: string): string =>
-  new Date(`${businessDate}T00:00:00Z`).toLocaleDateString('en-IN', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  });

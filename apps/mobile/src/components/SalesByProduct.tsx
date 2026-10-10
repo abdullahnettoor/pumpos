@@ -1,5 +1,6 @@
 import React from 'react';
-import { plural, rupees } from '../lib/home/format.js';
+import { deriveByProduct, fuelQuantityLabel, unitsLabel } from '../lib/home/byProduct.js';
+import { rupees } from '../lib/home/format.js';
 import type { FuelLine, ProductLine } from '../lib/home/sales.js';
 
 /** Caption on a group header: which Shifts it covers, or "Live". */
@@ -24,8 +25,6 @@ interface Props {
 /** Fuel grades take these in turn; a swatch is colour plus the grade name beside it. */
 const FUEL_SWATCH = ['bg-accent', 'bg-info', 'bg-warn', 'bg-good', 'bg-bad'] as const;
 const swatchOf = (i: number) => FUEL_SWATCH[i % FUEL_SWATCH.length];
-
-const sumOf = (xs: readonly { value: number }[]) => xs.reduce((s, x) => s + x.value, 0);
 
 const Note: React.FC<{ note: GroupNote }> = ({ note }) => (
   <span className={note.live ? 'normal-case tracking-normal text-accent' : ''}>
@@ -61,8 +60,6 @@ const Empty: React.FC<{ children: string }> = ({ children }) => (
   <p className="border-t border-line px-3 py-2.5 text-[12px] text-text-muted">{children}</p>
 );
 
-const unitsLabel = (n: number) => plural(Math.round(n * 100) / 100, 'unit');
-
 /**
  * Sales split into fuel (a line per grade) and everything else, with a total and
  * a stacked bar. Shared by Home, the Shift Summary and the DSSR: the caller says
@@ -78,10 +75,17 @@ export const SalesByProduct: React.FC<Props> = ({
   fuelTotal,
   productsTotal,
 }) => {
-  const fuelSum = fuelTotal ?? sumOf(fuel);
-  const productSum = productsTotal ?? sumOf(products);
-  const total = fuelSum + productSum;
-  const units = products.reduce((s, p) => s + p.quantity, 0);
+  const {
+    total,
+    productsTotal: productSum,
+    units,
+    segments,
+  } = deriveByProduct({
+    fuel,
+    products,
+    fuelTotal,
+    productsTotal,
+  });
 
   return (
     <div className="mx-3 overflow-hidden rounded-[14px] border border-line bg-card">
@@ -90,22 +94,18 @@ export const SalesByProduct: React.FC<Props> = ({
           <span className="text-[11px] font-medium text-text-muted">Total sales</span>
           <span className="num text-[17px] font-semibold text-text-high">{rupees(total)}</span>
         </div>
-        {total > 0 && (
+        {segments.length > 0 && (
           <div
             aria-hidden="true"
             className="mt-2.5 flex h-2.5 gap-0.5 overflow-hidden rounded-full"
           >
-            {fuel
-              .filter((f) => f.value > 0)
-              .map((f, i) => (
-                <div key={f.key} className={swatchOf(i)} style={{ flex: f.value }} />
-              ))}
-            {productSum > 0 && (
+            {segments.map((seg) => (
               <div
-                className="bg-text-muted"
-                style={{ flex: Math.max(productSum, total * 0.012) }}
+                key={seg.key}
+                className={seg.kind === 'fuel' ? swatchOf(seg.index) : 'bg-text-muted'}
+                style={{ flex: seg.weight }}
               />
-            )}
+            ))}
           </div>
         )}
       </div>
@@ -122,7 +122,7 @@ export const SalesByProduct: React.FC<Props> = ({
               {f.code && <span className="font-medium text-text-muted"> · {f.code}</span>}
             </>
           }
-          quantity={`${Math.round(f.quantity).toLocaleString('en-IN')} ${f.unit}`}
+          quantity={fuelQuantityLabel(f)}
           value={f.value}
         />
       ))}

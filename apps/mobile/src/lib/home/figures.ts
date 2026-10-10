@@ -4,8 +4,8 @@
  * customer and supplier lists); the screen only renders them.
  */
 import { num, round2 } from './num.js';
-import { plural } from './format.js';
-import type { Snapshot } from './sales.js';
+import { plural, signedRupees } from './format.js';
+import { shiftLabel, type Snapshot } from './sales.js';
 
 export type Tone = 'default' | 'good' | 'warn' | 'bad';
 
@@ -13,6 +13,8 @@ export interface Tile {
   /** Null when there is nothing to show yet (the tile prints "—"). */
   value: number | null;
   detail: string;
+  /** A second, lower-weight line (the attendant level of the cash variance). */
+  secondary?: string;
   tone: Tone;
 }
 export interface HomeTiles {
@@ -25,26 +27,57 @@ export interface HomeTiles {
 /** Beyond this many rupees a cash variance reads as a problem. */
 const VARIANCE_ALERT = 100;
 
+/** "Shift 2 short +1 more" / "DU3 over": who is off, largest first, and which way. */
+function offLabel(off: { name: string; v: number }[]): string {
+  const sorted = [...off].sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
+  let label = `${sorted[0].name} ${sorted[0].v < 0 ? 'short' : 'over'}`;
+  if (sorted.length > 1) label += ` +${sorted.length - 1} more`;
+  return label;
+}
+
+const isOff = (v: number) => Math.abs(v) >= 0.005;
+
+/**
+ * Cash variance at its two levels (ADR 0005), never added together:
+ *  - the tile's figure is the OFFICE count variance of the closed Shifts, named
+ *    by the Shift it came from;
+ *  - the secondary line is the ATTENDANT variance (declared cash against each
+ *    Drawer's expected cash), named by the Dispenser Unit.
+ */
 function varianceTile(snap: Snapshot): Tile {
   const closed = (snap.shifts ?? []).length;
   if (closed === 0) return { value: null, detail: 'No closed Shift yet', tone: 'default' };
 
   const drawer = snap.drawer ?? {};
-  // Two levels (ADR 0005): each attendant's drawer, and the office's count.
-  const value = round2(num(drawer.totalCashVariance) + num(drawer.totalAttendantVariance));
-  const off = ((drawer.attendants ?? []) as Snapshot[])
-    .map((a) => ({ du: String(a.duName ?? a.attendantName ?? 'Drawer'), v: num(a.variance) }))
-    .filter((a) => Math.abs(a.v) >= 0.005)
-    .sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
+  const office = round2(num(drawer.totalCashVariance));
+  const shiftsOff = ((snap.shifts ?? []) as Snapshot[])
+    .map((s) => ({ name: shiftLabel(s), v: num(s.cashVariance) }))
+    .filter((s) => isOff(s.v));
+  const detail = isOff(office)
+    ? shiftsOff.length > 0
+      ? `${offLabel(shiftsOff)} · office count`
+      : 'Office count'
+    : plural(closed, 'closed Shift');
 
-  let detail: string;
-  if (off.length > 0) {
-    detail = `${off[0].du} ${off[0].v < 0 ? 'short' : 'over'}`;
-    if (off.length > 1) detail += ` +${off.length - 1} more`;
-  } else {
-    detail = Math.abs(value) >= 0.005 ? 'Office count' : plural(closed, 'closed Shift');
-  }
-  return { value, detail, tone: Math.abs(value) > VARIANCE_ALERT ? 'bad' : 'default' };
+  const dus = ((drawer.attendants ?? []) as Snapshot[]).map((a) => ({
+    name: String(a.duName ?? a.attendantName ?? 'Drawer'),
+    v: num(a.variance),
+  }));
+  const attendant = round2(num(drawer.totalAttendantVariance));
+  const hasAttendantLevel = dus.length > 0 || drawer.totalAttendantVariance != null;
+  const dusOff = dus.filter((d) => isOff(d.v));
+  const secondary = !hasAttendantLevel
+    ? undefined
+    : dusOff.length > 0
+      ? `Attendants ${signedRupees(attendant)} · ${offLabel(dusOff)}`
+      : `Attendants ${signedRupees(attendant)}`;
+
+  return {
+    value: office,
+    detail,
+    secondary,
+    tone: Math.abs(office) > VARIANCE_ALERT ? 'bad' : 'default',
+  };
 }
 
 function marginTile(snap: Snapshot): Tile {

@@ -1,3 +1,4 @@
+import { stationDay, stationDayMonth, stationTime } from './dates.js';
 import { plural } from './format.js';
 import type { Snapshot } from './sales.js';
 
@@ -9,26 +10,13 @@ export function elapsedLabel(openedAt: string, now: number): string {
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
-const dayKey = (ms: number, timeZone: string) =>
-  new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date(ms));
-
 /** Opening time in the station's timezone: `2:00 pm`, or `9 Oct, 2:00 pm` from an earlier day. */
 export function sinceLabel(openedAt: string, now: number, timeZone: string): string {
   const opened = Date.parse(openedAt);
   if (!Number.isFinite(opened)) return '—';
-  const time = new Intl.DateTimeFormat('en-IN', {
-    timeZone,
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  })
-    .format(new Date(opened))
-    .toLowerCase();
-  if (dayKey(opened, timeZone) === dayKey(now, timeZone)) return time;
-  const day = new Intl.DateTimeFormat('en-IN', { timeZone, day: 'numeric', month: 'short' }).format(
-    new Date(opened),
-  );
-  return `${day}, ${time}`;
+  const time = stationTime(opened, timeZone);
+  if (stationDay(opened, timeZone) === stationDay(now, timeZone)) return time;
+  return `${stationDayMonth(opened, timeZone)}, ${time}`;
 }
 
 export interface LiveShift {
