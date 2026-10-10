@@ -31,7 +31,7 @@ import {
   type StackEntry,
 } from './navStack.js';
 import { BackStackContext, type BackStack } from '../ui/backStack.js';
-import type { TabKey } from './tabs.js';
+import type { TabKey } from '../lib/tabKey.js';
 
 export interface Nav {
   active: TabKey;
@@ -40,7 +40,10 @@ export interface Nav {
   stacks: NavState['stacks'];
   /** Pushed pages on the active tab (0 = showing the tab's own screen). */
   depth: number;
-  select: (tab: TabKey, options?: { toRoot?: boolean }) => void;
+  /** A tab's requested view (see `select`'s `view`), applied once per request by the tab's root. */
+  views: NavState['views'];
+  /** Switch tab. `view` asks the tab's root to show a segment (e.g. Money's 'pay'). */
+  select: (tab: TabKey, options?: { toRoot?: boolean; view?: string }) => void;
   /** Push a detail page onto the active tab. Pass a stable `id` so a double tap pushes once. */
   push: (element: React.ReactNode, id?: string) => void;
   /** Switch to `tab` and push a detail page there. */
@@ -172,8 +175,10 @@ export const NavProvider: React.FC<{ tabs: readonly TabKey[]; children: React.Re
       tabs,
       visited: state.visited,
       stacks: state.stacks,
+      views: state.views,
       depth,
-      select: (tab, options) => dispatch({ type: 'select', tab, toRoot: options?.toRoot }),
+      select: (tab, options) =>
+        dispatch({ type: 'select', tab, toRoot: options?.toRoot, view: options?.view }),
       push: (element, id) => dispatch({ type: 'push', entry: entry(element, id) }),
       open: (tab, element, id) => dispatch({ type: 'open', tab, entry: entry(element, id) }),
       back,

@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   businessDateLabel,
   businessWeekday,
+  dateParts,
+  shortDate,
   stationDay,
   stationDayMonth,
   stationMinuteOfDay,
   stationTime,
+  weekdayOf,
 } from './dates.js';
 
 const tz = 'Asia/Kolkata';
@@ -31,5 +34,14 @@ describe('Business Date labels', () => {
   it('are calendar labels, unmoved by the device timezone', () => {
     expect(businessDateLabel('2026-10-09')).toBe('Fri, 9 Oct');
     expect(businessWeekday('2026-10-09')).toBe('Fri');
+  });
+});
+
+describe('plain calendar labels', () => {
+  it('reads a YYYY-MM-DD date by hand', () => {
+    expect(dateParts('2026-09-03')).toEqual({ y: 2026, m: 9, d: 3 });
+    expect(shortDate('2026-09-03')).toBe('3 Sep');
+    expect(shortDate('2026-10-08')).toBe('8 Oct');
+    expect(weekdayOf('2026-10-09')).toBe('Fri');
   });
 });

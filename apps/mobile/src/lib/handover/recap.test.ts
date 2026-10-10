@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RecordHandoverResult } from '@pump/ui';
-import type { AssignedDu, HandoverRow } from '../../components/handover/model.js';
-import { buildRecap, minutesOnShift, formatOnShift } from './recap.js';
+import type { AssignedDu, HandoverRow } from './model.js';
+import { buildRecap, formatOnShift, formatRecordedTime, minutesOnShift } from './recap.js';
 
 const du = (over: Partial<AssignedDu> = {}): AssignedDu => ({
   duId: 'du-1',
@@ -210,5 +210,16 @@ describe('time on shift', () => {
     expect(formatOnShift(192)).toBe('3h 12m');
     expect(formatOnShift(45)).toBe('45m');
     expect(formatOnShift(120)).toBe('2h 00m');
+  });
+});
+
+describe('formatRecordedTime', () => {
+  it('reads in the station timezone, not the device one', () => {
+    expect(formatRecordedTime('2026-10-09T12:10:00.000Z', 'Asia/Kolkata')).toBe('5:40 pm');
+    expect(formatRecordedTime('2026-10-09T12:10:00.000Z', 'UTC')).toBe('12:10 pm');
+  });
+  it('is null for a missing or unreadable time', () => {
+    expect(formatRecordedTime(null, 'UTC')).toBeNull();
+    expect(formatRecordedTime('nope', 'UTC')).toBeNull();
   });
 });

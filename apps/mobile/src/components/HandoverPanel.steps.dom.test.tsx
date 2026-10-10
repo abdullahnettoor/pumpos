@@ -330,11 +330,11 @@ describe('HandoverPanel steps (mobile)', () => {
       typeIn(/N-1 · Petrol/, '1050'); // 50 L × ₹100
       expect(cell('Expected')).toBe('₹5,000.00');
       expect(cell('Declared')).toBe('₹0.00');
-      expect(cell('Variance')).toBe('₹-5,000.00');
+      expect(cell('Variance')).toBe('−₹5,000');
 
       typeIn(/^Cash \(₹\)/, '4875');
       expect(cell('Declared')).toBe('₹4,875.00');
-      expect(cell('Variance')).toBe('₹-125.00');
+      expect(cell('Variance')).toBe('−₹125');
       expect(within(strip()).getByText('Live preview')).toBeDefined();
     });
 
@@ -347,7 +347,7 @@ describe('HandoverPanel steps (mobile)', () => {
       typeIn(/^Cash \(₹\)/, '6500');
       typeIn(/^Cash drops/, '500');
       // Pouch: float 2000 + 5000 sales − 500 drops = 6500.
-      expect(cell('Variance')).toBe('+₹0.00');
+      expect(cell('Variance')).toBe('Balanced');
     });
 
     it('is pinned to the top while the steps scroll', () => {
@@ -365,7 +365,7 @@ describe('HandoverPanel steps (mobile)', () => {
       await waitFor(() => expect(within(strip()).getByText('Accepted by server')).toBeDefined());
       expect(cell('Expected')).toBe('₹5,000.00');
       expect(cell('Declared')).toBe('₹4,875.00');
-      expect(cell('Variance')).toBe('₹-125.00');
+      expect(cell('Variance')).toBe('−₹125');
     });
 
     it('matches the variance shown beside the Save button', async () => {
@@ -373,10 +373,10 @@ describe('HandoverPanel steps (mobile)', () => {
       typeIn(/N-1 · Petrol/, '1050');
       typeIn(/^Cash \(₹\)/, '4875');
       const bar = () => screen.getByRole('button', { name: /Save handover/i }).parentElement!;
-      expect(bar().textContent).toContain('₹-125.00');
+      expect(bar().textContent).toContain('−₹125');
       fireEvent.click(screen.getByRole('button', { name: /Save handover/i }));
       await waitFor(() => expect(within(strip()).getByText('Accepted by server')).toBeDefined());
-      expect(bar().textContent).toContain('₹-125.00');
+      expect(bar().textContent).toContain('−₹125');
     });
   });
 
@@ -657,7 +657,7 @@ describe('HandoverPanel steps (mobile)', () => {
       expect(cell('Expected')).toBe('₹1,600.00');
       typeIn(/DU 1 · Cash \(₹\)/, '800');
       typeIn(/DU 2 · Cash \(₹\)/, '800');
-      expect(cell('Variance')).toBe('+₹0.00');
+      expect(cell('Variance')).toBe('Balanced');
     });
   });
 });

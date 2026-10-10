@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { isInactive, loginIdentity, memberStatus, stationSummary } from '../../lib/team/members.js';
-import { assignableStations, memberRights } from '../../lib/team/permissions.js';
+import { assignableStations, memberRights, teamWriteReason } from '../../lib/team/permissions.js';
 import { Avatar } from '../../ui/Avatar.js';
 import { DetailPage } from '../../ui/DetailPage.js';
 import { ListGroup } from '../../ui/ListRow.js';
@@ -9,7 +9,7 @@ import { SectionLabel } from '../../ui/SectionLabel.js';
 import { StatusBadge } from '../../ui/StatusBadge.js';
 import { EditMemberSheet, ResetPasswordSheet, StatusSheet } from './MemberSheets.js';
 import { useTeamData } from './useTeamData.js';
-import { useWriteGate, WriteReason } from './WriteGate.js';
+import { PausedReason, usePausedAction } from '../../ui/PausedAction.js';
 
 const Detail: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
   <div className="flex items-baseline justify-between gap-4 px-3 py-[11px]">
@@ -28,7 +28,7 @@ const Detail: React.FC<{ label: string; value: React.ReactNode }> = ({ label, va
 export const MemberPage: React.FC<{ memberId: string }> = ({ memberId }) => {
   const { actor, members, stations, onShift, writeAccess, isLoading } = useTeamData();
   const member = members.find((m) => m.id === memberId);
-  const gate = useWriteGate(writeAccess);
+  const gate = usePausedAction(teamWriteReason(writeAccess));
   const [editing, setEditing] = useState(false);
   const [resetting, setResetting] = useState(false);
   // What the status sheet will do is fixed when it opens: the list repaints the
@@ -116,7 +116,9 @@ export const MemberPage: React.FC<{ memberId: string }> = ({ memberId }) => {
           </ListGroup>
           {gate.reason && (
             <div className="mt-2">
-              <WriteReason id={gate.reasonId}>{gate.reason}</WriteReason>
+              <PausedReason id={gate.reasonId} className="px-1 text-center text-[11.5px]">
+                {gate.reason}
+              </PausedReason>
             </div>
           )}
         </>

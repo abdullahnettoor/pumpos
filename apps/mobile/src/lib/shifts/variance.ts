@@ -9,9 +9,9 @@
  * the attendant shortage; they have no second level.
  */
 import { isBalancedVariance, isTwoLevelVarianceSnapshot } from '@pump/shared';
-import { num, round2 } from '../home/num.js';
+import { num, round2 } from '../num.js';
 import type { Snapshot } from '../home/sales.js';
-import { offLabel, type DrawerOff } from '../variance.js';
+import { byLargestVariance, offLabel, type DrawerOff } from '../variance.js';
 
 export interface ShiftVariance {
   twoLevel: boolean;
@@ -42,7 +42,7 @@ export function deriveShiftVariance(snap: Snapshot): ShiftVariance {
   const drawersOff = ((Array.isArray(snap.drawers) ? snap.drawers : []) as Snapshot[])
     .filter((d) => d.variance != null && off(num(d.variance)))
     .map((d) => ({ name: drawerName(d), variance: num(d.variance) }))
-    .sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance));
+    .sort(byLargestVariance);
 
   const attendantOff = attendant !== null && off(attendant);
   const headline = attendantOff ? attendant : office;

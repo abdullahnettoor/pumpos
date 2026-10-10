@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { HandoverPanel } from '../components/HandoverPanel.js';
 import { formatRecordedTime } from '../lib/handover/recap.js';
 import { useOwnHandover } from '../lib/handover/useOwnHandover.js';
+import { useStationTimeZone } from '../shell/context.js';
 import { useBack, useBackGuard } from '../ui/backStack.js';
 import { BottomSheet, DetailPage, StatusBadge } from '../ui/index.js';
 
@@ -16,7 +17,8 @@ import { BottomSheet, DetailPage, StatusBadge } from '../ui/index.js';
  *   nav.push(<HandoverPage />, 'handover')
  */
 export const HandoverPage: React.FC = () => {
-  const own = useOwnHandover();
+  const timeZone = useStationTimeZone();
+  const own = useOwnHandover(true, timeZone);
   const back = useBack();
   // The bar's slot lives in the page's ActionBar; the form portals its Save into it.
   const [barSlot, setBarSlot] = useState<HTMLElement | null>(null);
@@ -37,7 +39,7 @@ export const HandoverPage: React.FC = () => {
     back();
   };
 
-  const since = formatRecordedTime(own?.openedAt);
+  const since = formatRecordedTime(own?.openedAt, timeZone);
   const subtitle = own
     ? [own.shiftName, own.duLabel, since ? `since ${since}` : null].filter(Boolean).join(' · ')
     : undefined;
@@ -58,7 +60,11 @@ export const HandoverPage: React.FC = () => {
     >
       <div className="px-4">
         {/* Never the form's own sticky bar: no slot, no Save. */}
-        <HandoverPanel actionBarTarget={own ? barSlot : null} onDirtyChange={setDirty} />
+        <HandoverPanel
+          actionBarTarget={own ? barSlot : null}
+          onDirtyChange={setDirty}
+          timeZone={timeZone}
+        />
       </div>
       <BottomSheet
         open={asking}

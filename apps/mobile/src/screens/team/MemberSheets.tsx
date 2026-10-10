@@ -13,7 +13,8 @@ import { loginIdentity, type TeamMember } from '../../lib/team/members.js';
 import type { TeamActor } from '../../lib/team/permissions.js';
 import { BottomSheet } from '../../ui/BottomSheet.js';
 import { CredentialsCard } from './CredentialsCard.js';
-import { FormRefusal, SheetButtons, TextField } from './fields.js';
+import { SheetButtons } from '../../ui/SheetButtons.js';
+import { FormRefusal, TextField } from './fields.js';
 import { MemberForm, newMemberDefaults } from './MemberForm.js';
 import {
   useAddMember,

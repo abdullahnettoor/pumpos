@@ -87,6 +87,20 @@ describe('navReducer', () => {
   });
 });
 
+describe('tab views', () => {
+  it('records a requested view with a growing sequence, once per request', () => {
+    const s1 = navReducer(initialNavState('home'), { type: 'select', tab: 'money', view: 'pay' });
+    expect(s1.views.money).toEqual({ view: 'pay', seq: 1 });
+    const s2 = navReducer(s1, { type: 'select', tab: 'money', view: 'pay' });
+    expect(s2.views.money).toEqual({ view: 'pay', seq: 2 });
+  });
+  it('a plain select leaves the request alone, and reset clears it', () => {
+    const s1 = navReducer(initialNavState('home'), { type: 'select', tab: 'money', view: 'pay' });
+    expect(navReducer(s1, { type: 'select', tab: 'home' }).views.money?.seq).toBe(1);
+    expect(navReducer(s1, { type: 'reset' }).views).toEqual({});
+  });
+});
+
 describe('clampActive', () => {
   it('moves to the first allowed tab when the active one is not allowed', () => {
     const s = clampActive(initialNavState('home'), ['reports', 'money']);

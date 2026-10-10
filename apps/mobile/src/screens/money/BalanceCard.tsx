@@ -1,4 +1,5 @@
 import React, { useId } from 'react';
+import { PausedReason, usePausedAction } from '../../ui/PausedAction.js';
 import { inr } from '@pump/ui';
 import type { ReceivablesAging } from '@pump/shared';
 import { standing, type MoneyCustomer, type StandingState } from '../../lib/money/parties.js';
@@ -49,9 +50,8 @@ export const BalanceCard: React.FC<{
   const amount = s.state === 'advance' ? -s.balance : s.balance;
   const hasLimit = s.limit !== null;
   const owes = s.state === 'over' || s.state === 'near' || s.state === 'under';
-  const reasonId = useId();
   const paymentReasonId = useId();
-  const paused = Boolean(limitAction?.disabledReason);
+  const limit = usePausedAction(limitAction?.disabledReason);
 
   return (
     <HeroCard
@@ -105,21 +105,15 @@ export const BalanceCard: React.FC<{
             {limitAction && (
               <button
                 type="button"
-                onClick={paused ? undefined : limitAction.onPress}
-                aria-disabled={paused || undefined}
-                aria-describedby={paused ? reasonId : undefined}
-                className="ml-auto min-h-[36px] rounded-lg px-2 text-[12.5px] font-bold text-accent aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                {...limit.buttonProps(limitAction.onPress)}
+                className="hit-44 ml-auto min-h-[36px] rounded-lg px-2 text-[12.5px] font-bold text-accent aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
               >
                 {hasLimit ? 'Edit limit' : 'Set limit'}
               </button>
             )}
           </div>
           <PaymentReason action={paymentAction} reasonId={paymentReasonId} />
-          {limitAction?.disabledReason && (
-            <p id={reasonId} className="m-0 text-[11px] text-text-muted">
-              {limitAction.disabledReason}
-            </p>
-          )}
+          {limit.reason && <PausedReason id={limit.reasonId}>{limit.reason}</PausedReason>}
         </div>
       )}
     </HeroCard>

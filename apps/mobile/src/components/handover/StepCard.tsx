@@ -1,6 +1,6 @@
 import React, { useId, useState } from 'react';
-import type { StepStatus } from './steps.js';
-import { CheckIcon, ChevronIcon } from './icons.js';
+import type { StepStatus } from '../../lib/handover/steps.js';
+import { CheckIcon, ChevronRightIcon } from '../../ui/icons.js';
 
 const STATUS_LABEL: Record<StepStatus, string> = {
   done: 'Done',
@@ -17,7 +17,7 @@ const Badge: React.FC<{ index: number; status: StepStatus }> = ({ index, status 
   if (status === 'done')
     return (
       <span className={`${base} border-transparent bg-good-soft text-good`}>
-        <CheckIcon />
+        <CheckIcon size={14} strokeWidth={3} />
       </span>
     );
   if (status === 'error')
@@ -77,7 +77,7 @@ export const StepCard: React.FC<{
             className="flex-shrink-0 text-text-faint transition-transform duration-150"
             style={{ transform: open ? 'rotate(90deg)' : undefined }}
           >
-            <ChevronIcon />
+            <ChevronRightIcon size={16} strokeWidth={2.4} />
           </span>
         </button>
       </h3>

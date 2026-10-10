@@ -10,6 +10,8 @@ import { ToPay } from './money/ToPay.js';
 
 type List = 'collect' | 'pay';
 
+const isList = (v: string): v is List => v === 'collect' || v === 'pay';
+
 const LISTS = [
   { value: 'collect', label: 'To collect' },
   { value: 'pay', label: 'To pay' },
@@ -34,6 +36,16 @@ export const MoneyScreen: React.FC<Props> = ({ station = null, renderSupplierPag
   const nav = useNav();
   const [list, setList] = useState<List>('collect');
   const [query, setQuery] = useState('');
+  // Home's To pay tile asks for a segment (`nav.select('money', { view })`); apply each request once.
+  const request = nav.views.money;
+  const [applied, setApplied] = useState(0);
+  if (request && request.seq !== applied) {
+    setApplied(request.seq);
+    if (isList(request.view) && request.view !== list) {
+      setList(request.view);
+      setQuery('');
+    }
+  }
 
   const switchList = (next: List) => {
     setList(next);

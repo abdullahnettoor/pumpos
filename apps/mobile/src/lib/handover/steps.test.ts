@@ -10,6 +10,9 @@ import {
   declaredNonCash,
   duFuelSales,
   merchTotal,
+  merchandiseCash,
+  nozzleGrossVolume,
+  sumReconciliations,
   nozzleNetVolume,
   readingsErrors,
   reconcileDu,
@@ -423,6 +426,71 @@ describe('reconcileDu', () => {
       expectedCash: 4400,
       expectedTotal: 5400,
       declaredTotal: 6900,
+      varianceAmount: 0,
+    });
+  });
+});
+
+describe('nozzleGrossVolume', () => {
+  it('is the litres metered past the opening reading, testing not yet taken off', () => {
+    const d = du();
+    const nz = d.nozzles[0];
+    expect(
+      nozzleGrossVolume(
+        nz,
+        form(d, { readings: { [nz.nozzleId]: '1050' }, testing: { [nz.nozzleId]: '5' } }),
+      ),
+    ).toBe(50);
+    expect(
+      nozzleNetVolume(
+        nz,
+        form(d, { readings: { [nz.nozzleId]: '1050' }, testing: { [nz.nozzleId]: '5' } }),
+      ),
+    ).toBe(45);
+  });
+  it('never goes below zero when the closing is behind the opening or blank', () => {
+    const d = du();
+    const nz = d.nozzles[0];
+    expect(nozzleGrossVolume(nz, form(d, { readings: { [nz.nozzleId]: '10' } }))).toBe(0);
+    expect(nozzleGrossVolume(nz, form(d, { readings: { [nz.nozzleId]: '' } }))).toBe(0);
+  });
+});
+
+describe('merchandiseCash', () => {
+  it('is gross at MRP less the typed card / UPI share', () => {
+    expect(merchandiseCash(1000, '250')).toBe(750);
+    expect(merchandiseCash(1000, '')).toBe(1000);
+  });
+  it('never goes below zero when more is declared non-cash than sold', () => {
+    expect(merchandiseCash(100, '400')).toBe(0);
+  });
+});
+
+describe('sumReconciliations', () => {
+  it('sums each Drawer and rounds the variance to paise', () => {
+    const total = sumReconciliations([
+      { expectedTotal: 1000.1, declaredTotal: 990.2, varianceAmount: -9.9 },
+      { expectedTotal: 500, declaredTotal: 500.1, varianceAmount: 0.1 },
+    ]);
+    expect(total.expectedTotal).toBeCloseTo(1500.1, 6);
+    expect(total.declaredTotal).toBeCloseTo(1490.3, 6);
+    expect(total.varianceAmount).toBe(-9.8);
+  });
+  it('counts a Drawer with no form as zero, and an empty list as all zeros', () => {
+    expect(
+      sumReconciliations([
+        null,
+        { expectedTotal: 5, declaredTotal: 5, varianceAmount: 0 },
+        undefined,
+      ]),
+    ).toEqual({
+      expectedTotal: 5,
+      declaredTotal: 5,
+      varianceAmount: 0,
+    });
+    expect(sumReconciliations([])).toEqual({
+      expectedTotal: 0,
+      declaredTotal: 0,
       varianceAmount: 0,
     });
   });

@@ -6,7 +6,7 @@
 import { isBalancedVariance } from '@pump/shared';
 import { formatMoney } from '@pump/ui';
 import type { BadgeTone } from '../ui/StatusBadge.js';
-import type { Tone } from '../ui/StatTile.js';
+import type { Tone } from '../ui/tones.js';
 import { signedRupees } from './format.js';
 
 /** A cash variance within this many rupees of zero is "on the nose" (rounds to ₹0). */
@@ -51,9 +51,13 @@ export interface DrawerOff {
   variance: number;
 }
 
+/** Largest variance first (either direction): the one Drawer order, for labels and lists. */
+export const byLargestVariance = (a: Pick<DrawerOff, 'variance'>, b: Pick<DrawerOff, 'variance'>) =>
+  Math.abs(b.variance) - Math.abs(a.variance);
+
 /** Who is off, largest first, and which way: "DU3 short", "DU3 short +1 more". */
 export function offLabel(drawers: readonly DrawerOff[]): string {
-  const sorted = [...drawers].sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance));
+  const sorted = [...drawers].sort(byLargestVariance);
   const first = sorted[0];
   const label = `${first.name} ${first.variance < 0 ? 'short' : 'over'}`;
   return sorted.length > 1 ? `${label} +${sorted.length - 1} more` : label;

@@ -13,6 +13,7 @@ import {
 import { limitOf, type MoneyCustomer } from '../../lib/money/parties.js';
 import { inputClass } from '../../components/handover/Fields.js';
 import { BottomSheet } from '../../ui/BottomSheet.js';
+import { SheetButtons } from '../../ui/SheetButtons.js';
 import { useCreditLimitEdit } from './useCreditLimitEdit.js';
 
 interface Props {
@@ -138,22 +139,13 @@ const Form: React.FC<Omit<Props, 'open'>> = ({ customer, onClose }) => {
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-2.5 pt-1">
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex h-11 items-center justify-center rounded-[13px] border border-line bg-card text-[13.5px] font-bold text-text-high"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isSaving || unchanged}
-          className="flex h-11 items-center justify-center rounded-[13px] bg-accent text-[13.5px] font-bold text-on-accent disabled:opacity-60"
-        >
-          {isSaving ? 'Saving…' : 'Save limit'}
-        </button>
-      </div>
+      <SheetButtons
+        onCancel={onClose}
+        submitLabel="Save limit"
+        busyLabel="Saving…"
+        busy={isSaving}
+        disabled={unchanged}
+      />
     </form>
   );
 };

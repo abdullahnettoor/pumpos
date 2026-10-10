@@ -2,12 +2,7 @@ import React from 'react';
 import { inr } from '@pump/ui';
 import { balanceState } from '../../lib/money/parties.js';
 import type { OldestCaption } from '../../lib/money/receivables.js';
-
-const CAPTION_TONE: Record<OldestCaption['tone'], string> = {
-  muted: 'text-text-muted',
-  warn: 'text-warn-fg',
-  bad: 'text-bad-fg',
-};
+import { TONE_TEXT } from '../../ui/tones.js';
 
 interface Props {
   balance: number;
@@ -32,7 +27,7 @@ export const BalanceFigure: React.FC<Props> = ({ balance, over = false, caption 
       </span>
       {kind === 'owes' && caption && (
         <span
-          className={`block text-[11px] font-normal ${CAPTION_TONE[caption.tone]}`}
+          className={`block text-[11px] font-normal ${TONE_TEXT[caption.tone]}`}
           data-tone={caption.tone}
         >
           {caption.text}

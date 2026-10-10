@@ -6,6 +6,7 @@ import { useSession, signOut } from './lib/session.js';
 import { MobileShell } from './shell/MobileShell.js';
 import { NavProvider } from './shell/nav.js';
 import { TabRoot } from './shell/TabRoot.js';
+import { TeamPage } from './screens/team/TeamPage.js';
 import { tabsForRole } from './shell/tabs.js';
 import { AttendantScreen } from './screens/AttendantScreen.js';
 
@@ -79,7 +80,7 @@ export const App: React.FC = () => {
 
   // Attendants get a dedicated mobile-only handover shell (no owner tabs).
   if (role === 'Attendant') {
-    return <AttendantScreen userName={userName} onSignOut={onSignOut} />;
+    return <AttendantScreen userName={userName} onSignOut={onSignOut} stations={stations} />;
   }
 
   if (!role || allowedTabs.length === 0) {
@@ -105,6 +106,7 @@ export const App: React.FC = () => {
         selectedStationId={selectedStationId}
         onSelectStation={setPickedStationId}
         onSignOut={onSignOut}
+        teamPage={<TeamPage />}
         renderRoot={(tab) => (
           <TabRoot tab={tab} station={selectedStation} stationsLoading={stationsQ.isLoading} />
         )}

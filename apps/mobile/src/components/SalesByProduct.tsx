@@ -30,8 +30,19 @@ interface Props {
   productsEmpty?: string;
 }
 
-/** Fuel grades take these in turn; a swatch is colour plus the grade name beside it. */
-const FUEL_SWATCH = ['bg-accent', 'bg-info', 'bg-warn', 'bg-good', 'bg-bad'] as const;
+/**
+ * Fuel grades take the categorical chart tokens in turn (never status colours: a
+ * grade must not read as good / bad / warn); a swatch is colour plus the grade
+ * name beside it.
+ */
+const FUEL_SWATCH = [
+  'bg-chart-1',
+  'bg-chart-2',
+  'bg-chart-3',
+  'bg-chart-4',
+  'bg-chart-5',
+  'bg-chart-6',
+] as const;
 const swatchOf = (i: number) => FUEL_SWATCH[i % FUEL_SWATCH.length];
 
 const Note: React.FC<{ note: GroupNote }> = ({ note }) => (

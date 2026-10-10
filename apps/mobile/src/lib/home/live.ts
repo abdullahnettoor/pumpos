@@ -1,4 +1,4 @@
-import { stationDay, stationDayMonth, stationTime } from './dates.js';
+import { stationDay, stationDayMonth, stationTime } from '../dates.js';
 import { plural } from '../format.js';
 import type { Snapshot } from './sales.js';
 

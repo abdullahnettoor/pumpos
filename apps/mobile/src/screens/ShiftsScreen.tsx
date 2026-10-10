@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Station } from '@pump/shared';
-import { businessDateLabel } from '../lib/home/dates.js';
+import { businessDateLabel } from '../lib/dates.js';
 import type { ShiftHistoryRow } from '../lib/shifts/history.js';
 import { useNav } from '../shell/nav.js';
 import { Note, SectionLabel } from '../ui/index.js';

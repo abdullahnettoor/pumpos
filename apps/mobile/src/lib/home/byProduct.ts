@@ -5,7 +5,8 @@
  */
 import { PRODUCT_CATEGORY_LABEL, type ProductType } from '@pump/shared';
 import { plural } from '../format.js';
-import { round2 } from './num.js';
+import { wholeQuantityLabel } from '../money/quantity.js';
+import { round2 } from '../num.js';
 import type { FuelLine, ProductLine } from './sales.js';
 
 /** A segment never renders thinner than this share of the bar, so a tiny product stays visible. */
@@ -70,7 +71,7 @@ export const unitsLabel = (n: number): string => plural(round2(n), 'unit');
 
 /** "1,240 L" for a fuel grade. */
 export const fuelQuantityLabel = (f: Pick<FuelLine, 'quantity' | 'unit'>): string =>
-  `${Math.round(f.quantity).toLocaleString('en-IN')} ${f.unit}`;
+  wholeQuantityLabel(f.quantity, f.unit);
 
 /** One row of the non-fuel group: a product category, or the single "Products" fallback. */
 export interface CategoryRow {

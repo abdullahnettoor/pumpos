@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Combobox, inr, runTask } from '@pump/ui';
-import type { CreditLine, DuProduct } from './model.js';
+import type { CreditLine, DuProduct } from '../../lib/handover/model.js';
 import { AddButton, NumberField, SelectField, TextField } from './Fields.js';
 import { TrashIcon } from './icons.js';
 
@@ -220,7 +220,7 @@ export const CustomerSaleForm: React.FC<{
                     )
                   }
                   disabled={busy}
-                  className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg border border-line text-bad-fg disabled:opacity-50"
+                  className="hit-44 grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg border border-line text-bad-fg disabled:opacity-50"
                   aria-label="Remove sale"
                 >
                   <TrashIcon />

@@ -12,8 +12,7 @@ import {
   isAttendant,
   type Role,
 } from '@pump/shared';
-
-export type TabKey = 'home' | 'shifts' | 'reports' | 'money' | 'insights';
+import type { TabKey } from '../lib/tabKey.js';
 
 export interface TabDef {
   key: TabKey;

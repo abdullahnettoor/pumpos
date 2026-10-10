@@ -1,27 +1,16 @@
 import React from 'react';
-import { useMobileAlerts } from '../lib/alerts.js';
 import { Avatar } from '../ui/Avatar.js';
-import { IconButton } from '../ui/IconButton.js';
-import { BellIcon, ChevronDownIcon } from '../ui/icons.js';
+import { ChevronDownIcon } from '../ui/icons.js';
 import { initialsOf } from '@pump/ui';
+import { AlertsBell } from './AlertsBell.js';
 import { useShell } from './context.js';
-
-interface Props {
-  onOpenAttention: () => void;
-}
 
 /**
  * Header of the Home tab: station button, alerts bell and avatar. The station
- * button and the avatar open the Account sheet. The bell shows the open-alert
- * count (`useMobileAlerts`, the same list as Home's "All N" and the Needs
- * attention page) and calls `onOpenAttention`, which the tab root supplies so
- * the shell does not import the page and every detail page behind it.
+ * button and the avatar open the Account sheet; the bell is `AlertsBell`.
  */
-export const HomeHeader: React.FC<Props> = ({ onOpenAttention }) => {
-  const { station, stationName, userName, openAccount } = useShell();
-  const alerts = useMobileAlerts(station);
-  const count = alerts.length;
-  const danger = alerts.some((a) => a.severity === 'danger');
+export const HomeHeader: React.FC = () => {
+  const { stationName, userName, openAccount } = useShell();
 
   return (
     <header className="flex items-center gap-2 px-4 pb-3 pt-1.5">
@@ -41,19 +30,7 @@ export const HomeHeader: React.FC<Props> = ({ onOpenAttention }) => {
         </span>
       </button>
       <div className="ml-auto flex items-center gap-2">
-        <IconButton label={count ? `Alerts, ${count} open` : 'Alerts'} onClick={onOpenAttention}>
-          <BellIcon size={17} />
-          {count > 0 && (
-            <span
-              aria-hidden="true"
-              className={`num absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full border-2 border-background px-0.5 text-[9px] font-bold text-on-accent ${
-                danger ? 'bg-bad' : 'bg-warn'
-              }`}
-            >
-              {count > 9 ? '9+' : count}
-            </span>
-          )}
-        </IconButton>
+        <AlertsBell />
         <button type="button" onClick={openAccount} aria-label="Account" className="rounded-full">
           <Avatar name={userName} />
         </button>
