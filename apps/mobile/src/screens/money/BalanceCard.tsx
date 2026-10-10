@@ -12,6 +12,13 @@ export interface LimitAction {
   disabledReason?: string;
 }
 
+/** The quiet "Record payment" button; absent when this user may not record one. */
+export interface PaymentAction {
+  onPress: () => void;
+  /** Set while the action is paused (Suspension): why, shown under the button. */
+  disabledReason?: string;
+}
+
 export const SURFACE: Record<StandingState, string> = {
   over: 'border-bad-line bg-bad-soft',
   near: 'border-warn-line bg-warn-soft',
@@ -37,16 +44,19 @@ const LABEL: Record<StandingState, string> = {
  * receivables-summary data exists. They are not derivable from the ledger, so
  * they are not shown.
  */
-export const BalanceCard: React.FC<{ customer: MoneyCustomer; limitAction?: LimitAction }> = ({
-  customer,
-  limitAction,
-}) => {
+export const BalanceCard: React.FC<{
+  customer: MoneyCustomer;
+  limitAction?: LimitAction;
+  paymentAction?: PaymentAction;
+}> = ({ customer, limitAction, paymentAction }) => {
   const s = standing(customer);
   const amount = s.state === 'advance' ? -s.balance : s.balance;
   const hasLimit = s.limit !== null;
   const owes = s.state === 'over' || s.state === 'near' || s.state === 'under';
   const reasonId = useId();
+  const paymentReasonId = useId();
   const paused = Boolean(limitAction?.disabledReason);
+  const paymentPaused = Boolean(paymentAction?.disabledReason);
 
   return (
     <HeroCard
@@ -90,20 +100,41 @@ export const BalanceCard: React.FC<{ customer: MoneyCustomer; limitAction?: Limi
       {owes && !hasLimit && (
         <p className="mt-3 text-[11.5px] text-text-muted">No credit limit set.</p>
       )}
-      {limitAction && (
-        <div className="mt-2.5 flex flex-col items-end gap-1 border-t border-line pt-2">
-          {/* aria-disabled, not disabled: it stays focusable, so a screen reader reaches
-              the button and hears the reason it is paused. */}
-          <button
-            type="button"
-            onClick={paused ? undefined : limitAction.onPress}
-            aria-disabled={paused || undefined}
-            aria-describedby={paused ? reasonId : undefined}
-            className="min-h-[36px] rounded-lg px-2 text-[12.5px] font-bold text-accent aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
-          >
-            {hasLimit ? 'Edit limit' : 'Set limit'}
-          </button>
-          {limitAction.disabledReason && (
+      {(paymentAction || limitAction) && (
+        <div className="mt-2.5 flex flex-col gap-1 border-t border-line pt-2">
+          <div className="flex items-center justify-between gap-2">
+            {/* Quiet on purpose: an outline, not the accent fill. The action bar stays Share / Download.
+                aria-disabled, not disabled: the button stays focusable, so a screen reader
+                reaches it and hears the reason it is paused. */}
+            {paymentAction && (
+              <button
+                type="button"
+                onClick={paymentPaused ? undefined : paymentAction.onPress}
+                aria-disabled={paymentPaused || undefined}
+                aria-describedby={paymentPaused ? paymentReasonId : undefined}
+                className="min-h-[36px] rounded-lg border border-line-strong px-3 text-[12.5px] font-bold text-text-high aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+              >
+                Record payment
+              </button>
+            )}
+            {limitAction && (
+              <button
+                type="button"
+                onClick={paused ? undefined : limitAction.onPress}
+                aria-disabled={paused || undefined}
+                aria-describedby={paused ? reasonId : undefined}
+                className="ml-auto min-h-[36px] rounded-lg px-2 text-[12.5px] font-bold text-accent aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+              >
+                {hasLimit ? 'Edit limit' : 'Set limit'}
+              </button>
+            )}
+          </div>
+          {paymentAction?.disabledReason && (
+            <p id={paymentReasonId} className="m-0 text-[11px] text-text-muted">
+              {paymentAction.disabledReason}
+            </p>
+          )}
+          {limitAction?.disabledReason && (
             <p id={reasonId} className="m-0 text-[11px] text-text-muted">
               {limitAction.disabledReason}
             </p>

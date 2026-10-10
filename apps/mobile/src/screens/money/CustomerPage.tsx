@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAccess, useCustomerLedger } from '@pump/ui';
+import { collectionAccess } from '../../lib/money/collection.js';
 import { creditLimitAccess } from '../../lib/money/creditLimit.js';
 import { balanceOf, type MoneyCustomer } from '../../lib/money/parties.js';
 import type { LedgerRow } from '../../lib/money/statement.js';
@@ -8,6 +9,7 @@ import { DetailPage } from '../../ui/DetailPage.js';
 import { BalanceCard } from './BalanceCard.js';
 import { CallButton } from './CallButton.js';
 import { CreditLimitSheet } from './CreditLimitSheet.js';
+import { RecordPaymentSheet } from './RecordPaymentSheet.js';
 import { StatementSection } from './StatementSection.js';
 import { useCustomersData } from './useMoneyData.js';
 
@@ -20,6 +22,8 @@ import { useCustomersData } from './useMoneyData.js';
  *    vehicle spend go between `BalanceCard` and the Statement.
  *  - #400 (statement PDF): pass `share` / `download` to `DetailPage`; with
  *    neither, no action bar is shown.
+ *  - Record payment: a quiet outline button on the balance card (not in the action
+ *    bar); opens `RecordPaymentSheet`, a Collection through the existing route.
  *  - Credit limit: Owner / Manager edit it from the balance card (`CreditLimitSheet`,
  *    existing customer update route).
  *  - #413 (ranged ledger): replaces `useCustomerLedger` + the all-time
@@ -34,7 +38,7 @@ export const CustomerPage: React.FC<{ customer: MoneyCustomer }> = ({ customer: 
   const ledgerQ = useCustomerLedger(customer.id);
 
   // Owner / Manager only, and paused while Restricted Access blocks the write.
-  const { role } = useShell();
+  const { role, station } = useShell();
   const accessMode = useAccess().data?.subscription.mode;
   const limitAccess = creditLimitAccess({
     role,
@@ -42,6 +46,13 @@ export const CustomerPage: React.FC<{ customer: MoneyCustomer }> = ({ customer: 
     accessMode,
   });
   const [editingLimit, setEditingLimit] = useState(false);
+
+  // Every Role except Attendant (the server's collection guard); only Suspension pauses it,
+  // since a Collection finishes work already done (FINISH_OPEN_WORK). No station, no Office Record.
+  const paymentAccess = station
+    ? collectionAccess({ role, accessMode })
+    : { status: 'hidden' as const };
+  const [recordingPayment, setRecordingPayment] = useState(false);
 
   const subtitle = [customer.customerType, customer.fleetCode, customer.phone]
     .filter(Boolean)
@@ -57,6 +68,15 @@ export const CustomerPage: React.FC<{ customer: MoneyCustomer }> = ({ customer: 
     >
       <BalanceCard
         customer={customer}
+        paymentAction={
+          paymentAccess.status === 'hidden'
+            ? undefined
+            : {
+                onPress: () => setRecordingPayment(true),
+                disabledReason:
+                  paymentAccess.status === 'disabled' ? paymentAccess.reason : undefined,
+              }
+        }
         limitAction={
           limitAccess.status === 'hidden'
             ? undefined
@@ -79,6 +99,15 @@ export const CustomerPage: React.FC<{ customer: MoneyCustomer }> = ({ customer: 
         customer={customer}
         onClose={() => setEditingLimit(false)}
       />
+      {station && (
+        <RecordPaymentSheet
+          open={recordingPayment}
+          customer={customer}
+          stationId={station.id}
+          timeZone={station.settings?.timezone}
+          onClose={() => setRecordingPayment(false)}
+        />
+      )}
     </DetailPage>
   );
 };
