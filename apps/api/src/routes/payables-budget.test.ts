@@ -137,7 +137,12 @@ describe('GET /reports/payables', () => {
     expect(body.success).toBe(true);
     expect(body.data.total).toBe(1085800);
     expect(body.data.supplierCount).toBe(2);
-    expect(body.data.month).toEqual({ purchased: 2140000, paid: 1020000 });
+    expect(body.data.month).toEqual({
+      purchased: 2140000,
+      paid: 1020000,
+      purchasedMonth: '2026-10',
+      paidMonth: '2026-10',
+    });
     expect(body.data.suppliers[0]).toEqual({
       supplierId: 's-1',
       balance: 1043200.5,
@@ -158,7 +163,7 @@ describe('GET /reports/payables', () => {
     expect(body.data).toEqual({
       total: 0,
       supplierCount: 0,
-      month: { purchased: 0, paid: 0 },
+      month: { purchased: 0, paid: 0, purchasedMonth: '2026-10', paidMonth: '2026-10' },
       suppliers: [],
     });
   });
@@ -224,7 +229,14 @@ describe('GET /reports/payables/:supplierId', () => {
         method: 'BANK',
         fundingAccountName: 'SBI current a/c',
       },
-      month: { purchased: 2072200, paid: 980000, purchaseCount: 2, quantity: 22000 },
+      month: {
+        purchased: 2072200,
+        paid: 980000,
+        purchasedMonth: '2026-10',
+        paidMonth: '2026-10',
+        purchaseCount: 2,
+        quantity: 22000,
+      },
       purchasesByProduct: [
         { productId: 'p-1', name: 'HSD', unit: 'L', quantity: 12000, value: 1043200 },
         { productId: 'p-2', name: 'MS', unit: 'L', quantity: 10000, value: 1029000 },

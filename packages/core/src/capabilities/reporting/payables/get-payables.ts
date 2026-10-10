@@ -43,7 +43,8 @@ function windowsOf(ctx: ExecutionContext) {
     paidFrom: paid.from,
     paidTo: paid.to,
   };
-  return { currentBusinessDate, query };
+  const months = { purchasedMonth: purchased.from.slice(0, 7), paidMonth: paid.from.slice(0, 7) };
+  return { currentBusinessDate, query, months };
 }
 
 /**
@@ -59,12 +60,12 @@ export class GetPayables implements UseCase<GetPayablesCommand, PayablesSummary>
     input: GetPayablesCommand,
     ctx: ExecutionContext,
   ): Promise<Result<PayablesSummary>> {
-    const { currentBusinessDate, query } = windowsOf(ctx);
+    const { currentBusinessDate, query, months } = windowsOf(ctx);
     if (!input.stationId || !isValidBusinessDate(currentBusinessDate)) {
       return err(validationError('Payables require a Station'));
     }
     const source = await this.reader.summary({ organizationId: ctx.organizationId, ...query });
-    return ok(composePayables(source, currentBusinessDate));
+    return ok(composePayables(source, currentBusinessDate, months));
   }
 }
 
@@ -82,7 +83,7 @@ export class GetSupplierPayable implements UseCase<
     input: GetSupplierPayableCommand,
     ctx: ExecutionContext,
   ): Promise<Result<SupplierPayableSummary>> {
-    const { currentBusinessDate, query } = windowsOf(ctx);
+    const { currentBusinessDate, query, months } = windowsOf(ctx);
     if (!input.stationId || !input.supplierId || !isValidBusinessDate(currentBusinessDate)) {
       return err(validationError('Supplier payable requires a Station and a supplier'));
     }
@@ -92,6 +93,6 @@ export class GetSupplierPayable implements UseCase<
       ...query,
     });
     if (!source) return err(notFoundError('Supplier', input.supplierId));
-    return ok(composeSupplierPayable(source, currentBusinessDate));
+    return ok(composeSupplierPayable(source, currentBusinessDate, months));
   }
 }

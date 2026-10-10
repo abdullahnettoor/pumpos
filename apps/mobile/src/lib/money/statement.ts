@@ -1,5 +1,6 @@
 import { formatShiftLabel, isBalancedVariance } from '@pump/shared';
 import { accountTypeLabel } from '@pump/ui';
+import { ledgerQuantityLabel } from './quantity.js';
 
 /**
  * The party statement (Customer or Supplier): the ledger rows turned into a running balance,
@@ -119,16 +120,6 @@ const METHOD: Record<string, string> = {
   BankTransfer: 'Bank transfer',
 };
 
-/** `120 L Diesel`, `2.5 L Diesel`, `4 Nos Oil 1L`; nothing when there is no quantity. */
-function quantityLabel(r: LedgerRow, withProduct = true): string | null {
-  const qty = Number(r.quantity);
-  if (r.quantity == null || !Number.isFinite(qty) || qty <= 0) return null;
-  const shown = Number(qty.toFixed(2)).toLocaleString('en-IN');
-  return [shown, r.unit?.trim(), withProduct ? r.productName?.trim() : null]
-    .filter(Boolean)
-    .join(' ');
-}
-
 /**
  * What a customer row says beyond its date: a Credit Sale names its Shift, what
  * was sold and the Vehicle; a Collection its method and reference. A row without
@@ -145,7 +136,8 @@ function describeCustomerRow(r: LedgerRow, day: string): { meta: string; detail:
   } else {
     const shift = formatShiftLabel(r.shiftBusinessDate, r.shiftSequence);
     facts = shift ? [`Shift ${shift}`] : [];
-    detail = [quantityLabel(r), r.vehicleRegistration?.trim()].filter(Boolean).join(' · ') || null;
+    detail =
+      [ledgerQuantityLabel(r), r.vehicleRegistration?.trim()].filter(Boolean).join(' · ') || null;
   }
   // With nothing to say about the row, the note stays beside the date (the legacy layout);
   // otherwise it moves to the second line, after what the row says.
@@ -171,7 +163,7 @@ function describeSupplierRow(r: LedgerRow, day: string): { meta: string; detail:
   } else {
     const invoice = r.invoiceNumber?.trim();
     const tanker = r.tankerNumber?.trim();
-    facts = [invoice, quantityLabel(r, false)].filter((x): x is string => !!x);
+    facts = [invoice, ledgerQuantityLabel(r, false)].filter((x): x is string => !!x);
     detail = tanker ? `Tanker ${tanker}` : null;
   }
   const enriched = facts.length > 0 || detail !== null;

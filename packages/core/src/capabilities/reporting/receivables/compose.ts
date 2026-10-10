@@ -1,11 +1,11 @@
 import {
   RECEIVABLES_MIN_SETTLED_SALES,
-  businessDateDiffDays,
   type CustomerReceivable,
   type CustomerReceivableSummary,
   type ReceivablesAging,
   type ReceivablesSummary,
 } from '@pump/shared';
+import { ageInDays } from '../age.js';
 import type { CustomerReceivableSource, ReceivableSourceRow, ReceivablesSource } from './ports.js';
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -15,10 +15,6 @@ const roundAging = (a: ReceivablesAging): ReceivablesAging => ({
   d8_30: round2(a.d8_30),
   d30plus: round2(a.d30plus),
 });
-
-/** Whole calendar days from a date to a later one; never negative (a back-dated clock cannot age below 0). */
-export const ageInDays = (from: string, to: string): number =>
-  Math.max(0, businessDateDiffDays(from, to));
 
 function composeRow(row: ReceivableSourceRow, currentBusinessDate: string): CustomerReceivable {
   return {

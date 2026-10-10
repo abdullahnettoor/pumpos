@@ -10,6 +10,7 @@
  * shown is how long the oldest unpaid Purchase has waited.
  */
 import type {
+  PayablesMonthFigures,
   SupplierLastPayment,
   SupplierMonthFigures,
   SupplierPayable,
@@ -18,7 +19,8 @@ import type {
 import { accountTypeLabel } from '@pump/ui';
 import { compactRupees, plural } from '../format.js';
 import { daysLabel, type Tile } from './receivables.js';
-import { dayLabel } from './statement.js';
+import { wholeQuantityLabel } from './quantity.js';
+import { dayLabel, monthLabel } from './statement.js';
 
 /** `1 unpaid`, `2 unpaid`; null when no Purchase waits (an Opening Balance or an advance is not "unpaid"). */
 export const unpaidLabel = (
@@ -50,17 +52,28 @@ export function oldestUnpaidLine(
   return `${count} · oldest ${dayLabel(p.oldestUnpaidDate)}${age}`;
 }
 
-/** `22,000 L` (whole units; litres and nos are never fractional in practice). */
-export const quantityLabel = (quantity: number, unit: string): string =>
-  `${Math.round(quantity).toLocaleString('en-IN')} ${unit}`.trim();
+/**
+ * The one line that says which month each "this month" figure covers, shown only
+ * when the two differ (a few hours around a month end: Purchases follow the
+ * Business Date, Payments the station calendar date). Null otherwise.
+ */
+export function monthCaption(
+  m: Pick<PayablesMonthFigures, 'purchasedMonth' | 'paidMonth'> | null | undefined,
+): string | null {
+  if (!m || !m.purchasedMonth || !m.paidMonth || m.purchasedMonth === m.paidMonth) return null;
+  const name = (month: string) => monthLabel(`${month}-01`);
+  return `Purchases: ${name(m.purchasedMonth)} (Business Date) · Payments: ${name(m.paidMonth)} (Entry Date)`;
+}
 
 /** "Purchased this month": the value, then `2 purchases · 22,000 L` (litres only when fuel came in). */
-export function purchasedTile(m: SupplierMonthFigures): Tile {
+export function purchasedTile(
+  m: Pick<SupplierMonthFigures, 'purchased' | 'purchaseCount' | 'quantity'>,
+): Tile {
   const litres = Math.round(m.quantity);
   return {
     label: 'Purchased this month',
     value: compactRupees(m.purchased),
-    sub: [plural(m.purchaseCount, 'purchase'), litres > 0 ? quantityLabel(litres, 'L') : null]
+    sub: [plural(m.purchaseCount, 'purchase'), litres > 0 ? wholeQuantityLabel(litres, 'L') : null]
       .filter(Boolean)
       .join(' · '),
   };
@@ -95,6 +108,6 @@ export const productRows = (products: readonly SupplierProductPurchase[]): Produ
   products.map((p) => ({
     productId: p.productId,
     name: p.name,
-    quantity: quantityLabel(p.quantity, p.unit),
+    quantity: wholeQuantityLabel(p.quantity, p.unit),
     value: compactRupees(p.value),
   }));

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  monthCaption,
   oldestUnpaidLine,
   paidThisMonthTile,
   productRows,
   purchasedTile,
-  quantityLabel,
   sinceLabel,
   supplierRowMeta,
   unpaidLabel,
@@ -59,15 +59,15 @@ describe('oldestUnpaidLine', () => {
 
 describe('tiles', () => {
   it('purchased: value, purchase count and litres', () => {
-    expect(
-      purchasedTile({ purchased: 2072200, paid: 0, purchaseCount: 2, quantity: 22000 }),
-    ).toEqual({ label: 'Purchased this month', value: '₹20.72L', sub: '2 purchases · 22,000 L' });
+    expect(purchasedTile({ purchased: 2072200, purchaseCount: 2, quantity: 22000 })).toEqual({
+      label: 'Purchased this month',
+      value: '₹20.72L',
+      sub: '2 purchases · 22,000 L',
+    });
   });
 
   it('purchased: no litres when only products in units came in', () => {
-    expect(purchasedTile({ purchased: 250, paid: 0, purchaseCount: 1, quantity: 0 }).sub).toBe(
-      '1 purchase',
-    );
+    expect(purchasedTile({ purchased: 250, purchaseCount: 1, quantity: 0 }).sub).toBe('1 purchase');
   });
 
   it('paid: the last payment with its Funding Account type in words', () => {
@@ -96,9 +96,28 @@ describe('tiles', () => {
   });
 });
 
+describe('monthCaption', () => {
+  it('is silent when both figures cover the same month', () => {
+    expect(monthCaption({ purchasedMonth: '2026-10', paidMonth: '2026-10' })).toBeNull();
+    expect(monthCaption(undefined)).toBeNull();
+  });
+
+  it('names both months and their anchors when they differ', () => {
+    expect(monthCaption({ purchasedMonth: '2026-10', paidMonth: '2026-11' })).toBe(
+      'Purchases: October 2026 (Business Date) · Payments: November 2026 (Entry Date)',
+    );
+  });
+});
+
 describe('purchases by product', () => {
+  it('reads a litre unit typed as Ltr as L', () => {
+    expect(
+      productRows([{ productId: 'p', name: 'HSD', unit: 'Ltr', quantity: 500, value: 1 }])[0]
+        ?.quantity,
+    ).toBe('500 L');
+  });
+
   it('formats the quantity with its unit and the value compactly', () => {
-    expect(quantityLabel(12000, 'L')).toBe('12,000 L');
     expect(
       productRows([{ productId: 'p', name: 'HSD', unit: 'L', quantity: 12000, value: 1043200 }]),
     ).toEqual([{ productId: 'p', name: 'HSD', quantity: '12,000 L', value: '₹10.43L' }]);

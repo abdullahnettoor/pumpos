@@ -1,6 +1,14 @@
-import type { PayablesSummary, SupplierPayable, SupplierPayableSummary } from '@pump/shared';
-import { ageInDays } from '../receivables/compose.js';
+import type {
+  PayablesMonthFigures,
+  PayablesSummary,
+  SupplierPayable,
+  SupplierPayableSummary,
+} from '@pump/shared';
+import { ageInDays } from '../age.js';
 import type { PayableSourceRow, PayablesSource, SupplierPayableSource } from './ports.js';
+
+/** The calendar months "this month" covers for Purchases and for Payments. */
+export type PayablesMonths = Pick<PayablesMonthFigures, 'purchasedMonth' | 'paidMonth'>;
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -19,11 +27,16 @@ function composeRow(row: PayableSourceRow, currentBusinessDate: string): Supplie
 export function composePayables(
   source: PayablesSource,
   currentBusinessDate: string,
+  months: PayablesMonths,
 ): PayablesSummary {
   return {
     total: round2(source.total),
     supplierCount: source.supplierCount,
-    month: { purchased: round2(source.month.purchased), paid: round2(source.month.paid) },
+    month: {
+      purchased: round2(source.month.purchased),
+      paid: round2(source.month.paid),
+      ...months,
+    },
     suppliers: source.suppliers.map((row) => composeRow(row, currentBusinessDate)),
   };
 }
@@ -31,6 +44,7 @@ export function composePayables(
 export function composeSupplierPayable(
   source: SupplierPayableSource,
   currentBusinessDate: string,
+  months: PayablesMonths,
 ): SupplierPayableSummary {
   const { lastPayment, month } = source;
   return {
@@ -39,6 +53,7 @@ export function composeSupplierPayable(
     month: {
       purchased: round2(month.purchased),
       paid: round2(month.paid),
+      ...months,
       purchaseCount: month.purchaseCount,
       quantity: round2(month.quantity),
     },

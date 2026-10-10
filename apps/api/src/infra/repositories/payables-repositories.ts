@@ -45,7 +45,9 @@ const toSourceRow = (r: PerSupplierRow): PayableSourceRow => ({
  * 0, amount)`. An overpayment leaves every debit settled (an advance, which the
  * list never shows as a payable). The unpaid count and oldest unpaid date look at
  * Purchases only: an Opening Balance still takes its turn in the FIFO, but is
- * not "a Purchase waiting to be paid".
+ * not "a Purchase waiting to be paid". `credit_total` is MATERIALIZED so it is
+ * summed once; left inlined, the single-supplier plan re-scanned the ledger once
+ * per debit (a nested loop of N x M).
  *
  * Tenancy: every row is reached through `organization_id` (the ledger row and the
  * supplier itself). `scope` narrows to one supplier, or to active suppliers (the
@@ -72,7 +74,7 @@ function fifoCtes(organizationId: string, scope: SQL) {
       FROM ledger l
       WHERE l.signed > 0
     ),
-    credit_total AS (
+    credit_total AS MATERIALIZED (
       SELECT supplier_id, SUM(-signed) AS total FROM ledger WHERE signed < 0 GROUP BY supplier_id
     ),
     open_debits AS (
@@ -185,7 +187,7 @@ export class DrizzlePayablesReader implements PayablesReader {
       -- through its ledger row (reference_id), then its items; the purchase's
       -- Business Day is joined only to prove it belongs to this Organization.
       month_items AS (
-        SELECT pit.product_id, pr.name, pr.unit,
+        SELECT pit.product_id, pr.name, pr.unit, pr.product_type,
                SUM(pit.quantity) AS quantity, SUM(pit.line_total) AS value
         FROM ledger l
         JOIN purchases p
@@ -195,7 +197,7 @@ export class DrizzlePayablesReader implements PayablesReader {
         JOIN purchase_items pit ON pit.purchase_id = p.id
         JOIN products pr ON pr.id = pit.product_id AND pr.organization_id = ${org}
         WHERE l.type = 'Purchase' AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
-        GROUP BY pit.product_id, pr.name, pr.unit
+        GROUP BY pit.product_id, pr.name, pr.unit, pr.product_type
       )
       SELECT
         su.id AS "supplierId",
@@ -206,7 +208,9 @@ export class DrizzlePayablesReader implements PayablesReader {
         (SELECT purchased FROM month_flow) AS "monthPurchased",
         (SELECT paid FROM month_flow) AS "monthPaid",
         (SELECT purchase_count FROM month_flow) AS "monthPurchaseCount",
-        COALESCE((SELECT SUM(quantity) FILTER (WHERE unit = 'L') FROM month_items), 0) AS "monthLitres",
+        -- Litres = fuel received. Fuel is told apart by product type, never by the
+        -- free-text unit ('L', 'Ltr', 'Litre' are all typed in the wild).
+        COALESCE((SELECT SUM(quantity) FILTER (WHERE product_type = 'FUEL') FROM month_items), 0) AS "monthLitres",
         COALESCE((
           SELECT json_agg(json_build_object(
             'productId', top.product_id, 'name', top.name, 'unit', top.unit,

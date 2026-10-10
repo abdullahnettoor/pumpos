@@ -1,7 +1,7 @@
 import React from 'react';
 import { inr } from '@pump/ui';
 import { compactRupees } from '../../lib/format.js';
-import { sinceLabel, supplierRowMeta } from '../../lib/money/payables.js';
+import { monthCaption, sinceLabel, supplierRowMeta } from '../../lib/money/payables.js';
 import {
   balanceOf,
   matchName,
@@ -44,6 +44,7 @@ const metaOf = (s: MoneySupplier): string => s.metadata?.tradeName || s.phone ||
 export const ToPay: React.FC<Props> = ({ stationId, query, onOpenSupplier }) => {
   const { suppliers, isLoading } = useSuppliersData();
   const payables = usePayablesData(stationId);
+  const caption = monthCaption(payables.summary?.month);
   const searching = query.trim() !== '';
   const owedNow = owing(suppliers);
   const rows = sortByBalance(matchName(searching ? suppliers : owedNow, query));
@@ -72,6 +73,7 @@ export const ToPay: React.FC<Props> = ({ stationId, query, onOpenSupplier }) => 
             </div>
           </dl>
         )}
+        {caption && <p className="mt-1.5 text-[11px] text-text-muted">{caption}</p>}
       </HeroCard>
       <SectionLabel>Suppliers</SectionLabel>
       {rows.length === 0 ? (

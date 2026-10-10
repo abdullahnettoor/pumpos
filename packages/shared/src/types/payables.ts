@@ -40,6 +40,13 @@ export interface PayablesMonthFigures {
   purchased: number;
   /** Supplier Payments made this month (by Entry Date). */
   paid: number;
+  /**
+   * The calendar months those two figures cover (`YYYY-MM`). They differ for a
+   * few hours around a month end: "this month" is the Business Date's month for
+   * Purchases but the station calendar date's month for Payments (ADR 0005).
+   */
+  purchasedMonth: string;
+  paidMonth: string;
 }
 
 /** `GET /reports/payables?stationId=` */
@@ -65,7 +72,7 @@ export interface SupplierLastPayment {
 export interface SupplierMonthFigures extends PayablesMonthFigures {
   /** Purchases received this month. */
   purchaseCount: number;
-  /** Fuel litres received this month (items whose product is sold in litres only). */
+  /** Fuel litres received this month (fuel products only, whatever unit text they carry). */
   quantity: number;
 }
 

@@ -43,12 +43,15 @@ export interface PayableSourceRow {
   oldestUnpaidDate: string | null;
 }
 
+/** The figures the database sums; the months they cover are the use case's (it chose the ranges). */
+type WithoutMonths<T> = Omit<T, 'purchasedMonth' | 'paidMonth'>;
+
 export interface PayablesSource {
   /** Σ of every supplier's open payable, not only the rows returned. */
   total: number;
   /** Suppliers that are owed money, not only the rows returned. */
   supplierCount: number;
-  month: PayablesMonthFigures;
+  month: WithoutMonths<PayablesMonthFigures>;
   /** Suppliers owed money, largest first, already capped by the reader. */
   suppliers: PayableSourceRow[];
 }
@@ -56,7 +59,7 @@ export interface PayablesSource {
 export interface SupplierPayableSource {
   payable: PayableSourceRow;
   lastPayment: SupplierLastPayment | null;
-  month: SupplierMonthFigures;
+  month: WithoutMonths<SupplierMonthFigures>;
   purchasesByProduct: SupplierProductPurchase[];
 }
 

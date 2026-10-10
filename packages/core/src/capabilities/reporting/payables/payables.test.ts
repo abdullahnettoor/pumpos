@@ -25,6 +25,7 @@ const ctxAt = (iso: string, over: Partial<ExecutionContext> = {}): ExecutionCont
 });
 // 15:30 IST on 2026-10-09.
 const ctx = ctxAt('2026-10-09T10:00:00Z');
+const OCTOBER = { purchasedMonth: '2026-10', paidMonth: '2026-10' };
 
 const supplierSource = (over: Partial<SupplierPayableSource> = {}): SupplierPayableSource => ({
   payable: { supplierId: 's-1', balance: 1043200, unpaidCount: 1, oldestUnpaidDate: '2026-10-09' },
@@ -77,10 +78,11 @@ describe('composePayables', () => {
         ],
       },
       '2026-10-09',
+      OCTOBER,
     );
     expect(out.total).toBe(1085800.01);
     expect(out.supplierCount).toBe(3);
-    expect(out.month).toEqual({ purchased: 2140000, paid: 1020000 });
+    expect(out.month).toEqual({ purchased: 2140000, paid: 1020000, ...OCTOBER });
     expect(out.suppliers.map((s) => s.oldestUnpaidDays)).toEqual([0, 10]);
     expect(out.suppliers[1]).toMatchObject({ unpaidCount: 2, oldestUnpaidDate: '2026-09-29' });
   });
@@ -89,6 +91,7 @@ describe('composePayables', () => {
     const out = composePayables(
       { total: 5000, supplierCount: 900, month: { purchased: 0, paid: 0 }, suppliers: [] },
       '2026-10-09',
+      OCTOBER,
     );
     expect(out).toMatchObject({ total: 5000, supplierCount: 900, suppliers: [] });
   });
@@ -105,6 +108,7 @@ describe('composePayables', () => {
         ],
       },
       '2026-10-09',
+      OCTOBER,
     );
     expect(out.suppliers[0]).toMatchObject({ oldestUnpaidDate: null, oldestUnpaidDays: null });
     expect(out.suppliers[1].oldestUnpaidDays).toBe(0);
@@ -121,8 +125,15 @@ describe('composeSupplierPayable', () => {
         ],
       }),
       '2026-10-09',
+      OCTOBER,
     );
-    expect(out.month).toEqual({ purchased: 100, paid: 50.01, purchaseCount: 2, quantity: 12.35 });
+    expect(out.month).toEqual({
+      purchased: 100,
+      paid: 50.01,
+      ...OCTOBER,
+      purchaseCount: 2,
+      quantity: 12.35,
+    });
     expect(out.purchasesByProduct).toEqual([
       { productId: 'p-1', name: 'HSD', unit: 'L', quantity: 12.35, value: 100 },
     ]);
@@ -141,6 +152,7 @@ describe('composeSupplierPayable', () => {
         payable: { supplierId: 's-1', balance: -49000, unpaidCount: 0, oldestUnpaidDate: null },
       }),
       '2026-10-09',
+      OCTOBER,
     );
     expect(out).toMatchObject({ balance: -49000, unpaidCount: 0, oldestUnpaidDate: null });
     expect(out.oldestUnpaidDays).toBeNull();
@@ -150,6 +162,7 @@ describe('composeSupplierPayable', () => {
     const out = composeSupplierPayable(
       supplierSource({ lastPayment: null, purchasesByProduct: [] }),
       '2026-10-09',
+      OCTOBER,
     );
     expect(out.lastPayment).toBeNull();
     expect(out.purchasesByProduct).toEqual([]);
@@ -171,6 +184,11 @@ describe('GetPayables', () => {
       purchasedTo: '2026-10-31',
       paidFrom: '2026-11-01',
       paidTo: '2026-11-30',
+    });
+    // The wire says which month each figure covers, so the screen can say so when they differ.
+    expect(res.success && res.data.month).toMatchObject({
+      purchasedMonth: '2026-10',
+      paidMonth: '2026-11',
     });
   });
 

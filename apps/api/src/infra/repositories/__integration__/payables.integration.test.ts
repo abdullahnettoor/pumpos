@@ -45,6 +45,8 @@ const BIG_USER = id(22);
 const DIESEL = id(30); // sold in litres
 const PETROL = id(31); // sold in litres
 const LUBE = id(32); // sold in units
+const DIESEL_LTR = id(34); // fuel whose unit was typed 'Ltr'
+const BULK_OIL = id(35); // lubricant sold by the litre
 const OTHER_DIESEL = id(33);
 const BANK_ACCOUNT = id(40);
 const CASH_ACCOUNT = id(41);
@@ -171,6 +173,22 @@ describe.skipIf(!CONNECTION)('Payables reader against real Postgres', () => {
         code: 'OIL',
         productType: 'LUBRICANT',
         unit: 'Nos',
+      },
+      {
+        id: DIESEL_LTR,
+        organizationId: ORG,
+        name: 'Speed diesel',
+        code: 'XHSD',
+        productType: 'FUEL',
+        unit: 'Ltr',
+      },
+      {
+        id: BULK_OIL,
+        organizationId: ORG,
+        name: 'Bulk engine oil',
+        code: 'BOIL',
+        productType: 'LUBRICANT',
+        unit: 'L',
       },
       {
         id: OTHER_DIESEL,
@@ -562,6 +580,18 @@ describe.skipIf(!CONNECTION)('Payables reader against real Postgres', () => {
         purchaseCount: 2,
         quantity: 22000,
       });
+    });
+
+    it('counts litres by product type, whatever unit text the fuel was set up with', async () => {
+      const s = await supplier('Litres');
+      await purchase(s, '2026-10-03', 1000, {
+        lines: [
+          { product: DIESEL_LTR, quantity: 5000, value: 500 },
+          { product: BULK_OIL, quantity: 200, value: 500 },
+        ],
+      });
+      const one = await reader.supplier(supplierQuery(s));
+      expect(one?.month.quantity).toBe(5000);
     });
 
     it('measures purchased and paid by their own ranges (Business Date vs Entry Date)', async () => {

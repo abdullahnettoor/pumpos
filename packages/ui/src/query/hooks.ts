@@ -1060,7 +1060,11 @@ export function useReceivables(
   });
 }
 
-/** One customer's receivable and payment behaviour (single indexed statement). */
+/**
+ * One customer's receivable and payment behaviour (single indexed statement).
+ * Same cache rule as the list: balances only move through a write, which
+ * invalidates the key, so a window focus never refetches.
+ */
 export function useCustomerReceivable(
   stationId: string | null | undefined,
   customerId: string | null | undefined,
@@ -1071,6 +1075,7 @@ export function useCustomerReceivable(
     queryFn: () => shiftService.getCustomerReceivable(stationId!, customerId!),
     enabled: !!stationId && !!customerId,
     ...TIER.operational,
+    refetchOnWindowFocus: false,
     ...options,
   });
 }
@@ -1095,7 +1100,11 @@ export function usePayables(
   });
 }
 
-/** One supplier's payable, last payment, this month and purchases by product (single indexed statement). */
+/**
+ * One supplier's payable, last payment, this month and purchases by product
+ * (single indexed statement). Same cache rule as the list: no refetch on window
+ * focus; a purchase or supplier payment invalidates it (`useInvalidateOperational`).
+ */
 export function useSupplierPayable(
   stationId: string | null | undefined,
   supplierId: string | null | undefined,
@@ -1106,6 +1115,7 @@ export function useSupplierPayable(
     queryFn: () => shiftService.getSupplierPayable(stationId!, supplierId!),
     enabled: !!stationId && !!supplierId,
     ...TIER.operational,
+    refetchOnWindowFocus: false,
     ...options,
   });
 }

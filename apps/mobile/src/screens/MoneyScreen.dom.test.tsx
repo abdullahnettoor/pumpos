@@ -436,7 +436,7 @@ describe('To pay with the payables summary', () => {
   const summary = () => ({
     total: 1081600,
     supplierCount: 2,
-    month: { purchased: 2140000, paid: 1020000 },
+    month: { purchased: 2140000, paid: 1020000, purchasedMonth: '2026-10', paidMonth: '2026-10' },
     suppliers: [
       {
         supplierId: 's1',
@@ -463,6 +463,26 @@ describe('To pay with the payables summary', () => {
     expect(within(hero).getByText('₹10,81,600.00')).toBeTruthy();
     expect(within(hero).getByText('Paid this month').nextSibling?.textContent).toBe('₹10.2L');
     expect(within(hero).getByText('Purchased this month').nextSibling?.textContent).toBe('₹21.4L');
+  });
+
+  it('says which month each figure covers only when the two differ', () => {
+    payables.list = summary();
+    mount({ station: STATION });
+    toPay();
+    expect(document.body.textContent).not.toMatch(/Business Date\)/);
+    cleanup();
+
+    payables.list = {
+      ...summary(),
+      month: { ...summary().month, purchasedMonth: '2026-10', paidMonth: '2026-11' },
+    };
+    mount({ station: STATION });
+    toPay();
+    expect(
+      screen.getByText(
+        'Purchases: October 2026 (Business Date) · Payments: November 2026 (Entry Date)',
+      ),
+    ).toBeTruthy();
   });
 
   it('says on each row how many are unpaid and since when', () => {
@@ -1110,7 +1130,14 @@ describe('Supplier page', () => {
         method: 'BANK',
         fundingAccountName: 'SBI current a/c',
       },
-      month: { purchased: 2072200, paid: 980000, purchaseCount: 2, quantity: 22000 },
+      month: {
+        purchased: 2072200,
+        paid: 980000,
+        purchasedMonth: '2026-10',
+        paidMonth: '2026-10',
+        purchaseCount: 2,
+        quantity: 22000,
+      },
       purchasesByProduct: [
         { productId: 'p1', name: 'HSD', unit: 'L', quantity: 12000, value: 1043200 },
         { productId: 'p2', name: 'MS', unit: 'L', quantity: 10000, value: 1029000 },
@@ -1137,6 +1164,24 @@ describe('Supplier page', () => {
       expect(tiles.getByText('Last: 6 Oct · Bank')).toBeTruthy();
     });
 
+    it('says which month each tile covers only when they differ', () => {
+      payables.bySupplier.s1 = HPCL;
+      openSupplier('HPCL');
+      expect(document.body.textContent).not.toMatch(/\(Business Date\)/);
+      cleanup();
+
+      payables.bySupplier.s1 = {
+        ...HPCL,
+        month: { ...HPCL.month, purchasedMonth: '2026-10', paidMonth: '2026-11' },
+      };
+      openSupplier('HPCL');
+      expect(
+        screen.getByText(
+          'Purchases: October 2026 (Business Date) · Payments: November 2026 (Entry Date)',
+        ),
+      ).toBeTruthy();
+    });
+
     it('lists purchases by product with quantity and value', () => {
       payables.bySupplier.s1 = HPCL;
       openSupplier('HPCL');
@@ -1156,7 +1201,14 @@ describe('Supplier page', () => {
         oldestUnpaidDate: null,
         oldestUnpaidDays: null,
         lastPayment: null,
-        month: { purchased: 0, paid: 0, purchaseCount: 0, quantity: 0 },
+        month: {
+          purchased: 0,
+          paid: 0,
+          purchasedMonth: '2026-10',
+          paidMonth: '2026-10',
+          purchaseCount: 0,
+          quantity: 0,
+        },
         purchasesByProduct: [],
       };
       openSupplier('HPCL');
