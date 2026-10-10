@@ -1,0 +1,73 @@
+import React, { useState } from 'react';
+import { inr } from '@pump/ui';
+import {
+  matchName,
+  overLimitCount,
+  owing,
+  sortByBalance,
+  totalOwed,
+  type MoneyCustomer,
+} from '../../lib/money/parties.js';
+import { ListGroup } from '../../ui/ListRow.js';
+import { SectionLabel } from '../../ui/SectionLabel.js';
+import { CustomerRow } from './CustomerRow.js';
+import { MoneyHero } from './MoneyHero.js';
+import { SeeAllButton, Note } from './parts.js';
+import { useCustomersData } from './useMoneyData.js';
+
+/** Customers shown before "See all". */
+export const PREVIEW_COUNT = 5;
+
+interface Props {
+  query: string;
+  onOpenCustomer: (customer: MoneyCustomer) => void;
+}
+
+/**
+ * To collect: what customers owe (Σ credit sales − Σ collections), largest first.
+ * Only customers who owe are listed; a search looks across all of them, so a
+ * settled customer can still be found and opened.
+ */
+export const ToCollect: React.FC<Props> = ({ query, onOpenCustomer }) => {
+  const { customers, isLoading } = useCustomersData();
+  const [expanded, setExpanded] = useState(false);
+  const searching = query.trim() !== '';
+
+  const owingNow = owing(customers);
+  const rows = sortByBalance(matchName(searching ? customers : owingNow, query));
+  const shown = searching || expanded ? rows : rows.slice(0, PREVIEW_COUNT);
+  const overCount = overLimitCount(customers);
+
+  if (isLoading && customers.length === 0) return <Note>Loading customers…</Note>;
+
+  return (
+    <>
+      <MoneyHero
+        label={`Receivables · ${owingNow.length} ${owingNow.length === 1 ? 'customer' : 'customers'}`}
+        value={inr(totalOwed(customers))}
+        sub={
+          overCount > 0 && (
+            <span className="font-semibold text-bad-fg">{overCount} over credit limit</span>
+          )
+        }
+      />
+      <SectionLabel>{searching ? 'Customers' : 'Highest balances'}</SectionLabel>
+      {rows.length === 0 ? (
+        <Note>
+          {searching ? `No customers match “${query.trim()}”.` : 'Nobody owes you right now.'}
+        </Note>
+      ) : (
+        <ListGroup>
+          {shown.map((c) => (
+            <CustomerRow key={c.id} customer={c} onPress={() => onOpenCustomer(c)} />
+          ))}
+        </ListGroup>
+      )}
+      {!searching && !expanded && rows.length > PREVIEW_COUNT && (
+        <SeeAllButton onClick={() => setExpanded(true)}>
+          See all {rows.length} customers
+        </SeeAllButton>
+      )}
+    </>
+  );
+};
