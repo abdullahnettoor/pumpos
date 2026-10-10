@@ -51,6 +51,7 @@ vi.mock('../lib/alerts.js', () => ({ useMobileAlerts: () => feed.alerts }));
 
 const { HomeScreen } = await import('./HomeScreen.js');
 const { NavProvider, useNav } = await import('../shell/nav.js');
+const { ShellContext } = await import('../shell/context.js');
 
 let lastToday = '';
 const station = (settings: Record<string, unknown> = {}) =>
@@ -276,6 +277,30 @@ describe('Home: your handover card', () => {
     expect(card.textContent).toContain('Shift 2 · Not saved yet');
     expect(card.textContent).toContain('Continue');
     expect(container.querySelector('button, section')).toBe(card);
+  });
+
+  it('a Manager on a Dispenser Unit gets the pinned card above the full overview', () => {
+    feed.assignment = myAssignment();
+    const st = station(IST);
+    const { container } = render(
+      <ShellContext.Provider
+        value={{
+          station: st,
+          stationName: st.name,
+          userName: 'M G',
+          role: 'Manager',
+          openAccount: () => {},
+        }}
+      >
+        <NavProvider tabs={['home', 'shifts', 'reports', 'money', 'insights']}>
+          <HomeScreen station={st} />
+        </NavProvider>
+      </ShellContext.Provider>,
+    );
+    const card = screen.getByRole('button', { name: /Your handover · DU2/ });
+    expect(container.querySelector('button, section')).toBe(card);
+    expect(screen.getByText(/^Sales ·/)).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Needs attention' })).toBeTruthy();
   });
 
   it('counts the credit and fuel-card slips already recorded', () => {

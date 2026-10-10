@@ -134,7 +134,7 @@ describe('canManageReportTemplates (#332)', () => {
 describe('mobile Control Room tab guards (#390)', () => {
   it.each([
     ['Owner', true, true, true],
-    ['Manager', false, true, true],
+    ['Manager', true, true, true],
     ['Accountant', false, false, false],
     ['Staff', false, false, false],
     ['Attendant', false, false, false],

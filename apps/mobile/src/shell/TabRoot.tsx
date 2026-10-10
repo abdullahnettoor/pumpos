@@ -5,11 +5,9 @@
  * here, in `tabs.ts` and in `tabIcons.tsx`.
  */
 import React from 'react';
-import { canViewMobileHome, canViewMobileInsights, type Station } from '@pump/shared';
+import { canViewMobileHome, type Station } from '@pump/shared';
 import { HomeScreen } from '../screens/HomeScreen.js';
 import { HandoverCard } from '../screens/home/HandoverCard.js';
-import { HomeAttention } from '../screens/home/HomeAttention.js';
-import { useMobileAlerts } from '../lib/alerts.js';
 import { InsightsScreen } from '../screens/InsightsScreen.js';
 import { MoneyScreen } from '../screens/MoneyScreen.js';
 import { ReportsScreen } from '../screens/ReportsScreen.js';
@@ -28,33 +26,21 @@ interface Props {
   stationsLoading: boolean;
 }
 
-/** Home's attention section for a Role whose Home is only its handover card. */
-const HandoverHomeAttention: React.FC<{ station: Station | null }> = ({ station }) => {
-  const alerts = useMobileAlerts(station);
-  return <HomeAttention alerts={alerts} station={station} />;
-};
-
 export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
   const { role } = useShell();
-  // Home is the owner's overview. A Manager, Accountant or Staff member who mans a
-  // pump gets Home only for their handover card (see `tabsForRole`).
+  // Home is the overview for Owner and Manager (`canViewMobileHome`), with the
+  // pinned handover card when they man a pump. An Accountant or Staff member who
+  // mans a pump gets Home only for that card (see `tabsForRole`): no overview, no
+  // bell (neither Role may see alerts).
   const handoverOnlyHome = tab === 'home' && !canViewMobileHome(role);
-  // The bell needs an attention section to land on; a Role that may see alerts
-  // (Manager) gets both beside its card, any other gets neither.
-  const alertsOnHome = handoverOnlyHome && canViewMobileInsights(role);
   const header =
-    tab === 'home' && (!handoverOnlyHome || alertsOnHome) ? (
-      <HomeHeader />
-    ) : (
-      <TabHeader title={tabDef(tab).label} />
-    );
+    tab === 'home' && !handoverOnlyHome ? <HomeHeader /> : <TabHeader title={tabDef(tab).label} />;
 
   if (handoverOnlyHome)
     return (
       <>
         {header}
         <HandoverCard />
-        {alertsOnHome && <HandoverHomeAttention station={station} />}
       </>
     );
   if (tab === 'money')

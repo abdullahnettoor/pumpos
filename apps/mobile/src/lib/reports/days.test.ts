@@ -118,7 +118,7 @@ describe('dayView', () => {
     });
     expect(v.label).not.toContain('21');
   });
-  it('points a Role without Home (a Manager) at Shifts', () => {
+  it('points a Role without Home but with Shifts at Shifts', () => {
     const v = dayView(item({ status: 'LIVE' }), 'shifts');
     expect(v).toMatchObject({ action: 'live', liveTab: 'shifts', note: 'See Shifts' });
   });

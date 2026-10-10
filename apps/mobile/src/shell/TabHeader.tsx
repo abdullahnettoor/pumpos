@@ -7,7 +7,7 @@ import { useShell } from './context.js';
 /**
  * Header of a tab root (every tab except Home): the shell's station name + Account sheet wired into `PageHeader`.
  * A Role that may see alerts (Owner, Manager: `canViewMobileInsights`) gets the
- * bell here too, since Home (the bell's other place) is the Owner's alone.
+ * bell here too, so it is one tap from every tab (Home's header has it as well).
  */
 export const TabHeader: React.FC<{ title: string; right?: React.ReactNode }> = ({
   title,

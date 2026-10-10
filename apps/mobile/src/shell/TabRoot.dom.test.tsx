@@ -5,9 +5,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Role, Station } from '@pump/shared';
 
 /**
- * What Home shows per Role: the owner's overview, or for a Manager, Accountant
- * or Staff member who mans a pump just their handover card (they have no Home
- * overview, but Home is where the card lives).
+ * What Home shows per Role: the full overview for an Owner and a Manager (with
+ * the pinned handover card when they man a pump), or for an Accountant or Staff
+ * member who mans a pump just their handover card (they have no Home overview,
+ * but Home is where the card lives).
  */
 const mine = vi.hoisted(() => ({ assignment: null as unknown }));
 
@@ -67,31 +68,30 @@ describe('Home root per Role', () => {
     expect(screen.getByText('owner overview')).toBeTruthy();
   });
 
-  it('a Manager on a Dispenser Unit gets the handover card and no owner overview', () => {
-    mine.assignment = assigned;
-    renderTab('Manager');
-    expect(screen.getByRole('button', { name: /Your handover · DU2/ })).toBeTruthy();
-    expect(screen.queryByText('owner overview')).toBeNull();
-  });
-
-  it('a Manager on a Dispenser Unit gets the bell with an attention section to land on', () => {
-    mine.assignment = assigned;
+  it('a Manager gets the same overview and header as an Owner', () => {
     feed.alerts = [{ id: 'a1', severity: 'warning', category: 'stock', title: 'Tank 2 low' }];
     renderTab('Manager');
+    expect(screen.getByText('owner overview')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Alerts, 1 open' })).toBeTruthy();
-    expect(screen.getByRole('region', { name: 'Needs attention' })).toBeTruthy();
-    expect(screen.getByText('Tank 2 low')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Highway Fuels, open account' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Account' })).toBeTruthy();
+  });
+
+  it('a Manager on a Dispenser Unit gets the full Home, not the card-only Home', () => {
+    mine.assignment = assigned;
+    renderTab('Manager');
+    expect(screen.getByText('owner overview')).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Needs attention' })).toBeNull();
   });
 
   it('the bell pushes the Needs attention page on Home', () => {
-    mine.assignment = assigned;
     feed.alerts = [{ id: 'a1', severity: 'warning', category: 'stock', title: 'Tank 2 low' }];
     renderTab('Manager');
     fireEvent.click(screen.getByRole('button', { name: 'Alerts, 1 open' }));
     expect(seen.depth).toBe(1);
   });
 
-  it('an Accountant or Staff member who cannot see alerts gets the card only, no bell', () => {
+  it('an Accountant or Staff member who cannot see alerts gets the card only, no overview or bell', () => {
     mine.assignment = assigned;
     feed.alerts = [{ id: 'a1', severity: 'warning', category: 'stock', title: 'Tank 2 low' }];
     for (const role of ['Accountant', 'Staff'] as Role[]) {
@@ -99,6 +99,7 @@ describe('Home root per Role', () => {
       expect(screen.getByRole('button', { name: /Your handover · DU2/ })).toBeTruthy();
       expect(screen.queryByRole('button', { name: /^Alerts/ })).toBeNull();
       expect(screen.queryByText('Tank 2 low')).toBeNull();
+      expect(screen.queryByText('owner overview')).toBeNull();
       cleanup();
     }
   });
@@ -112,7 +113,7 @@ describe('the alerts bell on tab headers', () => {
     title: 'Tank 2 low',
   };
 
-  it('a Manager with no pump assignment reaches Needs attention from the Shifts tab', () => {
+  it('a Manager reaches Needs attention from the Shifts tab', () => {
     feed.alerts = [stockAlert];
     renderTab('Manager', 'shifts');
     expect(screen.getByText('shifts list')).toBeTruthy();

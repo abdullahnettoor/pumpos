@@ -58,12 +58,13 @@ Captured on the preview console against a freshly onboarded station ("Hilltop Fu
 
 Navigation map only; steps are in `docs/USER-FLOW.md` §13.
 
-- Dock tabs, by Role: **Home** (Owner) · **Shifts** (Owner, Manager) · **Reports** (Owner, Manager,
-  Accountant) · **Money** (Owner, Manager, Accountant) · **Insights** (Owner, Manager). Staff: none unless assigned a pump (then Home with only their handover card).
+- Dock tabs, by Role: **Home** (Owner, Manager) · **Shifts** (Owner, Manager) · **Reports** (Owner, Manager,
+  Accountant) · **Money** (Owner, Manager, Accountant) · **Insights** (Owner, Manager). Accountant or Staff assigned to a pump: also Home, with only their handover card.
 - Home header: station name or **avatar** → **Account sheet** (station switcher, Team, organization,
   Sign out); **bell** → **Needs attention** (stock, day close, credit, cash variance, handover).
 - Shifts → live shift / history row → **Shift Summary**. Reports → day row → **DSSR** (Share, Download PDF).
 - Money → To collect / To pay → customer or supplier page → **Statement** (range filter, PDF),
   **Record payment** (customer or supplier), credit limit (Owner, Manager).
 - **Attendant**: handover-only app (no dock), **Save handover**, Sign out in the account sheet.
-- Owner/Manager/Accountant/Staff assigned to a pump: **Your handover** card pinned on Home → handover page.
+- Owner/Manager/Accountant/Staff assigned to a pump: **Your handover** card pinned on Home → handover page
+  (Owner and Manager: above the full Home; Accountant and Staff: Home is just the card).
