@@ -95,5 +95,3 @@ export function useHomeData(station: Station) {
     statusQ.isLoading,
   ]);
 }
-
-export type HomeData = ReturnType<typeof useHomeData>;

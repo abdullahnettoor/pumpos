@@ -18,20 +18,9 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* Safe-area padding for notched devices + bottom tab bar. */
+/* Safe-area padding for notched devices. */
 .mobile-safe-top {
   padding-top: max(env(safe-area-inset-top), 12px);
-}
-.mobile-safe-bottom {
-  padding-bottom: max(env(safe-area-inset-bottom), 12px);
-}
-
-/* Hide scrollbars on horizontal chip rows. */
-.no-scrollbar {
-  scrollbar-width: none;
-}
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
 }
 
 /* Floating dock geometry (shell/Dock.tsx, shell/Pane.tsx).

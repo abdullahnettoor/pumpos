@@ -24,7 +24,7 @@ const ZERO_TERMINALS_MESSAGE =
   'No card/UPI takings entered for the assigned terminal(s). If that is correct, save again to confirm; otherwise enter the terminal amounts.';
 
 /** DUs with a terminal assigned where every terminal's card and UPI is zero. */
-export function dusWithZeroTerminalTakings(
+function dusWithZeroTerminalTakings(
   dus: AssignedDu[],
   forms: Record<string, DuFormState>,
 ): AssignedDu[] {
@@ -40,7 +40,7 @@ export function dusWithZeroTerminalTakings(
 }
 
 /** The Handover request for one DU, exactly as it is sent to the server. */
-export function buildHandoverPayload(input: {
+function buildHandoverPayload(input: {
   shiftId: string;
   attendantId: string;
   du: AssignedDu;

@@ -52,8 +52,7 @@ export function canActOn(
   return targetStationIds.every((id) => actor.stationIds.includes(id));
 }
 
-export const MANAGER_SCOPE_NOTE =
-  'Managers can manage only Staff and Attendants on their own stations.';
+const MANAGER_SCOPE_NOTE = 'Managers can manage only Staff and Attendants on their own stations.';
 
 export interface MemberRights {
   canEdit: boolean;

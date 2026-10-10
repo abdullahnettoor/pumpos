@@ -11,7 +11,11 @@ import {
   useToast,
   type FundingAccountType,
 } from '@pump/ui';
-import { entryDateToday, type OfficePaymentFields } from '../../lib/money/officePayment.js';
+import {
+  entryDateToday,
+  sameOfficeEntries,
+  type OfficePaymentFields,
+} from '../../lib/money/officePayment.js';
 import { inputClass } from '../../components/handover/Fields.js';
 import { BottomSheet } from '../../ui/BottomSheet.js';
 import { SegmentedControl } from '../../ui/SegmentedControl.js';
@@ -51,7 +55,6 @@ export interface OfficePaymentSheetProps<F extends OfficePaymentFields> {
   idleHint: string;
   /** Under the amount once a valid one is typed: where the balance would stand. */
   preview: (amountText: string) => string | null;
-  sameEntries: (a: F, b: F) => boolean;
   successMessage: (amount: number) => string;
   submitLabel: string;
   save: (form: F) => Promise<OfficePaymentResult>;
@@ -76,7 +79,6 @@ const Form = <F extends OfficePaymentFields>({
   dateHint: dateHelp,
   idleHint,
   preview: previewFor,
-  sameEntries,
   successMessage,
   submitLabel,
   save,
@@ -110,7 +112,7 @@ const Form = <F extends OfficePaymentFields>({
   const entries = watch() as F;
   // An earlier try with no answer may have been recorded: say so before a different payment.
   const maybeRecorded =
-    unknownAttempt && !sameEntries(unknownAttempt, entries) ? unknownAttempt : null;
+    unknownAttempt && !sameOfficeEntries(unknownAttempt, entries) ? unknownAttempt : null;
 
   const accountsQ = useFundingAccounts(stationId);
   const accounts = useMemo(

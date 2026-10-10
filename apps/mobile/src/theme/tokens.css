@@ -145,10 +145,11 @@
 }
 
 /*
- * Legacy bridge. Existing mobile screens still read the shared PumpOS tokens
- * from @pump/ui (--bg-canvas, --brand-primary, ...). Pointing them at the
- * semantic tokens makes those screens follow the active theme until each one
- * is restyled. Scoped to this app: desktop and console are unaffected.
+ * Shared-token bridge. The @pump/ui components the app renders (Toast, Login,
+ * BootScreen, Chip, Combobox, CashBreakdown) and the cash-count sheet read the
+ * shared PumpOS tokens (--bg-canvas, --brand-primary, ...). Pointing them at the
+ * semantic tokens makes them follow the active theme. Scoped to this app:
+ * desktop and console are unaffected.
  * (--text-default / --text-muted / --text-faint share their names with the
  * semantic tokens above, so they need no mapping.)
  */

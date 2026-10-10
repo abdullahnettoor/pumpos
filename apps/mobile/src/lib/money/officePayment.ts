@@ -8,9 +8,6 @@
 import { isValidBusinessDate, resolveEntryDate, type AccessMode } from '@pump/shared';
 import { reusesIdempotencyKey } from './creditLimit.js';
 
-/** Longest reference the server accepts (`notes` on both records). */
-export const OFFICE_NOTE_MAX = 500;
-
 /**
  * Today's Entry Date: the plain station-timezone calendar date. Day Start never
  * applies to an Office Record (an entry at 03:00 on the 15th is dated the 15th).

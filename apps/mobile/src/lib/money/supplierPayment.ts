@@ -92,8 +92,6 @@ export function supplierPaymentRequest(
   });
 }
 
-export type SupplierPaymentAccess = OfficePaymentAccess;
-
 /**
  * May this user record a Supplier Payment from here?
  *
@@ -106,17 +104,15 @@ export type SupplierPaymentAccess = OfficePaymentAccess;
 export function supplierPaymentAccess(input: {
   role: Role;
   accessMode?: AccessMode;
-}): SupplierPaymentAccess {
+}): OfficePaymentAccess {
   return officePaymentAccess({
     allowed: canRecordPurchase(input.role),
     accessMode: input.accessMode,
   });
 }
 
-export type SupplierPaymentFailure = OfficePaymentFailure;
-
 /** What the sheet says when the save is refused or fails. */
-export const supplierPaymentFailure = (error: unknown): SupplierPaymentFailure =>
+export const supplierPaymentFailure = (error: unknown): OfficePaymentFailure =>
   officePaymentFailure(error, {
     forbidden: 'You do not have permission to record supplier payments.',
     notFound: 'This supplier or account is no longer available.',

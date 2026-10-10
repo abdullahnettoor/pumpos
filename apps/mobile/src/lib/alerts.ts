@@ -7,7 +7,7 @@ import { useOwnHandover } from './handover/useOwnHandover.js';
 import type { MoneyCustomer } from './money/parties.js';
 import { usePastOpenDates } from './pastOpenDays.js';
 
-export type { AlertAction, AlertCategory, AlertSeverity, MobileAlert } from './attention/types.js';
+export type { MobileAlert } from './attention/types.js';
 
 /**
  * The one "needs attention" list of the mobile app: the header bell's badge,

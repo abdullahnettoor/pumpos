@@ -12,7 +12,7 @@
  *   hero gradient: bg-[image:var(--hero)]
  *
  * Load order in main.tsx: @pump/ui index.css, then this file, then tokens.css
- * (so the legacy bridge in tokens.css overrides index.css's :root values).
+ * (so the shared-token bridge in tokens.css overrides index.css's :root values).
  */
 @import '@pump/ui/src/pump-ds/tailwind.css';
 

@@ -4,7 +4,7 @@
  * the card (Home, Shift Summary, DSSR) gets the same arithmetic.
  */
 import { PRODUCT_CATEGORY_LABEL, type ProductType } from '@pump/shared';
-import { plural } from './format.js';
+import { plural } from '../format.js';
 import { round2 } from './num.js';
 import type { FuelLine, ProductLine } from './sales.js';
 
@@ -82,7 +82,7 @@ export interface CategoryRow {
 }
 
 /** What a snapshot frozen before categories existed is shown as. */
-export const UNCATEGORISED_NAME = 'Products';
+const UNCATEGORISED_NAME = 'Products';
 
 /**
  * Product lines grouped by category, largest value first with Other last. A

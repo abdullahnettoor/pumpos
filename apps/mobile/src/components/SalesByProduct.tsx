@@ -5,7 +5,7 @@ import {
   groupByCategory,
   unitsLabel,
 } from '../lib/home/byProduct.js';
-import { rupees } from '../lib/home/format.js';
+import { rupees } from '../lib/format.js';
 import type { FuelLine, ProductLine } from '../lib/home/sales.js';
 
 /** Caption on a group header: which Shifts it covers, or "Live". */

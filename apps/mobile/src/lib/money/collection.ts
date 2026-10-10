@@ -20,27 +20,16 @@ import {
 import { collectionPayload } from '@pump/ui';
 import {
   amountForValidation,
-  applyPaymentToParties,
-  classifyBalance,
   entryDateIssue,
   officePaymentAccess,
   officePaymentFailure,
-  OFFICE_NOTE_MAX,
-  sameOfficeEntries,
-  type BalanceAfter,
   type OfficePaymentAccess,
   type OfficePaymentFailure,
 } from './officePayment.js';
 
-// The rules a Collection shares with a Supplier Payment live in `officePayment.ts`;
-// re-exported so the Customer page's callers and tests keep one import path.
-export {
-  balanceAfterPayment,
-  entryDateToday,
-  isEarlierAttemptReceived,
-  keepsIdempotencyKey,
-  type BalanceAfter,
-} from './officePayment.js';
+// The rules a Collection shares with a Supplier Payment (Entry Date, balance
+// preview, Idempotency-Key rules, access and refusal wording) live in
+// `officePayment.ts`; this file adds only what is a Collection's own.
 
 export type CollectionMethod = 'Cash' | 'UPI' | 'Card' | 'BankTransfer';
 
@@ -51,9 +40,6 @@ export const COLLECTION_METHODS: readonly { value: CollectionMethod; label: stri
   { value: 'Card', label: 'Card' },
   { value: 'BankTransfer', label: 'Bank' },
 ];
-
-/** Longest reference the server accepts (`RecordCollection` notes). */
-export const COLLECTION_NOTE_MAX = OFFICE_NOTE_MAX;
 
 /** What the sheet fills in; every field is text, as typed. */
 export interface CollectionForm {
@@ -123,18 +109,6 @@ export function collectionRequest(stationId: string, customerId: string, form: C
   });
 }
 
-/** Are these two forms the same payment? Whitespace around the amount / reference does not count. */
-export const sameCollectionEntries = (a: CollectionForm, b: CollectionForm): boolean =>
-  sameOfficeEntries(a, b);
-
-/** What the Customer would owe once they have paid (negative = an advance). */
-export const amountAfterCollection = (balance: number): BalanceAfter => classifyBalance(balance);
-
-/** Write a saved Collection into a cached customers list (see `applyPaymentToParties`). */
-export const applyCollectionToCustomers = applyPaymentToParties;
-
-export type CollectionAccess = OfficePaymentAccess;
-
 /**
  * May this user record a payment from here?
  *
@@ -144,17 +118,18 @@ export type CollectionAccess = OfficePaymentAccess;
  *    a customer must be recorded when it is received"), so Restricted Access
  *    still permits it; only Suspension blocks it (`officePaymentAccess`).
  */
-export function collectionAccess(input: { role: Role; accessMode?: AccessMode }): CollectionAccess {
+export function collectionAccess(input: {
+  role: Role;
+  accessMode?: AccessMode;
+}): OfficePaymentAccess {
   return officePaymentAccess({
     allowed: canRecordCollection(input.role),
     accessMode: input.accessMode,
   });
 }
 
-export type CollectionFailure = OfficePaymentFailure;
-
 /** What the sheet says when the save is refused or fails. */
-export const collectionFailure = (error: unknown): CollectionFailure =>
+export const collectionFailure = (error: unknown): OfficePaymentFailure =>
   officePaymentFailure(error, {
     forbidden: 'You do not have permission to record payments.',
     notFound: 'This customer or account is no longer available.',

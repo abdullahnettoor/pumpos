@@ -1,6 +1,6 @@
 import React from 'react';
 import { inr, SUPPLIER_PAYMENT_ACCOUNT_TYPES } from '@pump/ui';
-import { previewBalance, sameOfficeEntries } from '../../lib/money/officePayment.js';
+import { previewBalance } from '../../lib/money/officePayment.js';
 import { balanceOf, type MoneySupplier } from '../../lib/money/parties.js';
 import {
   supplierPaymentFormSchema,
@@ -79,7 +79,6 @@ export const PaySupplierSheet: React.FC<Props> = ({
       dateHint="The day the payment was made. Defaults to today."
       idleHint={idleHint(balance)}
       preview={preview}
-      sameEntries={sameOfficeEntries}
       successMessage={(amount) => `${inr(amount)} paid to ${supplier.name}.`}
       submitLabel="Record payment"
       save={save}

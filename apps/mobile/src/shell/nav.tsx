@@ -8,7 +8,7 @@
  *   nav.push(<ShiftSummaryPage shiftId={id} />, `shift:${id}`);  // detail page in the current tab
  *   nav.open('money', <CustomerPage id={id} />, `customer:${id}`); // jump to another tab's stack
  *   nav.back();                                                  // what the header back button calls
- * and, in a sheet, `useBackLayer(open, onClose)` (BottomSheet already does).
+ * and, in a sheet, `useBackLayer(open, onClose)` from `ui/backStack` (BottomSheet already does).
  */
 import React, {
   createContext,
@@ -32,8 +32,6 @@ import {
 } from './navStack.js';
 import { BackStackContext, type BackStack } from '../ui/backStack.js';
 import type { TabKey } from './tabs.js';
-
-export { useBackLayer } from '../ui/backStack.js';
 
 export interface Nav {
   active: TabKey;

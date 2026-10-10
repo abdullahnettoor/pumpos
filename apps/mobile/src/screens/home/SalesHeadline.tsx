@@ -1,5 +1,5 @@
 import React from 'react';
-import { rupees } from '../../lib/home/format.js';
+import { rupees } from '../../lib/format.js';
 import type { LiveShift } from '../../lib/home/live.js';
 import {
   sparklinePath,

@@ -36,8 +36,6 @@ export interface MemberFormRules {
   requireStation: boolean;
 }
 
-export const PASSWORD_MIN = 8;
-
 /** Check trimmed text with a `@pump/shared` field schema, keeping its messages. */
 function shared(schema: z.ZodTypeAny) {
   return z.string().superRefine((text, ctx) => {

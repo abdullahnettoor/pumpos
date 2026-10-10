@@ -1,7 +1,7 @@
 /**
  * The mobile shell's tabs: the one place a tab's key, label and Role access
- * are declared. A later ticket that adds or retires a tab edits this file,
- * `tabIcons.tsx` (the dock glyph) and `TabRoot.tsx` (what the tab shows).
+ * are declared. Adding or retiring a tab edits this file, `tabIcons.tsx` (the
+ * dock glyph) and `TabRoot.tsx` (what the tab shows).
  */
 import {
   canManageFinancialAccounts,

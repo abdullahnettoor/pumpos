@@ -1,18 +1,10 @@
 /**
- * How a quantity reads on a Money screen. Two shapes, named for what they show:
- *
- *  - `wholeQuantityLabel`: a summary figure (`22,000 L`), rounded to whole units.
- *  - `ledgerQuantityLabel`: a statement row's own quantity (`2.5 L Diesel`),
- *    keeping up to two decimals, optionally naming the product.
- *
- * Both write the unit through `unitLabel`, so a unit typed as `Ltr`, `litres` or
- * `L` reads the same everywhere.
+ * How a summary quantity reads on a Money screen (`22,000 L`), rounded to whole
+ * units. The unit is written through `unitLabel`, so a unit typed as `Ltr`,
+ * `litres` or `L` reads the same everywhere. A statement row's own quantity
+ * (`2.5 L Diesel`) is `ledgerQuantityLabel` in `@pump/ui`, shared with the PDF.
  */
 import { unitLabel } from '@pump/ui';
-
-// A statement row's own quantity (`2.5 L Diesel`) is shared with the statement PDF: it lives in `@pump/ui`.
-export { ledgerQuantityLabel } from '@pump/ui';
-export type { LedgerQuantity } from '@pump/ui';
 
 /** The unit as shown: `L` for any litre spelling; blank stays blank. */
 const shownUnit = (unit: string | null | undefined): string => {

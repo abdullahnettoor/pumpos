@@ -116,7 +116,7 @@ export interface Standing {
   room: number;
 }
 
-export const NEAR_LIMIT_PCT = 80;
+const NEAR_LIMIT_PCT = 80;
 
 /**
  * The one place the limit bands are decided, on the exact ratio: the row bar,
