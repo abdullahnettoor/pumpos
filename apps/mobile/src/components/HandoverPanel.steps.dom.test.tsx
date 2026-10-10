@@ -192,7 +192,51 @@ describe('HandoverPanel steps (mobile)', () => {
   });
 
   describe('step status', () => {
-    it('marks the readings done while every nozzle is valid', () => {
+    it('leaves the readings not started until a closing reading is entered', () => {
+      withClient(<HandoverPanel />);
+      // The seed fills closing = opening; that is not an answer yet.
+      expect(statusOf(/Closing readings/)).toBe('not-started');
+      typeIn(/N-1 · Petrol/, '1050');
+      expect(statusOf(/Closing readings/)).toBe('done');
+    });
+
+    it('counts a closing equal to the opening once the attendant has confirmed it', () => {
+      withClient(<HandoverPanel />);
+      const field = screen.getByLabelText(/N-1 · Petrol/);
+      fireEvent.focus(field);
+      fireEvent.blur(field);
+      expect(statusOf(/Closing readings/)).toBe('done');
+      expect(stepHeader(/Closing readings/).textContent).toContain('no litres yet');
+    });
+
+    it('marks the readings in progress while only some nozzles are entered', () => {
+      assignment.data = makeAssignment({
+        dispenserUnits: [
+          du('1', NOZZLE, {
+            nozzles: [
+              ...du('1', NOZZLE).nozzles,
+              { ...du('1', NOZZLE).nozzles[0], nozzleId: NOZZLE_2, nozzleName: 'N-1b' },
+            ],
+          }),
+        ],
+      });
+      withClient(<HandoverPanel />);
+      expect(statusOf(/Closing readings/)).toBe('not-started');
+      typeIn(/N-1 · Petrol/, '1050');
+      expect(statusOf(/Closing readings/)).toBe('in-progress');
+      expect(stepHeader(/Closing readings/).textContent).toContain('1 of 2 nozzles entered');
+      typeIn(/N-1b · Petrol/, '1020');
+      expect(statusOf(/Closing readings/)).toBe('done');
+    });
+
+    it('treats readings the server already holds as entered', () => {
+      assignment.data = makeAssignment({
+        dispenserUnits: [
+          du('1', NOZZLE, {
+            nozzles: [{ ...du('1', NOZZLE).nozzles[0], closingReading: 1000 }],
+          }),
+        ],
+      });
       withClient(<HandoverPanel />);
       expect(statusOf(/Closing readings/)).toBe('done');
     });
@@ -415,6 +459,205 @@ describe('HandoverPanel steps (mobile)', () => {
       fireEvent.click(screen.getByRole('button', { name: /Save handover/i }));
       await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
       expect(mutateAsync.mock.calls.map((c) => c[0].payload.duId)).toEqual(['1', '2']);
+    });
+  });
+
+  describe('zero card/UPI with a terminal assigned', () => {
+    const terminalDu = () =>
+      makeAssignment({
+        stationHasConfiguredTerminals: true,
+        dispenserUnits: [
+          du('1', NOZZLE, {
+            terminals: [{ terminalId: 'term-1', label: 'POS 1' }],
+          }),
+        ],
+      });
+    const saveBtn = () => screen.getByRole('button', { name: /Save handover/i });
+
+    beforeEach(() => {
+      assignment.data = terminalDu();
+    });
+
+    it('holds the first save and asks for confirmation', async () => {
+      withClient(<HandoverPanel />);
+      typeIn(/^Cash \(₹\)/, '5000');
+      fireEvent.click(saveBtn());
+      await waitFor(() =>
+        expect(screen.getByRole('alert').textContent).toContain('No card/UPI takings entered'),
+      );
+      expect(mutateAsync).not.toHaveBeenCalled();
+    });
+
+    it('proceeds once the operator saves again to confirm', async () => {
+      withClient(<HandoverPanel />);
+      typeIn(/^Cash \(₹\)/, '5000');
+      fireEvent.click(saveBtn());
+      await waitFor(() => expect(screen.getByRole('alert')).toBeDefined());
+      fireEvent.click(saveBtn());
+      await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    });
+
+    it('does not ask when something is declared for the terminal', async () => {
+      withClient(<HandoverPanel />);
+      typeIn(/^Cash \(₹\)/, '5000');
+      typeIn('Card', '1000');
+      fireEvent.click(saveBtn());
+      await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    });
+
+    it('asks again if the terminal amounts are touched after confirming', async () => {
+      withClient(<HandoverPanel />);
+      typeIn(/^Cash \(₹\)/, '5000');
+      fireEvent.click(saveBtn());
+      await waitFor(() => expect(screen.getByRole('alert')).toBeDefined());
+      // Enter an amount, then clear it again: the earlier "yes" no longer stands.
+      typeIn('Card', '1000');
+      typeIn('Card', '');
+      fireEvent.click(saveBtn());
+      await waitFor(() =>
+        expect(screen.getByRole('alert').textContent).toContain('No card/UPI takings entered'),
+      );
+      expect(mutateAsync).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('field errors', () => {
+    const invalid = (label: RegExp | string) =>
+      screen.getByLabelText(label).getAttribute('aria-invalid');
+
+    it('highlights a negative aggregate Card and UPI', () => {
+      withClient(<HandoverPanel />);
+      typeIn('Card', '-5');
+      typeIn('UPI', '-1');
+      expect(invalid('Card')).toBe('true');
+      expect(invalid('UPI')).toBe('true');
+      expect(statusOf(/Card \/ UPI/)).toBe('error');
+    });
+
+    it('highlights the negative terminal field and nothing else', () => {
+      assignment.data = makeAssignment({
+        stationHasConfiguredTerminals: true,
+        dispenserUnits: [
+          du('1', NOZZLE, {
+            terminals: [
+              { terminalId: 'term-1', label: 'POS 1' },
+              { terminalId: 'term-2', label: 'POS 2' },
+            ],
+          }),
+        ],
+      });
+      withClient(<HandoverPanel />);
+      fireEvent.click(stepHeader(/Card \/ UPI/));
+      fireEvent.change(screen.getByRole('spinbutton', { name: 'UPI · POS 2' }), {
+        target: { value: '-3' },
+      });
+      expect(
+        screen.getByRole('spinbutton', { name: 'UPI · POS 2' }).getAttribute('aria-invalid'),
+      ).toBe('true');
+      expect(
+        screen.getByRole('spinbutton', { name: 'UPI · POS 1' }).getAttribute('aria-invalid'),
+      ).toBeNull();
+      expect(
+        screen.getByRole('spinbutton', { name: 'Card · POS 2' }).getAttribute('aria-invalid'),
+      ).toBeNull();
+    });
+
+    it('highlights a cleared closing reading and a negative cash drop', () => {
+      withClient(<HandoverPanel />);
+      typeIn(/N-1 · Petrol/, '');
+      typeIn(/^Cash drops/, '-1');
+      expect(invalid(/N-1 · Petrol/)).toBe('true');
+      expect(invalid(/^Cash drops/)).toBe('true');
+    });
+  });
+
+  describe('accessibility', () => {
+    it('names each terminal field with its terminal', () => {
+      assignment.data = makeAssignment({
+        stationHasConfiguredTerminals: true,
+        dispenserUnits: [
+          du('1', NOZZLE, {
+            terminals: [
+              { terminalId: 'term-1', label: 'POS 1' },
+              { terminalId: 'term-2', label: 'POS 2' },
+            ],
+          }),
+        ],
+      });
+      withClient(<HandoverPanel />);
+      fireEvent.click(stepHeader(/Card \/ UPI/));
+      for (const label of ['POS 1', 'POS 2']) {
+        expect(screen.getByRole('spinbutton', { name: `Card · ${label}` })).toBeDefined();
+        expect(screen.getByRole('spinbutton', { name: `UPI · ${label}` })).toBeDefined();
+        expect(
+          screen.getByRole('textbox', { name: `Batch ref (optional) · ${label}` }),
+        ).toBeDefined();
+      }
+    });
+
+    it('links each step header to its body and labels the section by its title', () => {
+      withClient(<HandoverPanel />);
+      const header = stepHeader(/Cash handed over/);
+      const panel = document.getElementById(header.getAttribute('aria-controls')!);
+      expect(panel).not.toBeNull();
+      expect(panel!.hasAttribute('hidden')).toBe(true);
+      fireEvent.click(header);
+      expect(panel!.hasAttribute('hidden')).toBe(false);
+      expect(screen.getByRole('region', { name: /Cash handed over/ })).toBeDefined();
+    });
+  });
+
+  describe('credit slips', () => {
+    it('shows the litres with their unit', () => {
+      assignment.data = makeAssignment({
+        dispenserUnits: [
+          du('1', NOZZLE, {
+            creditSales: [
+              {
+                id: 'c1',
+                customerId: 'cu1',
+                customerName: 'KTC',
+                productId: 'prod-1',
+                productName: 'Petrol',
+                quantity: 20,
+                amount: 2000,
+                notes: null,
+              },
+            ],
+          }),
+        ],
+      });
+      withClient(<HandoverPanel />);
+      expect(screen.getByText(/20 L Petrol/)).toBeDefined();
+    });
+  });
+
+  describe('several DUs with merchandise', () => {
+    // Merchandise cash is per attendant, and the server attributes it to every
+    // Handover (#419). The preview mirrors that, so each Drawer's expected cash
+    // and the strip are the same figures the save will record.
+    it('keeps each Drawer and the strip consistent', () => {
+      assignment.data = makeAssignment({
+        dispenserUnits: [du('1', NOZZLE), du('2', NOZZLE_2)],
+      });
+      products.data = [
+        { id: 'oil', name: 'Engine oil', productType: 'LUBE', sellingPrice: 400, isActive: true },
+      ];
+      merchHandovers.data = [
+        { attendantId: 'att-1', items: [{ productId: 'oil', quantity: 2 }], nonCashAmount: 0 },
+      ];
+      withClient(<HandoverPanel />);
+      const expectedCash = screen.getAllByText(/Expected cash:/).map((n) => n.textContent);
+      expect(expectedCash).toHaveLength(2);
+      for (const text of expectedCash) expect(text).toContain('cash sales ₹800.00');
+
+      const strip = within(screen.getByRole('group', { name: 'Handover summary' }));
+      const cell = (label: string) => strip.getByText(label).nextElementSibling!.textContent;
+      // Σ of the two Drawers' expected totals, so the variance below adds up.
+      expect(cell('Expected')).toBe('₹1,600.00');
+      typeIn(/DU 1 · Cash \(₹\)/, '800');
+      typeIn(/DU 2 · Cash \(₹\)/, '800');
+      expect(cell('Variance')).toBe('+₹0.00');
     });
   });
 });

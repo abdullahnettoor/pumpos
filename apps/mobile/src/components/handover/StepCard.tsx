@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import type { StepStatus } from './steps.js';
 import { CheckIcon, ChevronIcon } from './icons.js';
 
@@ -44,37 +44,45 @@ export const StepCard: React.FC<{
   children: React.ReactNode;
 }> = ({ index, title, status, summary, defaultOpen = false, children }) => {
   const [open, setOpen] = useState(defaultOpen);
+  const id = useId();
+  const titleId = `${id}-title`;
+  const panelId = `${id}-panel`;
   return (
     <section
       data-step-status={status}
+      aria-labelledby={titleId}
       className="overflow-hidden rounded-2xl border border-line bg-card"
     >
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2.5 p-3 text-left"
-      >
-        <Badge index={index} status={status} />
-        <span className="min-w-0 flex-1">
-          <span className="block text-[13.5px] font-bold text-text-high">
-            {title}
-            <span className="sr-only"> — {STATUS_LABEL[status]}</span>
+      <h3 className="m-0">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-controls={panelId}
+          className="flex w-full items-center gap-2.5 p-3 text-left"
+        >
+          <Badge index={index} status={status} />
+          <span className="min-w-0 flex-1">
+            <span id={titleId} className="block text-[13.5px] font-bold text-text-high">
+              {title}
+              <span className="sr-only"> — {STATUS_LABEL[status]}</span>
+            </span>
+            <span
+              className={`block truncate text-[11px] ${status === 'error' ? 'text-bad-fg' : 'text-text-muted'}`}
+            >
+              {summary}
+            </span>
           </span>
           <span
-            className={`block truncate text-[11px] ${status === 'error' ? 'text-bad-fg' : 'text-text-muted'}`}
+            className="flex-shrink-0 text-text-faint transition-transform duration-150"
+            style={{ transform: open ? 'rotate(90deg)' : undefined }}
           >
-            {summary}
+            <ChevronIcon />
           </span>
-        </span>
-        <span
-          className="flex-shrink-0 text-text-faint transition-transform duration-150"
-          style={{ transform: open ? 'rotate(90deg)' : undefined }}
-        >
-          <ChevronIcon />
-        </span>
-      </button>
+        </button>
+      </h3>
       <div
+        id={panelId}
         hidden={!open}
         className={`${open ? 'flex' : 'hidden'} flex-col gap-2.5 border-t border-line px-3 pb-3 pt-3`}
       >

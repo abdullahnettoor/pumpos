@@ -1,39 +1,78 @@
 import { describe, expect, it } from 'vitest';
-import { seedForm, type DuFormState } from './model.js';
+import { seedForm, type AssignedDu, type CreditLine, type DuFormState } from './model.js';
 import {
+  cashErrors,
   cashStep,
   collectHandoverErrors,
   creditStep,
-  expectedCashFor,
+  fieldErrorMap,
+  fieldId,
+  declaredNonCash,
+  duFuelSales,
+  merchTotal,
+  nozzleNetVolume,
+  readingsErrors,
+  reconcileDu,
+  terminalErrors,
   productsStep,
   readingsStep,
   terminalsStep,
 } from './steps.js';
 
-const du = (over: Record<string, unknown> = {}): any => ({
+const du = (over: Record<string, unknown> = {}): AssignedDu => ({
   duId: 'du-1',
   duName: 'DU 1',
   openingFloat: 2000,
   nozzles: [
-    { nozzleId: 'n1', nozzleName: 'N1', unit: 'L', unitPrice: 100, openingReading: 1000 },
-    { nozzleId: 'n2', nozzleName: 'N2', unit: 'L', unitPrice: 90, openingReading: 500 },
+    {
+      nozzleId: 'n1',
+      nozzleName: 'N1',
+      productId: 'p1',
+      productName: 'Petrol',
+      unit: 'L',
+      unitPrice: 100,
+      openingReading: 1000,
+    },
+    {
+      nozzleId: 'n2',
+      nozzleName: 'N2',
+      productId: 'p1',
+      productName: 'Petrol',
+      unit: 'L',
+      unitPrice: 90,
+      openingReading: 500,
+    },
   ],
   terminals: [],
   ...over,
 });
 
-const form = (d: any, over: Partial<DuFormState> = {}): DuFormState => ({
+const form = (d: AssignedDu, over: Partial<DuFormState> = {}): DuFormState => ({
   ...seedForm(d),
   ...over,
 });
 
-const line = (amount: number): any => ({ amount });
+const line = (amount: number): CreditLine => ({
+  customerId: null,
+  customerName: null,
+  vehicleId: null,
+  productId: null,
+  productName: null,
+  quantity: null,
+  unitPrice: null,
+  amount,
+  notes: null,
+});
 const price = (id: string) => ({ oil: 400, coolant: 250 })[id as 'oil'] ?? 0;
 
 describe('readingsStep', () => {
   it('is done when every nozzle has a valid closing reading', () => {
     const d = du();
-    const f = form(d, { readings: { n1: '1050', n2: '520' }, testing: { n1: '5', n2: '' } });
+    const f = form(d, {
+      readings: { n1: '1050', n2: '520' },
+      confirmedReadings: { n1: true, n2: true },
+      testing: { n1: '5', n2: '' },
+    });
     expect(readingsStep(d, f)).toEqual({ status: 'done', summary: 'N1, N2 · 65 L net' });
   });
 
@@ -52,6 +91,42 @@ describe('readingsStep', () => {
   it('is an error when testing exceeds the litres sold', () => {
     const d = du();
     const f = form(d, { readings: { n1: '1010', n2: '500' }, testing: { n1: '50', n2: '' } });
+    expect(readingsStep(d, f).status).toBe('error');
+  });
+});
+
+describe('readingsStep progress', () => {
+  it('is not started while no closing reading has been entered or confirmed', () => {
+    const d = du();
+    // The seed fills closing = opening, which is valid but not yet an answer.
+    expect(readingsStep(d, form(d)).status).toBe('not-started');
+  });
+
+  it('is in progress once some nozzles are entered', () => {
+    const d = du();
+    const f = form(d, { confirmedReadings: { n1: true, n2: false } });
+    expect(readingsStep(d, f)).toEqual({
+      status: 'in-progress',
+      summary: '1 of 2 nozzles entered',
+    });
+  });
+
+  it('counts a closing equal to its opening as done once confirmed', () => {
+    const d = du();
+    const f = form(d, { confirmedReadings: { n1: true, n2: true } });
+    expect(readingsStep(d, f)).toEqual({ status: 'done', summary: 'N1, N2 · no litres yet' });
+  });
+
+  it('is done when the server already holds the closing readings', () => {
+    const d = du({
+      nozzles: du().nozzles.map((nz) => ({ ...nz, closingReading: nz.openingReading })),
+    });
+    expect(readingsStep(d, form(d)).status).toBe('done');
+  });
+
+  it('puts an error ahead of progress', () => {
+    const d = du();
+    const f = form(d, { readings: { n1: '900', n2: '500' }, confirmedReadings: { n1: true } });
     expect(readingsStep(d, f).status).toBe('error');
   });
 });
@@ -216,7 +291,113 @@ describe('collectHandoverErrors', () => {
   });
 });
 
-describe('expectedCashFor', () => {
+describe('field errors', () => {
+  const messages = (d: AssignedDu, f: DuFormState, aggregate = true) =>
+    fieldErrorMap(
+      [...readingsErrors(d, f), ...terminalErrors(d, f, aggregate), ...cashErrors(d, f)],
+      d.duId,
+    );
+
+  it('names the input behind each reading and testing error', () => {
+    const d = du();
+    const f = form(d, {
+      readings: { n1: '900', n2: '' },
+      testing: { n1: '', n2: '' },
+    });
+    expect(messages(d, f)).toEqual({
+      [fieldId.reading('n1')]: 'Cannot be below opening (1000)',
+      [fieldId.reading('n2')]: 'Enter the closing reading',
+    });
+  });
+
+  it('flags testing that exceeds the litres sold, with the unit', () => {
+    const d = du();
+    const f = form(d, { readings: { n1: '1010', n2: '500' }, testing: { n1: '50', n2: '-1' } });
+    expect(messages(d, f)).toEqual({
+      [fieldId.testing('n1')]: 'Cannot exceed 10.00 L',
+      [fieldId.testing('n2')]: 'Cannot be negative',
+    });
+  });
+
+  it('highlights a negative aggregate Card or UPI', () => {
+    const d = du();
+    const f = form(d, { aggregateCard: '-1', aggregateUpi: '-2' });
+    expect(messages(d, f)).toEqual({
+      [fieldId.aggregateCard]: 'No negatives',
+      [fieldId.aggregateUpi]: 'No negatives',
+    });
+  });
+
+  it('highlights the exact terminal field that is negative', () => {
+    const d = du({
+      terminals: [
+        { terminalId: 't1', label: 'POS 1' },
+        { terminalId: 't2', label: 'POS 2' },
+      ],
+    });
+    const f = form(d, {
+      terminals: {
+        t1: { card: '', upi: '-5', batch: '' },
+        t2: { card: '-3', upi: '', batch: '' },
+      },
+    });
+    expect(messages(d, f, false)).toEqual({
+      [fieldId.terminalUpi('t1')]: 'No negatives',
+      [fieldId.terminalCard('t2')]: 'No negatives',
+    });
+  });
+
+  it('highlights negative cash and drops', () => {
+    const d = du();
+    expect(messages(d, form(d, { cash: '-1', drops: '-2' }))).toEqual({
+      [fieldId.cash]: 'No negatives',
+      [fieldId.drops]: 'No negatives',
+    });
+  });
+
+  it('only carries errors for the DU asked about', () => {
+    const d = du();
+    const errs = cashErrors(d, form(d, { cash: '-1' }));
+    expect(fieldErrorMap(errs, 'other-du')).toEqual({});
+  });
+
+  it('agrees with the step status: a step errors exactly when it has a field error', () => {
+    const d = du();
+    const bad = form(d, { aggregateCard: '-1' });
+    expect(terminalsStep(d, bad, true).status).toBe('error');
+    expect(Object.keys(messages(d, bad))).toHaveLength(1);
+    const ok = form(d);
+    expect(terminalsStep(d, ok, true).status).not.toBe('error');
+    expect(messages(d, ok)).toEqual({});
+  });
+});
+
+describe('shared helpers', () => {
+  it('nets testing off the metered litres and prices the DU', () => {
+    const d = du();
+    const f = form(d, { readings: { n1: '1050', n2: '520' }, testing: { n1: '10', n2: '' } });
+    expect(nozzleNetVolume(d.nozzles[0], f)).toBe(40);
+    expect(duFuelSales(d, f)).toBe(40 * 100 + 20 * 90);
+  });
+
+  it('sums card and UPI per terminal, or from the aggregate', () => {
+    const t = du({ terminals: [{ terminalId: 't1', label: 'POS 1' }] });
+    const f = form(t, { terminals: { t1: { card: '100', upi: '50', batch: '' } } });
+    expect(declaredNonCash(t, f, false)).toEqual({ card: 100, upi: 50 });
+    const d = du();
+    expect(declaredNonCash(d, form(d, { aggregateCard: '7', aggregateUpi: '3' }), true)).toEqual({
+      card: 7,
+      upi: 3,
+    });
+    expect(declaredNonCash(d, form(d, { aggregateCard: '7' }), false)).toEqual({ card: 0, upi: 0 });
+  });
+
+  it('values merchandise lines at MRP', () => {
+    expect(merchTotal([{ productId: 'oil', quantity: '2' }], price)).toBe(800);
+  });
+});
+
+describe('reconcileDu', () => {
   it('is float + cash sales − drops, cash sales net of card, UPI and credit', () => {
     const d = du({ nozzles: [du().nozzles[0]] });
     // 50 L × ₹100 = ₹5,000 metered.
@@ -225,8 +406,9 @@ describe('expectedCashFor', () => {
       aggregateCard: '1000',
       aggregateUpi: '500',
       drops: '500',
+      cash: '4400',
     });
-    const r = expectedCashFor({
+    const r = reconcileDu({
       du: d,
       form: f,
       credit: [line(700)],
@@ -234,6 +416,14 @@ describe('expectedCashFor', () => {
       merchCash: 400,
       aggregateNonCashAllowed: true,
     });
-    expect(r).toEqual({ float: 2000, cashSales: 2900, drops: 500, expected: 4400 });
+    expect(r).toMatchObject({
+      openingFloat: 2000,
+      cashSales: 2900,
+      cashDrops: 500,
+      expectedCash: 4400,
+      expectedTotal: 5400,
+      declaredTotal: 6900,
+      varianceAmount: 0,
+    });
   });
 });

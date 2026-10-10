@@ -194,7 +194,12 @@ export const CustomerSaleForm: React.FC<{
                 <p className="num truncate text-[11px] text-text-muted">
                   {[
                     l.vehicleLabel,
-                    [l.quantity ? `${l.quantity}` : null, l.productName ?? 'Fuel']
+                    [
+                      l.quantity
+                        ? `${l.quantity} ${duProducts.find((p) => p.id === l.productId)?.unit ?? 'L'}`
+                        : null,
+                      l.productName ?? 'Fuel',
+                    ]
                       .filter(Boolean)
                       .join(' '),
                     l.notes,
