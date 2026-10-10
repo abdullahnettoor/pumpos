@@ -691,33 +691,44 @@ export const stockMovements = pgTable('stock_movements', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
-export const stockVariances = pgTable('stock_variances', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  organizationId: uuid('organization_id')
-    .references(() => organizations.id)
-    .notNull(),
-  stationId: uuid('station_id')
-    .references(() => stations.id)
-    .notNull(),
-  // Nullable: a dip/physical count is a business-day reconciliation, not a
-  // shift-bound event. shift_id is set only for shift-scoped variance capture.
-  shiftId: uuid('shift_id').references(() => shifts.id),
-  businessDayId: uuid('business_day_id')
-    .references(() => businessDays.id)
-    .notNull(),
-  productId: uuid('product_id')
-    .references(() => products.id)
-    .notNull(),
-  tankId: uuid('tank_id').references(() => tanks.id),
-  expectedQuantity: numeric('expected_quantity', { precision: 12, scale: 3 }).notNull(),
-  actualQuantity: numeric('actual_quantity', { precision: 12, scale: 3 }).notNull(),
-  varianceQuantity: numeric('variance_quantity', { precision: 12, scale: 3 }).notNull(),
-  reason: varchar('reason', { length: 255 }),
-  approvedBy: uuid('approved_by').references(() => users.id),
-  // e.g. { openShiftAtRecording: true } — mid-shift dip, no reconciliation.
-  metadata: jsonb('metadata').default({}).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const stockVariances = pgTable(
+  'stock_variances',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    stationId: uuid('station_id')
+      .references(() => stations.id)
+      .notNull(),
+    // Nullable: a dip/physical count is a business-day reconciliation, not a
+    // shift-bound event. shift_id is set only for shift-scoped variance capture.
+    shiftId: uuid('shift_id').references(() => shifts.id),
+    businessDayId: uuid('business_day_id')
+      .references(() => businessDays.id)
+      .notNull(),
+    productId: uuid('product_id')
+      .references(() => products.id)
+      .notNull(),
+    tankId: uuid('tank_id').references(() => tanks.id),
+    expectedQuantity: numeric('expected_quantity', { precision: 12, scale: 3 }).notNull(),
+    actualQuantity: numeric('actual_quantity', { precision: 12, scale: 3 }).notNull(),
+    varianceQuantity: numeric('variance_quantity', { precision: 12, scale: 3 }).notNull(),
+    reason: varchar('reason', { length: 255 }),
+    approvedBy: uuid('approved_by').references(() => users.id),
+    // e.g. { openShiftAtRecording: true } — mid-shift dip, no reconciliation.
+    metadata: jsonb('metadata').default({}).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    // A Station's stock variances by Business Day (mobile Insights stock loss, #402).
+    orgStationDayIdx: index('stock_variances_org_station_day_idx').on(
+      t.organizationId,
+      t.stationId,
+      t.businessDayId,
+    ),
+  }),
+);
 
 // ----------------------------------------------------
 // FINANCE DOMAIN
