@@ -200,6 +200,24 @@ describe('dock', () => {
     expect(within(dock()!).queryByText('Home')).toBeNull();
   });
 
+  it.each([
+    ['Owner', 5],
+    ['Accountant', 2],
+  ] as const)(
+    '%s: the dock hugs its %i tabs, centred, instead of spanning the screen',
+    (role, n) => {
+      render(<Harness role={role} />);
+      const nav = dock()!;
+      expect(nav.className).toContain('mx-auto');
+      expect(nav.style.maxWidth).toBe(`calc(${n} * 62px + 16px)`);
+    },
+  );
+
+  it('lays the app out as a phone-width column on wider windows', () => {
+    const { container } = render(<Harness />);
+    expect(container.querySelector('.app-column')).not.toBeNull();
+  });
+
   it('marks the active tab and switches the shown screen', () => {
     render(<Harness />);
     expect(screen.getByRole('button', { name: 'Home' }).getAttribute('aria-current')).toBe('page');

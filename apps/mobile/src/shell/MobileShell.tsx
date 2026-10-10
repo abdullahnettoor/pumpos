@@ -72,7 +72,7 @@ export const MobileShell: React.FC<MobileShellProps> = ({
 
   return (
     <ShellContext.Provider value={ctx}>
-      <div className="mobile-safe-top flex h-[100dvh] flex-col bg-background text-text-default">
+      <div className="app-column mobile-safe-top flex h-[100dvh] flex-col bg-background text-text-default">
         {/* overflow-hidden: the panes are absolutely positioned in here, and a pane
             entering (Pane's playEnter) is moved down 8px for 180ms. Unclipped, that
             makes the document 8px taller than the screen, so a page scrollbar flashes
