@@ -19,7 +19,8 @@ interface Props<T extends string> {
 /**
  * Full-width pill toggle (Last 7 / 30 days, Customers / Suppliers): the design
  * system's `SegmentedControl` (a radiogroup), stretched to the row with a brand-filled
- * selection and a thumb-sized height.
+ * selection and a thumb-sized height. `w-auto` (not the design system's `w-full`) so the
+ * default `mx-3` insets it instead of pushing it 12px past the right edge.
  */
 export function SegmentedControl<T extends string>({
   options,
@@ -27,7 +28,7 @@ export function SegmentedControl<T extends string>({
   onChange,
   label,
   orientation = 'horizontal',
-  className = 'mx-3',
+  className = 'mx-3 w-auto',
 }: Props<T>) {
   return (
     <DsSegmentedControl

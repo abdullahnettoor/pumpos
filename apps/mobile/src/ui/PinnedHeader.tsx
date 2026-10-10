@@ -60,6 +60,6 @@ export const PinnedToolbar: React.FC<{ children: React.ReactNode }> = ({ childre
   const chrome = useContext(PaneChromeContext);
   if (!chrome) return <>{children}</>;
   return chrome.toolbarSlot
-    ? createPortal(<div className="pb-2.5">{children}</div>, chrome.toolbarSlot)
+    ? createPortal(<div className="flex flex-col pb-2.5">{children}</div>, chrome.toolbarSlot)
     : null;
 };

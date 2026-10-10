@@ -224,6 +224,25 @@ describe('AttendantScreen', () => {
     expect(within(header).getByRole('heading', { level: 1, name: 'Highway Fuels' })).toBeDefined();
   });
 
+  it('keeps the header pinned above the form and draws its edge only while the form is scrolled', () => {
+    assignment.data = makeAssignment();
+    renderScreen();
+    const header = screen.getByRole('banner');
+    const scroller = document.querySelector('main') as HTMLElement;
+    // A flex sibling above the scroller, never inside it: it cannot scroll away.
+    expect(scroller.contains(header)).toBe(false);
+    expect(header.className).toContain('bg-card');
+    expect(header.className).toContain('border-transparent');
+    scroller.scrollTop = 30;
+    fireEvent.scroll(scroller);
+    expect(header.className).toContain('border-line');
+    expect(header.className).toContain('shadow-edge');
+    scroller.scrollTop = 0;
+    fireEvent.scroll(scroller);
+    expect(header.className).toContain('border-transparent');
+    expect(header.className).not.toContain('shadow-edge');
+  });
+
   describe('no shift assigned', () => {
     it('explains, and Refresh re-reads the assignment', () => {
       renderScreen();

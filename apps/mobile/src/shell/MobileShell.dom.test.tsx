@@ -390,7 +390,9 @@ describe('pinned headers', () => {
           accepted={false}
         />,
       );
-      expect(container.firstElementChild!.className).toContain('top-[var(--pinned-header-h,0px)]');
+      expect(container.firstElementChild!.className).toContain(
+        'top-[calc(var(--pinned-header-h,-8px)+8px)]',
+      );
       // Scrolling to a spot (scrollIntoView) leaves room for the header too.
       expect(pane.className).toContain('scroll-pt-[var(--pinned-header-h,0px)]');
     } finally {

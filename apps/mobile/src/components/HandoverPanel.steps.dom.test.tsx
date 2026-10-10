@@ -353,7 +353,7 @@ describe('HandoverPanel steps (mobile)', () => {
     it('is pinned to the top while the steps scroll', () => {
       withClient(<HandoverPanel />);
       expect(strip().className).toContain('sticky');
-      expect(strip().className).toContain('top-[var(--pinned-header-h,0px)]');
+      expect(strip().className).toContain('top-[calc(var(--pinned-header-h,-8px)+8px)]');
     });
 
     it("shows the server's accepted figures after a save", async () => {
