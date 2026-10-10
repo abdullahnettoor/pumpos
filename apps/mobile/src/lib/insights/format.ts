@@ -1,5 +1,5 @@
 /**
- * Display formatting for the Insights tab. Pure and string-only: every figure
+ * Display formatting for the Insights tab (rupees come from `lib/format`). Pure and string-only: every figure
  * arrives computed from the API, so nothing here derives a business number.
  * Dates are plain `YYYY-MM-DD` read by hand (a fixed month table, no `Date`
  * locale formatting: Node's ICU spells September "Sept", the app's ICU does not).
@@ -13,23 +13,6 @@ const parts = (iso: string) => {
 };
 
 const trim = (n: number, dec: number) => String(Number(n.toFixed(dec)));
-
-/** ₹32.27L, ₹48.2k, ₹850; "Cr" from a crore. Compact amounts for headline figures. */
-export function compactRupees(amount: number): string {
-  const sign = amount < 0 ? '-' : '';
-  const n = Math.abs(amount);
-  if (n >= 1e7) return `${sign}₹${(n / 1e7).toFixed(2)}Cr`;
-  if (n >= 1e5) return `${sign}₹${(n / 1e5).toFixed(2)}L`;
-  if (n >= 1e3) return `${sign}₹${trim(n / 1e3, 1)}k`;
-  return `${sign}₹${Math.round(n)}`;
-}
-
-/** +₹120 / −₹210 / ₹0: a variance, signed, with a true minus. */
-export function signedRupees(amount: number): string {
-  const n = Math.round(Math.abs(amount));
-  if (n === 0) return '₹0';
-  return `${amount < 0 ? '−' : '+'}₹${n.toLocaleString('en-IN')}`;
-}
 
 /** 2,180 L, with Indian digit grouping. */
 export function litres(n: number): string {

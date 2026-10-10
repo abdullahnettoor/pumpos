@@ -884,12 +884,21 @@ export function useAttendantHandoverReport(
   });
 }
 
+// Between operational (15s) and semi (10m): see useInsightsSales.
+const INSIGHTS_SALES_CACHE = {
+  staleTime: 60_000,
+  gcTime: 60 * 60_000,
+  refetchOnWindowFocus: true,
+} as const;
+
 /**
  * Insights sales block over the last `days` closed Business Days. Everything in
- * it is sealed (closed-day snapshots), so it is semi tier, not operational: a
- * range never changes until a new day closes, which `useInvalidateOperational`
- * covers within the session. The server resolves the range end (the last closed
- * day), so the key carries the range length; not persisted (not in PERSIST_PREFIXES).
+ * it is sealed (closed-day snapshots), but the range END is the newest closed
+ * day, which the server resolves, so it moves whenever any device closes a day.
+ * Same-session closes invalidate it (`useInvalidateOperational`, which the
+ * desktop Business Day tab calls too); a close made on ANOTHER device is picked
+ * up by a short stale time plus refetch on focus. One aggregate statement, so a
+ * revalidation is cheap. Not persisted (not in PERSIST_PREFIXES).
  */
 export function useInsightsSales(
   stationId: string | null | undefined,
@@ -900,7 +909,7 @@ export function useInsightsSales(
     queryKey: queryKeys.insightsSales(stationId ?? '', days),
     queryFn: () => shiftService.getInsightsSales(stationId!, days),
     enabled: !!stationId,
-    ...TIER.semi,
+    ...INSIGHTS_SALES_CACHE,
     ...options,
   });
 }

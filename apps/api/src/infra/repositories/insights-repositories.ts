@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { DbClient } from '@pump/db';
+import { insightsRangeCtes } from './insights-range.js';
 import type {
   InsightsSalesQuery,
   InsightsSalesReader,
@@ -37,26 +38,7 @@ export class DrizzleInsightsSalesReader implements InsightsSalesReader {
     const days = q.days;
 
     const rows = await this.db.execute(sql`
-      WITH last_closed AS (
-        -- The newest CLOSED Business Day that has its sealed DSSR snapshot.
-        SELECT bd.business_date AS d
-        FROM business_days bd
-        WHERE bd.organization_id = ${org} AND bd.station_id = ${st} AND bd.status = 'CLOSED'
-          AND EXISTS (
-            SELECT 1 FROM dssr_snapshots ds
-            WHERE ds.organization_id = bd.organization_id AND ds.station_id = bd.station_id
-              AND ds.business_date = bd.business_date)
-        ORDER BY bd.business_date DESC
-        LIMIT 1
-      ),
-      bounds AS (
-        SELECT
-          d AS "to",
-          to_char(d::date - (${days}::int - 1), 'YYYY-MM-DD') AS "from",
-          to_char(d::date - ${days}::int, 'YYYY-MM-DD') AS "previousTo",
-          to_char(d::date - (2 * ${days}::int - 1), 'YYYY-MM-DD') AS "previousFrom"
-        FROM last_closed
-      ),
+      WITH ${insightsRangeCtes(org, st, days)},
       sealed_days AS (
         SELECT
           ds.business_date AS date,
@@ -79,22 +61,24 @@ export class DrizzleInsightsSalesReader implements InsightsSalesReader {
       fuel_mix AS (
         SELECT
           COALESCE(NULLIF(f."productCode", ''), f."productName", 'Unknown') AS "productCode",
-          SUM(COALESCE(f."netVolume", COALESCE(f."grossVolume", 0) - COALESCE(f."testingVolume", 0))) AS litres
+          COALESCE(NULLIF(f.unit, ''), 'L') AS unit,
+          SUM(COALESCE(f."netVolume", COALESCE(f."grossVolume", 0) - COALESCE(f."testingVolume", 0))) AS quantity
         FROM sealed_days sd,
           jsonb_to_recordset(sd.fuel_by_product) AS f(
             "productCode" text, "productName" text, unit text,
             "netVolume" numeric, "grossVolume" numeric, "testingVolume" numeric)
-        WHERE sd.current_period AND COALESCE(f.unit, 'L') = 'L'
-        GROUP BY 1
+        WHERE sd.current_period
+        GROUP BY 1, 2
       ),
       top_other AS (
-        SELECT p.name, SUM(p.quantity) AS quantity
+        -- Best seller by REVENUE: units are not comparable across products (1 L vs a 5 L can).
+        SELECT p.name, SUM(p.quantity) AS quantity, SUM(p.revenue) AS revenue
         FROM sealed_days sd,
           jsonb_to_recordset(sd.pnl_by_product) AS p(
-            "productId" text, name text, kind text, quantity numeric)
+            "productId" text, name text, kind text, quantity numeric, revenue numeric)
         WHERE sd.current_period AND p.kind = 'merchandise'
         GROUP BY p."productId", p.name
-        ORDER BY SUM(p.quantity) DESC, p.name
+        ORDER BY SUM(p.revenue) DESC, p.name
         LIMIT 1
       ),
       templates AS (
@@ -128,7 +112,7 @@ export class DrizzleInsightsSalesReader implements InsightsSalesReader {
           'closedDays', COUNT(*))
           FROM sealed_days WHERE NOT current_period),
           '{"sales":0,"otherSales":0,"closedDays":0}'::json) AS previous,
-        COALESCE((SELECT json_agg(fuel_mix) FROM fuel_mix), '[]'::json) AS fuel_litres,
+        COALESCE((SELECT json_agg(fuel_mix) FROM fuel_mix), '[]'::json) AS fuel_volumes,
         COALESCE((SELECT SUM(other_sales) FROM sealed_days WHERE current_period), 0) AS other_total,
         (SELECT row_to_json(top_other) FROM top_other) AS top_other,
         COALESCE((SELECT json_agg(row_to_json(templates) ORDER BY start_time NULLS LAST, name)
@@ -151,14 +135,19 @@ export class DrizzleInsightsSalesReader implements InsightsSalesReader {
         closedDays: num(row.previous?.closedDays),
         otherSales: num(row.previous?.otherSales),
       },
-      fuelLitres: ((row.fuel_litres ?? []) as any[]).map((p) => ({
+      fuelVolumes: ((row.fuel_volumes ?? []) as any[]).map((p) => ({
         productCode: String(p.productCode),
-        litres: num(p.litres),
+        unit: String(p.unit),
+        quantity: num(p.quantity),
       })),
       other: {
         total: num(row.other_total),
         top: row.top_other
-          ? { name: String(row.top_other.name), quantity: num(row.top_other.quantity) }
+          ? {
+              name: String(row.top_other.name),
+              quantity: num(row.top_other.quantity),
+              revenue: num(row.top_other.revenue),
+            }
           : null,
       },
       templates: ((row.templates ?? []) as any[]).map((t): InsightsTemplateRow => ({

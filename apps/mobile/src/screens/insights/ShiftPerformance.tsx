@@ -1,6 +1,9 @@
 import React from 'react';
 import type { InsightsSales } from '@pump/shared';
-import { compactRupees, litres, signedRupees } from '../../lib/insights/format.js';
+import { compactRupees, signedRupees } from '../../lib/format.js';
+import { litres } from '../../lib/insights/format.js';
+import { varianceTone } from '../../lib/variance.js';
+import { TONE_TEXT } from '../../ui/index.js';
 
 export const ShiftPerformance: React.FC<{ data: InsightsSales }> = ({ data }) => {
   const t = data.shiftTemplates;
@@ -19,16 +22,8 @@ export const ShiftPerformance: React.FC<{ data: InsightsSales }> = ({ data }) =>
           </p>
           <p className="num text-[11px] text-text-muted">
             {litres(s.avgVolume)} · var{' '}
-            <span
-              className={
-                s.avgCashVariance < -0.5
-                  ? 'text-bad-fg'
-                  : s.avgCashVariance > 0.5
-                    ? 'text-warn-fg'
-                    : 'text-good'
-              }
-            >
-              {signedRupees(s.avgCashVariance)}
+            <span className={TONE_TEXT[varianceTone(s.avgCashVariance)]}>
+              {signedRupees(s.avgCashVariance, { plus: true })}
             </span>
           </p>
         </div>

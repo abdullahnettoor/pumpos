@@ -18,6 +18,8 @@ function declarations(selector: RegExp): Record<string, string> {
 const light = declarations(/:root,\s*:root\.light/);
 const dark = declarations(/:root\.dark/);
 
+const CHART = ['chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5', 'chart-6'];
+
 /** The semantic token contract later tickets build on (names are fixed by #389). */
 const REQUIRED = [
   'background',
@@ -49,6 +51,7 @@ const REQUIRED = [
   'hero',
   'dock',
   'track',
+  ...CHART,
 ].map((n) => `--${n}`);
 
 function luminance(hex: string): number {
@@ -115,6 +118,17 @@ describe.each([
         expect(contrast(t[fg], t[bg]), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
       }
     }
+  });
+
+  it('keeps every chart series visible (3:1) on cards and apart from the status hues', () => {
+    const series = CHART.map((n) => `--${n}`);
+    for (const token of series) {
+      expect(contrast(t[token], t['--card']), `${token} on --card`).toBeGreaterThanOrEqual(3);
+      for (const status of ['--accent', '--good', '--bad', '--warn', '--info']) {
+        expect(t[token].toLowerCase(), `${token} vs ${status}`).not.toBe(t[status].toLowerCase());
+      }
+    }
+    expect(new Set(series.map((token) => t[token].toLowerCase())).size).toBe(series.length);
   });
 
   it('keeps text on the accent fill legible', () => {

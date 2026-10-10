@@ -62,9 +62,9 @@ const ROW = {
     { date: '2026-03-05', sales: 3000, volume: 300 },
   ],
   previous: { sales: 2000, otherSales: 100, closedDays: 2 },
-  fuel_litres: [{ productCode: 'MS', litres: 400 }],
+  fuel_volumes: [{ productCode: 'MS', unit: 'L', quantity: 400 }],
   other_total: 250,
-  top_other: { name: '20W-40 1L', quantity: 31 },
+  top_other: { name: '20W-40 1L', quantity: 31, revenue: 9300 },
   templates: [
     {
       templateId: 't-1',
@@ -120,7 +120,9 @@ describe('GET /reports/insights/sales', () => {
     expect(body.data.previousRange).toEqual({ from: '2026-02-25', to: '2026-03-03' });
     expect(body.data.total).toBe(4000);
     expect(body.data.previousTotal).toBe(2000);
-    expect(body.data.changePct).toBe(100);
+    // 2 closed days now, fewer than the comparable minimum: the figures are sent, the badge is not.
+    expect(body.data.changePct).toBeNull();
+    expect(body.data.previousAverage).toBeCloseTo(2000 / (ROW.previous as any).closedDays);
     expect(body.data.average).toBe(2000);
     expect(body.data.best).toEqual({ date: '2026-03-05', sales: 3000 });
     expect(body.data.trend).toHaveLength(7);
@@ -128,8 +130,8 @@ describe('GET /reports/insights/sales', () => {
     expect(body.data.otherProducts).toEqual({
       total: 250,
       previousTotal: 100,
-      changePct: 150,
-      top: { name: '20W-40 1L', quantity: 31 },
+      changePct: null,
+      top: { name: '20W-40 1L', quantity: 31, revenue: 9300 },
     });
     expect(body.data.shiftTemplates).toEqual([
       {
@@ -148,7 +150,7 @@ describe('GET /reports/insights/sales', () => {
       bounds: null,
       days: [],
       previous: { sales: 0, otherSales: 0, closedDays: 0 },
-      fuel_litres: [],
+      fuel_volumes: [],
       other_total: 0,
       top_other: null,
       templates: [],

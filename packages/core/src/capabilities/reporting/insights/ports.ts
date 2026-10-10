@@ -25,9 +25,11 @@ export interface InsightsClosedDayRow {
   volume: number;
 }
 
-export interface InsightsFuelLitresRow {
+/** Net fuel volume of one grade in one measurement unit ('L', 'kg', ...). */
+export interface InsightsFuelVolumeRow {
   productCode: string;
-  litres: number;
+  unit: string;
+  quantity: number;
 }
 
 /** A Shift Template's Shifts over the current period, summed (core averages). */
@@ -50,11 +52,12 @@ export interface InsightsSalesSource {
   /** Closed days of the current period, oldest first. */
   days: InsightsClosedDayRow[];
   previous: { sales: number; closedDays: number; otherSales: number };
-  /** Net litres per fuel grade over the current period (litre-metered grades only). */
-  fuelLitres: InsightsFuelLitresRow[];
+  /** Net volume per fuel grade and unit over the current period; core separates litres from the rest. */
+  fuelVolumes: InsightsFuelVolumeRow[];
   other: {
     total: number;
-    top: { name: string; quantity: number } | null;
+    /** Best seller by revenue (not by quantity: units are not comparable across products). */
+    top: { name: string; quantity: number; revenue: number } | null;
   };
   templates: InsightsTemplateRow[];
 }

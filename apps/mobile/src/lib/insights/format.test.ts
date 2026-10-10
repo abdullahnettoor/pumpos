@@ -1,34 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  compactRupees,
-  litres,
-  percent,
-  rangeLabel,
-  shortDate,
-  signedRupees,
-  weekdayDate,
-  weekdayInitial,
-} from './format.js';
-
-describe('compactRupees', () => {
-  it('abbreviates by Indian magnitude', () => {
-    expect(compactRupees(3227000)).toBe('₹32.27L');
-    expect(compactRupees(48200)).toBe('₹48.2k');
-    expect(compactRupees(48000)).toBe('₹48k');
-    expect(compactRupees(850)).toBe('₹850');
-    expect(compactRupees(25000000)).toBe('₹2.50Cr');
-    expect(compactRupees(0)).toBe('₹0');
-  });
-});
-
-describe('signedRupees', () => {
-  it('signs a variance with a true minus and groups digits', () => {
-    expect(signedRupees(-210)).toBe('−₹210');
-    expect(signedRupees(1590)).toBe('+₹1,590');
-    expect(signedRupees(0)).toBe('₹0');
-    expect(signedRupees(0.2)).toBe('₹0');
-  });
-});
+import { litres, percent, rangeLabel, shortDate, weekdayDate, weekdayInitial } from './format.js';
 
 describe('litres / percent', () => {
   it('formats', () => {

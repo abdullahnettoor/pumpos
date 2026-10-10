@@ -1,21 +1,23 @@
 import { z } from 'zod';
-import { INSIGHTS_RANGE_DAYS, type InsightsSales } from '@pump/shared';
-import { err, forbiddenError, ok, validationError } from '../../../kernel/index.js';
+import type { InsightsRangeDays, InsightsSales } from '@pump/shared';
+import { err, ok, validationError } from '../../../kernel/index.js';
 import type { ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import { composeInsightsSales } from './compose.js';
 import type { InsightsSalesReader } from './ports.js';
 
 export interface GetInsightsSalesCommand {
   stationId: string;
-  /** Range length in Business Days: 7, 30 or 90. */
+  /** Range length in Business Days: 7, 30 or 90 (anything else is refused). */
   days: number;
 }
 
+const rangeDays = z.union([z.literal(7), z.literal(30), z.literal(90)], {
+  message: 'days must be one of 7, 30, 90',
+}) satisfies z.ZodType<InsightsRangeDays>;
+
 const schema = z.object({
   stationId: z.string().min(1, 'stationId is required'),
-  days: z.number().refine((n) => (INSIGHTS_RANGE_DAYS as readonly number[]).includes(n), {
-    message: `days must be one of ${INSIGHTS_RANGE_DAYS.join(', ')}`,
-  }),
+  days: rangeDays,
 });
 
 export interface GetInsightsSalesDeps {
@@ -42,14 +44,14 @@ export class GetInsightsSales implements UseCase<GetInsightsSalesCommand, Insigh
     if (!p.success) {
       return err(validationError('Invalid GetInsightsSales query', { issues: p.error.flatten() }));
     }
-    if (ctx.stationId && ctx.stationId !== p.data.stationId) {
-      return err(forbiddenError('No access to this station'));
-    }
+    // Station access is the route's to enforce (it authorizes the requested
+    // station before building the context); the use case reads under the
+    // caller's organization and the station it was asked for.
 
     const source = await this.deps.reader.read({
       organizationId: ctx.organizationId,
       stationId: p.data.stationId,
-      days: p.data.days as 7 | 30 | 90,
+      days: p.data.days,
     });
     return ok(composeInsightsSales(source));
   }

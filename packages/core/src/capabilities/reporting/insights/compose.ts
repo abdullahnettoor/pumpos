@@ -1,3 +1,4 @@
+import { INSIGHTS_MIN_COMPARABLE_DAYS } from '@pump/shared';
 import type { InsightsSales, InsightsTrendDay } from '@pump/shared';
 import type { InsightsSalesSource, InsightsTemplateRow } from './ports.js';
 
@@ -21,6 +22,33 @@ export function eachDate(from: string, to: string): string[] {
     date = cursor.toISOString().slice(0, 10);
   }
   return out;
+}
+
+/** Litre-metered units; anything else (kg for CNG / Auto-LPG) cannot share a litre mix. */
+const isLitre = (unit: string) =>
+  ['l', 'litre', 'litres', 'ltr'].includes(unit.trim().toLowerCase());
+
+/**
+ * Change of the per-closed-day average, like for like.
+ *
+ * Raw totals are not comparable when the periods have different coverage (a
+ * station that closed 2 days against one that closed 7). So the periods are
+ * compared by average per closed day, and only when BOTH have at least
+ * `INSIGHTS_MIN_COMPARABLE_DAYS` closed days; otherwise there is no badge.
+ * Days still open inside either range are not closed, so they count in
+ * neither the totals nor the day counts.
+ */
+export function periodChange(
+  current: { total: number; closedDays: number },
+  previous: { total: number; closedDays: number },
+): number | null {
+  if (
+    current.closedDays < INSIGHTS_MIN_COMPARABLE_DAYS ||
+    previous.closedDays < INSIGHTS_MIN_COMPARABLE_DAYS
+  ) {
+    return null;
+  }
+  return percentChange(current.total / current.closedDays, previous.total / previous.closedDays);
 }
 
 function templateAverages(row: InsightsTemplateRow) {
@@ -61,15 +89,20 @@ export function composeInsightsSales(source: InsightsSalesSource): InsightsSales
       })
     : [];
 
-  const totalLitres = source.fuelLitres.reduce((sum, p) => sum + p.litres, 0);
-  const productMix = source.fuelLitres
-    .filter((p) => p.litres > 0)
+  const litreRows = source.fuelVolumes.filter((p) => isLitre(p.unit));
+  const totalLitres = litreRows.reduce((sum, p) => sum + p.quantity, 0);
+  const productMix = litreRows
+    .filter((p) => p.quantity > 0)
     .map((p) => ({
       productCode: p.productCode,
-      litres: round2(p.litres),
-      share: round1((p.litres / totalLitres) * 100),
+      litres: round2(p.quantity),
+      share: round1((p.quantity / totalLitres) * 100),
     }))
     .sort((a, b) => b.litres - a.litres);
+  const otherUnitFuels = source.fuelVolumes
+    .filter((p) => !isLitre(p.unit) && p.quantity > 0)
+    .map((p) => ({ productCode: p.productCode, quantity: round2(p.quantity), unit: p.unit }))
+    .sort((a, b) => b.quantity - a.quantity);
 
   const otherTotal = round2(source.other.total);
   const otherPrevious = round2(previous.otherSales);
@@ -81,15 +114,23 @@ export function composeInsightsSales(source: InsightsSalesSource): InsightsSales
     previousClosedDays: previous.closedDays,
     total,
     previousTotal,
-    changePct: previous.closedDays > 0 ? percentChange(total, previousTotal) : null,
+    changePct: periodChange(
+      { total, closedDays },
+      { total: previousTotal, closedDays: previous.closedDays },
+    ),
     average: closedDays > 0 ? round2(total / closedDays) : 0,
+    previousAverage: previous.closedDays > 0 ? round2(previousTotal / previous.closedDays) : 0,
     best,
     trend,
     productMix,
+    otherUnitFuels,
     otherProducts: {
       total: otherTotal,
       previousTotal: otherPrevious,
-      changePct: previous.closedDays > 0 ? percentChange(otherTotal, otherPrevious) : null,
+      changePct: periodChange(
+        { total: otherTotal, closedDays },
+        { total: otherPrevious, closedDays: previous.closedDays },
+      ),
       top: source.other.top,
     },
     shiftTemplates: source.templates.map(templateAverages),

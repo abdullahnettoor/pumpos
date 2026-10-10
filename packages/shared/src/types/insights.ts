@@ -11,6 +11,9 @@
 export const INSIGHTS_RANGE_DAYS = [7, 30, 90] as const;
 export type InsightsRangeDays = (typeof INSIGHTS_RANGE_DAYS)[number];
 
+/** Closed Business Days each period needs before the tab compares it with the other. */
+export const INSIGHTS_MIN_COMPARABLE_DAYS = 3;
+
 export interface InsightsDateRange {
   /** First Business Date of the period (inclusive, `YYYY-MM-DD`). */
   from: string;
@@ -37,13 +40,24 @@ export interface InsightsProductMixLine {
   share: number;
 }
 
+/** Fuel sold in a unit other than litres (CNG / Auto-LPG in kg): shown beside the mix, never in its shares. */
+export interface InsightsOtherUnitFuel {
+  productCode: string;
+  quantity: number;
+  unit: string;
+}
+
 export interface InsightsOtherProducts {
   /** Lubes & others (product) sales over the period. */
   total: number;
   previousTotal: number;
-  /** Percent change vs the previous period; null when there is nothing to compare. */
+  /**
+   * Percent change of the per-closed-day average vs the previous period; null
+   * when the two periods are not comparable (see `changePct` of `InsightsSales`).
+   */
   changePct: number | null;
-  top: { name: string; quantity: number } | null;
+  /** Best seller by revenue over the period (`quantity` is its unit count). */
+  top: { name: string; quantity: number; revenue: number } | null;
 }
 
 /** Average per Shift of one Shift Template over the period. */
@@ -68,13 +82,22 @@ export interface InsightsSales {
   previousClosedDays: number;
   total: number;
   previousTotal: number;
-  /** Percent change vs the previous period; null when there is nothing to compare. */
+  /**
+   * Percent change of the AVERAGE PER CLOSED DAY vs the previous period, so a
+   * period with fewer closed days is not compared on raw totals. Null (no
+   * badge) unless BOTH periods have at least `INSIGHTS_MIN_COMPARABLE_DAYS`
+   * closed days: a 2-day sample against a 7-day one says nothing.
+   */
   changePct: number | null;
   /** Average per CLOSED day (days the station did not trade do not dilute it). */
   average: number;
+  /** The previous period's average per closed day: the basis of `changePct`. */
+  previousAverage: number;
   best: { date: string; sales: number } | null;
   trend: InsightsTrendDay[];
   productMix: InsightsProductMixLine[];
+  /** Fuel metered in other units than litres: noted beside the mix. */
+  otherUnitFuels: InsightsOtherUnitFuel[];
   otherProducts: InsightsOtherProducts;
   shiftTemplates: InsightsShiftTemplate[];
 }
