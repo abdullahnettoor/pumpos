@@ -59,7 +59,7 @@ Captured on the preview console against a freshly onboarded station ("Hilltop Fu
 Navigation map only; steps are in `docs/USER-FLOW.md` §13.
 
 - Dock tabs, by Role: **Home** (Owner) · **Shifts** (Owner, Manager) · **Reports** (Owner, Manager,
-  Accountant) · **Money** (Owner, Manager, Accountant) · **Insights** (Owner, Manager). Staff: no tabs.
+  Accountant) · **Money** (Owner, Manager, Accountant) · **Insights** (Owner, Manager). Staff: none unless assigned a pump (then Home with only their handover card).
 - Home header: station name or **avatar** → **Account sheet** (station switcher, Team, organization,
   Sign out); **bell** → **Needs attention** (stock, day close, credit, cash variance, handover).
 - Shifts → live shift / history row → **Shift Summary**. Reports → day row → **DSSR** (Share, Download PDF).

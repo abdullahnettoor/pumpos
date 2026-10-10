@@ -312,7 +312,8 @@ _Avoid_: outstanding, khata
 **Credit Limit**:
 The most a Customer may owe on credit. A Customer is _near_ it from 80% of the
 limit and _over_ it beyond it; no limit means no standing to judge. Only an
-Owner or Manager may change it.
+Owner or Manager may change it. Not the Organization **Limit** (a Product Plan
+allowance).
 _Avoid_: credit cap, ceiling
 
 **Receivable aging**:
@@ -503,9 +504,11 @@ exist. Shared as a PDF from the same range the screen shows.
 _Avoid_: khata, account copy
 
 **Stock Loss**:
-A Tank's dip Variance judged against what it sold: within tolerance up to 0.5%
-of the litres sold, by size (a gain is judged like a loss). A provisional
-station-wide default; a Tank that sold nothing tolerates no Variance.
+The Insights view of a Tank's dip **Variance**, judged against what it sold:
+within tolerance up to 0.5% of the litres sold, by size (a gain is judged like a
+loss). The tolerance is one app-wide value pending an owner decision, not a
+Station setting (`stock-variance.ts`); a Tank that sold nothing tolerates no
+Variance. The domain term stays Variance; "loss" is only the Insights label.
 _Avoid_: shrinkage, leakage
 
 **Needs Attention**:

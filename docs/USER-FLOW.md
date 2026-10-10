@@ -270,16 +270,17 @@ on your Role.
 
 **Bottom dock.** Five tabs, shown only when your Role may open them:
 
-| Tab      | What it holds                                                                                                                              | Who                        |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- |
-| Home     | Today at a glance: sales, the live shift, tank levels, money position, **Needs attention**                                                 | Owner                      |
-| Shifts   | The live shift and shift history; tap a shift for its **Shift Summary**                                                                    | Owner, Manager             |
-| Reports  | Business days (Live, Draft, Sealed) with weekly figures; tap a day for its **DSSR**, Share or Download PDF                                 | Owner, Manager, Accountant |
-| Money    | **To collect** (customers) and **To pay** (suppliers); tap a party for its balance, aging, **Statement**, **Record payment**, credit limit | Owner, Manager, Accountant |
-| Insights | Sales trend, product mix, shift performance; attendant variance, stock loss and credit health when the plan includes them                  | Owner, Manager             |
+| Tab      | What it holds                                                                                                                                                                                        | Who                        |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| Home     | Today at a glance: sales, the live shift, tank levels, money position, **Needs attention**                                                                                                           | Owner                      |
+| Shifts   | The live shift and shift history; tap a shift for its **Shift Summary**                                                                                                                              | Owner, Manager             |
+| Reports  | Business days (Live, Draft, Sealed, Report missing) with weekly figures; a Draft or Sealed day opens its **DSSR** (Share, Download PDF), a Live day opens **Home**, and Report missing does not open | Owner, Manager, Accountant |
+| Money    | **To collect** (customers) and **To pay** (suppliers); tap a Customer or Supplier for its balance, aging, **Statement**, **Record payment**, credit limit                                            | Owner, Manager, Accountant |
+| Insights | Sales trend, product mix, shift performance; attendant variance, stock loss and credit health when the plan includes them                                                                            | Owner, Manager             |
 
-Staff see no tabs. Detail pages open on top of the tab and **‹ Back** returns
-to it.
+Staff have no tabs unless they are assigned a dispenser unit on the open shift;
+then they get a **Home** tab holding only their handover card (see below).
+Detail pages open on top of the tab and **‹ Back** returns to it.
 
 **Header.**
 
@@ -299,7 +300,8 @@ to it.
 station switcher. It shows your **handover** for the open shift (closing
 readings, cash count, card/UPI slips, credit slips) and **Save handover**; after
 saving it reads "Handover recorded" and stays editable until the shift closes.
-The only other control is **Sign out**.
+The only other control is the **avatar**, which opens the **Account sheet** with
+**Sign out**.
 
 **Owners, managers and staff who man a pump.** When you are assigned a
 dispenser unit on the open shift (step 6), a **Your handover** card is pinned to
