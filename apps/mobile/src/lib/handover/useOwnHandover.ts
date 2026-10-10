@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useMyAssignment } from '@pump/ui';
-import type { MyAssignment } from '../../components/handover/model.js';
+import type { MyAssignment } from './model.js';
 import { deriveOwnHandover, type OwnHandover } from './own.js';
 
 /**

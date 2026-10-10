@@ -10,7 +10,13 @@ import {
   type RecordHandoverPayload,
   type RecordHandoverResult,
 } from '@pump/ui';
-import { num, type AssignedDu, type CreditLine, type DuFormState, type MerchRow } from './model.js';
+import {
+  num,
+  type AssignedDu,
+  type CreditLine,
+  type DuFormState,
+  type MerchRow,
+} from '../../lib/handover/model.js';
 
 const txService = new CloudTransactionService();
 

@@ -9,7 +9,7 @@
  * the attendant shortage; they have no second level.
  */
 import { isBalancedVariance, isTwoLevelVarianceSnapshot } from '@pump/shared';
-import { num, round2 } from '../home/num.js';
+import { num, round2 } from '../num.js';
 import type { Snapshot } from '../home/sales.js';
 import { byLargestVariance, offLabel, type DrawerOff } from '../variance.js';
 

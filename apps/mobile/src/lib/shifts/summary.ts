@@ -7,7 +7,7 @@
  * the Handovers, the Dispenser Unit from today's setup).
  */
 import { productCategoryOf } from '@pump/shared';
-import { num, round2 } from '../home/num.js';
+import { num, round2 } from '../num.js';
 import { unitLabel } from '@pump/ui';
 import type { FuelLine, ProductLine, Snapshot } from '../home/sales.js';
 import { deriveShiftVariance, drawerName, type ShiftVariance } from './variance.js';

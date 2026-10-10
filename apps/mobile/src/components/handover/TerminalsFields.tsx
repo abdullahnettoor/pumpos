@@ -1,7 +1,7 @@
 import React from 'react';
 import { NumberField, TextField } from './Fields.js';
 import { fieldId } from './steps.js';
-import type { AssignedDu, DuFormState } from './model.js';
+import type { AssignedDu, DuFormState } from '../../lib/handover/model.js';
 
 /**
  * Step 3 body: card and UPI per assigned Payment Terminal, or the aggregate

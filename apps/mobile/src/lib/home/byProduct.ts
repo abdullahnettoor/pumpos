@@ -5,7 +5,7 @@
  */
 import { PRODUCT_CATEGORY_LABEL, type ProductType } from '@pump/shared';
 import { plural } from '../format.js';
-import { round2 } from './num.js';
+import { round2 } from '../num.js';
 import type { FuelLine, ProductLine } from './sales.js';
 
 /** A segment never renders thinner than this share of the bar, so a tiny product stays visible. */

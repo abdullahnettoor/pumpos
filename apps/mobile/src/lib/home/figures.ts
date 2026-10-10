@@ -4,7 +4,7 @@
  * customer and supplier lists); the screen only renders them.
  */
 import { formatDaysOfCover, isBalancedVariance } from '@pump/shared';
-import { num, round2 } from './num.js';
+import { num, round2 } from '../num.js';
 import { plural, signedRupees } from '../format.js';
 import { owing, totalOwed, type MoneyParty } from '../money/parties.js';
 import { offLabel } from '../variance.js';

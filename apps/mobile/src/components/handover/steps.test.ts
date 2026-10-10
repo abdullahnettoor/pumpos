@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { seedForm, type AssignedDu, type CreditLine, type DuFormState } from './model.js';
+import {
+  seedForm,
+  type AssignedDu,
+  type CreditLine,
+  type DuFormState,
+} from '../../lib/handover/model.js';
 import {
   cashErrors,
   cashStep,

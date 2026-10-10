@@ -3,9 +3,9 @@
  * View-only: everything here is read from the server's own figures (handover
  * rows, reconciliation totals), never recomputed.
  */
-import { businessDateLabel, stationMinuteOfDay } from '../home/dates.js';
+import { businessDateLabel, stationMinuteOfDay } from '../dates.js';
 import { elapsedLabel, sinceLabel } from '../home/live.js';
-import { num } from '../home/num.js';
+import { num } from '../num.js';
 import { shiftLabel, type Snapshot } from '../home/sales.js';
 
 export type DuStatus = 'recorded' | 'pending' | 'due';

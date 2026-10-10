@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RecordHandoverResult } from '@pump/ui';
-import type { AssignedDu, HandoverRow } from '../../components/handover/model.js';
+import type { AssignedDu, HandoverRow } from './model.js';
 import { buildRecap, minutesOnShift, formatOnShift } from './recap.js';
 
 const du = (over: Partial<AssignedDu> = {}): AssignedDu => ({

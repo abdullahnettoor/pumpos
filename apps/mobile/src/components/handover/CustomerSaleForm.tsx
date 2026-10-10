@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Combobox, inr, runTask } from '@pump/ui';
-import type { CreditLine, DuProduct } from './model.js';
+import type { CreditLine, DuProduct } from '../../lib/handover/model.js';
 import { AddButton, NumberField, SelectField, TextField } from './Fields.js';
 import { TrashIcon } from './icons.js';
 

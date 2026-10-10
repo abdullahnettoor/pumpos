@@ -3,7 +3,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Station } from '@pump/shared';
-import type { TabKey } from '../shell/tabs.js';
+import type { TabKey } from '../lib/tabKey.js';
 
 /**
  * Screen tests for Home: the honest sales headline (fuel from closed Shifts

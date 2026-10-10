@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Station } from '@pump/shared';
 import type { MobileAlert } from '../lib/alerts.js';
-import type { TabKey } from '../shell/tabs.js';
+import type { TabKey } from '../lib/tabKey.js';
 
 /**
  * The Needs attention page: grouped by kind, a row per alert, each opening the

@@ -4,7 +4,7 @@ import type { Station } from '@pump/shared';
 import type { MobileAlert } from '../../lib/alerts.js';
 import { homeAlerts } from '../../lib/attention/groups.js';
 import { AlertRow } from '../attention/AlertRow.js';
-import { useAlertOpener } from '../attention/useAlertOpener.js';
+import { useAlertOpener } from '../../shell/useAlertOpener.js';
 import { useOpenAttention } from '../../shell/attention.js';
 
 /** Alerts shown on Home; the rest are behind "All N". */

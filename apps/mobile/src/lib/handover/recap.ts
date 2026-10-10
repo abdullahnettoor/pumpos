@@ -1,10 +1,5 @@
 import type { RecordHandoverResult } from '@pump/ui';
-import {
-  num,
-  type AssignedDu,
-  type HandoverRow,
-  type RecordedTerminalEntry,
-} from '../../components/handover/model.js';
+import { num, type AssignedDu, type HandoverRow, type RecordedTerminalEntry } from './model.js';
 
 /**
  * What the attendant sees once their Handover is recorded: their own figures,

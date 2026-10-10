@@ -7,7 +7,7 @@ import {
   type CreditLine,
   type DuFormState,
   type MerchRow,
-} from './model.js';
+} from '../../lib/handover/model.js';
 
 /**
  * Step status, one-line summaries, validation and the expected-cash formula for

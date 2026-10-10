@@ -1,4 +1,4 @@
-import type { MyAssignment } from '../../components/handover/model.js';
+import type { MyAssignment } from './model.js';
 import { formatRecordedTime, buildRecap } from './recap.js';
 import { plural } from '../format.js';
 import { varianceBadge } from '../variance.js';

@@ -28,7 +28,7 @@ import {
   type DuProduct,
   type MerchProduct,
   type MyAssignment,
-} from './handover/model.js';
+} from '../lib/handover/model.js';
 import { ProductsFields } from './handover/ProductsFields.js';
 import { StepCard } from './handover/StepCard.js';
 import {

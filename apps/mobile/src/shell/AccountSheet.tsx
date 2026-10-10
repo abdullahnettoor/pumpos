@@ -7,7 +7,6 @@ import { BottomSheet } from '../ui/BottomSheet.js';
 import { ListGroup, ListRow } from '../ui/ListRow.js';
 import { SectionLabel } from '../ui/SectionLabel.js';
 import { BuildingIcon, CheckIcon, SignOutIcon } from '../ui/icons.js';
-import { TeamPage } from '../screens/team/TeamPage.js';
 import { useNav } from './nav.js';
 import { activeMembers, onShiftNames } from './team.js';
 
@@ -20,6 +19,8 @@ interface Props {
   selectedStationId: string | null;
   onSelectStation: (id: string) => void;
   onSignOut: () => void;
+  /** The Team page the Team row opens (App supplies it; the shell does not import screens' pages). */
+  teamPage: React.ReactNode;
 }
 
 const PLAN_LABEL: Record<string, string> = { CORE: 'Core' };
@@ -68,6 +69,7 @@ const SheetBody: React.FC<Omit<Props, 'open'>> = ({
   selectedStationId,
   onSelectStation,
   onSignOut,
+  teamPage,
 }) => {
   // Mounted only while the sheet is open, so these fetch on open.
   const orgQ = useOrganization();
@@ -130,7 +132,7 @@ const SheetBody: React.FC<Omit<Props, 'open'>> = ({
         stationId={selectedStationId}
         onOpen={() => {
           onClose();
-          nav.push(<TeamPage />, 'team');
+          nav.push(teamPage, 'team');
         }}
       />
 

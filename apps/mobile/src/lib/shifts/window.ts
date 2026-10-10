@@ -1,4 +1,4 @@
-import { stationDay, stationDayMonth, stationTime } from '../home/dates.js';
+import { stationDay, stationDayMonth, stationTime } from '../dates.js';
 
 /**
  * "6:00 am – 1:52 pm" in the station's timezone. A Shift that ends on another

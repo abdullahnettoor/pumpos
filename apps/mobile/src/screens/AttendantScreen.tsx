@@ -6,7 +6,7 @@ import {
   type RecordHandoverResult,
 } from '@pump/ui';
 import { HandoverPanel } from '../components/HandoverPanel.js';
-import type { AssignedDu, MyAssignment } from '../components/handover/model.js';
+import type { AssignedDu, MyAssignment } from '../lib/handover/model.js';
 import { AccountSheet } from './attendant/AccountSheet.js';
 import { AttendantHeader } from './attendant/AttendantHeader.js';
 import { DuStrip } from './attendant/DuStrip.js';

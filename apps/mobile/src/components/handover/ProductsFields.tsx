@@ -1,6 +1,6 @@
 import React from 'react';
 import { Combobox, inr } from '@pump/ui';
-import { num, type MerchRow } from './model.js';
+import { num, type MerchRow } from '../../lib/handover/model.js';
 import { AddButton, NumberField } from './Fields.js';
 import { TrashIcon } from './icons.js';
 

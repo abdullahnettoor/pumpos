@@ -6,8 +6,8 @@
  * cash variance is read off the immutable Shift Summary by `deriveShiftVariance`
  * and toned by `varianceBadge` (`isBalancedVariance`). Pure.
  */
-import { businessDateLabel } from '../home/dates.js';
-import { num } from '../home/num.js';
+import { businessDateLabel } from '../dates.js';
+import { num } from '../num.js';
 import { shiftLabel, type Snapshot } from '../home/sales.js';
 import { rupees } from '../format.js';
 import type { OwnHandover } from '../handover/own.js';

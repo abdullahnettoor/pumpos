@@ -8,8 +8,8 @@
  */
 import { productCategoryOf, shiftBusinessDate, type ProductType } from '@pump/shared';
 import { unitLabel } from '@pump/ui';
-import { businessWeekday } from './dates.js';
-import { num } from './num.js';
+import { businessWeekday } from '../dates.js';
+import { num } from '../num.js';
 
 export type Snapshot = Record<string, any>;
 

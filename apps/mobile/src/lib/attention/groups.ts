@@ -1,4 +1,4 @@
-import type { TabKey } from '../../shell/tabs.js';
+import type { TabKey } from '../tabKey.js';
 import type { AlertCategory, MobileAlert } from './types.js';
 
 export interface AlertKind {

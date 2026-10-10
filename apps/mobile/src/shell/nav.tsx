@@ -31,7 +31,7 @@ import {
   type StackEntry,
 } from './navStack.js';
 import { BackStackContext, type BackStack } from '../ui/backStack.js';
-import type { TabKey } from './tabs.js';
+import type { TabKey } from '../lib/tabKey.js';
 
 export interface Nav {
   active: TabKey;

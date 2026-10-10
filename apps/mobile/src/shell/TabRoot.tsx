@@ -18,7 +18,8 @@ import { ShiftsScreen } from '../screens/ShiftsScreen.js';
 import { useShell } from './context.js';
 import { HomeHeader } from './HomeHeader.js';
 import { TabHeader } from './TabHeader.js';
-import { tabDef, type TabKey } from './tabs.js';
+import { tabDef } from './tabs.js';
+import type { TabKey } from '../lib/tabKey.js';
 
 interface Props {
   tab: TabKey;

@@ -5,7 +5,7 @@ import { ShellContext } from './context.js';
 import { Dock } from './Dock.js';
 import { useNav } from './nav.js';
 import { Pane } from './Pane.js';
-import type { TabKey } from './tabs.js';
+import type { TabKey } from '../lib/tabKey.js';
 
 interface MobileShellProps {
   userName: string;
@@ -17,6 +17,8 @@ interface MobileShellProps {
   onSignOut: () => void;
   /** A tab's own screen (its header included). Pushed detail pages come from `useNav().push`. */
   renderRoot: (tab: TabKey) => React.ReactNode;
+  /** The Team page the Account sheet's Team row opens. App supplies it so the sheet does not import a screen. */
+  teamPage: React.ReactNode;
 }
 
 /**
@@ -37,6 +39,7 @@ export const MobileShell: React.FC<MobileShellProps> = ({
   onSelectStation,
   onSignOut,
   renderRoot,
+  teamPage,
 }) => {
   const nav = useNav();
   const [accountOpen, setAccountOpen] = useState(false);
@@ -94,6 +97,7 @@ export const MobileShell: React.FC<MobileShellProps> = ({
         selectedStationId={selectedStationId}
         onSelectStation={selectStation}
         onSignOut={onSignOut}
+        teamPage={teamPage}
       />
     </ShellContext.Provider>
   );

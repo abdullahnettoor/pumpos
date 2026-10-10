@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AssignedDu, MyAssignment } from '../../components/handover/model.js';
+import type { AssignedDu, MyAssignment } from './model.js';
 import { deriveOwnHandover } from './own.js';
 
 const du = (over: Partial<AssignedDu> = {}): AssignedDu => ({

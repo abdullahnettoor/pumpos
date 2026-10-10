@@ -7,8 +7,8 @@
  */
 import { isStockVarianceWithinTolerance } from '@pump/shared';
 import type { BusinessDayListItem } from '@pump/shared';
-import { stationTime } from '../home/dates.js';
-import { num } from '../home/num.js';
+import { stationTime } from '../dates.js';
+import { num } from '../num.js';
 import { unitLabel } from '@pump/ui';
 import { shiftLabel, type Snapshot } from '../home/sales.js';
 import { varianceBadge, type VarianceBadgeView } from '../variance.js';

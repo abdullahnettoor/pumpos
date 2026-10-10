@@ -4,7 +4,7 @@ import type { BusinessDayListItem, Station } from '@pump/shared';
 import { DayTiles } from '../../components/DayTiles.js';
 import { SalesByProduct } from '../../components/SalesByProduct.js';
 import { plural } from '../../lib/format.js';
-import { businessDateLabel } from '../../lib/home/dates.js';
+import { businessDateLabel } from '../../lib/dates.js';
 import { liveTabFor, liveTabLabel } from '../../lib/reports/days.js';
 import { stepTargets, type StepTarget } from '../../lib/reports/dssr.js';
 import { useNav } from '../../shell/nav.js';

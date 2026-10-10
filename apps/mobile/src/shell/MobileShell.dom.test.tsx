@@ -61,6 +61,7 @@ const { tabsForRole } = await import('./tabs.js');
 const { HomeHeader } = await import('./HomeHeader.js');
 const { TabHeader } = await import('./TabHeader.js');
 const { DetailPage } = await import('../ui/DetailPage.js');
+const { TeamPage } = await import('../screens/team/TeamPage.js');
 const { ThemeProvider } = await import('../theme/index.js');
 
 const stations = [
@@ -129,6 +130,7 @@ const Harness: React.FC<{
               onStationChange?.(id);
             }}
             onSignOut={onSignOut}
+            teamPage={<TeamPage />}
             renderRoot={(tab) => <Root tab={tab} stationName={name} />}
           />
         </NavProvider>
@@ -380,6 +382,7 @@ describe('Account sheet', () => {
             selectedStationId="st-1"
             onSelectStation={() => {}}
             onSignOut={() => {}}
+            teamPage={null}
             renderRoot={(tab) => <Root tab={tab} stationName="x" />}
           />
         </NavProvider>

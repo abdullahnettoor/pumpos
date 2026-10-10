@@ -2,7 +2,7 @@ import React from 'react';
 import { generateShiftSummaryPdf, useToast } from '@pump/ui';
 import type { Station } from '@pump/shared';
 import { SalesByProduct } from '../components/SalesByProduct.js';
-import { businessDateLabel } from '../lib/home/dates.js';
+import { businessDateLabel } from '../lib/dates.js';
 import { rupees, signedRupees } from '../lib/format.js';
 import type { ShiftSummaryRow } from '../lib/shifts/history.js';
 import { derivePaymentSlices } from '../lib/shifts/summary.js';

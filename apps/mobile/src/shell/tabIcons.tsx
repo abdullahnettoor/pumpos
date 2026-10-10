@@ -7,7 +7,7 @@ import {
   ShiftsIcon,
   type IconProps,
 } from '../ui/icons.js';
-import type { TabKey } from './tabs.js';
+import type { TabKey } from '../lib/tabKey.js';
 
 /** The dock glyph of each tab. */
 export const TAB_ICONS: Record<TabKey, React.FC<IconProps>> = {

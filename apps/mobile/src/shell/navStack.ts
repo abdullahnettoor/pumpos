@@ -4,7 +4,7 @@
  * the stack. React and the browser history are layered on top in `nav.tsx`.
  */
 import type { ReactNode } from 'react';
-import type { TabKey } from './tabs.js';
+import type { TabKey } from '../lib/tabKey.js';
 
 export interface StackEntry {
   /** Stable within the stack; a push whose id is already on top is ignored. */
