@@ -2,8 +2,8 @@
 import React, { useLayoutEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { Station } from '@pump/shared';
-import { THEME_COLORS } from '../theme/config.js';
+import type { Role, Station } from '@pump/shared';
+import { THEME_COLORS, THEME_STORAGE_KEY } from '../theme/config.js';
 
 /**
  * Screen tests for the Control Room shell: Role-filtered dock, the Account
@@ -45,7 +45,8 @@ const { MobileShell } = await import('./MobileShell.js');
 const { NavProvider, useNav } = await import('./nav.js');
 const { tabsForRole } = await import('./tabs.js');
 const { HomeHeader } = await import('./HomeHeader.js');
-const { PageHeader } = await import('../ui/PageHeader.js');
+const { TabHeader } = await import('./TabHeader.js');
+const { HOME_ATTENTION_ID } = await import('./attention.js');
 const { DetailPage } = await import('../ui/DetailPage.js');
 const { ThemeProvider } = await import('../theme/index.js');
 
@@ -75,15 +76,20 @@ const Detail: React.FC<{ name: string; withBar?: boolean }> = ({ name, withBar =
   </DetailPage>
 );
 
-/** Stand-in roots: Home uses the real HomeHeader, the rest PageHeader. */
+/** Stand-in roots: Home uses the real HomeHeader, the rest TabHeader. */
 const Root: React.FC<{ tab: string; stationName: string }> = ({ tab, stationName }) => {
   const n = useNav();
   return (
     <div data-testid={`root-${tab}`}>
-      {tab === 'home' ? <HomeHeader /> : <PageHeader title={tab} />}
+      {tab === 'home' ? <HomeHeader /> : <TabHeader title={tab} />}
       <p>
         {tab} list · {stationName}
       </p>
+      {tab === 'home' && (
+        <button type="button" id={HOME_ATTENTION_ID}>
+          2 items need attention
+        </button>
+      )}
       <button type="button" onClick={() => n.push(<Detail name={`${tab} item`} />, `${tab}:1`)}>
         Open {tab} item
       </button>
@@ -92,7 +98,7 @@ const Root: React.FC<{ tab: string; stationName: string }> = ({ tab, stationName
 };
 
 const Harness: React.FC<{
-  role?: Parameters<typeof tabsForRole>[0];
+  role?: Role;
   onSignOut?: () => void;
   onStationChange?: (id: string) => void;
 }> = ({ role = 'Owner', onSignOut = () => {}, onStationChange }) => {
@@ -104,7 +110,7 @@ const Harness: React.FC<{
         <Probe />
         <MobileShell
           userName="Abdullah Nettoor"
-          role={role ?? ''}
+          role={role}
           stations={stations}
           selectedStationId={stationId}
           onSelectStation={(id) => {
@@ -196,6 +202,21 @@ describe('header', () => {
   it('shows the open-alert count on the bell', () => {
     render(<Harness />);
     expect(screen.getByRole('button', { name: 'Alerts, 2 open' })).toBeTruthy();
+  });
+
+  it('the bell scrolls to and focuses Home attention section', async () => {
+    const scrolled: unknown[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Alerts, 2 open' }));
+    const section = screen.getByRole('button', { name: '2 items need attention' });
+    await waitFor(() => expect(document.activeElement).toBe(section));
+    expect(scrolled).toEqual([section]);
+    // Still on Home's own screen, not another page.
+    expect(holder.nav.active).toBe('home');
+    expect(holder.nav.depth).toBe(0);
   });
 
   it('has no station-picker row and no business-day pill', () => {
@@ -303,12 +324,16 @@ describe('Account sheet', () => {
     expect(sheet()).toBeNull();
   });
 
-  it('as shipped: no Appearance row, Light applied', () => {
+  it('as shipped: no Appearance row, Light applied even with a stored dark preference', () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     render(<Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+    expect(sheet()).toBeTruthy(); // the sheet really opened, so its absent rows are meaningful
+    expect(within(sheet()!).getByText('Station')).toBeTruthy();
     expect(screen.queryByText('Appearance')).toBeNull();
     expect(screen.queryByRole('radiogroup')).toBeNull();
     expect(document.documentElement.classList.contains('light')).toBe(true);
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
     expect(document.documentElement.style.colorScheme).toBe('light');
     expect(document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content).toBe(
       THEME_COLORS.light,
@@ -333,6 +358,63 @@ describe('Account sheet', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Account' }));
     expect(screen.getByRole('radiogroup', { name: 'Appearance' })).toBeTruthy();
+  });
+});
+
+describe('Account sheet focus and background', () => {
+  const openFromAvatar = () => {
+    const avatar = screen.getByRole('button', { name: 'Account' });
+    avatar.focus();
+    fireEvent.click(avatar);
+    return avatar;
+  };
+
+  it('moves focus into the sheet and makes the page behind inert while open', () => {
+    const { container } = render(<Harness />);
+    expect(container.hasAttribute('inert')).toBe(false);
+    openFromAvatar();
+    expect(document.activeElement).toBe(sheet());
+    expect(container.hasAttribute('inert')).toBe(true);
+    fireEvent.keyDown(sheet()!, { key: 'Escape' });
+    expect(container.hasAttribute('inert')).toBe(false);
+  });
+
+  it('keeps Tab inside the sheet, wrapping at both ends', () => {
+    render(<Harness />);
+    openFromAvatar();
+    const buttons = within(sheet()!).getAllByRole('button');
+    const first = buttons[0];
+    const last = buttons[buttons.length - 1];
+    expect(last.textContent).toBe('Sign out');
+    last.focus();
+    fireEvent.keyDown(last, { key: 'Tab' });
+    expect(document.activeElement).toBe(first);
+    fireEvent.keyDown(first, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(last);
+  });
+
+  it('pulls focus back if it escapes to the page behind', () => {
+    render(<Harness />);
+    const avatar = openFromAvatar();
+    avatar.focus();
+    expect(document.activeElement).toBe(sheet());
+  });
+
+  it('returns focus to what opened the sheet', () => {
+    render(<Harness />);
+    const avatar = openFromAvatar();
+    fireEvent.keyDown(sheet()!, { key: 'Escape' });
+    expect(document.activeElement).toBe(avatar);
+  });
+
+  it('after a station switch focus lands on the new header, not a removed node', () => {
+    render(<Harness />);
+    const avatar = openFromAvatar();
+    fireEvent.click(within(sheet()!).getByRole('button', { name: /City Fuels/ }));
+    expect(sheet()).toBeNull();
+    expect(avatar.isConnected).toBe(false); // the shell remounted
+    const station = screen.getByRole('button', { name: /City Fuels, open account/ });
+    expect(document.activeElement).toBe(station);
   });
 });
 

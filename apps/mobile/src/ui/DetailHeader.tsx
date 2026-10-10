@@ -1,6 +1,6 @@
 import React from 'react';
-import { useNav } from '../shell/nav.js';
-import { BackIcon } from '../shell/icons.js';
+import { useBack } from './backStack.js';
+import { BackIcon } from './icons.js';
 import { IconButton } from './IconButton.js';
 
 interface Props {
@@ -12,10 +12,10 @@ interface Props {
 
 /** Header of a pushed detail page: back button, title, one-line subtitle. */
 export const DetailHeader: React.FC<Props> = ({ title, subtitle, right }) => {
-  const nav = useNav();
+  const back = useBack();
   return (
     <header className="flex items-center gap-2.5 px-3.5 pb-3 pt-1">
-      <IconButton label="Back" onClick={nav.back} className="!text-text-high">
+      <IconButton label="Back" onClick={back} className="!text-text-high">
         <BackIcon size={18} strokeWidth={2.2} />
       </IconButton>
       <div className="min-w-0 flex-1">

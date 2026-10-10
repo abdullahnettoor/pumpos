@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronRightIcon } from '../shell/icons.js';
+import { ChevronRightIcon } from './icons.js';
 
 /** Card holding `ListRow`s, separated by hairlines. */
 export const ListGroup: React.FC<{ children: React.ReactNode; className?: string }> = ({

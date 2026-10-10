@@ -1,18 +1,19 @@
 import React from 'react';
-import { useAccess, useOrganization, useShiftStatus, useUsers } from '@pump/ui';
-import type { Station } from '@pump/shared';
+import { initialsOf, useAccess, useOrganization, useShiftStatus, useUsers } from '@pump/ui';
+import type { Role, Station } from '@pump/shared';
 import { AppearanceControl } from '../theme/index.js';
+import { Avatar } from '../ui/Avatar.js';
 import { BottomSheet } from '../ui/BottomSheet.js';
 import { ListGroup, ListRow } from '../ui/ListRow.js';
 import { SectionLabel } from '../ui/SectionLabel.js';
-import { BuildingIcon, CheckIcon, SignOutIcon } from './icons.js';
-import { initialsOf } from './context.js';
+import { BuildingIcon, CheckIcon, SignOutIcon } from '../ui/icons.js';
+import { activeMembers, onShiftNames } from './team.js';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   userName: string;
-  role: string;
+  role: Role;
   stations: Station[];
   selectedStationId: string | null;
   onSelectStation: (id: string) => void;
@@ -22,30 +23,12 @@ interface Props {
 const PLAN_LABEL: Record<string, string> = { CORE: 'Core' };
 const AVATARS_SHOWN = 4;
 
-const Avatar: React.FC<{ name?: string; text?: string; overlap?: boolean }> = ({
-  name = '',
-  text,
-  overlap,
-}) => (
-  <span
-    className={`grid h-[30px] w-[30px] flex-shrink-0 place-items-center rounded-full border-2 border-card bg-accent-soft text-[11px] font-extrabold text-accent ${overlap ? '-ml-2' : ''}`}
-  >
-    {text ?? initialsOf(name)}
-  </span>
-);
-
 /** Read-only team summary: member count and who is on the open shift here. */
 const TeamSummary: React.FC<{ stationId: string | null }> = ({ stationId }) => {
   const usersQ = useUsers();
   const statusQ = useShiftStatus(stationId);
-  const members: any[] = (usersQ.data || []).filter((u: any) => u.status !== 'INACTIVE');
-  const onShift = [
-    ...new Set<string>(
-      ((statusQ.data?.activeShift?.staffAssignments || []) as any[])
-        .map((a) => a.userName as string)
-        .filter(Boolean),
-    ),
-  ];
+  const members = activeMembers<{ id: string; fullName?: string; status?: string }>(usersQ.data);
+  const onShift = onShiftNames(statusQ.data?.activeShift?.staffAssignments);
   const shown = members.slice(0, AVATARS_SHOWN);
   const extra = members.length - shown.length;
   const count = `${members.length} member${members.length === 1 ? '' : 's'}`;
@@ -58,9 +41,9 @@ const TeamSummary: React.FC<{ stationId: string | null }> = ({ stationId }) => {
           leading={
             <span className="flex">
               {shown.map((u, i) => (
-                <Avatar key={u.id} name={u.fullName ?? ''} overlap={i > 0} />
+                <Avatar key={u.id} name={u.fullName ?? ''} size="sm" overlap={i > 0} />
               ))}
-              {extra > 0 && <Avatar text={`+${extra}`} overlap />}
+              {extra > 0 && <Avatar text={`+${extra}`} size="sm" overlap />}
             </span>
           }
           title={onShift.length ? `${onShift.length} on shift now` : 'No one on shift now'}
@@ -89,9 +72,7 @@ const SheetBody: React.FC<Omit<Props, 'open'>> = ({
   return (
     <div>
       <div className="flex items-center gap-3 px-4 pb-1.5">
-        <span className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-full bg-accent-soft text-[15px] font-extrabold text-accent">
-          {initialsOf(userName)}
-        </span>
+        <Avatar name={userName} size="lg" />
         <div className="min-w-0">
           <p className="truncate text-[15px] font-bold text-text-high">{userName}</p>
           <p className="truncate text-[11px] text-text-muted">
@@ -170,13 +151,19 @@ const SheetBody: React.FC<Omit<Props, 'open'>> = ({
   );
 };
 
+/** The visible header station button: where focus lands if the one that opened the sheet is gone. */
+const stationButton = () =>
+  Array.from(document.querySelectorAll<HTMLElement>('[data-station-button]')).find(
+    (el) => !el.closest('[aria-hidden="true"]'),
+  ) ?? null;
+
 /**
  * Bottom sheet behind the station name and avatar: who is signed in, the
  * station switcher, a read-only team summary, the Organization and Sign out.
  * The Appearance row is mounted but renders nothing until it ships (theme/config.ts).
  */
 export const AccountSheet: React.FC<Props> = ({ open, onClose, ...body }) => (
-  <BottomSheet open={open} onClose={onClose} label="Account">
+  <BottomSheet open={open} onClose={onClose} label="Account" fallbackFocus={stationButton}>
     <SheetBody onClose={onClose} {...body} />
   </BottomSheet>
 );

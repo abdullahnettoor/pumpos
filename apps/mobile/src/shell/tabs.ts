@@ -1,9 +1,17 @@
 /**
  * The mobile shell's tabs: the one place a tab's key, label and Role access
  * are declared. A later ticket that adds or retires a tab edits this file,
- * `icons.tsx` (the dock glyph) and `TabRoot.tsx` (what the tab shows).
+ * `tabIcons.tsx` (the dock glyph) and `TabRoot.tsx` (what the tab shows).
  */
-import type { UserRole } from '../lib/session.js';
+import {
+  canManageFinancialAccounts,
+  canViewMobileHome,
+  canViewMobileInsights,
+  canViewMobileShifts,
+  canViewReports,
+  isAttendant,
+  type Role,
+} from '@pump/shared';
 
 export type TabKey = 'home' | 'shifts' | 'reports' | 'money' | 'insights' | 'handover';
 
@@ -30,21 +38,28 @@ export const TAB_DEFS: readonly TabDef[] = [
 
 export const tabDef = (key: TabKey): TabDef => TAB_DEFS.find((t) => t.key === key)!;
 
-/** Tabs each Role may open on mobile (Attendant has its own shell). */
-export const TABS_BY_ROLE: Record<UserRole, TabKey[]> = {
-  Owner: ['home', 'shifts', 'reports', 'money', 'insights'],
-  Manager: ['shifts', 'reports', 'money', 'insights'],
-  Accountant: ['reports', 'money'],
-  Staff: [],
-  Attendant: [],
+/**
+ * Whether a Role may open each tab, answered by the shared permission guards
+ * (`@pump/shared`), never re-derived here. Reports and Money follow their
+ * existing guards; Home, Shifts and Insights have mobile guards of their own.
+ * Staff and Attendant get no tabs (Attendant has its own shell). My handover is
+ * not Role-based: it is added for anyone assigned to a Dispenser Unit.
+ */
+const CAN_OPEN: Record<Exclude<TabKey, 'handover'>, (role: Role) => boolean> = {
+  home: canViewMobileHome,
+  shifts: canViewMobileShifts,
+  reports: canViewReports,
+  money: canManageFinancialAccounts,
+  insights: canViewMobileInsights,
 };
 
 /**
  * The dock for a Role, in dock order. A user who is also assigned to a Dispenser
  * Unit on an open shift gets the extra "My handover" tab.
  */
-export function tabsForRole(role: UserRole | null, hasHandoverTab: boolean): TabKey[] {
-  const base = role ? TABS_BY_ROLE[role] : [];
-  const keys = hasHandoverTab && role !== 'Attendant' ? [...base, 'handover' as const] : base;
-  return TAB_DEFS.map((t) => t.key).filter((k) => keys.includes(k));
+export function tabsForRole(role: Role | null, hasHandoverTab: boolean): TabKey[] {
+  if (!role) return [];
+  return TAB_DEFS.map((t) => t.key).filter((key) =>
+    key === 'handover' ? hasHandoverTab && !isAttendant(role) : CAN_OPEN[key](role),
+  );
 }

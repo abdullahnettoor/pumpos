@@ -82,7 +82,7 @@ export const App: React.FC = () => {
     return <AttendantScreen userName={userName} onSignOut={onSignOut} />;
   }
 
-  if (allowedTabs.length === 0) {
+  if (!role || allowedTabs.length === 0) {
     return (
       <Centered>
         <p className="text-4xl">🔒</p>
@@ -99,7 +99,7 @@ export const App: React.FC = () => {
     <NavProvider tabs={allowedTabs}>
       <MobileShell
         userName={userName}
-        role={role ?? ''}
+        role={role}
         stations={stations}
         selectedStationId={selectedStationId}
         onSelectStation={setPickedStationId}

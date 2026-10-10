@@ -1,5 +1,4 @@
 import React from 'react';
-import type { TabKey } from './tabs.js';
 
 export interface IconProps {
   size?: number;
@@ -109,12 +108,3 @@ export const SignOutIcon = makeIcon(
     <path d="M21 12H9" />
   </>,
 );
-
-export const TAB_ICONS: Record<TabKey, React.FC<IconProps>> = {
-  home: HomeIcon,
-  shifts: ShiftsIcon,
-  reports: ReportsIcon,
-  money: MoneyIcon,
-  insights: InsightsIcon,
-  handover: HandoverIcon,
-};

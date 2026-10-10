@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import type { Station } from '@pump/shared';
+import type { Role, Station } from '@pump/shared';
 import { AccountSheet } from './AccountSheet.js';
 import { ShellContext } from './context.js';
 import { Dock } from './Dock.js';
@@ -9,7 +9,7 @@ import { tabDef, type TabKey } from './tabs.js';
 
 interface MobileShellProps {
   userName: string;
-  role: string;
+  role: Role;
   stations: Station[];
   selectedStationId: string | null;
   onSelectStation: (id: string) => void;

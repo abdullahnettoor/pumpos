@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
  * App wiring: the Account sheet's Sign out must still run the same sign-out as
  * before the shell revamp, whose session handler purges the persisted cache.
  */
+const who = vi.hoisted(() => ({ role: 'Owner', assignment: null as unknown }));
 let onSession: (session: unknown) => Promise<void>;
 const clearClientSessionData = vi.fn();
 const supabaseSignOut = vi.fn(async () => {
@@ -21,7 +22,7 @@ vi.mock('@pump/ui', async (importOriginal) => {
     Login: () => <p>login screen</p>,
     CloudStationService: class {
       getCurrentSession = async () => ({
-        user: { role: 'Owner', fullName: 'Abdullah N', email: 'a@b.c' },
+        user: { role: who.role, fullName: 'Abdullah N', email: 'a@b.c' },
       });
     },
     startSession: (handle: (s: unknown) => Promise<void>) => {
@@ -35,7 +36,7 @@ vi.mock('@pump/ui', async (importOriginal) => {
     clearClientSessionData: (...a: unknown[]) => clearClientSessionData(...a),
     supabase: { auth: { signOut: () => supabaseSignOut() } },
     useStations: () => ({ data: stations, isLoading: false }),
-    useMyAssignment: () => ({ data: null }),
+    useMyAssignment: () => ({ data: who.assignment }),
     useUsers: () => ({ data: [], isLoading: false }),
     useShiftStatus: () => ({ data: null }),
     useOrganization: () => ({ data: { name: 'Org' } }),
@@ -60,11 +61,62 @@ const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query
 const { ThemeProvider } = await import('./theme/index.js');
 
 beforeEach(() => {
+  who.role = 'Owner';
+  who.assignment = null;
   clearClientSessionData.mockClear();
   supabaseSignOut.mockClear();
   window.history.replaceState(null, '', '/');
 });
 afterEach(cleanup);
+
+const renderApp = () =>
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ThemeProvider appearanceEnabled={false} devSwitchEnabled={false}>
+        <App />
+      </ThemeProvider>
+    </QueryClientProvider>,
+  );
+const dockLabels = () =>
+  within(screen.getByRole('navigation', { name: 'Main' }))
+    .getAllByRole('button')
+    .map((b) => b.getAttribute('aria-label'));
+
+describe('App Role routing', () => {
+  it('Staff with no Dispenser Unit see the limited-access screen, no dock', async () => {
+    who.role = 'Staff';
+    renderApp();
+    await screen.findByText('Mobile access is limited');
+    expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy();
+  });
+
+  it('Staff assigned to a Dispenser Unit get a dock with only My handover', async () => {
+    who.role = 'Staff';
+    who.assignment = { shiftId: 's1' };
+    renderApp();
+    await screen.findByText('tab root');
+    expect(dockLabels()).toEqual(['My handover']);
+    expect(screen.getByRole('button', { name: 'My handover' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+  });
+
+  it('a Manager assigned to a Dispenser Unit gets My handover after their tabs', async () => {
+    who.role = 'Manager';
+    who.assignment = { shiftId: 's1' };
+    renderApp();
+    await screen.findByText('tab root');
+    expect(dockLabels()).toEqual(['Shifts', 'Reports', 'Money', 'Insights', 'My handover']);
+  });
+
+  it('a Manager with no assignment has no My handover tab', async () => {
+    who.role = 'Manager';
+    renderApp();
+    await screen.findByText('tab root');
+    expect(dockLabels()).toEqual(['Shifts', 'Reports', 'Money', 'Insights']);
+  });
+});
 
 describe('App', () => {
   it('Sign out in the Account sheet signs out and clears the persisted cache', async () => {

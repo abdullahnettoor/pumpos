@@ -30,7 +30,10 @@ import {
   type NavState,
   type StackEntry,
 } from './navStack.js';
+import { BackStackContext, type BackStack } from '../ui/backStack.js';
 import type { TabKey } from './tabs.js';
+
+export { useBackLayer } from '../ui/backStack.js';
 
 export interface Nav {
   active: TabKey;
@@ -50,11 +53,7 @@ export interface Nav {
   reset: () => void;
 }
 
-interface NavInternals extends Nav {
-  registerOverlay: (close: () => void) => () => void;
-}
-
-const NavContext = createContext<NavInternals | null>(null);
+const NavContext = createContext<Nav | null>(null);
 
 export function useNav(): Nav {
   const nav = useContext(NavContext);
@@ -118,19 +117,6 @@ function useBackLayers(layers: number, onBack: () => void): () => void {
   }, []);
 }
 
-/** While `open`, the system back gesture calls `onClose` (a sheet or other overlay). */
-export function useBackLayer(open: boolean, onClose: () => void): void {
-  const register = useContext(NavContext)?.registerOverlay;
-  const closeRef = useRef(onClose);
-  useLayoutEffect(() => {
-    closeRef.current = onClose;
-  });
-  useEffect(() => {
-    if (!open || !register) return;
-    return register(() => closeRef.current());
-  }, [open, register]);
-}
-
 export const NavProvider: React.FC<{ tabs: readonly TabKey[]; children: React.ReactNode }> = ({
   tabs,
   children,
@@ -166,7 +152,7 @@ export const NavProvider: React.FC<{ tabs: readonly TabKey[]; children: React.Re
   }, []);
   const back = useBackLayers(depth + overlayCount, closeTopLayer);
 
-  const value = useMemo<NavInternals>(
+  const value = useMemo<Nav>(
     () => ({
       active: state.active,
       tabs,
@@ -178,10 +164,14 @@ export const NavProvider: React.FC<{ tabs: readonly TabKey[]; children: React.Re
       open: (tab, element, id) => dispatch({ type: 'open', tab, entry: entry(element, id) }),
       back,
       reset: () => dispatch({ type: 'reset' }),
-      registerOverlay,
     }),
-    [state, tabs, depth, back, registerOverlay, entry],
+    [state, tabs, depth, back, entry],
   );
+  const backStack = useMemo<BackStack>(() => ({ back, registerOverlay }), [back, registerOverlay]);
 
-  return <NavContext.Provider value={value}>{children}</NavContext.Provider>;
+  return (
+    <BackStackContext.Provider value={backStack}>
+      <NavContext.Provider value={value}>{children}</NavContext.Provider>
+    </BackStackContext.Provider>
+  );
 };

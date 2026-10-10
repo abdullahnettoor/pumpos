@@ -1,5 +1,5 @@
 import React from 'react';
-import { TAB_ICONS } from './icons.js';
+import { TAB_ICONS } from './tabIcons.js';
 import { tabDef, type TabKey } from './tabs.js';
 
 interface Props {

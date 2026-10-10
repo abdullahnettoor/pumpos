@@ -11,6 +11,7 @@ import { resolveBusinessDate } from '@pump/shared';
 import type { Station } from '@pump/shared';
 import { Kpi } from '../components/Kpi.js';
 import { useMobileAlerts } from '../lib/alerts.js';
+import { HOME_ATTENTION_ID } from '../shell/attention.js';
 import type { TabKey } from '../shell/tabs.js';
 
 interface Props {
@@ -124,6 +125,7 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
       {alerts.length > 0 && (
         <button
           type="button"
+          id={HOME_ATTENTION_ID} /* the header bell scrolls here (shell/attention.ts) */
           onClick={() => onNavigate?.('insights')}
           className="flex items-center justify-between rounded-lg px-3 py-2"
           style={{

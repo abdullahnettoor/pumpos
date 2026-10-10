@@ -21,7 +21,11 @@ interface Props {
   trailing?: React.ReactNode;
 }
 
-/** A labelled figure in a card. Lay out in `<div className="grid grid-cols-2 gap-2 px-3">`. */
+/**
+ * A labelled figure in a card; lay out in `<div className="grid grid-cols-2 gap-2 px-3">`.
+ * Not the design system's `KpiTile`: that is a featureless cell framed by a `KpiStrip`
+ * (caps label, no wide variant or trailing sparkline); the mobile grid is separate bordered cards.
+ */
 export const StatTile: React.FC<Props> = ({
   label,
   value,

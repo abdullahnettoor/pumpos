@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DownloadIcon, ShareIcon } from '../shell/icons.js';
+import { DownloadIcon, ShareIcon } from './icons.js';
 
 export interface ActionSlot {
   /** May return a promise: the button shows a busy state until it settles. */

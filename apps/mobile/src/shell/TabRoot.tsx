@@ -1,7 +1,7 @@
 /**
  * What each tab shows as its own (root) screen. This is the plug-in point for
  * the tab tickets: replace a case below with the new screen (it renders its own
- * header: `PageHeader`, or `HomeHeader` on Home) and push detail pages with
+ * header: `TabHeader`, or `HomeHeader` on Home) and push detail pages with
  * `useNav().push`. The screens wired here are the pre-revamp ones, kept
  * working until their ticket replaces them.
  */
@@ -14,9 +14,9 @@ import { HomeScreen } from '../screens/HomeScreen.js';
 import { LedgerScreen } from '../screens/LedgerScreen.js';
 import { MoreScreen } from '../screens/MoreScreen.js';
 import { ShiftsScreen } from '../screens/ShiftsScreen.js';
-import { PageHeader } from '../ui/PageHeader.js';
 import { HomeHeader } from './HomeHeader.js';
 import { useNav } from './nav.js';
+import { TabHeader } from './TabHeader.js';
 import { tabDef, type TabKey } from './tabs.js';
 
 interface Props {
@@ -52,7 +52,7 @@ const ReportsRoot: React.FC<{ station: Station }> = ({ station }) => {
 
 export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
   const nav = useNav();
-  const header = tab === 'home' ? <HomeHeader /> : <PageHeader title={tabDef(tab).label} />;
+  const header = tab === 'home' ? <HomeHeader /> : <TabHeader title={tabDef(tab).label} />;
 
   if (tab === 'handover')
     return (

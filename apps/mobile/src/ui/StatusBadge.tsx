@@ -1,13 +1,15 @@
 import React from 'react';
+import { Chip, type ChipTone } from '@pump/ui';
 
 export type BadgeTone = 'good' | 'warn' | 'bad' | 'info' | 'muted';
 
-const TONE: Record<BadgeTone, string> = {
-  good: 'bg-good-soft text-good',
-  warn: 'bg-warn-soft text-warn-fg border border-warn-line',
-  bad: 'bg-bad-soft text-bad-fg',
-  info: 'bg-info-soft text-info',
-  muted: 'bg-card-alt text-text-muted border border-line',
+/** The mobile tone names, mapped onto the design system's `Chip` tones. */
+const TONE: Record<BadgeTone, ChipTone> = {
+  good: 'success',
+  warn: 'warning',
+  bad: 'danger',
+  info: 'info',
+  muted: 'neutral',
 };
 
 interface Props {
@@ -17,11 +19,13 @@ interface Props {
   num?: boolean;
 }
 
-/** Small pill for a state: Closed, Draft, Balanced, +₹120. */
+/**
+ * Small pill for a state: Closed, Draft, Balanced, +₹120. A `Chip` with free
+ * text; for a canonical status (Open, Overdue, Paid) use the design system's
+ * `StatusChip` directly.
+ */
 export const StatusBadge: React.FC<Props> = ({ tone = 'muted', children, num }) => (
-  <span
-    className={`inline-block whitespace-nowrap rounded-full px-2 py-1 text-[10.5px] font-bold ${TONE[tone]} ${num ? 'num' : ''}`}
-  >
+  <Chip tone={TONE[tone]} className={`text-[10.5px] font-bold ${num ? 'num' : ''}`}>
     {children}
-  </span>
+  </Chip>
 );
