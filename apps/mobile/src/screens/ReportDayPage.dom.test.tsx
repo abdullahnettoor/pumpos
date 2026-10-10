@@ -179,7 +179,10 @@ const Stage: React.FC = () => {
   );
 };
 const start = { date: '2026-10-08' };
-const mount = (date: string, tabs: readonly ('reports' | 'home')[] = ['reports', 'home']) => {
+const mount = (
+  date: string,
+  tabs: readonly ('reports' | 'home' | 'shifts' | 'money')[] = ['reports', 'home'],
+) => {
   start.date = date;
   return render(
     <ToastProvider>
@@ -365,6 +368,18 @@ describe('ReportDayPage', () => {
       expect(screen.queryByRole('button', { name: 'Share' })).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: 'See Home' }));
       expect(screen.getByTestId('tab').textContent).toBe('home');
+    });
+
+    it('sends a Live day to Shifts for a Role without Home (a Manager)', () => {
+      mount('2026-10-09', ['shifts', 'reports']);
+      fireEvent.click(screen.getByRole('button', { name: 'See Shifts' }));
+      expect(screen.getByTestId('tab').textContent).toBe('shifts');
+    });
+
+    it('offers no way off a Live day to a Role with neither Home nor Shifts', () => {
+      mount('2026-10-09', ['reports', 'money']);
+      expect(screen.getByText(/still live, so it has no DSSR/)).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /^See / })).toBeNull();
     });
 
     it('says a Report-missing day has no DSSR, and offers no actions', () => {

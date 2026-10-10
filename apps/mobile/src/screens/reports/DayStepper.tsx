@@ -1,4 +1,5 @@
 import React from 'react';
+import { liveTabLabel } from '../../lib/reports/days.js';
 import type { StepTarget } from '../../lib/reports/dssr.js';
 import { BackIcon, ChevronRightIcon } from '../../ui/icons.js';
 import { IconButton } from '../../ui/index.js';
@@ -23,7 +24,9 @@ export const DayStepper: React.FC<Props> = ({ older, newer, busy, onOlder, onNew
       <BackIcon size={16} strokeWidth={2.2} />
     </IconButton>
     <IconButton
-      label={newer?.kind === 'home' ? 'Next day (today, opens Home)' : 'Next day'}
+      label={
+        newer?.kind === 'live' ? `Next day (today, opens ${liveTabLabel(newer.tab)})` : 'Next day'
+      }
       className="disabled:opacity-40"
       disabled={!newer || busy}
       onClick={onNewer}

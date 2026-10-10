@@ -3,6 +3,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Station } from '@pump/shared';
+import type { TabKey } from '../shell/tabs.js';
 
 const feed = vi.hoisted(() => ({
   pages: [] as unknown[],
@@ -56,9 +57,9 @@ const Stage: React.FC = () => {
     </>
   );
 };
-const mount = () =>
+const mount = (tabs: readonly TabKey[] = ['reports', 'home']) =>
   render(
-    <NavProvider tabs={['reports', 'home']}>
+    <NavProvider tabs={tabs}>
       <Stage />
     </NavProvider>,
   );
@@ -121,6 +122,31 @@ describe('ReportsScreen', () => {
     expect(within(row).getByText('See Home')).toBeTruthy();
     expect(row.textContent).not.toContain('21,500');
     expect(row.textContent).not.toContain('21.5');
+  });
+
+  describe('a Live day per Role', () => {
+    const liveOnly = () => {
+      seed();
+      feed.pages = [{ ...(feed.pages[0] as object), days: [day('2026-10-09', 'LIVE', 21500)] }];
+    };
+
+    it('opens Shifts for a Manager (no Home tab)', () => {
+      liveOnly();
+      mount(['shifts', 'reports', 'money', 'insights']);
+      const row = screen.getByRole('button', { name: /^Fri 9 Oct, Live/ });
+      expect(within(row).getByText('See Shifts')).toBeTruthy();
+      fireEvent.click(row);
+      expect(screen.getByTestId('tab').textContent).toBe('shifts');
+    });
+
+    it('is not tappable for an Accountant (no Home or Shifts), and says the day is in progress', () => {
+      liveOnly();
+      mount(['reports', 'money']);
+      expect(screen.queryByRole('button', { name: /^Fri 9 Oct, Live/ })).toBeNull();
+      const row = screen.getByRole('group', { name: /^Fri 9 Oct, Live/ });
+      expect(within(row).getByText('Day in progress')).toBeTruthy();
+      expect(screen.getByTestId('tab').textContent).toBe('reports');
+    });
   });
 
   it('gives each row a label that carries its figures, with the decoration hidden', () => {

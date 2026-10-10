@@ -6,6 +6,7 @@ import {
   dayParts,
   dayView,
   draftDates,
+  liveTabFor,
   monthLabel,
   shortDate,
   weekChange,
@@ -67,7 +68,7 @@ describe('barWidths', () => {
 
 describe('DAY_STATUS', () => {
   it('has one presentation per status, and only Report missing does not open', () => {
-    expect(DAY_STATUS.LIVE).toMatchObject({ label: 'Live', tone: 'good', action: 'home' });
+    expect(DAY_STATUS.LIVE).toMatchObject({ label: 'Live', tone: 'good', action: 'live' });
     expect(DAY_STATUS.DRAFT).toMatchObject({ label: 'Draft', tone: 'warn', action: 'report' });
     expect(DAY_STATUS.SEALED).toMatchObject({ label: 'Sealed', tone: 'muted', action: 'report' });
     expect(DAY_STATUS.REPORT_MISSING).toMatchObject({
@@ -80,7 +81,7 @@ describe('DAY_STATUS', () => {
 
 describe('dayView', () => {
   it('shows a Sealed day with sales, litres, a balanced cash note and the full spoken figures', () => {
-    expect(dayView(item())).toMatchObject({
+    expect(dayView(item(), 'home')).toMatchObject({
       weekday: 'Thu',
       dayOfMonth: 8,
       statusLabel: 'Sealed',
@@ -94,32 +95,46 @@ describe('dayView', () => {
     });
   });
   it('flags a short or over cash variance with its sign and tone', () => {
-    expect(dayView(item({ cashVariance: -1250 }))).toMatchObject({
+    expect(dayView(item({ cashVariance: -1250 }), 'home')).toMatchObject({
       note: 'Cash −₹1,250',
       noteTone: 'bad',
     });
-    expect(dayView(item({ cashVariance: 120 }))).toMatchObject({
+    expect(dayView(item({ cashVariance: 120 }), 'home')).toMatchObject({
       note: 'Cash +₹120',
       noteTone: 'warn',
     });
   });
   it('shows a dash for litres when no Shift has closed', () => {
-    expect(dayView(item({ status: 'DRAFT', shiftCount: 0, volume: 0 })).volume).toBe('—');
+    expect(dayView(item({ status: 'DRAFT', shiftCount: 0, volume: 0 }), 'home').volume).toBe('—');
   });
   it('shows a Live day as In progress with no figure, pointing to Home', () => {
-    const v = dayView(item({ status: 'LIVE', totalSales: 21500, volume: 900 }));
+    const v = dayView(item({ status: 'LIVE', totalSales: 21500, volume: 900 }), 'home');
     expect(v).toMatchObject({
       headline: 'In progress',
       volume: '—',
       note: 'See Home',
       bar: 'hatched',
-      action: 'home',
+      action: 'live',
+      liveTab: 'home',
       label: 'Thu 8 Oct, Live, In progress, See Home',
     });
     expect(v.label).not.toContain('21');
   });
+  it('points a Role without Home (a Manager) at Shifts', () => {
+    const v = dayView(item({ status: 'LIVE' }), 'shifts');
+    expect(v).toMatchObject({ action: 'live', liveTab: 'shifts', note: 'See Shifts' });
+  });
+  it('shows a Live day as Day in progress, not tappable, for a Role with neither tab', () => {
+    const v = dayView(item({ status: 'LIVE' }), null);
+    expect(v).toMatchObject({
+      headline: 'Day in progress',
+      action: 'none',
+      liveTab: null,
+      note: 'No report until it closes',
+    });
+  });
   it('shows a closed day without a DSSR snapshot honestly and does not open it', () => {
-    const v = dayView(item({ status: 'REPORT_MISSING', totalSales: 0, shiftCount: 0 }));
+    const v = dayView(item({ status: 'REPORT_MISSING', totalSales: 0, shiftCount: 0 }), null);
     expect(v).toMatchObject({
       statusLabel: 'Report missing',
       tone: 'bad',
@@ -165,5 +180,13 @@ describe('weekTile', () => {
       'No sealed days yet',
     );
     expect(weekTile(week({ comparison: none })).arrow).toBeNull();
+  });
+});
+
+describe('liveTabFor', () => {
+  it('prefers Home, falls back to Shifts, else nothing', () => {
+    expect(liveTabFor(['home', 'shifts', 'reports'])).toBe('home');
+    expect(liveTabFor(['shifts', 'reports', 'money'])).toBe('shifts');
+    expect(liveTabFor(['reports', 'money'])).toBeNull();
   });
 });

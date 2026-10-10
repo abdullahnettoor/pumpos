@@ -57,16 +57,31 @@ export function barWidths(
   return days.map((d) => (max > 0 && hasFigures(d) ? Math.round((d.totalSales / max) * 100) : 0));
 }
 
+/** The tab that shows today's running day: Home for the Owner, Shifts for a Manager. */
+export type LiveTab = 'home' | 'shifts';
+const LIVE_TAB_LABEL: Record<LiveTab, string> = { home: 'Home', shifts: 'Shifts' };
+export const liveTabLabel = (tab: LiveTab): string => LIVE_TAB_LABEL[tab];
+
+/**
+ * Where a Live day opens for a Role: Home when it has Home, else Shifts (the live
+ * Shift is its first card), else nowhere (the day is shown but not tappable).
+ */
+export function liveTabFor(tabs: readonly string[]): LiveTab | null {
+  if (tabs.includes('home')) return 'home';
+  if (tabs.includes('shifts')) return 'shifts';
+  return null;
+}
+
 interface StatusPresentation {
   label: string;
   tone: 'good' | 'warn' | 'bad' | 'muted';
-  /** What tapping the row does. */
-  action: 'home' | 'report' | 'none';
+  /** What tapping the row does (`live`: open the Role's live-day tab, see `liveTabFor`). */
+  action: 'live' | 'report' | 'none';
 }
 
 /** The one status -> presentation map for the day list. */
 export const DAY_STATUS: Record<BusinessDayListStatus, StatusPresentation> = {
-  LIVE: { label: 'Live', tone: 'good', action: 'home' },
+  LIVE: { label: 'Live', tone: 'good', action: 'live' },
   DRAFT: { label: 'Draft', tone: 'warn', action: 'report' },
   SEALED: { label: 'Sealed', tone: 'muted', action: 'report' },
   REPORT_MISSING: { label: 'Report missing', tone: 'bad', action: 'none' },
@@ -78,6 +93,8 @@ export interface DayView {
   statusLabel: string;
   tone: StatusPresentation['tone'];
   action: StatusPresentation['action'];
+  /** For a `live` action: the tab it opens. */
+  liveTab: LiveTab | null;
   /** Top-left figure: sales, or the state when there is no honest figure. */
   headline: string;
   /** How the row's bar is drawn. */
@@ -92,13 +109,17 @@ export interface DayView {
 }
 
 /**
- * How a Business Day row reads. Live shows "In progress" and points to Home (its
- * list figure is partial and would disagree with Home); Report missing is a
- * closed day with no DSSR snapshot, so it shows no figures and does not open.
+ * How a Business Day row reads. Live shows "In progress" and points to the Role's
+ * live-day tab (`liveTab`: its list figure is partial and would disagree with
+ * Home); with no such tab the row says "Day in progress" and does not open.
+ * Report missing is a closed day with no DSSR snapshot, so it shows no figures
+ * and does not open.
  */
-export function dayView(day: BusinessDayListItem): DayView {
+export function dayView(day: BusinessDayListItem, liveTab: LiveTab | null): DayView {
   const { weekday, day: dayOfMonth } = dayParts(day.businessDate);
-  const { label: statusLabel, tone, action } = DAY_STATUS[day.status];
+  const presentation = DAY_STATUS[day.status];
+  const { label: statusLabel, tone } = presentation;
+  const action = day.status === 'LIVE' && !liveTab ? 'none' : presentation.action;
   const final = hasFigures(day);
   const volume =
     final && day.shiftCount > 0 ? `${Math.round(day.volume).toLocaleString('en-IN')} L` : '—';
@@ -108,8 +129,8 @@ export function dayView(day: BusinessDayListItem): DayView {
   let noteTone: DayView['noteTone'] = 'plain';
   let bar: DayView['bar'] = 'scaled';
   if (day.status === 'LIVE') {
-    headline = 'In progress';
-    note = 'See Home';
+    headline = liveTab ? 'In progress' : 'Day in progress';
+    note = liveTab ? `See ${liveTabLabel(liveTab)}` : 'No report until it closes';
     bar = 'hatched';
   } else if (day.status === 'REPORT_MISSING') {
     headline = 'Closed';
@@ -137,6 +158,7 @@ export function dayView(day: BusinessDayListItem): DayView {
     statusLabel,
     tone,
     action,
+    liveTab: day.status === 'LIVE' ? liveTab : null,
     headline,
     bar,
     volume,
