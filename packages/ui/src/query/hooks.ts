@@ -666,6 +666,9 @@ export function useShiftSummaries(stationId: string | null | undefined, options?
   });
 }
 
+/** What the history's cursor reads from a summary row. */
+type ShiftSummaryPageRow = { generatedAt?: string | null };
+
 /** Summaries per page of the closed-Shift history. */
 export const SHIFT_SUMMARY_PAGE_SIZE = 50;
 
@@ -680,7 +683,7 @@ export function useShiftSummaryHistory(stationId: string | null | undefined) {
       shiftService.getShiftSummaryPage(stationId!, SHIFT_SUMMARY_PAGE_SIZE, pageParam ?? undefined),
     enabled: !!stationId,
     initialPageParam: null as string | null,
-    getNextPageParam: (page: any[]) =>
+    getNextPageParam: (page: ShiftSummaryPageRow[]): string | undefined =>
       page.length < SHIFT_SUMMARY_PAGE_SIZE
         ? undefined
         : (page[page.length - 1]?.generatedAt ?? undefined),
