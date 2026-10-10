@@ -666,6 +666,9 @@ export function useShiftSummaries(stationId: string | null | undefined, options?
   });
 }
 
+/** What the history's cursor reads from a summary row. */
+type ShiftSummaryPageRow = { generatedAt?: string | null };
+
 /** Summaries per page of the closed-Shift history. */
 export const SHIFT_SUMMARY_PAGE_SIZE = 50;
 
@@ -678,8 +681,9 @@ export function useShiftSummaryHistory(stationId: string | null | undefined) {
     queryKey: queryKeys.shiftSummaryHistory(stationId ?? ''),
     queryFn: ({ pageParam }) =>
       shiftService.getShiftSummaryPage(stationId!, SHIFT_SUMMARY_PAGE_SIZE, pageParam ?? undefined),
+    enabled: !!stationId,
     initialPageParam: null as string | null,
-    getNextPageParam: (page: any[]) =>
+    getNextPageParam: (page: ShiftSummaryPageRow[]): string | undefined =>
       page.length < SHIFT_SUMMARY_PAGE_SIZE
         ? undefined
         : (page[page.length - 1]?.generatedAt ?? undefined),
@@ -815,53 +819,51 @@ function widensStatementWindow(
 }
 
 /**
- * A customer's statement for a date range (enriched rows + opening balance),
- * from the ranged ledger API. Operational tier; every operational write
- * invalidates the `customer-statement` prefix.
+ * A party's statement for a date range (enriched rows + opening balance), from the
+ * ranged ledger API: one hook for both kinds. Operational tier; every operational
+ * write invalidates the `customer-statement` / `supplier-statement` prefix.
  *
  * Widening the range into the past ("Earlier months") changes the key; the
  * previous range's rows stay on screen (`isPlaceholderData`) until the wider one
  * arrives, so the list never collapses to a spinner. Only that case carries rows
- * over: another range (the Filter) or another customer loads from scratch.
+ * over: another range (the Filter) or another party loads from scratch.
  */
-export function useCustomerStatement(
-  customerId: string | null | undefined,
+export function usePartyStatement(
+  kind: 'customer' | 'supplier',
+  partyId: string | null | undefined,
   range: { from: string; to: string },
   options?: Options<RangedPartyLedger>,
 ) {
+  const customer = kind === 'customer';
   return useQuery({
-    queryKey: queryKeys.customerStatement(customerId ?? '', range.from, range.to),
-    queryFn: () => txService.getCustomerLedgerRange(customerId!, range),
-    enabled: !!customerId,
+    queryKey: customer
+      ? queryKeys.customerStatement(partyId ?? '', range.from, range.to)
+      : queryKeys.supplierStatement(partyId ?? '', range.from, range.to),
+    queryFn: () =>
+      customer
+        ? txService.getCustomerLedgerRange(partyId!, range)
+        : txService.getSupplierLedgerRange(partyId!, range),
+    enabled: !!partyId,
     placeholderData: (previous, previousQuery) =>
-      widensStatementWindow(previousQuery?.queryKey, customerId, range) ? previous : undefined,
+      widensStatementWindow(previousQuery?.queryKey, partyId, range) ? previous : undefined,
     ...TIER.operational,
     ...options,
   });
 }
 
-/**
- * A supplier's statement for a date range (enriched rows + opening balance), from
- * the ranged ledger API. Operational tier; every operational write invalidates the
- * `supplier-statement` prefix. Same "Earlier months" behaviour as
- * `useCustomerStatement`: only a window widening into the past keeps the previous
- * rows on screen until the wider one arrives.
- */
-export function useSupplierStatement(
+/** A customer's statement: `usePartyStatement` for a customer. */
+export const useCustomerStatement = (
+  customerId: string | null | undefined,
+  range: { from: string; to: string },
+  options?: Options<RangedPartyLedger>,
+) => usePartyStatement('customer', customerId, range, options);
+
+/** A supplier's statement: `usePartyStatement` for a supplier. */
+export const useSupplierStatement = (
   supplierId: string | null | undefined,
   range: { from: string; to: string },
   options?: Options<RangedPartyLedger>,
-) {
-  return useQuery({
-    queryKey: queryKeys.supplierStatement(supplierId ?? '', range.from, range.to),
-    queryFn: () => txService.getSupplierLedgerRange(supplierId!, range),
-    enabled: !!supplierId,
-    placeholderData: (previous, previousQuery) =>
-      widensStatementWindow(previousQuery?.queryKey, supplierId, range) ? previous : undefined,
-    ...TIER.operational,
-    ...options,
-  });
-}
+) => usePartyStatement('supplier', supplierId, range, options);
 
 export function useSupplierLedger(supplierId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
@@ -1077,8 +1079,9 @@ export function useInsightsSales(
 
 /**
  * What customers owe (total, aging split, a row per customer that owes). One
- * statement over every ledger, so it does not refetch on window focus; a credit
- * sale or collection invalidates it (`useInvalidateOperational`). Not persisted.
+ * statement over every ledger. Plain operational tier (it refetches on window
+ * focus, like the statements beside it); a credit sale or collection invalidates
+ * it (`useInvalidateOperational`). Not persisted.
  */
 export function useReceivables(
   stationId: string | null | undefined,
@@ -1089,15 +1092,13 @@ export function useReceivables(
     queryFn: () => shiftService.getReceivables(stationId!),
     enabled: !!stationId,
     ...TIER.operational,
-    refetchOnWindowFocus: false,
     ...options,
   });
 }
 
 /**
  * One customer's receivable and payment behaviour (single indexed statement).
- * Same cache rule as the list: balances only move through a write, which
- * invalidates the key, so a window focus never refetches.
+ * Same cache rule as the list: plain operational tier; a write invalidates the key.
  */
 export function useCustomerReceivable(
   stationId: string | null | undefined,
@@ -1109,7 +1110,6 @@ export function useCustomerReceivable(
     queryFn: () => shiftService.getCustomerReceivable(stationId!, customerId!),
     enabled: !!stationId && !!customerId,
     ...TIER.operational,
-    refetchOnWindowFocus: false,
     ...options,
   });
 }
@@ -1117,8 +1117,9 @@ export function useCustomerReceivable(
 /**
  * What the Organization owes its suppliers (total, this month's purchased vs paid,
  * a row per supplier that is owed money). One statement over every supplier
- * ledger, so it does not refetch on window focus; a purchase or supplier payment
- * invalidates it (`useInvalidateOperational`). Not persisted.
+ * ledger. Plain operational tier (it refetches on window focus, like the statements
+ * beside it); a purchase or supplier payment invalidates it
+ * (`useInvalidateOperational`). Not persisted.
  */
 export function usePayables(
   stationId: string | null | undefined,
@@ -1129,15 +1130,14 @@ export function usePayables(
     queryFn: () => shiftService.getPayables(stationId!),
     enabled: !!stationId,
     ...TIER.operational,
-    refetchOnWindowFocus: false,
     ...options,
   });
 }
 
 /**
  * One supplier's payable, last payment, this month and purchases by product
- * (single indexed statement). Same cache rule as the list: no refetch on window
- * focus; a purchase or supplier payment invalidates it (`useInvalidateOperational`).
+ * (single indexed statement). Same cache rule as the list: plain operational tier;
+ * a purchase or supplier payment invalidates it (`useInvalidateOperational`).
  */
 export function useSupplierPayable(
   stationId: string | null | undefined,
@@ -1149,7 +1149,6 @@ export function useSupplierPayable(
     queryFn: () => shiftService.getSupplierPayable(stationId!, supplierId!),
     enabled: !!stationId && !!supplierId,
     ...TIER.operational,
-    refetchOnWindowFocus: false,
     ...options,
   });
 }

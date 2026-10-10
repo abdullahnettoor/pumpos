@@ -59,6 +59,7 @@
   --color-brand-secondary: var(--brand-secondary);
   --color-brand-warning: var(--brand-warning);
   --color-brand-danger: var(--brand-danger);
+  --color-on-brand: var(--text-on-brand);
 
   /* Surfaces + borders */
   --color-canvas: var(--bg-canvas);

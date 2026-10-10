@@ -10,7 +10,7 @@
 // prints them, it does not recompute a balance. Only the debit / credit split of
 // a row and the two column totals are derived, for display.
 
-import { formatShiftLabel, type RangedPartyLedger } from '@pump/shared';
+import { formatShiftLabel, resolveEntryDate, type RangedPartyLedger } from '@pump/shared';
 import { accountTypeLabel } from '../../utils/ledgerLabels.js';
 import { ledgerQuantityLabel } from '../../utils/ledgerQuantity.js';
 import type { LedgerDocProps, LedgerDocRow } from './ledgerDoc.js';
@@ -157,9 +157,21 @@ export function describeLedgerRow(
   };
 }
 
-/** The date a row sits under: its Business Date (a sale) or Entry Date (a Collection / Payment). */
-export const dateOf = (r: LedgerRow): string =>
-  String(r.businessDate ?? r.createdAt ?? '').slice(0, 10);
+/**
+ * The date a row sits under: its Business Date (a sale) or Entry Date (a
+ * Collection / Payment). Every ranged-ledger row carries one. A row without it
+ * (the all-time legacy ledger) falls back to its Shift's Business Date, then to
+ * the calendar date of `createdAt` in the station's timezone (`timeZone`, else the
+ * app default): never the UTC slice of the instant, which is the wrong day for an
+ * entry made after local midnight but before UTC midnight.
+ */
+export const dateOf = (r: LedgerRow, timeZone?: string | null): string => {
+  const dated = r.businessDate ?? r.shiftBusinessDate;
+  if (dated) return String(dated).slice(0, 10);
+  if (!r.createdAt) return '';
+  const at = new Date(r.createdAt);
+  return Number.isNaN(at.getTime()) ? '' : resolveEntryDate({ now: at, timeZone });
+};
 
 const MONTHS = [
   'January',
