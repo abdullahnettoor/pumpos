@@ -213,7 +213,7 @@ export const LedgerScreen: React.FC = () => {
             style={{
               backgroundColor: kind === k ? 'var(--bg-surface)' : 'transparent',
               color: kind === k ? 'var(--text-strong)' : 'var(--text-muted)',
-              boxShadow: kind === k ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+              boxShadow: kind === k ? 'var(--shadow-chip)' : 'none',
             }}
           >
             {k}

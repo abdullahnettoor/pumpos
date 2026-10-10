@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { THEME_COLORS } from './theme.js';
+import { STATUS_BAR_STYLES, THEME_COLORS } from './config.js';
 
 const css = readFileSync(fileURLToPath(new URL('./tokens.css', import.meta.url)), 'utf8');
 const bridge = readFileSync(fileURLToPath(new URL('./tailwind.css', import.meta.url)), 'utf8');
@@ -35,6 +35,11 @@ const REQUIRED = [
   'bad',
   'warn',
   'info',
+  'bad-fg',
+  'warn-fg',
+  'scrim',
+  'shadow-sheet',
+  'shadow-chip',
   'good-soft',
   'good-line',
   'bad-soft',
@@ -81,21 +86,34 @@ describe.each([
     }
   });
 
-  it('keeps accent and status colours legible on canvas, cards and their soft surfaces', () => {
-    for (const fg of ['--accent', '--good', '--bad', '--warn', '--info']) {
+  it('keeps accent, good and info legible (AA) on canvas, cards and their soft surfaces', () => {
+    for (const fg of ['--accent', '--good', '--info']) {
       for (const bg of ['--background', '--card']) {
         expect(contrast(t[fg], t[bg]), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
       }
     }
-    const soft: Array<[string, string]> = [
+    for (const [fg, bg] of [
       ['--accent', '--accent-soft'],
       ['--good', '--good-soft'],
-      ['--bad', '--bad-soft'],
-      ['--warn', '--warn-soft'],
       ['--info', '--info-soft'],
-    ];
-    for (const [fg, bg] of soft) {
+    ]) {
       expect(contrast(t[fg], t[bg]), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('keeps the bad/warn brand hues usable for icons and bars (3:1), and their -fg text AA', () => {
+    for (const fg of ['--bad', '--warn']) {
+      for (const bg of ['--background', '--card']) {
+        expect(contrast(t[fg], t[bg]), `${fg} on ${bg}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+    for (const [fg, soft] of [
+      ['--bad-fg', '--bad-soft'],
+      ['--warn-fg', '--warn-soft'],
+    ]) {
+      for (const bg of ['--background', '--card', soft]) {
+        expect(contrast(t[fg], t[bg]), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+      }
     }
   });
 
@@ -113,6 +131,63 @@ describe('theme-color', () => {
   it('matches each theme canvas', () => {
     expect(THEME_COLORS.light).toBe(light['--background']);
     expect(THEME_COLORS.dark).toBe(dark['--background']);
+  });
+
+  it('keeps the web manifest on the Light canvas', () => {
+    const manifest = JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL('../../public/manifest.webmanifest', import.meta.url)),
+        'utf8',
+      ),
+    );
+    expect(manifest.theme_color.toLowerCase()).toBe(THEME_COLORS.light);
+    expect(manifest.background_color.toLowerCase()).toBe(THEME_COLORS.light);
+  });
+
+  it('uses a dark-text status bar on Light and a translucent one on Dark', () => {
+    expect(STATUS_BAR_STYLES).toEqual({ light: 'default', dark: 'black-translucent' });
+  });
+});
+
+describe('Light palette is the existing PumpOS look (DESIGN.md "Colors")', () => {
+  const design = readFileSync(
+    fileURLToPath(new URL('../../../../DESIGN.md', import.meta.url)),
+    'utf8',
+  );
+  const colors = /^colors:\n((?: {2}.+\n)+)/m.exec(design)![1];
+  const documented = (key: string): string => {
+    const m = new RegExp(`^ {2}${key}: '(#[0-9A-Fa-f]{6})'`, 'm').exec(colors);
+    if (!m) throw new Error(`DESIGN.md colors.${key} not found`);
+    return m[1].toLowerCase();
+  };
+
+  // semantic token -> DESIGN.md colour key
+  const MAP: Record<string, string> = {
+    '--background': 'neutral',
+    '--card': 'surface',
+    '--card-alt': 'surface-alt',
+    '--line': 'border-soft',
+    '--line-strong': 'border-strong',
+    '--text-high': 'on-surface',
+    '--text-default': 'text-default',
+    '--text-muted': 'text-muted',
+    '--text-faint': 'text-faint',
+    '--accent': 'primary',
+    '--on-accent': 'on-primary',
+    '--info': 'secondary',
+    '--bad': 'error',
+    '--warn': 'tertiary',
+    '--good': 'success-fg',
+    '--good-soft': 'success-bg',
+    '--warn-soft': 'warning-bg',
+    '--warn-fg': 'warning-fg',
+    '--bad-soft': 'danger-bg',
+    '--bad-fg': 'danger-fg',
+    '--info-soft': 'info-bg',
+  };
+
+  it.each(Object.entries(MAP))('%s is DESIGN.md colors.%s', (token, key) => {
+    expect(light[token].toLowerCase()).toBe(documented(key));
   });
 });
 

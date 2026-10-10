@@ -15,7 +15,6 @@ import {
   readStoredPreference,
   resolveTheme,
   writeStoredPreference,
-  type ResolvedTheme,
   type ThemePreference,
 } from './theme.js';
 
@@ -23,12 +22,8 @@ export interface ThemeContextValue {
   /** What the user chose (stored per device). Ignored while appearance is disabled. */
   preference: ThemePreference;
   setPreference: (preference: ThemePreference) => void;
-  /** What actually renders. */
-  resolved: ResolvedTheme;
   /** False while Appearance is not shipped: always Light, no control. */
   appearanceEnabled: boolean;
-  /** True when the dev-only switch (`?theme=`) is overriding the theme. */
-  devForced: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -92,11 +87,9 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
     () => ({
       preference,
       setPreference,
-      resolved,
       appearanceEnabled,
-      devForced: devForce !== null,
     }),
-    [preference, setPreference, resolved, appearanceEnabled, devForce],
+    [preference, setPreference, appearanceEnabled],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

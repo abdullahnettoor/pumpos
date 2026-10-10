@@ -59,7 +59,7 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
       <div
         className="absolute inset-0"
-        style={{ background: 'rgba(0,0,0,0.5)' }}
+        style={{ background: 'var(--scrim)' }}
         onClick={onClose}
         aria-hidden
       />
@@ -67,7 +67,7 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
         role="dialog"
         aria-label="Cash denomination counter"
         className="relative z-10 flex max-h-[92vh] flex-col rounded-t-2xl"
-        style={{ backgroundColor: 'var(--bg-surface)', boxShadow: '0 -8px 32px rgba(0,0,0,0.24)' }}
+        style={{ backgroundColor: 'var(--bg-surface)', boxShadow: 'var(--shadow-sheet)' }}
       >
         {/* Grab handle */}
         <div className="flex justify-center pb-1 pt-2.5">

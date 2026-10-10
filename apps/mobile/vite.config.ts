@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { APPEARANCE_ENABLED } from './src/theme/config.ts';
+import { APPEARANCE_ENABLED, isDevSwitchEnabled } from './src/theme/config.ts';
 import { injectThemeFlags } from './src/theme/prepaint.ts';
 
 /** Fills the pre-paint theme script's placeholders in index.html. */
@@ -15,11 +15,12 @@ function themePrepaint(devSwitch: boolean): Plugin {
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => {
-  // The dev-only dark switch exists in `vite dev`, and in a build only when
-  // explicitly opted in (e.g. a preview deploy) — never for normal production.
+  // One evaluation of the dev-switch rule, shared by the pre-paint script
+  // (index.html) and the app (`define`), so they cannot disagree.
   const env = loadEnv(mode, process.cwd(), 'VITE_');
-  const devSwitch = command === 'serve' || env.VITE_THEME_DEV_SWITCH === 'true';
+  const devSwitch = isDevSwitchEnabled(command, env.VITE_THEME_DEV_SWITCH);
   return {
+    define: { __PUMP_THEME_DEV_SWITCH__: JSON.stringify(devSwitch) },
     plugins: [react(), tailwindcss(), themePrepaint(devSwitch)],
     server: {
       port: 3100,

@@ -8,10 +8,10 @@ interface KpiProps {
 }
 
 const toneColor: Record<NonNullable<KpiProps['tone']>, string> = {
-  default: 'var(--text-strong)',
-  positive: 'var(--state-success-fg, #1F6A53)',
-  negative: 'var(--state-danger-fg, #b3261e)',
-  warning: 'var(--state-warning-fg, #8a5a00)',
+  default: 'var(--text-high)',
+  positive: 'var(--good)',
+  negative: 'var(--bad-fg)',
+  warning: 'var(--warn-fg)',
 };
 
 export const Kpi: React.FC<KpiProps> = ({ label, value, sub, tone = 'default' }) => (

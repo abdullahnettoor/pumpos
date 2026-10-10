@@ -6,11 +6,24 @@ import {
   resolveTheme,
   writeStoredPreference,
 } from './theme.js';
-import { APPEARANCE_ENABLED, THEME_STORAGE_KEY } from './config.js';
+import { APPEARANCE_ENABLED, THEME_STORAGE_KEY, isDevSwitchEnabled } from './config.js';
 
 describe('Appearance ships hidden', () => {
   it('is disabled by config', () => {
     expect(APPEARANCE_ENABLED).toBe(false);
+  });
+});
+
+describe('isDevSwitchEnabled (the one dev-switch rule)', () => {
+  it('is on under `vite dev` and off for a normal build', () => {
+    expect(isDevSwitchEnabled('serve', undefined)).toBe(true);
+    expect(isDevSwitchEnabled('build', undefined)).toBe(false);
+  });
+
+  it('is on in a build only with an explicit opt-in (not merely a development mode)', () => {
+    expect(isDevSwitchEnabled('build', 'true')).toBe(true);
+    expect(isDevSwitchEnabled('build', 'false')).toBe(false);
+    expect(isDevSwitchEnabled('build', '1')).toBe(false);
   });
 });
 

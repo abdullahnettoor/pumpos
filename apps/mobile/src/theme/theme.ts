@@ -10,29 +10,28 @@
  * only way to see Dark is the dev-only switch (`?theme=dark`), which exists so
  * the dark token set can be verified before dark mode ships.
  */
-import { THEME_DEV_QUERY_PARAM, THEME_STORAGE_KEY } from './config.js';
+import {
+  STATUS_BAR_STYLES,
+  THEME_COLORS,
+  THEME_DEV_QUERY_PARAM,
+  THEME_STORAGE_KEY,
+  type ThemeName,
+} from './config.js';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
-export type ResolvedTheme = 'light' | 'dark';
+export type ResolvedTheme = ThemeName;
 
 export const THEME_PREFERENCES: readonly ThemePreference[] = ['system', 'light', 'dark'];
 
 /**
- * `<meta name="theme-color">` per theme: the canvas colour, so the browser /
- * status bar chrome blends with the screen. Mirrors `--background` in tokens.css.
+ * Whether the dev-only dark switch is available in this build. The rule lives
+ * in `isDevSwitchEnabled` (config.ts); `vite.config.ts` evaluates it once and
+ * injects the result both into the pre-paint script and here (via `define`).
+ * Off when the define is absent (e.g. under vitest).
  */
-export const THEME_COLORS: Record<ResolvedTheme, string> = {
-  light: '#f3f5f2',
-  dark: '#0b0f0d',
-};
-
-/**
- * Whether the dev-only dark switch is available in this build: always in
- * `vite dev`, and in a production build only when `VITE_THEME_DEV_SWITCH=true`
- * (e.g. a preview deploy). Never on for normal production builds.
- */
+declare const __PUMP_THEME_DEV_SWITCH__: boolean | undefined;
 export const DEV_SWITCH_ENABLED: boolean =
-  import.meta.env.DEV === true || import.meta.env.VITE_THEME_DEV_SWITCH === 'true';
+  typeof __PUMP_THEME_DEV_SWITCH__ !== 'undefined' && __PUMP_THEME_DEV_SWITCH__ === true;
 
 export function parsePreference(value: unknown): ThemePreference | null {
   return value === 'system' || value === 'light' || value === 'dark' ? value : null;
@@ -87,7 +86,11 @@ export function writeStoredPreference(
   }
 }
 
-/** Applies a resolved theme to the document: root class, color-scheme, theme-color meta. */
+/**
+ * Applies a resolved theme to the document: root class, color-scheme, the
+ * theme-color meta and the iOS status-bar style (so its text contrasts with
+ * the canvas). Mirrored before first paint by the script in index.html.
+ */
 export function applyTheme(doc: Document, theme: ResolvedTheme): void {
   const root = doc.documentElement;
   root.classList.remove('light', 'dark');
@@ -101,4 +104,14 @@ export function applyTheme(doc: Document, theme: ResolvedTheme): void {
     doc.head.appendChild(meta);
   }
   meta.content = THEME_COLORS[theme];
+
+  let bar = doc.querySelector<HTMLMetaElement>(
+    'meta[name="apple-mobile-web-app-status-bar-style"]',
+  );
+  if (!bar) {
+    bar = doc.createElement('meta');
+    bar.name = 'apple-mobile-web-app-status-bar-style';
+    doc.head.appendChild(bar);
+  }
+  bar.content = STATUS_BAR_STYLES[theme];
 }

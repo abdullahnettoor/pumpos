@@ -24,7 +24,8 @@
  * --accent         brand / primary action (petrol green; mint in dark)
  * --on-accent      text and icons placed on --accent
  * --accent-soft    tinted accent surface (avatar, selected chip)
- * --good --bad --warn --info          status foregrounds (text, icons, bars)
+ * --good --bad --warn --info          status foregrounds (icons, bars, large text)
+ * --bad-fg --warn-fg                   status text on a tinted --*-soft surface
  * --good-soft --bad-soft --warn-soft --info-soft    status tinted surfaces
  * --good-line --bad-line --warn-line  status tinted borders
  * --hero           gradient for the hero strip / summary card
@@ -32,45 +33,56 @@
  * --dock           translucent surface of the bottom dock / action bar
  * --dock-line      border of the dock
  * --track          empty part of a meter, tank tube, progress bar
- * --shadow         elevation shadow for floating surfaces (dock, sheet)
+ * --scrim          backdrop behind a sheet / modal
+ * --shadow         elevation shadow for floating surfaces (dock)
+ * --shadow-sheet   upward shadow for a bottom sheet
+ * --shadow-chip    hairline lift for a selected segment / chip
  */
 
 :root,
 :root.light {
-  --background: #f3f5f2;
-  --card: #ffffff;
-  --card-alt: #f7f8f6;
-  --line: #e3e8e2;
-  --line-strong: #d5dcd4;
+  /* Values with a counterpart in DESIGN.md "Colors" use the DESIGN.md value
+     (the existing PumpOS look). Only tokens it has no entry for (soft status
+     lines, hero, dock, track, scrim, shadows, accent-soft) take prototype values. */
+  --background: #f6f7f4; /* Canvas */
+  --card: #ffffff; /* Surface */
+  --card-alt: #f1f3ef; /* Surface Alt */
+  --line: #d9ded6; /* Border Soft */
+  --line-strong: #b9c1b7; /* Border Strong */
 
-  --text-high: #111813;
+  --text-high: #18201a; /* Text Strong */
   --text-default: #2b342d;
-  --text-muted: #5f6c64;
-  --text-faint: #7f8a82;
+  --text-muted: #5e6a61;
+  --text-faint: #7a857c;
 
   --accent: #1f6a53; /* Petrol Green */
   --on-accent: #ffffff;
   --accent-soft: #e3f1ea;
 
-  --good: #1e7a56;
-  --bad: #b83d32; /* Alert Red */
-  --warn: #8f5f08; /* Signal Amber, darkened for text legibility */
+  --good: #1e6a4e; /* success-fg */
+  --bad: #b44a3f; /* Alert Red */
+  --warn: #b7811e; /* Signal Amber */
   --info: #2e5e88; /* Diesel Blue */
+  --bad-fg: #9f3f36; /* danger-fg: text on --bad-soft */
+  --warn-fg: #8a6116; /* warning-fg: text on --warn-soft */
 
-  --good-soft: #e6f3ec;
+  --good-soft: #e8f4ee; /* success-bg */
   --good-line: #c5e2d3;
-  --bad-soft: #fcecea;
+  --bad-soft: #f8e3e0; /* danger-bg */
   --bad-line: #f3cfca;
-  --warn-soft: #fbf3e2;
+  --warn-soft: #f9f0da; /* warning-bg */
   --warn-line: #efdcae;
-  --info-soft: #e8f0f7;
+  --info-soft: #e8f0f7; /* info-bg */
 
   --hero: linear-gradient(135deg, #e4f2ea, #f6faf7);
   --hero-line: #cfe5d8;
   --dock: rgba(255, 255, 255, 0.88);
   --dock-line: #e1e6df;
   --track: #e8ece7;
+  --scrim: rgba(0, 0, 0, 0.5);
   --shadow: 0 10px 30px rgba(24, 32, 26, 0.14);
+  --shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.24);
+  --shadow-chip: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 :root.dark {
@@ -93,6 +105,8 @@
   --bad: #ff7a6b;
   --warn: #f2b544;
   --info: #6cb6ff;
+  --bad-fg: #ff7a6b;
+  --warn-fg: #f2b544;
 
   --good-soft: #10241b;
   --good-line: #1d4733;
@@ -107,7 +121,10 @@
   --dock: rgba(22, 28, 25, 0.86);
   --dock-line: #263029;
   --track: #1b2420;
+  --scrim: rgba(0, 0, 0, 0.6);
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.6);
+  --shadow-chip: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 /*
@@ -132,9 +149,9 @@
   --state-success-bg: var(--good-soft);
   --state-success-fg: var(--good);
   --state-warning-bg: var(--warn-soft);
-  --state-warning-fg: var(--warn);
+  --state-warning-fg: var(--warn-fg);
   --state-danger-bg: var(--bad-soft);
-  --state-danger-fg: var(--bad);
+  --state-danger-fg: var(--bad-fg);
   --state-info-bg: var(--info-soft);
   --state-info-fg: var(--info);
 }

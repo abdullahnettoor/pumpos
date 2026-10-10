@@ -6,7 +6,8 @@
  *   border-line  border-line-strong  border-bad-line ...
  *   text-text-high  text-text-default  text-text-muted  text-text-faint
  *   text-accent  text-on-accent  text-good  text-bad  text-warn  text-info
- *   bg-track  bg-dock  border-dock-line  border-hero-line  shadow-float
+ *   text-bad-fg  text-warn-fg  (status text on a soft surface)
+ *   bg-track  bg-scrim  shadow-sheet  shadow-chip  bg-dock  border-dock-line  border-hero-line  shadow-float
  *   hero gradient: bg-[image:var(--hero)]
  *
  * Load order in main.tsx: @pump/ui index.css, then this file, then tokens.css
@@ -34,6 +35,8 @@
   --color-bad: var(--bad);
   --color-warn: var(--warn);
   --color-info: var(--info);
+  --color-bad-fg: var(--bad-fg);
+  --color-warn-fg: var(--warn-fg);
   --color-good-soft: var(--good-soft);
   --color-good-line: var(--good-line);
   --color-bad-soft: var(--bad-soft);
@@ -46,6 +49,9 @@
   --color-dock: var(--dock);
   --color-dock-line: var(--dock-line);
   --color-track: var(--track);
+  --color-scrim: var(--scrim);
 
   --shadow-float: var(--shadow);
+  --shadow-sheet: var(--shadow-sheet);
+  --shadow-chip: var(--shadow-chip);
 }
