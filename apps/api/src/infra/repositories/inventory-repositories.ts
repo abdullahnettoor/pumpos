@@ -2,6 +2,9 @@ import { and, eq, sql } from 'drizzle-orm';
 import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type {
   StockMovement,
+  TankSalesWindow,
+  TankSalesWindowQuery,
+  TankSalesWindowReader,
   StockMovementRepository,
   StockVariance,
   StockVarianceRepository,
@@ -151,4 +154,59 @@ export async function readInventoryLevels(db: DbClient, organizationId: string, 
       quantity: Number(i.quantity),
     })),
   };
+}
+
+/**
+ * Per-tank sold volume over a Station's newest closed Business Days, in ONE
+ * statement (core `GetTankDaysOfCover`; averaging rules are documented there).
+ *
+ * Source: `stock_movements` Sale rows with a tank (metered fuel, booked when a
+ * Shift closes), the inventory source of truth. DSSR snapshots are not used:
+ * they carry no tank id (sold litres are per product), so they cannot tell two
+ * tanks of one product apart.
+ *
+ * Tenancy: `stock_movements` has no organization column, so the window of days
+ * is scoped on `business_days` (organization + station) and the tanks are
+ * re-checked on `tanks` (organization + station).
+ * Indexes: `business_days_org_station_date_uniq` for the window; the movement
+ * join filters on `business_day_id` (no index on `stock_movements` yet — see
+ * the PR for the proposed `(business_day_id, tank_id)` index).
+ */
+export class DrizzleTankSalesWindowReader implements TankSalesWindowReader {
+  constructor(private readonly db: DbExecutor) {}
+
+  async read(q: TankSalesWindowQuery): Promise<TankSalesWindow> {
+    const rows = await this.db.execute(sql`
+      WITH window_days AS (
+        SELECT bd.id
+        FROM business_days bd
+        WHERE bd.organization_id = ${q.organizationId} AND bd.station_id = ${q.stationId}
+          AND bd.status = 'CLOSED'
+        ORDER BY bd.business_date DESC
+        LIMIT ${q.days}::int
+      ),
+      sold AS (
+        SELECT sm.tank_id, -SUM(sm.quantity) AS volume
+        FROM stock_movements sm
+        JOIN window_days wd ON wd.id = sm.business_day_id
+        JOIN tanks t ON t.id = sm.tank_id
+          AND t.organization_id = ${q.organizationId} AND t.station_id = ${q.stationId}
+        WHERE sm.movement_type = 'Sale' AND sm.tank_id IS NOT NULL
+        GROUP BY sm.tank_id
+      )
+      SELECT
+        (SELECT count(*)::int FROM window_days) AS closed_days,
+        COALESCE(
+          (SELECT jsonb_agg(jsonb_build_object('tankId', tank_id, 'volume', volume)) FROM sold),
+          '[]'::jsonb) AS sold
+    `);
+    const row = (rows as unknown as Array<{ closed_days: number; sold: unknown }>)[0];
+    const sold = Array.isArray(row?.sold)
+      ? (row.sold as Array<{ tankId: string; volume: number }>)
+      : [];
+    return {
+      closedDays: Number(row?.closed_days ?? 0),
+      sold: sold.map((s) => ({ tankId: String(s.tankId), volume: Number(s.volume) })),
+    };
+  }
 }

@@ -172,6 +172,33 @@ describe('tank gauges', () => {
     expect(b).toMatchObject({ pct: 0, fill: 0, level: 'red' });
   });
 
+  it('words days of cover from the server figure, and hides it without history', () => {
+    const [a, b, c, d] = deriveTanks([
+      {
+        id: 'a',
+        name: 'A',
+        productName: 'P',
+        capacity: 1000,
+        currentVolume: 500,
+        daysOfCover: 2.6,
+      },
+      { id: 'b', name: 'B', productName: 'P', capacity: 1000, currentVolume: 90, daysOfCover: 0.9 },
+      {
+        id: 'c',
+        name: 'C',
+        productName: 'P',
+        capacity: 1000,
+        currentVolume: 500,
+        daysOfCover: null,
+      },
+      { id: 'd', name: 'D', productName: 'P', capacity: 1000, currentVolume: 500 },
+    ]);
+    expect(a.cover).toBe('2.6 days');
+    expect(b.cover).toBe('0.9 day');
+    expect(c.cover).toBe('');
+    expect(d.cover).toBe('');
+  });
+
   it('shows non-litre stock in its own unit', () => {
     const [t] = deriveTanks([
       {

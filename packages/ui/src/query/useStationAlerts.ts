@@ -1,5 +1,6 @@
 import React from 'react';
 import { useInventoryStatus, useInventoryItems } from './hooks.js';
+import { daysOfCoverLeft } from '@pump/shared';
 import { formatQty } from '../utils/format.js';
 import { tankPct, classifyTank, OVER_CAPACITY_EXPLANATION } from '../utils/stock.js';
 
@@ -55,7 +56,13 @@ export function deriveStationAlerts(tanks: any[] = [], items: any[] = []): Stati
       meta:
         level === 'over'
           ? `${t.productName} · ${pct.toFixed(0)}% · ${formatQty(vol, 0)} L. ${OVER_CAPACITY_EXPLANATION}`
-          : `${t.productName} · ${pct.toFixed(0)}% · ${formatQty(vol, 0)} L`,
+          : [
+              `${t.productName} · ${pct.toFixed(0)}% · ${formatQty(vol, 0)} L`,
+              // Days of cover from the server; absent without sales history.
+              daysOfCoverLeft(typeof t.daysOfCover === 'number' ? t.daysOfCover : null),
+            ]
+              .filter(Boolean)
+              .join(' · '),
       actionLabel: 'Stock',
       actionPath: '/inventory',
       actionTab: 'tanks',
