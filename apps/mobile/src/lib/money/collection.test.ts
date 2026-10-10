@@ -8,6 +8,9 @@ import {
   collectionFormSchema,
   collectionRequest,
   entryDateToday,
+  isEarlierAttemptReceived,
+  keepsIdempotencyKey,
+  sameCollectionEntries,
   type CollectionForm,
 } from './collection.js';
 
@@ -75,7 +78,7 @@ describe('collectionFormSchema', () => {
   });
 
   it('needs an amount above zero', () => {
-    expect(issues({ amount: '' }).amount).toBe('Enter the amount received.');
+    expect(issues({ amount: '' }).amount).toBe('Amount is required');
     expect(issues({ amount: '0' }).amount).toBe('Amount must be positive');
     expect(issues({ amount: '-5' }).amount).toBe('Amount must be positive');
     expect(issues({ amount: 'abc' }).amount).toBeTruthy();
@@ -180,5 +183,44 @@ describe('collectionFailure', () => {
   it('falls back to a retry hint', () => {
     expect(collectionFailure(new Error('')).message).toMatch(/try again/i);
     expect(collectionFailure(undefined).message).toMatch(/try again/i);
+  });
+});
+
+describe('idempotency keys', () => {
+  const err = (code: string, message: string, status?: number) =>
+    Object.assign(new Error(message), { code, status });
+
+  it('keeps the key while the outcome is unknown, replaces it once decided', () => {
+    expect(keepsIdempotencyKey(err('NETWORK', 'Network error'))).toBe(true);
+    expect(keepsIdempotencyKey(err('INTERNAL', 'boom', 500))).toBe(true);
+    expect(
+      keepsIdempotencyKey(
+        err('CONFLICT', 'A request with this Idempotency-Key is already in progress', 409),
+      ),
+    ).toBe(true);
+    expect(keepsIdempotencyKey(err('VALIDATION_ERROR', 'bad', 400))).toBe(false);
+    expect(keepsIdempotencyKey(err('FORBIDDEN', 'no', 403))).toBe(false);
+  });
+
+  it('a conflict over changed content means the earlier attempt arrived', () => {
+    expect(
+      isEarlierAttemptReceived(
+        err(
+          'CONFLICT',
+          'This Idempotency-Key was already used with different request content',
+          409,
+        ),
+      ),
+    ).toBe(true);
+    expect(isEarlierAttemptReceived(err('NETWORK', 'Network error'))).toBe(false);
+  });
+
+  it('compares entries as the server reads them (trimmed)', () => {
+    const a = form({ amount: '5000', notes: 'ref' });
+    expect(sameCollectionEntries(a, form({ amount: ' 5000 ', notes: ' ref ' }))).toBe(true);
+    expect(sameCollectionEntries(a, form({ amount: '4500', notes: 'ref' }))).toBe(false);
+    expect(
+      sameCollectionEntries(a, form({ amount: '5000', notes: 'ref', paymentMethod: 'UPI' })),
+    ).toBe(false);
   });
 });

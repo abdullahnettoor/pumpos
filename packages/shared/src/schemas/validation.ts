@@ -301,8 +301,13 @@ export const shiftCollectionSchema = z.object({
   notes: z.string().max(500).optional().nullable(),
 });
 
+/** A numeric(12,2) money column's largest value (`credit_limit`, `collections.amount`). */
+const NUMERIC_12_2_MAX = 9_999_999_999.99;
+
+const hasAtMostTwoDecimals = (n: number) => Math.abs(n * 100 - Math.round(n * 100)) <= 1e-6;
+
 /** `customers.credit_limit` is numeric(12,2): the largest amount it can hold. */
-export const CREDIT_LIMIT_MAX = 9_999_999_999.99;
+export const CREDIT_LIMIT_MAX = NUMERIC_12_2_MAX;
 
 /**
  * A Customer's credit limit: 0 or more, at most 2 decimal places, within the
@@ -314,7 +319,7 @@ export const creditLimitSchema = z
   .number()
   .nonnegative('Enter 0 or more.')
   .max(CREDIT_LIMIT_MAX, 'That is more than a limit can hold.')
-  .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) <= 1e-6, 'Use at most 2 decimal places.')
+  .refine(hasAtMostTwoDecimals, 'Use at most 2 decimal places.')
   .optional()
   .nullable();
 
@@ -564,14 +569,23 @@ export const expenseEntryFormSchema = z.object({
 });
 export type ExpenseEntryFormValues = z.infer<typeof expenseEntryFormSchema>;
 
-/** Customer collection — an Office Record (ADR 0005). */
+/** `collections.amount` is numeric(12,2): the largest payment it can hold. */
+export const COLLECTION_AMOUNT_MAX = NUMERIC_12_2_MAX;
+
+/**
+ * Customer collection — an Office Record (ADR 0005). The one form rule for the
+ * desktop quick entry and the mobile Record payment sheet: an amount above 0,
+ * within the column's range and at most 2 decimal places.
+ */
 export const collectionEntryFormSchema = z
   .object({
     entryDate: entryDateField,
     customerId: z.string().optional().default(''),
     amount: z.coerce
       .number({ invalid_type_error: 'Amount is required' })
-      .positive('Amount must be positive'),
+      .positive('Amount must be positive')
+      .max(COLLECTION_AMOUNT_MAX, 'That is more than a payment can hold.')
+      .refine(hasAtMostTwoDecimals, 'Use at most 2 decimal places.'),
     paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'BankTransfer']).default('Cash'),
     notes: z.string().max(500).optional().default(''),
     /** Account the money lands in. Not needed when a terminal is chosen. */

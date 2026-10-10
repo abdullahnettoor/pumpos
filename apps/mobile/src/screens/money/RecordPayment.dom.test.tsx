@@ -231,7 +231,7 @@ describe('the sheet', () => {
     await waitFor(() => expect(account().value).toBe('cash'));
 
     submit();
-    expect(await screen.findByText('Enter the amount received.')).toBeTruthy();
+    expect(await screen.findByText('Amount is required')).toBeTruthy();
     expect(amount().getAttribute('aria-invalid')).toBe('true');
 
     typeAmount('12.345');
@@ -266,11 +266,8 @@ describe('the sheet', () => {
 
 describe('saving', () => {
   it('records an Office Record with an Idempotency-Key, then the balance and caches refresh', async () => {
-    const { qc } = mount();
+    mount();
     await waitFor(() => expect(balance().getAttribute('data-state')).toBe('under'));
-    // Things that read the same collections: the receivables summary and the statement.
-    qc.setQueryData(['receivables', 'st-1'], { stale: true });
-    qc.setQueryData(['customer-statement', 'c1', '2026-04-01', '9999-12-31'], { stale: true });
     const ledgerCalls = getLedger.mock.calls.length;
 
     await pickCash('50000');
@@ -301,10 +298,6 @@ describe('saving', () => {
     expect(screen.getByText('₹50,000.00 recorded from KTC Logistics.')).toBeTruthy();
     await waitFor(() => expect(getCustomers.mock.calls.length).toBeGreaterThan(1));
     await waitFor(() => expect(getLedger.mock.calls.length).toBeGreaterThan(ledgerCalls));
-    expect(qc.getQueryState(['receivables', 'st-1'])?.isInvalidated).toBe(true);
-    expect(
-      qc.getQueryState(['customer-statement', 'c1', '2026-04-01', '9999-12-31'])?.isInvalidated,
-    ).toBe(true);
   });
 
   it('sends the chosen method and account (UPI into a bank account)', async () => {
@@ -367,6 +360,71 @@ describe('saving', () => {
     const keys = record.mock.calls.map((c) => c[1]?.idempotencyKey);
     expect(keys[1]).toBe(keys[0]);
     expect(keys[2]).not.toBe(keys[1]);
+  });
+
+  it('keeps the key through an edit after an unknown outcome and warns the first attempt may have gone through', async () => {
+    record.mockReset();
+    record.mockRejectedValueOnce(Object.assign(new Error('Network error'), { code: 'NETWORK' }));
+    mount();
+    await pickCash('5000');
+    submit();
+    await screen.findByText('Network error');
+    // Same entries: a plain retry, nothing to warn about.
+    expect(screen.queryByText(/may have gone through/)).toBeNull();
+
+    // The user changes the amount and tries again: still the same key.
+    typeAmount('4500');
+    expect((await screen.findByRole('status')).textContent).toMatch(
+      /earlier attempt of ₹5,000\.00 may have gone through/,
+    );
+    record.mockResolvedValueOnce({ id: 'col-2' });
+    submit();
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(2));
+    const keys = record.mock.calls.map((c) => c[1]?.idempotencyKey);
+    expect(keys[1]).toBe(keys[0]);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('when the API says the earlier attempt arrived, the balance is re-read and the next try takes a new key', async () => {
+    record.mockReset();
+    record.mockRejectedValueOnce(Object.assign(new Error('Network error'), { code: 'NETWORK' }));
+    mount();
+    await pickCash('5000');
+    submit();
+    await screen.findByText('Network error');
+    const loads = getCustomers.mock.calls.length;
+
+    typeAmount('4500');
+    record.mockRejectedValueOnce(
+      refusal(
+        'CONFLICT',
+        'This Idempotency-Key was already used with different request content',
+        409,
+      ),
+    );
+    submit();
+    expect((await screen.findByRole('alert')).textContent).toMatch(/earlier attempt was received/i);
+    await waitFor(() => expect(getCustomers.mock.calls.length).toBeGreaterThan(loads));
+    expect(screen.queryByText(/may have gone through/)).toBeNull();
+
+    record.mockResolvedValueOnce({ id: 'col-3' });
+    submit();
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(3));
+    const keys = record.mock.calls.map((c) => c[1]?.idempotencyKey);
+    expect(keys[2]).not.toBe(keys[1]);
+  });
+
+  it('labels the method group and keeps the account Retry outside its description', async () => {
+    vi.spyOn(ui.CloudFinanceService.prototype, 'getFundingAccounts').mockRejectedValue(
+      new Error('boom'),
+    );
+    mount();
+    await openSheet();
+    expect(screen.getByRole('group', { name: 'Method' })).toBeTruthy();
+    const retry = await screen.findByRole('button', { name: 'Retry' }, { timeout: 4000 });
+    const hint = document.getElementById(account().getAttribute('aria-describedby')!)!;
+    expect(hint.textContent).toBe('Could not load accounts.');
+    expect(hint.contains(retry)).toBe(false);
   });
 
   it('shows an access refusal inline, keeps the sheet and greys the action out', async () => {

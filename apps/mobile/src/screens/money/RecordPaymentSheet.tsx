@@ -16,6 +16,7 @@ import {
   COLLECTION_METHODS,
   collectionFormSchema,
   entryDateToday,
+  sameCollectionEntries,
   type CollectionForm,
 } from '../../lib/money/collection.js';
 import { balanceOf, type MoneyCustomer } from '../../lib/money/parties.js';
@@ -50,8 +51,9 @@ const Form: React.FC<
     stationId: string;
     save: (form: CollectionForm) => Promise<RecordCollectionResult>;
     isSaving: boolean;
+    unknownAttempt: CollectionForm | null;
   }
-> = ({ customer, stationId, timeZone, onClose, save, isSaving }) => {
+> = ({ customer, stationId, timeZone, onClose, save, isSaving, unknownAttempt }) => {
   const toast = useToast();
   const [refusal, setRefusal] = useState<string | null>(null);
   // Fixed while the sheet is open: the date the sheet opened on is today for this entry.
@@ -86,6 +88,10 @@ const Form: React.FC<
   const method = watch('paymentMethod');
   const amountText = watch('amount');
   const chosenAccount = watch('fundingAccountId');
+  const entries = watch();
+  // An earlier try with no answer may have been recorded: say so before a different payment.
+  const maybeRecorded =
+    unknownAttempt && !sameCollectionEntries(unknownAttempt, entries) ? unknownAttempt : null;
 
   const accountsQ = useFundingAccounts(stationId);
   const accounts = useMemo(
@@ -154,8 +160,8 @@ const Form: React.FC<
         </p>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[11.5px] font-semibold text-text-muted">Method</span>
+      <fieldset className="m-0 flex min-w-0 flex-col gap-1.5 border-0 p-0">
+        <legend className="mb-1.5 p-0 text-[11.5px] font-semibold text-text-muted">Method</legend>
         <SegmentedControl
           label="Payment method"
           options={COLLECTION_METHODS}
@@ -166,7 +172,7 @@ const Form: React.FC<
           }}
           className=""
         />
-      </div>
+      </fieldset>
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor={accountId} className="text-[11.5px] font-semibold text-text-muted">
@@ -193,19 +199,16 @@ const Form: React.FC<
             className={`m-0 text-[11px] ${accountProblem ? 'text-bad-fg' : 'text-text-muted'}`}
           >
             {accountProblem ?? accountNote}
-            {accountsQ.isError && (
-              <>
-                {' '}
-                <button
-                  type="button"
-                  onClick={() => void accountsQ.refetch()}
-                  className="font-bold text-accent"
-                >
-                  Retry
-                </button>
-              </>
-            )}
           </p>
+        )}
+        {accountsQ.isError && (
+          <button
+            type="button"
+            onClick={() => void accountsQ.refetch()}
+            className="self-start text-[11px] font-bold text-accent"
+          >
+            Retry
+          </button>
         )}
       </div>
 
@@ -260,6 +263,16 @@ const Form: React.FC<
         </p>
       )}
 
+      {maybeRecorded && (
+        <p
+          role="status"
+          className="m-0 rounded-xl border border-warn-line bg-warn-soft px-3 py-2 text-[12.5px] text-warn-fg"
+        >
+          Your earlier attempt of {inr(Number(maybeRecorded.amount.trim()))} may have gone through.
+          Check the balance before recording a different payment.
+        </p>
+      )}
+
       <div className="grid grid-cols-2 gap-2.5 pt-1">
         <button
           type="button"
@@ -296,7 +309,7 @@ export const RecordPaymentSheet: React.FC<Props> = ({
   timeZone,
   onClose,
 }) => {
-  const { save, isSaving } = useRecordCollection(stationId, customer.id);
+  const { save, isSaving, unknownAttempt } = useRecordCollection(stationId, customer.id);
   return (
     <BottomSheet open={open} onClose={onClose} label="Record payment">
       <Form
@@ -306,6 +319,7 @@ export const RecordPaymentSheet: React.FC<Props> = ({
         onClose={onClose}
         save={save}
         isSaving={isSaving}
+        unknownAttempt={unknownAttempt}
       />
     </BottomSheet>
   );

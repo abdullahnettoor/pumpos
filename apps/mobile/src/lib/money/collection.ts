@@ -5,9 +5,8 @@
  * A Collection is an Office Record (ADR 0005): station + Entry Date + payment
  * method + Funding Account, never a Shift or Business Day. The form's fields are
  * checked by `collectionEntryFormSchema` from `@pump/shared` (the rule the
- * desktop quick-entry form and the server hold a collection to); only what a
- * thumb-sized text form adds is checked here (blank amount, the column's
- * range and precision, an Entry Date that is not in the future).
+ * desktop quick-entry form and the server hold a collection to); only what the
+ * station's clock adds is checked here (an Entry Date that is not in the future).
  * Who may record and what a refusal says are decided here too, so the sheet and
  * the Customer page cannot disagree (`collection.test.ts` pins them).
  */
@@ -21,6 +20,7 @@ import {
   type Role,
 } from '@pump/shared';
 import { collectionPayload } from '@pump/ui';
+import { reusesIdempotencyKey } from './creditLimit.js';
 
 export type CollectionMethod = 'Cash' | 'UPI' | 'Card' | 'BankTransfer';
 
@@ -31,9 +31,6 @@ export const COLLECTION_METHODS: readonly { value: CollectionMethod; label: stri
   { value: 'Card', label: 'Card' },
   { value: 'BankTransfer', label: 'Bank' },
 ];
-
-/** `collections.amount` is numeric(12,2): the largest payment it can hold. */
-export const COLLECTION_AMOUNT_MAX = 9_999_999_999.99;
 
 /** Longest reference the server accepts (`RecordCollection` notes). */
 export const COLLECTION_NOTE_MAX = 500;
@@ -56,11 +53,15 @@ export interface CollectionForm {
   notes: string;
 }
 
-const hasAtMostTwoDecimals = (n: number) => Math.abs(n * 100 - Math.round(n * 100)) <= 1e-6;
+const FORM_FIELDS = ['amount', 'paymentMethod', 'fundingAccountId', 'entryDate', 'notes'] as const;
 
 /**
- * React Hook Form's resolver schema. `today` is the station's Entry Date today:
- * the server refuses a future date, so the form says so before sending.
+ * React Hook Form's resolver schema. The fields are text as typed; the rules
+ * are the shared `collectionEntryFormSchema` (amount above 0 within the column
+ * and to 2 decimals, a date shape, the account, the reference length), the one
+ * the desktop form and the server hold a collection to. `today` is the station's
+ * Entry Date today: the server refuses a future date, so the form says so before
+ * sending.
  */
 export const collectionFormSchema = (today: string) =>
   z
@@ -76,34 +77,17 @@ export const collectionFormSchema = (today: string) =>
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
 
       const text = v.amount.trim();
-      if (text === '') add('amount', 'Enter the amount received.');
-      else {
-        const n = Number(text);
-        if (Number.isFinite(n) && n > 0) {
-          if (n > COLLECTION_AMOUNT_MAX) add('amount', 'That is more than a payment can hold.');
-          else if (!hasAtMostTwoDecimals(n)) add('amount', 'Use at most 2 decimal places.');
-        }
-      }
-
-      // The shared rule: amount > 0, a date shape, the account (or a terminal), note length.
       const shared = collectionEntryFormSchema.safeParse({
         ...v,
+        // A blank box is a missing amount (the shared rule says so); '' would coerce to 0.
         amount: text === '' ? undefined : text,
         customerId: 'customer',
         terminalId: '',
       });
       if (!shared.success) {
         for (const issue of shared.error.issues) {
-          const field = issue.path[0];
-          if (field === 'amount' && text === '') continue;
-          if (field === 'amount' && Number(text) > 0 && Number.isFinite(Number(text))) continue;
-          if (
-            field === 'amount' ||
-            field === 'entryDate' ||
-            field === 'fundingAccountId' ||
-            field === 'notes'
-          )
-            add(field, issue.message);
+          const field = FORM_FIELDS.find((f) => f === issue.path[0]);
+          if (field) add(field, issue.message);
         }
       }
 
@@ -128,6 +112,43 @@ export function collectionRequest(stationId: string, customerId: string, form: C
     terminalId: '',
   });
 }
+
+/** The entries that make a save what it is, as the server will read them (trimmed). */
+const entriesOf = (f: CollectionForm) =>
+  [f.amount.trim(), f.paymentMethod, f.fundingAccountId, f.entryDate, f.notes.trim()].join(
+    '\u0000',
+  );
+
+/** Are these two forms the same payment? Whitespace around the amount / reference does not count. */
+export const sameCollectionEntries = (a: CollectionForm, b: CollectionForm): boolean =>
+  entriesOf(a) === entriesOf(b);
+
+const codeOf = (e: unknown): string | undefined =>
+  e && typeof e === 'object' ? (e as { code?: string }).code : undefined;
+
+/**
+ * Must the next try of this save carry the SAME Idempotency-Key? Yes while the
+ * outcome is unknown: no answer (network drop), a 5xx (the API releases the key),
+ * or the API saying the first request with this key is still running. Every
+ * other answer is decided (the API caches each 2xx/4xx under its key), so the
+ * key is replaced.
+ */
+export function keepsIdempotencyKey(error: unknown): boolean {
+  if (reusesIdempotencyKey(error)) return true;
+  return (
+    codeOf(error) === 'CONFLICT' &&
+    error instanceof Error &&
+    /already in progress/i.test(error.message)
+  );
+}
+
+/**
+ * A retry that changed the entries reached the API under the key of an attempt
+ * that did arrive: the API refuses "same key, different content". The earlier
+ * payment is on file, so the caller should read the balance again.
+ */
+export const isEarlierAttemptReceived = (error: unknown): boolean =>
+  codeOf(error) === 'CONFLICT' && !keepsIdempotencyKey(error);
 
 const cents = (n: number) => Math.round(n * 100) / 100;
 
@@ -194,9 +215,6 @@ export interface CollectionFailure {
   message: string;
 }
 
-const codeOf = (e: unknown): string | undefined =>
-  e && typeof e === 'object' ? (e as { code?: string }).code : undefined;
-
 /** What the sheet says when the save is refused or fails. */
 export function collectionFailure(error: unknown): CollectionFailure {
   const serverMessage = error instanceof Error && error.message ? error.message : null;
@@ -208,6 +226,13 @@ export function collectionFailure(error: unknown): CollectionFailure {
       };
     case 'FORBIDDEN':
       return { message: 'You do not have permission to record payments.' };
+    case 'CONFLICT':
+      return {
+        message: isEarlierAttemptReceived(error)
+          ? 'Your earlier attempt was received, so the balance has been refreshed. Check it before recording this payment again.'
+          : (serverMessage ??
+            'Still saving the earlier attempt. Wait a moment and check the balance.'),
+      };
     case 'NOT_FOUND':
       return { message: 'This customer or account is no longer available.' };
     case 'VALIDATION_ERROR':
