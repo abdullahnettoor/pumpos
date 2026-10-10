@@ -144,6 +144,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
     const varianceRows = await this.db
       .select({
         tankId: schema.stockVariances.tankId,
+        productId: schema.stockVariances.productId,
         tankName: schema.tanks.name,
         productName: schema.products.name,
         unit: schema.products.unit,
@@ -219,6 +220,8 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         amount: Number(r.amount),
       })),
       stockVariances: varianceRows.map((r) => ({
+        tankId: r.tankId ?? null,
+        productId: r.productId,
         tankName: r.tankName ?? 'Unknown',
         productName: r.productName ?? 'Unknown',
         unit: r.unit ?? '',
