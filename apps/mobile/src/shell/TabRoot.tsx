@@ -11,11 +11,10 @@ import { BusinessDayPill } from '../components/BusinessDayPill.js';
 import { HandoverPanel } from '../components/HandoverPanel.js';
 import { DssrScreen } from '../screens/DssrScreen.js';
 import { HomeScreen } from '../screens/HomeScreen.js';
+import { InsightsScreen } from '../screens/InsightsScreen.js';
 import { MoneyScreen } from '../screens/MoneyScreen.js';
-import { MoreScreen } from '../screens/MoreScreen.js';
 import { ShiftsScreen } from '../screens/ShiftsScreen.js';
 import { HomeHeader } from './HomeHeader.js';
-import { useNav } from './nav.js';
 import { TabHeader } from './TabHeader.js';
 import { tabDef, type TabKey } from './tabs.js';
 
@@ -51,7 +50,6 @@ const ReportsRoot: React.FC<{ station: Station }> = ({ station }) => {
 };
 
 export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
-  const nav = useNav();
   const header = tab === 'home' ? <HomeHeader /> : <TabHeader title={tabDef(tab).label} />;
 
   if (tab === 'handover')
@@ -100,13 +98,19 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
       </>
     );
 
-  const onNavigate = (target: TabKey) => nav.select(target);
+  if (tab === 'insights')
+    return (
+      <>
+        {header}
+        <InsightsScreen station={station} />
+      </>
+    );
+
   return (
     <>
       {header}
       <Padded>
         {tab === 'reports' && <ReportsRoot station={station} />}
-        {tab === 'insights' && <MoreScreen station={station} onNavigate={onNavigate} />}
       </Padded>
     </>
   );
