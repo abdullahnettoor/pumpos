@@ -31,7 +31,7 @@ interface Props {
 /** Home's attention section for a Role whose Home is only its handover card. */
 const HandoverHomeAttention: React.FC<{ station: Station | null }> = ({ station }) => {
   const alerts = useMobileAlerts(station);
-  return <HomeAttention alerts={alerts} />;
+  return <HomeAttention alerts={alerts} station={station} />;
 };
 
 export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {

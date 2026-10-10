@@ -10,8 +10,8 @@ import { useOpenAttention } from './attention.js';
 /**
  * Header of the Home tab: station button, alerts bell and avatar. The station
  * button and the avatar open the Account sheet. The bell shows the open-alert
- * count and goes to Home's attention section (`useOpenAttention`). The user's
- * own handover is not counted: its card is pinned at the top of the same Home.
+ * count (`useMobileAlerts`, the same list as Home's "All N" and the Needs
+ * attention page) and opens that page (`useOpenAttention`).
  */
 export const HomeHeader: React.FC = () => {
   const { station, stationName, userName, openAccount } = useShell();

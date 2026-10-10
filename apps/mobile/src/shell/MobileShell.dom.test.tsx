@@ -41,7 +41,16 @@ vi.mock('@pump/ui', async (importOriginal) => {
     useAccess: () => query({ plan: 'CORE' }),
   };
 });
-const alerts = [{ severity: 'danger' }, { severity: 'warning' }];
+const alerts = [
+  { id: 'tank-1', severity: 'danger', category: 'stock', title: 'HSD critically low' },
+  {
+    id: 'day-2026-10-08',
+    severity: 'warning',
+    category: 'day',
+    title: 'Thu, 8 Oct not closed',
+    action: { kind: 'day', businessDate: '2026-10-08' },
+  },
+];
 vi.mock('../lib/alerts.js', () => ({ useMobileAlerts: () => alerts }));
 
 const { MobileShell } = await import('./MobileShell.js');
@@ -211,30 +220,23 @@ describe('header', () => {
     mine.assignment = null;
   });
 
-  it('does not count the own handover on the bell: the card on Home is its home', () => {
-    mine.assignment = du();
-    render(<Harness />);
-    expect(screen.getByRole('button', { name: 'Alerts, 2 open' })).toBeTruthy();
-  });
-
   it('shows the open-alert count on the bell', () => {
     render(<Harness />);
     expect(screen.getByRole('button', { name: 'Alerts, 2 open' })).toBeTruthy();
   });
 
-  it('the bell scrolls to and focuses Home attention section', async () => {
-    const scrolled: unknown[] = [];
-    Element.prototype.scrollIntoView = function (this: Element) {
-      scrolled.push(this);
-    };
+  it('the bell opens the Needs attention page, listing what the badge counts', async () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Alerts, 2 open' }));
-    const section = screen.getByRole('button', { name: '2 items need attention' });
-    await waitFor(() => expect(document.activeElement).toBe(section));
-    expect(scrolled).toEqual([section]);
-    // Still on Home's own screen, not another page.
     expect(holder.nav.active).toBe('home');
-    expect(holder.nav.depth).toBe(0);
+    expect(holder.nav.depth).toBe(1);
+    expect(screen.getByText('2 open')).toBeTruthy();
+    expect(screen.getByText('HSD critically low')).toBeTruthy();
+    expect(screen.getByText('Thu, 8 Oct not closed')).toBeTruthy();
+    // A pushed page replaces the dock; back returns to Home.
+    expect(dock()).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(holder.nav.depth).toBe(0));
   });
 
   it('has no station-picker row and no business-day pill', () => {

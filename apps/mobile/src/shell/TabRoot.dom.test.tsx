@@ -69,13 +69,6 @@ describe('Home root per Role', () => {
     expect(screen.getByText('Tank 2 low')).toBeTruthy();
   });
 
-  it('the unsaved handover is not counted: it is the card, not an alert', () => {
-    mine.assignment = assigned;
-    renderHome('Manager');
-    expect(screen.getByRole('button', { name: 'Alerts' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Alerts, \d+ open/ })).toBeNull();
-  });
-
   it('an Accountant or Staff member who cannot see alerts gets the card only, no bell', () => {
     mine.assignment = assigned;
     feed.alerts = [{ id: 'a1', severity: 'warning', category: 'stock', title: 'Tank 2 low' }];

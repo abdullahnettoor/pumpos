@@ -149,12 +149,12 @@ const openShift = (businessDate: string) => ({
   },
 });
 
-const alert = (id: string, severity: string, title: string, tab = 'insights') => ({
+const alert = (id: string, severity: string, title: string, action?: unknown) => ({
   id,
   severity,
-  category: 'stock',
+  category: action ? 'day' : 'stock',
   title,
-  tab,
+  action,
 });
 
 const NavProbe: React.FC<{ onNav: (n: ReturnType<typeof useNav>) => void }> = ({ onNav }) => {
@@ -428,8 +428,11 @@ describe('Home: tiles', () => {
 describe('Home: attention', () => {
   const four = [
     alert('a1', 'danger', 'HSD critically low'),
-    alert('a2', 'danger', 'Fleet Co over credit limit', 'money'),
-    alert('a3', 'warning', 'Business day 2026-10-07 still open', 'shifts'),
+    alert('a2', 'danger', 'Fleet Co over credit limit', {
+      kind: 'customer',
+      customer: { id: 'c1', name: 'Fleet Co' },
+    }),
+    alert('a3', 'warning', 'Wed, 7 Oct not closed', { kind: 'day', businessDate: '2026-10-07' }),
     alert('a4', 'info', 'Petrol over capacity'),
   ];
 
@@ -439,7 +442,7 @@ describe('Home: attention', () => {
     const section = screen.getByRole('region', { name: 'Needs attention' });
     expect(within(section).getByText('HSD critically low')).toBeTruthy();
     expect(within(section).getByText('Fleet Co over credit limit')).toBeTruthy();
-    expect(within(section).queryByText(/still open/)).toBeNull();
+    expect(within(section).queryByText(/not closed/)).toBeNull();
     expect(within(section).getByRole('button', { name: 'All 4 alerts' })).toBeTruthy();
   });
 
@@ -451,18 +454,38 @@ describe('Home: attention', () => {
     expect(within(section).getByText('Nothing needs attention')).toBeTruthy();
   });
 
-  it('opens the tab an alert points at', () => {
+  it('opens the page an alert explains, on top of Home', () => {
     feed.alerts = four;
     renderHome();
     fireEvent.click(screen.getByRole('button', { name: /Fleet Co over credit limit/ }));
-    expect(nav.active).toBe('money');
+    expect(nav.active).toBe('home');
+    expect(nav.depth).toBe(1);
   });
 
-  it('does not offer a tab the Role cannot open', () => {
-    feed.alerts = [alert('a1', 'danger', 'Fleet Co over credit limit', 'money')];
+  it('gives a stock alert no action', () => {
+    feed.alerts = four;
+    renderHome();
+    expect(screen.queryByRole('button', { name: /HSD critically low/ })).toBeNull();
+    expect(screen.getByText('HSD critically low')).toBeTruthy();
+  });
+
+  it('does not offer a page whose tab the Role cannot open', () => {
+    feed.alerts = [
+      alert('a1', 'danger', 'Fleet Co over credit limit', {
+        kind: 'customer',
+        customer: { id: 'c1', name: 'Fleet Co' },
+      }),
+    ];
     renderHome(station(IST), ['home']);
     expect(screen.queryByRole('button', { name: /Fleet Co over credit limit/ })).toBeNull();
     expect(screen.getByText('Fleet Co over credit limit')).toBeTruthy();
+  });
+
+  it('"All N" opens the Needs attention page', () => {
+    feed.alerts = four;
+    renderHome();
+    fireEvent.click(screen.getByRole('button', { name: 'All 4 alerts' }));
+    expect(nav.depth).toBe(1);
   });
 });
 
