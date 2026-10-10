@@ -211,18 +211,8 @@ describe('header', () => {
     mine.assignment = null;
   });
 
-  it('counts an unsaved own handover on the bell', () => {
+  it('does not count the own handover on the bell: the card on Home is its home', () => {
     mine.assignment = du();
-    render(<Harness />);
-    expect(screen.getByRole('button', { name: 'Alerts, 3 open' })).toBeTruthy();
-  });
-
-  it('does not count an own handover that is saved', () => {
-    mine.assignment = du({
-      cashHandedOver: '10',
-      varianceAmount: '0',
-      createdAt: '2026-10-09T12:00:00Z',
-    });
     render(<Harness />);
     expect(screen.getByRole('button', { name: 'Alerts, 2 open' })).toBeTruthy();
   });

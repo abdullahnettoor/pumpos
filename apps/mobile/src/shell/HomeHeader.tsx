@@ -1,6 +1,5 @@
 import React from 'react';
 import { useMobileAlerts } from '../lib/alerts.js';
-import { useOwnHandover } from '../lib/handover/useOwnHandover.js';
 import { Avatar } from '../ui/Avatar.js';
 import { IconButton } from '../ui/IconButton.js';
 import { BellIcon, ChevronDownIcon } from '../ui/icons.js';
@@ -11,15 +10,14 @@ import { useOpenAttention } from './attention.js';
 /**
  * Header of the Home tab: station button, alerts bell and avatar. The station
  * button and the avatar open the Account sheet. The bell shows the open-alert
- * count (plus the user's own handover while it is not saved) and goes to Home's attention section (`useOpenAttention`).
+ * count and goes to Home's attention section (`useOpenAttention`). The user's
+ * own handover is not counted: its card is pinned at the top of the same Home.
  */
 export const HomeHeader: React.FC = () => {
   const { station, stationName, userName, openAccount } = useShell();
   const openAttention = useOpenAttention();
   const alerts = useMobileAlerts(station);
-  // An unfinished own handover counts too: it is waiting on the user.
-  const ownHandover = useOwnHandover();
-  const count = alerts.length + (ownHandover && !ownHandover.saved ? 1 : 0);
+  const count = alerts.length;
   const danger = alerts.some((a) => a.severity === 'danger');
 
   return (

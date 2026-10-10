@@ -1,10 +1,9 @@
 import React from 'react';
 import { inr } from '@pump/ui';
 import { ListGroup, ListRow, SectionLabel, StatusBadge } from '../../ui/index.js';
+import { plural } from '../../lib/format.js';
 import { varianceBadge } from '../../lib/variance.js';
-import { formatRecordedTime, type HandoverRecap } from './recap.js';
-
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+import { formatRecordedTime, type HandoverRecap } from '../../lib/handover/recap.js';
 
 /**
  * After a recorded Handover: confirmation, the attendant's own figures, and the

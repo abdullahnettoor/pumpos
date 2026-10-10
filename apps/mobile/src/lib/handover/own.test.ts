@@ -63,7 +63,7 @@ describe('deriveOwnHandover', () => {
     expect(own.title).toBe('Your handover · DU2, DU3');
   });
 
-  it('not saved: says so, with the credit and fuel-card slips recorded so far', () => {
+  it('not saved: says so, with the credit slips recorded so far (OMC card sales are not credit slips)', () => {
     const none = deriveOwnHandover(assignment([du()]))!;
     expect(none.saved).toBe(false);
     expect(none.status).toBe('Not saved yet');
@@ -71,7 +71,10 @@ describe('deriveOwnHandover', () => {
     const some = deriveOwnHandover(
       assignment([du({ creditSales: [slip('a'), slip('b')], omcSales: [slip('c')] })]),
     )!;
-    expect(some.status).toBe('Not saved yet · 3 credit slips');
+    expect(some.status).toBe('Not saved yet · 2 credit slips');
+
+    const onlyCards = deriveOwnHandover(assignment([du({ omcSales: [slip('c')] })]))!;
+    expect(onlyCards.status).toBe('Not saved yet');
 
     const one = deriveOwnHandover(assignment([du({ creditSales: [slip('a')] })]))!;
     expect(one.status).toBe('Not saved yet · 1 credit slip');

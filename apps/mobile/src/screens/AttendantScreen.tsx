@@ -12,7 +12,7 @@ import { AttendantHeader } from './attendant/AttendantHeader.js';
 import { DuStrip } from './attendant/DuStrip.js';
 import { NoShiftState } from './attendant/NoShiftState.js';
 import { RecordedState } from './attendant/RecordedState.js';
-import { buildRecap, type MerchandiseHandoverRecord } from './attendant/recap.js';
+import { buildRecap, type MerchandiseHandoverRecord } from '../lib/handover/recap.js';
 
 /**
  * Attendant app (mobile-only): their handover and nothing else. No dock, bell,

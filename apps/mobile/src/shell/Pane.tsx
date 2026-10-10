@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef } from 'react';
+import { PageActiveContext } from '../ui/backStack.js';
 
 interface Props {
   /** The page currently shown. Inactive panes stay mounted (state, scroll) but hidden. */
@@ -40,7 +41,7 @@ export const Pane: React.FC<Props> = ({ active, bottom = 'under-dock', children 
       className={`absolute overflow-y-auto overscroll-contain ${BOTTOM[bottom]} ${active ? '' : 'hidden'}`}
       aria-hidden={!active}
     >
-      {children}
+      <PageActiveContext.Provider value={active}>{children}</PageActiveContext.Provider>
     </div>
   );
 };

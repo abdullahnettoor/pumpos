@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
@@ -35,7 +36,8 @@ vi.mock('../components/CashCountSheet.js', () => ({ CashCountSheet: () => null }
 
 const { HandoverPage } = await import('./HandoverPage.js');
 const { HandoverPanel } = await import('../components/HandoverPanel.js');
-const { NavProvider } = await import('../shell/nav.js');
+const { NavProvider, useNav } = await import('../shell/nav.js');
+const { PageActiveContext } = await import('../ui/backStack.js');
 const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
 
 const NOZZLE = '33333333-3333-4333-8333-333333333333';
@@ -131,7 +133,7 @@ afterEach(cleanup);
 describe('HandoverPage', () => {
   it('names the Shift, the DU and when it started, with a Not saved badge', () => {
     renderPage();
-    expect(screen.getByRole('heading', { name: 'My handover' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Your handover' })).toBeTruthy();
     expect(screen.getByText(/^Shift 2 · DU2 · since \d{1,2}:\d{2} [ap]m$/)).toBeTruthy();
     expect(screen.getByText('Not saved')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Back' })).toBeTruthy();
@@ -181,6 +183,43 @@ describe('HandoverPage', () => {
     expect(mutateAsync.mock.calls[0][0].payload).toEqual(fromPage);
   });
 
+  it("has no bar while the assignment loads, and not the form's own sticky one either", () => {
+    assignment.data = undefined;
+    assignment.isLoading = true;
+    renderPage();
+    expect(screen.getByText(/Loading your shift/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Save handover/i })).toBeNull();
+    expect(document.querySelectorAll('.border-dock-line')).toHaveLength(0);
+    expect(document.querySelector('.sticky')).toBeNull();
+  });
+
+  it('loses the bar, and does not fall back to a sticky one, once the Shift closes', async () => {
+    const view = renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Save handover/i })).toBeTruthy(),
+    );
+    assignment.data = null;
+    view.rerender(
+      <QueryClientProvider client={client()}>
+        <NavProvider tabs={['home']}>
+          <HandoverPage />
+        </NavProvider>
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText(/No open shift assigned to you/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Save handover/i })).toBeNull();
+    expect(document.querySelectorAll('.border-dock-line')).toHaveLength(0);
+    expect(document.querySelector('.sticky')).toBeNull();
+  });
+
+  it('a Shift with no Dispenser Unit of mine left has no Save, and no sticky bar of its own', () => {
+    assignment.data = { ...makeAssignment(), dispenserUnits: [] };
+    renderPage();
+    expect(screen.queryByRole('button', { name: /Save handover/i })).toBeNull();
+    expect(document.querySelectorAll('.border-dock-line')).toHaveLength(0);
+    expect(screen.queryByText('Not saved')).toBeNull();
+  });
+
   it('has no action bar, and no badge, when there is no assignment left', () => {
     assignment.data = null;
     renderPage();
@@ -188,5 +227,105 @@ describe('HandoverPage', () => {
     expect(screen.queryByRole('button', { name: /Save handover/i })).toBeNull();
     expect(document.querySelectorAll('.border-dock-line')).toHaveLength(0);
     expect(screen.queryByText('Not saved')).toBeNull();
+  });
+});
+
+/** The page as the shell holds it: pushed on a stack, so back goes through the history. */
+const Stage: React.FC<{ shown?: boolean }> = ({ shown = true }) => {
+  const nav = useNav();
+  const top = nav.stacks.home?.at(-1);
+  return top ? (
+    <PageActiveContext.Provider value={shown}>{top.element}</PageActiveContext.Provider>
+  ) : (
+    <button type="button" onClick={() => nav.push(<HandoverPage />, 'handover')}>
+      open handover
+    </button>
+  );
+};
+
+const openPushed = (shown = true) => {
+  render(
+    <QueryClientProvider client={client()}>
+      <NavProvider tabs={['home']}>
+        <Stage shown={shown} />
+      </NavProvider>
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'open handover' }));
+};
+const type = async (value = '5000') => {
+  await waitFor(() => expect(screen.getByLabelText(/^Cash \(₹\)/)).toBeDefined());
+  fireEvent.change(screen.getByLabelText(/^Cash \(₹\)/), { target: { value } });
+};
+const onPage = () => screen.queryByRole('heading', { name: 'Your handover' });
+const asking = () => screen.queryByRole('dialog', { name: 'Discard changes?' });
+
+describe('HandoverPage back with unsaved edits', () => {
+  it('leaves at once when nothing was typed', async () => {
+    openPushed();
+    await waitFor(() => expect(onPage()).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(onPage()).toBeNull());
+    expect(asking()).toBeNull();
+  });
+
+  it('the Back button asks before discarding typing; Keep editing stays with it', async () => {
+    openPushed();
+    await type();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(asking()).toBeTruthy());
+    expect(onPage()).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => expect(asking()).toBeNull());
+    expect((screen.getByLabelText(/^Cash \(₹\)/) as HTMLInputElement).value).toBe('5000');
+  });
+
+  it('Discard changes leaves the page', async () => {
+    openPushed();
+    await type();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(asking()).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    await waitFor(() => expect(onPage()).toBeNull());
+    expect(screen.getByRole('button', { name: 'open handover' })).toBeTruthy();
+  });
+
+  it('the system back gesture asks too, keeps the page, and a second gesture means keep editing', async () => {
+    openPushed();
+    await type();
+    window.history.back();
+    await waitFor(() => expect(asking()).toBeTruthy());
+    expect(onPage()).toBeTruthy();
+
+    // The gesture consumed a history entry; the guard put it back, so back still works.
+    window.history.back();
+    await waitFor(() => expect(asking()).toBeNull());
+    expect(onPage()).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(asking()).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    await waitFor(() => expect(onPage()).toBeNull());
+  });
+
+  it('a page that is not the one on screen does not guard back', async () => {
+    openPushed(false);
+    await type();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(onPage()).toBeNull());
+    expect(asking()).toBeNull();
+  });
+
+  it('after a save there is nothing to discard', async () => {
+    openPushed();
+    await type();
+    fireEvent.change(screen.getByLabelText(/N3 · Diesel/), { target: { value: '1050' } });
+    fireEvent.click(screen.getByRole('button', { name: /Save handover/i }));
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText(/Saved at/)).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(onPage()).toBeNull());
+    expect(asking()).toBeNull();
   });
 });

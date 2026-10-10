@@ -82,7 +82,13 @@ export const HandoverPanel: React.FC<{
    * being mounted yet, and the bar waits for it.
    */
   actionBarTarget?: HTMLElement | null;
-}> = ({ onRecorded, actionBarTarget }) => {
+  /**
+   * Reports whether the form holds edits the server does not: true on the first
+   * edit, false once a save has been accepted. A detail page asks before
+   * leaving while it is true. Slips recorded are saved at once and never count.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
+}> = ({ onRecorded, actionBarTarget, onDirtyChange }) => {
   const assignmentQ = useMyAssignment();
   const productsQ = useProducts();
   const customersQ = useCustomers(true);
@@ -289,7 +295,10 @@ export const HandoverPanel: React.FC<{
     merchNonCash,
     hasErrors: formInvalid,
     onHandoverAccepted,
-    onRecorded,
+    onRecorded: (results) => {
+      onDirtyChange?.(false);
+      onRecorded?.(results);
+    },
   });
   const {
     creditByDu,
@@ -305,6 +314,7 @@ export const HandoverPanel: React.FC<{
 
   /** Applies a change to one DU's form; any edit makes a saved Handover stale. */
   const editForm = (duId: string, change: (form: DuFormState) => DuFormState) => {
+    onDirtyChange?.(true);
     resetAcceptedHandover(duId);
     setEditedForms((f) => ({ ...f, [duId]: change(f[duId] ?? forms[duId]) }));
   };
@@ -425,10 +435,12 @@ export const HandoverPanel: React.FC<{
         nonCash={merchNonCash}
         total={merchGross}
         onRowsChange={(rows) => {
+          onDirtyChange?.(true);
           resetMerchandiseAcceptance();
           setEditedMerchRows(rows);
         }}
         onNonCashChange={(value) => {
+          onDirtyChange?.(true);
           resetMerchandiseAcceptance();
           setEditedMerchNonCash(value);
         }}

@@ -1,5 +1,5 @@
 import type { MyAssignment } from '../../components/handover/model.js';
-import { formatRecordedTime, buildRecap } from '../../screens/attendant/recap.js';
+import { formatRecordedTime, buildRecap } from './recap.js';
 import { plural } from '../format.js';
 import { varianceBadge } from '../variance.js';
 
@@ -41,10 +41,8 @@ export function deriveOwnHandover(assignment: MyAssignment | null | undefined): 
   } else if (savedCount > 0) {
     status = `${savedCount} of ${dus.length} DUs saved`;
   } else {
-    const slips = dus.reduce(
-      (n, du) => n + (du.creditSales?.length ?? 0) + (du.omcSales?.length ?? 0),
-      0,
-    );
+    // Credit slips only: an OMC card sale settles into the OMC Wallet, it is not a credit slip.
+    const slips = dus.reduce((n, du) => n + (du.creditSales?.length ?? 0), 0);
     status = slips > 0 ? `Not saved yet · ${plural(slips, 'credit slip')}` : 'Not saved yet';
   }
 
