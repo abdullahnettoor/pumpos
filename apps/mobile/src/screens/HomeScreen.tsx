@@ -11,7 +11,7 @@ import { resolveBusinessDate } from '@pump/shared';
 import type { Station } from '@pump/shared';
 import { Kpi } from '../components/Kpi.js';
 import { useMobileAlerts } from '../lib/alerts.js';
-import type { TabKey } from '../components/BottomNav.js';
+import type { TabKey } from '../shell/tabs.js';
 
 interface Props {
   station: Station;
@@ -124,7 +124,7 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
       {alerts.length > 0 && (
         <button
           type="button"
-          onClick={() => onNavigate?.('more')}
+          onClick={() => onNavigate?.('insights')}
           className="flex items-center justify-between rounded-lg px-3 py-2"
           style={{
             backgroundColor: alerts.some((a) => a.severity === 'danger')
@@ -213,7 +213,7 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
             </h3>
             <button
               type="button"
-              onClick={() => onNavigate?.('more')}
+              onClick={() => onNavigate?.('insights')}
               className="text-[11px] font-medium"
               style={{ color: 'var(--brand-primary)' }}
             >

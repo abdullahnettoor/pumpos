@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useStationAlerts, useCustomers, useShiftStatus, useShiftSummaries, inr } from '@pump/ui';
 import { resolveBusinessDate } from '@pump/shared';
 import type { Station } from '@pump/shared';
-import type { TabKey } from '../components/BottomNav.js';
+import type { TabKey } from '../shell/tabs.js';
 
 export type AlertSeverity = 'danger' | 'warning' | 'info';
 export type AlertCategory = 'stock' | 'credit' | 'day' | 'variance';
@@ -52,7 +52,7 @@ export function useMobileAlerts(station: Station | null): MobileAlert[] {
         category: 'stock',
         title: a.title,
         meta: a.meta,
-        tab: 'more',
+        tab: 'insights',
       });
     }
 
@@ -70,7 +70,7 @@ export function useMobileAlerts(station: Station | null): MobileAlert[] {
         category: 'credit',
         title: `${c.name} over credit limit`,
         meta: `${inr(Number(c.currentBalance || 0))} of ${inr(Number(c.creditLimit || 0))}`,
-        tab: 'ledger',
+        tab: 'money',
       });
     } else if (overLimit.length > 1) {
       list.push({
@@ -78,7 +78,7 @@ export function useMobileAlerts(station: Station | null): MobileAlert[] {
         severity: 'danger',
         category: 'credit',
         title: `${overLimit.length} customers over credit limit`,
-        tab: 'ledger',
+        tab: 'money',
       });
     }
 

@@ -11,8 +11,8 @@ const LABELS: Record<ThemePreference, string> = {
 /**
  * System / Light / Dark picker. Built but hidden: it renders nothing while
  * `APPEARANCE_ENABLED` is false (theme/config.ts), so no Appearance control is
- * visible anywhere. When dark mode rolls out, flip the flag and mount this in
- * the Account / More screen (it is currently mounted in MoreScreen).
+ * visible anywhere. When dark mode rolls out, flip the flag: it is already
+ * mounted in the Account sheet (shell/AccountSheet.tsx).
  *
  * Keyboard: a radiogroup with a roving tabindex (one Tab stop, on the checked
  * option); arrow keys move and select, Home / End jump to the ends.

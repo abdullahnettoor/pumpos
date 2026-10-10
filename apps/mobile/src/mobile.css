@@ -33,3 +33,11 @@ body {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Floating dock geometry (shell/Dock.tsx, shell/Pane.tsx).
+ * --dock-gap: distance from the screen bottom to the dock (safe area aware).
+ * --dock-space: how much a page needs at its end to scroll clear of the dock. */
+:root {
+  --dock-gap: max(env(safe-area-inset-bottom), 12px);
+  --dock-space: calc(var(--dock-gap) + 58px + 20px);
+}

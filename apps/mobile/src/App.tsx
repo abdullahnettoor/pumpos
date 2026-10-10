@@ -1,27 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { BootScreen, Login, useStations, useMyAssignment } from '@pump/ui';
+import { BootScreen, Login, useStations, useMyAssignment, runTask } from '@pump/ui';
 import type { Station } from '@pump/shared';
-import { resolveBusinessDate } from '@pump/shared';
-import { useSession, signOut, type UserRole } from './lib/session.js';
-import { MobileShell } from './components/MobileShell.js';
-import type { TabKey } from './components/BottomNav.js';
-import { HomeScreen } from './screens/HomeScreen.js';
-import { ShiftsScreen } from './screens/ShiftsScreen.js';
-import { DssrScreen } from './screens/DssrScreen.js';
-import { LedgerScreen } from './screens/LedgerScreen.js';
-import { MoreScreen } from './screens/MoreScreen.js';
+import { useSession, signOut } from './lib/session.js';
+import { MobileShell } from './shell/MobileShell.js';
+import { NavProvider } from './shell/nav.js';
+import { TabRoot } from './shell/TabRoot.js';
+import { tabsForRole } from './shell/tabs.js';
 import { AttendantScreen } from './screens/AttendantScreen.js';
-import { HandoverPanel } from './components/HandoverPanel.js';
-import { runTask } from '@pump/ui';
-
-/** Tabs each role may access on mobile. */
-const TABS_BY_ROLE: Record<UserRole, TabKey[]> = {
-  Owner: ['home', 'shifts', 'dssr', 'ledger', 'more'],
-  Manager: ['shifts', 'dssr', 'ledger', 'more'],
-  Accountant: ['dssr', 'ledger'],
-  Staff: [],
-  Attendant: [], // Attendants use their own dedicated handover shell, not tabs.
-};
 
 const Centered: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div
@@ -54,47 +39,16 @@ export const App: React.FC = () => {
   // extra "My handover" tab with the same self-service UI as the Attendant shell.
   const myAssignmentQ = useMyAssignment({ enabled: status === 'ready' && role !== 'Attendant' });
   const hasHandoverTab = role !== 'Attendant' && !!myAssignmentQ.data;
+  const allowedTabs = useMemo(() => tabsForRole(role, hasHandoverTab), [role, hasHandoverTab]);
 
-  // All three selections below are *derived* rather than synced into state by
-  // an effect. Each is "the operator's pick, falling back to a default that
-  // depends on data which may not have loaded yet" — a fallback is a render
-  // concern, and an effect only made it arrive one render late.
+  // The operator's pick, falling back to the first station until stations load.
+  // Derived rather than synced by an effect, so the fallback is right on first render.
   const [pickedStationId, setPickedStationId] = useState<string | null>(null);
-  const [pickedTab, setPickedTab] = useState<TabKey>('home');
-
-  const allowedTabs = useMemo<TabKey[]>(() => {
-    const base = role ? TABS_BY_ROLE[role] : [];
-    return hasHandoverTab ? [...base, 'handover'] : base;
-  }, [role, hasHandoverTab]);
-
-  // Default to the first station until one is picked.
   const selectedStationId = pickedStationId ?? stations[0]?.id ?? null;
-  const setSelectedStationId = setPickedStationId;
-
-  // Keep the active tab within what the role + view allows.
-  const tab = allowedTabs.length && !allowedTabs.includes(pickedTab) ? allowedTabs[0] : pickedTab;
-  const setTab = setPickedTab;
-
   const selectedStation = useMemo(
     () => stations.find((s) => s.id === selectedStationId) ?? null,
     [stations, selectedStationId],
   );
-
-  // Global business-day navigation (MB1). `todayBiz` is the station's current
-  // business date; the pill lets the user page back to any prior day.
-  const stationSettings: any = (selectedStation as any)?.settings || {};
-  const todayBiz = selectedStation
-    ? resolveBusinessDate({
-        timeZone: stationSettings.timezone,
-        dayStartsAt: stationSettings.business_day_starts_at,
-      })
-    : undefined;
-  const [pickedBizDate, setBizDate] = useState<string | null>(null);
-  // Defaults to today, and clamps a stale pick if the day rolled over past what
-  // is now selectable.
-  const bizDate = pickedBizDate && todayBiz && pickedBizDate > todayBiz ? todayBiz : pickedBizDate;
-  const businessDate = bizDate ?? todayBiz ?? null;
-  const showBusinessDay = tab === 'home' || tab === 'dssr';
 
   // Same branded screen desktop and console show, so the wait looks like one
   // product rather than three. It replaced "Connecting…", which named the
@@ -120,16 +74,12 @@ export const App: React.FC = () => {
     );
   }
 
+  const onSignOut = () =>
+    runTask(signOut(), (error: unknown) => console.error('Sign out failed:', error));
+
   // Attendants get a dedicated mobile-only handover shell (no owner tabs).
   if (role === 'Attendant') {
-    return (
-      <AttendantScreen
-        userName={userName}
-        onSignOut={() =>
-          runTask(signOut(), (error: unknown) => console.error('Sign out failed:', error))
-        }
-      />
-    );
+    return <AttendantScreen userName={userName} onSignOut={onSignOut} />;
   }
 
   if (allowedTabs.length === 0) {
@@ -145,52 +95,19 @@ export const App: React.FC = () => {
     );
   }
 
-  const titleByTab: Record<TabKey, string> = {
-    home: 'Overview',
-    shifts: 'Shifts',
-    dssr: 'Daily report',
-    ledger: 'Money',
-    handover: 'My handover',
-    more: 'Insights',
-  };
-
-  const renderScreen = () => {
-    if (tab === 'handover') return <HandoverPanel />;
-    if (tab === 'ledger') return <LedgerScreen />;
-    if (!selectedStation) {
-      return (
-        <p className="py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-          {stationsQ.isLoading ? 'Loading stations…' : 'No stations available.'}
-        </p>
-      );
-    }
-    if (tab === 'home')
-      return (
-        <HomeScreen station={selectedStation} businessDate={businessDate} onNavigate={setTab} />
-      );
-    if (tab === 'shifts') return <ShiftsScreen station={selectedStation} />;
-    if (tab === 'dssr') return <DssrScreen station={selectedStation} businessDate={businessDate} />;
-    if (tab === 'more') return <MoreScreen station={selectedStation} onNavigate={setTab} />;
-    return null;
-  };
-
   return (
-    <MobileShell
-      userName={userName}
-      role={role ?? ''}
-      stations={stations}
-      selectedStationId={selectedStationId}
-      onSelectStation={setSelectedStationId}
-      activeTab={tab}
-      onChangeTab={setTab}
-      allowedTabs={allowedTabs}
-      title={titleByTab[tab]}
-      businessDate={businessDate}
-      maxBusinessDate={todayBiz ?? null}
-      onChangeBusinessDate={setBizDate}
-      showBusinessDay={showBusinessDay}
-    >
-      {renderScreen()}
-    </MobileShell>
+    <NavProvider tabs={allowedTabs}>
+      <MobileShell
+        userName={userName}
+        role={role ?? ''}
+        stations={stations}
+        selectedStationId={selectedStationId}
+        onSelectStation={setPickedStationId}
+        onSignOut={onSignOut}
+        renderRoot={(tab) => (
+          <TabRoot tab={tab} station={selectedStation} stationsLoading={stationsQ.isLoading} />
+        )}
+      />
+    </NavProvider>
   );
 };
