@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react';
-import { useForm, type Resolver, type UseFormRegister } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { ZodTypeAny } from 'zod';
 import {
@@ -126,7 +126,6 @@ const Form = <F extends OfficePaymentFields>({
 
   const preview = previewFor(amountText);
   const clearRefusal = () => setRefusal(null);
-  const reg = register as UseFormRegister<OfficePaymentFields>;
 
   const submit = handleSubmit(async (data) => {
     setRefusal(null);
@@ -170,7 +169,7 @@ const Form = <F extends OfficePaymentFields>({
           aria-invalid={errors.amount ? true : undefined}
           aria-describedby={amountHint}
           className={inputClass(Boolean(errors.amount))}
-          {...reg('amount', { onChange: clearRefusal })}
+          {...register('amount', { onChange: clearRefusal })}
         />
         <p
           id={amountHint}
@@ -206,7 +205,7 @@ const Form = <F extends OfficePaymentFields>({
           aria-describedby={accountNote || accountProblem ? accountHint : undefined}
           disabled={accountsQ.isLoading || accounts.length === 0}
           className={`${inputClass(Boolean(accountProblem))} ${FIELD_TEXT}`}
-          {...reg('fundingAccountId', { onChange: clearRefusal })}
+          {...register('fundingAccountId', { onChange: clearRefusal })}
         >
           <option value="">Choose account…</option>
           {accounts.map((a) => (
@@ -245,7 +244,7 @@ const Form = <F extends OfficePaymentFields>({
           aria-invalid={errors.entryDate ? true : undefined}
           aria-describedby={dateHint}
           className={`${inputClass(Boolean(errors.entryDate))} ${FIELD_TEXT}`}
-          {...reg('entryDate', { onChange: clearRefusal })}
+          {...register('entryDate', { onChange: clearRefusal })}
         />
         <p
           id={dateHint}
@@ -267,7 +266,7 @@ const Form = <F extends OfficePaymentFields>({
           aria-invalid={errors.notes ? true : undefined}
           aria-describedby={errors.notes ? `${refId}-hint` : undefined}
           className={`${inputClass(Boolean(errors.notes))} ${FIELD_TEXT}`}
-          {...reg('notes', { onChange: clearRefusal })}
+          {...register('notes', { onChange: clearRefusal })}
         />
         {errors.notes && (
           <p id={`${refId}-hint`} className="m-0 text-[11px] text-bad-fg">
