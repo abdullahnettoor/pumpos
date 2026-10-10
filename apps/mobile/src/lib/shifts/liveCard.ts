@@ -37,8 +37,8 @@ export interface LiveShiftCard {
 
 const MINUTES_PER_DAY = 1440;
 
-const timeToMinutes = (hhmm: unknown): number | null => {
-  const m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm ?? ''));
+const timeToMinutes = (hhmm: string | null | undefined): number | null => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm ?? '');
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 };
 
@@ -51,7 +51,7 @@ const timeToMinutes = (hhmm: unknown): number | null => {
 export function isHandoverDue(
   openedAt: string,
   now: number,
-  scheduledEnd: unknown,
+  scheduledEnd: string | null | undefined,
   timeZone: string,
 ): boolean {
   const opened = Date.parse(openedAt);

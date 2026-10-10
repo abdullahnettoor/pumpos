@@ -60,7 +60,7 @@ export function deriveShiftVariance(snap: Snapshot): ShiftVariance {
     .sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance));
 
   const attendantOff = attendant !== null && off(attendant);
-  const headline = attendantOff ? (attendant as number) : office;
+  const headline = attendantOff ? attendant : office;
   let headlineNote = 'Balanced';
   if (off(headline)) {
     headlineNote =

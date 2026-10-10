@@ -180,8 +180,13 @@ export function deriveShiftSummary(snap: Snapshot, duNames: NozzleDuNames): Shif
 
 /** A merchandise handover or billed sale as the two endpoints return it. */
 export interface MerchSaleRead {
-  totalAmount?: unknown;
-  items?: { productId?: unknown; productName?: unknown; quantity?: unknown; lineTotal?: unknown }[];
+  totalAmount?: number | string | null;
+  items?: {
+    productId?: string | null;
+    productName?: string | null;
+    quantity?: number | string | null;
+    lineTotal?: number | string | null;
+  }[];
 }
 
 export interface ShiftProducts {

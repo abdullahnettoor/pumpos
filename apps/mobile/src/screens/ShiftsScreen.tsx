@@ -3,7 +3,7 @@ import type { Station } from '@pump/shared';
 import { businessDateLabel } from '../lib/home/dates.js';
 import type { ShiftHistoryRow } from '../lib/shifts/history.js';
 import { useNav } from '../shell/nav.js';
-import { SectionLabel } from '../ui/index.js';
+import { Note, SectionLabel } from '../ui/index.js';
 import { LiveShiftCard } from './shifts/LiveShiftCard.js';
 import { ShiftHistory } from './shifts/ShiftHistory.js';
 import { useShiftsData } from './shifts/useShiftsData.js';
@@ -15,12 +15,6 @@ interface Props {
 
 /** Business days of history shown before "Show older days". */
 const DAYS_PER_PAGE = 10;
-
-const Note: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="mx-3 rounded-[14px] border border-line bg-card px-3.5 py-3 text-xs text-text-muted">
-    {children}
-  </p>
-);
 
 /**
  * The Shifts tab, view-only: the running Shift, then every closed Shift grouped
