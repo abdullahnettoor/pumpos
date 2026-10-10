@@ -73,7 +73,12 @@ export interface AssignedDu {
 export interface MyAssignment {
   userId?: string;
   station?: { id?: string; name?: string } | null;
-  shift?: { id?: string; templateName?: string; stationId?: string } | null;
+  shift?: {
+    id?: string;
+    templateName?: string | null;
+    stationId?: string;
+    openedAt?: string | null;
+  } | null;
   stationHasConfiguredTerminals?: boolean;
   dispenserUnits?: AssignedDu[];
 }

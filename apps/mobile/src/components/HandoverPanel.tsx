@@ -70,7 +70,10 @@ const STEP_TITLE: Record<StepId, string> = {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export const HandoverPanel: React.FC = () => {
+export const HandoverPanel: React.FC<{
+  /** Called after a save in which every DU's Handover was accepted. */
+  onRecorded?: (results: RecordHandoverResult[]) => void;
+}> = ({ onRecorded }) => {
   const assignmentQ = useMyAssignment();
   const productsQ = useProducts();
   const customersQ = useCustomers(true);
@@ -277,6 +280,7 @@ export const HandoverPanel: React.FC = () => {
     merchNonCash,
     hasErrors: formInvalid,
     onHandoverAccepted,
+    onRecorded,
   });
   const {
     creditByDu,

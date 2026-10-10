@@ -95,6 +95,8 @@ export function useHandoverSubmission(input: {
   hasErrors: boolean;
   /** Called after the server accepts a DU's Handover, to echo it into the form. */
   onHandoverAccepted: (du: AssignedDu, result: RecordHandoverResult) => void;
+  /** Called once every DU's Handover is accepted by a save, with the server's results. */
+  onRecorded?: (results: RecordHandoverResult[]) => void;
 }) {
   const { dus, forms, shiftId, attendantId, stationId } = input;
   const qc = useQueryClient();
@@ -261,6 +263,7 @@ export function useHandoverSubmission(input: {
     try {
       await saveMerchandise(shiftId);
 
+      const results: RecordHandoverResult[] = [];
       for (const du of dus) {
         const form = forms[du.duId];
         if (!form) continue;
@@ -272,8 +275,10 @@ export function useHandoverSubmission(input: {
           aggregateNonCashAllowed: input.aggregateNonCashAllowed,
         });
         const fingerprint = handoverPayloadFingerprint(payload);
-        if (acceptedFingerprintByDuRef.current[du.duId] === fingerprint && acceptedByDu[du.duId])
+        if (acceptedFingerprintByDuRef.current[du.duId] === fingerprint && acceptedByDu[du.duId]) {
+          results.push(acceptedByDu[du.duId]);
           continue;
+        }
         handoverRequestByDuRef.current[du.duId] = resolveHandoverRequestIdentity(
           handoverRequestByDuRef.current[du.duId],
           payload,
@@ -287,9 +292,11 @@ export function useHandoverSubmission(input: {
         delete handoverRequestByDuRef.current[du.duId];
         setAcceptedByDu((current) => ({ ...current, [du.duId]: result }));
         input.onHandoverAccepted(du, result);
+        results.push(result);
       }
 
       setSavedAt(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
+      input.onRecorded?.(results);
     } catch (e: unknown) {
       setError(messageOf(e, 'Could not save handover'));
     } finally {
