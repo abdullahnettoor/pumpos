@@ -38,9 +38,10 @@ export const SummaryStrip: React.FC<{
     <div
       role="group"
       aria-label="Handover summary"
-      // The ::before block hides steps scrolling through the padding above the
-      // strip once it sticks.
-      className="sticky top-0 z-10 rounded-2xl border border-line bg-card px-3 py-2.5 shadow-chip before:absolute before:inset-x-[-1px] before:-top-[17px] before:h-4 before:bg-background before:content-['']"
+      // Sticks just below a pinned page header (`--pinned-header-h`; 0 where there is
+      // none, as in the Attendant app). The ::before block hides steps scrolling
+      // through the padding above the strip once it sticks.
+      className="sticky top-[var(--pinned-header-h,0px)] z-10 rounded-2xl border border-line bg-card px-3 py-2.5 shadow-chip before:absolute before:inset-x-[-1px] before:-top-[17px] before:h-4 before:bg-background before:content-['']"
     >
       <div className="grid grid-cols-3 gap-2.5">
         <Cell first label="Expected" value={inr(summary.expectedTotal)} />

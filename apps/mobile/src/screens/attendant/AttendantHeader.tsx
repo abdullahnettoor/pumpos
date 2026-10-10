@@ -1,9 +1,9 @@
 import React from 'react';
 import { initialsOf, PumpOSMark } from '@pump/ui';
-import { Avatar } from '../../ui/index.js';
+import { Avatar, scrollEdgeClass } from '../../ui/index.js';
 
 /**
- * The attendant's whole chrome: the PumpOS mark, the Station mark and name, who they are, and
+ * The attendant's whole chrome (pinned above the scrolling form): the PumpOS mark, the Station mark and name, who they are, and
  * the avatar that opens the account sheet. There is nothing else to navigate
  * to, so there is deliberately no menu, bell or station switcher.
  */
@@ -11,8 +11,12 @@ export const AttendantHeader: React.FC<{
   stationName: string;
   userName: string;
   onOpenAccount: () => void;
-}> = ({ stationName, userName, onOpenAccount }) => (
-  <header className="mobile-safe-top flex flex-shrink-0 items-center gap-2.5 border-b border-line bg-card px-4 pb-2.5">
+  /** The scroll edge (`scrollEdgeClass`): hairline + soft shadow once the form scrolls under the header. */
+  edgeClass?: string;
+}> = ({ stationName, userName, onOpenAccount, edgeClass = scrollEdgeClass(false) }) => (
+  <header
+    className={`mobile-safe-top relative z-20 flex flex-shrink-0 items-center gap-2.5 bg-card px-4 pb-2.5 ${edgeClass}`}
+  >
     <PumpOSMark aria-hidden className="h-[21px] flex-shrink-0 text-accent" />
     <span
       aria-hidden

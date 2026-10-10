@@ -8,6 +8,7 @@ import {
 } from '@pump/ui';
 import { HandoverPanel } from '../components/HandoverPanel.js';
 import type { AssignedDu, MyAssignment } from '../lib/handover/model.js';
+import { scrollEdgeClass, useScrolled } from '../ui/index.js';
 import { AccountSheet } from './attendant/AccountSheet.js';
 import { AttendantHeader } from './attendant/AttendantHeader.js';
 import { DuStrip } from './attendant/DuStrip.js';
@@ -49,6 +50,9 @@ export const AttendantScreen: React.FC<{
   } | null>(null);
   const [editing, setEditing] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  // The header stays put above the scroller; its edge shows once the form has scrolled under it.
+  const [scroller, setScroller] = useState<HTMLElement | null>(null);
+  const scrolled = useScrolled(scroller);
 
   const savedResults = accepted && accepted.shiftId === shiftId ? accepted.savedResults : undefined;
 
@@ -124,8 +128,9 @@ export const AttendantScreen: React.FC<{
         stationName={stationName}
         userName={userName}
         onOpenAccount={() => setAccountOpen(true)}
+        edgeClass={scrollEdgeClass(scrolled)}
       />
-      <main className="flex-1 overflow-y-auto px-4 pt-4">
+      <main ref={setScroller} className="flex-1 overflow-y-auto px-4 pt-4">
         {isForm ? body : <div className="pb-8">{body}</div>}
       </main>
       <AccountSheet

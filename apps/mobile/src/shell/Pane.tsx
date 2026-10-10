@@ -1,5 +1,6 @@
-import React, { useLayoutEffect, useRef } from 'react';
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { PageActiveContext } from '../ui/backStack.js';
+import { PaneChromeContext } from '../ui/scrollEdge.js';
 
 interface Props {
   /** The page currently shown. Inactive panes stay mounted (state, scroll) but hidden. */
@@ -52,7 +53,8 @@ const BOTTOM: Record<NonNullable<Props['bottom']>, string> = {
 };
 
 /**
- * One page of a stack in its own scroll container. A hidden pane (`display:none`)
+ * One page of a stack in its own scroll container. Its header (`PinnedHeader`)
+ * sticks to the top of this container. A hidden pane (`display:none`)
  * loses its scroll offset in some browsers, so the offset is tracked on scroll
  * and put back when the pane becomes active again.
  */
@@ -63,7 +65,19 @@ export const Pane: React.FC<Props> = ({
   enterOnMount = false,
   children,
 }) => {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
+  // What the page's pinned header needs: the scroller (for its scroll edge) and
+  // the slot a page toolbar is portaled into.
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
+  const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
+  const attach = useCallback((el: HTMLDivElement | null) => {
+    ref.current = el;
+    setScroller(el);
+  }, []);
+  const chrome = useMemo(
+    () => ({ scroller, toolbarSlot, setToolbarSlot }),
+    [scroller, toolbarSlot],
+  );
   const savedTop = useRef(0);
   const seenEnter = useRef(enterOnMount ? 0 : enterKey);
 
@@ -79,14 +93,16 @@ export const Pane: React.FC<Props> = ({
 
   return (
     <div
-      ref={ref}
+      ref={attach}
       onScroll={(e) => {
         if (active) savedTop.current = e.currentTarget.scrollTop;
       }}
-      className={`absolute overflow-y-auto overscroll-contain ${BOTTOM[bottom]} ${active ? '' : 'hidden'}`}
+      className={`absolute overflow-y-auto overscroll-contain scroll-pt-[var(--pinned-header-h,0px)] ${BOTTOM[bottom]} ${active ? '' : 'hidden'}`}
       aria-hidden={!active}
     >
-      <PageActiveContext.Provider value={active}>{children}</PageActiveContext.Provider>
+      <PaneChromeContext.Provider value={chrome}>
+        <PageActiveContext.Provider value={active}>{children}</PageActiveContext.Provider>
+      </PaneChromeContext.Provider>
     </div>
   );
 };

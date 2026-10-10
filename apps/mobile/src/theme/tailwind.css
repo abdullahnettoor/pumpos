@@ -9,7 +9,7 @@
  *   text-on-bad  (text on a solid bg-bad fill)
  *   text-bad-fg  text-warn-fg  (status text on a soft surface)
  *   bg-chart-1 .. bg-chart-6  (categorical series; never status colours)
- *   bg-track  bg-scrim  shadow-sheet  shadow-chip  bg-dock  border-dock-line  border-hero-line  shadow-float
+ *   bg-track  bg-scrim  shadow-sheet  shadow-chip  shadow-edge  bg-dock  border-dock-line  border-hero-line  shadow-float
  *   hero gradient: bg-[image:var(--hero)]
  *
  * Load order in main.tsx: @pump/ui index.css, then this file, then tokens.css
@@ -64,4 +64,5 @@
   --shadow-float: var(--shadow);
   --shadow-sheet: var(--shadow-sheet);
   --shadow-chip: var(--shadow-chip);
+  --shadow-edge: var(--shadow-edge);
 }

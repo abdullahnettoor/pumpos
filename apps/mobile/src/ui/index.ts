@@ -10,6 +10,8 @@ export { ListGroup, ListRow } from './ListRow.js';
 export { Note } from './Note.js';
 export { PausedReason, pausedButtonProps, usePausedAction } from './PausedAction.js';
 export { PageHeader } from './PageHeader.js';
+export { PinnedHeader, PinnedToolbar } from './PinnedHeader.js';
+export { scrollEdgeClass, useScrolled } from './scrollEdge.js';
 export { SeeAllButton } from './SeeAllButton.js';
 export { SectionLabel } from './SectionLabel.js';
 export { SegmentedControl } from './SegmentedControl.js';
