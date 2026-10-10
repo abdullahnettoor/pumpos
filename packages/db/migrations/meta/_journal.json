@@ -71,6 +71,13 @@
       "when": 1791612496907,
       "tag": "0009_special_bug",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791617029922,
+      "tag": "0010_lazy_tattoo",
+      "breakpoints": true
     }
   ]
 }
