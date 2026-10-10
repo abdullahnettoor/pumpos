@@ -19,6 +19,18 @@ export const stationTime = (ms: number, timeZone: string): string =>
     .format(new Date(ms))
     .toLowerCase();
 
+/** Minutes after local midnight of an instant in the station's timezone. */
+export function stationMinuteOfDay(ms: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(ms));
+  const at = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return at('hour') * 60 + at('minute');
+}
+
 /** `9 Oct` in the station's timezone. */
 export const stationDayMonth = (ms: number, timeZone: string): string =>
   new Intl.DateTimeFormat(LOCALE, { timeZone, day: 'numeric', month: 'short' }).format(

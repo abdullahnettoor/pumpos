@@ -36,6 +36,21 @@ describe('SalesByProduct', () => {
     expect(within(total).getByText('₹6,060')).toBeTruthy();
   });
 
+  it('lets the caller word the empty states (a closed Shift with no product sales)', () => {
+    render(
+      <SalesByProduct
+        fuel={[]}
+        products={[]}
+        fuelNote={{ text: 'x' }}
+        productsNote={{ text: 'y' }}
+        fuelEmpty="No fuel sales in this shift."
+        productsEmpty="No product sales in this shift."
+      />,
+    );
+    expect(screen.getByText('No fuel sales in this shift.')).toBeTruthy();
+    expect(screen.getByText('No product sales in this shift.')).toBeTruthy();
+  });
+
   it('lets the caller retitle the products group and pin the totals', () => {
     render(
       <SalesByProduct

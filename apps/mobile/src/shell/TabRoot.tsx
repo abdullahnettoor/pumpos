@@ -83,7 +83,7 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
       </>
     );
 
-  // Home lays out its own sections (cards inset 12px, labels 16px); the rest still use the padded page.
+  // Home and Shifts lay out their own sections (cards inset 12px, labels 16px); the rest still use the padded page.
   if (tab === 'home')
     return (
       <>
@@ -92,12 +92,20 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
       </>
     );
 
+  // Shifts, like Home, lays out its own sections.
+  if (tab === 'shifts')
+    return (
+      <>
+        {header}
+        <ShiftsScreen station={station} />
+      </>
+    );
+
   const onNavigate = (target: TabKey) => nav.select(target);
   return (
     <>
       {header}
       <Padded>
-        {tab === 'shifts' && <ShiftsScreen station={station} />}
         {tab === 'reports' && <ReportsRoot station={station} />}
         {tab === 'insights' && <MoreScreen station={station} onNavigate={onNavigate} />}
       </Padded>
