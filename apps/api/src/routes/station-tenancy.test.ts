@@ -92,6 +92,7 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /dssr/daily/preview': 'org-scoped-query',
   'GET /dssr/profit-loss': 'org-scoped-query',
   'GET /dssr/daily/range': 'org-scoped-query',
+  'GET /dssr/days': 'refuses-foreign-station',
 
   'GET /reports/attendant-handovers': 'org-scoped-query',
 

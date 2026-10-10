@@ -33,6 +33,7 @@ import type {
   DesktopDownloads,
   AttendantHandoverReport,
   AttendantReportFilters,
+  BusinessDayList,
 } from '@pump/shared';
 
 /**
@@ -91,6 +92,7 @@ export const queryKeys = {
   inventoryVariances: (stationId: string) => ['inventory-variances', stationId] as const,
   dssr: (stationId: string, date: string) => ['dssr', stationId, date] as const,
   dssrPreview: (stationId: string, date: string) => ['dssr-preview', stationId, date] as const,
+  businessDayList: (stationId: string) => ['business-day-list', stationId] as const,
   dssrRange: (stationId: string, from: string, to: string) =>
     ['dssr-range', stationId, from, to] as const,
   attendantHandoverReport: (stationId: string, from: string, to: string) =>
@@ -843,6 +845,25 @@ export function useProfitLoss(
   });
 }
 
+/**
+ * The Reports tab's Business Day list, one calendar month per page, newest first.
+ * `fetchNextPage` loads the next older month that has any Business Day
+ * (`olderMonth`), so a station with a gap never shows an empty page. Operational
+ * tier: it reads live day state (Live → Draft → Sealed), so it must never serve
+ * same-session stale data; `useInvalidateOperational` refreshes it.
+ */
+export function useBusinessDayList(stationId: string | null | undefined) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.businessDayList(stationId ?? ''),
+    queryFn: ({ pageParam }): Promise<BusinessDayList> =>
+      shiftService.getBusinessDayList(stationId!, pageParam ?? undefined),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.olderMonth,
+    enabled: !!stationId,
+    ...TIER.operational,
+  });
+}
+
 export function useDailyDssrRange(
   stationId: string | null | undefined,
   from: string,
@@ -902,6 +923,7 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['business-day-status'] }),
       qc.invalidateQueries({ queryKey: ['shift-summaries'] }),
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] }),
+      qc.invalidateQueries({ queryKey: ['business-day-list'] }),
       qc.invalidateQueries({ queryKey: ['shift-transactions'] }),
       qc.invalidateQueries({ queryKey: ['merchandise-handovers'] }),
       qc.invalidateQueries({ queryKey: ['merchandise-sales'] }),

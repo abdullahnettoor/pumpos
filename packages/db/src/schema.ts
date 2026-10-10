@@ -296,6 +296,8 @@ export const shifts = pgTable(
     oneOpenPerStation: uniqueIndex('shifts_station_open_uniq')
       .on(t.organizationId, t.stationId)
       .where(sql`${t.status} = 'OPEN'`),
+    // The Business Day list, DSSR compose and dashboard roll up a day's shifts.
+    businessDayIdx: index('shifts_business_day_idx').on(t.businessDayId),
   }),
 );
 
@@ -617,6 +619,8 @@ export const sales = pgTable(
   },
   (t) => ({
     shiftAttendantIdx: index('sales_shift_attendant_idx').on(t.shiftId, t.attendantId),
+    // A Business Day's sales are summed for the DSSR and the Business Day list.
+    businessDayIdx: index('sales_business_day_idx').on(t.businessDayId),
   }),
 );
 
@@ -1021,27 +1025,47 @@ export const documentSequences = pgTable(
 // REPORTING, AUDIT & SYNC DOMAINS
 // ----------------------------------------------------
 
-export const shiftSummaries = pgTable('shift_summaries', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  shiftId: uuid('shift_id')
-    .references(() => shifts.id)
-    .notNull(),
-  snapshotData: jsonb('snapshot_data').notNull(),
-  generatedAt: timestamp('generated_at').defaultNow().notNull(),
-});
+export const shiftSummaries = pgTable(
+  'shift_summaries',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    shiftId: uuid('shift_id')
+      .references(() => shifts.id)
+      .notNull(),
+    snapshotData: jsonb('snapshot_data').notNull(),
+    generatedAt: timestamp('generated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    // Joined from a Business Day's shifts to read their stored snapshots.
+    shiftIdx: index('shift_summaries_shift_idx').on(t.shiftId),
+  }),
+);
 
-export const dssrSnapshots = pgTable('dssr_snapshots', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  organizationId: uuid('organization_id')
-    .references(() => organizations.id)
-    .notNull(),
-  stationId: uuid('station_id')
-    .references(() => stations.id)
-    .notNull(),
-  businessDate: varchar('business_date', { length: 10 }).notNull(), // YYYY-MM-DD
-  snapshotData: jsonb('snapshot_data').notNull(),
-  generatedAt: timestamp('generated_at').defaultNow().notNull(),
-});
+export const dssrSnapshots = pgTable(
+  'dssr_snapshots',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    stationId: uuid('station_id')
+      .references(() => stations.id)
+      .notNull(),
+    businessDate: varchar('business_date', { length: 10 }).notNull(), // YYYY-MM-DD
+    snapshotData: jsonb('snapshot_data').notNull(),
+    generatedAt: timestamp('generated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    // Looked up by (station, date) for the DSSR and by month for the list. Not
+    // unique: `save` replaces by delete + insert, and a second row must not
+    // make a regeneration fail.
+    stationDateIdx: index('dssr_snapshots_org_station_date_idx').on(
+      t.organizationId,
+      t.stationId,
+      t.businessDate,
+    ),
+  }),
+);
 
 // Canonical append-only business-event log (Handbook Vol. 4). Mirrors the
 // DomainEvent envelope in @pump/core. Audit log + sync/replay source; business

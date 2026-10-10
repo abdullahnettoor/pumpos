@@ -1,6 +1,9 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type {
+  BusinessDayListQuery,
+  BusinessDayListReader,
+  BusinessDayListSource,
   DssrDataReader,
   DssrSnapshot,
   DssrSnapshotRepository,
@@ -227,6 +230,121 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       })),
       products,
       nozzles,
+    };
+  }
+}
+
+/**
+ * Business Day list reader (#394): the Reports tab's month page in ONE
+ * statement, whatever the number of days, Shifts or Sales.
+ *
+ * - SEALED days (a CLOSED day with a DSSR snapshot): scalars are extracted from
+ *   `dssr_snapshots.snapshot_data` with `->` / `->>`; the snapshot JSON never
+ *   reaches the Worker.
+ * - Every other day (OPEN, or CLOSED without a snapshot): rolled up from that
+ *   day's Shift Summaries plus its Sales, grouped in SQL. This is the same
+ *   arithmetic `composeDssr` does (net fuel litres, Σ fuel sales value, Σ office
+ *   cash variance, Σ sale totals), minus everything the list does not show.
+ *   The live DSSR preview is deliberately not built here — only for the one day
+ *   a user opens.
+ *
+ * Every table is reached through an organization/station-scoped `business_days`
+ * row, so a foreign stationId yields no rows.
+ */
+export class DrizzleBusinessDayListReader implements BusinessDayListReader {
+  constructor(private readonly db: DbExecutor) {}
+
+  async load(q: BusinessDayListQuery): Promise<BusinessDayListSource> {
+    const [row] = (await this.db.execute(sql`
+      WITH days AS (
+        SELECT bd.id, bd.business_date, bd.status
+        FROM business_days bd
+        WHERE bd.organization_id = ${q.organizationId} AND bd.station_id = ${q.stationId}
+          AND ((bd.business_date >= ${q.monthFrom} AND bd.business_date <= ${q.monthTo})
+            OR (bd.business_date >= ${q.weekFrom} AND bd.business_date <= ${q.currentBusinessDate}))
+      ),
+      snap AS (
+        SELECT DISTINCT ON (ds.business_date) ds.business_date, ds.snapshot_data AS data
+        FROM dssr_snapshots ds
+        WHERE ds.organization_id = ${q.organizationId} AND ds.station_id = ${q.stationId}
+          AND ds.business_date IN (SELECT d.business_date FROM days d WHERE d.status = 'CLOSED')
+        ORDER BY ds.business_date, ds.generated_at DESC
+      ),
+      unsealed AS (
+        SELECT d.id, d.business_date
+        FROM days d
+        LEFT JOIN snap sn ON sn.business_date = d.business_date
+        WHERE d.status <> 'CLOSED' OR sn.business_date IS NULL
+      ),
+      shift_roll AS (
+        SELECT s.business_day_id AS id,
+          COUNT(*)::int AS shift_count,
+          SUM((ss.snapshot_data ->> 'totalFuelSalesValue')::numeric) AS fuel_sales,
+          SUM(COALESCE((ss.snapshot_data ->> 'totalNetVolume')::numeric,
+                       (ss.snapshot_data ->> 'totalVolume')::numeric
+                         - COALESCE((ss.snapshot_data ->> 'totalTesting')::numeric, 0))) AS volume,
+          SUM((ss.snapshot_data ->> 'cashVariance')::numeric) AS cash_variance
+        FROM shifts s
+        JOIN shift_summaries ss ON ss.shift_id = s.id
+        WHERE s.business_day_id IN (SELECT u.id FROM unsealed u)
+        GROUP BY s.business_day_id
+      ),
+      sale_roll AS (
+        SELECT sa.business_day_id AS id, SUM(sa.total_amount) AS product_sales
+        FROM sales sa
+        WHERE sa.business_day_id IN (SELECT u.id FROM unsealed u)
+        GROUP BY sa.business_day_id
+      ),
+      figures AS (
+        SELECT
+          d.business_date AS "businessDate",
+          d.status AS "dayStatus",
+          COALESCE(CASE WHEN sn.business_date IS NOT NULL
+            THEN (sn.data -> 'fuel' ->> 'totalSalesValue')::numeric ELSE sh.fuel_sales END, 0)
+            AS "fuelSales",
+          COALESCE(CASE WHEN sn.business_date IS NOT NULL
+            THEN (sn.data -> 'merchandise' ->> 'salesValue')::numeric ELSE sl.product_sales END, 0)
+            AS "productSales",
+          COALESCE(CASE WHEN sn.business_date IS NOT NULL
+            THEN COALESCE((sn.data -> 'fuel' ->> 'totalNetVolume')::numeric,
+                          (sn.data -> 'fuel' ->> 'totalVolume')::numeric)
+            ELSE sh.volume END, 0) AS "volume",
+          COALESCE(CASE WHEN sn.business_date IS NOT NULL
+            THEN (sn.data -> 'drawer' ->> 'totalCashVariance')::numeric ELSE sh.cash_variance END, 0)
+            AS "cashVariance",
+          COALESCE(CASE WHEN sn.business_date IS NOT NULL
+            THEN (sn.data ->> 'shiftsIncluded')::int ELSE sh.shift_count END, 0) AS "shiftCount"
+        FROM days d
+        LEFT JOIN snap sn ON sn.business_date = d.business_date AND d.status = 'CLOSED'
+        LEFT JOIN shift_roll sh ON sh.id = d.id
+        LEFT JOIN sale_roll sl ON sl.id = d.id
+      )
+      SELECT
+        COALESCE((SELECT json_agg(f) FROM figures f), '[]'::json) AS days,
+        (SELECT COUNT(*)::int FROM business_days bd
+          WHERE bd.organization_id = ${q.organizationId} AND bd.station_id = ${q.stationId}
+            AND bd.status = 'OPEN' AND bd.business_date < ${q.currentBusinessDate}) AS "openPastDays",
+        (SELECT MAX(bd.business_date) FROM business_days bd
+          WHERE bd.organization_id = ${q.organizationId} AND bd.station_id = ${q.stationId}
+            AND bd.business_date < ${q.monthFrom}) AS "olderBusinessDate"
+    `)) as unknown as Array<{
+      days: Array<Record<string, unknown>> | null;
+      openPastDays: number | string | null;
+      olderBusinessDate: string | null;
+    }>;
+
+    return {
+      days: (row?.days ?? []).map((d) => ({
+        businessDate: String(d.businessDate),
+        dayStatus: d.dayStatus === 'CLOSED' ? 'CLOSED' : 'OPEN',
+        fuelSales: Number(d.fuelSales ?? 0),
+        productSales: Number(d.productSales ?? 0),
+        volume: Number(d.volume ?? 0),
+        cashVariance: Number(d.cashVariance ?? 0),
+        shiftCount: Number(d.shiftCount ?? 0),
+      })),
+      openPastDays: Number(row?.openPastDays ?? 0),
+      olderBusinessDate: row?.olderBusinessDate ?? null,
     };
   }
 }
