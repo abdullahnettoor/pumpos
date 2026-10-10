@@ -94,18 +94,19 @@ export async function projectShiftSummary(
       COALESCE((SELECT jsonb_agg(jsonb_build_object(
           'productId', t.product_id,
           'productName', t.name,
+          'productType', t.product_type,
           'quantity', t.quantity,
           'lineTotal', t.line_total
         ) ORDER BY t.name, t.product_id)
         FROM (
-          SELECT si.product_id, p.name,
+          SELECT si.product_id, p.name, p.product_type,
             SUM(si.quantity)::float8 AS quantity,
             SUM(si.line_total)::float8 AS line_total
           FROM sales s
           JOIN sale_items si ON si.sale_id = s.id
           LEFT JOIN products p ON p.id = si.product_id
           WHERE s.shift_id = ${shift.id} AND s.sale_type <> 'Fuel'
-          GROUP BY si.product_id, p.name
+          GROUP BY si.product_id, p.name, p.product_type
         ) t), '[]'::jsonb) AS product_rows,
       (SELECT COALESCE(SUM(s.total_amount), 0)::float8 FROM sales s
         WHERE s.shift_id = ${shift.id} AND s.sale_type <> 'Fuel') AS product_total,

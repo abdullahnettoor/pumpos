@@ -15,6 +15,7 @@ export * from './utils/phone-auth.js';
 export * from './utils/natural-order.js';
 export * from './utils/shift-context.js';
 export * from './utils/shift-label.js';
+export * from './utils/product-category.js';
 export * from './utils/onboarding-tax.js';
 export * from './constants/payment.js';
 export * from './utils/shift-close-cash.js';

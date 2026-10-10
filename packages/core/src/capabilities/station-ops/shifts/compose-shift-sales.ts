@@ -18,6 +18,8 @@ const num = (v: unknown) => {
 export interface ShiftProductSaleLine {
   productId: string;
   productName: string;
+  /** The product's category (its `productType`); null when the product is unknown. */
+  productType: string | null;
   quantity: number;
   value: number;
 }
@@ -38,6 +40,7 @@ export interface ShiftPayments {
 interface ProductRow {
   productId?: string | null;
   productName?: string | null;
+  productType?: string | null;
   quantity?: number | string | null;
   lineTotal?: number | string | null;
 }
@@ -56,6 +59,7 @@ export function composeShiftProductSales(
     const line = byProduct.get(productId) ?? {
       productId,
       productName: r.productName ?? 'Product',
+      productType: r.productType ?? null,
       quantity: 0,
       value: 0,
     };

@@ -9,18 +9,98 @@ describe('composeShiftProductSales', () => {
   it('groups by product id, so two products with one name stay apart', () => {
     const out = composeShiftProductSales(
       [
-        { productId: 'p1', productName: 'Engine Oil', quantity: 2, lineTotal: 600 },
-        { productId: 'p2', productName: 'Engine Oil', quantity: 1, lineTotal: 450 },
-        { productId: 'p1', productName: 'Engine Oil', quantity: '1', lineTotal: '300' },
+        {
+          productId: 'p1',
+          productName: 'Engine Oil',
+          productType: 'LUBRICANT',
+          quantity: 2,
+          lineTotal: 600,
+        },
+        {
+          productId: 'p2',
+          productName: 'Engine Oil',
+          productType: 'ACCESSORY',
+          quantity: 1,
+          lineTotal: 450,
+        },
+        {
+          productId: 'p1',
+          productName: 'Engine Oil',
+          productType: 'LUBRICANT',
+          quantity: '1',
+          lineTotal: '300',
+        },
       ],
       1416,
     );
     expect(out.lines).toEqual([
-      { productId: 'p1', productName: 'Engine Oil', quantity: 3, value: 900 },
-      { productId: 'p2', productName: 'Engine Oil', quantity: 1, value: 450 },
+      {
+        productId: 'p1',
+        productName: 'Engine Oil',
+        productType: 'LUBRICANT',
+        quantity: 3,
+        value: 900,
+      },
+      {
+        productId: 'p2',
+        productName: 'Engine Oil',
+        productType: 'ACCESSORY',
+        quantity: 1,
+        value: 450,
+      },
     ]);
     // The total is the sales' own total (tax included), not the line sum.
     expect(out.total).toBe(1416);
+  });
+
+  it('carries each line product type, several products across several types', () => {
+    const out = composeShiftProductSales(
+      [
+        {
+          productId: 'a',
+          productName: 'Oil',
+          productType: 'LUBRICANT',
+          quantity: 1,
+          lineTotal: 500,
+        },
+        {
+          productId: 'b',
+          productName: 'Booster',
+          productType: 'ADDITIVE',
+          quantity: 2,
+          lineTotal: 300,
+        },
+        {
+          productId: 'c',
+          productName: 'Mat',
+          productType: 'ACCESSORY',
+          quantity: 1,
+          lineTotal: 200,
+        },
+        {
+          productId: 'd',
+          productName: 'Grease',
+          productType: 'LUBRICANT',
+          quantity: 1,
+          lineTotal: 100,
+        },
+      ],
+      1100,
+    );
+    expect(out.lines.map((l) => [l.productName, l.productType])).toEqual([
+      ['Oil', 'LUBRICANT'],
+      ['Booster', 'ADDITIVE'],
+      ['Mat', 'ACCESSORY'],
+      ['Grease', 'LUBRICANT'],
+    ]);
+  });
+
+  it('has a null product type for a product the catalogue no longer resolves', () => {
+    const out = composeShiftProductSales(
+      [{ productId: 'x', productName: null, quantity: 1, lineTotal: 10 }],
+      10,
+    );
+    expect(out.lines[0]).toMatchObject({ productName: 'Product', productType: null });
   });
 
   it('is empty for a Shift with no Product Sales', () => {

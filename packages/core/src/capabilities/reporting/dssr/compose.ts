@@ -242,6 +242,12 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     name: string;
     code: string;
     kind: 'fuel' | 'merchandise';
+    /**
+     * The product's category (its `productType`), frozen with the day. Set on
+     * merchandise lines only; absent for an unknown product and on snapshots
+     * frozen before #392.
+     */
+    productType?: string;
     quantity: number;
     revenue: number;
     cogs: number;
@@ -281,6 +287,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       name: prod?.name ?? 'Unknown',
       code: prod?.code ?? '',
       kind: 'merchandise',
+      ...(prod?.productType ? { productType: prod.productType } : {}),
       quantity: round2(m.qty),
       revenue: rev,
       cogs: c,
