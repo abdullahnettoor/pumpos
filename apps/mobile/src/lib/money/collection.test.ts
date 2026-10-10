@@ -220,7 +220,9 @@ describe('idempotency keys', () => {
     expect(isEarlierAttemptReceived(business)).toBe(false);
     expect(keepsIdempotencyKey(business)).toBe(false);
     expect(
-      isEarlierAttemptReceived(err('CONFLICT', 'This Idempotency-Key belongs to another user', 409)),
+      isEarlierAttemptReceived(
+        err('CONFLICT', 'This Idempotency-Key belongs to another user', 409),
+      ),
     ).toBe(false);
     expect(
       isEarlierAttemptReceived(
