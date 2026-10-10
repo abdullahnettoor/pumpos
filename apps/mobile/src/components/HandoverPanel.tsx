@@ -517,7 +517,9 @@ export const HandoverPanel: React.FC<{
           <div key={du.duId} className="flex flex-col gap-2">
             <h2 className="px-1 pt-1 text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted">
               {du.duName}
-              {du.duCode ? <span className="text-text-faint"> · {du.duCode}</span> : null}
+              {du.duCode && du.duCode !== du.duName ? (
+                <span className="text-text-faint"> · {du.duCode}</span>
+              ) : null}
             </h2>
 
             {/* 1 · Closing readings + per-nozzle testing */}

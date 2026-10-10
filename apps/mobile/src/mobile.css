@@ -47,6 +47,16 @@ body {
   }
 }
 
+/* Lists are layout here, never bullets. The shared pump-ds Tailwind entry leaves
+ * Tailwind's preflight out (desktop relies on its own base), so the browser's
+ * default disc markers and indent would show on every <ul> that wraps inline. */
+ul,
+ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
 /* Safe-area padding for notched devices. */
 .mobile-safe-top {
   padding-top: max(env(safe-area-inset-top), 12px);
