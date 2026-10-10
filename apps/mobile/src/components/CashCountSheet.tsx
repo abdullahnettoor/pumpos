@@ -116,7 +116,7 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
                   className="grid h-8 w-12 flex-shrink-0 place-items-center rounded-lg text-[13px] font-bold tabular-nums"
                   style={{
                     backgroundColor: active ? 'var(--brand-primary)' : 'var(--bg-surface-alt)',
-                    color: active ? '#fff' : 'var(--text-muted)',
+                    color: active ? 'var(--on-accent)' : 'var(--text-muted)',
                   }}
                 >
                   ₹{d}
@@ -191,7 +191,7 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
                 onApply(total);
                 onClose();
               }}
-              className="flex-1 rounded-xl py-3 text-sm font-semibold text-white"
+              className="flex-1 rounded-xl py-3 text-sm font-semibold text-on-accent"
               style={{ backgroundColor: 'var(--brand-primary)' }}
             >
               Apply {inr(total)}

@@ -1,8 +1,14 @@
 /* Mobile-specific layout on top of the shared PumpOS design tokens.
- * The tokens + Tailwind theme come from @pump/ui (imported in main.tsx). */
+ * Base tokens + Tailwind theme come from @pump/ui; the mobile semantic colour
+ * tokens (light/dark) live in theme/tokens.css. All imported in main.tsx.
+ * color-scheme follows the theme class, set by the pre-paint script in
+ * index.html and ThemeProvider. */
 
-:root {
+:root.light {
   color-scheme: light;
+}
+:root.dark {
+  color-scheme: dark;
 }
 
 * {

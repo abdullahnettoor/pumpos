@@ -1,0 +1,51 @@
+/*
+ * Mobile Tailwind entry: the shared pump-ds theme + utilities, plus the
+ * semantic tokens from tokens.css exposed as utilities.
+ *
+ *   bg-background  bg-card  bg-card-alt  bg-accent  bg-accent-soft  bg-good-soft ...
+ *   border-line  border-line-strong  border-bad-line ...
+ *   text-text-high  text-text-default  text-text-muted  text-text-faint
+ *   text-accent  text-on-accent  text-good  text-bad  text-warn  text-info
+ *   bg-track  bg-dock  border-dock-line  border-hero-line  shadow-float
+ *   hero gradient: bg-[image:var(--hero)]
+ *
+ * Load order in main.tsx: @pump/ui index.css, then this file, then tokens.css
+ * (so the legacy bridge in tokens.css overrides index.css's :root values).
+ */
+@import '@pump/ui/src/pump-ds/tailwind.css';
+
+@theme {
+  --color-background: var(--background);
+  --color-card: var(--card);
+  --color-card-alt: var(--card-alt);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-text-high: var(--text-high);
+  --color-text-default: var(--text-default);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+  --color-warn: var(--warn);
+  --color-info: var(--info);
+  --color-good-soft: var(--good-soft);
+  --color-good-line: var(--good-line);
+  --color-bad-soft: var(--bad-soft);
+  --color-bad-line: var(--bad-line);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-line: var(--warn-line);
+  --color-info-soft: var(--info-soft);
+
+  --color-hero-line: var(--hero-line);
+  --color-dock: var(--dock);
+  --color-dock-line: var(--dock-line);
+  --color-track: var(--track);
+
+  --shadow-float: var(--shadow);
+}

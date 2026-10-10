@@ -39,7 +39,7 @@ const SignOutButton: React.FC = () => (
   <button
     onClick={() => runTask(signOut(), (error: unknown) => console.error('Sign out failed:', error))}
     className="mt-3 rounded-lg px-4 py-2 text-sm font-semibold"
-    style={{ backgroundColor: 'var(--brand-primary)', color: '#ffffff' }}
+    style={{ backgroundColor: 'var(--brand-primary)', color: 'var(--on-accent)' }}
   >
     Sign out
   </button>

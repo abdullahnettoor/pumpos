@@ -17,7 +17,7 @@ export const AttendantScreen: React.FC<{ userName: string; onSignOut: () => void
       >
         <div className="flex items-center gap-2">
           <span
-            className="grid h-7 w-7 place-items-center rounded-lg text-sm font-bold text-white"
+            className="grid h-7 w-7 place-items-center rounded-lg text-sm font-bold text-on-accent"
             style={{ backgroundColor: 'var(--brand-primary)' }}
           >
             P

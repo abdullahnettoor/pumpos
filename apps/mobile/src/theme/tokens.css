@@ -1,0 +1,156 @@
+/*
+ * Mobile semantic colour tokens ("Control room").
+ *
+ * Two value sets, switched by a `light` / `dark` class on <html> (applied
+ * before first paint by the script in index.html, then kept by ThemeProvider).
+ * Light is the default and also applies when no class is present. Dark ships
+ * built but hidden (see theme/config.ts).
+ *
+ * Components reference ONLY these semantic tokens (directly via var(--token),
+ * or through the Tailwind bridge in tailwind.css: bg-card, border-line,
+ * text-text-high, text-good, ...). Never a raw hex in a component.
+ *
+ * Token            Use
+ * ---------------- ----------------------------------------------------------
+ * --background     screen canvas
+ * --card           card / sheet / input surface
+ * --card-alt       recessed or striped surface inside a card
+ * --line           hairline border / divider
+ * --line-strong    emphasised border, grabber, centre rule
+ * --text-high      titles and primary figures
+ * --text-default   body text
+ * --text-muted     secondary labels
+ * --text-faint     tertiary labels, inactive icons (non-essential text only)
+ * --accent         brand / primary action (petrol green; mint in dark)
+ * --on-accent      text and icons placed on --accent
+ * --accent-soft    tinted accent surface (avatar, selected chip)
+ * --good --bad --warn --info          status foregrounds (text, icons, bars)
+ * --good-soft --bad-soft --warn-soft --info-soft    status tinted surfaces
+ * --good-line --bad-line --warn-line  status tinted borders
+ * --hero           gradient for the hero strip / summary card
+ * --hero-line      border of the hero surface
+ * --dock           translucent surface of the bottom dock / action bar
+ * --dock-line      border of the dock
+ * --track          empty part of a meter, tank tube, progress bar
+ * --shadow         elevation shadow for floating surfaces (dock, sheet)
+ */
+
+:root,
+:root.light {
+  --background: #f3f5f2;
+  --card: #ffffff;
+  --card-alt: #f7f8f6;
+  --line: #e3e8e2;
+  --line-strong: #d5dcd4;
+
+  --text-high: #111813;
+  --text-default: #2b342d;
+  --text-muted: #5f6c64;
+  --text-faint: #7f8a82;
+
+  --accent: #1f6a53; /* Petrol Green */
+  --on-accent: #ffffff;
+  --accent-soft: #e3f1ea;
+
+  --good: #1e7a56;
+  --bad: #b83d32; /* Alert Red */
+  --warn: #8f5f08; /* Signal Amber, darkened for text legibility */
+  --info: #2e5e88; /* Diesel Blue */
+
+  --good-soft: #e6f3ec;
+  --good-line: #c5e2d3;
+  --bad-soft: #fcecea;
+  --bad-line: #f3cfca;
+  --warn-soft: #fbf3e2;
+  --warn-line: #efdcae;
+  --info-soft: #e8f0f7;
+
+  --hero: linear-gradient(135deg, #e4f2ea, #f6faf7);
+  --hero-line: #cfe5d8;
+  --dock: rgba(255, 255, 255, 0.88);
+  --dock-line: #e1e6df;
+  --track: #e8ece7;
+  --shadow: 0 10px 30px rgba(24, 32, 26, 0.14);
+}
+
+:root.dark {
+  --background: #0b0f0d;
+  --card: #121815;
+  --card-alt: #161d1a;
+  --line: #1c2420;
+  --line-strong: #26302b;
+
+  --text-high: #ffffff;
+  --text-default: #cfd8d2;
+  --text-muted: #7d8f85;
+  --text-faint: #6b7d73;
+
+  --accent: #2fd18d; /* mint */
+  --on-accent: #06110c;
+  --accent-soft: #143326;
+
+  --good: #2fd18d;
+  --bad: #ff7a6b;
+  --warn: #f2b544;
+  --info: #6cb6ff;
+
+  --good-soft: #10241b;
+  --good-line: #1d4733;
+  --bad-soft: #211312;
+  --bad-line: #42201d;
+  --warn-soft: #1f1712;
+  --warn-line: #3a2a19;
+  --info-soft: #101c28;
+
+  --hero: linear-gradient(135deg, #12251c, #0f1714);
+  --hero-line: #1d3a2c;
+  --dock: rgba(22, 28, 25, 0.86);
+  --dock-line: #263029;
+  --track: #1b2420;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+/*
+ * Legacy bridge. Existing mobile screens still read the shared PumpOS tokens
+ * from @pump/ui (--bg-canvas, --brand-primary, ...). Pointing them at the
+ * semantic tokens makes those screens follow the active theme until each one
+ * is restyled. Scoped to this app: desktop and console are unaffected.
+ * (--text-default / --text-muted / --text-faint share their names with the
+ * semantic tokens above, so they need no mapping.)
+ */
+:root {
+  --bg-canvas: var(--background);
+  --bg-surface: var(--card);
+  --bg-surface-alt: var(--card-alt);
+  --border-soft: var(--line);
+  --border-strong: var(--line-strong);
+  --text-strong: var(--text-high);
+  --brand-primary: var(--accent);
+  --brand-secondary: var(--info);
+  --brand-warning: var(--warn);
+  --brand-danger: var(--bad);
+  --state-success-bg: var(--good-soft);
+  --state-success-fg: var(--good);
+  --state-warning-bg: var(--warn-soft);
+  --state-warning-fg: var(--warn);
+  --state-danger-bg: var(--bad-soft);
+  --state-danger-fg: var(--bad);
+  --state-info-bg: var(--info-soft);
+  --state-info-fg: var(--info);
+}
+
+/*
+ * Amounts and quantities: Geist Mono with tabular figures, so digits align in
+ * columns and don't jitter as values change. Apply `.num` to every amount,
+ * quantity, reading and count. (`.font-mono` gets the same figures so existing
+ * markup is covered too.)
+ */
+.num,
+.font-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+.num {
+  letter-spacing: -0.02em;
+}

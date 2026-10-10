@@ -523,7 +523,7 @@ const CustomerSaleForm: React.FC<{
                 runTask(submit(), (error: unknown) => console.error('Failed to add sale:', error))
               }
               disabled={adding || busy || (!isOmc && !customerId) || !(Number(amount) > 0)}
-              className="flex-1 rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className="flex-1 rounded-lg py-2 text-sm font-semibold text-on-accent disabled:opacity-60"
               style={{ backgroundColor: 'var(--brand-primary)' }}
             >
               {adding ? 'Adding…' : isOmc ? 'Add OMC sale' : 'Add credit sale'}
@@ -1537,7 +1537,7 @@ export const HandoverPanel: React.FC = () => {
             )
           }
           disabled={saving || formInvalid}
-          className="w-full rounded-xl py-3 text-sm font-semibold text-white disabled:opacity-60"
+          className="w-full rounded-xl py-3 text-sm font-semibold text-on-accent disabled:opacity-60"
           style={{ backgroundColor: 'var(--brand-primary)' }}
         >
           {saving ? 'Saving…' : 'Save handover'}

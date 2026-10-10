@@ -13,6 +13,7 @@ import { Kpi } from '../components/Kpi.js';
 import { AlertList } from '../components/AlertList.js';
 import { Collapsible } from '../components/Collapsible.js';
 import { useMobileAlerts } from '../lib/alerts.js';
+import { AppearanceControl } from '../theme/index.js';
 import type { TabKey } from '../components/BottomNav.js';
 
 interface Props {
@@ -419,6 +420,9 @@ export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
           {(stationsQ.data || []).length} station{(stationsQ.data || []).length === 1 ? '' : 's'}
         </p>
       </Collapsible>
+
+      {/* Renders nothing until Appearance ships (theme/config.ts). */}
+      <AppearanceControl />
     </div>
   );
 };
