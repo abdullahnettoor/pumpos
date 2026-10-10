@@ -108,3 +108,12 @@ export const SignOutIcon = makeIcon(
     <path d="M21 12H9" />
   </>,
 );
+export const PhoneIcon = makeIcon(
+  <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2" />,
+);
+export const SearchIcon = makeIcon(
+  <>
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.5-3.5" />
+  </>,
+);
