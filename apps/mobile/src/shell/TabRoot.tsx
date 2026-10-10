@@ -11,8 +11,8 @@ import { BusinessDayPill } from '../components/BusinessDayPill.js';
 import { HandoverPanel } from '../components/HandoverPanel.js';
 import { DssrScreen } from '../screens/DssrScreen.js';
 import { HomeScreen } from '../screens/HomeScreen.js';
-import { LedgerScreen } from '../screens/LedgerScreen.js';
 import { InsightsScreen } from '../screens/InsightsScreen.js';
+import { MoneyScreen } from '../screens/MoneyScreen.js';
 import { ShiftsScreen } from '../screens/ShiftsScreen.js';
 import { HomeHeader } from './HomeHeader.js';
 import { TabHeader } from './TabHeader.js';
@@ -65,9 +65,8 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
     return (
       <>
         {header}
-        <Padded>
-          <LedgerScreen />
-        </Padded>
+        {/* #397: pass `renderSupplierPage` here to open the Supplier page from To pay. */}
+        <MoneyScreen />
       </>
     );
 
