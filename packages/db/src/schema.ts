@@ -248,6 +248,11 @@ export const businessDays = pgTable(
       t.stationId,
       t.businessDate,
     ),
+    orgBusinessDateIdx: index('business_days_org_business_date_idx').on(
+      t.organizationId,
+      t.businessDate,
+      t.id,
+    ),
   }),
 );
 
@@ -444,6 +449,11 @@ export const customerTransactions = pgTable(
   (t) => ({
     shiftAttendantIdx: index('customer_txn_shift_attendant_idx').on(t.shiftId, t.attendantId),
     shiftDuIdx: index('customer_txn_shift_du_idx').on(t.shiftId, t.duId),
+    customerBusinessDayCreatedIdx: index('customer_txn_customer_business_day_created_idx').on(
+      t.customerId,
+      t.businessDayId,
+      t.createdAt,
+    ),
   }),
 );
 
@@ -496,6 +506,11 @@ export const supplierTransactions = pgTable(
     orgStationEntryDateIdx: index('supplier_transactions_org_station_entry_date_idx').on(
       t.organizationId,
       t.stationId,
+      t.entryDate,
+    ),
+    orgSupplierEntryDateIdx: index('supplier_transactions_org_supplier_entry_date_idx').on(
+      t.organizationId,
+      t.supplierId,
       t.entryDate,
     ),
     // The payment-has-funding CHECK lives in 0001_rls_and_triggers.sql (custom
@@ -888,6 +903,11 @@ export const collections = pgTable(
     orgStationEntryDateIdx: index('collections_org_station_entry_date_idx').on(
       t.organizationId,
       t.stationId,
+      t.entryDate,
+    ),
+    orgCustomerEntryDateIdx: index('collections_org_customer_entry_date_idx').on(
+      t.organizationId,
+      t.customerId,
       t.entryDate,
     ),
   }),

@@ -1,6 +1,6 @@
 {
-  "id": "c10ae356-b14b-4d18-ba43-ff06c557e27b",
-  "prevId": "03f2d1a4-fe48-486f-ad68-719c006ce2a6",
+  "id": "9c024bfc-7195-411f-bcf2-1ddfc77002e8",
+  "prevId": "be87c91d-6643-4f91-8240-b06b609a31a0",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -337,6 +337,33 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "business_days_org_business_date_idx": {
+          "name": "business_days_org_business_date_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "business_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -1499,7 +1526,35 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "dssr_snapshots_org_station_date_idx": {
+          "name": "dssr_snapshots_org_station_date_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "station_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "business_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "dssr_snapshots_organization_id_organizations_id_fk": {
           "name": "dssr_snapshots_organization_id_organizations_id_fk",
@@ -5275,7 +5330,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "shift_summaries_shift_idx": {
+          "name": "shift_summaries_shift_idx",
+          "columns": [
+            {
+              "expression": "shift_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "shift_summaries_shift_id_shifts_id_fk": {
           "name": "shift_summaries_shift_id_shifts_id_fk",
@@ -5560,6 +5631,21 @@
           ],
           "isUnique": true,
           "where": "\"shifts\".\"status\" = 'OPEN'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "shifts_business_day_idx": {
+          "name": "shifts_business_day_idx",
+          "columns": [
+            {
+              "expression": "business_day_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}

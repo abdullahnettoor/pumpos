@@ -1,243 +1,139 @@
 import React from 'react';
-import {
-  useDailyDssrPreview,
-  useDailyDssrRange,
-  useCustomers,
-  useSuppliers,
-  useShiftStatus,
-  inr,
-} from '@pump/ui';
-import { resolveBusinessDate } from '@pump/shared';
 import type { Station } from '@pump/shared';
-import { Kpi } from '../components/Kpi.js';
-import { useMobileAlerts } from '../lib/alerts.js';
-import { HOME_ATTENTION_ID } from '../shell/attention.js';
-import type { TabKey } from '../shell/tabs.js';
+import { SalesByProduct } from '../components/SalesByProduct.js';
+import { compactRupees, signedRupees } from '../lib/home/format.js';
+import { comparisonView, type Comparison } from '../lib/home/sales.js';
+import { useNav } from '../shell/nav.js';
+import { SectionLabel, StatTile } from '../ui/index.js';
+import { HomeAttention } from './home/HomeAttention.js';
+import { LiveShiftStrip } from './home/LiveShiftStrip.js';
+import { MoneyPosition } from './home/MoneyPosition.js';
+import { SalesHeadline } from './home/SalesHeadline.js';
+import { TankGauges } from './home/TankGauges.js';
+import { useHomeData } from './home/useHomeData.js';
 
 interface Props {
   station: Station;
-  /** Business day selected by the global pill (YYYY-MM-DD). */
-  businessDate: string | null;
-  onNavigate?: (tab: TabKey) => void;
 }
 
-const numberFmt = (n: number, dec = 0) =>
-  n.toLocaleString('en-IN', { minimumFractionDigits: dec, maximumFractionDigits: dec });
-
-function addDays(isoDate: string, delta: number): string {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + delta);
-  return dt.toISOString().slice(0, 10);
-}
-
-export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate }) => {
-  const settings: any = (station as any).settings || {};
-  const todayBiz = resolveBusinessDate({
-    timeZone: settings.timezone,
-    dayStartsAt: settings.business_day_starts_at,
-  });
-  const date = businessDate ?? todayBiz;
-  const isToday = date === todayBiz;
-
-  const previewQ = useDailyDssrPreview(station.id, date);
-  const customersQ = useCustomers();
-  const suppliersQ = useSuppliers();
-  const statusQ = useShiftStatus(station.id, true, { enabled: isToday } as any);
-  const alerts = useMobileAlerts(station);
-
-  // Compact 7-day fuel-sales trend (closed-day snapshots ending at the selected day).
-  const trendQ = useDailyDssrRange(station.id, addDays(date, -6), date);
-  const trend = (trendQ.data || [])
-    .map((s: any) => ({
-      date: s.businessDate,
-      sales: Number(s.snapshotData?.fuel?.totalSalesValue || 0),
-    }))
-    .sort((a: any, b: any) => (a.date < b.date ? -1 : 1));
-  const maxTrend = Math.max(1, ...trend.map((t) => t.sales));
-
-  const snap: any = previewQ.data?.snapshotData ?? previewQ.data ?? {};
-  const fuel = snap.fuel || {};
-  const credit = snap.credit || {};
-  const purchases = snap.purchases || {};
-  const drawer = snap.drawer || {};
-  const pnl = snap.pnl || {};
-  const shiftsIncluded = (snap.shifts || []).length;
-
-  const fuelSales = Number(fuel.totalSalesValue || 0);
-  const volume = Number(fuel.totalNetVolume ?? fuel.totalVolume ?? 0);
-  const creditTotal = Number(credit.total || 0);
-  const purchasesTotal = Number(purchases.total || 0);
-  const cashVariance = Number(drawer.totalCashVariance || 0);
-  const grossMargin = Number(pnl.grossMargin || 0);
-  const hasCostBasis = Number(pnl.cogs || 0) > 0;
-
-  const receivables = (customersQ.data || []).reduce(
-    (s: number, c: any) => s + Math.max(0, Number(c.currentBalance || 0)),
-    0,
+const ComparisonNote: React.FC<{ c: Comparison }> = ({ c }) => {
+  const v = comparisonView(c);
+  return (
+    <span className={v.tone === 'bad' ? 'text-bad-fg' : ''}>
+      {v.arrow && (
+        <>
+          <span aria-hidden="true">{v.arrow}</span>
+          <span className="sr-only">{v.srLabel}</span>{' '}
+        </>
+      )}
+      {v.text}
+    </span>
   );
-  const payables = (suppliersQ.data || []).reduce(
-    (s: number, x: any) => s + Math.max(0, Number(x.currentBalance || 0)),
-    0,
-  );
+};
 
-  const hasActiveShift = isToday && !!statusQ.data?.activeShift;
-
-  if (previewQ.isLoading) {
-    return (
-      <p className="py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-        Loading…
-      </p>
-    );
-  }
+/**
+ * Home, the Control Room's first tab: live Shift, an honest sales headline
+ * (fuel from closed Shifts only, Product Sales live), the day's tiles, the top
+ * alerts, Sales by product, tank gauges and the money position.
+ */
+export const HomeScreen: React.FC<Props> = ({ station }) => {
+  const nav = useNav();
+  const m = useHomeData(station);
+  const t = m.tiles;
+  const canOpen = (tab: 'reports' | 'money') => nav.tabs.includes(tab);
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Day status banner */}
-      <div
-        className="flex items-center justify-between rounded-xl border px-4 py-3"
-        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
-      >
-        <div>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            {isToday ? 'Today · live' : 'Business day'}
-          </p>
-          <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
-            {date}
-          </p>
+    <div className="pb-2">
+      <LiveShiftStrip shift={m.live} loading={m.shiftLoading} />
+
+      <SectionLabel right={m.comparison ? <ComparisonNote c={m.comparison} /> : undefined}>
+        Sales · {m.dateLabel}
+      </SectionLabel>
+      {m.salesError ? (
+        <p className="mx-3 rounded-[14px] border border-bad-line bg-bad-soft px-3 py-2.5 text-xs text-bad-fg">
+          Could not load today&apos;s sales.
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2 px-3">
+          <SalesHeadline
+            sales={m.sales}
+            split={m.split}
+            openShift={m.openShiftInDay ? m.live : null}
+            trend={m.trend}
+          />
+          <StatTile
+            label="Cash variance"
+            value={t.variance.value === null ? '—' : signedRupees(t.variance.value)}
+            sub={t.variance.detail}
+            note={t.variance.secondary}
+            tone={t.variance.tone}
+          />
+          <StatTile
+            label="Gross margin"
+            value={t.margin.value === null ? '—' : compactRupees(t.margin.value)}
+            sub={t.margin.detail}
+            tone={t.margin.tone}
+          />
+          <StatTile
+            label="Credit sales"
+            value={compactRupees(t.credit.value ?? 0)}
+            sub={t.credit.detail}
+            tone={t.credit.tone}
+          />
+          <StatTile
+            label="Purchases"
+            value={compactRupees(t.purchases.value ?? 0)}
+            sub={t.purchases.detail}
+            tone={t.purchases.tone}
+          />
         </div>
-        <span
-          className="rounded-full px-3 py-1 text-xs font-medium"
-          style={{
-            backgroundColor: hasActiveShift ? 'var(--state-success-bg)' : 'var(--bg-surface-alt)',
-            color: hasActiveShift ? 'var(--state-success-fg)' : 'var(--text-muted)',
-          }}
-        >
-          {isToday
-            ? hasActiveShift
-              ? 'Shift open'
-              : 'No open shift'
-            : `${shiftsIncluded} shift${shiftsIncluded === 1 ? '' : 's'}`}
-        </span>
-      </div>
-
-      {/* Compact attention chip (full feed lives in More → Needs attention) */}
-      {alerts.length > 0 && (
-        <button
-          type="button"
-          id={HOME_ATTENTION_ID} /* the header bell scrolls here (shell/attention.ts) */
-          onClick={() => onNavigate?.('insights')}
-          className="flex items-center justify-between rounded-lg px-3 py-2"
-          style={{
-            backgroundColor: alerts.some((a) => a.severity === 'danger')
-              ? 'var(--state-danger-bg)'
-              : 'var(--state-warning-bg)',
-          }}
-        >
-          <span
-            className="flex items-center gap-2 text-xs font-medium"
-            style={{
-              color: alerts.some((a) => a.severity === 'danger')
-                ? 'var(--state-danger-fg)'
-                : 'var(--state-warning-fg)',
-            }}
-          >
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{
-                backgroundColor: alerts.some((a) => a.severity === 'danger')
-                  ? 'var(--state-danger-fg)'
-                  : 'var(--state-warning-fg)',
-              }}
-            />
-            {alerts.length} {alerts.length === 1 ? 'item needs' : 'items need'} attention
-          </span>
-          <span
-            style={{
-              color: alerts.some((a) => a.severity === 'danger')
-                ? 'var(--state-danger-fg)'
-                : 'var(--state-warning-fg)',
-            }}
-          >
-            ›
-          </span>
-        </button>
       )}
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3">
-        <Kpi
-          label={isToday ? 'Fuel sales today' : 'Fuel sales'}
-          value={inr(fuelSales)}
-          sub={`${numberFmt(volume, 2)} L net`}
-          tone="positive"
-        />
-        <Kpi label="Purchases" value={inr(purchasesTotal)} />
-        <Kpi label="Credit sales" value={inr(creditTotal)} sub="Receivable" />
-        <Kpi
-          label="Cash variance"
-          value={inr(cashVariance)}
-          sub={`${shiftsIncluded} shift${shiftsIncluded === 1 ? '' : 's'}`}
-          tone={Math.abs(cashVariance) > 100 ? 'negative' : 'default'}
-        />
-        <Kpi
-          label="Receivables"
-          value={inr(receivables)}
-          sub="Customer dues · current"
-          tone={receivables > 0 ? 'warning' : 'default'}
-        />
-        <Kpi
-          label="Payables"
-          value={inr(payables)}
-          sub="Supplier dues · current"
-          tone={payables > 0 ? 'warning' : 'default'}
-        />
-        <Kpi
-          label="Gross margin"
-          value={hasCostBasis ? inr(grossMargin) : '—'}
-          sub={hasCostBasis ? 'Sales − COGS' : 'Set product costs for margin'}
-          tone={hasCostBasis && grossMargin < 0 ? 'negative' : 'default'}
-        />
-      </div>
+      <HomeAttention alerts={m.alerts} />
 
-      {/* 7-day trend (glance) — full analytics live in More */}
-      {trend.length > 1 && (
-        <section
-          className="rounded-xl border p-4"
-          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
-        >
-          <div className="mb-2 flex items-center justify-between">
-            <h3
-              className="text-xs font-semibold uppercase tracking-wide"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              7-day fuel sales
-            </h3>
-            <button
-              type="button"
-              onClick={() => onNavigate?.('insights')}
-              className="text-[11px] font-medium"
-              style={{ color: 'var(--brand-primary)' }}
-            >
-              Details ›
+      <SectionLabel
+        right={
+          canOpen('reports') ? (
+            <button type="button" onClick={() => nav.select('reports')}>
+              Daily report ›
             </button>
-          </div>
-          <div className="flex h-16 items-end gap-1">
-            {trend.map((t) => (
-              <div key={t.date} className="flex-1" title={`${t.date} · ${inr(t.sales)}`}>
-                <div
-                  className="w-full rounded-t"
-                  style={{
-                    height: `${Math.max(2, (t.sales / maxTrend) * 100)}%`,
-                    backgroundColor: 'var(--brand-primary)',
-                    opacity: 0.85,
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        </section>
+          ) : undefined
+        }
+      >
+        Sales by product
+      </SectionLabel>
+      <SalesByProduct
+        fuel={m.sales.fuel}
+        products={m.sales.products}
+        fuelTotal={m.sales.fuelValue}
+        productsTotal={m.sales.productsValue}
+        fuelNote={{
+          text: m.sales.closedShifts.length
+            ? `${m.sales.closedShifts.map((s) => s.label).join(' + ')} · closed`
+            : 'No closed Shift yet',
+        }}
+        productsNote={{ text: 'Live', live: true }}
+      />
+
+      {m.tanks.length > 0 && (
+        <>
+          <SectionLabel>Tanks</SectionLabel>
+          <TankGauges tanks={m.tanks} />
+        </>
       )}
+
+      <SectionLabel
+        right={
+          canOpen('money') ? (
+            <button type="button" onClick={() => nav.select('money')}>
+              Money ›
+            </button>
+          ) : undefined
+        }
+      >
+        Money position
+      </SectionLabel>
+      <MoneyPosition money={m.money} />
     </div>
   );
 };
