@@ -1,5 +1,10 @@
 import React from 'react';
-import { deriveByProduct, fuelQuantityLabel, unitsLabel } from '../lib/home/byProduct.js';
+import {
+  deriveByProduct,
+  fuelQuantityLabel,
+  groupByCategory,
+  unitsLabel,
+} from '../lib/home/byProduct.js';
 import { rupees } from '../lib/home/format.js';
 import type { FuelLine, ProductLine } from '../lib/home/sales.js';
 
@@ -15,7 +20,7 @@ interface Props {
   products: readonly ProductLine[];
   fuelNote: GroupNote;
   productsNote: GroupNote;
-  /** Header of the non-fuel group. Product categories (#392) will replace the single group. */
+  /** Header of the non-fuel group. Its rows are product categories. */
   productsTitle?: string;
   /** Override the fuel / products totals when they are known more exactly than the line sums. */
   fuelTotal?: number;
@@ -91,6 +96,7 @@ export const SalesByProduct: React.FC<Props> = ({
     fuelTotal,
     productsTotal,
   });
+  const categories = groupByCategory(products);
 
   return (
     <div className="mx-3 overflow-hidden rounded-[14px] border border-line bg-card">
@@ -133,17 +139,17 @@ export const SalesByProduct: React.FC<Props> = ({
       ))}
 
       <GroupHeader title={productsTitle} note={productsNote} />
-      {products.length === 0 && <Empty>{productsEmpty}</Empty>}
-      {products.map((p) => (
+      {categories.length === 0 && <Empty>{productsEmpty}</Empty>}
+      {categories.map((c) => (
         <Row
-          key={p.key}
+          key={c.key}
           swatch="bg-text-muted opacity-60"
-          name={p.name}
-          quantity={p.quantity > 0 ? unitsLabel(p.quantity) : undefined}
-          value={p.value}
+          name={c.name}
+          quantity={c.quantity > 0 ? unitsLabel(c.quantity) : undefined}
+          value={c.value}
         />
       ))}
-      {products.length > 1 && (
+      {categories.length > 1 && (
         <div className="grid grid-cols-[12px_1fr_auto_auto] items-center gap-2.5 border-t border-line bg-card-alt px-3 py-2.5">
           <span />
           <span className="text-[13px] font-semibold text-text-high">Products total</span>

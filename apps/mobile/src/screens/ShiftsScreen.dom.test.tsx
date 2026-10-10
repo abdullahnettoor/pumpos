@@ -483,9 +483,21 @@ describe('Shift Summary page', () => {
             productSales: {
               total: 1440,
               lines: [
-                { productId: 'oil-a', productName: 'Engine oil', quantity: 4, value: 900 },
-                // Same name, different product: must not merge into the line above.
-                { productId: 'oil-b', productName: 'Engine oil', quantity: 1, value: 540 },
+                {
+                  productId: 'oil-a',
+                  productName: 'Engine oil',
+                  productType: 'LUBRICANT',
+                  quantity: 4,
+                  value: 900,
+                },
+                // Same name, different product and category: its own row.
+                {
+                  productId: 'oil-b',
+                  productName: 'Engine oil',
+                  productType: 'ACCESSORY',
+                  quantity: 1,
+                  value: 540,
+                },
               ],
             },
           }),
@@ -493,10 +505,11 @@ describe('Shift Summary page', () => {
       ];
     };
 
-    it('adds them to the total and lists each product (never merging by name)', async () => {
+    it('adds them to the total and groups them by category (never merging by name)', async () => {
       withProducts();
       await openToday();
-      expect(screen.getAllByText('Engine oil')).toHaveLength(2);
+      expect(screen.getByText('Lubricants')).toBeTruthy();
+      expect(screen.getByText('Accessories')).toBeTruthy();
       expect(screen.getByText('₹900')).toBeTruthy();
       expect(screen.getByText('₹540')).toBeTruthy();
       expect(screen.getAllByText('₹2,14,640').length).toBeGreaterThan(0);

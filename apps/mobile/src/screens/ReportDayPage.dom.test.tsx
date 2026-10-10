@@ -122,7 +122,14 @@ const payload = (date: string, live: boolean) => ({
       cogs: 420000,
       grossMargin: 20830,
       byProduct: [
-        { kind: 'merchandise', productId: 'm1', name: 'Engine oil', quantity: 18, revenue: 6840 },
+        {
+          kind: 'merchandise',
+          productId: 'm1',
+          name: 'Engine oil',
+          productType: 'LUBRICANT',
+          quantity: 18,
+          revenue: 6840,
+        },
       ],
     },
     credit: { total: 48210, count: 6 },
@@ -233,7 +240,7 @@ describe('ReportDayPage', () => {
     expect(screen.getByText('6 slips')).toBeTruthy();
     expect(screen.getByText('Purchases')).toBeTruthy();
     expect(screen.getByText('Total sales')).toBeTruthy();
-    expect(screen.getByText('Engine oil')).toBeTruthy();
+    expect(screen.getByText('Lubricants')).toBeTruthy();
     expect(screen.getByText('Included Shifts')).toBeTruthy();
     expect(screen.getByText('Morning')).toBeTruthy();
     expect(screen.getByText('Closed 1:58 pm · 2,210 L')).toBeTruthy();

@@ -113,7 +113,30 @@ describe('deriveSales: fuel from closed Shifts, Product Sales live', () => {
     expect(s.productUnits).toBe(23);
   });
 
-  it('rolls a long tail into one line', () => {
+  it('carries each merchandise line category, and leaves it empty on a legacy snapshot', () => {
+    const r = deriveSales({
+      merchandise: { salesValue: 300 },
+      pnl: {
+        byProduct: [
+          {
+            productId: 'a',
+            kind: 'merchandise',
+            name: 'Oil',
+            quantity: 1,
+            revenue: 200,
+            productType: 'LUBRICANT',
+          },
+          { productId: 'b', kind: 'merchandise', name: 'Mat', quantity: 1, revenue: 100 },
+        ],
+      },
+    });
+    expect(r.products.map((p) => [p.name, p.productType])).toEqual([
+      ['Oil', 'LUBRICANT'],
+      ['Mat', null],
+    ]);
+  });
+
+  it('keeps every product line (the block groups them by category, nothing is rolled up)', () => {
     const many = Array.from({ length: 9 }, (_, i) => ({
       productId: `m${i}`,
       kind: 'merchandise',
@@ -122,12 +145,8 @@ describe('deriveSales: fuel from closed Shifts, Product Sales live', () => {
       revenue: 100 - i,
     }));
     const r = deriveSales({ merchandise: { salesValue: 900 }, pnl: { byProduct: many } });
-    expect(r.products).toHaveLength(6);
-    expect(r.products[5]).toMatchObject({
-      name: '4 other products',
-      quantity: 4,
-      value: 95 + 94 + 93 + 92,
-    });
+    expect(r.products).toHaveLength(9);
+    expect(r.productUnits).toBe(9);
   });
 
   it('shows one Products line when sales exist but no line detail does', () => {
