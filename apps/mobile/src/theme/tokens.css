@@ -164,6 +164,7 @@
   --border-strong: var(--line-strong);
   --text-strong: var(--text-high);
   --brand-primary: var(--accent);
+  --text-on-brand: var(--on-accent);
   --brand-secondary: var(--info);
   --brand-warning: var(--warn);
   --brand-danger: var(--bad);
