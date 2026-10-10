@@ -16,12 +16,12 @@ const TEXT: Record<TankGaugeLevel, string> = {
 const STATE: Partial<Record<TankGaugeLevel, string>> = { red: 'Low', amber: 'Getting low' };
 
 /** One tank takes the full width, two split it, three or more fill three columns. */
-export const GAUGE_COLUMNS: Record<1 | 2 | 3, string> = {
+const GAUGE_COLUMNS: Record<1 | 2 | 3, string> = {
   1: 'grid-cols-1',
   2: 'grid-cols-2',
   3: 'grid-cols-3',
 };
-export const gaugeColumns = (count: number): string =>
+const gaugeColumns = (count: number): string =>
   GAUGE_COLUMNS[Math.min(Math.max(count, 1), 3) as 1 | 2 | 3];
 
 /**

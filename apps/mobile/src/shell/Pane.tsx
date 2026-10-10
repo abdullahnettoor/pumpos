@@ -22,10 +22,10 @@ interface Props {
   children: React.ReactNode;
 }
 
-export const ENTER_MS = 180;
+const ENTER_MS = 180;
 
 /** True when the user asked for less motion (OS setting). */
-export const prefersReducedMotion = (): boolean =>
+const prefersReducedMotion = (): boolean =>
   typeof window !== 'undefined' &&
   typeof window.matchMedia === 'function' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -35,7 +35,7 @@ export const prefersReducedMotion = (): boolean =>
  * Animation (nothing is left on the element, so scroll, stacking and the pane's
  * own layout are untouched); skipped under reduced motion.
  */
-export function playEnter(el: HTMLElement): void {
+function playEnter(el: HTMLElement): void {
   if (prefersReducedMotion() || typeof el.animate !== 'function') return;
   el.animate(
     [
