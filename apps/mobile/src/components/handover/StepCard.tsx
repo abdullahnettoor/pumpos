@@ -1,5 +1,5 @@
 import React, { useId, useState } from 'react';
-import type { StepStatus } from './steps.js';
+import type { StepStatus } from '../../lib/handover/steps.js';
 import { CheckIcon, ChevronIcon } from './icons.js';
 
 const STATUS_LABEL: Record<StepStatus, string> = {

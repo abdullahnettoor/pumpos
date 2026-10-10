@@ -1,4 +1,5 @@
 import { inr } from '@pump/ui';
+import { round2 } from '../num.js';
 import { reconcileDrawer, type DrawerReconciliation } from '@pump/shared';
 import {
   num,
@@ -7,7 +8,7 @@ import {
   type CreditLine,
   type DuFormState,
   type MerchRow,
-} from '../../lib/handover/model.js';
+} from './model.js';
 
 /**
  * Step status, one-line summaries, validation and the expected-cash formula for
@@ -69,13 +70,13 @@ const litres = (v: number) => `${Number(v.toFixed(2)).toLocaleString('en-IN')} L
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** Litres metered past the opening reading, never below zero. */
-const grossVolume = (nz: AssignedNozzle, form: DuFormState): number =>
+/** Litres metered past the opening reading (testing not yet taken off), never below zero. */
+export const nozzleGrossVolume = (nz: AssignedNozzle, form: DuFormState): number =>
   Math.max(0, num(form.readings[nz.nozzleId]) - nz.openingReading);
 
 /** Litres sold net of testing, for one nozzle. */
 export function nozzleNetVolume(nz: AssignedNozzle, form: DuFormState): number {
-  return Math.max(0, grossVolume(nz, form) - num(form.testing[nz.nozzleId]));
+  return Math.max(0, nozzleGrossVolume(nz, form) - num(form.testing[nz.nozzleId]));
 }
 
 /** Metered fuel value of a DU: Σ net litres × unit price. */
@@ -96,7 +97,7 @@ export function readingsErrors(du: AssignedDu, form: DuFormState): HandoverError
     else if (closing < 0) push(reading, 'Cannot be negative');
     else if (closing < nz.openingReading)
       push(reading, `Cannot be below opening (${nz.openingReading})`);
-    const vol = grossVolume(nz, form);
+    const vol = nozzleGrossVolume(nz, form);
     const testingVal = num(form.testing[nz.nozzleId]);
     if (testingVal < 0) push(fieldId.testing(nz.nozzleId), 'Cannot be negative');
     else if (testingVal > vol)
@@ -243,6 +244,15 @@ export function merchTotal(rows: MerchRow[], priceOf: (productId: string) => num
   return rows.reduce((s, r) => s + num(r.quantity) * priceOf(r.productId), 0);
 }
 
+/**
+ * The cash share of the merchandise lines: gross at MRP less what the attendant
+ * declared as card / UPI (`merchNonCash`, as typed), never below zero. This is
+ * what the server attributes to the Handover as merchandise cash.
+ */
+export function merchandiseCash(gross: number, merchNonCash: string): number {
+  return Math.max(0, gross - num(merchNonCash));
+}
+
 /** Step 4. Optional. A line missing its product or its quantity is in progress. */
 export function productsStep(
   merchRows: MerchRow[],
@@ -323,4 +333,31 @@ export function reconcileDu(input: {
     openingFloat,
     cashDrops,
   };
+}
+
+/** Expected · Declared · Variance of one or more Drawers. */
+export interface ReconciliationTotals {
+  expectedTotal: number;
+  declaredTotal: number;
+  varianceAmount: number;
+}
+
+/**
+ * The strip's figures: the Drawers' totals summed (the live preview, a Drawer
+ * with no form counting as zero, or the server's accepted per-Drawer figures).
+ * The variance is summed then rounded to paise so float dust never shows as a
+ * variance.
+ */
+export function sumReconciliations(
+  parts: readonly (ReconciliationTotals | null | undefined)[],
+): ReconciliationTotals {
+  const total = parts.reduce<ReconciliationTotals>(
+    (sum, r) => ({
+      expectedTotal: sum.expectedTotal + (r?.expectedTotal ?? 0),
+      declaredTotal: sum.declaredTotal + (r?.declaredTotal ?? 0),
+      varianceAmount: sum.varianceAmount + (r?.varianceAmount ?? 0),
+    }),
+    { expectedTotal: 0, declaredTotal: 0, varianceAmount: 0 },
+  );
+  return { ...total, varianceAmount: round2(total.varianceAmount) };
 }

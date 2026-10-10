@@ -1,6 +1,6 @@
 import React from 'react';
 import { NumberField, TextField } from './Fields.js';
-import { fieldId } from './steps.js';
+import { fieldId } from '../../lib/handover/steps.js';
 import type { AssignedDu, DuFormState } from '../../lib/handover/model.js';
 
 /**

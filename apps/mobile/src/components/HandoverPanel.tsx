@@ -38,12 +38,15 @@ import {
   fieldErrorMap,
   fieldId,
   merchTotal,
+  merchandiseCash,
+  nozzleGrossVolume,
   productsStep,
   readingsStep,
   reconcileDu,
+  sumReconciliations,
   terminalsStep,
   type StepId,
-} from './handover/steps.js';
+} from '../lib/handover/steps.js';
 import { SummaryStrip } from './handover/SummaryStrip.js';
 import { TerminalsFields } from './handover/TerminalsFields.js';
 import { useHandoverSubmission } from './handover/useHandoverSubmission.js';
@@ -71,8 +74,6 @@ const STEP_TITLE: Record<StepId, string> = {
   products: 'Products sold',
   cash: 'Cash handed over',
 };
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export const HandoverPanel: React.FC<{
   /** Called after a save in which every DU's Handover was accepted. */
@@ -232,7 +233,7 @@ export const HandoverPanel: React.FC<{
   // Merchandise: gross at MRP, and the cash share the server attributes.
   const priceOf = (productId: string) => Number(merchById[productId]?.sellingPrice || 0);
   const merchGross = merchTotal(merchRows, priceOf);
-  const merchCash = Math.max(0, merchGross - num(merchNonCash));
+  const merchCash = merchandiseCash(merchGross, merchNonCash);
 
   const errorList = collectHandoverErrors({
     dus,
@@ -390,25 +391,13 @@ export const HandoverPanel: React.FC<{
         : null,
     ]),
   );
-  const live = Object.values(reconciliations).reduce(
-    (sum, r) => ({
-      expectedTotal: sum.expectedTotal + (r?.expectedTotal ?? 0),
-      declaredTotal: sum.declaredTotal + (r?.declaredTotal ?? 0),
-      varianceAmount: sum.varianceAmount + (r?.varianceAmount ?? 0),
-    }),
-    { expectedTotal: 0, declaredTotal: 0, varianceAmount: 0 },
-  );
-  live.varianceAmount = round2(live.varianceAmount);
+  const live = sumReconciliations(Object.values(reconciliations));
   const allAccepted = dus.length > 0 && dus.every((du) => acceptedByDu[du.duId]);
   const acceptedSummary = allAccepted
     ? {
         ...acceptedByDu[dus[0].duId],
         // The server's own per-Drawer figures, summed the same way as the preview.
-        expectedTotal: dus.reduce((sum, du) => sum + acceptedByDu[du.duId].expectedTotal, 0),
-        declaredTotal: dus.reduce((sum, du) => sum + acceptedByDu[du.duId].declaredTotal, 0),
-        varianceAmount: round2(
-          dus.reduce((sum, du) => sum + acceptedByDu[du.duId].varianceAmount, 0),
-        ),
+        ...sumReconciliations(dus.map((du) => acceptedByDu[du.duId])),
       }
     : null;
   const shownSummary = selectHandoverSummary(live, acceptedSummary);
@@ -537,8 +526,7 @@ export const HandoverPanel: React.FC<{
               defaultOpen
             >
               {du.nozzles.map((nz) => {
-                const closing = num(form.readings[nz.nozzleId]);
-                const vol = Math.max(0, closing - nz.openingReading);
+                const vol = nozzleGrossVolume(nz, form);
                 return (
                   <div key={nz.nozzleId} className="grid grid-cols-2 gap-2.5">
                     <NumberField
