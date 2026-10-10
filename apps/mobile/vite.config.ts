@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { APPEARANCE_ENABLED, isDevSwitchEnabled } from './src/theme/config.ts';
 import { injectThemeFlags } from './src/theme/prepaint.ts';
+import pkg from './package.json' with { type: 'json' };
 
 /** Fills the pre-paint theme script's placeholders in index.html. */
 function themePrepaint(devSwitch: boolean): Plugin {
@@ -20,7 +21,12 @@ export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   const devSwitch = isDevSwitchEnabled(command, env.VITE_THEME_DEV_SWITCH);
   return {
-    define: { __PUMP_THEME_DEV_SWITCH__: JSON.stringify(devSwitch) },
+    define: {
+      __PUMP_THEME_DEV_SWITCH__: JSON.stringify(devSwitch),
+      // The Account sheet footer shows the installed version, baked in from
+      // package.json at build time (same as the console's status bar).
+      __APP_VERSION__: JSON.stringify(pkg.version),
+    },
     plugins: [react(), tailwindcss(), themePrepaint(devSwitch)],
     server: {
       port: 3100,

@@ -421,6 +421,15 @@ describe('Account sheet', () => {
     expect(s.getByText('Plan · Core')).toBeTruthy();
   });
 
+  it('ends with the PumpOS mark and version, below Sign out', () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+    const footer = within(sheet()!).getByText(/^PumpOS · v\d/);
+    expect(footer.parentElement?.querySelector('svg[aria-hidden="true"]')).toBeTruthy();
+    const signOut = within(sheet()!).getByRole('button', { name: 'Sign out' });
+    expect(signOut.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('signs out and closes', () => {
     const onSignOut = vi.fn();
     render(<Harness onSignOut={onSignOut} />);
