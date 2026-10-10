@@ -32,6 +32,7 @@ const REQUIRED = [
   'text-faint',
   'accent',
   'on-accent',
+  'on-bad',
   'accent-soft',
   'good',
   'bad',
@@ -133,6 +134,10 @@ describe.each([
 
   it('keeps text on the accent fill legible', () => {
     expect(contrast(t['--on-accent'], t['--accent'])).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('keeps text on a solid danger fill legible', () => {
+    expect(contrast(t['--on-bad'], t['--bad'])).toBeGreaterThanOrEqual(4.5);
   });
 
   it('keeps borders distinguishable from their surface', () => {

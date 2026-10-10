@@ -25,6 +25,7 @@
  * --on-accent      text and icons placed on --accent
  * --accent-soft    tinted accent surface (avatar, selected chip)
  * --good --bad --warn --info          status foregrounds (icons, bars, large text)
+ * --on-bad        text placed on a solid --bad fill (a destructive button)
  * --bad-fg --warn-fg                   status text on a tinted --*-soft surface
  * --good-soft --bad-soft --warn-soft --info-soft    status tinted surfaces
  * --good-line --bad-line --warn-line  status tinted borders
@@ -65,6 +66,7 @@
   --bad: #b44a3f; /* Alert Red */
   --warn: #b7811e; /* Signal Amber */
   --info: #2e5e88; /* Diesel Blue */
+  --on-bad: #ffffff;
   --bad-fg: #9f3f36; /* danger-fg: text on --bad-soft */
   --warn-fg: #8a6116; /* warning-fg: text on --warn-soft */
 
@@ -115,6 +117,7 @@
   --bad: #ff7a6b;
   --warn: #f2b544;
   --info: #6cb6ff;
+  --on-bad: #1a0907;
   --bad-fg: #ff7a6b;
   --warn-fg: #f2b544;
 

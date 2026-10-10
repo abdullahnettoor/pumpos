@@ -210,7 +210,7 @@ export const SheetButtons: React.FC<{
       type="submit"
       disabled={busy || disabled}
       className={`flex h-11 items-center justify-center rounded-[13px] text-[13.5px] font-bold disabled:opacity-60 ${
-        tone === 'danger' ? 'bg-bad text-white' : 'bg-accent text-on-accent'
+        tone === 'danger' ? 'bg-bad text-on-bad' : 'bg-accent text-on-accent'
       }`}
     >
       {busy ? busyLabel : submitLabel}

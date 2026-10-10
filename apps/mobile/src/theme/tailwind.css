@@ -6,6 +6,7 @@
  *   border-line  border-line-strong  border-bad-line ...
  *   text-text-high  text-text-default  text-text-muted  text-text-faint
  *   text-accent  text-on-accent  text-good  text-bad  text-warn  text-info
+ *   text-on-bad  (text on a solid bg-bad fill)
  *   text-bad-fg  text-warn-fg  (status text on a soft surface)
  *   bg-chart-1 .. bg-chart-6  (categorical series; never status colours)
  *   bg-track  bg-scrim  shadow-sheet  shadow-chip  bg-dock  border-dock-line  border-hero-line  shadow-float
@@ -36,6 +37,7 @@
   --color-bad: var(--bad);
   --color-warn: var(--warn);
   --color-info: var(--info);
+  --color-on-bad: var(--on-bad);
   --color-bad-fg: var(--bad-fg);
   --color-warn-fg: var(--warn-fg);
   --color-good-soft: var(--good-soft);
