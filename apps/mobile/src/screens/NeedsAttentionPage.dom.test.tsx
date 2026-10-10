@@ -29,7 +29,6 @@ const { HomeHeader } = await import('../shell/HomeHeader.js');
 const { ShellContext } = await import('../shell/context.js');
 const { NavProvider, useNav } = await import('../shell/nav.js');
 const { stackOf } = await import('../shell/navStack.js');
-const { useOpenAttention } = await import('./attention/useOpenAttention.js');
 
 const station = { id: 'st-1', name: 'Highway Fuels', settings: {} } as unknown as Station;
 
@@ -86,14 +85,13 @@ const Probe: React.FC = () => {
 /** Home's root plus whatever page is on top of its stack (the shell does this with Panes). */
 const Stage: React.FC = () => {
   const n = useNav();
-  const openAttention = useOpenAttention();
   const stack = stackOf({ active: n.active, stacks: n.stacks, visited: [...n.visited] }, 'home');
   const top = stack[stack.length - 1];
   return top ? (
     <>{top.element}</>
   ) : (
     <>
-      <HomeHeader onOpenAttention={openAttention} />
+      <HomeHeader />
       <HomeAttention alerts={feed.alerts as MobileAlert[]} station={station} />
     </>
   );

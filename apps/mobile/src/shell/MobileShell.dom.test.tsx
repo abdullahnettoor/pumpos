@@ -95,7 +95,7 @@ const Root: React.FC<{ tab: string; stationName: string }> = ({ tab, stationName
   return (
     <div data-testid={`root-${tab}`}>
       {tab === 'home' ? (
-        <HomeHeader onOpenAttention={() => n.push(<Detail name="attention" />, 'attention')} />
+        <HomeHeader />
       ) : (
         <TabHeader title={tab} />
       )}
@@ -231,7 +231,7 @@ describe('header', () => {
     expect(badge?.getAttribute('aria-hidden')).toBe('true');
   });
 
-  it('the bell calls onOpenAttention: the page it pushes replaces the dock, back returns', async () => {
+  it('the bell opens Needs attention: the page it pushes replaces the dock, back returns', async () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Alerts, 2 open' }));
     expect(holder.nav.active).toBe('home');

@@ -5,7 +5,7 @@ import type { MobileAlert } from '../../lib/alerts.js';
 import { homeAlerts } from '../../lib/attention/groups.js';
 import { AlertRow } from '../attention/AlertRow.js';
 import { useAlertOpener } from '../attention/useAlertOpener.js';
-import { useOpenAttention } from '../attention/useOpenAttention.js';
+import { useOpenAttention } from '../../shell/attention.js';
 
 /** Alerts shown on Home; the rest are behind "All N". */
 const HOME_ALERT_LIMIT = 2;

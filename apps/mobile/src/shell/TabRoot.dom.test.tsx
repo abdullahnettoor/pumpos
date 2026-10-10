@@ -20,6 +20,9 @@ const feed = vi.hoisted(() => ({
 }));
 vi.mock('../lib/alerts.js', () => ({ useMobileAlerts: () => feed.alerts }));
 vi.mock('../screens/HomeScreen.js', () => ({ HomeScreen: () => <p>owner overview</p> }));
+vi.mock('../screens/ShiftsScreen.js', () => ({ ShiftsScreen: () => <p>shifts list</p> }));
+vi.mock('../screens/ReportsScreen.js', () => ({ ReportsScreen: () => <p>reports list</p> }));
+vi.mock('../screens/MoneyScreen.js', () => ({ MoneyScreen: () => <p>money list</p> }));
 
 const { TabRoot } = await import('./TabRoot.js');
 const { ShellContext } = await import('./context.js');
@@ -40,14 +43,14 @@ const DepthProbe: React.FC = () => {
   return null;
 };
 
-const renderHome = (role: Role) =>
+const renderTab = (role: Role, tab: 'home' | 'shifts' | 'reports' | 'money' = 'home') =>
   render(
     <ShellContext.Provider
       value={{ station, stationName: station.name, userName: 'A B', role, openAccount: () => {} }}
     >
-      <NavProvider tabs={['home']}>
+      <NavProvider tabs={[tab]}>
         <DepthProbe />
-        <TabRoot tab="home" station={station} stationsLoading={false} />
+        <TabRoot tab={tab} station={station} stationsLoading={false} />
       </NavProvider>
     </ShellContext.Provider>,
   );
@@ -60,13 +63,13 @@ afterEach(() => {
 
 describe('Home root per Role', () => {
   it('an Owner gets the overview', () => {
-    renderHome('Owner');
+    renderTab('Owner');
     expect(screen.getByText('owner overview')).toBeTruthy();
   });
 
   it('a Manager on a Dispenser Unit gets the handover card and no owner overview', () => {
     mine.assignment = assigned;
-    renderHome('Manager');
+    renderTab('Manager');
     expect(screen.getByRole('button', { name: /Your handover · DU2/ })).toBeTruthy();
     expect(screen.queryByText('owner overview')).toBeNull();
   });
@@ -74,7 +77,7 @@ describe('Home root per Role', () => {
   it('a Manager on a Dispenser Unit gets the bell with an attention section to land on', () => {
     mine.assignment = assigned;
     feed.alerts = [{ id: 'a1', severity: 'warning', category: 'stock', title: 'Tank 2 low' }];
-    renderHome('Manager');
+    renderTab('Manager');
     expect(screen.getByRole('button', { name: 'Alerts, 1 open' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Needs attention' })).toBeTruthy();
     expect(screen.getByText('Tank 2 low')).toBeTruthy();
@@ -83,7 +86,7 @@ describe('Home root per Role', () => {
   it('the bell pushes the Needs attention page on Home', () => {
     mine.assignment = assigned;
     feed.alerts = [{ id: 'a1', severity: 'warning', category: 'stock', title: 'Tank 2 low' }];
-    renderHome('Manager');
+    renderTab('Manager');
     fireEvent.click(screen.getByRole('button', { name: 'Alerts, 1 open' }));
     expect(seen.depth).toBe(1);
   });
@@ -92,10 +95,45 @@ describe('Home root per Role', () => {
     mine.assignment = assigned;
     feed.alerts = [{ id: 'a1', severity: 'warning', category: 'stock', title: 'Tank 2 low' }];
     for (const role of ['Accountant', 'Staff'] as Role[]) {
-      renderHome(role);
+      renderTab(role);
       expect(screen.getByRole('button', { name: /Your handover · DU2/ })).toBeTruthy();
       expect(screen.queryByRole('button', { name: /^Alerts/ })).toBeNull();
       expect(screen.queryByText('Tank 2 low')).toBeNull();
+      cleanup();
+    }
+  });
+});
+
+describe('the alerts bell on tab headers', () => {
+  const stockAlert = {
+    id: 'a1',
+    severity: 'warning' as const,
+    category: 'stock' as const,
+    title: 'Tank 2 low',
+  };
+
+  it('a Manager with no pump assignment reaches Needs attention from the Shifts tab', () => {
+    feed.alerts = [stockAlert];
+    renderTab('Manager', 'shifts');
+    expect(screen.getByText('shifts list')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Alerts, 1 open' }));
+    expect(seen.depth).toBe(1);
+  });
+
+  it('every tab of an alert-seeing Role carries the bell', () => {
+    feed.alerts = [stockAlert];
+    for (const tab of ['reports', 'money'] as const) {
+      renderTab('Manager', tab);
+      expect(screen.getByRole('button', { name: 'Alerts, 1 open' })).toBeTruthy();
+      cleanup();
+    }
+  });
+
+  it('a Role that may not see alerts (Accountant) has no bell on its tabs', () => {
+    feed.alerts = [stockAlert];
+    for (const tab of ['reports', 'money'] as const) {
+      renderTab('Accountant', tab);
+      expect(screen.queryByRole('button', { name: /^Alerts/ })).toBeNull();
       cleanup();
     }
   });
