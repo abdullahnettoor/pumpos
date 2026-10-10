@@ -147,6 +147,19 @@ describe('HandoverPanel steps (mobile)', () => {
   afterEach(cleanup);
 
   describe('step cards', () => {
+    it('names the DU once when its code is the same as its name', () => {
+      assignment.data = makeAssignment({
+        dispenserUnits: [du('1', NOZZLE, { duName: 'DU-1', duCode: 'DU-1' })],
+      });
+      withClient(<HandoverPanel />);
+      expect(screen.getByRole('heading', { level: 2, name: 'DU-1' })).toBeTruthy();
+    });
+
+    it('adds the code after the name when they differ', () => {
+      withClient(<HandoverPanel />);
+      expect(screen.getByRole('heading', { level: 2, name: 'DU 1 · D-1' })).toBeTruthy();
+    });
+
     it('shows the five steps of a DU in order', () => {
       withClient(<HandoverPanel />);
       const titles = screen
