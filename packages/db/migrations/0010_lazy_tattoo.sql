@@ -1,0 +1,1 @@
+CREATE INDEX "stock_variances_org_station_day_idx" ON "stock_variances" USING btree ("organization_id","station_id","business_day_id");
