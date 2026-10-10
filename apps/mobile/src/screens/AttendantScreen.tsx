@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { businessDateSettings, type Station } from '@pump/shared';
 import {
   runTask,
   useMerchandiseHandovers,
@@ -6,7 +7,7 @@ import {
   type RecordHandoverResult,
 } from '@pump/ui';
 import { HandoverPanel } from '../components/HandoverPanel.js';
-import type { AssignedDu, MyAssignment } from '../components/handover/model.js';
+import type { AssignedDu, MyAssignment } from '../lib/handover/model.js';
 import { AccountSheet } from './attendant/AccountSheet.js';
 import { AttendantHeader } from './attendant/AttendantHeader.js';
 import { DuStrip } from './attendant/DuStrip.js';
@@ -24,10 +25,12 @@ import { buildRecap, type MerchandiseHandoverRecord } from '../lib/handover/reca
  * closes), and "Handover recorded", which shows on reload when the assignment
  * already holds a Handover for every DU and straight after a save.
  */
-export const AttendantScreen: React.FC<{ userName: string; onSignOut: () => void }> = ({
-  userName,
-  onSignOut,
-}) => {
+export const AttendantScreen: React.FC<{
+  userName: string;
+  onSignOut: () => void;
+  /** The org's stations: the Shift's station gives the timezone times are shown in. */
+  stations?: readonly Station[];
+}> = ({ userName, onSignOut, stations = [] }) => {
   const assignmentQ = useMyAssignment();
   const assignment: MyAssignment | null | undefined = assignmentQ.data;
   const dus: AssignedDu[] = useMemo(
@@ -52,6 +55,9 @@ export const AttendantScreen: React.FC<{ userName: string; onSignOut: () => void
   // The station the Shift is at, never an arbitrary one from the org's list;
   // with no assignment there is nothing to name.
   const stationName = assignment?.station?.name ?? 'PumpOS';
+  const timeZone = businessDateSettings(
+    stations.find((s) => s.id === assignment?.station?.id)?.settings,
+  ).timeZone;
 
   // Null until every DU has a recorded Handover (this session's or the one the
   // assignment holds): a partly recorded Shift still shows the form.
@@ -85,6 +91,7 @@ export const AttendantScreen: React.FC<{ userName: string; onSignOut: () => void
       <RecordedState
         recap={recap}
         shiftName={assignment?.shift?.templateName}
+        timeZone={timeZone}
         onEdit={() => {
           setAccepted(null);
           setEditing(true);
@@ -100,6 +107,7 @@ export const AttendantScreen: React.FC<{ userName: string; onSignOut: () => void
           openedAt={assignment?.shift?.openedAt}
         />
         <HandoverPanel
+          timeZone={timeZone}
           onRecorded={(saved) => {
             if (!shiftId) return;
             setAccepted({ shiftId, savedResults: saved });

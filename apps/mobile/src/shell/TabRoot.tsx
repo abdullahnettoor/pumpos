@@ -9,7 +9,6 @@ import { canViewMobileHome, canViewMobileInsights, type Station } from '@pump/sh
 import { HomeScreen } from '../screens/HomeScreen.js';
 import { HandoverCard } from '../screens/home/HandoverCard.js';
 import { HomeAttention } from '../screens/home/HomeAttention.js';
-import { useOpenAttention } from '../screens/attention/useOpenAttention.js';
 import { useMobileAlerts } from '../lib/alerts.js';
 import { InsightsScreen } from '../screens/InsightsScreen.js';
 import { MoneyScreen } from '../screens/MoneyScreen.js';
@@ -19,7 +18,8 @@ import { ShiftsScreen } from '../screens/ShiftsScreen.js';
 import { useShell } from './context.js';
 import { HomeHeader } from './HomeHeader.js';
 import { TabHeader } from './TabHeader.js';
-import { tabDef, type TabKey } from './tabs.js';
+import { tabDef } from './tabs.js';
+import type { TabKey } from '../lib/tabKey.js';
 
 interface Props {
   tab: TabKey;
@@ -36,7 +36,6 @@ const HandoverHomeAttention: React.FC<{ station: Station | null }> = ({ station 
 
 export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
   const { role } = useShell();
-  const openAttention = useOpenAttention();
   // Home is the owner's overview. A Manager, Accountant or Staff member who mans a
   // pump gets Home only for their handover card (see `tabsForRole`).
   const handoverOnlyHome = tab === 'home' && !canViewMobileHome(role);
@@ -45,7 +44,7 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
   const alertsOnHome = handoverOnlyHome && canViewMobileInsights(role);
   const header =
     tab === 'home' && (!handoverOnlyHome || alertsOnHome) ? (
-      <HomeHeader onOpenAttention={openAttention} />
+      <HomeHeader />
     ) : (
       <TabHeader title={tabDef(tab).label} />
     );

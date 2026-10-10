@@ -4,8 +4,9 @@
  * customer and supplier lists); the screen only renders them.
  */
 import { formatDaysOfCover, isBalancedVariance } from '@pump/shared';
-import { num, round2 } from './num.js';
+import { num, round2 } from '../num.js';
 import { plural, signedRupees } from '../format.js';
+import { owing, totalOwed, type MoneyParty } from '../money/parties.js';
 import { offLabel } from '../variance.js';
 import { shiftLabel, type Snapshot } from './sales.js';
 
@@ -173,17 +174,10 @@ export interface MoneyPosition {
   toPay: MoneyLine;
 }
 
+/** Who is owed and how much, by the Money tab's rule (`owing`, `totalOwed`): one balance rule everywhere. */
 function dues(rows: readonly unknown[] | undefined): { value: number; parties: number } {
-  let value = 0;
-  let parties = 0;
-  for (const r of (rows ?? []) as Snapshot[]) {
-    const balance = num(r.currentBalance);
-    if (balance > 0) {
-      value += balance;
-      parties += 1;
-    }
-  }
-  return { value, parties };
+  const owed = owing((rows ?? []) as MoneyParty[]);
+  return { value: totalOwed(owed), parties: owed.length };
 }
 
 /** Customer receivables and supplier payables (positive balances only). */
@@ -196,7 +190,7 @@ export function deriveMoney(
   return {
     toCollect: {
       ...c,
-      detail: c.parties ? `${plural(c.parties, 'customer')} with dues` : 'Nothing due',
+      detail: c.parties ? `${plural(c.parties, 'customer')} to collect` : 'Nothing due',
     },
     toPay: {
       ...s,

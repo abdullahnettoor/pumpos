@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { offLabel, varianceBadge, varianceTone } from './variance.js';
+import { byLargestVariance, offLabel, varianceBadge, varianceTone } from './variance.js';
 
 describe('varianceTone', () => {
   it('flags a shortage as bad, a surplus as warn, zero as good', () => {
@@ -42,5 +42,12 @@ describe('offLabel', () => {
       ]),
     ).toBe('DU3 short +1 more');
     expect(offLabel([{ name: 'DU1', variance: 20 }])).toBe('DU1 over');
+  });
+});
+
+describe('byLargestVariance', () => {
+  it('orders by size, either direction', () => {
+    const list = [{ variance: 40 }, { variance: -300 }, { variance: 120 }];
+    expect([...list].sort(byLargestVariance).map((d) => d.variance)).toEqual([-300, 120, 40]);
   });
 });

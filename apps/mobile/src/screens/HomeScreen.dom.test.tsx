@@ -3,7 +3,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Station } from '@pump/shared';
-import type { TabKey } from '../shell/tabs.js';
+import type { TabKey } from '../lib/tabKey.js';
 
 /**
  * Screen tests for Home: the honest sales headline (fuel from closed Shifts
@@ -557,10 +557,18 @@ describe('Home: tanks, money, removed sections', () => {
     renderHome();
     const collect = screen.getByText('To collect').closest('button')!;
     expect(within(collect).getByText('₹6.82L')).toBeTruthy();
-    expect(within(collect).getByText('2 customers with dues')).toBeTruthy();
+    expect(within(collect).getByText('2 customers to collect')).toBeTruthy();
     fireEvent.click(collect);
     expect(nav.active).toBe('money');
     expect(within(screen.getByText('To pay').closest('button')!).getByText('₹10.43L')).toBeTruthy();
+    expect(nav.views.money?.view).toBe('collect');
+  });
+
+  it('opens Money on its To pay segment from the To pay tile', () => {
+    renderHome();
+    fireEvent.click(screen.getByText('To pay').closest('button')!);
+    expect(nav.active).toBe('money');
+    expect(nav.views.money?.view).toBe('pay');
   });
 
   it('has no drawers section and none of the old KPI grid', () => {

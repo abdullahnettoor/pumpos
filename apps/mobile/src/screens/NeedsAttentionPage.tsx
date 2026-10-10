@@ -5,7 +5,7 @@ import { plural } from '../lib/format.js';
 import { useShell } from '../shell/context.js';
 import { DetailPage, SectionLabel } from '../ui/index.js';
 import { AlertRow } from './attention/AlertRow.js';
-import { useAlertOpener } from './attention/useAlertOpener.js';
+import { useAlertOpener } from '../shell/useAlertOpener.js';
 
 /**
  * The full alert inbox behind the header bell. It reads the same list as the

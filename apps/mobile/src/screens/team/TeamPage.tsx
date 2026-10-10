@@ -7,7 +7,7 @@ import {
   stationSummary,
   type TeamMember,
 } from '../../lib/team/members.js';
-import { assignableStations, canManageTeam } from '../../lib/team/permissions.js';
+import { assignableStations, canManageTeam, teamWriteReason } from '../../lib/team/permissions.js';
 import { Avatar } from '../../ui/Avatar.js';
 import { DetailPage } from '../../ui/DetailPage.js';
 import { ListGroup, ListRow } from '../../ui/ListRow.js';
@@ -17,7 +17,7 @@ import { StatusBadge } from '../../ui/StatusBadge.js';
 import { MemberPage } from './MemberPage.js';
 import { AddMemberSheet } from './MemberSheets.js';
 import { useTeamData } from './useTeamData.js';
-import { useWriteGate, WriteReason } from './WriteGate.js';
+import { PausedReason, usePausedAction } from '../../ui/PausedAction.js';
 
 const MemberRow: React.FC<{
   member: TeamMember;
@@ -48,7 +48,7 @@ export const TeamPage: React.FC = () => {
   const { actor, members, stations, onShift, writeAccess, isLoading, isError, refetch } =
     useTeamData();
   const [adding, setAdding] = useState(false);
-  const gate = useWriteGate(writeAccess);
+  const gate = usePausedAction(teamWriteReason(writeAccess));
 
   const active = members.filter((m) => !isInactive(m));
   const inactive = members.filter(isInactive);
@@ -56,7 +56,11 @@ export const TeamPage: React.FC = () => {
 
   const actions = canAdd ? (
     <>
-      {gate.reason && <WriteReason id={gate.reasonId}>{gate.reason}</WriteReason>}
+      {gate.reason && (
+        <PausedReason id={gate.reasonId} className="px-1 text-center text-[11.5px]">
+          {gate.reason}
+        </PausedReason>
+      )}
       <button
         type="button"
         {...gate.buttonProps(() => setAdding(true))}

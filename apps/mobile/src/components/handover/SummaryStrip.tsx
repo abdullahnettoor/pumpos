@@ -1,17 +1,13 @@
 import React from 'react';
 import { inr } from '@pump/ui';
+import { varianceBadge } from '../../lib/variance.js';
+import { TONE_TEXT } from '../../ui/index.js';
 
 export interface HandoverSummary {
   expectedTotal: number;
   declaredTotal: number;
   varianceAmount: number;
 }
-
-/** Variance tone: balanced is good, short is bad, over is a warning. */
-export const varianceTone = (variance: number) =>
-  Math.abs(variance) < 1 ? 'text-good' : variance < 0 ? 'text-bad-fg' : 'text-warn-fg';
-
-export const formatVariance = (variance: number) => `${variance >= 0 ? '+' : ''}${inr(variance)}`;
 
 const Cell: React.FC<{ label: string; value: string; tone?: string; first?: boolean }> = ({
   label,
@@ -35,28 +31,28 @@ export const SummaryStrip: React.FC<{
   accepted: boolean;
   /** Where this handover is, e.g. "Highway Fuels · Shift 2". */
   context?: string;
-}> = ({ summary, accepted, context }) => (
-  <div
-    role="group"
-    aria-label="Handover summary"
-    // The ::before block hides steps scrolling through the padding above the
-    // strip once it sticks.
-    className="sticky top-0 z-10 rounded-2xl border border-line bg-card px-3 py-2.5 shadow-chip before:absolute before:inset-x-[-1px] before:-top-[17px] before:h-4 before:bg-background before:content-['']"
-  >
-    <div className="grid grid-cols-3 gap-2.5">
-      <Cell first label="Expected" value={inr(summary.expectedTotal)} />
-      <Cell label="Declared" value={inr(summary.declaredTotal)} />
-      <Cell
-        label="Variance"
-        value={formatVariance(summary.varianceAmount)}
-        tone={varianceTone(summary.varianceAmount)}
-      />
+}> = ({ summary, accepted, context }) => {
+  // The app's one variance rule and wording (`varianceBadge`), as on the recap and Shift rows.
+  const variance = varianceBadge(summary.varianceAmount);
+  return (
+    <div
+      role="group"
+      aria-label="Handover summary"
+      // The ::before block hides steps scrolling through the padding above the
+      // strip once it sticks.
+      className="sticky top-0 z-10 rounded-2xl border border-line bg-card px-3 py-2.5 shadow-chip before:absolute before:inset-x-[-1px] before:-top-[17px] before:h-4 before:bg-background before:content-['']"
+    >
+      <div className="grid grid-cols-3 gap-2.5">
+        <Cell first label="Expected" value={inr(summary.expectedTotal)} />
+        <Cell label="Declared" value={inr(summary.declaredTotal)} />
+        <Cell label="Variance" value={variance.text} tone={TONE_TEXT[variance.tone]} />
+      </div>
+      <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] font-semibold">
+        <span className={`uppercase tracking-wide ${accepted ? 'text-good' : 'text-text-faint'}`}>
+          {accepted ? 'Accepted by server' : 'Live preview'}
+        </span>
+        {context ? <span className="truncate text-text-muted">{context}</span> : null}
+      </div>
     </div>
-    <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] font-semibold">
-      <span className={`uppercase tracking-wide ${accepted ? 'text-good' : 'text-text-faint'}`}>
-        {accepted ? 'Accepted by server' : 'Live preview'}
-      </span>
-      {context ? <span className="truncate text-text-muted">{context}</span> : null}
-    </div>
-  </div>
-);
+  );
+};

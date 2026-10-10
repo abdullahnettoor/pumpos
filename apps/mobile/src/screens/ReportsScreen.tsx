@@ -1,33 +1,29 @@
 import React from 'react';
 import type { BusinessDayListItem, Station } from '@pump/shared';
 import { useBusinessDayList } from '@pump/ui';
+import { shortDate } from '../lib/dates.js';
 import { plural } from '../lib/format.js';
 import {
   barWidths,
   dayView,
   draftDates,
+  liveTabFor,
   monthLabel,
-  shortDate,
   weekTile,
-  type DayView,
+  type LiveTab,
 } from '../lib/reports/days.js';
 import { useNav } from '../shell/nav.js';
-import { ListGroup, Note, SectionLabel, StatTile, StatusBadge } from '../ui/index.js';
+import { ListGroup, Note, SectionLabel, StatTile, StatusBadge, TONE_TEXT } from '../ui/index.js';
 import { ChevronRightIcon } from '../ui/icons.js';
 import { ReportDayPage } from './reports/ReportDayPage.js';
 
-const NOTE_TONE: Record<DayView['noteTone'], string> = {
-  bad: 'text-bad-fg',
-  warn: 'text-warn-fg',
-  plain: '',
-};
-
-const DayRow: React.FC<{ day: BusinessDayListItem; width: number; onPress: () => void }> = ({
-  day,
-  width,
-  onPress,
-}) => {
-  const v = dayView(day);
+const DayRow: React.FC<{
+  day: BusinessDayListItem;
+  liveTab: LiveTab | null;
+  width: number;
+  onPress: () => void;
+}> = ({ day, liveTab, width, onPress }) => {
+  const v = dayView(day, liveTab);
   const body = (
     <>
       <div className="w-10 flex-shrink-0 text-center">
@@ -57,7 +53,7 @@ const DayRow: React.FC<{ day: BusinessDayListItem; width: number; onPress: () =>
         )}
         <div className="num mt-[5px] flex justify-between text-[11px] text-text-muted">
           <span>{v.volume}</span>
-          <span className={NOTE_TONE[v.noteTone]}>{v.note}</span>
+          <span className={v.noteTone === 'plain' ? '' : TONE_TEXT[v.noteTone]}>{v.note}</span>
         </div>
       </div>
       {v.action !== 'none' && (
@@ -90,7 +86,7 @@ const DayRow: React.FC<{ day: BusinessDayListItem; width: number; onPress: () =>
 
 /**
  * Reports tab: the Station's Business Days, newest first by month, each with its
- * Live / Draft / Sealed status. Live goes to Home (no DSSR until the day closes);
+ * Live / Draft / Sealed status. Live opens the Role's live-day tab (Home, else Shifts; no DSSR until the day closes);
  * Draft and Sealed push the DSSR page; a closed day with no DSSR snapshot is
  * shown as Report missing and does not open.
  */
@@ -99,6 +95,7 @@ export const ReportsScreen: React.FC<{ station: Station }> = ({ station }) => {
   const q = useBusinessDayList(station.id);
   const pages = q.data?.pages ?? [];
   const first = pages[0];
+  const liveTab = liveTabFor(nav.tabs);
 
   if (q.isLoading) return <Note>Loading…</Note>;
   if (q.isError || !first)
@@ -112,8 +109,8 @@ export const ReportsScreen: React.FC<{ station: Station }> = ({ station }) => {
     );
 
   const open = (day: BusinessDayListItem) => {
-    const { action } = dayView(day);
-    if (action === 'home') nav.select('home');
+    const { action, liveTab: tab } = dayView(day, liveTab);
+    if (action === 'live' && tab) nav.select(tab);
     else if (action === 'report')
       nav.push(
         <ReportDayPage station={station} businessDate={day.businessDate} />,
@@ -171,6 +168,7 @@ export const ReportsScreen: React.FC<{ station: Station }> = ({ station }) => {
                 <DayRow
                   key={day.businessDate}
                   day={day}
+                  liveTab={liveTab}
                   width={widthOf.get(day.businessDate) ?? 0}
                   onPress={() => open(day)}
                 />

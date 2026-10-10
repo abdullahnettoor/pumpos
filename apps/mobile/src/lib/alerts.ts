@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useStationAlerts, useCustomers, useShiftSummaries } from '@pump/ui';
-import type { Station } from '@pump/shared';
+import { businessDateSettings, type Station } from '@pump/shared';
 import { deriveAlerts } from './attention/derive.js';
 import type { MobileAlert } from './attention/types.js';
 import { useOwnHandover } from './handover/useOwnHandover.js';
@@ -20,7 +20,7 @@ export function useMobileAlerts(station: Station | null): MobileAlert[] {
   const customersQ = useCustomers();
   const pastOpen = usePastOpenDates(station?.id);
   const summariesQ = useShiftSummaries(station?.id);
-  const ownHandover = useOwnHandover(!!station);
+  const ownHandover = useOwnHandover(!!station, businessDateSettings(station?.settings).timeZone);
 
   return useMemo(() => {
     if (!station) return [];

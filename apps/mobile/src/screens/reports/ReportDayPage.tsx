@@ -4,7 +4,8 @@ import type { BusinessDayListItem, Station } from '@pump/shared';
 import { DayTiles } from '../../components/DayTiles.js';
 import { SalesByProduct } from '../../components/SalesByProduct.js';
 import { plural } from '../../lib/format.js';
-import { businessDateLabel } from '../../lib/home/dates.js';
+import { businessDateLabel } from '../../lib/dates.js';
+import { liveTabFor, liveTabLabel } from '../../lib/reports/days.js';
 import { stepTargets, type StepTarget } from '../../lib/reports/dssr.js';
 import { useNav } from '../../shell/nav.js';
 import { DetailPage, Note, SectionLabel } from '../../ui/index.js';
@@ -39,13 +40,13 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
   const list = useBusinessDayList(station.id);
   const days = useMemo(() => (list.data?.pages ?? []).flatMap((p) => p.days), [list.data]);
   const status = days.find((d) => d.businessDate === date)?.status;
-  const canGoHome = nav.tabs.includes('home');
+  const liveTab = liveTabFor(nav.tabs);
 
   const { model, loading, error, refetch } = useDssrDay(station, date, status);
-  const targets = stepTargets(days, date, { hasOlderMonths: !!list.hasNextPage, canGoHome });
+  const targets = stepTargets(days, date, { hasOlderMonths: !!list.hasNextPage, liveTab });
 
   const goTo = (t: StepTarget | null) => {
-    if (t?.kind === 'home') nav.select('home');
+    if (t?.kind === 'live') nav.select(t.tab);
     else if (t?.kind === 'day') {
       setDate(t.date);
       top.current?.scrollIntoView?.({ block: 'start' });
@@ -66,7 +67,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
         if (res.isError || pages.length <= loadedPages) throw res.error ?? new Error('No page');
         loadedPages = pages.length;
         const loaded: BusinessDayListItem[] = pages.flatMap((p) => p.days);
-        t = stepTargets(loaded, date, { hasOlderMonths: !!res.hasNextPage, canGoHome }).older;
+        t = stepTargets(loaded, date, { hasOlderMonths: !!res.hasNextPage, liveTab }).older;
       }
       goTo(t);
     } catch {
@@ -97,13 +98,13 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
       return (
         <div className="px-4 py-10 text-center text-sm text-text-muted">
           <p>This day is still live, so it has no DSSR yet.</p>
-          {canGoHome && (
+          {liveTab && (
             <button
               type="button"
-              onClick={() => nav.select('home')}
+              onClick={() => nav.select(liveTab)}
               className="mt-2 font-bold text-accent"
             >
-              See Home
+              See {liveTabLabel(liveTab)}
             </button>
           )}
         </div>

@@ -4,7 +4,7 @@
  * the stack. React and the browser history are layered on top in `nav.tsx`.
  */
 import type { ReactNode } from 'react';
-import type { TabKey } from './tabs.js';
+import type { TabKey } from '../lib/tabKey.js';
 
 export interface StackEntry {
   /** Stable within the stack; a push whose id is already on top is ignored. */
@@ -17,10 +17,16 @@ export interface NavState {
   stacks: Partial<Record<TabKey, StackEntry[]>>;
   /** Tabs opened at least once, in the order first opened. Visited tabs stay mounted. */
   visited: TabKey[];
+  /**
+   * A tab's requested view (`select(tab, { view })`): which segment its root
+   * should show. `seq` grows on every request so a tab applies each one once,
+   * even when the same view is asked for twice.
+   */
+  views: Partial<Record<TabKey, { view: string; seq: number }>>;
 }
 
 export type NavAction =
-  | { type: 'select'; tab: TabKey; toRoot?: boolean }
+  | { type: 'select'; tab: TabKey; toRoot?: boolean; view?: string }
   | { type: 'push'; entry: StackEntry }
   | { type: 'open'; tab: TabKey; entry: StackEntry }
   | { type: 'pop' }
@@ -30,9 +36,13 @@ export const initialNavState = (active: TabKey): NavState => ({
   active,
   stacks: {},
   visited: [active],
+  views: {},
 });
 
-export const stackOf = (state: NavState, tab: TabKey): StackEntry[] => state.stacks[tab] ?? [];
+export const stackOf = (
+  state: Partial<NavState> & Pick<NavState, 'stacks'>,
+  tab: TabKey,
+): StackEntry[] => state.stacks[tab] ?? [];
 
 const visit = (visited: TabKey[], tab: TabKey): TabKey[] =>
   visited.includes(tab) ? visited : [...visited, tab];
@@ -46,7 +56,17 @@ function pushOn(state: NavState, tab: TabKey, entry: StackEntry): NavState {
 export function navReducer(state: NavState, action: NavAction): NavState {
   switch (action.type) {
     case 'select': {
-      const next = { ...state, active: action.tab, visited: visit(state.visited, action.tab) };
+      const next: NavState = {
+        ...state,
+        active: action.tab,
+        visited: visit(state.visited, action.tab),
+        views: action.view
+          ? {
+              ...state.views,
+              [action.tab]: { view: action.view, seq: (state.views[action.tab]?.seq ?? 0) + 1 },
+            }
+          : state.views,
+      };
       return action.toRoot ? { ...next, stacks: { ...state.stacks, [action.tab]: [] } } : next;
     }
     case 'push':
@@ -63,7 +83,7 @@ export function navReducer(state: NavState, action: NavAction): NavState {
       return { ...state, stacks: { ...state.stacks, [state.active]: stack.slice(0, -1) } };
     }
     case 'reset':
-      return { ...state, stacks: {} };
+      return { ...state, stacks: {}, views: {} };
   }
 }
 

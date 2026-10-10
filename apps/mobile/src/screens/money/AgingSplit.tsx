@@ -1,9 +1,8 @@
 import React from 'react';
 import type { ReceivablesAging } from '@pump/shared';
 import { compactRupees } from '../../lib/format.js';
-import { agingSegments, type AgingTone } from '../../lib/money/receivables.js';
-
-const FILL: Record<AgingTone, string> = { good: 'bg-good', warn: 'bg-warn', bad: 'bg-bad' };
+import { agingSegments } from '../../lib/money/receivables.js';
+import { TONE_FILL } from '../../ui/tones.js';
 
 interface Props {
   aging: ReceivablesAging | null | undefined;
@@ -39,7 +38,7 @@ export const AgingSplit: React.FC<Props> = ({
             .map((s) => (
               <div
                 key={s.key}
-                className={FILL[s.tone]}
+                className={TONE_FILL[s.tone]}
                 style={{ flex: `${s.share} 1 0%` }}
                 data-segment={s.key}
               />

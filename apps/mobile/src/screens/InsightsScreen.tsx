@@ -7,7 +7,7 @@ import { CreditHealth } from './insights/CreditHealth.js';
 import { ProductMix } from './insights/ProductMix.js';
 import { SalesTrend } from './insights/SalesTrend.js';
 import { ShiftPerformance } from './insights/ShiftPerformance.js';
-import { StateCard } from './insights/StateCard.js';
+import { StateCard } from '../ui/StateCard.js';
 import { StockLoss } from './insights/StockLoss.js';
 
 const OPTIONS = INSIGHTS_RANGE_DAYS.map((d) => ({ value: String(d), label: `${d} days` }));

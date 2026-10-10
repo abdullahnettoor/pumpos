@@ -7,11 +7,12 @@
  */
 import { isStockVarianceWithinTolerance } from '@pump/shared';
 import type { BusinessDayListItem } from '@pump/shared';
-import { stationTime } from '../home/dates.js';
-import { num } from '../home/num.js';
+import { stationTime } from '../dates.js';
+import { num } from '../num.js';
 import { unitLabel } from '@pump/ui';
 import { shiftLabel, type Snapshot } from '../home/sales.js';
 import { varianceBadge, type VarianceBadgeView } from '../variance.js';
+import type { LiveTab } from './days.js';
 
 const grouped = (n: number, decimals = 0) =>
   n.toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
@@ -127,12 +128,13 @@ export function deriveTankMovement(snap: Snapshot): TankMovementRow[] {
   });
 }
 
-export type StepTarget = { kind: 'day'; date: string } | { kind: 'home' } | { kind: 'load' };
+export type StepTarget =
+  { kind: 'day'; date: string } | { kind: 'live'; tab: LiveTab } | { kind: 'load' };
 
 export interface StepTargets {
   /** Previous (older) day. `load`: not in the loaded months yet, fetch the next older month. */
   older: StepTarget | null;
-  /** Next (newer) day. `home`: the Live day, which has no DSSR until it closes. */
+  /** Next (newer) day. `live`: the Live day, which has no DSSR until it closes (opens the Role's live-day tab). */
   newer: StepTarget | null;
 }
 
@@ -142,13 +144,13 @@ const hasDssr = (d: Pick<BusinessDayListItem, 'status'>) =>
 /**
  * Where ‹ and › lead from `date`, across the Reports list's days (newest first).
  * Days without a DSSR to show (Report missing) are skipped. Stepping newer into
- * the Live day goes Home, only when Home is reachable. A date outside the loaded
+ * the Live day opens `liveTab` (Home, or Shifts for a Role without Home), only when the Role has one. A date outside the loaded
  * list has no neighbours.
  */
 export function stepTargets(
   days: readonly Pick<BusinessDayListItem, 'businessDate' | 'status'>[],
   date: string,
-  opts: { hasOlderMonths: boolean; canGoHome: boolean },
+  opts: { hasOlderMonths: boolean; liveTab: LiveTab | null },
 ): StepTargets {
   const at = days.findIndex((d) => d.businessDate === date);
   if (at < 0) return { older: null, newer: null };
@@ -165,8 +167,8 @@ export function stepTargets(
     newer: !newer
       ? null
       : newer.status === 'LIVE'
-        ? opts.canGoHome
-          ? { kind: 'home' }
+        ? opts.liveTab
+          ? { kind: 'live', tab: opts.liveTab }
           : null
         : { kind: 'day', date: newer.businessDate },
   };

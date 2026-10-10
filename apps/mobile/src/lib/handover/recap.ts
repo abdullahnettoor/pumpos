@@ -1,10 +1,7 @@
 import type { RecordHandoverResult } from '@pump/ui';
-import {
-  num,
-  type AssignedDu,
-  type HandoverRow,
-  type RecordedTerminalEntry,
-} from '../../components/handover/model.js';
+import { stationTime } from '../dates.js';
+import { num, round2 } from '../num.js';
+import type { AssignedDu, HandoverRow, RecordedTerminalEntry } from './model.js';
 
 /**
  * What the attendant sees once their Handover is recorded: their own figures,
@@ -44,7 +41,6 @@ export interface HandoverRecap {
   recordedAt: string | null;
 }
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
 /** One DU's recorded Handover, from whichever source holds it. */
@@ -138,13 +134,14 @@ export function buildRecap(input: {
   };
 }
 
-/** "5:40 pm" in the device's time zone; null for a missing or unreadable ISO time. */
-export function formatRecordedTime(iso: string | null | undefined): string | null {
+/** "5:40 pm" in the STATION's time zone (not the device's); null for a missing or unreadable ISO time. */
+export function formatRecordedTime(
+  iso: string | null | undefined,
+  timeZone: string,
+): string | null {
   if (!iso) return null;
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? null
-    : d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? null : stationTime(ms, timeZone);
 }
 
 /** Whole minutes since the shift opened; null when the opening time is unknown. */

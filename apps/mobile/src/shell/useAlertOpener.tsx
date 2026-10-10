@@ -1,12 +1,12 @@
 import { useCallback } from 'react';
-import type { MobileAlert } from '../../lib/alerts.js';
-import { ALERT_KINDS } from '../../lib/attention/groups.js';
+import type { MobileAlert } from '../lib/alerts.js';
+import { ALERT_KINDS } from '../lib/attention/groups.js';
 import type { Station } from '@pump/shared';
-import { useNav } from '../../shell/nav.js';
-import { HandoverPage } from '../HandoverPage.js';
-import { ShiftSummaryPage } from '../ShiftSummaryPage.js';
-import { CustomerPage } from '../money/CustomerPage.js';
-import { ReportDayPage } from '../reports/ReportDayPage.js';
+import { useNav } from './nav.js';
+import { HandoverPage } from '../screens/HandoverPage.js';
+import { ShiftSummaryPage } from '../screens/ShiftSummaryPage.js';
+import { CustomerPage } from '../screens/money/CustomerPage.js';
+import { ReportDayPage } from '../screens/reports/ReportDayPage.js';
 
 /**
  * Opens the one page an alert explains, pushed on the current tab so back

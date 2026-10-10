@@ -19,6 +19,7 @@ import {
 import { inputClass } from '../../components/handover/Fields.js';
 import { BottomSheet } from '../../ui/BottomSheet.js';
 import { SegmentedControl } from '../../ui/SegmentedControl.js';
+import { SheetButtons } from '../../ui/SheetButtons.js';
 import type { OfficePaymentResult } from './useOfficePayment.js';
 
 const FIELD_TEXT = '!font-sans !text-[15px] !font-medium';
@@ -296,22 +297,12 @@ const Form = <F extends OfficePaymentFields>({
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-2.5 pt-1">
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex h-11 items-center justify-center rounded-[13px] border border-line bg-card text-[13.5px] font-bold text-text-high"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isSaving}
-          className="flex h-11 items-center justify-center rounded-[13px] bg-accent text-[13.5px] font-bold text-on-accent disabled:opacity-60"
-        >
-          {isSaving ? 'Recording…' : submitLabel}
-        </button>
-      </div>
+      <SheetButtons
+        onCancel={onClose}
+        submitLabel={submitLabel}
+        busyLabel="Recording…"
+        busy={isSaving}
+      />
     </form>
   );
 };

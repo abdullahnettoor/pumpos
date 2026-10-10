@@ -2,8 +2,8 @@
  * Closed-Shift history for the Shifts tab: summaries grouped by the Shift's
  * Business Date (not the calendar day it opened), newest first.
  */
-import { businessDateLabel, stationDay } from '../home/dates.js';
-import { round2 } from '../home/num.js';
+import { businessDateLabel, stationDay } from '../dates.js';
+import { round2 } from '../num.js';
 import { shiftLabel, type Snapshot } from '../home/sales.js';
 import { varianceBadge, type VarianceBadgeView } from '../variance.js';
 import { deriveSalesTotals } from './summary.js';

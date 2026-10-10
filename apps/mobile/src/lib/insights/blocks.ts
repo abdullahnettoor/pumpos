@@ -1,7 +1,7 @@
 import type { InsightsAttendantVariance, InsightsStockLoss } from '@pump/shared';
 import { STOCK_VARIANCE_TOLERANCE_PCT } from '@pump/shared';
 import { plural, signedRupees } from '../format.js';
-import type { Tone } from '../../ui/StatTile.js';
+import type { Tone } from '../../ui/tones.js';
 import { varianceBadge } from '../variance.js';
 import { signedLitres, trim } from './format.js';
 

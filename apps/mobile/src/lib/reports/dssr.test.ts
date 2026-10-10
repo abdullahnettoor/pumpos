@@ -11,14 +11,20 @@ const list = [
   day('2026-10-06', 'SEALED'),
   day('2026-10-05', 'SEALED'),
 ];
-const opts = { hasOlderMonths: false, canGoHome: true };
+const opts = { hasOlderMonths: false, liveTab: 'home' as const };
 
 describe('stepTargets', () => {
   it('steps newer into the Live day as Home, never as a DSSR', () => {
-    expect(stepTargets(list, '2026-10-08', opts).newer).toEqual({ kind: 'home' });
+    expect(stepTargets(list, '2026-10-08', opts).newer).toEqual({ kind: 'live', tab: 'home' });
+  });
+  it('steps newer into the Live day as Shifts for a Role without Home', () => {
+    expect(stepTargets(list, '2026-10-08', { ...opts, liveTab: 'shifts' }).newer).toEqual({
+      kind: 'live',
+      tab: 'shifts',
+    });
   });
   it('has no newer step when Home is not reachable or nothing is newer', () => {
-    expect(stepTargets(list, '2026-10-08', { ...opts, canGoHome: false }).newer).toBeNull();
+    expect(stepTargets(list, '2026-10-08', { ...opts, liveTab: null }).newer).toBeNull();
     expect(stepTargets(list, '2026-10-09', opts).newer).toBeNull();
   });
   it('skips a Report-missing day in both directions', () => {

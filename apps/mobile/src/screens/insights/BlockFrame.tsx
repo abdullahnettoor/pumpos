@@ -1,6 +1,6 @@
 import React from 'react';
 import { SectionLabel } from '../../ui/index.js';
-import { StateCard } from './StateCard.js';
+import { StateCard } from '../../ui/StateCard.js';
 
 interface Props {
   title: string;

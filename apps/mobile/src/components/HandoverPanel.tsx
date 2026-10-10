@@ -13,20 +13,22 @@ import {
   type CashBreakdown,
   type RecordHandoverResult,
 } from '@pump/ui';
+import { varianceBadge } from '../lib/variance.js';
+import { TONE_TEXT } from '../ui/index.js';
+import { num } from '../lib/num.js';
 import { CashCountSheet } from './CashCountSheet.js';
 import { CustomerSaleForm } from './handover/CustomerSaleForm.js';
 import { NumberField } from './handover/Fields.js';
 import { CalculatorIcon } from './handover/icons.js';
 import {
   blankZero,
-  num,
   seedForm,
   type AssignedDu,
   type DuFormState,
   type DuProduct,
   type MerchProduct,
   type MyAssignment,
-} from './handover/model.js';
+} from '../lib/handover/model.js';
 import { ProductsFields } from './handover/ProductsFields.js';
 import { StepCard } from './handover/StepCard.js';
 import {
@@ -36,13 +38,16 @@ import {
   fieldErrorMap,
   fieldId,
   merchTotal,
+  merchandiseCash,
+  nozzleGrossVolume,
   productsStep,
   readingsStep,
   reconcileDu,
+  sumReconciliations,
   terminalsStep,
   type StepId,
-} from './handover/steps.js';
-import { SummaryStrip, formatVariance, varianceTone } from './handover/SummaryStrip.js';
+} from '../lib/handover/steps.js';
+import { SummaryStrip } from './handover/SummaryStrip.js';
 import { TerminalsFields } from './handover/TerminalsFields.js';
 import { useHandoverSubmission } from './handover/useHandoverSubmission.js';
 
@@ -70,8 +75,6 @@ const STEP_TITLE: Record<StepId, string> = {
   cash: 'Cash handed over',
 };
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
-
 export const HandoverPanel: React.FC<{
   /** Called after a save in which every DU's Handover was accepted. */
   onRecorded?: (results: RecordHandoverResult[]) => void;
@@ -88,7 +91,9 @@ export const HandoverPanel: React.FC<{
    * leaving while it is true. Slips recorded are saved at once and never count.
    */
   onDirtyChange?: (dirty: boolean) => void;
-}> = ({ onRecorded, actionBarTarget, onDirtyChange }) => {
+  /** The station's timezone: the "Saved at" time reads in it, not in the device's. */
+  timeZone?: string;
+}> = ({ onRecorded, actionBarTarget, onDirtyChange, timeZone }) => {
   const assignmentQ = useMyAssignment();
   const productsQ = useProducts();
   const customersQ = useCustomers(true);
@@ -230,7 +235,7 @@ export const HandoverPanel: React.FC<{
   // Merchandise: gross at MRP, and the cash share the server attributes.
   const priceOf = (productId: string) => Number(merchById[productId]?.sellingPrice || 0);
   const merchGross = merchTotal(merchRows, priceOf);
-  const merchCash = Math.max(0, merchGross - num(merchNonCash));
+  const merchCash = merchandiseCash(merchGross, merchNonCash);
 
   const errorList = collectHandoverErrors({
     dus,
@@ -294,6 +299,7 @@ export const HandoverPanel: React.FC<{
     merchRows,
     merchNonCash,
     hasErrors: formInvalid,
+    timeZone,
     onHandoverAccepted,
     onRecorded: (results) => {
       onDirtyChange?.(false);
@@ -388,28 +394,17 @@ export const HandoverPanel: React.FC<{
         : null,
     ]),
   );
-  const live = Object.values(reconciliations).reduce(
-    (sum, r) => ({
-      expectedTotal: sum.expectedTotal + (r?.expectedTotal ?? 0),
-      declaredTotal: sum.declaredTotal + (r?.declaredTotal ?? 0),
-      varianceAmount: sum.varianceAmount + (r?.varianceAmount ?? 0),
-    }),
-    { expectedTotal: 0, declaredTotal: 0, varianceAmount: 0 },
-  );
-  live.varianceAmount = round2(live.varianceAmount);
+  const live = sumReconciliations(Object.values(reconciliations));
   const allAccepted = dus.length > 0 && dus.every((du) => acceptedByDu[du.duId]);
   const acceptedSummary = allAccepted
     ? {
         ...acceptedByDu[dus[0].duId],
         // The server's own per-Drawer figures, summed the same way as the preview.
-        expectedTotal: dus.reduce((sum, du) => sum + acceptedByDu[du.duId].expectedTotal, 0),
-        declaredTotal: dus.reduce((sum, du) => sum + acceptedByDu[du.duId].declaredTotal, 0),
-        varianceAmount: round2(
-          dus.reduce((sum, du) => sum + acceptedByDu[du.duId].varianceAmount, 0),
-        ),
+        ...sumReconciliations(dus.map((du) => acceptedByDu[du.duId])),
       }
     : null;
   const shownSummary = selectHandoverSummary(live, acceptedSummary);
+  const shownVariance = varianceBadge(shownSummary.varianceAmount);
   const productsState = productsStep(merchRows, merchNonCash, priceOf);
   // Which steps hold an error, so the bar can say where to look.
   const failingSteps = Array.from(
@@ -470,10 +465,8 @@ export const HandoverPanel: React.FC<{
           <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-text-faint">
             Variance
           </p>
-          <p
-            className={`num text-[17px] font-semibold ${varianceTone(shownSummary.varianceAmount)}`}
-          >
-            {formatVariance(shownSummary.varianceAmount)}
+          <p className={`num text-[17px] font-semibold ${TONE_TEXT[shownVariance.tone]}`}>
+            {shownVariance.text}
           </p>
         </div>
         <button
@@ -536,8 +529,7 @@ export const HandoverPanel: React.FC<{
               defaultOpen
             >
               {du.nozzles.map((nz) => {
-                const closing = num(form.readings[nz.nozzleId]);
-                const vol = Math.max(0, closing - nz.openingReading);
+                const vol = nozzleGrossVolume(nz, form);
                 return (
                   <div key={nz.nozzleId} className="grid grid-cols-2 gap-2.5">
                     <NumberField

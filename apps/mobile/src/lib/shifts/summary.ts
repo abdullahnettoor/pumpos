@@ -7,7 +7,8 @@
  * the Handovers, the Dispenser Unit from today's setup).
  */
 import { productCategoryOf } from '@pump/shared';
-import { num, round2 } from '../home/num.js';
+import { wholeQuantityLabel } from '../money/quantity.js';
+import { num, round2 } from '../num.js';
 import { unitLabel } from '@pump/ui';
 import type { FuelLine, ProductLine, Snapshot } from '../home/sales.js';
 import { deriveShiftVariance, drawerName, type ShiftVariance } from './variance.js';
@@ -88,10 +89,7 @@ export function deriveFuelLines(snap: Snapshot): FuelLine[] {
 export function volumeLabel(fuel: readonly FuelLine[]): string {
   const perUnit = new Map<string, number>();
   for (const f of fuel) perUnit.set(f.unit, (perUnit.get(f.unit) ?? 0) + f.quantity);
-  return (
-    [...perUnit].map(([u, q]) => `${Math.round(q).toLocaleString('en-IN')} ${u}`).join(' · ') ||
-    '0 L'
-  );
+  return [...perUnit].map(([u, q]) => wholeQuantityLabel(q, u)).join(' · ') || '0 L';
 }
 
 /** Nozzle → Dispenser Unit name, from the station's (static) nozzle and dispenser lists. */

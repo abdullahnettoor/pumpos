@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { Role, Station } from '@pump/shared';
+import { businessDateSettings, type Role, type Station } from '@pump/shared';
 
 /** What the header building blocks need from the shell around them. */
 export interface ShellContextValue {
@@ -15,6 +15,15 @@ export interface ShellContextValue {
 }
 
 export const ShellContext = createContext<ShellContextValue | null>(null);
+
+/**
+ * The IANA timezone of the selected station (the default zone with no shell or
+ * station). Times shown to the operator read in it, never in the device's.
+ */
+export function useStationTimeZone(): string {
+  const ctx = useContext(ShellContext);
+  return businessDateSettings(ctx?.station?.settings).timeZone;
+}
 
 export function useShell(): ShellContextValue {
   const ctx = useContext(ShellContext);

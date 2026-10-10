@@ -83,7 +83,7 @@ export function ChoiceChips<T extends string>({
               aria-checked={on}
               aria-disabled={disabled || undefined}
               onClick={disabled ? undefined : () => onChange(o)}
-              className={`min-h-[40px] rounded-full border px-3.5 text-[13px] font-semibold aria-disabled:cursor-not-allowed ${
+              className={`hit-44 min-h-[40px] rounded-full border px-3.5 text-[13px] font-semibold aria-disabled:cursor-not-allowed ${
                 on
                   ? 'border-accent bg-accent text-on-accent'
                   : 'border-line-strong bg-card text-text-high'
@@ -187,33 +187,4 @@ export const FormRefusal: React.FC<{ children: React.ReactNode }> = ({ children 
   >
     {children}
   </p>
-);
-
-/** Cancel + primary pair at the foot of a sheet. */
-export const SheetButtons: React.FC<{
-  onCancel: () => void;
-  submitLabel: string;
-  busyLabel: string;
-  busy: boolean;
-  tone?: 'accent' | 'danger';
-  disabled?: boolean;
-}> = ({ onCancel, submitLabel, busyLabel, busy, tone = 'accent', disabled }) => (
-  <div className="grid grid-cols-2 gap-2.5 pt-1">
-    <button
-      type="button"
-      onClick={onCancel}
-      className="flex h-11 items-center justify-center rounded-[13px] border border-line bg-card text-[13.5px] font-bold text-text-high"
-    >
-      Cancel
-    </button>
-    <button
-      type="submit"
-      disabled={busy || disabled}
-      className={`flex h-11 items-center justify-center rounded-[13px] text-[13.5px] font-bold disabled:opacity-60 ${
-        tone === 'danger' ? 'bg-bad text-white' : 'bg-accent text-on-accent'
-      }`}
-    >
-      {busy ? busyLabel : submitLabel}
-    </button>
-  </div>
 );

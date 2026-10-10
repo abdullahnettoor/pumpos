@@ -61,6 +61,7 @@ const { tabsForRole } = await import('./tabs.js');
 const { HomeHeader } = await import('./HomeHeader.js');
 const { TabHeader } = await import('./TabHeader.js');
 const { DetailPage } = await import('../ui/DetailPage.js');
+const { TeamPage } = await import('../screens/team/TeamPage.js');
 const { ThemeProvider } = await import('../theme/index.js');
 
 const stations = [
@@ -94,11 +95,7 @@ const Root: React.FC<{ tab: string; stationName: string }> = ({ tab, stationName
   const n = useNav();
   return (
     <div data-testid={`root-${tab}`}>
-      {tab === 'home' ? (
-        <HomeHeader onOpenAttention={() => n.push(<Detail name="attention" />, 'attention')} />
-      ) : (
-        <TabHeader title={tab} />
-      )}
+      {tab === 'home' ? <HomeHeader /> : <TabHeader title={tab} />}
       <p>
         {tab} list · {stationName}
       </p>
@@ -133,6 +130,7 @@ const Harness: React.FC<{
               onStationChange?.(id);
             }}
             onSignOut={onSignOut}
+            teamPage={<TeamPage />}
             renderRoot={(tab) => <Root tab={tab} stationName={name} />}
           />
         </NavProvider>
@@ -231,7 +229,7 @@ describe('header', () => {
     expect(badge?.getAttribute('aria-hidden')).toBe('true');
   });
 
-  it('the bell calls onOpenAttention: the page it pushes replaces the dock, back returns', async () => {
+  it('the bell opens Needs attention: the page it pushes replaces the dock, back returns', async () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Alerts, 2 open' }));
     expect(holder.nav.active).toBe('home');
@@ -384,6 +382,7 @@ describe('Account sheet', () => {
             selectedStationId="st-1"
             onSelectStation={() => {}}
             onSignOut={() => {}}
+            teamPage={null}
             renderRoot={(tab) => <Root tab={tab} stationName="x" />}
           />
         </NavProvider>

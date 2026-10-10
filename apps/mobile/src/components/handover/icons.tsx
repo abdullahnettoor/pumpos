@@ -42,15 +42,3 @@ export const CalculatorIcon: React.FC<{ size?: number }> = ({ size = 16 }) => (
     <line x1="8" y1="18" x2="12" y2="18" />
   </Svg>
 );
-
-export const CheckIcon: React.FC<{ size?: number }> = ({ size = 14 }) => (
-  <Svg size={size} strokeWidth={3}>
-    <polyline points="20 6 9 17 4 12" />
-  </Svg>
-);
-
-export const ChevronIcon: React.FC<{ size?: number }> = ({ size = 16 }) => (
-  <Svg size={size} strokeWidth={2.4}>
-    <polyline points="9 18 15 12 9 6" />
-  </Svg>
-);

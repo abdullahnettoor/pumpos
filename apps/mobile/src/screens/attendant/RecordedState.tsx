@@ -12,10 +12,12 @@ import { formatRecordedTime, type HandoverRecap } from '../../lib/handover/recap
 export const RecordedState: React.FC<{
   recap: HandoverRecap;
   shiftName: string | null | undefined;
+  /** The station's timezone: the recorded time reads in it. */
+  timeZone: string;
   onEdit: () => void;
-}> = ({ recap, shiftName, onEdit }) => {
+}> = ({ recap, shiftName, timeZone, onEdit }) => {
   const badge = varianceBadge(recap.variance);
-  const time = formatRecordedTime(recap.recordedAt);
+  const time = formatRecordedTime(recap.recordedAt, timeZone);
   const subtitle = [recap.duNames.join(', '), shiftName, time, badge.text]
     .filter(Boolean)
     .join(' · ');

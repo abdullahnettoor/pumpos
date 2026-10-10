@@ -225,8 +225,17 @@ describe('deriveMoney', () => {
       ],
       [{ currentBalance: 700 }, { currentBalance: 0 }],
     );
-    expect(m.toCollect).toEqual({ value: 1250.5, parties: 2, detail: '2 customers with dues' });
+    expect(m.toCollect).toEqual({ value: 1250.5, parties: 2, detail: '2 customers to collect' });
     expect(m.toPay).toEqual({ value: 700, parties: 1, detail: '1 supplier to pay' });
+  });
+
+  it('uses the Money tab rule: float dust below half a paisa is settled, not a party', () => {
+    const m = deriveMoney(
+      [{ currentBalance: '0.004' }, { currentBalance: 0.005 }],
+      [{ currentBalance: 0.0049 }],
+    );
+    expect(m.toCollect.parties).toBe(1);
+    expect(m.toPay).toMatchObject({ parties: 0, detail: 'Nothing to pay' });
   });
 
   it('says nothing is due when nothing is', () => {
