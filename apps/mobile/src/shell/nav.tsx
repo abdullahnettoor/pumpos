@@ -64,10 +64,11 @@ export function useNav(): Nav {
 /**
  * Keep browser history one entry per layer (pushed page or open sheet).
  * `onBack` runs when the user goes back (system gesture or `back()`), and must
- * close the top layer. Entries are added when layers grow and unwound with
+ * close the top layer; returning `false` means it stayed (a guarded page), and
+ * the history entry the gesture consumed is put back. Entries are added when layers grow and unwound with
  * `history.go` when layers shrink for any other reason.
  */
-function useBackLayers(layers: number, onBack: () => void): () => void {
+function useBackLayers(layers: number, onBack: () => boolean | void): () => void {
   const layersRef = useRef(layers);
   const pushed = useRef(0);
   const ignorePops = useRef(0);
@@ -105,7 +106,7 @@ function useBackLayers(layers: number, onBack: () => void): () => void {
         return;
       }
       pushed.current = Math.max(0, pushed.current - 1);
-      onBackRef.current();
+      if (onBackRef.current() === false) sync();
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -139,6 +140,14 @@ export const NavProvider: React.FC<{ tabs: readonly TabKey[]; children: React.Re
     };
   }, []);
 
+  const guards = useRef<Array<() => boolean>>([]);
+  const registerGuard = useCallback((allow: () => boolean) => {
+    guards.current = [...guards.current, allow];
+    return () => {
+      guards.current = guards.current.filter((f) => f !== allow);
+    };
+  }, []);
+
   const depth = stackOf(state, state.active).length;
   const nextId = useRef(0);
   const entry = useCallback((element: React.ReactNode, id?: string): StackEntry => {
@@ -147,8 +156,15 @@ export const NavProvider: React.FC<{ tabs: readonly TabKey[]; children: React.Re
 
   const closeTopLayer = useCallback(() => {
     const top = overlays.current[overlays.current.length - 1];
-    if (top) top();
-    else dispatch({ type: 'pop' });
+    if (top) {
+      top();
+      return true;
+    }
+    // The shown page may ask first (unsaved work); it stays when the guard says no.
+    const guard = guards.current[guards.current.length - 1];
+    if (guard && !guard()) return false;
+    dispatch({ type: 'pop' });
+    return true;
   }, []);
   const back = useBackLayers(depth + overlayCount, closeTopLayer);
 
@@ -167,7 +183,10 @@ export const NavProvider: React.FC<{ tabs: readonly TabKey[]; children: React.Re
     }),
     [state, tabs, depth, back, entry],
   );
-  const backStack = useMemo<BackStack>(() => ({ back, registerOverlay }), [back, registerOverlay]);
+  const backStack = useMemo<BackStack>(
+    () => ({ back, registerOverlay, registerGuard }),
+    [back, registerOverlay, registerGuard],
+  );
 
   return (
     <BackStackContext.Provider value={backStack}>
