@@ -62,6 +62,9 @@ export interface DssrCreditSale {
 
 /** Business-day tank dip / physical-count reconciliation. */
 export interface DssrStockVariance {
+  /** The dipped tank (null for an item count). Added to the snapshot so readers need not match by name. */
+  tankId?: string | null;
+  productId?: string | null;
   tankName: string;
   productName: string;
   /** Measurement unit of the product (e.g. 'Litre', 'Piece'). */

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { litres, percent, rangeLabel, shortDate, weekdayDate, weekdayInitial } from './format.js';
+import {
+  litres,
+  percent,
+  rangeLabel,
+  shortDate,
+  signedLitres,
+  weekdayDate,
+  weekdayInitial,
+} from './format.js';
 
 describe('litres / percent', () => {
   it('formats', () => {
@@ -19,5 +27,17 @@ describe('dates', () => {
   it('labels a range, compactly within a month', () => {
     expect(rangeLabel('2026-10-03', '2026-10-09')).toBe('3–9 Oct');
     expect(rangeLabel('2026-09-28', '2026-10-04')).toBe('28 Sep – 4 Oct');
+  });
+});
+
+describe('signedLitres', () => {
+  it('writes the direction with a true minus', () => {
+    expect(signedLitres(-42)).toBe('−42 L');
+    expect(signedLitres(6.5)).toBe('+6.5 L');
+    expect(signedLitres(-1234.56)).toBe('−1,234.6 L');
+  });
+  it('reads zero (and a hair of rounding) as 0 L', () => {
+    expect(signedLitres(0)).toBe('0 L');
+    expect(signedLitres(-0.04)).toBe('0 L');
   });
 });

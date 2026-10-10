@@ -34,8 +34,11 @@ import type {
   AttendantHandoverReport,
   AttendantReportFilters,
   BusinessDayList,
+  InsightsAttendantVariance,
+  InsightsCreditHealth,
   InsightsRangeDays,
   InsightsSales,
+  InsightsStockLoss,
 } from '@pump/shared';
 
 /**
@@ -103,6 +106,12 @@ export const queryKeys = {
   attendantHandoverReport: (stationId: string, from: string, to: string) =>
     ['attendant-handover-report', stationId, from, to] as const,
   insightsSales: (stationId: string, days: number) => ['insights-sales', stationId, days] as const,
+  insightsAttendantVariance: (stationId: string, days: number) =>
+    ['insights-attendant-variance', stationId, days] as const,
+  insightsStockLoss: (stationId: string, days: number) =>
+    ['insights-stock-loss', stationId, days] as const,
+  insightsCreditHealth: (stationId: string, days: number) =>
+    ['insights-credit-health', stationId, days] as const,
   expenseCategories: () => ['expense-categories'] as const,
   incomeCategories: () => ['income-categories'] as const,
   products: () => ['products'] as const,
@@ -969,6 +978,57 @@ export function useInsightsSales(
 }
 
 /**
+ * Insights part 2 (#402): the blocks beside the sales block. Same range, same
+ * range end and the same cache rules as `useInsightsSales` (operational tier,
+ * invalidated with it, never persisted).
+ *
+ * The attendant block is gated on the `reports.attendant` Product Capability:
+ * mount it only where that is entitled (the screen puts it behind a
+ * `CapabilityGate`), so a Station without it never sends the request.
+ */
+export function useInsightsAttendantVariance(
+  stationId: string | null | undefined,
+  days: InsightsRangeDays,
+  options?: Options<InsightsAttendantVariance[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.insightsAttendantVariance(stationId ?? '', days),
+    queryFn: () => shiftService.getInsightsAttendantVariance(stationId!, days),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useInsightsStockLoss(
+  stationId: string | null | undefined,
+  days: InsightsRangeDays,
+  options?: Options<InsightsStockLoss[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.insightsStockLoss(stationId ?? '', days),
+    queryFn: () => shiftService.getInsightsStockLoss(stationId!, days),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useInsightsCreditHealth(
+  stationId: string | null | undefined,
+  days: InsightsRangeDays,
+  options?: Options<InsightsCreditHealth>,
+) {
+  return useQuery({
+    queryKey: queryKeys.insightsCreditHealth(stationId ?? '', days),
+    queryFn: () => shiftService.getInsightsCreditHealth(stationId!, days),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
  * Returns a callback that invalidates the operational caches for a station after
  * a mutation (open/close shift, record expense/collection/etc.) so screens stay
  * fresh without manual refetch wiring.
@@ -999,6 +1059,11 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['attendant-handover-report'] }),
       // Insights read sealed days; closing a Business Day adds one to the range.
       qc.invalidateQueries({ queryKey: ['insights-sales'] }),
+      // ...and so do the part 2 blocks: closed-day Shift Summaries, Tank Dips and
+      // Credit Sales move with a close, Collections (Entry Date) with a collection.
+      qc.invalidateQueries({ queryKey: ['insights-attendant-variance'] }),
+      qc.invalidateQueries({ queryKey: ['insights-stock-loss'] }),
+      qc.invalidateQueries({ queryKey: ['insights-credit-health'] }),
       // Business Day cockpit + P&L read the live DSSR preview — refresh it too.
       qc.invalidateQueries({ queryKey: ['dssr'] }),
       qc.invalidateQueries({ queryKey: ['dssr-preview'] }),
