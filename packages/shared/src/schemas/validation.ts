@@ -301,11 +301,28 @@ export const shiftCollectionSchema = z.object({
   notes: z.string().max(500).optional().nullable(),
 });
 
+/** `customers.credit_limit` is numeric(12,2): the largest amount it can hold. */
+export const CREDIT_LIMIT_MAX = 9_999_999_999.99;
+
+/**
+ * A Customer's credit limit: 0 or more, at most 2 decimal places, within the
+ * column's range. The one rule for the Customer form, the mobile limit sheet and
+ * the server's create/update use-cases, so none of them can accept what another
+ * refuses. `null` / absent mean "no limit".
+ */
+export const creditLimitSchema = z
+  .number()
+  .nonnegative('Enter 0 or more.')
+  .max(CREDIT_LIMIT_MAX, 'That is more than a limit can hold.')
+  .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) <= 1e-6, 'Use at most 2 decimal places.')
+  .optional()
+  .nullable();
+
 export const customerCreateSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   phone: z.string().max(50).optional().nullable(),
   customerType: z.enum(['Regular', 'Credit', 'Fleet']).default('Regular'),
-  creditLimit: z.number().nonnegative().optional().nullable(),
+  creditLimit: creditLimitSchema,
   fleetCode: z.string().max(100).optional().nullable(),
   isPrepaid: z.boolean().default(false),
   settlementCycle: z.enum(['OPEN', 'EOD']).default('OPEN'),
