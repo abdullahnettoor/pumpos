@@ -21,7 +21,7 @@ function memoryStorage(): Storage {
   } as Storage;
 }
 
-/** The control in isolation; the real screen is covered by MoreScreen.dom.test.tsx. */
+/** The control in isolation; the real mount is covered by shell/MobileShell.dom.test.tsx ("Account sheet"). */
 const Screen: React.FC = () => <AppearanceControl />;
 
 const resolvedTheme = () => (root().classList.contains('dark') ? 'dark' : 'light');

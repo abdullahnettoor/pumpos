@@ -11,6 +11,10 @@ export interface SegmentedControlProps<T extends string> {
   value: T;
   onChange: (value: T) => void;
   disabled?: boolean;
+  /** Fill the row: segments share the width equally (a full-width mobile toggle). */
+  stretch?: boolean;
+  /** Fill the selected segment with the brand colour instead of raising it (default `raised`). */
+  activeStyle?: 'raised' | 'brand';
   'aria-label': string;
   className?: string;
 }
@@ -26,6 +30,8 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   disabled,
+  stretch,
+  activeStyle = 'raised',
   className,
   'aria-label': ariaLabel,
 }: SegmentedControlProps<T>) {
@@ -33,8 +39,12 @@ export function SegmentedControl<T extends string>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
+      style={
+        stretch ? { gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` } : undefined
+      }
       className={cn(
-        'inline-flex h-8 items-center gap-0.5 rounded-button border border-border-soft bg-surface-alt p-0.5',
+        stretch ? 'grid h-8 w-full items-stretch gap-0.5' : 'inline-flex h-8 items-center gap-0.5',
+        'rounded-button border border-border-soft bg-surface-alt p-0.5',
         disabled && 'opacity-60',
         className,
       )}
@@ -52,7 +62,9 @@ export function SegmentedControl<T extends string>({
             className={cn(
               'h-full rounded-[6px] px-3 text-[12px] font-medium transition-colors disabled:cursor-not-allowed',
               active
-                ? 'bg-surface text-ink-strong shadow-sm ring-1 ring-border-soft'
+                ? activeStyle === 'brand'
+                  ? 'bg-brand text-[color:var(--on-accent,#fff)]' // --on-accent: themed text on brand (mobile)
+                  : 'bg-surface text-ink-strong shadow-sm ring-1 ring-border-soft'
                 : 'text-ink-muted hover:text-ink-strong',
             )}
           >

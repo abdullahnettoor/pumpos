@@ -29,4 +29,20 @@ describe('SegmentedControl', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'A4' }));
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('stretch gives every segment an equal share of the row', () => {
+    render(
+      <SegmentedControl
+        aria-label="Paper"
+        options={options}
+        value="A4"
+        onChange={() => {}}
+        stretch
+        activeStyle="brand"
+      />,
+    );
+    const group = screen.getByRole('radiogroup', { name: 'Paper' });
+    expect(group.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))');
+    expect(screen.getByRole('radio', { name: 'A4' }).className).toContain('bg-brand');
+  });
 });

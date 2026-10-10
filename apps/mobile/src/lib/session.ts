@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import type { Role } from '@pump/shared';
 import {
   CloudStationService,
   setApiBaseUrl,
@@ -9,8 +10,6 @@ import {
   supabase,
   startSession,
 } from '@pump/ui';
-
-export type UserRole = 'Owner' | 'Manager' | 'Accountant' | 'Staff' | 'Attendant';
 
 /** Resolve the API base URL from the current mobile host (mirrors console). */
 export function resolveApiUrl(): string | undefined {
@@ -36,7 +35,7 @@ const stationService = new CloudStationService();
 export interface SessionState {
   status: 'loading' | 'signed-out' | 'ready' | 'error';
   session: any;
-  role: UserRole | null;
+  role: Role | null;
   userName: string;
   error: { message: string; code?: string } | null;
 }
