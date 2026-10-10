@@ -74,3 +74,49 @@ describe('composeDssr document counts and per-shift fuel value (#391)', () => {
     expect(d.fuel.totalSalesValue).toBe(0);
   });
 });
+
+describe('composeDssr tank stock movement (#395)', () => {
+  const dip = {
+    tankName: 'Tank 1',
+    productName: 'Petrol',
+    unit: 'Litre',
+    inventoryType: 'BULK',
+    expectedQuantity: 14820,
+    actualQuantity: 14802,
+    varianceQuantity: -18,
+    reason: null,
+  };
+
+  it("derives the tank's closing book from its opening, receipts, sales and adjustments", () => {
+    const d = composeDssr(
+      emptySource({
+        stockVariances: [
+          {
+            ...dip,
+            tankMovement: {
+              tankId: 't1',
+              openingQuantity: 12000,
+              receivedQuantity: 5000,
+              soldQuantity: 2210.5,
+              adjustedQuantity: 30.5,
+            },
+          },
+        ],
+      }),
+    ) as any;
+    expect(d.fuelStockVariance[0].tankMovement).toEqual({
+      tankId: 't1',
+      openingQuantity: 12000,
+      receivedQuantity: 5000,
+      soldQuantity: 2210.5,
+      adjustedQuantity: 30.5,
+      closingQuantity: 14820,
+    });
+    expect(d.fuelStockVariance[0]).toMatchObject({ status: 'Loss', varianceQuantity: -18 });
+  });
+
+  it('leaves a dip with no movement exactly as before', () => {
+    const d = composeDssr(emptySource({ stockVariances: [dip] })) as any;
+    expect('tankMovement' in d.fuelStockVariance[0]).toBe(false);
+  });
+});

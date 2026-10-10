@@ -9,6 +9,7 @@ import type {
   DssrSnapshot,
   DssrSnapshotRepository,
   DssrSourceData,
+  DssrTankMovementSource,
 } from '@pump/core';
 import { shiftSequenceSql } from '../shift-sequence-sql.js';
 
@@ -71,6 +72,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       .select({
         organizationId: schema.businessDays.organizationId,
         stationId: schema.businessDays.stationId,
+        businessDate: schema.businessDays.businessDate,
       })
       .from(schema.businessDays)
       .where(eq(schema.businessDays.id, businessDayId))
@@ -157,6 +159,14 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       .leftJoin(schema.products, eq(schema.products.id, schema.stockVariances.productId))
       .where(eq(schema.stockVariances.businessDayId, businessDayId));
 
+    // Each dipped tank's litres over the day, from stock_movements (#395).
+    const tankMovements = await this.readTankMovements(
+      businessDayId,
+      businessDay?.stationId,
+      businessDay?.businessDate,
+      varianceRows.flatMap((r) => (r.tankId ? [r.tankId] : [])),
+    );
+
     // Reference lookups for enriching the fuel roll-up with names + cost basis.
     const productRows = organizationId
       ? await this.db
@@ -220,6 +230,9 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         actualQuantity: Number(r.actualQuantity),
         varianceQuantity: Number(r.varianceQuantity),
         reason: r.reason ?? null,
+        ...(r.tankId && tankMovements.has(r.tankId)
+          ? { tankMovement: tankMovements.get(r.tankId) }
+          : {}),
       })),
       saleItems: saleItemRows.map((r) => ({
         productId: r.productId,
@@ -236,6 +249,57 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       products,
       nozzles,
     };
+  }
+
+  /**
+   * Per tank: book before the day (Σ movements of earlier Business Days of the
+   * station), and on the day the Purchases received, net Sale litres, and every
+   * other movement but dip reconciliations ('Variance'). One statement for all
+   * dipped tanks. Movements of later days never count.
+   */
+  private async readTankMovements(
+    businessDayId: string,
+    stationId: string | undefined,
+    businessDate: string | undefined,
+    tankIds: string[],
+  ): Promise<Map<string, DssrTankMovementSource>> {
+    const out = new Map<string, DssrTankMovementSource>();
+    if (!stationId || !businessDate || tankIds.length === 0) return out;
+    const rows = (await this.db.execute(sql`
+      SELECT sm.tank_id AS "tankId",
+        COALESCE(SUM(sm.quantity) FILTER (WHERE bd.business_date < ${businessDate}), 0) AS opening,
+        COALESCE(SUM(sm.quantity) FILTER (
+          WHERE bd.id = ${businessDayId} AND sm.movement_type = 'Purchase'), 0) AS received,
+        COALESCE(-SUM(sm.quantity) FILTER (
+          WHERE bd.id = ${businessDayId} AND sm.movement_type = 'Sale'), 0) AS sold,
+        COALESCE(SUM(sm.quantity) FILTER (
+          WHERE bd.id = ${businessDayId}
+            AND sm.movement_type NOT IN ('Purchase', 'Sale', 'Variance')), 0) AS adjusted
+      FROM stock_movements sm
+      JOIN business_days bd ON bd.id = sm.business_day_id
+      WHERE sm.tank_id IN (${sql.join(
+        tankIds.map((id) => sql`${id}`),
+        sql`, `,
+      )})
+        AND bd.station_id = ${stationId}
+        AND bd.business_date <= ${businessDate}
+      GROUP BY sm.tank_id
+    `)) as unknown as {
+      tankId: string;
+      opening: string;
+      received: string;
+      sold: string;
+      adjusted: string;
+    }[];
+    for (const r of rows)
+      out.set(r.tankId, {
+        tankId: r.tankId,
+        openingQuantity: Number(r.opening),
+        receivedQuantity: Number(r.received),
+        soldQuantity: Number(r.sold),
+        adjustedQuantity: Number(r.adjusted),
+      });
+    return out;
   }
 }
 

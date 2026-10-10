@@ -5,7 +5,7 @@ import { ShellContext } from './context.js';
 import { Dock } from './Dock.js';
 import { useNav } from './nav.js';
 import { Pane } from './Pane.js';
-import { tabDef, type TabKey } from './tabs.js';
+import type { TabKey } from './tabs.js';
 
 interface MobileShellProps {
   userName: string;
@@ -62,12 +62,7 @@ export const MobileShell: React.FC<MobileShellProps> = ({
             const tabActive = tab === nav.active;
             return (
               <React.Fragment key={tab}>
-                <Pane
-                  active={tabActive && stack.length === 0}
-                  bottom={tabDef(tab).reserveDock ? 'above-dock' : 'under-dock'}
-                >
-                  {renderRoot(tab)}
-                </Pane>
+                <Pane active={tabActive && stack.length === 0}>{renderRoot(tab)}</Pane>
                 {stack.map((entry, i) => (
                   <Pane key={entry.id} active={tabActive && i === stack.length - 1} bottom="full">
                     {entry.element}

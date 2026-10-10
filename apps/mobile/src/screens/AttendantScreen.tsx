@@ -12,13 +12,13 @@ import { AttendantHeader } from './attendant/AttendantHeader.js';
 import { DuStrip } from './attendant/DuStrip.js';
 import { NoShiftState } from './attendant/NoShiftState.js';
 import { RecordedState } from './attendant/RecordedState.js';
-import { buildRecap, type MerchandiseHandoverRecord } from './attendant/recap.js';
+import { buildRecap, type MerchandiseHandoverRecord } from '../lib/handover/recap.js';
 
 /**
  * Attendant app (mobile-only): their handover and nothing else. No dock, bell,
  * Home, Shifts, Reports, Money or Insights, and no station switcher; the only
  * way out is Sign out in the account sheet. Other roles reach the same form
- * through the "My handover" tab when they are assigned to a DU.
+ * from the pinned handover card on Home when they are assigned to a DU.
  *
  * Three states: no shift assigned, the handover form (saveable until the Shift
  * closes), and "Handover recorded", which shows on reload when the assignment

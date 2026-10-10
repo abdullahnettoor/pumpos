@@ -851,6 +851,7 @@ export function useInventoryVariances(
   });
 }
 
+/** A Sealed day's immutable DSSR snapshot (null when none is stored). */
 export function useDailyDssr(
   stationId: string | null | undefined,
   date: string,
@@ -860,6 +861,7 @@ export function useDailyDssr(
     queryKey: queryKeys.dssr(stationId ?? '', date),
     queryFn: () => shiftService.getDailyDssr(stationId!, date),
     enabled: !!stationId && !!date,
+    ...TIER.operational,
     ...options,
   });
 }
