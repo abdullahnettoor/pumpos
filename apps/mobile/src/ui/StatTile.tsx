@@ -14,7 +14,7 @@ interface Props {
   label: string;
   /** Amount, quantity or count: set in the tabular mono face. */
   value: string;
-  sub?: string;
+  sub?: React.ReactNode;
   /** A further line under `sub`. */
   note?: string;
   tone?: Tone;
