@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STOCK_LOSS_TOLERANCE_PCT } from '@pump/shared';
+import { STOCK_VARIANCE_TOLERANCE_PCT } from '@pump/shared';
 import { FixedClock, SequentialIdGenerator } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
 import { composeAttendantVariance, composeCreditHealth, composeStockLoss } from './compose.js';
@@ -81,7 +81,8 @@ const tank = (over: Partial<InsightsStockLossRow>): InsightsStockLossRow => ({
   productCode: 'MS',
   varianceLitres: -40,
   soldLitres: 20000,
-  costBasis: 90,
+  dips: 1,
+  valueAtCost: -3600,
   ...over,
 });
 
@@ -91,12 +92,12 @@ describe('composeStockLoss', () => {
     expect(r.varianceLitres).toBe(-40);
     expect(r.soldLitres).toBe(20000);
     expect(r.pctOfSold).toBe(-0.2);
-    // 40 L lost at the product's cost basis, not at the selling price.
+    // The value arrives frozen from the DSSR snapshots; it is only rounded here.
     expect(r.valueAtCost).toBe(-3600);
   });
 
   it('flags a tank within tolerance and one outside it', () => {
-    const limit = (20000 * STOCK_LOSS_TOLERANCE_PCT) / 100; // 100 L
+    const limit = (20000 * STOCK_VARIANCE_TOLERANCE_PCT) / 100; // 100 L
     const rows = composeStockLoss([
       tank({ tankId: 'within', varianceLitres: -limit }),
       tank({ tankId: 'outside', varianceLitres: -(limit + 1) }),
@@ -106,7 +107,7 @@ describe('composeStockLoss', () => {
   });
 
   it('judges a gain by its size too: it is a recording problem, not a good result', () => {
-    const [r] = composeStockLoss([tank({ varianceLitres: 400 })]);
+    const [r] = composeStockLoss([tank({ varianceLitres: 400, valueAtCost: 36000 })]);
     expect(r.valueAtCost).toBe(36000);
     expect(r.withinTolerance).toBe(false);
   });
@@ -118,6 +119,18 @@ describe('composeStockLoss', () => {
     const [lost] = composeStockLoss([tank({ soldLitres: 0, varianceLitres: -5 })]);
     expect(lost.pctOfSold).toBeNull();
     expect(lost.withinTolerance).toBe(false);
+  });
+
+  it('keeps an unvalued variance unvalued instead of calling it zero rupees', () => {
+    const [r] = composeStockLoss([tank({ valueAtCost: null })]);
+    expect(r.valueAtCost).toBeNull();
+  });
+
+  it('keeps a tank with no dip: zero litres, no dips, within tolerance', () => {
+    const [r] = composeStockLoss([
+      tank({ varianceLitres: 0, dips: 0, valueAtCost: 0, soldLitres: 1200 }),
+    ]);
+    expect(r).toMatchObject({ varianceLitres: 0, dips: 0, withinTolerance: true, pctOfSold: 0 });
   });
 
   it('lists the biggest loss first', () => {

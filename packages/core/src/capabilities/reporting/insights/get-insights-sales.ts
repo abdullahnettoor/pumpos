@@ -5,10 +5,6 @@ import { composeInsightsSales } from './compose.js';
 import { insightsQuerySchema, type InsightsQueryCommand } from './query.js';
 import type { InsightsSalesReader } from './ports.js';
 
-export type GetInsightsSalesCommand = InsightsQueryCommand;
-
-const schema = insightsQuerySchema;
-
 export interface GetInsightsSalesDeps {
   reader: InsightsSalesReader;
 }
@@ -22,14 +18,14 @@ export interface GetInsightsSalesDeps {
  * (closed-day DSSR snapshots and their Shift Summaries) contributes, so a
  * figure never changes once its day has closed.
  */
-export class GetInsightsSales implements UseCase<GetInsightsSalesCommand, InsightsSales> {
+export class GetInsightsSales implements UseCase<InsightsQueryCommand, InsightsSales> {
   constructor(private readonly deps: GetInsightsSalesDeps) {}
 
   async execute(
-    input: GetInsightsSalesCommand,
+    input: InsightsQueryCommand,
     ctx: ExecutionContext,
   ): Promise<Result<InsightsSales>> {
-    const p = schema.safeParse(input);
+    const p = insightsQuerySchema.safeParse(input);
     if (!p.success) {
       return err(validationError('Invalid GetInsightsSales query', { issues: p.error.flatten() }));
     }

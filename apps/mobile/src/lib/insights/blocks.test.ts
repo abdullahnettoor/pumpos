@@ -1,23 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import type { InsightsStockLoss } from '@pump/shared';
-import {
-  attendantNote,
-  attendantTone,
-  creditBars,
-  divergeBars,
-  signedLitres,
-  stockLossLine,
-} from './blocks.js';
+import { attendantBars, attendantNote, creditBars, stockLossLine } from './blocks.js';
 
-describe('divergeBars', () => {
+describe('attendantBars', () => {
   it('scales every bar to the largest absolute net, either side of zero', () => {
-    expect(divergeBars([{ netVariance: -1590 }, { netVariance: 120 }, { netVariance: 0 }])).toEqual(
-      [1, 120 / 1590, 0],
-    );
+    const v = attendantBars([{ netVariance: -1590 }, { netVariance: 120 }, { netVariance: 0 }]);
+    expect(v.map((x) => x.bar)).toEqual([1, 120 / 1590, 0]);
+    expect(v.map((x) => x.short)).toEqual([true, false, false]);
   });
   it('draws nothing when everyone is on zero', () => {
-    expect(divergeBars([{ netVariance: 0 }])).toEqual([0]);
-    expect(divergeBars([])).toEqual([]);
+    expect(attendantBars([{ netVariance: 0 }]).map((x) => x.bar)).toEqual([0]);
+    expect(attendantBars([])).toEqual([]);
+  });
+  it('uses ONE balanced rule for bar, tone and text: a -₹0.30 net is short on all three', () => {
+    const [v] = attendantBars([{ netVariance: -0.3 }]);
+    expect(v).toMatchObject({ balanced: false, short: true, tone: 'bad', text: '−₹0.30' });
+    expect(v.bar).toBe(1);
+  });
+  it('a net inside the balanced rule has no bar and reads good', () => {
+    const [v, big] = attendantBars([{ netVariance: -0.004 }, { netVariance: -340 }]);
+    expect(v).toMatchObject({ balanced: true, tone: 'good', bar: 0, text: '₹0' });
+    // The balanced row never stretches the scale of the others.
+    expect(big.bar).toBe(1);
+  });
+  it('tone follows the sign once off balance: short bad, over warning', () => {
+    const [short, over] = attendantBars([{ netVariance: -340 }, { netVariance: 120 }]);
+    expect(short.tone).toBe('bad');
+    expect(over.tone).toBe('warn');
   });
 });
 
@@ -38,26 +47,6 @@ describe('attendantNote', () => {
   });
 });
 
-describe('attendantTone', () => {
-  it('is bad for short, a warning for over, good within the tolerance', () => {
-    expect(attendantTone(-340)).toBe('bad');
-    expect(attendantTone(120)).toBe('warn');
-    expect(attendantTone(0.2)).toBe('good');
-  });
-});
-
-describe('signedLitres', () => {
-  it('writes the direction with a true minus', () => {
-    expect(signedLitres(-42)).toBe('−42 L');
-    expect(signedLitres(6.5)).toBe('+6.5 L');
-    expect(signedLitres(-1234.56)).toBe('−1,234.6 L');
-  });
-  it('reads zero (and a hair of rounding) as 0 L', () => {
-    expect(signedLitres(0)).toBe('0 L');
-    expect(signedLitres(-0.04)).toBe('0 L');
-  });
-});
-
 const tank = (over: Partial<InsightsStockLoss>): InsightsStockLoss => ({
   tankId: 't',
   tankName: 'Tank 1',
@@ -65,6 +54,7 @@ const tank = (over: Partial<InsightsStockLoss>): InsightsStockLoss => ({
   varianceLitres: -42,
   soldLitres: 15000,
   pctOfSold: -0.28,
+  dips: 3,
   valueAtCost: -3780,
   withinTolerance: true,
   ...over,
@@ -91,6 +81,16 @@ describe('stockLossLine', () => {
     expect(
       stockLossLine(tank({ varianceLitres: 90, pctOfSold: 0.6, withinTolerance: false })).tone,
     ).toBe('warn');
+  });
+  it('says no dip was recorded for a tank with none, instead of claiming it is within tolerance', () => {
+    expect(
+      stockLossLine(tank({ dips: 0, varianceLitres: 0, pctOfSold: 0, valueAtCost: 0 })),
+    ).toEqual({
+      litres: '0 L',
+      note: 'no dip recorded in this range',
+      tone: 'default',
+      outside: false,
+    });
   });
   it('says nothing was sold rather than inventing a share', () => {
     expect(stockLossLine(tank({ soldLitres: 0, pctOfSold: null })).note).toBe(

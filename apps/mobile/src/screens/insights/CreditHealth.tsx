@@ -24,21 +24,25 @@ const Bar: React.FC<{ label: string; amount: number; width: number; fill: string
   </>
 );
 
-/** Plain words for how the receivables book moved: grew / shrank / unchanged. */
+/**
+ * Credit given against collected, in plain words. It is NOT the movement of the
+ * receivables book: customer balance adjustments are not in it, so it never
+ * says "receivables grew".
+ */
 const Summary: React.FC<{ d: InsightsCreditHealth; days: number }> = ({ d, days }) => (
   <p className="text-xs text-text-muted">
     {d.receivablesChange > 0 ? (
       <>
-        Receivables grew{' '}
+        Credit given exceeded collections by{' '}
         <b className="num font-semibold text-warn-fg">{compactRupees(d.receivablesChange)}</b>
       </>
     ) : d.receivablesChange < 0 ? (
       <>
-        Receivables shrank{' '}
+        Collections exceeded credit given by{' '}
         <b className="num font-semibold text-good">{compactRupees(-d.receivablesChange)}</b>
       </>
     ) : (
-      <>Receivables did not move</>
+      <>Credit given and collected were equal</>
     )}{' '}
     in {days} days
     {d.creditShareOfSales !== null && (

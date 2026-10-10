@@ -127,15 +127,10 @@ export interface InsightsAttendantVariance {
 }
 
 /**
- * A tank's recorded stock variance (Tank Dip vs book) over the range counts as
- * within tolerance up to this share of the litres it sold. Loss and gain are
- * judged alike by size: an unexplained gain points at a missed Purchase or a
- * bad dip as much as a loss points at shrinkage. A station default for now;
- * it is not configurable per Station.
+ * One tank's Tank Dip variance over the range, as the DSSRs of the range's
+ * closed days state it (every dip, including one taken while a Shift was open),
+ * so it equals the DSSR / Inventory variances figures. Every active tank is listed.
  */
-export const STOCK_LOSS_TOLERANCE_PCT = 0.5;
-
-/** One tank's Tank Dip variance over the range. */
 export interface InsightsStockLoss {
   tankId: string;
   tankName: string;
@@ -146,9 +141,15 @@ export interface InsightsStockLoss {
   soldLitres: number;
   /** `varianceLitres` as a percent of `soldLitres` (signed, two decimals); null when nothing was sold. */
   pctOfSold: number | null;
-  /** `varianceLitres` × the product's cost basis (signed: negative = money lost). */
-  valueAtCost: number;
-  /** |variance| is at most `STOCK_LOSS_TOLERANCE_PCT` of the litres sold. */
+  /** Tank Dips recorded in the range; 0 means nothing was measured (the variance is then 0 by absence). */
+  dips: number;
+  /**
+   * Σ variance × the product's cost basis AS FROZEN in each day's DSSR snapshot
+   * (signed: negative = money lost), so it never changes after the day closes.
+   * Null when a day's snapshot carries no cost (frozen before cost was stored).
+   */
+  valueAtCost: number | null;
+  /** |variance| is at most `STOCK_VARIANCE_TOLERANCE_PCT` of the litres sold. */
   withinTolerance: boolean;
 }
 
@@ -163,7 +164,10 @@ export interface InsightsCreditHealth {
   creditGiven: number;
   /** Collections whose Entry Date falls in the range. */
   collected: number;
-  /** `creditGiven − collected`: how much the receivables book moved. Positive = grew. */
+  /**
+   * `creditGiven − collected`. Customer balance adjustments are not in it, so
+   * this is not the movement of the receivables book; label it as the difference.
+   */
   receivablesChange: number;
   /** Credit Sales as a percent of fuel + product sales (one decimal); null with no sales. */
   creditShareOfSales: number | null;

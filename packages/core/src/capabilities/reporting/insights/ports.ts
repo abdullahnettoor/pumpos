@@ -10,7 +10,8 @@ import type { InsightsDateRange, InsightsRangeDays } from '@pump/shared';
  * sees a snapshot's JSON or a whole history.
  */
 
-export interface InsightsSalesQuery {
+/** What every Insights reader takes: the tenant, the Station and the range length. */
+export interface InsightsRangeQuery {
   organizationId: string;
   stationId: string;
   days: InsightsRangeDays;
@@ -63,15 +64,13 @@ export interface InsightsSalesSource {
 }
 
 export interface InsightsSalesReader {
-  read(query: InsightsSalesQuery): Promise<InsightsSalesSource>;
+  read(query: InsightsRangeQuery): Promise<InsightsSalesSource>;
 }
 
 // ---------------------------------------------------------------------------
 // Insights part 2 (#402). Same query shape and the same range end as the sales
 // block; each reader answers one bounded, pre-aggregated source.
 // ---------------------------------------------------------------------------
-
-export type InsightsRangeQuery = InsightsSalesQuery;
 
 /**
  * One Attendant's variance over the current period, aggregated in the
@@ -95,21 +94,27 @@ export interface InsightsAttendantVarianceReader {
 /** The most Attendants one Station block lists. */
 export const INSIGHTS_ATTENDANT_LIMIT = 25;
 
-/** One tank's recorded dip variance and sales over the current period. */
+/**
+ * One tank's recorded dip variance and sales over the current period. The
+ * variance is what the closed days' DSSR snapshots state (every dip they
+ * list), and its value was frozen in those snapshots: nothing live is read.
+ */
 export interface InsightsStockLossRow {
   tankId: string;
   tankName: string;
   productCode: string;
-  /** Σ (actual − book) litres of the tank's Tank Dips on closed days. */
+  /** Σ (actual − book) litres of the tank's Tank Dips on closed days; 0 with none. */
   varianceLitres: number;
   /** Net litres its Nozzles metered on closed days. */
   soldLitres: number;
-  /** The product's cost basis per litre. */
-  costBasis: number;
+  /** Tank Dips recorded on closed days of the range. */
+  dips: number;
+  /** Σ variance × the cost frozen in each day's snapshot; null when any dip's snapshot has none. */
+  valueAtCost: number | null;
 }
 
 export interface InsightsStockLossReader {
-  /** One row per tank that recorded a dip variance in the range. */
+  /** One row per active tank of the Station (and any inactive tank that has a dip or sales in the range). */
   read(query: InsightsRangeQuery): Promise<InsightsStockLossRow[]>;
 }
 

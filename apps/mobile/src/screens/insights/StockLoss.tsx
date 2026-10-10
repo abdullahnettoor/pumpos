@@ -20,7 +20,7 @@ export const StockLoss: React.FC<{ stationId: string; days: InsightsRangeDays }>
       isError={q.isError}
       loaded={!!q.data}
       onRetry={() => void q.refetch()}
-      empty={q.data && rows.length === 0 ? 'No tank dips were recorded in this range.' : undefined}
+      empty={q.data && rows.length === 0 ? 'This Station has no tanks yet.' : undefined}
     >
       <ListGroup>
         {rows.map((t) => {
@@ -44,7 +44,7 @@ export const StockLoss: React.FC<{ stationId: string; days: InsightsRangeDays }>
               </div>
               <div className="flex flex-col items-end gap-1">
                 <span className={`num text-[13px] font-semibold ${TONE_TEXT[line.tone]}`}>
-                  {signedRupees(t.valueAtCost, { plus: true })}
+                  {t.valueAtCost === null ? '—' : signedRupees(t.valueAtCost, { plus: true })}
                 </span>
                 {line.outside && (
                   <StatusBadge tone={line.tone === 'bad' ? 'bad' : 'warn'}>Outside</StatusBadge>
@@ -55,7 +55,8 @@ export const StockLoss: React.FC<{ stationId: string; days: InsightsRangeDays }>
         })}
       </ListGroup>
       <p className="px-4 pt-1.5 text-[11px] text-text-faint">
-        Rupees at cost basis. Tanks with a dip in this range only.
+        Same figures as each day's report. Rupees at the cost frozen with the day; — where the
+        report has none.
       </p>
     </BlockFrame>
   );

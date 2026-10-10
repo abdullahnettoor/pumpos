@@ -95,7 +95,26 @@ const TANKS = [
     productCode: 'MS',
     varianceLitres: '-40.000',
     soldLitres: '20000.000',
-    costBasis: '90.0000',
+    dips: 2,
+    valueAtCost: '-3600.00',
+  },
+  {
+    tankId: 't-2',
+    tankName: 'Tank 2',
+    productCode: 'HSD',
+    varianceLitres: '0',
+    soldLitres: '0',
+    dips: 0,
+    valueAtCost: '0',
+  },
+  {
+    tankId: 't-3',
+    tankName: 'Tank 3',
+    productCode: 'HSD',
+    varianceLitres: '-5.000',
+    soldLitres: '1000.000',
+    dips: 1,
+    valueAtCost: null,
   },
 ];
 const CREDIT = [
@@ -232,20 +251,47 @@ describe('GET /reports/insights/stock-loss', () => {
         varianceLitres: -40,
         soldLitres: 20000,
         pctOfSold: -0.2,
+        dips: 2,
         valueAtCost: -3600,
+        withinTolerance: true,
+      },
+      {
+        tankId: 't-3',
+        tankName: 'Tank 3',
+        productCode: 'HSD',
+        varianceLitres: -5,
+        soldLitres: 1000,
+        pctOfSold: -0.5,
+        dips: 1,
+        // The snapshot froze no cost: unvalued, not zero rupees.
+        valueAtCost: null,
+        withinTolerance: true,
+      },
+      {
+        tankId: 't-2',
+        tankName: 'Tank 2',
+        productCode: 'HSD',
+        varianceLitres: 0,
+        soldLitres: 0,
+        pctOfSold: null,
+        dips: 0,
+        valueAtCost: 0,
         withinTolerance: true,
       },
     ]);
   });
 
-  it('reads recorded dips of closed days and sales from sealed snapshots', async () => {
+  it('reads dips and sales from sealed DSSR snapshots only, never live stock_variances or cost', async () => {
     const { db, statements } = makeFakeDb(TANKS);
     await makeApp(db).request(url);
     const { sql: text } = new PgDialect().sqlToQuery(statements[0] as any);
-    expect(text).toContain('stock_variances');
+    expect(text).not.toContain('stock_variances');
+    expect(text).not.toContain('cost_basis');
+    expect(text).toContain("'fuelStockVariance'");
     expect(text).toContain('dssr_snapshots');
     expect(text).toContain("bd.status = 'CLOSED'");
-    expect(text).toContain('openShiftAtRecording');
+    // The DSSR counts a dip taken while a Shift was open, so the block does too.
+    expect(text).not.toContain('openShiftAtRecording');
   });
 
   it('refuses roles that cannot view reports', async () => {

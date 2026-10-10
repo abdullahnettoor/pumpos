@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { schema, type DbClient } from '@pump/db';
+import { composeDssr } from '@pump/core';
+import { DrizzleDssrDataReader } from '../reporting-repositories.js';
 import {
   DrizzleInsightsAttendantVarianceReader,
   DrizzleInsightsCreditHealthReader,
@@ -16,8 +18,10 @@ import {
  * What a fake cannot prove, and this does: the window is the same as the sales
  * block's (newest CLOSED sealed day, inclusive bounds, an open day never moves
  * it); the attendant level is read from two-level Shift Summaries only and
- * classified per Shift by the shared balanced rule; dips recorded while a Shift
- * was open do not count as loss; Credit Sales follow the Business Date and
+ * classified per Shift by the shared balanced rule; stock loss is read from the
+ * sealed DSSR snapshots (so it equals the DSSR and /inventory/variances, a dip
+ * taken while a Shift was open included) and valued at the cost frozen in them,
+ * never the live cost basis; Credit Sales follow the Business Date and
  * Collections the Entry Date (a Collection dated on a day that never closed
  * still counts); and nothing from a sibling station or another tenant leaks.
  *
@@ -155,13 +159,7 @@ describe.skipIf(!CONNECTION)('Insights part 2 readers against real Postgres', ()
     }
   });
 
-  async function day(
-    org: string,
-    station: string,
-    date: string,
-    status: 'OPEN' | 'CLOSED',
-    snapshot?: ReturnType<typeof dssr>,
-  ) {
+  async function day(org: string, station: string, date: string, status: 'OPEN' | 'CLOSED') {
     const dayId = nextId();
     await db.insert(schema.businessDays).values({
       id: dayId,
@@ -171,15 +169,36 @@ describe.skipIf(!CONNECTION)('Insights part 2 readers against real Postgres', ()
       status,
       openedBy: org === ORG ? USER : OTHER_USER,
     });
-    if (snapshot) {
-      await db.insert(schema.dssrSnapshots).values({
-        organizationId: org,
-        stationId: station,
-        businessDate: date,
-        snapshotData: snapshot,
-      });
-    }
     return dayId;
+  }
+
+  /**
+   * Seals a day: the DSSR snapshot carries `fuelStockVariance` exactly as the
+   * real pipeline writes it (the real reader + `composeDssr` over the day's
+   * stock_variances rows), plus any hand-made `extraVariances` (rows frozen by
+   * an older release, or malformed).
+   */
+  async function seal(
+    org: string,
+    station: string,
+    dayId: string,
+    date: string,
+    snapshot: ReturnType<typeof dssr>,
+    extraVariances: Array<Record<string, unknown>> = [],
+  ) {
+    const composed = composeDssr(await new DrizzleDssrDataReader(db).readBusinessDay(dayId));
+    await db.insert(schema.dssrSnapshots).values({
+      organizationId: org,
+      stationId: station,
+      businessDate: date,
+      snapshotData: {
+        ...snapshot,
+        fuelStockVariance: [
+          ...((composed as any).fuelStockVariance as Array<Record<string, unknown>>),
+          ...extraVariances,
+        ],
+      },
+    });
   }
 
   async function shift(
@@ -412,59 +431,11 @@ describe.skipIf(!CONNECTION)('Insights part 2 readers against real Postgres', ()
       { id: OTHER_ACCOUNT, organizationId: OTHER_ORG, accountType: 'CASH_IN_HAND', name: 'Cash' },
     ]);
 
-    const d11 = await day(
-      ORG,
-      STATION,
-      '2026-03-11',
-      'OPEN',
-      dssr({
-        fuelSales: 777777,
-        credit: 99999,
-        nozzles: [{ nozzleId: N_MS, netVolume: 99999 }],
-      }),
-    );
-    const d10 = await day(
-      ORG,
-      STATION,
-      '2026-03-10',
-      'CLOSED',
-      dssr({
-        fuelSales: 100000,
-        merchSales: 5000,
-        credit: 10000,
-        nozzles: [
-          { nozzleId: N_MS, netVolume: 6000 },
-          { nozzleId: N_HSD, netVolume: 4000 },
-          { nozzleId: N_IDLE, netVolume: 0 },
-        ],
-      }),
-    );
+    const d11 = await day(ORG, STATION, '2026-03-11', 'OPEN');
+    const d10 = await day(ORG, STATION, '2026-03-10', 'CLOSED');
     await day(ORG, STATION, '2026-03-09', 'CLOSED'); // closed, never sealed
-    const d08 = await day(
-      ORG,
-      STATION,
-      '2026-03-08',
-      'CLOSED',
-      dssr({
-        fuelSales: 50000,
-        merchSales: 1000,
-        credit: 4000,
-        // A snapshot frozen before net volume was stored: gross less testing.
-        nozzles: [{ nozzleId: N_MS, grossVolume: 3100, testingVolume: 100 }],
-      }),
-    );
-    const d02 = await day(
-      ORG,
-      STATION,
-      '2026-03-02',
-      'CLOSED',
-      dssr({
-        fuelSales: 70000,
-        merchSales: 2000,
-        credit: 3000,
-        nozzles: [{ nozzleId: N_MS, netVolume: 5000 }],
-      }),
-    );
+    const d08 = await day(ORG, STATION, '2026-03-08', 'CLOSED');
+    const d02 = await day(ORG, STATION, '2026-03-02', 'CLOSED');
 
     // --- Attendant variance (Shift Summaries) ---
     await shift(
@@ -477,6 +448,7 @@ describe.skipIf(!CONNECTION)('Insights part 2 readers against real Postgres', ()
         drawer(ATT1, 30), // same Attendant, second Drawer: the Shift nets to -70
         drawer(ATT2, 0.004), // under half a paisa: balanced
         drawer(ATT2, null), // not handed over yet: no figure
+        drawer('not-a-uuid', -5), // a malformed id in a frozen snapshot drops that Drawer, not the read
       ]),
     );
     await shift(
@@ -503,13 +475,74 @@ describe.skipIf(!CONNECTION)('Insights part 2 readers against real Postgres', ()
     await shift(ORG, STATION, d02, MORNING, twoLevel([drawer(ATT1, -500)]));
     await shift(ORG, STATION, d11, MORNING, twoLevel([drawer(ATT1, -777)]));
 
-    // --- Stock loss (Tank Dips) ---
+    // --- Stock loss (Tank Dips, then sealed with their day) ---
     await dip(ORG, STATION, d10, T_MS, P_MS, -30);
     await dip(ORG, STATION, d08, T_MS, P_MS, -20);
-    await dip(ORG, STATION, d10, T_MS, P_MS, -999, { openShiftAtRecording: true }); // not reconciled
+    // Taken while a Shift was open: the DSSR and /inventory/variances count it, so does the block.
+    await dip(ORG, STATION, d10, T_MS, P_MS, -9, { openShiftAtRecording: true });
     await dip(ORG, STATION, d02, T_MS, P_MS, -500); // previous period
     await dip(ORG, STATION, d11, T_MS, P_MS, -888); // open day
     await dip(ORG, STATION, d10, T_HSD, P_HSD, 10);
+
+    await seal(
+      ORG,
+      STATION,
+      d11,
+      '2026-03-11',
+      dssr({
+        fuelSales: 777777,
+        credit: 99999,
+        nozzles: [{ nozzleId: N_MS, netVolume: 99999 }],
+      }),
+    );
+    await seal(
+      ORG,
+      STATION,
+      d10,
+      '2026-03-10',
+      dssr({
+        fuelSales: 100000,
+        merchSales: 5000,
+        credit: 10000,
+        nozzles: [
+          { nozzleId: N_MS, netVolume: 6000 },
+          { nozzleId: N_HSD, netVolume: 4000 },
+          { nozzleId: N_IDLE, netVolume: 0 },
+          { nozzleId: 'garbage', netVolume: 50 }, // malformed id: dropped, the read survives
+        ],
+      }),
+    );
+    await seal(
+      ORG,
+      STATION,
+      d08,
+      '2026-03-08',
+      dssr({
+        fuelSales: 50000,
+        merchSales: 1000,
+        credit: 4000,
+        // A snapshot frozen before net volume was stored: gross less testing.
+        nozzles: [{ nozzleId: N_MS, grossVolume: 3100, testingVolume: 100 }],
+      }),
+      [
+        // Frozen by an older release: no tank id, no unit cost (matched by its unique tank name).
+        { tankName: 'Tank HSD', varianceQuantity: -4 },
+        // A malformed tank id that names no tank: dropped.
+        { tankId: 'not-a-uuid', tankName: 'Nope', varianceQuantity: -1 },
+      ],
+    );
+    await seal(
+      ORG,
+      STATION,
+      d02,
+      '2026-03-02',
+      dssr({
+        fuelSales: 70000,
+        merchSales: 2000,
+        credit: 3000,
+        nozzles: [{ nozzleId: N_MS, netVolume: 5000 }],
+      }),
+    );
 
     // --- Credit health (Collections by Entry Date) ---
     await collection(ORG, STATION, CUSTOMER, ACCOUNT, '2026-03-04', 1000); // first day of the range
@@ -520,31 +553,22 @@ describe.skipIf(!CONNECTION)('Insights part 2 readers against real Postgres', ()
     await collection(ORG, OTHER_TENANT_STATION, OTHER_CUSTOMER, OTHER_ACCOUNT, '2026-03-05', 5);
 
     // --- A sibling station and another tenant with newer closed days ---
-    const sib = await day(
+    const sib = await day(ORG, SIBLING, '2026-03-12', 'CLOSED');
+    await shift(ORG, SIBLING, sib, MORNING, twoLevel([drawer(ATT1, -4242)]));
+    await dip(ORG, SIBLING, sib, T_SIB, P_MS, -777);
+    await seal(
       ORG,
       SIBLING,
+      sib,
       '2026-03-12',
-      'CLOSED',
       dssr({
         fuelSales: 123456,
         credit: 11111,
         nozzles: [{ nozzleId: N_SIB, netVolume: 1234 }],
       }),
     );
-    await shift(ORG, SIBLING, sib, MORNING, twoLevel([drawer(ATT1, -4242)]));
-    await dip(ORG, SIBLING, sib, T_SIB, P_MS, -777);
     await collection(ORG, SIBLING, CUSTOMER, ACCOUNT, '2026-03-08', 3);
-    const other = await day(
-      OTHER_ORG,
-      OTHER_TENANT_STATION,
-      '2026-03-12',
-      'CLOSED',
-      dssr({
-        fuelSales: 888888,
-        credit: 88888,
-        nozzles: [],
-      }),
-    );
+    const other = await day(OTHER_ORG, OTHER_TENANT_STATION, '2026-03-12', 'CLOSED');
     await shift(
       OTHER_ORG,
       OTHER_TENANT_STATION,
@@ -553,6 +577,13 @@ describe.skipIf(!CONNECTION)('Insights part 2 readers against real Postgres', ()
       twoLevel([drawer(ATT1, -9999)]),
     );
     await dip(OTHER_ORG, OTHER_TENANT_STATION, other, T_OTHER, OTHER_PRODUCT, -555);
+    await seal(
+      OTHER_ORG,
+      OTHER_TENANT_STATION,
+      other,
+      '2026-03-12',
+      dssr({ fuelSales: 888888, credit: 88888, nozzles: [] }),
+    );
   }
 
   const q = (stationId: string, days: 7 | 30 | 90 = 7, organizationId = ORG) => ({
@@ -615,43 +646,90 @@ describe.skipIf(!CONNECTION)('Insights part 2 readers against real Postgres', ()
   });
 
   describe('stock loss', () => {
-    it('sums reconciled dips per tank against the litres the tank sold', async () => {
+    it('sums the dips each sealed DSSR states per tank, against the litres the tank sold', async () => {
       const r = await stock.read(q(STATION));
       const ms = r.find((t) => t.tankId === T_MS)!;
-      // -30 and -20: the mid-shift dip, the previous period and the open day are out.
-      expect(ms).toMatchObject({ tankName: 'Tank MS', productCode: 'MS' });
-      expect(ms.varianceLitres).toBe(-50);
+      // -30, -20 and the mid-shift -9 (the DSSR includes it); the previous period and the open day are out.
+      expect(ms).toMatchObject({ tankName: 'Tank MS', productCode: 'MS', dips: 3 });
+      expect(ms.varianceLitres).toBe(-59);
       // 6000 (net) + 3000 (gross 3100 less testing 100 on the older snapshot); the open day's 99999 and 03-02's 5000 are out.
       expect(Number(ms.soldLitres)).toBe(9000);
-      expect(Number(ms.costBasis)).toBe(90);
+      // Valued at the 90/L frozen in each snapshot.
+      expect(Number(ms.valueAtCost)).toBe(-59 * 90);
 
       const hsd = r.find((t) => t.tankId === T_HSD)!;
-      expect(hsd.varianceLitres).toBe(10);
+      // +10 from the 03-10 DSSR; -4 from an older-release row matched by its unique tank name.
+      expect(hsd.varianceLitres).toBe(6);
       expect(Number(hsd.soldLitres)).toBe(4000);
-      expect(Number(hsd.costBasis)).toBe(80);
+      expect(hsd.dips).toBe(2);
     });
 
-    it('lists only tanks that recorded a dip variance', async () => {
-      const ids = (await stock.read(q(STATION))).map((t) => t.tankId);
-      expect(ids).not.toContain(T_IDLE);
-      expect(ids).toHaveLength(2);
+    it("equals the DSSR: the block's litres are the days' fuelStockVariance rows, and /inventory/variances", async () => {
+      const r = await stock.read(q(STATION));
+      const snapshots = await sql`
+        select snapshot_data from dssr_snapshots
+        where station_id = ${STATION} and business_date between '2026-03-04' and '2026-03-10'
+          and business_date <> '2026-03-09'`;
+      const dssrByTank = new Map<string, number>();
+      for (const row of snapshots)
+        for (const v of row.snapshot_data.fuelStockVariance as any[]) {
+          if (!v.tankId) continue;
+          dssrByTank.set(v.tankId, (dssrByTank.get(v.tankId) ?? 0) + Number(v.varianceQuantity));
+        }
+      expect(dssrByTank.get(T_MS)).toBe(-59);
+      expect(r.find((t) => t.tankId === T_MS)!.varianceLitres).toBe(dssrByTank.get(T_MS));
+      expect(r.find((t) => t.tankId === T_HSD)!.varianceLitres - -4).toBe(dssrByTank.get(T_HSD));
+
+      // The same rows /inventory/variances lists (stock_variances of the range's closed days, mid-shift dips included).
+      const [{ total }] = await sql`
+        select sum(sv.variance_quantity)::float as total
+        from stock_variances sv join business_days bd on bd.id = sv.business_day_id
+        where sv.tank_id = ${T_MS} and bd.status = 'CLOSED'
+          and bd.business_date between '2026-03-04' and '2026-03-10'`;
+      expect(r.find((t) => t.tankId === T_MS)!.varianceLitres).toBe(total);
+    });
+
+    it('freezes the rupee value with the day: a later cost basis change does not move it', async () => {
+      const before = (await stock.read(q(STATION))).find((t) => t.tankId === T_MS)!;
+      await sql`update products set cost_basis = 123 where id = ${P_MS}`;
+      try {
+        const after = (await stock.read(q(STATION))).find((t) => t.tankId === T_MS)!;
+        expect(Number(after.valueAtCost)).toBe(Number(before.valueAtCost));
+        expect(Number(after.valueAtCost)).toBe(-59 * 90);
+      } finally {
+        await sql`update products set cost_basis = 90 where id = ${P_MS}`;
+      }
+    });
+
+    it('leaves the value null where a snapshot has no frozen cost, instead of guessing', async () => {
+      const hsd = (await stock.read(q(STATION))).find((t) => t.tankId === T_HSD)!;
+      expect(hsd.valueAtCost).toBeNull();
+    });
+
+    it('lists every tank of the station, a tank with no dip as zero litres and zero dips', async () => {
+      const r = await stock.read(q(STATION));
+      expect(r.map((t) => t.tankId).sort()).toEqual([T_MS, T_HSD, T_IDLE].sort());
+      const idle = r.find((t) => t.tankId === T_IDLE)!;
+      expect(idle).toMatchObject({ varianceLitres: 0, dips: 0, valueAtCost: 0 });
+      expect(Number(idle.soldLitres)).toBe(0);
     });
 
     it('widens with the range', async () => {
       const ms = (await stock.read(q(STATION, 30))).find((t) => t.tankId === T_MS)!;
-      expect(ms.varianceLitres).toBe(-550);
+      expect(ms.varianceLitres).toBe(-559);
       expect(Number(ms.soldLitres)).toBe(14000);
+      expect(Number(ms.valueAtCost)).toBe(-559 * 90);
     });
 
     it('never mixes in a sibling station or another tenant', async () => {
       expect((await stock.read(q(SIBLING))).map((t) => t.tankId)).toEqual([T_SIB]);
-      expect(await stock.read(q(OTHER_TENANT_STATION, 7, ORG))).toEqual([]);
+      expect((await stock.read(q(OTHER_TENANT_STATION, 7, ORG))).map((t) => t.tankId)).toEqual([]);
       const own = await stock.read(q(OTHER_TENANT_STATION, 7, OTHER_ORG));
       expect(own.map((t) => t.tankId)).toEqual([T_OTHER]);
-      expect(Number(own[0].costBasis)).toBe(1);
+      expect(Number(own[0].valueAtCost)).toBe(-555);
     });
 
-    it('is empty for a station with no history', async () => {
+    it('is empty for a station with no tanks', async () => {
       expect(await stock.read(q(EMPTY_STATION))).toEqual([]);
     });
   });

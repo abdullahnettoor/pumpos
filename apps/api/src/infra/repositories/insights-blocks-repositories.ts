@@ -11,8 +11,18 @@ import {
   type InsightsStockLossRow,
 } from '@pump/core';
 import { VARIANCE_EPSILON } from '@pump/shared';
-import { dssrDaySales } from '../dssr-snapshot-sql.js';
-import { insightsRangeCtes } from './insights-range.js';
+import {
+  dssrCreditTotal,
+  dssrDaySales,
+  dssrNetVolumeOfRecord,
+  jsonbArray,
+  uuidOrNull,
+} from '../dssr-snapshot-sql.js';
+import {
+  insightsClosedDaysCte,
+  insightsRangeCtes,
+  insightsSealedDaysCte,
+} from './insights-range.js';
 
 /**
  * The three Insights blocks of part 2 (#402). Each reader is ONE statement:
@@ -27,10 +37,6 @@ import { insightsRangeCtes } from './insights-range.js';
  */
 
 const num = (v: unknown): number => Number(v ?? 0) || 0;
-
-/** A jsonb value that is not an array (a snapshot frozen before the field existed) reads as empty. */
-const asArray = (expr: string) =>
-  sql.raw(`CASE WHEN jsonb_typeof(${expr}) = 'array' THEN ${expr} ELSE '[]'::jsonb END`);
 
 /**
  * Cash variance by Attendant, from the Drawers of closed Shift Summaries.
@@ -56,28 +62,27 @@ export class DrizzleInsightsAttendantVarianceReader implements InsightsAttendant
 
     const rows = await this.db.execute(sql`
       WITH ${insightsRangeCtes(org, st, q.days)},
+      ${insightsClosedDaysCte(org, st)},
       drawers AS (
-        SELECT s.id AS shift_id, d."attendantId" AS attendant_id,
+        SELECT s.id AS shift_id, ${uuidOrNull('d."attendantId"')} AS attendant_id,
                d."attendantName" AS snapshot_name, d.variance
-        FROM bounds b
-        JOIN business_days bd
-          ON bd.organization_id = ${org} AND bd.station_id = ${st} AND bd.status = 'CLOSED'
-         AND bd.business_date BETWEEN b."from" AND b."to"
+        FROM closed_days cd
         JOIN shifts s
-          ON s.business_day_id = bd.id AND s.organization_id = ${org} AND s.station_id = ${st}
+          ON s.business_day_id = cd.id AND s.organization_id = ${org} AND s.station_id = ${st}
          AND s.status IN ('CLOSED', 'LOCKED')
         JOIN shift_summaries ss ON ss.shift_id = s.id
         CROSS JOIN LATERAL jsonb_to_recordset(
           CASE WHEN COALESCE((ss.snapshot_data ->> 'cashVarianceModel')::numeric, 0) >= 2
-               THEN ${asArray(`ss.snapshot_data -> 'drawers'`)}
+               THEN ${jsonbArray(sql`ss.snapshot_data -> 'drawers'`)}
                ELSE '[]'::jsonb END
-        ) AS d("attendantId" uuid, "attendantName" text, variance numeric)
-        WHERE d."attendantId" IS NOT NULL AND d.variance IS NOT NULL
+        ) AS d("attendantId" text, "attendantName" text, variance numeric)
+        WHERE d.variance IS NOT NULL
       ),
       per_shift AS (
         SELECT attendant_id, shift_id, MAX(snapshot_name) AS snapshot_name,
                ROUND(SUM(variance), 2) AS variance
         FROM drawers
+        WHERE attendant_id IS NOT NULL
         GROUP BY attendant_id, shift_id
       ),
       per_attendant AS (
@@ -110,20 +115,27 @@ export class DrizzleInsightsAttendantVarianceReader implements InsightsAttendant
 }
 
 /**
- * Stock loss per tank: recorded Tank Dip variances (`stock_variances`, dip
- * minus book where book is the `stock_movements` ledger at dip time) of the
- * range's closed Business Days, beside the litres each tank sold (the net
- * volume its Nozzles metered, from the days' DSSR snapshots).
+ * Stock loss per tank, from the SEALED DSSR snapshots of the range's closed
+ * Business Days: each snapshot's `fuelStockVariance` rows (Tank Dip actual
+ * minus book, plus the tank, product and cost per litre frozen at close), beside
+ * the litres each tank sold (the net volume its Nozzles metered, from the same
+ * snapshots).
  *
- * A dip recorded while a Shift was open is excluded: it was not reconciled
- * (in-flight sales were not booked yet), so its variance is not a loss.
- * Tanks with no recorded dip in the range are not listed: nothing was
- * measured, so a zero would be a claim.
+ * Sourcing from the snapshot, not from `stock_variances`, is what makes the
+ * figure the DSSR's own: the block's total equals the sum of the days' DSSR
+ * stock variances (and /inventory/variances), dips taken while a Shift was open
+ * included, and the rupee value cannot move after the day closed (it is
+ * variance x the unit cost frozen in the snapshot, never the live
+ * `products.cost_basis`). A row whose snapshot predates the frozen cost leaves
+ * the tank's value null rather than guessing; one whose snapshot predates the
+ * frozen tank id is matched by tank name when that name is unique at the Station.
+ *
+ * Every active tank is listed (zero litres and zero dips when nothing was
+ * recorded), plus any inactive tank that has a dip or sales in the range.
  *
  * Indexes: `business_days_org_station_date_uniq`,
  * `dssr_snapshots_org_station_date_idx`, primary keys of nozzles / tanks /
- * products. `stock_variances` has no index on `business_day_id`; it is a small
- * table (a few rows per tank per dip) and is filtered by the closed-day list.
+ * products. No `stock_variances` read at all.
  */
 export class DrizzleInsightsStockLossReader implements InsightsStockLossReader {
   constructor(private readonly db: DbClient) {}
@@ -134,46 +146,63 @@ export class DrizzleInsightsStockLossReader implements InsightsStockLossReader {
 
     const rows = await this.db.execute(sql`
       WITH ${insightsRangeCtes(org, st, q.days)},
-      closed_days AS (
-        SELECT bd.id, bd.business_date
-        FROM bounds b
-        JOIN business_days bd
-          ON bd.organization_id = ${org} AND bd.station_id = ${st} AND bd.status = 'CLOSED'
-         AND bd.business_date BETWEEN b."from" AND b."to"
+      ${insightsClosedDaysCte(org, st)},
+      tank_names AS (
+        SELECT t.name, (array_agg(t.id))[1] AS id
+        FROM tanks t
+        WHERE t.organization_id = ${org} AND t.station_id = ${st}
+        GROUP BY t.name
+        HAVING COUNT(*) = 1
       ),
-      dips AS (
-        SELECT sv.tank_id, SUM(sv.variance_quantity) AS variance
-        FROM closed_days cd
-        JOIN stock_variances sv
-          ON sv.business_day_id = cd.id
-         AND sv.organization_id = ${org} AND sv.station_id = ${st}
-        WHERE sv.tank_id IS NOT NULL
-          AND COALESCE(sv.metadata ->> 'openShiftAtRecording', 'false') <> 'true'
-        GROUP BY sv.tank_id
-      ),
-      sold AS (
-        SELECT n.tank_id,
-               SUM(COALESCE(f."netVolume",
-                            COALESCE(f."grossVolume", 0) - COALESCE(f."testingVolume", 0))) AS litres
+      dip_rows AS (
+        SELECT COALESCE(${uuidOrNull('v."tankId"')}, tn.id) AS tank_id,
+               v."varianceQuantity" AS variance,
+               NULLIF(v."unitCost", 0) AS unit_cost
         FROM closed_days cd
         JOIN dssr_snapshots ds
           ON ds.organization_id = ${org} AND ds.station_id = ${st}
          AND ds.business_date = cd.business_date
         CROSS JOIN LATERAL jsonb_to_recordset(
-          ${asArray(`ds.snapshot_data -> 'fuel' -> 'nozzles'`)}
-        ) AS f("nozzleId" uuid, "netVolume" numeric, "grossVolume" numeric, "testingVolume" numeric)
-        JOIN nozzles n ON n.id = f."nozzleId" AND n.organization_id = ${org} AND n.station_id = ${st}
+          ${jsonbArray(sql`ds.snapshot_data -> 'fuelStockVariance'`)}
+        ) AS v("tankId" text, "tankName" text, "varianceQuantity" numeric, "unitCost" numeric)
+        LEFT JOIN tank_names tn ON tn.name = v."tankName"
+        WHERE v."varianceQuantity" IS NOT NULL
+      ),
+      dips AS (
+        SELECT tank_id,
+               SUM(variance) AS variance,
+               COUNT(*)::int AS dips,
+               CASE WHEN COUNT(*) FILTER (WHERE variance <> 0 AND unit_cost IS NULL) > 0 THEN NULL
+                    ELSE SUM(variance * COALESCE(unit_cost, 0)) END AS worth
+        FROM dip_rows
+        WHERE tank_id IS NOT NULL
+        GROUP BY tank_id
+      ),
+      sold AS (
+        SELECT n.tank_id, SUM(${dssrNetVolumeOfRecord('f')}) AS litres
+        FROM closed_days cd
+        JOIN dssr_snapshots ds
+          ON ds.organization_id = ${org} AND ds.station_id = ${st}
+         AND ds.business_date = cd.business_date
+        CROSS JOIN LATERAL jsonb_to_recordset(
+          ${jsonbArray(sql`ds.snapshot_data -> 'fuel' -> 'nozzles'`)}
+        ) AS f("nozzleId" text, "netVolume" numeric, "grossVolume" numeric, "testingVolume" numeric)
+        JOIN nozzles n
+          ON n.id = ${uuidOrNull('f."nozzleId"')} AND n.organization_id = ${org} AND n.station_id = ${st}
         GROUP BY n.tank_id
       )
       SELECT t.id AS "tankId", t.name AS "tankName", p.code AS "productCode",
-             dips.variance AS "varianceLitres",
+             COALESCE(dips.variance, 0) AS "varianceLitres",
              COALESCE(sold.litres, 0) AS "soldLitres",
-             COALESCE(p.cost_basis, 0) AS "costBasis"
-      FROM dips
-      JOIN tanks t ON t.id = dips.tank_id AND t.organization_id = ${org} AND t.station_id = ${st}
+             COALESCE(dips.dips, 0) AS dips,
+             CASE WHEN dips.tank_id IS NULL THEN 0 ELSE dips.worth END AS "valueAtCost"
+      FROM tanks t
       JOIN products p ON p.id = t.product_id AND p.organization_id = ${org}
+      LEFT JOIN dips ON dips.tank_id = t.id
       LEFT JOIN sold ON sold.tank_id = t.id
-      ORDER BY dips.variance, t.name
+      WHERE t.organization_id = ${org} AND t.station_id = ${st}
+        AND (t.status = 'ACTIVE' OR dips.tank_id IS NOT NULL OR sold.tank_id IS NOT NULL)
+      ORDER BY COALESCE(dips.variance, 0), t.name
     `);
 
     return (rows as unknown as Record<string, unknown>[]).map((r) => ({
@@ -182,7 +211,8 @@ export class DrizzleInsightsStockLossReader implements InsightsStockLossReader {
       productCode: String(r.productCode),
       varianceLitres: num(r.varianceLitres),
       soldLitres: num(r.soldLitres),
-      costBasis: num(r.costBasis),
+      dips: num(r.dips),
+      valueAtCost: r.valueAtCost === null ? null : num(r.valueAtCost),
     }));
   }
 }
@@ -209,18 +239,12 @@ export class DrizzleInsightsCreditHealthReader implements InsightsCreditHealthRe
 
     const result = await this.db.execute(sql`
       WITH ${insightsRangeCtes(org, st, q.days)},
-      sealed_days AS (
-        SELECT (ds.business_date >= b."from") AS current_period,
-               COALESCE((ds.snapshot_data -> 'credit' ->> 'total')::numeric, 0) AS credit,
-               ${dssrDaySales('ds.snapshot_data')} AS sales
-        FROM bounds b
-        JOIN dssr_snapshots ds
-          ON ds.organization_id = ${org} AND ds.station_id = ${st}
-         AND ds.business_date BETWEEN b."previousFrom" AND b."to"
-        JOIN business_days bd
-          ON bd.organization_id = ds.organization_id AND bd.station_id = ds.station_id
-         AND bd.business_date = ds.business_date AND bd.status = 'CLOSED'
-      ),
+      ${insightsSealedDaysCte(
+        org,
+        st,
+        sql`${dssrCreditTotal('ds.snapshot_data')} AS credit,
+               ${dssrDaySales('ds.snapshot_data')} AS sales`,
+      )},
       collected AS (
         SELECT COALESCE(SUM(c.amount), 0) AS total
         FROM bounds b

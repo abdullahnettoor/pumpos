@@ -1,8 +1,9 @@
 import type { InsightsAttendantVariance, InsightsStockLoss } from '@pump/shared';
-import { STOCK_LOSS_TOLERANCE_PCT } from '@pump/shared';
-import { plural } from '../format.js';
+import { STOCK_VARIANCE_TOLERANCE_PCT } from '@pump/shared';
+import { plural, signedRupees } from '../format.js';
 import type { Tone } from '../../ui/StatTile.js';
-import { varianceTone } from '../variance.js';
+import { varianceBadge } from '../variance.js';
+import { signedLitres, trim } from './format.js';
 
 /**
  * Display derivations for the Insights part 2 blocks (#402). Every business
@@ -11,10 +12,34 @@ import { varianceTone } from '../variance.js';
  * out: bar geometry, wording, tone.
  */
 
-/** Half-width of each diverging bar, 0..1 of the track's half, scaled to the largest |net| shown. */
-export function divergeBars(rows: ReadonlyArray<Pick<InsightsAttendantVariance, 'netVariance'>>) {
-  const max = rows.reduce((m, r) => Math.max(m, Math.abs(r.netVariance)), 0);
-  return rows.map((r) => (max > 0 ? Math.abs(r.netVariance) / max : 0));
+export interface AttendantBarView {
+  /** Tone and text from the one shared variance rule (`varianceBadge`): the bar, the figure and the counts agree. */
+  tone: Tone;
+  text: string;
+  /** Balanced by `isBalancedVariance`: no bar, and the figure reads "Balanced". */
+  balanced: boolean;
+  /** Short (bar grows left, bad) or over (right, warning). Meaningless when balanced. */
+  short: boolean;
+  /** Length of the bar as 0..1 of the track's half, scaled to the largest off-balance |net| shown. */
+  bar: number;
+}
+
+/** The diverging-bar row model for each Attendant, in the order given. */
+export function attendantBars(
+  rows: ReadonlyArray<Pick<InsightsAttendantVariance, 'netVariance'>>,
+): AttendantBarView[] {
+  const views = rows.map((r) => ({ r, badge: varianceBadge(r.netVariance) }));
+  const max = views.reduce(
+    (m, v) => (v.badge.balanced ? m : Math.max(m, Math.abs(v.r.netVariance))),
+    0,
+  );
+  return views.map(({ r, badge }) => ({
+    tone: badge.tone,
+    text: badge.balanced ? signedRupees(0) : badge.text,
+    balanced: badge.balanced,
+    short: r.netVariance < 0,
+    bar: badge.balanced || max <= 0 ? 0 : Math.abs(r.netVariance) / max,
+  }));
 }
 
 /**
@@ -33,19 +58,6 @@ export function attendantNote(
   return `${short} short · ${over} over of ${plural(shifts, 'shift')}`;
 }
 
-/** Tone of an Attendant's net: short is bad, over is worth a look, balanced is good. */
-export const attendantTone = (netVariance: number): Tone => varianceTone(netVariance);
-
-const trim = (n: number, dec: number) => String(Number(n.toFixed(dec)));
-
-/** `−42 L`, `+6.5 L`, `0 L` (true minus sign, grouping like the rest of the app). */
-export function signedLitres(n: number): string {
-  const a = Math.abs(n);
-  const body = `${a.toLocaleString('en-IN', { maximumFractionDigits: 1 })} L`;
-  if (Number(trim(a, 1)) === 0) return '0 L';
-  return n < 0 ? `−${body}` : `+${body}`;
-}
-
 export interface StockLossLine {
   litres: string;
   note: string;
@@ -57,9 +69,17 @@ export interface StockLossLine {
 /** One tank's row: litres, "0.28% of sold · within tolerance", tone. */
 export function stockLossLine(t: InsightsStockLoss): StockLossLine {
   const outside = !t.withinTolerance;
+  if (t.dips === 0) {
+    return {
+      litres: signedLitres(0),
+      note: 'no dip recorded in this range',
+      tone: 'default',
+      outside: false,
+    };
+  }
   const pct = t.pctOfSold === null ? 'nothing sold' : `${trim(Math.abs(t.pctOfSold), 2)}% of sold`;
   const verdict = outside
-    ? `outside ${trim(STOCK_LOSS_TOLERANCE_PCT, 2)}% tolerance`
+    ? `outside ${trim(STOCK_VARIANCE_TOLERANCE_PCT, 2)}% tolerance`
     : 'within tolerance';
   return {
     litres: signedLitres(t.varianceLitres),

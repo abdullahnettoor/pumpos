@@ -185,8 +185,14 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
 
   // --- Tank dip / stock variance, split by unit basis (fuel = volume in L,
   // merchandise = item count) so the two never share a confusing unit column. ---
+  // The cost per unit is frozen with the day (the same `products` cost basis the
+  // P&L below uses), so a variance's rupee value never changes after close.
   const withStatus = (v: DssrSourceData['stockVariances'][number]) => ({
     ...v,
+    unitCost:
+      v.productId && source.products[v.productId]
+        ? Number(source.products[v.productId].costBasis || 0)
+        : 0,
     status: v.varianceQuantity < 0 ? 'Loss' : v.varianceQuantity > 0 ? 'Gain' : 'OK',
   });
   const fuelStockVariance = source.stockVariances

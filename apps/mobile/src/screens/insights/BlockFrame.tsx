@@ -1,5 +1,6 @@
 import React from 'react';
 import { SectionLabel } from '../../ui/index.js';
+import { StateCard } from './StateCard.js';
 
 interface Props {
   title: string;
@@ -12,21 +13,6 @@ interface Props {
   empty?: string;
   children: React.ReactNode;
 }
-
-const Card: React.FC<{ children: React.ReactNode; tone?: 'plain' | 'error' }> = ({
-  children,
-  tone = 'plain',
-}) => (
-  <p
-    className={`mx-3 rounded-[14px] border px-3 py-4 text-center text-xs ${
-      tone === 'error'
-        ? 'border-bad-line bg-bad-soft text-bad-fg'
-        : 'border-line bg-card text-text-muted'
-    }`}
-  >
-    {children}
-  </p>
-);
 
 /**
  * One Insights block with its own section label and its own loading, error and
@@ -45,16 +31,13 @@ export const BlockFrame: React.FC<Props> = ({
   <section aria-label={title}>
     <SectionLabel right={right}>{title}</SectionLabel>
     {isError ? (
-      <Card tone="error">
-        Could not load {title.toLowerCase()}.{' '}
-        <button type="button" className="font-semibold underline" onClick={onRetry}>
-          Retry
-        </button>
-      </Card>
+      <StateCard kind="error" onRetry={onRetry}>
+        Could not load {title.toLowerCase()}.
+      </StateCard>
     ) : !loaded ? (
-      <Card>Loading…</Card>
+      <StateCard kind="loading">Loading…</StateCard>
     ) : empty ? (
-      <Card>{empty}</Card>
+      <StateCard kind="empty">{empty}</StateCard>
     ) : (
       children
     )}

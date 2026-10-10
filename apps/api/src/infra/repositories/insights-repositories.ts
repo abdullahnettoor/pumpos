@@ -1,19 +1,25 @@
 import { sql } from 'drizzle-orm';
-import { dssrDaySales, dssrNetVolume, dssrProductSalesValue } from '../dssr-snapshot-sql.js';
+import {
+  dssrDaySales,
+  dssrNetVolume,
+  dssrNetVolumeOfRecord,
+  dssrProductSalesValue,
+  jsonbArray,
+} from '../dssr-snapshot-sql.js';
 import type { DbClient } from '@pump/db';
-import { insightsRangeCtes } from './insights-range.js';
+import {
+  insightsClosedDaysCte,
+  insightsRangeCtes,
+  insightsSealedDaysCte,
+} from './insights-range.js';
 import type {
-  InsightsSalesQuery,
+  InsightsRangeQuery,
   InsightsSalesReader,
   InsightsSalesSource,
   InsightsTemplateRow,
 } from '@pump/core';
 
 const num = (v: unknown): number => Number(v ?? 0) || 0;
-
-/** A jsonb value that is not an array (a snapshot frozen before the field existed) reads as empty. */
-const jsonArray = (expr: ReturnType<typeof sql.raw>) =>
-  sql`CASE WHEN jsonb_typeof(${expr}) = 'array' THEN ${expr} ELSE '[]'::jsonb END`;
 
 /**
  * Reads the Insights sales block's sealed-data aggregates in ONE statement.
@@ -33,35 +39,27 @@ const jsonArray = (expr: ReturnType<typeof sql.raw>) =>
 export class DrizzleInsightsSalesReader implements InsightsSalesReader {
   constructor(private readonly db: DbClient) {}
 
-  async read(q: InsightsSalesQuery): Promise<InsightsSalesSource> {
+  async read(q: InsightsRangeQuery): Promise<InsightsSalesSource> {
     const org = q.organizationId;
     const st = q.stationId;
     const days = q.days;
 
     const rows = await this.db.execute(sql`
       WITH ${insightsRangeCtes(org, st, days)},
-      sealed_days AS (
-        SELECT
-          ds.business_date AS date,
-          (ds.business_date >= b."from") AS current_period,
-          ${dssrDaySales('ds.snapshot_data')} AS sales,
+      ${insightsSealedDaysCte(
+        org,
+        st,
+        sql`${dssrDaySales('ds.snapshot_data')} AS sales,
           ${dssrProductSalesValue('ds.snapshot_data')} AS other_sales,
           ${dssrNetVolume('ds.snapshot_data')} AS volume,
-          ${jsonArray(sql.raw(`ds.snapshot_data -> 'fuel' -> 'byProduct'`))} AS fuel_by_product,
-          ${jsonArray(sql.raw(`ds.snapshot_data -> 'pnl' -> 'byProduct'`))} AS pnl_by_product
-        FROM bounds b
-        JOIN dssr_snapshots ds
-          ON ds.organization_id = ${org} AND ds.station_id = ${st}
-         AND ds.business_date BETWEEN b."previousFrom" AND b."to"
-        JOIN business_days bd
-          ON bd.organization_id = ds.organization_id AND bd.station_id = ds.station_id
-         AND bd.business_date = ds.business_date AND bd.status = 'CLOSED'
-      ),
+          ${jsonbArray(sql`ds.snapshot_data -> 'fuel' -> 'byProduct'`)} AS fuel_by_product,
+          ${jsonbArray(sql`ds.snapshot_data -> 'pnl' -> 'byProduct'`)} AS pnl_by_product`,
+      )},
       fuel_mix AS (
         SELECT
           COALESCE(NULLIF(f."productCode", ''), f."productName", 'Unknown') AS "productCode",
           COALESCE(NULLIF(f.unit, ''), 'L') AS unit,
-          SUM(COALESCE(f."netVolume", COALESCE(f."grossVolume", 0) - COALESCE(f."testingVolume", 0))) AS quantity
+          SUM(${dssrNetVolumeOfRecord('f')}) AS quantity
         FROM sealed_days sd,
           jsonb_to_recordset(sd.fuel_by_product) AS f(
             "productCode" text, "productName" text, unit text,
@@ -80,6 +78,7 @@ export class DrizzleInsightsSalesReader implements InsightsSalesReader {
         ORDER BY SUM(p.revenue) DESC, p.name
         LIMIT 1
       ),
+      ${insightsClosedDaysCte(org, st)},
       templates AS (
         SELECT
           s.shift_template_id AS "templateId",
@@ -90,12 +89,9 @@ export class DrizzleInsightsSalesReader implements InsightsSalesReader {
                        (ss.snapshot_data ->> 'totalVolume')::numeric, 0)) AS "totalVolume",
           SUM(COALESCE((ss.snapshot_data ->> 'cashVariance')::numeric, 0)) AS "totalCashVariance",
           MIN(t.start_time) AS start_time
-        FROM bounds b
-        JOIN business_days bd
-          ON bd.organization_id = ${org} AND bd.station_id = ${st} AND bd.status = 'CLOSED'
-         AND bd.business_date BETWEEN b."from" AND b."to"
+        FROM closed_days cd
         JOIN shifts s
-          ON s.business_day_id = bd.id AND s.organization_id = ${org} AND s.station_id = ${st}
+          ON s.business_day_id = cd.id AND s.organization_id = ${org} AND s.station_id = ${st}
         JOIN shift_summaries ss ON ss.shift_id = s.id
         LEFT JOIN shift_templates t ON t.id = s.shift_template_id
         GROUP BY s.shift_template_id, t.name

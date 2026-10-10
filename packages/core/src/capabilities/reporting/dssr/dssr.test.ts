@@ -279,6 +279,37 @@ describe('GenerateDssr', () => {
     if (!result.success) expect(result.error.code).toBe('NOT_FOUND');
   });
 
+  it('freezes the tank, product and cost per litre with each stock variance row', async () => {
+    const data = source();
+    data.stockVariances = [
+      {
+        tankId: 't1',
+        productId: 'p1',
+        tankName: 'T1',
+        productName: 'Petrol',
+        unit: 'Litre',
+        inventoryType: 'BULK',
+        expectedQuantity: 5000,
+        actualQuantity: 4990,
+        varianceQuantity: -10,
+        reason: null,
+      },
+    ];
+
+    const result = await new GenerateDssr({
+      businessDays: new BdRepo([bday()]),
+      snapshots: new SnapRepo(),
+      reader: new Reader(data),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ businessDayId: 'bd-1' }, ctx());
+
+    expect(result.success).toBe(true);
+    if (result.success)
+      expect((result.data.snapshotData as any).fuelStockVariance).toEqual([
+        expect.objectContaining({ tankId: 't1', productId: 'p1', unitCost: 88, status: 'Loss' }),
+      ]);
+  });
+
   it('includes a later Business Day Tank Dip without changing its Shift Summary', async () => {
     const data = source();
     data.stockVariances = [];

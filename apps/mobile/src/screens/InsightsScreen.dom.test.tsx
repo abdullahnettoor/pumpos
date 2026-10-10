@@ -152,6 +152,7 @@ const tanks = [
     varianceLitres: -120,
     soldLitres: 15000,
     pctOfSold: -0.8,
+    dips: 3,
     valueAtCost: -10800,
     withinTolerance: false,
   },
@@ -162,7 +163,19 @@ const tanks = [
     varianceLitres: 6,
     soldLitres: 20000,
     pctOfSold: 0.03,
+    dips: 2,
     valueAtCost: 480,
+    withinTolerance: true,
+  },
+  {
+    tankId: 't3',
+    tankName: 'Tank 3',
+    productCode: 'MS',
+    varianceLitres: 0,
+    soldLitres: 0,
+    pctOfSold: null,
+    dips: 0,
+    valueAtCost: 0,
     withinTolerance: true,
   },
 ];
@@ -332,6 +345,39 @@ describe('InsightsScreen: cash variance by attendant (gated on reports.attendant
     expect(within(block).getByText('Balanced in all 4 shifts')).toBeTruthy();
   });
 
+  it('uses one balanced rule: a -₹0.30 net is short in the bar, the figure and the counts alike', () => {
+    state.data = report;
+    blocks.attendant.data = [
+      {
+        attendantId: 'a9',
+        name: 'Tiny Short',
+        shifts: 2,
+        shortShifts: 1,
+        overShifts: 0,
+        netVariance: -0.3,
+      },
+    ];
+    renderScreen();
+    const block = screen.getByRole('region', { name: 'Cash variance by attendant' });
+    const figure = within(block).getByText('−₹0.30');
+    expect(figure.className).toContain('text-bad');
+    expect(figure.className).not.toContain('text-good');
+    expect(within(block).getByText('1 of 2 shifts short')).toBeTruthy();
+    const bar = block.querySelector('i');
+    expect(bar?.className).toContain('bg-bad');
+  });
+
+  it('draws no bar for an attendant balanced by the same rule', () => {
+    state.data = report;
+    blocks.attendant.data = [
+      { attendantId: 'a8', name: 'Even', shifts: 3, shortShifts: 0, overShifts: 0, netVariance: 0 },
+    ];
+    renderScreen();
+    const block = screen.getByRole('region', { name: 'Cash variance by attendant' });
+    expect(block.querySelector('i')).toBeNull();
+    expect(within(block).getByText('₹0').className).toContain('text-good');
+  });
+
   it('hides the block, and never asks the API for it, without the capability', () => {
     state.data = report;
     blocks.attendant.data = attendants;
@@ -392,14 +438,33 @@ describe('InsightsScreen: stock loss', () => {
     expect(within(block).getByText('+₹480')).toBeTruthy();
     // Only the tank outside tolerance carries the flag.
     expect(within(block).getAllByText('Outside')).toHaveLength(1);
-    expect(within(block).getByText(/cost basis/)).toBeTruthy();
+    expect(within(block).getByText(/cost frozen with the day/)).toBeTruthy();
   });
 
-  it('says so when no dip was recorded', () => {
+  it('lists a tank with no dip too, as 0 L, without claiming it was measured', () => {
+    state.data = report;
+    blocks.stock.data = tanks;
+    renderScreen();
+    const block = screen.getByRole('region', { name: 'Stock loss' });
+    expect(within(block).getByText('Tank 3')).toBeTruthy();
+    expect(within(block).getByText('no dip recorded in this range')).toBeTruthy();
+    expect(within(block).getByText('0 L')).toBeTruthy();
+  });
+
+  it('shows a dash, not zero rupees, when the report froze no cost', () => {
+    state.data = report;
+    blocks.stock.data = [{ ...tanks[0], valueAtCost: null }];
+    renderScreen();
+    const block = screen.getByRole('region', { name: 'Stock loss' });
+    expect(within(block).getByText('—')).toBeTruthy();
+    expect(within(block).queryByText(/₹/)).toBeNull();
+  });
+
+  it('says so when the station has no tanks', () => {
     state.data = report;
     blocks.stock.data = [];
     renderScreen();
-    expect(screen.getByText('No tank dips were recorded in this range.')).toBeTruthy();
+    expect(screen.getByText('This Station has no tanks yet.')).toBeTruthy();
   });
 
   it('is shown whatever the Attendant Handover entitlement', () => {
@@ -418,17 +483,18 @@ describe('InsightsScreen: credit health', () => {
     const block = screen.getByRole('region', { name: 'Credit health' });
     expect(within(block).getByText('₹3.41L')).toBeTruthy();
     expect(within(block).getByText('₹2.96L')).toBeTruthy();
-    expect(within(block).getByText(/Receivables grew/)).toBeTruthy();
+    expect(within(block).getByText(/Credit given exceeded collections by/)).toBeTruthy();
+    expect(within(block).queryByText(/Receivables/)).toBeNull();
     expect(within(block).getByText('₹45,000')).toBeTruthy();
     expect(within(block).getByText('11%')).toBeTruthy();
     expect(within(block).getByText(/13\.7% vs prior 7/)).toBeTruthy();
   });
 
-  it('says receivables shrank when collections outran credit', () => {
+  it('says collections exceeded credit given when they outran it', () => {
     state.data = report;
     blocks.credit.data = { ...creditHealth, collected: 400000, receivablesChange: -59000 };
     renderScreen();
-    expect(screen.getByText(/Receivables shrank/)).toBeTruthy();
+    expect(screen.getByText(/Collections exceeded credit given by/)).toBeTruthy();
     expect(screen.getByText('₹59,000')).toBeTruthy();
   });
 
@@ -446,6 +512,42 @@ describe('InsightsScreen: credit health', () => {
     blocks.credit.data = { ...creditHealth, creditGiven: 0, collected: 0, receivablesChange: 0 };
     renderScreen();
     expect(screen.getByText('No credit given or collected in this range.')).toBeTruthy();
+  });
+});
+
+describe('InsightsScreen: the blocks are independent of the sales read', () => {
+  it('still shows the part-2 blocks when the sales read failed, and keeps its own Retry', () => {
+    state.isError = true;
+    blocks.attendant.data = attendants;
+    blocks.stock.data = tanks;
+    blocks.credit.data = creditHealth;
+    renderScreen();
+    expect(screen.getByText(/Could not load insights/)).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Cash variance by attendant' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Stock loss' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Credit health' })).toBeTruthy();
+  });
+
+  it('shows the part-2 blocks while the sales read is still loading', () => {
+    blocks.stock.data = tanks;
+    renderScreen();
+    expect(screen.getByText('Loading insights…')).toBeTruthy();
+    expect(screen.getByText('Tank 1')).toBeTruthy();
+  });
+
+  it('shows the sales blocks when every part-2 block failed', () => {
+    state.data = report;
+    for (const b of Object.values(blocks)) b.isError = true;
+    renderScreen();
+    expect(screen.getByText('₹32.27L')).toBeTruthy();
+    expect(screen.getAllByRole('alert')).toHaveLength(3);
+  });
+
+  it('announces a loading block politely', () => {
+    state.data = report;
+    renderScreen();
+    const block = screen.getByRole('region', { name: 'Stock loss' });
+    expect(within(block).getByRole('status').textContent).toBe('Loading…');
   });
 });
 
