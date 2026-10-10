@@ -61,7 +61,7 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
     return (
       <>
         {header}
-        <MoneyScreen renderSupplierPage={(s) => <SupplierPage supplier={s} />} />
+        <MoneyScreen station={station} renderSupplierPage={(s) => <SupplierPage supplier={s} />} />
       </>
     );
 

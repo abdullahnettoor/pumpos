@@ -24,9 +24,8 @@ export type SaveLimitResult = { ok: true } | { ok: false; failure: CreditLimitFa
  * on its own (the app's QueryClient does that for every policy refusal), so the
  * action greys out for real.
  *
- * TODO(#398): the receivables summary has its own query key once #398 lands on
- * the base (`receivables`, `customer-receivable`); invalidate them here too,
- * since the limit feeds the same rows. They do not exist on this base yet.
+ * The receivables summary (`receivables`, with the per-customer entries under the
+ * same prefix) is invalidated too: the limit feeds the same Money rows.
  *
  * Idempotency: one key per logical save. It is reused when the outcome is
  * unknown (network, 5xx) so a retry cannot apply twice, and replaced after a
@@ -57,6 +56,7 @@ export function useCreditLimitEdit(customerId: string) {
             : list,
       );
       void qc.invalidateQueries({ queryKey: ['customers'] });
+      void qc.invalidateQueries({ queryKey: ['receivables'] });
     },
     onError: (error) => {
       if (!reusesIdempotencyKey(error)) attempt.current = null;

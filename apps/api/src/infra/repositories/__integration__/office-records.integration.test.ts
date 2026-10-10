@@ -43,6 +43,7 @@ const RANGE_END_DAY = '00000000-0000-0000-0000-00000000c111';
 const OTHER_ORG = '00000000-0000-0000-0000-00000000c112';
 const OTHER_DAY = '00000000-0000-0000-0000-00000000c114';
 const RANGE_CUSTOMER = '00000000-0000-0000-0000-00000000c116';
+const SETTLED_CUSTOMER = '00000000-0000-0000-0000-00000000c1a6';
 const RANGE_SUPPLIER = '00000000-0000-0000-0000-00000000c117';
 const RANGE_PURCHASE = '00000000-0000-0000-0000-00000000c118';
 const MISSING_PURCHASE = '00000000-0000-0000-0000-00000000c119';
@@ -352,9 +353,48 @@ describe.skipIf(!CONNECTION)('Office Records against real Postgres (ADR 0005)', 
     ]);
     expect(ranged.data.entries[0].runningBalance).toBe('3000.00');
     expect(ranged.data.closingBalance).toBe('1000.00');
+    expect(ranged.data.hasEarlier).toBe(true);
     const customers = await get('/transactions/customers');
     expect(customers.data.find((row: any) => row.id === RANGE_CUSTOMER).currentBalance).toBe(1000);
     expect(ranged.data.closingBalance).toBe('1000.00');
+
+    // Nothing before the first entry: no earlier history to load.
+    const before = await get(
+      `/transactions/customers/${RANGE_CUSTOMER}/ledger?from=2000-01-01&to=2000-01-31`,
+    );
+    expect(before.data).toMatchObject({ periodOpeningBalance: '0', hasEarlier: false });
+
+    // Settled before the window (opening balance 0) is still history: "Earlier months" must show.
+    await db.insert(schema.customers).values({
+      id: SETTLED_CUSTOMER,
+      organizationId: ORG,
+      customerType: 'Fleet',
+      name: 'Settled',
+    });
+    await db.insert(schema.customerTransactions).values({
+      businessDayId: PRIOR_DAY,
+      customerId: SETTLED_CUSTOMER,
+      transactionType: 'Credit Sale',
+      amount: '500',
+    });
+    await db.insert(schema.collections).values({
+      organizationId: ORG,
+      stationId: STATION,
+      entryDate: '2026-03-13',
+      customerId: SETTLED_CUSTOMER,
+      amount: '500',
+      paymentMethod: 'Cash',
+      fundingAccountId: CASH,
+      documentNumber: 'COL-SETTLED-1',
+    });
+    const settled = await get(
+      `/transactions/customers/${SETTLED_CUSTOMER}/ledger?from=2026-03-14&to=2026-03-31`,
+    );
+    expect(settled.data).toMatchObject({
+      periodOpeningBalance: '0.00',
+      hasEarlier: true,
+      entries: [],
+    });
   });
 
   it('keeps supplier purchases on their copied Entry Date when purchase metadata is missing and reports advances', async () => {
@@ -418,6 +458,7 @@ describe.skipIf(!CONNECTION)('Office Records against real Postgres (ADR 0005)', 
       `/transactions/suppliers/${RANGE_SUPPLIER}/ledger?from=2026-03-15&to=2026-03-15`,
     );
     expect(ranged.data.periodOpeningBalance).toBe('-50.00');
+    expect(ranged.data.hasEarlier).toBe(true);
     expect(ranged.data.entries).toHaveLength(3);
     const purchaseRow = ranged.data.entries.find((row: any) => row.invoiceNumber === 'INV-RANGE-1');
     expect(purchaseRow).toMatchObject({ businessDate: '2026-03-15', reference: 'INV-RANGE-1' });

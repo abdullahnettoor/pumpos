@@ -95,6 +95,7 @@ import {
   DrizzleFinancialAccountRepository,
   DrizzlePaymentTerminalLookup,
 } from '../infra/repositories/finance-account-repositories.js';
+import { onCustomerLedger } from '../infra/customer-ledger-sql.js';
 import { sendResult } from '../infra/send-result.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
 import {
@@ -450,6 +451,7 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
       data: {
         periodOpeningBalance: statement.periodOpeningBalance,
         closingBalance: statement.closingBalance,
+        hasEarlier: statement.hasEarlier,
         entries: statement.entries,
       },
     });
@@ -504,7 +506,7 @@ transactionsRouter.get('/customers', async (c) => {
           FROM customer_transactions ct
           JOIN business_days bd ON bd.id = ct.business_day_id
          WHERE bd.organization_id = ${user.organizationId}
-           AND ct.transaction_type NOT IN ('OMC Sale', 'Collection')
+           AND ${onCustomerLedger('ct')}
         UNION ALL
         SELECT co.customer_id, -co.amount
           FROM collections co
@@ -664,6 +666,7 @@ transactionsRouter.get('/customers/:id/ledger', async (c) => {
       data: {
         periodOpeningBalance: statement.periodOpeningBalance,
         closingBalance: statement.closingBalance,
+        hasEarlier: statement.hasEarlier,
         entries: statement.entries,
       },
     });
