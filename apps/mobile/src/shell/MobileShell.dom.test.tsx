@@ -257,6 +257,17 @@ describe('tab change animation', () => {
     expect(animate).toHaveBeenCalledTimes(2);
   });
 
+  it('clips the panes, so the entering pane cannot overflow the page', () => {
+    // The enter animation moves the whole pane down 8px. Unclipped, the document
+    // grew 8px, a page scrollbar flashed and the dock jumped on every tab switch
+    // (desktop browsers with classic scrollbars). jsdom has no layout, so this pins
+    // the clip itself; the visual check was done in a real browser.
+    render(<Harness />);
+    const paneContainer = paneOf(screen.getByText(/^home list/)).parentElement!;
+    expect(paneContainer.className).toContain('overflow-hidden');
+    expect(paneContainer.contains(screen.getByRole('navigation', { name: 'Main' }))).toBe(true);
+  });
+
   it('does nothing under prefers-reduced-motion', () => {
     reduceMotion(true);
     render(<Harness />);

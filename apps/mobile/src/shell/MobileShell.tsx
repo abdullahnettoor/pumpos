@@ -73,7 +73,14 @@ export const MobileShell: React.FC<MobileShellProps> = ({
   return (
     <ShellContext.Provider value={ctx}>
       <div className="mobile-safe-top flex h-[100dvh] flex-col bg-background text-text-default">
-        <div className="relative min-h-0 flex-1" key={selectedStationId ?? 'no-station'}>
+        {/* overflow-hidden: the panes are absolutely positioned in here, and a pane
+            entering (Pane's playEnter) is moved down 8px for 180ms. Unclipped, that
+            makes the document 8px taller than the screen, so a page scrollbar flashes
+            and the whole UI (dock included) narrows and jumps back on every tab switch. */}
+        <div
+          className="relative min-h-0 flex-1 overflow-hidden"
+          key={selectedStationId ?? 'no-station'}
+        >
           {nav.visited.map((tab) => {
             const stack = nav.stacks[tab] ?? [];
             const tabActive = tab === nav.active;
