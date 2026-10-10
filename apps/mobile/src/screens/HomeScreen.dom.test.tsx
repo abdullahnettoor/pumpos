@@ -204,6 +204,7 @@ beforeEach(() => {
         capacity: 20000,
         currentVolume: 12400,
         productUnit: 'L',
+        daysOfCover: 12.4,
       },
       {
         id: 't2',
@@ -213,6 +214,7 @@ beforeEach(() => {
         capacity: 20000,
         currentVolume: 3600,
         productUnit: 'L',
+        daysOfCover: 0.9,
       },
       {
         id: 't3',
@@ -477,6 +479,15 @@ describe('Home: tanks, money, removed sections', () => {
     expect(container.querySelectorAll('[data-level]')).toHaveLength(3);
     expect(screen.getByText('18%')).toBeTruthy();
     expect(screen.getByText('12.4 KL')).toBeTruthy();
+  });
+
+  it('shows days of cover on a gauge, and nothing for a tank without sales history', () => {
+    renderHome();
+    const gauge = (title: string) => screen.getByText(title).closest('[data-level]') as HTMLElement;
+    expect(within(gauge('HSD')).getByText('0.9 day')).toBeTruthy();
+    expect(within(gauge('MS')).getByText('12.4 days')).toBeTruthy();
+    // XP95 has no daysOfCover (new tank / no sales): no cover line at all.
+    expect(within(gauge('XP95')).queryByText(/day/)).toBeNull();
   });
 
   it('opens Money from To collect and To pay', () => {
