@@ -72,6 +72,31 @@ export interface DssrStockVariance {
   actualQuantity: number;
   varianceQuantity: number;
   reason: string | null;
+  /**
+   * The tank's stock movement over the day, from `stock_movements` (BULK rows
+   * only; absent for a dip with no tank). Frozen into the snapshot beside the
+   * dip so a Stock movement view never recomputes it. Snapshots frozen before
+   * #395 lack these keys.
+   */
+  tankMovement?: DssrTankMovementSource;
+}
+
+/**
+ * One tank's litres across a Business Day, summed from `stock_movements` by the
+ * reader. `composeDssr` derives the closing book from them, so
+ * `opening + received - sold + adjusted = closing` and `actualQuantity -
+ * closing` is the dip variance.
+ */
+export interface DssrTankMovementSource {
+  tankId: string;
+  /** Book stock before the day: Σ movements of earlier Business Days. */
+  openingQuantity: number;
+  /** Purchases delivered into the tank on the day. */
+  receivedQuantity: number;
+  /** Net metered litres dispensed on the day (a positive number). */
+  soldQuantity: number;
+  /** Other day movements (Adjustment, OpeningBalance); dip reconciliations are excluded. */
+  adjustedQuantity: number;
 }
 
 /**
