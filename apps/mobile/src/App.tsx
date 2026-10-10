@@ -80,7 +80,7 @@ export const App: React.FC = () => {
 
   // Attendants get a dedicated mobile-only handover shell (no owner tabs).
   if (role === 'Attendant') {
-    return <AttendantScreen userName={userName} onSignOut={onSignOut} />;
+    return <AttendantScreen userName={userName} onSignOut={onSignOut} stations={stations} />;
   }
 
   if (!role || allowedTabs.length === 0) {

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useOwnHandover } from '../../lib/handover/useOwnHandover.js';
+import { useStationTimeZone } from '../../shell/context.js';
 import { useNav } from '../../shell/nav.js';
 import { HandoverIcon, ChevronRightIcon } from '../../ui/icons.js';
 import { HandoverPage } from '../HandoverPage.js';
@@ -13,7 +14,7 @@ import { HandoverPage } from '../HandoverPage.js';
  */
 export const HandoverCard: React.FC = () => {
   const nav = useNav();
-  const own = useOwnHandover();
+  const own = useOwnHandover(true, useStationTimeZone());
   if (!own) return null;
 
   const meta = [own.shiftName, own.status].filter(Boolean).join(' · ');

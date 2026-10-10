@@ -26,7 +26,10 @@ export interface OwnHandover {
 }
 
 /** Null when the user has no Dispenser Unit on an open Shift. */
-export function deriveOwnHandover(assignment: MyAssignment | null | undefined): OwnHandover | null {
+export function deriveOwnHandover(
+  assignment: MyAssignment | null | undefined,
+  timeZone: string,
+): OwnHandover | null {
   const dus = assignment?.dispenserUnits ?? [];
   if (!assignment || dus.length === 0) return null;
 
@@ -36,7 +39,7 @@ export function deriveOwnHandover(assignment: MyAssignment | null | undefined): 
 
   let status: string;
   if (recap) {
-    const time = formatRecordedTime(recap.recordedAt);
+    const time = formatRecordedTime(recap.recordedAt, timeZone);
     status = ['Saved' + (time ? ` ${time}` : ''), varianceBadge(recap.variance).text].join(' · ');
   } else if (savedCount > 0) {
     status = `${savedCount} of ${dus.length} DUs saved`;

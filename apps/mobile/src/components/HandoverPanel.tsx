@@ -91,7 +91,9 @@ export const HandoverPanel: React.FC<{
    * leaving while it is true. Slips recorded are saved at once and never count.
    */
   onDirtyChange?: (dirty: boolean) => void;
-}> = ({ onRecorded, actionBarTarget, onDirtyChange }) => {
+  /** The station's timezone: the "Saved at" time reads in it, not in the device's. */
+  timeZone?: string;
+}> = ({ onRecorded, actionBarTarget, onDirtyChange, timeZone }) => {
   const assignmentQ = useMyAssignment();
   const productsQ = useProducts();
   const customersQ = useCustomers(true);
@@ -297,6 +299,7 @@ export const HandoverPanel: React.FC<{
     merchRows,
     merchNonCash,
     hasErrors: formInvalid,
+    timeZone,
     onHandoverAccepted,
     onRecorded: (results) => {
       onDirtyChange?.(false);

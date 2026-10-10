@@ -10,6 +10,8 @@ import {
   type RecordHandoverPayload,
   type RecordHandoverResult,
 } from '@pump/ui';
+import { businessDateSettings } from '@pump/shared';
+import { stationTime } from '../../lib/dates.js';
 import { num } from '../../lib/num.js';
 import {
   type AssignedDu,
@@ -99,6 +101,8 @@ export function useHandoverSubmission(input: {
   merchNonCash: string;
   /** Validation errors block the save (see steps.ts). */
   hasErrors: boolean;
+  /** The station's timezone for the "saved at" time (default: the app's default zone). */
+  timeZone?: string;
   /** Called after the server accepts a DU's Handover, to echo it into the form. */
   onHandoverAccepted: (du: AssignedDu, result: RecordHandoverResult) => void;
   /** Called once every DU's Handover is accepted by a save, with the server's results. */
@@ -309,7 +313,9 @@ export function useHandoverSubmission(input: {
         results.push(result);
       }
 
-      setSavedAt(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
+      setSavedAt(
+        stationTime(Date.now(), input.timeZone ?? businessDateSettings(undefined).timeZone),
+      );
       input.onRecorded?.(results);
     } catch (e: unknown) {
       setError(messageOf(e, 'Could not save handover'));
