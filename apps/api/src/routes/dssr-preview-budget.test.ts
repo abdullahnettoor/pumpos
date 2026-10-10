@@ -86,7 +86,16 @@ function dayQueue(n: number): any[][] {
     rows({ productId: 'p2', quantity: '1', lineTotal: '500' }), // sale lines
     rows({ customerType: 'Fleet', amount: '4000' }), // credit sales
     [], // stock variances
-    [{ id: 'p2', name: 'Engine Oil', code: 'EO', unit: 'Piece', costBasis: '400' }],
+    [
+      {
+        id: 'p2',
+        name: 'Engine Oil',
+        code: 'EO',
+        unit: 'Piece',
+        costBasis: '400',
+        productType: 'LUBRICANT',
+      },
+    ],
     [{ id: 'n1', name: 'N1' }],
   ];
 }
@@ -103,6 +112,10 @@ describe('GET /dssr/daily/preview open-day statement budget (#391)', () => {
     expect(body.data.snapshotData.credit).toMatchObject({ count: n, total: 4000 * n });
     expect(body.data.snapshotData.purchases).toEqual({ total: 1200 * n, count: n });
     expect(body.data.snapshotData.shifts[0]).toMatchObject({ fuelSalesValue: 98000 });
+    // Product categories (#392) ride on the same products read: no extra statement.
+    const merch = body.data.snapshotData.pnl.byProduct.filter((r: any) => r.kind === 'merchandise');
+    expect(merch).toHaveLength(1);
+    expect(merch[0]).toMatchObject({ productId: 'p2', productType: 'LUBRICANT' });
   });
 
   it('answers null without reading the day when no Business Day exists yet', async () => {
