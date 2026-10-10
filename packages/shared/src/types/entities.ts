@@ -395,6 +395,9 @@ export interface NozzleReading {
   createdAt: string;
 }
 
+/** How a customer settles: a running account, or by the end of the Business Day. */
+export type SettlementCycle = 'OPEN' | 'EOD';
+
 export interface Customer {
   id: string;
   organizationId: string;
@@ -404,7 +407,7 @@ export interface Customer {
   phone?: string | null;
   creditLimit?: number | null;
   fleetCode?: string | null;
-  settlementCycle?: 'OPEN' | 'EOD';
+  settlementCycle?: SettlementCycle;
   metadata?: Record<string, any> | null;
   isActive: boolean;
   createdAt: string;

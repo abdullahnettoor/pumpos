@@ -1,6 +1,11 @@
 import { err, ok, validationError } from '../../../kernel/index.js';
 import type { ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import { isValidBusinessDate, resolveBusinessDate, shiftBusinessDate } from '@pump/shared';
+import {
+  isValidBusinessDate,
+  monthBounds,
+  resolveBusinessDate,
+  shiftBusinessDate,
+} from '@pump/shared';
 import type {
   BusinessDayList,
   BusinessDayListComparison,
@@ -37,16 +42,6 @@ export function businessDayListStatus(
 ): BusinessDayListStatus {
   if (dayStatus === 'CLOSED') return hasSnapshot ? 'SEALED' : 'REPORT_MISSING';
   return businessDate < currentBusinessDate ? 'DRAFT' : 'LIVE';
-}
-
-/** First and last Business Date of a `YYYY-MM` month. */
-export function monthBounds(month: string): { from: string; to: string } {
-  const match = MONTH.exec(month);
-  if (!match) throw new Error(`Invalid month: ${month}`);
-  const year = Number(match[1]);
-  const monthIndex = Number(match[2]);
-  const lastDay = new Date(Date.UTC(year, monthIndex, 0)).getUTCDate();
-  return { from: `${month}-01`, to: `${month}-${String(lastDay).padStart(2, '0')}` };
 }
 
 /**

@@ -190,6 +190,18 @@ describe('saving', () => {
     expect(qc.getQueryState(ui.queryKeys.customers(true))?.isInvalidated).toBeDefined();
   });
 
+  it('refreshes the receivables summary, which the limit also feeds', async () => {
+    const { qc } = mount();
+    qc.setQueryData(ui.queryKeys.receivables('s1'), { customers: [] });
+    qc.setQueryData(ui.queryKeys.customerReceivable('s1', 'c1'), { customerId: 'c1' });
+    await openSheet();
+    type('120000');
+    save();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(qc.getQueryState(ui.queryKeys.receivables('s1'))?.isInvalidated).toBe(true);
+    expect(qc.getQueryState(ui.queryKeys.customerReceivable('s1', 'c1'))?.isInvalidated).toBe(true);
+  });
+
   it('sends the note with the change, trimmed, and leaves it out when blank', async () => {
     mount();
     await openSheet();
