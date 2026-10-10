@@ -163,7 +163,7 @@ function describeCustomerRow(r: LedgerRow, day: string): { meta: string; detail:
 function describeSupplierRow(r: LedgerRow, day: string): { meta: string; detail: string | null } {
   const note = r.notes?.trim();
   let facts: string[];
-  let detail: string | null = null;
+  let detail: string | null;
   if (r.transactionType === 'Payment') {
     facts = r.method ? [accountTypeLabel(r.method)] : [];
     const from = r.fundingAccountName?.trim();
