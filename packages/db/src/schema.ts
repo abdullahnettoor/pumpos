@@ -248,6 +248,11 @@ export const businessDays = pgTable(
       t.stationId,
       t.businessDate,
     ),
+    orgBusinessDateIdx: index('business_days_org_business_date_idx').on(
+      t.organizationId,
+      t.businessDate,
+      t.id,
+    ),
   }),
 );
 
