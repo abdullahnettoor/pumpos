@@ -5,7 +5,7 @@ import { StatusBadge } from '../../ui/StatusBadge.js';
 import { HeroCard } from './HeroCard.js';
 import { LimitBar } from './LimitBar.js';
 
-const SURFACE: Record<StandingState, string> = {
+export const SURFACE: Record<StandingState, string> = {
   over: 'border-bad-line bg-bad-soft',
   near: 'border-warn-line bg-warn-soft',
   under: 'border-hero-line bg-[image:var(--hero)]',

@@ -12,6 +12,7 @@ import { HomeScreen } from '../screens/HomeScreen.js';
 import { InsightsScreen } from '../screens/InsightsScreen.js';
 import { MoneyScreen } from '../screens/MoneyScreen.js';
 import { ReportsScreen } from '../screens/ReportsScreen.js';
+import { SupplierPage } from '../screens/money/SupplierPage.js';
 import { ShiftsScreen } from '../screens/ShiftsScreen.js';
 import { HomeHeader } from './HomeHeader.js';
 import { TabHeader } from './TabHeader.js';
@@ -45,8 +46,7 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
     return (
       <>
         {header}
-        {/* #397: pass `renderSupplierPage` here to open the Supplier page from To pay. */}
-        <MoneyScreen />
+        <MoneyScreen renderSupplierPage={(s) => <SupplierPage supplier={s} />} />
       </>
     );
 

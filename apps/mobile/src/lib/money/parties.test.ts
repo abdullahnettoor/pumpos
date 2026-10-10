@@ -6,6 +6,7 @@ import {
   owing,
   sortByBalance,
   standing,
+  supplierIdentity,
   totalOwed,
 } from './parties.js';
 
@@ -113,5 +114,17 @@ describe('list figures', () => {
 
   it('counts customers over their limit', () => {
     expect(overLimitCount(customers)).toBe(1);
+  });
+});
+
+describe('supplierIdentity', () => {
+  it('lists GSTIN and vendor code, leaving out whatever is missing or blank', () => {
+    expect(supplierIdentity({ metadata: { gstin: '32AAACH1118R1Z5', vendorCode: 'V-1' } })).toEqual(
+      ['GSTIN 32AAACH1118R1Z5', 'Code V-1'],
+    );
+    expect(supplierIdentity({ metadata: { gstin: ' ', vendorCode: 'V-1' } })).toEqual(['Code V-1']);
+    expect(supplierIdentity({ metadata: { tradeName: 'HPCL' } })).toEqual([]);
+    expect(supplierIdentity({ metadata: null })).toEqual([]);
+    expect(supplierIdentity({})).toEqual([]);
   });
 });

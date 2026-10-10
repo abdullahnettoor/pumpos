@@ -23,7 +23,12 @@ export interface MoneySupplier {
   id: string;
   name: string;
   phone?: string | null;
-  metadata?: { tradeName?: string | null; gstin?: string | null } | null;
+  metadata?: {
+    tradeName?: string | null;
+    gstin?: string | null;
+    /** Not captured by the supplier form today; shown on the page when a supplier has one. */
+    vendorCode?: string | null;
+  } | null;
   currentBalance?: number | string | null;
 }
 
@@ -62,6 +67,13 @@ export const matchName = <T extends Party>(parties: readonly T[], query: string)
   const q = query.trim().toLowerCase();
   return q ? parties.filter((p) => p.name.toLowerCase().includes(q)) : [...parties];
 };
+
+/** What a Supplier page shows under the name: `GSTIN …`, `Code …`; empty parts are left out. */
+export function supplierIdentity(s: Pick<MoneySupplier, 'metadata'>): string[] {
+  const gstin = s.metadata?.gstin?.trim();
+  const code = s.metadata?.vendorCode?.trim();
+  return [gstin && `GSTIN ${gstin}`, code && `Code ${code}`].filter((x): x is string => !!x);
+}
 
 /** What a party's balance means on its own, with or without a credit limit. */
 export type BalanceState = 'owes' | 'advance' | 'settled';
