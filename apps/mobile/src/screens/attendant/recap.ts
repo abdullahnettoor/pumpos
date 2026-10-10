@@ -1,14 +1,25 @@
-import type { RecordHandoverResult } from '@pump/ui';
-import { num, type AssignedDu } from '../../components/handover/model.js';
+import { inr, type RecordHandoverResult } from '@pump/ui';
+import { isBalancedVariance } from '@pump/shared';
+import {
+  num,
+  type AssignedDu,
+  type HandoverRow,
+  type RecordedTerminalEntry,
+} from '../../components/handover/model.js';
 
 /**
  * What the attendant sees once their Handover is recorded: their own figures,
- * nothing about the station. Pure. Built from the server's accepted result in
- * the session that saved, and from the Handover the assignment holds after a
- * reload (both describe the same record; the result is just available sooner).
+ * nothing about the station. Pure.
+ *
+ * The figures are the server's. A save (`RecordHandoverResult`) and a reload
+ * (the Handover the assignment holds) both reduce to one `RecordedDu` (the
+ * stored handover row, its litres, its OMC card total and its terminal
+ * entries) and everything below reads only that, so the recap cannot differ
+ * between the two. Nothing is re-derived from nozzle readings here.
  */
 
 export interface MerchandiseHandoverRecord {
+  attendantId?: string;
   totalAmount?: string | number | null;
   items?: { quantity?: string | number | null }[];
 }
@@ -22,7 +33,10 @@ export interface HandoverRecap {
   creditSlips: number;
   /** Credit + fuel-card slips plus card/UPI takings. */
   creditAndCardAmount: number;
-  hasCardUpi: boolean;
+  /** Labels of the Payment Terminals that took card/UPI. */
+  terminalLabels: string[];
+  /** Card/UPI was declared without a terminal (a Station with none configured). */
+  hasAggregateCardUpi: boolean;
   cashDrops: number;
   cashHandedOver: number;
   openingFloat: number;
@@ -32,101 +46,111 @@ export interface HandoverRecap {
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
-
-/** Every Drawer has a Handover on record: nothing left to declare. */
-export const allDusRecorded = (dus: AssignedDu[]): boolean =>
-  dus.length > 0 && dus.every((du) => du.handover != null);
-
-/** Litres and value metered past the opening reading, net of testing. */
-function fuelFromNozzles(du: AssignedDu): { litres: number; amount: number } {
-  let litres = 0;
-  let amount = 0;
-  for (const nz of du.nozzles) {
-    if (nz.closingReading == null) continue;
-    const net = Math.max(0, nz.closingReading - nz.openingReading - num(nz.testingVolume));
-    litres += net;
-    amount += net * num(nz.unitPrice);
-  }
-  return { litres, amount };
-}
-
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
+/** One DU's recorded Handover, from whichever source holds it. */
+interface RecordedDu {
+  row: HandoverRow;
+  litres: number;
+  /** Anonymous OMC card sales are not on the row; the server sums them separately. */
+  omcCardSales: number;
+  terminalEntries: RecordedTerminalEntry[];
+}
+
+const fromResult = (result: RecordHandoverResult): RecordedDu => ({
+  row: result.handover,
+  litres: sum(result.nozzleReadings.map((r) => num(r.netVolume))),
+  omcCardSales: num(result.omcCardSales),
+  terminalEntries: result.terminalEntries,
+});
+
+const fromAssignment = (du: AssignedDu): RecordedDu | null =>
+  du.handover
+    ? {
+        row: du.handover,
+        litres: sum(du.nozzles.map((nz) => num(nz.netVolume))),
+        omcCardSales: sum((du.omcSales ?? []).map((l) => num(l.amount))),
+        terminalEntries: du.terminalEntries ?? [],
+      }
+    : null;
+
+/** The session's accepted result for the DU wins (it is available before the refetch). */
+function recordedFor(du: AssignedDu, results: Map<string, RecordHandoverResult>) {
+  const result = results.get(du.duId);
+  return result ? fromResult(result) : fromAssignment(du);
+}
+
+/**
+ * The recap for the DUs the attendant is accountable for, or null while any of
+ * them has no recorded Handover: "recorded" is never reported for a part.
+ */
 export function buildRecap(input: {
   dus: AssignedDu[];
   /** The server's accepted results from this session, when there are any. */
   results?: RecordHandoverResult[];
   merchandise: MerchandiseHandoverRecord | undefined;
-}): HandoverRecap {
+}): HandoverRecap | null {
   const { dus, results = [], merchandise } = input;
+  if (dus.length === 0) return null;
   const resultByDu = new Map(results.map((r) => [r.handover.duId, r]));
 
-  let fuelLitres = 0;
-  let fuelAmount = 0;
-  let slipAmount = 0;
-  let cardUpi = 0;
-  let cashDrops = 0;
-  let cashHandedOver = 0;
-  let openingFloat = 0;
-  let variance = 0;
-  const recordedTimes: string[] = [];
-
+  const recorded: { du: AssignedDu; rec: RecordedDu }[] = [];
   for (const du of dus) {
-    const result = resultByDu.get(du.duId);
-    const row = du.handover as Record<string, unknown> | null;
-    if (result) {
-      fuelLitres += sum(result.nozzleReadings.map((r) => num(r.netVolume)));
-      fuelAmount += num(result.expectedFuelSales);
-      slipAmount += num(result.creditSales) + num(result.omcCardSales);
-      cardUpi += num(result.handover.cardHandedOver) + num(result.handover.upiHandedOver);
-      cashDrops += num(result.handover.cashDrops);
-      cashHandedOver += num(result.handover.cashHandedOver);
-      openingFloat += num(result.handover.openingFloat);
-      variance += num(result.varianceAmount);
-      recordedTimes.push(result.handover.createdAt);
-    } else if (row) {
-      const fuel = fuelFromNozzles(du);
-      fuelLitres += fuel.litres;
-      fuelAmount += fuel.amount;
-      slipAmount += num(row.creditHandedOver as string);
-      cardUpi += num(row.cardHandedOver as string) + num(row.upiHandedOver as string);
-      cashDrops += num(row.cashDrops as string);
-      cashHandedOver += num(row.cashHandedOver as string);
-      openingFloat += num(row.openingFloat as string);
-      variance += num(row.varianceAmount as string);
-      if (row.createdAt) recordedTimes.push(row.createdAt as string);
-    }
+    const rec = recordedFor(du, resultByDu);
+    if (!rec) return null;
+    recorded.push({ du, rec });
   }
 
-  const slips = dus.reduce(
-    (n, du) => n + (du.creditSales?.length ?? 0) + (du.omcSales?.length ?? 0),
-    0,
+  const labels = new Set<string>();
+  let aggregateCardUpi = false;
+  for (const { du, rec } of recorded) {
+    const used = rec.terminalEntries.filter((e) => num(e.cardAmount) + num(e.upiAmount) > 0);
+    for (const entry of used) {
+      const label = du.terminals.find((t) => t.terminalId === entry.terminalId)?.label;
+      if (label) labels.add(label);
+    }
+    if (used.length === 0 && num(rec.row.cardHandedOver) + num(rec.row.upiHandedOver) > 0)
+      aggregateCardUpi = true;
+  }
+
+  const field = (pick: (row: HandoverRow) => string | number | null | undefined) =>
+    round2(sum(recorded.map(({ rec }) => num(pick(rec.row)))));
+  const slipAmount = sum(
+    recorded.map(({ rec }) => num(rec.row.creditHandedOver) + rec.omcCardSales),
   );
+  const cardUpi = field((r) => num(r.cardHandedOver) + num(r.upiHandedOver));
+  const times = recorded.flatMap(({ rec }) => (rec.row.createdAt ? [rec.row.createdAt] : []));
+
   return {
     duNames: dus.map((du) => du.duName),
-    fuelLitres: round2(fuelLitres),
-    fuelAmount: round2(fuelAmount),
+    fuelLitres: round2(sum(recorded.map(({ rec }) => rec.litres))),
+    fuelAmount: field((r) => r.expectedSales),
     productQuantity: sum((merchandise?.items ?? []).map((i) => num(i.quantity))),
     productAmount: num(merchandise?.totalAmount),
-    creditSlips: slips,
+    creditSlips: sum(dus.map((du) => (du.creditSales?.length ?? 0) + (du.omcSales?.length ?? 0))),
     creditAndCardAmount: round2(slipAmount + cardUpi),
-    hasCardUpi: cardUpi > 0,
-    cashDrops: round2(cashDrops),
-    cashHandedOver: round2(cashHandedOver),
-    openingFloat: round2(openingFloat),
-    variance: round2(variance),
-    recordedAt: recordedTimes.sort().at(-1) ?? null,
+    terminalLabels: [...labels],
+    hasAggregateCardUpi: aggregateCardUpi,
+    cashDrops: field((r) => r.cashDrops),
+    cashHandedOver: field((r) => r.cashHandedOver),
+    openingFloat: field((r) => r.openingFloat),
+    variance: field((r) => r.varianceAmount),
+    recordedAt: times.sort().at(-1) ?? null,
   };
 }
 
 export type VarianceTone = 'good' | 'bad' | 'warn';
 
-/** Balanced within ₹1; short is a problem, over is worth a look. */
+/**
+ * Balanced by the same rule as the office's Drawer reconciliation
+ * (`isBalancedVariance`), so attendant and office never disagree; short is a
+ * problem, over is worth a look.
+ */
 export function varianceBadge(variance: number): { label: string; tone: VarianceTone } {
-  if (Math.abs(variance) < 1) return { label: 'Balanced', tone: 'good' };
+  if (isBalancedVariance(variance)) return { label: 'Balanced', tone: 'good' };
   return variance < 0
-    ? { label: `Short ₹${Math.abs(Math.round(variance)).toLocaleString('en-IN')}`, tone: 'bad' }
-    : { label: `Over ₹${Math.round(variance).toLocaleString('en-IN')}`, tone: 'warn' };
+    ? { label: `Short ${inr(Math.abs(variance))}`, tone: 'bad' }
+    : { label: `Over ${inr(variance)}`, tone: 'warn' };
 }
 
 /** Whole minutes since the shift opened; null when the opening time is unknown. */

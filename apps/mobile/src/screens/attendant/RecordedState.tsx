@@ -1,12 +1,7 @@
 import React from 'react';
 import { inr } from '@pump/ui';
+import { ListGroup, ListRow, SectionLabel, StatusBadge } from '../../ui/index.js';
 import { varianceBadge, type HandoverRecap } from './recap.js';
-
-const BADGE_TONE = {
-  good: 'bg-good-soft text-good',
-  bad: 'bg-bad-soft text-bad-fg',
-  warn: 'bg-warn-soft text-warn-fg',
-} as const;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -17,16 +12,6 @@ const formatTime = (iso: string | null): string | null => {
     ? null
     : d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 };
-
-const Row: React.FC<{ title: string; meta: string; value: string }> = ({ title, meta, value }) => (
-  <li className="flex items-center gap-3 border-b border-line px-3.5 py-3 last:border-b-0">
-    <div className="min-w-0 flex-1">
-      <p className="m-0 text-[13px] font-semibold text-text-high">{title}</p>
-      <p className="m-0 truncate text-[11px] text-text-muted">{meta}</p>
-    </div>
-    <span className="num flex-shrink-0 text-sm font-semibold text-text-high">{value}</span>
-  </li>
-);
 
 /**
  * After a recorded Handover: confirmation, the attendant's own figures, and the
@@ -42,18 +27,20 @@ export const RecordedState: React.FC<{
   const subtitle = [recap.duNames.join(', '), shiftName, time, badge.label]
     .filter(Boolean)
     .join(' · ');
+  // "2 slips + T1": the slips, then the terminals that took card/UPI.
   const cardsMeta = [
     recap.creditSlips > 0 ? plural(recap.creditSlips, 'slip') : null,
-    recap.hasCardUpi ? 'card / UPI' : null,
+    recap.terminalLabels.length > 0 ? recap.terminalLabels.join(', ') : null,
+    recap.terminalLabels.length === 0 && recap.hasAggregateCardUpi ? 'card / UPI' : null,
   ]
     .filter(Boolean)
     .join(' + ');
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="-mx-4 flex flex-col gap-3">
       <section
         role="status"
-        className="rounded-2xl border border-transparent bg-good-soft px-4 py-[18px] text-center"
+        className="mx-3 rounded-2xl border border-transparent bg-good-soft px-4 py-[18px] text-center"
       >
         <span
           aria-hidden
@@ -76,49 +63,51 @@ export const RecordedState: React.FC<{
         <p className="m-0 mt-0.5 text-xs text-text-muted">{subtitle}</p>
       </section>
 
-      <h3 className="m-0 px-1 text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted">
-        Your summary
-      </h3>
-      <ul className="m-0 list-none overflow-hidden rounded-2xl border border-line bg-card p-0">
-        <Row
+      <SectionLabel>Your summary</SectionLabel>
+      <ListGroup>
+        <ListRow
           title="Fuel sold"
           meta={`${Number(recap.fuelLitres.toFixed(2)).toLocaleString('en-IN')} L`}
-          value={inr(recap.fuelAmount)}
+          end={<span className="num">{inr(recap.fuelAmount)}</span>}
         />
-        <Row
+        <ListRow
           title="Products"
           meta={recap.productQuantity > 0 ? plural(recap.productQuantity, 'item') : 'None sold'}
-          value={inr(recap.productAmount)}
+          end={<span className="num">{inr(recap.productAmount)}</span>}
         />
-        <Row
+        <ListRow
           title="Credit & cards"
           meta={cardsMeta || 'None'}
-          value={inr(recap.creditAndCardAmount)}
+          end={<span className="num">{inr(recap.creditAndCardAmount)}</span>}
         />
-        <Row title="Cash drops" meta="taken by office" value={inr(recap.cashDrops)} />
-        <Row
+        <ListRow
+          title="Cash drops"
+          meta="taken by office"
+          end={<span className="num">{inr(recap.cashDrops)}</span>}
+        />
+        <ListRow
           title="Cash handed over"
           meta={recap.openingFloat > 0 ? `includes ${inr(recap.openingFloat)} float` : 'in drawer'}
-          value={inr(recap.cashHandedOver)}
+          end={<span className="num">{inr(recap.cashHandedOver)}</span>}
         />
-        <li className="flex items-center gap-3 bg-card-alt px-3.5 py-3">
-          <p className="m-0 flex-1 text-[13px] font-semibold text-text-high">Variance</p>
-          <span
-            className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${BADGE_TONE[badge.tone]}`}
-          >
-            {badge.label}
-          </span>
-        </li>
-      </ul>
+        <ListRow
+          title="Variance"
+          end={
+            <StatusBadge tone={badge.tone} num>
+              {badge.label}
+            </StatusBadge>
+          }
+        />
+      </ListGroup>
 
       <button
         type="button"
         onClick={onEdit}
-        className="h-12 rounded-xl border border-line-strong bg-card text-sm font-semibold text-text-high"
+        className="mx-3 h-12 rounded-xl border border-line-strong bg-card text-sm font-semibold text-text-high"
       >
         Edit before shift closes
       </button>
-      <p className="m-0 px-6 text-center text-[11px] text-text-muted">
+      <p className="m-0 px-9 text-center text-[11px] text-text-muted">
         {shiftName ? `Your manager closes ${shiftName}.` : 'Your manager closes the shift.'} You can
         sign out now.
       </p>

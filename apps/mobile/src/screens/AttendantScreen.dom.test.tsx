@@ -26,7 +26,12 @@ vi.mock('@pump/ui', async (importOriginal) => {
   return {
     ...actual,
     useMyAssignment: () => assignment,
-    useStations: () => ({ data: [{ id: 'station-1', name: 'Highway Fuels' }] }),
+    useStations: () => ({
+      data: [
+        { id: 'station-0', name: 'Wrong Station' },
+        { id: 'station-1', name: 'Highway Fuels' },
+      ],
+    }),
     useProducts: () => ({ data: [] }),
     useCustomers: () => ({ data: [] }),
     useAllVehicles: () => ({ data: [] }),
@@ -61,7 +66,7 @@ const resultFor = (payload: any, over: Record<string, unknown> = {}) => ({
     upiHandedOver: String(payload.upiHandedOver ?? 0),
     creditHandedOver: '0',
     testingVolume: '0',
-    expectedSales: '0',
+    expectedSales: '5000',
     openingFloat: '2000',
     cashDrops: String(payload.cashDrops ?? 0),
     expectedCash: '5000',
@@ -95,8 +100,37 @@ const resultFor = (payload: any, over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const makeAssignment = (over: { du?: Record<string, unknown> } & Record<string, unknown> = {}) => {
-  const { du, ...rest } = over;
+const makeDu = (
+  id: string,
+  name: string,
+  nozzleId: string,
+  over: Record<string, unknown> = {},
+) => ({
+  duId: id,
+  duName: name,
+  duCode: null,
+  openingFloat: 1000,
+  nozzles: [
+    {
+      nozzleId,
+      nozzleName: `${name}-N`,
+      productId: 'prod-1',
+      productName: 'Petrol',
+      unit: 'L',
+      unitPrice: 100,
+      openingReading: 1000,
+    },
+  ],
+  terminals: [],
+  creditSales: [],
+  omcSales: [],
+  ...over,
+});
+
+const makeAssignment = (
+  over: { du?: Record<string, unknown>; extraDus?: unknown[] } & Record<string, unknown> = {},
+) => {
+  const { du, extraDus = [], ...rest } = over;
   return {
     userId: 'att-1',
     station: { id: 'station-1', name: 'Highway Fuels' },
@@ -129,6 +163,7 @@ const makeAssignment = (over: { du?: Record<string, unknown> } & Record<string, 
         omcSales: [],
         ...du,
       },
+      ...extraDus,
     ],
     ...rest,
   };
@@ -139,6 +174,7 @@ const RECORDED_HANDOVER = {
   cardHandedOver: '0',
   upiHandedOver: '0',
   creditHandedOver: '0',
+  expectedSales: '10000',
   openingFloat: '2000',
   cashDrops: '20000',
   expectedCash: '12254',
@@ -185,9 +221,10 @@ describe('AttendantScreen', () => {
       expect(refetch).toHaveBeenCalledTimes(1);
     });
 
-    it('still names the Station from the stations list', () => {
+    it('names no arbitrary Station: a neutral label, not the first of the org', () => {
       renderScreen();
-      expect(screen.getByRole('heading', { level: 1, name: 'Highway Fuels' })).toBeDefined();
+      expect(screen.getByRole('heading', { level: 1, name: 'PumpOS' })).toBeDefined();
+      expect(screen.queryByText('Wrong Station')).toBeNull();
     });
 
     it('shows progress while loading', () => {
@@ -210,10 +247,16 @@ describe('AttendantScreen', () => {
 
     it('shows the DU strip: pump, Shift, nozzles and time on shift', () => {
       renderScreen();
-      const strip = screen.getByRole('status', { name: 'Your dispenser unit' });
+      const strip = screen.getByRole('region', { name: 'Your dispenser unit' });
       expect(within(strip).getByText("You're on DU2")).toBeDefined();
       expect(within(strip).getByText('Shift 2 · N1')).toBeDefined();
       expect(within(strip).getByText('3h 12m')).toBeDefined();
+    });
+
+    it("names the Shift's station, not the first station in the org's list", () => {
+      renderScreen();
+      expect(screen.getByRole('heading', { level: 1, name: 'Highway Fuels' })).toBeDefined();
+      expect(screen.queryByText('Wrong Station')).toBeNull();
     });
 
     it('renders the redesigned handover form with the single Save bar', () => {
@@ -255,6 +298,7 @@ describe('AttendantScreen', () => {
               openingReading: 1000,
               closingReading: 1100,
               testingVolume: 0,
+              netVolume: 100,
             },
           ],
         },
@@ -273,7 +317,7 @@ describe('AttendantScreen', () => {
       expect(screen.getByText('Handover recorded')).toBeDefined();
       expect(screen.getByText('100 L')).toBeDefined();
       expect(screen.getByText('3 items')).toBeDefined();
-      expect(screen.getByText('Short ₹125')).toBeDefined();
+      expect(screen.getByText('Short ₹125.00')).toBeDefined();
       expect(screen.getByText('includes ₹2,000.00 float')).toBeDefined();
       expect(screen.queryByRole('button', { name: /Save handover/i })).toBeNull();
     });
@@ -285,6 +329,128 @@ describe('AttendantScreen', () => {
       expect(screen.getByRole('button', { name: /Save handover/i })).toBeDefined();
       // The form is seeded from what was recorded.
       expect((screen.getByLabelText(/^Cash \(₹\)/) as HTMLInputElement).value).toBe('12254');
+    });
+  });
+
+  describe('several DUs for one person (#388)', () => {
+    const NOZZLE_2 = '44444444-4444-4444-8444-444444444444';
+    const recordedRow = (duId: string, over: Record<string, unknown> = {}) => ({
+      ...RECORDED_HANDOVER,
+      duId,
+      cashDrops: '0',
+      varianceAmount: '0',
+      openingFloat: '1000',
+      ...over,
+    });
+    const recordedDu = (id: string, name: string, nozzleId: string, cash: string) =>
+      makeDu(id, name, nozzleId, {
+        handover: recordedRow(id, { cashHandedOver: cash }),
+        nozzles: [
+          {
+            nozzleId,
+            nozzleName: `${name}-N`,
+            productId: 'prod-1',
+            productName: 'Petrol',
+            unit: 'L',
+            unitPrice: 100,
+            openingReading: 1000,
+            closingReading: 1050,
+            testingVolume: 0,
+            netVolume: 50,
+          },
+        ],
+      });
+    const two = (a: Record<string, unknown>, b: Record<string, unknown>) =>
+      makeAssignment({
+        du: { duName: 'DU2', ...a },
+        extraDus: [{ ...makeDu('du-2', 'DU3', NOZZLE_2), ...b }],
+      });
+
+    it('shows one form with a step set per DU', () => {
+      assignment.data = two({}, {});
+      renderScreen();
+      expect(screen.getByText("You're on DU2, DU3")).toBeDefined();
+      expect(screen.getByLabelText(/N1 · Petrol/)).toBeDefined();
+      expect(screen.getByLabelText(/DU3-N · Petrol/)).toBeDefined();
+      expect(screen.getAllByRole('button', { name: /Save handover/i })).toHaveLength(1);
+    });
+
+    it('records every DU, then summarises them together', async () => {
+      assignment.data = two({}, {});
+      renderScreen();
+      fireEvent.change(screen.getByLabelText(/N1 · Petrol/), { target: { value: '1050' } });
+      fireEvent.change(screen.getByLabelText(/DU3-N · Petrol/), { target: { value: '1020' } });
+      fireEvent.change(screen.getByLabelText(/^DU2 · Cash \(₹\)/), { target: { value: '5000' } });
+      fireEvent.change(screen.getByLabelText(/^DU3 · Cash \(₹\)/), { target: { value: '2000' } });
+      fireEvent.click(screen.getByRole('button', { name: /Save handover/i }));
+
+      await screen.findByText('Handover recorded');
+      expect(mutateAsync).toHaveBeenCalledTimes(2);
+      expect(screen.getByText('70 L')).toBeDefined();
+      expect(screen.getByText(/^DU2, DU3 ·/)).toBeDefined();
+      expect(screen.getByText('₹7,000.00')).toBeDefined();
+    });
+
+    it('does not report "recorded" when one DU did not save', async () => {
+      assignment.data = two({}, {});
+      mutateAsync
+        .mockReset()
+        .mockImplementationOnce(({ payload }: { payload: never }) =>
+          Promise.resolve(resultFor(payload)),
+        )
+        .mockRejectedValueOnce(new Error('Shift is closed'));
+      renderScreen();
+      fireEvent.change(screen.getByLabelText(/N1 · Petrol/), { target: { value: '1050' } });
+      fireEvent.change(screen.getByLabelText(/DU3-N · Petrol/), { target: { value: '1020' } });
+      fireEvent.change(screen.getByLabelText(/^DU2 · Cash \(₹\)/), { target: { value: '5000' } });
+      fireEvent.change(screen.getByLabelText(/^DU3 · Cash \(₹\)/), { target: { value: '2000' } });
+      fireEvent.click(screen.getByRole('button', { name: /Save handover/i }));
+
+      await screen.findByText('Shift is closed');
+      expect(screen.queryByText('Handover recorded')).toBeNull();
+      expect(screen.getByRole('button', { name: /Save handover/i })).toBeDefined();
+    });
+
+    it('on reload with only some DUs recorded, still shows the form for the rest', () => {
+      assignment.data = makeAssignment({
+        du: recordedDu('du-1', 'DU2', NOZZLE, '5000'),
+        extraDus: [makeDu('du-2', 'DU3', NOZZLE_2)],
+      });
+      renderScreen();
+      expect(screen.queryByText('Handover recorded')).toBeNull();
+      expect(screen.getByLabelText(/DU3-N · Petrol/)).toBeDefined();
+      expect(screen.getByRole('button', { name: /Save handover/i })).toBeDefined();
+    });
+
+    it('on reload with every DU recorded, shows one recap across them', () => {
+      assignment.data = makeAssignment({
+        du: recordedDu('du-1', 'DU2', NOZZLE, '5000'),
+        extraDus: [recordedDu('du-2', 'DU3', NOZZLE_2, '2000')],
+      });
+      renderScreen();
+      expect(screen.getByText('Handover recorded')).toBeDefined();
+      expect(screen.getByText(/^DU2, DU3 ·/)).toBeDefined();
+      expect(screen.getByText('100 L')).toBeDefined();
+      expect(screen.getByText('₹7,000.00')).toBeDefined();
+      expect(screen.queryByRole('button', { name: /Save handover/i })).toBeNull();
+    });
+  });
+
+  describe('credit & cards recap', () => {
+    it('names the terminal and counts slips and OMC card sales on reload', () => {
+      assignment.data = makeAssignment({
+        du: {
+          handover: { ...RECORDED_HANDOVER, creditHandedOver: '300', cardHandedOver: '500' },
+          terminals: [{ terminalId: 't1', label: 'T1' }],
+          terminalEntries: [{ terminalId: 't1', cardAmount: '500', upiAmount: '0' }],
+          creditSales: [{ id: 'c1', amount: 300, customerId: 'cu', customerName: 'Fleet' }],
+          omcSales: [{ id: 'o1', amount: 200, customerId: null, customerName: null }],
+        },
+      });
+      renderScreen();
+      expect(screen.getByText('2 slips + T1')).toBeDefined();
+      // credit 300 + OMC card 200 + card 500
+      expect(screen.getByText('₹1,000.00')).toBeDefined();
     });
   });
 

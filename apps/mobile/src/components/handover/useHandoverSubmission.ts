@@ -258,6 +258,15 @@ export function useHandoverSubmission(input: {
       setError(ZERO_TERMINALS_MESSAGE);
       return;
     }
+    // Every DU must have its form before anything is written: skipping one would
+    // report "recorded" for a Handover that was never sent.
+    const unready = dus.filter((du) => !forms[du.duId]);
+    if (unready.length > 0) {
+      setError(
+        `Still loading ${unready.map((du) => du.duName).join(', ')}. Try again in a moment.`,
+      );
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -266,7 +275,6 @@ export function useHandoverSubmission(input: {
       const results: RecordHandoverResult[] = [];
       for (const du of dus) {
         const form = forms[du.duId];
-        if (!form) continue;
         const payload = buildHandoverPayload({
           shiftId,
           attendantId: attendantId!,

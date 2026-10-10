@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RecordHandoverResult } from '@pump/ui';
-import type { AssignedDu } from '../../components/handover/model.js';
-import {
-  allDusRecorded,
-  buildRecap,
-  minutesOnShift,
-  formatOnShift,
-  varianceBadge,
-} from './recap.js';
+import type { AssignedDu, HandoverRow } from '../../components/handover/model.js';
+import { buildRecap, minutesOnShift, formatOnShift, varianceBadge } from './recap.js';
 
 const du = (over: Partial<AssignedDu> = {}): AssignedDu => ({
   duId: 'du-1',
@@ -23,6 +17,7 @@ const du = (over: Partial<AssignedDu> = {}): AssignedDu => ({
       openingReading: 1000,
       closingReading: 1100,
       testingVolume: 5,
+      netVolume: 95,
       unitPrice: 100,
     },
   ],
@@ -33,11 +28,13 @@ const du = (over: Partial<AssignedDu> = {}): AssignedDu => ({
   ...over,
 });
 
-const recorded = (over: Record<string, unknown> = {}) => ({
+const row = (over: Partial<HandoverRow> = {}): HandoverRow => ({
+  duId: 'du-1',
   cashHandedOver: '12254',
   cardHandedOver: '8400',
   upiHandedOver: '14200',
   creditHandedOver: '19260',
+  expectedSales: '9500',
   openingFloat: '2000',
   cashDrops: '20000',
   expectedCash: '12254',
@@ -46,25 +43,25 @@ const recorded = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-describe('allDusRecorded', () => {
-  it('is true only when every DU holds a recorded Handover', () => {
-    expect(allDusRecorded([du({ handover: recorded() })])).toBe(true);
-    expect(allDusRecorded([du({ handover: recorded() }), du({ duId: 'du-2' })])).toBe(false);
-    expect(allDusRecorded([])).toBe(false);
-  });
-});
+/** The server's answer to a save, built from the stored row. */
+const resultFor = (r: HandoverRow, over: Partial<RecordHandoverResult> = {}) =>
+  ({
+    handover: r,
+    terminalEntries: [],
+    nozzleReadings: [{ nozzleId: 'n3', netVolume: 95 }],
+    expectedFuelSales: Number(r.expectedSales),
+    creditSales: Number(r.creditHandedOver),
+    omcCardSales: 0,
+    varianceAmount: Number(r.varianceAmount),
+    ...over,
+  }) as unknown as RecordHandoverResult;
 
 describe('buildRecap from the recorded Handover (reload)', () => {
-  it('summarises fuel from the nozzles and money from the handover row', () => {
+  it('reads fuel, credit and money straight from the stored handover', () => {
     const recap = buildRecap({
-      dus: [
-        du({
-          handover: recorded(),
-          creditSales: [{ id: 'c1', amount: 19260 } as never],
-        }),
-      ],
+      dus: [du({ handover: row(), creditSales: [{ id: 'c1', amount: 19260 } as never] })],
       merchandise: { totalAmount: '1080', items: [{ quantity: '2' }, { quantity: '1' }] },
-    });
+    })!;
     expect(recap.fuelLitres).toBe(95);
     expect(recap.fuelAmount).toBe(9500);
     expect(recap.productQuantity).toBe(3);
@@ -78,52 +75,145 @@ describe('buildRecap from the recorded Handover (reload)', () => {
     expect(recap.duNames).toEqual(['DU2']);
   });
 
+  it('does not recompute the fuel value from the nozzles', () => {
+    // The stored figure wins even if the readings would say otherwise.
+    const recap = buildRecap({
+      dus: [du({ handover: row({ expectedSales: '1234' }) })],
+      merchandise: undefined,
+    })!;
+    expect(recap.fuelAmount).toBe(1234);
+  });
+
   it('has no products when nothing was declared', () => {
-    const recap = buildRecap({ dus: [du({ handover: recorded() })], merchandise: undefined });
+    const recap = buildRecap({ dus: [du({ handover: row() })], merchandise: undefined })!;
     expect(recap.productQuantity).toBe(0);
     expect(recap.productAmount).toBe(0);
   });
 });
 
-describe('buildRecap from the accepted results', () => {
-  const result = (over: Partial<RecordHandoverResult> = {}): RecordHandoverResult =>
-    ({
-      handover: recorded({
-        duId: 'du-1',
-        cashHandedOver: '5000',
-        cashDrops: '1000',
-        varianceAmount: '-250',
+describe('buildRecap: save and reload agree', () => {
+  const omc = { id: 'o1', amount: 700, customerId: null } as never;
+  const slip = { id: 'c1', amount: 19260, customerId: 'cu' } as never;
+  const stored = row({ creditHandedOver: '19260', cardHandedOver: '5000', upiHandedOver: '400' });
+  const terminals = [
+    { terminalId: 't1', label: 'T1' },
+    { terminalId: 't2', label: 'T2' },
+  ];
+  const entries = [
+    { terminalId: 't1', cardAmount: '5000', upiAmount: '400', batchRef: null },
+    { terminalId: 't2', cardAmount: '0', upiAmount: '0', batchRef: null },
+  ];
+  const merchandise = { totalAmount: '1080', items: [{ quantity: '2' }, { quantity: '1' }] };
+
+  // The same Handover, once as the save's answer and once as the reloaded assignment.
+  const saved = buildRecap({
+    dus: [du({ terminals, creditSales: [slip], omcSales: [omc] })],
+    results: [
+      resultFor(stored, {
+        omcCardSales: 700,
+        terminalEntries: entries as never,
       }),
-      terminalEntries: [],
-      nozzleReadings: [{ nozzleId: 'n3', netVolume: 40 }],
-      expectedFuelSales: 4000,
-      creditSales: 300,
-      omcCardSales: 200,
-      varianceAmount: -250,
-      ...over,
-    }) as never;
+    ],
+    merchandise,
+  });
+  const reloaded = buildRecap({
+    dus: [
+      du({
+        terminals,
+        creditSales: [slip],
+        omcSales: [omc],
+        handover: stored,
+        terminalEntries: entries,
+      }),
+    ],
+    merchandise,
+  });
+
+  it('produces identical figures', () => {
+    expect(saved).not.toBeNull();
+    expect(reloaded).toEqual(saved);
+  });
+
+  it('includes OMC card sales on both paths', () => {
+    expect(reloaded!.creditAndCardAmount).toBe(19260 + 700 + 5000 + 400);
+    expect(saved!.creditAndCardAmount).toBe(19260 + 700 + 5000 + 400);
+  });
+
+  it('counts slips and names only the terminals that took money', () => {
+    expect(reloaded!.creditSlips).toBe(2);
+    expect(reloaded!.terminalLabels).toEqual(['T1']);
+    expect(reloaded!.hasAggregateCardUpi).toBe(false);
+  });
+
+  it('flags aggregate card/UPI when the Station has no terminals', () => {
+    const recap = buildRecap({
+      dus: [du({ handover: stored })],
+      merchandise: undefined,
+    })!;
+    expect(recap.terminalLabels).toEqual([]);
+    expect(recap.hasAggregateCardUpi).toBe(true);
+  });
 
   it('prefers the accepted result over the (possibly stale) assignment', () => {
     const recap = buildRecap({
-      dus: [du({ handover: recorded() })],
-      results: [result()],
+      dus: [du({ handover: row() })],
+      results: [
+        resultFor(row({ cashHandedOver: '5000', cashDrops: '1000', varianceAmount: '-250' })),
+      ],
       merchandise: undefined,
-    });
-    expect(recap.fuelLitres).toBe(40);
-    expect(recap.fuelAmount).toBe(4000);
+    })!;
     expect(recap.cashHandedOver).toBe(5000);
     expect(recap.cashDrops).toBe(1000);
-    expect(recap.creditAndCardAmount).toBe(300 + 200 + 8400 + 14200);
     expect(recap.variance).toBe(-250);
+  });
+});
+
+describe('buildRecap completeness', () => {
+  const two = [du(), du({ duId: 'du-2', duName: 'DU3' })];
+
+  it('is null while no DU is recorded, or none at all', () => {
+    expect(buildRecap({ dus: [], merchandise: undefined })).toBeNull();
+    expect(buildRecap({ dus: [du()], merchandise: undefined })).toBeNull();
+  });
+
+  it('is null while any DU is still unrecorded', () => {
+    const partial = [du({ handover: row() }), two[1]];
+    expect(buildRecap({ dus: partial, merchandise: undefined })).toBeNull();
+  });
+
+  it('is null when the session saved only some of the DUs', () => {
+    expect(
+      buildRecap({ dus: two, results: [resultFor(row())], merchandise: undefined }),
+    ).toBeNull();
+  });
+
+  it('sums every DU once all are recorded, mixing results and the assignment', () => {
+    const recap = buildRecap({
+      dus: [du({ handover: row({ duId: 'du-1' }) }), two[1]],
+      results: [resultFor(row({ duId: 'du-2', cashHandedOver: '1000' }))],
+      merchandise: undefined,
+    })!;
+    expect(recap.duNames).toEqual(['DU2', 'DU3']);
+    expect(recap.cashHandedOver).toBe(12254 + 1000);
+    expect(recap.fuelLitres).toBe(190);
   });
 });
 
 describe('varianceBadge', () => {
   it('labels balanced, short and over', () => {
     expect(varianceBadge(0).label).toBe('Balanced');
-    expect(varianceBadge(0.4).label).toBe('Balanced');
-    expect(varianceBadge(-125).label).toMatch(/^Short/);
-    expect(varianceBadge(60).label).toMatch(/^Over/);
+    expect(varianceBadge(-125).label).toBe('Short ₹125.00');
+    expect(varianceBadge(60).label).toBe('Over ₹60.00');
+    expect(varianceBadge(-125).tone).toBe('bad');
+    expect(varianceBadge(60).tone).toBe('warn');
+  });
+
+  it('agrees with the office on what is balanced', () => {
+    expect(varianceBadge(0.004).label).toBe('Balanced');
+    expect(varianceBadge(-0.004).label).toBe('Balanced');
+    // Under a rupee is still a variance: the office would show it, so do we.
+    expect(varianceBadge(0.4).label).toBe('Over ₹0.40');
+    expect(varianceBadge(-0.4).label).toBe('Short ₹0.40');
   });
 });
 

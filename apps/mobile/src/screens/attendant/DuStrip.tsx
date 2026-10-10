@@ -23,8 +23,7 @@ export const DuStrip: React.FC<{
   const nozzles = dus.flatMap((du) => du.nozzles.map((nz) => nz.nozzleName));
   const meta = [shiftName ?? 'Shift', nozzles.join(', ')].filter(Boolean).join(' · ');
   return (
-    <div
-      role="status"
+    <section
       aria-label="Your dispenser unit"
       className="mb-3 flex items-center gap-3 rounded-2xl border border-line bg-card px-3.5 py-3"
     >
@@ -44,6 +43,6 @@ export const DuStrip: React.FC<{
           <p className="m-0 text-[10px] text-text-muted">on shift</p>
         </div>
       ) : null}
-    </div>
+    </section>
   );
 };

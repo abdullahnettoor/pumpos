@@ -14,6 +14,7 @@ import {
   canRecordIncome,
   canRecordStockCount,
   canRecordHandover,
+  isAttendant,
   isHandoverSelfScoped,
   type Role,
 } from '@pump/shared';
@@ -2666,6 +2667,9 @@ transactionsRouter.get('/shifts/:id/merchandise-handovers', async (c) => {
         eq(schema.sales.shiftId, shiftId),
         eq(schema.sales.captureMechanism, 'MERCH_HANDOVER'),
         eq(schema.businessDays.organizationId, user.organizationId),
+        // An Attendant sees only their own product handover: the rest of the
+        // shift's attendants are not theirs to read (#407). Office roles see all.
+        ...(isAttendant(user.role) ? [eq(schema.sales.attendantId, user.id)] : []),
       ),
     )
     .orderBy(desc(schema.sales.createdAt));

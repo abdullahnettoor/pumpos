@@ -3,7 +3,6 @@ import {
   runTask,
   useMerchandiseHandovers,
   useMyAssignment,
-  useStations,
   type RecordHandoverResult,
 } from '@pump/ui';
 import { HandoverPanel } from '../components/HandoverPanel.js';
@@ -13,7 +12,7 @@ import { AttendantHeader } from './attendant/AttendantHeader.js';
 import { DuStrip } from './attendant/DuStrip.js';
 import { NoShiftState } from './attendant/NoShiftState.js';
 import { RecordedState } from './attendant/RecordedState.js';
-import { allDusRecorded, buildRecap, type MerchandiseHandoverRecord } from './attendant/recap.js';
+import { buildRecap, type MerchandiseHandoverRecord } from './attendant/recap.js';
 
 /**
  * Attendant app (mobile-only): their handover and nothing else. No dock, bell,
@@ -30,38 +29,42 @@ export const AttendantScreen: React.FC<{ userName: string; onSignOut: () => void
   onSignOut,
 }) => {
   const assignmentQ = useMyAssignment();
-  const stationsQ = useStations();
-  const data: MyAssignment | null | undefined = assignmentQ.data;
-  const dus: AssignedDu[] = useMemo(() => data?.dispenserUnits ?? [], [data?.dispenserUnits]);
-  const shiftId = data?.shift?.id;
+  const assignment: MyAssignment | null | undefined = assignmentQ.data;
+  const dus: AssignedDu[] = useMemo(
+    () => assignment?.dispenserUnits ?? [],
+    [assignment?.dispenserUnits],
+  );
+  const shiftId = assignment?.shift?.id;
+  // The server returns an Attendant only their own product handover.
   const merchQ = useMerchandiseHandovers(shiftId ?? null);
 
   // What the server accepted in this session, tagged with its Shift so a result
   // can never describe a later one. "Edit" suspends the recorded view.
   const [accepted, setAccepted] = useState<{
     shiftId: string;
-    results: RecordHandoverResult[];
+    savedResults: RecordHandoverResult[];
   } | null>(null);
   const [editing, setEditing] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
-  const results = accepted && accepted.shiftId === shiftId ? accepted.results : undefined;
-  const showRecorded = !editing && (results != null || allDusRecorded(dus));
+  const savedResults = accepted && accepted.shiftId === shiftId ? accepted.savedResults : undefined;
 
-  const stationName =
-    data?.station?.name ??
-    (stationsQ.data as { name?: string }[] | undefined)?.[0]?.name ??
-    'PumpOS';
+  // The station the Shift is at, never an arbitrary one from the org's list;
+  // with no assignment there is nothing to name.
+  const stationName = assignment?.station?.name ?? 'PumpOS';
 
-  const recap = useMemo(() => {
-    if (!showRecorded) return null;
-    const mine = (merchQ.data ?? []).find(
-      (h: { attendantId: string }) => h.attendantId === data?.userId,
-    ) as MerchandiseHandoverRecord | undefined;
-    return buildRecap({ dus, results, merchandise: mine });
-  }, [showRecorded, dus, results, merchQ.data, data?.userId]);
+  // Null until every DU has a recorded Handover (this session's or the one the
+  // assignment holds): a partly recorded Shift still shows the form.
+  const myMerchandise = useMemo(() => {
+    const rows: MerchandiseHandoverRecord[] = merchQ.data ?? [];
+    return rows.find((h) => h.attendantId === assignment?.userId);
+  }, [merchQ.data, assignment?.userId]);
+  const recap = useMemo(
+    () => (editing ? null : buildRecap({ dus, results: savedResults, merchandise: myMerchandise })),
+    [editing, dus, savedResults, myMerchandise],
+  );
 
-  const hasWork = Boolean(data) && dus.length > 0;
+  const hasWork = Boolean(assignment) && dus.length > 0;
 
   // The form has its own sticky save bar at the foot of the scroller; the
   // other states just need breathing room.
@@ -81,7 +84,7 @@ export const AttendantScreen: React.FC<{ userName: string; onSignOut: () => void
     body = (
       <RecordedState
         recap={recap}
-        shiftName={data?.shift?.templateName}
+        shiftName={assignment?.shift?.templateName}
         onEdit={() => {
           setAccepted(null);
           setEditing(true);
@@ -91,11 +94,15 @@ export const AttendantScreen: React.FC<{ userName: string; onSignOut: () => void
   } else {
     body = (
       <>
-        <DuStrip dus={dus} shiftName={data?.shift?.templateName} openedAt={data?.shift?.openedAt} />
+        <DuStrip
+          dus={dus}
+          shiftName={assignment?.shift?.templateName}
+          openedAt={assignment?.shift?.openedAt}
+        />
         <HandoverPanel
           onRecorded={(saved) => {
             if (!shiftId) return;
-            setAccepted({ shiftId, results: saved });
+            setAccepted({ shiftId, savedResults: saved });
             setEditing(false);
           }}
         />
