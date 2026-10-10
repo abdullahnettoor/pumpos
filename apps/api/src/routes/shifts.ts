@@ -1139,6 +1139,8 @@ shiftsRouter.get('/my-assignment', async (c) => {
         openingReading: Number(nr.openingReading),
         closingReading: nr.closingReading != null ? Number(nr.closingReading) : null,
         testingVolume: nr.testingVolume != null ? Number(nr.testingVolume) : null,
+        // Litres the recorded Handover accepted: stored gross volume less testing.
+        netVolume: Math.max(0, Number(nr.volumeSold ?? 0) - Number(nr.testingVolume ?? 0)),
         unitPrice: nr.unitPrice != null ? Number(nr.unitPrice) : null,
       }))
       .sort(byNaturalField((n) => n.nozzleName));
