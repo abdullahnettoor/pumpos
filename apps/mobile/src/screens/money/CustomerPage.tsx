@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
+import { useAccess } from '@pump/ui';
 import type { Station } from '@pump/shared';
+import { creditLimitAccess } from '../../lib/money/creditLimit.js';
 import { balanceOf, type MoneyCustomer } from '../../lib/money/parties.js';
 import { STATEMENT_MONTHS } from '../../lib/money/statement.js';
+import { useShell } from '../../shell/context.js';
 import { DetailPage } from '../../ui/DetailPage.js';
 import { BalanceCard } from './BalanceCard.js';
 import { BehaviourTiles } from './BehaviourTiles.js';
 import { CallButton } from './CallButton.js';
+import { CreditLimitSheet } from './CreditLimitSheet.js';
 import { StatementSection } from './StatementSection.js';
 import {
   useCustomerReceivableData,
@@ -27,6 +31,9 @@ import { VehicleSpend } from './VehicleSpend.js';
  * as a balance. "Earlier months" fetches 6 more whenever any older entry exists
  * (the server says so), also for a customer settled before the window.
  *
+ * Owner / Manager edit the credit limit from the balance card (`CreditLimitSheet`,
+ * existing customer update route).
+ *
  * Seam for #400 (statement PDF): pass `share` / `download` to `DetailPage`; with
  * neither, no action bar is shown.
  */
@@ -44,6 +51,16 @@ export const CustomerPage: React.FC<{
   const statement = useCustomerStatementData(customer.id, station, months);
   const opening = Number(statement.ledger?.periodOpeningBalance ?? 0) || 0;
 
+  // Owner / Manager only, and paused while Restricted Access blocks the write.
+  const { role } = useShell();
+  const accessMode = useAccess().data?.subscription.mode;
+  const limitAccess = creditLimitAccess({
+    role,
+    customerType: customer.customerType,
+    accessMode,
+  });
+  const [editingLimit, setEditingLimit] = useState(false);
+
   const subtitle = [customer.customerType, customer.fleetCode, customer.phone]
     .filter(Boolean)
     .join(' · ');
@@ -56,7 +73,18 @@ export const CustomerPage: React.FC<{
         customer.phone ? <CallButton name={customer.name} phone={customer.phone} /> : undefined
       }
     >
-      <BalanceCard customer={customer} aging={receivable.summary?.aging} />
+      <BalanceCard
+        customer={customer}
+        aging={receivable.summary?.aging}
+        limitAction={
+          limitAccess.status === 'hidden'
+            ? undefined
+            : {
+                onPress: () => setEditingLimit(true),
+                disabledReason: limitAccess.status === 'disabled' ? limitAccess.reason : undefined,
+              }
+        }
+      />
       {receivable.summary && <BehaviourTiles summary={receivable.summary} />}
       {receivable.summary && <VehicleSpend vehicles={receivable.summary.vehicles} />}
       <StatementSection
@@ -80,6 +108,11 @@ export const CustomerPage: React.FC<{
               }
             : undefined
         }
+      />
+      <CreditLimitSheet
+        open={editingLimit}
+        customer={customer}
+        onClose={() => setEditingLimit(false)}
       />
     </DetailPage>
   );

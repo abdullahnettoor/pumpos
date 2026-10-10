@@ -29,6 +29,7 @@ vi.mock('@pump/ui', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
+    useAccess: () => ({ data: undefined }),
     useCustomers: () => ({ data: customers, isLoading: false }),
     useSuppliers: () => ({ data: suppliers, isLoading: false }),
     useSupplierLedger: (id: string) => ({
@@ -71,6 +72,15 @@ const { MoneyScreen } = await import('./MoneyScreen.js');
 const { SupplierPage } = await import('./money/SupplierPage.js');
 const { NavProvider, useNav } = await import('../shell/nav.js');
 const { stackOf } = await import('../shell/navStack.js');
+const { ShellContext } = await import('../shell/context.js');
+
+const shell = {
+  station: null,
+  stationName: 'Station',
+  userName: 'Asha',
+  role: 'Owner' as const,
+  openAccount: () => {},
+};
 
 const holder = { nav: null as unknown as ReturnType<typeof useNav> };
 const Probe: React.FC = () => {
@@ -96,10 +106,12 @@ const STATION = {
 };
 const mount = (props: StageProps = {}) =>
   render(
-    <NavProvider tabs={['money']}>
-      <Probe />
-      <Stage {...props} />
-    </NavProvider>,
+    <ShellContext.Provider value={shell}>
+      <NavProvider tabs={['money']}>
+        <Probe />
+        <Stage {...props} />
+      </NavProvider>
+    </ShellContext.Provider>,
   );
 
 const cust = (over: Record<string, unknown>) => ({
@@ -439,7 +451,7 @@ describe('Customer page', () => {
     mount();
     open('Calicut Cabs');
     expect(balance().getAttribute('data-state')).toBe('under');
-    expect(within(balance()).queryByText(/limit$/)).toBeNull();
+    expect(within(balance()).queryByText(/^(Near|Over) limit$/)).toBeNull();
     expect(within(balance()).getByText('₹38,600.00 left · 61% used')).toBeTruthy();
   });
 

@@ -1,6 +1,5 @@
 import type React from 'react';
 import {
-  HandoverIcon,
   HomeIcon,
   InsightsIcon,
   MoneyIcon,
@@ -17,5 +16,4 @@ export const TAB_ICONS: Record<TabKey, React.FC<IconProps>> = {
   reports: ReportsIcon,
   money: MoneyIcon,
   insights: InsightsIcon,
-  handover: HandoverIcon,
 };

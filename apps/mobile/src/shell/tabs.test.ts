@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tabsForRole } from './tabs.js';
+import { TAB_DEFS, tabsForRole } from './tabs.js';
 
 describe('tabsForRole', () => {
   it('Owner gets every tab in dock order', () => {
@@ -15,15 +15,20 @@ describe('tabsForRole', () => {
     expect(tabsForRole('Staff', false)).toEqual([]);
     expect(tabsForRole('Attendant', true)).toEqual([]);
   });
-  it('a user assigned to a Dispenser Unit gets My handover last', () => {
+  it('has no handover tab: the handover is reached from a card on Home', () => {
+    expect(TAB_DEFS.map((t) => t.key)).toEqual(['home', 'shifts', 'reports', 'money', 'insights']);
+    expect(tabsForRole('Owner', true)).toEqual(tabsForRole('Owner', false));
+  });
+  it('a Manager, Accountant or Staff member on a Dispenser Unit gets Home for the handover card', () => {
     expect(tabsForRole('Manager', true)).toEqual([
+      'home',
       'shifts',
       'reports',
       'money',
       'insights',
-      'handover',
     ]);
-    expect(tabsForRole('Staff', true)).toEqual(['handover']);
+    expect(tabsForRole('Accountant', true)).toEqual(['home', 'reports', 'money']);
+    expect(tabsForRole('Staff', true)).toEqual(['home']);
   });
   it('no role, no tabs', () => {
     expect(tabsForRole(null, false)).toEqual([]);

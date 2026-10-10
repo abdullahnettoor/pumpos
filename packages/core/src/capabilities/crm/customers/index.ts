@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { CustomerType } from '@pump/shared';
+import { canChangeCreditLimit, creditLimitSchema } from '@pump/shared';
+import type { CustomerType, Role } from '@pump/shared';
 import {
   BusinessEvents,
   conflictError,
@@ -63,7 +64,24 @@ export interface UpdateCustomerCommand {
   settlementCycle?: 'OPEN' | 'EOD';
   metadata?: Record<string, unknown> | null;
   isActive?: boolean;
+  /**
+   * Why the edit was made (for a credit-limit change: the reason). Not stored on
+   * the Customer: it travels on the `CUSTOMER_UPDATED` event, whose payload is
+   * free-form JSON, so it is audit history without a schema change.
+   */
+  note?: string;
 }
+
+/**
+ * A credit limit arrives as a number or numeric text (JSON from older clients);
+ * either way it is held to the shared rule (`creditLimitSchema`): 0 or more, at
+ * most 2 decimals, within numeric(12,2). Text that is not a number is refused,
+ * not stored.
+ */
+const creditLimitInput = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() !== '' ? Number(v) : v),
+  creditLimitSchema,
+);
 
 const customerTypeEnum = z.enum(['Regular', 'Credit', 'Fleet']);
 const createSchema = z.object({
@@ -71,7 +89,7 @@ const createSchema = z.object({
   customerType: customerTypeEnum,
   stationId: z.string().nullish(),
   phone: z.string().max(50).nullish(),
-  creditLimit: z.union([z.coerce.number(), z.string()]).nullish(),
+  creditLimit: creditLimitInput,
   fleetCode: z.string().max(100).nullish(),
   isPrepaid: z.boolean().optional(),
   settlementCycle: z.enum(['OPEN', 'EOD']).optional(),
@@ -82,17 +100,39 @@ const updateSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
   customerType: customerTypeEnum.optional(),
   phone: z.string().max(50).nullish(),
-  creditLimit: z.union([z.coerce.number(), z.string()]).nullish(),
+  creditLimit: creditLimitInput,
   fleetCode: z.string().max(100).nullish(),
   isPrepaid: z.boolean().optional(),
   settlementCycle: z.enum(['OPEN', 'EOD']).optional(),
   metadata: z.record(z.any()).nullish(),
   isActive: z.boolean().optional(),
+  note: z
+    .string()
+    .trim()
+    .max(500)
+    .transform((v) => (v === '' ? undefined : v))
+    .optional(),
 });
 
 function nz(v: number | string | null | undefined): string | null {
   if (v === null || v === undefined) return null;
   return String(v);
+}
+
+/** `0` and "none" both mean no limit, so neither counts as a change from the other. */
+const limitValue = (v: number | string | null | undefined): number =>
+  v === null || v === undefined ? 0 : Number(v);
+
+/**
+ * Changing a Customer's credit limit is a narrower right than editing the
+ * Customer (Accountants may edit, not re-limit): `canChangeCreditLimit`. Enforced
+ * here so every caller of the use-case is covered, not one route. A command with
+ * no tenant-user actor (a system job) is not a user acting.
+ */
+function mayChangeLimit(ctx: ExecutionContext): boolean {
+  const actor = ctx.actorSnapshot;
+  if (!actor || actor.kind !== 'tenant_user') return true;
+  return actor.role !== null && canChangeCreditLimit(actor.role as Role);
 }
 
 export interface CustomerDeps {
@@ -156,6 +196,11 @@ export class UpdateCustomer implements UseCase<UpdateCustomerCommand, Customer> 
     if (!existing) return err(notFoundError('Customer', p.data.id));
     if (existing.organizationId !== ctx.organizationId)
       return err(forbiddenError('Customer belongs to another organization'));
+    const limitChanged =
+      p.data.creditLimit !== undefined &&
+      limitValue(p.data.creditLimit) !== limitValue(existing.creditLimit);
+    if (limitChanged && !mayChangeLimit(ctx))
+      return err(forbiddenError('Only an Owner or Manager can change a credit limit'));
     if (
       p.data.name !== undefined &&
       p.data.name !== existing.name &&
@@ -184,7 +229,13 @@ export class UpdateCustomer implements UseCase<UpdateCustomerCommand, Customer> 
         eventType: BusinessEvents.CUSTOMER_UPDATED,
         aggregateType: 'Customer',
         aggregateId: updated.id,
-        payload: { customerId: updated.id },
+        payload: {
+          customerId: updated.id,
+          ...(limitChanged
+            ? { creditLimit: { from: existing.creditLimit, to: updated.creditLimit } }
+            : {}),
+          ...(p.data.note ? { note: p.data.note } : {}),
+        },
       }),
     ]);
     return ok(updated);

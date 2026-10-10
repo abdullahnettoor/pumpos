@@ -365,14 +365,12 @@ describe.skipIf(!CONNECTION)('Office Records against real Postgres (ADR 0005)', 
     expect(before.data).toMatchObject({ periodOpeningBalance: '0', hasEarlier: false });
 
     // Settled before the window (opening balance 0) is still history: "Earlier months" must show.
-    await db
-      .insert(schema.customers)
-      .values({
-        id: SETTLED_CUSTOMER,
-        organizationId: ORG,
-        customerType: 'Fleet',
-        name: 'Settled',
-      });
+    await db.insert(schema.customers).values({
+      id: SETTLED_CUSTOMER,
+      organizationId: ORG,
+      customerType: 'Fleet',
+      name: 'Settled',
+    });
     await db.insert(schema.customerTransactions).values({
       businessDayId: PRIOR_DAY,
       customerId: SETTLED_CUSTOMER,
