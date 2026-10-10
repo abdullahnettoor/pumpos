@@ -4,11 +4,9 @@ import {
   collectionRequest,
   type CollectionForm,
 } from '../../lib/money/collection.js';
-import { useOfficePayment, type OfficePaymentResult } from './useOfficePayment.js';
+import { useOfficePayment } from './useOfficePayment.js';
 
 const service = new CloudTransactionService();
-
-export type RecordCollectionResult = OfficePaymentResult;
 
 /**
  * Records one Collection through the existing route

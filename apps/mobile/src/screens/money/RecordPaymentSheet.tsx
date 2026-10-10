@@ -3,7 +3,6 @@ import { collectionAccountTypes, inr } from '@pump/ui';
 import {
   COLLECTION_METHODS,
   collectionFormSchema,
-  sameCollectionEntries,
   type CollectionForm,
   type CollectionMethod,
 } from '../../lib/money/collection.js';
@@ -77,7 +76,6 @@ export const RecordPaymentSheet: React.FC<Props> = ({
       dateHint="The day the money was received. Defaults to today."
       idleHint={`${inr(Math.max(0, balance))} is owed now.`}
       preview={preview}
-      sameEntries={sameCollectionEntries}
       successMessage={(amount) => `${inr(amount)} recorded from ${customer.name}.`}
       submitLabel="Record payment"
       save={save}

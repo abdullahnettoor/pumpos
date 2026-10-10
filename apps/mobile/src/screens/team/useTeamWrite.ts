@@ -41,7 +41,7 @@ const patchUsers = (qc: QueryClient, fn: (list: TeamMember[] | undefined) => unk
  * The hook must live in a component that stays mounted while its sheet is
  * closed and reopened, or a retry after a network error would start a new key.
  */
-export function useTeamWrite<I, T>({ action, run, apply }: WriteConfig<I, T>) {
+function useTeamWrite<I, T>({ action, run, apply }: WriteConfig<I, T>) {
   const qc = useQueryClient();
   const key = useRef<string | null>(null);
   const inFlight = useRef<Promise<TeamWriteResult<T>> | null>(null);

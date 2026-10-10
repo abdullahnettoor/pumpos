@@ -309,6 +309,13 @@ _Avoid_: udhaar entry, due sale
 figure.
 _Avoid_: outstanding, khata
 
+**Credit Limit**:
+The most a Customer may owe on credit. A Customer is _near_ it from 80% of the
+limit and _over_ it beyond it; no limit means no standing to judge. Only an
+Owner or Manager may change it. Not the Organization **Limit** (a Product Plan
+allowance).
+_Avoid_: credit cap, ceiling
+
 **Receivable aging**:
 What a Customer owes, split by how long each unpaid amount has been waiting. A
 Collection or a credit Adjustment pays the oldest unpaid amount first; what is
@@ -481,6 +488,36 @@ _Avoid_: attendant report, staff report, variance report
 Summaries are stored permanently, never recalculated historically, never
 edited after generation; regeneration is explicit and idempotent.
 _Avoid_: refresh, recompute
+
+**Business Day Status**:
+Where a Business Day stands in the day list: _Live_ (open, the Current Business
+Date, figures still moving), _Draft_ (a Past Open Business Day: ended, not yet
+closed, so its DSSR is a preview), _Sealed_ (closed, with its immutable DSSR
+Snapshot) or _Report Missing_ (closed but no snapshot exists; shown with no
+figures, never as Sealed).
+_Avoid_: day state
+
+**Statement**:
+A Customer's or Supplier's ledger over a date range: each entry with the
+running balance, opening with a "balance brought forward" when earlier entries
+exist. Shared as a PDF from the same range the screen shows.
+_Avoid_: khata, account copy
+
+**Stock Loss**:
+The Insights view of a Tank's dip **Variance**, judged against what it sold:
+within tolerance up to 0.5% of the litres sold, by size (a gain is judged like a
+loss). The tolerance is one app-wide value pending an owner decision, not a
+Station setting (`stock-variance.ts`); a Tank that sold nothing tolerates no
+Variance. The domain term stays Variance; "loss" is only the Insights label.
+_Avoid_: shrinkage, leakage
+
+**Needs Attention**:
+The one list of open items that want the user's eye: stock alerts, Past Open
+Business Days, customers over their Credit Limit, large Shift cash variances and
+the user's own unsaved Handover. Derived from figures the server already holds;
+open items only, no history. The header bell's count, Home's "All N" and the
+Needs attention page are the same list.
+_Avoid_: notifications, alerts inbox
 
 ## Events & Resilience
 

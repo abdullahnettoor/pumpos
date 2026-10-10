@@ -8,7 +8,8 @@
  */
 import { productCategoryOf } from '@pump/shared';
 import { num, round2 } from '../home/num.js';
-import { unitLabel, type FuelLine, type ProductLine, type Snapshot } from '../home/sales.js';
+import { unitLabel } from '@pump/ui';
+import type { FuelLine, ProductLine, Snapshot } from '../home/sales.js';
 import { deriveShiftVariance, drawerName, type ShiftVariance } from './variance.js';
 
 export interface NozzleLine {

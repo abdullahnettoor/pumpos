@@ -9,7 +9,8 @@ import { isStockVarianceWithinTolerance } from '@pump/shared';
 import type { BusinessDayListItem } from '@pump/shared';
 import { stationTime } from '../home/dates.js';
 import { num } from '../home/num.js';
-import { shiftLabel, unitLabel, type Snapshot } from '../home/sales.js';
+import { unitLabel } from '@pump/ui';
+import { shiftLabel, type Snapshot } from '../home/sales.js';
 import { varianceBadge, type VarianceBadgeView } from '../variance.js';
 
 const grouped = (n: number, decimals = 0) =>

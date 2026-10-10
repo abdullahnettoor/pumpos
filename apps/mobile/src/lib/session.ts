@@ -12,7 +12,7 @@ import {
 } from '@pump/ui';
 
 /** Resolve the API base URL from the current mobile host (mirrors console). */
-export function resolveApiUrl(): string | undefined {
+function resolveApiUrl(): string | undefined {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL as string;
   if (typeof window !== 'undefined') {
     const { hostname } = window.location;

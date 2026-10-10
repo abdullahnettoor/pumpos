@@ -1,13 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { inr } from '@pump/ui';
+import { fullDayLabel, inr, type LedgerRow, type PartyKind } from '@pump/ui';
 import { isBalancedVariance } from '@pump/shared';
-import {
-  buildStatement,
-  fullDayLabel,
-  STATEMENT_PAGE,
-  type LedgerRow,
-  type PartyKind,
-} from '../../lib/money/statement.js';
+import { buildStatement, STATEMENT_PAGE } from '../../lib/money/statement.js';
 import { signedMoney } from '../../lib/format.js';
 import { Note } from '../../ui/Note.js';
 import { SectionLabel } from '../../ui/SectionLabel.js';

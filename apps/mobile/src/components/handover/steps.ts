@@ -133,7 +133,7 @@ export function cashErrors(du: AssignedDu, form: DuFormState): HandoverError[] {
   return errs;
 }
 
-export function productsErrors(merchNonCash: string, merchRows: MerchRow[]): HandoverError[] {
+function productsErrors(merchNonCash: string, merchRows: MerchRow[]): HandoverError[] {
   const errs: HandoverError[] = [];
   if (num(merchNonCash) < 0)
     errs.push({ step: 'products', message: 'Merchandise non-cash negative' });
@@ -275,7 +275,7 @@ export function cashStep(form: DuFormState, recorded: boolean): StepState {
 }
 
 /** Σ of the slips' amounts. */
-export const sumLines = (lines: CreditLine[]): number =>
+const sumLines = (lines: CreditLine[]): number =>
   lines.reduce((s, l) => s + Number(l.amount || 0), 0);
 
 /** One Drawer's reconciliation, with the float and drops it was computed from. */

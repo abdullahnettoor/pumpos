@@ -8,7 +8,7 @@ import { useAlertOpener } from '../attention/useAlertOpener.js';
 import { useOpenAttention } from '../attention/useOpenAttention.js';
 
 /** Alerts shown on Home; the rest are behind "All N". */
-export const HOME_ALERT_LIMIT = 2;
+const HOME_ALERT_LIMIT = 2;
 
 interface Props {
   /** Already sorted by severity (`useMobileAlerts`). */

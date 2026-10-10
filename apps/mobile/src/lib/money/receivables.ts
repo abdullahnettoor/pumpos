@@ -14,8 +14,8 @@ import {
   type CustomerVehicleSpend,
   type ReceivablesAging,
 } from '@pump/shared';
+import { dayLabel } from '@pump/ui';
 import { compactRupees, plural } from '../format.js';
-import { dayLabel } from './statement.js';
 
 export type AgingKey = keyof ReceivablesAging;
 export type AgingTone = 'good' | 'warn' | 'bad';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { compactRupees } from '../../lib/home/format.js';
+import { compactRupees } from '../../lib/format.js';
 import type { MoneyPosition as Money } from '../../lib/home/figures.js';
 import { useNav } from '../../shell/nav.js';
 import { StatTile } from '../../ui/index.js';

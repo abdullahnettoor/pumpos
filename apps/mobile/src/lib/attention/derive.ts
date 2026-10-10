@@ -17,9 +17,9 @@ import { varianceBadge } from '../variance.js';
 import type { AlertSeverity, MobileAlert } from './types.js';
 
 /** A closed Shift's cash variance is raised only beyond this many rupees. */
-export const CASH_VARIANCE_ALERT_ABOVE = 200;
+const CASH_VARIANCE_ALERT_ABOVE = 200;
 /** How many of the newest closed Shifts are checked for a variance. */
-export const VARIANCE_SHIFTS_CHECKED = 5;
+const VARIANCE_SHIFTS_CHECKED = 5;
 
 const RANK: Record<AlertSeverity, number> = { danger: 0, warning: 1, info: 2 };
 

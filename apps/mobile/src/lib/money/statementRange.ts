@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isValidBusinessDate, monthBounds } from '@pump/shared';
-import { fullDayLabel, monthLabel, statementWindowStart } from './statement.js';
+import { fullDayLabel, monthLabel } from '@pump/ui';
+import { statementWindowStart } from './statement.js';
 
 /**
  * Which stretch of a party's ledger the Statement covers. One choice drives the

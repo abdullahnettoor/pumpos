@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildStatement,
-  deltaOf,
-  fullDayLabel,
-  statementWindowStart,
-  type LedgerRow,
-} from './statement.js';
+import { deltaOf, fullDayLabel, type LedgerRow } from '@pump/ui';
+import { buildStatement, statementWindowStart } from './statement.js';
 
 const row = (
   id: string,

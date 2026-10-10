@@ -62,9 +62,6 @@ export interface SalesFigures {
   closedShifts: ClosedShift[];
 }
 
-// One unit wording for Home, Shift Summary and the Money statements (and its PDF).
-export { unitLabel };
-
 const groupedInt = (n: number) => Math.round(n).toLocaleString('en-IN');
 
 export const shiftLabel = (s: Snapshot): string =>

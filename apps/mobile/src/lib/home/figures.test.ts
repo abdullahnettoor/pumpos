@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveMoney, deriveTanks, deriveTiles, tankLevel } from './figures.js';
-import { compactRupees, rupees, signedRupees } from './format.js';
+import { compactRupees, rupees, signedRupees } from '../format.js';
 
 describe('rupee formatting', () => {
   it('groups in lakhs and drops paise', () => {

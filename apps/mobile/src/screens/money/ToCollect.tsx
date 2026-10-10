@@ -18,7 +18,7 @@ import { AgingSplit } from './AgingSplit.js';
 import { useCustomersData, useReceivablesData } from './useMoneyData.js';
 
 /** Customers shown before "See all". */
-export const PREVIEW_COUNT = 5;
+const PREVIEW_COUNT = 5;
 
 interface Props {
   /** The Station whose clock ages the receivables; without one the aging and "Oldest" are left out. */

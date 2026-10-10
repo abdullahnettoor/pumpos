@@ -1,5 +1,5 @@
 import type { BusinessDayListItem, BusinessDayListStatus, BusinessDayListWeek } from '@pump/shared';
-import { compactRupees, plural, signedRupees } from '../home/format.js';
+import { compactRupees, plural, signedRupees } from '../format.js';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const MONTHS = [

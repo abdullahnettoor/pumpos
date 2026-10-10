@@ -1,9 +1,8 @@
 /**
- * What each tab shows as its own (root) screen. This is the plug-in point for
- * the tab tickets: replace a case below with the new screen (it renders its own
- * header: `TabHeader`, or `HomeHeader` on Home) and push detail pages with
- * `useNav().push`. The screens wired here are the pre-revamp ones, kept
- * working until their ticket replaces them.
+ * What each tab shows as its own (root) screen. A tab's screen renders under
+ * the header chosen here (`TabHeader`, or `HomeHeader` on Home) and pushes
+ * detail pages with `useNav().push`. A tab that is added or retired is edited
+ * here, in `tabs.ts` and in `tabIcons.tsx`.
  */
 import React from 'react';
 import { canViewMobileHome, canViewMobileInsights, type Station } from '@pump/shared';
@@ -80,7 +79,7 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
       </>
     );
 
-  // Home and Shifts lay out their own sections (cards inset 12px, labels 16px); the rest still use the padded page.
+  // Every tab lays out its own sections (cards inset 12px, labels 16px).
   if (tab === 'home')
     return (
       <>
@@ -89,7 +88,6 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
       </>
     );
 
-  // Shifts, like Home, lays out its own sections.
   if (tab === 'shifts')
     return (
       <>
@@ -106,7 +104,6 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
       </>
     );
 
-  // Reports lays out its own sections too (tiles and lists inset 12px).
   if (tab === 'reports')
     return (
       <>

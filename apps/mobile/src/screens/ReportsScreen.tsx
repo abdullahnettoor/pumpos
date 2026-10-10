@@ -1,7 +1,7 @@
 import React from 'react';
 import type { BusinessDayListItem, Station } from '@pump/shared';
 import { useBusinessDayList } from '@pump/ui';
-import { plural } from '../lib/home/format.js';
+import { plural } from '../lib/format.js';
 import {
   barWidths,
   dayView,

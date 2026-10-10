@@ -4,7 +4,6 @@ import {
   dayLabel,
   deltaOf,
   describeLedgerRow,
-  fullDayLabel,
   monthLabel,
   type LedgerRow,
   type PartyKind,
@@ -12,9 +11,7 @@ import {
 
 // How a ledger row reads (and its dates) is shared with the statement PDF and lives
 // in `@pump/ui` next to the document, so the screen and the PDF cannot word a row
-// differently. Re-exported here for the Money screens.
-export { dateOf, dayLabel, deltaOf, describeLedgerRow, fullDayLabel, monthLabel };
-export type { LedgerRow, PartyKind };
+// differently.
 
 /**
  * The party statement (Customer or Supplier): the ledger rows turned into a running balance,

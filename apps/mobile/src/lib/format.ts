@@ -1,8 +1,8 @@
 /**
  * The one place the mobile app formats rupees. Pure, string-only: figures
  * arrive computed, nothing here derives a business number. Screens import from
- * here (Home's `lib/home/format` re-exports it); a second set of rupee helpers
- * with different output for the same amount is how two tabs end up disagreeing.
+ * here; a second set of rupee helpers with different output for the same amount
+ * is how two tabs end up disagreeing.
  */
 import { formatMoney, inr } from '@pump/ui';
 

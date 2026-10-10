@@ -109,8 +109,8 @@ export function deriveTiles(snap: Snapshot): HomeTiles {
 }
 
 /** Fill levels below which a tank gauge turns red / amber. */
-export const TANK_RED_BELOW = 25;
-export const TANK_AMBER_BELOW = 40;
+const TANK_RED_BELOW = 25;
+const TANK_AMBER_BELOW = 40;
 
 export type TankGaugeLevel = 'red' | 'amber' | 'ok' | 'unknown';
 

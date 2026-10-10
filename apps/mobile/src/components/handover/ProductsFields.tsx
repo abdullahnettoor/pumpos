@@ -11,7 +11,7 @@ interface Option {
 }
 
 /** One step of the stepper: never below zero, blank (not "0") at zero. */
-export const stepQuantity = (current: string, delta: 1 | -1): string => {
+const stepQuantity = (current: string, delta: 1 | -1): string => {
   const next = Math.max(0, Number((num(current) + delta).toFixed(3)));
   return next > 0 ? String(next) : '';
 };

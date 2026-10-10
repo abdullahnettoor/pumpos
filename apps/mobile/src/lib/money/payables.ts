@@ -16,11 +16,10 @@ import type {
   SupplierPayable,
   SupplierProductPurchase,
 } from '@pump/shared';
-import { accountTypeLabel } from '@pump/ui';
+import { accountTypeLabel, dayLabel, monthLabel } from '@pump/ui';
 import { compactRupees, plural } from '../format.js';
 import { daysLabel, type Tile } from './receivables.js';
 import { wholeQuantityLabel } from './quantity.js';
-import { dayLabel, monthLabel } from './statement.js';
 
 /** `1 unpaid`, `2 unpaid`; null when no Purchase waits (an Opening Balance or an advance is not "unpaid"). */
 export const unpaidLabel = (
