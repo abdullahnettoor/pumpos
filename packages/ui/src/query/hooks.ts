@@ -194,6 +194,20 @@ export const TIER = {
   operational: { staleTime: 15_000, gcTime: 5 * 60_000, refetchOnWindowFocus: true } as const,
 };
 
+/** The key of one party's statement window: `[prefix, partyId, from, to]`. */
+export type StatementKey =
+  ReturnType<typeof queryKeys.customerStatement> | ReturnType<typeof queryKeys.supplierStatement>;
+
+/** Whether `key` is a customer or supplier statement window (the shape the two builders above make). */
+export function isStatementKey(key: readonly unknown[] | undefined): key is StatementKey {
+  return (
+    !!key &&
+    key.length === 4 &&
+    (key[0] === 'customer-statement' || key[0] === 'supplier-statement') &&
+    key.slice(1).every((part) => typeof part === 'string')
+  );
+}
+
 export const stationsQueryOptions = () => ({
   queryKey: queryKeys.stations(),
   queryFn: () => stationSvc.getStations(),
@@ -785,14 +799,30 @@ export function useCustomerLedger(customerId: string | null | undefined, options
 }
 
 /**
+ * Statement rows stay on screen while a request is in flight only when the
+ * window of the SAME party widens into the past with the same end ("Earlier
+ * months"). Picking another range, or another party, shows a loading state
+ * instead of rows that belong to somewhere else.
+ */
+function widensStatementWindow(
+  previousKey: readonly unknown[] | undefined,
+  partyId: string | null | undefined,
+  range: { from: string; to: string },
+): boolean {
+  if (!isStatementKey(previousKey)) return false;
+  const [, previousId, previousFrom, previousTo] = previousKey;
+  return previousId === partyId && previousTo === range.to && previousFrom > range.from;
+}
+
+/**
  * A customer's statement for a date range (enriched rows + opening balance),
  * from the ranged ledger API. Operational tier; every operational write
  * invalidates the `customer-statement` prefix.
  *
- * Widening the range ("Earlier months") changes the key; the previous range's
- * rows stay on screen (`isPlaceholderData`) until the wider one arrives, so the
- * list never collapses to a spinner. Only the SAME customer's rows are carried
- * over, never another customer's.
+ * Widening the range into the past ("Earlier months") changes the key; the
+ * previous range's rows stay on screen (`isPlaceholderData`) until the wider one
+ * arrives, so the list never collapses to a spinner. Only that case carries rows
+ * over: another range (the Filter) or another customer loads from scratch.
  */
 export function useCustomerStatement(
   customerId: string | null | undefined,
@@ -804,7 +834,7 @@ export function useCustomerStatement(
     queryFn: () => txService.getCustomerLedgerRange(customerId!, range),
     enabled: !!customerId,
     placeholderData: (previous, previousQuery) =>
-      previousQuery?.queryKey[1] === customerId ? previous : undefined,
+      widensStatementWindow(previousQuery?.queryKey, customerId, range) ? previous : undefined,
     ...TIER.operational,
     ...options,
   });
@@ -814,8 +844,8 @@ export function useCustomerStatement(
  * A supplier's statement for a date range (enriched rows + opening balance), from
  * the ranged ledger API. Operational tier; every operational write invalidates the
  * `supplier-statement` prefix. Same "Earlier months" behaviour as
- * `useCustomerStatement`: the previous range's rows stay on screen until the wider
- * one arrives, and only the SAME supplier's rows are carried over.
+ * `useCustomerStatement`: only a window widening into the past keeps the previous
+ * rows on screen until the wider one arrives.
  */
 export function useSupplierStatement(
   supplierId: string | null | undefined,
@@ -827,7 +857,7 @@ export function useSupplierStatement(
     queryFn: () => txService.getSupplierLedgerRange(supplierId!, range),
     enabled: !!supplierId,
     placeholderData: (previous, previousQuery) =>
-      previousQuery?.queryKey[1] === supplierId ? previous : undefined,
+      widensStatementWindow(previousQuery?.queryKey, supplierId, range) ? previous : undefined,
     ...TIER.operational,
     ...options,
   });

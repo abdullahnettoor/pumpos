@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { useAccess } from '@pump/ui';
+import { customerStatementParty, useAccess, useToast } from '@pump/ui';
 import type { Station } from '@pump/shared';
 import { collectionAccess } from '../../lib/money/collection.js';
 import { creditLimitAccess } from '../../lib/money/creditLimit.js';
 import { balanceOf, type MoneyCustomer } from '../../lib/money/parties.js';
-import { STATEMENT_MONTHS } from '../../lib/money/statement.js';
 import { useShell } from '../../shell/context.js';
 import { DetailPage } from '../../ui/DetailPage.js';
 import { BalanceCard } from './BalanceCard.js';
@@ -12,12 +11,9 @@ import { BehaviourTiles } from './BehaviourTiles.js';
 import { CallButton } from './CallButton.js';
 import { CreditLimitSheet } from './CreditLimitSheet.js';
 import { RecordPaymentSheet } from './RecordPaymentSheet.js';
-import { StatementSection } from './StatementSection.js';
-import {
-  useCustomerReceivableData,
-  useCustomersData,
-  useCustomerStatementData,
-} from './useMoneyData.js';
+import { PartyStatement } from './PartyStatement.js';
+import { useCustomerReceivableData, useCustomersData } from './useMoneyData.js';
+import { usePartyStatement } from './usePartyStatement.js';
 import { VehicleSpend } from './VehicleSpend.js';
 
 /**
@@ -28,10 +24,11 @@ import { VehicleSpend } from './VehicleSpend.js';
  * The aging, behaviour tiles and vehicles come from the receivables summary and
  * appear when it arrives; a failed or missing summary leaves the balance card
  * and the statement standing on their own. The statement is the ranged ledger:
- * the last 6 months with each Credit Sale's Shift, product, litres and Vehicle
- * and each Collection's method and reference, and what came before carried in
- * as a balance. "Earlier months" fetches 6 more whenever any older entry exists
- * (the server says so), also for a customer settled before the window.
+ * this month by default (or the range picked in the Filter) with each Credit
+ * Sale's Shift, product, litres and Vehicle and each Collection's method and
+ * reference, and what came before carried in as a balance. "Earlier months"
+ * (default window only, see `PartyStatement`) adds one more month whenever any
+ * older entry exists (the server says so), also for a customer settled before it.
  *
  * Two quiet actions sit on the balance card (not in the action bar):
  *  - Record payment: opens `RecordPaymentSheet`, a Collection through the existing
@@ -39,8 +36,8 @@ import { VehicleSpend } from './VehicleSpend.js';
  *  - Credit limit: Owner / Manager edit it (`CreditLimitSheet`, existing customer
  *    update route).
  *
- * Seam for #400 (statement PDF): pass `share` / `download` to `DetailPage`; with
- * neither, no action bar is shown.
+ * Share and Download statement print the range the statement shows (see
+ * `usePartyStatement`).
  */
 export const CustomerPage: React.FC<{
   customer: MoneyCustomer;
@@ -54,9 +51,14 @@ export const CustomerPage: React.FC<{
   const { role, station: shellStation } = useShell();
   const station = stationProp ?? shellStation;
   const receivable = useCustomerReceivableData(station?.id, customer.id);
-  const [months, setMonths] = useState(STATEMENT_MONTHS);
-  const statement = useCustomerStatementData(customer.id, station, months);
-  const opening = Number(statement.ledger?.periodOpeningBalance ?? 0) || 0;
+  const toast = useToast();
+  const statement = usePartyStatement({
+    kind: 'customer',
+    partyId: customer.id,
+    party: customerStatementParty(customer),
+    station,
+    balance: balanceOf(customer),
+  });
 
   // Owner / Manager only, and paused while Restricted Access blocks the write.
   const accessMode = useAccess().data?.subscription.mode;
@@ -85,6 +87,9 @@ export const CustomerPage: React.FC<{
       right={
         customer.phone ? <CallButton name={customer.name} phone={customer.phone} /> : undefined
       }
+      share={statement.share}
+      download={statement.download}
+      onActionError={(message) => toast.error(message)}
     >
       <BalanceCard
         customer={customer}
@@ -109,28 +114,7 @@ export const CustomerPage: React.FC<{
       />
       {receivable.summary && <BehaviourTiles summary={receivable.summary} />}
       {receivable.summary && <VehicleSpend vehicles={receivable.summary.vehicles} />}
-      <StatementSection
-        kind="customer"
-        balance={balanceOf(customer)}
-        rows={statement.ledger?.entries}
-        isLoading={statement.isLoading}
-        isError={statement.isError}
-        onRetry={() => void statement.refetch()}
-        period={
-          statement.ledger
-            ? {
-                from: statement.from,
-                openingBalance: opening,
-                // Anything dated before the window can be loaded, even when it nets to 0:
-                // a customer settled before the window still has history to read.
-                onEarlier: statement.ledger.hasEarlier
-                  ? () => setMonths((m) => m + STATEMENT_MONTHS)
-                  : undefined,
-                isLoadingEarlier: statement.isFetchingMore,
-              }
-            : undefined
-        }
-      />
+      <PartyStatement statement={statement} />
       <CreditLimitSheet
         open={editingLimit}
         customer={customer}

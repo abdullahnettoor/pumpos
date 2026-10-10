@@ -16,6 +16,7 @@ export interface MoneyCustomer {
   phone?: string | null;
   creditLimit?: number | string | null;
   currentBalance?: number | string | null;
+  metadata?: { gstin?: string | null } | null;
 }
 
 /** A Supplier as the suppliers list returns it (the fields Money reads). */

@@ -73,7 +73,35 @@ export {
   paperFromStation,
 } from './services/reports/reportConfig.js';
 export { letterheadFromStation } from './services/reports/letterhead.js';
-export { generateDssrPdf, generateShiftSummaryPdf } from './services/reports/generate.js';
+export {
+  generateDssrPdf,
+  generateShiftSummaryPdf,
+  generateStatementPdf,
+} from './services/reports/generate.js';
+export {
+  ADVANCE_NOTE,
+  PARTY_STATEMENT_WORDING,
+  customerStatementParty,
+  dateOf,
+  dayLabel,
+  deltaOf,
+  describeLedgerRow,
+  fullDayLabel,
+  monthLabel,
+  partyStatementDoc,
+  statementFilePrefix,
+  supplierStatementParty,
+} from './services/reports/partyStatement.js';
+export type {
+  LedgerRow,
+  PartyKind,
+  PartyStatementInput,
+  StatementCustomer,
+  StatementSupplier,
+} from './services/reports/partyStatement.js';
+export { fileSlug, ledgerFileName } from './services/reports/ledgerFileName.js';
+export { ledgerQuantityLabel, unitLabel } from './utils/ledgerQuantity.js';
+export type { LedgerQuantity } from './utils/ledgerQuantity.js';
 export { LedgerView, computeLedgerRows } from './components/ledger/LedgerView.js';
 export type {
   LedgerResolved,
