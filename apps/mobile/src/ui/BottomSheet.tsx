@@ -12,6 +12,12 @@ interface Props {
    * (the screen under it remounted). Return null to leave focus alone.
    */
   fallbackFocus?: () => HTMLElement | null;
+  /**
+   * Whether the sheet takes a layer of its own in the system back gesture (the
+   * default: back closes it). A sheet that is a guard's prompt turns this off:
+   * the gesture reaches the guard, which decides.
+   */
+  backLayer?: boolean;
   children: React.ReactNode;
 }
 
@@ -32,7 +38,12 @@ function inertBackground(layer: HTMLElement): () => void {
 const isUsable = (el: HTMLElement | null): el is HTMLElement =>
   !!el && el.isConnected && !el.closest('[aria-hidden="true"], [inert]');
 
-const SheetLayer: React.FC<Omit<Props, 'open'>> = ({ onClose, label, fallbackFocus, children }) => {
+const SheetLayer: React.FC<Omit<Props, 'open' | 'backLayer'>> = ({
+  onClose,
+  label,
+  fallbackFocus,
+  children,
+}) => {
   const layerRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const fallbackRef = useRef(fallbackFocus);
@@ -112,8 +123,8 @@ const SheetLayer: React.FC<Omit<Props, 'open'>> = ({ onClose, label, fallbackFoc
  * it returns focus to what opened it (or `fallbackFocus` if that is gone).
  * Rendered into `document.body` so the page behind can be made inert as a whole.
  */
-export const BottomSheet: React.FC<Props> = ({ open, onClose, ...rest }) => {
-  useBackLayer(open, onClose);
+export const BottomSheet: React.FC<Props> = ({ open, onClose, backLayer = true, ...rest }) => {
+  useBackLayer(open && backLayer, onClose);
   if (!open) return null;
   return createPortal(<SheetLayer onClose={onClose} {...rest} />, document.body);
 };

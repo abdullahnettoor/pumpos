@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { AssignedDu } from '../../components/handover/model.js';
-import { formatOnShift, minutesOnShift } from './recap.js';
+import { formatOnShift, minutesOnShift } from '../../lib/handover/recap.js';
 
 /** Re-renders on an interval so "time on shift" keeps counting. */
 function useNow(intervalMs: number): number {
