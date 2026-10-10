@@ -2,6 +2,7 @@ import React from 'react';
 import { Combobox, inr } from '@pump/ui';
 import { num } from '../../lib/num.js';
 import type { MerchRow } from '../../lib/handover/model.js';
+import { MinusIcon, PlusIcon } from '../../ui/icons.js';
 import { AddButton, NumberField } from './Fields.js';
 import { TrashIcon } from './icons.js';
 
@@ -17,16 +18,16 @@ const stepQuantity = (current: string, delta: 1 | -1): string => {
   return next > 0 ? String(next) : '';
 };
 
-const StepperButton: React.FC<{ label: string; onClick: () => void; children: string }> = ({
-  label,
-  onClick,
-  children,
-}) => (
+const StepperButton: React.FC<{
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}> = ({ label, onClick, children }) => (
   <button
     type="button"
     onClick={onClick}
     aria-label={label}
-    className="hit-44 grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl border border-line-strong bg-card text-lg font-semibold text-text-high"
+    className="hit-44 grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl border border-line-strong bg-card text-text-high"
   >
     {children}
   </button>
@@ -55,6 +56,12 @@ export const ProductsFields: React.FC<{
           const p = productById[row.productId];
           const mrp = p?.sellingPrice != null ? Number(p.sellingPrice) : null;
           const lineTotal = mrp != null ? mrp * num(row.quantity) : null;
+          const caption =
+            mrp != null
+              ? `MRP ${inr(mrp)}${lineTotal ? ` · ${inr(lineTotal)}` : ''}`
+              : p?.unit
+                ? `Qty in ${p.unit}`
+                : '';
           return (
             <li
               key={idx}
@@ -67,36 +74,33 @@ export const ProductsFields: React.FC<{
                 placeholder="Select product…"
                 searchPlaceholder="Search product…"
               />
-              <div className="flex items-center gap-2">
-                <p className="num min-w-0 flex-1 truncate text-[11px] text-text-muted">
-                  {mrp != null
-                    ? `MRP ${inr(mrp)}${lineTotal ? ` · ${inr(lineTotal)}` : ''}`
-                    : p?.unit
-                      ? `Qty in ${p.unit}`
-                      : ''}
-                </p>
-                <StepperButton
-                  label="Decrease quantity"
-                  onClick={() => patch(idx, { quantity: stepQuantity(row.quantity, -1) })}
-                >
-                  −
-                </StepperButton>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  value={row.quantity}
-                  placeholder="0"
-                  aria-label="Quantity"
-                  onChange={(e) => patch(idx, { quantity: e.target.value })}
-                  className="num h-9 w-14 flex-shrink-0 rounded-xl border border-line-strong bg-card text-center text-[15px] font-semibold text-text-high focus:border-accent focus:outline-none focus:ring-[3px] focus:ring-accent/20"
-                />
-                <StepperButton
-                  label="Increase quantity"
-                  onClick={() => patch(idx, { quantity: stepQuantity(row.quantity, 1) })}
-                >
-                  +
-                </StepperButton>
+              {caption && <p className="num truncate text-[11px] text-text-muted">{caption}</p>}
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2" data-stepper-row>
+                <div aria-hidden="true" />
+                <div className="flex items-center justify-center gap-2" data-stepper>
+                  <StepperButton
+                    label="Decrease quantity"
+                    onClick={() => patch(idx, { quantity: stepQuantity(row.quantity, -1) })}
+                  >
+                    <MinusIcon size={16} strokeWidth={2.4} />
+                  </StepperButton>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    value={row.quantity}
+                    placeholder="0"
+                    aria-label="Quantity"
+                    onChange={(e) => patch(idx, { quantity: e.target.value })}
+                    className="num h-9 w-14 flex-shrink-0 rounded-xl border border-line-strong bg-card px-0 text-center text-[15px] font-semibold leading-none text-text-high placeholder:text-center focus:border-accent focus:outline-none focus:ring-[3px] focus:ring-accent/20"
+                  />
+                  <StepperButton
+                    label="Increase quantity"
+                    onClick={() => patch(idx, { quantity: stepQuantity(row.quantity, 1) })}
+                  >
+                    <PlusIcon size={16} strokeWidth={2.4} />
+                  </StepperButton>
+                </div>
                 <button
                   type="button"
                   onClick={() =>
@@ -106,7 +110,7 @@ export const ProductsFields: React.FC<{
                         : [{ productId: '', quantity: '' }],
                     )
                   }
-                  className="hit-44 grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl border border-line text-bad-fg"
+                  className="hit-44 grid h-9 w-9 flex-shrink-0 justify-self-end place-items-center rounded-xl border border-line text-bad-fg"
                   aria-label="Remove item"
                 >
                   <TrashIcon />
