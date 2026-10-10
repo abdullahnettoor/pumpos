@@ -677,6 +677,20 @@ export class CloudShiftService {
     return data || [];
   }
 
+  /** One page of summaries, newest first; `before` is the previous page's oldest `generatedAt`. */
+  async getShiftSummaryPage(stationId: string, limit: number, before?: string): Promise<any[]> {
+    const cursor = before ? `&before=${encodeURIComponent(before)}` : '';
+    const data = await request<any[]>(
+      `/shifts/shift-summaries?stationId=${stationId}&limit=${limit}${cursor}`,
+    );
+    return data || [];
+  }
+
+  /** One Shift's stored summary by id (404 when it is not the caller's to read). */
+  async getShiftSummary(shiftId: string): Promise<any> {
+    return request<any>(`/shifts/shift-summaries/${encodeURIComponent(shiftId)}`);
+  }
+
   async generateDailyDssr(stationId: string, businessDate: string): Promise<any> {
     return request<any>('/dssr/daily/generate', {
       method: 'POST',

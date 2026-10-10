@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
-import { useStationAlerts, useCustomers, useShiftStatus, useShiftSummaries, inr } from '@pump/ui';
-import { resolveBusinessDate } from '@pump/shared';
+import { useStationAlerts, useCustomers, useShiftSummaries, inr } from '@pump/ui';
 import type { Station } from '@pump/shared';
 import type { TabKey } from '../shell/tabs.js';
+import { usePastOpenDates } from './pastOpenDays.js';
 
 export type AlertSeverity = 'danger' | 'warning' | 'info';
 export type AlertCategory = 'stock' | 'credit' | 'day' | 'variance';
@@ -27,17 +27,9 @@ const VARIANCE_THRESHOLD = 200; // ₹ — flag a closed shift's cash variance b
  * exceptions row and the More → Alerts feed never drift.
  */
 export function useMobileAlerts(station: Station | null): MobileAlert[] {
-  const settings: any = (station as any)?.settings || {};
-  const todayBiz = station
-    ? resolveBusinessDate({
-        timeZone: settings.timezone,
-        dayStartsAt: settings.business_day_starts_at,
-      })
-    : '';
-
   const stock = useStationAlerts(station?.id, !!station);
   const customersQ = useCustomers();
-  const statusQ = useShiftStatus(station?.id, true, { enabled: !!station } as any);
+  const pastOpen = usePastOpenDates(station?.id);
   const summariesQ = useShiftSummaries(station?.id);
 
   return useMemo(() => {
@@ -82,14 +74,13 @@ export function useMobileAlerts(station: Station | null): MobileAlert[] {
       });
     }
 
-    // Business day not closed (a prior day still open).
-    const bizDay: any = statusQ.data?.businessDay;
-    if (bizDay?.status === 'OPEN' && bizDay?.businessDate && bizDay.businessDate < todayBiz) {
+    // Business days not closed (a prior day still open), one alert each.
+    for (const date of pastOpen) {
       list.push({
-        id: `day-${bizDay.businessDate}`,
+        id: `day-${date}`,
         severity: 'warning',
         category: 'day',
-        title: `Business day ${bizDay.businessDate} still open`,
+        title: `Business day ${date} still open`,
         meta: 'Close it in the console to finalize the DSSR',
         tab: 'shifts',
       });
@@ -115,5 +106,5 @@ export function useMobileAlerts(station: Station | null): MobileAlert[] {
     }
 
     return list.sort((a, b) => RANK[a.severity] - RANK[b.severity]);
-  }, [station, stock, customersQ.data, statusQ.data, summariesQ.data, todayBiz]);
+  }, [station, stock, customersQ.data, pastOpen, summariesQ.data]);
 }

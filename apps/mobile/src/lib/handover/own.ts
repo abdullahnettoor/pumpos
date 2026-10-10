@@ -1,7 +1,7 @@
-import { isBalancedVariance } from '@pump/shared';
 import type { MyAssignment } from '../../components/handover/model.js';
 import { formatRecordedTime, buildRecap } from '../../screens/attendant/recap.js';
-import { plural, signedRupees } from '../format.js';
+import { plural } from '../format.js';
+import { varianceBadge } from '../variance.js';
 
 /**
  * The signed-in user's own Handover as the server knows it, for the pinned Home
@@ -25,9 +25,6 @@ export interface OwnHandover {
   status: string;
 }
 
-const varianceLabel = (variance: number) =>
-  isBalancedVariance(variance) ? 'Balanced' : signedRupees(variance, { plus: true });
-
 /** Null when the user has no Dispenser Unit on an open Shift. */
 export function deriveOwnHandover(assignment: MyAssignment | null | undefined): OwnHandover | null {
   const dus = assignment?.dispenserUnits ?? [];
@@ -40,7 +37,7 @@ export function deriveOwnHandover(assignment: MyAssignment | null | undefined): 
   let status: string;
   if (recap) {
     const time = formatRecordedTime(recap.recordedAt);
-    status = ['Saved' + (time ? ` ${time}` : ''), varianceLabel(recap.variance)].join(' · ');
+    status = ['Saved' + (time ? ` ${time}` : ''), varianceBadge(recap.variance).text].join(' · ');
   } else if (savedCount > 0) {
     status = `${savedCount} of ${dus.length} DUs saved`;
   } else {

@@ -4,6 +4,7 @@ import {
   businessWeekday,
   stationDay,
   stationDayMonth,
+  stationMinuteOfDay,
   stationTime,
 } from './dates.js';
 
@@ -19,6 +20,10 @@ describe('station-timezone instants', () => {
   it('formats the clock time and day in the station zone', () => {
     expect(stationTime(instant, tz)).toBe('2:00 am');
     expect(stationDayMonth(instant, tz)).toBe('10 Oct');
+  });
+  it('reads minutes after local midnight (midnight is 0, not 24)', () => {
+    expect(stationMinuteOfDay(instant, tz)).toBe(120);
+    expect(stationMinuteOfDay(Date.parse('2026-10-09T18:30:00Z'), tz)).toBe(0);
   });
 });
 

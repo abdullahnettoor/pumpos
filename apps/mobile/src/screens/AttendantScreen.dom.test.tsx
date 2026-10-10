@@ -317,7 +317,7 @@ describe('AttendantScreen', () => {
       expect(screen.getByText('Handover recorded')).toBeDefined();
       expect(screen.getByText('100 L')).toBeDefined();
       expect(screen.getByText('3 items')).toBeDefined();
-      expect(screen.getByText('Short ₹125.00')).toBeDefined();
+      expect(screen.getByText('−₹125')).toBeDefined();
       expect(screen.getByText('includes ₹2,000.00 float')).toBeDefined();
       expect(screen.queryByRole('button', { name: /Save handover/i })).toBeNull();
     });

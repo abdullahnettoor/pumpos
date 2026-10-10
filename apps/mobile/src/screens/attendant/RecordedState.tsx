@@ -1,7 +1,8 @@
 import React from 'react';
 import { inr } from '@pump/ui';
 import { ListGroup, ListRow, SectionLabel, StatusBadge } from '../../ui/index.js';
-import { formatRecordedTime, varianceBadge, type HandoverRecap } from './recap.js';
+import { varianceBadge } from '../../lib/variance.js';
+import { formatRecordedTime, type HandoverRecap } from './recap.js';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -16,7 +17,7 @@ export const RecordedState: React.FC<{
 }> = ({ recap, shiftName, onEdit }) => {
   const badge = varianceBadge(recap.variance);
   const time = formatRecordedTime(recap.recordedAt);
-  const subtitle = [recap.duNames.join(', '), shiftName, time, badge.label]
+  const subtitle = [recap.duNames.join(', '), shiftName, time, badge.text]
     .filter(Boolean)
     .join(' · ');
   // "2 slips + T1": the slips, then the terminals that took card/UPI.
@@ -86,7 +87,7 @@ export const RecordedState: React.FC<{
           title="Variance"
           end={
             <StatusBadge tone={badge.tone} num>
-              {badge.label}
+              {badge.text}
             </StatusBadge>
           }
         />
