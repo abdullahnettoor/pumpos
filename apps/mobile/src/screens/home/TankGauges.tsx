@@ -1,0 +1,51 @@
+import React from 'react';
+import type { TankGauge, TankGaugeLevel } from '../../lib/home/figures.js';
+
+const FILL: Record<TankGaugeLevel, string> = {
+  red: 'bg-bad',
+  amber: 'bg-warn',
+  ok: 'bg-good',
+  unknown: 'bg-text-faint',
+};
+const TEXT: Record<TankGaugeLevel, string> = {
+  red: 'text-bad',
+  amber: 'text-warn',
+  ok: 'text-good',
+  unknown: 'text-text-muted',
+};
+const STATE: Partial<Record<TankGaugeLevel, string>> = { red: 'Low', amber: 'Getting low' };
+
+/** A tube gauge per tank: fill, percent and volume; red below 25%, amber below 40%. */
+export const TankGauges: React.FC<{ tanks: readonly TankGauge[] }> = ({ tanks }) => (
+  <div className="grid grid-cols-3 gap-2 px-3">
+    {tanks.map((t) => (
+      <div
+        key={t.id}
+        data-level={t.level}
+        className="flex items-stretch gap-2.5 rounded-[14px] border border-line bg-card p-2.5"
+      >
+        <div
+          aria-hidden="true"
+          className="relative h-[74px] w-4 flex-shrink-0 overflow-hidden rounded-md bg-track"
+        >
+          <i
+            className={`absolute inset-x-0 bottom-0 ${FILL[t.level]}`}
+            style={{ height: `${t.fill}%` }}
+          />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-xs font-bold text-text-high">{t.title}</p>
+          <p className={`num mt-1.5 text-lg font-semibold ${TEXT[t.level]}`}>
+            {t.pct === null ? '—' : `${t.pct}%`}
+            {STATE[t.level] && <span className="sr-only"> {STATE[t.level]}</span>}
+          </p>
+          <p className="mt-0.5 text-[10px] leading-snug text-text-muted">
+            <span className="num">{t.volume}</span>
+            <br />
+            <span className="block truncate">{t.tankName}</span>
+          </p>
+        </div>
+      </div>
+    ))}
+  </div>
+);
