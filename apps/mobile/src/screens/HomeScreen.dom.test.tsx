@@ -561,6 +561,14 @@ describe('Home: tanks, money, removed sections', () => {
     fireEvent.click(collect);
     expect(nav.active).toBe('money');
     expect(within(screen.getByText('To pay').closest('button')!).getByText('₹10.43L')).toBeTruthy();
+    expect(nav.views.money?.view).toBe('collect');
+  });
+
+  it('opens Money on its To pay segment from the To pay tile', () => {
+    renderHome();
+    fireEvent.click(screen.getByText('To pay').closest('button')!);
+    expect(nav.active).toBe('money');
+    expect(nav.views.money?.view).toBe('pay');
   });
 
   it('has no drawers section and none of the old KPI grid', () => {

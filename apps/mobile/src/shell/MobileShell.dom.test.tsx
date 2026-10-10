@@ -94,11 +94,7 @@ const Root: React.FC<{ tab: string; stationName: string }> = ({ tab, stationName
   const n = useNav();
   return (
     <div data-testid={`root-${tab}`}>
-      {tab === 'home' ? (
-        <HomeHeader />
-      ) : (
-        <TabHeader title={tab} />
-      )}
+      {tab === 'home' ? <HomeHeader /> : <TabHeader title={tab} />}
       <p>
         {tab} list · {stationName}
       </p>

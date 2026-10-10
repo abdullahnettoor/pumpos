@@ -1450,4 +1450,18 @@ describe('Supplier page', () => {
     expect(screen.getByRole('radio', { name: 'To pay' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'HPCL Kozhikode Depot' })).toBeNull();
   });
+
+  it('opens on To collect, and on To pay when Home asks for it (once per request)', () => {
+    mount();
+    expect(screen.getByPlaceholderText('Search customers')).toBeTruthy();
+    act(() => holder.nav.select('money', { view: 'pay' }));
+    expect(screen.getByPlaceholderText('Search suppliers')).toBeTruthy();
+    // The user switches back by hand; a plain tab select does not re-apply the old request.
+    fireEvent.click(screen.getByRole('radio', { name: 'To collect' }));
+    act(() => holder.nav.select('money'));
+    expect(screen.getByPlaceholderText('Search customers')).toBeTruthy();
+    // A second request for the same view applies again.
+    act(() => holder.nav.select('money', { view: 'pay' }));
+    expect(screen.getByPlaceholderText('Search suppliers')).toBeTruthy();
+  });
 });
