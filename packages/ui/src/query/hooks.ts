@@ -33,6 +33,8 @@ import type {
   DesktopDownloads,
   AttendantHandoverReport,
   AttendantReportFilters,
+  InsightsRangeDays,
+  InsightsSales,
 } from '@pump/shared';
 
 /**
@@ -95,6 +97,7 @@ export const queryKeys = {
     ['dssr-range', stationId, from, to] as const,
   attendantHandoverReport: (stationId: string, from: string, to: string) =>
     ['attendant-handover-report', stationId, from, to] as const,
+  insightsSales: (stationId: string, days: number) => ['insights-sales', stationId, days] as const,
   expenseCategories: () => ['expense-categories'] as const,
   incomeCategories: () => ['income-categories'] as const,
   products: () => ['products'] as const,
@@ -881,6 +884,27 @@ export function useAttendantHandoverReport(
 }
 
 /**
+ * Insights sales block over the last `days` closed Business Days. Everything in
+ * it is sealed (closed-day snapshots), so it is semi tier, not operational: a
+ * range never changes until a new day closes, which `useInvalidateOperational`
+ * covers within the session. The server resolves the range end (the last closed
+ * day), so the key carries the range length; not persisted (not in PERSIST_PREFIXES).
+ */
+export function useInsightsSales(
+  stationId: string | null | undefined,
+  days: InsightsRangeDays,
+  options?: Options<InsightsSales>,
+) {
+  return useQuery({
+    queryKey: queryKeys.insightsSales(stationId ?? '', days),
+    queryFn: () => shiftService.getInsightsSales(stationId!, days),
+    enabled: !!stationId,
+    ...TIER.semi,
+    ...options,
+  });
+}
+
+/**
  * Returns a callback that invalidates the operational caches for a station after
  * a mutation (open/close shift, record expense/collection/etc.) so screens stay
  * fresh without manual refetch wiring.
@@ -908,6 +932,8 @@ export function useInvalidateOperational() {
       // The Attendant Handover Report reads closed-shift handovers, so closing
       // a shift (or correcting one) changes it within the same session.
       qc.invalidateQueries({ queryKey: ['attendant-handover-report'] }),
+      // Insights read sealed days; closing a Business Day adds one to the range.
+      qc.invalidateQueries({ queryKey: ['insights-sales'] }),
       // Business Day cockpit + P&L read the live DSSR preview — refresh it too.
       qc.invalidateQueries({ queryKey: ['dssr'] }),
       qc.invalidateQueries({ queryKey: ['dssr-preview'] }),

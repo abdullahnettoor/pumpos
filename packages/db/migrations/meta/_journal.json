@@ -43,6 +43,13 @@
       "when": 1791271115513,
       "tag": "0005_worried_havok",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791611335483,
+      "tag": "0006_useful_paper_doll",
+      "breakpoints": true
     }
   ]
 }
