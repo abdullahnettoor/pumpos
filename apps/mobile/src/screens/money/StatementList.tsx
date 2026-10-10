@@ -2,6 +2,16 @@ import React from 'react';
 import { inr } from '@pump/ui';
 import { signedMoney } from '../../lib/format.js';
 import type { Statement } from '../../lib/money/statement.js';
+import { MinusIcon, PlusIcon } from '../../ui/icons.js';
+
+/**
+ * What an entry does to the balance: one that adds to it (Credit Sale, Purchase)
+ * is amber, one that reduces it (Collection, Supplier Payment) is green.
+ */
+const ENTRY_TONE = {
+  raises: { badge: 'border-warn-line bg-warn-soft text-warn-fg', amount: 'text-warn-fg' },
+  reduces: { badge: 'border-good-line bg-good-soft text-good', amount: 'text-good' },
+} as const;
 
 /** Statement of a Customer: months newest first, each row with its running balance. */
 export const StatementList: React.FC<{
@@ -28,15 +38,16 @@ export const StatementList: React.FC<{
         <ul className="[&>li+li]:border-t [&>li+li]:border-line">
           {m.entries.map((e) => {
             const reduces = e.delta < 0;
+            const tone = reduces ? ENTRY_TONE.reduces : ENTRY_TONE.raises;
+            const Sign = reduces ? MinusIcon : PlusIcon;
             return (
               <li key={e.key} className="flex items-center gap-2.5 px-3 py-2.5">
                 <span
                   aria-hidden="true"
-                  className={`grid h-[30px] w-[30px] flex-shrink-0 place-items-center rounded-full border border-line bg-card-alt text-[15px] font-bold ${
-                    reduces ? 'text-good' : 'text-text-high'
-                  }`}
+                  data-sign={reduces ? 'reduces' : 'raises'}
+                  className={`grid h-[30px] w-[30px] flex-shrink-0 place-items-center rounded-full border ${tone.badge}`}
                 >
-                  {reduces ? '−' : '+'}
+                  <Sign size={14} strokeWidth={2.6} />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] font-semibold text-text-high">{e.label}</p>
@@ -44,9 +55,7 @@ export const StatementList: React.FC<{
                   {e.detail && <p className="truncate text-[11px] text-text-muted">{e.detail}</p>}
                 </div>
                 <div className="flex-shrink-0 text-right">
-                  <p
-                    className={`num text-[13.5px] font-semibold ${reduces ? 'text-good' : 'text-text-high'}`}
-                  >
+                  <p className={`num text-[13.5px] font-semibold ${tone.amount}`}>
                     {reduces ? '−' : '+'}
                     {inr(Math.abs(e.delta))}
                   </p>
