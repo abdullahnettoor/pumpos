@@ -154,6 +154,7 @@ export { Banner } from './components/primitives/Banner.js';
 export type { BannerProps, BannerSeverity } from './components/primitives/Banner.js';
 export { useZodForm } from './forms/useZodForm.js';
 export { formatMoney, inr, formatQty } from './utils/format.js';
+export { initialsOf } from './utils/initials.js';
 export { runTask, useRunTask } from './utils/runTask.js';
 export * from './pump-ds/icon/index.js';
 export * from './pump-ds/brand/index.js';
@@ -163,6 +164,13 @@ export * from './pump-ds/boot/index.js';
 export * from './pump-ds/meter/index.js';
 export { STATUS_BAR_HEIGHT_PX } from './pump-ds/shell/index.js';
 export * from './pump-ds/button/index.js';
+// Shared with the mobile Control Room primitives (apps/mobile/src/ui).
+export { Chip, StatusChip } from './pump-ds/chip/index.js';
+export type { ChipProps, ChipTone, StatusChipProps } from './pump-ds/chip/index.js';
+export { SegmentedControl } from './pump-ds/segmented/index.js';
+export type { SegmentedControlProps, SegmentedControlOption } from './pump-ds/segmented/index.js';
+export { PageHeader } from './pump-ds/page-header/index.js';
+export type { PageHeaderProps } from './pump-ds/page-header/index.js';
 
 // Post-sign-in boot: the branded wait screen and the parallel resolve behind it.
 export * from './boot/sessionBoot.js';

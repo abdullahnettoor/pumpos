@@ -1,6 +1,6 @@
 import React from 'react';
 import type { MobileAlert, AlertSeverity } from '../lib/alerts.js';
-import type { TabKey } from './BottomNav.js';
+import type { TabKey } from '../shell/tabs.js';
 
 const SEV: Record<AlertSeverity, { bg: string; fg: string }> = {
   danger: { bg: 'var(--state-danger-bg)', fg: 'var(--state-danger-fg)' },

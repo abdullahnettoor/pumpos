@@ -21,6 +21,7 @@ import { type Station } from '@pump/shared';
 import { preReadyQuickCreateIds, type PreReadyQuickCreateId } from './quickCreateActions.js';
 import type { NavIntent } from './AppShell.js';
 import { openQuickEntry } from '../quick-entry/store.js';
+import { initialsOf } from '../utils/initials.js';
 import {
   TopBar,
   CommandPalette,
@@ -70,13 +71,6 @@ export interface AppTopBarProps {
   stationReady?: boolean;
   /** Shell-provided menu entries appended above "Log out" (desktop updates). */
   userMenuExtras?: UserMenuAction[];
-}
-
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export const AppTopBar: React.FC<AppTopBarProps> = ({
