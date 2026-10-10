@@ -41,6 +41,11 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     /** Null for pre-#287 shifts, whose cashVariance already includes it. */
     attendantVariance: number | null;
     netVolume: number;
+    /**
+     * This shift's fuel sales (from its summary): lets a later day compare shift by shift.
+     * Null when the summary recorded none, so a comparison skips it rather than reading 0.
+     */
+    fuelSalesValue: number | null;
   }[] = [];
   // Attendant (Handover) variance per Attendant/DU across the day (#287).
   let totalAttendantVariance = 0;
@@ -88,6 +93,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       cashVariance: Number(snap.cashVariance ?? 0),
       attendantVariance: sAttendantVariance,
       netVolume: sNet,
+      fuelSalesValue: snap.totalFuelSalesValue == null ? null : Number(snap.totalFuelSalesValue),
     });
     for (const r of (snap.readings ?? []) as Record<string, any>[]) {
       const gross = Number(r.grossVolume ?? r.volumeSold ?? 0);
@@ -284,8 +290,10 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       normalCredit,
       fleetCredit,
       total: normalCredit + fleetCredit,
+      /** Number of credit slips (customer-ledger Credit Sales) behind the total. */
+      count: source.creditSales.length,
     },
-    purchases: { total: purchasesTotal },
+    purchases: { total: purchasesTotal, count: source.purchases.length },
     pnl: {
       revenueFuel,
       revenueMerch,

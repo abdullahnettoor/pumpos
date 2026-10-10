@@ -43,7 +43,14 @@ describe('useInvalidateOperational', () => {
 
   it('refreshes the shift, day and summary caches a write moves', () => {
     const keys = invalidatedKeysAfterOperationalWrite();
-    for (const key of ['shift-status', 'business-day-status', 'shift-summaries', 'dssr-preview']) {
+    for (const key of [
+      'shift-status',
+      'business-day-status',
+      'shift-summaries',
+      'dssr-preview',
+      // The mobile Home's trend reads closed days' snapshots.
+      'dssr-range',
+    ]) {
       expect(keys).toContain(key);
     }
   });
