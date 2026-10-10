@@ -1,0 +1,1 @@
+CREATE INDEX "business_days_org_business_date_idx" ON "business_days" USING btree ("organization_id","business_date","id");
