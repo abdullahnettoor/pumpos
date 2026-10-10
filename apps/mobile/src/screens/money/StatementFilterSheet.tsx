@@ -8,7 +8,6 @@ import {
   rangePresets,
   resolveRange,
   statementRangeFormSchema,
-  type PresetId,
   type RangeChoice,
   type StatementRangeForm,
 } from '../../lib/money/statementRange.js';
@@ -66,8 +65,8 @@ const Form: React.FC<Omit<Props, 'open'>> = ({ onClose, today, choice, onApply }
   const presets = useMemo(() => rangePresets(today), [today]);
   const options = useMemo(
     () => [
-      ...presets.map((p) => ({ value: p.id as PresetId, label: p.label })),
-      { value: 'custom' as PresetId, label: 'Custom range' },
+      ...presets.map((p) => ({ value: p.id, label: p.label })),
+      { value: 'custom', label: 'Custom range' },
     ],
     [presets],
   );
