@@ -30,11 +30,14 @@ export const StockLoss: React.FC<{ stationId: string; days: InsightsRangeDays }>
               key={t.tankId}
               className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5"
             >
-              <span className="grid h-[30px] place-items-center rounded-[9px] bg-track text-[10.5px] font-bold text-text-high">
-                {t.productCode}
+              <span
+                title={t.productCode}
+                className="grid h-[30px] min-w-0 place-items-center overflow-hidden rounded-[9px] bg-track px-1 text-[10.5px] font-bold text-text-high"
+              >
+                <span className="block max-w-full truncate">{t.productCode}</span>
               </span>
               <div className="min-w-0">
-                <p className={`num text-[13px] font-semibold ${TONE_TEXT[line.tone]}`}>
+                <p className={`num truncate text-[13px] font-semibold ${TONE_TEXT[line.tone]}`}>
                   {line.litres}
                   <span className="ml-1.5 font-sans text-[11px] font-medium text-text-muted">
                     {t.tankName}

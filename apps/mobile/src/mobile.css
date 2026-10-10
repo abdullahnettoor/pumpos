@@ -18,6 +18,18 @@ body {
   overscroll-behavior-y: none;
 }
 
+/* App scroll areas (pages, the Attendant screen, sheets) scroll by touch, wheel,
+ * trackpad and keyboard without a visible bar, as a native app does. Phones already
+ * draw overlay scrollbars that take no width; desktop browsers (and their responsive
+ * mode) draw a permanent ~15px bar that pushed page content off-centre against the
+ * full-width dock and header. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Safe-area padding for notched devices. */
 .mobile-safe-top {
   padding-top: max(env(safe-area-inset-top), 12px);
