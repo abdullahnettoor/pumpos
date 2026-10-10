@@ -5,14 +5,14 @@
  * `useNav().push`. The screens wired here are the pre-revamp ones, kept
  * working until their ticket replaces them.
  */
-import React, { useState } from 'react';
-import { resolveBusinessDate, type Station } from '@pump/shared';
-import { BusinessDayPill } from '../components/BusinessDayPill.js';
+import React from 'react';
+import type { Station } from '@pump/shared';
 import { HandoverPanel } from '../components/HandoverPanel.js';
-import { DssrScreen } from '../screens/DssrScreen.js';
 import { HomeScreen } from '../screens/HomeScreen.js';
 import { InsightsScreen } from '../screens/InsightsScreen.js';
 import { MoneyScreen } from '../screens/MoneyScreen.js';
+import { ReportsScreen } from '../screens/ReportsScreen.js';
+import { SupplierPage } from '../screens/money/SupplierPage.js';
 import { ShiftsScreen } from '../screens/ShiftsScreen.js';
 import { HomeHeader } from './HomeHeader.js';
 import { TabHeader } from './TabHeader.js';
@@ -30,25 +30,6 @@ const Padded: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="px-4 pb-4">{children}</div>
 );
 
-/** Interim Reports root: the day navigator moved here from the global header. */
-const ReportsRoot: React.FC<{ station: Station }> = ({ station }) => {
-  const settings: any = (station as any).settings || {};
-  const today = resolveBusinessDate({
-    timeZone: settings.timezone,
-    dayStartsAt: settings.business_day_starts_at,
-  });
-  const [picked, setPicked] = useState<string | null>(null);
-  const date = picked && picked <= today ? picked : today;
-  return (
-    <>
-      <div className="pb-3">
-        <BusinessDayPill value={date} max={today} onChange={setPicked} />
-      </div>
-      <DssrScreen station={station} businessDate={date} />
-    </>
-  );
-};
-
 export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
   const header = tab === 'home' ? <HomeHeader /> : <TabHeader title={tabDef(tab).label} />;
 
@@ -65,8 +46,7 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
     return (
       <>
         {header}
-        {/* #397: pass `renderSupplierPage` here to open the Supplier page from To pay. */}
-        <MoneyScreen />
+        <MoneyScreen renderSupplierPage={(s) => <SupplierPage supplier={s} />} />
       </>
     );
 
@@ -106,10 +86,15 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
       </>
     );
 
-  return (
-    <>
-      {header}
-      <Padded>{tab === 'reports' && <ReportsRoot station={station} />}</Padded>
-    </>
-  );
+  // Reports lays out its own sections too (tiles and lists inset 12px).
+  if (tab === 'reports')
+    return (
+      <>
+        {header}
+        <ReportsScreen station={station} />
+      </>
+    );
+
+  // Every tab is wired above; a new TabKey lands here with just its header.
+  return <>{header}</>;
 };

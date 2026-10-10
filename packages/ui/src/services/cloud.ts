@@ -24,6 +24,7 @@ import {
   DesktopDownloads,
   AttendantHandoverReport,
   AttendantReportFilters,
+  BusinessDayList,
   InsightsRangeDays,
   InsightsSales,
 } from '@pump/shared';
@@ -716,6 +717,17 @@ export class CloudShiftService {
     return request<ProfitLossReport>(
       `/dssr/profit-loss?stationId=${stationId}&from=${from}&to=${to}`,
     );
+  }
+
+  /**
+   * One month page of the Reports tab's Business Day list (Live / Draft /
+   * Sealed) plus the week tiles. `month` is `YYYY-MM`; omit it for the month of
+   * the Current Business Date. Aggregated in SQL; never builds a DSSR preview.
+   */
+  async getBusinessDayList(stationId: string, month?: string): Promise<BusinessDayList> {
+    const query = new URLSearchParams({ stationId });
+    if (month) query.set('month', month);
+    return request<BusinessDayList>(`/dssr/days?${query.toString()}`);
   }
 
   async getDailyDssrRange(stationId: string, from: string, to: string): Promise<any[]> {

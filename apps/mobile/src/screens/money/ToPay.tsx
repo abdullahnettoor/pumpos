@@ -19,8 +19,7 @@ import { useSuppliersData } from './useMoneyData.js';
 interface Props {
   query: string;
   /**
-   * Opens a supplier's page. Unset until the Supplier page (#397) exists: the
-   * rows then render as plain, non-tappable rows.
+   * Opens a supplier's page. Unset, the rows render as plain, non-tappable rows.
    */
   onOpenSupplier?: (supplier: MoneySupplier) => void;
 }

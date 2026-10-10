@@ -1,12 +1,13 @@
 /**
- * The customer statement: the ledger rows turned into a running balance,
+ * The party statement (Customer or Supplier): the ledger rows turned into a running balance,
  * newest first, grouped by month and paged. Pure, so the arithmetic that has to
  * match the Customer's balance is pinned by `statement.test.ts`.
  *
- * Rows come oldest-first from `GET /transactions/customers/:id/ledger`
- * (Business Date for a sale, Entry Date for a Collection). They carry no
- * running balance, so it is accumulated here from zero over the whole
- * (all-time) ledger. That figure is only shown when it ends on the server's
+ * Rows come from `GET /transactions/customers/:id/ledger` (Business Date for a
+ * sale, Entry Date for a Collection) or `/suppliers/:id/ledger` (Entry Date; a
+ * purchase carries its Business Date). They carry no running balance, so it is
+ * accumulated here from zero over the whole (all-time) ledger, oldest first by
+ * date. That figure is only shown when it ends on the server's
  * `currentBalance` (`reconciled`); otherwise the statement is partial and the
  * rows carry no running balance, rather than a wrong one. The ranged / enriched
  * ledger (#413) replaces this input.
@@ -63,17 +64,32 @@ const RECONCILE_TOLERANCE = 0.005;
 
 export const STATEMENT_PAGE = 20;
 
-/** Friendly names for the ledger's raw transaction types. */
+/** Which ledger the rows belong to: decides which type reduces the balance. */
+export type PartyKind = 'customer' | 'supplier';
+
+/** The one transaction type that reduces what the party owes / what you owe them. */
+const REDUCING: Record<PartyKind, string> = { customer: 'Collection', supplier: 'Payment' };
+
+/** Friendly names for the ledger's raw transaction types (customer and supplier). */
 const LABEL: Record<string, string> = {
   'Credit Sale': 'Credit Sale',
   Collection: 'Payment received',
+  Purchase: 'Purchase',
+  Payment: 'Payment made',
   Adjustment: 'Adjustment',
   'Opening Balance': 'Opening balance',
 };
 
-/** A Collection reduces what the customer owes; everything else adds to it. */
-export function deltaOf(transactionType: string | null | undefined, amount: number): number {
-  return transactionType === 'Collection' ? -amount : amount;
+/**
+ * A Collection (customer) or a Payment (supplier) reduces the balance;
+ * everything else adds to it.
+ */
+export function deltaOf(
+  transactionType: string | null | undefined,
+  amount: number,
+  kind: PartyKind = 'customer',
+): number {
+  return transactionType === REDUCING[kind] ? -amount : amount;
 }
 
 const dateOf = (r: LedgerRow): string => String(r.businessDate ?? r.createdAt ?? '').slice(0, 10);
@@ -120,12 +136,17 @@ export function buildStatement(
   rows: readonly LedgerRow[],
   visible: number = STATEMENT_PAGE,
   expectedBalance?: number,
+  kind: PartyKind = 'customer',
 ): Statement {
   let running = 0;
-  const entries = rows.map((r, i): StatementEntry & { date: string } => {
-    const delta = deltaOf(r.transactionType, Number(r.amount ?? 0) || 0);
+  // Oldest first by date (stable, so same-day rows keep the API's order): a
+  // back-dated row then lands in its own month, not between two others.
+  const ordered = rows
+    .map((r, i) => ({ r, i, date: dateOf(r) }))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.i - b.i));
+  const entries = ordered.map(({ r, i, date }): StatementEntry & { date: string } => {
+    const delta = deltaOf(r.transactionType, Number(r.amount ?? 0) || 0, kind);
     running = Math.round((running + delta) * 100) / 100;
-    const date = dateOf(r);
     const day = date ? dayLabel(date) : '';
     const note = r.notes?.trim();
     return {

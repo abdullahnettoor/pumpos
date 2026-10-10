@@ -1,25 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React from 'react';
 import { useCustomerLedger } from '@pump/ui';
-import { buildStatement, STATEMENT_PAGE, type LedgerRow } from '../../lib/money/statement.js';
 import { balanceOf, type MoneyCustomer } from '../../lib/money/parties.js';
+import type { LedgerRow } from '../../lib/money/statement.js';
 import { DetailPage } from '../../ui/DetailPage.js';
-import { PhoneIcon } from '../../ui/icons.js';
-import { Note } from '../../ui/Note.js';
-import { SectionLabel } from '../../ui/SectionLabel.js';
 import { BalanceCard } from './BalanceCard.js';
-import { StatementList } from './StatementList.js';
+import { CallButton } from './CallButton.js';
+import { StatementSection } from './StatementSection.js';
 import { useCustomersData } from './useMoneyData.js';
-
-/** Call button: a real `tel:` link, styled like the header `IconButton`. */
-const CallButton: React.FC<{ name: string; phone: string }> = ({ name, phone }) => (
-  <a
-    href={`tel:${phone.replace(/[^\d+]/g, '')}`}
-    aria-label={`Call ${name}`}
-    className="grid h-[34px] w-[34px] flex-shrink-0 place-items-center rounded-[10px] border border-line bg-card text-text-muted"
-  >
-    <PhoneIcon size={17} />
-  </a>
-);
 
 /**
  * Customer page: header (type, fleet code, phone, call), balance card and the
@@ -40,11 +27,6 @@ export const CustomerPage: React.FC<{ customer: MoneyCustomer }> = ({ customer: 
   const customer = customers.find((c) => c.id === initial.id) ?? initial;
 
   const ledgerQ = useCustomerLedger(customer.id);
-  const [visible, setVisible] = useState(STATEMENT_PAGE);
-  const statement = useMemo(
-    () => buildStatement((ledgerQ.data ?? []) as LedgerRow[], visible, balanceOf(customer)),
-    [ledgerQ.data, visible, customer],
-  );
 
   const subtitle = [customer.customerType, customer.fleetCode, customer.phone]
     .filter(Boolean)
@@ -59,32 +41,14 @@ export const CustomerPage: React.FC<{ customer: MoneyCustomer }> = ({ customer: 
       }
     >
       <BalanceCard customer={customer} />
-      <SectionLabel>Statement</SectionLabel>
-      {ledgerQ.isLoading ? (
-        <Note>Loading statement…</Note>
-      ) : ledgerQ.isError ? (
-        <Note>
-          Couldn’t load the statement.{' '}
-          <button
-            type="button"
-            onClick={() => void ledgerQ.refetch()}
-            className="font-bold text-accent"
-          >
-            Retry
-          </button>
-        </Note>
-      ) : statement.total === 0 ? (
-        <Note>
-          {statement.reconciled
-            ? 'No transactions yet.'
-            : 'No statement entries to show for this balance.'}
-        </Note>
-      ) : (
-        <StatementList
-          statement={statement}
-          onLoadMore={() => setVisible((n) => n + STATEMENT_PAGE)}
-        />
-      )}
+      <StatementSection
+        kind="customer"
+        balance={balanceOf(customer)}
+        rows={ledgerQ.data as LedgerRow[] | undefined}
+        isLoading={ledgerQ.isLoading}
+        isError={ledgerQ.isError}
+        onRetry={() => void ledgerQ.refetch()}
+      />
     </DetailPage>
   );
 };
