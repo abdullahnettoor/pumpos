@@ -5,14 +5,13 @@
  * `useNav().push`. The screens wired here are the pre-revamp ones, kept
  * working until their ticket replaces them.
  */
-import React, { useState } from 'react';
-import { resolveBusinessDate, type Station } from '@pump/shared';
-import { BusinessDayPill } from '../components/BusinessDayPill.js';
+import React from 'react';
+import type { Station } from '@pump/shared';
 import { HandoverPanel } from '../components/HandoverPanel.js';
-import { DssrScreen } from '../screens/DssrScreen.js';
 import { HomeScreen } from '../screens/HomeScreen.js';
 import { LedgerScreen } from '../screens/LedgerScreen.js';
 import { MoreScreen } from '../screens/MoreScreen.js';
+import { ReportsScreen } from '../screens/ReportsScreen.js';
 import { ShiftsScreen } from '../screens/ShiftsScreen.js';
 import { HomeHeader } from './HomeHeader.js';
 import { useNav } from './nav.js';
@@ -30,25 +29,6 @@ interface Props {
 const Padded: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="px-4 pb-4">{children}</div>
 );
-
-/** Interim Reports root: the day navigator moved here from the global header. */
-const ReportsRoot: React.FC<{ station: Station }> = ({ station }) => {
-  const settings: any = (station as any).settings || {};
-  const today = resolveBusinessDate({
-    timeZone: settings.timezone,
-    dayStartsAt: settings.business_day_starts_at,
-  });
-  const [picked, setPicked] = useState<string | null>(null);
-  const date = picked && picked <= today ? picked : today;
-  return (
-    <>
-      <div className="pb-3">
-        <BusinessDayPill value={date} max={today} onChange={setPicked} />
-      </div>
-      <DssrScreen station={station} businessDate={date} />
-    </>
-  );
-};
 
 export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
   const nav = useNav();
@@ -98,7 +78,7 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
       {header}
       <Padded>
         {tab === 'shifts' && <ShiftsScreen station={station} />}
-        {tab === 'reports' && <ReportsRoot station={station} />}
+        {tab === 'reports' && <ReportsScreen station={station} />}
         {tab === 'insights' && <MoreScreen station={station} onNavigate={onNavigate} />}
       </Padded>
     </>

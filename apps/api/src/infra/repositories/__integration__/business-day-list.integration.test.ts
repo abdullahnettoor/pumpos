@@ -217,7 +217,10 @@ describe.skipIf(!CONNECTION)('Business Day list reader against real Postgres', (
       endTime: '14:00',
     });
 
-    const two = [shiftSnapshot(), shiftSnapshot({ totalFuelSalesValue: 50000, totalNetVolume: 480 })];
+    const two = [
+      shiftSnapshot(),
+      shiftSnapshot({ totalFuelSalesValue: 50000, totalNetVolume: 480 }),
+    ];
     // Same figures sealed (06) and unsealed-but-closed-shifts (the Draft rollup, 07).
     await seedDay(ORG, STATION, '2026-10-06', 'CLOSED', two, [1200, 300], true);
     await seedDay(ORG, STATION, '2026-10-07', 'OPEN', two, [1200, 300], false);
