@@ -24,7 +24,6 @@ vi.mock('./money/CustomerPage.js', () => ({
 }));
 vi.mock('./HandoverPage.js', () => ({ HandoverPage: () => <p>Handover page</p> }));
 
-const { NeedsAttentionPage } = await import('./NeedsAttentionPage.js');
 const { HomeAttention } = await import('./home/HomeAttention.js');
 const { HomeHeader } = await import('../shell/HomeHeader.js');
 const { ShellContext } = await import('../shell/context.js');

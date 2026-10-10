@@ -42,14 +42,19 @@ describe('deriveAlerts', () => {
   it('carries stock alerts with no action (no purchasing on mobile)', () => {
     const [a] = deriveAlerts({
       ...none,
-      stock: [{ id: 'tank-1', severity: 'danger', title: 'HSD critically low', meta: '8% · 3,600 L' }],
+      stock: [
+        { id: 'tank-1', severity: 'danger', title: 'HSD critically low', meta: '8% · 3,600 L' },
+      ],
     });
     expect(a).toMatchObject({ id: 'tank-1', category: 'stock', severity: 'danger' });
     expect(a.action).toBeUndefined();
   });
 
   it('raises one day alert per past open day, newest first, opening that day', () => {
-    const days = deriveAlerts({ ...none, pastOpenDates: ['2026-10-06', '2026-10-08', '2026-10-08'] });
+    const days = deriveAlerts({
+      ...none,
+      pastOpenDates: ['2026-10-06', '2026-10-08', '2026-10-08'],
+    });
     expect(days.map((a) => a.id)).toEqual(['day-2026-10-08', 'day-2026-10-06']);
     expect(days[0].action).toEqual({ kind: 'day', businessDate: '2026-10-08' });
     expect(days[0].title).toMatch(/8 Oct/);

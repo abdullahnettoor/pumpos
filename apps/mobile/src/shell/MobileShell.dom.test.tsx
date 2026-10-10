@@ -210,11 +210,6 @@ describe('dock', () => {
   });
 });
 
-const du = (handover?: unknown) => ({
-  shift: { id: 's2', templateName: 'Shift 2' },
-  dispenserUnits: [{ duId: 'du-2', duName: 'DU2', nozzles: [], terminals: [], handover }],
-});
-
 describe('header', () => {
   afterEach(() => {
     mine.assignment = null;
