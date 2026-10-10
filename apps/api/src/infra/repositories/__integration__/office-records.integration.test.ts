@@ -38,6 +38,14 @@ const CUSTOMER = '00000000-0000-0000-0000-00000000c10b';
 const CATEGORY = '00000000-0000-0000-0000-00000000c10c';
 const DAY = '00000000-0000-0000-0000-00000000c10d';
 const SUPPLIER = '00000000-0000-0000-0000-00000000c10e';
+const PRIOR_DAY = '00000000-0000-0000-0000-00000000c110';
+const RANGE_END_DAY = '00000000-0000-0000-0000-00000000c111';
+const OTHER_ORG = '00000000-0000-0000-0000-00000000c112';
+const OTHER_DAY = '00000000-0000-0000-0000-00000000c114';
+const RANGE_CUSTOMER = '00000000-0000-0000-0000-00000000c116';
+const RANGE_SUPPLIER = '00000000-0000-0000-0000-00000000c117';
+const RANGE_PURCHASE = '00000000-0000-0000-0000-00000000c118';
+const MISSING_PURCHASE = '00000000-0000-0000-0000-00000000c119';
 
 const BOOTSTRAP = `
   do $$ begin
@@ -123,10 +131,19 @@ describe.skipIf(!CONNECTION)('Office Records against real Postgres (ADR 0005)', 
   });
 
   async function seed() {
-    await db.insert(schema.organizations).values({ id: ORG, name: 'Tenant A' });
+    await db.insert(schema.organizations).values([
+      { id: ORG, name: 'Tenant A' },
+      { id: OTHER_ORG, name: 'Tenant B' },
+    ]);
     await db.insert(schema.stations).values([
       { id: STATION, organizationId: ORG, name: 'Station A', code: 'STA' },
       { id: OTHER_STATION, organizationId: ORG, name: 'Station B', code: 'STB' },
+      {
+        id: '00000000-0000-0000-0000-00000000c115',
+        organizationId: OTHER_ORG,
+        name: 'Station C',
+        code: 'STC',
+      },
     ]);
     await db.insert(schema.users).values({
       id: MANAGER,
@@ -176,16 +193,17 @@ describe.skipIf(!CONNECTION)('Office Records against real Postgres (ADR 0005)', 
       },
       { id: FOREIGN_TERMINAL, organizationId: ORG, stationId: OTHER_STATION, label: 'B-POS' },
     ]);
-    await db.insert(schema.customers).values({
-      id: CUSTOMER,
-      organizationId: ORG,
-      customerType: 'Fleet',
-      name: 'Sharma Transports',
-    });
+    await db.insert(schema.customers).values([
+      { id: CUSTOMER, organizationId: ORG, customerType: 'Fleet', name: 'Sharma Transports' },
+      { id: RANGE_CUSTOMER, organizationId: ORG, customerType: 'Fleet', name: 'Range Customer' },
+    ]);
     await db
       .insert(schema.expenseCategories)
       .values({ id: CATEGORY, organizationId: ORG, name: 'Tea' });
-    await db.insert(schema.suppliers).values({ id: SUPPLIER, organizationId: ORG, name: 'IOC' });
+    await db.insert(schema.suppliers).values([
+      { id: SUPPLIER, organizationId: ORG, name: 'IOC' },
+      { id: RANGE_SUPPLIER, organizationId: ORG, name: 'Range Supplier' },
+    ]);
     // A credit sale on a (sales) Business Day: the receivable a collection pays down.
     await db.insert(schema.businessDays).values({
       id: DAY,
@@ -195,6 +213,32 @@ describe.skipIf(!CONNECTION)('Office Records against real Postgres (ADR 0005)', 
       status: 'OPEN',
       openedBy: MANAGER,
     });
+    await db.insert(schema.businessDays).values([
+      {
+        id: PRIOR_DAY,
+        organizationId: ORG,
+        stationId: STATION,
+        businessDate: '2026-03-13',
+        status: 'CLOSED',
+        openedBy: MANAGER,
+      },
+      {
+        id: RANGE_END_DAY,
+        organizationId: ORG,
+        stationId: STATION,
+        businessDate: '2026-03-15',
+        status: 'OPEN',
+        openedBy: MANAGER,
+      },
+      {
+        id: OTHER_DAY,
+        organizationId: OTHER_ORG,
+        stationId: '00000000-0000-0000-0000-00000000c115',
+        businessDate: '2026-03-14',
+        status: 'OPEN',
+        openedBy: MANAGER,
+      },
+    ]);
     await db.insert(schema.customerTransactions).values({
       businessDayId: DAY,
       customerId: CUSTOMER,
@@ -244,6 +288,231 @@ describe.skipIf(!CONNECTION)('Office Records against real Postgres (ADR 0005)', 
     expect(await db.select().from(schema.businessDays)).toHaveLength(daysBefore.length);
   });
 
+  it('builds ranged customer balances from Business Date sales and Entry Date collections, inclusively and tenant-scoped', async () => {
+    await db.insert(schema.customerTransactions).values([
+      {
+        businessDayId: PRIOR_DAY,
+        customerId: RANGE_CUSTOMER,
+        transactionType: 'Credit Sale',
+        amount: '2000',
+      },
+      {
+        businessDayId: DAY,
+        customerId: RANGE_CUSTOMER,
+        transactionType: 'Credit Sale',
+        amount: '1000',
+      },
+      {
+        businessDayId: RANGE_END_DAY,
+        customerId: RANGE_CUSTOMER,
+        transactionType: 'Credit Sale',
+        amount: '1000',
+      },
+      // A cross-tenant row referencing this party must not enter its statement or balance.
+      {
+        businessDayId: OTHER_DAY,
+        customerId: RANGE_CUSTOMER,
+        transactionType: 'Credit Sale',
+        amount: '50000',
+      },
+    ]);
+    await db.insert(schema.collections).values([
+      {
+        organizationId: ORG,
+        stationId: STATION,
+        entryDate: '2026-03-15',
+        customerId: RANGE_CUSTOMER,
+        amount: '3000',
+        paymentMethod: 'Cash',
+        fundingAccountId: CASH,
+        documentNumber: 'COL-RANGE-1',
+      },
+      {
+        organizationId: OTHER_ORG,
+        stationId: '00000000-0000-0000-0000-00000000c115',
+        entryDate: '2026-03-14',
+        customerId: RANGE_CUSTOMER,
+        amount: '40000',
+        paymentMethod: 'Cash',
+        fundingAccountId: CASH,
+        documentNumber: 'COL-FOREIGN-1',
+      },
+    ]);
+
+    const ranged = await get(
+      `/transactions/customers/${RANGE_CUSTOMER}/ledger?from=2026-03-14&to=2026-03-15`,
+    );
+    expect(ranged.data.periodOpeningBalance).toBe('2000.00');
+    expect(
+      ranged.data.entries.map((entry: any) => [entry.transactionType, entry.businessDate]),
+    ).toEqual([
+      ['Credit Sale', '2026-03-14'],
+      ['Credit Sale', '2026-03-15'],
+      ['Collection', '2026-03-15'],
+    ]);
+    expect(ranged.data.entries[0].runningBalance).toBe('3000.00');
+    expect(ranged.data.closingBalance).toBe('1000.00');
+    const customers = await get('/transactions/customers');
+    expect(customers.data.find((row: any) => row.id === RANGE_CUSTOMER).currentBalance).toBe(1000);
+    expect(ranged.data.closingBalance).toBe('1000.00');
+  });
+
+  it('keeps supplier purchases on their copied Entry Date when purchase metadata is missing and reports advances', async () => {
+    await db.insert(schema.purchases).values({
+      id: RANGE_PURCHASE,
+      documentNumber: 'PUR-RANGE-1',
+      businessDayId: DAY, // Business Date 2026-03-14, distinct from copied Entry Date below.
+      supplierId: RANGE_SUPPLIER,
+      invoiceNumber: 'INV-RANGE-1',
+      amount: '30',
+    });
+    await db.insert(schema.supplierTransactions).values([
+      {
+        organizationId: ORG,
+        stationId: STATION,
+        entryDate: '2026-03-13',
+        supplierId: RANGE_SUPPLIER,
+        transactionType: 'Payment',
+        amount: '50',
+        fundingAccountId: BANK,
+      },
+      {
+        organizationId: ORG,
+        stationId: STATION,
+        entryDate: '2026-03-15',
+        supplierId: RANGE_SUPPLIER,
+        transactionType: 'Purchase',
+        amount: '30',
+        referenceType: 'PURCHASE',
+        referenceId: RANGE_PURCHASE,
+      },
+      {
+        organizationId: ORG,
+        stationId: STATION,
+        entryDate: '2026-03-15',
+        supplierId: RANGE_SUPPLIER,
+        transactionType: 'Purchase',
+        amount: '5',
+        referenceType: 'PURCHASE',
+        referenceId: MISSING_PURCHASE,
+      },
+      {
+        organizationId: ORG,
+        stationId: STATION,
+        entryDate: '2026-03-15',
+        supplierId: RANGE_SUPPLIER,
+        transactionType: 'Payment',
+        amount: '2',
+        fundingAccountId: BANK,
+      },
+      {
+        organizationId: OTHER_ORG,
+        stationId: '00000000-0000-0000-0000-00000000c115',
+        entryDate: '2026-03-15',
+        supplierId: RANGE_SUPPLIER,
+        transactionType: 'Purchase',
+        amount: '90000',
+      },
+    ]);
+    const ranged = await get(
+      `/transactions/suppliers/${RANGE_SUPPLIER}/ledger?from=2026-03-15&to=2026-03-15`,
+    );
+    expect(ranged.data.periodOpeningBalance).toBe('-50.00');
+    expect(ranged.data.entries).toHaveLength(3);
+    const purchaseRow = ranged.data.entries.find((row: any) => row.invoiceNumber === 'INV-RANGE-1');
+    expect(purchaseRow).toMatchObject({ businessDate: '2026-03-15', reference: 'INV-RANGE-1' });
+    expect(Number(purchaseRow.runningBalance)).toBeGreaterThan(-50);
+    expect(ranged.data.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          transactionType: 'Purchase',
+          businessDate: '2026-03-15',
+          invoiceNumber: 'INV-RANGE-1',
+          reference: 'INV-RANGE-1',
+        }),
+        expect.objectContaining({
+          transactionType: 'Purchase',
+          businessDate: '2026-03-15',
+          reference: null,
+        }),
+        expect.objectContaining({
+          transactionType: 'Payment',
+          businessDate: '2026-03-15',
+          method: 'BANK',
+        }),
+      ]),
+    );
+    const suppliers = await get('/transactions/suppliers');
+    expect(suppliers.data.find((row: any) => row.id === RANGE_SUPPLIER).currentBalance).toBe(-17);
+    expect(ranged.data.closingBalance).toBe('-17.00');
+  });
+
+  it('uses date-ordered indexes for all three ranged statement sources', async () => {
+    await sql.unsafe(
+      `INSERT INTO business_days (id, organization_id, station_id, business_date, status, opened_by)
+       SELECT gen_random_uuid(), $1, $2, to_char(date '2024-01-01' + n, 'YYYY-MM-DD'), 'CLOSED', $3
+       FROM generate_series(0, 364) n ON CONFLICT DO NOTHING`,
+      [ORG, STATION, MANAGER],
+    );
+    await sql.unsafe(
+      `INSERT INTO customer_transactions (id, business_day_id, customer_id, transaction_type, amount)
+       SELECT gen_random_uuid(), bd.id, $1, 'Credit Sale', 10
+       FROM generate_series(1, 10000) n
+       JOIN business_days bd ON bd.organization_id = $2
+         AND bd.station_id = $3
+         AND bd.business_date = to_char(date '2024-01-01' + ((n - 1) % 365), 'YYYY-MM-DD')`,
+      [RANGE_CUSTOMER, ORG, STATION],
+    );
+    await sql.unsafe(
+      `INSERT INTO collections (id, document_number, organization_id, station_id, entry_date,
+         customer_id, amount, payment_method, funding_account_id)
+       SELECT gen_random_uuid(), 'COL-EXPLAIN-' || n, $1, $2,
+         to_char(date '2024-01-01' + ((n - 1) % 365), 'YYYY-MM-DD'), $3, 10, 'Cash', $4
+       FROM generate_series(1, 10000) n`,
+      [ORG, STATION, RANGE_CUSTOMER, CASH],
+    );
+    await sql.unsafe(
+      `INSERT INTO supplier_transactions (id, organization_id, station_id, entry_date, supplier_id,
+         transaction_type, amount)
+       SELECT gen_random_uuid(), $1, $2,
+         to_char(date '2024-01-01' + ((n - 1) % 365), 'YYYY-MM-DD'), $3, 'Purchase', 10
+       FROM generate_series(1, 10000) n`,
+      [ORG, STATION, RANGE_SUPPLIER],
+    );
+    await sql.unsafe('ANALYZE business_days');
+    await sql.unsafe('ANALYZE customer_transactions');
+    await sql.unsafe('ANALYZE collections');
+    await sql.unsafe('ANALYZE supplier_transactions');
+
+    const plans = await Promise.all([
+      sql.unsafe(
+        `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
+         SELECT ct.id FROM customer_transactions ct
+         JOIN business_days bd ON bd.id = ct.business_day_id AND bd.organization_id = $1
+         WHERE bd.organization_id = $1 AND bd.business_date BETWEEN $2 AND $3 AND ct.customer_id = $4`,
+        [ORG, '2024-06-01', '2024-06-02', RANGE_CUSTOMER],
+      ),
+      sql.unsafe(
+        `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
+         SELECT co.id FROM collections co
+         WHERE co.organization_id = $1 AND co.customer_id = $2 AND co.entry_date BETWEEN $3 AND $4`,
+        [ORG, RANGE_CUSTOMER, '2024-06-01', '2024-06-02'],
+      ),
+      sql.unsafe(
+        `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
+         SELECT st.id FROM supplier_transactions st
+         WHERE st.organization_id = $1 AND st.supplier_id = $2 AND st.entry_date BETWEEN $3 AND $4`,
+        [ORG, RANGE_SUPPLIER, '2024-06-01', '2024-06-02'],
+      ),
+    ]);
+    const planText = plans.map((plan) => plan.map((row: any) => row['QUERY PLAN']).join('\n'));
+    console.info('\nParty ledger EXPLAIN (trimmed):\n' + planText.join('\n---\n'));
+    expect(planText[0]).toContain('business_days_org_business_date_idx');
+    expect(planText[0]).toContain('customer_txn_customer_business_day_created_idx');
+    expect(planText[1]).toContain('collections_org_customer_entry_date_idx');
+    expect(planText[2]).toContain('supplier_transactions_org_supplier_entry_date_idx');
+  }, 30_000);
+
   it('rejects a future Entry Date', async () => {
     const r = await post('/transactions/expenses', {
       stationId: STATION,
@@ -258,7 +527,7 @@ describe.skipIf(!CONNECTION)('Office Records against real Postgres (ADR 0005)', 
   it('refuses a collection into an account that does not suit its method', async () => {
     const r = await post('/transactions/collections', {
       stationId: STATION,
-      customerId: CUSTOMER,
+      customerId: RANGE_CUSTOMER,
       amount: 4000,
       paymentMethod: 'Cash',
       fundingAccountId: BANK,

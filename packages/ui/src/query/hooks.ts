@@ -874,6 +874,7 @@ export function useDailyDssrRange(
     queryKey: queryKeys.dssrRange(stationId ?? '', from, to),
     queryFn: () => shiftService.getDailyDssrRange(stationId!, from, to),
     enabled: !!stationId && !!from && !!to,
+    ...TIER.operational,
     ...options,
   });
 }
@@ -933,6 +934,8 @@ export function useInvalidateOperational() {
       // Business Day cockpit + P&L read the live DSSR preview — refresh it too.
       qc.invalidateQueries({ queryKey: ['dssr'] }),
       qc.invalidateQueries({ queryKey: ['dssr-preview'] }),
+      // Closing a Business Day writes its snapshot: the mobile Home's 7-day trend reads the range.
+      qc.invalidateQueries({ queryKey: ['dssr-range'] }),
       qc.invalidateQueries({ queryKey: ['expenses'] }),
       qc.invalidateQueries({ queryKey: ['income'] }),
       qc.invalidateQueries({ queryKey: ['purchases'] }),

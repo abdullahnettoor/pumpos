@@ -1,6 +1,6 @@
 {
-  "id": "c10ae356-b14b-4d18-ba43-ff06c557e27b",
-  "prevId": "03f2d1a4-fe48-486f-ad68-719c006ce2a6",
+  "id": "be87c91d-6643-4f91-8240-b06b609a31a0",
+  "prevId": "c10ae356-b14b-4d18-ba43-ff06c557e27b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -337,6 +337,33 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "business_days_org_business_date_idx": {
+          "name": "business_days_org_business_date_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "business_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}

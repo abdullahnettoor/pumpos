@@ -12,6 +12,8 @@ export const SectionLabel: React.FC<Props> = ({ children, right }) => (
     <h2 className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-text-muted">
       {children}
     </h2>
-    {right && <span className="text-[11px] font-semibold text-accent">{right}</span>}
+    {right && (
+      <span className="text-[11px] font-semibold text-accent [&_button]:text-inherit">{right}</span>
+    )}
   </div>
 );

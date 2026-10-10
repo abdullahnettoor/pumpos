@@ -1,4 +1,4 @@
--- DERIVED from packages/db/migrations/0006_lethal_raider.sql by
+-- DERIVED from packages/db/migrations/0008_lowly_sir_ram.sql by
 -- `npm run db:sync-supabase -w @pump/db`. Edit the source, never this copy.
 
 CREATE INDEX "dssr_snapshots_org_station_date_idx" ON "dssr_snapshots" USING btree ("organization_id","station_id","business_date");--> statement-breakpoint

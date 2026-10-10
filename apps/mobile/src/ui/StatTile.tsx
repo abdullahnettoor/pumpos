@@ -14,6 +14,8 @@ interface Props {
   /** Amount, quantity or count: set in the tabular mono face. */
   value: string;
   sub?: string;
+  /** A further line under `sub`. */
+  note?: string;
   tone?: Tone;
   /** Span both columns of a two-column grid, with a larger figure. */
   wide?: boolean;
@@ -30,6 +32,7 @@ export const StatTile: React.FC<Props> = ({
   label,
   value,
   sub,
+  note,
   tone = 'default',
   wide,
   trailing,
@@ -47,6 +50,7 @@ export const StatTile: React.FC<Props> = ({
         {value}
       </p>
       {sub && <p className="mt-0.5 text-[11px] text-text-muted">{sub}</p>}
+      {note && <p className="text-[11px] text-text-faint">{note}</p>}
     </div>
     {trailing}
   </div>
