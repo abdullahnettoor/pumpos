@@ -106,6 +106,12 @@ type Variables = {
 
 export const transactionsRouter = new Hono<{ Variables: Variables }>();
 
+const isIsoCalendarDate = (value: string): boolean => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+
 const docNumbers = new TimestampDocumentNumberGenerator();
 
 /**
@@ -422,12 +428,127 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
       404,
     );
   }
-  // TODO (ledger scaling): this returns the supplier's ALL-TIME transactions and
-  // the client computes the period opening + in-range rows. Bounded per single
-  // supplier, so fine for now. When a supplier's history grows large, mirror the
-  // account-statement pattern: accept from/to, return
-  // { periodOpeningBalance: Σ(debit − credit) WHERE businessDate < from, entries: in-range only }
-  // and drop the client-side clampByDate/opening computation in UnifiedLedger.
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  if (from || to) {
+    if (!from || !to || !isIsoCalendarDate(from) || !isIsoCalendarDate(to) || from > to) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'from and to must be valid YYYY-MM-DD dates, with from <= to',
+          },
+        },
+        400,
+      );
+    }
+    const [statement] = (await db.execute(sql`
+      WITH entries AS (
+        SELECT
+          st.id,
+          st.transaction_type AS "transactionType",
+          st.amount,
+          CASE
+            WHEN st.transaction_type = 'Purchase' THEN bd.business_date
+            ELSE st.entry_date
+          END AS "businessDate",
+          st.notes,
+          st.created_at AS "createdAt",
+          st.reference_type AS "referenceType",
+          st.reference_id AS "referenceId",
+          st.funding_account_id AS "fundingAccountId",
+          fa.name AS "fundingAccountName",
+          p.invoice_number AS "invoiceNumber",
+          pi.product_name AS "productName",
+          pi.quantity,
+          pi.unit,
+          NULL::text AS "tankerNumber",
+          CASE WHEN st.transaction_type = 'Payment' THEN
+            CASE fa.account_type
+              WHEN 'CASH_IN_HAND' THEN 'Cash'
+              WHEN 'PETTY_CASH' THEN 'Cash'
+              WHEN 'BANK' THEN 'BankTransfer'
+              WHEN 'MERCHANT_CLEARING' THEN 'Card/UPI'
+              WHEN 'CMS' THEN 'OMC'
+              WHEN 'OWNER' THEN 'Owner'
+              ELSE NULL
+            END
+          ELSE NULL END AS method,
+          COALESCE(p.invoice_number, st.notes, st.reference_type) AS reference,
+          1::int AS sort_order
+        FROM supplier_transactions st
+        LEFT JOIN financial_accounts fa
+          ON fa.id = st.funding_account_id AND fa.organization_id = st.organization_id
+        LEFT JOIN purchases p ON p.id = st.reference_id AND st.reference_type = 'PURCHASE'
+        LEFT JOIN business_days bd ON bd.id = p.business_day_id
+        LEFT JOIN LATERAL (
+          SELECT STRING_AGG(DISTINCT pr.name, ', ' ORDER BY pr.name) AS product_name,
+                 CASE WHEN COUNT(DISTINCT pr.unit) = 1 THEN SUM(pit.quantity)::text ELSE NULL END AS quantity,
+                 CASE WHEN COUNT(DISTINCT pr.unit) = 1 THEN MIN(pr.unit) ELSE NULL END AS unit
+          FROM purchase_items pit
+          JOIN products pr ON pr.id = pit.product_id
+          WHERE pit.purchase_id = p.id
+          HAVING COUNT(*) > 0
+        ) pi ON true
+        WHERE st.organization_id = ${user.organizationId}
+          AND st.supplier_id = ${supplierId}
+          -- Purchase payables copy their Business Date to entry_date; using the
+          -- indexed office date here bounds the scan while the returned date is
+          -- still sourced from the Business Day above.
+          AND st.entry_date <= ${to}
+      ),
+      opening AS (
+        SELECT COALESCE(SUM(CASE WHEN "transactionType" = 'Payment' THEN -amount ELSE amount END), 0)::numeric AS balance
+        FROM entries WHERE "businessDate" < ${from}
+      ),
+      ranged AS (
+        SELECT entries.*,
+          SUM(CASE WHEN "transactionType" = 'Payment' THEN -amount ELSE amount END)
+            OVER (ORDER BY "businessDate", "createdAt", id ROWS UNBOUNDED PRECEDING) AS range_balance
+        FROM entries WHERE "businessDate" >= ${from} AND "businessDate" <= ${to}
+      )
+      SELECT
+        opening.balance::text AS "periodOpeningBalance",
+        (opening.balance + COALESCE((SELECT range_balance FROM ranged ORDER BY "businessDate" DESC, "createdAt" DESC, id DESC LIMIT 1), 0))::text AS "closingBalance",
+        COALESCE((SELECT json_agg(json_build_object(
+          'id', ranged.id, 'transactionType', ranged."transactionType", 'amount', ranged.amount::text,
+          'businessDate', ranged."businessDate", 'runningBalance', (opening.balance + ranged.range_balance)::text,
+          'notes', ranged.notes, 'createdAt', ranged."createdAt", 'invoiceNumber', ranged."invoiceNumber",
+          'productName', ranged."productName", 'quantity', ranged.quantity, 'unit', ranged.unit,
+          'tankerNumber', ranged."tankerNumber", 'method', ranged.method, 'reference', ranged.reference,
+          'fundingAccountName', ranged."fundingAccountName"
+        ) ORDER BY ranged."businessDate", ranged."createdAt", ranged.id) FROM ranged), '[]'::json) AS entries
+      FROM opening
+    `)) as unknown as Array<{
+      periodOpeningBalance: string;
+      closingBalance: string;
+      entries: Array<Record<string, unknown>>;
+    }>;
+    const entries = (statement?.entries ?? []).map((entry) => ({
+      ...entry,
+      amount: Number(entry.amount ?? 0),
+      runningBalance: Number(entry.runningBalance ?? 0),
+      quantity: entry.quantity == null ? null : Number(entry.quantity),
+      invoiceNumber: entry.invoiceNumber ?? null,
+      productName: entry.productName ?? null,
+      unit: entry.unit ?? null,
+      tankerNumber: entry.tankerNumber ?? null,
+      method: entry.method ?? null,
+      reference: entry.reference ?? null,
+      fundingAccountName: entry.fundingAccountName ?? null,
+    }));
+    return c.json({
+      success: true,
+      data: {
+        periodOpeningBalance: Number(statement?.periodOpeningBalance ?? 0),
+        closingBalance: Number(statement?.closingBalance ?? statement?.periodOpeningBalance ?? 0),
+        entries,
+      },
+    });
+  }
+
+  // Keep the legacy all-time response shape for desktop and older mobile clients.
   const list = await db
     .select({
       id: schema.supplierTransactions.id,
@@ -616,12 +737,134 @@ transactionsRouter.get('/customers/:id/ledger', async (c) => {
       404,
     );
   }
-  // TODO (ledger scaling): this returns the customer's ALL-TIME transactions and
-  // the client computes the period opening + in-range rows. Bounded per single
-  // customer, so fine for now. When a customer's history grows large, mirror the
-  // account-statement pattern: accept from/to, return
-  // { periodOpeningBalance: Σ(debit − credit) WHERE businessDate < from, entries: in-range only }
-  // and drop the client-side clampByDate/opening computation in UnifiedLedger.
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  if (from || to) {
+    if (!from || !to || !isIsoCalendarDate(from) || !isIsoCalendarDate(to) || from > to) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'from and to must be valid YYYY-MM-DD dates, with from <= to',
+          },
+        },
+        400,
+      );
+    }
+    const [statement] = (await db.execute(sql`
+      WITH entries AS (
+        SELECT
+          ct.id,
+          ct.transaction_type AS "transactionType",
+          ct.amount,
+          bd.business_date AS "businessDate",
+          ct.notes,
+          ct.created_at AS "createdAt",
+          ct.shift_id AS "shiftId",
+          bd.business_date AS "shiftBusinessDate",
+          CASE WHEN ct.shift_id IS NULL THEN NULL ELSE (
+            SELECT COUNT(*)::int FROM shifts seq
+            WHERE seq.business_day_id = ct.business_day_id
+              AND (seq.opened_at, seq.id) <= (sh.opened_at, sh.id)
+          ) END AS "shiftSequence",
+          pr.name AS "productName",
+          ct.quantity,
+          pr.unit,
+          cv.registration_number AS "vehicleRegistration",
+          NULL::text AS method,
+          NULL::text AS reference,
+          NULL::text AS "fundingAccountName",
+          CASE WHEN ct.transaction_type = 'Collection' THEN -ct.amount ELSE ct.amount END AS signed_amount,
+          1::int AS sort_order
+        FROM customer_transactions ct
+        JOIN business_days bd ON bd.id = ct.business_day_id
+        LEFT JOIN shifts sh ON sh.id = ct.shift_id
+        LEFT JOIN products pr ON pr.id = ct.product_id
+        LEFT JOIN customer_vehicles cv ON cv.id = ct.vehicle_id
+        WHERE bd.organization_id = ${user.organizationId}
+          AND ct.customer_id = ${customerId}
+          AND ct.transaction_type NOT IN ('OMC Sale', 'Collection')
+          AND bd.business_date <= ${to}
+        UNION ALL
+        SELECT
+          co.id,
+          'Collection'::text AS "transactionType",
+          co.amount,
+          co.entry_date AS "businessDate",
+          co.notes,
+          co.created_at AS "createdAt",
+          NULL::uuid AS "shiftId",
+          NULL::varchar AS "shiftBusinessDate",
+          NULL::int AS "shiftSequence",
+          NULL::varchar AS "productName",
+          NULL::numeric AS quantity,
+          NULL::varchar AS unit,
+          NULL::varchar AS "vehicleRegistration",
+          co.payment_method AS method,
+          co.document_number AS reference,
+          fa.name AS "fundingAccountName",
+          -co.amount AS signed_amount,
+          2::int AS sort_order
+        FROM collections co
+        LEFT JOIN financial_accounts fa
+          ON fa.id = co.funding_account_id AND fa.organization_id = co.organization_id
+        WHERE co.organization_id = ${user.organizationId}
+          AND co.customer_id = ${customerId}
+          AND co.entry_date <= ${to}
+      ),
+      opening AS (
+        SELECT COALESCE(SUM(signed_amount), 0)::numeric AS balance FROM entries WHERE "businessDate" < ${from}
+      ),
+      ranged AS (
+        SELECT entries.*,
+          SUM(signed_amount) OVER (ORDER BY "businessDate", "createdAt", sort_order, id ROWS UNBOUNDED PRECEDING) AS range_balance
+        FROM entries WHERE "businessDate" >= ${from} AND "businessDate" <= ${to}
+      )
+      SELECT
+        opening.balance::text AS "periodOpeningBalance",
+        (opening.balance + COALESCE((SELECT range_balance FROM ranged ORDER BY "businessDate" DESC, "createdAt" DESC, sort_order DESC, id DESC LIMIT 1), 0))::text AS "closingBalance",
+        COALESCE((SELECT json_agg(json_build_object(
+          'id', ranged.id, 'transactionType', ranged."transactionType", 'amount', ranged.amount::text,
+          'businessDate', ranged."businessDate", 'runningBalance', (opening.balance + ranged.range_balance)::text,
+          'notes', ranged.notes, 'createdAt', ranged."createdAt", 'shiftId', ranged."shiftId",
+          'shiftBusinessDate', ranged."shiftBusinessDate", 'shiftSequence', ranged."shiftSequence",
+          'productName', ranged."productName", 'quantity', ranged.quantity::text, 'unit', ranged.unit,
+          'vehicleRegistration', ranged."vehicleRegistration", 'method', ranged.method,
+          'reference', ranged.reference, 'fundingAccountName', ranged."fundingAccountName"
+        ) ORDER BY ranged."businessDate", ranged."createdAt", ranged.sort_order, ranged.id) FROM ranged), '[]'::json) AS entries
+      FROM opening
+    `)) as unknown as Array<{
+      periodOpeningBalance: string;
+      closingBalance: string;
+      entries: Array<Record<string, unknown>>;
+    }>;
+    const entries = (statement?.entries ?? []).map((entry) => ({
+      ...entry,
+      amount: Number(entry.amount ?? 0),
+      runningBalance: Number(entry.runningBalance ?? 0),
+      quantity: entry.quantity == null ? null : Number(entry.quantity),
+      shiftId: entry.shiftId ?? null,
+      shiftBusinessDate: entry.shiftBusinessDate ?? null,
+      shiftSequence: entry.shiftSequence == null ? null : Number(entry.shiftSequence),
+      productName: entry.productName ?? null,
+      unit: entry.unit ?? null,
+      vehicleRegistration: entry.vehicleRegistration ?? null,
+      method: entry.method ?? null,
+      reference: entry.reference ?? null,
+      fundingAccountName: entry.fundingAccountName ?? null,
+    }));
+    return c.json({
+      success: true,
+      data: {
+        periodOpeningBalance: Number(statement?.periodOpeningBalance ?? 0),
+        closingBalance: Number(statement?.closingBalance ?? statement?.periodOpeningBalance ?? 0),
+        entries,
+      },
+    });
+  }
+
+  // Keep the legacy all-time response shape for desktop and older mobile clients.
   // Credit sales / adjustments come from the customer ledger; collections are
   // Office Records read from `collections` (ADR 0005). `businessDate` is the
   // ledger date: Business Date for a sale, Entry Date for a collection.
