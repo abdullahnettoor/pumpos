@@ -1,5 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import React, { useMemo, useState } from 'react';
 import {
   useMyAssignment,
   useProducts,
@@ -7,21 +6,44 @@ import {
   useAllVehicles,
   useInventoryItems,
   useMerchandiseHandovers,
-  Combobox,
-  CloudTransactionService,
-  handoverPayloadFingerprint,
-  createIdempotencyKey,
-  resolveHandoverRequestIdentity,
   selectHandoverSummary,
-  useRecordHandoverMutation,
-  queryKeys,
   inr,
+  runTask,
   type CashBreakdown,
-  type RecordHandoverPayload,
   type RecordHandoverResult,
 } from '@pump/ui';
 import { CashCountSheet } from './CashCountSheet.js';
-import { runTask } from '@pump/ui';
+import { CustomerSaleForm } from './handover/CustomerSaleForm.js';
+import { NumberField } from './handover/Fields.js';
+import { CalculatorIcon } from './handover/icons.js';
+import {
+  blankZero,
+  num,
+  seedForm,
+  type AssignedDu,
+  type DuFormState,
+  type DuProduct,
+  type MerchProduct,
+  type MyAssignment,
+} from './handover/model.js';
+import { ProductsFields } from './handover/ProductsFields.js';
+import { StepCard } from './handover/StepCard.js';
+import {
+  cashStep,
+  collectHandoverErrors,
+  creditStep,
+  fieldErrorMap,
+  fieldId,
+  merchTotal,
+  productsStep,
+  readingsStep,
+  reconcileDu,
+  terminalsStep,
+  type StepId,
+} from './handover/steps.js';
+import { SummaryStrip, formatVariance, varianceTone } from './handover/SummaryStrip.js';
+import { TerminalsFields } from './handover/TerminalsFields.js';
+import { useHandoverSubmission } from './handover/useHandoverSubmission.js';
 
 /**
  * Shared self-service handover UI — mirrors the desktop HandoverDrawer. Loads the
@@ -30,588 +52,50 @@ import { runTask } from '@pump/ui';
  * fuel-on-credit lines, cash, and a merchandise closing. Used both by the
  * dedicated Attendant shell and by the "My handover" tab that appears for any
  * other role when they are assigned to a dispenser unit on an open shift.
+ *
+ * Presentation: five collapsible step cards per DU under a sticky
+ * Expected · Declared · Variance strip, with one Save handover action (there is
+ * no draft — a save is re-saveable until the Shift closes). This component owns
+ * what the attendant has typed; validation, step status and the Drawer maths
+ * live in ./handover/steps (pure), and saving in ./handover/useHandoverSubmission.
  */
 
-const txService = new CloudTransactionService();
-
-type TerminalState = Record<string, { card: string; upi: string; batch: string }>;
-
-interface DuFormState {
-  readings: Record<string, string>; // nozzleId -> closing
-  testing: Record<string, string>; // nozzleId -> testing volume
-  terminals: TerminalState; // terminalId -> {card, upi, batch}
-  aggregateCard: string;
-  aggregateUpi: string;
-  cash: string;
-  /** Cash taken from this Drawer mid-shift (ADR 0005). */
-  drops: string;
-}
-
-interface CreditLine {
-  id?: string;
-  /** Null for an anonymous OMC card sale. */
-  customerId: string | null;
-  customerName: string | null;
-  customerType?: string | null;
-  vehicleId: string | null;
-  vehicleLabel?: string | null;
-  productId: string | null;
-  productName: string | null;
-  quantity: number | null;
-  unitPrice: number | null;
-  amount: number;
-  notes: string | null;
-}
-
-interface DuProduct {
-  id: string;
-  name: string;
-  unit: string;
-  price: number;
-}
-
-/**
- * An amount as the input shows it: blank for zero or missing, so the operator
- * types into an empty box (placeholder "0") instead of deleting a 0 first (#302).
- * Submitting a blank still sends 0 (`num`).
- */
-const blankZero = (v: string | number | null | undefined): string =>
-  v != null && v !== '' && Number(v) !== 0 && Number.isFinite(Number(v)) ? String(Number(v)) : '';
-
-const num = (v: string | number | null | undefined) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
+const STEP_TITLE: Record<StepId, string> = {
+  readings: 'Closing readings',
+  credit: 'Credit & fuel-card sales',
+  terminals: 'Card / UPI',
+  products: 'Products sold',
+  cash: 'Cash handed over',
 };
 
-// A fresh idempotency key per customer-sale line, so a retry of the SAME line
-// (e.g. after a flaky-network blip) de-dupes server-side instead of double-posting.
-const genIdemKey = (): string =>
-  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-const fieldStyle = {
-  backgroundColor: 'var(--bg-surface)',
-  borderColor: 'var(--border-soft)',
-  color: 'var(--text-strong)',
-} as const;
-
-const TrashIcon: React.FC<{ size?: number }> = ({ size = 15 }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <polyline points="3 6 5 6 21 6" />
-    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-    <path d="M10 11v6M14 11v6" />
-    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-  </svg>
-);
-
-const CalculatorIcon: React.FC<{ size?: number }> = ({ size = 18 }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <rect x="4" y="2" width="16" height="20" rx="2" />
-    <line x1="8" y1="6" x2="16" y2="6" />
-    <line x1="8" y1="10" x2="8" y2="10" />
-    <line x1="12" y1="10" x2="12" y2="10" />
-    <line x1="16" y1="10" x2="16" y2="10" />
-    <line x1="8" y1="14" x2="8" y2="14" />
-    <line x1="12" y1="14" x2="12" y2="14" />
-    <line x1="16" y1="14" x2="16" y2="18" />
-    <line x1="8" y1="18" x2="12" y2="18" />
-  </svg>
-);
-
-const NumberField: React.FC<{
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  sub?: string;
-  placeholder?: string;
-  min?: number;
-  error?: string;
-  trailing?: React.ReactNode;
-}> = ({ label, value, onChange, sub, placeholder, min = 0, error, trailing }) => (
-  <label className="flex flex-col gap-1">
-    <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-      {label}
-    </span>
-    <div className="flex items-center gap-2">
-      <input
-        type="number"
-        inputMode="decimal"
-        min={min}
-        value={value}
-        placeholder={placeholder ?? '0'}
-        onChange={(e) => onChange(e.target.value)}
-        className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm font-mono tabular-nums"
-        style={{
-          ...fieldStyle,
-          borderColor: error ? 'var(--state-danger-fg)' : fieldStyle.borderColor,
-        }}
-      />
-      {trailing}
-    </div>
-    {error ? (
-      <span className="text-[11px]" style={{ color: 'var(--state-danger-fg)' }}>
-        {error}
-      </span>
-    ) : sub ? (
-      <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
-        {sub}
-      </span>
-    ) : null}
-  </label>
-);
-
-/** Inline customer-sale recorder for one DU. A single client-side picker (cached
- *  customers + vehicles — no server search) drives both channels: Credit (a
- *  station receivable) and OMC card (settled to the CMS account, optional
- *  customer). Prices from the DU's own fuels; each line saves immediately. */
-const CustomerSaleForm: React.FC<{
-  duProducts: DuProduct[];
-  customers: any[];
-  allVehicles: any[];
-  credit: CreditLine[];
-  omc: CreditLine[];
-  busy: boolean;
-  onAdd: (
-    channel: 'credit' | 'omc',
-    line: Omit<CreditLine, 'id'>,
-    idempotencyKey: string,
-  ) => Promise<void>;
-  onRemove: (channel: 'credit' | 'omc', id: string) => Promise<void>;
-}> = ({ duProducts, customers, allVehicles, credit, omc, busy, onAdd, onRemove }) => {
-  const [open, setOpen] = useState(false);
-  const [channel, setChannel] = useState<'credit' | 'omc'>('credit');
-  const [selectValue, setSelectValue] = useState('');
-  const [customerId, setCustomerId] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [customerType, setCustomerType] = useState<string | null>(null);
-  const [vehicleId, setVehicleId] = useState<string | null>(null);
-  const [vehicleLabel, setVehicleLabel] = useState('');
-  const [productId, setProductId] = useState('');
-  const [qty, setQty] = useState('');
-  const [price, setPrice] = useState('');
-  const [amount, setAmount] = useState('');
-  const [notes, setNotes] = useState('');
-  const [adding, setAdding] = useState(false);
-  // Idempotency key for the line being added — kept across a failed retry
-  // (same key → server de-dupes), cleared on success or any edit.
-  const idemKeyRef = useRef<string | null>(null);
-
-  const reset = () => {
-    idemKeyRef.current = null;
-    setSelectValue('');
-    setChannel('credit');
-    setCustomerId('');
-    setCustomerName('');
-    setCustomerType(null);
-    setVehicleId(null);
-    setVehicleLabel('');
-    setProductId('');
-    setQty('');
-    setPrice('');
-    setAmount('');
-    setNotes('');
-  };
-
-  // Combined, cached option list: vehicles (scoped to the passed customers) + customers.
-  const options = useMemo(() => {
-    const customerIds = new Set(customers.map((c: any) => c.id));
-    const opts: { value: string; label: string; sublabel?: string }[] = [];
-    for (const v of allVehicles) {
-      if (!customerIds.has(v.customerId)) continue;
-      const parts = [v.customerName, v.customerType, v.defaultProductName].filter(Boolean);
-      opts.push({ value: `v:${v.id}`, label: v.registrationNumber, sublabel: parts.join(' · ') });
-    }
-    for (const c of customers)
-      opts.push({ value: `c:${c.id}`, label: c.name, sublabel: c.customerType });
-    return opts;
-  }, [allVehicles, customers]);
-
-  const defaultChannelFor = (cust: any): 'credit' | 'omc' =>
-    cust?.customerType === 'Fleet' && cust?.isPrepaid ? 'omc' : 'credit';
-
-  const onSelect = (value: string) => {
-    idemKeyRef.current = null;
-    setSelectValue(value);
-    if (value.startsWith('v:')) {
-      const v = allVehicles.find((x: any) => `v:${x.id}` === value);
-      if (!v) return;
-      const cust = customers.find((c: any) => c.id === v.customerId);
-      setCustomerId(v.customerId);
-      setCustomerName(v.customerName ?? 'Customer');
-      setCustomerType(v.customerType ?? cust?.customerType ?? null);
-      setChannel(
-        defaultChannelFor(cust ?? { customerType: v.customerType, isPrepaid: v.isPrepaid }),
-      );
-      setVehicleId(v.id);
-      setVehicleLabel(v.registrationNumber);
-      const match = duProducts.find((p) => p.id === v.defaultProductId);
-      if (match) {
-        setProductId(match.id);
-        if (match.price > 0) setPrice(match.price.toFixed(2));
-      }
-    } else if (value.startsWith('c:')) {
-      const id = value.slice(2);
-      const c = customers.find((x: any) => x.id === id);
-      setCustomerId(id);
-      setCustomerName(c?.name ?? 'Customer');
-      setCustomerType(c?.customerType ?? null);
-      setChannel(defaultChannelFor(c));
-      setVehicleId(null);
-      setVehicleLabel('');
-    }
-  };
-
-  const onProduct = (pid: string) => {
-    idemKeyRef.current = null;
-    setProductId(pid);
-    const p = duProducts.find((x) => x.id === pid);
-    const pr = p && p.price > 0 ? p.price : 0;
-    setPrice(pr > 0 ? pr.toFixed(2) : '');
-    const q = Number(qty);
-    if (q > 0 && pr > 0) setAmount((q * pr).toFixed(2));
-  };
-  const onQty = (v: string) => {
-    idemKeyRef.current = null;
-    setQty(v);
-    const q = Number(v);
-    const pr = Number(price);
-    if (q > 0 && pr > 0) setAmount((q * pr).toFixed(2));
-  };
-  const onAmount = (v: string) => {
-    idemKeyRef.current = null;
-    setAmount(v);
-    const a = Number(v);
-    const pr = Number(price);
-    if (a > 0 && pr > 0) setQty((a / pr).toFixed(3));
-  };
-
-  const isOmc = channel === 'omc';
-  const submit = async () => {
-    const amt = Number(amount);
-    if ((!isOmc && !customerId) || !(amt > 0)) return;
-    setAdding(true);
-    try {
-      const idempotencyKey = idemKeyRef.current ?? (idemKeyRef.current = genIdemKey());
-      await onAdd(
-        channel,
-        {
-          customerId: customerId || null,
-          customerName: customerId ? customerName : null,
-          customerType,
-          vehicleId,
-          vehicleLabel: vehicleLabel || null,
-          productId: productId || null,
-          productName: duProducts.find((p) => p.id === productId)?.name ?? null,
-          quantity: Number(qty) > 0 ? Number(qty) : null,
-          unitPrice: price && Number(price) >= 0 ? Number(price) : null,
-          amount: amt,
-          notes: notes || null,
-        },
-        idempotencyKey,
-      );
-      reset();
-      setOpen(false);
-    } finally {
-      setAdding(false);
-    }
-  };
-
-  const renderList = (label: string, lines: CreditLine[], ch: 'credit' | 'omc') =>
-    lines.length > 0 ? (
-      <div className="mb-2">
-        <div
-          className="mb-1 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide"
-          style={{ color: 'var(--text-muted)' }}
-        >
-          <span>{label}</span>
-          <span className="font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>
-            {inr(lines.reduce((s, l) => s + Number(l.amount || 0), 0))}
-          </span>
-        </div>
-        <ul className="flex flex-col gap-1">
-          {lines.map((l, i) => (
-            <li
-              key={l.id ?? i}
-              className="flex items-center justify-between rounded-lg border px-3 py-2"
-              style={{ borderColor: 'var(--border-soft)' }}
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm" style={{ color: 'var(--text-default)' }}>
-                  {l.customerName || 'OMC card (no customer)'}
-                  {l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
-                </p>
-                <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                  {l.productName ?? 'Fuel'}
-                  {l.quantity ? ` · ${l.quantity}` : ''}
-                  {l.notes ? ` · ${l.notes}` : ''}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className="font-mono text-sm tabular-nums"
-                  style={{ color: 'var(--text-strong)' }}
-                >
-                  {inr(l.amount)}
-                </span>
-                {l.id && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      // The panel shows the operator-facing message via setError;
-                      // this only catches what that path re-throws.
-                      runTask(onRemove(ch, l.id!), (error: unknown) =>
-                        console.error('Failed to remove sale:', error),
-                      )
-                    }
-                    disabled={busy}
-                    className="grid h-7 w-7 place-items-center rounded-lg border disabled:opacity-50"
-                    style={{ borderColor: 'var(--border-soft)', color: 'var(--state-danger-fg)' }}
-                    aria-label="Remove sale"
-                  >
-                    <TrashIcon />
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    ) : null;
-
-  return (
-    <div>
-      <p
-        className="mb-2 text-xs font-semibold uppercase tracking-wide"
-        style={{ color: 'var(--text-muted)' }}
-      >
-        Customer sales
-      </p>
-
-      {renderList('Credit', credit, 'credit')}
-      {renderList('OMC card · CMS', omc, 'omc')}
-
-      {!open ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="w-full rounded-lg border border-dashed py-2 text-sm font-medium"
-          style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}
-        >
-          + Add customer sale
-        </button>
-      ) : (
-        <div
-          className="flex flex-col gap-2 rounded-lg border p-3"
-          style={{ borderColor: 'var(--border-soft)' }}
-        >
-          {/* Channel toggle */}
-          <div className="flex gap-2">
-            {(['credit', 'omc'] as const).map((ch) => (
-              <button
-                key={ch}
-                type="button"
-                onClick={() => setChannel(ch)}
-                className="flex-1 rounded-lg border py-2 text-xs font-semibold"
-                style={{
-                  borderColor: channel === ch ? 'var(--brand-primary)' : 'var(--border-soft)',
-                  color: channel === ch ? 'var(--brand-primary)' : 'var(--text-muted)',
-                  backgroundColor: channel === ch ? 'var(--bg-surface-alt)' : 'var(--bg-surface)',
-                }}
-              >
-                {ch === 'credit' ? 'Credit (receivable)' : 'OMC card → CMS'}
-              </button>
-            ))}
-          </div>
-          {isOmc && (
-            <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
-              Settled to CMS by the Oil Company — not a receivable. Customer optional.
-            </p>
-          )}
-
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-              Customer or vehicle{isOmc ? ' (optional)' : ''}
-            </span>
-            <Combobox
-              options={options}
-              value={selectValue}
-              onChange={onSelect}
-              placeholder="Select customer or vehicle…"
-              searchPlaceholder="Search name or vehicle no.…"
-              emptyMessage="No customer or vehicle found."
-            />
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-              Fuel
-            </span>
-            <select
-              value={productId}
-              onChange={(e) => onProduct(e.target.value)}
-              className="rounded-lg border px-3 py-2 text-sm"
-              style={fieldStyle}
-            >
-              <option value="">Select fuel…</option>
-              {duProducts.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="grid grid-cols-2 gap-2">
-            <NumberField
-              label={`Quantity${price ? ` @ ${price}` : ''}`}
-              value={qty}
-              onChange={onQty}
-            />
-            <NumberField label="Amount (₹)" value={amount} onChange={onAmount} />
-          </div>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-              Remarks (driver, slip no.)
-            </span>
-            <input
-              type="text"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. driver / slip ref"
-              className="rounded-lg border px-3 py-2 text-sm"
-              style={fieldStyle}
-            />
-          </label>
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                reset();
-                setOpen(false);
-              }}
-              className="flex-1 rounded-lg border py-2 text-sm font-medium"
-              style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                runTask(submit(), (error: unknown) => console.error('Failed to add sale:', error))
-              }
-              disabled={adding || busy || (!isOmc && !customerId) || !(Number(amount) > 0)}
-              className="flex-1 rounded-lg py-2 text-sm font-semibold text-on-accent disabled:opacity-60"
-              style={{ backgroundColor: 'var(--brand-primary)' }}
-            >
-              {adding ? 'Adding…' : isOmc ? 'Add OMC sale' : 'Add credit sale'}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-/** What a DU's entry looks like before the attendant touches it. Pure over `du`. */
-function seedForm(du: any): DuFormState {
-  const readings: Record<string, string> = {};
-  const testing: Record<string, string> = {};
-  for (const nz of du.nozzles) {
-    readings[nz.nozzleId] = String(nz.closingReading ?? nz.openingReading ?? 0);
-    testing[nz.nozzleId] = blankZero(nz.testingVolume);
-  }
-  const terminals: TerminalState = {};
-  for (const t of du.terminals) {
-    const entry = (du.terminalEntries || []).find((e: any) => e.terminalId === t.terminalId);
-    terminals[t.terminalId] = {
-      card: blankZero(entry?.cardAmount),
-      upi: blankZero(entry?.upiAmount),
-      batch: entry?.batchRef ?? '',
-    };
-  }
-  return {
-    readings,
-    testing,
-    terminals,
-    aggregateCard: du.terminals.length === 0 ? blankZero(du.handover?.cardHandedOver) : '',
-    aggregateUpi: du.terminals.length === 0 ? blankZero(du.handover?.upiHandedOver) : '',
-    cash: blankZero(du.handover?.cashHandedOver),
-    drops: blankZero(du.handover?.cashDrops),
-  };
-}
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export const HandoverPanel: React.FC = () => {
   const assignmentQ = useMyAssignment();
   const productsQ = useProducts();
   const customersQ = useCustomers(true);
   const vehiclesQ = useAllVehicles(true);
-  const qc = useQueryClient();
-  const recordHandover = useRecordHandoverMutation();
 
-  const data = assignmentQ.data;
-  // Memoised: a bare `?? []` gives the seed effect below a new array identity
-  // every render, which is what made its dependency list unsatisfiable.
-  const dus: any[] = useMemo(() => data?.dispenserUnits ?? [], [data?.dispenserUnits]);
-  const shiftId: string | undefined = data?.shift?.id;
-  const attendantId: string | undefined = data?.userId;
-  const stationId: string | undefined = data?.station?.id ?? data?.shift?.stationId;
+  const data: MyAssignment | null | undefined = assignmentQ.data;
+  // Memoised: a bare `?? []` gives the memos below a new array identity every
+  // render, which would recompute them on each keystroke.
+  const dus: AssignedDu[] = useMemo(() => data?.dispenserUnits ?? [], [data?.dispenserUnits]);
+  const shiftId = data?.shift?.id;
+  const attendantId = data?.userId;
+  const stationId = data?.station?.id ?? data?.shift?.stationId;
   const aggregateNonCashAllowed = data?.stationHasConfiguredTerminals === false;
   const inventoryQ = useInventoryItems(stationId ?? null);
   const merchHandoversQ = useMerchandiseHandovers(shiftId ?? null);
 
   const [editedForms, setEditedForms] = useState<Record<string, DuFormState>>({});
-  const [editedCreditByDu, setEditedCreditByDu] = useState<Record<string, CreditLine[]>>({});
-  const [editedOmcByDu, setEditedOmcByDu] = useState<Record<string, CreditLine[]>>({});
   const [editedMerchRows, setEditedMerchRows] = useState<
     { productId: string; quantity: string }[] | null
   >(null);
   const [editedMerchNonCash, setEditedMerchNonCash] = useState<string | null>(null);
-  const [ccBusy, setCcBusy] = useState(false);
   // Cash denomination counter (bottom sheet): which DU's sheet is open + per-DU
   // counts (parent-held so re-opening preserves them; future backend = drop-in).
   const [sheetDuId, setSheetDuId] = useState<string | null>(null);
   const [cashBreakdownByDu, setCashBreakdownByDu] = useState<Record<string, CashBreakdown>>({});
-  const [saving, setSaving] = useState(false);
-  // Terminals assigned but zero card/UPI declared: require one explicit
-  // confirmation so a forgotten POS sheet is caught at entry.
-  const [zeroTerminalsConfirmed, setZeroTerminalsConfirmed] = useState(false);
-  const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [acceptedByDu, setAcceptedByDu] = useState<Record<string, RecordHandoverResult>>({});
-  const handoverRequestByDuRef = useRef<
-    Record<string, { fingerprint: string; idempotencyKey: string }>
-  >({});
-  const acceptedFingerprintByDuRef = useRef<Record<string, string>>({});
-  const merchandiseRequestRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(
-    null,
-  );
-  const resetMerchandiseAcceptance = () => {
-    setAcceptedByDu({});
-    merchandiseRequestRef.current = null;
-  };
 
   /**
    * The attendant's entry for each DU: what they have typed, falling back to
@@ -627,30 +111,16 @@ export const HandoverPanel: React.FC = () => {
     return out;
   }, [dus, editedForms]);
 
-  const creditByDu = useMemo(() => {
-    const out: Record<string, CreditLine[]> = {};
-    for (const du of dus)
-      out[du.duId] = editedCreditByDu[du.duId] ?? ((du.creditSales || []) as CreditLine[]);
-    return out;
-  }, [dus, editedCreditByDu]);
-
-  const omcByDu = useMemo(() => {
-    const out: Record<string, CreditLine[]> = {};
-    for (const du of dus)
-      out[du.duId] = editedOmcByDu[du.duId] ?? ((du.omcSales || []) as CreditLine[]);
-    return out;
-  }, [dus, editedOmcByDu]);
-
   // Merchandise products (non-fuel), for the add-line picker.
   const merchProducts = useMemo(
     () =>
-      (productsQ.data || []).filter(
-        (p: any) => p.productType && p.productType !== 'FUEL' && p.isActive !== false,
+      ((productsQ.data || []) as MerchProduct[]).filter(
+        (p: MerchProduct) => p.productType && p.productType !== 'FUEL' && p.isActive !== false,
       ),
     [productsQ.data],
   );
   const merchById = useMemo(() => {
-    const m: Record<string, any> = {};
+    const m: Record<string, MerchProduct> = {};
     for (const p of merchProducts) m[p.id] = p;
     return m;
   }, [merchProducts]);
@@ -658,7 +128,7 @@ export const HandoverPanel: React.FC = () => {
   // On-hand stock per merchandise product (shown in the picker, like desktop).
   const stock = useMemo(() => {
     const m: Record<string, number> = {};
-    (inventoryQ.data || []).forEach((i: any) => {
+    (inventoryQ.data || []).forEach((i: { productId: string; quantity: number | string }) => {
       m[i.productId] = Number(i.quantity);
     });
     return m;
@@ -666,7 +136,7 @@ export const HandoverPanel: React.FC = () => {
 
   const merchOptions = useMemo(
     () =>
-      merchProducts.map((pr: any) => {
+      merchProducts.map((pr) => {
         const onHand = stock[pr.id];
         const priceLabel =
           pr.sellingPrice != null ? `MRP ${inr(Number(pr.sellingPrice))}` : 'No price set';
@@ -687,14 +157,20 @@ export const HandoverPanel: React.FC = () => {
    * arrived a frame late could submit an empty list over a real one.
    */
   const myMerchandise = useMemo(
-    () => (merchHandoversQ.data ?? []).find((h: any) => h.attendantId === attendantId),
+    () =>
+      (merchHandoversQ.data ?? []).find(
+        (h: { attendantId: string }) => h.attendantId === attendantId,
+      ),
     [merchHandoversQ.data, attendantId],
   );
   const merchRows = useMemo<{ productId: string; quantity: string }[]>(() => {
     if (editedMerchRows) return editedMerchRows;
     const items = myMerchandise?.items ?? [];
     return items.length
-      ? items.map((it: any) => ({ productId: it.productId, quantity: String(Number(it.quantity)) }))
+      ? items.map((it: { productId: string; quantity: number | string }) => ({
+          productId: it.productId,
+          quantity: String(Number(it.quantity)),
+        }))
       : [{ productId: '', quantity: '' }];
   }, [editedMerchRows, myMerchandise]);
   const merchNonCash =
@@ -706,72 +182,143 @@ export const HandoverPanel: React.FC = () => {
   // Customers pickable for on-account sales: all except legacy station-prepaid
   // non-fleet wallets. Prepaid Fleet ARE included (OMC fleet cards → CMS).
   const creditCustomers = useMemo(
-    () => (customersQ.data || []).filter((c: any) => c.customerType === 'Fleet' || !c.isPrepaid),
+    () =>
+      (customersQ.data || []).filter(
+        (c: { customerType?: string; isPrepaid?: boolean }) =>
+          c.customerType === 'Fleet' || !c.isPrepaid,
+      ),
     [customersQ.data],
   );
   // Cached vehicles (semi tier, persisted) — no server search.
   const allVehicles = useMemo(() => vehiclesQ.data ?? [], [vehiclesQ.data]);
 
-  const duProductsFor = (du: any): DuProduct[] =>
+  const duProductsFor = (du: AssignedDu): DuProduct[] =>
     Array.from(
       new Map(
-        (du.nozzles || [])
-          .filter((n: any) => n.productId)
-          .map((n: any) => [
-            n.productId,
+        du.nozzles
+          .filter((n) => n.productId)
+          .map((n): [string, DuProduct] => [
+            n.productId as string,
             {
-              id: n.productId,
+              id: n.productId as string,
               name: n.productName ?? 'Fuel',
               unit: n.unit ?? 'L',
               price: Number(n.unitPrice || 0),
             },
           ]),
       ).values(),
-    ) as DuProduct[];
+    );
 
-  const clearAccepted = (duId: string) =>
-    setAcceptedByDu((current) => {
-      if (!current[duId]) return current;
-      const next = { ...current };
-      delete next[duId];
-      return next;
+  // Merchandise: gross at MRP, and the cash share the server attributes.
+  const priceOf = (productId: string) => Number(merchById[productId]?.sellingPrice || 0);
+  const merchGross = merchTotal(merchRows, priceOf);
+  const merchCash = Math.max(0, merchGross - num(merchNonCash));
+
+  const errorList = collectHandoverErrors({
+    dus,
+    forms,
+    aggregateNonCashAllowed,
+    merchNonCash,
+    merchRows,
+  });
+  const formInvalid = errorList.length > 0;
+
+  /** Echo what the server accepted back into the form, so the inputs read as saved. */
+  const onHandoverAccepted = (du: AssignedDu, result: RecordHandoverResult) =>
+    setEditedForms((current) => ({
+      ...current,
+      [du.duId]: {
+        ...(current[du.duId] ?? forms[du.duId]),
+        cash: blankZero(result.handover.cashHandedOver),
+        drops: blankZero(result.handover.cashDrops),
+        aggregateCard: blankZero(result.handover.cardHandedOver),
+        aggregateUpi: blankZero(result.handover.upiHandedOver),
+        readings: Object.fromEntries(
+          result.nozzleReadings.map((reading) => [
+            reading.nozzleId,
+            String(reading.closingReading),
+          ]),
+        ),
+        confirmedReadings: Object.fromEntries(
+          result.nozzleReadings.map((reading) => [reading.nozzleId, true]),
+        ),
+        testing: Object.fromEntries(
+          result.nozzleReadings.map((reading) => [
+            reading.nozzleId,
+            blankZero(reading.testingVolume),
+          ]),
+        ),
+        terminals: Object.fromEntries(
+          du.terminals.map((terminal) => {
+            const entry = result.terminalEntries.find(
+              (item) => item.terminalId === terminal.terminalId,
+            );
+            return [
+              terminal.terminalId,
+              {
+                card: blankZero(entry?.cardAmount),
+                upi: blankZero(entry?.upiAmount),
+                batch: entry?.batchRef ?? '',
+              },
+            ];
+          }),
+        ),
+      },
+    }));
+
+  const submission = useHandoverSubmission({
+    dus,
+    forms,
+    shiftId,
+    attendantId,
+    stationId,
+    aggregateNonCashAllowed,
+    merchRows,
+    merchNonCash,
+    hasErrors: formInvalid,
+    onHandoverAccepted,
+  });
+  const {
+    creditByDu,
+    omcByDu,
+    acceptedByDu,
+    resetAcceptedHandover,
+    resetMerchandiseAcceptance,
+    clearZeroTerminalsConfirmation,
+    saving,
+    savedAt,
+    error,
+  } = submission;
+
+  /** Applies a change to one DU's form; any edit makes a saved Handover stale. */
+  const editForm = (duId: string, change: (form: DuFormState) => DuFormState) => {
+    resetAcceptedHandover(duId);
+    setEditedForms((f) => ({ ...f, [duId]: change(f[duId] ?? forms[duId]) }));
+  };
+  const setReading = (duId: string, nozzleId: string, v: string) =>
+    editForm(duId, (f) => ({
+      ...f,
+      readings: { ...f.readings, [nozzleId]: v },
+      confirmedReadings: { ...f.confirmedReadings, [nozzleId]: true },
+    }));
+  /** Leaving a closing reading confirms it as is: a nozzle that did not move still reads its opening. */
+  const confirmReading = (duId: string, nozzleId: string) => {
+    if (forms[duId]?.confirmedReadings[nozzleId]) return;
+    setEditedForms((f) => {
+      const form = f[duId] ?? forms[duId];
+      return {
+        ...f,
+        [duId]: { ...form, confirmedReadings: { ...form.confirmedReadings, [nozzleId]: true } },
+      };
     });
-  const resetAcceptedHandover = (duId: string) => {
-    clearAccepted(duId);
-    delete handoverRequestByDuRef.current[duId];
-    delete acceptedFingerprintByDuRef.current[duId];
   };
-  const setReading = (duId: string, nozzleId: string, v: string) => {
-    resetAcceptedHandover(duId);
-    setEditedForms((f) => ({
-      ...f,
-      [duId]: {
-        ...(f[duId] ?? forms[duId]),
-        readings: { ...(f[duId] ?? forms[duId]).readings, [nozzleId]: v },
-      },
-    }));
-  };
-  const setTesting = (duId: string, nozzleId: string, v: string) => {
-    resetAcceptedHandover(duId);
-    setEditedForms((f) => ({
-      ...f,
-      [duId]: {
-        ...(f[duId] ?? forms[duId]),
-        testing: { ...(f[duId] ?? forms[duId]).testing, [nozzleId]: v },
-      },
-    }));
-  };
-  const setCash = (duId: string, v: string) => {
-    resetAcceptedHandover(duId);
-    setEditedForms((f) => ({ ...f, [duId]: { ...(f[duId] ?? forms[duId]), cash: v } }));
-  };
-  const setDrops = (duId: string, v: string) => {
-    resetAcceptedHandover(duId);
-    setEditedForms((f) => ({ ...f, [duId]: { ...(f[duId] ?? forms[duId]), drops: v } }));
-  };
+  const setTesting = (duId: string, nozzleId: string, v: string) =>
+    editForm(duId, (f) => ({ ...f, testing: { ...f.testing, [nozzleId]: v } }));
+  const setCash = (duId: string, v: string) => editForm(duId, (f) => ({ ...f, cash: v }));
+  const setDrops = (duId: string, v: string) => editForm(duId, (f) => ({ ...f, drops: v }));
   const setAggregate = (duId: string, field: 'aggregateCard' | 'aggregateUpi', v: string) => {
-    resetAcceptedHandover(duId);
-    setEditedForms((f) => ({ ...f, [duId]: { ...(f[duId] ?? forms[duId]), [field]: v } }));
+    clearZeroTerminalsConfirmation();
+    editForm(duId, (f) => ({ ...f, [field]: v }));
   };
   const setTerminal = (
     duId: string,
@@ -779,769 +326,296 @@ export const HandoverPanel: React.FC = () => {
     field: 'card' | 'upi' | 'batch',
     v: string,
   ) => {
-    resetAcceptedHandover(duId);
-    setEditedForms((f) => ({
+    clearZeroTerminalsConfirmation();
+    editForm(duId, (f) => ({
       ...f,
-      [duId]: {
-        ...(f[duId] ?? forms[duId]),
-        terminals: {
-          ...(f[duId] ?? forms[duId]).terminals,
-          [terminalId]: { ...(f[duId] ?? forms[duId]).terminals[terminalId], [field]: v },
-        },
-      },
+      terminals: { ...f.terminals, [terminalId]: { ...f.terminals[terminalId], [field]: v } },
     }));
   };
 
-  const addCredit = async (
-    duId: string,
-    channel: 'credit' | 'omc',
-    line: Omit<CreditLine, 'id'>,
-    idempotencyKey?: string,
-  ) => {
-    if (!shiftId) return;
-    setError(null);
-    setCcBusy(true);
-    try {
-      const entry = await txService.recordCollection(
-        {
-          shiftId,
-          customerId: line.customerId || undefined,
-          vehicleId: line.vehicleId,
-          productId: line.productId,
-          quantity: line.quantity,
-          unitPrice: line.unitPrice,
-          amount: line.amount,
-          paymentMethod: channel === 'omc' ? 'OMC' : 'Credit',
-          attendantId: attendantId ?? null,
-          duId,
-          notes: line.notes ?? undefined,
-        },
-        { idempotencyKey },
-      );
-      const stamped = { ...line, id: entry?.id };
-      resetAcceptedHandover(duId);
-      if (channel === 'omc')
-        setEditedOmcByDu((c) => ({ ...c, [duId]: [...(c[duId] ?? omcByDu[duId] ?? []), stamped] }));
-      else
-        setEditedCreditByDu((c) => ({
-          ...c,
-          [duId]: [...(c[duId] ?? creditByDu[duId] ?? []), stamped],
-        }));
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed to add sale');
-      throw e;
-    } finally {
-      setCcBusy(false);
-    }
-  };
-
-  const removeCredit = async (duId: string, channel: 'credit' | 'omc', id: string) => {
-    setError(null);
-    setCcBusy(true);
-    try {
-      if (channel === 'omc') {
-        await txService.voidOmcCardSale(id);
-        resetAcceptedHandover(duId);
-        setEditedOmcByDu((c) => ({
-          ...c,
-          [duId]: (c[duId] ?? omcByDu[duId] ?? []).filter((l) => l.id !== id),
-        }));
-      } else {
-        await txService.voidCreditSale(id);
-        resetAcceptedHandover(duId);
-        setEditedCreditByDu((c) => ({
-          ...c,
-          [duId]: (c[duId] ?? creditByDu[duId] ?? []).filter((l) => l.id !== id),
-        }));
-      }
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed to remove sale');
-    } finally {
-      setCcBusy(false);
-    }
-  };
-
-  function collectErrors(): string[] {
-    const errs: string[] = [];
-    for (const du of dus) {
-      const form = forms[du.duId];
-      if (!form) continue;
-      for (const nz of du.nozzles) {
-        const raw = form.readings[nz.nozzleId];
-        const hasReading = raw !== '' && raw != null;
-        const closing = num(raw);
-        if (!hasReading) errs.push(`${nz.nozzleName}: closing reading required`);
-        if (hasReading && closing < nz.openingReading)
-          errs.push(`${nz.nozzleName}: closing below opening`);
-        if (closing < 0) errs.push(`${nz.nozzleName}: negative reading`);
-        const vol = Math.max(0, closing - nz.openingReading);
-        const testingVal = num(form.testing[nz.nozzleId]);
-        if (testingVal < 0) errs.push(`${nz.nozzleName}: testing negative`);
-        else if (testingVal > vol) errs.push(`${nz.nozzleName}: testing exceeds sold volume`);
-      }
-      for (const t of du.terminals) {
-        if (
-          num(form.terminals[t.terminalId]?.card) < 0 ||
-          num(form.terminals[t.terminalId]?.upi) < 0
-        )
-          errs.push(`${du.duName}: negative POS amount`);
-      }
-      if (num(form.cash) < 0) errs.push(`${du.duName}: negative cash`);
-      if (num(form.drops) < 0) errs.push(`${du.duName}: negative cash drops`);
-      if (aggregateNonCashAllowed && (num(form.aggregateCard) < 0 || num(form.aggregateUpi) < 0))
-        errs.push(`${du.duName}: negative non-cash amount`);
-    }
-    if (num(merchNonCash) < 0) errs.push('Merchandise non-cash negative');
-    for (const r of merchRows) if (num(r.quantity) < 0) errs.push('Merchandise qty negative');
-    return errs;
-  }
-
-  async function handleSave() {
-    if (!shiftId) return;
-    if (collectErrors().length > 0) {
-      setError('Please fix the highlighted fields before saving.');
-      return;
-    }
-    if (!zeroTerminalsConfirmed) {
-      const zeroDus = (data?.dus ?? []).filter((du: any) => {
-        const form = forms[du.duId];
-        if (!form || du.terminals.length === 0) return false;
-        return du.terminals.every(
-          (t: any) =>
-            num(form.terminals[t.terminalId]?.card) === 0 &&
-            num(form.terminals[t.terminalId]?.upi) === 0,
-        );
-      });
-      if (zeroDus.length > 0) {
-        setZeroTerminalsConfirmed(true);
-        setError(
-          'No card/UPI takings entered for the assigned terminal(s). If that is correct, save again to confirm; otherwise enter the terminal amounts.',
-        );
-        return;
-      }
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      // Merchandise is recorded first so each accepted Handover reads the same
-      // authoritative merchandise cash that the live preview includes.
-      const merchLines = merchRows
-        .map((r) => ({ productId: r.productId, quantity: num(r.quantity) }))
-        .filter((l) => l.productId && l.quantity > 0);
-      if (merchLines.length) {
-        const merchandisePayload = {
-          attendantId,
-          lines: merchLines,
-          nonCashAmount: num(merchNonCash),
-        };
-        const fingerprint = JSON.stringify(merchandisePayload);
-        if (merchandiseRequestRef.current?.fingerprint !== fingerprint) {
-          merchandiseRequestRef.current = { fingerprint, idempotencyKey: createIdempotencyKey() };
-        }
-        await txService.recordMerchandiseHandover(shiftId, merchandisePayload, {
-          idempotencyKey: merchandiseRequestRef.current.idempotencyKey,
-        });
-        await Promise.all([
-          qc.invalidateQueries({ queryKey: queryKeys.merchandiseHandovers(shiftId) }),
-          qc.invalidateQueries({ queryKey: queryKeys.merchandiseSales(shiftId) }),
-          stationId
-            ? qc.invalidateQueries({ queryKey: queryKeys.inventoryItems(stationId) })
-            : Promise.resolve(),
-        ]);
-      }
-
-      for (const du of dus) {
-        const form = forms[du.duId];
-        if (!form) continue;
-        const nozzleReadings = du.nozzles.map((nz: any) => ({
-          nozzleId: nz.nozzleId,
-          closingReading: num(form.readings[nz.nozzleId]),
-          testingVolume: num(form.testing[nz.nozzleId]),
-        }));
-        const terminalEntries = du.terminals
-          .map((t: any) => ({
-            terminalId: t.terminalId,
-            cardAmount: num(form.terminals[t.terminalId]?.card),
-            upiAmount: num(form.terminals[t.terminalId]?.upi),
-            batchRef: form.terminals[t.terminalId]?.batch || null,
-          }))
-          .filter((e: any) => e.cardAmount > 0 || e.upiAmount > 0 || e.batchRef);
-        const payload: RecordHandoverPayload = {
-          shiftId,
-          userId: attendantId!,
-          duId: du.duId,
-          cashHandedOver: num(form.cash),
-          cashDrops: num(form.drops),
-          ...(du.terminals.length === 0 && aggregateNonCashAllowed
-            ? { cardHandedOver: num(form.aggregateCard), upiHandedOver: num(form.aggregateUpi) }
-            : {}),
-          terminalEntries: du.terminals.length > 0 ? terminalEntries : undefined,
-          nozzleReadings,
-        };
-        const fingerprint = handoverPayloadFingerprint(payload);
-        if (acceptedFingerprintByDuRef.current[du.duId] === fingerprint && acceptedByDu[du.duId])
-          continue;
-        handoverRequestByDuRef.current[du.duId] = resolveHandoverRequestIdentity(
-          handoverRequestByDuRef.current[du.duId],
-          payload,
-        );
-        const result = await recordHandover.mutateAsync({
-          stationId: stationId ?? '',
-          payload,
-          idempotencyKey: handoverRequestByDuRef.current[du.duId].idempotencyKey,
-        });
-        acceptedFingerprintByDuRef.current[du.duId] = fingerprint;
-        delete handoverRequestByDuRef.current[du.duId];
-        setAcceptedByDu((current) => ({ ...current, [du.duId]: result }));
-        setEditedForms((current) => ({
-          ...current,
-          [du.duId]: {
-            ...(current[du.duId] ?? forms[du.duId]),
-            cash: blankZero(result.handover.cashHandedOver),
-            drops: blankZero(result.handover.cashDrops),
-            aggregateCard: blankZero(result.handover.cardHandedOver),
-            aggregateUpi: blankZero(result.handover.upiHandedOver),
-            readings: Object.fromEntries(
-              result.nozzleReadings.map((reading) => [
-                reading.nozzleId,
-                String(reading.closingReading),
-              ]),
-            ),
-            testing: Object.fromEntries(
-              result.nozzleReadings.map((reading) => [
-                reading.nozzleId,
-                blankZero(reading.testingVolume),
-              ]),
-            ),
-            terminals: Object.fromEntries(
-              du.terminals.map((terminal: any) => {
-                const entry = result.terminalEntries.find(
-                  (item) => item.terminalId === terminal.terminalId,
-                );
-                return [
-                  terminal.terminalId,
-                  {
-                    card: blankZero(entry?.cardAmount),
-                    upi: blankZero(entry?.upiAmount),
-                    batch: entry?.batchRef ?? '',
-                  },
-                ];
-              }),
-            ),
-          },
-        }));
-      }
-
-      setSavedAt(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
-    } catch (e: any) {
-      setError(e?.message ?? 'Could not save handover');
-    } finally {
-      setSaving(false);
-    }
-  }
-
   if (assignmentQ.isLoading) {
-    return (
-      <p className="py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-        Loading your shift…
-      </p>
-    );
+    return <p className="py-10 text-center text-sm text-text-muted">Loading your shift…</p>;
   }
 
   if (!data) {
     return (
-      <div
-        className="mt-6 rounded-xl border border-dashed p-8 text-center"
-        style={{ borderColor: 'var(--border-soft)' }}
-      >
+      <div className="mt-6 rounded-2xl border border-dashed border-line-strong p-8 text-center">
         <p className="text-4xl">⛽</p>
-        <p className="mt-2 font-semibold" style={{ color: 'var(--text-strong)' }}>
-          No open shift assigned to you
-        </p>
-        <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
+        <p className="mt-2 font-semibold text-text-high">No open shift assigned to you</p>
+        <p className="mt-1 text-sm text-text-muted">
           Once a manager opens a shift and assigns you to a dispenser unit, it will appear here.
         </p>
       </div>
     );
   }
 
-  // Aggregate reconciliation across all DUs + merchandise (matches desktop).
-  let fuelExpected = 0;
-  let declaredTotal = 0;
-  let drawerAdjustment = 0;
-  for (const du of dus) {
-    const form = forms[du.duId];
-    if (!form) continue;
-    for (const nz of du.nozzles) {
-      const vol = Math.max(0, num(form.readings[nz.nozzleId]) - nz.openingReading);
-      const net = Math.max(0, vol - num(form.testing[nz.nozzleId]));
-      fuelExpected += net * Number(nz.unitPrice || 0);
-    }
-    const cardTotal =
-      du.terminals.length > 0
-        ? du.terminals.reduce((s: number, t: any) => s + num(form.terminals[t.terminalId]?.card), 0)
-        : aggregateNonCashAllowed
-          ? num(form.aggregateCard)
-          : 0;
-    const upiTotal =
-      du.terminals.length > 0
-        ? du.terminals.reduce((s: number, t: any) => s + num(form.terminals[t.terminalId]?.upi), 0)
-        : aggregateNonCashAllowed
-          ? num(form.aggregateUpi)
-          : 0;
-    const creditTotal = (creditByDu[du.duId] || []).reduce((s, l) => s + Number(l.amount || 0), 0);
-    const omcTotal = (omcByDu[du.duId] || []).reduce((s, l) => s + Number(l.amount || 0), 0);
-    declaredTotal += num(form.cash) + cardTotal + upiTotal + creditTotal + omcTotal;
-    // The pouch also holds the Opening Float and lacks what was dropped.
-    drawerAdjustment += Number(du.openingFloat || 0) - num(form.drops);
-  }
-  const merchTotal = merchRows.reduce(
-    (s, r) => s + num(r.quantity) * Number(merchById[r.productId]?.sellingPrice || 0),
-    0,
+  // Each Drawer reconciled as the server will on save; the strip is their sum.
+  const reconciliations = Object.fromEntries(
+    dus.map((du) => [
+      du.duId,
+      forms[du.duId]
+        ? reconcileDu({
+            du,
+            form: forms[du.duId],
+            credit: creditByDu[du.duId] ?? [],
+            omc: omcByDu[du.duId] ?? [],
+            merchCash,
+            aggregateNonCashAllowed,
+          })
+        : null,
+    ]),
   );
-  const merchCash = Math.max(0, merchTotal - num(merchNonCash));
-  const expectedTotal = fuelExpected + merchCash;
-  const varianceTotal = Math.round((declaredTotal - expectedTotal - drawerAdjustment) * 100) / 100;
+  const live = Object.values(reconciliations).reduce(
+    (sum, r) => ({
+      expectedTotal: sum.expectedTotal + (r?.expectedTotal ?? 0),
+      declaredTotal: sum.declaredTotal + (r?.declaredTotal ?? 0),
+      varianceAmount: sum.varianceAmount + (r?.varianceAmount ?? 0),
+    }),
+    { expectedTotal: 0, declaredTotal: 0, varianceAmount: 0 },
+  );
+  live.varianceAmount = round2(live.varianceAmount);
   const allAccepted = dus.length > 0 && dus.every((du) => acceptedByDu[du.duId]);
   const acceptedSummary = allAccepted
     ? {
         ...acceptedByDu[dus[0].duId],
-        expectedTotal:
-          dus.reduce((sum, du) => sum + acceptedByDu[du.duId].expectedFuelSales, 0) +
-          acceptedByDu[dus[0].duId].merchandiseCash,
+        // The server's own per-Drawer figures, summed the same way as the preview.
+        expectedTotal: dus.reduce((sum, du) => sum + acceptedByDu[du.duId].expectedTotal, 0),
         declaredTotal: dus.reduce((sum, du) => sum + acceptedByDu[du.duId].declaredTotal, 0),
-        // Each Drawer's server-reconciled variance (float and drops included).
-        varianceAmount:
-          Math.round(dus.reduce((sum, du) => sum + acceptedByDu[du.duId].varianceAmount, 0) * 100) /
-          100,
+        varianceAmount: round2(
+          dus.reduce((sum, du) => sum + acceptedByDu[du.duId].varianceAmount, 0),
+        ),
       }
     : null;
-  const shownSummary = selectHandoverSummary(
-    { expectedTotal, declaredTotal, varianceAmount: varianceTotal },
-    acceptedSummary,
+  const shownSummary = selectHandoverSummary(live, acceptedSummary);
+  const productsState = productsStep(merchRows, merchNonCash, priceOf);
+  // Which steps hold an error, so the bar can say where to look.
+  const failingSteps = Array.from(
+    new Set(
+      errorList.map((e) => {
+        const duName = dus.find((du) => du.duId === e.duId)?.duName;
+        return `${STEP_TITLE[e.step]}${dus.length > 1 && duName ? ` (${duName})` : ''}`;
+      }),
+    ),
   );
-  const formInvalid = collectErrors().length > 0;
+
+  const productsCard = (index: number) => (
+    <StepCard
+      index={index}
+      title={STEP_TITLE.products}
+      status={productsState.status}
+      summary={dus.length > 1 ? `${productsState.summary} · all your pumps` : productsState.summary}
+    >
+      <ProductsFields
+        rows={merchRows}
+        options={merchOptions}
+        productById={merchById}
+        nonCash={merchNonCash}
+        total={merchGross}
+        onRowsChange={(rows) => {
+          resetMerchandiseAcceptance();
+          setEditedMerchRows(rows);
+        }}
+        onNonCashChange={(value) => {
+          resetMerchandiseAcceptance();
+          setEditedMerchNonCash(value);
+        }}
+      />
+    </StepCard>
+  );
 
   return (
-    <div className="flex flex-col gap-4">
-      <div
-        className="rounded-xl border px-4 py-3"
-        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
-      >
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-          {data.station?.name ?? 'Station'} · {data.shift?.templateName ?? 'Shift'}
-        </p>
-        <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
-          Shift open · record as you go
-        </p>
-      </div>
+    <div className="flex flex-col gap-3">
+      <SummaryStrip
+        summary={shownSummary}
+        accepted={shownSummary.source === 'accepted'}
+        context={`${data.station?.name ?? 'Station'} · ${data.shift?.templateName ?? 'Shift'}`}
+      />
 
-      {dus.map((du) => {
+      {dus.map((du, duIndex) => {
         const form = forms[du.duId];
-        if (!form) return null;
+        const reconciliation = reconciliations[du.duId];
+        if (!form || !reconciliation) return null;
         const duProducts = duProductsFor(du);
         const credit = creditByDu[du.duId] || [];
         const omc = omcByDu[du.duId] || [];
+        const errors = fieldErrorMap(errorList, du.duId);
+        // Recorded and untouched since: cash reads "done" even though a zero
+        // amount shows as an empty box.
+        const recorded =
+          Boolean(acceptedByDu[du.duId]) || (du.handover != null && !editedForms[du.duId]);
+        const readings = readingsStep(du, form);
+        const credits = creditStep(credit, omc);
+        const terminals = terminalsStep(du, form, aggregateNonCashAllowed);
+        const cash = cashStep(form, recorded);
+        // Products are recorded once per person, so they sit in the first DU's set.
+        const hasProducts = duIndex === 0;
+        const float = reconciliation.openingFloat;
 
         return (
-          <section
-            key={du.duId}
-            className="flex flex-col gap-3 rounded-xl border p-4"
-            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
-          >
-            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+          <div key={du.duId} className="flex flex-col gap-2">
+            <h2 className="px-1 pt-1 text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted">
               {du.duName}
-              {du.duCode ? (
-                <span style={{ color: 'var(--text-faint)' }}> · {du.duCode}</span>
-              ) : null}
+              {du.duCode ? <span className="text-text-faint"> · {du.duCode}</span> : null}
             </h2>
 
-            {/* Closing readings + per-nozzle testing */}
-            <div>
-              <p
-                className="mb-2 text-xs font-semibold uppercase tracking-wide"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                Closing readings
-              </p>
-              <div className="flex flex-col gap-3">
-                {du.nozzles.map((nz: any) => {
-                  const rawReading = form.readings[nz.nozzleId];
-                  const hasReading = rawReading !== '' && rawReading != null;
-                  const closing = num(rawReading);
-                  const vol = Math.max(0, closing - nz.openingReading);
-                  const readingError =
-                    hasReading && closing < nz.openingReading
-                      ? `Cannot be below opening (${nz.openingReading})`
-                      : undefined;
-                  const testingVal = num(form.testing[nz.nozzleId]);
-                  const testingError =
-                    testingVal < 0
-                      ? 'Cannot be negative'
-                      : testingVal > vol
-                        ? `Cannot exceed ${vol.toFixed(2)} ${nz.unit}`
-                        : undefined;
-                  return (
-                    <div key={nz.nozzleId} className="grid grid-cols-2 gap-3">
-                      <NumberField
-                        label={`${nz.nozzleName} · ${nz.productName}`}
-                        value={rawReading ?? ''}
-                        onChange={(v) => setReading(du.duId, nz.nozzleId, v)}
-                        sub={`Opening ${nz.openingReading} · ${vol ? `${vol.toFixed(2)} ${nz.unit}` : 'enter closing'}`}
-                        error={readingError}
-                      />
-                      <NumberField
-                        label={`Testing (${nz.unit})`}
-                        value={form.testing[nz.nozzleId] ?? ''}
-                        onChange={(v) => setTesting(du.duId, nz.nozzleId, v)}
-                        error={testingError}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Card / UPI per assigned terminal */}
-            {du.terminals.length > 0 ? (
-              <div>
-                <p
-                  className="mb-2 text-xs font-semibold uppercase tracking-wide"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  Card / UPI by terminal
-                </p>
-                <div className="flex flex-col gap-3">
-                  {du.terminals.map((t: any) => (
-                    <div
-                      key={t.terminalId}
-                      className="rounded-lg border p-3"
-                      style={{ borderColor: 'var(--border-soft)' }}
-                    >
-                      <p
-                        className="mb-2 text-sm font-medium"
-                        style={{ color: 'var(--text-default)' }}
-                      >
-                        {t.label}
-                      </p>
-                      <div className="grid grid-cols-2 gap-3">
-                        {t.supportsCard !== false && (
-                          <NumberField
-                            label="Card"
-                            value={form.terminals[t.terminalId]?.card ?? ''}
-                            onChange={(v) => setTerminal(du.duId, t.terminalId, 'card', v)}
-                            error={
-                              num(form.terminals[t.terminalId]?.card) < 0
-                                ? 'No negatives'
-                                : undefined
-                            }
-                          />
-                        )}
-                        {t.supportsUpi !== false && (
-                          <NumberField
-                            label="UPI"
-                            value={form.terminals[t.terminalId]?.upi ?? ''}
-                            onChange={(v) => setTerminal(du.duId, t.terminalId, 'upi', v)}
-                            error={
-                              num(form.terminals[t.terminalId]?.upi) < 0
-                                ? 'No negatives'
-                                : undefined
-                            }
-                          />
-                        )}
-                      </div>
-                      <label className="mt-2 flex flex-col gap-1">
-                        <span
-                          className="text-xs font-medium"
-                          style={{ color: 'var(--text-muted)' }}
-                        >
-                          Batch ref (optional)
-                        </span>
-                        <input
-                          type="text"
-                          value={form.terminals[t.terminalId]?.batch ?? ''}
-                          onChange={(e) =>
-                            setTerminal(du.duId, t.terminalId, 'batch', e.target.value)
-                          }
-                          className="rounded-lg border px-3 py-2 text-sm"
-                          style={fieldStyle}
-                        />
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : aggregateNonCashAllowed ? (
-              <div>
-                <p
-                  className="mb-2 text-xs font-semibold uppercase tracking-wide"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  Card / UPI totals
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <NumberField
-                    label="Card"
-                    value={form.aggregateCard}
-                    onChange={(v) => setAggregate(du.duId, 'aggregateCard', v)}
-                  />
-                  <NumberField
-                    label="UPI"
-                    value={form.aggregateUpi}
-                    onChange={(v) => setAggregate(du.duId, 'aggregateUpi', v)}
-                  />
-                </div>
-                <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                  Aggregate declaration used because no Payment Terminal is configured.
-                </p>
-              </div>
-            ) : (
-              <p
-                className="rounded-lg border p-3 text-xs"
-                style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}
-              >
-                No Payment Terminal is assigned to this Dispenser. Card and UPI declarations require
-                an assigned terminal.
-              </p>
-            )}
-
-            {/* Customer sales — credit (receivable) + OMC card (→ CMS) */}
-            <CustomerSaleForm
-              duProducts={duProducts}
-              customers={creditCustomers}
-              allVehicles={allVehicles}
-              credit={credit}
-              omc={omc}
-              busy={ccBusy}
-              onAdd={(channel, line, key) => addCredit(du.duId, channel, line, key)}
-              onRemove={(channel, id) => removeCredit(du.duId, channel, id)}
-            />
-          </section>
-        );
-      })}
-
-      {/* Merchandise closing — searchable picker (mirrors desktop) */}
-      <section
-        className="flex flex-col gap-3 rounded-xl border p-4"
-        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
-      >
-        <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
-          Merchandise closing
-        </h2>
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-          Lubes / accessories you sold this shift.
-        </p>
-
-        <div className="flex flex-col gap-2">
-          {merchRows.map((row, idx) => {
-            const p = merchById[row.productId];
-            const mrp = p?.sellingPrice != null ? Number(p.sellingPrice) : null;
-            const lineTotal = mrp != null ? mrp * num(row.quantity) : null;
-            return (
-              <div
-                key={idx}
-                className="flex flex-col gap-2 rounded-lg border p-2"
-                style={{ borderColor: 'var(--border-soft)' }}
-              >
-                <Combobox
-                  options={merchOptions}
-                  value={row.productId}
-                  onChange={(v) => {
-                    resetMerchandiseAcceptance();
-                    setEditedMerchRows(
-                      merchRows.map((r, i) => (i === idx ? { ...r, productId: v } : r)),
-                    );
-                  }}
-                  placeholder="Select product…"
-                  searchPlaceholder="Search product…"
-                />
-                <div className="flex items-end gap-2">
-                  <label className="flex w-24 flex-col gap-1">
-                    <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                      Qty{p?.unit ? ` (${p.unit})` : ''}
-                    </span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
-                      value={row.quantity}
-                      placeholder="0"
-                      onChange={(e) => {
-                        resetMerchandiseAcceptance();
-                        setEditedMerchRows(
-                          merchRows.map((r, i) =>
-                            i === idx ? { ...r, quantity: e.target.value } : r,
-                          ),
-                        );
-                      }}
-                      className="rounded-lg border px-3 py-2 text-right text-sm font-mono tabular-nums"
-                      style={fieldStyle}
+            {/* 1 · Closing readings + per-nozzle testing */}
+            <StepCard
+              index={1}
+              title={STEP_TITLE.readings}
+              status={readings.status}
+              summary={readings.summary}
+              defaultOpen
+            >
+              {du.nozzles.map((nz) => {
+                const closing = num(form.readings[nz.nozzleId]);
+                const vol = Math.max(0, closing - nz.openingReading);
+                return (
+                  <div key={nz.nozzleId} className="grid grid-cols-2 gap-2.5">
+                    <NumberField
+                      label={`${nz.nozzleName} · ${nz.productName}`}
+                      value={form.readings[nz.nozzleId] ?? ''}
+                      onChange={(v) => setReading(du.duId, nz.nozzleId, v)}
+                      onBlur={() => confirmReading(du.duId, nz.nozzleId)}
+                      meta={`Opening ${nz.openingReading}`}
+                      sub={vol ? `${vol.toFixed(2)} ${nz.unit}` : 'enter closing'}
+                      error={errors[fieldId.reading(nz.nozzleId)]}
                     />
-                  </label>
-                  <div
-                    className="flex-1 pb-2 text-right text-xs"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    {mrp != null ? `MRP ${inr(mrp)}${lineTotal ? ` · ${inr(lineTotal)}` : ''}` : ''}
+                    <NumberField
+                      label={`Testing (${nz.unit})`}
+                      value={form.testing[nz.nozzleId] ?? ''}
+                      onChange={(v) => setTesting(du.duId, nz.nozzleId, v)}
+                      error={errors[fieldId.testing(nz.nozzleId)]}
+                    />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      resetMerchandiseAcceptance();
-                      setEditedMerchRows(
-                        merchRows.length > 1
-                          ? merchRows.filter((_, i) => i !== idx)
-                          : [{ productId: '', quantity: '' }],
-                      );
-                    }}
-                    className="grid h-9 w-9 place-items-center rounded-lg border"
-                    style={{ borderColor: 'var(--border-soft)', color: 'var(--state-danger-fg)' }}
-                    aria-label="Remove item"
-                  >
-                    <TrashIcon />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </StepCard>
 
-        <button
-          type="button"
-          onClick={() => {
-            resetMerchandiseAcceptance();
-            setEditedMerchRows([...merchRows, { productId: '', quantity: '' }]);
-          }}
-          className="w-full rounded-lg border border-dashed py-2 text-sm font-medium"
-          style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}
-        >
-          + Add item
-        </button>
+            {/* 2 · Credit and fuel-card sales (receivable / → CMS) */}
+            <StepCard
+              index={2}
+              title={STEP_TITLE.credit}
+              status={credits.status}
+              summary={credits.summary}
+            >
+              <CustomerSaleForm
+                duProducts={duProducts}
+                customers={creditCustomers}
+                allVehicles={allVehicles}
+                credit={credit}
+                omc={omc}
+                busy={submission.ccBusy}
+                onAdd={(channel, line, key) => submission.addCredit(du.duId, channel, line, key)}
+                onRemove={(channel, id) => submission.removeCredit(du.duId, channel, id)}
+              />
+            </StepCard>
 
-        <NumberField
-          label="Paid by card / UPI (₹, optional)"
-          value={merchNonCash}
-          onChange={(value) => {
-            resetMerchandiseAcceptance();
-            setEditedMerchNonCash(value);
-          }}
-          sub="Portion of merchandise not collected as cash"
-        />
-      </section>
+            {/* 3 · Card / UPI per assigned terminal, or the aggregate fallback */}
+            <StepCard
+              index={3}
+              title={STEP_TITLE.terminals}
+              status={terminals.status}
+              summary={terminals.summary}
+            >
+              <TerminalsFields
+                du={du}
+                form={form}
+                aggregateNonCashAllowed={aggregateNonCashAllowed}
+                errors={errors}
+                onTerminalChange={(terminalId, field, v) =>
+                  setTerminal(du.duId, terminalId, field, v)
+                }
+                onAggregateChange={(field, v) => setAggregate(du.duId, field, v)}
+              />
+            </StepCard>
 
-      {/* Cash handed over — recorded last */}
-      <section
-        className="flex flex-col gap-3 rounded-xl border p-4"
-        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
-      >
-        <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
-          Cash handed over
-        </h2>
-        {dus.map((du) => (
-          <NumberField
-            key={du.duId}
-            label={dus.length > 1 ? `${du.duName} · Cash (₹)` : 'Cash (₹)'}
-            value={forms[du.duId]?.cash ?? ''}
-            onChange={(v) => setCash(du.duId, v)}
-            error={num(forms[du.duId]?.cash) < 0 ? 'No negatives' : undefined}
-            trailing={
+            {/* 4 · Products sold (once per person) */}
+            {hasProducts ? productsCard(4) : null}
+
+            {/* Last · Cash handed over */}
+            <StepCard
+              index={hasProducts ? 5 : 4}
+              title={STEP_TITLE.cash}
+              status={cash.status}
+              summary={cash.summary}
+            >
+              <NumberField
+                label={dus.length > 1 ? `${du.duName} · Cash (₹)` : 'Cash (₹)'}
+                value={form.cash}
+                onChange={(v) => setCash(du.duId, v)}
+                error={errors[fieldId.cash]}
+                sub={float > 0 ? `Include your ${inr(float)} opening float` : undefined}
+              />
               <button
                 type="button"
                 onClick={() => setSheetDuId(du.duId)}
-                className="grid h-[38px] w-[38px] flex-shrink-0 place-items-center rounded-lg border"
-                style={{ borderColor: 'var(--border-soft)', color: 'var(--brand-primary)' }}
-                aria-label="Count cash by denomination"
+                className="flex h-10 items-center justify-center gap-2 rounded-xl border border-line-strong text-[13px] font-semibold text-accent"
               >
                 <CalculatorIcon />
+                Count notes
               </button>
-            }
-          />
-        ))}
-        {dus.map((du) => (
-          <NumberField
-            key={`drops-${du.duId}`}
-            label={dus.length > 1 ? `${du.duName} · Cash drops (₹)` : 'Cash drops (₹)'}
-            value={forms[du.duId]?.drops ?? ''}
-            onChange={(v) => setDrops(du.duId, v)}
-            error={num(forms[du.duId]?.drops) < 0 ? 'No negatives' : undefined}
-          />
-        ))}
-        {dus.some((du) => Number(du.openingFloat) > 0) && (
-          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-            Include your opening float:{' '}
-            {dus.map((du) => `${du.duName} ${inr(Number(du.openingFloat || 0))}`).join(' · ')}
-          </p>
-        )}
-        <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
-          Confirm physical cash at close. Hand over everything in the pouch, float included.
-        </p>
-      </section>
+              <NumberField
+                label={dus.length > 1 ? `${du.duName} · Cash drops (₹)` : 'Cash drops (₹)'}
+                value={form.drops}
+                onChange={(v) => setDrops(du.duId, v)}
+                error={errors[fieldId.drops]}
+              />
+              <p className="text-[11px] leading-relaxed text-text-muted">
+                Expected cash:{' '}
+                <b className="num text-text-high">{inr(reconciliation.expectedCash)}</b> = float{' '}
+                <span className="num">{inr(reconciliation.openingFloat)}</span> + cash sales{' '}
+                <span className="num">{inr(reconciliation.cashSales)}</span> − drops{' '}
+                <span className="num">{inr(reconciliation.cashDrops)}</span>
+              </p>
+              <p className="text-[11px] text-text-faint">
+                Confirm physical cash at close. Hand over everything in the pouch, float included.
+              </p>
+            </StepCard>
+          </div>
+        );
+      })}
 
-      {/* Sticky summary + save */}
-      <div
-        className="sticky bottom-0 -mx-4 flex flex-col gap-1 border-t px-4 pb-3 pt-2"
-        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
-      >
+      {/* Sticky bar: running variance + the one Save action */}
+      <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-1.5 border-t border-dock-line bg-dock px-4 pb-3 pt-2.5 backdrop-blur">
         {error && (
-          <p className="text-center text-xs" style={{ color: 'var(--state-danger-fg)' }}>
+          <p role="alert" className="text-center text-xs text-bad-fg">
             {error}
           </p>
         )}
         {formInvalid && !error && (
-          <p className="text-center text-[11px]" style={{ color: 'var(--state-danger-fg)' }}>
-            Fix the highlighted fields to save.
+          <p className="text-center text-[11px] text-bad-fg">
+            Fix {failingSteps.join(', ')} to save.
           </p>
         )}
-        <p
-          className="text-[10px] font-semibold uppercase tracking-wide"
-          style={{ color: allAccepted ? 'var(--state-success-fg)' : 'var(--text-faint)' }}
-        >
-          {shownSummary.source === 'accepted' ? 'Accepted by server' : 'Live preview'}
-        </p>
-        <div className="flex items-center justify-between text-xs">
-          <span style={{ color: 'var(--text-muted)' }}>
-            Expected{' '}
-            <span className="font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>
-              {inr(shownSummary.expectedTotal)}
-            </span>
-            {' · '}Declared{' '}
-            <span className="font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>
-              {inr(shownSummary.declaredTotal)}
-            </span>
-          </span>
-          <span
-            className="font-mono text-sm font-semibold tabular-nums"
-            style={{
-              color:
-                Math.abs(shownSummary.varianceAmount) < 1
-                  ? 'var(--text-faint)'
-                  : shownSummary.varianceAmount < 0
-                    ? 'var(--state-danger-fg)'
-                    : 'var(--state-warning-fg)',
-            }}
-          >
-            {shownSummary.varianceAmount >= 0 ? '+' : ''}
-            {inr(shownSummary.varianceAmount)}
-          </span>
-        </div>
         {savedAt && !saving && (
-          <p className="text-center text-[11px]" style={{ color: 'var(--state-success-fg)' }}>
-            Saved at {savedAt}
+          <p className="text-center text-[11px] text-good">
+            Saved at {savedAt}. You can edit and save again until the shift closes.
           </p>
         )}
-        <button
-          type="button"
-          onClick={() =>
-            runTask(handleSave(), (error: unknown) =>
-              console.error('Failed to save handover:', error),
-            )
-          }
-          disabled={saving || formInvalid}
-          className="w-full rounded-xl py-3 text-sm font-semibold text-on-accent disabled:opacity-60"
-          style={{ backgroundColor: 'var(--brand-primary)' }}
-        >
-          {saving ? 'Saving…' : 'Save handover'}
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-text-faint">
+              Variance
+            </p>
+            <p
+              className={`num text-[17px] font-semibold ${varianceTone(shownSummary.varianceAmount)}`}
+            >
+              {formatVariance(shownSummary.varianceAmount)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              runTask(submission.save(), (error: unknown) =>
+                console.error('Failed to save handover:', error),
+              )
+            }
+            disabled={saving || formInvalid}
+            className="h-12 flex-1 rounded-xl bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
+          >
+            {saving ? 'Saving…' : 'Save handover'}
+          </button>
+        </div>
       </div>
 
       <CashCountSheet
