@@ -1,8 +1,10 @@
 /**
  * The Shift Summary page's figures. Everything comes from the immutable Shift
- * Summary snapshot (never recomputed) except Product Sales, which a snapshot
- * does not carry: those are read from the Shift's merchandise endpoints and
- * folded in by `deriveShiftProducts`.
+ * Summary snapshot and is never recomputed from live data: fuel, Product Sales,
+ * the payment split, the nozzle readings (with their Dispenser Unit) and the
+ * Drawer reconciliation. A snapshot frozen before a figure was added lacks it;
+ * each deriver says what it does then (`products: null`, payments summed from
+ * the Handovers, the Dispenser Unit from today's setup).
  */
 import { num, round2 } from '../home/num.js';
 import {
@@ -57,6 +59,10 @@ export interface ShiftSummaryModel {
   fuel: FuelLine[];
   fuelValue: number;
   fuelVolumeLabel: string;
+  /** Product Sales; null when the snapshot predates them (they were not captured). */
+  products: ShiftProducts | null;
+  /** The headline: fuel + Product Sales. The same figure the Shift's history row shows. */
+  total: number;
   payments: ShiftPayments;
   variance: ShiftVariance;
   nozzles: NozzleLine[];
@@ -109,7 +115,8 @@ export function nozzleDuNames(
 
 function nozzleLines(snap: Snapshot, duNames: NozzleDuNames): NozzleLine[] {
   return list(snap.nozzleReadings).map((r, i) => {
-    const detail = [duNames.get(String(r.nozzleId)), r.productCode || r.productName]
+    // The reading's own Dispenser Unit; only snapshots frozen before it was stored use today's setup.
+    const detail = [r.duName ?? duNames.get(String(r.nozzleId)), r.productCode || r.productName]
       .filter(Boolean)
       .join(' · ');
     return {
@@ -136,8 +143,15 @@ function drawerLines(snap: Snapshot): DrawerLine[] {
   }));
 }
 
-/** Cash the Drawers declared as sales: the server's `cashSalesSum`, else Σ Drawer cash sales. */
+/**
+ * How the Shift was paid: the snapshot's `payments`. A snapshot frozen before it
+ * existed has the same figures on its Handovers, summed here.
+ */
 function derivePayments(snap: Snapshot): ShiftPayments {
+  if (snap.payments) {
+    const p = snap.payments as Snapshot;
+    return { cash: num(p.cash), upi: num(p.upi), card: num(p.card), credit: num(p.credit) };
+  }
   const handovers = list(snap.handovers);
   const drawers = list(snap.drawers);
   return {
@@ -148,6 +162,55 @@ function derivePayments(snap: Snapshot): ShiftPayments {
       snap.creditSalesTotal != null && num(snap.creditSalesTotal) > 0
         ? num(snap.creditSalesTotal)
         : sum(handovers, (h) => h.creditHandedOver),
+  };
+}
+
+export interface ShiftProducts {
+  lines: ProductLine[];
+  /** Σ sale totals (what the DSSR counts), which tax can put above the line sum. */
+  total: number;
+}
+
+/** Product Sales from the snapshot, one line per product id; null for a snapshot without them. */
+export function deriveShiftProducts(snap: Snapshot): ShiftProducts | null {
+  const ps = snap.productSales as Snapshot | undefined;
+  if (!ps) return null;
+  return {
+    lines: rollUpProducts(
+      list(ps.lines).map((l) => ({
+        key: String(l.productId ?? l.productName),
+        name: String(l.productName ?? 'Product'),
+        quantity: num(l.quantity),
+        value: num(l.value),
+      })),
+    ),
+    total: num(ps.total),
+  };
+}
+
+export interface SalesTotals {
+  fuel: number;
+  /** Null when the snapshot predates Product Sales. */
+  products: number | null;
+  total: number;
+}
+
+/**
+ * A Shift's sales as its snapshot states them. The history row, the day total
+ * and the page's headline all read this, so they cannot disagree: total sales
+ * is fuel plus Product Sales (fuel alone for a snapshot that predates them).
+ */
+export function deriveSalesTotals(snap: Snapshot): SalesTotals {
+  const fuel =
+    snap.totalFuelSalesValue != null
+      ? num(snap.totalFuelSalesValue)
+      : sum(list(snap.fuelByProduct), (f) => f.salesValue);
+  const products = snap.productSales ? num((snap.productSales as Snapshot).total) : null;
+  return {
+    fuel,
+    products,
+    total:
+      snap.totalSalesValue != null ? num(snap.totalSalesValue) : round2(fuel + (products ?? 0)),
   };
 }
 
@@ -165,11 +228,13 @@ function deriveOffice(snap: Snapshot, v: ShiftVariance): OfficeCount {
 export function deriveShiftSummary(snap: Snapshot, duNames: NozzleDuNames): ShiftSummaryModel {
   const fuel = deriveFuelLines(snap);
   const variance = deriveShiftVariance(snap);
+  const totals = deriveSalesTotals(snap);
   return {
     fuel,
-    fuelValue:
-      snap.totalFuelSalesValue != null ? num(snap.totalFuelSalesValue) : sum(fuel, (f) => f.value),
+    fuelValue: totals.fuel,
     fuelVolumeLabel: volumeLabel(fuel),
+    products: deriveShiftProducts(snap),
+    total: totals.total,
     payments: derivePayments(snap),
     variance,
     nozzles: nozzleLines(snap, duNames),
@@ -178,78 +243,18 @@ export function deriveShiftSummary(snap: Snapshot, duNames: NozzleDuNames): Shif
   };
 }
 
-/** A merchandise handover or billed sale as the two endpoints return it. */
-export interface MerchSaleRead {
-  totalAmount?: number | string | null;
-  items?: {
-    productId?: string | null;
-    productName?: string | null;
-    quantity?: number | string | null;
-    lineTotal?: number | string | null;
-  }[];
-}
-
-export interface ShiftProducts {
-  lines: ProductLine[];
-  /** Σ sale totals (what the DSSR counts), which tax can put above the line sum. */
-  total: number;
-}
-
-/**
- * The Shift's Product Sales: bulk Handover sales and individually billed sales,
- * grouped by product. Merchandise is a Shift's Sale (ADR 0005) but its Shift
- * Summary snapshot holds only fuel, so this is read live.
- */
-export function deriveShiftProducts(
-  handovers: readonly MerchSaleRead[],
-  billed: readonly MerchSaleRead[],
-): ShiftProducts {
-  const sales = [...handovers, ...billed];
-  const byProduct = new Map<string, ProductLine>();
-  for (const sale of sales) {
-    for (const it of sale.items ?? []) {
-      const name = String(it.productName ?? 'Product');
-      // Billed sale items carry only the product name, so the name is the one key both reads share.
-      const key = name.trim().toLowerCase();
-      const line = byProduct.get(key) ?? {
-        key: String(it.productId ?? key),
-        name,
-        quantity: 0,
-        value: 0,
-      };
-      line.quantity += num(it.quantity);
-      line.value += num(it.lineTotal);
-      byProduct.set(key, line);
-    }
-  }
-  return {
-    lines: rollUpProducts([...byProduct.values()].map((l) => ({ ...l, value: round2(l.value) }))),
-    total: round2(sales.reduce((s, x) => s + num(x.totalAmount), 0)),
-  };
-}
-
 export interface PaymentSlice {
-  key: 'cash' | 'upi' | 'card' | 'credit' | 'other';
+  key: 'cash' | 'upi' | 'card' | 'credit';
   label: string;
   amount: number;
 }
 
-/**
- * Payment split of the Shift's total sales. Cash, UPI, card and credit are the
- * declared figures; what they do not account for (OMC fuel cards, counter card
- * sales) shows as "Other" rather than being hidden. `total` is null while Product
- * Sales are still loading: "Other" is only worked out against the full total.
- */
-export function derivePaymentSlices(p: ShiftPayments, total: number | null): PaymentSlice[] {
-  const slices: PaymentSlice[] = [
+/** The four ways a Shift was paid, as the snapshot declares them. */
+export function derivePaymentSlices(p: ShiftPayments): PaymentSlice[] {
+  return [
     { key: 'cash', label: 'Cash', amount: p.cash },
     { key: 'upi', label: 'UPI', amount: p.upi },
     { key: 'card', label: 'Card', amount: p.card },
     { key: 'credit', label: 'Credit', amount: p.credit },
   ];
-  if (total !== null) {
-    const other = round2(total - (p.cash + p.upi + p.card + p.credit));
-    if (other >= 1) slices.push({ key: 'other', label: 'Other', amount: other });
-  }
-  return slices;
 }

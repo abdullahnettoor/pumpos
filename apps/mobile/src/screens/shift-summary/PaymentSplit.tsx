@@ -1,5 +1,5 @@
 import React from 'react';
-import { rupees } from '../../lib/home/format.js';
+import { rupees } from '../../lib/format.js';
 import type { PaymentSlice } from '../../lib/shifts/summary.js';
 
 const SWATCH: Record<PaymentSlice['key'], string> = {
@@ -7,7 +7,6 @@ const SWATCH: Record<PaymentSlice['key'], string> = {
   upi: 'bg-info',
   card: 'bg-text-muted',
   credit: 'bg-warn',
-  other: 'bg-text-faint',
 };
 
 /** Stacked bar plus one amount per payment method. A colour is always paired with its name. */

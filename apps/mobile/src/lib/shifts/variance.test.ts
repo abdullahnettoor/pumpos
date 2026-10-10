@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveShiftVariance, offLabel, varianceBadge } from './variance.js';
+import { deriveShiftVariance } from './variance.js';
 
 const drawers = [
   { duName: 'DU1', attendantName: 'Ramesh', variance: 0 },
@@ -48,28 +48,5 @@ describe('deriveShiftVariance', () => {
 
   it('treats sub-paisa noise as balanced', () => {
     expect(deriveShiftVariance({ cashVariance: 0.001 }).headlineNote).toBe('Balanced');
-  });
-});
-
-describe('offLabel', () => {
-  it('names the largest and counts the rest', () => {
-    expect(
-      offLabel([
-        { name: 'DU1', variance: 20 },
-        { name: 'DU2', variance: -90 },
-      ]),
-    ).toBe('DU2 short +1 more');
-  });
-});
-
-describe('varianceBadge', () => {
-  it('maps balanced / surplus / short', () => {
-    expect(varianceBadge(0)).toEqual({ tone: 'good', text: 'Balanced' });
-    expect(varianceBadge(120)).toEqual({ tone: 'warn', text: '+₹120' });
-    expect(varianceBadge(-340)).toEqual({ tone: 'bad', text: '−₹340' });
-  });
-
-  it('keeps paise for a variance under a rupee', () => {
-    expect(varianceBadge(-0.5).text).toBe('−₹0.50');
   });
 });

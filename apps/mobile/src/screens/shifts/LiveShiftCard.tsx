@@ -1,7 +1,8 @@
 import React from 'react';
-import { rupees } from '../../lib/home/format.js';
+import { DuChip } from '../../components/DuChip.js';
+import { rupees } from '../../lib/format.js';
 import type { DuStatus, LiveDu, LiveShiftCard as LiveCard } from '../../lib/shifts/liveCard.js';
-import { varianceBadge } from '../../lib/shifts/variance.js';
+import { varianceBadge } from '../../lib/variance.js';
 import { StatusBadge, type BadgeTone } from '../../ui/index.js';
 
 const STATUS: Record<DuStatus, { label: string; tone: BadgeTone }> = {
@@ -22,18 +23,13 @@ const DuRow: React.FC<{ du: LiveDu }> = ({ du }) => {
   const variance = du.variance === null ? null : varianceBadge(du.variance);
   return (
     <li className="flex items-center gap-2.5 border-t border-line px-3 py-[11px] first:border-t-0">
-      <span
-        aria-hidden="true"
-        className="grid h-8 min-w-8 max-w-[64px] flex-shrink-0 place-items-center truncate rounded-[9px] border border-line bg-card-alt px-1.5 text-[11px] font-bold text-text-muted"
-      >
-        {du.duName}
-      </span>
+      <DuChip name={du.duName} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-[13px] font-semibold text-text-high">{du.attendant}</p>
         <p className="num truncate text-[11px] text-text-muted">
           {du.declared === null
             ? `${du.duName} · Not handed over yet`
-            : `Declared ${rupees(du.declared)} · ${variance?.text === 'Balanced' ? 'balanced' : `var ${variance?.text}`}`}
+            : `Declared ${rupees(du.declared)} · ${variance?.balanced ? 'balanced' : `var ${variance?.text}`}`}
         </p>
       </div>
       <StatusBadge tone={status.tone}>{status.label}</StatusBadge>

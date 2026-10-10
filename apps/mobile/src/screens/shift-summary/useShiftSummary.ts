@@ -1,27 +1,20 @@
 import { useMemo } from 'react';
-import {
-  useDispensers,
-  useMerchandiseHandovers,
-  useMerchandiseSales,
-  useNozzles,
-  useShiftSummaries,
-} from '@pump/ui';
+import { useDispensers, useNozzles, useShiftSummaryById } from '@pump/ui';
 import { businessDateSettings, shiftDisplayLabel } from '@pump/shared';
 import type { Station } from '@pump/shared';
 import { shiftLabel, type Snapshot } from '../../lib/home/sales.js';
 import type { ShiftSummaryRow } from '../../lib/shifts/history.js';
-import {
-  deriveShiftProducts,
-  deriveShiftSummary,
-  nozzleDuNames,
-} from '../../lib/shifts/summary.js';
+import { deriveShiftSummary, nozzleDuNames } from '../../lib/shifts/summary.js';
 import { windowLabel } from '../../lib/shifts/window.js';
 
 /**
- * One Shift Summary: the immutable snapshot (read from the summaries cache,
- * falling back to the row the page was opened from) and, because a snapshot
- * holds only fuel, the Shift's Product Sales from the merchandise endpoints.
- * The derivations are pure and live in `lib/shifts/summary.ts`.
+ * One Shift Summary: the immutable snapshot, read by shift id (so the page
+ * opens for a Shift of any age, from any entry point) and painted at once from
+ * the row it was opened from. Every figure comes from the snapshot; the
+ * derivations are pure and live in `lib/shifts/summary.ts`.
+ *
+ * The station's nozzle and dispenser lists are read only for a snapshot whose
+ * readings predate their stored Dispenser Unit.
  */
 export function useShiftSummary(
   station: Station,
@@ -29,18 +22,14 @@ export function useShiftSummary(
   initial: ShiftSummaryRow | undefined,
 ) {
   const { timeZone } = businessDateSettings(station.settings);
-  const summariesQ = useShiftSummaries(station.id);
-  const nozzlesQ = useNozzles(station.id);
-  const dispensersQ = useDispensers(station.id);
-  const handoversQ = useMerchandiseHandovers(shiftId);
-  const billedQ = useMerchandiseSales(shiftId);
+  const summaryQ = useShiftSummaryById(shiftId, { placeholderData: initial });
+  // A late-attributed record refreshes the stored snapshot, so the read wins over the opening row.
+  const row = (summaryQ.data as ShiftSummaryRow | undefined) ?? initial;
 
-  // A late-attributed record refreshes the stored snapshot, so the cache wins over the opening row.
-  const row =
-    (summariesQ.data as ShiftSummaryRow[] | undefined)?.find((s) => s.shiftId === shiftId) ??
-    initial;
-  const handovers = handoversQ.data;
-  const billed = billedQ.data;
+  const readings = (row?.snapshotData as Snapshot | undefined)?.nozzleReadings;
+  const needsSetup = Array.isArray(readings) && readings.some((r: Snapshot) => r.duName == null);
+  const nozzlesQ = useNozzles(station.id, { enabled: needsSetup });
+  const dispensersQ = useDispensers(station.id, { enabled: needsSetup });
   const nozzles = nozzlesQ.data;
   const dispensers = dispensersQ.data;
 
@@ -57,20 +46,5 @@ export function useShiftSummary(
     };
   }, [row, nozzles, dispensers, timeZone]);
 
-  const products = useMemo(
-    () =>
-      handovers && billed
-        ? deriveShiftProducts(handovers as Snapshot[], billed as Snapshot[])
-        : null,
-    [handovers, billed],
-  );
-
-  return {
-    model,
-    products,
-    /** Fuel is complete; product sales arrive with their own reads. */
-    productsLoading: handoversQ.isLoading || billedQ.isLoading,
-    productsError: handoversQ.isError || billedQ.isError,
-    summariesLoading: summariesQ.isLoading,
-  };
+  return { model, loading: summaryQ.isLoading };
 }

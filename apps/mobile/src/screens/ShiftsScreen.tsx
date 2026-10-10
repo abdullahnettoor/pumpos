@@ -16,6 +16,14 @@ interface Props {
 /** Business days of history shown before "Show older days". */
 const DAYS_PER_PAGE = 10;
 
+/** One sentence naming every Past Open Business Day, oldest first. */
+function pastOpenMessage(dates: readonly string[]): string {
+  const labels = dates.map(businessDateLabel).join(', ');
+  return dates.length === 1
+    ? `Business day ${labels} still open. Close it on desktop.`
+    : `Business days ${labels} still open. Close them on desktop.`;
+}
+
 /**
  * The Shifts tab, view-only: the running Shift, then every closed Shift grouped
  * by Shift Business Date. A row opens that Shift's full Summary (with Share and
@@ -32,14 +40,21 @@ export const ShiftsScreen: React.FC<Props> = ({ station }) => {
       `shift:${row.shiftId}`,
     );
 
+  // Reveal the next days; when they are not loaded yet, page further back for them.
+  const showOlder = () => {
+    const next = visibleDays + DAYS_PER_PAGE;
+    setVisibleDays(next);
+    if (m.hasMoreHistory && m.history.length < next) void m.loadMoreHistory();
+  };
+
   return (
     <div className="pb-2">
-      {m.staleOpenDate && (
+      {m.staleOpenDates.length > 0 && (
         <p
           role="status"
           className="mx-3 mb-1 rounded-[14px] border border-warn-line bg-warn-soft px-3.5 py-3 text-xs font-semibold text-warn-fg"
         >
-          Business day {businessDateLabel(m.staleOpenDate)} still open. Close it on desktop.
+          {pastOpenMessage(m.staleOpenDates)}
         </p>
       )}
 
@@ -61,14 +76,15 @@ export const ShiftsScreen: React.FC<Props> = ({ station }) => {
         </>
       )}
       <ShiftHistory days={m.history.slice(0, visibleDays)} onOpen={open} />
-      {m.history.length > visibleDays && (
+      {(m.history.length > visibleDays || m.hasMoreHistory) && (
         <div className="px-3 pt-3">
           <button
             type="button"
-            onClick={() => setVisibleDays((n) => n + DAYS_PER_PAGE)}
-            className="h-10 w-full rounded-[13px] border border-line bg-card text-[13px] font-bold text-text-high"
+            disabled={m.loadingMore}
+            onClick={showOlder}
+            className="h-10 w-full rounded-[13px] border border-line bg-card text-[13px] font-bold text-text-high disabled:opacity-60"
           >
-            Show older days
+            {m.loadingMore ? 'Loading…' : 'Show older days'}
           </button>
         </div>
       )}

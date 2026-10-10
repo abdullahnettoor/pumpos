@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RecordHandoverResult } from '@pump/ui';
 import type { AssignedDu, HandoverRow } from '../../components/handover/model.js';
-import { buildRecap, minutesOnShift, formatOnShift, varianceBadge } from './recap.js';
+import { buildRecap, minutesOnShift, formatOnShift } from './recap.js';
 
 const du = (over: Partial<AssignedDu> = {}): AssignedDu => ({
   duId: 'du-1',
@@ -196,24 +196,6 @@ describe('buildRecap completeness', () => {
     expect(recap.duNames).toEqual(['DU2', 'DU3']);
     expect(recap.cashHandedOver).toBe(12254 + 1000);
     expect(recap.fuelLitres).toBe(190);
-  });
-});
-
-describe('varianceBadge', () => {
-  it('labels balanced, short and over', () => {
-    expect(varianceBadge(0).label).toBe('Balanced');
-    expect(varianceBadge(-125).label).toBe('Short ₹125.00');
-    expect(varianceBadge(60).label).toBe('Over ₹60.00');
-    expect(varianceBadge(-125).tone).toBe('bad');
-    expect(varianceBadge(60).tone).toBe('warn');
-  });
-
-  it('agrees with the office on what is balanced', () => {
-    expect(varianceBadge(0.004).label).toBe('Balanced');
-    expect(varianceBadge(-0.004).label).toBe('Balanced');
-    // Under a rupee is still a variance: the office would show it, so do we.
-    expect(varianceBadge(0.4).label).toBe('Over ₹0.40');
-    expect(varianceBadge(-0.4).label).toBe('Short ₹0.40');
   });
 });
 

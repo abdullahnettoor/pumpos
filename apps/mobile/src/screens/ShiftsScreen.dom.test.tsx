@@ -20,12 +20,16 @@ const q = (data: unknown, extra: Record<string, unknown> = {}) => ({
 
 const feed = vi.hoisted(() => ({
   status: null as unknown,
-  summaries: [] as unknown[],
+  /** Every closed Shift, newest first; the history hook serves them PAGE rows at a time. */
+  summaries: [] as { shiftId: string }[],
+  pageSize: 50,
+  /** Business Day status: every open day before the Current Business Date. */
+  pastOpen: [] as { businessDate: string }[],
   nozzles: [] as unknown[],
   dispensers: [] as unknown[],
-  handovers: [] as unknown[],
-  billed: [] as unknown[],
   pdf: [] as unknown[][],
+  /** Shift ids the by-id read was asked for. */
+  byIdReads: [] as string[],
 }));
 
 vi.mock('@pump/ui', async (importOriginal) => {
@@ -33,11 +37,28 @@ vi.mock('@pump/ui', async (importOriginal) => {
   return {
     ...actual,
     useShiftStatus: () => q(feed.status),
-    useShiftSummaries: () => q(feed.summaries),
+    useBusinessDayStatus: () => q({ pastOpenBusinessDays: feed.pastOpen }),
+    useShiftSummaryHistory: () => {
+      const [loaded, setLoaded] = React.useState(1);
+      const shown = feed.summaries.slice(0, loaded * feed.pageSize);
+      const pages = [];
+      for (let i = 0; i < shown.length; i += feed.pageSize)
+        pages.push(shown.slice(i, i + feed.pageSize));
+      return {
+        ...q({ pages }),
+        hasNextPage: shown.length < feed.summaries.length,
+        isFetchingNextPage: false,
+        fetchNextPage: async () => setLoaded((n) => n + 1),
+      };
+    },
+    // The by-id read: any age, not just the newest page. An unknown id is a 404.
+    useShiftSummaryById: (shiftId: string) => {
+      feed.byIdReads.push(shiftId);
+      const found = feed.summaries.find((r) => r.shiftId === shiftId);
+      return found ? q(found) : q(undefined, { isError: true });
+    },
     useNozzles: () => q(feed.nozzles),
     useDispensers: () => q(feed.dispensers),
-    useMerchandiseHandovers: () => q(feed.handovers),
-    useMerchandiseSales: () => q(feed.billed),
     generateShiftSummaryPdf: async (...args: unknown[]) => void feed.pdf.push(args),
   };
 });
@@ -85,6 +106,7 @@ const closedSnapshot = (over: Record<string, unknown> = {}) => ({
     {
       nozzleId: 'n1',
       nozzleName: 'N1',
+      duName: 'DU1',
       productCode: 'MS',
       productName: 'Petrol',
       openingReading: 184220.4,
@@ -96,6 +118,9 @@ const closedSnapshot = (over: Record<string, unknown> = {}) => ({
     },
   ],
   handovers: [{ cardHandedOver: '1000', upiHandedOver: '2000', creditHandedOver: '0' }],
+  payments: { cash: 210200, upi: 2000, card: 1000, credit: 0 },
+  productSales: { total: 0, lines: [] },
+  totalSalesValue: 213200,
   cashSalesSum: 210200,
   creditSalesTotal: 0,
   attendantVariance: -340,
@@ -137,6 +162,7 @@ const HISTORY = [
     '2026-10-09T02:00:00Z',
     closedSnapshot({
       totalFuelSalesValue: 259010,
+      totalSalesValue: 259010,
       attendantVariance: 0,
       drawers: [],
       fuelByProduct: [],
@@ -150,6 +176,7 @@ const HISTORY = [
     '2026-10-08T08:22:00Z',
     closedSnapshot({
       totalFuelSalesValue: 206530,
+      totalSalesValue: 206530,
       attendantVariance: 0,
       officeCountVariance: 120,
       drawers: [],
@@ -200,8 +227,9 @@ beforeEach(() => {
   feed.summaries = HISTORY;
   feed.nozzles = [{ id: 'n1', duId: 'd1' }];
   feed.dispensers = [{ id: 'd1', name: 'DU1' }];
-  feed.handovers = [];
-  feed.billed = [];
+  feed.pastOpen = [];
+  feed.pageSize = 50;
+  feed.byIdReads = [];
   feed.pdf = [];
 });
 afterEach(() => {
@@ -245,14 +273,24 @@ describe('Shifts tab: live Shift', () => {
   });
 
   it('warns that a past Business Day is still open', () => {
-    feed.status = { ...liveStatus, businessDay: { status: 'OPEN', businessDate: '2026-10-07' } };
+    feed.pastOpen = [{ businessDate: '2026-10-07' }];
     mount();
     expect(screen.getByRole('status').textContent).toBe(
       'Business day Wed, 7 Oct still open. Close it on desktop.',
     );
   });
 
-  it('shows no banner when the open Business Day is today', () => {
+  it('still names an older open day when today is open too', () => {
+    // Today's day is open (live Shift) AND two earlier days were never closed: the
+    // shift status only names the newest open day, the day status lists them all.
+    feed.pastOpen = [{ businessDate: '2026-10-08' }, { businessDate: '2026-10-06' }];
+    mount();
+    expect(screen.getByRole('status').textContent).toBe(
+      'Business days Tue, 6 Oct, Thu, 8 Oct still open. Close them on desktop.',
+    );
+  });
+
+  it('shows no banner when no past Business Day is open', () => {
     mount();
     expect(screen.queryByRole('status')).toBeNull();
   });
@@ -319,6 +357,31 @@ describe('Shifts tab: history', () => {
   });
 });
 
+describe('Shifts tab: history beyond the first page', () => {
+  const dayRows = (n: number) =>
+    Array.from({ length: n }, (_, i) => {
+      const d = `2026-09-${String(30 - i).padStart(2, '0')}`;
+      return row(`d${i}`, d, 1, `${d}T02:00:00Z`, `${d}T10:00:00Z`, closedSnapshot());
+    });
+
+  it('fetches further pages for "Show older days", never showing a half-loaded day', () => {
+    feed.summaries = dayRows(25);
+    feed.pageSize = 8; // 8 of 25 days per fetch
+    mount();
+    // The oldest loaded day (23 Sep) may be cut off by the page, so it is held back.
+    expect(screen.getByRole('region', { name: /24 Sep/ })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: /23 Sep/ })).toBeNull();
+    for (let guard = 0; guard < 6; guard++) {
+      const more = screen.queryByRole('button', { name: 'Show older days' });
+      if (!more) break;
+      fireEvent.click(more);
+    }
+    // All 25 days are reachable, down to the oldest (6 Sep).
+    expect(screen.getByRole('region', { name: /\b6 Sep/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Show older days' })).toBeNull();
+  });
+});
+
 describe('ShiftSummaryPage entry (pushed by other pages, e.g. the DSSR)', () => {
   const mountPage = (shiftId: string) =>
     render(
@@ -340,10 +403,19 @@ describe('ShiftSummaryPage entry (pushed by other pages, e.g. the DSSR)', () => 
     expect(screen.getByText('This shift summary is not available.')).toBeTruthy();
   });
 
-  it('badges a locked Shift as Locked', () => {
-    feed.summaries = [{ ...(HISTORY[0] as object), status: 'LOCKED' }];
+  it('reads a single summary by id, so a Shift beyond the first page still opens', () => {
+    feed.pageSize = 1; // the history list holds one row; the target is the third
+    mountPage('s-y1');
+    expect(feed.byIdReads).toContain('s-y1');
+    expect(screen.getByRole('heading', { name: 'Shift 1 summary' })).toBeTruthy();
+    expect(screen.getByText('Thu, 8 Oct · 6:00 am – 1:52 pm')).toBeTruthy();
+  });
+
+  it('badges a locked Shift as Closed', () => {
+    feed.summaries = [{ ...(HISTORY[0] as object), status: 'LOCKED' } as never];
     mountPage('s-today');
-    expect(screen.getByText('Locked')).toBeTruthy();
+    expect(screen.getByText('Closed')).toBeTruthy();
+    expect(screen.queryByText('Locked')).toBeNull();
   });
 });
 
@@ -397,25 +469,83 @@ describe('Shift Summary page', () => {
     expect(screen.getByText('Credit').parentElement?.textContent).toContain('₹0');
   });
 
-  it("adds the Shift's product sales to the total and the product block", async () => {
-    feed.handovers = [
-      {
-        totalAmount: '1180',
-        items: [{ productId: 'oil', productName: 'Engine oil', quantity: '4', lineTotal: '1000' }],
-      },
-    ];
-    feed.billed = [
-      {
-        totalAmount: '260',
-        items: [{ productName: 'Coolant', quantity: '1', lineTotal: '260' }],
-      },
+  describe('with product sales in the snapshot', () => {
+    const withProducts = () => {
+      feed.summaries = [
+        row(
+          's-today',
+          '2026-10-09',
+          1,
+          '2026-10-09T00:30:00Z',
+          '2026-10-09T08:22:00Z',
+          closedSnapshot({
+            totalSalesValue: 214640,
+            productSales: {
+              total: 1440,
+              lines: [
+                { productId: 'oil-a', productName: 'Engine oil', quantity: 4, value: 900 },
+                // Same name, different product: must not merge into the line above.
+                { productId: 'oil-b', productName: 'Engine oil', quantity: 1, value: 540 },
+              ],
+            },
+          }),
+        ),
+      ];
+    };
+
+    it('adds them to the total and lists each product (never merging by name)', async () => {
+      withProducts();
+      await openToday();
+      expect(screen.getAllByText('Engine oil')).toHaveLength(2);
+      expect(screen.getByText('₹900')).toBeTruthy();
+      expect(screen.getByText('₹540')).toBeTruthy();
+      expect(screen.getAllByText('₹2,14,640').length).toBeGreaterThan(0);
+      expect(screen.queryByText('No product sales in this shift.')).toBeNull();
+    });
+
+    it('shows the same total on the history row, the day total and the page', async () => {
+      withProducts();
+      mount();
+      const today = screen.getByRole('region', { name: 'Today · Fri, 9 Oct' });
+      // The day's total (section label) and the row.
+      expect(within(today).getAllByText('₹2,14,640')).toHaveLength(2);
+      fireEvent.click(within(today).getByRole('button'));
+      await screen.findByRole('heading', { name: 'Shift 1 summary' });
+      // The page leads with the very same figure.
+      expect(screen.getAllByText('₹2,14,640').length).toBeGreaterThan(0);
+    });
+  });
+
+  it('is honest about a summary saved before product sales were included', async () => {
+    const { productSales: _p, totalSalesValue: _t, ...legacy } = closedSnapshot();
+    feed.summaries = [
+      row('s-today', '2026-10-09', 1, '2026-10-09T00:30:00Z', '2026-10-09T08:22:00Z', legacy),
     ];
     await openToday();
-    expect(screen.getByText('Engine oil')).toBeTruthy();
-    expect(screen.getByText('Coolant')).toBeTruthy();
-    // 2,13,200 fuel + 1,440 products
-    expect(screen.getAllByText('₹2,14,640').length).toBeGreaterThan(0);
-    expect(screen.queryByText('No product sales in this shift.')).toBeNull();
+    expect(
+      screen.getByText('This summary was saved before product sales were included.'),
+    ).toBeTruthy();
+    // Fuel alone is the total on both the row and the page.
+    expect(screen.getAllByText('₹2,13,200').length).toBeGreaterThan(1);
+  });
+
+  it("takes each reading's Dispenser Unit from the snapshot, not from today's setup", async () => {
+    feed.nozzles = [{ id: 'n1', duId: 'd9' }];
+    feed.dispensers = [{ id: 'd9', name: 'DU9' }];
+    await openToday();
+    expect(screen.getByText('DU1 · MS')).toBeTruthy();
+    expect(screen.queryByText('DU9 · MS')).toBeNull();
+  });
+
+  it('has no invented "Other" payment slice', async () => {
+    await openToday();
+    expect(screen.queryByText('Other')).toBeNull();
+  });
+
+  it('lets screen readers reach each Drawer’s DU name', async () => {
+    await openToday();
+    const chip = screen.getByText('DU3');
+    expect(chip.closest('[aria-hidden="true"]')).toBeNull();
   });
 
   it('has Share and Download PDF in the action bar, and no row-level share anywhere', async () => {

@@ -36,10 +36,10 @@ export interface ShiftPayments {
 }
 
 interface ProductRow {
-  productId?: unknown;
-  productName?: unknown;
-  quantity?: unknown;
-  lineTotal?: unknown;
+  productId?: string | null;
+  productName?: string | null;
+  quantity?: number | string | null;
+  lineTotal?: number | string | null;
 }
 
 /**
@@ -52,10 +52,10 @@ export function composeShiftProductSales(
 ): ShiftProductSales {
   const byProduct = new Map<string, ShiftProductSaleLine>();
   for (const r of rows) {
-    const productId = String(r.productId ?? '');
+    const productId = r.productId ?? '';
     const line = byProduct.get(productId) ?? {
       productId,
-      productName: String(r.productName ?? 'Product'),
+      productName: r.productName ?? 'Product',
       quantity: 0,
       value: 0,
     };

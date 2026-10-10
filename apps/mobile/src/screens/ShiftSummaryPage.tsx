@@ -3,7 +3,7 @@ import { generateShiftSummaryPdf, useToast } from '@pump/ui';
 import type { Station } from '@pump/shared';
 import { SalesByProduct } from '../components/SalesByProduct.js';
 import { businessDateLabel } from '../lib/home/dates.js';
-import { rupees, signedRupees } from '../lib/home/format.js';
+import { rupees, signedRupees } from '../lib/format.js';
 import type { ShiftSummaryRow } from '../lib/shifts/history.js';
 import { derivePaymentSlices } from '../lib/shifts/summary.js';
 import { DetailPage, SectionLabel, StatTile, StatusBadge } from '../ui/index.js';
@@ -20,25 +20,22 @@ interface Props {
 }
 
 /**
- * A closed Shift's full summary, from its immutable Shift Summary snapshot:
- * total sales and cash variance, payment split, sales by product, nozzle
- * readings and drawer reconciliation. Share and Download produce the same PDF
- * the desktop Shift Summary does. Push it with
+ * A closed Shift's full summary, read from its immutable Shift Summary snapshot
+ * (nothing is recomputed from live data): total sales and cash variance,
+ * payment split, sales by product, nozzle readings and drawer reconciliation.
+ * Share and Download produce the same PDF the desktop Shift Summary does. Push
+ * it with
  * `nav.push(<ShiftSummaryPage station={station} shiftId={id} />, `shift:${id}`)`.
  */
 export const ShiftSummaryPage: React.FC<Props> = ({ station, shiftId, initial }) => {
   const toast = useToast();
-  const { model, products, productsLoading, productsError, summariesLoading } = useShiftSummary(
-    station,
-    shiftId,
-    initial,
-  );
+  const { model, loading } = useShiftSummary(station, shiftId, initial);
 
   if (!model)
     return (
       <DetailPage title="Shift summary">
         <p className="px-4 py-10 text-center text-sm text-text-muted">
-          {summariesLoading ? 'Loading shift summary…' : 'This shift summary is not available.'}
+          {loading ? 'Loading shift summary…' : 'This shift summary is not available.'}
         </p>
       </DetailPage>
     );
@@ -54,15 +51,8 @@ export const ShiftSummaryPage: React.FC<Props> = ({ station, shiftId, initial })
       output,
     );
 
-  // Total sales = fuel from the snapshot + Product Sales read live (null until they have loaded).
-  const productsTotal = products ? products.total : null;
-  const total = f.fuelValue + (productsTotal ?? 0);
+  const { products } = f;
   const v = f.variance;
-  const productsNote = productsLoading
-    ? 'Loading…'
-    : productsError
-      ? 'Unavailable'
-      : 'Product sales';
 
   return (
     <DetailPage
@@ -70,7 +60,7 @@ export const ShiftSummaryPage: React.FC<Props> = ({ station, shiftId, initial })
       subtitle={[row.businessDate ? businessDateLabel(String(row.businessDate)) : '', model.window]
         .filter(Boolean)
         .join(' · ')}
-      right={<StatusBadge tone="good">{row.status === 'LOCKED' ? 'Locked' : 'Closed'}</StatusBadge>}
+      right={<StatusBadge tone="good">Closed</StatusBadge>}
       share={{ onPress: () => pdf('save') }}
       download={{ onPress: () => pdf('download'), label: 'Download PDF' }}
       onActionError={(message) => toast.error(message)}
@@ -80,10 +70,10 @@ export const ShiftSummaryPage: React.FC<Props> = ({ station, shiftId, initial })
           wide
           label="Total sales"
           note={`Shift ${model.code}`}
-          value={rupees(total)}
+          value={rupees(f.total)}
           sub={[
             f.fuelVolumeLabel,
-            productsTotal === null ? undefined : `products ${rupees(productsTotal)}`,
+            products === null ? undefined : `products ${rupees(products.total)}`,
           ]
             .filter(Boolean)
             .join(' · ')}
@@ -99,8 +89,7 @@ export const ShiftSummaryPage: React.FC<Props> = ({ station, shiftId, initial })
                       : 'text-warn-fg'
                 }`}
               >
-                {v.headline > 0 ? '+' : ''}
-                {signedRupees(v.headline)}
+                {signedRupees(v.headline, { plus: true })}
               </p>
               <p className="mt-0.5 text-[11px] text-text-muted">{v.headlineNote}</p>
             </div>
@@ -109,25 +98,21 @@ export const ShiftSummaryPage: React.FC<Props> = ({ station, shiftId, initial })
       </div>
 
       <SectionLabel>Payments</SectionLabel>
-      <PaymentSplit
-        slices={derivePaymentSlices(f.payments, productsLoading || productsError ? null : total)}
-      />
+      <PaymentSplit slices={derivePaymentSlices(f.payments)} />
 
       <SectionLabel>Sales by product</SectionLabel>
       <SalesByProduct
         fuel={f.fuel}
         products={products?.lines ?? []}
         fuelTotal={f.fuelValue}
-        productsTotal={productsTotal ?? 0}
+        productsTotal={products?.total ?? 0}
         fuelNote={{ text: 'From nozzle readings' }}
-        productsNote={{ text: productsNote }}
+        productsNote={{ text: products ? 'Product sales' : 'Not recorded' }}
         fuelEmpty="No fuel sales in this shift."
         productsEmpty={
-          productsLoading
-            ? 'Loading product sales…'
-            : productsError
-              ? 'Product sales could not be loaded.'
-              : 'No product sales in this shift.'
+          products
+            ? 'No product sales in this shift.'
+            : 'This summary was saved before product sales were included.'
         }
       />
 

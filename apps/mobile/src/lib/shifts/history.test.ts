@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { deriveShiftHistory } from './history.js';
+import { deriveShiftHistory, settledDays } from './history.js';
+import { deriveShiftSummary } from './summary.js';
 
 const ctx = { timeZone: 'Asia/Kolkata', today: '2026-10-09' };
 
@@ -48,6 +49,33 @@ describe('deriveShiftHistory', () => {
     expect(days[1].total).toBe(465540);
   });
 
+  it('counts Product Sales in a row and in the day total, as the Summary page does', () => {
+    const snap = {
+      totalFuelSalesValue: 10000,
+      totalSalesValue: 11416,
+      productSales: { total: 1416, lines: [] },
+    };
+    const days = deriveShiftHistory(
+      [
+        summary('a', '2026-10-09', '2026-10-09T01:00:00Z', snap),
+        summary('b', '2026-10-09', '2026-10-09T09:00:00Z', snap),
+      ],
+      ctx,
+    );
+    expect(days[0].rows.map((r) => r.sales)).toEqual([11416, 11416]);
+    expect(days[0].total).toBe(22832);
+    // The page's headline is the very same figure.
+    expect(deriveShiftSummary(snap, new Map()).total).toBe(days[0].rows[0].sales);
+  });
+
+  it('falls back to fuel for a snapshot that predates Product Sales', () => {
+    const [day] = deriveShiftHistory(
+      [summary('a', '2026-10-09', '2026-10-09T01:00:00Z', { totalFuelSalesValue: 700 })],
+      ctx,
+    );
+    expect(day.rows[0].sales).toBe(700);
+  });
+
   it('shows the variance badge and the window on each row', () => {
     const [day] = deriveShiftHistory(
       [
@@ -73,5 +101,24 @@ describe('deriveShiftHistory', () => {
 
   it('returns nothing for no summaries', () => {
     expect(deriveShiftHistory([], ctx)).toEqual([]);
+  });
+});
+
+describe('settledDays', () => {
+  const days = deriveShiftHistory(
+    [
+      summary('a', '2026-10-09', '2026-10-09T01:00:00Z'),
+      summary('b', '2026-10-08', '2026-10-08T01:00:00Z'),
+    ],
+    ctx,
+  );
+  it('holds back the oldest loaded day while older pages remain', () => {
+    expect(settledDays(days, true).map((d) => d.businessDate)).toEqual(['2026-10-09']);
+  });
+  it('shows every day once nothing older is left', () => {
+    expect(settledDays(days, false)).toHaveLength(2);
+  });
+  it('keeps a lone day', () => {
+    expect(settledDays(days.slice(0, 1), true)).toHaveLength(1);
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   deriveFuelLines,
   derivePaymentSlices,
+  deriveSalesTotals,
   deriveShiftProducts,
   deriveShiftSummary,
   nozzleDuNames,
@@ -145,56 +146,91 @@ describe('volumeLabel / deriveFuelLines', () => {
   });
 });
 
-describe('deriveShiftProducts', () => {
-  it('groups bulk handover items and billed sales by product', () => {
-    const p = deriveShiftProducts(
-      [
-        {
-          totalAmount: '1180',
-          items: [
-            { productId: 'oil', productName: 'Engine oil', quantity: '4.000', lineTotal: '1000' },
-          ],
-        },
+describe('Product Sales (from the snapshot)', () => {
+  const withProducts = {
+    ...snapshot,
+    totalProductSalesValue: 1416,
+    totalSalesValue: 214616,
+    productSales: {
+      total: 1416,
+      lines: [
+        { productId: 'p1', productName: 'Engine Oil', quantity: 3, value: 900 },
+        // A second product sharing the name stays its own line.
+        { productId: 'p2', productName: 'Engine Oil', quantity: 1, value: 450 },
       ],
-      [
-        {
-          totalAmount: '590',
-          items: [{ productName: 'Engine oil', quantity: '1', lineTotal: '500' }],
-        },
-        {
-          totalAmount: '210',
-          items: [{ productId: 'cool', productName: 'Coolant', quantity: '1', lineTotal: '210' }],
-        },
-      ],
-    );
-    // A handover item has an id, a billed item only a name: both land on one line.
-    expect(p.lines.map((l) => [l.name, l.quantity, l.value])).toEqual([
-      ['Engine oil', 5, 1500],
-      ['Coolant', 1, 210],
+    },
+  };
+
+  it('lists one line per product id and takes the sales total as the figure', () => {
+    const p = deriveShiftProducts(withProducts);
+    expect(p?.lines.map((l) => [l.key, l.name, l.quantity, l.value])).toEqual([
+      ['p1', 'Engine Oil', 3, 900],
+      ['p2', 'Engine Oil', 1, 450],
     ]);
-    expect(p.total).toBe(1980);
+    expect(p?.total).toBe(1416);
   });
 
-  it('is empty for a Shift with no product sales', () => {
-    expect(deriveShiftProducts([], [])).toEqual({ lines: [], total: 0 });
+  it('is an empty list (not missing) for a Shift with no Product Sales', () => {
+    expect(deriveShiftProducts({ productSales: { total: 0, lines: [] } })).toEqual({
+      lines: [],
+      total: 0,
+    });
+  });
+
+  it('is null for a snapshot that predates Product Sales', () => {
+    expect(deriveShiftProducts(snapshot)).toBeNull();
+    expect(deriveShiftSummary(snapshot, new Map()).products).toBeNull();
+  });
+
+  it('adds them to the headline total', () => {
+    expect(deriveShiftSummary(withProducts, new Map()).total).toBe(214616);
+    expect(deriveSalesTotals(withProducts)).toEqual({
+      fuel: 213200,
+      products: 1416,
+      total: 214616,
+    });
+  });
+
+  it('shows fuel alone as the total for a snapshot without them', () => {
+    expect(deriveSalesTotals(snapshot)).toEqual({ fuel: 213200, products: null, total: 213200 });
+  });
+});
+
+describe('payments (from the snapshot)', () => {
+  it('reads the snapshot payment split rather than summing Handovers again', () => {
+    const m = deriveShiftSummary(
+      { ...snapshot, payments: { cash: 1, upi: 2, card: 3, credit: 4 } },
+      new Map(),
+    );
+    expect(m.payments).toEqual({ cash: 1, upi: 2, card: 3, credit: 4 });
+  });
+});
+
+describe('Dispenser Unit on a nozzle row', () => {
+  const reading = { nozzleId: 'n1', nozzleName: 'N1', productCode: 'MS', unit: 'L' };
+
+  it("takes the reading's own DU over today's setup", () => {
+    const moved = nozzleDuNames([{ id: 'n1', duId: 'd9' }], [{ id: 'd9', name: 'DU9' }]);
+    const m = deriveShiftSummary({ nozzleReadings: [{ ...reading, duName: 'DU1' }] }, moved);
+    expect(m.nozzles[0].detail).toBe('DU1 · MS');
+  });
+
+  it('falls back to the setup only for a snapshot whose readings carry no DU', () => {
+    const names = nozzleDuNames([{ id: 'n1', duId: 'd9' }], [{ id: 'd9', name: 'DU9' }]);
+    expect(deriveShiftSummary({ nozzleReadings: [reading] }, names).nozzles[0].detail).toBe(
+      'DU9 · MS',
+    );
   });
 });
 
 describe('derivePaymentSlices', () => {
-  const p = { cash: 100, upi: 60, card: 25, credit: 15 };
-  it('has the four declared methods and no Other when they add up', () => {
-    expect(derivePaymentSlices(p, 200).map((s) => s.key)).toEqual([
-      'cash',
-      'upi',
-      'card',
-      'credit',
+  it('has the four declared methods and nothing else', () => {
+    const slices = derivePaymentSlices({ cash: 100, upi: 60, card: 25, credit: 15 });
+    expect(slices.map((s) => [s.key, s.amount])).toEqual([
+      ['cash', 100],
+      ['upi', 60],
+      ['card', 25],
+      ['credit', 15],
     ]);
-  });
-  it('shows what the methods do not account for as Other', () => {
-    const slices = derivePaymentSlices(p, 250);
-    expect(slices.at(-1)).toEqual({ key: 'other', label: 'Other', amount: 50 });
-  });
-  it('waits for the full total before working out Other', () => {
-    expect(derivePaymentSlices(p, null)).toHaveLength(4);
   });
 });

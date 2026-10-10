@@ -1,5 +1,5 @@
 import React from 'react';
-import { rupees } from '../../lib/home/format.js';
+import { rupees } from '../../lib/format.js';
 import type { ShiftHistoryDay, ShiftHistoryRow } from '../../lib/shifts/history.js';
 import { ListGroup, ListRow, SectionLabel, StatusBadge } from '../../ui/index.js';
 
@@ -24,7 +24,7 @@ export const ShiftHistory: React.FC<Props> = ({ days, onOpen }) => (
               meta={<span className="num">{row.window}</span>}
               end={
                 <div>
-                  <div className="num">{rupees(row.fuelSales)}</div>
+                  <div className="num">{rupees(row.sales)}</div>
                   <div className="mt-[3px]">
                     <StatusBadge tone={row.badge.tone} num>
                       {row.badge.text}

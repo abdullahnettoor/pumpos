@@ -3,9 +3,11 @@
  * Business Date (not the calendar day it opened), newest first.
  */
 import { businessDateLabel, stationDay } from '../home/dates.js';
-import { num, round2 } from '../home/num.js';
+import { round2 } from '../home/num.js';
 import { shiftLabel, type Snapshot } from '../home/sales.js';
-import { deriveShiftVariance, varianceBadge, type VarianceBadgeView } from './variance.js';
+import { varianceBadge, type VarianceBadgeView } from '../variance.js';
+import { deriveSalesTotals } from './summary.js';
+import { deriveShiftVariance } from './variance.js';
 import { windowLabel } from './window.js';
 
 /** One row of `GET /shifts/shift-summaries`. */
@@ -15,8 +17,8 @@ export interface ShiftHistoryRow {
   shiftId: string;
   title: string;
   window: string;
-  /** Fuel sales from the snapshot: Product Sales are not part of a Shift Summary snapshot. */
-  fuelSales: number;
+  /** Total sales from the snapshot (fuel + Product Sales): the figure the Shift Summary page leads with. */
+  sales: number;
   badge: VarianceBadgeView;
   summary: ShiftSummaryRow;
 }
@@ -46,7 +48,7 @@ export function deriveShiftHistory(
       shiftId: s.shiftId,
       title: shiftLabel(s),
       window: windowLabel(s.openedAt, s.closedAt, ctx.timeZone),
-      fuelSales: num(snap.totalFuelSalesValue),
+      sales: deriveSalesTotals(snap).total,
       badge: varianceBadge(deriveShiftVariance(snap).headline),
       summary: s,
     };
@@ -60,7 +62,17 @@ export function deriveShiftHistory(
         businessDate === ctx.today
           ? `Today · ${businessDateLabel(businessDate)}`
           : businessDateLabel(businessDate),
-      total: round2(rows.reduce((sum, r) => sum + r.fuelSales, 0)),
+      total: round2(rows.reduce((sum, r) => sum + r.sales, 0)),
       rows,
     }));
+}
+
+/**
+ * While older pages are still to load, the oldest day loaded so far may be cut
+ * off part-way (its other Shifts are on the next page), so its total would be
+ * wrong. It is held back until its Shifts are all in. A lone loaded day stays
+ * (hiding it would leave nothing to show).
+ */
+export function settledDays(days: readonly ShiftHistoryDay[], hasMore: boolean): ShiftHistoryDay[] {
+  return hasMore && days.length > 1 ? days.slice(0, -1) : [...days];
 }

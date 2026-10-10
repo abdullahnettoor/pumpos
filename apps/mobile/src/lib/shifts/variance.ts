@@ -9,16 +9,9 @@
  * the attendant shortage; they have no second level.
  */
 import { isBalancedVariance, isTwoLevelVarianceSnapshot } from '@pump/shared';
-import { formatMoney } from '@pump/ui';
-import { signedRupees } from '../home/format.js';
 import { num, round2 } from '../home/num.js';
 import type { Snapshot } from '../home/sales.js';
-import type { BadgeTone } from '../../ui/StatusBadge.js';
-
-export interface DrawerOff {
-  name: string;
-  variance: number;
-}
+import { offLabel, type DrawerOff } from '../variance.js';
 
 export interface ShiftVariance {
   twoLevel: boolean;
@@ -35,14 +28,6 @@ export interface ShiftVariance {
 }
 
 const off = (v: number) => !isBalancedVariance(v);
-
-/** "DU3 short", or "DU3 short +1 more": largest first. */
-export function offLabel(drawers: readonly DrawerOff[]): string {
-  const sorted = [...drawers].sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance));
-  const first = sorted[0];
-  const label = `${first.name} ${first.variance < 0 ? 'short' : 'over'}`;
-  return sorted.length > 1 ? `${label} +${sorted.length - 1} more` : label;
-}
 
 export function drawerName(d: Snapshot): string {
   return String(d.duName ?? d.attendantName ?? 'Drawer');
@@ -73,18 +58,4 @@ export function deriveShiftVariance(snap: Snapshot): ShiftVariance {
         : 'Office count';
   }
   return { twoLevel, attendant, office, headline, headlineNote, drawersOff };
-}
-
-export interface VarianceBadgeView {
-  tone: BadgeTone;
-  text: string;
-}
-
-/** Balanced / +₹120 / −₹340, as the Shift row and Drawer badges show it. */
-export function varianceBadge(v: number): VarianceBadgeView {
-  if (!off(v)) return { tone: 'good', text: 'Balanced' };
-  // Whole rupees, except under ₹1 where rounding would read "₹0" for a real variance.
-  const amount =
-    Math.abs(v) < 1 ? `${v < 0 ? '−' : ''}${formatMoney(Math.abs(v))}` : signedRupees(v);
-  return { tone: v < 0 ? 'bad' : 'warn', text: `${v > 0 ? '+' : ''}${amount}` };
 }
