@@ -11,5 +11,5 @@ export { PageHeader } from './PageHeader.js';
 export { SeeAllButton } from './SeeAllButton.js';
 export { SectionLabel } from './SectionLabel.js';
 export { SegmentedControl } from './SegmentedControl.js';
-export { StatTile, type Tone } from './StatTile.js';
+export { StatTile, TONE_TEXT, type Tone } from './StatTile.js';
 export { StatusBadge, type BadgeTone } from './StatusBadge.js';

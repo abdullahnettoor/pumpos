@@ -28,6 +28,8 @@
  * --bad-fg --warn-fg                   status text on a tinted --*-soft surface
  * --good-soft --bad-soft --warn-soft --info-soft    status tinted surfaces
  * --good-line --bad-line --warn-line  status tinted borders
+ * --chart-1..6    categorical series (product mix, legends): six hues that are
+ *                  NOT status colours, so a grade never reads as good/bad/warn
  * --hero           gradient for the hero strip / summary card
  * --hero-line      border of the hero surface
  * --dock           translucent surface of the bottom dock / action bar
@@ -65,6 +67,14 @@
   --info: #2e5e88; /* Diesel Blue */
   --bad-fg: #9f3f36; /* danger-fg: text on --bad-soft */
   --warn-fg: #8a6116; /* warning-fg: text on --warn-soft */
+
+  /* Categorical chart series: each >= 3:1 on --card, none equal to a status hue. */
+  --chart-1: #2c7a9b;
+  --chart-2: #b87518;
+  --chart-3: #7a5cb0;
+  --chart-4: #4f8a2e;
+  --chart-5: #b5476e;
+  --chart-6: #6b747d;
 
   --good-soft: #e8f4ee; /* success-bg */
   --good-line: #c5e2d3;
@@ -107,6 +117,13 @@
   --info: #6cb6ff;
   --bad-fg: #ff7a6b;
   --warn-fg: #f2b544;
+
+  --chart-1: #5bb0d6;
+  --chart-2: #e3a458;
+  --chart-3: #ab94e6;
+  --chart-4: #92c96b;
+  --chart-5: #e783a6;
+  --chart-6: #9aa7b0;
 
   --good-soft: #10241b;
   --good-line: #1d4733;

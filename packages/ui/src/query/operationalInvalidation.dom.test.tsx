@@ -50,6 +50,9 @@ describe('useInvalidateOperational', () => {
       'dssr-preview',
       // The mobile Home's trend reads closed days' snapshots.
       'dssr-range',
+      // Closing a Business Day (from the desktop Business Day tab too) moves the
+      // end of every mobile Insights range.
+      'insights-sales',
     ]) {
       expect(keys).toContain(key);
     }
