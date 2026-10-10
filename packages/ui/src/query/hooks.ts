@@ -819,53 +819,51 @@ function widensStatementWindow(
 }
 
 /**
- * A customer's statement for a date range (enriched rows + opening balance),
- * from the ranged ledger API. Operational tier; every operational write
- * invalidates the `customer-statement` prefix.
+ * A party's statement for a date range (enriched rows + opening balance), from the
+ * ranged ledger API: one hook for both kinds. Operational tier; every operational
+ * write invalidates the `customer-statement` / `supplier-statement` prefix.
  *
  * Widening the range into the past ("Earlier months") changes the key; the
  * previous range's rows stay on screen (`isPlaceholderData`) until the wider one
  * arrives, so the list never collapses to a spinner. Only that case carries rows
- * over: another range (the Filter) or another customer loads from scratch.
+ * over: another range (the Filter) or another party loads from scratch.
  */
-export function useCustomerStatement(
-  customerId: string | null | undefined,
+export function usePartyStatement(
+  kind: 'customer' | 'supplier',
+  partyId: string | null | undefined,
   range: { from: string; to: string },
   options?: Options<RangedPartyLedger>,
 ) {
+  const customer = kind === 'customer';
   return useQuery({
-    queryKey: queryKeys.customerStatement(customerId ?? '', range.from, range.to),
-    queryFn: () => txService.getCustomerLedgerRange(customerId!, range),
-    enabled: !!customerId,
+    queryKey: customer
+      ? queryKeys.customerStatement(partyId ?? '', range.from, range.to)
+      : queryKeys.supplierStatement(partyId ?? '', range.from, range.to),
+    queryFn: () =>
+      customer
+        ? txService.getCustomerLedgerRange(partyId!, range)
+        : txService.getSupplierLedgerRange(partyId!, range),
+    enabled: !!partyId,
     placeholderData: (previous, previousQuery) =>
-      widensStatementWindow(previousQuery?.queryKey, customerId, range) ? previous : undefined,
+      widensStatementWindow(previousQuery?.queryKey, partyId, range) ? previous : undefined,
     ...TIER.operational,
     ...options,
   });
 }
 
-/**
- * A supplier's statement for a date range (enriched rows + opening balance), from
- * the ranged ledger API. Operational tier; every operational write invalidates the
- * `supplier-statement` prefix. Same "Earlier months" behaviour as
- * `useCustomerStatement`: only a window widening into the past keeps the previous
- * rows on screen until the wider one arrives.
- */
-export function useSupplierStatement(
+/** A customer's statement: `usePartyStatement` for a customer. */
+export const useCustomerStatement = (
+  customerId: string | null | undefined,
+  range: { from: string; to: string },
+  options?: Options<RangedPartyLedger>,
+) => usePartyStatement('customer', customerId, range, options);
+
+/** A supplier's statement: `usePartyStatement` for a supplier. */
+export const useSupplierStatement = (
   supplierId: string | null | undefined,
   range: { from: string; to: string },
   options?: Options<RangedPartyLedger>,
-) {
-  return useQuery({
-    queryKey: queryKeys.supplierStatement(supplierId ?? '', range.from, range.to),
-    queryFn: () => txService.getSupplierLedgerRange(supplierId!, range),
-    enabled: !!supplierId,
-    placeholderData: (previous, previousQuery) =>
-      widensStatementWindow(previousQuery?.queryKey, supplierId, range) ? previous : undefined,
-    ...TIER.operational,
-    ...options,
-  });
-}
+) => usePartyStatement('supplier', supplierId, range, options);
 
 export function useSupplierLedger(supplierId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
