@@ -32,7 +32,7 @@ const SignOutButton: React.FC = () => (
 );
 
 export const App: React.FC = () => {
-  const { status, role, userName, error } = useSession();
+  const { status, role, userName, userId, error } = useSession();
   const stationsQ = useStations({ enabled: status === 'ready' });
   const stations = useMemo(() => (stationsQ.data || []) as Station[], [stationsQ.data]);
 
@@ -99,6 +99,7 @@ export const App: React.FC = () => {
     <NavProvider tabs={allowedTabs}>
       <MobileShell
         userName={userName}
+        userId={userId}
         role={role}
         stations={stations}
         selectedStationId={selectedStationId}

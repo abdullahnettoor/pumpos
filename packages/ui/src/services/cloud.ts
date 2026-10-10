@@ -536,33 +536,48 @@ export class CloudUserAssignmentService implements IUserAssignmentService {
     // Role change
   }
 
-  async createUser(data: any): Promise<User> {
-    return request<User>('/setup/users', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createUser(data: any, opts?: { idempotencyKey?: string }): Promise<User> {
+    return request<User>(
+      '/setup/users',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async updateUser(id: string, data: any): Promise<User> {
-    return request<User>(`/setup/users/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  async updateUser(id: string, data: any, opts?: { idempotencyKey?: string }): Promise<User> {
+    return request<User>(
+      `/setup/users/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async resetUserPassword(id: string, password: string): Promise<User> {
-    return request<User>(`/setup/users/${id}/reset-password`, {
-      method: 'POST',
-      body: JSON.stringify({ password }),
-    });
+  async resetUserPassword(
+    id: string,
+    password: string,
+    opts?: { idempotencyKey?: string },
+  ): Promise<User> {
+    return request<User>(
+      `/setup/users/${id}/reset-password`,
+      { method: 'POST', body: JSON.stringify({ password }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async deactivateUser(id: string): Promise<User> {
-    return request<User>(`/setup/users/${id}/deactivate`, { method: 'POST' });
+  async deactivateUser(id: string, opts?: { idempotencyKey?: string }): Promise<User> {
+    return request<User>(
+      `/setup/users/${id}/deactivate`,
+      { method: 'POST' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async reactivateUser(id: string): Promise<User> {
-    return request<User>(`/setup/users/${id}/reactivate`, { method: 'POST' });
+  async reactivateUser(id: string, opts?: { idempotencyKey?: string }): Promise<User> {
+    return request<User>(
+      `/setup/users/${id}/reactivate`,
+      { method: 'POST' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
