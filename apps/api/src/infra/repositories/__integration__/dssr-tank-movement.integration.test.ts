@@ -216,6 +216,11 @@ describe.skipIf(!CONNECTION)('DSSR tank stock movement against real Postgres', (
     expect(row.tankMovement.closingQuantity).toBe(12559.5);
   });
 
+  it("loads each product's type with the products it already reads (#392)", async () => {
+    const source = await new DrizzleDssrDataReader(db).readBusinessDay(DAY_2);
+    expect(Object.values(source.products).map((p) => p.productType)).toContain('FUEL');
+  });
+
   it('leaves a day with no dips without a movement read', async () => {
     const source = await new DrizzleDssrDataReader(db).readBusinessDay(DAY_3);
     expect(source.stockVariances).toEqual([]);

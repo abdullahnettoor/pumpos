@@ -559,7 +559,15 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
     // Figures the mobile Shift Summary page reads straight from the snapshot.
     expect(snap.productSales).toEqual({
       total: 240,
-      lines: [{ productId: OIL, productName: 'Engine Oil', quantity: 2, value: 240 }],
+      lines: [
+        {
+          productId: OIL,
+          productName: 'Engine Oil',
+          productType: 'LUBRICANT',
+          quantity: 2,
+          value: 240,
+        },
+      ],
     });
     expect(snap.totalSalesValue).toBe(50 * 100 + 60 * 90 + 240);
     expect(snap.payments).toEqual({ cash: 5100, upi: 100, card: 400, credit: 2000 });
