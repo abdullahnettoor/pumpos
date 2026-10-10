@@ -3,8 +3,10 @@
  * payloads the existing read endpoints return (DSSR preview, inventory status,
  * customer and supplier lists); the screen only renders them.
  */
+import { isBalancedVariance } from '@pump/shared';
 import { num, round2 } from './num.js';
-import { plural, signedRupees } from './format.js';
+import { plural, signedRupees } from '../format.js';
+import { offLabel } from '../variance.js';
 import { shiftLabel, type Snapshot } from './sales.js';
 
 export type Tone = 'default' | 'good' | 'warn' | 'bad';
@@ -27,15 +29,7 @@ export interface HomeTiles {
 /** Beyond this many rupees a cash variance reads as a problem. */
 const VARIANCE_ALERT = 100;
 
-/** "Shift 2 short +1 more" / "DU3 over": who is off, largest first, and which way. */
-function offLabel(off: { name: string; v: number }[]): string {
-  const sorted = [...off].sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
-  let label = `${sorted[0].name} ${sorted[0].v < 0 ? 'short' : 'over'}`;
-  if (sorted.length > 1) label += ` +${sorted.length - 1} more`;
-  return label;
-}
-
-const isOff = (v: number) => Math.abs(v) >= 0.005;
+const isOff = (v: number) => !isBalancedVariance(v);
 
 /**
  * Cash variance at its two levels (ADR 0005), never added together:
@@ -51,8 +45,8 @@ function varianceTile(snap: Snapshot): Tile {
   const drawer = snap.drawer ?? {};
   const office = round2(num(drawer.totalCashVariance));
   const shiftsOff = ((snap.shifts ?? []) as Snapshot[])
-    .map((s) => ({ name: shiftLabel(s), v: num(s.cashVariance) }))
-    .filter((s) => isOff(s.v));
+    .map((s) => ({ name: shiftLabel(s), variance: num(s.cashVariance) }))
+    .filter((s) => isOff(s.variance));
   const detail = isOff(office)
     ? shiftsOff.length > 0
       ? `${offLabel(shiftsOff)} · office count`
@@ -61,11 +55,11 @@ function varianceTile(snap: Snapshot): Tile {
 
   const dus = ((drawer.attendants ?? []) as Snapshot[]).map((a) => ({
     name: String(a.duName ?? a.attendantName ?? 'Drawer'),
-    v: num(a.variance),
+    variance: num(a.variance),
   }));
   const attendant = round2(num(drawer.totalAttendantVariance));
   const hasAttendantLevel = dus.length > 0 || drawer.totalAttendantVariance != null;
-  const dusOff = dus.filter((d) => isOff(d.v));
+  const dusOff = dus.filter((d) => isOff(d.variance));
   const secondary = !hasAttendantLevel
     ? undefined
     : dusOff.length > 0

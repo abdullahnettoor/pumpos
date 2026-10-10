@@ -1,5 +1,4 @@
-import { inr, type RecordHandoverResult } from '@pump/ui';
-import { isBalancedVariance } from '@pump/shared';
+import type { RecordHandoverResult } from '@pump/ui';
 import {
   num,
   type AssignedDu,
@@ -137,20 +136,6 @@ export function buildRecap(input: {
     variance: field((r) => r.varianceAmount),
     recordedAt: times.sort().at(-1) ?? null,
   };
-}
-
-export type VarianceTone = 'good' | 'bad' | 'warn';
-
-/**
- * Balanced by the same rule as the office's Drawer reconciliation
- * (`isBalancedVariance`), so attendant and office never disagree; short is a
- * problem, over is worth a look.
- */
-export function varianceBadge(variance: number): { label: string; tone: VarianceTone } {
-  if (isBalancedVariance(variance)) return { label: 'Balanced', tone: 'good' };
-  return variance < 0
-    ? { label: `Short ${inr(Math.abs(variance))}`, tone: 'bad' }
-    : { label: `Over ${inr(variance)}`, tone: 'warn' };
 }
 
 /** Whole minutes since the shift opened; null when the opening time is unknown. */

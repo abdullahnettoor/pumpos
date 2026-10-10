@@ -58,7 +58,7 @@ export interface SalesFigures {
 /** Product lines shown before the tail is rolled into one "N other products" line. */
 export const MAX_PRODUCT_LINES = 5;
 
-const unitLabel = (unit: unknown): string => {
+export const unitLabel = (unit: unknown): string => {
   const u = typeof unit === 'string' ? unit.trim() : '';
   if (!u || /^(l|litre|liter)s?$/i.test(u)) return 'L';
   if (/^(kg|kilogram)s?$/i.test(u)) return 'kg';
@@ -88,9 +88,15 @@ function productLines(snap: Snapshot, productsValue: number): ProductLine[] {
     return productsValue > 0
       ? [{ key: 'products', name: 'Products', quantity: 0, value: productsValue }]
       : [];
-  if (lines.length <= MAX_PRODUCT_LINES) return lines;
-  const head = lines.slice(0, MAX_PRODUCT_LINES);
-  const tail = lines.slice(MAX_PRODUCT_LINES);
+  return rollUpProducts(lines);
+}
+
+/** Largest lines first; the tail past `MAX_PRODUCT_LINES` becomes one "N other products" line. */
+export function rollUpProducts(lines: readonly ProductLine[]): ProductLine[] {
+  const sorted = [...lines].sort((a, b) => b.value - a.value);
+  if (sorted.length <= MAX_PRODUCT_LINES) return sorted;
+  const head = sorted.slice(0, MAX_PRODUCT_LINES);
+  const tail = sorted.slice(MAX_PRODUCT_LINES);
   return [
     ...head,
     {
