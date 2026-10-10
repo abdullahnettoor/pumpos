@@ -92,7 +92,10 @@ jobs:
           # The suite creates and drops its own schema, so it is safe against
           # any database; CI still gets a throwaway one.
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/pumpos_test
-        run: npx vitest run apps/api/src/infra/repositories/__integration__
+        # One file at a time: every file creates shared roles (authenticated, anon)
+        # and its own schema up front, and running them in parallel races on
+        # pg_authid / pg_namespace (duplicate key on the role or schema).
+        run: npx vitest run apps/api/src/infra/repositories/__integration__ --no-file-parallelism
 
   # One migration source of truth (#270). packages/db/migrations (drizzle
   # journal) is authoritative; supabase/migrations is derived from it. Each
