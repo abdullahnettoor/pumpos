@@ -94,7 +94,7 @@ export function buildRecap(input: {
       cashHandedOver += num(row.cashHandedOver as string);
       openingFloat += num(row.openingFloat as string);
       variance += num(row.varianceAmount as string);
-      if (row.createdAt) recordedTimes.push(String(row.createdAt));
+      if (row.createdAt) recordedTimes.push(row.createdAt as string);
     }
   }
 

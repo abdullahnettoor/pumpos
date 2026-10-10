@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import React from 'react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
@@ -318,7 +317,7 @@ describe('AttendantScreen', () => {
     it('closes on Escape', async () => {
       renderScreen();
       fireEvent.click(screen.getByRole('button', { name: 'Account' }));
-      fireEvent.keyDown(document, { key: 'Escape' });
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     });
   });

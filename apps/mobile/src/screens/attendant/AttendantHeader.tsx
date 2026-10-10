@@ -1,11 +1,6 @@
 import React from 'react';
-
-/** Up to two initials: "Sajid P" -> "SP", "Highway Fuels" -> "HF". */
-export function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase();
-}
+import { initialsOf } from '@pump/ui';
+import { Avatar } from '../../ui/index.js';
 
 /**
  * The attendant's whole chrome: the Station mark and name, who they are, and
@@ -33,9 +28,9 @@ export const AttendantHeader: React.FC<{
       onClick={onOpenAccount}
       aria-label="Account"
       aria-haspopup="dialog"
-      className="grid h-[34px] w-[34px] flex-shrink-0 place-items-center rounded-full border border-line bg-card-alt text-xs font-bold text-text-high"
+      className="flex-shrink-0 rounded-full"
     >
-      {initialsOf(userName)}
+      <Avatar name={userName} />
     </button>
   </header>
 );
