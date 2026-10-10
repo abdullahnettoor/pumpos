@@ -1,14 +1,5 @@
 import React from 'react';
-
-export type Tone = 'default' | 'good' | 'warn' | 'bad';
-
-/** Text colour of a figure by tone (also for an inline figure outside a tile). */
-export const TONE_TEXT: Record<Tone, string> = {
-  default: 'text-text-high',
-  good: 'text-good',
-  warn: 'text-warn-fg',
-  bad: 'text-bad-fg',
-};
+import { TONE_TEXT, type Tone } from './tones.js';
 
 interface Props {
   label: string;

@@ -1,11 +1,6 @@
 import React from 'react';
 import type { LimitTone } from '../../lib/money/parties.js';
-
-const FILL: Record<LimitTone, string> = {
-  accent: 'bg-accent',
-  warn: 'bg-warn',
-  bad: 'bg-bad',
-};
+import { TONE_FILL } from '../../ui/tones.js';
 
 interface Props {
   /** Balance as a percent of the credit limit (may pass 100). */
@@ -44,7 +39,7 @@ export const LimitBar: React.FC<Props> = ({
       className={`h-1.5 overflow-hidden rounded-full bg-track ${className}`}
     >
       <div
-        className={`h-full rounded-full ${FILL[tone]}`}
+        className={`h-full rounded-full ${TONE_FILL[tone]}`}
         style={{ width: `${Math.min(100, Math.max(0, usedPct))}%` }}
       />
     </div>

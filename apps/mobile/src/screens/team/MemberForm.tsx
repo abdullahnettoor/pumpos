@@ -13,16 +13,10 @@ import type { TeamFailure } from '../../lib/team/failure.js';
 import { assignableRoles } from '../../lib/team/permissions.js';
 import type { TeamActor } from '../../lib/team/permissions.js';
 import { loginIdentity } from '../../lib/team/members.js';
+import { SheetButtons } from '../../ui/SheetButtons.js';
 import type { TeamWriteResult } from './useTeamWrite.js';
 import { CredentialsCard } from './CredentialsCard.js';
-import {
-  ChoiceChips,
-  FormRefusal,
-  SheetButtons,
-  StationChecks,
-  SwitchField,
-  TextField,
-} from './fields.js';
+import { ChoiceChips, FormRefusal, StationChecks, SwitchField, TextField } from './fields.js';
 
 interface Props {
   mode: MemberFormMode;

@@ -1,8 +1,8 @@
 import React from 'react';
 
 /**
- * The one card Insights uses to say a block or the screen has no figures to
- * show: loading (announced politely), an error with Retry, or an empty state.
+ * The one card a screen or block uses to say it has no figures to show (Insights'
+ * blocks and screen): loading (announced politely), an error with Retry, or an empty state.
  */
 export const StateCard: React.FC<{
   kind: 'loading' | 'error' | 'empty';

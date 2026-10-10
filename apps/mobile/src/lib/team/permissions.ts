@@ -94,6 +94,10 @@ export function memberRights(
 
 export type TeamWriteAccess = { status: 'enabled' } | { status: 'disabled'; reason: string };
 
+/** Why a team action is paused, or null while it is available. */
+export const teamWriteReason = (access: TeamWriteAccess): string | null =>
+  access.status === 'disabled' ? access.reason : null;
+
 /**
  * Every team write (`POST|PUT /setup/users...`) is BLOCKED under Restricted
  * Access and Suspension, so the actions are disabled with the reason. An Access

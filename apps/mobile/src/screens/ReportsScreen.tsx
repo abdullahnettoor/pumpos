@@ -10,19 +10,12 @@ import {
   liveTabFor,
   monthLabel,
   weekTile,
-  type DayView,
   type LiveTab,
 } from '../lib/reports/days.js';
 import { useNav } from '../shell/nav.js';
-import { ListGroup, Note, SectionLabel, StatTile, StatusBadge } from '../ui/index.js';
+import { ListGroup, Note, SectionLabel, StatTile, StatusBadge, TONE_TEXT } from '../ui/index.js';
 import { ChevronRightIcon } from '../ui/icons.js';
 import { ReportDayPage } from './reports/ReportDayPage.js';
-
-const NOTE_TONE: Record<DayView['noteTone'], string> = {
-  bad: 'text-bad-fg',
-  warn: 'text-warn-fg',
-  plain: '',
-};
 
 const DayRow: React.FC<{
   day: BusinessDayListItem;
@@ -60,7 +53,7 @@ const DayRow: React.FC<{
         )}
         <div className="num mt-[5px] flex justify-between text-[11px] text-text-muted">
           <span>{v.volume}</span>
-          <span className={NOTE_TONE[v.noteTone]}>{v.note}</span>
+          <span className={v.noteTone === 'plain' ? '' : TONE_TEXT[v.noteTone]}>{v.note}</span>
         </div>
       </div>
       {v.action !== 'none' && (

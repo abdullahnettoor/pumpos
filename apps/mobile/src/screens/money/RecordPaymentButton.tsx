@@ -1,4 +1,5 @@
 import React from 'react';
+import { PausedReason, pausedButtonProps } from '../../ui/PausedAction.js';
 
 /** The quiet "Record payment" button; absent when this user may not record one. */
 export interface PaymentAction {
@@ -22,9 +23,7 @@ export const RecordPaymentButton: React.FC<{ action: PaymentAction; reasonId: st
   return (
     <button
       type="button"
-      onClick={paused ? undefined : action.onPress}
-      aria-disabled={paused || undefined}
-      aria-describedby={paused ? reasonId : undefined}
+      {...pausedButtonProps(paused, reasonId, action.onPress)}
       className="min-h-[36px] rounded-lg border border-line-strong px-3 text-[12.5px] font-bold text-text-high aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
     >
       Record payment
@@ -38,7 +37,5 @@ export const PaymentReason: React.FC<{ action?: PaymentAction; reasonId: string 
   reasonId,
 }) =>
   action?.disabledReason ? (
-    <p id={reasonId} className="m-0 text-[11px] text-text-muted">
-      {action.disabledReason}
-    </p>
+    <PausedReason id={reasonId}>{action.disabledReason}</PausedReason>
   ) : null;

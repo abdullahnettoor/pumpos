@@ -8,7 +8,7 @@ import { ListGroup, ListRow } from '../ui/ListRow.js';
 import { SectionLabel } from '../ui/SectionLabel.js';
 import { BuildingIcon, CheckIcon, SignOutIcon } from '../ui/icons.js';
 import { useNav } from './nav.js';
-import { activeMembers, onShiftNames } from './team.js';
+import { activeMembers, onShiftNames } from '../lib/team/members.js';
 
 interface Props {
   open: boolean;

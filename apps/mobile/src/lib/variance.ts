@@ -6,7 +6,7 @@
 import { isBalancedVariance } from '@pump/shared';
 import { formatMoney } from '@pump/ui';
 import type { BadgeTone } from '../ui/StatusBadge.js';
-import type { Tone } from '../ui/StatTile.js';
+import type { Tone } from '../ui/tones.js';
 import { signedRupees } from './format.js';
 
 /** A cash variance within this many rupees of zero is "on the nose" (rounds to ₹0). */
