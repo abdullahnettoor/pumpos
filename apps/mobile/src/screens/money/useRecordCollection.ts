@@ -16,9 +16,9 @@ export type RecordCollectionResult = OfficePaymentResult;
  * station, Entry Date and Funding Account and no shift. Caching and the
  * Idempotency-Key rules are `useOfficePayment`'s.
  *
- * The statement and the receivables summary (aging, last payment, usually-pays-in)
- * read the same collections: they arrive with #398, which adds their keys (and
- * its own invalidation) to the shared `queryKeys`.
+ * The ranged statement and the receivables summary (aging, last payment,
+ * usually-pays-in) read the same collections: `useInvalidateOperational` covers
+ * their prefixes (`customer-statement`, `receivables`).
  */
 export function useRecordCollection(stationId: string, customerId: string) {
   return useOfficePayment<CollectionForm>({

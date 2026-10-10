@@ -34,7 +34,8 @@ let accounts: any[];
 let accessMode: AccessMode | undefined;
 const record = vi.spyOn(ui.CloudTransactionService.prototype, 'recordCollection');
 const getCustomers = vi.spyOn(ui.CloudTransactionService.prototype, 'getCustomers');
-const getLedger = vi.spyOn(ui.CloudTransactionService.prototype, 'getCustomerLedger');
+// The Customer page reads the ranged statement (#398); a Collection must refresh it.
+const getLedger = vi.spyOn(ui.CloudTransactionService.prototype, 'getCustomerLedgerRange');
 
 const refusal = (code: string, message: string, status = 403) =>
   Object.assign(new Error(message), { code, status });
@@ -96,7 +97,7 @@ beforeEach(() => {
   accounts = ACCOUNTS;
   accessMode = 'NORMAL';
   getCustomers.mockImplementation(async () => list);
-  getLedger.mockResolvedValue([]);
+  getLedger.mockResolvedValue({ entries: [], periodOpeningBalance: '0', hasEarlier: false } as any);
   vi.spyOn(ui.CloudFinanceService.prototype, 'getFundingAccounts').mockImplementation(
     async () => accounts,
   );

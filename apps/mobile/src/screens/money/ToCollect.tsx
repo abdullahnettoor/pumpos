@@ -14,12 +14,15 @@ import { SectionLabel } from '../../ui/SectionLabel.js';
 import { SeeAllButton } from '../../ui/SeeAllButton.js';
 import { CustomerRow } from './CustomerRow.js';
 import { HeroCard } from './HeroCard.js';
-import { useCustomersData } from './useMoneyData.js';
+import { AgingSplit } from './AgingSplit.js';
+import { useCustomersData, useReceivablesData } from './useMoneyData.js';
 
 /** Customers shown before "See all". */
 export const PREVIEW_COUNT = 5;
 
 interface Props {
+  /** The Station whose clock ages the receivables; without one the aging and "Oldest" are left out. */
+  stationId?: string | null;
   query: string;
   onOpenCustomer: (customer: MoneyCustomer) => void;
 }
@@ -27,10 +30,13 @@ interface Props {
 /**
  * To collect: what customers owe (Σ credit sales − Σ collections), largest first.
  * Only customers who owe are listed; a search looks across all of them, so a
- * settled customer can still be found and opened.
+ * settled customer can still be found and opened. The hero carries the aging
+ * split and each row how long its oldest debt has waited; both come from the
+ * receivables summary and are simply left out until it arrives (or fails).
  */
-export const ToCollect: React.FC<Props> = ({ query, onOpenCustomer }) => {
+export const ToCollect: React.FC<Props> = ({ stationId, query, onOpenCustomer }) => {
   const { customers, isLoading } = useCustomersData();
+  const receivables = useReceivablesData(stationId);
   const [expanded, setExpanded] = useState(false);
   const searching = query.trim() !== '';
 
@@ -52,6 +58,7 @@ export const ToCollect: React.FC<Props> = ({ query, onOpenCustomer }) => {
             {overCount} over credit limit
           </p>
         )}
+        <AgingSplit aging={receivables.summary?.aging} />
       </HeroCard>
       <SectionLabel>{searching ? 'Customers' : 'Highest balances'}</SectionLabel>
       {rows.length === 0 ? (
@@ -61,7 +68,12 @@ export const ToCollect: React.FC<Props> = ({ query, onOpenCustomer }) => {
       ) : (
         <ListGroup>
           {shown.map((c) => (
-            <CustomerRow key={c.id} customer={c} onPress={() => onOpenCustomer(c)} />
+            <CustomerRow
+              key={c.id}
+              customer={c}
+              oldestUnpaidDays={receivables.byCustomer.get(c.id)?.oldestUnpaidDays}
+              onPress={() => onOpenCustomer(c)}
+            />
           ))}
         </ListGroup>
       )}

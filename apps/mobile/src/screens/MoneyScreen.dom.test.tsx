@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import React, { useLayoutEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 /**
@@ -11,8 +12,19 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 const customers: any[] = [];
 const suppliers: any[] = [];
 const ledgers: Record<string, any[]> = {};
-const ledgerState = { isLoading: false, isError: false };
+const ledgerState = { isLoading: false, isError: false, placeholder: false };
 const supplierLedgers: Record<string, any[]> = {};
+/** The receivables summary for the list and per customer; `undefined` = not (yet) available. */
+const receivables: { list: any; byCustomer: Record<string, any>; failed: boolean } = {
+  list: undefined,
+  byCustomer: {},
+  failed: false,
+};
+/** Opening balance of a customer's statement window, and the windows asked for. */
+const openings: Record<string, string> = {};
+/** Whether a customer has any entry before the window; unset = whenever the opening balance is not 0. */
+const earlier: Record<string, boolean> = {};
+const statementCalls: Array<{ id: string; from: string; to: string }> = [];
 
 vi.mock('@pump/ui', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -27,11 +39,32 @@ vi.mock('@pump/ui', async (importOriginal) => {
       isError: ledgerState.isError,
       refetch: vi.fn(),
     }),
-    useCustomerLedger: (id: string) => ({
-      data: ledgers[id] ?? [],
-      isLoading: ledgerState.isLoading,
-      isError: ledgerState.isError,
-      refetch: vi.fn(),
+    useCustomerStatement: (id: string, range: { from: string; to: string }) => {
+      statementCalls.push({ id, ...range });
+      return {
+        data: ledgerState.isLoading
+          ? undefined
+          : {
+              periodOpeningBalance: openings[id] ?? '0',
+              closingBalance: '0',
+              hasEarlier: earlier[id] ?? Number(openings[id] ?? '0') !== 0,
+              entries: ledgers[id] ?? [],
+            },
+        isPlaceholderData: ledgerState.placeholder,
+        isLoading: ledgerState.isLoading,
+        isError: ledgerState.isError,
+        refetch: vi.fn(),
+      };
+    },
+    useReceivables: (stationId: string | null) => ({
+      data: stationId && !receivables.failed ? receivables.list : undefined,
+      isLoading: false,
+      isError: receivables.failed,
+    }),
+    useCustomerReceivable: (stationId: string | null, id: string) => ({
+      data: stationId && !receivables.failed ? receivables.byCustomer[id] : undefined,
+      isLoading: false,
+      isError: receivables.failed,
     }),
   };
 });
@@ -60,21 +93,30 @@ const Probe: React.FC = () => {
 };
 
 /** The Money root, plus whatever page is on top of its stack (the shell does this with Panes). */
-const Stage: React.FC<{ renderSupplierPage?: (s: any) => React.ReactNode }> = (props) => {
+type StageProps = { renderSupplierPage?: (s: any) => React.ReactNode; station?: any };
+const Stage: React.FC<StageProps> = (props) => {
   const n = useNav();
   const stack = stackOf({ active: n.active, stacks: n.stacks, visited: [...n.visited] }, 'money');
   const top = stack[stack.length - 1];
   return top ? <>{top.element}</> : <MoneyScreen {...props} />;
 };
 
-const mount = (props: { renderSupplierPage?: (s: any) => React.ReactNode } = {}) =>
+const STATION = {
+  id: 'st-1',
+  settings: { timezone: 'Asia/Kolkata', business_day_starts_at: '06:00' },
+};
+// The Record payment sheets (mounted once a station is known) hold their save in a real
+// query client; the lists and ledgers above stay mocked.
+const mount = (props: StageProps = {}) =>
   render(
-    <ShellContext.Provider value={shell}>
-      <NavProvider tabs={['money']}>
-        <Probe />
-        <Stage {...props} />
-      </NavProvider>
-    </ShellContext.Provider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <ShellContext.Provider value={shell}>
+        <NavProvider tabs={['money']}>
+          <Probe />
+          <Stage {...props} />
+        </NavProvider>
+      </ShellContext.Provider>
+    </QueryClientProvider>,
   );
 
 const cust = (over: Record<string, unknown>) => ({
@@ -90,12 +132,22 @@ const cust = (over: Record<string, unknown>) => ({
 const row = (name: string) => screen.getByRole('button', { name: new RegExp(name) });
 
 beforeEach(() => {
+  // 10:00 IST on 9 Oct 2026: the statement window opens on 1 May.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-09T10:00:00+05:30'));
   customers.length = 0;
   suppliers.length = 0;
   for (const k of Object.keys(ledgers)) delete ledgers[k];
+  for (const k of Object.keys(earlier)) delete earlier[k];
   for (const k of Object.keys(supplierLedgers)) delete supplierLedgers[k];
+  for (const k of Object.keys(openings)) delete openings[k];
+  receivables.list = undefined;
+  receivables.byCustomer = {};
+  receivables.failed = false;
+  statementCalls.length = 0;
   ledgerState.isLoading = false;
   ledgerState.isError = false;
+  ledgerState.placeholder = false;
   customers.push(
     cust({ name: 'Calicut Cabs', creditLimit: '100000', currentBalance: '61400' }),
     cust({
@@ -129,7 +181,115 @@ beforeEach(() => {
     { id: 's3', name: 'Square Deal', currentBalance: '0' },
   );
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
+
+const AGING = { d0_7: 287000, d8_30: 211000, d30plus: 184000 };
+const receivableRow = (customerId: string, balance: number, days: number | null) => ({
+  customerId,
+  balance,
+  oldestUnpaidDate: days === null ? null : '2026-09-21',
+  oldestUnpaidDays: days,
+  aging: { d0_7: balance, d8_30: 0, d30plus: 0 },
+});
+
+describe('To collect with the receivables summary', () => {
+  const summary = () => ({
+    total: 590400,
+    customerCount: 6,
+    aging: AGING,
+    customers: [
+      receivableRow('KTC Logistics', 214600, 32),
+      receivableRow('Malabar Travels', 128900, 9),
+      receivableRow('Calicut Cabs', 61400, 3),
+      receivableRow('Sree Transports', 84300, 0),
+    ],
+  });
+
+  it('shows the aging split in the hero', () => {
+    receivables.list = summary();
+    mount({ station: STATION });
+    const split = screen.getByTestId('aging-split');
+    expect(within(split).getByText('₹2.87L')).toBeTruthy();
+    expect(within(split).getByText('0–7 days')).toBeTruthy();
+    expect(within(split).getByText('₹2.11L')).toBeTruthy();
+    expect(within(split).getByText('8–30 days')).toBeTruthy();
+    expect(within(split).getByText('₹1.84L')).toBeTruthy();
+    expect(within(split).getByText('30+ days')).toBeTruthy();
+    // Sits inside the hero, under the total.
+    expect(screen.getByText('Receivables · 6 customers').closest('section')!.contains(split)).toBe(
+      true,
+    );
+  });
+
+  it('sizes the bar by each bucket’s share of what is owed', () => {
+    receivables.list = summary();
+    mount({ station: STATION });
+    const flex = (key: string) =>
+      (screen.getByTestId('aging-split').querySelector(`[data-segment="${key}"]`) as HTMLElement)
+        .style.flexGrow;
+    // 287 : 211 : 184 of 682
+    expect(Number(flex('d0_7'))).toBeCloseTo((287 / 682) * 100, 1);
+    expect(Number(flex('d30plus'))).toBeCloseTo((184 / 682) * 100, 1);
+  });
+
+  it('says how long each customer’s oldest debt has waited, coloured by its bucket', () => {
+    receivables.list = summary();
+    mount({ station: STATION });
+    const tone = (name: string) =>
+      within(row(name))
+        .getByText(/^Oldest/)
+        .getAttribute('data-tone');
+    expect(within(row('KTC Logistics')).getByText('Oldest 32 days')).toBeTruthy();
+    expect(tone('KTC Logistics')).toBe('bad');
+    expect(within(row('Malabar Travels')).getByText('Oldest 9 days')).toBeTruthy();
+    expect(tone('Malabar Travels')).toBe('warn');
+    expect(tone('Calicut Cabs')).toBe('muted');
+    expect(within(row('Sree Transports')).getByText('Oldest today')).toBeTruthy();
+    expect(row('KTC Logistics').getAttribute('aria-label')).toBe(
+      'KTC Logistics, ₹2,14,600.00 owed, over limit, oldest 32 days',
+    );
+  });
+
+  it('leaves a customer the summary does not know without a caption (hidden, not zero)', () => {
+    receivables.list = summary();
+    mount({ station: STATION });
+    // Govt Hospital owes money but is not in the summary rows.
+    expect(within(row('Govt Hospital')).queryByText(/Oldest/)).toBeNull();
+    expect(row('Govt Hospital').getAttribute('aria-label')).not.toMatch(/oldest/);
+  });
+
+  it('shows plain rows and no split until the summary arrives, without a station, or when it fails', () => {
+    mount({ station: STATION });
+    expect(screen.queryByTestId('aging-split')).toBeNull();
+    expect(screen.queryByText(/Oldest/)).toBeNull();
+    cleanup();
+
+    receivables.list = summary();
+    mount();
+    expect(screen.queryByTestId('aging-split')).toBeNull();
+    cleanup();
+
+    receivables.failed = true;
+    mount({ station: STATION });
+    expect(screen.queryByTestId('aging-split')).toBeNull();
+    expect(screen.getByText('Receivables · 6 customers')).toBeTruthy();
+    expect(screen.getByText('₹5,90,400.00')).toBeTruthy();
+  });
+
+  it('draws no split when the summary says nothing is owed', () => {
+    receivables.list = {
+      total: 0,
+      customerCount: 0,
+      aging: { d0_7: 0, d8_30: 0, d30plus: 0 },
+      customers: [],
+    };
+    mount({ station: STATION });
+    expect(screen.queryByTestId('aging-split')).toBeNull();
+  });
+});
 
 describe('To collect', () => {
   it('shows the receivable total and customer count, largest balance first', () => {
@@ -342,6 +502,245 @@ describe('Customer page', () => {
     expect(screen.getByText('Receivables · 6 customers')).toBeTruthy();
   });
 
+  describe('receivables summary', () => {
+    const ktc = () => ({
+      customerId: 'KTC Logistics',
+      balance: 214600,
+      oldestUnpaidDate: '2026-09-21',
+      oldestUnpaidDays: 18,
+      aging: { d0_7: 86400, d8_30: 78000, d30plus: 50200 },
+      settlementCycle: 'OPEN',
+      lastPayment: { amount: 40000, entryDate: '2026-09-18', method: 'UPI', daysAgo: 21 },
+      usuallyPaysInDays: 24,
+      month: { credit: 81900, slips: 23, litres: 812, paid: 0 },
+      vehicles: [
+        {
+          vehicleId: 'v1',
+          registration: 'KL-11-AB-4521',
+          type: 'Truck',
+          amount: 52300,
+          litres: 500,
+        },
+        {
+          vehicleId: 'v2',
+          registration: 'KL-11-AC-7710',
+          type: 'Truck',
+          amount: 21400,
+          litres: 200,
+        },
+        { vehicleId: 'v3', registration: 'KL-11-BB-0912', type: 'Bus', amount: 8200, litres: 80 },
+      ],
+    });
+    const openKtc = (extra: Record<string, unknown> = {}) => {
+      receivables.byCustomer['KTC Logistics'] = { ...ktc(), ...extra };
+      mount({ station: STATION });
+      open('KTC Logistics');
+    };
+    const tile = (label: string) => screen.getByText(label).closest('div')!.parentElement!;
+
+    it('shows the aging split inside the balance card', () => {
+      openKtc();
+      const split = within(balance()).getByTestId('aging-split');
+      expect(within(split).getByText('₹86,400')).toBeTruthy();
+      expect(within(split).getByText('0–7 days')).toBeTruthy();
+      expect(within(split).getByText('₹78,000')).toBeTruthy();
+      expect(within(split).getByText('₹50,200')).toBeTruthy();
+      expect(within(split).getByText('30+ days')).toBeTruthy();
+    });
+
+    it('shows last payment, usually pays in, credit and paid this month', () => {
+      openKtc();
+      const behaviour = within(screen.getByRole('group', { name: 'Payment behaviour' }));
+      expect(behaviour.getByText('₹40,000')).toBeTruthy();
+      expect(behaviour.getByText('18 Sep · 21 days ago')).toBeTruthy();
+      expect(behaviour.getByText('24 days')).toBeTruthy();
+      expect(behaviour.getByText('avg, last 6 settled sales')).toBeTruthy();
+      expect(behaviour.getByText('₹81,900')).toBeTruthy();
+      expect(behaviour.getByText('23 slips · 812 L')).toBeTruthy();
+      expect(behaviour.getByText('Paid this month')).toBeTruthy();
+      expect(behaviour.getByText('Settles: open account')).toBeTruthy();
+      expect(tile('Last payment')).toBeTruthy();
+    });
+
+    it('hides the tiles the API has no data for, instead of showing zeros', () => {
+      openKtc({ lastPayment: null, usuallyPaysInDays: null });
+      const behaviour = within(screen.getByRole('group', { name: 'Payment behaviour' }));
+      expect(behaviour.queryByText('Last payment')).toBeNull();
+      expect(behaviour.queryByText('Usually pays in')).toBeNull();
+      expect(behaviour.getByText('Credit this month')).toBeTruthy();
+      expect(behaviour.getByText('Paid this month')).toBeTruthy();
+    });
+
+    it('lists Vehicles · this month with bars sized against the biggest', () => {
+      openKtc();
+      const vehicles = within(screen.getByRole('region', { name: 'Vehicles this month' }));
+      expect(vehicles.getByText('3 vehicles')).toBeTruthy();
+      const items = vehicles.getAllByRole('listitem');
+      expect(items[0].textContent).toContain('KL-11-AB-4521');
+      expect(items[0].textContent).toContain('Truck');
+      expect(items[0].textContent).toContain('₹52,300');
+      expect(items[2].textContent).toContain('Bus');
+      const widths = vehicles
+        .getAllByTestId('vehicle-bar')
+        .map((b) => (b as HTMLElement).style.width);
+      expect(widths[0]).toBe('100%');
+      expect(parseFloat(widths[1])).toBeCloseTo((21400 / 52300) * 100, 1);
+      expect(parseFloat(widths[2])).toBeCloseTo((8200 / 52300) * 100, 1);
+    });
+
+    it('has no vehicles section for a customer with none this month', () => {
+      openKtc({ vehicles: [] });
+      expect(screen.queryByRole('region', { name: 'Vehicles this month' })).toBeNull();
+      expect(screen.queryByText(/Vehicles ·/)).toBeNull();
+    });
+
+    it('words a customer who settles by end of day', () => {
+      openKtc({ settlementCycle: 'EOD' });
+      expect(screen.getByText('Settles: end of day')).toBeTruthy();
+    });
+
+    it('leaves the balance card and the statement standing when the summary fails', () => {
+      receivables.failed = true;
+      ledgers['KTC Logistics'] = [];
+      mount({ station: STATION });
+      open('KTC Logistics');
+      expect(within(balance()).getByText('Owes you')).toBeTruthy();
+      expect(screen.queryByTestId('aging-split')).toBeNull();
+      expect(screen.queryByRole('group', { name: 'Payment behaviour' })).toBeNull();
+      expect(screen.getByText('Statement')).toBeTruthy();
+    });
+
+    it('shows no aging for a settled customer, even with a summary', () => {
+      receivables.byCustomer['Settled Sam'] = {
+        ...ktc(),
+        customerId: 'Settled Sam',
+        balance: 0,
+        aging: { d0_7: 0, d8_30: 0, d30plus: 0 },
+      };
+      mount({ station: STATION });
+      fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'sam' } });
+      open('Settled Sam');
+      expect(within(balance()).queryByTestId('aging-split')).toBeNull();
+    });
+  });
+
+  describe('enriched statement', () => {
+    const SALE = {
+      id: 's1',
+      transactionType: 'Credit Sale',
+      amount: '10750',
+      businessDate: '2026-10-09',
+      createdAt: '2026-10-09T10:00:00Z',
+      shiftId: 'sh1',
+      shiftBusinessDate: '2026-10-09',
+      shiftSequence: 1,
+      productName: 'Diesel',
+      quantity: 120,
+      unit: 'L',
+      vehicleRegistration: 'KL-11-AB-4521',
+    };
+    const PAYMENT = {
+      id: 'c1',
+      transactionType: 'Collection',
+      amount: '4000',
+      businessDate: '2026-09-18',
+      createdAt: '2026-09-18T10:00:00Z',
+      method: 'UPI',
+      reference: 'COL-000042',
+      fundingAccountName: 'SBI',
+    };
+
+    it('shows the Shift Label, product, litres and Vehicle on a Credit Sale, method and reference on a Collection', () => {
+      customers.push(cust({ name: 'Ledger Lou', currentBalance: '6750', creditLimit: '100000' }));
+      openings['Ledger Lou'] = '0';
+      ledgers['Ledger Lou'] = [PAYMENT, SALE];
+      // 10750 - 4000
+      mount({ station: STATION });
+      fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
+      open('Ledger Lou');
+      const oct = within(screen.getByRole('region', { name: 'October 2026' }));
+      expect(oct.getByText('9 Oct · Shift 20261009-1')).toBeTruthy();
+      expect(oct.getByText('120 L Diesel · KL-11-AB-4521')).toBeTruthy();
+      const sep = within(screen.getByRole('region', { name: 'September 2026' }));
+      expect(sep.getByText('18 Sep · UPI · Ref COL-000042')).toBeTruthy();
+    });
+
+    it('asks for the last 6 months and carries the earlier balance in', () => {
+      customers.push(cust({ name: 'Ledger Lou', currentBalance: '11750', creditLimit: '100000' }));
+      openings['Ledger Lou'] = '1000';
+      ledgers['Ledger Lou'] = [SALE];
+      mount({ station: STATION });
+      fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
+      open('Ledger Lou');
+      expect(statementCalls.at(-1)).toMatchObject({ id: 'Ledger Lou', from: '2026-05-01' });
+      expect(screen.getByText('Balance brought forward from before 1 May 2026')).toBeTruthy();
+      // The row's running balance starts from the opening balance: 1000 + 10750.
+      expect(document.body.textContent).toContain('Bal ₹11,750.00');
+    });
+
+    it('widens the window by 6 months from "Earlier months" when something is owed from before', () => {
+      customers.push(cust({ name: 'Ledger Lou', currentBalance: '11750', creditLimit: '100000' }));
+      openings['Ledger Lou'] = '1000';
+      ledgers['Ledger Lou'] = [SALE];
+      mount({ station: STATION });
+      fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
+      open('Ledger Lou');
+      fireEvent.click(screen.getByRole('button', { name: 'Earlier months' }));
+      expect(statementCalls.at(-1)).toMatchObject({ id: 'Ledger Lou', from: '2025-11-01' });
+    });
+
+    it('says nothing is owed before the window, and offers no earlier months, when nothing is dated before it', () => {
+      customers.push(cust({ name: 'Ledger Lou', currentBalance: '10750', creditLimit: '100000' }));
+      openings['Ledger Lou'] = '0';
+      ledgers['Ledger Lou'] = [SALE];
+      mount({ station: STATION });
+      fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
+      open('Ledger Lou');
+      expect(screen.getByText('Nothing owed before 1 May 2026.')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Earlier months' })).toBeNull();
+    });
+
+    it('offers earlier months to a customer who was settled before the window', () => {
+      customers.push(cust({ name: 'Ledger Lou', currentBalance: '10750', creditLimit: '100000' }));
+      openings['Ledger Lou'] = '0';
+      earlier['Ledger Lou'] = true; // older entries that net to zero
+      ledgers['Ledger Lou'] = [SALE];
+      mount({ station: STATION });
+      fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
+      open('Ledger Lou');
+      expect(screen.getByText('Nothing owed before 1 May 2026.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Earlier months' }));
+      expect(statementCalls.at(-1)).toMatchObject({ id: 'Ledger Lou', from: '2025-11-01' });
+    });
+
+    it('keeps the rows on screen while earlier months load', () => {
+      customers.push(cust({ name: 'Ledger Lou', currentBalance: '11750', creditLimit: '100000' }));
+      openings['Ledger Lou'] = '1000';
+      ledgers['Ledger Lou'] = [SALE];
+      ledgerState.placeholder = true;
+      mount({ station: STATION });
+      fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
+      open('Ledger Lou');
+      expect(screen.queryByText('Loading statement…')).toBeNull();
+      expect(screen.getByText('Credit Sale')).toBeTruthy();
+      const more = screen.getByRole('button', { name: 'Loading earlier months…' });
+      expect((more as HTMLButtonElement).disabled).toBe(true);
+      // The footer names the window it was fetched for: it waits for the wider one.
+      expect(screen.queryByText(/Balance brought forward/)).toBeNull();
+    });
+
+    it('shows the balance brought forward when nothing happened in the window', () => {
+      customers.push(cust({ name: 'Ledger Lou', currentBalance: '1000', creditLimit: '100000' }));
+      openings['Ledger Lou'] = '1000';
+      ledgers['Ledger Lou'] = [];
+      mount({ station: STATION });
+      fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
+      open('Ledger Lou');
+      expect(screen.getByText('Balance brought forward from before 1 May 2026')).toBeTruthy();
+      expect(screen.queryByText(/No transactions/)).toBeNull();
+    });
+  });
+
   describe('statement', () => {
     const LEDGER = [
       {
@@ -491,7 +890,7 @@ describe('Customer page', () => {
       mount();
       fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'sam' } });
       open('Settled Sam');
-      expect(screen.getByText('No transactions yet.')).toBeTruthy();
+      expect(screen.getByText(/No transactions since 1 May 2026/)).toBeTruthy();
       cleanup();
 
       mount();
