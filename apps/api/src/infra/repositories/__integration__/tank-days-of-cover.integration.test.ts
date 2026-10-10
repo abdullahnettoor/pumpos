@@ -191,16 +191,14 @@ describe.skipIf(!CONNECTION)('Tank days of cover window against real Postgres', 
       [T_EMPTY, ORG, EMPTY_STATION, 'Tank E', PRODUCT],
       [T_OTHER, OTHER_ORG, OTHER_STATION, 'Tank O', OTHER_PRODUCT],
     ] as const)
-      await db
-        .insert(schema.tanks)
-        .values({
-          id: tid,
-          organizationId: oid,
-          stationId: sid,
-          name,
-          productId: pid,
-          capacity: '20000',
-        });
+      await db.insert(schema.tanks).values({
+        id: tid,
+        organizationId: oid,
+        stationId: sid,
+        name,
+        productId: pid,
+        capacity: '20000',
+      });
 
     // STATION: 9 closed days (10-01..10-09), the 7 newest are 10-03..10-09.
     // The two oldest sold a huge amount that must NOT count; T1 sells 100 L a day.
