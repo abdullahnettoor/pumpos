@@ -3,6 +3,8 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Station } from '@pump/shared';
+import type { TabKey } from '../lib/tabKey.js';
+import { tabsForRole } from '../shell/tabs.js';
 
 /**
  * Screen tests for the DSSR page: Sealed reads the snapshot and Draft the
@@ -179,10 +181,7 @@ const Stage: React.FC = () => {
   );
 };
 const start = { date: '2026-10-08' };
-const mount = (
-  date: string,
-  tabs: readonly ('reports' | 'home' | 'shifts' | 'money')[] = ['reports', 'home'],
-) => {
+const mount = (date: string, tabs: readonly TabKey[] = ['reports', 'home']) => {
   start.date = date;
   return render(
     <ToastProvider>
@@ -299,6 +298,12 @@ describe('ReportDayPage', () => {
       expect(feed.reads.some((r) => r.endsWith('2026-10-09'))).toBe(false);
     });
 
+    it('steps newer into the Live day as Home for a Manager', () => {
+      mount('2026-10-08', tabsForRole('Manager', false));
+      fireEvent.click(screen.getByRole('button', { name: 'Next day (today, opens Home)' }));
+      expect(screen.getByTestId('tab').textContent).toBe('home');
+    });
+
     it('disables newer when Home is not reachable', () => {
       mount('2026-10-08', ['reports']);
       expect((screen.getByRole('button', { name: /Next day/ }) as HTMLButtonElement).disabled).toBe(
@@ -370,7 +375,13 @@ describe('ReportDayPage', () => {
       expect(screen.getByTestId('tab').textContent).toBe('home');
     });
 
-    it('sends a Live day to Shifts for a Role without Home (a Manager)', () => {
+    it('sends a Live day to Home for a Manager', () => {
+      mount('2026-10-09', tabsForRole('Manager', false));
+      fireEvent.click(screen.getByRole('button', { name: 'See Home' }));
+      expect(screen.getByTestId('tab').textContent).toBe('home');
+    });
+
+    it('sends a Live day to Shifts for a dock with Shifts but no Home', () => {
       mount('2026-10-09', ['shifts', 'reports']);
       fireEvent.click(screen.getByRole('button', { name: 'See Shifts' }));
       expect(screen.getByTestId('tab').textContent).toBe('shifts');

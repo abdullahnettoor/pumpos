@@ -272,14 +272,16 @@ on your Role.
 
 | Tab      | What it holds                                                                                                                                                                                        | Who                        |
 | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| Home     | Today at a glance: sales, the live shift, tank levels, money position, **Needs attention**                                                                                                           | Owner                      |
+| Home     | Today at a glance: sales, the live shift, tank levels, money position, **Needs attention**                                                                                                           | Owner, Manager             |
 | Shifts   | The live shift and shift history; tap a shift for its **Shift Summary**                                                                                                                              | Owner, Manager             |
 | Reports  | Business days (Live, Draft, Sealed, Report missing) with weekly figures; a Draft or Sealed day opens its **DSSR** (Share, Download PDF), a Live day opens **Home**, and Report missing does not open | Owner, Manager, Accountant |
 | Money    | **To collect** (customers) and **To pay** (suppliers); tap a Customer or Supplier for its balance, aging, **Statement**, **Record payment**, credit limit                                            | Owner, Manager, Accountant |
 | Insights | Sales trend, product mix, shift performance; attendant variance, stock loss and credit health when the plan includes them                                                                            | Owner, Manager             |
 
-Staff have no tabs unless they are assigned a dispenser unit on the open shift;
-then they get a **Home** tab holding only their handover card (see below).
+A Manager has the same five tabs as the Owner. An Accountant gets Reports and
+Money. Staff have no tabs unless they are assigned a dispenser unit on the open
+shift; then they get a **Home** tab holding only their handover card (see
+below), and an Accountant assigned to a pump gets that Home tab too.
 Detail pages open on top of the tab and **‹ Back** returns to it.
 
 **Header.**
@@ -303,12 +305,12 @@ saving it reads "Handover recorded" and stays editable until the shift closes.
 The only other control is the **avatar**, which opens the **Account sheet** with
 **Sign out**.
 
-**Owners, managers and staff who man a pump.** When you are assigned a
-dispenser unit on the open shift (step 6), a **Your handover** card is pinned to
-the top of **Home**: **Continue** (or **Edit** once saved) opens the same
-handover form as a page. Without a Home overview (a Manager, Accountant or
-Staff member) Home holds just that card, plus Needs attention for a Manager. The
-card goes when the shift closes.
+**Owners, managers, accountants and staff who man a pump.** When you are
+assigned a dispenser unit on the open shift (step 6), a **Your handover** card
+is pinned to the top of **Home**: **Continue** (or **Edit** once saved) opens
+the same handover form as a page. An Owner or Manager keeps the full Home under
+the card. An Accountant or Staff member has no Home overview, so their Home
+holds just that card. The card goes when the shift closes.
 
 Done when: the right tabs appear for the Role, the bell count matches the
 **Needs attention** list, and each attendant sees only their handover.

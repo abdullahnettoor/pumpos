@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Station } from '@pump/shared';
 import type { TabKey } from '../lib/tabKey.js';
+import { tabsForRole } from '../shell/tabs.js';
 
 const feed = vi.hoisted(() => ({
   pages: [] as unknown[],
@@ -130,7 +131,16 @@ describe('ReportsScreen', () => {
       feed.pages = [{ ...(feed.pages[0] as object), days: [day('2026-10-09', 'LIVE', 21500)] }];
     };
 
-    it('opens Shifts for a Manager (no Home tab)', () => {
+    it('opens Home for a Manager, as for an Owner', () => {
+      liveOnly();
+      mount(tabsForRole('Manager', false));
+      const row = screen.getByRole('button', { name: /^Fri 9 Oct, Live/ });
+      expect(within(row).getByText('See Home')).toBeTruthy();
+      fireEvent.click(row);
+      expect(screen.getByTestId('tab').textContent).toBe('home');
+    });
+
+    it('opens Shifts for a dock that has Shifts but no Home', () => {
       liveOnly();
       mount(['shifts', 'reports', 'money', 'insights']);
       const row = screen.getByRole('button', { name: /^Fri 9 Oct, Live/ });

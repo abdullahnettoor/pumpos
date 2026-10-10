@@ -47,9 +47,10 @@ const CAN_OPEN: Record<TabKey, (role: Role) => boolean> = {
 /**
  * The dock for a Role, in dock order. A user assigned to a Dispenser Unit on an
  * open Shift reaches their handover from a pinned card on Home, so Home is in
- * their dock even when the Role has no Home overview (a Manager, Accountant or
- * Staff member who mans a pump). Home then holds only that card
- * (`TabRoot`). There is no handover tab of its own.
+ * their dock even when the Role has no Home overview (an Accountant or Staff
+ * member who mans a pump). Home then holds only that card (`TabRoot`); Owner and
+ * Manager already have Home, and the card is pinned at the top of it. There is no
+ * handover tab of its own.
  */
 export function tabsForRole(role: Role | null, hasHandover: boolean): TabKey[] {
   if (!role) return [];

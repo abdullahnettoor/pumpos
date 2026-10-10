@@ -36,7 +36,7 @@ export function barWidths(
   return days.map((d) => (max > 0 && hasFigures(d) ? Math.round((d.totalSales / max) * 100) : 0));
 }
 
-/** The tab that shows today's running day: Home for the Owner, Shifts for a Manager. */
+/** The tab that shows today's running day: Home (Owner, Manager), else Shifts. */
 export type LiveTab = 'home' | 'shifts';
 const LIVE_TAB_LABEL: Record<LiveTab, string> = { home: 'Home', shifts: 'Shifts' };
 export const liveTabLabel = (tab: LiveTab): string => LIVE_TAB_LABEL[tab];

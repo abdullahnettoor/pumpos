@@ -334,9 +334,14 @@ export function canOnboardStation(role: Role): boolean {
  * Control Room tabs (Attendant has its own handover shell).
  */
 
-/** The owner's Home overview. Owner only. */
+/**
+ * The Home overview (live Shift, sales headline, alerts, tanks, money position).
+ * Owner and Manager: the Owner decided (#388) a Manager sees the same Home. A Role
+ * without it (Accountant, Staff) reaches Home only for its own handover card while
+ * assigned to a Dispenser Unit.
+ */
 export function canViewMobileHome(role: Role): boolean {
-  return role === 'Owner';
+  return role === 'Owner' || role === 'Manager';
 }
 
 /** The Shifts tab: shift history and close-out review. Owner and Manager. */

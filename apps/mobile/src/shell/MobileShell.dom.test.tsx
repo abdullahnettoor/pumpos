@@ -184,7 +184,7 @@ afterEach(() => {
 describe('dock', () => {
   it.each([
     ['Owner', ['Home', 'Shifts', 'Reports', 'Money', 'Insights']],
-    ['Manager', ['Shifts', 'Reports', 'Money', 'Insights']],
+    ['Manager', ['Home', 'Shifts', 'Reports', 'Money', 'Insights']],
     ['Accountant', ['Reports', 'Money']],
   ] as const)('%s sees only their tabs, icon-only', (role, labels) => {
     render(<Harness role={role} />);

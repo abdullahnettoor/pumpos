@@ -5,8 +5,16 @@ describe('tabsForRole', () => {
   it('Owner gets every tab in dock order', () => {
     expect(tabsForRole('Owner', false)).toEqual(['home', 'shifts', 'reports', 'money', 'insights']);
   });
-  it('Manager has no Home', () => {
-    expect(tabsForRole('Manager', false)).toEqual(['shifts', 'reports', 'money', 'insights']);
+  it('Manager gets the same dock as the Owner, Home included, with or without a pump', () => {
+    expect(tabsForRole('Manager', false)).toEqual(tabsForRole('Owner', false));
+    expect(tabsForRole('Manager', false)).toEqual([
+      'home',
+      'shifts',
+      'reports',
+      'money',
+      'insights',
+    ]);
+    expect(tabsForRole('Manager', true)).toEqual(tabsForRole('Manager', false));
   });
   it('Accountant gets Reports and Money only', () => {
     expect(tabsForRole('Accountant', false)).toEqual(['reports', 'money']);
@@ -19,14 +27,7 @@ describe('tabsForRole', () => {
     expect(TAB_DEFS.map((t) => t.key)).toEqual(['home', 'shifts', 'reports', 'money', 'insights']);
     expect(tabsForRole('Owner', true)).toEqual(tabsForRole('Owner', false));
   });
-  it('a Manager, Accountant or Staff member on a Dispenser Unit gets Home for the handover card', () => {
-    expect(tabsForRole('Manager', true)).toEqual([
-      'home',
-      'shifts',
-      'reports',
-      'money',
-      'insights',
-    ]);
+  it('an Accountant or Staff member on a Dispenser Unit gets Home for the handover card', () => {
     expect(tabsForRole('Accountant', true)).toEqual(['home', 'reports', 'money']);
     expect(tabsForRole('Staff', true)).toEqual(['home']);
   });

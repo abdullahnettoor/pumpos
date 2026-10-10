@@ -103,7 +103,7 @@ describe('App Role routing', () => {
     expect(dockLabels()).toEqual(['Home']);
   });
 
-  it('a Manager assigned to a Dispenser Unit gets Home first, and no My handover tab', async () => {
+  it('a Manager assigned to a Dispenser Unit gets the same dock as an Owner, and no My handover tab', async () => {
     who.role = 'Manager';
     who.assignment = ASSIGNED;
     renderApp();
@@ -118,11 +118,11 @@ describe('App Role routing', () => {
     expect(dockLabels()).toEqual(['Home', 'Shifts', 'Reports', 'Money', 'Insights']);
   });
 
-  it('a Manager with no assignment has no Home', async () => {
+  it('a Manager with no assignment gets the same dock as an Owner, Home included', async () => {
     who.role = 'Manager';
     renderApp();
     await screen.findByText('tab root');
-    expect(dockLabels()).toEqual(['Shifts', 'Reports', 'Money', 'Insights']);
+    expect(dockLabels()).toEqual(['Home', 'Shifts', 'Reports', 'Money', 'Insights']);
   });
 
   it('an assignment holding no Dispenser Unit does not count', async () => {
