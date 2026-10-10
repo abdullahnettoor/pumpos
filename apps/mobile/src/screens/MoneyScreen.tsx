@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SegmentedControl } from '../ui/SegmentedControl.js';
 import { useNav } from '../shell/nav.js';
+import type { Station } from '@pump/shared';
 import type { MoneyCustomer, MoneySupplier } from '../lib/money/parties.js';
 import { CustomerPage } from './money/CustomerPage.js';
 import { SearchField } from './money/SearchField.js';
@@ -15,6 +16,8 @@ const LISTS = [
 ] as const;
 
 interface Props {
+  /** The selected Station: its clock ages the receivables. Null while stations load; the Money tab works without it, minus the aging. */
+  station?: Station | null;
   /**
    * What a supplier row opens. `TabRoot` passes the Supplier page in here;
    * unset, supplier rows are plain, non-tappable rows.
@@ -27,7 +30,7 @@ interface Props {
  * detail page on the Money stack. The tab root stays mounted while a page is
  * open, so the list, search and scroll are where you left them.
  */
-export const MoneyScreen: React.FC<Props> = ({ renderSupplierPage }) => {
+export const MoneyScreen: React.FC<Props> = ({ station = null, renderSupplierPage }) => {
   const nav = useNav();
   const [list, setList] = useState<List>('collect');
   const [query, setQuery] = useState('');
@@ -48,9 +51,10 @@ export const MoneyScreen: React.FC<Props> = ({ renderSupplierPage }) => {
       <div>
         {list === 'collect' ? (
           <ToCollect
+            stationId={station?.id}
             query={query}
             onOpenCustomer={(c: MoneyCustomer) =>
-              nav.push(<CustomerPage customer={c} />, `customer:${c.id}`)
+              nav.push(<CustomerPage customer={c} station={station} />, `customer:${c.id}`)
             }
           />
         ) : (
