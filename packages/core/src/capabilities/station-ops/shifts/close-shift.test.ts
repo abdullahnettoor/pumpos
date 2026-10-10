@@ -375,6 +375,7 @@ describe('CloseShift', () => {
       expect(result.data.snapshot.cashVariance).toBe(0);
       expect(result.data.snapshot.totalVolume).toBe(100);
       expect(result.data.snapshot.totalFuelSalesValue).toBe(10000);
+      expect(result.data.snapshot.productSalesVersion).toBe(1);
     }
     expect(stock.saved).toHaveLength(1);
     expect(stock.saved[0].quantity).toBe('-100');

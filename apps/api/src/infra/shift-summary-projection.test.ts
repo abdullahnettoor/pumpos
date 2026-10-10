@@ -17,7 +17,7 @@ type Rows = Map<unknown, unknown[]>;
  * (#229); the stub serves that statement's row, populating the template and
  * closed-user slots from the rows registered per table.
  */
-function stubDb(rows: Rows) {
+function stubDb(rows: Rows, productRows: unknown[] = [], productTotal = 0) {
   const first = (table: unknown) => (rows.get(table) ?? [])[0] ?? null;
   return {
     execute: async () => [
@@ -31,6 +31,8 @@ function stubDb(rows: Rows) {
         expense_rows: [],
         collection_rows: [],
         credit_rows: [],
+        product_rows: productRows,
+        product_total: productTotal,
       },
     ],
   };
@@ -55,8 +57,12 @@ const closeSnapshot = {
   cashVariance: 300,
 };
 
-const project = (rows: Rows, snapshot: unknown = closeSnapshot) =>
-  projectShiftSummary(stubDb(rows) as never, shift, snapshot);
+const project = (
+  rows: Rows,
+  snapshot: unknown = closeSnapshot,
+  productRows: unknown[] = [],
+  productTotal = 0,
+) => projectShiftSummary(stubDb(rows, productRows, productTotal) as never, shift, snapshot);
 
 describe('projectShiftSummary', () => {
   const populated: Rows = new Map<unknown, unknown[]>([
@@ -92,6 +98,52 @@ describe('projectShiftSummary', () => {
     expect(out.openingCash).toBe(5000);
     expect(out.cashVariance).toBe(300);
     expect(out.cashNetChange).toBe(13500);
+  });
+
+  it('projects product types and category on newly composed Product Sales lines', async () => {
+    const out = await project(
+      new Map(),
+      { ...closeSnapshot, productSalesVersion: 1 },
+      [
+        {
+          productId: 'product-1',
+          productName: 'Engine Oil',
+          productType: 'LUBRICANT',
+          category: 'Motor Oils',
+          quantity: '2',
+          lineTotal: '1680',
+        },
+      ],
+      1800,
+    );
+
+    expect(out.productSales).toEqual({
+      total: 1800,
+      lines: [
+        {
+          productId: 'product-1',
+          productName: 'Engine Oil',
+          productType: 'LUBRICANT',
+          category: 'Motor Oils',
+          quantity: 2,
+          value: 1680,
+        },
+      ],
+    });
+  });
+
+  it('does not add Product Sales to a legacy snapshot', async () => {
+    const out = await project(new Map(), closeSnapshot, [
+      {
+        productId: 'product-1',
+        productName: 'Engine Oil',
+        productType: 'LUBRICANT',
+        quantity: 2,
+        lineTotal: 1680,
+      },
+    ]);
+
+    expect(out).not.toHaveProperty('productSales');
   });
 
   it('shows no attendant/office split on a pre-#287 snapshot (#287)', async () => {

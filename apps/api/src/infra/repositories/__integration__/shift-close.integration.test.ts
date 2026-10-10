@@ -157,6 +157,7 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
         name: 'Engine Oil',
         code: 'OIL',
         productType: 'LUBRICANT',
+        category: 'Motor Oils',
         unit: 'pcs',
       },
     ]);
@@ -303,6 +304,34 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
         taxAmount: '0',
         totalAmount: '120',
         nonCashAmount: '20',
+      },
+    ]);
+    await db.insert(schema.saleItems).values([
+      {
+        saleId: (
+          await db
+            .select({ id: schema.sales.id })
+            .from(schema.sales)
+            .where(eq(schema.sales.documentNumber, 'SAL-1'))
+        )[0].id,
+        productId: OIL,
+        quantity: '2',
+        unitPrice: '60',
+        taxAmount: '0',
+        lineTotal: '120',
+      },
+      {
+        saleId: (
+          await db
+            .select({ id: schema.sales.id })
+            .from(schema.sales)
+            .where(eq(schema.sales.documentNumber, 'SAL-2'))
+        )[0].id,
+        productId: OIL,
+        quantity: '2',
+        unitPrice: '60',
+        taxAmount: '0',
+        lineTotal: '120',
       },
     ]);
 
@@ -541,6 +570,19 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       productCode: 'MS',
     });
     expect(snap.creditSalesTotal).toBe(2000);
+    expect(snap.productSales).toEqual({
+      total: 240,
+      lines: [
+        {
+          productId: OIL,
+          productName: 'Engine Oil',
+          productType: 'LUBRICANT',
+          category: 'Motor Oils',
+          quantity: 4,
+          value: 240,
+        },
+      ],
+    });
     expect(snap.cashSalesSum).toBe(5100);
     expect(snap).not.toHaveProperty('cardCollectionsSum'); // collections are Office Records
   });

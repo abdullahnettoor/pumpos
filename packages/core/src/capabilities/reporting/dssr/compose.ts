@@ -143,6 +143,43 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     salesByMethod[sale.paymentMethod] = (salesByMethod[sale.paymentMethod] ?? 0) + sale.totalAmount;
   const merchandiseSalesValue = sum(source.sales.map((s) => s.totalAmount));
 
+  const merchandiseByProduct = new Map<
+    string,
+    {
+      productId: string;
+      productName: string;
+      productType: string;
+      category: string | null;
+      quantity: number;
+      value: number;
+    }
+  >();
+  for (const item of source.saleItems) {
+    const product = source.products[item.productId];
+    const productType = product?.productType || 'OTHER';
+    const current = merchandiseByProduct.get(item.productId) ?? {
+      productId: item.productId,
+      productName: product?.name ?? 'Unknown',
+      productType,
+      category: product?.category ?? null,
+      quantity: 0,
+      value: 0,
+    };
+    current.quantity += item.quantity;
+    current.value += item.revenue;
+    merchandiseByProduct.set(item.productId, current);
+  }
+  const merchandiseByProductLines = [...merchandiseByProduct.values()]
+    .map((line) => ({
+      ...line,
+      quantity: round2(line.quantity),
+      value: round2(line.value),
+    }))
+    .sort(
+      (a, b) =>
+        a.productName.localeCompare(b.productName) || a.productId.localeCompare(b.productId),
+    );
+
   // --- T5: output tax on sales, from the split frozen on each line ---
   const gstLines = source.saleItems.filter((i) => i.taxCategory === 'GST');
   const vatLines = source.saleItems.filter((i) => i.taxCategory === 'FUEL_VAT');
@@ -215,6 +252,8 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     name: string;
     code: string;
     kind: 'fuel' | 'merchandise';
+    productType?: string;
+    category?: string | null;
     quantity: number;
     revenue: number;
     cogs: number;
@@ -254,6 +293,8 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       name: prod?.name ?? 'Unknown',
       code: prod?.code ?? '',
       kind: 'merchandise',
+      productType: prod?.productType || 'OTHER',
+      category: prod?.category ?? null,
       quantity: round2(m.qty),
       revenue: rev,
       cogs: c,
@@ -278,6 +319,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     merchandise: {
       salesValue: merchandiseSalesValue,
       byPaymentMethod: salesByMethod,
+      byProduct: merchandiseByProductLines,
     },
     salesTax,
     credit: {

@@ -255,6 +255,9 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
     const nowIso = ctx.clock.now().toISOString();
     const baseSnapshot: Record<string, unknown> = {
       generatedAt: nowIso,
+      // A read-time projector may add Product Sales only for summaries created
+      // after their source was added; earlier snapshots remain unchanged.
+      productSalesVersion: 1,
       cashVarianceModel: CASH_VARIANCE_MODEL_TWO_LEVEL,
       shiftId: shift.id,
       businessDayId: shift.businessDayId,

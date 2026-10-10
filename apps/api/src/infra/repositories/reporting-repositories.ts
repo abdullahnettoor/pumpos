@@ -160,6 +160,8 @@ export class DrizzleDssrDataReader implements DssrDataReader {
             code: schema.products.code,
             unit: schema.products.unit,
             costBasis: schema.products.costBasis,
+            productType: schema.products.productType,
+            category: schema.products.category,
           })
           .from(schema.products)
           .where(eq(schema.products.organizationId, organizationId))
@@ -173,7 +175,14 @@ export class DrizzleDssrDataReader implements DssrDataReader {
 
     const products: Record<
       string,
-      { name: string; code: string; unit: string; costBasis: number }
+      {
+        name: string;
+        code: string;
+        unit: string;
+        costBasis: number;
+        productType: string;
+        category: string | null;
+      }
     > = {};
     for (const p of productRows)
       products[p.id] = {
@@ -181,6 +190,8 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         code: p.code ?? '',
         unit: p.unit ?? 'L',
         costBasis: Number(p.costBasis ?? 0),
+        productType: p.productType,
+        category: p.category ?? null,
       };
     const nozzles: Record<string, string> = {};
     for (const n of nozzleRows) nozzles[n.id] = n.name;

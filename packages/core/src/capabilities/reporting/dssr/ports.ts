@@ -87,8 +87,18 @@ export interface DssrSourceData {
   stockVariances: DssrStockVariance[];
   /** Merchandise sale line items (productId + qty) for merchandise COGS. */
   saleItems: DssrSaleItem[];
-  /** productId → { name, code, costBasis } for fuel roll-up + COGS. */
-  products: Record<string, { name: string; code: string; unit: string; costBasis: number }>;
+  /** productId → product details for fuel roll-up, category and COGS. */
+  products: Record<
+    string,
+    {
+      name: string;
+      code: string;
+      unit: string;
+      costBasis: number;
+      productType?: string | null;
+      category?: string | null;
+    }
+  >;
   /** nozzleId → nozzle name. */
   nozzles: Record<string, string>;
 }

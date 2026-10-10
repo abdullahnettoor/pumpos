@@ -154,7 +154,7 @@ function source(): DssrSourceData {
     ],
     products: {
       p1: { name: 'Petrol', code: 'MS', costBasis: 88 },
-      p2: { name: 'Engine Oil', code: 'EO', costBasis: 400 },
+      p2: { name: 'Engine Oil', code: 'EO', productType: 'LUBRICANT', costBasis: 400 },
     },
     nozzles: { n1: 'N1' },
   };
@@ -182,6 +182,16 @@ describe('GenerateDssr', () => {
       expect(d.fuel.nozzles[0].nozzleName).toBe('N1');
       expect(d.merchandise.salesValue).toBe(1680);
       expect(d.merchandise.byPaymentMethod.Credit).toBe(1180);
+      expect(d.merchandise.byProduct).toEqual([
+        {
+          productId: 'p2',
+          productName: 'Engine Oil',
+          productType: 'LUBRICANT',
+          category: null,
+          quantity: 2,
+          value: 1680,
+        },
+      ]);
       expect(d.credit.normalCredit).toBe(1000);
       expect(d.credit.fleetCredit).toBe(4000);
       // T5: output GST on merchandise, extracted from the MRP-inclusive line.
@@ -210,9 +220,34 @@ describe('GenerateDssr', () => {
       const merchRow = d.pnl.byProduct.find((r: any) => r.kind === 'merchandise');
       expect(fuelRow.margin).toBe(11760);
       expect(merchRow.margin).toBe(880);
+      expect(merchRow.productType).toBe('LUBRICANT');
       expect(d.pnl.byProduct[0].kind).toBe('fuel'); // sorted by margin desc
     }
     expect(store.events.map((e) => e.eventType)).toContain(BusinessEvents.DSSR_GENERATED);
+  });
+
+  it('composes old product snapshots with missing category data', async () => {
+    const data = source();
+    data.products.p2 = { name: 'Engine Oil', code: 'EO', costBasis: 400 };
+    const result = await new GenerateDssr({
+      businessDays: new BdRepo([bday()]),
+      snapshots: new SnapRepo(),
+      reader: new Reader(data),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ businessDayId: 'bd-1' }, ctx());
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const snapshot = result.data.snapshotData as any;
+      expect(snapshot.merchandise.byProduct[0]).toMatchObject({
+        productName: 'Engine Oil',
+        productType: 'OTHER',
+        category: null,
+      });
+      expect(
+        snapshot.pnl.byProduct.find((row: any) => row.kind === 'merchandise').productType,
+      ).toBe('OTHER');
+    }
   });
 
   it('is idempotent — returns the existing snapshot without regenerating', async () => {

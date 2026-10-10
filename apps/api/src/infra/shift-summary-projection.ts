@@ -4,6 +4,7 @@ import { schema, type DbClient } from '@pump/db';
 import { byNaturalField } from '@pump/shared';
 import { rowJson, rowJsonNullable } from './sql-json.js';
 import { creditSaleLinesJson } from './repositories/shift-recon-sql.js';
+import { composeShiftProductSales } from '@pump/core';
 import {
   RefreshShiftSummary,
   type EventPublisher,
@@ -42,6 +43,7 @@ export async function projectShiftSummary(
 ): Promise<Record<string, unknown>> {
   const snap = rawSnapshot ?? {};
   const recon = snap.reconciliation ?? {};
+  const hasProductSales = Number(snap.productSalesVersion ?? 0) >= 1;
 
   // Fetch every slice in ONE statement (#229): each sub-select renders rows as
   // jsonb in exactly the shape the previous drizzle builders produced (camelCase
@@ -84,6 +86,26 @@ export async function projectShiftSummary(
         FROM handover_terminal_entries e
         LEFT JOIN payment_terminals pt ON pt.id = e.terminal_id
         WHERE e.shift_id = ${shift.id}), '[]'::jsonb) AS te_rows,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+          'productId', t.product_id,
+          'productName', t.name,
+          'productType', t.product_type,
+          'category', t.category,
+          'quantity', t.quantity,
+          'lineTotal', t.line_total
+        ) ORDER BY t.name, t.product_id)
+        FROM (
+          SELECT si.product_id, p.name, p.product_type, p.category,
+            SUM(si.quantity)::float8 AS quantity,
+            SUM(si.line_total)::float8 AS line_total
+          FROM sales s
+          JOIN sale_items si ON si.sale_id = s.id
+          LEFT JOIN products p ON p.id = si.product_id
+          WHERE s.shift_id = ${shift.id} AND s.sale_type <> 'Fuel' AND ${hasProductSales}
+          GROUP BY si.product_id, p.name, p.product_type, p.category
+        ) t), '[]'::jsonb) AS product_rows,
+      (SELECT COALESCE(SUM(s.total_amount), 0)::float8 FROM sales s
+        WHERE s.shift_id = ${shift.id} AND s.sale_type <> 'Fuel' AND ${hasProductSales}) AS product_total,
       -- Expenses, collections and purchases have no Shift (ADR 0005, #308):
       -- a Shift Summary never shows them.
       ${creditSaleLinesJson(shift.id)} AS credit_rows
@@ -95,6 +117,7 @@ export async function projectShiftSummary(
   const nrRows: any[] = row.nr_rows ?? [];
   const hoRows: any[] = row.ho_rows ?? [];
   const teRows: any[] = row.te_rows ?? [];
+  const productRows: any[] = row.product_rows ?? [];
   const creditSaleRows: any[] = row.credit_rows ?? [];
 
   const template = templateRows[0];
@@ -220,6 +243,9 @@ export async function projectShiftSummary(
     cashNetChange: closingCash - openingCash,
     nozzleReadings,
     fuelByProduct,
+    ...(hasProductSales
+      ? { productSales: composeShiftProductSales(productRows, Number(row.product_total ?? 0)) }
+      : {}),
     totalVolumeSold,
     totalTestingVolume,
     totalNetVolumeSold,
