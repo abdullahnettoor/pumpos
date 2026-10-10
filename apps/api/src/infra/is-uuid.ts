@@ -1,4 +1,4 @@
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { isUuid } from '@pump/shared';
 
 /**
  * Whether a path parameter has the shape Postgres accepts for a `uuid` column.
@@ -6,4 +6,4 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * id reaches the database as an invalid cast (a 500) instead of "not found".
  * The shape only: versions and variants are not checked, as Postgres does not.
  */
-export const isUuid = (value: string): boolean => UUID.test(value);
+export { isUuid };

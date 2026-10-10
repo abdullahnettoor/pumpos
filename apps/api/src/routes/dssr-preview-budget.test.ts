@@ -6,7 +6,8 @@ import { dssrRouter } from './dssr.js';
  * Statement-budget guard for GET /dssr/daily/preview of an OPEN Business Day
  * (the mobile Home's sales read, #391): one day lookup plus the source reader's
  * nine selects (day, shift summaries, purchases, sales, sale lines, credit sales,
- * stock variances, products, nozzles). The count is fixed: it must not grow with
+ * stock variances, products, nozzles), plus one tank-movement aggregate when
+ * stock-variance rows have tanks. The count is fixed: it must not grow with
  * the number of sales, purchases or credit slips on the day. The per-document
  * counts the screen shows (credit slips, purchases) are derived in memory from
  * rows the reader already loads.
@@ -35,7 +36,7 @@ function makeFakeDb(selectQueue: any[][]) {
     },
     execute: async () => {
       counter.executes += 1;
-      return [];
+      return [{ tankId: 'tank-1', opening: '1000', received: '100', sold: '50', adjusted: '0' }];
     },
   };
   return { db, counter };
@@ -71,7 +72,7 @@ function dayQueue(n: number): any[][] {
   const rows = <T>(row: T) => Array.from({ length: n }, () => row);
   return [
     [openDay], // route: the day lookup
-    [{ organizationId: 'org-1', stationId: 'st-1' }], // reader: day
+    [{ organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-15' }], // reader: day
     [
       {
         shiftId: 'sh-1',
@@ -85,7 +86,15 @@ function dayQueue(n: number): any[][] {
     rows({ paymentMethod: 'Cash', saleType: 'Product', totalAmount: '500' }), // sales
     rows({ productId: 'p2', quantity: '1', lineTotal: '500' }), // sale lines
     rows({ customerType: 'Fleet', amount: '4000' }), // credit sales
-    [], // stock variances
+    [
+      {
+        tankId: 'tank-1',
+        tankName: 'Tank 1',
+        expectedQuantity: '100',
+        actualQuantity: '95',
+        varianceQuantity: '-5',
+      },
+    ], // stock variances
     [
       {
         id: 'p2',
@@ -107,7 +116,7 @@ describe('GET /dssr/daily/preview open-day statement budget (#391)', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
 
-    expect(counter).toEqual({ selects: 10, executes: 0 });
+    expect(counter).toEqual({ selects: 10, executes: 1 });
     // The Home screen's figures ride on the preview payload.
     expect(body.data.snapshotData.credit).toMatchObject({ count: n, total: 4000 * n });
     expect(body.data.snapshotData.purchases).toEqual({ total: 1200 * n, count: n });

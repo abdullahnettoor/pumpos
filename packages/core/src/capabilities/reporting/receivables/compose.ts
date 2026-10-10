@@ -1,5 +1,6 @@
 import {
   RECEIVABLES_MIN_SETTLED_SALES,
+  round2,
   type CustomerReceivable,
   type CustomerReceivableSummary,
   type ReceivablesAging,
@@ -7,8 +8,6 @@ import {
 } from '@pump/shared';
 import { ageInDays } from '../age.js';
 import type { CustomerReceivableSource, ReceivableSourceRow, ReceivablesSource } from './ports.js';
-
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 const roundAging = (a: ReceivablesAging): ReceivablesAging => ({
   d0_7: round2(a.d0_7),

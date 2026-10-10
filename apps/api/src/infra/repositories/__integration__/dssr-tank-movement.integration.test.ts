@@ -29,6 +29,7 @@ const OIL = '00000000-0000-0000-0000-00000000c107';
 const TEMPLATE = '00000000-0000-0000-0000-00000000c300';
 const SHIFT_2 = '00000000-0000-0000-0000-00000000c301';
 const SALE = '00000000-0000-0000-0000-00000000c302';
+const FUEL_SALE = '00000000-0000-0000-0000-00000000c303';
 const DAY_1 = '00000000-0000-0000-0000-00000000c201';
 const DAY_2 = '00000000-0000-0000-0000-00000000c202';
 const DAY_3 = '00000000-0000-0000-0000-00000000c203';
@@ -190,6 +191,26 @@ describe.skipIf(!CONNECTION)('DSSR tank stock movement against real Postgres', (
       taxAmount: '0',
       lineTotal: '120',
     } as never);
+    await db.insert(schema.sales).values({
+      id: FUEL_SALE,
+      documentNumber: 'SAL-FUEL-1',
+      shiftId: SHIFT_2,
+      businessDayId: DAY_2,
+      saleType: 'Fuel',
+      paymentMethod: 'Cash',
+      attendantId: USER,
+      subtotalAmount: '9000',
+      taxAmount: '0',
+      totalAmount: '9000',
+    } as never);
+    await db.insert(schema.saleItems).values({
+      saleId: FUEL_SALE,
+      productId: PRODUCT,
+      quantity: '90',
+      unitPrice: '100',
+      taxAmount: '0',
+      lineTotal: '9000',
+    } as never);
 
     // Day 1: opening balance 10000 and a purchase of 6000, 1500 sold, dip posts -50.
     await move(DAY_1, TANK, 'OpeningBalance', 10000);
@@ -274,6 +295,16 @@ describe.skipIf(!CONNECTION)('DSSR tank stock movement against real Postgres', (
     const payload = composeDssr(source) as { pnl: { byProduct: Record<string, any>[] } };
     const line = payload.pnl.byProduct.find((r) => r.kind === 'merchandise' && r.productId === OIL);
     expect(line).toMatchObject({ name: 'Engine Oil', quantity: 1, productType: 'LUBRICANT' });
+  });
+
+  it('excludes Fuel-type Sale rows because fuel value comes from nozzle readings', async () => {
+    const source = await new DrizzleDssrDataReader(db).readBusinessDay(DAY_2);
+    expect(source.sales).toEqual([
+      { paymentMethod: 'Cash', saleType: 'Product', totalAmount: 120 },
+    ]);
+    expect(source.saleItems.map((line) => line.productId)).toEqual([OIL]);
+    const payload = composeDssr(source) as { merchandise: { salesValue: number } };
+    expect(payload.merchandise.salesValue).toBe(120);
   });
 
   it('leaves a day with no dips without a movement read', async () => {

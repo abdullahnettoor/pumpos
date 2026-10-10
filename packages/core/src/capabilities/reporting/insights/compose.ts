@@ -1,4 +1,4 @@
-import { INSIGHTS_MIN_COMPARABLE_DAYS, isStockVarianceWithinTolerance } from '@pump/shared';
+import { INSIGHTS_MIN_COMPARABLE_DAYS, isStockVarianceWithinTolerance, round2 } from '@pump/shared';
 import type {
   InsightsAttendantVariance,
   InsightsCreditHealth,
@@ -14,7 +14,6 @@ import type {
   InsightsTemplateRow,
 } from './ports.js';
 
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const round3 = (n: number) => Math.round((n + Number.EPSILON) * 1000) / 1000;
 const round1 = (n: number) => Math.round((n + Number.EPSILON) * 10) / 10;
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { round2 } from '@pump/shared';
 import type { TaxCategory } from '@pump/shared';
 import {
   BusinessEvents,
@@ -161,8 +162,6 @@ export function computeIncomeTax(
     },
   };
 }
-
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 export interface RecordIncomeCommand {
   stationId?: string;

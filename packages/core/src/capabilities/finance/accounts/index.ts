@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { resolveEntryDate } from '@pump/shared';
+import { resolveEntryDate, round2 } from '@pump/shared';
 import {
   BusinessEvents,
   conflictError,
@@ -102,8 +102,6 @@ const accountTypeEnum = z.enum([
   'CMS',
   'OWNER',
 ]);
-
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 export interface CreateFinancialAccountCommand {
   stationId?: string | null;

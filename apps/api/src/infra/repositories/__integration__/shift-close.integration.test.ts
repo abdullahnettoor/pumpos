@@ -4,11 +4,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { and, eq } from 'drizzle-orm';
+import { Hono } from 'hono';
 import { schema, type DbClient } from '@pump/db';
 import { CloseShift, type ExecutionContext } from '@pump/core';
 import { runInTransaction } from '../../transaction.js';
 import { LedgerPostingService } from '../../ledger-posting.js';
 import { DrizzleShiftSummaryProjector } from '../../shift-summary-projection.js';
+import { shiftsRouter } from '../../../routes/shifts.js';
 import {
   DrizzleCloseShiftContextReader,
   DrizzleNozzleReadingRepository,
@@ -573,6 +575,33 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
     expect(snap.payments).toEqual({ cash: 5100, upi: 100, card: 400, credit: 2000 });
     expect(snap.nozzleReadings.map((r: any) => r.duName)).toEqual(['DU-1', 'DU-1']);
     expect(snap).not.toHaveProperty('cardCollectionsSum'); // collections are Office Records
+  });
+
+  it('serves a stored Shift Summary to a Manager and refuses an Attendant on real Postgres', async () => {
+    const requestAs = (role: 'Manager' | 'Attendant') => {
+      const app = new Hono<{ Variables: { db: DbClient; user: any } }>();
+      app.use('*', async (c, next) => {
+        c.set('db', db);
+        c.set('user', {
+          id: role === 'Attendant' ? ATTENDANT : MANAGER,
+          email: `${role.toLowerCase()}@example.com`,
+          fullName: role,
+          organizationId: ORG,
+          role,
+          assignedStationIds: [STATION],
+        });
+        await next();
+      });
+      app.route('/', shiftsRouter);
+      return app.request(`/shift-summaries/${SHIFT}`);
+    };
+
+    const managerResponse = await requestAs('Manager');
+    expect(managerResponse.status).toBe(200);
+    expect(((await managerResponse.json()) as any).data.shiftId).toBe(SHIFT);
+
+    const attendantResponse = await requestAs('Attendant');
+    expect(attendantResponse.status).toBe(403);
   });
 
   it('records fuel SALE stock movements net of testing', async () => {

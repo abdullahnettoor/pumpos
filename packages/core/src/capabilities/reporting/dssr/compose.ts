@@ -1,8 +1,7 @@
-import { drawerKey, isTwoLevelVarianceSnapshot, type ProductType } from '@pump/shared';
+import { drawerKey, isTwoLevelVarianceSnapshot, round2, type ProductType } from '@pump/shared';
 import type { DssrSourceData } from './ports.js';
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const roundQty = (n: number) => Math.round((n + Number.EPSILON) * 1000) / 1000;
 
 interface FuelAgg {
@@ -146,9 +145,11 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
 
   // --- Merchandise sales (POS) by payment method ---
   const salesByMethod = { Cash: 0, Card: 0, UPI: 0, Credit: 0 } as Record<string, number>;
-  for (const sale of source.sales)
+  for (const sale of source.sales.filter((row) => row.saleType !== 'Fuel'))
     salesByMethod[sale.paymentMethod] = (salesByMethod[sale.paymentMethod] ?? 0) + sale.totalAmount;
-  const merchandiseSalesValue = sum(source.sales.map((s) => s.totalAmount));
+  const merchandiseSalesValue = sum(
+    source.sales.filter((sale) => sale.saleType !== 'Fuel').map((sale) => sale.totalAmount),
+  );
 
   // --- T5: output tax on sales, from the split frozen on each line ---
   const gstLines = source.saleItems.filter((i) => i.taxCategory === 'GST');

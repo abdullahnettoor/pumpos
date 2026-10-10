@@ -114,7 +114,7 @@ export function businessDateDiffDays(from: string, to: string): number {
   return Math.round(ms / 86_400_000);
 }
 
-const MONTH_KEY = /^(\d{4})-(0[1-9]|1[0-2])$/;
+export const MONTH_KEY = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
 /** First and last calendar date (`YYYY-MM-DD`) of a `YYYY-MM` month. Throws on a malformed month. */
 export function monthBounds(month: string): { from: string; to: string } {
@@ -122,6 +122,47 @@ export function monthBounds(month: string): { from: string; to: string } {
   if (!match) throw new Error(`Invalid month: ${month}`);
   const lastDay = new Date(Date.UTC(Number(match[1]), Number(match[2]), 0)).getUTCDate();
   return { from: `${month}-01`, to: `${month}-${String(lastDay).padStart(2, '0')}` };
+}
+
+/** Current sales-month and calendar-month windows used by party finance reads. */
+export function partyMonthWindows(input: {
+  now: Date;
+  timeZone?: string | null;
+  dayStartsAt?: string | null;
+}) {
+  const timeZone = input.timeZone ?? DEFAULT_TIMEZONE;
+  const dayStartsAt = input.dayStartsAt ?? '00:00';
+  const currentBusinessDate = resolveBusinessDate({
+    now: input.now,
+    timeZone,
+    dayStartsAt,
+  });
+  const entryDate = resolveEntryDate({ now: input.now, timeZone });
+  const businessMonth = monthBounds(currentBusinessDate.slice(0, 7));
+  const entryMonth = monthBounds(entryDate.slice(0, 7));
+  return {
+    currentBusinessDate,
+    entryDate,
+    businessMonth,
+    entryMonth,
+    months: {
+      businessMonth: businessMonth.from.slice(0, 7),
+      entryMonth: entryMonth.from.slice(0, 7),
+    },
+  };
+}
+
+/** Current Business Date used when a read needs only the aging anchor. */
+export function currentBusinessDateOf(input: {
+  now: Date;
+  timeZone?: string | null;
+  dayStartsAt?: string | null;
+}): string {
+  return resolveBusinessDate({
+    now: input.now,
+    timeZone: input.timeZone ?? DEFAULT_TIMEZONE,
+    dayStartsAt: input.dayStartsAt ?? '00:00',
+  });
 }
 
 /** Extract date-resolution settings from a station `settings` JSONB blob. */

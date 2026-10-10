@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { isAuthorizedForStation, canExportReports } from '@pump/shared';
+import { isAuthorizedForStation, canExportReports, canViewReports } from '@pump/shared';
 import {
   GenerateDssr,
   ListBusinessDays,
@@ -20,6 +20,7 @@ import {
 import { DrizzleBusinessDayRepository } from '../infra/repositories/station-ops-repositories.js';
 import { sendResult } from '../infra/send-result.js';
 import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
+import { requireStationRead } from '../infra/station-read-guard.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
 
 type Variables = {
@@ -290,19 +291,13 @@ dssrRouter.get('/daily/preview', async (c) => {
 // live DSSR preview.
 dssrRouter.get('/days', async (c) => {
   const user = c.var.user;
-  const stationId = c.req.query('stationId');
-  if (!stationId) {
-    return c.json(
-      { success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } },
-      400,
-    );
-  }
-  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
-      403,
-    );
-  }
+  const scope = requireStationRead(
+    c,
+    canViewReports,
+    'Insufficient permissions to view Daily Station Sales Reports',
+  );
+  if (scope instanceof Response) return scope;
+  const { stationId } = scope;
   // Resolves the station under the caller's organization (a foreign station is
   // a 404); the clock goes into the context, and the use-case derives the
   // Current Business Date from it.

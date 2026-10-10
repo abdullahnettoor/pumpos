@@ -1,4 +1,4 @@
-import type { TaxCategory } from '@pump/shared';
+import { round2, type TaxCategory } from '@pump/shared';
 import { computeLineTax } from '../finance/tax/index.js';
 import type { SaleLineTax } from './ports.js';
 
@@ -50,9 +50,9 @@ export function splitSaleLineTax(
   if (!product) return { ...ZERO, taxableAmount: String(round2(gross)) };
 
   const cfg = product.taxConfig ?? {};
-  const gstRate = product.taxCategory === 'GST' ? num(cfg.gst_rate) : null;
-  const vatRate = product.taxCategory === 'FUEL_VAT' ? num(cfg.vat_rate) : null;
-  const cessRate = product.taxCategory === 'GST' ? num(cfg.cess) : null;
+  const gstRate = product.taxCategory === 'GST' ? numOrNull(cfg.gst_rate) : null;
+  const vatRate = product.taxCategory === 'FUEL_VAT' ? numOrNull(cfg.vat_rate) : null;
+  const cessRate = product.taxCategory === 'GST' ? numOrNull(cfg.cess) : null;
   const hsnCode = cfg.hsn_code ? String(cfg.hsn_code) : null;
 
   const hasRate = (gstRate ?? 0) > 0 || (vatRate ?? 0) > 0 || (cessRate ?? 0) > 0;
@@ -93,10 +93,8 @@ export function splitSaleLineTax(
   };
 }
 
-const num = (v: unknown): number | null => {
+const numOrNull = (v: unknown): number | null => {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
-
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;

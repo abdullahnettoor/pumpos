@@ -1,4 +1,5 @@
 import { sql, type SQL } from 'drizzle-orm';
+import { UUID_PATTERN } from '@pump/shared';
 
 /**
  * The one place that knows where a day's sales figures live inside a stored
@@ -70,6 +71,8 @@ export const dssrNetVolumeOfRecord = (alias: string): SQL => {
   return sql`COALESCE(${a}."netVolume", COALESCE(${a}."grossVolume", 0) - COALESCE(${a}."testingVolume", 0))`;
 };
 
+/** Net litres in a stored Shift Summary: readings, stored net, then gross less testing. */
+
 /**
  * A jsonb path that should hold an array: anything else (absent, null, an
  * object: a snapshot frozen before the field existed) reads as empty, so
@@ -87,5 +90,5 @@ export const jsonbArray = (expr: SQL): SQL =>
  */
 export const uuidOrNull = (ref: string): SQL => {
   const c = column(ref);
-  return sql`(CASE WHEN ${c} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN ${c}::uuid END)`;
+  return sql`(CASE WHEN ${c} ~* ${UUID_PATTERN} THEN ${c}::uuid END)`;
 };

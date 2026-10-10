@@ -1,4 +1,5 @@
 import { CASH_VARIANCE_MODEL_TWO_LEVEL, isTwoLevelVarianceSnapshot } from '@pump/shared';
+import { netNozzleVolume, shiftSummaryNetVolume } from './shift-summary-sql.js';
 import { sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import { byNaturalField } from '@pump/shared';
@@ -90,7 +91,8 @@ export async function projectShiftSummary(
         LEFT JOIN payment_terminals pt ON pt.id = e.terminal_id
         WHERE e.shift_id = ${shift.id}), '[]'::jsonb) AS te_rows,
       -- Product Sales: every non-fuel sale of the Shift (bulk Handover and billed),
-      -- grouped by product id, plus the sales' own total (what the DSSR counts).
+      -- grouped by product id, plus the sales' own total. Tank-linked Fuel sales
+      -- are excluded because Fuel Sales come from nozzle readings.
       COALESCE((SELECT jsonb_agg(jsonb_build_object(
           'productId', t.product_id,
           'productName', t.name,
@@ -128,8 +130,9 @@ export async function projectShiftSummary(
   const closedByName = closedUserRows[0]?.fullName ?? 'System';
   const openedByName = openedUserRows[0]?.fullName ?? 'System';
   const nozzleReadings = nrRows.map(({ nr, nz, prod, duName }) => {
-    const gross = Number(nr.volumeSold ?? 0);
-    const testing = Math.min(Math.max(Number(nr.testingVolume ?? 0), 0), gross);
+    const gross = Math.max(0, Number(nr.volumeSold ?? 0));
+    const net = netNozzleVolume(gross, nr.testingVolume);
+    const testing = gross - net;
     return {
       nozzleId: nr.nozzleId,
       nozzleName: nz?.name ?? 'Unknown',
@@ -142,7 +145,7 @@ export async function projectShiftSummary(
       closingReading: Number(nr.closingReading ?? nr.openingReading),
       volumeSold: gross,
       testingVolume: testing,
-      netVolume: gross - testing,
+      netVolume: net,
       unitPrice: Number(nr.unitPrice ?? 0),
       unit: prod?.unit ?? 'L',
     };
@@ -150,8 +153,7 @@ export async function projectShiftSummary(
   // Natural nozzle order (N1, N2, ... N10) for the summary tables.
   nozzleReadings.sort(byNaturalField((r) => String(r.nozzleName)));
   const totalTestingVolume = nozzleReadings.reduce((a, r) => a + r.testingVolume, 0);
-  const totalNetVolumeSold =
-    nozzleReadings.reduce((a, r) => a + r.netVolume, 0) || Number(snap.totalNetVolume ?? 0);
+  const totalNetVolumeSold = shiftSummaryNetVolume(snap, nozzleReadings);
   const totalVolumeSold =
     nozzleReadings.reduce((a, r) => a + r.volumeSold, 0) || Number(snap.totalVolume ?? 0);
 
@@ -315,6 +317,7 @@ export async function projectShiftSummary(
   };
 }
 
+/** Legacy snapshot fallback shared with DSSR and all aggregate readers. */
 /** Adapter for the core ShiftSummaryProjector port. */
 export class DrizzleShiftSummaryProjector implements ShiftSummaryProjector {
   constructor(private readonly db: DbClient) {}

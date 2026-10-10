@@ -1,7 +1,8 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import { productCategoryOf, type ProductType } from '@pump/shared';
 import { dssrFuelSalesValue, dssrNetVolume, dssrProductSalesValue } from '../dssr-snapshot-sql.js';
+import { shiftSummaryNetVolumeSql } from '../shift-summary-sql.js';
 import type {
   BusinessDayListQuery,
   BusinessDayListReader,
@@ -106,7 +107,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         totalAmount: schema.sales.totalAmount,
       })
       .from(schema.sales)
-      .where(eq(schema.sales.businessDayId, businessDayId));
+      .where(and(eq(schema.sales.businessDayId, businessDayId), ne(schema.sales.saleType, 'Fuel')));
 
     // Merchandise sale line items (productId + qty + revenue) for merch COGS + per-product margin.
     const saleItemRows = await this.db
@@ -124,7 +125,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       })
       .from(schema.saleItems)
       .innerJoin(schema.sales, eq(schema.sales.id, schema.saleItems.saleId))
-      .where(eq(schema.sales.businessDayId, businessDayId));
+      .where(and(eq(schema.sales.businessDayId, businessDayId), ne(schema.sales.saleType, 'Fuel')));
 
     // Credit receivables created today, with customer type (normal vs fleet).
     const creditSaleRows = await this.db
@@ -163,6 +164,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
     // Each dipped tank's litres over the day, from stock_movements (#395).
     const tankMovements = await this.readTankMovements(
       businessDayId,
+      businessDay?.organizationId,
       businessDay?.stationId,
       businessDay?.businessDate,
       varianceRows.flatMap((r) => (r.tankId ? [r.tankId] : [])),
@@ -268,12 +270,13 @@ export class DrizzleDssrDataReader implements DssrDataReader {
    */
   private async readTankMovements(
     businessDayId: string,
+    organizationId: string | undefined,
     stationId: string | undefined,
     businessDate: string | undefined,
     tankIds: string[],
   ): Promise<Map<string, DssrTankMovementSource>> {
     const out = new Map<string, DssrTankMovementSource>();
-    if (!stationId || !businessDate || tankIds.length === 0) return out;
+    if (!organizationId || !stationId || !businessDate || tankIds.length === 0) return out;
     const rows = (await this.db.execute(sql`
       SELECT sm.tank_id AS "tankId",
         COALESCE(SUM(sm.quantity) FILTER (WHERE bd.business_date < ${businessDate}), 0) AS opening,
@@ -290,6 +293,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         tankIds.map((id) => sql`${id}`),
         sql`, `,
       )})
+        AND bd.organization_id = ${organizationId}
         AND bd.station_id = ${stationId}
         AND bd.business_date <= ${businessDate}
       GROUP BY sm.tank_id
@@ -358,9 +362,7 @@ export class DrizzleBusinessDayListReader implements BusinessDayListReader {
         SELECT s.business_day_id AS id,
           COUNT(*)::int AS shift_count,
           SUM((ss.snapshot_data ->> 'totalFuelSalesValue')::numeric) AS fuel_sales,
-          SUM(COALESCE((ss.snapshot_data ->> 'totalNetVolume')::numeric,
-                       (ss.snapshot_data ->> 'totalVolume')::numeric
-                         - COALESCE((ss.snapshot_data ->> 'totalTesting')::numeric, 0))) AS volume,
+          SUM(${shiftSummaryNetVolumeSql('ss.snapshot_data')}) AS volume,
           SUM((ss.snapshot_data ->> 'cashVariance')::numeric) AS cash_variance
         FROM shifts s
         JOIN shift_summaries ss ON ss.shift_id = s.id
@@ -371,6 +373,7 @@ export class DrizzleBusinessDayListReader implements BusinessDayListReader {
         SELECT sa.business_day_id AS id, SUM(sa.total_amount) AS product_sales
         FROM sales sa
         WHERE sa.business_day_id IN (SELECT u.id FROM unsealed u)
+          AND sa.sale_type <> 'Fuel'
         GROUP BY sa.business_day_id
       ),
       figures AS (

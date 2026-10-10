@@ -18,8 +18,8 @@ import type {
   InsightsSalesSource,
   InsightsTemplateRow,
 } from '@pump/core';
-
-const num = (v: unknown): number => Number(v ?? 0) || 0;
+import { num } from '@pump/shared';
+import { shiftSummaryNetVolumeSql } from '../shift-summary-sql.js';
 
 /**
  * Reads the Insights sales block's sealed-data aggregates in ONE statement.
@@ -85,8 +85,7 @@ export class DrizzleInsightsSalesReader implements InsightsSalesReader {
           COALESCE(t.name, 'Custom') AS name,
           COUNT(*)::int AS shifts,
           SUM(COALESCE((ss.snapshot_data ->> 'totalFuelSalesValue')::numeric, 0)) AS "totalSales",
-          SUM(COALESCE((ss.snapshot_data ->> 'totalNetVolume')::numeric,
-                       (ss.snapshot_data ->> 'totalVolume')::numeric, 0)) AS "totalVolume",
+           SUM(${shiftSummaryNetVolumeSql('ss.snapshot_data')}) AS "totalVolume",
           SUM(COALESCE((ss.snapshot_data ->> 'cashVariance')::numeric, 0)) AS "totalCashVariance",
           MIN(t.start_time) AS start_time
         FROM closed_days cd

@@ -2,9 +2,8 @@ import { err, notFoundError, ok, validationError } from '../../../kernel/index.j
 import type { ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import {
   isValidBusinessDate,
-  monthBounds,
-  resolveBusinessDate,
-  resolveEntryDate,
+  currentBusinessDateOf,
+  partyMonthWindows,
   type CustomerReceivableSummary,
   type ReceivablesSummary,
 } from '@pump/shared';
@@ -24,13 +23,6 @@ export interface GetCustomerReceivableCommand extends GetReceivablesCommand {
  * The Current Business Date from the Station's clock (timezone + Day Start):
  * the instant an open debit's age is measured to. Never the UTC date.
  */
-const currentBusinessDateOf = (ctx: ExecutionContext) =>
-  resolveBusinessDate({
-    now: ctx.clock.now(),
-    timeZone: ctx.timeZone,
-    dayStartsAt: ctx.businessDayStartsAt,
-  });
-
 /**
  * What the customers of the Organization owe (not one Station's slice): total,
  * aging split and a row per customer that owes.
@@ -44,7 +36,11 @@ export class GetReceivables implements UseCase<GetReceivablesCommand, Receivable
     input: GetReceivablesCommand,
     ctx: ExecutionContext,
   ): Promise<Result<ReceivablesSummary>> {
-    const currentBusinessDate = currentBusinessDateOf(ctx);
+    const currentBusinessDate = currentBusinessDateOf({
+      now: ctx.clock.now(),
+      timeZone: ctx.timeZone,
+      dayStartsAt: ctx.businessDayStartsAt,
+    });
     if (!input.stationId || !isValidBusinessDate(currentBusinessDate)) {
       return err(validationError('Receivables require a Station'));
     }
@@ -76,13 +72,18 @@ export class GetCustomerReceivable implements UseCase<
     input: GetCustomerReceivableCommand,
     ctx: ExecutionContext,
   ): Promise<Result<CustomerReceivableSummary>> {
-    const currentBusinessDate = currentBusinessDateOf(ctx);
+    const windows = partyMonthWindows({
+      now: ctx.clock.now(),
+      timeZone: ctx.timeZone,
+      dayStartsAt: ctx.businessDayStartsAt,
+    });
+    const currentBusinessDate = windows.currentBusinessDate;
     if (!input.stationId || !input.customerId || !isValidBusinessDate(currentBusinessDate)) {
       return err(validationError('Customer receivable requires a Station and a customer'));
     }
-    const entryDate = resolveEntryDate({ now: ctx.clock.now(), timeZone: ctx.timeZone });
-    const credit = monthBounds(currentBusinessDate.slice(0, 7));
-    const paid = monthBounds(entryDate.slice(0, 7));
+    const entryDate = windows.entryDate;
+    const credit = windows.businessMonth;
+    const paid = windows.entryMonth;
 
     const source = await this.reader.customer({
       organizationId: ctx.organizationId,

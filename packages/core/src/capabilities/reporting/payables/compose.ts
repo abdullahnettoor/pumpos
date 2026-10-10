@@ -4,13 +4,12 @@ import type {
   SupplierPayable,
   SupplierPayableSummary,
 } from '@pump/shared';
+import { round2 } from '@pump/shared';
 import { ageInDays } from '../age.js';
 import type { PayableSourceRow, PayablesSource, SupplierPayableSource } from './ports.js';
 
 /** The calendar months "this month" covers for Purchases and for Payments. */
 export type PayablesMonths = Pick<PayablesMonthFigures, 'purchasedMonth' | 'paidMonth'>;
-
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 function composeRow(row: PayableSourceRow, currentBusinessDate: string): SupplierPayable {
   return {

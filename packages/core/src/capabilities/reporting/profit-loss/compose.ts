@@ -7,6 +7,8 @@
  * office money, or both. Pure — the API reads the inputs.
  */
 
+import { round2 } from '@pump/shared';
+
 /** One sales day: the DSSR `pnl` block of its snapshot or live preview. */
 export interface ProfitLossSalesDay {
   date: string;
@@ -61,7 +63,6 @@ export interface ProfitLossReport {
   byProduct: ProfitLossProductMargin[];
 }
 
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const num = (v: unknown) => {
   const n = Number(v ?? 0);
   return Number.isFinite(n) ? n : 0;

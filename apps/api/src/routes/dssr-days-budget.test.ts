@@ -175,4 +175,22 @@ describe('GET /dssr/days', () => {
     expect(res.status).toBe(404);
     expect(foreign.counter.executes).toBe(0);
   });
+
+  it('uses the Reports role policy, including Accountants, before station or database reads', async () => {
+    const deniedDb = fake(station, { days: [], openPastDays: 0, olderBusinessDate: null });
+    const staff = await makeApp(deniedDb.db, 'Staff').request('/days?stationId=st-1');
+    expect(staff.status).toBe(403);
+    expect(deniedDb.counter.selects).toBe(0);
+
+    const accountantDb = fake(station, {
+      days: [],
+      openPastDays: 0,
+      olderBusinessDate: null,
+    });
+    const accountant = await makeApp(accountantDb.db, 'Accountant', ['st-1']).request(
+      '/days?stationId=st-1',
+    );
+    expect(accountant.status).toBe(200);
+    expect(accountantDb.counter).toEqual({ selects: 1, executes: 1, ...NO_WRITES });
+  });
 });

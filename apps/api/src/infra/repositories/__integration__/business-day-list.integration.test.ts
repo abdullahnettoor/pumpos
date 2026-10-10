@@ -130,6 +130,7 @@ describe.skipIf(!CONNECTION)('Business Day list reader against real Postgres', (
     summaries: Record<string, unknown>[],
     saleTotals: number[],
     snapshot: boolean,
+    fuelSaleTotals: number[] = [],
   ) {
     const businessDayId = uuid();
     await db.insert(schema.businessDays).values({
@@ -181,15 +182,34 @@ describe.skipIf(!CONNECTION)('Business Day list reader against real Postgres', (
         totalAmount: String(total),
       });
     }
+    for (const total of fuelSaleTotals) {
+      await db.insert(schema.sales).values({
+        id: uuid(),
+        documentNumber: `F-${businessDate}-${++n}`,
+        shiftId: shiftIds[0] ?? uuid(),
+        businessDayId,
+        saleType: 'Fuel',
+        subtotalAmount: String(total),
+        taxAmount: '0',
+        totalAmount: String(total),
+      });
+    }
     if (snapshot) {
       const source: DssrSourceData = {
         shiftSummaries: summaries.map((s, i) => ({ shiftId: shiftIds[i]!, snapshot: s })),
         purchases: [],
-        sales: saleTotals.map((totalAmount) => ({
-          paymentMethod: 'Cash',
-          saleType: 'Product',
-          totalAmount,
-        })),
+        sales: [
+          ...saleTotals.map((totalAmount) => ({
+            paymentMethod: 'Cash',
+            saleType: 'Product',
+            totalAmount,
+          })),
+          ...fuelSaleTotals.map((totalAmount) => ({
+            paymentMethod: 'Cash',
+            saleType: 'Fuel',
+            totalAmount,
+          })),
+        ],
         creditSales: [],
         stockVariances: [],
         saleItems: [],
@@ -251,8 +271,8 @@ describe.skipIf(!CONNECTION)('Business Day list reader against real Postgres', (
       shiftSnapshot({ totalFuelSalesValue: 50000, totalNetVolume: 480 }),
     ];
     // Same figures sealed (06) and unsealed-but-closed-shifts (the Draft rollup, 07).
-    await seedDay(ORG, STATION, '2026-10-06', 'CLOSED', two, [1200, 300], true);
-    await seedDay(ORG, STATION, '2026-10-07', 'OPEN', two, [1200, 300], false);
+    await seedDay(ORG, STATION, '2026-10-06', 'CLOSED', two, [1200, 300], true, [900]);
+    await seedDay(ORG, STATION, '2026-10-07', 'OPEN', two, [1200, 300], false, [900]);
     // Live today: one closed shift so far.
     await seedDay(ORG, STATION, CURRENT, 'OPEN', [shiftSnapshot({ cashVariance: 0 })], [], false);
     // A CLOSED day whose snapshot is missing is Report missing, not Sealed.
