@@ -13,6 +13,7 @@ import { Kpi } from '../components/Kpi.js';
 import { AlertList } from '../components/AlertList.js';
 import { Collapsible } from '../components/Collapsible.js';
 import { useMobileAlerts } from '../lib/alerts.js';
+import { AppearanceControl } from '../theme/index.js';
 import type { TabKey } from '../components/BottomNav.js';
 
 interface Props {
@@ -37,15 +38,21 @@ const shortDate = (iso: string) => {
 const numberFmt = (n: number, dec = 0) =>
   n.toLocaleString('en-IN', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 
-const PRODUCT_BAR = ['var(--brand-primary)', '#0891b2', '#7c3aed', '#d97706', '#059669'];
+const PRODUCT_BAR = [
+  'var(--accent)',
+  'var(--info)',
+  'var(--warn)',
+  'var(--good)',
+  'var(--text-muted)',
+];
 
 const ROLE_STYLE: Record<string, { bg: string; fg: string }> = {
-  Owner: { bg: 'rgba(99,102,241,0.15)', fg: '#6366f1' },
-  Manager: { bg: 'rgba(16,185,129,0.15)', fg: 'rgb(16,185,129)' },
-  Accountant: { bg: 'rgba(46,94,136,0.15)', fg: '#2e5e88' },
-  Staff: { bg: 'var(--bg-surface-alt)', fg: 'var(--text-muted)' },
-  Attendant: { bg: 'rgba(245,158,11,0.15)', fg: '#d97706' },
-  Offline: { bg: 'rgba(245,158,11,0.15)', fg: '#d97706' },
+  Owner: { bg: 'var(--accent-soft)', fg: 'var(--accent)' },
+  Manager: { bg: 'var(--good-soft)', fg: 'var(--good)' },
+  Accountant: { bg: 'var(--info-soft)', fg: 'var(--info)' },
+  Staff: { bg: 'var(--card-alt)', fg: 'var(--text-muted)' },
+  Attendant: { bg: 'var(--warn-soft)', fg: 'var(--warn-fg)' },
+  Offline: { bg: 'var(--warn-soft)', fg: 'var(--warn-fg)' },
 };
 
 export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
@@ -164,7 +171,7 @@ export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
               style={{
                 backgroundColor: days === d ? 'var(--bg-surface)' : 'transparent',
                 color: days === d ? 'var(--text-strong)' : 'var(--text-muted)',
-                boxShadow: days === d ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                boxShadow: days === d ? 'var(--shadow-chip)' : 'none',
               }}
             >
               Last {d} days
@@ -419,6 +426,9 @@ export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
           {(stationsQ.data || []).length} station{(stationsQ.data || []).length === 1 ? '' : 's'}
         </p>
       </Collapsible>
+
+      {/* Renders nothing until Appearance ships (theme/config.ts). */}
+      <AppearanceControl />
     </div>
   );
 };

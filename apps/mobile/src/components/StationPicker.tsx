@@ -23,7 +23,7 @@ export const StationPicker: React.FC<StationPickerProps> = ({ stations, selected
             style={{
               backgroundColor: isActive ? 'var(--brand-primary)' : 'var(--bg-surface)',
               borderColor: isActive ? 'var(--brand-primary)' : 'var(--border-soft)',
-              color: isActive ? '#fff' : 'var(--text-default)',
+              color: isActive ? 'var(--on-accent)' : 'var(--text-default)',
             }}
           >
             {s.name}
