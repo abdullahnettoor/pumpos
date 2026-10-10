@@ -1,11 +1,17 @@
 import { Hono } from 'hono';
 import type { DbClient } from '@pump/db';
-import { canViewAttendantReport, isAuthorizedForStation } from '@pump/shared';
-import { ATTENDANT_REPORT_CAPABILITY, GetAttendantHandoverReport } from '@pump/core';
+import { canViewAttendantReport, canViewReports } from '@pump/shared';
+import {
+  ATTENDANT_REPORT_CAPABILITY,
+  GetAttendantHandoverReport,
+  GetInsightsSales,
+} from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { requireCapabilityGuard } from '../infra/capability-guard.js';
 import { DrizzleAttendantHandoverReportReader } from '../infra/repositories/attendant-report-repositories.js';
+import { DrizzleInsightsSalesReader } from '../infra/repositories/insights-repositories.js';
+import { requireStationRead } from '../infra/station-read-guard.js';
 import { sendResult } from '../infra/send-result.js';
 
 type Variables = {
@@ -27,39 +33,19 @@ reportsRouter.get(
   requireCapabilityGuard(ATTENDANT_REPORT_CAPABILITY),
   async (c) => {
     const user = c.var.user;
-    if (!canViewAttendantReport(user.role)) {
-      return c.json(
-        {
-          success: false,
-          error: {
-            code: 'FORBIDDEN',
-            message: 'Insufficient permissions to view the Attendant Handover Report',
-          },
-        },
-        403,
-      );
-    }
+    const scope = requireStationRead(
+      c,
+      canViewAttendantReport,
+      'Insufficient permissions to view the Attendant Handover Report',
+    );
+    if (scope instanceof Response) return scope;
+    const { stationId } = scope;
 
-    const stationId = c.req.query('stationId');
     const from = c.req.query('from') ?? '';
     const to = c.req.query('to') ?? '';
     const attendantId = c.req.query('attendantId') || undefined;
-    // Only the station id is checked here, because the station authorization
-    // below cannot run without it. The date range is the use case's to
-    // validate — it owns the rule that `from` may not follow `to`.
-    if (!stationId) {
-      return c.json(
-        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } },
-        400,
-      );
-    }
-    if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-      return c.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
-        403,
-      );
-    }
-
+    // The date range is the use case's to validate: it owns the rule that
+    // `from` may not follow `to`.
     const result = await new GetAttendantHandoverReport({
       reader: new DrizzleAttendantHandoverReportReader(c.var.db),
     }).execute({ stationId, from, to, attendantId }, buildContext(user, { stationId }));
@@ -67,3 +53,28 @@ reportsRouter.get(
     return sendResult(c, result);
   },
 );
+
+/**
+ * GET /api/reports/insights/sales?stationId=&days=7|30|90
+ *
+ * The mobile Insights tab's sales block: trend, product mix and Shift
+ * performance over the last `days` CLOSED Business Days vs the previous equal
+ * period. Read-only, sealed data only (closed-day DSSR snapshots + Shift
+ * Summaries), aggregated in one SQL statement — see the reader. Open to the
+ * roles that can view Reports.
+ */
+reportsRouter.get('/insights/sales', async (c) => {
+  const user = c.var.user;
+  const scope = requireStationRead(c, canViewReports, 'Insufficient permissions to view Insights');
+  if (scope instanceof Response) return scope;
+  const { stationId } = scope;
+
+  // The range length is the use case's to validate (7 | 30 | 90); a missing or
+  // non-numeric value reaches it as NaN and is refused there.
+  const days = Number(c.req.query('days'));
+  const result = await new GetInsightsSales({
+    reader: new DrizzleInsightsSalesReader(c.var.db),
+  }).execute({ stationId, days }, buildContext(user, { stationId }));
+
+  return sendResult(c, result);
+});

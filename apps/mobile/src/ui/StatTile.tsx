@@ -2,7 +2,8 @@ import React from 'react';
 
 export type Tone = 'default' | 'good' | 'warn' | 'bad';
 
-const VALUE_TONE: Record<Tone, string> = {
+/** Text colour of a figure by tone (also for an inline figure outside a tile). */
+export const TONE_TEXT: Record<Tone, string> = {
   default: 'text-text-high',
   good: 'text-good',
   warn: 'text-warn-fg',
@@ -45,7 +46,7 @@ export const StatTile: React.FC<Props> = ({
     <div className="min-w-0">
       <p className="text-[11px] font-medium text-text-muted">{label}</p>
       <p
-        className={`num mt-1 font-semibold ${wide ? 'text-[30px] tracking-[-0.03em]' : 'text-xl'} ${VALUE_TONE[tone]}`}
+        className={`num mt-1 font-semibold ${wide ? 'text-[30px] tracking-[-0.03em]' : 'text-xl'} ${TONE_TEXT[tone]}`}
       >
         {value}
       </p>

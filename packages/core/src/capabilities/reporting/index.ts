@@ -8,3 +8,6 @@ export * from './attendant-report/get-attendant-handover-report.js';
 export * from './profit-loss/compose.js';
 export * from './business-day-list/ports.js';
 export * from './business-day-list/list-business-days.js';
+export * from './insights/ports.js';
+export * from './insights/compose.js';
+export * from './insights/get-insights-sales.js';

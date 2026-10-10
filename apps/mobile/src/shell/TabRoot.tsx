@@ -9,12 +9,11 @@ import React from 'react';
 import type { Station } from '@pump/shared';
 import { HandoverPanel } from '../components/HandoverPanel.js';
 import { HomeScreen } from '../screens/HomeScreen.js';
+import { InsightsScreen } from '../screens/InsightsScreen.js';
 import { MoneyScreen } from '../screens/MoneyScreen.js';
-import { MoreScreen } from '../screens/MoreScreen.js';
 import { ReportsScreen } from '../screens/ReportsScreen.js';
 import { ShiftsScreen } from '../screens/ShiftsScreen.js';
 import { HomeHeader } from './HomeHeader.js';
-import { useNav } from './nav.js';
 import { TabHeader } from './TabHeader.js';
 import { tabDef, type TabKey } from './tabs.js';
 
@@ -31,7 +30,6 @@ const Padded: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
-  const nav = useNav();
   const header = tab === 'home' ? <HomeHeader /> : <TabHeader title={tabDef(tab).label} />;
 
   if (tab === 'handover')
@@ -71,15 +69,27 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
       </>
     );
 
-  const onNavigate = (target: TabKey) => nav.select(target);
+  if (tab === 'insights')
+    return (
+      <>
+        {header}
+        <InsightsScreen station={station} />
+      </>
+    );
+
+  // Reports lays out its own sections too (tiles and lists inset 12px).
+  if (tab === 'reports')
+    return (
+      <>
+        {header}
+        <ReportsScreen station={station} />
+      </>
+    );
+
   return (
     <>
       {header}
-      <Padded>
-        {tab === 'shifts' && <ShiftsScreen station={station} />}
-        {tab === 'reports' && <ReportsScreen station={station} />}
-        {tab === 'insights' && <MoreScreen station={station} onNavigate={onNavigate} />}
-      </Padded>
+      <Padded>{tab === 'shifts' && <ShiftsScreen station={station} />}</Padded>
     </>
   );
 };

@@ -25,6 +25,8 @@ import {
   AttendantHandoverReport,
   AttendantReportFilters,
   BusinessDayList,
+  InsightsRangeDays,
+  InsightsSales,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -735,6 +737,15 @@ export class CloudShiftService {
     });
     if (filters.attendantId) query.set('attendantId', filters.attendantId);
     return request<AttendantHandoverReport>(`/reports/attendant-handovers?${query.toString()}`);
+  }
+
+  /**
+   * Insights sales block (trend, product mix, Shift performance) over the last
+   * `days` closed Business Days. Sealed data only: a given range end never changes.
+   */
+  async getInsightsSales(stationId: string, days: InsightsRangeDays): Promise<InsightsSales> {
+    const query = new URLSearchParams({ stationId, days: String(days) });
+    return request<InsightsSales>(`/reports/insights/sales?${query.toString()}`);
   }
 }
 
