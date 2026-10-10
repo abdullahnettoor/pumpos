@@ -109,9 +109,7 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
   return (
     <>
       {header}
-      <Padded>
-        {tab === 'reports' && <ReportsRoot station={station} />}
-      </Padded>
+      <Padded>{tab === 'reports' && <ReportsRoot station={station} />}</Padded>
     </>
   );
 };
