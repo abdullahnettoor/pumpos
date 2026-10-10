@@ -77,12 +77,7 @@ describe('SegmentedControl', () => {
     it('with nothing selected, ArrowLeft goes to the last segment and ArrowRight to the first', () => {
       const onChange = vi.fn();
       render(
-        <SegmentedControl
-          aria-label="N"
-          options={three}
-          value={'' as 'a'}
-          onChange={onChange}
-        />,
+        <SegmentedControl aria-label="N" options={three} value={'' as 'a'} onChange={onChange} />,
       );
       const group = screen.getByRole('radiogroup', { name: 'N' });
       fireEvent.keyDown(group, { key: 'ArrowLeft' });

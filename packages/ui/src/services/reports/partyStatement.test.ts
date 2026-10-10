@@ -249,7 +249,7 @@ describe('ledger file names (one helper for the desktop ledger and the statement
 });
 
 describe('dateOf', () => {
-  it('prefers the row\'s own Business / Entry Date', () => {
+  it("prefers the row's own Business / Entry Date", () => {
     expect(dateOf({ businessDate: '2026-10-07', createdAt: '2026-10-09T20:00:00Z' })).toBe(
       '2026-10-07',
     );

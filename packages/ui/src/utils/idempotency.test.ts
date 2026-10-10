@@ -10,7 +10,10 @@ describe('keepsIdempotencyKey', () => {
     expect(keepsIdempotencyKey(failure('boom', { status: 503 }))).toBe(true);
     expect(
       keepsIdempotencyKey(
-        failure('A request with this key is already in progress', { status: 409, code: 'CONFLICT' }),
+        failure('A request with this key is already in progress', {
+          status: 409,
+          code: 'CONFLICT',
+        }),
       ),
     ).toBe(true);
   });
@@ -21,9 +24,7 @@ describe('keepsIdempotencyKey', () => {
       false,
     );
     expect(
-      keepsIdempotencyKey(
-        failure('different request content', { status: 409, code: 'CONFLICT' }),
-      ),
+      keepsIdempotencyKey(failure('different request content', { status: 409, code: 'CONFLICT' })),
     ).toBe(false);
   });
 });
