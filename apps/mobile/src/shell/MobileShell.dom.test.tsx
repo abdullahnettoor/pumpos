@@ -212,6 +212,91 @@ describe('dock', () => {
   });
 });
 
+describe('tab change animation', () => {
+  const animate = vi.fn();
+  const reduceMotion = (reduce: boolean) => {
+    window.matchMedia = ((q: string) => ({
+      matches: reduce && q.includes('prefers-reduced-motion'),
+      media: q,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+  };
+  beforeEach(() => {
+    animate.mockReset();
+    (HTMLElement.prototype as any).animate = animate;
+  });
+  afterEach(() => {
+    delete (HTMLElement.prototype as any).animate;
+  });
+
+  it('fades the incoming tab in, once per switch, on the pane that is shown', () => {
+    render(<Harness />);
+    expect(animate).not.toHaveBeenCalled(); // first paint is not animated
+    fireEvent.click(screen.getByRole('button', { name: 'Shifts' }));
+    expect(animate).toHaveBeenCalledTimes(1);
+    expect(animate.mock.instances[0]).toBe(paneOf(screen.getByText(/^shifts list/)));
+    const [frames, timing] = animate.mock.calls[0];
+    expect(frames[0].opacity).toBe(0);
+    expect(frames[1].opacity).toBe(1);
+    expect(timing.duration).toBeGreaterThanOrEqual(150);
+    expect(timing.duration).toBeLessThanOrEqual(200);
+    expect(timing.easing).toBe('ease-out');
+    // Back to an already-mounted tab animates again; tapping the active tab does not.
+    fireEvent.click(screen.getByRole('button', { name: 'Home' }));
+    expect(animate).toHaveBeenCalledTimes(2);
+    expect(animate.mock.instances[1]).toBe(paneOf(screen.getByText(/^home list/)));
+    fireEvent.click(screen.getByRole('button', { name: 'Home' }));
+    expect(animate).toHaveBeenCalledTimes(2);
+  });
+
+  it('does nothing under prefers-reduced-motion', () => {
+    reduceMotion(true);
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Shifts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Home' }));
+    expect(animate).not.toHaveBeenCalled();
+    // The tab still switches.
+    expect(paneOf(screen.getByText(/^home list/)).classList.contains('hidden')).toBe(false);
+    // The dock pill also stops sliding.
+    expect(dock()!.querySelector('[data-dock-pill]')!.className).toMatch(
+      /motion-reduce:transition-none/,
+    );
+  });
+
+  it('does not replay on push, back, or a station switch of the same tab', async () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Shifts' }));
+    animate.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Open shifts item' }));
+    expect(animate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await settle();
+    expect(animate).not.toHaveBeenCalled();
+  });
+
+  it('keeps tabs mounted and restores scroll across a switch', () => {
+    render(<Harness />);
+    const home = paneOf(screen.getByText(/^home list/));
+    home.scrollTop = 120;
+    fireEvent.scroll(home);
+    fireEvent.click(screen.getByRole('button', { name: 'Shifts' }));
+    expect(screen.getByText(/^home list/)).toBeTruthy(); // still mounted
+    fireEvent.click(screen.getByRole('button', { name: 'Home' }));
+    expect(paneOf(screen.getByText(/^home list/)).scrollTop).toBe(120);
+  });
+
+  it('slides the dock pill to the active tab', () => {
+    render(<Harness />);
+    const pill = () => dock()!.querySelector('[data-dock-pill]') as HTMLElement;
+    expect(pill().style.transform).toBe('translateX(0%)');
+    fireEvent.click(screen.getByRole('button', { name: 'Reports' }));
+    expect(pill().style.transform).toBe('translateX(200%)');
+    fireEvent.click(screen.getByRole('button', { name: 'Insights' }));
+    expect(pill().style.transform).toBe('translateX(400%)');
+  });
+});
+
 describe('header', () => {
   afterEach(() => {
     mine.assignment = null;

@@ -56,8 +56,7 @@ export const MemberPage: React.FC<{ memberId: string }> = ({ memberId }) => {
 
   return (
     <DetailPage
-      title={member.fullName}
-      subtitle={member.role}
+      title="Team member"
       right={<StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>}
     >
       <div className="flex items-center gap-3 px-4 pb-1 pt-1">

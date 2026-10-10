@@ -78,6 +78,8 @@ export const BellIcon = makeIcon(
 export const ChevronRightIcon = makeIcon(<path d="m9 6 6 6-6 6" />);
 export const ChevronDownIcon = makeIcon(<path d="m6 9 6 6 6-6" />);
 export const BackIcon = makeIcon(<path d="m15 6-6 6 6 6" />);
+export const PlusIcon = makeIcon(<path d="M12 5v14M5 12h14" />);
+export const MinusIcon = makeIcon(<path d="M5 12h14" />);
 export const CheckIcon = makeIcon(<path d="m5 12.5 4.5 4.5L19 7.5" />);
 export const ShareIcon = makeIcon(
   <>
