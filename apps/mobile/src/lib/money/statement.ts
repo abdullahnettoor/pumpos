@@ -1,19 +1,26 @@
+import { formatShiftLabel } from '@pump/shared';
+
 /**
  * The party statement (Customer or Supplier): the ledger rows turned into a running balance,
  * newest first, grouped by month and paged. Pure, so the arithmetic that has to
  * match the Customer's balance is pinned by `statement.test.ts`.
  *
- * Rows come from `GET /transactions/customers/:id/ledger` (Business Date for a
- * sale, Entry Date for a Collection) or `/suppliers/:id/ledger` (Entry Date; a
- * purchase carries its Business Date). They carry no running balance, so it is
- * accumulated here from zero over the whole (all-time) ledger, oldest first by
- * date. That figure is only shown when it ends on the server's
- * `currentBalance` (`reconciled`); otherwise the statement is partial and the
- * rows carry no running balance, rather than a wrong one. The ranged / enriched
- * ledger (#413) replaces this input.
+ * Rows come from the customer ledger (`GET /transactions/customers/:id/ledger`,
+ * Business Date for a sale, Entry Date for a Collection; the ranged call adds the
+ * Shift, product, quantity and Vehicle of a sale and the method and reference of
+ * a Collection) or `/suppliers/:id/ledger` (Entry Date; a purchase carries its
+ * Business Date). They carry no usable running balance for the window shown, so it
+ * is accumulated here from the ledger's opening balance (0 for an all-time
+ * ledger), oldest first by date. That figure is only shown when it ends on the
+ * server's `currentBalance` (`reconciled`); otherwise the statement is partial
+ * and the rows carry no running balance, rather than a wrong one.
  */
 
-/** A ledger row as the API returns it. */
+/**
+ * A ledger row as the API returns it. The enrichment (Shift, product, quantity,
+ * Vehicle, method, reference) comes only from the ranged customer ledger; the
+ * all-time legacy rows (and the supplier rows) leave it out.
+ */
 export interface LedgerRow {
   id?: string;
   transactionType?: string | null;
@@ -21,14 +28,24 @@ export interface LedgerRow {
   notes?: string | null;
   createdAt?: string | null;
   businessDate?: string | null;
+  shiftBusinessDate?: string | null;
+  shiftSequence?: number | null;
+  productName?: string | null;
+  quantity?: number | string | null;
+  unit?: string | null;
+  vehicleRegistration?: string | null;
+  method?: string | null;
+  reference?: string | null;
 }
 
 export interface StatementEntry {
   key: string;
   /** "Credit Sale", "Payment received", ... */
   label: string;
-  /** "9 Oct", or "9 Oct · note". */
+  /** "9 Oct · Shift 20261009-1", "18 Sep · UPI · Ref COL-000042", or "9 Oct · note". */
   meta: string;
+  /** A second line: "120 L Diesel · KL-11-AB-4521" on a Credit Sale; null when there is nothing to add. */
+  detail: string | null;
   /** Signed effect on what the customer owes: a Collection is negative. */
   delta: number;
   /** What they owed right after this row; null when the statement does not reconcile. */
@@ -92,6 +109,61 @@ export function deltaOf(
   return transactionType === REDUCING[kind] ? -amount : amount;
 }
 
+/** The Collection payment methods, as the API stores them. */
+const METHOD: Record<string, string> = {
+  Cash: 'Cash',
+  Card: 'Card',
+  UPI: 'UPI',
+  BankTransfer: 'Bank transfer',
+};
+
+/** `120 L Diesel`, `2.5 L Diesel`, `4 Nos Oil 1L`; nothing when there is no quantity. */
+function quantityLabel(r: LedgerRow): string | null {
+  const qty = Number(r.quantity);
+  if (r.quantity == null || !Number.isFinite(qty) || qty <= 0) return null;
+  const shown = Number(qty.toFixed(2)).toLocaleString('en-IN');
+  return [shown, r.unit?.trim(), r.productName?.trim()].filter(Boolean).join(' ');
+}
+
+/**
+ * What a customer row says beyond its date: a Credit Sale names its Shift, what
+ * was sold and the Vehicle; a Collection its method and reference. A row without
+ * the enrichment (legacy ledger, adjustments) shows just its note.
+ */
+function describeCustomerRow(r: LedgerRow, day: string): { meta: string; detail: string | null } {
+  const note = r.notes?.trim();
+  let facts: string[];
+  let detail: string | null = null;
+  if (r.transactionType === 'Collection') {
+    const method = r.method ? (METHOD[r.method] ?? r.method) : null;
+    const ref = r.reference?.trim();
+    facts = [method, ref && `Ref ${ref}`].filter((x): x is string => !!x);
+  } else {
+    const shift = formatShiftLabel(r.shiftBusinessDate, r.shiftSequence);
+    facts = shift ? [`Shift ${shift}`] : [];
+    detail = [quantityLabel(r), r.vehicleRegistration?.trim()].filter(Boolean).join(' · ') || null;
+  }
+  // With nothing to say about the row, the note stays beside the date (the legacy layout);
+  // otherwise it moves to the second line, after what the row says.
+  const enriched = facts.length > 0 || detail !== null;
+  if (!enriched) return { meta: [day, note].filter(Boolean).join(' · '), detail: null };
+  return { meta: [day, ...facts].join(' · '), detail: detail ?? (note || null) };
+}
+
+/** `YYYY-MM-DD` that is later than any Business or Entry Date: the open end of a statement window. */
+export const STATEMENT_END = '9999-12-31';
+/** Calendar months a customer statement opens with (the current one and the 5 before), and each "Earlier months" step. */
+export const STATEMENT_MONTHS = 6;
+
+/** The first day of the month `months - 1` months before the month of `today` (a Business Date). */
+export function statementWindowStart(today: string, months: number): string {
+  const [y, m] = today.split('-').map(Number);
+  const index = y * 12 + (m - 1) - Math.max(0, months - 1);
+  const year = Math.floor(index / 12);
+  const month = (index % 12) + 1;
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-01`;
+}
+
 const dateOf = (r: LedgerRow): string => String(r.businessDate ?? r.createdAt ?? '').slice(0, 10);
 
 const MONTHS = [
@@ -121,6 +193,12 @@ export const monthLabel = (iso: string): string => {
   return p ? `${MONTHS[p[1] - 1]} ${p[0]}` : iso;
 };
 
+/** "1 May 2026". */
+export const fullDayLabel = (iso: string): string => {
+  const p = parts(iso);
+  return p ? `${p[2]} ${MONTHS[p[1] - 1].slice(0, 3)} ${p[0]}` : iso;
+};
+
 /** "9 Oct". */
 export const dayLabel = (iso: string): string => {
   const p = parts(iso);
@@ -131,14 +209,17 @@ export const dayLabel = (iso: string): string => {
  * @param expectedBalance the server's `currentBalance` for the party. The
  * running balance is trusted only if the ledger closes on it. Pass `undefined`
  * to skip the check (tests of the arithmetic alone).
+ * @param openingBalance what the party owed before the first row (the ranged
+ * ledger's `periodOpeningBalance`); 0 for an all-time ledger.
  */
 export function buildStatement(
   rows: readonly LedgerRow[],
   visible: number = STATEMENT_PAGE,
   expectedBalance?: number,
   kind: PartyKind = 'customer',
+  openingBalance = 0,
 ): Statement {
-  let running = 0;
+  let running = Math.round(openingBalance * 100) / 100;
   // Oldest first by date (stable, so same-day rows keep the API's order): a
   // back-dated row then lands in its own month, not between two others.
   const ordered = rows
@@ -149,10 +230,14 @@ export function buildStatement(
     running = Math.round((running + delta) * 100) / 100;
     const day = date ? dayLabel(date) : '';
     const note = r.notes?.trim();
+    const described =
+      kind === 'customer'
+        ? describeCustomerRow(r, day)
+        : { meta: [day, note].filter(Boolean).join(' · '), detail: null };
     return {
       key: r.id ?? `row-${i}`,
       label: LABEL[r.transactionType ?? ''] ?? r.transactionType ?? 'Entry',
-      meta: [day, note].filter(Boolean).join(' · '),
+      ...described,
       delta,
       balance: running,
       date,
@@ -162,7 +247,7 @@ export function buildStatement(
   const closingBalance = entries.length ? running : null;
   const reconciled =
     expectedBalance === undefined ||
-    Math.abs((closingBalance ?? 0) - expectedBalance) < RECONCILE_TOLERANCE;
+    Math.abs((closingBalance ?? running) - expectedBalance) < RECONCILE_TOLERANCE;
 
   const newestFirst = entries.slice().reverse();
   const shownEntries = newestFirst.slice(0, Math.max(0, visible));

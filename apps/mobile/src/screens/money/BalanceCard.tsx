@@ -1,7 +1,9 @@
 import React from 'react';
 import { inr } from '@pump/ui';
+import type { ReceivablesAging } from '@pump/shared';
 import { standing, type MoneyCustomer, type StandingState } from '../../lib/money/parties.js';
 import { StatusBadge } from '../../ui/StatusBadge.js';
+import { AgingSplit } from './AgingSplit.js';
 import { HeroCard } from './HeroCard.js';
 import { LimitBar } from './LimitBar.js';
 
@@ -25,12 +27,14 @@ const LABEL: Record<StandingState, string> = {
  * The Customer's balance and where it stands against the credit limit: Owes you
  * (under / near / over the limit), Advance, or Settled.
  *
- * Seam for #398: the aging split (0–7 / 8–30 / 30+ days) and the tiles for last
- * payment, usually pays in and vehicle spend belong with this card once the
- * receivables-summary data exists. They are not derivable from the ledger, so
- * they are not shown.
+ * When the receivables summary is there, the aging split (0–7 / 8–30 / 30+ days)
+ * sits under the limit bar; without it (loading, failed, no Station) the card is
+ * just the balance and the limit.
  */
-export const BalanceCard: React.FC<{ customer: MoneyCustomer }> = ({ customer }) => {
+export const BalanceCard: React.FC<{
+  customer: MoneyCustomer;
+  aging?: ReceivablesAging | null;
+}> = ({ customer, aging }) => {
   const s = standing(customer);
   const amount = s.state === 'advance' ? -s.balance : s.balance;
   const hasLimit = s.limit !== null;
@@ -78,6 +82,7 @@ export const BalanceCard: React.FC<{ customer: MoneyCustomer }> = ({ customer })
       {owes && !hasLimit && (
         <p className="mt-3 text-[11.5px] text-text-muted">No credit limit set.</p>
       )}
+      {owes && <AgingSplit aging={aging} showBar={false} divided />}
     </HeroCard>
   );
 };

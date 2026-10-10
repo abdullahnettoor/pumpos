@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildStatement, deltaOf, type LedgerRow } from './statement.js';
+import {
+  buildStatement,
+  deltaOf,
+  fullDayLabel,
+  statementWindowStart,
+  type LedgerRow,
+} from './statement.js';
 import { compactRupees, signedRupees } from './format.js';
 
 const row = (
@@ -162,6 +168,102 @@ describe('supplier statement', () => {
   });
 });
 
+describe('windowed statement (ranged ledger)', () => {
+  it('starts the running balance from the period opening balance and reconciles on the closing one', () => {
+    const rows = [
+      row('a', 'Credit Sale', 500, '2026-10-02'),
+      row('b', 'Collection', 200, '2026-10-05'),
+    ];
+    const s = buildStatement(rows, 20, 1800, 'customer', 1500);
+    expect(s.reconciled).toBe(true);
+    expect(s.closingBalance).toBe(1800);
+    expect(s.months.flatMap((m) => m.entries).map((e) => e.balance)).toEqual([1800, 2000]);
+  });
+
+  it('is partial when the opening balance does not lead to the server balance', () => {
+    expect(
+      buildStatement([row('a', 'Credit Sale', 500, '2026-10-02')], 20, 999, 'customer', 1500)
+        .reconciled,
+    ).toBe(false);
+  });
+
+  it('reconciles an empty window on the opening balance alone', () => {
+    const s = buildStatement([], 20, 1500, 'customer', 1500);
+    expect(s.reconciled).toBe(true);
+    expect(s.total).toBe(0);
+  });
+});
+
+describe('enriched customer rows', () => {
+  const sale = row('s', 'Credit Sale', 10750, '2026-10-09', {
+    shiftBusinessDate: '2026-10-09',
+    shiftSequence: 1,
+    productName: 'Diesel',
+    quantity: 120,
+    unit: 'L',
+    vehicleRegistration: 'KL-11-AB-4521',
+  });
+  const entryOf = (r: LedgerRow) => buildStatement([r]).months[0].entries[0];
+
+  it('names the Shift, what was sold and the Vehicle on a Credit Sale', () => {
+    expect(entryOf(sale)).toMatchObject({
+      label: 'Credit Sale',
+      meta: '9 Oct · Shift 20261009-1',
+      detail: '120 L Diesel · KL-11-AB-4521',
+    });
+  });
+
+  it('formats litres without trailing zeros and groups thousands the Indian way', () => {
+    expect(entryOf({ ...sale, quantity: '2.500' }).detail).toBe('2.5 L Diesel · KL-11-AB-4521');
+    expect(entryOf({ ...sale, quantity: 12345.678 }).detail).toBe(
+      '12,345.68 L Diesel · KL-11-AB-4521',
+    );
+  });
+
+  it('leaves out what a sale does not have: no Vehicle, no Shift, no quantity', () => {
+    expect(entryOf({ ...sale, vehicleRegistration: null }).detail).toBe('120 L Diesel');
+    expect(entryOf({ ...sale, shiftSequence: null }).meta).toBe('9 Oct');
+    expect(entryOf({ ...sale, quantity: null, productName: null }).detail).toBe('KL-11-AB-4521');
+    expect(
+      entryOf({ ...sale, quantity: null, vehicleRegistration: null, notes: 'Bill 12' }).detail,
+    ).toBe('Bill 12');
+  });
+
+  it('shows the method and reference on a Collection', () => {
+    const e = entryOf(
+      row('c', 'Collection', 40000, '2026-09-18', { method: 'UPI', reference: 'COL-000042' }),
+    );
+    expect(e).toMatchObject({
+      label: 'Payment received',
+      meta: '18 Sep · UPI · Ref COL-000042',
+      delta: -40000,
+    });
+    expect(entryOf(row('c', 'Collection', 1, '2026-09-18', { method: 'BankTransfer' })).meta).toBe(
+      '18 Sep · Bank transfer',
+    );
+    expect(
+      entryOf(row('c', 'Collection', 1, '2026-09-18', { method: 'Cash', notes: 'cheque' })).detail,
+    ).toBe('cheque');
+  });
+
+  it('keeps the note on a legacy row with none of the enrichment', () => {
+    expect(entryOf(row('x', 'Adjustment', 5, '2026-10-01', { notes: 'rounding' }))).toMatchObject({
+      meta: '1 Oct · rounding',
+      detail: null,
+    });
+  });
+
+  it('does not enrich supplier rows', () => {
+    const e = buildStatement(
+      [row('p', 'Payment', 1, '2026-10-01', { method: 'UPI', notes: 'n' })],
+      20,
+      undefined,
+      'supplier',
+    ).months[0].entries[0];
+    expect(e).toMatchObject({ meta: '1 Oct · n', detail: null });
+  });
+});
+
 describe('statement order', () => {
   it('orders by date, so a back-dated row lands in its own month and the balance follows', () => {
     const s = buildStatement(
@@ -191,5 +293,24 @@ describe('money formatting', () => {
   it('puts the sign before the rupee', () => {
     expect(signedRupees(-125)).toBe('−₹125.00');
     expect(signedRupees(125)).toBe('₹125.00');
+  });
+});
+
+describe('statement window', () => {
+  it('opens on the first of the month, counting the current month', () => {
+    expect(statementWindowStart('2026-10-09', 1)).toBe('2026-10-01');
+    expect(statementWindowStart('2026-10-09', 6)).toBe('2026-05-01');
+    expect(statementWindowStart('2026-10-31', 12)).toBe('2025-11-01');
+  });
+
+  it('crosses a year boundary', () => {
+    expect(statementWindowStart('2026-02-15', 6)).toBe('2025-09-01');
+    expect(statementWindowStart('2026-01-01', 2)).toBe('2025-12-01');
+    expect(statementWindowStart('2026-12-31', 24)).toBe('2025-01-01');
+  });
+
+  it('labels a window start in full', () => {
+    expect(fullDayLabel('2026-05-01')).toBe('1 May 2026');
+    expect(fullDayLabel('nope')).toBe('nope');
   });
 });

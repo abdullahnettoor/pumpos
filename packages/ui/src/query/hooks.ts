@@ -36,6 +36,9 @@ import type {
   BusinessDayList,
   InsightsRangeDays,
   InsightsSales,
+  CustomerReceivableSummary,
+  RangedPartyLedger,
+  ReceivablesSummary,
 } from '@pump/shared';
 
 /**
@@ -88,6 +91,11 @@ export const queryKeys = {
   suppliers: (activeOnly = true) => ['suppliers', activeOnly] as const,
   customerLedger: (customerId: string) => ['customer-ledger', customerId] as const,
   supplierLedger: (supplierId: string) => ['supplier-ledger', supplierId] as const,
+  customerStatement: (customerId: string, from: string, to: string) =>
+    ['customer-statement', customerId, from, to] as const,
+  receivables: (stationId: string) => ['receivables', stationId] as const,
+  customerReceivable: (stationId: string, customerId: string) =>
+    ['receivables', stationId, customerId] as const,
   inventoryStatus: (stationId: string) => ['inventory-status', stationId] as const,
   inventoryItems: (stationId: string) => ['inventory-items', stationId] as const,
   inventoryMovements: (stationId: string) => ['inventory-movements', stationId] as const,
@@ -718,6 +726,25 @@ export function useCustomerLedger(customerId: string | null | undefined, options
   });
 }
 
+/**
+ * A customer's statement for a date range (enriched rows + opening balance),
+ * from the ranged ledger API. Operational tier; every operational write
+ * invalidates the `customer-statement` prefix.
+ */
+export function useCustomerStatement(
+  customerId: string | null | undefined,
+  range: { from: string; to: string },
+  options?: Options<RangedPartyLedger>,
+) {
+  return useQuery({
+    queryKey: queryKeys.customerStatement(customerId ?? '', range.from, range.to),
+    queryFn: () => txService.getCustomerLedgerRange(customerId!, range),
+    enabled: !!customerId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 export function useSupplierLedger(supplierId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.supplierLedger(supplierId ?? ''),
@@ -929,6 +956,40 @@ export function useInsightsSales(
 }
 
 /**
+ * What customers owe (total, aging split, a row per customer that owes). One
+ * statement over every ledger, so it does not refetch on window focus; a credit
+ * sale or collection invalidates it (`useInvalidateOperational`). Not persisted.
+ */
+export function useReceivables(
+  stationId: string | null | undefined,
+  options?: Options<ReceivablesSummary>,
+) {
+  return useQuery({
+    queryKey: queryKeys.receivables(stationId ?? ''),
+    queryFn: () => shiftService.getReceivables(stationId!),
+    enabled: !!stationId,
+    ...TIER.operational,
+    refetchOnWindowFocus: false,
+    ...options,
+  });
+}
+
+/** One customer's receivable and payment behaviour (single indexed statement). */
+export function useCustomerReceivable(
+  stationId: string | null | undefined,
+  customerId: string | null | undefined,
+  options?: Options<CustomerReceivableSummary>,
+) {
+  return useQuery({
+    queryKey: queryKeys.customerReceivable(stationId ?? '', customerId ?? ''),
+    queryFn: () => shiftService.getCustomerReceivable(stationId!, customerId!),
+    enabled: !!stationId && !!customerId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
  * Returns a callback that invalidates the operational caches for a station after
  * a mutation (open/close shift, record expense/collection/etc.) so screens stay
  * fresh without manual refetch wiring.
@@ -969,6 +1030,10 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['purchases'] }),
       qc.invalidateQueries({ queryKey: ['collections'] }),
       qc.invalidateQueries({ queryKey: ['customers'] }),
+      // Receivables are settled FIFO from the same ledger as a customer's balance,
+      // and the statement reads it: a credit sale or collection moves both.
+      qc.invalidateQueries({ queryKey: ['receivables'] }),
+      qc.invalidateQueries({ queryKey: ['customer-statement'] }),
       // Money layer: account balances, statements and the Cash & Bank register all
       // move with expenses / income / collections / payments.
       qc.invalidateQueries({ queryKey: ['financial-accounts'] }),

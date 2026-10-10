@@ -2,6 +2,7 @@ import React from 'react';
 import { inr } from '@pump/ui';
 import { compactRupees } from '../../lib/money/format.js';
 import { limitOf, standing, type MoneyCustomer, type Standing } from '../../lib/money/parties.js';
+import { oldestCaption } from '../../lib/money/receivables.js';
 import { Avatar } from '../../ui/Avatar.js';
 import { ChevronRightIcon } from '../../ui/icons.js';
 import { BalanceFigure } from './BalanceFigure.js';
@@ -16,7 +17,7 @@ const metaOf = (c: MoneyCustomer): string => {
 };
 
 /** What a screen reader hears for the whole row: "KTC, ₹2,14,600.00 owed, over limit". */
-const spokenLabel = (name: string, s: Standing): string => {
+const spokenLabel = (name: string, s: Standing, oldest: string | null): string => {
   const money =
     s.state === 'advance'
       ? `${inr(-s.balance)} advance`
@@ -24,20 +25,24 @@ const spokenLabel = (name: string, s: Standing): string => {
         ? 'settled'
         : `${inr(s.balance)} owed`;
   const limit = s.state === 'over' ? 'over limit' : s.state === 'near' ? 'near limit' : null;
-  return [name, money, limit].filter(Boolean).join(', ');
+  return [name, money, limit, oldest?.toLowerCase()].filter(Boolean).join(', ');
 };
 
-/** One To collect row: avatar, name, type and limit, balance (red over the limit) and the limit bar. */
-export const CustomerRow: React.FC<{ customer: MoneyCustomer; onPress: () => void }> = ({
-  customer,
-  onPress,
-}) => {
+/** One To collect row: avatar, name, type and limit, balance (red over the limit), how long the oldest debt has waited, and the limit bar. */
+export const CustomerRow: React.FC<{
+  customer: MoneyCustomer;
+  onPress: () => void;
+  /** Days the customer's oldest unpaid debt has waited (receivables summary); null/absent = not known. */
+  oldestUnpaidDays?: number | null;
+}> = ({ customer, onPress, oldestUnpaidDays }) => {
   const s = standing(customer);
+  const caption =
+    s.state === 'advance' || s.state === 'settled' ? null : oldestCaption(oldestUnpaidDays);
   return (
     <button
       type="button"
       onClick={onPress}
-      aria-label={spokenLabel(customer.name, s)}
+      aria-label={spokenLabel(customer.name, s, caption?.text ?? null)}
       className="flex w-full flex-col gap-2 px-3 py-[11px]"
     >
       <span className="flex w-full items-center gap-2.5">
@@ -48,7 +53,7 @@ export const CustomerRow: React.FC<{ customer: MoneyCustomer; onPress: () => voi
           </span>
           <span className="block truncate text-[11px] text-text-muted">{metaOf(customer)}</span>
         </span>
-        <BalanceFigure balance={s.balance} over={s.state === 'over'} />
+        <BalanceFigure balance={s.balance} over={s.state === 'over'} caption={caption} />
         <span className="flex-shrink-0 text-text-faint">
           <ChevronRightIcon size={16} strokeWidth={2.2} />
         </span>

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { resolveBusinessDate, resolveEntryDate, shiftBusinessDate } from './business-date.js';
+import {
+  businessDateDiffDays,
+  resolveBusinessDate,
+  resolveEntryDate,
+  shiftBusinessDate,
+} from './business-date.js';
 
 /**
  * Business dates are calendar labels, not instants. The arithmetic must roll
@@ -45,5 +50,16 @@ describe('resolveEntryDate (ADR 0005)', () => {
     expect(resolveBusinessDate({ now, timeZone: 'Asia/Kolkata', dayStartsAt: '06:00' })).toBe(
       '2026-03-14',
     );
+  });
+});
+
+describe('businessDateDiffDays', () => {
+  it('counts whole calendar days across month, year and leap boundaries', () => {
+    expect(businessDateDiffDays('2026-10-01', '2026-10-09')).toBe(8);
+    expect(businessDateDiffDays('2026-09-30', '2026-10-01')).toBe(1);
+    expect(businessDateDiffDays('2025-12-31', '2026-01-01')).toBe(1);
+    expect(businessDateDiffDays('2028-02-28', '2028-03-01')).toBe(2);
+    expect(businessDateDiffDays('2026-10-09', '2026-10-09')).toBe(0);
+    expect(businessDateDiffDays('2026-10-09', '2026-10-01')).toBe(-8);
   });
 });

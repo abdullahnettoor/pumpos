@@ -105,6 +105,15 @@ export function shiftBusinessDate(businessDate: string, deltaDays: number): stri
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Whole calendar days from one business date to another (`to - from`; negative
+ * when `to` is earlier). Calendar labels, so UTC arithmetic like `shiftBusinessDate`.
+ */
+export function businessDateDiffDays(from: string, to: string): number {
+  const ms = new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime();
+  return Math.round(ms / 86_400_000);
+}
+
 /** Extract date-resolution settings from a station `settings` JSONB blob. */
 export function businessDateSettings(settings: unknown): { timeZone: string; dayStartsAt: string } {
   const s = (settings ?? {}) as Record<string, unknown>;
