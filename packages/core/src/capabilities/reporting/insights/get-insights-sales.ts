@@ -1,24 +1,13 @@
-import { z } from 'zod';
-import type { InsightsRangeDays, InsightsSales } from '@pump/shared';
+import type { InsightsSales } from '@pump/shared';
 import { err, ok, validationError } from '../../../kernel/index.js';
 import type { ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import { composeInsightsSales } from './compose.js';
+import { insightsQuerySchema, type InsightsQueryCommand } from './query.js';
 import type { InsightsSalesReader } from './ports.js';
 
-export interface GetInsightsSalesCommand {
-  stationId: string;
-  /** Range length in Business Days: 7, 30 or 90 (anything else is refused). */
-  days: number;
-}
+export type GetInsightsSalesCommand = InsightsQueryCommand;
 
-const rangeDays = z.union([z.literal(7), z.literal(30), z.literal(90)], {
-  message: 'days must be one of 7, 30, 90',
-}) satisfies z.ZodType<InsightsRangeDays>;
-
-const schema = z.object({
-  stationId: z.string().min(1, 'stationId is required'),
-  days: rangeDays,
-});
+const schema = insightsQuerySchema;
 
 export interface GetInsightsSalesDeps {
   reader: InsightsSalesReader;

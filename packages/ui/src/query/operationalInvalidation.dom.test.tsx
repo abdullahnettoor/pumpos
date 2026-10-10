@@ -53,6 +53,11 @@ describe('useInvalidateOperational', () => {
       // Closing a Business Day (from the desktop Business Day tab too) moves the
       // end of every mobile Insights range.
       'insights-sales',
+      // Insights part 2: closed-day Shift Summaries, Tank Dips, Credit Sales and
+      // (by Entry Date) Collections all move with a write.
+      'insights-attendant-variance',
+      'insights-stock-loss',
+      'insights-credit-health',
     ]) {
       expect(keys).toContain(key);
     }

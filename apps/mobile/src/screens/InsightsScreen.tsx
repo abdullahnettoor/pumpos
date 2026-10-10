@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import { INSIGHTS_RANGE_DAYS, type InsightsRangeDays, type Station } from '@pump/shared';
 import { useInsightsSales } from '@pump/ui';
 import { SectionLabel, SegmentedControl } from '../ui/index.js';
+import { AttendantVariance } from './insights/AttendantVariance.js';
+import { CreditHealth } from './insights/CreditHealth.js';
 import { ProductMix } from './insights/ProductMix.js';
 import { SalesTrend } from './insights/SalesTrend.js';
 import { ShiftPerformance } from './insights/ShiftPerformance.js';
+import { StockLoss } from './insights/StockLoss.js';
 
 const OPTIONS = INSIGHTS_RANGE_DAYS.map((d) => ({ value: String(d), label: `${d} days` }));
 
@@ -66,10 +69,13 @@ export const InsightsScreen: React.FC<{ station: Station }> = ({ station }) => {
           ) : (
             <Empty>No closed Shifts in this range.</Empty>
           )}
+
+          {/* Part 2 (#402): each block is its own read under the same range, with its own states. */}
+          <AttendantVariance stationId={station.id} days={days} />
+          <StockLoss stationId={station.id} days={days} />
+          <CreditHealth stationId={station.id} days={days} />
         </>
       )}
-
-      {/* Part 2 (#402) adds its blocks here: variance by attendant, stock loss, credit health. */}
     </div>
   );
 };

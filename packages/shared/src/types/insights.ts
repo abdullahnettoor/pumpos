@@ -101,3 +101,77 @@ export interface InsightsSales {
   otherProducts: InsightsOtherProducts;
   shiftTemplates: InsightsShiftTemplate[];
 }
+
+/**
+ * Insights part 2 (#402): cash variance by attendant, stock loss, credit health.
+ * Same `days` range and the same range end as the sales block
+ * (`GET /api/reports/insights/{attendant-variance,stock-loss,credit-health}`).
+ */
+
+/**
+ * One Attendant's cash variance over the range: the ATTENDANT level of the
+ * two-level drawer variance (ADR 0005), from the Drawers in closed Shift
+ * Summaries. Never summed with the office count variance.
+ */
+export interface InsightsAttendantVariance {
+  attendantId: string;
+  name: string;
+  /** Closed Shifts in which the Attendant handed over at least one Drawer. */
+  shifts: number;
+  /** Shifts whose summed Drawer variance was short (negative, not balanced). */
+  shortShifts: number;
+  /** Shifts whose summed Drawer variance was over (positive, not balanced). */
+  overShifts: number;
+  /** Signed net over the range: negative = short. */
+  netVariance: number;
+}
+
+/**
+ * A tank's recorded stock variance (Tank Dip vs book) over the range counts as
+ * within tolerance up to this share of the litres it sold. Loss and gain are
+ * judged alike by size: an unexplained gain points at a missed Purchase or a
+ * bad dip as much as a loss points at shrinkage. A station default for now;
+ * it is not configurable per Station.
+ */
+export const STOCK_LOSS_TOLERANCE_PCT = 0.5;
+
+/** One tank's Tank Dip variance over the range. */
+export interface InsightsStockLoss {
+  tankId: string;
+  tankName: string;
+  productCode: string;
+  /** Σ (actual dip − book) litres. Negative = loss, positive = gain. */
+  varianceLitres: number;
+  /** Net litres the tank dispensed over the range (Nozzle readings of closed days). */
+  soldLitres: number;
+  /** `varianceLitres` as a percent of `soldLitres` (signed, two decimals); null when nothing was sold. */
+  pctOfSold: number | null;
+  /** `varianceLitres` × the product's cost basis (signed: negative = money lost). */
+  valueAtCost: number;
+  /** |variance| is at most `STOCK_LOSS_TOLERANCE_PCT` of the litres sold. */
+  withinTolerance: boolean;
+}
+
+/**
+ * Credit health over the range. Credit Sales are placed by Business Date
+ * (closed days of the range) and Collections by Entry Date, so the two share a
+ * calendar window but not an anchor.
+ */
+export interface InsightsCreditHealth {
+  range: InsightsDateRange | null;
+  /** Credit Sales (receivables created) on closed Business Days of the range. */
+  creditGiven: number;
+  /** Collections whose Entry Date falls in the range. */
+  collected: number;
+  /** `creditGiven − collected`: how much the receivables book moved. Positive = grew. */
+  receivablesChange: number;
+  /** Credit Sales as a percent of fuel + product sales (one decimal); null with no sales. */
+  creditShareOfSales: number | null;
+  closedDays: number;
+  previousCreditGiven: number;
+  /**
+   * Per-closed-day average of `creditGiven` vs the previous period; null unless
+   * BOTH periods have at least `INSIGHTS_MIN_COMPARABLE_DAYS` closed days.
+   */
+  creditGivenChangePct: number | null;
+}

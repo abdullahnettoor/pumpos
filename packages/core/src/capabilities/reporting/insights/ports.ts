@@ -65,3 +65,65 @@ export interface InsightsSalesSource {
 export interface InsightsSalesReader {
   read(query: InsightsSalesQuery): Promise<InsightsSalesSource>;
 }
+
+// ---------------------------------------------------------------------------
+// Insights part 2 (#402). Same query shape and the same range end as the sales
+// block; each reader answers one bounded, pre-aggregated source.
+// ---------------------------------------------------------------------------
+
+export type InsightsRangeQuery = InsightsSalesQuery;
+
+/**
+ * One Attendant's variance over the current period, aggregated in the
+ * database from the Drawers of closed Shift Summaries (two-level snapshots
+ * only: a pre-#287 snapshot has no attendant level to read).
+ */
+export interface InsightsAttendantVarianceRow {
+  attendantId: string;
+  name: string;
+  shifts: number;
+  shortShifts: number;
+  overShifts: number;
+  netVariance: number;
+}
+
+export interface InsightsAttendantVarianceReader {
+  /** At most `INSIGHTS_ATTENDANT_LIMIT` rows, those with the largest absolute net first. */
+  read(query: InsightsRangeQuery): Promise<InsightsAttendantVarianceRow[]>;
+}
+
+/** The most Attendants one Station block lists. */
+export const INSIGHTS_ATTENDANT_LIMIT = 25;
+
+/** One tank's recorded dip variance and sales over the current period. */
+export interface InsightsStockLossRow {
+  tankId: string;
+  tankName: string;
+  productCode: string;
+  /** Σ (actual − book) litres of the tank's Tank Dips on closed days. */
+  varianceLitres: number;
+  /** Net litres its Nozzles metered on closed days. */
+  soldLitres: number;
+  /** The product's cost basis per litre. */
+  costBasis: number;
+}
+
+export interface InsightsStockLossReader {
+  /** One row per tank that recorded a dip variance in the range. */
+  read(query: InsightsRangeQuery): Promise<InsightsStockLossRow[]>;
+}
+
+export interface InsightsCreditHealthSource {
+  range: InsightsDateRange | null;
+  closedDays: number;
+  /** Credit Sales (Business Date) and fuel + product sales of the closed days. */
+  creditGiven: number;
+  sales: number;
+  /** Collections whose Entry Date falls in the range. */
+  collected: number;
+  previous: { creditGiven: number; closedDays: number };
+}
+
+export interface InsightsCreditHealthReader {
+  read(query: InsightsRangeQuery): Promise<InsightsCreditHealthSource>;
+}
