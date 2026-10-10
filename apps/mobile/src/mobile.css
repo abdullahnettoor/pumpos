@@ -31,6 +31,21 @@ body {
   --dock-space: calc(var(--dock-gap) + 58px + 20px);
 }
 
+/* Touch target: the visual stays as drawn, the hit area grows to at least
+ * 44 x 44 px (centred), so a 30-36px icon button or chip is still easy to hit. */
+.hit-44 {
+  position: relative;
+}
+.hit-44::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
+
 /* Hatched fill: a figure that is not final yet (a running Shift's fuel on Home,
  * "counted at close"). Accent at partial strength over the track. */
 .bg-hatch {

@@ -6,7 +6,7 @@ export const CallButton: React.FC<{ name: string; phone: string }> = ({ name, ph
   <a
     href={`tel:${phone.replace(/[^\d+]/g, '')}`}
     aria-label={`Call ${name}`}
-    className="grid h-[34px] w-[34px] flex-shrink-0 place-items-center rounded-[10px] border border-line bg-card text-text-muted"
+    className="hit-44 grid h-[34px] w-[34px] flex-shrink-0 place-items-center rounded-[10px] border border-line bg-card text-text-muted"
   >
     <PhoneIcon size={17} />
   </a>

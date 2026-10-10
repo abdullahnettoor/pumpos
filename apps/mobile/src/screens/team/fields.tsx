@@ -83,7 +83,7 @@ export function ChoiceChips<T extends string>({
               aria-checked={on}
               aria-disabled={disabled || undefined}
               onClick={disabled ? undefined : () => onChange(o)}
-              className={`min-h-[40px] rounded-full border px-3.5 text-[13px] font-semibold aria-disabled:cursor-not-allowed ${
+              className={`hit-44 min-h-[40px] rounded-full border px-3.5 text-[13px] font-semibold aria-disabled:cursor-not-allowed ${
                 on
                   ? 'border-accent bg-accent text-on-accent'
                   : 'border-line-strong bg-card text-text-high'

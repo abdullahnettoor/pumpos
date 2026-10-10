@@ -24,7 +24,7 @@ export const RecordPaymentButton: React.FC<{ action: PaymentAction; reasonId: st
     <button
       type="button"
       {...pausedButtonProps(paused, reasonId, action.onPress)}
-      className="min-h-[36px] rounded-lg border border-line-strong px-3 text-[12.5px] font-bold text-text-high aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+      className="hit-44 min-h-[36px] rounded-lg border border-line-strong px-3 text-[12.5px] font-bold text-text-high aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
     >
       Record payment
     </button>

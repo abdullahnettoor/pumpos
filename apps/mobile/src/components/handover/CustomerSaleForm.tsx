@@ -220,7 +220,7 @@ export const CustomerSaleForm: React.FC<{
                     )
                   }
                   disabled={busy}
-                  className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg border border-line text-bad-fg disabled:opacity-50"
+                  className="hit-44 grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg border border-line text-bad-fg disabled:opacity-50"
                   aria-label="Remove sale"
                 >
                   <TrashIcon />

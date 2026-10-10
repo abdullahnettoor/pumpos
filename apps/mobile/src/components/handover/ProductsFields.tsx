@@ -26,7 +26,7 @@ const StepperButton: React.FC<{ label: string; onClick: () => void; children: st
     type="button"
     onClick={onClick}
     aria-label={label}
-    className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl border border-line-strong bg-card text-lg font-semibold text-text-high"
+    className="hit-44 grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl border border-line-strong bg-card text-lg font-semibold text-text-high"
   >
     {children}
   </button>
@@ -106,7 +106,7 @@ export const ProductsFields: React.FC<{
                         : [{ productId: '', quantity: '' }],
                     )
                   }
-                  className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl border border-line text-bad-fg"
+                  className="hit-44 grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl border border-line text-bad-fg"
                   aria-label="Remove item"
                 >
                   <TrashIcon />
