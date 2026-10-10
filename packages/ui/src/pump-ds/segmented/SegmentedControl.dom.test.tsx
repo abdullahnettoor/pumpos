@@ -74,6 +74,40 @@ describe('SegmentedControl', () => {
       expect(onChange).toHaveBeenCalledTimes(3);
     });
 
+    it('with nothing selected, ArrowLeft goes to the last segment and ArrowRight to the first', () => {
+      const onChange = vi.fn();
+      render(
+        <SegmentedControl aria-label="N" options={three} value={'' as 'a'} onChange={onChange} />,
+      );
+      const group = screen.getByRole('radiogroup', { name: 'N' });
+      fireEvent.keyDown(group, { key: 'ArrowLeft' });
+      expect(onChange).toHaveBeenLastCalledWith('c');
+      fireEvent.keyDown(group, { key: 'ArrowRight' });
+      expect(onChange).toHaveBeenLastCalledWith('a');
+    });
+
+    it('manual activation: the arrows only move the focus; a click (Enter / Space) chooses', () => {
+      const onChange = vi.fn();
+      render(
+        <SegmentedControl
+          aria-label="N"
+          options={three}
+          value="a"
+          onChange={onChange}
+          activation="manual"
+        />,
+      );
+      const group = screen.getByRole('radiogroup', { name: 'N' });
+      screen.getByRole('radio', { name: 'One' }).focus();
+      fireEvent.keyDown(group, { key: 'ArrowRight' });
+      expect(onChange).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'Two' }));
+      fireEvent.keyDown(group, { key: 'ArrowRight' });
+      expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'Three' }));
+      fireEvent.click(screen.getByRole('radio', { name: 'Three' }));
+      expect(onChange).toHaveBeenCalledWith('c');
+    });
+
     it('follows the arrows down a vertical group and keeps the focus with the choice', () => {
       const onChange = vi.fn();
       render(

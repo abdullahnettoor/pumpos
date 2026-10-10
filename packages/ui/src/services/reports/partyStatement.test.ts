@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RangedPartyLedger } from '@pump/shared';
 import {
   customerStatementParty,
+  dateOf,
   partyStatementDoc,
   statementFilePrefix,
   supplierStatementParty,
@@ -244,5 +245,27 @@ describe('ledger file names (one helper for the desktop ledger and the statement
     expect(ledgerFileName('Customer_Statement', '', { from: 'a', to: 'b' }, 'Customer')).toBe(
       'Customer_Statement_Customer_a_b',
     );
+  });
+});
+
+describe('dateOf', () => {
+  it("prefers the row's own Business / Entry Date", () => {
+    expect(dateOf({ businessDate: '2026-10-07', createdAt: '2026-10-09T20:00:00Z' })).toBe(
+      '2026-10-07',
+    );
+  });
+
+  it('falls back to the Shift Business Date, then to the station-timezone date of createdAt', () => {
+    expect(dateOf({ shiftBusinessDate: '2026-10-06', createdAt: '2026-10-09T20:00:00Z' })).toBe(
+      '2026-10-06',
+    );
+    // 20:00 UTC on the 9th is 01:30 on the 10th in Asia/Kolkata: not the UTC slice.
+    expect(dateOf({ createdAt: '2026-10-09T20:00:00Z' }, 'Asia/Kolkata')).toBe('2026-10-10');
+    expect(dateOf({ createdAt: '2026-10-09T20:00:00Z' }, 'UTC')).toBe('2026-10-09');
+  });
+
+  it('is empty for a row with no date at all', () => {
+    expect(dateOf({})).toBe('');
+    expect(dateOf({ createdAt: 'not a date' })).toBe('');
   });
 });

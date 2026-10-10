@@ -17,6 +17,13 @@ export interface SegmentedControlProps<T extends string> {
   activeStyle?: 'raised' | 'brand';
   /** `vertical` stacks the segments as full-width rows (a short list of choices, e.g. date presets). */
   orientation?: 'horizontal' | 'vertical';
+  /**
+   * `automatic` (default): the arrow keys move AND select. `manual`: they only
+   * move the focus; Enter / Space (or a click) chooses. Use `manual` when a
+   * choice is costly (it saves, or reloads data) so a keyboard user can browse
+   * the segments without committing each one.
+   */
+  activation?: 'automatic' | 'manual';
   'aria-label': string;
   className?: string;
 }
@@ -39,6 +46,7 @@ export function SegmentedControl<T extends string>({
   stretch,
   activeStyle = 'raised',
   orientation = 'horizontal',
+  activation = 'automatic',
   className,
   'aria-label': ariaLabel,
 }: SegmentedControlProps<T>) {
@@ -49,19 +57,24 @@ export function SegmentedControl<T extends string>({
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (disabled) return;
     const last = options.length - 1;
+    // Automatic activation walks from the selection; manual walks from the focus.
+    const focused = buttons.current.findIndex((b) => b && b === document.activeElement);
+    const from = activation === 'manual' && focused >= 0 ? focused : at;
     const to =
       event.key === 'ArrowRight' || event.key === 'ArrowDown'
-        ? (at + 1) % options.length
+        ? (from + 1) % options.length
         : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
-          ? (at - 1 + options.length) % options.length
+          ? from < 0
+            ? last
+            : (from - 1 + options.length) % options.length
           : event.key === 'Home'
             ? 0
             : event.key === 'End'
               ? last
               : -1;
-    if (to < 0 || to === at) return;
+    if (to < 0 || to === from) return;
     event.preventDefault();
-    onChange(options[to].value);
+    if (activation === 'automatic') onChange(options[to].value);
     buttons.current[to]?.focus();
   };
 
@@ -107,7 +120,7 @@ export function SegmentedControl<T extends string>({
               vertical ? 'min-h-11 w-full text-left' : 'h-full',
               active
                 ? activeStyle === 'brand'
-                  ? 'bg-brand text-[color:var(--on-accent,#fff)]' // --on-accent: themed text on brand (mobile)
+                  ? 'bg-brand text-on-brand'
                   : 'bg-surface text-ink-strong shadow-sm ring-1 ring-border-soft'
                 : 'text-ink-muted hover:text-ink-strong',
             )}

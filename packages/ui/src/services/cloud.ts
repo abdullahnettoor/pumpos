@@ -702,10 +702,9 @@ export class CloudShiftService {
 
   /** One page of summaries, newest first; `before` is the previous page's oldest `generatedAt`. */
   async getShiftSummaryPage(stationId: string, limit: number, before?: string): Promise<any[]> {
-    const cursor = before ? `&before=${encodeURIComponent(before)}` : '';
-    const data = await request<any[]>(
-      `/shifts/shift-summaries?stationId=${stationId}&limit=${limit}${cursor}`,
-    );
+    const query = new URLSearchParams({ stationId, limit: String(limit) });
+    if (before) query.set('before', before);
+    const data = await request<any[]>(`/shifts/shift-summaries?${query}`);
     return data || [];
   }
 
