@@ -2,9 +2,8 @@ import { err, notFoundError, ok, validationError } from '../../../kernel/index.j
 import type { ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import {
   isValidBusinessDate,
-  monthBounds,
+  partyMonthWindows,
   resolveBusinessDate,
-  resolveEntryDate,
   type PayablesSummary,
   type SupplierPayableSummary,
 } from '@pump/shared';
@@ -29,22 +28,30 @@ export interface GetSupplierPayableCommand extends GetPayablesCommand {
  */
 function windowsOf(ctx: ExecutionContext) {
   const now = ctx.clock.now();
-  const currentBusinessDate = resolveBusinessDate({
+  const windows = partyMonthWindows({
     now,
-    timeZone: ctx.timeZone,
-    dayStartsAt: ctx.businessDayStartsAt,
+    timeZone: ctx.timeZone ?? 'Asia/Kolkata',
+    dayStartsAt: ctx.businessDayStartsAt ?? '00:00',
   });
-  const entryDate = resolveEntryDate({ now, timeZone: ctx.timeZone });
-  const purchased = monthBounds(currentBusinessDate.slice(0, 7));
-  const paid = monthBounds(entryDate.slice(0, 7));
   const query: Omit<PayablesQuery, 'organizationId'> = {
-    purchasedFrom: purchased.from,
-    purchasedTo: purchased.to,
-    paidFrom: paid.from,
-    paidTo: paid.to,
+    purchasedFrom: windows.businessMonth.from,
+    purchasedTo: windows.businessMonth.to,
+    paidFrom: windows.entryMonth.from,
+    paidTo: windows.entryMonth.to,
   };
-  const months = { purchasedMonth: purchased.from.slice(0, 7), paidMonth: paid.from.slice(0, 7) };
-  return { currentBusinessDate, query, months };
+  const months = {
+    purchasedMonth: windows.months.businessMonth,
+    paidMonth: windows.months.entryMonth,
+  };
+  return {
+    currentBusinessDate: resolveBusinessDate({
+      now,
+      timeZone: ctx.timeZone,
+      dayStartsAt: ctx.businessDayStartsAt,
+    }),
+    query,
+    months,
+  };
 }
 
 /**

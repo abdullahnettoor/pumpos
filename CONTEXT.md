@@ -457,6 +457,12 @@ closed Business Day or the Tank sold nothing in the window. Read-only, computed
 on the server; shown as "2.6 days" / "0.9 day".
 _Avoid_: runway, stock days
 
+Days of Cover counts only Nozzle Reading movements (`reference_type = 'reading'`);
+the DSSR tank movement's sold litres count every `Sale` stock movement. Days of
+Cover uses the Station's 7 most recent closed Business Days; the DSSR uses all
+movements through its specific Business Date and only that day's movements for
+received, sold and adjusted totals.
+
 **Tank Transfer**:
 Fuel moved between two Tanks without a sale.
 _Avoid_: inter-tank move, decanting

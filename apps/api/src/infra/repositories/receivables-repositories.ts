@@ -1,4 +1,4 @@
-import { sql, type SQL } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import type { DbClient } from '@pump/db';
 import { onCustomerLedger } from '../customer-ledger-sql.js';
 import {
@@ -7,6 +7,7 @@ import {
   RECEIVABLES_SETTLED_SAMPLE,
   RECEIVABLES_VEHICLE_LIMIT,
   type SettlementCycle,
+  num,
 } from '@pump/shared';
 import type {
   CustomerReceivableQuery,
@@ -16,8 +17,7 @@ import type {
   ReceivablesReader,
   ReceivablesSource,
 } from '@pump/core';
-
-const num = (v: unknown): number => Number(v ?? 0) || 0;
+import { fifoCtes } from './fifo-ctes.js';
 
 interface PerCustomerRow {
   customerId: string;
@@ -60,12 +60,16 @@ const toSourceRow = (r: PerCustomerRow): ReceivableSourceRow => ({
  * `scope` narrows to one customer (and keeps inactive ones, which the list drops
  * so it matches the To collect list).
  */
-function fifoCtes(organizationId: string, currentBusinessDate: string, scope: SQL) {
+function receivableFifoCtes(
+  organizationId: string,
+  currentBusinessDate: string,
+  scope: ReturnType<typeof sql>,
+) {
   const { recentMaxDays, midMaxDays } = RECEIVABLES_AGING_EDGES;
-  return sql`
-    debits AS (
+  const ledger = sql`
       SELECT ct.id, ct.customer_id, bd.business_date AS date, ct.created_at, ct.amount,
-             ct.transaction_type AS type, ct.quantity, ct.product_id, ct.vehicle_id
+             ct.transaction_type AS type, ct.quantity, ct.product_id, ct.vehicle_id,
+             ct.amount AS signed, NULL::text AS kind
       FROM customer_transactions ct
       JOIN business_days bd
         ON bd.id = ct.business_day_id AND bd.organization_id = ${organizationId}
@@ -74,44 +78,33 @@ function fifoCtes(organizationId: string, currentBusinessDate: string, scope: SQ
       WHERE ${onCustomerLedger('ct')}
         AND ct.amount > 0
         ${scope}
-    ),
-    credits AS (
-      SELECT ct.id, ct.customer_id, bd.business_date AS date, ct.created_at,
-             -ct.amount AS amount, 'ADJUSTMENT'::text AS kind
+      UNION ALL
+      SELECT ct.id, ct.customer_id, bd.business_date AS date, ct.created_at, ct.amount,
+             ct.transaction_type AS type, ct.quantity, ct.product_id, ct.vehicle_id,
+             ct.amount AS signed, 'ADJUSTMENT'::text AS kind
       FROM customer_transactions ct
       JOIN business_days bd
         ON bd.id = ct.business_day_id AND bd.organization_id = ${organizationId}
       JOIN customers cu
         ON cu.id = ct.customer_id AND cu.organization_id = ${organizationId}
-      WHERE ${onCustomerLedger('ct')}
-        AND ct.amount < 0
-        ${scope}
+      WHERE ${onCustomerLedger('ct')} AND ct.amount < 0 ${scope}
       UNION ALL
       SELECT co.id, co.customer_id, co.entry_date AS date, co.created_at,
-             co.amount, 'COLLECTION'::text AS kind
+             -co.amount AS amount, 'Collection'::text AS type, NULL::numeric AS quantity,
+             NULL::uuid AS product_id, NULL::uuid AS vehicle_id, -co.amount AS signed,
+             'COLLECTION'::text AS kind
       FROM collections co
-      JOIN customers cu
-        ON cu.id = co.customer_id AND cu.organization_id = ${organizationId}
-      WHERE co.organization_id = ${organizationId}
-        ${scope}
-    ),
-    debit_cum AS (
-      SELECT d.*,
-        SUM(d.amount) OVER (
-          PARTITION BY d.customer_id ORDER BY d.date, d.created_at, d.id
-          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        ) AS cum_debit
-      FROM debits d
-    ),
-    credit_total AS (
-      SELECT customer_id, SUM(amount) AS total FROM credits GROUP BY customer_id
-    ),
-    open_debits AS (
-      SELECT dc.customer_id, dc.date,
-        LEAST(dc.amount, GREATEST(0, dc.cum_debit - COALESCE(ctt.total, 0))) AS open_amount,
-        GREATEST(0, ${currentBusinessDate}::date - dc.date::date) AS age
-      FROM debit_cum dc
-      LEFT JOIN credit_total ctt ON ctt.customer_id = dc.customer_id
+      JOIN customers cu ON cu.id = co.customer_id AND cu.organization_id = ${organizationId}
+      WHERE co.organization_id = ${organizationId} ${scope}
+  `;
+  return sql`
+    ${fifoCtes({ ledger, entityColumn: 'customer_id' })},
+    debits AS (SELECT * FROM debit_cum),
+    aged_debits AS (
+      SELECT od.customer_id, od.date, od.type,
+        od.open_amount,
+        GREATEST(0, ${currentBusinessDate}::date - od.date::date) AS age
+      FROM open_debits od
     ),
     per_customer AS (
       SELECT customer_id,
@@ -120,7 +113,7 @@ function fifoCtes(organizationId: string, currentBusinessDate: string, scope: SQ
         COALESCE(SUM(open_amount) FILTER (WHERE age <= ${recentMaxDays}), 0) AS d0_7,
         COALESCE(SUM(open_amount) FILTER (WHERE age > ${recentMaxDays} AND age <= ${midMaxDays}), 0) AS d8_30,
         COALESCE(SUM(open_amount) FILTER (WHERE age > ${midMaxDays}), 0) AS d30plus
-      FROM open_debits
+      FROM aged_debits
       GROUP BY customer_id
       HAVING SUM(open_amount) > 0
     )`;
@@ -142,7 +135,7 @@ export class DrizzleReceivablesReader implements ReceivablesReader {
   async summary(q: ReceivablesQuery): Promise<ReceivablesSource> {
     const org = q.organizationId;
     const rows = (await this.db.execute(sql`
-      WITH ${fifoCtes(org, q.currentBusinessDate, sql`AND cu.is_active`)}
+      WITH ${receivableFifoCtes(org, q.currentBusinessDate, sql`AND cu.is_active`)}
       SELECT
         COALESCE(SUM(d0_7), 0) AS "d0_7",
         COALESCE(SUM(d8_30), 0) AS "d8_30",
@@ -179,7 +172,7 @@ export class DrizzleReceivablesReader implements ReceivablesReader {
     const org = q.organizationId;
     const id = q.customerId;
     const rows = (await this.db.execute(sql`
-      WITH ${fifoCtes(org, q.currentBusinessDate, sql`AND cu.id = ${id}`)},
+      WITH ${receivableFifoCtes(org, q.currentBusinessDate, sql`AND cu.id = ${id}`)},
       credit_ranges AS (
         SELECT c.customer_id, c.date, c.kind,
           ROW_NUMBER() OVER w AS rn,

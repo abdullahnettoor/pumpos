@@ -37,6 +37,7 @@ import { lockStationInventory, runInTransaction } from '../infra/transaction.js'
 import { rowJson, rowJsonNullable, tsIso } from '../infra/sql-json.js';
 import { shiftSequenceSql } from '../infra/shift-sequence-sql.js';
 import { isUuid } from '../infra/is-uuid.js';
+import { netNozzleVolume } from '../infra/shift-summary-sql.js';
 import { assembleReconTotals, reconTotalsJson } from '../infra/repositories/shift-recon-sql.js';
 import {
   DrizzleDispenserRepository,
@@ -1141,7 +1142,7 @@ shiftsRouter.get('/my-assignment', async (c) => {
         closingReading: nr.closingReading != null ? Number(nr.closingReading) : null,
         testingVolume: nr.testingVolume != null ? Number(nr.testingVolume) : null,
         // Litres the recorded Handover accepted: stored gross volume less testing.
-        netVolume: Math.max(0, Number(nr.volumeSold ?? 0) - Number(nr.testingVolume ?? 0)),
+        netVolume: netNozzleVolume(nr.volumeSold, nr.testingVolume),
         unitPrice: nr.unitPrice != null ? Number(nr.unitPrice) : null,
       }))
       .sort(byNaturalField((n) => n.nozzleName));

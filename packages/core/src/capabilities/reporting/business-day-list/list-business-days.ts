@@ -3,6 +3,8 @@ import type { ExecutionContext, Result, UseCase } from '../../../kernel/index.js
 import {
   isValidBusinessDate,
   monthBounds,
+  MONTH_KEY,
+  round2,
   resolveBusinessDate,
   shiftBusinessDate,
 } from '@pump/shared';
@@ -13,9 +15,6 @@ import type {
   BusinessDayListReader,
   BusinessDayListStatus,
 } from './ports.js';
-
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-const MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
 /** Days in the week window the Reports tiles compare (this one and the one before). */
 const WEEK_DAYS = 7;
@@ -123,7 +122,7 @@ export class ListBusinessDays implements UseCase<ListBusinessDaysCommand, Busine
       return err(validationError('Business Day list requires a Station'));
     }
     const month = input.month ?? currentBusinessDate.slice(0, 7);
-    if (!MONTH.test(month)) {
+    if (!MONTH_KEY.test(month)) {
       return err(validationError('month must be YYYY-MM'));
     }
 

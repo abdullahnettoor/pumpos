@@ -2,9 +2,9 @@ import { err, notFoundError, ok, validationError } from '../../../kernel/index.j
 import type { ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import {
   isValidBusinessDate,
-  monthBounds,
   resolveBusinessDate,
   resolveEntryDate,
+  partyMonthWindows,
   type CustomerReceivableSummary,
   type ReceivablesSummary,
 } from '@pump/shared';
@@ -29,6 +29,13 @@ const currentBusinessDateOf = (ctx: ExecutionContext) =>
     now: ctx.clock.now(),
     timeZone: ctx.timeZone,
     dayStartsAt: ctx.businessDayStartsAt,
+  });
+
+const partyWindowsOf = (ctx: ExecutionContext) =>
+  partyMonthWindows({
+    now: ctx.clock.now(),
+    timeZone: ctx.timeZone ?? 'Asia/Kolkata',
+    dayStartsAt: ctx.businessDayStartsAt ?? '00:00',
   });
 
 /**
@@ -81,8 +88,9 @@ export class GetCustomerReceivable implements UseCase<
       return err(validationError('Customer receivable requires a Station and a customer'));
     }
     const entryDate = resolveEntryDate({ now: ctx.clock.now(), timeZone: ctx.timeZone });
-    const credit = monthBounds(currentBusinessDate.slice(0, 7));
-    const paid = monthBounds(entryDate.slice(0, 7));
+    const windows = partyWindowsOf(ctx);
+    const credit = windows.businessMonth;
+    const paid = windows.entryMonth;
 
     const source = await this.reader.customer({
       organizationId: ctx.organizationId,

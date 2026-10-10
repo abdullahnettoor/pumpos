@@ -1,4 +1,4 @@
-import { productCategoryOf, type ProductType } from '@pump/shared';
+import { num, productCategoryOf, round2, type ProductType } from '@pump/shared';
 
 /**
  * The sales figures a Shift Summary snapshot carries beyond the fuel totals the
@@ -9,12 +9,6 @@ import { productCategoryOf, type ProductType } from '@pump/shared';
  * Shift Summary is composed; snapshots frozen earlier lack them and readers
  * fall back (the DSSR compose did the same for its later fields).
  */
-
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-const num = (v: unknown) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-};
 
 /** One product's Product Sales in the Shift, grouped by product id. */
 export interface ShiftProductSaleLine {

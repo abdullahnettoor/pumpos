@@ -1,6 +1,6 @@
 import { sql, type SQL } from 'drizzle-orm';
 import type { DbClient } from '@pump/db';
-import { PAYABLES_PRODUCT_LIMIT, PAYABLES_SUPPLIER_LIMIT } from '@pump/shared';
+import { num, PAYABLES_PRODUCT_LIMIT, PAYABLES_SUPPLIER_LIMIT } from '@pump/shared';
 import type {
   PayableSourceRow,
   PayablesQuery,
@@ -10,8 +10,7 @@ import type {
   SupplierPayableSource,
 } from '@pump/core';
 import { supplierSignedAmount } from '../supplier-ledger-sql.js';
-
-const num = (v: unknown): number => Number(v ?? 0) || 0;
+import { fifoCtes } from './fifo-ctes.js';
 
 interface PerSupplierRow {
   supplierId: string;
@@ -53,46 +52,27 @@ const toSourceRow = (r: PerSupplierRow): PayableSourceRow => ({
  * supplier itself). `scope` narrows to one supplier, or to active suppliers (the
  * list, matching the To pay list).
  */
-function fifoCtes(organizationId: string, scope: SQL) {
-  return sql`
-    ledger AS (
-      SELECT st.id, st.supplier_id, st.entry_date AS date, st.created_at,
-             st.transaction_type AS type, st.reference_type, st.reference_id,
-             st.funding_account_id, ${supplierSignedAmount('st')} AS signed
-      FROM supplier_transactions st
-      JOIN suppliers su
-        ON su.id = st.supplier_id AND su.organization_id = ${organizationId}
-      WHERE st.organization_id = ${organizationId}
-        ${scope}
-    ),
-    debit_cum AS (
-      SELECT l.id, l.supplier_id, l.date, l.type, l.signed AS amount,
-        SUM(l.signed) OVER (
-          PARTITION BY l.supplier_id ORDER BY l.date, l.created_at, l.id
-          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        ) AS cum_debit
-      FROM ledger l
-      WHERE l.signed > 0
-    ),
-    credit_total AS MATERIALIZED (
-      SELECT supplier_id, SUM(-signed) AS total FROM ledger WHERE signed < 0 GROUP BY supplier_id
-    ),
-    open_debits AS (
-      SELECT dc.supplier_id, dc.date, dc.type,
-        LEAST(dc.amount, GREATEST(0, dc.cum_debit - COALESCE(ct.total, 0))) AS open_amount
-      FROM debit_cum dc
-      LEFT JOIN credit_total ct ON ct.supplier_id = dc.supplier_id
-    ),
-    per_supplier AS (
-      SELECT supplier_id,
-        SUM(open_amount) AS balance,
-        COUNT(*) FILTER (WHERE type = 'Purchase' AND open_amount > 0)::int AS unpaid_count,
-        MIN(date) FILTER (WHERE type = 'Purchase' AND open_amount > 0) AS oldest
-      FROM open_debits
-      GROUP BY supplier_id
-      HAVING SUM(open_amount) > 0
-    )`;
-}
+const supplierLedger = (organizationId: string, scope: SQL) => sql`
+  SELECT st.id, st.supplier_id, st.entry_date AS date, st.created_at,
+         st.transaction_type AS type, st.transaction_type AS kind,
+         st.reference_type, st.reference_id,
+         st.funding_account_id, ${supplierSignedAmount('st')} AS signed,
+         ${supplierSignedAmount('st')} AS amount
+  FROM supplier_transactions st
+  JOIN suppliers su ON su.id = st.supplier_id AND su.organization_id = ${organizationId}
+  WHERE st.organization_id = ${organizationId} ${scope}`;
+
+const supplierFifoCtes = (organizationId: string, scope: SQL) => sql`
+  ${fifoCtes({ ledger: supplierLedger(organizationId, scope), entityColumn: 'supplier_id' })},
+  per_supplier AS (
+    SELECT supplier_id,
+      SUM(open_amount) AS balance,
+      COUNT(*) FILTER (WHERE type = 'Purchase' AND open_amount > 0)::int AS unpaid_count,
+      MIN(date) FILTER (WHERE type = 'Purchase' AND open_amount > 0) AS oldest
+    FROM open_debits
+    GROUP BY supplier_id
+    HAVING SUM(open_amount) > 0
+  )`;
 
 /**
  * Reads the payables summary. Each read is ONE statement of a fixed set of CTEs
@@ -111,7 +91,7 @@ export class DrizzlePayablesReader implements PayablesReader {
   async summary(q: PayablesQuery): Promise<PayablesSource> {
     const org = q.organizationId;
     const rows = (await this.db.execute(sql`
-      WITH ${fifoCtes(org, sql`AND su.is_active`)},
+      WITH ${supplierFifoCtes(org, sql`AND su.is_active`)},
       month_flow AS (
         SELECT
           COALESCE(SUM(l.signed) FILTER (
@@ -159,7 +139,7 @@ export class DrizzlePayablesReader implements PayablesReader {
     const org = q.organizationId;
     const id = q.supplierId;
     const rows = (await this.db.execute(sql`
-      WITH ${fifoCtes(org, sql`AND su.id = ${id}`)},
+      WITH ${supplierFifoCtes(org, sql`AND su.id = ${id}`)},
       last_payment AS (
         SELECT -l.signed AS amount, l.date AS "entryDate",
                fa.account_type AS method, fa.name AS "fundingAccountName"

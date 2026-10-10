@@ -304,7 +304,7 @@ export const shiftCollectionSchema = z.object({
 /** A numeric(12,2) money column's largest value (`credit_limit`, `collections.amount`). */
 const NUMERIC_12_2_MAX = 9_999_999_999.99;
 
-const hasAtMostTwoDecimals = (n: number) => Math.abs(n * 100 - Math.round(n * 100)) <= 1e-6;
+export const hasAtMostTwoDecimals = (n: number) => Math.abs(n * 100 - Math.round(n * 100)) <= 1e-6;
 
 /** `customers.credit_limit` is numeric(12,2): the largest amount it can hold. */
 export const CREDIT_LIMIT_MAX = NUMERIC_12_2_MAX;

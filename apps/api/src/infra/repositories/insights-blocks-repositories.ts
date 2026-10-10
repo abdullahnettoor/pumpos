@@ -10,7 +10,7 @@ import {
   type InsightsStockLossReader,
   type InsightsStockLossRow,
 } from '@pump/core';
-import { VARIANCE_EPSILON } from '@pump/shared';
+import { CASH_VARIANCE_MODEL_TWO_LEVEL, num, VARIANCE_EPSILON } from '@pump/shared';
 import {
   dssrCreditTotal,
   dssrDaySales,
@@ -35,8 +35,6 @@ import {
  * predicates (Shift Summaries and Business-Day-keyed rows through their
  * tenant-scoped Business Day / Shift).
  */
-
-const num = (v: unknown): number => Number(v ?? 0) || 0;
 
 /**
  * Cash variance by Attendant, from the Drawers of closed Shift Summaries.
@@ -72,7 +70,7 @@ export class DrizzleInsightsAttendantVarianceReader implements InsightsAttendant
          AND s.status IN ('CLOSED', 'LOCKED')
         JOIN shift_summaries ss ON ss.shift_id = s.id
         CROSS JOIN LATERAL jsonb_to_recordset(
-          CASE WHEN COALESCE((ss.snapshot_data ->> 'cashVarianceModel')::numeric, 0) >= 2
+          CASE WHEN COALESCE((ss.snapshot_data ->> 'cashVarianceModel')::numeric, 0) >= ${CASH_VARIANCE_MODEL_TWO_LEVEL}
                THEN ${jsonbArray(sql`ss.snapshot_data -> 'drawers'`)}
                ELSE '[]'::jsonb END
         ) AS d("attendantId" text, "attendantName" text, variance numeric)

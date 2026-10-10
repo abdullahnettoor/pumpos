@@ -122,7 +122,7 @@ describe('GET /reports/receivables', () => {
     expect(params).toContain('2026-10-09');
     expect(params).toContain(500);
     expect(text).toContain('collections');
-    expect(text).toContain('SUM(d.amount) OVER');
+    expect(text).toContain('SUM(l.signed) OVER');
   });
 
   it('maps the aggregate to the wire contract, ages from the Current Business Date', async () => {

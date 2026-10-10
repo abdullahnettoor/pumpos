@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { round2 } from '@pump/shared';
 import {
   BusinessEvents,
   err,
@@ -62,8 +63,6 @@ const schema = z.object({
     .min(1, 'at least one line is required'),
   nonCashAmount: z.coerce.number().min(0).optional(),
 });
-
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 /**
  * Record (or replace) an employee's walk-in merchandise "handover" — the bulk,
