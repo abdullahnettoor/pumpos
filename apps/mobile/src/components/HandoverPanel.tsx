@@ -13,6 +13,8 @@ import {
   type CashBreakdown,
   type RecordHandoverResult,
 } from '@pump/ui';
+import { varianceBadge } from '../lib/variance.js';
+import { TONE_TEXT } from '../ui/index.js';
 import { CashCountSheet } from './CashCountSheet.js';
 import { CustomerSaleForm } from './handover/CustomerSaleForm.js';
 import { NumberField } from './handover/Fields.js';
@@ -42,7 +44,7 @@ import {
   terminalsStep,
   type StepId,
 } from './handover/steps.js';
-import { SummaryStrip, formatVariance, varianceTone } from './handover/SummaryStrip.js';
+import { SummaryStrip } from './handover/SummaryStrip.js';
 import { TerminalsFields } from './handover/TerminalsFields.js';
 import { useHandoverSubmission } from './handover/useHandoverSubmission.js';
 
@@ -410,6 +412,7 @@ export const HandoverPanel: React.FC<{
       }
     : null;
   const shownSummary = selectHandoverSummary(live, acceptedSummary);
+  const shownVariance = varianceBadge(shownSummary.varianceAmount);
   const productsState = productsStep(merchRows, merchNonCash, priceOf);
   // Which steps hold an error, so the bar can say where to look.
   const failingSteps = Array.from(
@@ -470,10 +473,8 @@ export const HandoverPanel: React.FC<{
           <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-text-faint">
             Variance
           </p>
-          <p
-            className={`num text-[17px] font-semibold ${varianceTone(shownSummary.varianceAmount)}`}
-          >
-            {formatVariance(shownSummary.varianceAmount)}
+          <p className={`num text-[17px] font-semibold ${TONE_TEXT[shownVariance.tone]}`}>
+            {shownVariance.text}
           </p>
         </div>
         <button
