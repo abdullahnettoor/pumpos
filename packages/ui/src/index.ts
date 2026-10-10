@@ -155,6 +155,7 @@ export type { BannerProps, BannerSeverity } from './components/primitives/Banner
 export { useZodForm } from './forms/useZodForm.js';
 export { formatMoney, inr, formatQty } from './utils/format.js';
 export { initialsOf } from './utils/initials.js';
+export { accountTypeLabel } from './utils/ledgerLabels.js';
 export { runTask, useRunTask } from './utils/runTask.js';
 export * from './pump-ds/icon/index.js';
 export * from './pump-ds/brand/index.js';

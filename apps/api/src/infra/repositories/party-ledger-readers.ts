@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import type { DbClient } from '@pump/db';
 import { isValidBusinessDate, type PartyLedgerEntry, type RangedPartyLedger } from '@pump/shared';
 import { onCustomerLedger } from '../customer-ledger-sql.js';
+import { supplierSignedAmount } from '../supplier-ledger-sql.js';
 import { shiftSequenceSql } from '../shift-sequence-sql.js';
 
 export type PartyLedgerRange = { from: string; to: string };
@@ -201,7 +202,7 @@ export class DrizzleSupplierLedgerReader {
           NULL::text AS "tankerNumber",
           CASE WHEN st.transaction_type = 'Payment' THEN fa.account_type ELSE NULL END AS method,
           p.invoice_number AS reference,
-          CASE WHEN st.transaction_type = 'Payment' THEN -st.amount ELSE st.amount END AS signed_amount
+          ${supplierSignedAmount('st')} AS signed_amount
         FROM supplier_transactions st
         LEFT JOIN financial_accounts fa
           ON fa.id = st.funding_account_id AND fa.organization_id = st.organization_id
@@ -231,7 +232,7 @@ export class DrizzleSupplierLedgerReader {
           AND st.entry_date <= ${to}
       ),
       opening AS (
-        SELECT COALESCE(SUM(CASE WHEN st.transaction_type = 'Payment' THEN -st.amount ELSE st.amount END), 0)::numeric AS balance,
+        SELECT COALESCE(SUM(${supplierSignedAmount('st')}), 0)::numeric AS balance,
                COUNT(*) > 0 AS has_earlier
         FROM supplier_transactions st
         WHERE st.organization_id = ${organizationId}

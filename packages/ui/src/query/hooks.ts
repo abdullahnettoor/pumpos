@@ -39,8 +39,10 @@ import type {
   InsightsRangeDays,
   InsightsSales,
   CustomerReceivableSummary,
+  PayablesSummary,
   RangedPartyLedger,
   ReceivablesSummary,
+  SupplierPayableSummary,
   InsightsStockLoss,
 } from '@pump/shared';
 
@@ -99,6 +101,11 @@ export const queryKeys = {
   supplierLedger: (supplierId: string) => ['supplier-ledger', supplierId] as const,
   customerStatement: (customerId: string, from: string, to: string) =>
     ['customer-statement', customerId, from, to] as const,
+  supplierStatement: (supplierId: string, from: string, to: string) =>
+    ['supplier-statement', supplierId, from, to] as const,
+  payables: (stationId: string) => ['payables', stationId] as const,
+  supplierPayable: (stationId: string, supplierId: string) =>
+    ['payables', stationId, supplierId] as const,
   receivables: (stationId: string) => ['receivables', stationId] as const,
   customerReceivable: (stationId: string, customerId: string) =>
     ['receivables', stationId, customerId] as const,
@@ -799,6 +806,29 @@ export function useCustomerStatement(
   });
 }
 
+/**
+ * A supplier's statement for a date range (enriched rows + opening balance), from
+ * the ranged ledger API. Operational tier; every operational write invalidates the
+ * `supplier-statement` prefix. Same "Earlier months" behaviour as
+ * `useCustomerStatement`: the previous range's rows stay on screen until the wider
+ * one arrives, and only the SAME supplier's rows are carried over.
+ */
+export function useSupplierStatement(
+  supplierId: string | null | undefined,
+  range: { from: string; to: string },
+  options?: Options<RangedPartyLedger>,
+) {
+  return useQuery({
+    queryKey: queryKeys.supplierStatement(supplierId ?? '', range.from, range.to),
+    queryFn: () => txService.getSupplierLedgerRange(supplierId!, range),
+    enabled: !!supplierId,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === supplierId ? previous : undefined,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 export function useSupplierLedger(supplierId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.supplierLedger(supplierId ?? ''),
@@ -1046,6 +1076,41 @@ export function useCustomerReceivable(
 }
 
 /**
+ * What the Organization owes its suppliers (total, this month's purchased vs paid,
+ * a row per supplier that is owed money). One statement over every supplier
+ * ledger, so it does not refetch on window focus; a purchase or supplier payment
+ * invalidates it (`useInvalidateOperational`). Not persisted.
+ */
+export function usePayables(
+  stationId: string | null | undefined,
+  options?: Options<PayablesSummary>,
+) {
+  return useQuery({
+    queryKey: queryKeys.payables(stationId ?? ''),
+    queryFn: () => shiftService.getPayables(stationId!),
+    enabled: !!stationId,
+    ...TIER.operational,
+    refetchOnWindowFocus: false,
+    ...options,
+  });
+}
+
+/** One supplier's payable, last payment, this month and purchases by product (single indexed statement). */
+export function useSupplierPayable(
+  stationId: string | null | undefined,
+  supplierId: string | null | undefined,
+  options?: Options<SupplierPayableSummary>,
+) {
+  return useQuery({
+    queryKey: queryKeys.supplierPayable(stationId ?? '', supplierId ?? ''),
+    queryFn: () => shiftService.getSupplierPayable(stationId!, supplierId!),
+    enabled: !!stationId && !!supplierId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
  * Insights part 2 (#402): the blocks beside the sales block. Same range, same
  * range end and the same cache rules as `useInsightsSales` (operational tier,
  * invalidated with it, never persisted).
@@ -1146,6 +1211,10 @@ export function useInvalidateOperational() {
       // and the statement reads it: a credit sale or collection moves both.
       qc.invalidateQueries({ queryKey: ['receivables'] }),
       qc.invalidateQueries({ queryKey: ['customer-statement'] }),
+      // Payables are settled FIFO from the supplier ledger, like a supplier's
+      // balance: a purchase or supplier payment moves them and the statement.
+      qc.invalidateQueries({ queryKey: ['payables'] }),
+      qc.invalidateQueries({ queryKey: ['supplier-statement'] }),
       // Money layer: account balances, statements and the Cash & Bank register all
       // move with expenses / income / collections / payments.
       qc.invalidateQueries({ queryKey: ['financial-accounts'] }),

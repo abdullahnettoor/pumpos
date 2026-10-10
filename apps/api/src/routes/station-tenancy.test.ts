@@ -99,6 +99,8 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /reports/insights/sales': 'org-scoped-query',
   'GET /reports/receivables': 'refuses-foreign-station',
   'GET /reports/receivables/:customerId': 'refuses-foreign-station',
+  'GET /reports/payables': 'refuses-foreign-station',
+  'GET /reports/payables/:supplierId': 'refuses-foreign-station',
   'GET /reports/insights/attendant-variance': 'org-scoped-query',
   'GET /reports/insights/stock-loss': 'org-scoped-query',
   'GET /reports/insights/credit-health': 'org-scoped-query',

@@ -251,15 +251,71 @@ describe('enriched customer rows', () => {
       detail: null,
     });
   });
+});
 
-  it('does not enrich supplier rows', () => {
-    const e = buildStatement(
-      [row('p', 'Payment', 1, '2026-10-01', { method: 'UPI', notes: 'n' })],
+describe('enriched supplier rows', () => {
+  const purchase = row('p', 'Purchase', 1043200, '2026-10-09', {
+    invoiceNumber: 'INV-55821',
+    productName: 'Diesel',
+    quantity: 12000,
+    unit: 'L',
+    tankerNumber: 'KL-58-H-2210',
+  });
+  const payment = row('y', 'Payment', 980000, '2026-10-06', {
+    method: 'BANK',
+    fundingAccountName: 'SBI current a/c',
+  });
+  const entryOf = (r: LedgerRow) =>
+    buildStatement([r], 20, undefined, 'supplier').months[0].entries[0];
+
+  it('names the product, invoice, quantity and tanker on a Purchase', () => {
+    expect(entryOf(purchase)).toMatchObject({
+      label: 'Purchase · Diesel',
+      meta: '9 Oct · INV-55821 · 12,000 L',
+      detail: 'Tanker KL-58-H-2210',
+      delta: 1043200,
+    });
+  });
+
+  it('shows the method in words and the Funding Account on a Payment', () => {
+    expect(entryOf(payment)).toMatchObject({
+      label: 'Payment made',
+      meta: '6 Oct · Bank',
+      detail: 'From SBI current a/c',
+      delta: -980000,
+    });
+    expect(entryOf({ ...payment, method: 'CASH_IN_HAND' }).meta).toBe('6 Oct · Cash in Hand');
+  });
+
+  it('leaves out what a row does not have: no tanker, no invoice, no quantity', () => {
+    expect(entryOf({ ...purchase, tankerNumber: null }).detail).toBeNull();
+    expect(entryOf({ ...purchase, tankerNumber: null, notes: 'urgent' }).detail).toBe('urgent');
+    expect(entryOf({ ...purchase, invoiceNumber: null }).meta).toBe('9 Oct · 12,000 L');
+    expect(entryOf({ ...purchase, quantity: null, unit: null }).meta).toBe('9 Oct · INV-55821');
+    expect(entryOf({ ...payment, fundingAccountName: null }).detail).toBeNull();
+  });
+
+  it('keeps a plain Purchase label and the note on a legacy row with none of the enrichment', () => {
+    expect(entryOf(row('x', 'Purchase', 5, '2026-10-01', { notes: 'INV-1' }))).toMatchObject({
+      label: 'Purchase',
+      meta: '1 Oct · INV-1',
+      detail: null,
+    });
+    expect(entryOf(row('o', 'Opening Balance', 5, '2026-10-01'))).toMatchObject({
+      label: 'Opening balance',
+      meta: '1 Oct',
+    });
+  });
+
+  it('runs a negative balance (an advance) across an overpaid payment', () => {
+    const s = buildStatement(
+      [row('a', 'Purchase', 100, '2026-10-01'), row('b', 'Payment', 250, '2026-10-02')],
       20,
-      undefined,
+      -150,
       'supplier',
-    ).months[0].entries[0];
-    expect(e).toMatchObject({ meta: '1 Oct · n', detail: null });
+    );
+    expect(s.months[0].entries.map((e) => e.balance)).toEqual([-150, 100]);
+    expect(s.reconciled).toBe(true);
   });
 });
 

@@ -5,13 +5,8 @@ import {
   lastPaymentTile,
   paidTile,
   usuallyPaysTile,
-  type Tile,
 } from '../../lib/money/receivables.js';
-import { StatTile } from '../../ui/StatTile.js';
-
-const asTile = (t: Tile, tone?: 'good' | 'warn') => (
-  <StatTile key={t.label} label={t.label} value={t.value} sub={t.sub} tone={tone} />
-);
+import { TileGrid } from './TileGrid.js';
 
 /**
  * How the customer pays: last payment, usually-pays-in, credit and paid this
@@ -21,15 +16,15 @@ const asTile = (t: Tile, tone?: 'good' | 'warn') => (
 export const BehaviourTiles: React.FC<{ summary: CustomerReceivableSummary }> = ({ summary }) => {
   const last = lastPaymentTile(summary.lastPayment);
   const usual = usuallyPaysTile(summary.usuallyPaysInDays);
-  const tiles = [
-    last && asTile(last, 'good'),
-    usual && asTile(usual),
-    asTile(creditTile(summary.month), summary.month.credit > 0 ? 'warn' : undefined),
-    asTile(paidTile(summary.month, summary.settlementCycle)),
-  ].filter(Boolean);
   return (
-    <div aria-label="Payment behaviour" role="group" className="mt-2 grid grid-cols-2 gap-2 px-3">
-      {tiles}
-    </div>
+    <TileGrid
+      label="Payment behaviour"
+      tiles={[
+        last && { tile: last, tone: 'good' },
+        usual && { tile: usual },
+        { tile: creditTile(summary.month), tone: summary.month.credit > 0 ? 'warn' : undefined },
+        { tile: paidTile(summary.month, summary.settlementCycle) },
+      ]}
+    />
   );
 };

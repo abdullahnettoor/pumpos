@@ -8,8 +8,10 @@ import {
   GetInsightsAttendantVariance,
   GetInsightsCreditHealth,
   GetInsightsSales,
+  GetPayables,
   GetInsightsStockLoss,
   GetReceivables,
+  GetSupplierPayable,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
@@ -21,6 +23,7 @@ import {
   DrizzleInsightsStockLossReader,
 } from '../infra/repositories/insights-blocks-repositories.js';
 import { DrizzleInsightsSalesReader } from '../infra/repositories/insights-repositories.js';
+import { DrizzlePayablesReader } from '../infra/repositories/payables-repositories.js';
 import { DrizzleReceivablesReader } from '../infra/repositories/receivables-repositories.js';
 import { isUuid } from '../infra/is-uuid.js';
 import { requireStationRead } from '../infra/station-read-guard.js';
@@ -228,5 +231,74 @@ reportsRouter.get('/insights/credit-health', async (c) => {
     reader: new DrizzleInsightsCreditHealthReader(c.var.db),
   }).execute({ stationId, days }, buildContext(user, { stationId }));
 
+  return sendResult(c, result);
+});
+
+/**
+ * GET /api/reports/payables?stationId=
+ *
+ * What the Organization owes its suppliers, settled FIFO (a Supplier Payment
+ * settles the oldest Purchase first): total, this month's purchased vs paid and
+ * a row per supplier that is owed money (largest first, capped) with its unpaid
+ * Purchase count and oldest unpaid date. ONE aggregate statement whatever the
+ * number of suppliers or ledger entries (the station lookup for the clock is the
+ * only other read). Open to the Roles that see the Money tab. No due dates:
+ * suppliers carry no payment terms.
+ *
+ * Organization-wide like the suppliers list's `currentBalance`: the station only
+ * gates access and supplies the timezone and Day Start the month and age are
+ * measured with.
+ */
+reportsRouter.get('/payables', async (c) => {
+  const user = c.var.user;
+  const scope = requireStationRead(
+    c,
+    canManageFinancialAccounts,
+    'Insufficient permissions to view payables',
+  );
+  if (scope instanceof Response) return scope;
+  const { stationId } = scope;
+
+  const clock = await loadStationClock(c.var.db, user.organizationId, stationId);
+  if (!clock) return stationNotFound(c);
+  const result = await new GetPayables(new DrizzlePayablesReader(c.var.db)).execute(
+    { stationId },
+    buildContext(user, { stationId, ...clock }),
+  );
+  return sendResult(c, result);
+});
+
+/**
+ * GET /api/reports/payables/:supplierId?stationId=
+ *
+ * One supplier's payable (NET balance: negative = paid ahead), last payment,
+ * this month's purchased vs paid and purchases by product. One aggregate
+ * statement. A supplier outside the caller's Organization, or an id that is not
+ * a uuid, is a 404.
+ */
+reportsRouter.get('/payables/:supplierId', async (c) => {
+  const user = c.var.user;
+  const scope = requireStationRead(
+    c,
+    canManageFinancialAccounts,
+    'Insufficient permissions to view payables',
+  );
+  if (scope instanceof Response) return scope;
+  const { stationId } = scope;
+
+  const supplierId = c.req.param('supplierId');
+  if (!isUuid(supplierId)) {
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Supplier not found' } },
+      404,
+    );
+  }
+
+  const clock = await loadStationClock(c.var.db, user.organizationId, stationId);
+  if (!clock) return stationNotFound(c);
+  const result = await new GetSupplierPayable(new DrizzlePayablesReader(c.var.db)).execute(
+    { stationId, supplierId },
+    buildContext(user, { stationId, ...clock }),
+  );
   return sendResult(c, result);
 });

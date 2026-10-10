@@ -5,6 +5,7 @@ export * from './types/attendant-report.js';
 export * from './types/business-day-list.js';
 export * from './types/insights.js';
 export * from './types/receivables.js';
+export * from './types/payables.js';
 export * from './types/party-ledger.js';
 export * from './schemas/validation.js';
 export * from './permissions/guards.js';

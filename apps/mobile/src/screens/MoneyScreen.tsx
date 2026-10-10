@@ -16,7 +16,7 @@ const LISTS = [
 ] as const;
 
 interface Props {
-  /** The selected Station: its clock ages the receivables. Null while stations load; the Money tab works without it, minus the aging. */
+  /** The selected Station: its clock ages the receivables and payables. Null while stations load; the Money tab works without it, minus the aging and the payables summary. */
   station?: Station | null;
   /**
    * What a supplier row opens. `TabRoot` passes the Supplier page in here;
@@ -59,6 +59,7 @@ export const MoneyScreen: React.FC<Props> = ({ station = null, renderSupplierPag
           />
         ) : (
           <ToPay
+            stationId={station?.id}
             query={query}
             onOpenSupplier={
               renderSupplierPage &&
