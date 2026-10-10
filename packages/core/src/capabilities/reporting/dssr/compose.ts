@@ -3,6 +3,7 @@ import type { DssrSourceData } from './ports.js';
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+const roundQty = (n: number) => Math.round((n + Number.EPSILON) * 1000) / 1000;
 
 interface FuelAgg {
   productId: string | null;
@@ -185,10 +186,24 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
 
   // --- Tank dip / stock variance, split by unit basis (fuel = volume in L,
   // merchandise = item count) so the two never share a confusing unit column. ---
-  const withStatus = (v: DssrSourceData['stockVariances'][number]) => ({
-    ...v,
-    status: v.varianceQuantity < 0 ? 'Loss' : v.varianceQuantity > 0 ? 'Gain' : 'OK',
-  });
+  const withStatus = (v: DssrSourceData['stockVariances'][number]) => {
+    const { tankMovement: m, ...row } = v;
+    return {
+      ...row,
+      status: v.varianceQuantity < 0 ? 'Loss' : v.varianceQuantity > 0 ? 'Gain' : 'OK',
+      // The tank's litres over the day (#395), additive: snapshots frozen before it lack the key.
+      ...(m
+        ? {
+            tankMovement: {
+              ...m,
+              closingQuantity: roundQty(
+                m.openingQuantity + m.receivedQuantity - m.soldQuantity + m.adjustedQuantity,
+              ),
+            },
+          }
+        : {}),
+    };
+  };
   const fuelStockVariance = source.stockVariances
     .filter((v) => v.inventoryType === 'BULK')
     .map(withStatus);

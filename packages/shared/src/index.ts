@@ -19,3 +19,4 @@ export * from './constants/demo.js';
 export * from './utils/desktop-downloads.js';
 export * from './utils/drawer-reconciliation.js';
 export * from './utils/days-of-cover.js';
+export * from './utils/stock-variance.js';

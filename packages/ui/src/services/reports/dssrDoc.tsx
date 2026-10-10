@@ -355,6 +355,32 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
 };
 
 /**
+ * Marking carried by a DSSR printed from a Business Day that is not closed yet
+ * (a live preview, not the sealed snapshot). It is outside the configurable
+ * sections so no station layout can print a draft without it.
+ */
+export const DSSR_DRAFT_MARK = 'DRAFT \u2014 DAY NOT CLOSED';
+
+const DraftBanner = () => (
+  <View
+    key="draft"
+    style={{
+      borderWidth: 1,
+      borderColor: C.amber,
+      backgroundColor: C.warnBg,
+      paddingVertical: 5,
+      paddingHorizontal: 8,
+      marginBottom: 8,
+    }}
+  >
+    <Text style={{ fontSize: 9, fontWeight: 700, color: C.warnFg }}>{DSSR_DRAFT_MARK}</Text>
+    <Text style={{ fontSize: 7.5, color: C.warnFg, marginTop: 2 }}>
+      Figures can still change until the Business Day is closed and the DSSR is sealed.
+    </Text>
+  </View>
+);
+
+/**
  * Daily Sales Summary Record (DSSR) as a branded, mono-numeric react-pdf
  * document. Reuses the shift-summary primitive kit (fonts, table, KPIs) so both
  * reports stay visually identical. Reads the immutable DSSR snapshot.
@@ -368,12 +394,17 @@ export const DssrDoc: React.FC<{ dssr: any; config?: DssrReportConfig }> = ({
     businessDate: dssr?.businessDate ?? dssr?.snapshotData?.businessDate,
     generatedAt: dssr?.generatedAt ?? dssr?.snapshotData?.generatedAt,
   };
+  const draft = dssr?.draft === true;
   return (
     <Document>
       <Page size={config.paper} style={s.page}>
+        {draft && <DraftBanner />}
         {config.sections.map((key) => builders[key]?.(d, config))}
         <View style={s.foot} fixed>
-          <Text>Generated {new Date().toLocaleString('en-IN')}</Text>
+          <Text>
+            Generated {new Date().toLocaleString('en-IN')}
+            {draft ? ` \u2022 ${DSSR_DRAFT_MARK}` : ''}
+          </Text>
           <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
       </Page>
