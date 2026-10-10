@@ -9,6 +9,7 @@ import type { TabKey } from './tabs.js';
 
 interface MobileShellProps {
   userName: string;
+  userId?: string | null;
   role: Role;
   stations: Station[];
   selectedStationId: string | null;
@@ -29,6 +30,7 @@ interface MobileShellProps {
  */
 export const MobileShell: React.FC<MobileShellProps> = ({
   userName,
+  userId,
   role,
   stations,
   selectedStationId,
@@ -43,8 +45,15 @@ export const MobileShell: React.FC<MobileShellProps> = ({
 
   const station = stations.find((s) => s.id === selectedStationId) ?? null;
   const ctx = useMemo(
-    () => ({ station, stationName: station?.name ?? 'PumpOS', userName, role, openAccount }),
-    [station, userName, role, openAccount],
+    () => ({
+      station,
+      stationName: station?.name ?? 'PumpOS',
+      userName,
+      userId,
+      role,
+      openAccount,
+    }),
+    [station, userName, userId, role, openAccount],
   );
 
   const selectStation = (id: string) => {

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import React, { useLayoutEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 /**
@@ -101,6 +102,7 @@ const { SupplierPage } = await import('./money/SupplierPage.js');
 const { NavProvider, useNav } = await import('../shell/nav.js');
 const { stackOf } = await import('../shell/navStack.js');
 const { ShellContext } = await import('../shell/context.js');
+const { createQueryClient } = await import('@pump/ui');
 
 const shell = {
   station: null,
@@ -132,14 +134,17 @@ const STATION = {
   id: 'st-1',
   settings: { timezone: 'Asia/Kolkata', business_day_starts_at: '06:00' },
 };
+// The Record payment sheet's save hook needs a QueryClient even while the sheet is closed.
 const mount = (props: StageProps = {}) =>
   render(
-    <ShellContext.Provider value={shell}>
-      <NavProvider tabs={['money']}>
-        <Probe />
-        <Stage {...props} />
-      </NavProvider>
-    </ShellContext.Provider>,
+    <QueryClientProvider client={createQueryClient()}>
+      <ShellContext.Provider value={shell}>
+        <NavProvider tabs={['money']}>
+          <Probe />
+          <Stage {...props} />
+        </NavProvider>
+      </ShellContext.Provider>
+    </QueryClientProvider>,
   );
 
 const cust = (over: Record<string, unknown>) => ({

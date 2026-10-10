@@ -34,4 +34,21 @@ describe('collectionEntryFormSchema', () => {
         .success,
     ).toBe(false);
   });
+
+  it('holds the amount to the column (numeric 12,2): above 0, 2 decimals, bounded', () => {
+    const message = (amount: unknown) => {
+      const r = collectionEntryFormSchema.safeParse({
+        ...base,
+        amount,
+        paymentMethod: 'Cash',
+        fundingAccountId: 'a',
+      });
+      return r.success ? null : r.error.issues[0].message;
+    };
+    expect(message(10)).toBeNull();
+    expect(message('9999999999.99')).toBeNull();
+    expect(message(0)).toBe('Amount must be positive');
+    expect(message(10.123)).toBe('Use at most 2 decimal places.');
+    expect(message(10_000_000_000)).toBe('That is more than a payment can hold.');
+  });
 });

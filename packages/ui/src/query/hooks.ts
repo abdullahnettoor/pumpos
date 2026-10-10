@@ -99,6 +99,8 @@ export const queryKeys = {
   suppliers: (activeOnly = true) => ['suppliers', activeOnly] as const,
   customerLedger: (customerId: string) => ['customer-ledger', customerId] as const,
   supplierLedger: (supplierId: string) => ['supplier-ledger', supplierId] as const,
+  /** Every cached statement window of one customer (prefix of `customerStatement`). */
+  customerStatements: (customerId: string) => ['customer-statement', customerId] as const,
   customerStatement: (customerId: string, from: string, to: string) =>
     ['customer-statement', customerId, from, to] as const,
   supplierStatement: (supplierId: string, from: string, to: string) =>
