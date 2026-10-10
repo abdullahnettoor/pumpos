@@ -570,7 +570,7 @@ export const expenseEntryFormSchema = z.object({
 export type ExpenseEntryFormValues = z.infer<typeof expenseEntryFormSchema>;
 
 /** `collections.amount` / `supplier_transactions.amount` are numeric(12,2): the largest payment they hold. */
-export const COLLECTION_AMOUNT_MAX = NUMERIC_12_2_MAX;
+export const OFFICE_PAYMENT_AMOUNT_MAX = NUMERIC_12_2_MAX;
 
 /**
  * The amount of an Office payment (a Collection or a Supplier Payment): above 0,
@@ -579,7 +579,7 @@ export const COLLECTION_AMOUNT_MAX = NUMERIC_12_2_MAX;
 const officePaymentAmountField = z.coerce
   .number({ invalid_type_error: 'Amount is required' })
   .positive('Amount must be positive')
-  .max(COLLECTION_AMOUNT_MAX, 'That is more than a payment can hold.')
+  .max(OFFICE_PAYMENT_AMOUNT_MAX, 'That is more than a payment can hold.')
   .refine(hasAtMostTwoDecimals, 'Use at most 2 decimal places.');
 
 /**

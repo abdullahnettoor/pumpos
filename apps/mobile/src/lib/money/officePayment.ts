@@ -78,11 +78,15 @@ export function keepsIdempotencyKey(error: unknown): boolean {
 
 /**
  * A retry that changed the entries reached the API under the key of an attempt
- * that did arrive: the API refuses "same key, different content". The earlier
- * payment is on file, so the caller should read the balance again.
+ * that did arrive: the API refuses "same key, different content" with a CONFLICT
+ * (`infra/idempotency.ts`). Only that answer means the earlier payment is on file
+ * (so the caller should read the balance again); every other CONFLICT (another
+ * request, another user, a business conflict) says nothing about it.
  */
 export const isEarlierAttemptReceived = (error: unknown): boolean =>
-  codeOf(error) === 'CONFLICT' && !keepsIdempotencyKey(error);
+  codeOf(error) === 'CONFLICT' &&
+  error instanceof Error &&
+  /different request content/i.test(error.message);
 
 const cents = (n: number) => Math.round(n * 100) / 100;
 

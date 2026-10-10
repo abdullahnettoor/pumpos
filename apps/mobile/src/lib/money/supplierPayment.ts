@@ -20,7 +20,6 @@ import {
 import { supplierPaymentPayload } from '@pump/ui';
 import {
   amountForValidation,
-  applyPaymentToParties,
   entryDateIssue,
   officePaymentAccess,
   officePaymentFailure,
@@ -93,15 +92,6 @@ export function supplierPaymentRequest(
     fundingAccountId: form.fundingAccountId,
   });
 }
-
-/** Are these two forms the same payment? Whitespace around the amount / reference does not count. */
-export const sameSupplierPaymentEntries = (
-  a: SupplierPaymentForm,
-  b: SupplierPaymentForm,
-): boolean => sameOfficeEntries(a, b);
-
-/** Write a saved Supplier Payment into a cached suppliers list (the payable falls by the amount). */
-export const applyPaymentToSuppliers = applyPaymentToParties;
 
 export type SupplierPaymentAccess = OfficePaymentAccess;
 

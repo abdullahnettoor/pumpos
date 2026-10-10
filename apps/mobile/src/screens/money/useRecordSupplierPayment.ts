@@ -17,16 +17,15 @@ const service = new CloudTransactionService();
  * refreshes purchases, account balances and the Daily Cash Book, and the
  * supplier ledger (the statement) is invalidated through its own key.
  *
- * Seam for #399 (payables summary): its keys (oldest unpaid, purchased vs paid)
- * join `refreshBalances` in `useOfficePayment` / the shared `queryKeys` when that
- * summary lands.
+ * TODO(#399): the payables summary (oldest unpaid, purchased vs paid) adds its
+ * keys to `refreshKeys` when it lands.
  */
 export function useRecordSupplierPayment(stationId: string, supplierId: string) {
   return useOfficePayment<SupplierPaymentForm>({
     stationId,
     partyId: supplierId,
     partyListKey: 'suppliers',
-    ledgerKey: queryKeys.supplierLedger(supplierId),
+    refreshKeys: [queryKeys.supplierLedger(supplierId)],
     send: (form, idempotencyKey) =>
       service.recordSupplierPayment(supplierPaymentRequest(stationId, supplierId, form), {
         idempotencyKey,

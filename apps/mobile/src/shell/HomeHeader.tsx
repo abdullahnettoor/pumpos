@@ -5,17 +5,20 @@ import { IconButton } from '../ui/IconButton.js';
 import { BellIcon, ChevronDownIcon } from '../ui/icons.js';
 import { initialsOf } from '@pump/ui';
 import { useShell } from './context.js';
-import { useOpenAttention } from './attention.js';
+
+interface Props {
+  onOpenAttention: () => void;
+}
 
 /**
  * Header of the Home tab: station button, alerts bell and avatar. The station
  * button and the avatar open the Account sheet. The bell shows the open-alert
- * count and goes to Home's attention section (`useOpenAttention`). The user's
- * own handover is not counted: its card is pinned at the top of the same Home.
+ * count (`useMobileAlerts`, the same list as Home's "All N" and the Needs
+ * attention page) and calls `onOpenAttention`, which the tab root supplies so
+ * the shell does not import the page and every detail page behind it.
  */
-export const HomeHeader: React.FC = () => {
+export const HomeHeader: React.FC<Props> = ({ onOpenAttention }) => {
   const { station, stationName, userName, openAccount } = useShell();
-  const openAttention = useOpenAttention();
   const alerts = useMobileAlerts(station);
   const count = alerts.length;
   const danger = alerts.some((a) => a.severity === 'danger');
@@ -38,10 +41,11 @@ export const HomeHeader: React.FC = () => {
         </span>
       </button>
       <div className="ml-auto flex items-center gap-2">
-        <IconButton label={count ? `Alerts, ${count} open` : 'Alerts'} onClick={openAttention}>
+        <IconButton label={count ? `Alerts, ${count} open` : 'Alerts'} onClick={onOpenAttention}>
           <BellIcon size={17} />
           {count > 0 && (
             <span
+              aria-hidden="true"
               className={`num absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full border-2 border-background px-0.5 text-[9px] font-bold text-on-accent ${
                 danger ? 'bg-bad' : 'bg-warn'
               }`}

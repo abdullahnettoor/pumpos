@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
-  applyPaymentToSuppliers,
-  sameSupplierPaymentEntries,
   supplierPaymentAccess,
   supplierPaymentFailure,
   supplierPaymentFormSchema,
   supplierPaymentRequest,
   type SupplierPaymentForm,
 } from './supplierPayment.js';
-import { classifyBalance, previewBalance } from './officePayment.js';
+import {
+  applyPaymentToParties,
+  classifyBalance,
+  previewBalance,
+  sameOfficeEntries,
+} from './officePayment.js';
 
 const TODAY = '2026-10-10';
 const schema = supplierPaymentFormSchema(TODAY);
@@ -123,24 +126,24 @@ describe('the payable after a payment', () => {
       { id: 's1', currentBalance: '1043200.00' },
       { id: 's2', currentBalance: 300 },
     ];
-    expect(applyPaymentToSuppliers(list, 's1', 43200)).toEqual([
+    expect(applyPaymentToParties(list, 's1', 43200)).toEqual([
       { id: 's1', currentBalance: '1000000.00' },
       { id: 's2', currentBalance: 300 },
     ]);
-    expect(applyPaymentToSuppliers([{ id: 's2', currentBalance: 300 }], 's2', 400)).toEqual([
+    expect(applyPaymentToParties([{ id: 's2', currentBalance: 300 }], 's2', 400)).toEqual([
       { id: 's2', currentBalance: -100 },
     ]);
-    expect(applyPaymentToSuppliers(undefined, 's1', 1)).toBeUndefined();
+    expect(applyPaymentToParties(undefined, 's1', 1)).toBeUndefined();
   });
 });
 
-describe('sameSupplierPaymentEntries', () => {
+describe('comparing supplier payment entries', () => {
   it('compares entries as the server reads them (trimmed)', () => {
     const a = form({ amount: '25000', notes: 'ref' });
-    expect(sameSupplierPaymentEntries(a, form({ amount: ' 25000 ', notes: ' ref ' }))).toBe(true);
-    expect(sameSupplierPaymentEntries(a, form({ amount: '24000', notes: 'ref' }))).toBe(false);
+    expect(sameOfficeEntries(a, form({ amount: ' 25000 ', notes: ' ref ' }))).toBe(true);
+    expect(sameOfficeEntries(a, form({ amount: '24000', notes: 'ref' }))).toBe(false);
     expect(
-      sameSupplierPaymentEntries(a, form({ amount: '25000', notes: 'ref', fundingAccountId: 'x' })),
+      sameOfficeEntries(a, form({ amount: '25000', notes: 'ref', fundingAccountId: 'x' })),
     ).toBe(false);
   });
 });

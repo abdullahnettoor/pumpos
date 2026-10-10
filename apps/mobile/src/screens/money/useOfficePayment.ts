@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { createIdempotencyKey, useInvalidateOperational } from '@pump/ui';
 import {
   applyPaymentToParties,
@@ -16,8 +16,11 @@ interface Options<F extends OfficePaymentFields> {
   partyId: string;
   /** The cached party list whose balance falls by the amount: customers or suppliers (semi tier). */
   partyListKey: 'customers' | 'suppliers';
-  /** The party's own ledger query, refreshed with the balances. */
-  ledgerKey: readonly unknown[];
+  /**
+   * The party's own queries (ledger, statement, receivable...), each refreshed
+   * with the balances through its centralized key.
+   */
+  refreshKeys: readonly QueryKey[];
   /** The one request: the existing route, carrying this Idempotency-Key. */
   send: (form: F, idempotencyKey: string) => Promise<unknown>;
   failure: (error: unknown) => OfficePaymentFailure;
@@ -32,7 +35,8 @@ interface Options<F extends OfficePaymentFields> {
  * the lower balance into every cached list at once (the card repaints in the
  * same frame) and then `useInvalidateOperational` refreshes the server's rows
  * (customers, suppliers, collections, purchases, account balances, the Daily
- * Cash Book). The party's ledger is invalidated through its own key. A refusal
+ * Cash Book). The party's own queries are invalidated through their centralized
+ * keys (`refreshKeys`), so a page repaints even for a save from another screen. A refusal
  * by the access mode refreshes the Access Document on its own (the app's
  * QueryClient does that for every policy refusal).
  *
@@ -45,7 +49,7 @@ interface Options<F extends OfficePaymentFields> {
  * is unknown, so the sheet can warn that it may have gone through.
  */
 export function useOfficePayment<F extends OfficePaymentFields>(opts: Options<F>) {
-  const { stationId, partyId, partyListKey, ledgerKey, send, failure } = opts;
+  const { stationId, partyId, partyListKey, refreshKeys, send, failure } = opts;
   const qc = useQueryClient();
   const invalidateOperational = useInvalidateOperational();
   const key = useRef<string | null>(null);
@@ -54,7 +58,7 @@ export function useOfficePayment<F extends OfficePaymentFields>(opts: Options<F>
 
   const refreshBalances = () => {
     void invalidateOperational(stationId);
-    void qc.invalidateQueries({ queryKey: ledgerKey });
+    for (const queryKey of refreshKeys) void qc.invalidateQueries({ queryKey });
   };
 
   const mutation = useMutation({

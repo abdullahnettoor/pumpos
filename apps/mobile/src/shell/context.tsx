@@ -7,6 +7,8 @@ export interface ShellContextValue {
   station: Station | null;
   stationName: string;
   userName: string;
+  /** The signed-in user's member id (the Team page keeps people from locking themselves out). */
+  userId?: string | null;
   role: Role;
   /** Opens the Account sheet (station name and avatar both call this). */
   openAccount: () => void;

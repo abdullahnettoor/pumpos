@@ -33,10 +33,11 @@ import { VehicleSpend } from './VehicleSpend.js';
  * as a balance. "Earlier months" fetches 6 more whenever any older entry exists
  * (the server says so), also for a customer settled before the window.
  *
- * Record payment: a quiet outline button on the balance card (not in the action
- * bar); opens `RecordPaymentSheet`, a Collection through the existing route.
- * Owner / Manager edit the credit limit from the balance card (`CreditLimitSheet`,
- * existing customer update route).
+ * Two quiet actions sit on the balance card (not in the action bar):
+ *  - Record payment: opens `RecordPaymentSheet`, a Collection through the existing
+ *    route; every Role except Attendant.
+ *  - Credit limit: Owner / Manager edit it (`CreditLimitSheet`, existing customer
+ *    update route).
  *
  * Seam for #400 (statement PDF): pass `share` / `download` to `DetailPage`; with
  * neither, no action bar is shown.
@@ -45,18 +46,19 @@ export const CustomerPage: React.FC<{
   customer: MoneyCustomer;
   /** The selected Station: its clock ages the receivables and anchors "this month". */
   station?: Station | null;
-}> = ({ customer: initial, station = null }) => {
+}> = ({ customer: initial, station: stationProp = null }) => {
   // The list row is a snapshot; read the live entry so a refreshed balance shows.
   const { customers } = useCustomersData();
   const customer = customers.find((c) => c.id === initial.id) ?? initial;
 
+  const { role, station: shellStation } = useShell();
+  const station = stationProp ?? shellStation;
   const receivable = useCustomerReceivableData(station?.id, customer.id);
   const [months, setMonths] = useState(STATEMENT_MONTHS);
   const statement = useCustomerStatementData(customer.id, station, months);
   const opening = Number(statement.ledger?.periodOpeningBalance ?? 0) || 0;
 
   // Owner / Manager only, and paused while Restricted Access blocks the write.
-  const { role, station: shellStation } = useShell();
   const accessMode = useAccess().data?.subscription.mode;
   const limitAccess = creditLimitAccess({
     role,
@@ -65,10 +67,9 @@ export const CustomerPage: React.FC<{
   });
   const [editingLimit, setEditingLimit] = useState(false);
 
-  // The page's station, else the shell's (the same one in the app). Every Role except Attendant (the server's collection guard); only Suspension pauses it,
+  // Every Role except Attendant (the server's collection guard); only Suspension pauses it,
   // since a Collection finishes work already done (FINISH_OPEN_WORK). No station, no Office Record.
-  const paymentStation = station ?? shellStation;
-  const paymentAccess = paymentStation
+  const paymentAccess = station
     ? collectionAccess({ role, accessMode })
     : { status: 'hidden' as const };
   const [recordingPayment, setRecordingPayment] = useState(false);
@@ -87,6 +88,7 @@ export const CustomerPage: React.FC<{
     >
       <BalanceCard
         customer={customer}
+        aging={receivable.summary?.aging}
         paymentAction={
           paymentAccess.status === 'hidden'
             ? undefined
@@ -96,7 +98,6 @@ export const CustomerPage: React.FC<{
                   paymentAccess.status === 'disabled' ? paymentAccess.reason : undefined,
               }
         }
-        aging={receivable.summary?.aging}
         limitAction={
           limitAccess.status === 'hidden'
             ? undefined
@@ -135,12 +136,12 @@ export const CustomerPage: React.FC<{
         customer={customer}
         onClose={() => setEditingLimit(false)}
       />
-      {paymentStation && (
+      {station && (
         <RecordPaymentSheet
           open={recordingPayment}
           customer={customer}
-          stationId={paymentStation.id}
-          timeZone={paymentStation.settings?.timezone}
+          stationId={station.id}
+          timeZone={station.settings?.timezone}
           onClose={() => setRecordingPayment(false)}
         />
       )}

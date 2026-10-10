@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import React, { useLayoutEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Role, Station } from '@pump/shared';
 import { THEME_COLORS, THEME_STORAGE_KEY } from '../theme/config.js';
@@ -36,12 +37,22 @@ vi.mock('@pump/ui', async (importOriginal) => {
     ...actual,
     useMyAssignment: () => query(mine.assignment),
     useUsers: () => query(users),
+    useStations: () => query([]),
     useShiftStatus: () => query(shiftStatus),
     useOrganization: () => query({ name: 'Malabar Fuels Pvt Ltd' }),
     useAccess: () => query({ plan: 'CORE' }),
   };
 });
-const alerts = [{ severity: 'danger' }, { severity: 'warning' }];
+const alerts = [
+  { id: 'tank-1', severity: 'danger', category: 'stock', title: 'HSD critically low' },
+  {
+    id: 'day-2026-10-08',
+    severity: 'warning',
+    category: 'day',
+    title: 'Thu, 8 Oct not closed',
+    action: { kind: 'day', businessDate: '2026-10-08' },
+  },
+];
 vi.mock('../lib/alerts.js', () => ({ useMobileAlerts: () => alerts }));
 
 const { MobileShell } = await import('./MobileShell.js');
@@ -49,7 +60,6 @@ const { NavProvider, useNav } = await import('./nav.js');
 const { tabsForRole } = await import('./tabs.js');
 const { HomeHeader } = await import('./HomeHeader.js');
 const { TabHeader } = await import('./TabHeader.js');
-const { HOME_ATTENTION_ID } = await import('./attention.js');
 const { DetailPage } = await import('../ui/DetailPage.js');
 const { ThemeProvider } = await import('../theme/index.js');
 
@@ -84,21 +94,22 @@ const Root: React.FC<{ tab: string; stationName: string }> = ({ tab, stationName
   const n = useNav();
   return (
     <div data-testid={`root-${tab}`}>
-      {tab === 'home' ? <HomeHeader /> : <TabHeader title={tab} />}
+      {tab === 'home' ? (
+        <HomeHeader onOpenAttention={() => n.push(<Detail name="attention" />, 'attention')} />
+      ) : (
+        <TabHeader title={tab} />
+      )}
       <p>
         {tab} list · {stationName}
       </p>
-      {tab === 'home' && (
-        <button type="button" id={HOME_ATTENTION_ID}>
-          2 items need attention
-        </button>
-      )}
       <button type="button" onClick={() => n.push(<Detail name={`${tab} item`} />, `${tab}:1`)}>
         Open {tab} item
       </button>
     </div>
   );
 };
+
+const queryClient = new QueryClient();
 
 const Harness: React.FC<{
   role?: Role;
@@ -108,23 +119,25 @@ const Harness: React.FC<{
   const [stationId, setStationId] = useState('st-1');
   const name = stations.find((s) => s.id === stationId)!.name;
   return (
-    <ThemeProvider appearanceEnabled={false} devSwitchEnabled={false}>
-      <NavProvider tabs={tabsForRole(role, false)}>
-        <Probe />
-        <MobileShell
-          userName="Abdullah Nettoor"
-          role={role}
-          stations={stations}
-          selectedStationId={stationId}
-          onSelectStation={(id) => {
-            setStationId(id);
-            onStationChange?.(id);
-          }}
-          onSignOut={onSignOut}
-          renderRoot={(tab) => <Root tab={tab} stationName={name} />}
-        />
-      </NavProvider>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider appearanceEnabled={false} devSwitchEnabled={false}>
+        <NavProvider tabs={tabsForRole(role, false)}>
+          <Probe />
+          <MobileShell
+            userName="Abdullah Nettoor"
+            role={role}
+            stations={stations}
+            selectedStationId={stationId}
+            onSelectStation={(id) => {
+              setStationId(id);
+              onStationChange?.(id);
+            }}
+            onSignOut={onSignOut}
+            renderRoot={(tab) => <Root tab={tab} stationName={name} />}
+          />
+        </NavProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 };
 
@@ -201,20 +214,9 @@ describe('dock', () => {
   });
 });
 
-const du = (handover?: unknown) => ({
-  shift: { id: 's2', templateName: 'Shift 2' },
-  dispenserUnits: [{ duId: 'du-2', duName: 'DU2', nozzles: [], terminals: [], handover }],
-});
-
 describe('header', () => {
   afterEach(() => {
     mine.assignment = null;
-  });
-
-  it('does not count the own handover on the bell: the card on Home is its home', () => {
-    mine.assignment = du();
-    render(<Harness />);
-    expect(screen.getByRole('button', { name: 'Alerts, 2 open' })).toBeTruthy();
   });
 
   it('shows the open-alert count on the bell', () => {
@@ -222,19 +224,21 @@ describe('header', () => {
     expect(screen.getByRole('button', { name: 'Alerts, 2 open' })).toBeTruthy();
   });
 
-  it('the bell scrolls to and focuses Home attention section', async () => {
-    const scrolled: unknown[] = [];
-    Element.prototype.scrollIntoView = function (this: Element) {
-      scrolled.push(this);
-    };
+  it('hides the badge text from assistive tech (the button label carries the count)', () => {
+    render(<Harness />);
+    const badge = screen.getByRole('button', { name: 'Alerts, 2 open' }).querySelector('.num');
+    expect(badge?.textContent).toBe('2');
+    expect(badge?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('the bell calls onOpenAttention: the page it pushes replaces the dock, back returns', async () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Alerts, 2 open' }));
-    const section = screen.getByRole('button', { name: '2 items need attention' });
-    await waitFor(() => expect(document.activeElement).toBe(section));
-    expect(scrolled).toEqual([section]);
-    // Still on Home's own screen, not another page.
     expect(holder.nav.active).toBe('home');
-    expect(holder.nav.depth).toBe(0);
+    expect(holder.nav.depth).toBe(1);
+    expect(dock()).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(holder.nav.depth).toBe(0));
   });
 
   it('has no station-picker row and no business-day pill', () => {
@@ -303,16 +307,27 @@ describe('Account sheet', () => {
     expect(screen.getByText('shifts list · City Fuels')).toBeTruthy();
   });
 
-  it('shows a read-only team summary: member count and who is on shift now', () => {
+  it('shows the team summary: member count and who is on shift now', () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Account' }));
     const s = within(sheet()!);
     expect(s.getByText('3 members')).toBeTruthy(); // the inactive user is not counted
     expect(s.getByText('2 on shift now')).toBeTruthy(); // Ramesh is on two DUs, counted once
     expect(s.getByText('Ramesh K, Sajid P')).toBeTruthy();
-    // Read-only: no control in the Team group.
-    const team = s.getByText('2 on shift now').closest('div[class*="rounded-[14px]"]')!;
-    expect(within(team as HTMLElement).queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it('opens the Team page from the Team row and closes the sheet', async () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+    fireEvent.click(within(sheet()!).getByRole('button', { name: /2 on shift now/ }));
+    expect(sheet()).toBeNull();
+    expect(holder.nav.depth).toBe(1);
+    expect(await screen.findByRole('heading', { name: 'Team' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Ramesh K/ })).toBeTruthy();
+    // Back returns to the tab the person was on.
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await settle();
+    expect(holder.nav.depth).toBe(0);
   });
 
   it('shows the Organization name and plan', () => {

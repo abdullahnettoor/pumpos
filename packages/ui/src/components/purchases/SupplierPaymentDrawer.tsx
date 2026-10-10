@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { resolveEntryDate } from '@pump/shared';
+import { resolveEntryDate, supplierPaymentEntryFormSchema } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { DateField, Field, MoneyInput, TextInput } from '../primitives/Field.js';
 import { Combobox } from '../primitives/Combobox.js';
@@ -90,8 +90,21 @@ const SupplierPaymentForm: React.FC<Omit<SupplierPaymentDrawerProps, 'isOpen'>> 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stationId || !resolvedSupplier?.id || !amount || Number(amount) <= 0) return;
-    if (!fundingAccountId) {
-      setAccountError('Choose the account');
+    // The same field rules as the mobile sheet and the server (amount range and
+    // 2 decimals, the account, the reference length).
+    const checked = supplierPaymentEntryFormSchema.safeParse({
+      entryDate,
+      supplierId: resolvedSupplier.id,
+      amount,
+      notes,
+      fundingAccountId,
+    });
+    if (!checked.success) {
+      const issues = checked.error.issues;
+      const accountIssue = issues.find((i) => i.path[0] === 'fundingAccountId');
+      const other = issues.find((i) => i.path[0] !== 'fundingAccountId');
+      setAccountError(accountIssue?.message ?? null);
+      setError(other?.message ?? null);
       return;
     }
     try {
