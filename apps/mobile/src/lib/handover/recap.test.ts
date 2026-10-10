@@ -1,4 +1,4 @@
-import { formatRecordedTime, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { RecordHandoverResult } from '@pump/ui';
 import type { AssignedDu, HandoverRow } from './model.js';
 import { buildRecap, formatOnShift, formatRecordedTime, minutesOnShift } from './recap.js';
