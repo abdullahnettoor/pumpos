@@ -671,25 +671,35 @@ export const saleItems = pgTable('sale_items', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
-export const stockMovements = pgTable('stock_movements', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  // Nullable: sale movements occur within a shift; purchase/receipt movements
-  // happen against a business day with no shift.
-  shiftId: uuid('shift_id').references(() => shifts.id),
-  businessDayId: uuid('business_day_id')
-    .references(() => businessDays.id)
-    .notNull(),
-  productId: uuid('product_id')
-    .references(() => products.id)
-    .notNull(),
-  tankId: uuid('tank_id').references(() => tanks.id),
-  movementType: varchar('movement_type', { length: 50 }).notNull(), // 'Purchase', 'Sale', 'Adjustment', 'Decantation', 'Variance'
-  quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(),
-  referenceType: varchar('reference_type', { length: 50 }),
-  referenceId: uuid('reference_id'),
-  notes: varchar('notes', { length: 500 }),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const stockMovements = pgTable(
+  'stock_movements',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    // Nullable: sale movements occur within a shift; purchase/receipt movements
+    // happen against a business day with no shift.
+    shiftId: uuid('shift_id').references(() => shifts.id),
+    businessDayId: uuid('business_day_id')
+      .references(() => businessDays.id)
+      .notNull(),
+    productId: uuid('product_id')
+      .references(() => products.id)
+      .notNull(),
+    tankId: uuid('tank_id').references(() => tanks.id),
+    movementType: varchar('movement_type', { length: 50 }).notNull(), // 'Purchase', 'Sale', 'Adjustment', 'Decantation', 'Variance'
+    quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(),
+    referenceType: varchar('reference_type', { length: 50 }),
+    referenceId: uuid('reference_id'),
+    notes: varchar('notes', { length: 500 }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    // A Business Day's stock movements per tank (days of cover on Home, #403).
+    businessDayTankIdx: index('stock_movements_business_day_tank_idx').on(
+      t.businessDayId,
+      t.tankId,
+    ),
+  }),
+);
 
 export const stockVariances = pgTable(
   'stock_variances',
