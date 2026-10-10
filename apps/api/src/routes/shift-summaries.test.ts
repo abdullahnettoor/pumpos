@@ -60,7 +60,7 @@ function makeApp(db: unknown, user: Record<string, unknown> = {}) {
 function summaryRow(i: number) {
   return {
     shift: {
-      id: `sh-${i}`,
+      id: `00000000-0000-0000-0000-${String(i).padStart(12, '0')}`,
       status: 'CLOSED',
       openedAt: new Date('2026-03-15T06:00:00Z'),
       closedAt: new Date('2026-03-15T14:00:00Z'),
@@ -130,6 +130,13 @@ describe('GET /shift-summaries/:shiftId', () => {
     expect(((await res.json()) as any).success).toBe(false);
   });
 
+  it('answers 404 for malformed ids without querying the database', async () => {
+    const { db, counter } = makeFakeDb([]);
+    const res = await makeApp(db).request('/shift-summaries/sh-7');
+    expect(res.status).toBe(404);
+    expect(counter.selects).toBe(0);
+  });
+
   it('answers 404 for a station the caller is not assigned to', async () => {
     const { db } = makeFakeDb([summaryRow(1)]);
     const res = await makeApp(db, {
@@ -145,5 +152,14 @@ describe('GET /shift-summaries/:shiftId', () => {
       '/shift-summaries/sh-1',
     );
     expect(res.status).toBe(200);
+  });
+
+  it('refuses Attendants because the snapshot includes other Drawers’ variance', async () => {
+    const { db, counter } = makeFakeDb([summaryRow(1)]);
+    const res = await makeApp(db, { role: 'Attendant' }).request(
+      '/shift-summaries/00000000-0000-0000-0000-000000000001',
+    );
+    expect(res.status).toBe(403);
+    expect(counter.selects).toBe(0);
   });
 });

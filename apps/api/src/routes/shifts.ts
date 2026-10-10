@@ -36,6 +36,7 @@ import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import { rowJson, rowJsonNullable, tsIso } from '../infra/sql-json.js';
 import { shiftSequenceSql } from '../infra/shift-sequence-sql.js';
+import { isUuid } from '../infra/is-uuid.js';
 import { assembleReconTotals, reconTotalsJson } from '../infra/repositories/shift-recon-sql.js';
 import {
   DrizzleDispenserRepository,
@@ -1909,6 +1910,20 @@ shiftsRouter.get('/shift-summaries', async (c) => {
 // caller cannot reach answers 404, never 403, so ids do not leak.
 shiftsRouter.get('/shift-summaries/:shiftId', async (c) => {
   const user = c.var.user;
+  if (!isUuid(c.req.param('shiftId'))) {
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Shift summary not found' } },
+      404,
+    );
+  }
+  // A Shift Summary contains every Drawer’s variance. An Attendant may read
+  // only their own Handover, so this station-wide snapshot is not available to them.
+  if (isAttendant(user.role)) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
+  }
   const [row] = await shiftSummaryRows(c.var.db)
     .where(
       and(
