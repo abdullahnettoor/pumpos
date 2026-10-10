@@ -143,7 +143,7 @@ function describeCustomerRow(r: LedgerRow, day: string): { meta: string; detail:
   // otherwise it moves to the second line, after what the row says.
   const enriched = facts.length > 0 || detail !== null;
   if (!enriched) return { meta: [day, note].filter(Boolean).join(' · '), detail: null };
-  return { meta: [day, ...facts].join(' · '), detail: detail ?? (note || null) };
+  return { meta: [day, ...facts].filter(Boolean).join(' · '), detail: detail ?? (note || null) };
 }
 
 /**
@@ -168,7 +168,7 @@ function describeSupplierRow(r: LedgerRow, day: string): { meta: string; detail:
   }
   const enriched = facts.length > 0 || detail !== null;
   if (!enriched) return { meta: [day, note].filter(Boolean).join(' · '), detail: null };
-  return { meta: [day, ...facts].join(' · '), detail: detail ?? (note || null) };
+  return { meta: [day, ...facts].filter(Boolean).join(' · '), detail: detail ?? (note || null) };
 }
 
 /** "Purchase · Diesel" when the row names what was bought, else the plain type label. */
@@ -178,10 +178,26 @@ function supplierLabel(r: LedgerRow): string {
   return product ? `${base} · ${product}` : base;
 }
 
-/** `YYYY-MM-DD` that is later than any Business or Entry Date: the open end of a statement window. */
-export const STATEMENT_END = '9999-12-31';
-/** Calendar months a customer statement opens with (the current one and the 5 before), and each "Earlier months" step. */
-export const STATEMENT_MONTHS = 6;
+/**
+ * How a ledger row reads: its label ("Credit Sale", "Purchase · HSD"), the line
+ * under it (`day` first when given, then the Shift / invoice / method facts) and
+ * an optional second line. One place, so the screen and the statement PDF word a
+ * row the same way.
+ */
+export function describeLedgerRow(
+  r: LedgerRow,
+  kind: PartyKind,
+  day = '',
+): { label: string; meta: string; detail: string | null } {
+  const described = kind === 'customer' ? describeCustomerRow(r, day) : describeSupplierRow(r, day);
+  return {
+    label:
+      kind === 'supplier'
+        ? supplierLabel(r)
+        : (LABEL[r.transactionType ?? ''] ?? r.transactionType ?? 'Entry'),
+    ...described,
+  };
+}
 
 /** The first day of the month `months - 1` months before the month of `today` (a Business Date). */
 export function statementWindowStart(today: string, months: number): string {
@@ -192,7 +208,8 @@ export function statementWindowStart(today: string, months: number): string {
   return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-01`;
 }
 
-const dateOf = (r: LedgerRow): string => String(r.businessDate ?? r.createdAt ?? '').slice(0, 10);
+export const dateOf = (r: LedgerRow): string =>
+  String(r.businessDate ?? r.createdAt ?? '').slice(0, 10);
 
 const MONTHS = [
   'January',
@@ -256,16 +273,9 @@ export function buildStatement(
   const entries = ordered.map(({ r, i, date }): StatementEntry & { date: string } => {
     const delta = deltaOf(r.transactionType, Number(r.amount ?? 0) || 0, kind);
     running = Math.round((running + delta) * 100) / 100;
-    const day = date ? dayLabel(date) : '';
-    const described =
-      kind === 'customer' ? describeCustomerRow(r, day) : describeSupplierRow(r, day);
     return {
       key: r.id ?? `row-${i}`,
-      label:
-        kind === 'supplier'
-          ? supplierLabel(r)
-          : (LABEL[r.transactionType ?? ''] ?? r.transactionType ?? 'Entry'),
-      ...described,
+      ...describeLedgerRow(r, kind, date ? dayLabel(date) : ''),
       delta,
       balance: running,
       date,

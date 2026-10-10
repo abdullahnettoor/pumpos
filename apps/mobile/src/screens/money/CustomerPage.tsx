@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { useAccess } from '@pump/ui';
+import { useAccess, useToast } from '@pump/ui';
 import type { Station } from '@pump/shared';
 import { collectionAccess } from '../../lib/money/collection.js';
 import { creditLimitAccess } from '../../lib/money/creditLimit.js';
 import { balanceOf, type MoneyCustomer } from '../../lib/money/parties.js';
-import { STATEMENT_MONTHS } from '../../lib/money/statement.js';
+import { customerPdfParty } from '../../lib/money/statementPdf.js';
+import { rangeLabel } from '../../lib/money/statementRange.js';
 import { useShell } from '../../shell/context.js';
 import { DetailPage } from '../../ui/DetailPage.js';
 import { BalanceCard } from './BalanceCard.js';
@@ -12,12 +13,15 @@ import { BehaviourTiles } from './BehaviourTiles.js';
 import { CallButton } from './CallButton.js';
 import { CreditLimitSheet } from './CreditLimitSheet.js';
 import { RecordPaymentSheet } from './RecordPaymentSheet.js';
+import { StatementFilterSheet } from './StatementFilterSheet.js';
 import { StatementSection } from './StatementSection.js';
 import {
   useCustomerReceivableData,
   useCustomersData,
   useCustomerStatementData,
 } from './useMoneyData.js';
+import { useStatementPdf } from './useStatementPdf.js';
+import { useStatementRange } from './useStatementRange.js';
 import { VehicleSpend } from './VehicleSpend.js';
 
 /**
@@ -28,10 +32,11 @@ import { VehicleSpend } from './VehicleSpend.js';
  * The aging, behaviour tiles and vehicles come from the receivables summary and
  * appear when it arrives; a failed or missing summary leaves the balance card
  * and the statement standing on their own. The statement is the ranged ledger:
- * the last 6 months with each Credit Sale's Shift, product, litres and Vehicle
- * and each Collection's method and reference, and what came before carried in
- * as a balance. "Earlier months" fetches 6 more whenever any older entry exists
- * (the server says so), also for a customer settled before the window.
+ * this month by default (or the range picked in the Filter) with each Credit
+ * Sale's Shift, product, litres and Vehicle and each Collection's method and
+ * reference, and what came before carried in as a balance. "Earlier months" adds
+ * one more month whenever any older entry exists (the server says so), also for
+ * a customer settled before the range.
  *
  * Two quiet actions sit on the balance card (not in the action bar):
  *  - Record payment: opens `RecordPaymentSheet`, a Collection through the existing
@@ -39,8 +44,9 @@ import { VehicleSpend } from './VehicleSpend.js';
  *  - Credit limit: Owner / Manager edit it (`CreditLimitSheet`, existing customer
  *    update route).
  *
- * Seam for #400 (statement PDF): pass `share` / `download` to `DetailPage`; with
- * neither, no action bar is shown.
+ * The statement shows one range, this month until the Filter picks another or
+ * "Earlier months" adds one; Share and Download statement print that same range
+ * (see `useStatementPdf`).
  */
 export const CustomerPage: React.FC<{
   customer: MoneyCustomer;
@@ -54,9 +60,20 @@ export const CustomerPage: React.FC<{
   const { role, station: shellStation } = useShell();
   const station = stationProp ?? shellStation;
   const receivable = useCustomerReceivableData(station?.id, customer.id);
-  const [months, setMonths] = useState(STATEMENT_MONTHS);
-  const statement = useCustomerStatementData(customer.id, station, months);
+  const toast = useToast();
+  const statementRange = useStatementRange(station);
+  const { range } = statementRange;
+  const statement = useCustomerStatementData(customer.id, range);
   const opening = Number(statement.ledger?.periodOpeningBalance ?? 0) || 0;
+  const [filtering, setFiltering] = useState(false);
+  const pdf = useStatementPdf({
+    kind: 'customer',
+    party: customerPdfParty(customer),
+    station,
+    range,
+    ledger: statement.ledger,
+    pending: statement.isLoading || statement.isFetchingMore || statement.isError,
+  });
 
   // Owner / Manager only, and paused while Restricted Access blocks the write.
   const accessMode = useAccess().data?.subscription.mode;
@@ -85,6 +102,9 @@ export const CustomerPage: React.FC<{
       right={
         customer.phone ? <CallButton name={customer.name} phone={customer.phone} /> : undefined
       }
+      share={pdf.share}
+      download={pdf.download}
+      onActionError={(message) => toast.error(message)}
     >
       <BalanceCard
         customer={customer}
@@ -111,7 +131,9 @@ export const CustomerPage: React.FC<{
       {receivable.summary && <VehicleSpend vehicles={receivable.summary.vehicles} />}
       <StatementSection
         kind="customer"
-        balance={balanceOf(customer)}
+        // The range's own closing balance: a past range does not end on today's balance.
+        balance={statement.ledger ? Number(statement.ledger.closingBalance) : balanceOf(customer)}
+        onFilter={() => setFiltering(true)}
         rows={statement.ledger?.entries}
         isLoading={statement.isLoading}
         isError={statement.isError}
@@ -119,17 +141,27 @@ export const CustomerPage: React.FC<{
         period={
           statement.ledger
             ? {
-                from: statement.from,
+                from: range.from,
+                label: rangeLabel(range),
                 openingBalance: opening,
-                // Anything dated before the window can be loaded, even when it nets to 0:
-                // a customer settled before the window still has history to read.
-                onEarlier: statement.ledger.hasEarlier
-                  ? () => setMonths((m) => m + STATEMENT_MONTHS)
-                  : undefined,
+                // Anything dated before the range can be loaded, even when it nets to 0:
+                // a customer settled before it still has history to read. A range picked by
+                // hand stays as picked (the Filter changes it).
+                onEarlier:
+                  statement.ledger.hasEarlier && statementRange.choice.kind === 'recent'
+                    ? statementRange.widen
+                    : undefined,
                 isLoadingEarlier: statement.isFetchingMore,
               }
             : undefined
         }
+      />
+      <StatementFilterSheet
+        open={filtering}
+        onClose={() => setFiltering(false)}
+        today={statementRange.today}
+        choice={statementRange.choice}
+        onApply={statementRange.choose}
       />
       <CreditLimitSheet
         open={editingLimit}

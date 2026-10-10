@@ -73,7 +73,16 @@ export {
   paperFromStation,
 } from './services/reports/reportConfig.js';
 export { letterheadFromStation } from './services/reports/letterhead.js';
-export { generateDssrPdf, generateShiftSummaryPdf } from './services/reports/generate.js';
+export {
+  generateDssrPdf,
+  generateShiftSummaryPdf,
+  generateStatementPdf,
+} from './services/reports/generate.js';
+export type {
+  StatementPdfData,
+  StatementPdfKind,
+  StatementPdfRow,
+} from './services/reports/statementPdf.js';
 export { LedgerView, computeLedgerRows } from './components/ledger/LedgerView.js';
 export type {
   LedgerResolved,

@@ -47,7 +47,8 @@ vi.mock('@pump/ui', async (importOriginal) => {
           ? undefined
           : {
               periodOpeningBalance: openings[id] ?? '0',
-              closingBalance: '0',
+              // The server's closing balance of the range: here the party's balance on record.
+              closingBalance: String(suppliers.find((s) => s.id === id)?.currentBalance ?? '0'),
               hasEarlier: earlier[id] ?? Number(openings[id] ?? '0') !== 0,
               entries: supplierLedgers[id] ?? [],
             },
@@ -74,7 +75,8 @@ vi.mock('@pump/ui', async (importOriginal) => {
           ? undefined
           : {
               periodOpeningBalance: openings[id] ?? '0',
-              closingBalance: '0',
+              // The server's closing balance of the range: here the party's balance on record.
+              closingBalance: String(customers.find((c) => c.id === id)?.currentBalance ?? '0'),
               hasEarlier: earlier[id] ?? Number(openings[id] ?? '0') !== 0,
               entries: ledgers[id] ?? [],
             },
@@ -102,7 +104,7 @@ const { SupplierPage } = await import('./money/SupplierPage.js');
 const { NavProvider, useNav } = await import('../shell/nav.js');
 const { stackOf } = await import('../shell/navStack.js');
 const { ShellContext } = await import('../shell/context.js');
-const { createQueryClient } = await import('@pump/ui');
+const { createQueryClient, ToastProvider } = await import('@pump/ui');
 
 const shell = {
   station: null,
@@ -138,12 +140,14 @@ const STATION = {
 const mount = (props: StageProps = {}) =>
   render(
     <QueryClientProvider client={createQueryClient()}>
-      <ShellContext.Provider value={shell}>
-        <NavProvider tabs={['money']}>
-          <Probe />
-          <Stage {...props} />
-        </NavProvider>
-      </ShellContext.Provider>
+      <ToastProvider>
+        <ShellContext.Provider value={shell}>
+          <NavProvider tabs={['money']}>
+            <Probe />
+            <Stage {...props} />
+          </NavProvider>
+        </ShellContext.Provider>
+      </ToastProvider>
     </QueryClientProvider>,
   );
 
@@ -160,7 +164,7 @@ const cust = (over: Record<string, unknown>) => ({
 const row = (name: string) => screen.getByRole('button', { name: new RegExp(name) });
 
 beforeEach(() => {
-  // 10:00 IST on 9 Oct 2026: the statement window opens on 1 May.
+  // 10:00 IST on 9 Oct 2026: the statement opens on this month (1 to 31 Oct).
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-09T10:00:00+05:30'));
   customers.length = 0;
@@ -613,10 +617,11 @@ describe('Customer page', () => {
     expect(within(balance()).getByText('Nothing due.')).toBeTruthy();
   });
 
-  it('has no action bar yet and hides the figures that need the receivables summary', () => {
+  it('has Share and Download statement, and hides the figures that need the receivables summary', () => {
     mount();
     open('KTC Logistics');
-    expect(screen.queryByRole('button', { name: /Share|Download/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Share' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Download statement' })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/Last payment|Usually pays|0–7 days/);
   });
 
@@ -793,20 +798,24 @@ describe('Customer page', () => {
       expect(sep.getByText('18 Sep · UPI · Ref COL-000042')).toBeTruthy();
     });
 
-    it('asks for the last 6 months and carries the earlier balance in', () => {
+    it('asks for this month and carries the earlier balance in', () => {
       customers.push(cust({ name: 'Ledger Lou', currentBalance: '11750', creditLimit: '100000' }));
       openings['Ledger Lou'] = '1000';
       ledgers['Ledger Lou'] = [SALE];
       mount({ station: STATION });
       fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
       open('Ledger Lou');
-      expect(statementCalls.at(-1)).toMatchObject({ id: 'Ledger Lou', from: '2026-05-01' });
-      expect(screen.getByText('Balance brought forward from before 1 May 2026')).toBeTruthy();
+      expect(statementCalls.at(-1)).toEqual({
+        id: 'Ledger Lou',
+        from: '2026-10-01',
+        to: '2026-10-31',
+      });
+      expect(screen.getByText('Balance brought forward from before 1 Oct 2026')).toBeTruthy();
       // The row's running balance starts from the opening balance: 1000 + 10750.
       expect(document.body.textContent).toContain('Bal ₹11,750.00');
     });
 
-    it('widens the window by 6 months from "Earlier months" when something is owed from before', () => {
+    it('adds a month from "Earlier months" when something is owed from before', () => {
       customers.push(cust({ name: 'Ledger Lou', currentBalance: '11750', creditLimit: '100000' }));
       openings['Ledger Lou'] = '1000';
       ledgers['Ledger Lou'] = [SALE];
@@ -814,7 +823,11 @@ describe('Customer page', () => {
       fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
       open('Ledger Lou');
       fireEvent.click(screen.getByRole('button', { name: 'Earlier months' }));
-      expect(statementCalls.at(-1)).toMatchObject({ id: 'Ledger Lou', from: '2025-11-01' });
+      expect(statementCalls.at(-1)).toMatchObject({
+        id: 'Ledger Lou',
+        from: '2026-09-01',
+        to: '2026-10-31',
+      });
     });
 
     it('says nothing is owed before the window, and offers no earlier months, when nothing is dated before it', () => {
@@ -824,7 +837,7 @@ describe('Customer page', () => {
       mount({ station: STATION });
       fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
       open('Ledger Lou');
-      expect(screen.getByText('Nothing owed before 1 May 2026.')).toBeTruthy();
+      expect(screen.getByText('Nothing owed before 1 Oct 2026.')).toBeTruthy();
       expect(screen.queryByRole('button', { name: 'Earlier months' })).toBeNull();
     });
 
@@ -836,9 +849,13 @@ describe('Customer page', () => {
       mount({ station: STATION });
       fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
       open('Ledger Lou');
-      expect(screen.getByText('Nothing owed before 1 May 2026.')).toBeTruthy();
+      expect(screen.getByText('Nothing owed before 1 Oct 2026.')).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Earlier months' }));
-      expect(statementCalls.at(-1)).toMatchObject({ id: 'Ledger Lou', from: '2025-11-01' });
+      expect(statementCalls.at(-1)).toMatchObject({
+        id: 'Ledger Lou',
+        from: '2026-09-01',
+        to: '2026-10-31',
+      });
     });
 
     it('keeps the rows on screen while earlier months load', () => {
@@ -864,7 +881,7 @@ describe('Customer page', () => {
       mount({ station: STATION });
       fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'lou' } });
       open('Ledger Lou');
-      expect(screen.getByText('Balance brought forward from before 1 May 2026')).toBeTruthy();
+      expect(screen.getByText('Balance brought forward from before 1 Oct 2026')).toBeTruthy();
       expect(screen.queryByText(/No transactions/)).toBeNull();
     });
   });
@@ -1018,7 +1035,7 @@ describe('Customer page', () => {
       mount();
       fireEvent.change(screen.getByLabelText('Search customers'), { target: { value: 'sam' } });
       open('Settled Sam');
-      expect(screen.getByText(/No transactions since 1 May 2026/)).toBeTruthy();
+      expect(screen.getByText(/No transactions in October 2026/)).toBeTruthy();
       cleanup();
 
       mount();
@@ -1114,9 +1131,10 @@ describe('Supplier page', () => {
     expect(within(balance()).getByText('Nothing due.')).toBeTruthy();
   });
 
-  it('has no action bar yet and none of the payables-summary figures', () => {
+  it('has Share and Download statement, and none of the payables-summary figures', () => {
     openSupplier('HPCL');
-    expect(screen.queryByRole('button', { name: /Share|Download/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Share' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Download statement' })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(
       /Purchased this month|Paid this month|Purchases by product|Oldest unpaid/i,
     );
@@ -1290,29 +1308,29 @@ describe('Supplier page', () => {
       expect(screen.getByText('Tanker KL-58-H-2210')).toBeTruthy();
     });
 
-    it('asks for the last 6 months and carries the earlier balance in (an advance reads signed)', () => {
+    it('asks for this month and carries the earlier balance in (an advance reads signed)', () => {
       suppliers.push(sup({ name: 'Ledger Lal', currentBalance: '-1000' }));
       openings['Ledger Lal'] = '-1500';
       supplierLedgers['Ledger Lal'] = [{ ...PURCHASE, amount: '500' }];
       openSupplier('Ledger');
       expect(supplierStatementCalls.at(-1)).toEqual({
         id: 'Ledger Lal',
-        from: '2026-05-01',
-        to: '9999-12-31',
+        from: '2026-10-01',
+        to: '2026-10-31',
       });
-      expect(screen.getByText('Balance brought forward from before 1 May 2026')).toBeTruthy();
+      expect(screen.getByText('Balance brought forward from before 1 Oct 2026')).toBeTruthy();
       expect(screen.getByText('−₹1,500.00')).toBeTruthy();
       expect(screen.getByText('Bal −₹1,000.00')).toBeTruthy();
     });
 
-    it('widens the window by 6 months on "Earlier months" and keeps the rows while it loads', () => {
+    it('adds a month on "Earlier months" and keeps the rows while it loads', () => {
       suppliers.push(sup({ name: 'Ledger Lal', currentBalance: '500' }));
       openings['Ledger Lal'] = '0';
       earlier['Ledger Lal'] = true;
       supplierLedgers['Ledger Lal'] = [{ ...PURCHASE, amount: '500' }];
       openSupplier('Ledger');
       fireEvent.click(screen.getByRole('button', { name: 'Earlier months' }));
-      expect(supplierStatementCalls.at(-1)).toMatchObject({ from: '2025-11-01' });
+      expect(supplierStatementCalls.at(-1)).toMatchObject({ from: '2026-09-01', to: '2026-10-31' });
       ledgerState.placeholder = true;
       cleanup();
       openSupplier('Ledger');
@@ -1412,7 +1430,7 @@ describe('Supplier page', () => {
       ledgerState.isLoading = false;
       suppliers.push(sup({ name: 'Brand New', currentBalance: '0' }));
       openSupplier('Brand');
-      expect(screen.getByText('No transactions since 1 May 2026.')).toBeTruthy();
+      expect(screen.getByText('No transactions in October 2026.')).toBeTruthy();
       cleanup();
 
       ledgerState.isError = true;

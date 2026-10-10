@@ -47,7 +47,7 @@ describe('useSupplierStatement', () => {
     );
     const { wrapper } = setup();
     const { result, rerender } = renderHook(
-      ({ from }: { from: string }) => useSupplierStatement('s-1', { from, to: '9999-12-31' }),
+      ({ from }: { from: string }) => useSupplierStatement('s-1', { from, to: '2026-10-31' }),
       { wrapper, initialProps: { from: '2026-05-01' } },
     );
     await waitFor(() => expect(result.current.data?.entries[0].id).toBe('six-months'));
@@ -69,11 +69,30 @@ describe('useSupplierStatement', () => {
     const { wrapper } = setup();
     const { result, rerender } = renderHook(
       ({ id }: { id: string }) =>
-        useSupplierStatement(id, { from: '2026-05-01', to: '9999-12-31' }),
+        useSupplierStatement(id, { from: '2026-05-01', to: '2026-10-31' }),
       { wrapper, initialProps: { id: 's-1' } },
     );
     await waitFor(() => expect(result.current.data?.entries[0].id).toBe('s-1-row'));
     rerender({ id: 's-2' });
+    expect(result.current.data).toBeUndefined();
+    expect(result.current.isLoading).toBe(true);
+  });
+  it('loads from scratch when the Filter moves the range instead of widening it', async () => {
+    vi.spyOn(CloudTransactionService.prototype, 'getSupplierLedgerRange').mockImplementation(
+      async (_id, range) =>
+        range.from === '2026-10-01'
+          ? ledger('this-month')
+          : new Promise<RangedPartyLedger>(() => {}),
+    );
+    const { wrapper } = setup();
+    const { result, rerender } = renderHook(
+      ({ from, to }: { from: string; to: string }) => useSupplierStatement('s-1', { from, to }),
+      { wrapper, initialProps: { from: '2026-10-01', to: '2026-10-31' } },
+    );
+    await waitFor(() => expect(result.current.data?.entries[0].id).toBe('this-month'));
+
+    // Last month: earlier start AND earlier end, so these rows are not part of it.
+    rerender({ from: '2026-09-01', to: '2026-09-30' });
     expect(result.current.data).toBeUndefined();
     expect(result.current.isLoading).toBe(true);
   });
