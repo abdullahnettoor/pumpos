@@ -53,6 +53,9 @@ describe('useInvalidateOperational', () => {
       // Closing a Business Day (from the desktop Business Day tab too) moves the
       // end of every mobile Insights range.
       'insights-sales',
+      // Receivables move with every credit sale and collection, like a customer's balance.
+      'receivables',
+      'customer-statement',
       // Insights part 2: closed-day Shift Summaries, Tank Dips, Credit Sales and
       // (by Entry Date) Collections all move with a write.
       'insights-attendant-variance',

@@ -298,6 +298,21 @@ _Avoid_: udhaar entry, due sale
 figure.
 _Avoid_: outstanding, khata
 
+**Receivable aging**:
+What a Customer owes, split by how long each unpaid amount has been waiting. A
+Collection or a credit Adjustment pays the oldest unpaid amount first; what is
+left of each Credit Sale, Opening Balance or debit Adjustment is aged from its
+Business Date to the Current Business Date into 0–7, 8–30 and 30+ days (31 days
+and older). Organization-wide, like the Customer Balance, and as fresh as it.
+An overpayment is an advance, not a negative receivable.
+_Avoid_: dues, overdue (no due date exists)
+
+**Usually pays in**:
+The mean number of days from a Credit Sale to the Collection that settles it,
+over the Customer's last 6 settled Credit Sales; shown only with at least 3. A
+Credit Sale cleared by a credit Adjustment is a write-off, not the Customer
+paying, so it is left out.
+
 **Cash Drop**:
 Cash taken from one Attendant's Drawer mid-shift (e.g., to a safe), reducing
 that Drawer's expected cash. Recorded on that Attendant's Handover, or at
@@ -413,6 +428,16 @@ _Avoid_: gauging, stick reading
 **Physical Count**:
 A counted stock-take of non-fuel items, compared against book stock.
 _Avoid_: stock audit
+
+**Days of Cover**:
+How long a Tank's current book stock lasts at its recent selling rate: current
+stock ÷ average daily volume sold from that Tank over the Station's last 7
+closed Business Days (divisor = closed days found, 1–7, zero-sale days
+included; per Tank, from Sale stock movements, so two Tanks of one product are
+judged by what each dispensed). No figure (hidden) when the Station has no
+closed Business Day or the Tank sold nothing in the window. Read-only, computed
+on the server; shown as "2.6 days" / "0.9 day".
+_Avoid_: runway, stock days
 
 **Tank Transfer**:
 Fuel moved between two Tanks without a sale.

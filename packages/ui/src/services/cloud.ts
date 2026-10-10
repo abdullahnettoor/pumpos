@@ -29,6 +29,9 @@ import {
   InsightsCreditHealth,
   InsightsRangeDays,
   InsightsSales,
+  CustomerReceivableSummary,
+  RangedPartyLedger,
+  ReceivablesSummary,
   InsightsStockLoss,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
@@ -780,6 +783,23 @@ export class CloudShiftService {
     return request<InsightsSales>(`/reports/insights/sales?${query.toString()}`);
   }
 
+  /** What customers owe: total, aging split and a row per customer that owes. */
+  async getReceivables(stationId: string): Promise<ReceivablesSummary> {
+    const query = new URLSearchParams({ stationId });
+    return request<ReceivablesSummary>(`/reports/receivables?${query.toString()}`);
+  }
+
+  /** One customer's receivable plus last payment, usually-pays-in, this month and vehicle spend. */
+  async getCustomerReceivable(
+    stationId: string,
+    customerId: string,
+  ): Promise<CustomerReceivableSummary> {
+    const query = new URLSearchParams({ stationId });
+    return request<CustomerReceivableSummary>(
+      `/reports/receivables/${encodeURIComponent(customerId)}?${query.toString()}`,
+    );
+  }
+
   /**
    * Cash variance by Attendant over the same range (#402). Refused with
    * CAPABILITY_NOT_ENTITLED unless the Organization has `reports.attendant`.
@@ -1263,6 +1283,17 @@ export class CloudTransactionService {
 
   async getCustomerLedger(customerId: string): Promise<any[]> {
     return request<any[]>(`/transactions/customers/${customerId}/ledger`);
+  }
+
+  /** The customer's statement for a date range: opening balance, enriched rows, closing balance. */
+  async getCustomerLedgerRange(
+    customerId: string,
+    range: { from: string; to: string },
+  ): Promise<RangedPartyLedger> {
+    const query = new URLSearchParams(range);
+    return request<RangedPartyLedger>(
+      `/transactions/customers/${encodeURIComponent(customerId)}/ledger?${query.toString()}`,
+    );
   }
 
   async getSupplierLedger(supplierId: string): Promise<any[]> {

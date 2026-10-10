@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FixedClock, SequentialIdGenerator } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
-import {
-  ListBusinessDays,
-  businessDayListStatus,
-  monthBounds,
-  weekWindows,
-} from './list-business-days.js';
+import { ListBusinessDays, businessDayListStatus, weekWindows } from './list-business-days.js';
 import type {
   BusinessDayListQuery,
   BusinessDayListReader,
@@ -79,12 +74,6 @@ describe('businessDayListStatus', () => {
 });
 
 describe('windows', () => {
-  it('bounds a month, including February in a leap year', () => {
-    expect(monthBounds('2026-10')).toEqual({ from: '2026-10-01', to: '2026-10-31' });
-    expect(monthBounds('2026-02')).toEqual({ from: '2026-02-01', to: '2026-02-28' });
-    expect(monthBounds('2028-02')).toEqual({ from: '2028-02-01', to: '2028-02-29' });
-    expect(monthBounds('2026-12')).toEqual({ from: '2026-12-01', to: '2026-12-31' });
-  });
   it('takes the 7 completed Business Dates before the current one, then the 7 before', () => {
     expect(weekWindows('2026-10-09')).toEqual({
       current: { from: '2026-10-02', to: '2026-10-08' },
