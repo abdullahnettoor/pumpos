@@ -111,12 +111,12 @@ describe('GET /shift-summaries query-count regression', () => {
 describe('GET /shift-summaries/:shiftId', () => {
   it('reads one Shift Summary in a single statement', async () => {
     const { db, counter } = makeFakeDb([summaryRow(7)]);
-    const res = await makeApp(db).request('/shift-summaries/sh-7');
+    const res = await makeApp(db).request('/shift-summaries/00000000-0000-0000-0000-000000000007');
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
     expect(counter.selects).toBe(1);
     expect(body.data).toMatchObject({
-      shiftId: 'sh-7',
+      shiftId: '00000000-0000-0000-0000-000000000007',
       businessDate: '2026-03-15',
       templateName: 'Morning',
       snapshotData: { totalFuelSalesValue: 1007 },
@@ -142,14 +142,14 @@ describe('GET /shift-summaries/:shiftId', () => {
     const res = await makeApp(db, {
       role: 'Manager',
       assignedStationIds: ['st-other'],
-    }).request('/shift-summaries/sh-1');
+    }).request('/shift-summaries/00000000-0000-0000-0000-000000000001');
     expect(res.status).toBe(404);
   });
 
   it('serves an assigned manager', async () => {
     const { db } = makeFakeDb([summaryRow(1)]);
     const res = await makeApp(db, { role: 'Manager', assignedStationIds: ['st-1'] }).request(
-      '/shift-summaries/sh-1',
+      '/shift-summaries/00000000-0000-0000-0000-000000000001',
     );
     expect(res.status).toBe(200);
   });
