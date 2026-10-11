@@ -1,5 +1,6 @@
 // PROTOTYPE — throwaway. Density register (#471). Three layouts on the
 // Inventory → Density tab, switched by ?dvariant=A|B|C. Mock data only.
+//   Density is recorded per product.
 //   A — Register book: chronological log, like the paper register.
 //   B — Tank cards: today's reading per tank, trend, quick inline entry.
 //   C — Matrix + board: tanks × days grid, and a printable "Today's density" board.
@@ -8,14 +9,23 @@ import { Button, Chip, Icon, KpiStrip, KpiTile, Panel, Sparkline } from '../../.
 import { Drawer } from '../../Drawer.js';
 import { Field, NumberInput, Select } from '../../primitives/Field.js';
 import { density15 } from './DensityCalculator.js';
-import { SETTINGS, TANKS } from './mock.js';
+import { SETTINGS, TANKS as ALL_TANKS } from './mock.js';
+
+// Density is recorded PER PRODUCT (field practice). A reading may optionally
+// say which tank/nozzle the sample came from.
+const UNITS = [
+  { id: 'MS', name: 'Petrol', product: 'MS' as const },
+  { id: 'HSD', name: 'Diesel', product: 'HSD' as const },
+];
+const TANKS = UNITS;
 
 type Source = 'Morning' | 'Decantation' | 'Ad-hoc';
 interface Reading {
   id: string;
   date: string; // business date
   time: string;
-  tankId: string;
+  tankId: string; // product id (MS | HSD)
+  from?: string; // optional: tank or nozzle sampled
   source: Source;
   observed: number;
   temp: number;
@@ -37,12 +47,12 @@ const SPEC = { MS: [720, 775], HSD: [820, 860] } as const;
 
 const seed = (): Reading[] => {
   const out: Reading[] = [];
-  const base: Record<string, number> = { t1: 744.6, t2: 833.1, t3: 831.4 };
-  const decant: Record<string, string> = { '2026-10-09': 't1', '2026-10-10': 't2' };
+  const base: Record<string, number> = { MS: 744.6, HSD: 832.6 };
+  const decant: Record<string, string> = { '2026-10-09': 'MS', '2026-10-10': 'HSD' };
   DAYS14.forEach((date, di) => {
     TANKS.forEach((t) => {
-      if (date === TODAY && t.id !== 't1') return; // today missing for t2, t3
-      if (di === 6 && t.id === 't3') return; // a missed day
+      if (date === TODAY && t.id !== 'MS') return; // today missing for diesel
+      if (di === 6 && t.id === 'HSD') return; // a missed day
       const wob = ((di * 7 + t.id.length * 3) % 5) * 0.1 - 0.2;
       const d15 = +(base[t.id] + wob).toFixed(1);
       const temp = 28 + ((di + 2) % 5);
@@ -52,19 +62,21 @@ const seed = (): Reading[] => {
         time: '06:10',
         tankId: t.id,
         source: 'Morning',
+        from: 'Nozzle',
         observed: +(d15 - 0.68 * (temp - 15)).toFixed(1),
         temp,
         d15,
         by: 'Rahul (Manager)',
       });
       if (decant[date] === t.id) {
-        base[t.id] += t.id === 't2' ? 4.0 : 0.3; // t2 jumped after a decantation
+        base[t.id] += t.id === 'HSD' ? 4.0 : 0.3; // diesel jumped after a decantation
         out.push({
           id: `${date}-${t.id}-d`,
           date,
           time: '14:58',
           tankId: t.id,
           source: 'Decantation',
+          from: t.id === 'MS' ? 'Tank 1' : 'Tank 2',
           observed: +(base[t.id] - 0.68 * 16).toFixed(1),
           temp: 31,
           d15: +base[t.id].toFixed(1),
@@ -122,6 +134,7 @@ const RecordDrawer: React.FC<{
   const [source, setSource] = useState<Source>('Morning');
   const [mode, setMode] = useState<'calc' | 'direct'>('calc');
   const [vals, setVals] = useState<Record<string, { obs: string; temp: string; d15: string }>>({});
+  const [from, setFrom] = useState<Record<string, string>>({});
   const list = presetTank ? TANKS.filter((t) => t.id === presetTank) : TANKS;
   const v = (id: string) => vals[id] ?? { obs: '', temp: '', d15: '' };
   const set = (id: string, k: 'obs' | 'temp' | 'd15', x: string) =>
@@ -135,7 +148,7 @@ const RecordDrawer: React.FC<{
     <Drawer
       isOpen={isOpen}
       onClose={onClose}
-      title={presetTank ? `Record density · ${tank(presetTank).name}` : 'Record density'}
+      title={presetTank ? `Record density · ${tank(presetTank).name}` : 'Record density by product'}
       footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, width: '100%' }}>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -152,6 +165,7 @@ const RecordDrawer: React.FC<{
                     date: TODAY,
                     time: new Date().toTimeString().slice(0, 5),
                     tankId: t.id,
+                    from: from[t.id] || undefined,
                     source,
                     observed: Number(v(t.id).obs || result(t.id)),
                     temp: Number(v(t.id).temp || 15),
@@ -196,7 +210,7 @@ const RecordDrawer: React.FC<{
             }}
           >
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-              {t.name} · {t.product}
+              {t.name} ({t.product})
               <span style={{ fontWeight: 400, opacity: 0.6, fontSize: 12 }}>
                 {' '}
                 · spec {lo}–{hi}
@@ -290,7 +304,7 @@ const VariantA: React.FC<VProps> = ({ rows, onRecord }) => {
             onChange={(e) => setTankF(e.target.value)}
             style={{ height: 30, fontSize: 12 }}
           >
-            <option value="">All tanks</option>
+            <option value="">All products</option>
             {TANKS.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
@@ -308,8 +322,9 @@ const VariantA: React.FC<VProps> = ({ rows, onRecord }) => {
           <tr>
             <th style={th}>Date</th>
             <th style={th}>Time</th>
-            <th style={th}>Tank</th>
+            <th style={th}>Product</th>
             <th style={th}>Reading</th>
+            <th style={th}>Sampled from</th>
             <th style={{ ...th, textAlign: 'right' }}>Hydrometer</th>
             <th style={{ ...th, textAlign: 'right' }}>Temp</th>
             <th style={{ ...th, textAlign: 'right' }}>At 15 °C</th>
@@ -384,7 +399,7 @@ const VariantB: React.FC<VProps> = ({ rows, onRecord }) => {
         return (
           <Panel
             key={t.id}
-            title={`${t.name} · ${t.product}`}
+            title={`${t.name} (${t.product})`}
             action={
               today ? (
                 <Chip size="sm" tone="success" icon={<Icon name="check" size="xs" />}>
@@ -441,6 +456,7 @@ const VariantB: React.FC<VProps> = ({ rows, onRecord }) => {
                 >
                   <span style={{ opacity: 0.7 }}>
                     {r.date.slice(5)} {r.time} · {r.source}
+                    {r.from ? ` · ${r.from}` : ''}
                   </span>
                   <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{r.d15}</strong>
                 </div>
@@ -496,7 +512,7 @@ const VariantC: React.FC<VProps> = ({ rows, onRecord }) => {
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr>
-                <th style={th}>Tank</th>
+                <th style={th}>Product</th>
                 {DAYS14.map((d) => (
                   <th
                     key={d}
@@ -591,35 +607,28 @@ const VariantC: React.FC<VProps> = ({ rows, onRecord }) => {
             </div>
             <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 18 }}>{TODAY}</div>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 32 }}>
-              {(['MS', 'HSD'] as const).map((p) => {
-                const tk = TANKS.filter((t) => t.product === p);
+              {UNITS.map((t) => {
+                const r = rows
+                  .filter((x) => x.tankId === t.id && x.date === TODAY)
+                  .sort(sortDesc)[0];
                 return (
-                  <div key={p}>
+                  <div key={t.id}>
                     <div style={{ fontSize: 18, fontWeight: 700 }}>
-                      {p === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'}
+                      {t.name} ({t.product})
                     </div>
-                    {tk.map((t) => {
-                      const r = rows
-                        .filter((x) => x.tankId === t.id && x.date === TODAY)
-                        .sort(sortDesc)[0];
-                      return (
-                        <div key={t.id} style={{ marginTop: 8 }}>
-                          <div
-                            style={{
-                              fontSize: 44,
-                              fontWeight: 800,
-                              fontVariantNumeric: 'tabular-nums',
-                              color: r ? '#111' : '#bbb',
-                            }}
-                          >
-                            {r ? r.d15.toFixed(1) : '— — —'}
-                          </div>
-                          <div style={{ fontSize: 12, opacity: 0.6 }}>
-                            {t.name} · kg/m³{!r && ' · not recorded yet'}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    <div
+                      style={{
+                        fontSize: 52,
+                        fontWeight: 800,
+                        fontVariantNumeric: 'tabular-nums',
+                        color: r ? '#111' : '#bbb',
+                      }}
+                    >
+                      {r ? r.d15.toFixed(1) : '— — —'}
+                    </div>
+                    <div style={{ fontSize: 12, opacity: 0.6 }}>
+                      kg/m³{!r && ' · not recorded yet'}
+                    </div>
                   </div>
                 );
               })}
@@ -707,7 +716,7 @@ export const DensityRegisterPrototypeTab: React.FC = () => {
         <KpiTile
           dot={missing.length ? 'warning' : 'success'}
           valueTone={missing.length ? 'warning' : undefined}
-          label="Today's readings"
+          label="Today's readings (products)"
           value={`${TANKS.length - missing.length}/${TANKS.length}`}
           hint={
             missing.length
