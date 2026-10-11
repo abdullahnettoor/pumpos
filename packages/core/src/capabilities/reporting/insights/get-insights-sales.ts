@@ -1,0 +1,43 @@
+import type { InsightsSales } from '@pump/shared';
+import { err, ok, validationError } from '../../../kernel/index.js';
+import type { ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
+import { composeInsightsSales } from './compose.js';
+import { insightsQuerySchema, type InsightsQueryCommand } from './query.js';
+import type { InsightsSalesReader } from './ports.js';
+
+export interface GetInsightsSalesDeps {
+  reader: InsightsSalesReader;
+}
+
+/**
+ * One Station's Insights sales block: trend, product mix and Shift
+ * performance over the last 7 / 30 / 90 closed Business Days, compared with
+ * the previous equal period.
+ *
+ * Read-only: derives no state and emits no Business Event. Only sealed data
+ * (closed-day DSSR snapshots and their Shift Summaries) contributes, so a
+ * figure never changes once its day has closed.
+ */
+export class GetInsightsSales implements UseCase<InsightsQueryCommand, InsightsSales> {
+  constructor(private readonly deps: GetInsightsSalesDeps) {}
+
+  async execute(
+    input: InsightsQueryCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<InsightsSales>> {
+    const p = insightsQuerySchema.safeParse(input);
+    if (!p.success) {
+      return err(validationError('Invalid GetInsightsSales query', { issues: p.error.flatten() }));
+    }
+    // Station access is the route's to enforce (it authorizes the requested
+    // station before building the context); the use case reads under the
+    // caller's organization and the station it was asked for.
+
+    const source = await this.deps.reader.read({
+      organizationId: ctx.organizationId,
+      stationId: p.data.stationId,
+      days: p.data.days,
+    });
+    return ok(composeInsightsSales(source));
+  }
+}

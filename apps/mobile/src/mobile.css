@@ -1,5 +1,9 @@
 /* Mobile-specific layout on top of the shared PumpOS design tokens.
- * The tokens + Tailwind theme come from @pump/ui (imported in main.tsx). */
+ * Base tokens + Tailwind theme come from @pump/ui; the mobile semantic colour
+ * tokens (light/dark) live in theme/tokens.css. All imported in main.tsx.
+ * color-scheme: Light by default (also when no theme class is present); Dark
+ * is set inline on <html> by the pre-paint script in index.html and
+ * applyTheme (ThemeProvider), the single mechanism for switching it. */
 
 :root {
   color-scheme: light;
@@ -14,18 +18,79 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* Safe-area padding for notched devices + bottom tab bar. */
-.mobile-safe-top {
-  padding-top: max(env(safe-area-inset-top), 12px);
-}
-.mobile-safe-bottom {
-  padding-bottom: max(env(safe-area-inset-bottom), 12px);
-}
-
-/* Hide scrollbars on horizontal chip rows. */
+/* App scroll areas (pages, the Attendant screen, sheets) scroll by touch, wheel,
+ * trackpad and keyboard without a visible bar, as a native app does. Phones already
+ * draw overlay scrollbars that take no width; desktop browsers (and their responsive
+ * mode) draw a permanent ~15px bar that pushed page content off-centre against the
+ * full-width dock and header. */
 .no-scrollbar {
   scrollbar-width: none;
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/* The app is laid out for a phone. On a wider window (tablet, laptop, desktop
+ * responsive mode) it stays a centred phone-width column instead of stretching,
+ * with the canvas either side and a hairline edge. */
+:root {
+  --app-max-w: 480px;
+}
+.app-column {
+  width: 100%;
+  max-width: var(--app-max-w);
+  margin-inline: auto;
+}
+@media (min-width: 481px) {
+  .app-column {
+    border-inline: 1px solid var(--line);
+  }
+}
+
+/* Lists are layout here, never bullets. The shared pump-ds Tailwind entry leaves
+ * Tailwind's preflight out (desktop relies on its own base), so the browser's
+ * default disc markers and indent would show on every <ul> that wraps inline. */
+ul,
+ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Safe-area padding for notched devices. */
+.mobile-safe-top {
+  padding-top: max(env(safe-area-inset-top), 12px);
+}
+
+/* Floating dock geometry (shell/Dock.tsx, shell/Pane.tsx).
+ * --dock-gap: distance from the screen bottom to the dock (safe area aware).
+ * --dock-space: how much a page needs at its end to scroll clear of the dock. */
+:root {
+  --dock-gap: max(env(safe-area-inset-bottom), 12px);
+  --dock-space: calc(var(--dock-gap) + 58px + 20px);
+}
+
+/* Touch target: the visual stays as drawn, the hit area grows to at least
+ * 44 x 44 px (centred), so a 30-36px icon button or chip is still easy to hit. */
+.hit-44 {
+  position: relative;
+}
+.hit-44::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
+
+/* Hatched fill: a figure that is not final yet (a running Shift's fuel on Home,
+ * "counted at close"). Accent at partial strength over the track. */
+.bg-hatch {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--accent) 35%, transparent) 0 4px,
+    transparent 4px 8px
+  );
 }

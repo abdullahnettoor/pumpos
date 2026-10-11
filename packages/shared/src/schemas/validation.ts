@@ -301,11 +301,33 @@ export const shiftCollectionSchema = z.object({
   notes: z.string().max(500).optional().nullable(),
 });
 
+/** A numeric(12,2) money column's largest value (`credit_limit`, `collections.amount`). */
+const NUMERIC_12_2_MAX = 9_999_999_999.99;
+
+export const hasAtMostTwoDecimals = (n: number) => Math.abs(n * 100 - Math.round(n * 100)) <= 1e-6;
+
+/** `customers.credit_limit` is numeric(12,2): the largest amount it can hold. */
+export const CREDIT_LIMIT_MAX = NUMERIC_12_2_MAX;
+
+/**
+ * A Customer's credit limit: 0 or more, at most 2 decimal places, within the
+ * column's range. The one rule for the Customer form, the mobile limit sheet and
+ * the server's create/update use-cases, so none of them can accept what another
+ * refuses. `null` / absent mean "no limit".
+ */
+export const creditLimitSchema = z
+  .number()
+  .nonnegative('Enter 0 or more.')
+  .max(CREDIT_LIMIT_MAX, 'That is more than a limit can hold.')
+  .refine(hasAtMostTwoDecimals, 'Use at most 2 decimal places.')
+  .optional()
+  .nullable();
+
 export const customerCreateSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   phone: z.string().max(50).optional().nullable(),
   customerType: z.enum(['Regular', 'Credit', 'Fleet']).default('Regular'),
-  creditLimit: z.number().nonnegative().optional().nullable(),
+  creditLimit: creditLimitSchema,
   fleetCode: z.string().max(100).optional().nullable(),
   isPrepaid: z.boolean().default(false),
   settlementCycle: z.enum(['OPEN', 'EOD']).default('OPEN'),
@@ -547,14 +569,29 @@ export const expenseEntryFormSchema = z.object({
 });
 export type ExpenseEntryFormValues = z.infer<typeof expenseEntryFormSchema>;
 
-/** Customer collection — an Office Record (ADR 0005). */
+/** `collections.amount` / `supplier_transactions.amount` are numeric(12,2): the largest payment they hold. */
+export const OFFICE_PAYMENT_AMOUNT_MAX = NUMERIC_12_2_MAX;
+
+/**
+ * The amount of an Office payment (a Collection or a Supplier Payment): above 0,
+ * within the column's range and at most 2 decimal places.
+ */
+const officePaymentAmountField = z.coerce
+  .number({ invalid_type_error: 'Amount is required' })
+  .positive('Amount must be positive')
+  .max(OFFICE_PAYMENT_AMOUNT_MAX, 'That is more than a payment can hold.')
+  .refine(hasAtMostTwoDecimals, 'Use at most 2 decimal places.');
+
+/**
+ * Customer collection — an Office Record (ADR 0005). The one form rule for the
+ * desktop quick entry and the mobile Record payment sheet: an amount above 0,
+ * within the column's range and at most 2 decimal places.
+ */
 export const collectionEntryFormSchema = z
   .object({
     entryDate: entryDateField,
     customerId: z.string().optional().default(''),
-    amount: z.coerce
-      .number({ invalid_type_error: 'Amount is required' })
-      .positive('Amount must be positive'),
+    amount: officePaymentAmountField,
     paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'BankTransfer']).default('Cash'),
     notes: z.string().max(500).optional().default(''),
     /** Account the money lands in. Not needed when a terminal is chosen. */
@@ -574,6 +611,21 @@ export const collectionEntryFormSchema = z
     }
   });
 export type CollectionEntryFormValues = z.infer<typeof collectionEntryFormSchema>;
+
+/**
+ * Supplier payment — an Office Record (ADR 0005): the Entry Date and the
+ * Funding Account it is paid from, never a Shift. The mobile Record payment
+ * sheet checks its fields with this; the amount rule is the Collection's.
+ */
+export const supplierPaymentEntryFormSchema = z.object({
+  entryDate: entryDateField,
+  supplierId: z.string().optional().default(''),
+  amount: officePaymentAmountField,
+  notes: z.string().max(500).optional().default(''),
+  /** The money account it is paid from. */
+  fundingAccountId: z.string().min(1, 'Choose the account'),
+});
+export type SupplierPaymentEntryFormValues = z.infer<typeof supplierPaymentEntryFormSchema>;
 
 export const purchaseLineFormSchema = z.object({
   productId: z.string().min(1, 'Product is required'),

@@ -15,6 +15,8 @@ Use these sources in this order when they disagree:
 
 - [`USER-FLOW.md`](USER-FLOW.md) — operator walkthrough; verify screen labels and
   screenshots against the current application before using it as a test script.
+- [`mobile-revamp-decisions.md`](mobile-revamp-decisions.md) — product decisions
+  and current defaults from the mobile revamp (#388), with where to change each.
 - [`PUMP-ERP-DESIGN-SYSTEM.md`](PUMP-ERP-DESIGN-SYSTEM.md) and the root
   [`DESIGN.md`](../DESIGN.md) — product design language and tokens.
 - [`DATA-CACHING.md`](DATA-CACHING.md) — current client caching practice.

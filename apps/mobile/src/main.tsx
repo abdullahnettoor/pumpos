@@ -8,9 +8,11 @@ import {
   setPdfSaver,
 } from '@pump/ui';
 import '@pump/ui/src/index.css';
-import '@pump/ui/src/pump-ds/tailwind.css';
+import './theme/tailwind.css';
+import './theme/tokens.css';
 import './mobile.css';
 import { App } from './App.js';
+import { ThemeProvider } from './theme/index.js';
 
 const queryClient = createQueryClient();
 
@@ -53,9 +55,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <QueryProvider client={queryClient}>
-        <ToastProvider>
-          <App />
-        </ToastProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <App />
+          </ToastProvider>
+        </ThemeProvider>
       </QueryProvider>
     </ErrorBoundary>
   </React.StrictMode>,

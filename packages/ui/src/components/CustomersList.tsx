@@ -38,6 +38,8 @@ const transactionService = new CloudTransactionService();
 
 interface CustomersListProps {
   selectedStation: any | null;
+  /** Signed-in Role: locks the credit-limit field for Roles that may not change it. */
+  userRole?: string;
   /** @deprecated Collections are office records now; ignored. */
   defaultShiftId?: string;
 }
@@ -56,7 +58,7 @@ export function summarizeCustomerBalances(customers: any[]) {
   );
 }
 
-export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation }) => {
+export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, userRole }) => {
   const [selectedTab, setSelectedTab] = useState<TabType>('transactions');
 
   const stationId = selectedStation?.id ?? null;
@@ -785,6 +787,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
         isOpen={isCustomerDrawerOpen}
         editingCustomer={editingCustomer}
         stationId={stationId}
+        userRole={userRole}
         onClose={closeCustomerDrawer}
       />
 

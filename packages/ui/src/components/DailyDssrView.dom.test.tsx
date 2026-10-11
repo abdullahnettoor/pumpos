@@ -32,4 +32,32 @@ describe('DailyDssrView (ADR 0005: sales-only)', () => {
     expect(screen.getAllByText(/Gross Margin/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Daily Cash Book/)).toBeTruthy();
   });
+
+  describe('OMC Card Sales (ADR 0001)', () => {
+    const view = (snapshotData: Record<string, unknown>) =>
+      renderWithProviders(
+        <DailyDssrView
+          dailyDssr={{
+            businessDate: '2026-10-10',
+            generatedAt: '2026-10-11T01:00:00.000Z',
+            snapshotData: { credit: { normalCredit: 0, fleetCredit: 34040 }, ...snapshotData },
+          }}
+        />,
+      );
+
+    it("shows the day's OMC card sales in the sales summary, next to Credit Sales", () => {
+      view({ omcCard: { total: 2000, count: 1 } });
+      expect(screen.getByText('Fleet Credit Sales')).toBeTruthy();
+      const row = screen.getByText('OMC Card Sales').parentElement as HTMLElement;
+      expect(row.textContent).toContain('2,000');
+    });
+
+    it('leaves a snapshot frozen before the field, or a day without any, unchanged', () => {
+      view({});
+      expect(screen.queryByText('OMC Card Sales')).toBeNull();
+      cleanup();
+      view({ omcCard: { total: 0, count: 0 } });
+      expect(screen.queryByText('OMC Card Sales')).toBeNull();
+    });
+  });
 });

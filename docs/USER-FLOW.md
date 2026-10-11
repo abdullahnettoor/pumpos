@@ -21,6 +21,10 @@ and agents driving it.
 Most everyday entries can start from **+ New** — the sections below use the
 dedicated pages so you also learn where records live afterwards.
 
+This describes the **web/desktop console**. The phone app has its own
+navigation (a bottom dock, no sidebar): see
+[13. The mobile app](#13-the-mobile-app).
+
 **Two anchors to keep in mind** (they explain most of the UI):
 
 - **Business Day** — the station's sales day, starting at its configured Day
@@ -112,13 +116,13 @@ email/phone, role → **Add Member**. The member gets an email invite (step 1).
 
 Roles:
 
-| Role       | Use for                                                        |
-| ---------- | -------------------------------------------------------------- |
-| Owner      | Global admin, sees everything incl. P&L                        |
-| Manager    | Runs the station: shifts, setup, day close                     |
-| Accountant | Finance entries and reports                                    |
-| Staff      | Day-to-day operational entries                                 |
-| Attendant  | Mobile-only; accountable for one dispenser unit (DU) per shift |
+| Role       | Use for                                                                       |
+| ---------- | ----------------------------------------------------------------------------- |
+| Owner      | Global admin, sees everything incl. P&L                                       |
+| Manager    | Runs the station: shifts, setup, day close                                    |
+| Accountant | Finance entries and reports                                                   |
+| Staff      | Day-to-day operational entries                                                |
+| Attendant  | Mobile-only (handover app); accountable for one dispenser unit (DU) per shift |
 
 ## 6. Open a shift
 
@@ -257,6 +261,59 @@ Sidebar → **Reports**: **Daily DSSR** (generate/view snapshots) · **Profit &
 Loss** (Owner) · **Ledger** · **Invoices** · **Tax Register** · **Cash &
 Bank** · **Daily Cash Book** (each account's opening, in, out and closing for
 one date, live) · **Expense Register** · **Attendant Handovers**.
+
+## 13. The mobile app
+
+The phone app is the owner's and manager's **control room** and the
+attendant's **handover**. Sign in the same way (step 1). What you see depends
+on your Role.
+
+**Bottom dock.** Five tabs, shown only when your Role may open them:
+
+| Tab      | What it holds                                                                                                                                                                                        | Who                        |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| Home     | Today at a glance: sales, the live shift, tank levels, money position, **Needs attention**                                                                                                           | Owner, Manager             |
+| Shifts   | The live shift and shift history; tap a shift for its **Shift Summary**                                                                                                                              | Owner, Manager             |
+| Reports  | Business days (Live, Draft, Sealed, Report missing) with weekly figures; a Draft or Sealed day opens its **DSSR** (Share, Download PDF), a Live day opens **Home**, and Report missing does not open | Owner, Manager, Accountant |
+| Money    | **To collect** (customers) and **To pay** (suppliers); tap a Customer or Supplier for its balance, aging, **Statement**, **Record payment**, credit limit                                            | Owner, Manager, Accountant |
+| Insights | Sales trend, product mix, shift performance; attendant variance, stock loss and credit health when the plan includes them                                                                            | Owner, Manager             |
+
+A Manager has the same five tabs as the Owner. An Accountant gets Reports and
+Money. Staff have no tabs unless they are assigned a dispenser unit on the open
+shift; then they get a **Home** tab holding only their handover card (see
+below), and an Accountant assigned to a pump gets that Home tab too.
+Detail pages open on top of the tab and **‹ Back** returns to it.
+
+**Header.**
+
+- On **Home**, the station name and the **avatar** open the **Account sheet**;
+  the **bell** (with a count) opens **Needs attention**. Other tabs show the
+  tab title with the station name, which also opens the Account sheet.
+- **Needs attention** is one list: stock alerts, a past business day still open,
+  customers over their credit limit, a large shift cash variance, and your own
+  unsaved handover. Tap an item to open the page that explains it. Home's
+  "All N" opens the same list.
+- The **Account sheet** holds who is signed in, the **station switcher**,
+  **Team** (add or edit a member, reset a password, deactivate; a Manager can
+  manage Staff and Attendants), the organization and plan, and **Sign out**.
+  There is no Appearance setting yet: the app is always Light.
+
+**Attendants** get a separate, handover-only app: no dock, no bell, no
+station switcher. It shows your **handover** for the open shift (closing
+readings, cash count, card/UPI slips, credit slips) and **Save handover**; after
+saving it reads "Handover recorded" and stays editable until the shift closes.
+The only other control is the **avatar**, which opens the **Account sheet** with
+**Sign out**.
+
+**Owners, managers, accountants and staff who man a pump.** When you are
+assigned a dispenser unit on the open shift (step 6), a **Your handover** card
+is pinned to the top of **Home**: **Continue** (or **Edit** once saved) opens
+the same handover form as a page. An Owner or Manager keeps the full Home under
+the card. An Accountant or Staff member has no Home overview, so their Home
+holds just that card. The card goes when the shift closes.
+
+Done when: the right tabs appear for the Role, the bell count matches the
+**Needs attention** list, and each attendant sees only their handover.
 
 ---
 

@@ -100,9 +100,21 @@ export async function printReactPdf(element: any, filename: string): Promise<voi
   await printer(await renderPdf(element), pdfName(filename));
 }
 
-export type PdfOutput = 'save' | 'print';
+/**
+ * 'save' goes through the platform saver (native dialog on desktop, the share
+ * sheet on mobile); 'download' always writes a browser download, so a screen
+ * with both Share and Download buttons can offer both on a phone.
+ */
+export type PdfOutput = 'save' | 'print' | 'download';
 
-/** Save or print one PDF element; report generators take this as a mode. */
+/** Download the same vector PDF straight to the browser, bypassing the platform saver. */
+export async function downloadReactPdf(element: any, filename: string): Promise<void> {
+  await webSaver(await renderPdf(element), pdfName(filename));
+}
+
+/** Save, download or print one PDF element; report generators take this as a mode. */
 export function outputReactPdf(element: any, filename: string, output: PdfOutput = 'save') {
-  return output === 'print' ? printReactPdf(element, filename) : exportReactPdf(element, filename);
+  if (output === 'print') return printReactPdf(element, filename);
+  if (output === 'download') return downloadReactPdf(element, filename);
+  return exportReactPdf(element, filename);
 }

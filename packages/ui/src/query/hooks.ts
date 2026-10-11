@@ -33,6 +33,17 @@ import type {
   DesktopDownloads,
   AttendantHandoverReport,
   AttendantReportFilters,
+  BusinessDayList,
+  InsightsAttendantVariance,
+  InsightsCreditHealth,
+  InsightsRangeDays,
+  InsightsSales,
+  CustomerReceivableSummary,
+  PayablesSummary,
+  RangedPartyLedger,
+  ReceivablesSummary,
+  SupplierPayableSummary,
+  InsightsStockLoss,
 } from '@pump/shared';
 
 /**
@@ -71,6 +82,9 @@ export const queryKeys = {
   businessDayStatusPrefix: (stationId: string) => ['business-day-status', stationId] as const,
   myAssignment: () => ['my-assignment'] as const,
   shiftSummaries: (stationId: string) => ['shift-summaries', stationId] as const,
+  // Both sit under the 'shift-summaries' prefix, so useInvalidateOperational refreshes them.
+  shiftSummaryHistory: (stationId: string) => ['shift-summaries', 'history', stationId] as const,
+  shiftSummary: (shiftId: string) => ['shift-summaries', 'one', shiftId] as const,
   dashboardSummary: (stationId: string) => ['dashboard-summary', stationId] as const,
   shiftTransactions: (shiftId: string) => ['shift-transactions', shiftId] as const,
   merchandiseHandovers: (shiftId: string) => ['merchandise-handovers', shiftId] as const,
@@ -85,16 +99,38 @@ export const queryKeys = {
   suppliers: (activeOnly = true) => ['suppliers', activeOnly] as const,
   customerLedger: (customerId: string) => ['customer-ledger', customerId] as const,
   supplierLedger: (supplierId: string) => ['supplier-ledger', supplierId] as const,
+  /** Every cached statement window of one customer (prefix of `customerStatement`). */
+  customerStatements: (customerId: string) => ['customer-statement', customerId] as const,
+  customerStatement: (customerId: string, from: string, to: string) =>
+    ['customer-statement', customerId, from, to] as const,
+  /** Every cached statement window of one supplier (prefix of `supplierStatement`). */
+  supplierStatements: (supplierId: string) => ['supplier-statement', supplierId] as const,
+  supplierStatement: (supplierId: string, from: string, to: string) =>
+    ['supplier-statement', supplierId, from, to] as const,
+  payables: (stationId: string) => ['payables', stationId] as const,
+  supplierPayable: (stationId: string, supplierId: string) =>
+    ['payables', stationId, supplierId] as const,
+  receivables: (stationId: string) => ['receivables', stationId] as const,
+  customerReceivable: (stationId: string, customerId: string) =>
+    ['receivables', stationId, customerId] as const,
   inventoryStatus: (stationId: string) => ['inventory-status', stationId] as const,
   inventoryItems: (stationId: string) => ['inventory-items', stationId] as const,
   inventoryMovements: (stationId: string) => ['inventory-movements', stationId] as const,
   inventoryVariances: (stationId: string) => ['inventory-variances', stationId] as const,
   dssr: (stationId: string, date: string) => ['dssr', stationId, date] as const,
   dssrPreview: (stationId: string, date: string) => ['dssr-preview', stationId, date] as const,
+  businessDayList: (stationId: string) => ['business-day-list', stationId] as const,
   dssrRange: (stationId: string, from: string, to: string) =>
     ['dssr-range', stationId, from, to] as const,
   attendantHandoverReport: (stationId: string, from: string, to: string) =>
     ['attendant-handover-report', stationId, from, to] as const,
+  insightsSales: (stationId: string, days: number) => ['insights-sales', stationId, days] as const,
+  insightsAttendantVariance: (stationId: string, days: number) =>
+    ['insights-attendant-variance', stationId, days] as const,
+  insightsStockLoss: (stationId: string, days: number) =>
+    ['insights-stock-loss', stationId, days] as const,
+  insightsCreditHealth: (stationId: string, days: number) =>
+    ['insights-credit-health', stationId, days] as const,
   expenseCategories: () => ['expense-categories'] as const,
   incomeCategories: () => ['income-categories'] as const,
   products: () => ['products'] as const,
@@ -157,6 +193,20 @@ export const TIER = {
   semi: { staleTime: 10 * 60_000, gcTime: 60 * 60_000, refetchOnWindowFocus: false } as const,
   operational: { staleTime: 15_000, gcTime: 5 * 60_000, refetchOnWindowFocus: true } as const,
 };
+
+/** The key of one party's statement window: `[prefix, partyId, from, to]`. */
+export type StatementKey =
+  ReturnType<typeof queryKeys.customerStatement> | ReturnType<typeof queryKeys.supplierStatement>;
+
+/** Whether `key` is a customer or supplier statement window (the shape the two builders above make). */
+export function isStatementKey(key: readonly unknown[] | undefined): key is StatementKey {
+  return (
+    !!key &&
+    key.length === 4 &&
+    (key[0] === 'customer-statement' || key[0] === 'supplier-statement') &&
+    key.slice(1).every((part) => typeof part === 'string')
+  );
+}
 
 export const stationsQueryOptions = () => ({
   queryKey: queryKeys.stations(),
@@ -616,6 +666,45 @@ export function useShiftSummaries(stationId: string | null | undefined, options?
   });
 }
 
+/** What the history's cursor reads from a summary row. */
+type ShiftSummaryPageRow = { generatedAt?: string | null };
+
+/** Summaries per page of the closed-Shift history. */
+export const SHIFT_SUMMARY_PAGE_SIZE = 50;
+
+/**
+ * Closed-Shift history, newest first, one cursor page at a time (the cursor is the
+ * oldest `generatedAt` loaded). Operational tier, not persisted.
+ */
+export function useShiftSummaryHistory(stationId: string | null | undefined) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.shiftSummaryHistory(stationId ?? ''),
+    queryFn: ({ pageParam }) =>
+      shiftService.getShiftSummaryPage(stationId!, SHIFT_SUMMARY_PAGE_SIZE, pageParam ?? undefined),
+    enabled: !!stationId,
+    initialPageParam: null as string | null,
+    getNextPageParam: (page: ShiftSummaryPageRow[]): string | undefined =>
+      page.length < SHIFT_SUMMARY_PAGE_SIZE
+        ? undefined
+        : (page[page.length - 1]?.generatedAt ?? undefined),
+    ...TIER.operational,
+  });
+}
+
+/**
+ * One Shift's stored summary by id, whatever its age. `placeholderData` lets a
+ * caller that already holds the row paint it at once while the read confirms it.
+ */
+export function useShiftSummaryById(shiftId: string | null | undefined, options?: Options<any>) {
+  return useQuery({
+    queryKey: queryKeys.shiftSummary(shiftId ?? ''),
+    queryFn: () => shiftService.getShiftSummary(shiftId!),
+    enabled: !!shiftId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 /**
  * The dashboard's single shift read (#147): open/last shift identity, stored
  * last-summary scalars, reopen/grace state, and today's rollup — one bounded
@@ -713,6 +802,69 @@ export function useCustomerLedger(customerId: string | null | undefined, options
   });
 }
 
+/**
+ * Statement rows stay on screen while a request is in flight only when the
+ * window of the SAME party widens into the past with the same end ("Earlier
+ * months"). Picking another range, or another party, shows a loading state
+ * instead of rows that belong to somewhere else.
+ */
+function widensStatementWindow(
+  previousKey: readonly unknown[] | undefined,
+  partyId: string | null | undefined,
+  range: { from: string; to: string },
+): boolean {
+  if (!isStatementKey(previousKey)) return false;
+  const [, previousId, previousFrom, previousTo] = previousKey;
+  return previousId === partyId && previousTo === range.to && previousFrom > range.from;
+}
+
+/**
+ * A party's statement for a date range (enriched rows + opening balance), from the
+ * ranged ledger API: one hook for both kinds. Operational tier; every operational
+ * write invalidates the `customer-statement` / `supplier-statement` prefix.
+ *
+ * Widening the range into the past ("Earlier months") changes the key; the
+ * previous range's rows stay on screen (`isPlaceholderData`) until the wider one
+ * arrives, so the list never collapses to a spinner. Only that case carries rows
+ * over: another range (the Filter) or another party loads from scratch.
+ */
+export function usePartyStatement(
+  kind: 'customer' | 'supplier',
+  partyId: string | null | undefined,
+  range: { from: string; to: string },
+  options?: Options<RangedPartyLedger>,
+) {
+  const customer = kind === 'customer';
+  return useQuery({
+    queryKey: customer
+      ? queryKeys.customerStatement(partyId ?? '', range.from, range.to)
+      : queryKeys.supplierStatement(partyId ?? '', range.from, range.to),
+    queryFn: () =>
+      customer
+        ? txService.getCustomerLedgerRange(partyId!, range)
+        : txService.getSupplierLedgerRange(partyId!, range),
+    enabled: !!partyId,
+    placeholderData: (previous, previousQuery) =>
+      widensStatementWindow(previousQuery?.queryKey, partyId, range) ? previous : undefined,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/** A customer's statement: `usePartyStatement` for a customer. */
+export const useCustomerStatement = (
+  customerId: string | null | undefined,
+  range: { from: string; to: string },
+  options?: Options<RangedPartyLedger>,
+) => usePartyStatement('customer', customerId, range, options);
+
+/** A supplier's statement: `usePartyStatement` for a supplier. */
+export const useSupplierStatement = (
+  supplierId: string | null | undefined,
+  range: { from: string; to: string },
+  options?: Options<RangedPartyLedger>,
+) => usePartyStatement('supplier', supplierId, range, options);
+
 export function useSupplierLedger(supplierId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.supplierLedger(supplierId ?? ''),
@@ -799,6 +951,7 @@ export function useInventoryVariances(
   });
 }
 
+/** A Sealed day's immutable DSSR snapshot (null when none is stored). */
 export function useDailyDssr(
   stationId: string | null | undefined,
   date: string,
@@ -808,6 +961,7 @@ export function useDailyDssr(
     queryKey: queryKeys.dssr(stationId ?? '', date),
     queryFn: () => shiftService.getDailyDssr(stationId!, date),
     enabled: !!stationId && !!date,
+    ...TIER.operational,
     ...options,
   });
 }
@@ -843,6 +997,25 @@ export function useProfitLoss(
   });
 }
 
+/**
+ * The Reports tab's Business Day list, one calendar month per page, newest first.
+ * `fetchNextPage` loads the next older month that has any Business Day
+ * (`olderMonth`), so a station with a gap never shows an empty page. Operational
+ * tier: it reads live day state (Live → Draft → Sealed), so it must never serve
+ * same-session stale data; `useInvalidateOperational` refreshes it.
+ */
+export function useBusinessDayList(stationId: string | null | undefined) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.businessDayList(stationId ?? ''),
+    queryFn: ({ pageParam }): Promise<BusinessDayList> =>
+      shiftService.getBusinessDayList(stationId!, pageParam ?? undefined),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.olderMonth,
+    enabled: !!stationId,
+    ...TIER.operational,
+  });
+}
+
 export function useDailyDssrRange(
   stationId: string | null | undefined,
   from: string,
@@ -853,6 +1026,7 @@ export function useDailyDssrRange(
     queryKey: queryKeys.dssrRange(stationId ?? '', from, to),
     queryFn: () => shiftService.getDailyDssrRange(stationId!, from, to),
     enabled: !!stationId && !!from && !!to,
+    ...TIER.operational,
     ...options,
   });
 }
@@ -881,6 +1055,156 @@ export function useAttendantHandoverReport(
 }
 
 /**
+ * Insights sales block over the last `days` closed Business Days. Everything in
+ * it is sealed (closed-day snapshots), but the range END is the newest closed
+ * day, which the server resolves, so it moves whenever any device closes a day.
+ * Operational tier: same-session closes invalidate it (`useInvalidateOperational`,
+ * which the desktop Business Day tab calls too), and a close made on ANOTHER
+ * device is picked up by the tier's short stale time. One aggregate statement,
+ * so a revalidation is cheap. Not persisted (not in PERSIST_PREFIXES).
+ */
+export function useInsightsSales(
+  stationId: string | null | undefined,
+  days: InsightsRangeDays,
+  options?: Options<InsightsSales>,
+) {
+  return useQuery({
+    queryKey: queryKeys.insightsSales(stationId ?? '', days),
+    queryFn: () => shiftService.getInsightsSales(stationId!, days),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
+ * What customers owe (total, aging split, a row per customer that owes). One
+ * statement over every ledger. Plain operational tier (it refetches on window
+ * focus, like the statements beside it); a credit sale or collection invalidates
+ * it (`useInvalidateOperational`). Not persisted.
+ */
+export function useReceivables(
+  stationId: string | null | undefined,
+  options?: Options<ReceivablesSummary>,
+) {
+  return useQuery({
+    queryKey: queryKeys.receivables(stationId ?? ''),
+    queryFn: () => shiftService.getReceivables(stationId!),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
+ * One customer's receivable and payment behaviour (single indexed statement).
+ * Same cache rule as the list: plain operational tier; a write invalidates the key.
+ */
+export function useCustomerReceivable(
+  stationId: string | null | undefined,
+  customerId: string | null | undefined,
+  options?: Options<CustomerReceivableSummary>,
+) {
+  return useQuery({
+    queryKey: queryKeys.customerReceivable(stationId ?? '', customerId ?? ''),
+    queryFn: () => shiftService.getCustomerReceivable(stationId!, customerId!),
+    enabled: !!stationId && !!customerId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
+ * What the Organization owes its suppliers (total, this month's purchased vs paid,
+ * a row per supplier that is owed money). One statement over every supplier
+ * ledger. Plain operational tier (it refetches on window focus, like the statements
+ * beside it); a purchase or supplier payment invalidates it
+ * (`useInvalidateOperational`). Not persisted.
+ */
+export function usePayables(
+  stationId: string | null | undefined,
+  options?: Options<PayablesSummary>,
+) {
+  return useQuery({
+    queryKey: queryKeys.payables(stationId ?? ''),
+    queryFn: () => shiftService.getPayables(stationId!),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
+ * One supplier's payable, last payment, this month and purchases by product
+ * (single indexed statement). Same cache rule as the list: plain operational tier;
+ * a purchase or supplier payment invalidates it (`useInvalidateOperational`).
+ */
+export function useSupplierPayable(
+  stationId: string | null | undefined,
+  supplierId: string | null | undefined,
+  options?: Options<SupplierPayableSummary>,
+) {
+  return useQuery({
+    queryKey: queryKeys.supplierPayable(stationId ?? '', supplierId ?? ''),
+    queryFn: () => shiftService.getSupplierPayable(stationId!, supplierId!),
+    enabled: !!stationId && !!supplierId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
+ * Insights part 2 (#402): the blocks beside the sales block. Same range, same
+ * range end and the same cache rules as `useInsightsSales` (operational tier,
+ * invalidated with it, never persisted).
+ *
+ * The attendant block is gated on the `reports.attendant` Product Capability:
+ * mount it only where that is entitled (the screen puts it behind a
+ * `CapabilityGate`), so a Station without it never sends the request.
+ */
+export function useInsightsAttendantVariance(
+  stationId: string | null | undefined,
+  days: InsightsRangeDays,
+  options?: Options<InsightsAttendantVariance[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.insightsAttendantVariance(stationId ?? '', days),
+    queryFn: () => shiftService.getInsightsAttendantVariance(stationId!, days),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useInsightsStockLoss(
+  stationId: string | null | undefined,
+  days: InsightsRangeDays,
+  options?: Options<InsightsStockLoss[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.insightsStockLoss(stationId ?? '', days),
+    queryFn: () => shiftService.getInsightsStockLoss(stationId!, days),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useInsightsCreditHealth(
+  stationId: string | null | undefined,
+  days: InsightsRangeDays,
+  options?: Options<InsightsCreditHealth>,
+) {
+  return useQuery({
+    queryKey: queryKeys.insightsCreditHealth(stationId ?? '', days),
+    queryFn: () => shiftService.getInsightsCreditHealth(stationId!, days),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
  * Returns a callback that invalidates the operational caches for a station after
  * a mutation (open/close shift, record expense/collection/etc.) so screens stay
  * fresh without manual refetch wiring.
@@ -902,20 +1226,38 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['business-day-status'] }),
       qc.invalidateQueries({ queryKey: ['shift-summaries'] }),
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] }),
+      qc.invalidateQueries({ queryKey: ['business-day-list'] }),
       qc.invalidateQueries({ queryKey: ['shift-transactions'] }),
       qc.invalidateQueries({ queryKey: ['merchandise-handovers'] }),
       qc.invalidateQueries({ queryKey: ['merchandise-sales'] }),
       // The Attendant Handover Report reads closed-shift handovers, so closing
       // a shift (or correcting one) changes it within the same session.
       qc.invalidateQueries({ queryKey: ['attendant-handover-report'] }),
+      // Insights read sealed days; closing a Business Day adds one to the range.
+      qc.invalidateQueries({ queryKey: ['insights-sales'] }),
+      // ...and so do the part 2 blocks: closed-day Shift Summaries, Tank Dips and
+      // Credit Sales move with a close, Collections (Entry Date) with a collection.
+      qc.invalidateQueries({ queryKey: ['insights-attendant-variance'] }),
+      qc.invalidateQueries({ queryKey: ['insights-stock-loss'] }),
+      qc.invalidateQueries({ queryKey: ['insights-credit-health'] }),
       // Business Day cockpit + P&L read the live DSSR preview — refresh it too.
       qc.invalidateQueries({ queryKey: ['dssr'] }),
       qc.invalidateQueries({ queryKey: ['dssr-preview'] }),
+      // Closing a Business Day writes its snapshot: the mobile Home's 7-day trend reads the range.
+      qc.invalidateQueries({ queryKey: ['dssr-range'] }),
       qc.invalidateQueries({ queryKey: ['expenses'] }),
       qc.invalidateQueries({ queryKey: ['income'] }),
       qc.invalidateQueries({ queryKey: ['purchases'] }),
       qc.invalidateQueries({ queryKey: ['collections'] }),
       qc.invalidateQueries({ queryKey: ['customers'] }),
+      // Receivables are settled FIFO from the same ledger as a customer's balance,
+      // and the statement reads it: a credit sale or collection moves both.
+      qc.invalidateQueries({ queryKey: ['receivables'] }),
+      qc.invalidateQueries({ queryKey: ['customer-statement'] }),
+      // Payables are settled FIFO from the supplier ledger, like a supplier's
+      // balance: a purchase or supplier payment moves them and the statement.
+      qc.invalidateQueries({ queryKey: ['payables'] }),
+      qc.invalidateQueries({ queryKey: ['supplier-statement'] }),
       // Money layer: account balances, statements and the Cash & Bank register all
       // move with expenses / income / collections / payments.
       qc.invalidateQueries({ queryKey: ['financial-accounts'] }),

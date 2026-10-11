@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="light">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -7,9 +7,52 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1"
     />
-    <meta name="theme-color" content="#1F6A53" />
+    <meta name="theme-color" content="__THEME_COLOR_LIGHT__" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="__STATUS_BAR_LIGHT__" />
+    <!--
+      Pre-paint theme: sets the light/dark class on <html>, plus the theme-color
+      and iOS status-bar meta, before first paint (no flash). Mirrors
+      resolveTheme/applyTheme in src/theme/theme.ts (pinned by
+      prepaint.test.ts). The double-underscore placeholders are filled by vite.config.ts from
+      src/theme/config.ts (colours, storage key, status-bar styles), so nothing
+      here is a second copy. Appearance is not shipped, so this is Light unless
+      the dev-only ?theme= switch is on.
+    -->
+    <script>
+      (function () {
+        try {
+          var theme = 'light';
+          var force = null;
+          if (__THEME_DEV_SWITCH__) {
+            var m = /[?&]theme=(light|dark)(&|$)/.exec(location.search);
+            if (m) force = m[1];
+          }
+          if (force) {
+            theme = force;
+          } else if (__APPEARANCE_ENABLED__) {
+            var p = localStorage.getItem('__THEME_STORAGE_KEY__');
+            theme =
+              p === 'light' || p === 'dark'
+                ? p
+                : matchMedia('(prefers-color-scheme: dark)').matches
+                  ? 'dark'
+                  : 'light';
+          }
+          var root = document.documentElement;
+          root.classList.remove('light', 'dark');
+          root.classList.add(theme);
+          root.style.colorScheme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          var dark = theme === 'dark';
+          if (meta)
+            meta.setAttribute('content', dark ? '__THEME_COLOR_DARK__' : '__THEME_COLOR_LIGHT__');
+          var bar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+          if (bar)
+            bar.setAttribute('content', dark ? '__STATUS_BAR_DARK__' : '__STATUS_BAR_LIGHT__');
+        } catch (e) {}
+      })();
+    </script>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>PumpOS Mobile</title>

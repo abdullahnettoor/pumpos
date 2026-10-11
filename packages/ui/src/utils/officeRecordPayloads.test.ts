@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { collectionPayload, expensePayload } from './officeRecordPayloads.js';
+import {
+  collectionPayload,
+  expensePayload,
+  supplierPaymentPayload,
+} from './officeRecordPayloads.js';
 
 describe('office record payloads', () => {
   it('builds an expense body with entry date and funding account, no shift', () => {
@@ -46,5 +50,33 @@ describe('office record payloads', () => {
       terminalId: 't1',
     });
     expect(body).toMatchObject({ fundingAccountId: 'cash', terminalId: undefined });
+  });
+
+  it('builds a supplier payment body with entry date and funding account, no shift', () => {
+    expect(
+      supplierPaymentPayload('s1', {
+        entryDate: '2026-09-20',
+        supplierId: 'su1',
+        amount: 25000,
+        notes: 'NEFT 4471',
+        fundingAccountId: 'bank',
+      }),
+    ).toEqual({
+      stationId: 's1',
+      entryDate: '2026-09-20',
+      fundingAccountId: 'bank',
+      supplierId: 'su1',
+      amount: 25000,
+      notes: 'NEFT 4471',
+    });
+    expect(
+      supplierPaymentPayload('s1', {
+        entryDate: '2026-09-20',
+        supplierId: 'su1',
+        amount: 1,
+        notes: '',
+        fundingAccountId: 'bank',
+      }).notes,
+    ).toBeUndefined();
   });
 });

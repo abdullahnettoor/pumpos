@@ -85,9 +85,13 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({ sele
           <span className="text-[12px] text-ink-muted">Paper for all reports</span>
           <SegmentedControl<Paper>
             aria-label="Paper size"
-            disabled={savingPage}
+            // Each choice saves, so the arrows only browse; Enter / Space / click
+            // chooses. Not `disabled` while saving (that would drop the focus).
+            activation="manual"
             value={paper}
-            onChange={(next) => void savePage({ paper: next })}
+            onChange={(next) => {
+              if (!savingPage) void savePage({ paper: next });
+            }}
             options={[
               { value: 'A4', label: 'A4' },
               { value: 'LETTER', label: 'Letter' },

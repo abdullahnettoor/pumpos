@@ -126,6 +126,7 @@ function source(): DssrSourceData {
       { customerType: 'Regular', amount: 1000 },
       { customerType: 'Fleet', amount: 4000 },
     ],
+    omcCardSales: [{ amount: 2000 }],
     stockVariances: [
       {
         tankName: 'T1',
@@ -184,6 +185,7 @@ describe('GenerateDssr', () => {
       expect(d.merchandise.byPaymentMethod.Credit).toBe(1180);
       expect(d.credit.normalCredit).toBe(1000);
       expect(d.credit.fleetCredit).toBe(4000);
+      expect(d.omcCard).toEqual({ total: 2000, count: 1 });
       // T5: output GST on merchandise, extracted from the MRP-inclusive line.
       expect(d.salesTax.gst.taxable).toBe(1423.73);
       expect(d.salesTax.gst.total).toBe(256.27);
@@ -277,6 +279,37 @@ describe('GenerateDssr', () => {
 
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.code).toBe('NOT_FOUND');
+  });
+
+  it('freezes the tank, product and cost per litre with each stock variance row', async () => {
+    const data = source();
+    data.stockVariances = [
+      {
+        tankId: 't1',
+        productId: 'p1',
+        tankName: 'T1',
+        productName: 'Petrol',
+        unit: 'Litre',
+        inventoryType: 'BULK',
+        expectedQuantity: 5000,
+        actualQuantity: 4990,
+        varianceQuantity: -10,
+        reason: null,
+      },
+    ];
+
+    const result = await new GenerateDssr({
+      businessDays: new BdRepo([bday()]),
+      snapshots: new SnapRepo(),
+      reader: new Reader(data),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ businessDayId: 'bd-1' }, ctx());
+
+    expect(result.success).toBe(true);
+    if (result.success)
+      expect((result.data.snapshotData as any).fuelStockVariance).toEqual([
+        expect.objectContaining({ tankId: 't1', productId: 'p1', unitCost: 88, status: 'Loss' }),
+      ]);
   });
 
   it('includes a later Business Day Tank Dip without changing its Shift Summary', async () => {

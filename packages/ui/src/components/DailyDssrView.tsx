@@ -4,7 +4,7 @@ import { Button } from '../pump-ds/index.js';
 import { formatDateTime, formatMoney, inr } from '../utils/format.js';
 import { ReportNote } from './reports/ReportNote.js';
 import { useRunTask } from '../utils/runTask.js';
-import { shiftDisplayLabel } from '@pump/shared';
+import { readDssrOmcCard, shiftDisplayLabel } from '@pump/shared';
 
 interface DailyDssrViewProps {
   dailyDssr: any;
@@ -49,6 +49,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   };
   const normalCredit = Number(credit.normalCredit || 0);
   const fleetCredit = Number(credit.fleetCredit || 0);
+  const omcCard = readDssrOmcCard(snapshot);
   // T5 — output tax on sales. GST (merchandise) and VAT (fuel) stay on separate
   // lines: fuel VAT is outside GST and carries no input credit for the buyer.
   const salesTax = (snapshot.salesTax || {}) as {
@@ -414,6 +415,8 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
               color: 'var(--brand-warning)',
             },
             { label: 'Fleet Credit Sales', value: inr(fleetCredit), color: 'var(--brand-warning)' },
+            // ADR 0001: OMC card fuel settles to the OMC Wallet; only snapshots that carry it show it.
+            ...(omcCard ? [{ label: 'OMC Card Sales', value: inr(omcCard.total) }] : []),
             { label: 'Purchases', value: inr(Number(purchases.total || 0)) },
             ...(salesGstTotal > 0
               ? [

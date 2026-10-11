@@ -43,7 +43,28 @@ describe('useInvalidateOperational', () => {
 
   it('refreshes the shift, day and summary caches a write moves', () => {
     const keys = invalidatedKeysAfterOperationalWrite();
-    for (const key of ['shift-status', 'business-day-status', 'shift-summaries', 'dssr-preview']) {
+    for (const key of [
+      'shift-status',
+      'business-day-status',
+      'shift-summaries',
+      'dssr-preview',
+      // The mobile Home's trend reads closed days' snapshots.
+      'dssr-range',
+      // Closing a Business Day (from the desktop Business Day tab too) moves the
+      // end of every mobile Insights range.
+      'insights-sales',
+      // Receivables move with every credit sale and collection, like a customer's balance.
+      'receivables',
+      'customer-statement',
+      // Payables move with every purchase and supplier payment, like a supplier's balance.
+      'payables',
+      'supplier-statement',
+      // Insights part 2: closed-day Shift Summaries, Tank Dips, Credit Sales and
+      // (by Entry Date) Collections all move with a write.
+      'insights-attendant-variance',
+      'insights-stock-loss',
+      'insights-credit-health',
+    ]) {
       expect(keys).toContain(key);
     }
   });

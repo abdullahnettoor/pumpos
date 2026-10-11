@@ -24,6 +24,17 @@ import {
   DesktopDownloads,
   AttendantHandoverReport,
   AttendantReportFilters,
+  BusinessDayList,
+  InsightsAttendantVariance,
+  InsightsCreditHealth,
+  InsightsRangeDays,
+  InsightsSales,
+  CustomerReceivableSummary,
+  PayablesSummary,
+  RangedPartyLedger,
+  ReceivablesSummary,
+  SupplierPayableSummary,
+  InsightsStockLoss,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -527,33 +538,48 @@ export class CloudUserAssignmentService implements IUserAssignmentService {
     // Role change
   }
 
-  async createUser(data: any): Promise<User> {
-    return request<User>('/setup/users', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createUser(data: any, opts?: { idempotencyKey?: string }): Promise<User> {
+    return request<User>(
+      '/setup/users',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async updateUser(id: string, data: any): Promise<User> {
-    return request<User>(`/setup/users/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  async updateUser(id: string, data: any, opts?: { idempotencyKey?: string }): Promise<User> {
+    return request<User>(
+      `/setup/users/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async resetUserPassword(id: string, password: string): Promise<User> {
-    return request<User>(`/setup/users/${id}/reset-password`, {
-      method: 'POST',
-      body: JSON.stringify({ password }),
-    });
+  async resetUserPassword(
+    id: string,
+    password: string,
+    opts?: { idempotencyKey?: string },
+  ): Promise<User> {
+    return request<User>(
+      `/setup/users/${id}/reset-password`,
+      { method: 'POST', body: JSON.stringify({ password }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async deactivateUser(id: string): Promise<User> {
-    return request<User>(`/setup/users/${id}/deactivate`, { method: 'POST' });
+  async deactivateUser(id: string, opts?: { idempotencyKey?: string }): Promise<User> {
+    return request<User>(
+      `/setup/users/${id}/deactivate`,
+      { method: 'POST' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async reactivateUser(id: string): Promise<User> {
-    return request<User>(`/setup/users/${id}/reactivate`, { method: 'POST' });
+  async reactivateUser(id: string, opts?: { idempotencyKey?: string }): Promise<User> {
+    return request<User>(
+      `/setup/users/${id}/reactivate`,
+      { method: 'POST' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
@@ -674,6 +700,19 @@ export class CloudShiftService {
     return data || [];
   }
 
+  /** One page of summaries, newest first; `before` is the previous page's oldest `generatedAt`. */
+  async getShiftSummaryPage(stationId: string, limit: number, before?: string): Promise<any[]> {
+    const query = new URLSearchParams({ stationId, limit: String(limit) });
+    if (before) query.set('before', before);
+    const data = await request<any[]>(`/shifts/shift-summaries?${query}`);
+    return data || [];
+  }
+
+  /** One Shift's stored summary by id (404 when it is not the caller's to read). */
+  async getShiftSummary(shiftId: string): Promise<any> {
+    return request<any>(`/shifts/shift-summaries/${encodeURIComponent(shiftId)}`);
+  }
+
   async generateDailyDssr(stationId: string, businessDate: string): Promise<any> {
     return request<any>('/dssr/daily/generate', {
       method: 'POST',
@@ -702,6 +741,17 @@ export class CloudShiftService {
     );
   }
 
+  /**
+   * One month page of the Reports tab's Business Day list (Live / Draft /
+   * Sealed) plus the week tiles. `month` is `YYYY-MM`; omit it for the month of
+   * the Current Business Date. Aggregated in SQL; never builds a DSSR preview.
+   */
+  async getBusinessDayList(stationId: string, month?: string): Promise<BusinessDayList> {
+    const query = new URLSearchParams({ stationId });
+    if (month) query.set('month', month);
+    return request<BusinessDayList>(`/dssr/days?${query.toString()}`);
+  }
+
   async getDailyDssrRange(stationId: string, from: string, to: string): Promise<any[]> {
     const data = await request<any[]>(
       `/dssr/daily/range?stationId=${stationId}&from=${from}&to=${to}`,
@@ -723,6 +773,78 @@ export class CloudShiftService {
     });
     if (filters.attendantId) query.set('attendantId', filters.attendantId);
     return request<AttendantHandoverReport>(`/reports/attendant-handovers?${query.toString()}`);
+  }
+
+  /**
+   * Insights sales block (trend, product mix, Shift performance) over the last
+   * `days` closed Business Days. Sealed data only: a given range end never changes.
+   */
+  async getInsightsSales(stationId: string, days: InsightsRangeDays): Promise<InsightsSales> {
+    const query = new URLSearchParams({ stationId, days: String(days) });
+    return request<InsightsSales>(`/reports/insights/sales?${query.toString()}`);
+  }
+
+  /** What customers owe: total, aging split and a row per customer that owes. */
+  async getReceivables(stationId: string): Promise<ReceivablesSummary> {
+    const query = new URLSearchParams({ stationId });
+    return request<ReceivablesSummary>(`/reports/receivables?${query.toString()}`);
+  }
+
+  /** One customer's receivable plus last payment, usually-pays-in, this month and vehicle spend. */
+  async getCustomerReceivable(
+    stationId: string,
+    customerId: string,
+  ): Promise<CustomerReceivableSummary> {
+    const query = new URLSearchParams({ stationId });
+    return request<CustomerReceivableSummary>(
+      `/reports/receivables/${encodeURIComponent(customerId)}?${query.toString()}`,
+    );
+  }
+
+  /** What the Organization owes its suppliers: total, this month and a row per supplier owed. */
+  async getPayables(stationId: string): Promise<PayablesSummary> {
+    const query = new URLSearchParams({ stationId });
+    return request<PayablesSummary>(`/reports/payables?${query.toString()}`);
+  }
+
+  /** One supplier's payable plus last payment, this month and purchases by product. */
+  async getSupplierPayable(stationId: string, supplierId: string): Promise<SupplierPayableSummary> {
+    const query = new URLSearchParams({ stationId });
+    return request<SupplierPayableSummary>(
+      `/reports/payables/${encodeURIComponent(supplierId)}?${query.toString()}`,
+    );
+  }
+
+  /**
+   * Cash variance by Attendant over the same range (#402). Refused with
+   * CAPABILITY_NOT_ENTITLED unless the Organization has `reports.attendant`.
+   */
+  async getInsightsAttendantVariance(
+    stationId: string,
+    days: InsightsRangeDays,
+  ): Promise<InsightsAttendantVariance[]> {
+    const query = new URLSearchParams({ stationId, days: String(days) });
+    return request<InsightsAttendantVariance[]>(
+      `/reports/insights/attendant-variance?${query.toString()}`,
+    );
+  }
+
+  /** Tank Dip variance per tank over the same range (#402). */
+  async getInsightsStockLoss(
+    stationId: string,
+    days: InsightsRangeDays,
+  ): Promise<InsightsStockLoss[]> {
+    const query = new URLSearchParams({ stationId, days: String(days) });
+    return request<InsightsStockLoss[]>(`/reports/insights/stock-loss?${query.toString()}`);
+  }
+
+  /** Credit Sales given vs Collections received over the same range (#402). */
+  async getInsightsCreditHealth(
+    stationId: string,
+    days: InsightsRangeDays,
+  ): Promise<InsightsCreditHealth> {
+    const query = new URLSearchParams({ stationId, days: String(days) });
+    return request<InsightsCreditHealth>(`/reports/insights/credit-health?${query.toString()}`);
   }
 }
 
@@ -853,17 +975,24 @@ export class CloudTransactionService {
     });
   }
 
+  /**
+   * The API updates only the fields sent, so a caller changing one thing (the
+   * mobile credit-limit sheet) sends just that. Pass an `idempotencyKey` so a
+   * retried save cannot apply twice.
+   */
   async updateCustomer(
     id: string,
     payload: {
-      name: string;
+      name?: string;
       phone?: string | null;
-      customerType: 'Regular' | 'Credit' | 'Fleet';
+      customerType?: 'Regular' | 'Credit' | 'Fleet';
       creditLimit?: number | null;
       fleetCode?: string | null;
       isPrepaid?: boolean;
       settlementCycle?: 'OPEN' | 'EOD';
       isActive?: boolean;
+      /** Why the edit was made; recorded on the audit event, not on the customer. */
+      note?: string;
       metadata?: {
         gstin?: string | null;
         stateCode?: string | null;
@@ -872,11 +1001,16 @@ export class CloudTransactionService {
         billingAddress?: string | null;
       } | null;
     },
+    opts?: { idempotencyKey?: string },
   ): Promise<any> {
-    return request<any>(`/transactions/customers/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
+    return request<any>(
+      `/transactions/customers/${id}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async topupCustomer(
@@ -1166,6 +1300,28 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/customers/${customerId}/ledger`);
   }
 
+  /** The customer's statement for a date range: opening balance, enriched rows, closing balance. */
+  async getCustomerLedgerRange(
+    customerId: string,
+    range: { from: string; to: string },
+  ): Promise<RangedPartyLedger> {
+    const query = new URLSearchParams(range);
+    return request<RangedPartyLedger>(
+      `/transactions/customers/${encodeURIComponent(customerId)}/ledger?${query.toString()}`,
+    );
+  }
+
+  /** The supplier's statement for a date range: opening balance, enriched rows, closing balance. */
+  async getSupplierLedgerRange(
+    supplierId: string,
+    range: { from: string; to: string },
+  ): Promise<RangedPartyLedger> {
+    const query = new URLSearchParams(range);
+    return request<RangedPartyLedger>(
+      `/transactions/suppliers/${encodeURIComponent(supplierId)}/ledger?${query.toString()}`,
+    );
+  }
+
   async getSupplierLedger(supplierId: string): Promise<any[]> {
     return request<any[]>(`/transactions/suppliers/${supplierId}/ledger`);
   }
@@ -1238,18 +1394,25 @@ export class CloudTransactionService {
   }
 
   /** Office Record (ADR 0005): entry date + funding account, no shift. */
-  async recordSupplierPayment(payload: {
-    stationId: string;
-    entryDate?: string;
-    fundingAccountId: string;
-    supplierId: string;
-    amount: number;
-    notes?: string;
-  }): Promise<any> {
-    return request<any>('/transactions/supplier-payments', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async recordSupplierPayment(
+    payload: {
+      stationId: string;
+      entryDate?: string;
+      fundingAccountId: string;
+      supplierId: string;
+      amount: number;
+      notes?: string;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/transactions/supplier-payments',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async recordSale(payload: {

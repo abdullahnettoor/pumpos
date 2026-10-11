@@ -256,6 +256,56 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     assertPdfContainsVectorMark(buffer);
   });
 
+  it('marks a draft DSSR as not closed, outside the configurable sections, and leaves a sealed one unmarked', () => {
+    const texts = (node: any): string[] => {
+      if (node == null || typeof node === 'boolean') return [];
+      if (typeof node === 'string' || typeof node === 'number') return [String(node)];
+      if (Array.isArray(node)) return node.flatMap(texts);
+      if (typeof node.type === 'function' && node.type !== Text) {
+        return texts((node.type as any)(node.props));
+      }
+      return texts(node.props?.children);
+    };
+    // A layout that prints no header at all must still carry the draft mark.
+    const config = { sections: ['meta'] as any[], paper: 'A4' as const };
+    const base = { businessDate: '2026-10-08', snapshotData: { shiftsIncluded: 2 } };
+    const draft = texts((DssrDoc as any)({ dssr: { ...base, draft: true }, config })).join(' ');
+    expect(draft).toContain('DRAFT \u2014 DAY NOT CLOSED');
+    const sealed = texts((DssrDoc as any)({ dssr: base, config })).join(' ');
+    expect(sealed).not.toContain('DRAFT');
+  });
+
+  it('prints OMC card sales in the DSSR sales summary only when the snapshot carries them', () => {
+    const texts = (node: any): string[] => {
+      if (node == null || typeof node === 'boolean') return [];
+      if (typeof node === 'string' || typeof node === 'number') return [String(node)];
+      if (Array.isArray(node)) return node.flatMap(texts);
+      if (typeof node.type === 'function' && node.type !== Text) {
+        return texts((node.type as any)(node.props));
+      }
+      return texts(node.props?.children);
+    };
+    const config = { sections: ['financial'] as any[], paper: 'A4' as const };
+    const render = (snapshotData: Record<string, unknown>) =>
+      texts(
+        (DssrDoc as any)({
+          dssr: {
+            businessDate: '2026-10-10',
+            snapshotData: { credit: { normalCredit: 0, fleetCredit: 34040 }, ...snapshotData },
+          },
+          config,
+        }),
+      );
+    const withOmc = render({ omcCard: { total: 2000, count: 1 } });
+    const at = withOmc.indexOf('OMC Card Sales');
+    expect(at).toBeGreaterThan(withOmc.indexOf('Fleet Credit Sales'));
+    expect(withOmc[at + 1]).toMatch(/2,000/);
+    // Unchanged for a snapshot frozen before the field and for a day without any.
+    const legacy = render({});
+    expect(legacy).not.toContain('OMC Card Sales');
+    expect(render({ omcCard: { total: 0, count: 0 } })).toEqual(legacy);
+  });
+
   it('generates real PDF buffer for Tax Invoice with verified vector mark in PDF stream', async () => {
     const invoice = {
       invoiceNumber: 'INV-2026-001',
@@ -337,6 +387,37 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
 
     assertPdfContainsVectorMark(buffer);
+  });
+
+  it('renders a long party statement (opening line, detail lines, closing line) across pages', async () => {
+    const rows = Array.from({ length: 90 }, (_, i) => ({
+      dateLabel: `${(i % 28) + 1} Oct 2026`,
+      particulars: 'Credit Sale',
+      detail: 'Shift 20261007-1 \u00b7 50 L Diesel \u00b7 KL-11-AB-4521',
+      debit: 100,
+      credit: 0,
+      balance: 5100 + i * 100,
+    }));
+    const doc = React.createElement(LedgerDoc, {
+      title: 'CUSTOMER STATEMENT',
+      entityName: 'Acme Transport',
+      periodLabel: 'October 2026',
+      debitLabel: 'Sales',
+      creditLabel: 'Received',
+      balanceLabel: 'Balance',
+      rows,
+      totals: { debit: 9000, credit: 0, balance: 14000 },
+      partyLines: ['Fleet \u00b7 FL-001'],
+      partyAccount: true,
+      opening: 5000,
+      closing: { note: 'Due from customer' },
+      stationName: 'Apex Station',
+      letterhead: mockLetterhead,
+    });
+    const buffer = await streamToBuffer(await pdf(doc as any).toBuffer());
+    expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+    const count = /\/Type\s*\/Pages[\s\S]*?\/Count\s+(\d+)/.exec(buffer.toString('latin1'));
+    expect(Number(count?.[1])).toBeGreaterThan(1);
   });
 
   /**

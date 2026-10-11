@@ -1,3 +1,5 @@
+import type { ProductType } from '@pump/shared';
+
 export interface DssrSnapshot {
   id: string;
   organizationId: string;
@@ -60,8 +62,20 @@ export interface DssrCreditSale {
   amount: number;
 }
 
+/**
+ * An OMC Card Sale of the business day: fuel paid by an Oil Marketing Company
+ * card, settled to the OMC Wallet. Not a receivable and not a `sales` row, so
+ * without this the day's sales summary shows it nowhere.
+ */
+export interface DssrOmcCardSale {
+  amount: number;
+}
+
 /** Business-day tank dip / physical-count reconciliation. */
 export interface DssrStockVariance {
+  /** The dipped tank (null for an item count). Added to the snapshot so readers need not match by name. */
+  tankId?: string | null;
+  productId?: string | null;
   tankName: string;
   productName: string;
   /** Measurement unit of the product (e.g. 'Litre', 'Piece'). */
@@ -72,6 +86,31 @@ export interface DssrStockVariance {
   actualQuantity: number;
   varianceQuantity: number;
   reason: string | null;
+  /**
+   * The tank's stock movement over the day, from `stock_movements` (BULK rows
+   * only; absent for a dip with no tank). Frozen into the snapshot beside the
+   * dip so a Stock movement view never recomputes it. Snapshots frozen before
+   * #395 lack these keys.
+   */
+  tankMovement?: DssrTankMovementSource;
+}
+
+/**
+ * One tank's litres across a Business Day, summed from `stock_movements` by the
+ * reader. `composeDssr` derives the closing book from them, so
+ * `opening + received - sold + adjusted = closing` and `actualQuantity -
+ * closing` is the dip variance.
+ */
+export interface DssrTankMovementSource {
+  tankId: string;
+  /** Book stock before the day: Σ movements of earlier Business Days. */
+  openingQuantity: number;
+  /** Purchases delivered into the tank on the day. */
+  receivedQuantity: number;
+  /** Net metered litres dispensed on the day (a positive number). */
+  soldQuantity: number;
+  /** Other day movements (Adjustment, OpeningBalance); dip reconciliations are excluded. */
+  adjustedQuantity: number;
 }
 
 /**
@@ -84,11 +123,26 @@ export interface DssrSourceData {
   purchases: DssrPurchase[];
   sales: DssrSale[];
   creditSales: DssrCreditSale[];
+  /** The day's OMC Card Sales, anchored to the Business Day like Credit Sales. */
+  omcCardSales: DssrOmcCardSale[];
   stockVariances: DssrStockVariance[];
   /** Merchandise sale line items (productId + qty) for merchandise COGS. */
   saleItems: DssrSaleItem[];
-  /** productId → { name, code, costBasis } for fuel roll-up + COGS. */
-  products: Record<string, { name: string; code: string; unit: string; costBasis: number }>;
+  /**
+   * productId → { name, code, costBasis } for fuel roll-up + COGS, plus the
+   * category merchandise lines are grouped under (#392): the product's
+   * `productType`, normalised by the reader through `productCategoryOf`.
+   */
+  products: Record<
+    string,
+    {
+      name: string;
+      code: string;
+      unit: string;
+      costBasis: number;
+      productType?: ProductType | null;
+    }
+  >;
   /** nozzleId → nozzle name. */
   nozzles: Record<string, string>;
 }

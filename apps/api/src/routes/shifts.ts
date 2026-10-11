@@ -36,6 +36,8 @@ import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import { rowJson, rowJsonNullable, tsIso } from '../infra/sql-json.js';
 import { shiftSequenceSql } from '../infra/shift-sequence-sql.js';
+import { isUuid } from '../infra/is-uuid.js';
+import { netNozzleVolume } from '../infra/shift-summary-sql.js';
 import { assembleReconTotals, reconTotalsJson } from '../infra/repositories/shift-recon-sql.js';
 import {
   DrizzleDispenserRepository,
@@ -1139,6 +1141,8 @@ shiftsRouter.get('/my-assignment', async (c) => {
         openingReading: Number(nr.openingReading),
         closingReading: nr.closingReading != null ? Number(nr.closingReading) : null,
         testingVolume: nr.testingVolume != null ? Number(nr.testingVolume) : null,
+        // Litres the recorded Handover accepted: stored gross volume less testing.
+        netVolume: netNozzleVolume(nr.volumeSold, nr.testingVolume),
         unitPrice: nr.unitPrice != null ? Number(nr.unitPrice) : null,
       }))
       .sort(byNaturalField((n) => n.nozzleName));
@@ -1821,6 +1825,38 @@ shiftsRouter.post(
   },
 );
 
+/** The columns one Shift Summary row (list and single read) is built from. */
+function shiftSummaryRows(db: DbClient) {
+  return db
+    .select({
+      shift: schema.shifts,
+      snapshotData: schema.shiftSummaries.snapshotData,
+      generatedAt: schema.shiftSummaries.generatedAt,
+      businessDate: schema.businessDays.businessDate,
+      shiftSequence: shiftSequenceSql('shifts'),
+      templateName: schema.shiftTemplates.name,
+    })
+    .from(schema.shiftSummaries)
+    .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftSummaries.shiftId))
+    .leftJoin(schema.businessDays, eq(schema.businessDays.id, schema.shifts.businessDayId))
+    .leftJoin(schema.shiftTemplates, eq(schema.shiftTemplates.id, schema.shifts.shiftTemplateId));
+}
+
+type ShiftSummaryRow = Awaited<ReturnType<typeof shiftSummaryRows>>[number];
+
+const toShiftSummaryDto = (r: ShiftSummaryRow) => ({
+  shiftId: r.shift.id,
+  status: r.shift.status,
+  openedAt: r.shift.openedAt,
+  closedAt: r.shift.closedAt,
+  businessDayId: r.shift.businessDayId,
+  businessDate: r.businessDate,
+  shiftSequence: r.shiftSequence ?? null,
+  templateName: r.templateName ?? null,
+  generatedAt: r.generatedAt,
+  snapshotData: r.snapshotData,
+});
+
 // GET /api/shifts/shift-summaries?stationId=...&limit=...&before=...
 // Serves the STORED snapshot per summary — the snapshot is kept current at
 // write time (shift close + late-attribution refresh), so no read-time
@@ -1854,20 +1890,7 @@ shiftsRouter.get('/shift-summaries', async (c) => {
       400,
     );
   }
-  const db = c.var.db;
-  const rows = await db
-    .select({
-      shift: schema.shifts,
-      snapshotData: schema.shiftSummaries.snapshotData,
-      generatedAt: schema.shiftSummaries.generatedAt,
-      businessDate: schema.businessDays.businessDate,
-      shiftSequence: shiftSequenceSql('shifts'),
-      templateName: schema.shiftTemplates.name,
-    })
-    .from(schema.shiftSummaries)
-    .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftSummaries.shiftId))
-    .leftJoin(schema.businessDays, eq(schema.businessDays.id, schema.shifts.businessDayId))
-    .leftJoin(schema.shiftTemplates, eq(schema.shiftTemplates.id, schema.shifts.shiftTemplateId))
+  const rows = await shiftSummaryRows(c.var.db)
     .where(
       and(
         eq(schema.shifts.stationId, stationId),
@@ -1878,17 +1901,49 @@ shiftsRouter.get('/shift-summaries', async (c) => {
     .orderBy(desc(schema.shiftSummaries.generatedAt))
     .limit(limit);
 
-  const data = rows.map((r) => ({
-    shiftId: r.shift.id,
-    status: r.shift.status,
-    openedAt: r.shift.openedAt,
-    closedAt: r.shift.closedAt,
-    businessDayId: r.shift.businessDayId,
-    businessDate: r.businessDate,
-    shiftSequence: r.shiftSequence ?? null,
-    templateName: r.templateName ?? null,
-    generatedAt: r.generatedAt,
-    snapshotData: r.snapshotData,
-  }));
-  return c.json({ success: true, data });
+  return c.json({ success: true, data: rows.map(toShiftSummaryDto) });
+});
+
+// GET /api/shifts/shift-summaries/:shiftId
+// One Shift's stored summary, so a page opened by id (from a Business Day, an
+// alert) does not have to find it inside a paged list. One statement scoped by
+// the caller's organization; a Shift of another organization or station the
+// caller cannot reach answers 404, never 403, so ids do not leak.
+shiftsRouter.get('/shift-summaries/:shiftId', async (c) => {
+  const user = c.var.user;
+  if (!isUuid(c.req.param('shiftId'))) {
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Shift summary not found' } },
+      404,
+    );
+  }
+  // A Shift Summary contains every Drawer’s variance. An Attendant may read
+  // only their own Handover, so this station-wide snapshot is not available to them.
+  if (isAttendant(user.role)) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
+  }
+  const [row] = await shiftSummaryRows(c.var.db)
+    .where(
+      and(
+        eq(schema.shiftSummaries.shiftId, c.req.param('shiftId')),
+        eq(schema.shifts.organizationId, user.organizationId),
+      ),
+    )
+    .limit(1);
+  if (
+    !row ||
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: row.shift.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Shift summary not found' } },
+      404,
+    );
+  }
+  return c.json({ success: true, data: toShiftSummaryDto(row) });
 });

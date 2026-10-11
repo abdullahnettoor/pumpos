@@ -10,6 +10,9 @@ import {
   isAuthorizedForStation,
   canRecordHandover,
   isHandoverSelfScoped,
+  canViewMobileHome,
+  canViewMobileShifts,
+  canViewMobileInsights,
   UserContext,
   ResourceContext,
 } from './guards.js';
@@ -125,5 +128,19 @@ describe('canManageReportTemplates (#332)', () => {
     expect(canManageReportTemplates('Accountant')).toBe(false);
     expect(canManageReportTemplates('Staff')).toBe(false);
     expect(canManageReportTemplates('Attendant' as never)).toBe(false);
+  });
+});
+
+describe('mobile Control Room tab guards (#390)', () => {
+  it.each([
+    ['Owner', true, true, true],
+    ['Manager', true, true, true],
+    ['Accountant', false, false, false],
+    ['Staff', false, false, false],
+    ['Attendant', false, false, false],
+  ] as const)('%s: home %s, shifts %s, insights %s', (role, home, shifts, insights) => {
+    expect(canViewMobileHome(role)).toBe(home);
+    expect(canViewMobileShifts(role)).toBe(shifts);
+    expect(canViewMobileInsights(role)).toBe(insights);
   });
 });

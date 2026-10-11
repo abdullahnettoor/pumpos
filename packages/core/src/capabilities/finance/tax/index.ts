@@ -1,4 +1,4 @@
-import type { TaxCategory } from '@pump/shared';
+import { round2, type TaxCategory } from '@pump/shared';
 
 /**
  * Pure tax computation for Indian fuel retail. Fuel is VAT (outside GST);
@@ -56,8 +56,6 @@ export interface TaxContext {
   supplierStateCode?: string | null;
   buyerStateCode?: string | null;
 }
-
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 /**
  * Inter-state only when BOTH state codes are known and differ. When the buyer

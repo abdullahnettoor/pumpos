@@ -321,3 +321,35 @@ export function canManageExpenseCategory(role: Role): boolean {
 export function canOnboardStation(role: Role): boolean {
   return role === 'Owner' || role === 'Manager';
 }
+
+// ----------------------------------------------------
+// Mobile Control Room tabs (#390)
+// ----------------------------------------------------
+
+/**
+ * Mobile tabs that have no wider permission of their own. Reports and Money use
+ * `canViewReports` / `canManageFinancialAccounts`; these three are the tabs
+ * whose Role access is stated only here, so the mobile dock reads every answer
+ * from this file instead of re-deriving it. Staff and Attendant get no
+ * Control Room tabs (Attendant has its own handover shell).
+ */
+
+/**
+ * The Home overview (live Shift, sales headline, alerts, tanks, money position).
+ * Owner and Manager: the Owner decided (#388) a Manager sees the same Home. A Role
+ * without it (Accountant, Staff) reaches Home only for its own handover card while
+ * assigned to a Dispenser Unit.
+ */
+export function canViewMobileHome(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager';
+}
+
+/** The Shifts tab: shift history and close-out review. Owner and Manager. */
+export function canViewMobileShifts(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager';
+}
+
+/** The Insights tab (alerts and analysis). Owner and Manager. */
+export function canViewMobileInsights(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager';
+}

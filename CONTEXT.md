@@ -140,7 +140,7 @@ Attendant.
 When an Attendant is absent, any active user of the station (Owner, Manager,
 Accountant or Staff) may be put on the Dispenser Unit instead. That person is
 the Attendant for that Shift: they hold the Drawer and hand it over exactly as
-an Attendant would, on mobile ("My handover") or recorded by the office on
+an Attendant would, on mobile (the "Your handover" card on Home) or recorded by the office on
 desktop. An Accountant, like an Attendant, may record only their own Handover
 (#301).
 _Avoid_: operator, pumper
@@ -288,6 +288,17 @@ Business Day (sealed with it), never to a Shift. Paying for it is a separate
 Supplier Payment.
 _Avoid_: procurement, inward
 
+**Payables**:
+What the Organization owes its suppliers (Σ Purchases − Σ Supplier Payments). A
+Supplier Payment or a credit Adjustment pays the oldest unpaid amount first; an
+**unpaid Purchase** is a Purchase not yet fully paid that way, and its Business
+Date is how long it has waited. An Opening Balance takes its turn in that order
+but is not "an unpaid Purchase". Organization-wide, like the Supplier balance. An
+overpayment is an advance (a negative Supplier balance), not a negative payable.
+"This month": Purchases by their Business Date, Supplier Payments by their Entry
+Date.
+_Avoid_: dues, overdue (suppliers have no payment terms, so no due date exists)
+
 **Credit Sale**:
 A receivable: fuel sold on credit records only a customer-ledger debit. It is
 not Drawer cash and never moves stock again.
@@ -297,6 +308,28 @@ _Avoid_: udhaar entry, due sale
 Σ Credit Sales − Σ Collections for a customer. A ledger figure, never a drawer
 figure.
 _Avoid_: outstanding, khata
+
+**Credit Limit**:
+The most a Customer may owe on credit. A Customer is _near_ it from 80% of the
+limit and _over_ it beyond it; no limit means no standing to judge. Only an
+Owner or Manager may change it. Not the Organization **Limit** (a Product Plan
+allowance).
+_Avoid_: credit cap, ceiling
+
+**Receivable aging**:
+What a Customer owes, split by how long each unpaid amount has been waiting. A
+Collection or a credit Adjustment pays the oldest unpaid amount first; what is
+left of each Credit Sale, Opening Balance or debit Adjustment is aged from its
+Business Date to the Current Business Date into 0–7, 8–30 and 30+ days (31 days
+and older). Organization-wide, like the Customer Balance, and as fresh as it.
+An overpayment is an advance, not a negative receivable.
+_Avoid_: dues, overdue (no due date exists)
+
+**Usually pays in**:
+The mean number of days from a Credit Sale to the Collection that settles it,
+over the Customer's last 6 settled Credit Sales; shown only with at least 3. A
+Credit Sale cleared by a credit Adjustment is a write-off, not the Customer
+paying, so it is left out.
 
 **Cash Drop**:
 Cash taken from one Attendant's Drawer mid-shift (e.g., to a safe), reducing
@@ -373,7 +406,9 @@ _Avoid_: wallet (standalone), fuel-card account
 
 **OMC Card Sale**:
 Fuel dispensed against an Oil Marketing Company card; settles into the OMC
-Wallet — never Drawer cash, never a station receivable.
+Wallet — never Drawer cash, never a station receivable. It appears in the DSSR
+and in the Shift Summary payment split as "OMC card", so the split adds up to
+total sales.
 _Avoid_: fuel-card sale
 
 ## Finance & Ledger
@@ -414,6 +449,22 @@ _Avoid_: gauging, stick reading
 A counted stock-take of non-fuel items, compared against book stock.
 _Avoid_: stock audit
 
+**Days of Cover**:
+How long a Tank's current book stock lasts at its recent selling rate: current
+stock ÷ average daily volume sold from that Tank over the Station's last 7
+closed Business Days (divisor = closed days found, 1–7, zero-sale days
+included; per Tank, from Sale stock movements, so two Tanks of one product are
+judged by what each dispensed). No figure (hidden) when the Station has no
+closed Business Day or the Tank sold nothing in the window. Read-only, computed
+on the server; shown as "2.6 days" / "0.9 day".
+_Avoid_: runway, stock days
+
+Days of Cover counts only Nozzle Reading movements (`reference_type = 'reading'`);
+the DSSR tank movement's sold litres count every `Sale` stock movement. Days of
+Cover uses the Station's 7 most recent closed Business Days; the DSSR uses all
+movements through its specific Business Date and only that day's movements for
+received, sold and adjusted totals.
+
 **Tank Transfer**:
 Fuel moved between two Tanks without a sale.
 _Avoid_: inter-tank move, decanting
@@ -445,6 +496,36 @@ _Avoid_: attendant report, staff report, variance report
 Summaries are stored permanently, never recalculated historically, never
 edited after generation; regeneration is explicit and idempotent.
 _Avoid_: refresh, recompute
+
+**Business Day Status**:
+Where a Business Day stands in the day list: _Live_ (open, the Current Business
+Date, figures still moving), _Draft_ (a Past Open Business Day: ended, not yet
+closed, so its DSSR is a preview), _Sealed_ (closed, with its immutable DSSR
+Snapshot) or _Report Missing_ (closed but no snapshot exists; shown with no
+figures, never as Sealed).
+_Avoid_: day state
+
+**Statement**:
+A Customer's or Supplier's ledger over a date range: each entry with the
+running balance, opening with a "balance brought forward" when earlier entries
+exist. Shared as a PDF from the same range the screen shows.
+_Avoid_: khata, account copy
+
+**Stock Loss**:
+The Insights view of a Tank's dip **Variance**, judged against what it sold:
+within tolerance up to 0.5% of the litres sold, by size (a gain is judged like a
+loss). The tolerance is one app-wide value pending an owner decision, not a
+Station setting (`stock-variance.ts`); a Tank that sold nothing tolerates no
+Variance. The domain term stays Variance; "loss" is only the Insights label.
+_Avoid_: shrinkage, leakage
+
+**Needs Attention**:
+The one list of open items that want the user's eye: stock alerts, Past Open
+Business Days, customers over their Credit Limit, large Shift cash variances and
+the user's own unsaved Handover. Derived from figures the server already holds;
+open items only, no history. The header bell's count, Home's "All N" and the
+Needs attention page are the same list.
+_Avoid_: notifications, alerts inbox
 
 ## Events & Resilience
 
