@@ -250,3 +250,10 @@ Superseding the open questions above; see ADR 0007.
 - Manager, Accountant, Owner record density and Decantations. Desktop only; mobile out of scope.
 - Cost per litre updates at Decantation: invoice value ÷ received quantity.
 - Out of scope for this milestone: TDS, transport/Bata, new tax reports.
+
+### Update (prototype review, 2026-10-11)
+
+- One Decantation per tanker visit with one or more Tank Lines; chambers point to a Tank Line.
+- Fuel Purchase links per product at the visit level; variance per invoice (Σ received of that product's lines).
+- Chamber marks are OK / Short / Excess; the chamber check is hidden behind a checkbox.
+- UI: accordion stepper with compact summary cards (prototype variant E, branch `prototype/decantation-ui`).

@@ -421,11 +421,22 @@ Fuel moved between two Tanks without a sale.
 _Avoid_: inter-tank move
 
 **Decantation**:
-Unloading a tanker into a station Tank. The only event that adds fuel stock.
-Anchored to the Business Day, no Shift. Records the dip before unloading, RO
-Density, unloading times and an optional dip after unloading; links to a Fuel
-Purchase. Received quantity is always measured (ADR 0007).
+One tanker visit unloading into one or more station Tanks. The only event that
+adds fuel stock. Anchored to the Business Day, no Shift. Has one Tank Line per
+tank (dip before, RO Density, optional dip after) and optional Chamber checks;
+links one Fuel Purchase per product. Received quantity is always measured
+(ADR 0007).
 _Avoid_: fuel receipt, tanker receipt, unloading entry
+
+**Tank Line**:
+One tank a Decantation unloads into: its product, dips, RO Density and
+measured received quantity. Stock is added per Tank Line.
+_Avoid_: allocation, split
+
+**Chamber**:
+A compartment of the tanker. An optional Decantation check records its seal,
+dip mark (OK / Short / Excess) and whether it was emptied. Never moves stock.
+_Avoid_: compartment
 
 **RO Density**:
 Density the station measures from the tanker sample with its own instrument,
