@@ -72,7 +72,7 @@ export const HomeScreen: React.FC<Props> = ({ station, role = null }) => {
         </div>
       )}
 
-      <HomeAttention alerts={m.alerts} station={station} role={role ?? undefined} />
+      <HomeAttention alerts={m.alerts} station={station} />
 
       <SectionLabel
         right={

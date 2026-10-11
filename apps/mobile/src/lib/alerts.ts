@@ -5,6 +5,7 @@ import {
   useDensityTodaySummary,
   useDecantations,
   useShiftSummaries,
+  useProducts,
 } from '@pump/ui';
 import type { Role, Station } from '@pump/shared';
 import { businessDateSettings } from '@pump/shared';
@@ -34,11 +35,21 @@ export function useMobileAlerts(station: Station | null, role: Role | null = nul
   const decantationsQ = useDecantations(station?.id ?? null, '', {
     enabled: !!station && canSeeInventoryAttention(role),
   });
+  const productsQ = useProducts();
   const densityQ = useDensityTodaySummary(station?.id ?? null, undefined, {
     enabled: !!station && canSeeInventoryAttention(role),
   });
 
-  const alerts = useMemo(() => {
+  const productNames = useMemo(
+    () =>
+      Object.fromEntries((productsQ.data ?? []).map((p) => [p.id, p.name || p.code])) as Record<
+        string,
+        string
+      >,
+    [productsQ.data],
+  );
+
+  return useMemo(() => {
     if (!station) return [];
     return deriveAlerts({
       stock,
@@ -48,6 +59,7 @@ export function useMobileAlerts(station: Station | null, role: Role | null = nul
       ownHandover,
       role,
       decantations: decantationsQ.data ?? [],
+      productNames,
       densityToday: densityQ.data,
     });
   }, [
@@ -59,15 +71,7 @@ export function useMobileAlerts(station: Station | null, role: Role | null = nul
     ownHandover,
     role,
     decantationsQ.data,
+    productNames,
     densityQ.data,
   ]);
-  if (role === 'Accountant') {
-    return alerts.filter(
-      (alert) =>
-        alert.category === 'decantation' ||
-        alert.category === 'density' ||
-        alert.category === 'handover',
-    );
-  }
-  return alerts;
 }

@@ -1,8 +1,16 @@
-import React from 'react';
-import { resolveDecantationSettings, type DecantationView, type Station } from '@pump/shared';
+import React, { useContext } from 'react';
+import {
+  canRecordDecantation,
+  resolveDecantationSettings,
+  type DecantationView,
+  type Station,
+} from '@pump/shared';
 import { isoToLocalTime, toDecantationRow, useDecantations } from '@pump/ui';
 import { useDecantationNames } from '../../lib/decantation/names.js';
 import { fmtLitres } from '../../lib/decantation/format.js';
+import { decantationRoute } from '../../lib/attention/routes.js';
+import { ShellContext } from '../../shell/context.js';
+import { TankerArrivedPage } from './TankerArrivedPage.js';
 import { useNav } from '../../shell/nav.js';
 import { DetailPage, ListGroup, ListRow, StateCard, StatusBadge } from '../../ui/index.js';
 import { DecantationDetailPage } from './DecantationDetailPage.js';
@@ -27,13 +35,14 @@ export function openDecantation(
     ) : (
       <DecantationDetailPage station={station} decantationId={d.id} />
     ),
-    `decantation:${d.id}`,
+    decantationRoute(d.id),
   );
 }
 
 /** One row per tanker visit: status, flags, and which product still has no linked purchase. */
 export const DecantationsListPage: React.FC<{ station: Station }> = ({ station }) => {
   const nav = useNav();
+  const role = useContext(ShellContext)?.role;
   const q = useDecantations(station.id);
   const names = useDecantationNames(station.id);
   const tolerance = resolveDecantationSettings(station.settings).quantityTolerance;
@@ -41,7 +50,21 @@ export const DecantationsListPage: React.FC<{ station: Station }> = ({ station }
   const rows = (q.data ?? []).map((d) => toDecantationRow(d, names, tolerance));
 
   return (
-    <DetailPage title="Decantations" subtitle={station.name}>
+    <DetailPage
+      title="Decantations"
+      subtitle={station.name}
+      right={
+        role && canRecordDecantation(role) ? (
+          <button
+            type="button"
+            onClick={() => nav.push(<TankerArrivedPage station={station} />, 'tanker-arrived')}
+            className="rounded-[10px] bg-accent-soft px-2.5 py-1 text-xs font-extrabold text-accent"
+          >
+            Tanker arrived
+          </button>
+        ) : undefined
+      }
+    >
       {q.isLoading ? (
         <StateCard kind="loading">Loading…</StateCard>
       ) : q.isError ? (

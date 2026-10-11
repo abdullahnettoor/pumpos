@@ -18,16 +18,7 @@ import { useAlertOpener } from '../shell/useAlertOpener.js';
  */
 export const NeedsAttentionPage: React.FC = () => {
   const { station, role } = useShell();
-  const allAlerts = useMobileAlerts(station, role);
-  const alerts =
-    role === 'Accountant'
-      ? allAlerts.filter(
-          (alert) =>
-            alert.category === 'decantation' ||
-            alert.category === 'density' ||
-            alert.category === 'handover',
-        )
-      : allAlerts;
+  const alerts = useMobileAlerts(station, role);
   const open = useAlertOpener(station);
   const groups = groupAlerts(alerts);
 

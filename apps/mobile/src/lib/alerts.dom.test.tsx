@@ -17,6 +17,7 @@ vi.mock('@pump/ui', async (importOriginal) => {
     ...actual,
     useStationAlerts: () => [],
     useCustomers: () => q([]),
+    useProducts: () => q([]),
     useShiftSummaries: () => q([]),
     useDecantations: () => q(feed.decantations),
     useDensityTodaySummary: () => q(feed.densityToday),

@@ -1,6 +1,7 @@
 import React, { useContext } from 'react';
 import { canRecordDecantation, type Station } from '@pump/shared';
 import { isoToLocalTime, useDecantations } from '@pump/ui';
+import { DECANTATIONS_ROUTE } from '../../lib/attention/routes.js';
 import { useDecantationNames } from '../../lib/decantation/names.js';
 import { ShellContext, useStationTimeZone } from '../../shell/context.js';
 import { useNav } from '../../shell/nav.js';
@@ -29,7 +30,7 @@ export const DecantationActions: React.FC<{ station: Station }> = ({ station }) 
       </button>
       <button
         type="button"
-        onClick={() => nav.push(<DecantationsListPage station={station} />, 'decantations')}
+        onClick={() => nav.push(<DecantationsListPage station={station} />, DECANTATIONS_ROUTE)}
       >
         Decantations ›
       </button>

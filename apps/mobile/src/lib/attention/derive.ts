@@ -14,13 +14,22 @@ import type { OwnHandover } from '../handover/own.js';
 import { standing, type MoneyCustomer } from '../money/parties.js';
 import { deriveShiftVariance } from '../shifts/variance.js';
 import { shiftHeadlineBadge } from '../cashVariance.js';
-import type { AlertSeverity, MobileAlert } from './types.js';
+import type { AlertCategory, AlertSeverity, MobileAlert } from './types.js';
 import type { DensityTodaySummary, DecantationView, Role } from '@pump/shared';
 
 /** A closed Shift's cash variance is raised only beyond this many rupees. */
 const CASH_VARIANCE_ALERT_ABOVE = 200;
 /** How many of the newest closed Shifts are checked for a variance. */
 const VARIANCE_SHIFTS_CHECKED = 5;
+
+/**
+ * The one role policy for what an alert list may contain. Accountants have no
+ * Home overview (ADR 0011, amended), so their bell carries only the work they
+ * do: Decantations, Density and their own handover. Everyone else sees all.
+ */
+const ACCOUNTANT_CATEGORIES: readonly AlertCategory[] = ['decantation', 'density', 'handover'];
+export const alertVisibleToRole = (category: AlertCategory, role?: Role | null): boolean =>
+  role !== 'Accountant' || ACCOUNTANT_CATEGORIES.includes(category);
 
 const RANK: Record<AlertSeverity, number> = { danger: 0, warning: 1, info: 2 };
 
@@ -41,6 +50,8 @@ export interface AlertSources {
   ownHandover: OwnHandover | null;
   role?: Role | null;
   decantations?: readonly DecantationView[];
+  /** Fuel product names by id; a missing id falls back to a generic label. */
+  productNames?: Readonly<Record<string, string>>;
   densityToday?: DensityTodaySummary | null;
 }
 
@@ -126,6 +137,8 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
 
   if (canSeeInventoryWork) {
     for (const decantation of src.decantations ?? []) {
+      if (decantation.status === 'DISCARDED') continue;
+      const productName = (id: string) => src.productNames?.[id] ?? 'Fuel';
       const action = { kind: 'decantation' as const, decantationId: decantation.id };
       if (decantation.status === 'DRAFT') {
         list.push({
@@ -144,7 +157,7 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
             severity: 'warning',
             category: 'decantation',
             title: 'Pending measurement',
-            meta: `${decantation.documentNumber} · ${line.productId}`,
+            meta: `${decantation.documentNumber} · ${productName(line.productId)}`,
             action,
           });
         }
@@ -155,7 +168,7 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
           severity: 'warning',
           category: 'decantation',
           title: 'Fuel Purchase not linked',
-          meta: `${decantation.documentNumber} · ${productId}`,
+          meta: `${decantation.documentNumber} · ${productName(productId)}`,
           action,
         });
       }
@@ -185,5 +198,7 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
   }
 
   // Array.sort is stable: kind and recency above survive inside a severity.
-  return list.sort((a, b) => RANK[a.severity] - RANK[b.severity]);
+  return list
+    .filter((a) => alertVisibleToRole(a.category, src.role))
+    .sort((a, b) => RANK[a.severity] - RANK[b.severity]);
 }

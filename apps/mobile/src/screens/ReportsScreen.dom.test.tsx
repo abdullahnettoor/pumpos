@@ -2,7 +2,7 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import type { Station } from '@pump/shared';
+import type { Role, Station } from '@pump/shared';
 import type { TabKey } from '../lib/tabKey.js';
 import { tabsForRole } from '../shell/tabs.js';
 
@@ -33,8 +33,14 @@ vi.mock('./reports/ReportDayPage.js', () => ({
   ReportDayPage: ({ businessDate }: { businessDate: string }) => <p>DSSR for {businessDate}</p>,
 }));
 
+vi.mock('./decantation/DecantationsListPage.js', () => ({
+  DecantationsListPage: () => <p>Decantations list</p>,
+}));
+vi.mock('./density/DensityPage.js', () => ({ DensityPage: () => <p>Density page</p> }));
+
 const { ReportsScreen } = await import('./ReportsScreen.js');
 const { NavProvider, useNav } = await import('../shell/nav.js');
+const { ShellContext } = await import('../shell/context.js');
 
 const station = { id: 'st-1', name: 'Highway Fuels' } as unknown as Station;
 const day = (businessDate: string, status: string, totalSales: number, cashVariance = 0) => ({
@@ -58,11 +64,15 @@ const Stage: React.FC = () => {
     </>
   );
 };
-const mount = (tabs: readonly TabKey[] = ['reports', 'home']) =>
+const mount = (tabs: readonly TabKey[] = ['reports', 'home'], role: Role = 'Owner') =>
   render(
-    <NavProvider tabs={tabs}>
-      <Stage />
-    </NavProvider>,
+    <ShellContext.Provider
+      value={{ station, stationName: 'x', userName: 'A', role, openAccount: () => {} }}
+    >
+      <NavProvider tabs={tabs}>
+        <Stage />
+      </NavProvider>
+    </ShellContext.Provider>,
   );
 
 afterEach(() => {
@@ -252,5 +262,26 @@ describe('ReportsScreen', () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Load older months' }));
     expect(feed.fetchNext).toHaveBeenCalled();
+  });
+
+  it.each(['Owner', 'Manager', 'Accountant'] as const)(
+    'gives %s Decantations and Density entries',
+    (role) => {
+      seed();
+      mount(['reports'], role);
+      fireEvent.click(screen.getByRole('button', { name: /Decantations/ }));
+      expect(screen.getByText('Decantations list')).toBeTruthy();
+      cleanup();
+      mount(['reports'], role);
+      fireEvent.click(screen.getByRole('button', { name: /Density/ }));
+      expect(screen.getByText('Density page')).toBeTruthy();
+    },
+  );
+
+  it.each(['Staff', 'Attendant'] as const)('hides both entries from %s', (role) => {
+    seed();
+    mount(['reports'], role);
+    expect(screen.queryByRole('button', { name: /Decantations/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Density/ })).toBeNull();
   });
 });

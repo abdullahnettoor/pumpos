@@ -12,16 +12,7 @@ import { useShell } from './context.js';
  */
 export const AlertsBell: React.FC = () => {
   const { station, role } = useShell();
-  const allAlerts = useMobileAlerts(station, role);
-  const alerts =
-    role === 'Accountant'
-      ? allAlerts.filter(
-          (alert) =>
-            alert.category === 'decantation' ||
-            alert.category === 'density' ||
-            alert.category === 'handover',
-        )
-      : allAlerts;
+  const alerts = useMobileAlerts(station, role);
   const openAttention = useOpenAttention();
   const count = alerts.length;
   const danger = alerts.some((a) => a.severity === 'danger');

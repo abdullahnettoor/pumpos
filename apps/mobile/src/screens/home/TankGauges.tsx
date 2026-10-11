@@ -49,10 +49,8 @@ export const TankGauges: React.FC<{ tanks: readonly TankGauge[] }> = ({ tanks })
           <p className="truncate text-xs font-bold text-text-high">{t.title}</p>
           <p className={`num mt-1.5 text-lg font-semibold ${TEXT[t.level]}`}>
             {t.pct === null ? '—' : `${t.pct}%`}
+            {STATE[t.level] && <span className="sr-only"> {STATE[t.level]}</span>}
           </p>
-          {STATE[t.level] && (
-            <p className={`text-[10px] font-semibold ${TEXT[t.level]}`}>{STATE[t.level]}</p>
-          )}
           <p className="mt-0.5 text-[10px] leading-snug text-text-muted">
             <span className="num">{t.volume}</span>
             <br />
@@ -65,7 +63,7 @@ export const TankGauges: React.FC<{ tanks: readonly TankGauge[] }> = ({ tanks })
             </p>
           )}
           {t.waitingOnDecantation && (
-            <p className="mt-1 text-[10px] font-semibold leading-snug text-warn-fg">
+            <p className="mt-1 text-xs font-semibold leading-snug text-warn-fg">
               Waiting on decantation
             </p>
           )}
