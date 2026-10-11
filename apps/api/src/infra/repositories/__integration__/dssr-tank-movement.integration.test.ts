@@ -258,6 +258,8 @@ describe.skipIf(!CONNECTION)('DSSR tank stock movement against real Postgres', (
     await move(DAY_2, TANK, 'Sale', -1200.25);
     await move(DAY_2, TANK, 'Sale', -1010.25);
     await move(DAY_2, TANK, 'Purchase', 300);
+    // A measured Decantation counts as received too (D3), not as an adjustment.
+    await move(DAY_2, TANK, 'Decantation', 700);
     await move(DAY_2, TANK, 'Adjustment', 20);
     await move(DAY_2, TANK, 'Variance', -18);
     // Day 3 is later than the day under test: it must never count.
@@ -304,7 +306,7 @@ describe.skipIf(!CONNECTION)('DSSR tank stock movement against real Postgres', (
       tankId: TANK,
       // 10000 + 6000 - 1500 - 50 (day 1 dip reconciliation counts in the book).
       openingQuantity: 14450,
-      receivedQuantity: 300,
+      receivedQuantity: 1000,
       soldQuantity: 2210.5,
       adjustedQuantity: 20,
     });
@@ -321,8 +323,8 @@ describe.skipIf(!CONNECTION)('DSSR tank stock movement against real Postgres', (
     const source = await new DrizzleDssrDataReader(db).readBusinessDay(DAY_2);
     const payload = composeDssr(source) as { fuelStockVariance: Record<string, any>[] };
     const row = payload.fuelStockVariance.find((r) => r.tankName === 'Tank 1')!;
-    // 14450 + 300 - 2210.5 + 20 = 12559.5
-    expect(row.tankMovement.closingQuantity).toBe(12559.5);
+    // 14450 + 1000 - 2210.5 + 20 = 13259.5
+    expect(row.tankMovement.closingQuantity).toBe(13259.5);
   });
 
   it("freezes a merchandise line's category, read from the product's type (#392)", async () => {

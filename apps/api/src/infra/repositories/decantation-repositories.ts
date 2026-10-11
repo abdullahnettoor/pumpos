@@ -1,7 +1,12 @@
-import { and, asc, desc, eq, gte, inArray, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { schema, type DbExecutor } from '@pump/db';
-import type {
-  Decantation,
+import {
+  DecantationMeasurementService,
+  type DecantationPurchaseLink,
+  type DecantationPurchaseRepository,
+  type EventPublisher,
+  type TankSalesReader,
+  type Decantation,
   DecantationChamber,
   DecantationFlag,
   DecantationListQuery,
@@ -11,6 +16,8 @@ import type {
   DensityReading,
   DensityReadingRepository,
 } from '@pump/core';
+import { DrizzleStockMovementRepository } from './inventory-repositories.js';
+import { DrizzleProductRepository } from './product.repo.js';
 
 const num = (v: string | null): number | null => (v == null ? null : Number(v));
 const str = (v: number | null): string | null => (v == null ? null : String(v));
@@ -216,6 +223,77 @@ export class DrizzleDecantationRepository implements DecantationRepository {
     return (await this.hydrate(rows))[0] ?? null;
   }
 
+  async findPendingForTank(
+    organizationId: string,
+    stationId: string,
+    tankId: string,
+  ): Promise<Decantation[]> {
+    const ids = await this.db
+      .selectDistinct({ id: schema.decantationTankLines.decantationId })
+      .from(schema.decantationTankLines)
+      .innerJoin(
+        schema.decantations,
+        eq(schema.decantations.id, schema.decantationTankLines.decantationId),
+      )
+      .where(
+        and(
+          eq(schema.decantationTankLines.organizationId, organizationId),
+          eq(schema.decantationTankLines.stationId, stationId),
+          eq(schema.decantationTankLines.tankId, tankId),
+          eq(schema.decantationTankLines.status, 'PENDING_MEASUREMENT'),
+          sql`${schema.decantations.status} <> 'DRAFT'`,
+        ),
+      );
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .select({ d: schema.decantations, businessDate: schema.businessDays.businessDate })
+      .from(schema.decantations)
+      .innerJoin(schema.businessDays, eq(schema.businessDays.id, schema.decantations.businessDayId))
+      .where(
+        and(
+          eq(schema.decantations.organizationId, organizationId),
+          inArray(
+            schema.decantations.id,
+            ids.map((i) => i.id),
+          ),
+        ),
+      )
+      .orderBy(asc(schema.decantations.createdAt));
+    return this.hydrate(rows);
+  }
+
+  async updateMeasurement(d: Decantation): Promise<void> {
+    await this.db
+      .update(schema.decantations)
+      .set({ status: d.status, flags: d.flags, updatedAt: new Date(d.updatedAt) })
+      .where(
+        and(
+          eq(schema.decantations.id, d.id),
+          eq(schema.decantations.organizationId, d.organizationId),
+        ),
+      );
+    for (const l of d.lines) {
+      await this.db
+        .update(schema.decantationTankLines)
+        .set({
+          afterDip: str(l.afterDip),
+          afterDipAt: dateOrNull(l.afterDipAt),
+          salesDuring: String(l.salesDuring),
+          receivedQty: str(l.receivedQty),
+          measuredBy: l.measuredBy,
+          measurementRefId: l.measurementRefId,
+          measuredAt: dateOrNull(l.measuredAt),
+          status: l.status,
+        })
+        .where(
+          and(
+            eq(schema.decantationTankLines.id, l.id),
+            eq(schema.decantationTankLines.organizationId, d.organizationId),
+          ),
+        );
+    }
+  }
+
   async list(q: DecantationListQuery): Promise<Decantation[]> {
     const conds = [
       eq(schema.decantations.organizationId, q.organizationId),
@@ -262,4 +340,111 @@ export class DrizzleDensityReadingRepository implements DensityReadingRepository
       })),
     );
   }
+}
+
+export class DrizzleDecantationPurchaseRepository implements DecantationPurchaseRepository {
+  constructor(private readonly db: DbExecutor) {}
+
+  private toLink(r: typeof schema.decantationPurchases.$inferSelect): DecantationPurchaseLink {
+    return {
+      id: r.id,
+      organizationId: r.organizationId,
+      stationId: r.stationId,
+      decantationId: r.decantationId,
+      purchaseId: r.purchaseId,
+      productId: r.productId,
+      receivedQty: num(r.receivedQty),
+      invoiceQty: num(r.invoiceQty),
+      varianceQty: num(r.varianceQty),
+      varianceComputedAt: isoOrNull(r.varianceComputedAt),
+    };
+  }
+
+  async listForPurchaseProduct(organizationId: string, purchaseId: string, productId: string) {
+    const rows = await this.db
+      .select()
+      .from(schema.decantationPurchases)
+      .where(
+        and(
+          eq(schema.decantationPurchases.organizationId, organizationId),
+          eq(schema.decantationPurchases.purchaseId, purchaseId),
+          eq(schema.decantationPurchases.productId, productId),
+        ),
+      );
+    return rows.map((r) => this.toLink(r));
+  }
+
+  async listForDecantation(organizationId: string, decantationId: string) {
+    const rows = await this.db
+      .select()
+      .from(schema.decantationPurchases)
+      .where(
+        and(
+          eq(schema.decantationPurchases.organizationId, organizationId),
+          eq(schema.decantationPurchases.decantationId, decantationId),
+        ),
+      );
+    return rows.map((r) => this.toLink(r));
+  }
+
+  async updateVariance(l: DecantationPurchaseLink): Promise<void> {
+    await this.db
+      .update(schema.decantationPurchases)
+      .set({
+        receivedQty: str(l.receivedQty),
+        invoiceQty: str(l.invoiceQty),
+        varianceQty: str(l.varianceQty),
+        varianceComputedAt: dateOrNull(l.varianceComputedAt),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(schema.decantationPurchases.id, l.id),
+          eq(schema.decantationPurchases.organizationId, l.organizationId),
+        ),
+      );
+  }
+
+  async invoiceLine(organizationId: string, purchaseId: string, productId: string) {
+    const rows = (await this.db.execute(sql`
+      SELECT COALESCE(SUM(pi.quantity), 0) AS quantity,
+        COALESCE(SUM(pi.quantity * pi.unit_price), 0) AS value,
+        COUNT(*)::int AS n
+      FROM purchase_items pi
+      JOIN purchases p ON p.id = pi.purchase_id
+      WHERE p.organization_id = ${organizationId}
+        AND pi.purchase_id = ${purchaseId} AND pi.product_id = ${productId}
+    `)) as unknown as { quantity: string; value: string; n: number }[];
+    const r = rows[0];
+    return r && r.n > 0 ? { quantity: Number(r.quantity), value: Number(r.value) } : null;
+  }
+}
+
+export class DrizzleTankSalesReader implements TankSalesReader {
+  constructor(private readonly db: DbExecutor) {}
+
+  async litresSoldBetween(tankId: string, fromIso: string, toIso: string): Promise<number> {
+    const rows = (await this.db.execute(sql`
+      SELECT COALESCE(-SUM(quantity), 0) AS sold
+      FROM stock_movements
+      WHERE tank_id = ${tankId} AND movement_type = 'Sale'
+        AND created_at > ${fromIso}::timestamp AND created_at <= ${toIso}::timestamp
+    `)) as unknown as { sold: string }[];
+    return Number(rows[0]?.sold ?? 0);
+  }
+}
+
+/** Wires the #468 measurement service to a transaction. */
+export function createDecantationMeasurement(
+  tx: DbExecutor,
+  events: EventPublisher,
+): DecantationMeasurementService {
+  return new DecantationMeasurementService({
+    decantations: new DrizzleDecantationRepository(tx),
+    links: new DrizzleDecantationPurchaseRepository(tx),
+    movements: new DrizzleStockMovementRepository(tx),
+    products: new DrizzleProductRepository(tx),
+    sales: new DrizzleTankSalesReader(tx),
+    events,
+  });
 }
