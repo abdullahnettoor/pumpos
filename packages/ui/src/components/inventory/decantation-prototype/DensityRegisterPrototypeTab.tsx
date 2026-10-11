@@ -649,6 +649,59 @@ const VariantC: React.FC<VProps> = ({ rows, onRecord }) => {
   );
 };
 
+/* ------------------------- Variant D (chosen) ------------------------- */
+// B's product cards on top, A's register log below, C's board as a real A4 print.
+
+const printBoard = (rows: Reading[]) => {
+  const cells = UNITS.map((u) => {
+    const r = rows.filter((x) => x.tankId === u.id && x.date === TODAY).sort(sortDesc)[0];
+    return `<div class="p"><div class="n">${u.name} (${u.product})</div>
+      <div class="v ${r ? '' : 'm'}">${r ? r.d15.toFixed(1) : '— — —'}</div>
+      <div class="u">kg/m³${r ? '' : ' · not recorded'}</div></div>`;
+  }).join('');
+  const w = window.open('', '_blank', 'width=1100,height=780');
+  if (!w) return;
+  w.document.write(`<!doctype html><html><head><title>Density board ${TODAY}</title><style>
+    @page { size: A4 landscape; margin: 14mm; }
+    body { font-family: system-ui, sans-serif; color:#000; margin:0; }
+    .b { border:4px solid #000; border-radius:16px; padding:28px 32px; height:170mm; box-sizing:border-box;
+         display:flex; flex-direction:column; }
+    .h { display:flex; justify-content:space-between; font-size:22px; font-weight:700; }
+    .t { text-align:center; font-size:30px; letter-spacing:.12em; text-transform:uppercase; margin:18px 0 6px; }
+    .row { flex:1; display:flex; justify-content:space-around; align-items:center; }
+    .p { text-align:center; } .n { font-size:34px; font-weight:700; }
+    .v { font-size:130px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.05; }
+    .m { color:#999; } .u { font-size:26px; }
+    .f { font-size:13px; text-align:center; }
+  </style></head><body><div class="b">
+    <div class="h"><span>PumpOS Demo Fuel Station</span><span>${TODAY}</span></div>
+    <div class="t">Density at 15 °C</div>
+    <div class="row">${cells}</div>
+    <div class="f">Customers may request a density check at any time.</div>
+  </div><script>window.onload=()=>{window.print();}</script></body></html>`);
+  w.document.close();
+};
+
+const VariantD: React.FC<VProps> = ({ rows, onRecord }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+      <Button
+        variant="secondary"
+        size="sm"
+        leftIcon={<Icon name="printer" size="sm" />}
+        onClick={() => printBoard(rows)}
+      >
+        Print board
+      </Button>
+      <Button size="sm" leftIcon={<Icon name="plus" size="sm" />} onClick={() => onRecord()}>
+        Record density
+      </Button>
+    </div>
+    <VariantB rows={rows} onRecord={onRecord} />
+    <VariantA rows={rows} onRecord={onRecord} />
+  </div>
+);
+
 /* ------------------------------ Tab + switcher ------------------------------ */
 
 interface VProps {
@@ -656,6 +709,7 @@ interface VProps {
   onRecord: (tankId?: string) => void;
 }
 const VARIANTS = {
+  D: { name: 'Cards + log + print (chosen)', C: VariantD },
   A: { name: 'Register book', C: VariantA },
   B: { name: 'Tank cards', C: VariantB },
   C: { name: 'Matrix + board', C: VariantC },
@@ -666,7 +720,7 @@ const KEYS = Object.keys(VARIANTS) as Key[];
 const useV = () => {
   const read = (): Key => {
     const v = new URLSearchParams(window.location.search).get('dvariant')?.toUpperCase();
-    return (KEYS as string[]).includes(v ?? '') ? (v as Key) : 'A';
+    return (KEYS as string[]).includes(v ?? '') ? (v as Key) : 'D';
   };
   const [v, setV] = useState<Key>(read);
   const go = (k: Key) => {
@@ -682,6 +736,7 @@ export const DensityRegisterPrototypeTab: React.FC = () => {
   const [v, go] = useV();
   const [rows, setRows] = useState<Reading[]>(seed);
   const [rec, setRec] = useState<{ open: boolean; tank?: string }>({ open: false });
+  const [justSaved, setJustSaved] = useState(false);
   const i = KEYS.indexOf(v);
   const prev = () => go(KEYS[(i - 1 + KEYS.length) % KEYS.length]);
   const next = () => go(KEYS[(i + 1) % KEYS.length]);
@@ -759,13 +814,48 @@ export const DensityRegisterPrototypeTab: React.FC = () => {
           </Button>
         </div>
       )}
+      {justSaved && (
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            fontSize: 13,
+            padding: '8px 12px',
+            borderRadius: 8,
+            background: 'var(--color-success-bg,#e7f6ec)',
+            color: 'var(--color-success-fg,#157f3c)',
+          }}
+        >
+          <Icon name="check" size="sm" />
+          Morning density saved.
+          <span style={{ flex: 1 }} />
+          <Button
+            size="xs"
+            variant="outline"
+            leftIcon={<Icon name="printer" size="xs" />}
+            onClick={() => {
+              printBoard(rows);
+              setJustSaved(false);
+            }}
+          >
+            Print today's board
+          </Button>
+          <Button size="xs" variant="ghost" onClick={() => setJustSaved(false)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
       <V rows={rows} onRecord={(tankId) => setRec({ open: true, tank: tankId })} />
       <RecordDrawer
         key={rec.tank ?? 'all'}
         isOpen={rec.open}
         presetTank={rec.tank}
         onClose={() => setRec({ open: false })}
-        onSave={(rs) => setRows((x) => [...x, ...rs])}
+        onSave={(rs) => {
+          setRows((x) => [...x, ...rs]);
+          if (rs.some((r) => r.source === 'Morning')) setJustSaved(true);
+        }}
       />
       {!import.meta.env.PROD && (
         <div
