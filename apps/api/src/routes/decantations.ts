@@ -150,7 +150,7 @@ decantationsRouter.get('/decantations/linkable-purchases', async (c) => {
   // Authorize the station first so a foreign station is refused before validation.
   const denied = guardStation(c, c.req.query('stationId'));
   if (denied) return denied;
-  if (!(await loadStationClock(c.var.db, user.organizationId, c.req.query('stationId') as string)))
+  if (!(await loadStationClock(c.var.db, user.organizationId, c.req.query('stationId'))))
     return stationNotFound(c);
   const query = listLinkablePurchasesSchema.safeParse(c.req.query());
   if (!query.success)
