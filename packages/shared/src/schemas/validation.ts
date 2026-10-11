@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { normalizeIndianMobile, INDIAN_MOBILE_MESSAGE } from '../utils/phone-auth.js';
 import { isValidBusinessDate } from '../utils/business-date.js';
+import { decantationSettingsSchema } from '../utils/decantation-settings.js';
 
 const timeStringSchema = z
   .string()
@@ -140,6 +141,7 @@ export const stationSchema = z.object({
         })
         .optional()
         .nullable(),
+      ...decantationSettingsSchema.shape,
     })
     .default({
       shift_grace_minutes: 15,

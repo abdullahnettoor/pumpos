@@ -37,7 +37,7 @@ import type {
   DensityReadingRepository,
 } from './ports.js';
 
-/** Defaults until the station's #464 settings are supplied by the caller. */
+/** Fallback when the caller supplies no station settings (#464). */
 export const DEFAULT_DECANTATION_TOLERANCES = {
   densityToleranceKgM3: 3,
   settlingTimeMinutes: 30,

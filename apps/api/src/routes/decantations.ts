@@ -13,7 +13,11 @@ import {
 import { DrizzleTankRepository } from '../infra/repositories/setup-repositories.js';
 import { DrizzleBusinessDayRepository } from '../infra/repositories/station-ops-repositories.js';
 import { sendResult } from '../infra/send-result.js';
-import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
+import {
+  loadStationClock,
+  loadStationDecantationSettings,
+  stationNotFound,
+} from '../infra/station-clock.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
 
@@ -51,6 +55,11 @@ async function record(c: Ctx, body: any) {
   const user = c.var.user;
   const clock = await loadStationClock(c.var.db, user.organizationId, body.stationId);
   if (!clock) return stationNotFound(c);
+  const settings = await loadStationDecantationSettings(
+    c.var.db,
+    user.organizationId,
+    body.stationId,
+  );
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     await lockStationInventory(tx, user.organizationId, body.stationId);
     return new RecordDecantation({
@@ -61,7 +70,7 @@ async function record(c: Ctx, body: any) {
       docNumbers,
       events,
       measurement: createDecantationMeasurement(tx, events),
-      // #464: pass loadStationDecantationSettings(...) here once it lands.
+      ...(settings ? { settings } : {}),
     }).execute(body, buildContext(user, { stationId: body.stationId, ...clock }));
   });
   return sendResult(c, result);

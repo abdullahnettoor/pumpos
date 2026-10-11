@@ -95,6 +95,9 @@ export class DecantationMeasurementService implements DecantationMeasurement, Ta
     for (const line of decantation.lines) {
       if (line.status !== 'PENDING_MEASUREMENT' || line.afterDip == null) continue;
       const received = round3(line.afterDip - line.beforeDip + line.salesDuring);
+      // Never block the save: an inconsistent after dip leaves the line pending,
+      // and the next routine Tank Dip measures it instead.
+      if (received < 0) continue;
       const r = this.measure(
         ctx,
         decantation,

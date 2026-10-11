@@ -192,6 +192,14 @@ describe('measurement: after dip path', () => {
     expect(await t.stock()).toBe(4000);
   });
 
+  it('an after dip below the before dip saves and leaves the line pending (never blocks)', async () => {
+    const t = setup();
+    const r = await t.record.execute(cmd({ afterDip: 3000 }), t.ctx());
+    if (!r.success) throw new Error(JSON.stringify(r.error));
+    expect(r.data.decantation.lines[0].status).toBe('PENDING_MEASUREMENT');
+    expect(t.movements.some((x) => x.movementType === 'Decantation')).toBe(false);
+  });
+
   it('a draft never measures', async () => {
     const t = setup();
     await t.record.execute({ ...cmd({ afterDip: 9000 }), draft: true }, t.ctx());
