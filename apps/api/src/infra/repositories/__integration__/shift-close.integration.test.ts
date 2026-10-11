@@ -428,6 +428,32 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       quantity: '20',
       unitPrice: '100',
     });
+
+    // OMC Card Sales (anonymous, settled to the OMC Wallet) are their own payment bucket.
+    await db.insert(schema.customerTransactions).values([
+      {
+        shiftId: SHIFT,
+        businessDayId: DAY,
+        customerId: null,
+        productId: FUEL,
+        attendantId: ATTENDANT,
+        duId: DU,
+        transactionType: 'OMC Sale',
+        referenceType: 'OMC_CARD_SALE',
+        amount: '750',
+      },
+      {
+        shiftId: SHIFT,
+        businessDayId: DAY,
+        customerId: null,
+        productId: FUEL,
+        attendantId: ATTENDANT,
+        duId: DU,
+        transactionType: 'OMC Sale',
+        referenceType: 'OMC_CARD_SALE',
+        amount: '250.50',
+      },
+    ]);
   }
 
   function ctx(): ExecutionContext {
@@ -572,7 +598,13 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       ],
     });
     expect(snap.totalSalesValue).toBe(50 * 100 + 60 * 90 + 240);
-    expect(snap.payments).toEqual({ cash: 5100, upi: 100, card: 400, credit: 2000 });
+    expect(snap.payments).toEqual({
+      cash: 5100,
+      upi: 100,
+      card: 400,
+      credit: 2000,
+      omcCard: 1000.5,
+    });
     expect(snap.nozzleReadings.map((r: any) => r.duName)).toEqual(['DU-1', 'DU-1']);
     expect(snap).not.toHaveProperty('cardCollectionsSum'); // collections are Office Records
   });

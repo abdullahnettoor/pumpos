@@ -197,6 +197,22 @@ export function creditSaleLinesJson(shiftId: string) {
 `;
 }
 
+/**
+ * Σ the shift's OMC Card Sales (transactionType 'OMC Sale' / referenceType
+ * OMC_CARD_SALE) as one scalar sub-select, the same Shift scope as
+ * {@link creditSaleLinesJson}. OMC fuel settles into the OMC Wallet: it is a
+ * payment bucket of the Shift's total sales, never drawer cash or a receivable.
+ */
+export function omcCardSalesTotal(shiftId: string) {
+  return sql`
+  (SELECT COALESCE(SUM(ct.amount), 0)::float8
+    FROM customer_transactions ct
+    WHERE ct.shift_id = ${shiftId}
+      AND ct.transaction_type = 'OMC Sale'
+      AND ct.reference_type = 'OMC_CARD_SALE')
+`;
+}
+
 /** Coerce a credit-sale line into the core CreditSaleRecord port shape. */
 export function toCreditSaleRecord(r: CreditSaleLineRow): CreditSaleRecord {
   return {

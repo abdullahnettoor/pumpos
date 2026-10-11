@@ -31,6 +31,12 @@ export interface ShiftPayments {
   upi: number;
   card: number;
   credit: number;
+  /**
+   * Σ the Shift's OMC Card Sales: fuel paid by an Oil Marketing Company card,
+   * settled to the OMC Wallet (never Drawer cash, never a receivable). Added to
+   * the snapshot later, so a snapshot frozen before it lacks the key.
+   */
+  omcCard?: number;
 }
 
 interface ProductRow {
@@ -78,13 +84,17 @@ interface HandoverRow {
 /**
  * How the Shift was paid, as declared: cash the Drawers took (floats excluded),
  * card and UPI from the Handovers, credit from the Shift's credit sales (else
- * what the Handovers declared). No residual bucket: money no figure accounts
- * for is not invented here.
+ * what the Handovers declared) and OMC Card Sales from the OMC ledger rows. No
+ * residual bucket: money no figure accounts for is not invented here (an
+ * attendant shortage is the Drawer variance, shown by the reader as its own
+ * line, not a payment method).
  */
 export function composeShiftPayments(input: {
   cashSales: number;
   handovers: readonly HandoverRow[];
   creditSalesTotal: number;
+  /** Σ the Shift's OMC Card Sales. */
+  omcCardTotal: number;
 }): ShiftPayments {
   const sum = (pick: (h: HandoverRow) => unknown) =>
     round2(input.handovers.reduce((s, h) => s + num(pick(h)), 0));
@@ -95,6 +105,7 @@ export function composeShiftPayments(input: {
     upi: sum((h) => h.upiHandedOver),
     card: sum((h) => h.cardHandedOver),
     credit: round2(credit),
+    omcCard: round2(num(input.omcCardTotal)),
   };
 }
 

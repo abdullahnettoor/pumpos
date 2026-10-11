@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import { byNaturalField } from '@pump/shared';
 import { rowJson, rowJsonNullable } from './sql-json.js';
-import { creditSaleLinesJson } from './repositories/shift-recon-sql.js';
+import { creditSaleLinesJson, omcCardSalesTotal } from './repositories/shift-recon-sql.js';
 import {
   RefreshShiftSummary,
   composeShiftPayments,
@@ -114,7 +114,9 @@ export async function projectShiftSummary(
         WHERE s.shift_id = ${shift.id} AND s.sale_type <> 'Fuel') AS product_total,
       -- Expenses, collections and purchases have no Shift (ADR 0005, #308):
       -- a Shift Summary never shows them.
-      ${creditSaleLinesJson(shift.id)} AS credit_rows
+      ${creditSaleLinesJson(shift.id)} AS credit_rows,
+      -- OMC Card Sales settle to the OMC Wallet: their own payment bucket (ADR 0001).
+      ${omcCardSalesTotal(shift.id)} AS omc_card_total
   `)) as unknown as [Record<string, any>];
 
   const templateRows = row.template ? [row.template] : [];
@@ -247,6 +249,7 @@ export async function projectShiftSummary(
     cashSales: Number(recon.cashSales ?? 0),
     handovers: hoRows.map(({ h }) => h),
     creditSalesTotal,
+    omcCardTotal: Number(row.omc_card_total ?? 0),
   });
 
   const openingCash = Number(snap.openingCash ?? 0);

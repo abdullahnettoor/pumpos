@@ -131,16 +131,34 @@ describe('composeShiftPayments', () => {
   ];
 
   it('sums card and UPI from Handovers and takes credit from the credit sales', () => {
-    expect(composeShiftPayments({ cashSales: 1234.5, handovers, creditSalesTotal: 900 })).toEqual({
+    expect(
+      composeShiftPayments({
+        cashSales: 1234.5,
+        handovers,
+        creditSalesTotal: 900,
+        omcCardTotal: 0,
+      }),
+    ).toEqual({
       cash: 1234.5,
       upi: 150.5,
       card: 40,
       credit: 900,
+      omcCard: 0,
     });
   });
 
   it('falls back to the Handovers credit when the Shift has no credit sale rows', () => {
-    expect(composeShiftPayments({ cashSales: 0, handovers, creditSalesTotal: 0 }).credit).toBe(15);
+    expect(
+      composeShiftPayments({ cashSales: 0, handovers, creditSalesTotal: 0, omcCardTotal: 0 })
+        .credit,
+    ).toBe(15);
+  });
+
+  it('carries the OMC Card Sales total as its own bucket', () => {
+    expect(
+      composeShiftPayments({ cashSales: 0, handovers, creditSalesTotal: 0, omcCardTotal: 2000.004 })
+        .omcCard,
+    ).toBe(2000);
   });
 });
 
