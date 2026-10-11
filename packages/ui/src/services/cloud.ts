@@ -35,6 +35,10 @@ import {
   ReceivablesSummary,
   SupplierPayableSummary,
   InsightsStockLoss,
+  DensityReading,
+  DensityReadingWithContext,
+  DensityTodaySummary,
+  RecordDensityReadingPayload,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -110,6 +114,29 @@ export interface RecordHandoverResult {
   /** cashHandedOver − expectedCash. */
   varianceAmount: number;
   replaced: boolean;
+}
+
+export interface DecantationDayCloseWarnings {
+  pendingMeasurement: string[];
+  purchaseNotLinked: { documentNumber: string; products: string[] }[];
+  flagged: string[];
+}
+
+export function formatDecantationWarningSummary(warnings: DecantationDayCloseWarnings): string {
+  const entries: string[] = [];
+  const describe = (label: string, documents: string[]) => {
+    if (documents.length > 0) entries.push(`${label}: ${documents.join(', ')}`);
+  };
+  describe('Pending measurement', warnings.pendingMeasurement);
+  if (warnings.purchaseNotLinked.length > 0) {
+    entries.push(
+      `Purchase not linked: ${warnings.purchaseNotLinked
+        .map(({ documentNumber, products }) => `${documentNumber} (${products.join(', ')})`)
+        .join(', ')}`,
+    );
+  }
+  describe('Flagged', warnings.flagged);
+  return entries.join('; ');
 }
 
 export interface RecordStockCountPayload {
@@ -849,6 +876,46 @@ export class CloudShiftService {
 }
 
 export class CloudTransactionService {
+  async getDensityReadings(params: {
+    stationId: string;
+    productId?: string;
+    from?: string;
+    to?: string;
+    kind?: string;
+    limit?: number;
+  }): Promise<DensityReadingWithContext[]> {
+    const qs = new URLSearchParams({ stationId: params.stationId });
+    if (params.productId) qs.set('productId', params.productId);
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    if (params.kind) qs.set('kind', params.kind);
+    if (params.limit) qs.set('limit', String(params.limit));
+    return request<DensityReadingWithContext[]>(`/transactions/density/readings?${qs.toString()}`);
+  }
+
+  async getDensityTodaySummary(params: {
+    stationId: string;
+    businessDate?: string;
+  }): Promise<DensityTodaySummary> {
+    const qs = new URLSearchParams({ stationId: params.stationId });
+    if (params.businessDate) qs.set('businessDate', params.businessDate);
+    return request<DensityTodaySummary>(`/transactions/density/today?${qs.toString()}`);
+  }
+
+  async recordDensity(
+    payload: RecordDensityReadingPayload,
+    options?: { idempotencyKey?: string },
+  ): Promise<DensityReading> {
+    return request<DensityReading>(
+      '/transactions/density/readings',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      options,
+    );
+  }
+
   async getShiftTransactions(shiftId: string): Promise<any> {
     return request<any>(`/transactions/shifts/${shiftId}/transactions`);
   }
@@ -1301,6 +1368,15 @@ export class CloudTransactionService {
 
   async getInventoryStatus(stationId: string): Promise<any[]> {
     return request<any[]>(`/transactions/inventory/status?stationId=${stationId}`);
+  }
+
+  async getDecantationDayCloseWarnings(
+    stationId: string,
+    businessDayId: string,
+  ): Promise<DecantationDayCloseWarnings> {
+    return request<DecantationDayCloseWarnings>(
+      `/transactions/decantations/day-close-warnings?stationId=${encodeURIComponent(stationId)}&businessDayId=${encodeURIComponent(businessDayId)}`,
+    );
   }
 
   async getInventoryItems(stationId: string): Promise<any[]> {

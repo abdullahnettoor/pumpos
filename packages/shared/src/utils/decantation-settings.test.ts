@@ -10,6 +10,7 @@ const DEFAULTS = {
   quantityTolerance: 0.2,
   settlingTimeMinutes: 30,
   densitySpecBands: {},
+  densityEntryMethod: 'HYDROMETER',
 };
 
 describe('resolveDecantationSettings', () => {
@@ -25,6 +26,7 @@ describe('resolveDecantationSettings', () => {
         densityToleranceKgM3: 4,
         quantityTolerance: 0.15,
         settlingTimeMinutes: 'soon',
+        densityEntryMethod: 'DIRECT_15',
         densitySpecBands: {
           'product-1': { minKgM3: 815, maxKgM3: 845 },
           'product-2': { minKgM3: 'low', maxKgM3: 860 },
@@ -35,6 +37,7 @@ describe('resolveDecantationSettings', () => {
       densityToleranceKgM3: 4,
       quantityTolerance: 0.15,
       settlingTimeMinutes: 30,
+      densityEntryMethod: 'DIRECT_15',
       densitySpecBands: {
         'product-1': { minKgM3: 815, maxKgM3: 845 },
       },

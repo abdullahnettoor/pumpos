@@ -3,3 +3,7 @@ export * from './record-decantation.js';
 export * from './queries.js';
 export * from './measurement.js';
 export * from './linking.js';
+export * from './record-density-reading.js';
+export * from './list-density-readings.js';
+export * from './get-density-today-summary.js';
+export * from './build-density-today-summary.js';

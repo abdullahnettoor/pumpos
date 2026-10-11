@@ -1,4 +1,6 @@
-import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lt, lte, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import { roundDensity } from '@pump/shared';
 import { schema, type DbExecutor } from '@pump/db';
 import {
   DecantationMeasurementService,
@@ -9,6 +11,7 @@ import {
   DecantationLinker,
   type DecantationPurchaseLink,
   type DecantationPurchaseRepository,
+  type DecantationDayCloseWarnings,
   type EventPublisher,
   type TankSalesReader,
   type Decantation,
@@ -20,6 +23,8 @@ import {
   DecantationTankLine,
   DensityReading,
   DensityReadingRepository,
+  DensityReadingListQuery,
+  DensityReadingWithContext,
 } from '@pump/core';
 import { DrizzleStockMovementRepository } from './inventory-repositories.js';
 import { DrizzleProductRepository } from './product.repo.js';
@@ -347,10 +352,149 @@ export class DrizzleDecantationRepository implements DecantationRepository {
       .limit(q.limit ?? 200);
     return this.hydrate(rows);
   }
+
+  async getDayCloseWarnings({
+    organizationId,
+    stationId,
+    businessDayId,
+  }: {
+    organizationId: string;
+    stationId: string;
+    businessDayId: string;
+  }): Promise<DecantationDayCloseWarnings> {
+    const closeDay = alias(schema.businessDays, 'close_day');
+    const rows = await this.db
+      .selectDistinct({
+        documentNumber: schema.decantations.documentNumber,
+        decantationId: schema.decantations.id,
+        decantationBusinessDayId: schema.decantations.businessDayId,
+        status: schema.decantations.status,
+        flags: schema.decantations.flags,
+        lineStatus: schema.decantationTankLines.status,
+        productId: schema.decantationTankLines.productId,
+        productName: schema.products.name,
+        linkedPurchaseId: schema.decantationPurchases.purchaseId,
+      })
+      .from(schema.decantations)
+      .innerJoin(
+        schema.businessDays,
+        and(
+          eq(schema.businessDays.id, schema.decantations.businessDayId),
+          eq(schema.businessDays.organizationId, schema.decantations.organizationId),
+          eq(schema.businessDays.stationId, schema.decantations.stationId),
+        ),
+      )
+      .innerJoin(
+        closeDay,
+        and(
+          eq(closeDay.id, businessDayId),
+          eq(closeDay.organizationId, organizationId),
+          eq(closeDay.stationId, stationId),
+        ),
+      )
+      .leftJoin(
+        schema.decantationTankLines,
+        and(
+          eq(schema.decantationTankLines.decantationId, schema.decantations.id),
+          eq(schema.decantationTankLines.organizationId, schema.decantations.organizationId),
+          eq(schema.decantationTankLines.stationId, schema.decantations.stationId),
+        ),
+      )
+      .leftJoin(
+        schema.products,
+        and(
+          eq(schema.products.id, schema.decantationTankLines.productId),
+          eq(schema.products.organizationId, schema.decantations.organizationId),
+        ),
+      )
+      .leftJoin(
+        schema.decantationPurchases,
+        and(
+          eq(schema.decantationPurchases.decantationId, schema.decantations.id),
+          eq(schema.decantationPurchases.productId, schema.decantationTankLines.productId),
+          eq(schema.decantationPurchases.organizationId, schema.decantations.organizationId),
+          eq(schema.decantationPurchases.stationId, schema.decantations.stationId),
+        ),
+      )
+      .where(
+        and(
+          eq(schema.decantations.organizationId, organizationId),
+          eq(schema.decantations.stationId, stationId),
+          sql`${schema.decantations.status} <> 'DRAFT'`,
+          lte(schema.businessDays.businessDate, closeDay.businessDate),
+        ),
+      );
+
+    const pendingMeasurement = new Set<string>();
+    const unlinkedByDocument = new Map<string, Set<string>>();
+    const flagged = new Set<string>();
+    for (const row of rows) {
+      if (row.status === 'PENDING_MEASUREMENT' || row.lineStatus === 'PENDING_MEASUREMENT')
+        pendingMeasurement.add(row.documentNumber);
+      if (row.productId && !row.linkedPurchaseId) {
+        const products = unlinkedByDocument.get(row.documentNumber) ?? new Set<string>();
+        products.add(row.productName ?? row.productId);
+        unlinkedByDocument.set(row.documentNumber, products);
+      }
+      if (
+        row.decantationBusinessDayId === businessDayId &&
+        Array.isArray(row.flags) &&
+        row.flags.length > 0
+      )
+        flagged.add(row.documentNumber);
+    }
+    return {
+      pendingMeasurement: [...pendingMeasurement].sort(),
+      purchaseNotLinked: [...unlinkedByDocument]
+        .map(([documentNumber, products]) => ({
+          documentNumber,
+          products: [...products].sort(),
+        }))
+        .sort((a, b) => a.documentNumber.localeCompare(b.documentNumber)),
+      flagged: [...flagged].sort(),
+    };
+  }
 }
 
 export class DrizzleDensityReadingRepository implements DensityReadingRepository {
   constructor(private readonly db: DbExecutor) {}
+
+  private mapRow(
+    row: typeof schema.densityReadings.$inferSelect,
+    extra?: {
+      productName?: string;
+      productCode?: string;
+      tankName?: string | null;
+      nozzleName?: string | null;
+      recordedByName?: string | null;
+    },
+  ): DensityReadingWithContext {
+    return {
+      id: row.id,
+      organizationId: row.organizationId,
+      stationId: row.stationId,
+      businessDate: row.businessDate,
+      productId: row.productId,
+      kind: row.kind as 'MORNING' | 'ADHOC' | 'DECANTATION',
+      sampledFrom: (row.sampledFrom as 'NOZZLE' | 'TANK' | null) ?? null,
+      tankId: row.tankId,
+      nozzleId: row.nozzleId,
+      entryMethod: row.entryMethod as 'HYDROMETER' | 'DIRECT_15',
+      observedDensity: num(row.observedDensity),
+      observedTempC: num(row.observedTempC),
+      density15: Number(row.density15),
+      decantationTankLineId: row.decantationTankLineId,
+      flags: (row.flags as unknown[]) ?? [],
+      recordedBy: row.recordedBy,
+      recordedAt: row.recordedAt.toISOString(),
+      createdAt: row.createdAt ? row.createdAt.toISOString() : undefined,
+      productName: extra?.productName,
+      productCode: extra?.productCode,
+      tankName: extra?.tankName ?? null,
+      nozzleName: extra?.nozzleName ?? null,
+      recordedByName: extra?.recordedByName ?? null,
+    };
+  }
 
   async saveMany(readings: DensityReading[]): Promise<void> {
     if (readings.length === 0) return;
@@ -375,6 +519,191 @@ export class DrizzleDensityReadingRepository implements DensityReadingRepository
         recordedAt: new Date(r.recordedAt),
       })),
     );
+  }
+
+  async findLatestForProduct(
+    organizationId: string,
+    stationId: string,
+    productId: string,
+    before?: { businessDate: string; recordedAt: string },
+  ): Promise<DensityReading | null> {
+    const conditions = [
+      eq(schema.densityReadings.organizationId, organizationId),
+      eq(schema.densityReadings.stationId, stationId),
+      eq(schema.densityReadings.productId, productId),
+    ];
+    if (before) {
+      // Register order is (business_date, recorded_at): the predecessor is the newest
+      // reading at or before this position, so a back-dated entry compares to the
+      // reading immediately before it. Ties on the instant count as preceding.
+      const previous = or(
+        lt(schema.densityReadings.businessDate, before.businessDate),
+        and(
+          eq(schema.densityReadings.businessDate, before.businessDate),
+          lte(schema.densityReadings.recordedAt, new Date(before.recordedAt)),
+        ),
+      );
+      if (previous) conditions.push(previous);
+    }
+    const [row] = await this.db
+      .select()
+      .from(schema.densityReadings)
+      .where(and(...conditions))
+      .orderBy(
+        desc(schema.densityReadings.businessDate),
+        desc(schema.densityReadings.recordedAt),
+        desc(schema.densityReadings.createdAt),
+      )
+      .limit(1);
+
+    return row ? this.mapRow(row) : null;
+  }
+
+  async hasInterveningDecantation(
+    organizationId: string,
+    stationId: string,
+    productId: string,
+    afterTimestamp: string,
+    beforeTimestamp: string,
+  ): Promise<boolean> {
+    const after = new Date(afterTimestamp);
+    const before = new Date(beforeTimestamp);
+
+    // Check density_readings with kind = DECANTATION
+    const [reading] = await this.db
+      .select({ id: schema.densityReadings.id })
+      .from(schema.densityReadings)
+      .where(
+        and(
+          eq(schema.densityReadings.organizationId, organizationId),
+          eq(schema.densityReadings.stationId, stationId),
+          eq(schema.densityReadings.productId, productId),
+          eq(schema.densityReadings.kind, 'DECANTATION'),
+          gte(schema.densityReadings.recordedAt, after),
+          lte(schema.densityReadings.recordedAt, before),
+        ),
+      )
+      .limit(1);
+
+    if (reading) return true;
+
+    // Check decantations and decantation_tank_lines directly
+    const [line] = await this.db
+      .select({ id: schema.decantationTankLines.id })
+      .from(schema.decantationTankLines)
+      .innerJoin(
+        schema.decantations,
+        eq(schema.decantationTankLines.decantationId, schema.decantations.id),
+      )
+      .where(
+        and(
+          eq(schema.decantations.organizationId, organizationId),
+          eq(schema.decantations.stationId, stationId),
+          eq(schema.decantationTankLines.productId, productId),
+          gte(schema.decantations.createdAt, after),
+          lte(schema.decantations.createdAt, before),
+        ),
+      )
+      .limit(1);
+
+    return !!line;
+  }
+
+  async list(query: DensityReadingListQuery): Promise<DensityReadingWithContext[]> {
+    const conditions = [
+      eq(schema.densityReadings.organizationId, query.organizationId),
+      eq(schema.densityReadings.stationId, query.stationId),
+    ];
+    if (query.productId) {
+      conditions.push(eq(schema.densityReadings.productId, query.productId));
+    }
+    if (query.from) {
+      conditions.push(gte(schema.densityReadings.businessDate, query.from));
+    }
+    if (query.to) {
+      conditions.push(lte(schema.densityReadings.businessDate, query.to));
+    }
+    if (query.kind) {
+      conditions.push(eq(schema.densityReadings.kind, query.kind));
+    }
+
+    const rows = await this.db
+      .select({
+        reading: schema.densityReadings,
+        productName: schema.products.name,
+        productCode: schema.products.code,
+        tankName: schema.tanks.name,
+        nozzleName: schema.nozzles.name,
+        recordedByName: schema.users.fullName,
+      })
+      .from(schema.densityReadings)
+      .leftJoin(schema.products, eq(schema.densityReadings.productId, schema.products.id))
+      .leftJoin(schema.tanks, eq(schema.densityReadings.tankId, schema.tanks.id))
+      .leftJoin(schema.nozzles, eq(schema.densityReadings.nozzleId, schema.nozzles.id))
+      .leftJoin(schema.users, eq(schema.densityReadings.recordedBy, schema.users.id))
+      .where(and(...conditions))
+      .orderBy(
+        desc(schema.densityReadings.businessDate),
+        desc(schema.densityReadings.recordedAt),
+        desc(schema.densityReadings.createdAt),
+      )
+      .limit(query.limit ?? 500);
+
+    const items = rows.map((r) =>
+      this.mapRow(r.reading, {
+        productName: r.productName ?? undefined,
+        productCode: r.productCode ?? undefined,
+        tankName: r.tankName,
+        nozzleName: r.nozzleName,
+        recordedByName: r.recordedByName,
+      }),
+    );
+
+    // Compute delta vs previous reading of that product
+    const byProduct = new Map<string, DensityReadingWithContext[]>();
+    for (const item of items) {
+      if (!byProduct.has(item.productId)) {
+        byProduct.set(item.productId, []);
+      }
+      byProduct.get(item.productId)!.push(item);
+    }
+
+    for (const prodItems of byProduct.values()) {
+      const ascItems = [...prodItems].reverse();
+      for (let i = 0; i < ascItems.length; i++) {
+        if (i === 0) {
+          ascItems[i].delta = null;
+        } else {
+          ascItems[i].delta = roundDensity(ascItems[i].density15 - ascItems[i - 1].density15, 2);
+        }
+      }
+    }
+
+    return items;
+  }
+
+  async listFuelProductsWithActiveTanks(
+    organizationId: string,
+    stationId: string,
+  ): Promise<Array<{ id: string; name: string; code: string }>> {
+    return this.db
+      .selectDistinct({
+        id: schema.products.id,
+        name: schema.products.name,
+        code: schema.products.code,
+      })
+      .from(schema.tanks)
+      .innerJoin(schema.products, eq(schema.tanks.productId, schema.products.id))
+      .where(
+        and(
+          eq(schema.tanks.organizationId, organizationId),
+          eq(schema.tanks.stationId, stationId),
+          eq(schema.tanks.status, 'ACTIVE'),
+          eq(schema.products.productType, 'FUEL'),
+          eq(schema.products.isActive, true),
+        ),
+      )
+      .orderBy(asc(schema.products.name));
   }
 }
 
