@@ -280,7 +280,29 @@ const SaveFooter: React.FC<{
 
 const cell: React.CSSProperties = { padding: '4px 6px', fontSize: 12, verticalAlign: 'middle' };
 
-const ChambersBefore: React.FC<{ api: DraftApi }> = ({ api }) => {
+const ChambersBefore: React.FC<{ api: DraftApi }> = ({ api }) =>
+  api.d.checkChambers ? <ChambersTable api={api} /> : null;
+
+const ChamberToggle: React.FC<{ api: DraftApi }> = ({ api }) => (
+  <label
+    style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, marginBottom: 12 }}
+  >
+    <input
+      style={{ marginTop: 3 }}
+      type="checkbox"
+      checked={api.d.checkChambers}
+      onChange={(e) => api.set('checkChambers', e.target.checked)}
+    />
+    <span>
+      Check tanker chambers
+      <span style={{ display: 'block', fontSize: 12, opacity: 0.6 }}>
+        Optional — seal, dip mark and emptied check per chamber
+      </span>
+    </span>
+  </label>
+);
+
+const ChambersTable: React.FC<{ api: DraftApi }> = ({ api }) => {
   const upd = (i: number, patch: Partial<Chamber>) =>
     api.set(
       'chambers',
@@ -407,7 +429,7 @@ const ChambersBefore: React.FC<{ api: DraftApi }> = ({ api }) => {
 };
 
 const ChambersEmptied: React.FC<{ api: DraftApi }> = ({ api }) =>
-  api.d.chambers.length ? (
+  api.d.checkChambers && api.d.chambers.length ? (
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Chambers emptied</div>
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
@@ -461,6 +483,7 @@ export const VariantA: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
       isOpen={isOpen}
       onClose={onClose}
       title="New Decantation"
+      widthVariant="wide"
       footer={
         last ? (
           <SaveFooter
@@ -530,6 +553,7 @@ export const VariantA: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
       )}
       {step === 1 && (
         <>
+          <ChamberToggle api={api} />
           <ChambersBefore api={api} />
           <BeforeFields api={api} />
           {api.densityOut && (
@@ -565,6 +589,7 @@ export const VariantB: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
       isOpen={isOpen}
       onClose={onClose}
       title="New Decantation"
+      widthVariant="wide"
       footer={<SaveFooter api={api} onSave={onSave} onClose={onClose} />}
     >
       <div
@@ -630,6 +655,7 @@ export const VariantB: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
       <div style={{ height: 14 }} />
 
       <SectionTitle n={2}>Before unloading</SectionTitle>
+      <ChamberToggle api={api} />
       <ChambersBefore api={api} />
       <BeforeFields api={api} />
 
@@ -667,6 +693,7 @@ export const VariantC: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
         <div style={{ width: 1, background: 'var(--color-border, #e5e5e5)' }} />
         <div style={col}>
           <SectionTitle>At the tank</SectionTitle>
+          <ChamberToggle api={api} />
           <ChambersBefore api={api} />
           <BeforeFields api={api} />
           <UnloadFields api={api} />

@@ -28,6 +28,7 @@ export interface Draft {
   afterDipAt: string;
   salesDuring: string;
   chambers: Chamber[];
+  checkChambers: boolean;
 }
 
 export interface Chamber {
@@ -62,6 +63,7 @@ export const emptyDraft = (): Draft => ({
   afterDipAt: '',
   salesDuring: '',
   chambers: [newChamber('4000'), newChamber('4000'), newChamber('4000')],
+  checkChambers: false,
 });
 
 const minutes = (hhmm: string) => {
@@ -89,10 +91,11 @@ export const useDraft = () => {
       d.end &&
       d.afterDipAt &&
       minutes(d.afterDipAt) - minutes(d.end) < SETTINGS.settlingMinutes;
-    const chamberTotal = d.chambers.reduce((a, c) => a + Number(c.capacity || 0), 0);
+    const ch = d.checkChambers ? d.chambers : [];
+    const chamberTotal = ch.reduce((a, c) => a + Number(c.capacity || 0), 0);
     const chamberMismatch = !!purchase && chamberTotal > 0 && chamberTotal !== purchase.qty;
-    const chamberShort = d.chambers.some((c) => c.mark === 'short' || !c.sealOk);
-    const notEmptied = d.chambers.length > 0 && d.end !== '' && d.chambers.some((c) => !c.emptied);
+    const chamberShort = ch.some((c) => c.mark === 'short' || !c.sealOk);
+    const notEmptied = ch.length > 0 && d.end !== '' && ch.some((c) => !c.emptied);
     const tanksForProduct = TANKS.filter((t) => t.product === d.product);
     const openPurchases = PURCHASES.filter((p) => p.product === d.product);
     return {
@@ -107,11 +110,7 @@ export const useDraft = () => {
       chamberMismatch,
       chamberShort,
       notEmptied,
-      flagged:
-        densityOut ||
-        chamberShort ||
-        !!earlyDip ||
-        (d.end !== '' && d.chambers.some((c) => !c.emptied)),
+      flagged: densityOut || chamberShort || !!earlyDip || notEmptied,
       tanksForProduct,
       openPurchases,
     };
@@ -133,7 +132,7 @@ export const useDraft = () => {
     salesDuring: Number(d.salesDuring || 0),
     status: derived.received != null ? 'measured' : 'pending',
     received: derived.received,
-    sealOk: d.sealOk && !d.chambers.some((c) => c.mark === 'short' || !c.sealOk),
+    sealOk: d.sealOk && !ch.some((c) => c.mark === 'short' || !c.sealOk),
   });
 
   return { d, set, ...derived, toDecantation };
