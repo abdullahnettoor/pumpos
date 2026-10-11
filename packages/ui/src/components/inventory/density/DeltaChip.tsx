@@ -1,6 +1,6 @@
 import React from 'react';
 import { Chip } from '../../../pump-ds/index.js';
-import { DEFAULT_DENSITY_TOLERANCE_KG_M3 } from '@pump/shared';
+import { DEFAULT_DENSITY_TOLERANCE_KG_M3, isUnexplainedDensityJump } from '@pump/shared';
 
 export interface DeltaChipProps {
   delta: number | null | undefined;
@@ -20,9 +20,8 @@ export const DeltaChip: React.FC<DeltaChipProps> = ({
   }
 
   const isDecantation = kind === 'DECANTATION';
-  const hasJumpFlag = Array.isArray(flags) && flags.some((f) => f === 'UNEXPLAINED_JUMP');
   const isLargeJump = Math.abs(delta) > tolerance;
-  const isUnexplained = hasJumpFlag || (isLargeJump && !isDecantation);
+  const isUnexplained = isUnexplainedDensityJump({ delta, kind, flags, tolerance });
 
   const tone = isUnexplained ? 'danger' : isDecantation && isLargeJump ? 'info' : 'neutral';
 

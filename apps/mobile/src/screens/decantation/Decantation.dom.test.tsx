@@ -23,7 +23,22 @@ vi.mock('@pump/ui', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
+    isoToLocalTime: (value: string, timeZone = 'Asia/Kolkata') =>
+      new Intl.DateTimeFormat('en-GB', {
+        timeZone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      }).format(new Date(value)),
+    decantationFormSchema: actual.decantationFormSchema,
+    useZodForm: actual.useZodForm,
     useInventoryStatus: () => q(feed.tanks),
+    useProducts: () =>
+      q([
+        { id: 'ms', name: 'Petrol', code: 'MS', productType: 'FUEL', isActive: true },
+        { id: 'hsd', name: 'Diesel', code: 'HSD', productType: 'FUEL', isActive: true },
+      ]),
+    useStations: () => q([station]),
     useDecantations: (_s: string, status = '') =>
       q(status ? feed.decantations.filter((d) => d.status === status) : feed.decantations),
     useLinkablePurchases: (_s: string, ids: string[]) =>
@@ -167,6 +182,8 @@ const mount = (role: string, ui: React.ReactNode) =>
   );
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-09T08:30:00.000Z'));
   Object.assign(feed, {
     tanks: TANKS,
     decantations: [draft],
@@ -176,7 +193,10 @@ beforeEach(() => {
     failNext: false,
   });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe('Decantation entry points', () => {
   it.each(['Owner', 'Manager', 'Accountant'])(

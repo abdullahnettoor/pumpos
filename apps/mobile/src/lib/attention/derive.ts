@@ -14,12 +14,22 @@ import type { OwnHandover } from '../handover/own.js';
 import { standing, type MoneyCustomer } from '../money/parties.js';
 import { deriveShiftVariance } from '../shifts/variance.js';
 import { shiftHeadlineBadge } from '../cashVariance.js';
-import type { AlertSeverity, MobileAlert } from './types.js';
+import type { AlertCategory, AlertSeverity, MobileAlert } from './types.js';
+import type { DensityTodaySummary, DecantationView, Role } from '@pump/shared';
 
 /** A closed Shift's cash variance is raised only beyond this many rupees. */
 const CASH_VARIANCE_ALERT_ABOVE = 200;
 /** How many of the newest closed Shifts are checked for a variance. */
 const VARIANCE_SHIFTS_CHECKED = 5;
+
+/**
+ * The one role policy for what an alert list may contain. Accountants have no
+ * Home overview (ADR 0011, amended), so their bell carries only the work they
+ * do: Decantations, Density and their own handover. Everyone else sees all.
+ */
+const ACCOUNTANT_CATEGORIES: readonly AlertCategory[] = ['decantation', 'density', 'handover'];
+export const alertVisibleToRole = (category: AlertCategory, role?: Role | null): boolean =>
+  role !== 'Accountant' || ACCOUNTANT_CATEGORIES.includes(category);
 
 const RANK: Record<AlertSeverity, number> = { danger: 0, warning: 1, info: 2 };
 
@@ -38,6 +48,11 @@ export interface AlertSources {
   /** Shift Summary rows (`GET /shifts/shift-summaries`). */
   summaries: readonly Snapshot[];
   ownHandover: OwnHandover | null;
+  role?: Role | null;
+  decantations?: readonly DecantationView[];
+  /** Fuel product names by id; a missing id falls back to a generic label. */
+  productNames?: Readonly<Record<string, string>>;
+  densityToday?: DensityTodaySummary | null;
 }
 
 const openedAt = (s: Snapshot) => {
@@ -52,6 +67,9 @@ const openedAt = (s: Snapshot) => {
  */
 export function deriveAlerts(src: AlertSources): MobileAlert[] {
   const list: MobileAlert[] = [];
+
+  const canSeeInventoryWork =
+    src.role === 'Owner' || src.role === 'Manager' || src.role === 'Accountant';
 
   for (const a of src.stock) {
     list.push({ id: a.id, severity: a.severity, category: 'stock', title: a.title, meta: a.meta });
@@ -117,6 +135,70 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
     });
   }
 
+  if (canSeeInventoryWork) {
+    for (const decantation of src.decantations ?? []) {
+      if (decantation.status === 'DISCARDED') continue;
+      const productName = (id: string) => src.productNames?.[id] ?? 'Fuel';
+      const action = { kind: 'decantation' as const, decantationId: decantation.id };
+      if (decantation.status === 'DRAFT') {
+        list.push({
+          id: `dec-draft-${decantation.id}`,
+          severity: 'warning',
+          category: 'decantation',
+          title: `${decantation.tankerNumber} still unloading`,
+          meta: 'Finish unloading',
+          action,
+        });
+      }
+      for (const line of decantation.lines) {
+        if (decantation.status !== 'DRAFT' && line.status === 'PENDING_MEASUREMENT') {
+          list.push({
+            id: `dec-pending-${line.id}`,
+            severity: 'warning',
+            category: 'decantation',
+            title: 'Pending measurement',
+            meta: `${decantation.documentNumber} · ${productName(line.productId)}`,
+            action,
+          });
+        }
+      }
+      for (const productId of decantation.unlinkedProductIds ?? []) {
+        list.push({
+          id: `dec-unlinked-${decantation.id}-${productId}`,
+          severity: 'warning',
+          category: 'decantation',
+          title: 'Fuel Purchase not linked',
+          meta: `${decantation.documentNumber} · ${productName(productId)}`,
+          action,
+        });
+      }
+      if (decantation.flags.length > 0) {
+        list.push({
+          id: `dec-flagged-${decantation.id}`,
+          severity: 'warning',
+          category: 'decantation',
+          title: 'Flagged Decantation',
+          meta: `${decantation.documentNumber} · ${decantation.flags.map((flag) => flag.message).join(', ')}`,
+          action,
+        });
+      }
+    }
+  }
+
+  const density = src.densityToday;
+  if (canSeeInventoryWork && density && density.missingCount > 0) {
+    list.push({
+      id: 'density-missing',
+      severity: 'warning',
+      category: 'density',
+      title: `Today's density missing (${density.missingCount}/${density.totalProducts})`,
+      meta: density.missingProducts.map((product) => product.productName).join(', '),
+      action: { kind: 'density' },
+    });
+  }
+
   // Array.sort is stable: kind and recency above survive inside a severity.
-  return list.sort((a, b) => RANK[a.severity] - RANK[b.severity]);
+  return list
+    .filter((a) => alertVisibleToRole(a.category, src.role))
+    .sort((a, b) => RANK[a.severity] - RANK[b.severity]);
 }

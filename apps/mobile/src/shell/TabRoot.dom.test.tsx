@@ -91,13 +91,12 @@ describe('Home root per Role', () => {
     expect(seen.depth).toBe(1);
   });
 
-  it('an Accountant or Staff member who cannot see alerts gets the card only, no overview or bell', () => {
+  it('an Accountant or Staff member who cannot see the Home overview gets the card only', () => {
     mine.assignment = assigned;
     feed.alerts = [{ id: 'a1', severity: 'warning', category: 'stock', title: 'Tank 2 low' }];
     for (const role of ['Accountant', 'Staff'] as Role[]) {
       renderTab(role);
       expect(screen.getByRole('button', { name: /Your handover · DU2/ })).toBeTruthy();
-      expect(screen.queryByRole('button', { name: /^Alerts/ })).toBeNull();
       expect(screen.queryByText('Tank 2 low')).toBeNull();
       expect(screen.queryByText('owner overview')).toBeNull();
       cleanup();
@@ -130,11 +129,11 @@ describe('the alerts bell on tab headers', () => {
     }
   });
 
-  it('a Role that may not see alerts (Accountant) has no bell on its tabs', () => {
+  it('an Accountant gets the alert bell on Reports and Money', () => {
     feed.alerts = [stockAlert];
     for (const tab of ['reports', 'money'] as const) {
       renderTab('Accountant', tab);
-      expect(screen.queryByRole('button', { name: /^Alerts/ })).toBeNull();
+      expect(screen.getByRole('button', { name: /^Alerts/ })).toBeTruthy();
       cleanup();
     }
   });

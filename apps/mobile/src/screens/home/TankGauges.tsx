@@ -62,6 +62,11 @@ export const TankGauges: React.FC<{ tanks: readonly TankGauge[] }> = ({ tanks })
               {t.cover}
             </p>
           )}
+          {t.waitingOnDecantation && (
+            <p className="mt-1 text-xs font-semibold leading-snug text-warn-fg">
+              Waiting on decantation
+            </p>
+          )}
         </div>
       </div>
     ))}
