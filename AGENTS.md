@@ -70,9 +70,11 @@ Anchoring rules (target, ADR 0005):
 - **Office records** (collections, supplier payments, expenses, income, bank
   work) → **entry date only** (station-timezone calendar date, never Day
   Start), no `shift_id`, no `business_day_id`.
-- **Purchases** are forecourt stock events → `business_day_id` (sealed with
-  the day), never a `shift_id`. Paying for one is a separate supplier payment
-  (an office record).
+- **Product Purchases** are forecourt stock events → `business_day_id` (sealed
+  with the day), never a `shift_id`. A **Fuel Purchase** is an Office Record
+  (entry date, no stock); fuel stock comes only from **Decantation**
+  (`business_day_id`, no shift) — ADR 0007. Paying for a purchase is a separate
+  supplier payment (an office record).
 - **Credit sales are receivables**, not drawer cash. A fleet fuel-on-credit sale
   records only a customer-ledger debit (receivable); it never moves stock again
   (the fuel is already metered via nozzle readings). Customer balance =

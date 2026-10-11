@@ -91,6 +91,8 @@ const listQuery = (over: Partial<PayablesQuery> = {}): PayablesQuery => ({
   organizationId: ORG,
   purchasedFrom: MONTH.from,
   purchasedTo: MONTH.to,
+  fuelPurchaseFrom: MONTH.from,
+  fuelPurchaseTo: MONTH.to,
   paidFrom: MONTH.from,
   paidTo: MONTH.to,
   ...over,
@@ -259,8 +261,8 @@ describe.skipIf(!CONNECTION)('Payables reader against real Postgres', () => {
   }
 
   /**
-   * A Purchase: the purchases header (+ items) on the Business Day of `date`, and
-   * its payable on the supplier ledger (`entry_date` = that Business Date).
+   * A Purchase: product purchases anchor to the Business Day; fuel purchases
+   * use the Entry Date. Its payable uses the same anchor date.
    * Without `lines` the ledger row is a bare payable, as an imported one is.
    */
   async function purchase(
@@ -279,13 +281,19 @@ describe.skipIf(!CONNECTION)('Payables reader against real Postgres', () => {
     const station = over.station ?? STATION;
     const purchaseId = nextId();
     if (over.lines) {
-      const dayId = await businessDay(org, station, over.user ?? USER, date);
+      const isFuelPurchase = over.lines.every((line) =>
+        [DIESEL, PETROL, DIESEL_LTR, OTHER_DIESEL].includes(line.product as never),
+      );
+      const dayId = isFuelPurchase
+        ? null
+        : await businessDay(org, station, over.user ?? USER, date);
       await db.insert(schema.purchases).values({
         id: purchaseId,
         documentNumber: `PUR-${purchaseId.slice(-6)}`,
         organizationId: org,
         stationId: station,
         businessDayId: dayId,
+        entryDate: isFuelPurchase ? date : null,
         supplierId,
         invoiceNumber: over.invoice ?? null,
         amount: String(amount),
@@ -582,6 +590,25 @@ describe.skipIf(!CONNECTION)('Payables reader against real Postgres', () => {
         purchaseCount: 2,
         quantity: 22000,
       });
+    });
+
+    it('puts each purchase in the month by its own anchor: product by business day, fuel by Entry Date', async () => {
+      const s = await supplier('Mixed anchors');
+      await purchase(s, '2026-10-12', 250, {
+        lines: [{ product: LUBE, quantity: 50, value: 250 }],
+      });
+      await purchase(s, '2026-11-05', 600, {
+        lines: [{ product: DIESEL, quantity: 7000, value: 600 }],
+      });
+      // Fuel dated in the business-day window but outside the entry-date window.
+      await purchase(s, '2026-10-20', 9000, {
+        lines: [{ product: PETROL, quantity: 99, value: 9000 }],
+      });
+      const one = await reader.supplier(
+        supplierQuery(s, { fuelPurchaseFrom: '2026-11-01', fuelPurchaseTo: '2026-11-30' }),
+      );
+      expect(one?.month).toMatchObject({ purchased: 850, purchaseCount: 2, quantity: 7000 });
+      expect(one?.purchasesByProduct.map((p) => p.productId).sort()).toEqual([DIESEL, LUBE].sort());
     });
 
     it('counts litres by product type, whatever unit text the fuel was set up with', async () => {

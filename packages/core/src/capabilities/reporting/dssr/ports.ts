@@ -105,7 +105,7 @@ export interface DssrTankMovementSource {
   tankId: string;
   /** Book stock before the day: Σ movements of earlier Business Days. */
   openingQuantity: number;
-  /** Purchases delivered into the tank on the day. */
+  /** Product Purchases and measured Decantations delivered into the tank on the day. */
   receivedQuantity: number;
   /** Net metered litres dispensed on the day (a positive number). */
   soldQuantity: number;

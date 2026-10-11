@@ -18,7 +18,12 @@ import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { useToast } from './primitives/ToastProvider.js';
 import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText, Icon } from '../pump-ds/index.js';
-import { resolveBusinessDate, resolveEntryDate, type PurchaseEntryFormValues } from '@pump/shared';
+import {
+  mixedPurchaseError,
+  resolveBusinessDate,
+  resolveEntryDate,
+  type PurchaseEntryFormValues,
+} from '@pump/shared';
 import { purchaseColumns, buildSupplierColumns } from './purchases/columns.js';
 import { SupplierFormDrawer } from './purchases/SupplierFormDrawer.js';
 import { SupplierStatementDrawer } from './purchases/SupplierStatementDrawer.js';
@@ -48,7 +53,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
   };
 
   const stationId = selectedStation?.id ?? null;
-  const purchasesQ = usePurchases();
+  const purchasesQ = usePurchases(stationId ?? '');
   const suppliersActiveQ = useSuppliers(true);
   const suppliersAllQ = useSuppliers(false);
   const productsQ = useProducts();
@@ -68,11 +73,13 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
 
   // Business-date bucketing for purchase KPIs + a purchases search filter.
   const stationSettings: any = selectedStation?.settings || {};
-  const todayIso = resolveBusinessDate({
+  const todayIso = resolveEntryDate({ timeZone: stationSettings.timezone });
+  const businessToday = resolveBusinessDate({
     timeZone: stationSettings.timezone,
     dayStartsAt: stationSettings.business_day_starts_at,
   });
   const monthPrefix = todayIso.slice(0, 7);
+  const businessMonthPrefix = businessToday.slice(0, 7);
   const [purchaseSearch, setPurchaseSearch] = useState('');
   const purchaseKpis = useMemo(() => {
     let today = 0,
@@ -80,19 +87,21 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
       todayCount = 0;
     for (const p of purchases) {
       const amt = Number(p.amount || 0);
-      const bd: string = p.businessDate || '';
-      if (bd === todayIso) {
+      const date = p.entryDate || p.businessDate || '';
+      const todayAnchor = p.entryDate ? todayIso : businessToday;
+      if (date === todayAnchor) {
         today += amt;
         todayCount += 1;
       }
-      if (bd.startsWith(monthPrefix)) month += amt;
+      const monthAnchor = p.entryDate ? monthPrefix : businessMonthPrefix;
+      if (date.startsWith(monthAnchor)) month += amt;
     }
     const payables = allSuppliers.reduce(
       (s: number, x: any) => s + Math.max(0, Number(x.currentBalance || 0)),
       0,
     );
     return { today, month, todayCount, payables };
-  }, [purchases, allSuppliers, todayIso, monthPrefix]);
+  }, [purchases, allSuppliers, todayIso, businessToday, monthPrefix, businessMonthPrefix]);
   const filteredPurchases = useMemo(() => {
     const q = purchaseSearch.trim().toLowerCase();
     if (!q) return purchases;
@@ -136,10 +145,9 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
   const [gstFrom, setGstFrom] = useState(`${gstToday.slice(0, 8)}01`);
   const [gstTo, setGstTo] = useState(gstToday);
   // See IncomeList: a tab-gated query replaces the load-from-effect.
-  const gstQ = usePurchaseGstRegister(
-    { from: gstFrom, to: gstTo },
-    { enabled: activeTab === 'gst' },
-  );
+  const gstQ = usePurchaseGstRegister({ from: gstFrom, to: gstTo }, stationId ?? '', {
+    enabled: activeTab === 'gst',
+  });
   const gstRows = useMemo(() => gstQ.data ?? [], [gstQ.data]);
   const gstLoading = gstQ.isFetching;
   const gstError = gstQ.error ? gstQ.error.message : null;
@@ -160,8 +168,8 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
   const resetPurchaseForm = (supplierId?: string) => {
     setFormError(null);
     setPurchaseDefaults({
-      // Purchases are dated by business day (ADR 0005), not UTC (#288).
-      transactionDate: todayIso,
+      // Fuel Purchases use station-timezone calendar Entry Date, never Day Start.
+      transactionDate: resolveEntryDate({ timeZone: stationSettings.timezone }),
       supplierId: supplierId || suppliers[0]?.id || '',
       invoiceNumber: '',
       notes: '',
@@ -222,6 +230,14 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
   const handleAddPurchase = async (values: PurchaseEntryFormValues, payment?: PurchasePayNow) => {
     setFormError(null);
     if (!values.supplierId || values.lines.length === 0) return;
+    const mixed = mixedPurchaseError(
+      values.lines,
+      (id) => products.find((product) => product.id === id)?.productType === 'FUEL',
+    );
+    if (mixed) {
+      setFormError(mixed);
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -235,8 +251,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
           productId: l.productId,
           quantity: Number(l.quantity),
           unitPrice: Number(l.unitPrice),
-          tankAllocations:
-            l.tankAllocations && l.tankAllocations.length > 0 ? l.tankAllocations : undefined,
+          invoiceDensity: l.invoiceDensity === '' ? undefined : l.invoiceDensity,
         })),
         payment: payment && payment.amount > 0 ? payment : undefined,
       });
@@ -245,7 +260,10 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
       toast.success(
         payment && payment.amount > 0 ? 'Purchase recorded with payment.' : 'Purchase recorded.',
       );
-      await invalidateOperational(stationId);
+      runTask(
+        invalidateOperational(stationId),
+        'Purchase recorded, but the screen could not be refreshed.',
+      );
     } catch (err: any) {
       setFormError(err.message || 'Failed to record supplier purchase');
     } finally {
@@ -447,7 +465,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
                   data={filteredPurchases}
                   emptyMessage="No purchases logged yet."
                   getRowId={(r: any) => r.documentNumber || r.id}
-                  initialSorting={[{ id: 'businessDate', desc: true }]}
+                  initialSorting={[{ id: 'entryDate', desc: true }]}
                   onRowClick={(r: any) => openPurchaseDetail(r)}
                 />
               )}
@@ -659,7 +677,11 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
                             color: 'var(--text-default)',
                           }}
                         >
-                          <DateText value={r.businessDate} variant="compact" tone="muted" />
+                          <DateText
+                            value={r.entryDate ?? r.businessDate}
+                            variant="compact"
+                            tone="muted"
+                          />
                         </td>
                         <td
                           style={{
@@ -855,7 +877,10 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
                   Date
                 </span>
                 <strong style={{ color: 'var(--text-strong)' }}>
-                  <DateText value={detailPurchase.businessDate} tone="strong" />
+                  <DateText
+                    value={detailPurchase.entryDate ?? detailPurchase.businessDate}
+                    tone="strong"
+                  />
                 </strong>
               </div>
               <div>

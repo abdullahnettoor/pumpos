@@ -637,14 +637,17 @@ async function main() {
     ])
     .onConflictDoNothing();
 
-  // Fuel delivery purchase — business-day anchored, NO shift
+  // Fuel invoice is an Office Record; demo inventory is seeded independently.
   await db
     .insert(schema.purchases)
     .values({
       id: ID.purchaseFuel,
       documentNumber: 'PUR-000001',
       shiftId: null,
-      businessDayId: ID.bday,
+      businessDayId: null,
+      organizationId: ID.org,
+      stationId: ID.station,
+      entryDate: businessDate,
       supplierId: ID.supplierIoc,
       invoiceNumber: 'IOC-99812',
       amount: nz(900000),
@@ -682,7 +685,7 @@ async function main() {
     })
     .onConflictDoNothing();
 
-  // Stock movements: purchase (day-anchored, no shift) + fuel sale (shift)
+  // Stock movements: opening/demo stock + fuel sale (shift)
   await db
     .insert(schema.stockMovements)
     .values([
@@ -692,9 +695,11 @@ async function main() {
         businessDayId: ID.bday,
         productId: ID.prodDiesel,
         tankId: ID.tankDiesel,
-        movementType: 'Purchase',
+        // TODO(ADR 0007 / Decantation #477): stopgap — seed a Decantation instead
+        // once fuel stock comes only from Decantation.
+        movementType: 'OpeningBalance',
         quantity: nz(10000),
-        referenceType: 'purchase',
+        referenceType: 'demo-opening-stock',
         referenceId: ID.purchaseFuel,
         notes: 'Tanker decant',
       },

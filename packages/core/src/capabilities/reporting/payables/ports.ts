@@ -25,6 +25,9 @@ export interface PayablesQuery {
   /** Purchases of this Business Date range are "this month" (inclusive). */
   purchasedFrom: string;
   purchasedTo: string;
+  /** Fuel Purchase Office Records counted by Entry Date (inclusive). */
+  fuelPurchaseFrom: string;
+  fuelPurchaseTo: string;
   /** Supplier Payments of this Entry Date range are "this month" (inclusive). */
   paidFrom: string;
   paidTo: string;

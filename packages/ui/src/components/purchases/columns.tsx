@@ -1,15 +1,29 @@
 import React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { inr } from '../../utils/format.js';
-import { StatusChip, DateText, Icon } from '../../pump-ds/index.js';
+import { StatusChip, DateText, Icon, Chip } from '../../pump-ds/index.js';
 
 /** Column builders for the Purchases screen tables (extracted from PurchasesList). */
 
 export const purchaseColumns: ColumnDef<any, any>[] = [
   {
-    accessorKey: 'businessDate',
+    id: 'entryDate',
+    accessorFn: (row) => row.entryDate ?? row.businessDate ?? row.shiftDate,
     header: 'Date',
-    cell: ({ row }) => <DateText value={row.original.businessDate ?? row.original.shiftDate} />,
+    cell: ({ row }) => (
+      <div
+        style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}
+      >
+        <DateText
+          value={row.original.entryDate ?? row.original.businessDate ?? row.original.shiftDate}
+        />
+        {row.original.businessDayId == null && row.original.awaitingDecantation && (
+          <Chip tone="warning" size="xs" variant="soft">
+            Awaiting decantation
+          </Chip>
+        )}
+      </div>
+    ),
   },
   {
     accessorKey: 'supplierName',

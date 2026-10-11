@@ -1,6 +1,6 @@
 # Shifts and sales anchor to the Business Day; office money anchors to the calendar date
 
-Status: accepted (2026-09-23). Supersedes the "universal anchor" rule in
+Status: accepted (2026-09-23); the Purchase rule is amended for fuel by ADR 0007. Supersedes the "universal anchor" rule in
 `AGENTS.md` and the financial-ledger half of ADR 0003.
 
 ## Context
