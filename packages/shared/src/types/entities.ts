@@ -13,6 +13,10 @@ import {
   ExpenseStatus,
   Weekday,
 } from './core.js';
+import type {
+  DecantationSettings,
+  DecantationSettingsInput,
+} from '../utils/decantation-settings.js';
 
 export interface BaseMetadata {
   id: string;
@@ -67,7 +71,7 @@ export interface StationLegalInfo {
   contact?: string;
 }
 
-export interface StationSettings {
+export interface StationSettings extends Omit<Partial<DecantationSettings>, 'densitySpecBands'> {
   shift_grace_minutes: number;
   shift_lock_grace_days: number;
   offline_warning_days: number;
@@ -90,6 +94,7 @@ export interface StationSettings {
     showLogo?: boolean;
     showStationLogo?: boolean;
   } | null;
+  densitySpecBands?: DecantationSettingsInput['densitySpecBands'];
 }
 
 export interface Station {

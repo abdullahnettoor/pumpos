@@ -79,6 +79,7 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /finance/cash-book': 'org-scoped-query',
 
   'GET /setup/stations': 'not-station-scoped',
+  'GET /setup/stations/:id/decantation-settings': 'refuses-foreign-station',
   'GET /setup/tanks': 'org-scoped-query',
   'GET /setup/dispensers': 'org-scoped-query',
   'GET /setup/nozzles': 'org-scoped-query',

@@ -516,6 +516,7 @@ export const App: React.FC = () => {
         return (
           <StationOverview
             selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
             onStationSelected={(station: Station | null) => pickStation(station?.id ?? null)}
           />
         );
