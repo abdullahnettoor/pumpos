@@ -85,6 +85,62 @@ export interface DecantationRepository {
    */
   replace(decantation: Decantation): Promise<void>;
   list(query: DecantationListQuery): Promise<Decantation[]>;
+  /**
+   * Non-draft Decantations of a station with at least one PENDING_MEASUREMENT line
+   * for `tankId`, oldest first (#468 tank-dip resolution).
+   */
+  findPendingForTank(
+    organizationId: string,
+    stationId: string,
+    tankId: string,
+  ): Promise<Decantation[]>;
+  /**
+   * Persist measurement only: after-dip fields, received/measured_* and status on
+   * lines, plus the header status/flags/updated_at. Never touches chambers,
+   * density readings or the other (sealed) fields (#468).
+   */
+  updateMeasurement(decantation: Decantation): Promise<void>;
+}
+
+/** Link of a Decantation to the Fuel Purchase invoice of one product (#469, D5). */
+export interface DecantationPurchaseLink {
+  id: string;
+  organizationId: string;
+  stationId: string;
+  decantationId: string;
+  purchaseId: string;
+  productId: string;
+  receivedQty: number | null;
+  invoiceQty: number | null;
+  /** received − invoice (+ Excess, − Short). Never netted across invoices. */
+  varianceQty: number | null;
+  varianceComputedAt: string | null;
+}
+
+export interface DecantationPurchaseRepository {
+  listForPurchaseProduct(
+    organizationId: string,
+    purchaseId: string,
+    productId: string,
+  ): Promise<DecantationPurchaseLink[]>;
+  listForDecantation(
+    organizationId: string,
+    decantationId: string,
+  ): Promise<DecantationPurchaseLink[]>;
+  /** Persist received/invoice/variance fields of an existing link. */
+  updateVariance(link: DecantationPurchaseLink): Promise<void>;
+  /** Σ quantity and Σ quantity × unit price of the purchase's lines of a product. */
+  invoiceLine(
+    organizationId: string,
+    purchaseId: string,
+    productId: string,
+  ): Promise<{ quantity: number; value: number } | null>;
+}
+
+/** Litres dispensed from a tank, as booked by closed shifts. */
+export interface TankSalesReader {
+  /** Σ −quantity of `Sale` movements of the tank with created_at in (from, to]. */
+  litresSoldBetween(tankId: string, fromIso: string, toIso: string): Promise<number>;
 }
 
 export interface DensityReading {

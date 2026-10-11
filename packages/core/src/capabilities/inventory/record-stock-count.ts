@@ -22,6 +22,7 @@ import {
 } from '../station-ops/business-days/index.js';
 import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../station-ops/shifts/index.js';
 import type { TankRepository } from '../station-setup/tanks/index.js';
+import type { TankDipMeasurement } from './decantation/measurement.js';
 import type {
   StockMovement,
   StockMovementRepository,
@@ -71,6 +72,8 @@ export interface RecordStockCountDeps {
   shifts: ShiftRepository;
   businessDays: BusinessDayWriteRepository;
   events: EventPublisher;
+  /** #468: resolves pending Decantation tank lines from a tank dip. */
+  decantationMeasurement?: TankDipMeasurement;
 }
 
 export interface RecordStockCountResult {
@@ -164,6 +167,27 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     const bd = eligibility.data.businessDay;
 
     const isBulk = !!cmd.tankId;
+    const varianceId = ctx.ids.newId();
+    const nowIso = ctx.clock.now().toISOString();
+
+    // Pending Decantation lines of this tank are measured from this dip BEFORE
+    // the expected quantity is read, so the received litres are in book stock
+    // and the dip never double counts them (D4). With a shift open the dip is
+    // not reconciled either, so the lines stay pending.
+    let decantationLinesMeasured = 0;
+    if (tank && !openShiftAtRecording && this.deps.decantationMeasurement) {
+      const measured = await this.deps.decantationMeasurement.measureFromTankDip(ctx, {
+        stationId: cmd.stationId,
+        tankId: tank.id,
+        dip: cmd.actualQuantity,
+        dipAt: nowIso,
+        refId: varianceId,
+        anchor: { businessDayId: bd.id, businessDate: bd.businessDate },
+      });
+      if (!measured.success) return measured;
+      decantationLinesMeasured = measured.data.measuredLines;
+    }
+
     const expected = isBulk
       ? await this.deps.movements.currentQuantityForTank(cmd.tankId as string)
       : await this.deps.movements.currentQuantityForProduct(ctx.organizationId, productId);
@@ -172,7 +196,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
 
     const now = ctx.clock.now().toISOString();
     const variance: StockVariance = {
-      id: ctx.ids.newId(),
+      id: varianceId,
       organizationId: ctx.organizationId,
       stationId: cmd.stationId,
       shiftId: cmd.shiftId ?? null,
@@ -223,6 +247,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
           actual,
           variance: varianceQuantity,
           openShiftAtRecording,
+          decantationLinesMeasured,
         },
       }),
     ];

@@ -115,6 +115,7 @@ export interface DecantationMeasurement {
   measureLinesWithAfterDip(
     ctx: ExecutionContext,
     decantation: Decantation,
+    anchor: { businessDayId: string; businessDate: string },
   ): Promise<Result<Decantation>>;
 }
 
@@ -170,6 +171,8 @@ export class RecordDecantation implements UseCase<
     if (cmd.decantationId) {
       if (!existing || existing.stationId !== cmd.stationId)
         return err(notFoundError('Decantation', cmd.decantationId));
+      const ownDay = await this.deps.businessDays.findById(existing.businessDayId);
+      if (ownDay?.status === 'CLOSED') return this.addAfterDipToSealedDay(cmd, existing, ctx);
       if (existing.status === 'MEASURED' || existing.lines.some((l) => l.status === 'MEASURED'))
         return err(
           invariantViolation('A measured Decantation can no longer be edited', {
@@ -320,8 +323,11 @@ export class RecordDecantation implements UseCase<
     await this.deps.densityReadings.saveMany(readings);
 
     // #468: measure lines that already carry an after dip (posts stock movements).
-    if (this.deps.measurement && lines.some((l) => l.afterDip != null)) {
-      const measured = await this.deps.measurement.measureLinesWithAfterDip(ctx, decantation);
+    if (this.deps.measurement && !cmd.draft && lines.some((l) => l.afterDip != null)) {
+      const measured = await this.deps.measurement.measureLinesWithAfterDip(ctx, decantation, {
+        businessDayId: bd.id,
+        businessDate: bd.businessDate,
+      });
       if (!measured.success) return measured;
       decantation = measured.data;
     }
@@ -385,5 +391,116 @@ export class RecordDecantation implements UseCase<
     await this.deps.events.publish(events);
 
     return ok({ decantation, warnings });
+  }
+
+  /**
+   * The Decantation's own Business Day is closed (sealed). Only the after-dip
+   * measurement fields (`afterDip`, `afterDipAt`, `salesDuring`) of still
+   * PENDING lines may be added, matched by line id (or tank); every other field
+   * in the command is ignored and the stored record stays as sealed. Lines that
+   * get an after dip are measured at once; the stock movement is booked on the
+   * current open Business Day, never on the sealed one.
+   */
+  private async addAfterDipToSealedDay(
+    cmd: z.output<typeof schema>,
+    existing: Decantation,
+    ctx: ExecutionContext,
+  ): Promise<Result<RecordDecantationResult>> {
+    if (!this.deps.measurement)
+      return err(invariantViolation('Business day is closed; the Decantation is sealed'));
+    const nowIso = ctx.clock.now().toISOString();
+    let touched = 0;
+    const decantation: Decantation = {
+      ...existing,
+      lines: existing.lines.map((l) => ({ ...l })),
+    };
+    for (const input of cmd.lines) {
+      const line = decantation.lines.find((l) =>
+        input.id ? l.id === input.id : l.tankId === input.tankId,
+      );
+      if (!line || line.status !== 'PENDING_MEASUREMENT' || input.afterDip == null) continue;
+      line.afterDip = input.afterDip;
+      line.afterDipAt = iso(input.afterDipAt) ?? nowIso;
+      line.salesDuring = input.salesDuring ?? line.salesDuring;
+      touched++;
+    }
+    if (touched === 0)
+      return err(
+        invariantViolation('Business day is closed; only an after dip can be added', {
+          decantationId: existing.id,
+        }),
+      );
+
+    const day = await resolveBusinessDayWrite(this.deps.businessDays, ctx, {
+      stationId: existing.stationId,
+      kind: 'STOCK',
+    });
+    if (!day.success) return day;
+    const bd = day.data.businessDay;
+
+    const measured = await this.deps.measurement.measureLinesWithAfterDip(ctx, decantation, {
+      businessDayId: bd.id,
+      businessDate: bd.businessDate,
+    });
+    if (!measured.success) return measured;
+    const result = measured.data;
+
+    // Early-after-dip flags for the newly entered after dips; other flags are kept.
+    const settings = this.deps.settings ?? DEFAULT_DECANTATION_TOLERANCES;
+    const { flags: fresh } = computeDecantationFlags({
+      lines: result.lines.map((l) => ({
+        id: l.id,
+        roDensity: null,
+        invoiceDensity: null,
+        afterDipAt: l.afterDipAt,
+      })),
+      chambers: [],
+      chambersChecked: false,
+      unloadEndedAt: result.unloadEndedAt,
+      invoiceQuantity: null,
+      densityToleranceKgM3: settings.densityToleranceKgM3,
+      settlingTimeMinutes: settings.settlingTimeMinutes,
+    });
+    const known = new Set(result.flags.map(decantationFlagKey));
+    const added = fresh.filter(
+      (f) => f.code === 'EARLY_AFTER_DIP' && !known.has(decantationFlagKey(f)),
+    );
+    if (added.length > 0) {
+      result.flags = [...result.flags, ...added];
+      await this.deps.decantations.updateMeasurement(result);
+    }
+
+    const common = { stationId: existing.stationId, businessDayId: existing.businessDayId };
+    const events: DomainEvent[] = [
+      eventFromContext(ctx, {
+        eventType: BusinessEvents.DECANTATION_RECORDED,
+        aggregateType: 'Decantation',
+        aggregateId: result.id,
+        ...common,
+        payload: {
+          decantationId: result.id,
+          documentNumber: result.documentNumber,
+          tankerNumber: result.tankerNumber,
+          status: result.status,
+          updated: true,
+          measuredBy: 'AFTER_DIP',
+          measuredOnBusinessDayId: bd.id,
+          lines: result.lines,
+          flags: result.flags,
+        },
+      }),
+    ];
+    if (added.length > 0)
+      events.push(
+        relatedEventFromContext(ctx, {
+          eventType: BusinessEvents.DECANTATION_FLAGGED,
+          aggregateType: 'Decantation',
+          aggregateId: result.id,
+          ...common,
+          payload: { decantationId: result.id, reasons: added },
+        }),
+      );
+    await this.deps.events.publish(events);
+    return ok({ decantation: result, warnings: [] });
   }
 }
