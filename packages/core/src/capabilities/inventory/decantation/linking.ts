@@ -1,10 +1,5 @@
 import { z } from 'zod';
-import {
-  computeDecantationFlags,
-  decantationFlagKey,
-  DEFAULT_DECANTATION_SETTINGS,
-  type DecantationFlag,
-} from '@pump/shared';
+import { computeDecantationFlags, decantationFlagKey, type DecantationFlag } from '@pump/shared';
 import {
   BusinessEvents,
   err,
@@ -22,6 +17,7 @@ import type {
   Result,
   UseCase,
 } from '../../../kernel/index.js';
+import { DEFAULT_DECANTATION_TOLERANCES } from './record-decantation.js';
 import type {
   Decantation,
   DecantationLinkRepository,
@@ -53,8 +49,6 @@ export interface InvoiceSettler {
     input: { purchaseId: string; productId: string; decantationId: string },
   ): Promise<void>;
 }
-
-const DEFAULT_TOLERANCES = DEFAULT_DECANTATION_SETTINGS;
 
 export interface DecantationLinkerDeps {
   links: DecantationLinkRepository;
@@ -174,7 +168,7 @@ export class DecantationLinker {
     const views = await this.deps.links.listViews(ctx.organizationId, [d.id]);
     const density = new Map<string, number>(fallback);
     for (const v of views) if (v.invoiceDensity != null) density.set(v.productId, v.invoiceDensity);
-    const settings = this.deps.settings ?? DEFAULT_TOLERANCES;
+    const settings = this.deps.settings ?? DEFAULT_DECANTATION_TOLERANCES;
     const { flags: fresh } = computeDecantationFlags({
       lines: d.lines.map((l) => ({
         id: l.id,

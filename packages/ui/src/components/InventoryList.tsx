@@ -108,7 +108,7 @@ const movementColumns: ColumnDef<any, any>[] = [
     cell: ({ getValue }) => {
       const t = getValue() as string;
       const tone =
-        t === 'Purchase'
+        t === 'Purchase' || t === 'Decantation'
           ? 'info'
           : t === 'Variance'
             ? 'danger'
@@ -368,6 +368,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
   const [countReason, setCountReason] = useState('');
   const [countSubmitting, setCountSubmitting] = useState(false);
   const [countError, setCountError] = useState<string | null>(null);
+  const [countNotice, setCountNotice] = useState<string[]>([]);
   const countRequestRef = useRef<StockCountRequestIdentity | null>(loadPendingStockCountRequest());
 
   const items = useMemo(() => itemsQ.data ?? [], [itemsQ.data]);
@@ -432,6 +433,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
     setCountActual('');
     setCountReason('');
     setCountError(null);
+    setCountNotice([]);
     setCountOpen(true);
   };
 
@@ -457,11 +459,12 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
       };
       countRequestRef.current = resolveStockCountRequestIdentity(countRequestRef.current, payload);
       savePendingStockCountRequest({ ...countRequestRef.current, payload });
-      await transactionService.recordStockCount(payload, {
+      const counted = await transactionService.recordStockCount(payload, {
         idempotencyKey: countRequestRef.current.idempotencyKey,
       });
       countRequestRef.current = null;
       savePendingStockCountRequest(null);
+      setCountNotice((counted.warnings ?? []).map((w) => w.message));
       setCountOpen(false);
       await invalidateOperational(stationId);
     } catch (err: any) {
@@ -531,6 +534,30 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
         }
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {countNotice.length > 0 && (
+            <div
+              role="status"
+              style={{
+                backgroundColor: 'var(--state-warning-bg)',
+                color: 'var(--state-warning-fg)',
+                padding: '8px 12px',
+                borderRadius: 'var(--radius-input)',
+                fontSize: '12px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: '12px',
+              }}
+            >
+              <span>{countNotice.join(' ')}</span>
+              <button
+                type="button"
+                onClick={() => setCountNotice([])}
+                style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
           <KpiStrip columns="auto">
             <KpiTile
               dot="brand"

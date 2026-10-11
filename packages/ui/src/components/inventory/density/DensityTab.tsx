@@ -3,13 +3,12 @@ import { Button, Icon, SegmentedControl } from '../../../pump-ds/index.js';
 import {
   useDensityReadings,
   useDensityTodaySummary,
-  useInvalidateOperational,
   useNozzles,
   useProducts,
+  useRecordDensityReading,
   useStations,
   useTanks,
 } from '../../../query/hooks.js';
-import { CloudTransactionService } from '../../../services/cloud.js';
 import { TodayView } from './TodayView.js';
 import { RegisterView } from './RegisterView.js';
 import { RecordDensityDrawer } from './RecordDensityDrawer.js';
@@ -20,15 +19,13 @@ export interface DensityTabProps {
   stationId: string;
 }
 
-const txService = new CloudTransactionService();
-
 export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
   const [view, setView] = useState<'today' | 'register'>('today');
   const [isRecordOpen, setIsRecordOpen] = useState(false);
   const [presetProductId, setPresetProductId] = useState<string | undefined>(undefined);
   const [morningPromptProduct, setMorningPromptProduct] = useState<string | null>(null);
 
-  const invalidateOperational = useInvalidateOperational();
+  const recordDensity = useRecordDensityReading(stationId);
 
   const stationsQ = useStations();
   const station = stationsQ.data?.find((s) => s.id === stationId);
@@ -59,8 +56,7 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
   };
 
   const handleSaveDensity = async (payload: RecordDensityReadingPayload) => {
-    await txService.recordDensity(payload);
-    await invalidateOperational(stationId);
+    await recordDensity.mutateAsync({ payload });
 
     if (payload.kind === 'MORNING') {
       const prod = fuelProducts.find((p) => p.id === payload.productId);

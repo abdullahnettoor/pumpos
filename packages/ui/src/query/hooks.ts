@@ -29,6 +29,7 @@ import type {
   DensityTodaySummary,
   DensityReadingWithContext,
   SaveDecantationBody,
+  RecordDensityReadingPayload,
 } from '@pump/shared';
 import type {
   BusinessDayStatusResponse,
@@ -1422,6 +1423,18 @@ export function useRecordDecantation(stationId: string | null | undefined) {
         decantationId: vars.decantationId,
         idempotencyKey: vars.idempotencyKey,
       }),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
+}
+
+/** Density Reading write; operational caches refresh in the background (never awaited). */
+export function useRecordDensityReading(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: { payload: RecordDensityReadingPayload; idempotencyKey?: string }) =>
+      txService.recordDensity(vars.payload, { idempotencyKey: vars.idempotencyKey }),
     onSuccess: () => {
       void invalidate(stationId);
     },

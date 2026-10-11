@@ -1,4 +1,22 @@
-import type { DecantationFlag, DecantationWarning, DecantationFlagCode } from '@pump/shared';
+import type {
+  DecantationFlag,
+  DecantationWarning,
+  DecantationFlagCode,
+  DensityReading,
+  DensityReadingListQuery,
+  DensityReadingWithContext,
+  DensityTodayProductSummary,
+  DensityTodaySummary,
+} from '@pump/shared';
+
+// Density Reading types are canonical in @pump/shared (shared with the UI).
+export type {
+  DensityReading,
+  DensityReadingListQuery,
+  DensityReadingWithContext,
+  DensityTodayProductSummary,
+  DensityTodaySummary,
+};
 
 export type { DecantationFlag, DecantationWarning, DecantationFlagCode };
 
@@ -228,67 +246,6 @@ export interface TankSalesReader {
     fromIso: string,
     toIso: string,
   ): Promise<number>;
-}
-
-export interface DensityReading {
-  id: string;
-  organizationId: string;
-  stationId: string;
-  businessDate: string;
-  productId: string;
-  kind: 'MORNING' | 'ADHOC' | 'DECANTATION';
-  sampledFrom: 'NOZZLE' | 'TANK' | null;
-  tankId: string | null;
-  nozzleId: string | null;
-  entryMethod: 'HYDROMETER' | 'DIRECT_15';
-  observedDensity: number | null;
-  observedTempC: number | null;
-  density15: number;
-  decantationTankLineId: string | null;
-  flags: unknown[];
-  recordedBy: string | null;
-  recordedAt: string;
-  createdAt?: string;
-}
-
-export interface DensityReadingListQuery {
-  organizationId: string;
-  stationId: string;
-  productId?: string;
-  from?: string;
-  to?: string;
-  kind?: 'MORNING' | 'ADHOC' | 'DECANTATION';
-  limit?: number;
-}
-
-export interface DensityReadingWithContext extends DensityReading {
-  productName?: string;
-  productCode?: string;
-  tankName?: string | null;
-  nozzleName?: string | null;
-  recordedByName?: string | null;
-  delta?: number | null;
-}
-
-export interface DensityTodayProductSummary {
-  productId: string;
-  productName: string;
-  productCode: string;
-  latestToday: DensityReadingWithContext | null;
-  todayRecorded: boolean;
-  trend14d: Array<{ date: string; density15: number | null }>;
-  /** Non-null 15 °C values of `trend14d`, oldest first (sparkline input). */
-  trendValues: number[];
-  lastReadings: DensityReadingWithContext[];
-}
-
-export interface DensityTodaySummary {
-  businessDate: string;
-  products: DensityTodayProductSummary[];
-  recordedCount: number;
-  missingCount: number;
-  missingProducts: Array<{ productId: string; productName: string; productCode: string }>;
-  totalProducts: number;
 }
 
 export interface DensityReadingRepository {
