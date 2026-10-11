@@ -23,6 +23,7 @@ import {
   CloudDesktopDownloadsService,
   type DecantationDayCloseWarnings,
 } from '../services/cloud.js';
+import type { DensityTodaySummary, DensityReadingWithContext } from '@pump/shared';
 import type {
   BusinessDayStatusResponse,
   DailyCashBook,
@@ -75,6 +76,19 @@ const accessSvc = new CloudAccessService();
 const desktopDownloadsSvc = new CloudDesktopDownloadsService();
 
 export const queryKeys = {
+  densityReadings: (
+    stationId: string,
+    productId = '',
+    from = '',
+    to = '',
+    kind = '',
+    limit = 500,
+  ) => ['density-readings', stationId, productId, from, to, kind, limit] as const,
+  densityReadingsPrefix: (stationId: string) => ['density-readings', stationId] as const,
+  densityToday: (stationId: string, businessDate = '') =>
+    ['density-today', stationId, businessDate] as const,
+  densityTodayPrefix: (stationId: string) => ['density-today', stationId] as const,
+
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
   // Prefix keys for station-wide invalidation (TanStack matches by prefix).
   shiftStatusPrefix: (stationId: string) => ['shift-status', stationId] as const,
@@ -1314,6 +1328,8 @@ export function useInvalidateOperational() {
       // and new suppliers are created from PurchasesList — keep them fresh too.
       qc.invalidateQueries({ queryKey: ['suppliers'] }),
       qc.invalidateQueries({ queryKey: ['activity-groups'] }),
+      qc.invalidateQueries({ queryKey: ['density-readings'] }),
+      qc.invalidateQueries({ queryKey: ['density-today'] }),
       qc.invalidateQueries({ queryKey: ['activity-group'] }),
     ];
     if (stationId) {
@@ -1322,9 +1338,62 @@ export function useInvalidateOperational() {
         qc.invalidateQueries({ queryKey: ['inventory-items', stationId] }),
         qc.invalidateQueries({ queryKey: ['inventory-movements', stationId] }),
         qc.invalidateQueries({ queryKey: ['inventory-variances', stationId] }),
+        qc.invalidateQueries({ queryKey: ['density-readings', stationId] }),
+        qc.invalidateQueries({ queryKey: ['density-today', stationId] }),
         qc.invalidateQueries({ queryKey: ['decantation-day-close-warnings', stationId] }),
       );
     }
     return Promise.all(invalidations).then(() => undefined);
   };
+}
+
+export function useDensityTodaySummary(
+  stationId: string | null | undefined,
+  businessDate?: string,
+  options?: Omit<UseQueryOptions<DensityTodaySummary, Error>, 'queryKey' | 'queryFn'>,
+) {
+  return useQuery({
+    queryKey: queryKeys.densityToday(stationId ?? '', businessDate ?? ''),
+    queryFn: () => txService.getDensityTodaySummary({ stationId: stationId!, businessDate }),
+    enabled: Boolean(stationId),
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
+    ...options,
+  });
+}
+
+export function useDensityReadings(
+  stationId: string | null | undefined,
+  params: {
+    productId?: string;
+    from?: string;
+    to?: string;
+    kind?: string;
+    limit?: number;
+  } = {},
+  options?: Omit<UseQueryOptions<DensityReadingWithContext[], Error>, 'queryKey' | 'queryFn'>,
+) {
+  return useQuery({
+    queryKey: queryKeys.densityReadings(
+      stationId ?? '',
+      params.productId ?? '',
+      params.from ?? '',
+      params.to ?? '',
+      params.kind ?? '',
+      params.limit ?? 500,
+    ),
+    queryFn: () =>
+      txService.getDensityReadings({
+        stationId: stationId!,
+        productId: params.productId,
+        from: params.from,
+        to: params.to,
+        kind: params.kind,
+        limit: params.limit,
+      }),
+    enabled: Boolean(stationId),
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
+    ...options,
+  });
 }

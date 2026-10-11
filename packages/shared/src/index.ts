@@ -1,3 +1,4 @@
+export * from './types/density.js';
 export * from './types/core.js';
 export * from './types/access.js';
 export * from './types/entities.js';
