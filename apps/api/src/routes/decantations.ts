@@ -2,7 +2,14 @@ import { Hono, type Context } from 'hono';
 import { and, eq, ne } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import { canRecordDecantation, isAuthorizedForStation } from '@pump/shared';
-import { GetDecantation, ListDecantations, RecordDecantation } from '@pump/core';
+import {
+  GetDecantation,
+  ListDecantations,
+  listDecantationsSchema,
+  RecordDecantation,
+  recordDecantationSchema,
+  type RecordDecantationCommand,
+} from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { TimestampDocumentNumberGenerator } from '../infra/doc-numbers.js';
@@ -21,6 +28,7 @@ import {
 } from '../infra/station-clock.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
+import { validateJson } from '../utils/validator.js';
 
 type Variables = { db: DbClient; user: AuthenticatedPrincipal };
 type Ctx = Context<{ Variables: Variables }>;
@@ -50,8 +58,8 @@ function guardStation(c: Ctx, stationId: string | null | undefined) {
   return null;
 }
 
-async function record(c: Ctx, body: any) {
-  const denied = guardStation(c, body?.stationId);
+async function record(c: Ctx, body: RecordDecantationCommand) {
+  const denied = guardStation(c, body.stationId);
   if (denied) return denied;
   const user = c.var.user;
   const clock = await loadStationClock(c.var.db, user.organizationId, body.stationId);
@@ -80,8 +88,9 @@ async function record(c: Ctx, body: any) {
 decantationsRouter.post(
   '/decantations',
   writePolicyGuard('POST /transactions/decantations'),
+  validateJson(recordDecantationSchema),
   async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = c.req.valid('json');
     return record(c, { ...body, decantationId: undefined });
   },
 );
@@ -89,31 +98,37 @@ decantationsRouter.post(
 decantationsRouter.put(
   '/decantations/:id',
   writePolicyGuard('PUT /transactions/decantations/:id'),
+  validateJson(recordDecantationSchema),
   async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = c.req.valid('json');
     return record(c, { ...body, decantationId: c.req.param('id') });
   },
 );
 
 decantationsRouter.get('/decantations', async (c) => {
   const user = c.var.user;
-  const stationId = c.req.query('stationId');
+  const query = listDecantationsSchema.safeParse(c.req.query());
+  if (!query.success)
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message:
+            query.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ') ||
+            'Invalid query',
+        },
+      },
+      400,
+    );
+  const stationId = query.data.stationId;
   const denied = guardStation(c, stationId);
   if (denied) return denied;
   if (!(await loadStationClock(c.var.db, user.organizationId, stationId)))
     return stationNotFound(c);
   const result = await new ListDecantations({
     decantations: new DrizzleDecantationRepository(c.var.db),
-  }).execute(
-    {
-      stationId: stationId!,
-      from: c.req.query('from'),
-      to: c.req.query('to'),
-      status: c.req.query('status') as any,
-      limit: c.req.query('limit') as any,
-    },
-    buildContext(user, { stationId: stationId! }),
-  );
+  }).execute(query.data, buildContext(user, { stationId }));
   return sendResult(c, result);
 });
 

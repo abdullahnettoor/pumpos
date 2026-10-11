@@ -86,7 +86,8 @@ const chamberSchema = z.object({
   tankLineIndex: z.coerce.number().int().min(0).nullish(),
 });
 
-const schema = z.object({
+/** Write body of RecordDecantation; also the HTTP boundary schema. */
+export const recordDecantationSchema = z.object({
   /** Present when updating an existing Decantation. */
   decantationId: z.string().min(1).optional(),
   stationId: z.string().min(1, 'stationId is required'),
@@ -104,7 +105,7 @@ const schema = z.object({
   chambers: z.array(chamberSchema).optional(),
 });
 
-export type RecordDecantationCommand = z.input<typeof schema>;
+export type RecordDecantationCommand = z.input<typeof recordDecantationSchema>;
 
 /**
  * #468 hook. Called inside the same transaction with the saved Decantation when
@@ -137,6 +138,23 @@ export interface RecordDecantationResult {
   warnings: DecantationWarning[];
 }
 
+/** Negative after-dip result: never blocks, the line stays pending for the next tank dip. */
+function belowBeforeWarnings(lines: DecantationTankLine[]): DecantationWarning[] {
+  return lines
+    .filter(
+      (l) =>
+        l.status === 'PENDING_MEASUREMENT' &&
+        l.afterDip != null &&
+        l.afterDip - l.beforeDip + l.salesDuring < 0,
+    )
+    .map((l) => ({
+      code: 'AFTER_DIP_BELOW_BEFORE' as const,
+      tankLineId: l.id,
+      message:
+        'After dip is below the before dip (allowing for sales); not measured. The next tank dip will measure it.',
+    }));
+}
+
 const iso = (v: string | undefined | null): string | null => (v ? new Date(v).toISOString() : null);
 
 /**
@@ -156,7 +174,7 @@ export class RecordDecantation implements UseCase<
     input: RecordDecantationCommand,
     ctx: ExecutionContext,
   ): Promise<Result<RecordDecantationResult>> {
-    const p = schema.safeParse(input);
+    const p = recordDecantationSchema.safeParse(input);
     if (!p.success)
       return err(
         validationError('Invalid RecordDecantation command', { issues: p.error.flatten() }),
@@ -257,7 +275,7 @@ export class RecordDecantation implements UseCase<
     const unloadEndedAt = iso(cmd.unloadEndedAt);
 
     const settings = this.deps.settings ?? DEFAULT_DECANTATION_TOLERANCES;
-    const { flags, warnings } = computeDecantationFlags({
+    const { flags, warnings: flagWarnings } = computeDecantationFlags({
       lines: lines.map((l, i) => ({
         id: l.id,
         roDensity: l.roDensity,
@@ -272,6 +290,7 @@ export class RecordDecantation implements UseCase<
       settlingTimeMinutes: settings.settlingTimeMinutes,
     });
 
+    const warnings: DecantationWarning[] = [...flagWarnings];
     let decantation: Decantation = {
       id: decantationId,
       organizationId: ctx.organizationId,
@@ -330,6 +349,7 @@ export class RecordDecantation implements UseCase<
       });
       if (!measured.success) return measured;
       decantation = measured.data;
+      warnings.push(...belowBeforeWarnings(decantation.lines));
     }
 
     const previous = new Set((existing?.flags ?? []).map(decantationFlagKey));
@@ -402,7 +422,7 @@ export class RecordDecantation implements UseCase<
    * current open Business Day, never on the sealed one.
    */
   private async addAfterDipToSealedDay(
-    cmd: z.output<typeof schema>,
+    cmd: z.output<typeof recordDecantationSchema>,
     existing: Decantation,
     ctx: ExecutionContext,
   ): Promise<Result<RecordDecantationResult>> {
@@ -501,6 +521,6 @@ export class RecordDecantation implements UseCase<
         }),
       );
     await this.deps.events.publish(events);
-    return ok({ decantation: result, warnings: [] });
+    return ok({ decantation: result, warnings: belowBeforeWarnings(result.lines) });
   }
 }
