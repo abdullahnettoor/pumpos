@@ -17,7 +17,7 @@ import type {
   Result,
   UseCase,
 } from '../../../kernel/index.js';
-import { DEFAULT_DECANTATION_TOLERANCES } from './record-decantation.js';
+import { DEFAULT_DECANTATION_TOLERANCES } from './tolerances.js';
 import type {
   Decantation,
   DecantationLinkRepository,
