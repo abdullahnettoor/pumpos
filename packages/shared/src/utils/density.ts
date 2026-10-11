@@ -89,7 +89,11 @@ export function alpha15(rho15: number, productClass?: ProductDensityClass | stri
  * ΔT  = tempC - 15
  * VCF = exp( -α15 · ΔT · (1 + 0.8 · α15 · ΔT) )
  */
-export function vcf(rho15: number, tempC: number, productClass?: ProductDensityClass | string): number {
+export function vcf(
+  rho15: number,
+  tempC: number,
+  productClass?: ProductDensityClass | string,
+): number {
   const dt = tempC - REFERENCE_TEMPERATURE_C;
   if (Math.abs(dt) < 1e-12) {
     return 1.0;
@@ -122,22 +126,17 @@ export function density15FromObserved(
   }
 
   const options: Density15Options =
-    typeof optionsOrMethod === 'string'
-      ? { method: optionsOrMethod }
-      : optionsOrMethod ?? {};
+    typeof optionsOrMethod === 'string' ? { method: optionsOrMethod } : (optionsOrMethod ?? {});
 
   const method = options.method ?? DEFAULT_DENSITY_METHOD;
-  const useGlassCorrection =
-    options.glassCorrection ?? (method === 'OMC_TABLE_53B');
+  const useGlassCorrection = options.glassCorrection ?? method === 'OMC_TABLE_53B';
   const maxIterations = options.maxIterations ?? 20;
   const tol = options.tolerance ?? 0.001;
 
   const dt = tempC - REFERENCE_TEMPERATURE_C;
 
   // Hydrometer thermal expansion correction factor (HYC)
-  const hyc = useGlassCorrection
-    ? 1.0 - 0.000023 * dt - 0.00000002 * (dt * dt)
-    : 1.0;
+  const hyc = useGlassCorrection ? 1.0 - 0.000023 * dt - 0.00000002 * (dt * dt) : 1.0;
 
   const targetDensity = rhoObs * hyc;
 

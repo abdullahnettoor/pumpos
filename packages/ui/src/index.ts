@@ -178,6 +178,11 @@ export type {
   CashCountPopoverProps,
   CashBreakdown,
 } from './components/primitives/CashCountPopover.js';
+export {
+  DensityCalculatorPopover,
+  DensityCalculatorPopup,
+} from './components/primitives/DensityCalculatorPopover.js';
+export type { DensityCalculatorPopoverProps } from './components/primitives/DensityCalculatorPopover.js';
 export { Banner } from './components/primitives/Banner.js';
 export type { BannerProps, BannerSeverity } from './components/primitives/Banner.js';
 export { useZodForm } from './forms/useZodForm.js';

@@ -50,7 +50,7 @@ describe('density mathematics (@pump/shared)', () => {
 
     it('computes α15 for jet band (e.g. 840.0 with jet formula = 0.00084260)', () => {
       const alpha = alpha15(840, 'jet');
-      expect(alpha).toBeCloseTo(0.00084260, 6);
+      expect(alpha).toBeCloseTo(0.0008426, 6);
     });
 
     it('computes α15 for fuel oil band (worked example iter 2: ρ15 = 840.08 → 0.00084368)', () => {
@@ -86,20 +86,20 @@ describe('density mathematics (@pump/shared)', () => {
   describe('density15FromObserved (§2.3 & §2.5 worked example)', () => {
     it('converges to 840.10 kg/m³ for sample: hydrometer 828.0 kg/m³ @ 32 °C', () => {
       const rho15 = density15FromObserved(828.0, 32.0);
-      expect(roundDensity(rho15, 2)).toBe(840.10);
+      expect(roundDensity(rho15, 2)).toBe(840.1);
       expect(roundDensity(rho15, 1)).toBe(840.1);
     });
 
     it('accepts explicit API_MPMS_11_1_ADJUNCT method string', () => {
       const rho15 = density15FromObserved(828.0, 32.0, 'API_MPMS_11_1_ADJUNCT');
-      expect(roundDensity(rho15, 2)).toBe(840.10);
+      expect(roundDensity(rho15, 2)).toBe(840.1);
     });
 
     it('accepts options object with method API_MPMS_11_1_ADJUNCT', () => {
       const rho15 = density15FromObserved(828.0, 32.0, {
         method: 'API_MPMS_11_1_ADJUNCT',
       });
-      expect(roundDensity(rho15, 2)).toBe(840.10);
+      expect(roundDensity(rho15, 2)).toBe(840.1);
     });
 
     it('supports OMC_TABLE_53B method with glass hydrometer correction', () => {
