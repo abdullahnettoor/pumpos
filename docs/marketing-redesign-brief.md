@@ -105,7 +105,7 @@ Some existing claims conflict with the documented product scope. In particular,
 AGENTS.md defines online-primary resilience, not offline-first operation.
 Multi-station visibility and owner notifications require capability verification
 before reuse in new copy. Product demonstrations must respect the Business Day,
-Shift, Drawer and DSSR definitions in `CONTEXT.md` and the rules in `AGENTS.md`.
+Shift, Drawer and DSSR definitions in `GLOSSARY.md` and the rules in `AGENTS.md`.
 
 Further source inspection confirms owner access to customer balances, collection
 and credit registers, financial accounts and reports on the console, plus

@@ -2,7 +2,7 @@
 
 These files preserve phase plans and design context. Their status text can lag the
 code: **GitHub Issues are the source of truth for current task status**, and code,
-configuration, `AGENTS.md`, `CONTEXT.md`, and accepted ADRs are authoritative for
+configuration, `AGENTS.md`, `GLOSSARY.md`, and accepted ADRs are authoritative for
 shipped behavior. Verify a phase's remaining work before acting on it.
 
 ## Phase documents

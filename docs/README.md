@@ -4,7 +4,7 @@ Use these sources in this order when they disagree:
 
 1. [`../AGENTS.md`](../AGENTS.md) — hard engineering, domain, security, and
    operational rules.
-2. [`../CONTEXT.md`](../CONTEXT.md) — canonical domain language.
+2. [`../GLOSSARY.md`](../GLOSSARY.md) — canonical domain language.
 3. [`adr/`](adr/) — accepted decisions and amendments.
 4. Current code, schema, and configuration — implementation truth. The database
    source is `packages/db/src/schema.ts` plus `packages/db/migrations/`.
