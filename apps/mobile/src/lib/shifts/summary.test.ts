@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   deriveFuelLines,
   derivePaymentSlices,
+  derivePaymentSplit,
   deriveSalesTotals,
   deriveShiftProducts,
   deriveShiftSummary,
@@ -77,7 +78,13 @@ describe('deriveShiftSummary', () => {
   });
 
   it('reads the payment split from the declared figures', () => {
-    expect(m.payments).toEqual({ cash: 90000, upi: 5000.5, card: 1000, credit: 500 });
+    expect(m.payments).toEqual({
+      cash: 90000,
+      upi: 5000.5,
+      card: 1000,
+      credit: 500,
+      omcCard: null,
+    });
   });
 
   it('names the Dispenser Unit and fuel on each nozzle row and keeps testing apart', () => {
@@ -230,7 +237,7 @@ describe('payments (from the snapshot)', () => {
       { ...snapshot, payments: { cash: 1, upi: 2, card: 3, credit: 4 } },
       new Map(),
     );
-    expect(m.payments).toEqual({ cash: 1, upi: 2, card: 3, credit: 4 });
+    expect(m.payments).toEqual({ cash: 1, upi: 2, card: 3, credit: 4, omcCard: null });
   });
 });
 
@@ -253,12 +260,107 @@ describe('Dispenser Unit on a nozzle row', () => {
 
 describe('derivePaymentSlices', () => {
   it('has the four declared methods and nothing else', () => {
-    const slices = derivePaymentSlices({ cash: 100, upi: 60, card: 25, credit: 15 });
+    const slices = derivePaymentSlices({ cash: 100, upi: 60, card: 25, credit: 15, omcCard: null });
     expect(slices.map((s) => [s.key, s.amount])).toEqual([
       ['cash', 100],
       ['upi', 60],
       ['card', 25],
       ['credit', 15],
     ]);
+  });
+});
+
+// The report-compare fixture's two Shifts (Sri Lakshmi, 2026-10-10), as their Shift Summary
+// snapshots store them. Morning: DU-1 declared ₹125 short and Suresh took ₹2,000 on an OMC card.
+const MORNING = {
+  cashVarianceModel: 2,
+  totalSalesValue: 181400,
+  attendantVariance: -125,
+  officeCountVariance: 50,
+  cashVariance: 50,
+  payments: { cash: 71275, upi: 58000, card: 27000, credit: 23000, omcCard: 2000 },
+};
+const EVENING = {
+  cashVarianceModel: 2,
+  totalSalesValue: 142315,
+  attendantVariance: 0,
+  officeCountVariance: 0,
+  cashVariance: 0,
+  payments: { cash: 64275, upi: 37000, card: 30000, credit: 11040, omcCard: 0 },
+};
+
+/** The identity the page must show: every slice plus the gap line is the total. */
+const added = (split: ReturnType<typeof derivePaymentSplit>) =>
+  split.slices.reduce((s, x) => s + x.amount, 0) +
+  (split.gap ? (split.gap.kind === 'short' ? split.gap.amount : -split.gap.amount) : 0);
+
+describe('derivePaymentSplit', () => {
+  const split = (snap: typeof MORNING) => {
+    const m = deriveShiftSummary(snap, new Map());
+    return derivePaymentSplit(m.payments, m.total, m.variance.attendant);
+  };
+
+  it('Morning: cash + UPI + card + credit + OMC card + the ₹125 shortage = total sales', () => {
+    const s = split(MORNING);
+    expect(s.slices.map((x) => [x.label, x.amount])).toEqual([
+      ['Cash', 71275],
+      ['UPI', 58000],
+      ['Card', 27000],
+      ['Credit', 23000],
+      ['OMC card', 2000],
+    ]);
+    expect(s.gap).toMatchObject({ kind: 'short', label: 'Short', amount: 125, tone: 'bad' });
+    expect(s.total).toBe(181400);
+    expect(added(s)).toBe(181400);
+  });
+
+  it('Evening: balanced, adds up with no gap line and no OMC bucket', () => {
+    const s = split(EVENING);
+    expect(s.slices.map((x) => x.key)).toEqual(['cash', 'upi', 'card', 'credit']);
+    expect(s.gap).toBeNull();
+    expect(s.total).toBe(142315);
+    expect(added(s)).toBe(142315);
+  });
+
+  it('shows an overage as its own line that comes off the split', () => {
+    const over = { ...MORNING, attendantVariance: 40, totalSalesValue: 181235 };
+    const s = split(over);
+    expect(s.gap).toMatchObject({ kind: 'over', label: 'Over', amount: 40, tone: 'warn' });
+    expect(s.total).toBe(181235);
+    expect(added(s)).toBe(181235);
+  });
+
+  it('a snapshot without the OMC bucket never invents an unexplained line', () => {
+    const { omcCard: _omit, ...payments } = MORNING.payments;
+    const legacy = { ...MORNING, payments };
+    const m = deriveShiftSummary(legacy, new Map());
+    expect(m.payments.omcCard).toBeNull();
+    const s = derivePaymentSplit(m.payments, m.total, m.variance.attendant);
+    expect(s.slices.map((x) => x.key)).toEqual(['cash', 'upi', 'card', 'credit']);
+    // ₹2,000 of OMC cannot be placed: show nothing extra, not a wrong ₹125 or ₹2,125.
+    expect(s.gap).toBeNull();
+    expect(s.total).toBeNull();
+  });
+
+  it('a snapshot with no payments block at all (summed from the Handovers) shows nothing extra', () => {
+    const m = deriveShiftSummary(
+      {
+        totalFuelSalesValue: 1000,
+        cashSalesSum: 900,
+        handovers: [{ cardHandedOver: '100', upiHandedOver: '0', creditHandedOver: '0' }],
+        cashVariance: 0,
+      },
+      new Map(),
+    );
+    const s = derivePaymentSplit(m.payments, m.total, m.variance.attendant);
+    expect(s.gap).toBeNull();
+    expect(s.total).toBe(1000);
+  });
+
+  it('a variance that does not reconcile to the total is not shown', () => {
+    const odd = { ...MORNING, attendantVariance: -340 };
+    const s = split(odd);
+    expect(s.gap).toBeNull();
+    expect(s.total).toBeNull();
   });
 });

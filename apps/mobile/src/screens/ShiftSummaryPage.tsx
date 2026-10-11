@@ -5,7 +5,7 @@ import { SalesByProduct } from '../components/SalesByProduct.js';
 import { businessDateLabel } from '../lib/dates.js';
 import { rupees, signedRupees } from '../lib/format.js';
 import type { ShiftSummaryRow } from '../lib/shifts/history.js';
-import { derivePaymentSlices } from '../lib/shifts/summary.js';
+import { derivePaymentSplit } from '../lib/shifts/summary.js';
 import { DetailPage, SectionLabel, StatTile, StatusBadge } from '../ui/index.js';
 import { DrawerReconciliation } from './shift-summary/DrawerReconciliation.js';
 import { NozzleTable } from './shift-summary/NozzleTable.js';
@@ -98,7 +98,7 @@ export const ShiftSummaryPage: React.FC<Props> = ({ station, shiftId, initial })
       </div>
 
       <SectionLabel>Payments</SectionLabel>
-      <PaymentSplit slices={derivePaymentSlices(f.payments)} />
+      <PaymentSplit split={derivePaymentSplit(f.payments, f.total, f.variance.attendant)} />
 
       <SectionLabel>Sales by product</SectionLabel>
       <SalesByProduct

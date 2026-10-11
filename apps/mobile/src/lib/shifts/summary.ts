@@ -6,7 +6,7 @@
  * each deriver says what it does then (`products: null`, payments summed from
  * the Handovers, the Dispenser Unit from today's setup).
  */
-import { productCategoryOf } from '@pump/shared';
+import { isBalancedVariance, productCategoryOf } from '@pump/shared';
 import { wholeQuantityLabel } from '../money/quantity.js';
 import { num, round2 } from '../num.js';
 import { unitLabel } from '@pump/ui';
@@ -50,6 +50,8 @@ export interface ShiftPayments {
   upi: number;
   card: number;
   credit: number;
+  /** OMC Card Sales; null when the snapshot predates the bucket (it was not captured). */
+  omcCard: number | null;
 }
 
 export interface ShiftSummaryModel {
@@ -144,11 +146,18 @@ function drawerLines(snap: Snapshot): DrawerLine[] {
 function derivePayments(snap: Snapshot): ShiftPayments {
   if (snap.payments) {
     const p = snap.payments as Snapshot;
-    return { cash: num(p.cash), upi: num(p.upi), card: num(p.card), credit: num(p.credit) };
+    return {
+      cash: num(p.cash),
+      upi: num(p.upi),
+      card: num(p.card),
+      credit: num(p.credit),
+      omcCard: p.omcCard == null ? null : num(p.omcCard),
+    };
   }
   const handovers = list(snap.handovers);
   const drawers = list(snap.drawers);
   return {
+    omcCard: null,
     cash: snap.cashSalesSum != null ? num(snap.cashSalesSum) : sum(drawers, (d) => d.cashSales),
     upi: sum(handovers, (h) => h.upiHandedOver),
     card: sum(handovers, (h) => h.cardHandedOver),
@@ -237,17 +246,83 @@ export function deriveShiftSummary(snap: Snapshot, duNames: NozzleDuNames): Shif
 }
 
 export interface PaymentSlice {
-  key: 'cash' | 'upi' | 'card' | 'credit';
+  key: 'cash' | 'upi' | 'card' | 'credit' | 'omc';
   label: string;
   amount: number;
 }
 
-/** The four ways a Shift was paid, as the snapshot declares them. */
+/**
+ * How a Shift was paid, as the snapshot declares it. Cash, UPI, Card and Credit
+ * always show; "OMC card" (fuel paid by an Oil Marketing Company card, settled to
+ * the OMC Wallet) shows once the snapshot carries it and it is not zero.
+ */
 export function derivePaymentSlices(p: ShiftPayments): PaymentSlice[] {
-  return [
+  const slices: PaymentSlice[] = [
     { key: 'cash', label: 'Cash', amount: p.cash },
     { key: 'upi', label: 'UPI', amount: p.upi },
     { key: 'card', label: 'Card', amount: p.card },
     { key: 'credit', label: 'Credit', amount: p.credit },
   ];
+  if (p.omcCard != null && p.omcCard !== 0)
+    slices.push({ key: 'omc', label: 'OMC card', amount: p.omcCard });
+  return slices;
+}
+
+export interface PaymentGap {
+  kind: 'short' | 'over';
+  /** "Short" / "Over". */
+  label: string;
+  /** Always positive: the direction is the label. */
+  amount: number;
+  /** What the line means for the reader. */
+  note: string;
+  tone: 'bad' | 'warn';
+}
+
+export interface PaymentSplitView {
+  slices: PaymentSlice[];
+  /** The attendant variance as its own line; null when balanced or when it cannot be reconciled. */
+  gap: PaymentGap | null;
+  /** Total sales, only when the split adds up to it (slices ± the gap): else nothing to reconcile against. */
+  total: number | null;
+}
+
+/** Rupee rounding: a split within 50 paise of the total counts as adding up. */
+const SPLIT_TOLERANCE = 0.5;
+
+/**
+ * The payment split that reconciles to Total sales. Cash is what the Drawers
+ * DECLARED, so an attendant shortage is sales that never reached a payment bucket:
+ * Cash + UPI + Card + Credit + OMC card + shortage = Total sales (an overage is
+ * cash declared beyond the sales, so it comes off instead). The snapshot's own
+ * attendant variance is the figure; nothing is recomputed, only added up for
+ * display. When the stored figures do not add up (a snapshot that predates a
+ * bucket, or product sales outside the Handovers) it shows nothing extra rather
+ * than a wrong number.
+ */
+export function derivePaymentSplit(
+  payments: ShiftPayments,
+  total: number,
+  attendantVariance: number | null,
+): PaymentSplitView {
+  const slices = derivePaymentSlices(payments);
+  const paid = round2(slices.reduce((s, x) => s + x.amount, 0));
+  const variance = attendantVariance ?? 0;
+  if (Math.abs(paid - variance - total) > SPLIT_TOLERANCE)
+    return { slices, gap: null, total: null };
+  if (isBalancedVariance(variance)) return { slices, gap: null, total };
+  const short = variance < 0;
+  return {
+    slices,
+    gap: {
+      kind: short ? 'short' : 'over',
+      label: short ? 'Short' : 'Over',
+      amount: Math.abs(variance),
+      note: short
+        ? 'Attendant shortage: sold, not declared in Cash'
+        : 'Attendant overage: already counted in Cash',
+      tone: short ? 'bad' : 'warn',
+    },
+    total,
+  };
 }
