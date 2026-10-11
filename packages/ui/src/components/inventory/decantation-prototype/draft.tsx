@@ -132,7 +132,7 @@ export const useDraft = () => {
     salesDuring: Number(d.salesDuring || 0),
     status: derived.received != null ? 'measured' : 'pending',
     received: derived.received,
-    sealOk: d.sealOk && !ch.some((c) => c.mark === 'short' || !c.sealOk),
+    sealOk: d.sealOk && !(d.checkChambers ? d.chambers : []).some((c) => c.mark === 'short' || !c.sealOk),
   });
 
   return { d, set, ...derived, toDecantation };
