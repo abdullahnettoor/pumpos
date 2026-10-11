@@ -24,6 +24,8 @@ import {
   DesktopDownloads,
   AttendantHandoverReport,
   AttendantReportFilters,
+  DecantationReport,
+  DecantationReportFilters,
   BusinessDayList,
   InsightsAttendantVariance,
   InsightsCreditHealth,
@@ -790,6 +792,15 @@ export class CloudShiftService {
    * Attendant Handover Report for a Business-Date range. Gated server-side on
    * the `reports.attendant` Product Capability.
    */
+  async getDecantationReport(filters: DecantationReportFilters): Promise<DecantationReport> {
+    const query = new URLSearchParams({
+      stationId: filters.stationId,
+      from: filters.from,
+      to: filters.to,
+    });
+    return request<DecantationReport>(`/reports/decantations?${query.toString()}`);
+  }
+
   async getAttendantHandoverReport(
     filters: AttendantReportFilters,
   ): Promise<AttendantHandoverReport> {
