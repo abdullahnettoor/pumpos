@@ -35,6 +35,9 @@ const DEC_OTHER = id(35);
 
 const PURCH1 = id(41);
 const PURCH2 = id(42);
+const PURCH_SPLIT = id(43);
+const DEC_SPLIT_A = id(36);
+const DEC_SPLIT_B = id(37);
 
 const ctx = (organizationId: string, stationId: string): ExecutionContext => ({
   organizationId,
@@ -395,6 +398,94 @@ describe.skipIf(!CONNECTION)('Decantation Report against real Postgres (ticket #
       status: 'MEASURED',
     });
 
+    // 3b. One invoice split over two Decantations (two items, weighted density)
+    const BD_SPLIT = id(25);
+    await db.insert(schema.businessDays).values({
+      id: BD_SPLIT,
+      organizationId: ORG,
+      stationId: STATION,
+      businessDate: '2026-03-08',
+      status: 'CLOSED',
+      openedBy: USER,
+    });
+    await db.insert(schema.purchases).values({
+      id: PURCH_SPLIT,
+      organizationId: ORG,
+      stationId: STATION,
+      supplierId: SUPPLIER,
+      businessDayId: BD_SPLIT,
+      documentNumber: 'PUR-003',
+      invoiceNumber: 'INV-SPLIT',
+      amount: '900000.00',
+      taxableAmount: '900000.00',
+    });
+    await db.insert(schema.purchaseItems).values([
+      {
+        id: id(53),
+        purchaseId: PURCH_SPLIT,
+        productId: PRODUCT,
+        quantity: '4000.000',
+        unitPrice: '90.00',
+        lineTotal: '360000.00',
+        taxableAmount: '360000.00',
+        invoiceDensity: '740.00',
+      },
+      {
+        id: id(54),
+        purchaseId: PURCH_SPLIT,
+        productId: PRODUCT,
+        quantity: '6000.000',
+        unitPrice: '90.00',
+        lineTotal: '540000.00',
+        taxableAmount: '540000.00',
+        invoiceDensity: '760.00',
+      },
+    ]);
+    for (const [n, dec, received] of [
+      [91, DEC_SPLIT_A, '6000.000'],
+      [92, DEC_SPLIT_B, '3900.000'],
+    ] as const) {
+      await db.insert(schema.decantations).values({
+        id: dec,
+        organizationId: ORG,
+        stationId: STATION,
+        businessDayId: BD_SPLIT,
+        documentNumber: `DEC-SPLIT-${n}`,
+        tankerNumber: `KA-01-SP-${n}`,
+        status: 'MEASURED',
+        chambersChecked: false,
+        flags: [],
+        recordedBy: USER,
+      });
+      await db.insert(schema.decantationTankLines).values({
+        id: id(n),
+        organizationId: ORG,
+        stationId: STATION,
+        decantationId: dec,
+        tankId: T1,
+        productId: PRODUCT,
+        beforeDip: '1000.00',
+        afterDip: '2000.00',
+        salesDuring: '0.00',
+        receivedQty: received,
+        roDensity: '752.00',
+        measuredBy: 'AFTER_DIP',
+        status: 'MEASURED',
+      });
+      await db.insert(schema.decantationPurchases).values({
+        id: id(n + 10),
+        organizationId: ORG,
+        stationId: STATION,
+        decantationId: dec,
+        purchaseId: PURCH_SPLIT,
+        productId: PRODUCT,
+        receivedQty: received,
+        invoiceQty: '10000.000',
+        varianceQty: '-100.000',
+        varianceComputedAt: new Date('2026-03-08T12:00:00Z'),
+      });
+    }
+
     // 4. Visit outside range
     await db.insert(schema.decantations).values({
       id: DEC_OUTSIDE,
@@ -447,8 +538,8 @@ describe.skipIf(!CONNECTION)('Decantation Report against real Postgres (ticket #
 
     const report = result.data;
     expect(report.stationName).toBe('Station Alpha');
-    // Exactly 3 visits in range for this station (outside date and other tenant excluded)
-    expect(report.visits).toHaveLength(3);
+    // 5 visits in range for this station (outside date and other tenant excluded)
+    expect(report.visits).toHaveLength(5);
 
     // 1. Visit 1 (DEC1 - measured & linked)
     const v1 = report.visits.find((v) => v.id === DEC1);
@@ -479,6 +570,7 @@ describe.skipIf(!CONNECTION)('Decantation Report against real Postgres (ticket #
     expect(v2).toBeDefined();
     expect(v2!.status).toBe('PENDING_MEASUREMENT');
     expect(v2!.invoiceLinks[0].status).toBe('PENDING_MEASUREMENT');
+    expect(v2!.summary.settledInvoiceVarianceQty).toBeNull();
     expect(v2!.invoiceLinks[0].statusLabel).toBe('Pending measurement');
     expect(v2!.invoiceLinks[0].varianceQty).toBeNull();
 
@@ -494,20 +586,54 @@ describe.skipIf(!CONNECTION)('Decantation Report against real Postgres (ticket #
     // Product Totals
     const msTotals = report.productTotals.find((p) => p.productCode === 'MS');
     expect(msTotals).toBeDefined();
-    expect(msTotals!.totalReceivedQty).toBe(14100); // 9100 + 5000
-    expect(msTotals!.totalInvoiceQty).toBe(19150); // 9150 + 10000
-    expect(msTotals!.totalVarianceQty).toBe(-50);
-    expect(msTotals!.shortVarianceQty).toBe(50);
-    expect(msTotals!.visitCount).toBe(3);
-    expect(msTotals!.measuredLineCount).toBe(2);
+    expect(msTotals!.totalReceivedQty).toBe(24000); // 9100 + 5000 + 6000 + 3900
+    expect(msTotals!.settledReceivedQty).toBe(19000); // like-for-like with settled invoices
+    expect(msTotals!.totalInvoiceQty).toBe(19150); // settled: 9150 + 10000 (split counted once)
+    expect(msTotals!.totalVarianceQty).toBe(-150);
+    expect(msTotals!.shortVarianceQty).toBe(150);
+    expect(msTotals!.pendingInvoiceQty).toBe(10000); // PURCH2, not settled
+    expect(msTotals!.pendingReceivedQty).toBe(5000); // unlinked
+    expect(msTotals!.visitCount).toBe(5);
+    expect(msTotals!.measuredLineCount).toBe(4);
     expect(msTotals!.pendingLineCount).toBe(1);
 
     // Grand Totals
-    expect(report.totals.totalVisits).toBe(3);
-    expect(report.totals.measuredVisits).toBe(2);
+    expect(report.totals.totalVisits).toBe(5);
+    expect(report.totals.measuredVisits).toBe(4);
+    expect(report.totals.transitDiscrepancies).toBe(3);
     expect(report.totals.pendingVisits).toBe(1);
     expect(report.totals.totalChambersShort).toBe(1);
     expect(report.totals.totalChambersNotEmptied).toBe(1);
     expect(report.totals.totalSealsBroken).toBe(1);
+  });
+
+  it('counts an invoice split over two Decantations once, with a weighted invoice density', async () => {
+    const result = await new GetDecantationReport({
+      reader: new DrizzleDecantationReportReader(db),
+    }).execute({ stationId: STATION, from: '2026-03-08', to: '2026-03-08' }, ctx(ORG, STATION));
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const r = result.data;
+    expect(r.generatedAt).toBe(new Date('2026-10-09T09:00:00+05:30').toISOString());
+    expect(r.visits).toHaveLength(2);
+    expect(r.invoices).toHaveLength(1);
+    expect(r.invoices[0]).toMatchObject({
+      invoiceNumber: 'INV-SPLIT',
+      supplierName: 'IOCL',
+      invoiceQty: 10000,
+      receivedQty: 9900,
+      varianceQty: -100,
+      visitCount: 2,
+      status: 'SETTLED',
+    });
+    expect(r.totals.totalInvoiceQty).toBe(10000);
+    expect(r.totals.totalVarianceQty).toBe(-100);
+    expect(r.totals.totalReceivedQty).toBe(9900);
+    for (const v of r.visits) {
+      expect(v.invoiceLinks[0].linkedVisitCount).toBe(2);
+      // (4000*740 + 6000*760) / 10000 = 752
+      expect(v.tankLines[0].invoiceDensity).toBe(752);
+      expect(v.tankLines[0].densityDeviation).toBe(0);
+    }
   });
 });

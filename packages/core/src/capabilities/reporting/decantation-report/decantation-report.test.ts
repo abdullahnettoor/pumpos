@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { composeDecantationReport } from './compose.js';
+import { composeDecantationReport, weightedInvoiceDensity } from './compose.js';
 import { GetDecantationReport } from './get-decantation-report.js';
 import type { DecantationReportReader, DecantationReportSource } from './ports.js';
 import { FixedClock, SequentialIdGenerator } from '../../../kernel/index.js';
@@ -16,6 +16,8 @@ function fakeContext(overrides: Partial<ExecutionContext> = {}): ExecutionContex
     ...overrides,
   } as ExecutionContext;
 }
+
+const GEN = '2026-03-10T06:00:00.000Z';
 
 describe('Decantation Report Composition (ticket #473)', () => {
   const baseQuery = {
@@ -118,11 +120,13 @@ describe('Decantation Report Composition (ticket #473)', () => {
           invoiceNumber: 'INV-IOCL-9981',
           purchaseDocumentNumber: 'PUR-001',
           invoiceDensity: 751.8,
+          supplierName: 'IOCL',
+          linkedVisitCount: 1,
         },
       ],
     };
 
-    const report = composeDecantationReport(source, baseQuery);
+    const report = composeDecantationReport(source, baseQuery, GEN);
 
     expect(report.stationName).toBe('North Station');
     expect(report.visits).toHaveLength(1);
@@ -247,11 +251,13 @@ describe('Decantation Report Composition (ticket #473)', () => {
           invoiceNumber: 'INV-HPCL-1234',
           purchaseDocumentNumber: 'PUR-002',
           invoiceDensity: 830.0,
+          supplierName: 'HPCL',
+          linkedVisitCount: 1,
         },
       ],
     };
 
-    const report = composeDecantationReport(source, baseQuery);
+    const report = composeDecantationReport(source, baseQuery, GEN);
     const visit = report.visits[0];
 
     expect(visit.status).toBe('PENDING_MEASUREMENT');
@@ -313,7 +319,7 @@ describe('Decantation Report Composition (ticket #473)', () => {
       links: [], // No purchase linked!
     };
 
-    const report = composeDecantationReport(source, baseQuery);
+    const report = composeDecantationReport(source, baseQuery, GEN);
     const visit = report.visits[0];
 
     expect(visit.invoiceLinks[0].status).toBe('NOT_LINKED');
@@ -373,5 +379,173 @@ describe('GetDecantationReport UseCase', () => {
       from: '2026-03-01',
       to: '2026-03-10',
     });
+  });
+
+  it('stamps generatedAt from the context clock', async () => {
+    const reader: DecantationReportReader = {
+      async read() {
+        return { decantations: [], tankLines: [], chambers: [], links: [] };
+      },
+    };
+    const res = await new GetDecantationReport({ reader }).execute(
+      { stationId: 'st-1', from: '2026-03-01', to: '2026-03-10' },
+      fakeContext(),
+    );
+    expect(res.success && res.data.generatedAt).toBe('2026-03-10T06:00:00.000Z');
+  });
+});
+
+function splitSource(opts: { settled: boolean }): DecantationReportSource {
+  const settledAt = opts.settled ? '2026-03-06T12:00:00Z' : null;
+  const mk = (n: number, qty: number) => ({
+    id: `dec-${n}`,
+    businessDayId: `bd-${n}`,
+    businessDate: `2026-03-0${n}`,
+    documentNumber: `DEC-00${n}`,
+    tankerNumber: `T-${n}`,
+    driverName: null,
+    unloadStartedAt: null,
+    unloadEndedAt: null,
+    chambersChecked: false,
+    status: 'MEASURED' as const,
+    flags: [],
+    notes: null,
+    createdAt: `2026-03-0${n}T08:00:00Z`,
+    line: {
+      id: `line-${n}`,
+      decantationId: `dec-${n}`,
+      tankId: 'tank-1',
+      tankName: 'Tank 1',
+      productId: 'prod-ms',
+      productName: 'Motor Spirit',
+      productCode: 'MS',
+      beforeDip: 0,
+      beforeDipAt: null,
+      observedDensity: null,
+      observedTempC: null,
+      roDensity: null,
+      afterDip: 0,
+      afterDipAt: null,
+      salesDuring: 0,
+      receivedQty: qty,
+      measuredBy: 'AFTER_DIP' as const,
+      measurementRefId: null,
+      measuredAt: null,
+      status: 'MEASURED' as const,
+      createdAt: '2026-03-05T08:00:00Z',
+    },
+  });
+  const a = mk(5, 6000);
+  const b = mk(6, 3900);
+  const link = (n: number, qty: number) => ({
+    id: `link-${n}`,
+    decantationId: `dec-${n}`,
+    purchaseId: 'purch-1',
+    productId: 'prod-ms',
+    receivedQty: opts.settled ? qty : null,
+    invoiceQty: opts.settled ? 10000 : null,
+    varianceQty: opts.settled ? -100 : null,
+    varianceComputedAt: settledAt,
+    invoiceNumber: 'INV-1',
+    purchaseDocumentNumber: 'PUR-1',
+    invoiceDensity: null,
+    supplierName: 'IOCL',
+    linkedVisitCount: 2,
+  });
+  return {
+    decantations: [a, b].map(({ line: _l, ...d }) => d),
+    tankLines: [a.line, b.line],
+    chambers: [],
+    links: [link(5, 6000), link(6, 3900)],
+  };
+}
+
+describe('split invoices, settling and like-for-like totals (#473 review)', () => {
+  const q = { organizationId: 'org-1', stationId: 'st-1', from: '2026-03-01', to: '2026-03-10' };
+
+  it('counts an invoice split over two Decantations once', () => {
+    const r = composeDecantationReport(splitSource({ settled: true }), q, GEN);
+    expect(r.invoices).toHaveLength(1);
+    const inv = r.invoices[0];
+    expect(inv.invoiceQty).toBe(10000);
+    expect(inv.receivedQty).toBe(9900);
+    expect(inv.varianceQty).toBe(-100);
+    expect(inv.visitCount).toBe(2);
+    expect(inv.supplierName).toBe('IOCL');
+    expect(r.totals.totalInvoiceQty).toBe(10000);
+    expect(r.totals.totalVarianceQty).toBe(-100);
+    expect(r.totals.totalReceivedQty).toBe(9900);
+    expect(r.totals.settledReceivedQty).toBe(9900);
+    expect(r.productTotals[0].totalInvoiceQty).toBe(10000);
+    expect(r.productTotals[0].shortVarianceQty).toBe(100);
+    for (const v of r.visits) {
+      expect(v.totalInvoiceQty).toBe(10000);
+      expect(v.invoiceLinks[0].linkedVisitCount).toBe(2);
+    }
+  });
+
+  it('shows Settling (not Exact/0) while variance_computed_at is null', () => {
+    const r = composeDecantationReport(splitSource({ settled: false }), q, GEN);
+    for (const v of r.visits) {
+      expect(v.invoiceLinks[0].status).toBe('SETTLING');
+      expect(v.invoiceLinks[0].statusLabel).toBe('Settling');
+      expect(v.invoiceLinks[0].varianceQty).toBeNull();
+      expect(v.totalVarianceQty).toBeNull();
+    }
+    expect(r.invoices[0].status).toBe('SETTLING');
+    expect(r.invoices[0].varianceQty).toBeNull();
+    // like with like: nothing settled, measured litres reported as pending
+    expect(r.totals.totalInvoiceQty).toBe(0);
+    expect(r.totals.settledReceivedQty).toBe(0);
+    expect(r.totals.pendingReceivedQty).toBe(9900);
+    expect(r.totals.settlingInvoiceCount).toBe(1);
+  });
+
+  it('composes the transit total server-side next to settled variance', () => {
+    const src = splitSource({ settled: true });
+    src.chambers = [
+      {
+        id: 'c1',
+        decantationId: 'dec-5',
+        tankLineId: null,
+        chamberNo: 1,
+        capacityL: 4000,
+        sealOk: false,
+        mark: 'SHORT',
+        dipMm: null,
+        emptied: false,
+      },
+    ];
+    const r = composeDecantationReport(src, q, GEN);
+    const v = r.visits.find((x) => x.id === 'dec-5')!;
+    expect(v.summary).toMatchObject({
+      shortChambers: 1,
+      sealsBroken: 1,
+      notEmptiedChambers: 1,
+      transitDiscrepancies: 3,
+      settledInvoiceVarianceQty: -100,
+    });
+    expect(r.totals.transitDiscrepancies).toBe(3);
+  });
+});
+
+describe('weightedInvoiceDensity', () => {
+  it('weights by quantity, ignoring null densities', () => {
+    expect(
+      weightedInvoiceDensity([
+        { quantity: 1000, invoiceDensity: 740 },
+        { quantity: 3000, invoiceDensity: 760 },
+        { quantity: 500, invoiceDensity: null },
+      ]),
+    ).toBe(755);
+  });
+  it('returns the single non-null density, or null', () => {
+    expect(
+      weightedInvoiceDensity([
+        { quantity: 10, invoiceDensity: null },
+        { quantity: 20, invoiceDensity: 748.5 },
+      ]),
+    ).toBe(748.5);
+    expect(weightedInvoiceDensity([{ quantity: 10, invoiceDensity: null }])).toBeNull();
   });
 });

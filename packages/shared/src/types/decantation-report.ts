@@ -40,7 +40,12 @@ export interface DecantationReportTankLine {
   densityDeviation: number | null;
 }
 
-export type DecantationReportInvoiceStatus = 'LINKED' | 'NOT_LINKED' | 'PENDING_MEASUREMENT';
+/**
+ * LINKED = invoice settled (variance computed); SETTLING = this visit is
+ * measured but the invoice waits on a sibling Decantation / pending lines.
+ */
+export type DecantationReportInvoiceStatus =
+  'LINKED' | 'NOT_LINKED' | 'PENDING_MEASUREMENT' | 'SETTLING';
 
 export type DecantationReportVarianceType = 'EXCESS' | 'SHORT' | 'EXACT';
 
@@ -51,13 +56,16 @@ export interface DecantationReportInvoiceLink {
   purchaseId: string | null;
   invoiceNumber: string | null;
   purchaseDocumentNumber: string | null;
+  /** Invoice-level quantity (the whole invoice, even when split across visits) */
   invoiceQty: number | null;
-  /** Litres received in this decantation for this product */
+  /** Litres received in THIS decantation for this product */
   receivedQty: number | null;
-  /** receivedQty - invoiceQty (+ Excess, - Short) when measured; null when pending or unlinked */
+  /** Invoice-level variance (Σ received across all visits - invoice qty); null until settled */
   varianceQty: number | null;
+  /** How many Decantations this invoice/product is split across (1 = not split) */
+  linkedVisitCount: number;
   status: DecantationReportInvoiceStatus;
-  /** Human-readable status: "Purchase not linked" | "Pending measurement" | "Excess" | "Short" | "Exact" */
+  /** Human-readable status: "Purchase not linked" | "Pending measurement" | "Settling" | "Excess" | "Short" | "Exact" */
   statusLabel: string;
   varianceType: DecantationReportVarianceType | null;
 }
@@ -83,6 +91,40 @@ export interface DecantationReportChamberSummary {
   hasTransitDiscrepancy: boolean;
 }
 
+/** Transit indicators next to the settled invoice variance (transit vs station loss). */
+export interface DecantationReportVisitSummary {
+  shortChambers: number;
+  excessChambers: number;
+  notEmptiedChambers: number;
+  sealsBroken: number;
+  transitDiscrepancies: number;
+  /** Σ variance of the settled invoices this visit belongs to; null when none settled */
+  settledInvoiceVarianceQty: number | null;
+  settlingInvoiceCount: number;
+}
+
+export type DecantationReportInvoiceSectionStatus = 'SETTLED' | 'SETTLING';
+
+/** One invoice (purchase + product), counted once however many visits it spans. */
+export interface DecantationReportInvoice {
+  purchaseId: string;
+  productId: string;
+  productName: string;
+  productCode: string;
+  invoiceNumber: string | null;
+  purchaseDocumentNumber: string | null;
+  supplierName: string | null;
+  invoiceQty: number | null;
+  /** Σ received across its visits; null until settled */
+  receivedQty: number | null;
+  varianceQty: number | null;
+  varianceType: DecantationReportVarianceType | null;
+  status: DecantationReportInvoiceSectionStatus;
+  statusLabel: string;
+  visitCount: number;
+  visits: { id: string; documentNumber: string }[];
+}
+
 export interface DecantationReportVisit {
   id: string;
   date: string; // business date (YYYY-MM-DD)
@@ -98,8 +140,11 @@ export interface DecantationReportVisit {
   chambers: DecantationReportChamber[];
   tankLines: DecantationReportTankLine[];
   invoiceLinks: DecantationReportInvoiceLink[];
+  summary: DecantationReportVisitSummary;
   totalReceivedQty: number;
+  /** Settled invoices this visit belongs to, each counted once */
   totalInvoiceQty: number;
+  /** null unless every linked invoice is settled */
   totalVarianceQty: number | null;
 }
 
@@ -107,9 +152,18 @@ export interface DecantationReportProductTotal {
   productId: string;
   productName: string;
   productCode: string;
+  /** Measured litres across all lines */
   totalReceivedQty: number;
+  /** Measured litres on settled invoices (like-for-like with totalInvoiceQty) */
+  settledReceivedQty: number;
+  /** Settled invoices only, each counted once */
   totalInvoiceQty: number;
+  /** Invoice-level variance of settled invoices only */
   totalVarianceQty: number;
+  /** Invoice qty of invoices not yet settled (shown separately) */
+  pendingInvoiceQty: number;
+  /** Measured litres not on a settled invoice (unlinked or settling) */
+  pendingReceivedQty: number;
   shortVarianceQty: number;
   excessVarianceQty: number;
   visitCount: number;
@@ -124,8 +178,14 @@ export interface DecantationReportTotals {
   pendingVisits: number;
   flaggedVisits: number;
   totalReceivedQty: number;
+  settledReceivedQty: number;
   totalInvoiceQty: number;
   totalVarianceQty: number;
+  pendingInvoiceQty: number;
+  pendingReceivedQty: number;
+  settlingInvoiceCount: number;
+  /** Server-composed transit total: chambers Short + Excess + not emptied + seals broken */
+  transitDiscrepancies: number;
   totalChambersShort: number;
   totalChambersExcess: number;
   totalChambersNotEmptied: number;
@@ -140,6 +200,7 @@ export interface DecantationReport {
   generatedAt: string;
   totals: DecantationReportTotals;
   productTotals: DecantationReportProductTotal[];
+  invoices: DecantationReportInvoice[];
   visits: DecantationReportVisit[];
 }
 

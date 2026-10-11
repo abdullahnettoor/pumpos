@@ -1255,6 +1255,8 @@ export function useInvalidateOperational() {
       // The Attendant Handover Report reads closed-shift handovers, so closing
       // a shift (or correcting one) changes it within the same session.
       qc.invalidateQueries({ queryKey: ['attendant-handover-report'] }),
+      // Decantation Report: measurements and invoice settlement move it.
+      qc.invalidateQueries({ queryKey: ['decantation-report'] }),
       // Insights read sealed days; closing a Business Day adds one to the range.
       qc.invalidateQueries({ queryKey: ['insights-sales'] }),
       // ...and so do the part 2 blocks: closed-day Shift Summaries, Tank Dips and

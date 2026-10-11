@@ -1,6 +1,5 @@
-import { and, asc, desc, eq, gte, inArray, lte } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { num } from '@pump/shared';
 import type {
   DecantationChamberSourceRow,
   DecantationPurchaseLinkSourceRow,
@@ -10,6 +9,14 @@ import type {
   DecantationSourceRow,
   DecantationTankLineSourceRow,
 } from '@pump/core';
+import { weightedInvoiceDensity } from '@pump/core';
+
+/** Null-preserving numeric conversion (NULL stays NULL, never 0). */
+const numOrNull = (v: unknown): number | null => {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 
 export class DrizzleDecantationReportReader implements DecantationReportReader {
   constructor(private readonly db: DbClient) {}
@@ -94,9 +101,28 @@ export class DrizzleDecantationReportReader implements DecantationReportReader {
         createdAt: schema.decantationTankLines.createdAt,
       })
       .from(schema.decantationTankLines)
-      .innerJoin(schema.tanks, eq(schema.decantationTankLines.tankId, schema.tanks.id))
-      .innerJoin(schema.products, eq(schema.decantationTankLines.productId, schema.products.id))
-      .where(inArray(schema.decantationTankLines.decantationId, decIds))
+      .innerJoin(
+        schema.tanks,
+        and(
+          eq(schema.decantationTankLines.tankId, schema.tanks.id),
+          eq(schema.tanks.organizationId, query.organizationId),
+          eq(schema.tanks.stationId, query.stationId),
+        ),
+      )
+      .innerJoin(
+        schema.products,
+        and(
+          eq(schema.decantationTankLines.productId, schema.products.id),
+          eq(schema.products.organizationId, query.organizationId),
+        ),
+      )
+      .where(
+        and(
+          inArray(schema.decantationTankLines.decantationId, decIds),
+          eq(schema.decantationTankLines.organizationId, query.organizationId),
+          eq(schema.decantationTankLines.stationId, query.stationId),
+        ),
+      )
       .orderBy(asc(schema.decantationTankLines.createdAt), asc(schema.decantationTankLines.id));
 
     // Query chambers
@@ -113,7 +139,13 @@ export class DrizzleDecantationReportReader implements DecantationReportReader {
         emptied: schema.decantationChambers.emptied,
       })
       .from(schema.decantationChambers)
-      .where(inArray(schema.decantationChambers.decantationId, decIds))
+      .where(
+        and(
+          inArray(schema.decantationChambers.decantationId, decIds),
+          eq(schema.decantationChambers.organizationId, query.organizationId),
+          eq(schema.decantationChambers.stationId, query.stationId),
+        ),
+      )
       .orderBy(asc(schema.decantationChambers.chamberNo));
 
     // Query links
@@ -129,10 +161,31 @@ export class DrizzleDecantationReportReader implements DecantationReportReader {
         varianceComputedAt: schema.decantationPurchases.varianceComputedAt,
         invoiceNumber: schema.purchases.invoiceNumber,
         purchaseDocumentNumber: schema.purchases.documentNumber,
+        supplierName: schema.suppliers.name,
       })
       .from(schema.decantationPurchases)
-      .leftJoin(schema.purchases, eq(schema.decantationPurchases.purchaseId, schema.purchases.id))
-      .where(inArray(schema.decantationPurchases.decantationId, decIds));
+      .innerJoin(
+        schema.purchases,
+        and(
+          eq(schema.decantationPurchases.purchaseId, schema.purchases.id),
+          eq(schema.purchases.organizationId, query.organizationId),
+          eq(schema.purchases.stationId, query.stationId),
+        ),
+      )
+      .leftJoin(
+        schema.suppliers,
+        and(
+          eq(schema.purchases.supplierId, schema.suppliers.id),
+          eq(schema.suppliers.organizationId, query.organizationId),
+        ),
+      )
+      .where(
+        and(
+          inArray(schema.decantationPurchases.decantationId, decIds),
+          eq(schema.decantationPurchases.organizationId, query.organizationId),
+          eq(schema.decantationPurchases.stationId, query.stationId),
+        ),
+      );
 
     // Query purchase items for densities and line quantities
     const purchaseIds = [
@@ -149,19 +202,50 @@ export class DrizzleDecantationReportReader implements DecantationReportReader {
               invoiceDensity: schema.purchaseItems.invoiceDensity,
             })
             .from(schema.purchaseItems)
+            .innerJoin(
+              schema.purchases,
+              and(
+                eq(schema.purchaseItems.purchaseId, schema.purchases.id),
+                eq(schema.purchases.organizationId, query.organizationId),
+                eq(schema.purchases.stationId, query.stationId),
+              ),
+            )
             .where(inArray(schema.purchaseItems.purchaseId, purchaseIds))
         : [];
 
-    const itemLookup = new Map<string, { totalQty: number; invoiceDensity: number | null }>();
+    const itemsByKey = new Map<string, { quantity: number; invoiceDensity: number | null }[]>();
     for (const item of purchaseItemRows) {
       const key = `${item.purchaseId}:${item.productId}`;
-      const existing = itemLookup.get(key) ?? { totalQty: 0, invoiceDensity: null };
-      existing.totalQty += Number(item.quantity);
-      if (item.invoiceDensity !== null) {
-        existing.invoiceDensity = num(item.invoiceDensity);
-      }
-      itemLookup.set(key, existing);
+      const list = itemsByKey.get(key) ?? [];
+      list.push({
+        quantity: Number(item.quantity),
+        invoiceDensity: numOrNull(item.invoiceDensity),
+      });
+      itemsByKey.set(key, list);
     }
+
+    // Every Decantation linked to these invoices (in or out of range): split count.
+    const linkCountRows =
+      purchaseIds.length > 0
+        ? await this.db
+            .select({
+              purchaseId: schema.decantationPurchases.purchaseId,
+              productId: schema.decantationPurchases.productId,
+              n: count(),
+            })
+            .from(schema.decantationPurchases)
+            .where(
+              and(
+                inArray(schema.decantationPurchases.purchaseId, purchaseIds),
+                eq(schema.decantationPurchases.organizationId, query.organizationId),
+                eq(schema.decantationPurchases.stationId, query.stationId),
+              ),
+            )
+            .groupBy(schema.decantationPurchases.purchaseId, schema.decantationPurchases.productId)
+        : [];
+    const linkCounts = new Map(
+      linkCountRows.map((r) => [`${r.purchaseId}:${r.productId}`, Number(r.n)]),
+    );
 
     const decantations: DecantationSourceRow[] = decRows.map((d) => ({
       id: d.id,
@@ -189,13 +273,13 @@ export class DrizzleDecantationReportReader implements DecantationReportReader {
       productCode: l.productCode,
       beforeDip: Number(l.beforeDip),
       beforeDipAt: l.beforeDipAt ? l.beforeDipAt.toISOString() : null,
-      observedDensity: num(l.observedDensity),
-      observedTempC: num(l.observedTempC),
-      roDensity: num(l.roDensity),
-      afterDip: num(l.afterDip),
+      observedDensity: numOrNull(l.observedDensity),
+      observedTempC: numOrNull(l.observedTempC),
+      roDensity: numOrNull(l.roDensity),
+      afterDip: numOrNull(l.afterDip),
       afterDipAt: l.afterDipAt ? l.afterDipAt.toISOString() : null,
       salesDuring: Number(l.salesDuring),
-      receivedQty: num(l.receivedQty),
+      receivedQty: numOrNull(l.receivedQty),
       measuredBy: l.measuredBy as DecantationTankLineSourceRow['measuredBy'],
       measurementRefId: l.measurementRefId,
       measuredAt: l.measuredAt ? l.measuredAt.toISOString() : null,
@@ -208,30 +292,37 @@ export class DrizzleDecantationReportReader implements DecantationReportReader {
       decantationId: c.decantationId,
       tankLineId: c.tankLineId,
       chamberNo: c.chamberNo,
-      capacityL: num(c.capacityL),
+      capacityL: numOrNull(c.capacityL),
       sealOk: c.sealOk,
       mark: c.mark as DecantationChamberSourceRow['mark'],
-      dipMm: num(c.dipMm),
+      dipMm: numOrNull(c.dipMm),
       emptied: c.emptied,
     }));
 
     const links: DecantationPurchaseLinkSourceRow[] = linkDbRows.map((l) => {
-      const itemInfo = itemLookup.get(`${l.purchaseId}:${l.productId}`);
+      const key = `${l.purchaseId}:${l.productId}`;
+      const items = itemsByKey.get(key);
       const invoiceQty =
-        l.invoiceQty !== null ? num(l.invoiceQty) : itemInfo ? itemInfo.totalQty : null;
+        l.invoiceQty !== null
+          ? numOrNull(l.invoiceQty)
+          : items
+            ? items.reduce((s, i) => s + i.quantity, 0)
+            : null;
 
       return {
         id: l.id,
         decantationId: l.decantationId,
         purchaseId: l.purchaseId,
         productId: l.productId,
-        receivedQty: num(l.receivedQty),
+        receivedQty: numOrNull(l.receivedQty),
         invoiceQty,
-        varianceQty: num(l.varianceQty),
+        varianceQty: numOrNull(l.varianceQty),
         varianceComputedAt: l.varianceComputedAt ? l.varianceComputedAt.toISOString() : null,
         invoiceNumber: l.invoiceNumber,
         purchaseDocumentNumber: l.purchaseDocumentNumber,
-        invoiceDensity: itemInfo?.invoiceDensity ?? null,
+        invoiceDensity: items ? weightedInvoiceDensity(items) : null,
+        supplierName: l.supplierName,
+        linkedVisitCount: linkCounts.get(key) ?? 1,
       };
     });
 

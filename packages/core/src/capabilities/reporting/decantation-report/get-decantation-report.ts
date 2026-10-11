@@ -37,10 +37,11 @@ export class GetDecantationReport implements UseCase<DecantationReportFilters, D
       organizationId: ctx.organizationId,
       ...parsed.data,
     });
-    const report = composeDecantationReport(source, {
-      organizationId: ctx.organizationId,
-      ...parsed.data,
-    });
+    const report = composeDecantationReport(
+      source,
+      { organizationId: ctx.organizationId, ...parsed.data },
+      ctx.clock.now().toISOString(),
+    );
     return ok(report);
   }
 }

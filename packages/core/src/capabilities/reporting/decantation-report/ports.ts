@@ -4,11 +4,13 @@ import type {
   DecantationReportChamberSummary,
   DecantationReportFilters,
   DecantationReportFlag,
+  DecantationReportInvoice,
   DecantationReportInvoiceLink,
   DecantationReportProductTotal,
   DecantationReportTankLine,
   DecantationReportTotals,
   DecantationReportVisit,
+  DecantationReportVisitSummary,
 } from '@pump/shared';
 
 /**
@@ -24,11 +26,13 @@ export type {
   DecantationReportChamberSummary,
   DecantationReportFilters,
   DecantationReportFlag,
+  DecantationReportInvoice,
   DecantationReportInvoiceLink,
   DecantationReportProductTotal,
   DecantationReportTankLine,
   DecantationReportTotals,
   DecantationReportVisit,
+  DecantationReportVisitSummary,
 };
 
 export interface DecantationReportQuery extends DecantationReportFilters {
@@ -99,6 +103,9 @@ export interface DecantationPurchaseLinkSourceRow {
   invoiceNumber: string | null;
   purchaseDocumentNumber: string | null;
   invoiceDensity: number | null;
+  supplierName: string | null;
+  /** Total Decantations linked to this (purchase, product), in or out of range */
+  linkedVisitCount: number;
 }
 
 export interface DecantationReportSource {

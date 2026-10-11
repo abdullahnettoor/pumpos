@@ -5,7 +5,57 @@ import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { DecantationReport } from '@pump/shared';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
 
-const mockReport: DecantationReport = {
+/** Fills the server-composed fields the fixtures below do not spell out. */
+function hydrate(raw: any): DecantationReport {
+  const visits = raw.visits.map((v: any) => ({
+    ...v,
+    chambers: v.chambers.map((c: any) => ({ tankLineId: null, ...c })),
+    invoiceLinks: v.invoiceLinks.map((i: any) => ({
+      purchaseDocumentNumber: null,
+      linkedVisitCount: i.purchaseId ? 1 : 0,
+      ...i,
+    })),
+    summary: v.summary ?? {
+      shortChambers: v.chamberSummary.shortCount,
+      excessChambers: v.chamberSummary.excessCount,
+      notEmptiedChambers: v.chamberSummary.notEmptiedCount,
+      sealsBroken: v.chamberSummary.sealsBrokenCount,
+      transitDiscrepancies:
+        v.chamberSummary.shortCount +
+        v.chamberSummary.excessCount +
+        v.chamberSummary.notEmptiedCount +
+        v.chamberSummary.sealsBrokenCount,
+      settledInvoiceVarianceQty: null,
+      settlingInvoiceCount: 0,
+    },
+  }));
+  return {
+    invoices: [],
+    ...raw,
+    visits,
+    productTotals: raw.productTotals.map((p: any) => ({
+      settledReceivedQty: p.totalReceivedQty,
+      pendingInvoiceQty: 0,
+      pendingReceivedQty: 0,
+      ...p,
+    })),
+    totals: {
+      flaggedVisits: 0,
+      settledReceivedQty: raw.totals.totalReceivedQty,
+      pendingInvoiceQty: 0,
+      pendingReceivedQty: 0,
+      settlingInvoiceCount: 0,
+      totalChambersExcess: 0,
+      transitDiscrepancies:
+        raw.totals.totalChambersShort +
+        raw.totals.totalChambersNotEmptied +
+        raw.totals.totalSealsBroken,
+      ...raw.totals,
+    },
+  };
+}
+
+const mockReport: DecantationReport = hydrate({
   stationId: 'st-1',
   stationName: 'Highway Fuels',
   from: '2026-03-01',
@@ -270,7 +320,7 @@ const mockReport: DecantationReport = {
     totalChambersNotEmptied: 1,
     totalSealsBroken: 1,
   },
-};
+});
 
 let currentReport: DecantationReport | undefined = mockReport;
 
@@ -310,7 +360,7 @@ describe('DecantationReportPanel DOM tests', () => {
 
     // Underground dip & density deviation
     expect(screen.getAllByText(/Tank 1/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/8,100.00 L/)).toBeTruthy();
+    expect(screen.getAllByText(/8,100.00 L/).length).toBeGreaterThan(0);
     expect(screen.getByText(/RO: 750.5/)).toBeTruthy();
     expect(screen.getByText(/\(\+0.5\)/)).toBeTruthy();
 
@@ -336,7 +386,8 @@ describe('DecantationReportPanel DOM tests', () => {
     // KPI Strip
     expect(screen.getByText('Tanker Visits')).toBeTruthy();
     expect(screen.getByText('Volume Received')).toBeTruthy();
-    expect(screen.getByText('Net Dip Variance')).toBeTruthy();
+    expect(screen.getByText('Settled Invoice Volume')).toBeTruthy();
+    expect(screen.getByText('Settled Invoice Variance')).toBeTruthy();
     expect(screen.getByText('Transit Discrepancies')).toBeTruthy();
 
     // Totals by Product
@@ -378,6 +429,7 @@ describe('DecantationReportPanel DOM tests', () => {
       visits: [],
       productTotals: [],
       totals: {
+        ...mockReport.totals,
         totalVisits: 0,
         measuredVisits: 0,
         pendingVisits: 0,
