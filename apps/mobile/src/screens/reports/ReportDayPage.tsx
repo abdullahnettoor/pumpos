@@ -3,12 +3,12 @@ import { generateDssrPdf, useBusinessDayList, useToast } from '@pump/ui';
 import type { BusinessDayListItem, Station } from '@pump/shared';
 import { DayTiles } from '../../components/DayTiles.js';
 import { SalesByProduct } from '../../components/SalesByProduct.js';
-import { plural } from '../../lib/format.js';
+import { plural, rupees } from '../../lib/format.js';
 import { businessDateLabel } from '../../lib/dates.js';
 import { liveTabFor, liveTabLabel } from '../../lib/reports/days.js';
 import { stepTargets, type StepTarget } from '../../lib/reports/dssr.js';
 import { useNav } from '../../shell/nav.js';
-import { DetailPage, Note, SectionLabel } from '../../ui/index.js';
+import { DetailPage, ListGroup, ListRow, Note, SectionLabel } from '../../ui/index.js';
 import { ShiftSummaryPage } from '../ShiftSummaryPage.js';
 import { DayStepper } from './DayStepper.js';
 import { DssrDraftBanner } from './DssrDraftBanner.js';
@@ -130,6 +130,17 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
         <div className="grid grid-cols-2 gap-2 px-3">
           <DayTiles tiles={model.tiles} />
         </div>
+        {model.omcCard && (
+          <div className="pt-2">
+            <ListGroup>
+              <ListRow
+                title="OMC card sales"
+                meta={`${plural(model.omcCard.count, 'slip')} · settled to the OMC wallet`}
+                end={<span className="num">{rupees(model.omcCard.total)}</span>}
+              />
+            </ListGroup>
+          </div>
+        )}
 
         <SectionLabel>Sales by product</SectionLabel>
         <SalesByProduct

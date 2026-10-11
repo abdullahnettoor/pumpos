@@ -17,6 +17,25 @@ import type { LiveTab } from './days.js';
 const grouped = (n: number, decimals = 0) =>
   n.toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 
+export interface OmcCardFigure {
+  total: number;
+  count: number;
+}
+
+/**
+ * The day's OMC Card Sales (fuel paid by an Oil Marketing Company card, settled
+ * to the OMC Wallet): shown beside Credit Sales so the money has a home. Null for
+ * a snapshot frozen before the field existed, and for a day without any, so
+ * stations that never take OMC cards see no empty line.
+ */
+export function deriveOmcCard(snap: Snapshot): OmcCardFigure | null {
+  const omc = snap.omcCard as Snapshot | undefined;
+  if (!omc) return null;
+  const total = num(omc.total);
+  const count = num(omc.count);
+  return total === 0 && count === 0 ? null : { total, count };
+}
+
 export interface DssrShiftRow {
   shiftId: string;
   /** `S1`, or `•` when the snapshot has no Shift sequence. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BusinessDayListStatus } from '@pump/shared';
-import { deriveShiftRows, deriveTankMovement, stepTargets } from './dssr.js';
+import { deriveShiftRows, deriveTankMovement, deriveOmcCard, stepTargets } from './dssr.js';
 
 const day = (businessDate: string, status: BusinessDayListStatus) => ({ businessDate, status });
 // Newest first, as the Reports list returns them.
@@ -242,5 +242,18 @@ describe('deriveTankMovement', () => {
 
   it('is empty without tank reconciliation (no dips that day)', () => {
     expect(deriveTankMovement({})).toEqual([]);
+  });
+});
+
+describe('deriveOmcCard', () => {
+  it("reads the day's OMC Card Sales total and slip count", () => {
+    expect(deriveOmcCard({ omcCard: { total: 2000, count: 1 } })).toEqual({
+      total: 2000,
+      count: 1,
+    });
+  });
+  it('is null for a snapshot frozen before the field, or a day without any', () => {
+    expect(deriveOmcCard({})).toBeNull();
+    expect(deriveOmcCard({ omcCard: { total: 0, count: 0 } })).toBeNull();
   });
 });
