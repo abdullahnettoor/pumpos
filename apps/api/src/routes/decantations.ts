@@ -3,6 +3,7 @@ import type { DbClient } from '@pump/db';
 import { canRecordDecantation, isAuthorizedForStation } from '@pump/shared';
 import {
   GetDecantation,
+  GetDecantationDayCloseWarnings,
   ListDecantations,
   listDecantationsSchema,
   RecordDecantation,
@@ -128,6 +129,27 @@ decantationsRouter.get('/decantations', async (c) => {
   const result = await new ListDecantations({
     decantations: new DrizzleDecantationRepository(c.var.db),
   }).execute(query.data, buildContext(user, { stationId }));
+  return sendResult(c, result);
+});
+
+/** Non-blocking warnings shown before a Business Day is closed (ADR 0007). */
+decantationsRouter.get('/decantations/day-close-warnings', async (c) => {
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  const businessDayId = c.req.query('businessDayId');
+  const denied = guardStation(c, stationId);
+  if (denied) return denied;
+  if (!(await loadStationClock(c.var.db, user.organizationId, stationId)))
+    return stationNotFound(c);
+  if (!businessDayId)
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'businessDayId is required' } },
+      400,
+    );
+
+  const result = await new GetDecantationDayCloseWarnings({
+    decantations: new DrizzleDecantationRepository(c.var.db),
+  }).execute({ stationId: stationId!, businessDayId }, buildContext(user, { stationId }));
   return sendResult(c, result);
 });
 

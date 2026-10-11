@@ -75,6 +75,17 @@ export interface DecantationListQuery {
   limit?: number;
 }
 
+export interface DecantationPurchaseWarning {
+  documentNumber: string;
+  products: string[];
+}
+
+export interface DecantationDayCloseWarnings {
+  pendingMeasurement: string[];
+  purchaseNotLinked: DecantationPurchaseWarning[];
+  flagged: string[];
+}
+
 export interface DecantationRepository {
   findById(organizationId: string, id: string): Promise<Decantation | null>;
   /** Header + lines + chambers. */
@@ -85,6 +96,12 @@ export interface DecantationRepository {
    */
   replace(decantation: Decantation): Promise<void>;
   list(query: DecantationListQuery): Promise<Decantation[]>;
+  /** Non-draft warnings through the selected Business Date, with flags for that day only. */
+  getDayCloseWarnings(input: {
+    organizationId: string;
+    stationId: string;
+    businessDayId: string;
+  }): Promise<DecantationDayCloseWarnings>;
   /**
    * Non-draft Decantations of a station with at least one PENDING_MEASUREMENT line
    * for `tankId`, oldest first (#468 tank-dip resolution).

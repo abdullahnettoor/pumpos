@@ -36,6 +36,8 @@ function windowsOf(ctx: ExecutionContext) {
   const query: Omit<PayablesQuery, 'organizationId'> = {
     purchasedFrom: windows.businessMonth.from,
     purchasedTo: windows.businessMonth.to,
+    fuelPurchaseFrom: windows.entryMonth.from,
+    fuelPurchaseTo: windows.entryMonth.to,
     paidFrom: windows.entryMonth.from,
     paidTo: windows.entryMonth.to,
   };

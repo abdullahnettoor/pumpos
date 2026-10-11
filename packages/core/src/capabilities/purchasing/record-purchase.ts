@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { round2 } from '@pump/shared';
+import { isValidBusinessDate, resolveEntryDate, round2 } from '@pump/shared';
 import {
   BusinessEvents,
   err,
@@ -43,6 +43,7 @@ export interface PurchaseLineInput {
   quantity: number | string;
   unitPrice: number | string;
   tankAllocations?: TankAllocationInput[] | null;
+  invoiceDensity?: number | string | null;
 }
 
 export interface RecordPurchaseCommand {
@@ -73,6 +74,7 @@ const lineSchema = z.object({
   quantity: z.coerce.number().positive('quantity must be positive'),
   unitPrice: z.coerce.number().positive('unitPrice must be positive'),
   tankAllocations: z.array(tankAllocationSchema).nullish(),
+  invoiceDensity: z.coerce.number().positive().max(99999.99).nullish(),
 });
 
 const schema = z
@@ -127,11 +129,10 @@ const round4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
 const numOrNull = (n: number | null | undefined): string | null => (n == null ? null : String(n));
 
 /**
- * Record a goods receipt + supplier tax invoice. A purchase is an inventory +
- * payable event anchored to the business day, never the cash drawer (payment is
- * a separate RecordSupplierPayment). Each line item updates stock for its product
- * (fuel lines may split across tanks) and carries its own GST/VAT breakup; the
- * header `amount` is the tax-inclusive grand total (the payable).
+ * Record a supplier tax invoice. Fuel invoices are Office Records on the Entry
+ * Date and never move stock; product invoices remain Business-Day stock events.
+ * Payment is a separate RecordSupplierPayment. The header amount is the
+ * tax-inclusive grand total (the payable).
  */
 export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurchaseResult> {
   constructor(private readonly deps: RecordPurchaseDeps) {}
@@ -162,26 +163,61 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
             },
           ];
 
+    const lineProducts = await Promise.all(
+      rawLines.map((line) => this.deps.products.findById(line.productId)),
+    );
+    for (let i = 0; i < rawLines.length; i += 1) {
+      const product = lineProducts[i];
+      if (!product || product.organizationId !== ctx.organizationId)
+        return err(notFoundError('Product', rawLines[i].productId));
+    }
+    const fuelLines = lineProducts.map((product) => product!.productType === 'FUEL');
+    const fuelPurchase = fuelLines.some(Boolean);
+    if (fuelPurchase && fuelLines.some((isFuel) => !isFuel))
+      return err(validationError('Record fuel and products as separate purchases'));
+
     const requestedStationId = cmd.stationId ?? ctx.stationId ?? null;
-    if (!cmd.shiftId && !requestedStationId)
-      return err(validationError('Either shiftId or stationId is required'));
+    if (!requestedStationId && !cmd.shiftId) return err(validationError('stationId is required'));
     // Purchases are forecourt stock events anchored to the business day only,
     // never a Shift (ADR 0005, #308): resolve the day by station + date. A
     // legacy replay that sends a shiftId but no date resolves through its Shift,
     // so it lands on that Shift's day rather than today's; the Shift is still
     // not stored.
-    const legacyShiftReplay = !!cmd.shiftId && !cmd.transactionDate;
-    const anchor = await resolveFinancialAnchor(
-      this.deps,
-      ctx,
-      legacyShiftReplay
-        ? { shiftId: cmd.shiftId }
-        : { stationId: requestedStationId, transactionDate: cmd.transactionDate },
-      { kind: 'STOCK' },
-    );
-    if (!anchor.success) return anchor;
-    const businessDayId = anchor.data.businessDayId;
-    const stationId = anchor.data.stationId;
+    let businessDayId: string | null = null;
+    let entryDate: string | null = null;
+    let payableDate: string;
+    let stationId = requestedStationId;
+    if (fuelPurchase) {
+      if (!stationId) {
+        const shiftId = cmd.shiftId!;
+        const shift = await this.deps.shifts.findById(shiftId);
+        if (!shift || shift.organizationId !== ctx.organizationId)
+          return err(notFoundError('Shift', shiftId));
+        stationId = shift.stationId;
+      }
+      const today = resolveEntryDate({ now: ctx.clock.now(), timeZone: ctx.timeZone });
+      entryDate = cmd.transactionDate ?? today;
+      if (!isValidBusinessDate(entryDate))
+        return err(validationError('entryDate must be a valid YYYY-MM-DD date'));
+      if (entryDate > today)
+        return err(validationError('entryDate cannot be in the future', { entryDate, today }));
+      payableDate = entryDate;
+    } else {
+      // Product purchases are day-sealed stock events, never a Shift.
+      const legacyShiftReplay = !!cmd.shiftId && !cmd.transactionDate;
+      const anchor = await resolveFinancialAnchor(
+        this.deps,
+        ctx,
+        legacyShiftReplay
+          ? { shiftId: cmd.shiftId }
+          : { stationId: requestedStationId, transactionDate: cmd.transactionDate },
+        { kind: 'STOCK' },
+      );
+      if (!anchor.success) return anchor;
+      businessDayId = anchor.data.businessDayId;
+      stationId = anchor.data.stationId;
+      payableDate = anchor.data.businessDate;
+    }
 
     // Resolve inter-state status from supplier state vs buyer (station) state.
     const supplierStateCode = supplier.metadata?.stateCode as string | undefined;
@@ -205,10 +241,8 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     // value across this invoice's lines (a product may span multiple lines).
     const costAgg = new Map<string, { oldCost: number; qty: number; value: number }>();
 
-    for (const line of rawLines) {
-      const product = await this.deps.products.findById(line.productId);
-      if (!product || product.organizationId !== ctx.organizationId)
-        return err(notFoundError('Product', line.productId));
+    for (const [lineIndex, line] of rawLines.entries()) {
+      const product = lineProducts[lineIndex]!;
       productNames.set(product.id, product.name);
 
       const quantity = Number(line.quantity);
@@ -218,14 +252,16 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
       // Accumulate cost-basis inputs. unitPrice is the per-unit landed cost:
       // pre-tax for GST items (input tax is creditable), tax-inclusive for fuel
       // (VAT is baked into the entered price). Both are the correct cost basis.
-      const agg = costAgg.get(line.productId) ?? {
-        oldCost: Number(product.costBasis ?? 0),
-        qty: 0,
-        value: 0,
-      };
-      agg.qty += quantity;
-      agg.value += quantity * unitPrice;
-      costAgg.set(line.productId, agg);
+      if (!fuelPurchase) {
+        const agg = costAgg.get(line.productId) ?? {
+          oldCost: Number(product.costBasis ?? 0),
+          qty: 0,
+          value: 0,
+        };
+        agg.qty += quantity;
+        agg.value += quantity * unitPrice;
+        costAgg.set(line.productId, agg);
+      }
 
       const gstRate = product.taxConfig?.gst_rate ?? null;
       const vatRate = product.taxConfig?.vat_rate ?? null;
@@ -252,7 +288,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
             };
 
       // Fuel lines: validate tank allocations sum to the line quantity.
-      const allocations = (line.tankAllocations ?? [])
+      const allocations = (fuelPurchase ? [] : (line.tankAllocations ?? []))
         .map((a) => ({ tankId: a.tankId, quantity: Number(a.quantity) }))
         .filter((a) => a.quantity > 0);
       const allocatedTotal = allocations.reduce((acc, a) => acc + a.quantity, 0);
@@ -285,15 +321,18 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
         cess: String(tax.cess),
         lineTotal: String(tax.total),
         tankAllocations: allocations.length > 0 ? allocations : null,
+        invoiceDensity:
+          fuelPurchase && line.invoiceDensity != null ? String(line.invoiceDensity) : null,
         createdAt: now,
       });
 
-      const lineMovements: StockMovement[] =
-        allocations.length > 0
+      const lineMovements: StockMovement[] = fuelPurchase
+        ? []
+        : allocations.length > 0
           ? allocations.map((a) => ({
               id: ctx.ids.newId(),
               shiftId: null,
-              businessDayId,
+              businessDayId: businessDayId!,
               productId: line.productId,
               tankId: a.tankId,
               movementType: 'Purchase',
@@ -307,7 +346,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
               {
                 id: ctx.ids.newId(),
                 shiftId: null,
-                businessDayId,
+                businessDayId: businessDayId!,
                 productId: line.productId,
                 tankId: null,
                 movementType: 'Purchase',
@@ -337,6 +376,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
       stationId,
       shiftId: null,
       businessDayId,
+      entryDate,
       supplierId: supplier.id,
       invoiceNumber: cmd.invoiceNumber ?? null,
       amount: String(headerTotals.grand),
@@ -365,15 +405,16 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
       await this.deps.products.updateCostBasis(productId, String(round4(newCost)));
     }
 
-    await this.deps.stock.saveMany(movements);
+    if (movements.length > 0) await this.deps.stock.saveMany(movements);
 
     // The payable moves no money (no Funding Account); it is dated on the
-    // purchase's Business Date — purchases stay forecourt stock events (ADR 0005).
+    // purchase's anchor date: Entry Date for fuel Office Records, Business Date
+    // for product stock purchases.
     const payable: SupplierTransaction = {
       id: ctx.ids.newId(),
       organizationId: ctx.organizationId,
       stationId,
-      entryDate: anchor.data.businessDate,
+      entryDate: payableDate,
       supplierId: supplier.id,
       transactionType: 'Purchase',
       amount: String(headerTotals.grand),
@@ -396,6 +437,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
           purchaseId: purchase.id,
           supplierId: supplier.id,
           amount: purchase.amount,
+          entryDate,
           lineCount: items.length,
         },
         presentation: {
@@ -407,36 +449,43 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
           },
         },
       }),
-      ...items.map((it) =>
-        eventFromContext(ctx, {
-          eventType: BusinessEvents.GOODS_RECEIVED,
-          aggregateType: 'Purchase',
-          aggregateId: purchase.id,
-          stationId,
-          businessDayId,
-          payload: {
-            purchaseId: purchase.id,
-            productId: it.productId,
-            quantity: Number(it.quantity),
-          },
-          presentation: {
-            templateId: 'goods-received.v1',
-            values: {
-              quantity: Number(it.quantity),
-              unit: 'units',
-              productName: productNames.get(it.productId) ?? 'product',
-              supplierName: supplier.name,
-            },
-          },
-        }),
-      ),
+      ...(!fuelPurchase
+        ? items.map((it) =>
+            eventFromContext(ctx, {
+              eventType: BusinessEvents.GOODS_RECEIVED,
+              aggregateType: 'Purchase',
+              aggregateId: purchase.id,
+              stationId,
+              businessDayId,
+              payload: {
+                purchaseId: purchase.id,
+                productId: it.productId,
+                quantity: Number(it.quantity),
+              },
+              presentation: {
+                templateId: 'goods-received.v1',
+                values: {
+                  quantity: Number(it.quantity),
+                  unit: 'units',
+                  productName: productNames.get(it.productId) ?? 'product',
+                  supplierName: supplier.name,
+                },
+              },
+            }),
+          )
+        : []),
       eventFromContext(ctx, {
         eventType: BusinessEvents.SUPPLIER_INVOICE_CREATED,
         aggregateType: 'Supplier',
         aggregateId: supplier.id,
         stationId,
         businessDayId,
-        payload: { purchaseId: purchase.id, supplierId: supplier.id, amount: purchase.amount },
+        payload: {
+          purchaseId: purchase.id,
+          supplierId: supplier.id,
+          amount: purchase.amount,
+          entryDate,
+        },
         presentation: {
           templateId: 'supplier-invoice.v1',
           values: {

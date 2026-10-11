@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import { and, desc, eq, gte, ilike, inArray, lte, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, lte, ne, sql, type SQL } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
   isAuthorizedForStation,
@@ -1653,11 +1653,17 @@ transactionsRouter.post(
         403,
       );
     }
-    const clock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
-    if (!clock) return stationNotFound(c);
     // The Shift owns the station; a body stationId is only cross-checked (#243).
+    // Resolved first so the Entry Date clock below is the station's, not a UTC
+    // fallback, for a legacy request that carries only a shiftId.
     const shiftStation = await guardShiftStation(c, body);
     if (!shiftStation.ok) return shiftStation.response;
+    const clock = await loadStationClock(
+      c.var.db,
+      user.organizationId,
+      shiftStation.stationId ?? body?.stationId,
+    );
+    if (!clock) return stationNotFound(c);
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const trace = createCommandTrace();
       const ctx = buildContext(user, {
@@ -1899,13 +1905,48 @@ transactionsRouter.get('/expenses', async (c) => {
   });
 });
 
+/**
+ * Station predicate for the purchase reads. A named station is authorized by
+ * the caller; an omitted one never widens to the whole organization for a user
+ * who is not authorized for every station — it narrows to their assigned ones
+ * (none assigned → no rows). Owners see the organization.
+ */
+export function purchaseStationScope(
+  user: { role: string; assignedStationIds: string[] },
+  stationId: string | undefined,
+) {
+  if (stationId) return eq(schema.purchases.stationId, stationId);
+  if (user.role === 'Owner') return undefined;
+  return user.assignedStationIds.length
+    ? inArray(schema.purchases.stationId, user.assignedStationIds)
+    : sql`false`;
+}
+
 transactionsRouter.get('/purchases', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  if (
+    stationId &&
+    !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })
+  )
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   const rows = await db
     .select({
       purchase: schema.purchases,
       businessDate: schema.businessDays.businessDate,
+      awaitingDecantation: sql<boolean>`(
+        ${schema.purchases.businessDayId} IS NULL
+        AND EXISTS (
+          SELECT 1 FROM purchase_items pi
+          JOIN products pr ON pr.id = pi.product_id
+          WHERE pi.purchase_id = ${schema.purchases.id} AND pr.product_type = 'FUEL'
+        )
+        AND NOT EXISTS (SELECT 1 FROM decantation_purchases dp WHERE dp.purchase_id = ${schema.purchases.id})
+      )`,
       supplierName: schema.suppliers.name,
       // Comma-joined distinct product names on the invoice — a quick "what was
       // bought" hint for the list, without fetching each purchase's line items.
@@ -1920,15 +1961,21 @@ transactionsRouter.get('/purchases', async (c) => {
       )`,
     })
     .from(schema.purchases)
-    .innerJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
     .leftJoin(schema.suppliers, eq(schema.purchases.supplierId, schema.suppliers.id))
-    .where(eq(schema.businessDays.organizationId, user.organizationId))
+    .where(
+      and(
+        eq(schema.purchases.organizationId, user.organizationId),
+        purchaseStationScope(user, stationId),
+      ),
+    )
     .orderBy(desc(schema.purchases.createdAt));
   return c.json({
     success: true,
     data: rows.map((r) => ({
       ...r.purchase,
       businessDate: r.businessDate,
+      awaitingDecantation: Boolean(r.awaitingDecantation),
       supplierName: r.supplierName ?? 'Unknown Supplier',
       itemsSummary: r.itemsSummary,
       itemCount: Number(r.itemCount || 0),
@@ -1940,21 +1987,44 @@ transactionsRouter.get('/purchases/:id/items', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const purchaseId = c.req.param('id');
+  const [owner] = await db
+    .select({ stationId: schema.purchases.stationId })
+    .from(schema.purchases)
+    .where(
+      and(
+        eq(schema.purchases.id, purchaseId),
+        eq(schema.purchases.organizationId, user.organizationId),
+      ),
+    )
+    .limit(1);
+  if (
+    owner &&
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: owner.stationId,
+    })
+  )
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   const rows = await db
     .select({
       item: schema.purchaseItems,
       productName: schema.products.name,
       productCode: schema.products.code,
       unit: schema.products.unit,
+      businessDate: schema.businessDays.businessDate,
+      entryDate: schema.purchases.entryDate,
     })
     .from(schema.purchaseItems)
     .innerJoin(schema.purchases, eq(schema.purchaseItems.purchaseId, schema.purchases.id))
-    .innerJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
     .leftJoin(schema.products, eq(schema.purchaseItems.productId, schema.products.id))
     .where(
       and(
         eq(schema.purchaseItems.purchaseId, purchaseId),
-        eq(schema.businessDays.organizationId, user.organizationId),
+        eq(schema.purchases.organizationId, user.organizationId),
       ),
     )
     .orderBy(schema.purchaseItems.createdAt);
@@ -1962,6 +2032,8 @@ transactionsRouter.get('/purchases/:id/items', async (c) => {
     success: true,
     data: rows.map((r) => ({
       ...r.item,
+      businessDate: r.businessDate,
+      entryDate: r.entryDate,
       productName: r.productName ?? 'Product',
       productCode: r.productCode ?? null,
       unit: r.unit ?? null,
@@ -2038,16 +2110,34 @@ transactionsRouter.get('/purchases/gst-register', async (c) => {
   const user = c.var.user;
   const from = c.req.query('from');
   const to = c.req.query('to');
-  const conds = [
-    eq(schema.businessDays.organizationId, user.organizationId),
+  const stationId = c.req.query('stationId');
+  if (
+    stationId &&
+    !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })
+  )
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
+  const conds: SQL[] = [
+    eq(schema.purchases.organizationId, user.organizationId),
     eq(schema.purchaseItems.taxCategory, 'GST'),
   ];
-  if (from) conds.push(gte(schema.businessDays.businessDate, from));
-  if (to) conds.push(lte(schema.businessDays.businessDate, to));
+  const scope = purchaseStationScope(user, stationId);
+  if (scope) conds.push(scope);
+  if (from)
+    conds.push(
+      gte(sql`COALESCE(${schema.businessDays.businessDate}, ${schema.purchases.entryDate})`, from),
+    );
+  if (to)
+    conds.push(
+      lte(sql`COALESCE(${schema.businessDays.businessDate}, ${schema.purchases.entryDate})`, to),
+    );
   const rows = await db
     .select({
       item: schema.purchaseItems,
       businessDate: schema.businessDays.businessDate,
+      entryDate: schema.purchases.entryDate,
       supplierName: schema.suppliers.name,
       supplierGstin: schema.suppliers.metadata,
       invoiceNumber: schema.purchases.invoiceNumber,
@@ -2057,14 +2147,17 @@ transactionsRouter.get('/purchases/gst-register', async (c) => {
     })
     .from(schema.purchaseItems)
     .innerJoin(schema.purchases, eq(schema.purchaseItems.purchaseId, schema.purchases.id))
-    .innerJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
     .leftJoin(schema.suppliers, eq(schema.purchases.supplierId, schema.suppliers.id))
     .leftJoin(schema.products, eq(schema.purchaseItems.productId, schema.products.id))
     .where(and(...conds))
-    .orderBy(desc(schema.businessDays.businessDate));
+    .orderBy(
+      desc(sql`COALESCE(${schema.businessDays.businessDate}, ${schema.purchases.entryDate})`),
+    );
   const data = rows.map((r) => ({
     ...r.item,
     businessDate: r.businessDate,
+    entryDate: r.entryDate,
     supplierName: r.supplierName ?? 'Unknown Supplier',
     supplierGstin: (r.supplierGstin as Record<string, unknown> | null)?.gstin ?? null,
     invoiceNumber: r.invoiceNumber,
@@ -2987,6 +3080,21 @@ transactionsRouter.get('/inventory/status', async (c) => {
       productCode: schema.products.code,
       productUnit: schema.products.unit,
       total: sql<string>`COALESCE(SUM(${schema.stockMovements.quantity}), 0)`,
+      waitingOnDecantation: sql<boolean>`EXISTS (
+        SELECT 1
+        FROM decantation_tank_lines dtl
+        INNER JOIN decantations d
+          ON d.id = dtl.decantation_id
+          AND d.organization_id = dtl.organization_id
+          AND d.station_id = dtl.station_id
+        WHERE dtl.tank_id = ${schema.tanks.id}
+          AND dtl.organization_id = ${user.organizationId}
+          AND dtl.station_id = ${stationId}
+          AND d.organization_id = ${user.organizationId}
+          AND d.station_id = ${stationId}
+          AND dtl.status = 'PENDING_MEASUREMENT'
+          AND d.status <> 'DRAFT'
+      )`,
     })
     .from(schema.tanks)
     .leftJoin(schema.products, eq(schema.products.id, schema.tanks.productId))
@@ -3009,6 +3117,7 @@ transactionsRouter.get('/inventory/status', async (c) => {
     productUnit: r.productUnit ?? 'L',
     capacity: Number(r.capacity),
     currentVolume: Math.max(0, Number(r.total ?? 0)),
+    waitingOnDecantation: Boolean(r.waitingOnDecantation),
   }));
 
   // Days of cover: ONE more aggregate statement (per-tank volume sold over the

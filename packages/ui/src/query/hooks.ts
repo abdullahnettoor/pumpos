@@ -21,6 +21,7 @@ import {
   CloudPaymentTerminalService,
   CloudAccessService,
   CloudDesktopDownloadsService,
+  type DecantationDayCloseWarnings,
 } from '../services/cloud.js';
 import type {
   BusinessDayStatusResponse,
@@ -93,7 +94,8 @@ export const queryKeys = {
   merchandiseSales: (shiftId: string) => ['merchandise-sales', shiftId] as const,
   expenses: () => ['expenses'] as const,
   income: (stationId = '', from = '', to = '') => ['income', stationId, from, to] as const,
-  purchases: () => ['purchases'] as const,
+  purchases: (stationId?: string) =>
+    stationId ? (['purchases', stationId] as const) : (['purchases'] as const),
   collections: () => ['collections'] as const,
   creditSales: () => ['credit-sales'] as const,
   vehicles: (activeOnly = false) => ['vehicles', activeOnly] as const,
@@ -116,6 +118,8 @@ export const queryKeys = {
   customerReceivable: (stationId: string, customerId: string) =>
     ['receivables', stationId, customerId] as const,
   inventoryStatus: (stationId: string) => ['inventory-status', stationId] as const,
+  decantationDayCloseWarnings: (stationId: string, businessDayId: string) =>
+    ['decantation-day-close-warnings', stationId, businessDayId] as const,
   inventoryItems: (stationId: string) => ['inventory-items', stationId] as const,
   inventoryMovements: (stationId: string) => ['inventory-movements', stationId] as const,
   inventoryVariances: (stationId: string) => ['inventory-variances', stationId] as const,
@@ -516,12 +520,13 @@ export function useSalesTaxRegister(
 /** Input GST on purchases for a period. */
 export function usePurchaseGstRegister(
   params: { from?: string; to?: string },
+  stationId: string,
   options?: Options<any[]>,
 ) {
   return useQuery({
-    queryKey: queryKeys.purchaseGstRegister(params.from ?? '', params.to ?? ''),
+    queryKey: [...queryKeys.purchaseGstRegister(params.from ?? '', params.to ?? ''), stationId],
     queryFn: () =>
-      txService.getPurchaseGstRegister(params.from || undefined, params.to || undefined),
+      txService.getPurchaseGstRegister(params.from || undefined, params.to || undefined, stationId),
     ...TIER.operational,
     ...options,
   });
@@ -742,10 +747,10 @@ export function useExpenses(options?: Options<any[]>) {
   });
 }
 
-export function usePurchases(options?: Options<any[]>) {
+export function usePurchases(stationId = '', options?: Options<any[]>) {
   return useQuery({
-    queryKey: queryKeys.purchases(),
-    queryFn: () => txService.getPurchases(),
+    queryKey: stationId ? queryKeys.purchases(stationId) : queryKeys.purchases(),
+    queryFn: () => txService.getPurchases(stationId || undefined),
     ...TIER.operational,
     ...options,
   });
@@ -914,6 +919,20 @@ export function useInventoryStatus(stationId: string | null | undefined, options
     queryKey: queryKeys.inventoryStatus(stationId ?? ''),
     queryFn: () => txService.getInventoryStatus(stationId!),
     enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useDecantationDayCloseWarnings(
+  stationId: string | null | undefined,
+  businessDayId: string | null | undefined,
+  options?: Options<DecantationDayCloseWarnings>,
+) {
+  return useQuery({
+    queryKey: queryKeys.decantationDayCloseWarnings(stationId ?? '', businessDayId ?? ''),
+    queryFn: () => txService.getDecantationDayCloseWarnings(stationId!, businessDayId!),
+    enabled: !!stationId && !!businessDayId,
     ...TIER.operational,
     ...options,
   });
@@ -1244,6 +1263,7 @@ export function useInvalidateOperational() {
   const qc = useQueryClient();
   return (stationId?: string | null) => {
     const invalidations = [
+      qc.invalidateQueries({ queryKey: ['purchase-gst-register'] }),
       qc.invalidateQueries({ queryKey: ['shift-status'] }),
       qc.invalidateQueries({ queryKey: ['business-day-status'] }),
       qc.invalidateQueries({ queryKey: ['shift-summaries'] }),
@@ -1302,6 +1322,7 @@ export function useInvalidateOperational() {
         qc.invalidateQueries({ queryKey: ['inventory-items', stationId] }),
         qc.invalidateQueries({ queryKey: ['inventory-movements', stationId] }),
         qc.invalidateQueries({ queryKey: ['inventory-variances', stationId] }),
+        qc.invalidateQueries({ queryKey: ['decantation-day-close-warnings', stationId] }),
       );
     }
     return Promise.all(invalidations).then(() => undefined);

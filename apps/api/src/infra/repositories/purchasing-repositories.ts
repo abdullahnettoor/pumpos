@@ -18,6 +18,7 @@ export class DrizzlePurchaseRepository implements PurchaseRepository {
       stationId: p.stationId,
       shiftId: p.shiftId,
       businessDayId: p.businessDayId,
+      entryDate: p.entryDate,
       supplierId: p.supplierId,
       invoiceNumber: p.invoiceNumber,
       amount: p.amount,
@@ -57,6 +58,7 @@ export class DrizzlePurchaseItemRepository implements PurchaseItemRepository {
         cess: it.cess,
         lineTotal: it.lineTotal,
         tankAllocations: it.tankAllocations,
+        invoiceDensity: it.invoiceDensity,
         createdAt: new Date(it.createdAt),
       })),
     );
