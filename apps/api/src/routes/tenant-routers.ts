@@ -5,6 +5,7 @@ import { productsRouter } from './products.js';
 import { shiftsRouter } from './shifts.js';
 import { transactionsRouter } from './transactions.js';
 import { decantationsRouter } from './decantations.js';
+import { densityRouter } from './density.js';
 import { dssrRouter } from './dssr.js';
 import { reportsRouter } from './reports.js';
 import { financeRouter } from './finance.js';
@@ -27,6 +28,7 @@ export const TENANT_ROUTERS: ReadonlyArray<readonly [string, Hono<any, any, any>
   ['/shifts', shiftsRouter],
   ['/transactions', transactionsRouter],
   ['/transactions', decantationsRouter],
+  ['/transactions', densityRouter],
   ['/dssr', dssrRouter],
   ['/reports', reportsRouter],
   ['/finance', financeRouter],

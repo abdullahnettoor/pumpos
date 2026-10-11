@@ -66,6 +66,8 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /transactions/shifts/:id/merchandise-sales': 'org-scoped-query',
   'GET /transactions/shifts/:id/transactions': 'org-scoped-query',
   'GET /transactions/decantations': 'refuses-foreign-station',
+  'GET /transactions/density/readings': 'refuses-foreign-station',
+  'GET /transactions/density/today': 'refuses-foreign-station',
   'GET /transactions/decantations/:id': 'org-scoped-query',
   'GET /transactions/inventory/status': 'org-scoped-query',
   'GET /transactions/inventory/items': 'org-scoped-query',

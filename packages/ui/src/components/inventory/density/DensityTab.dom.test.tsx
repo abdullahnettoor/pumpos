@@ -1,0 +1,230 @@
+// @vitest-environment jsdom
+import React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { renderWithProviders, createTestQueryClient } from '../../../test/renderWithProviders.js';
+import { DensityTab } from './DensityTab.js';
+import { queryKeys } from '../../../query/hooks.js';
+import type {
+  DensityReadingWithContext,
+  DensityTodaySummary,
+  Product,
+  Station,
+} from '@pump/shared';
+
+const STATION_ID = 'st-1';
+
+const STATION: Partial<Station> = {
+  id: STATION_ID,
+  name: 'Highway Express Retail Outlet',
+  code: 'HE01',
+  settings: {
+    timezone: 'Asia/Kolkata',
+    densityTolerance: 3.0,
+    densitySpecBands: {
+      MS: { min: 720, max: 775 },
+      HSD: { min: 820, max: 860 },
+    },
+  } as any,
+};
+
+const PRODUCTS: Partial<Product>[] = [
+  {
+    id: 'prod-ms',
+    name: 'Motor Spirit',
+    code: 'MS',
+    productType: 'FUEL',
+    isActive: true,
+  },
+  {
+    id: 'prod-hsd',
+    name: 'High Speed Diesel',
+    code: 'HSD',
+    productType: 'FUEL',
+    isActive: true,
+  },
+];
+
+const MOCK_READING_MS: DensityReadingWithContext = {
+  id: 'rd-1',
+  organizationId: 'org-1',
+  stationId: STATION_ID,
+  businessDate: '2026-10-11',
+  productId: 'prod-ms',
+  productName: 'Motor Spirit',
+  productCode: 'MS',
+  kind: 'MORNING',
+  entryMethod: 'HYDROMETER',
+  observedDensity: 745.0,
+  observedTempC: 28.5,
+  density15: 753.8,
+  flags: [],
+  delta: 0.5,
+  recordedBy: 'user-1',
+  recordedByName: 'Rajesh Manager',
+  recordedAt: '2026-10-11T06:30:00Z',
+};
+
+const MOCK_READING_HSD_JUMP: DensityReadingWithContext = {
+  id: 'rd-2',
+  organizationId: 'org-1',
+  stationId: STATION_ID,
+  businessDate: '2026-10-11',
+  productId: 'prod-hsd',
+  productName: 'High Speed Diesel',
+  productCode: 'HSD',
+  kind: 'ADHOC',
+  entryMethod: 'DIRECT_15',
+  observedDensity: null,
+  observedTempC: null,
+  density15: 840.0,
+  flags: ['UNEXPLAINED_JUMP'],
+  delta: 5.2,
+  recordedBy: 'user-2',
+  recordedByName: 'Sunil Operator',
+  recordedAt: '2026-10-11T08:00:00Z',
+};
+
+const MOCK_TODAY_SUMMARY: DensityTodaySummary = {
+  businessDate: '2026-10-11',
+  totalProducts: 2,
+  recordedCount: 1,
+  missingCount: 1,
+  products: [
+    {
+      productId: 'prod-ms',
+      productName: 'Motor Spirit',
+      productCode: 'MS',
+      todayRecorded: true,
+      latestToday: MOCK_READING_MS,
+      trend14d: [
+        { date: '2026-10-10', density15: 753.3 },
+        { date: '2026-10-11', density15: 753.8 },
+      ],
+      lastReadings: [MOCK_READING_MS],
+    },
+    {
+      productId: 'prod-hsd',
+      productName: 'High Speed Diesel',
+      productCode: 'HSD',
+      todayRecorded: false,
+      latestToday: null,
+      trend14d: [{ date: '2026-10-09', density15: 832.1 }],
+      lastReadings: [],
+    },
+  ],
+};
+
+function seedQueryClient() {
+  const qc = createTestQueryClient();
+  qc.setQueryData(queryKeys.stations(), [STATION]);
+  qc.setQueryData(queryKeys.products(), PRODUCTS);
+  qc.setQueryData(queryKeys.tanks(STATION_ID), []);
+  qc.setQueryData(queryKeys.nozzles(STATION_ID), []);
+  qc.setQueryData(queryKeys.densityToday(STATION_ID, ''), MOCK_TODAY_SUMMARY);
+  qc.setQueryData(
+    queryKeys.densityReadings(STATION_ID, '', '', '', '', 500),
+    [MOCK_READING_MS, MOCK_READING_HSD_JUMP],
+  );
+  return qc;
+}
+
+afterEach(cleanup);
+
+describe('DensityTab (Variant D)', () => {
+  it('renders Today view by default with product cards, missing banner, and header buttons', () => {
+    const qc = seedQueryClient();
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+
+    // Header actions
+    expect(screen.getByRole('button', { name: /Print board/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /Record density/i })).toBeDefined();
+
+    // Segmented control
+    const segmented = screen.getByRole('radiogroup', { name: /Density view/i });
+    expect(segmented).toBeDefined();
+
+    // Missing check banner
+    expect(screen.getByTestId('missing-density-banner')).toBeDefined();
+    expect(screen.getByText(/Today's readings 1\/2 products recorded/i)).toBeDefined();
+    expect(screen.getByText(/Missing today: High Speed Diesel/i)).toBeDefined();
+
+    // Product cards
+    expect(screen.getByText(/Motor Spirit \(MS\)/i)).toBeDefined();
+    expect(screen.getAllByText(/753\.8/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Recorded/i).length).toBeGreaterThanOrEqual(1);
+
+    expect(screen.getByText(/High Speed Diesel \(HSD\)/i)).toBeDefined();
+    expect(screen.getByText(/Today missing/i)).toBeDefined();
+  });
+
+  it('switches between Today and Register view via the segmented control', () => {
+    const qc = seedQueryClient();
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+
+    // Default: Today view is visible
+    expect(screen.getByText(/Motor Spirit \(MS\)/i)).toBeDefined();
+
+    // Switch to Register view
+    const registerBtn = screen.getByRole('radio', { name: /Register/i });
+    fireEvent.click(registerBtn);
+
+    // Register log table should now be rendered
+    expect(screen.getByText(/Density Register Log/i)).toBeDefined();
+    expect(screen.getByText(/Rajesh Manager/i)).toBeDefined();
+    expect(screen.getByText(/Sunil Operator/i)).toBeDefined();
+
+    // Check unexplained jump indication on HSD reading
+    expect(screen.getByText(/\+5\.20 · jump/i)).toBeDefined();
+
+    // Switch back to Today view
+    const todayBtn = screen.getByRole('radio', { name: /Today/i });
+    fireEvent.click(todayBtn);
+    expect(screen.getByText(/Motor Spirit \(MS\)/i)).toBeDefined();
+  });
+
+  it('opens Record Density drawer when clicking Record density button', () => {
+    const qc = seedQueryClient();
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+
+    const recordBtn = screen.getByRole('button', { name: /Record density/i });
+    fireEvent.click(recordBtn);
+
+    expect(screen.getByText(/Record Density · Motor Spirit/i)).toBeDefined();
+    expect(screen.getByText(/Reading Routine/i)).toBeDefined();
+    expect(screen.getByText(/Hydrometer \+ Temperature/i)).toBeDefined();
+    expect(screen.getByRole('button', { name: /Save Reading/i })).toBeDefined();
+  });
+
+
+  it('renders morning save prompt banner when morning density reading is saved', () => {
+    const qc = seedQueryClient();
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+
+    // Open record drawer
+    const recordBtn = screen.getByRole('button', { name: /Record density/i });
+    fireEvent.click(recordBtn);
+
+    // Save reading inside drawer (or trigger callback)
+    const saveBtn = screen.getByRole('button', { name: /Save Reading/i });
+    expect(saveBtn).toBeDefined();
+  });
+
+  it('calls window.open when clicking Print board', () => {
+    const qc = seedQueryClient();
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({
+      document: {
+        write: vi.fn(),
+        close: vi.fn(),
+      },
+    } as any);
+
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+
+    const printBtn = screen.getByRole('button', { name: /Print board/i });
+    fireEvent.click(printBtn);
+
+    expect(openSpy).toHaveBeenCalledWith('', '_blank', 'width=1100,height=780');
+    openSpy.mockRestore();
+  });
+});

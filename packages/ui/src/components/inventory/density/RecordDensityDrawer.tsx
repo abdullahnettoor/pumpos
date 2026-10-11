@@ -1,0 +1,435 @@
+import React, { useId, useMemo, useState } from 'react';
+import { Drawer } from '../../Drawer.js';
+import { Button, Icon } from '../../../pump-ds/index.js';
+import { DensityCalculatorPopover } from '../../primitives/DensityCalculatorPopover.js';
+import {
+  DEFAULT_DENSITY_METHOD,
+  DEFAULT_DENSITY_TOLERANCE_KG_M3,
+  density15FromObserved,
+  roundDensity,
+  type DensityMethod,
+  type RecordDensityReadingPayload,
+} from '@pump/shared';
+
+export interface RecordDensityDrawerProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (payload: RecordDensityReadingPayload) => Promise<void>;
+  stationId: string;
+  products: Array<{ id: string; name: string; code: string }>;
+  tanks?: Array<{ id: string; name: string; productId: string }>;
+  nozzles?: Array<{ id: string; name: string; productId: string }>;
+  presetProductId?: string;
+  defaultMethod?: DensityMethod;
+  tolerance?: number;
+}
+
+export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  stationId,
+  products,
+  tanks = [],
+  nozzles = [],
+  presetProductId,
+  defaultMethod = DEFAULT_DENSITY_METHOD,
+  tolerance = DEFAULT_DENSITY_TOLERANCE_KG_M3,
+}) => {
+  const [productId, setProductId] = useState<string>(
+    presetProductId || products[0]?.id || '',
+  );
+  const [kind, setKind] = useState<'MORNING' | 'ADHOC'>('MORNING');
+  const [entryMethod, setEntryMethod] = useState<'HYDROMETER' | 'DIRECT_15'>('HYDROMETER');
+  const [sampledFrom, setSampledFrom] = useState<'NONE' | 'TANK' | 'NOZZLE'>('NONE');
+  const [tankId, setTankId] = useState<string>('');
+  const [nozzleId, setNozzleId] = useState<string>('');
+
+  const [observedDensity, setObservedDensity] = useState<string>('');
+  const [observedTempC, setObservedTempC] = useState<string>('');
+  const [density15Direct, setDensity15Direct] = useState<string>('');
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Sync preset product when opening or changing preset
+  React.useEffect(() => {
+    if (presetProductId) {
+      setProductId(presetProductId);
+    } else if (products.length > 0 && !productId) {
+      setProductId(products[0].id);
+    }
+  }, [presetProductId, products, productId]);
+
+  const relevantTanks = useMemo(
+    () => tanks.filter((t) => t.productId === productId),
+    [tanks, productId],
+  );
+
+  const relevantNozzles = useMemo(
+    () => nozzles.filter((n) => n.productId === productId),
+    [nozzles, productId],
+  );
+
+  const calc15 = useMemo(() => {
+    if (entryMethod === 'DIRECT_15') {
+      const v = parseFloat(density15Direct);
+      return !isNaN(v) && v > 0 ? v : null;
+    }
+    const obs = parseFloat(observedDensity);
+    const temp = parseFloat(observedTempC);
+    if (!isNaN(obs) && !isNaN(temp) && obs > 0) {
+      try {
+        return roundDensity(
+          density15FromObserved(obs, temp, { method: defaultMethod, tolerance }),
+          2,
+        );
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }, [entryMethod, density15Direct, observedDensity, observedTempC, defaultMethod, tolerance]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!productId) {
+      setError('Please select a product');
+      return;
+    }
+
+    if (entryMethod === 'HYDROMETER') {
+      const obs = parseFloat(observedDensity);
+      const temp = parseFloat(observedTempC);
+      if (isNaN(obs) || obs <= 0) {
+        setError('Please enter a valid observed hydrometer density');
+        return;
+      }
+      if (isNaN(temp)) {
+        setError('Please enter a valid observed temperature');
+        return;
+      }
+    } else {
+      const d15 = parseFloat(density15Direct);
+      if (isNaN(d15) || d15 <= 0) {
+        setError('Please enter a valid 15 °C density');
+        return;
+      }
+    }
+
+    const payload: RecordDensityReadingPayload = {
+      stationId,
+      productId,
+      kind,
+      entryMethod,
+      sampledFrom: sampledFrom === 'NONE' ? null : sampledFrom,
+      tankId: sampledFrom === 'TANK' && tankId ? tankId : null,
+      nozzleId: sampledFrom === 'NOZZLE' && nozzleId ? nozzleId : null,
+      observedDensity:
+        entryMethod === 'HYDROMETER' ? parseFloat(observedDensity) : undefined,
+      observedTempC:
+        entryMethod === 'HYDROMETER' ? parseFloat(observedTempC) : undefined,
+      density15:
+        entryMethod === 'DIRECT_15' ? parseFloat(density15Direct) : undefined,
+    };
+
+    setSaving(true);
+    try {
+      await onSave(payload);
+      onClose();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to save density reading');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selectedProduct = products.find((p) => p.id === productId);
+
+  return (
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title={
+        selectedProduct
+          ? `Record Density · ${selectedProduct.name} (${selectedProduct.code})`
+          : 'Record Product Density'
+      }
+      footer={
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, width: '100%' }}>
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleSubmit}
+            disabled={saving || calc15 == null}
+          >
+            {saving ? 'Saving...' : 'Save Reading'}
+          </Button>
+        </div>
+      }
+    >
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {error && (
+          <div
+            style={{
+              padding: '8px 12px',
+              borderRadius: 6,
+              background: 'var(--color-danger-bg, #fef2f2)',
+              color: 'var(--color-danger-fg, #b91c1c)',
+              fontSize: 13,
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {/* Product selection */}
+        <div>
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+            Fuel Product
+          </label>
+          <select
+            value={productId}
+            onChange={(e) => {
+              setProductId(e.target.value);
+              setTankId('');
+              setNozzleId('');
+            }}
+            className="input"
+            style={{ width: '100%', height: 34, fontSize: 13 }}
+            disabled={saving}
+          >
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.code})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Reading Kind */}
+        <div>
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+            Reading Routine
+          </label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button
+              type="button"
+              size="sm"
+              variant={kind === 'MORNING' ? 'primary' : 'secondary'}
+              onClick={() => setKind('MORNING')}
+            >
+              Morning Routine (Daily)
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={kind === 'ADHOC' ? 'primary' : 'secondary'}
+              onClick={() => setKind('ADHOC')}
+            >
+              Ad-hoc / Spot Check
+            </Button>
+          </div>
+        </div>
+
+        {/* Entry Method */}
+        <div>
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+            Entry Method
+          </label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button
+              type="button"
+              size="sm"
+              variant={entryMethod === 'HYDROMETER' ? 'primary' : 'secondary'}
+              onClick={() => setEntryMethod('HYDROMETER')}
+            >
+              Hydrometer + Temperature
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={entryMethod === 'DIRECT_15' ? 'primary' : 'secondary'}
+              onClick={() => setEntryMethod('DIRECT_15')}
+            >
+              Direct 15 °C Value
+            </Button>
+          </div>
+        </div>
+
+        {/* Hydrometer Entry Fields */}
+        {entryMethod === 'HYDROMETER' ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              padding: 12,
+              background: 'var(--color-bg-subtle, #f9fafb)',
+              borderRadius: 8,
+              border: '1px solid var(--color-border, #e5e7eb)',
+            }}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 4 }}>
+                  Observed Hydrometer (kg/m³)
+                </label>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="e.g. 745.0"
+                    value={observedDensity}
+                    onChange={(e) => setObservedDensity(e.target.value)}
+                    className="input"
+                    style={{ width: '100%', height: 34, fontSize: 13 }}
+                  />
+                  <DensityCalculatorPopover
+                    method={defaultMethod}
+                    tolerance={tolerance}
+                    initialObserved={parseFloat(observedDensity) || undefined}
+                    initialTempC={parseFloat(observedTempC) || undefined}
+                    onApply={(d15, obs, temp) => {
+                      setDensity15Direct(d15.toString());
+                      setObservedDensity(obs.toString());
+                      setObservedTempC(temp.toString());
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 4 }}>
+                  Observed Temperature (°C)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="e.g. 28.5"
+                  value={observedTempC}
+                  onChange={(e) => setObservedTempC(e.target.value)}
+                  className="input"
+                  style={{ width: '100%', height: 34, fontSize: 13 }}
+                />
+              </div>
+            </div>
+
+            {/* Computed 15 °C banner */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '8px 12px',
+                borderRadius: 6,
+                background: calc15 ? 'var(--color-brand-subtle, #eff6ff)' : '#f3f4f6',
+                border: '1px solid var(--color-border, #e5e7eb)',
+              }}
+            >
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted, #4b5563)' }}>
+                Computed density at 15 °C:
+              </span>
+              <strong
+                style={{
+                  fontSize: 18,
+                  fontVariantNumeric: 'tabular-nums',
+                  color: calc15 ? 'var(--color-brand, #1e40af)' : '#9ca3af',
+                }}
+              >
+                {calc15 != null ? `${calc15.toFixed(2)} kg/m³` : '— — —'}
+              </strong>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+              Density at 15 °C (kg/m³)
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              placeholder="e.g. 753.5"
+              value={density15Direct}
+              onChange={(e) => setDensity15Direct(e.target.value)}
+              className="input"
+              style={{ width: '100%', height: 34, fontSize: 13 }}
+            />
+          </div>
+        )}
+
+        {/* Optional sampled from */}
+        <div style={{ borderTop: '1px solid var(--color-border, #e5e7eb)', paddingTop: 12 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 6 }}>
+            Sampled From (Optional)
+          </label>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <Button
+              type="button"
+              size="sm"
+              variant={sampledFrom === 'NONE' ? 'primary' : 'secondary'}
+              onClick={() => setSampledFrom('NONE')}
+            >
+              Unspecified
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={sampledFrom === 'TANK' ? 'primary' : 'secondary'}
+              onClick={() => setSampledFrom('TANK')}
+              disabled={relevantTanks.length === 0}
+            >
+              Tank ({relevantTanks.length})
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={sampledFrom === 'NOZZLE' ? 'primary' : 'secondary'}
+              onClick={() => setSampledFrom('NOZZLE')}
+              disabled={relevantNozzles.length === 0}
+            >
+              Nozzle ({relevantNozzles.length})
+            </Button>
+          </div>
+
+          {sampledFrom === 'TANK' && relevantTanks.length > 0 && (
+            <select
+              value={tankId}
+              onChange={(e) => setTankId(e.target.value)}
+              className="input"
+              style={{ width: '100%', height: 32, fontSize: 12 }}
+            >
+              <option value="">Select tank...</option>
+              {relevantTanks.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {sampledFrom === 'NOZZLE' && relevantNozzles.length > 0 && (
+            <select
+              value={nozzleId}
+              onChange={(e) => setNozzleId(e.target.value)}
+              className="input"
+              style={{ width: '100%', height: 32, fontSize: 12 }}
+            >
+              <option value="">Select nozzle...</option>
+              {relevantNozzles.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      </form>
+    </Drawer>
+  );
+};

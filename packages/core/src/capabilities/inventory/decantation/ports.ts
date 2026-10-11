@@ -161,8 +161,65 @@ export interface DensityReading {
   flags: unknown[];
   recordedBy: string | null;
   recordedAt: string;
+  createdAt?: string;
+}
+
+export interface DensityReadingListQuery {
+  organizationId: string;
+  stationId: string;
+  productId?: string;
+  from?: string;
+  to?: string;
+  kind?: 'MORNING' | 'ADHOC' | 'DECANTATION';
+  limit?: number;
+}
+
+export interface DensityReadingWithContext extends DensityReading {
+  productName?: string;
+  productCode?: string;
+  tankName?: string | null;
+  nozzleName?: string | null;
+  recordedByName?: string | null;
+  delta?: number | null;
+}
+
+export interface DensityTodayProductSummary {
+  productId: string;
+  productName: string;
+  productCode: string;
+  latestToday: DensityReadingWithContext | null;
+  todayRecorded: boolean;
+  trend14d: Array<{ date: string; density15: number | null }>;
+  lastReadings: DensityReadingWithContext[];
+}
+
+export interface DensityTodaySummary {
+  businessDate: string;
+  products: DensityTodayProductSummary[];
+  recordedCount: number;
+  missingCount: number;
+  totalProducts: number;
 }
 
 export interface DensityReadingRepository {
   saveMany(readings: DensityReading[]): Promise<void>;
+  findLatestForProduct(
+    organizationId: string,
+    stationId: string,
+    productId: string,
+    beforeRecordedAt?: string,
+  ): Promise<DensityReading | null>;
+  hasInterveningDecantation(
+    organizationId: string,
+    stationId: string,
+    productId: string,
+    afterTimestamp: string,
+    beforeTimestamp: string,
+  ): Promise<boolean>;
+  list(query: DensityReadingListQuery): Promise<DensityReadingWithContext[]>;
+  getTodaySummary(
+    organizationId: string,
+    stationId: string,
+    businessDate: string,
+  ): Promise<DensityTodaySummary>;
 }

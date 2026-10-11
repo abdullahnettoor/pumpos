@@ -27,6 +27,7 @@ import {
   Form,
   Icon,
 } from '../pump-ds/index.js';
+import { DensityTab } from './inventory/density/index.js';
 import { tankPct, classifyTank, OVER_CAPACITY_EXPLANATION } from '../utils/stock.js';
 import {
   isAmbiguousMutationError,
@@ -42,7 +43,7 @@ interface InventoryListProps {
   selectedStation: any | null;
 }
 
-type TabType = 'tanks' | 'items' | 'movements' | 'variances';
+type TabType = 'tanks' | 'density' | 'items' | 'movements' | 'variances';
 
 const fmtL = (n: number) =>
   `${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
@@ -502,6 +503,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
             onChange={(id) => setActiveTab(id as TabType)}
             tabs={[
               { id: 'tanks', label: 'Tank Status', icon: <Icon name="tank" size="xs" /> },
+              { id: 'density', label: 'Density Register', icon: <Icon name="gauge" size="xs" /> },
               { id: 'items', label: 'Merchandise Stock', icon: <Icon name="package" size="xs" /> },
               {
                 id: 'movements',
@@ -804,6 +806,8 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
               )}
             </Panel>
           )}
+
+          {activeTab === 'density' && <DensityTab stationId={stationId} />}
 
           {activeTab === 'variances' && (
             <Panel flush title="Reconciliations">

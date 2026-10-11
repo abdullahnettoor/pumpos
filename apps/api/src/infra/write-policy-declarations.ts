@@ -147,6 +147,11 @@ export const WRITE_POLICY_DECLARATIONS: WritePolicyRegistry = declareWritePolici
     rationale: 'A tanker that has already been decanted must be recorded, or stock is wrong.',
   },
   {
+    operation: 'POST /transactions/density/readings',
+    restricted: 'FINISH_OPEN_WORK',
+    rationale: 'Daily morning density checks complete shift opening routines and statutory compliance.',
+  },
+  {
     operation: 'POST /transactions/decantations',
     restricted: 'FINISH_OPEN_WORK',
     rationale: 'A tanker that has already been unloaded must be recorded, or stock is wrong.',
