@@ -88,7 +88,7 @@ decantationsRouter.get('/decantations', async (c) => {
   const stationId = c.req.query('stationId');
   const denied = guardStation(c, stationId);
   if (denied) return denied;
-  if (!(await loadStationClock(c.var.db, user.organizationId, stationId!)))
+  if (!(await loadStationClock(c.var.db, user.organizationId, stationId)))
     return stationNotFound(c);
   const result = await new ListDecantations({
     decantations: new DrizzleDecantationRepository(c.var.db),
