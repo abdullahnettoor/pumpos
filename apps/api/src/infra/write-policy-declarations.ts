@@ -157,6 +157,16 @@ export const WRITE_POLICY_DECLARATIONS: WritePolicyRegistry = declareWritePolici
     rationale: 'The after dip and chamber checks complete a decantation already in progress.',
   },
   {
+    operation: 'PUT /transactions/decantations/:id/purchases',
+    restricted: 'FINISH_OPEN_WORK',
+    rationale: 'Linking the invoice completes a tanker that has already been unloaded.',
+  },
+  {
+    operation: 'DELETE /transactions/decantations/:id/purchases/:productId',
+    restricted: 'FINISH_OPEN_WORK',
+    rationale: 'Correcting a wrong link on a tanker that has already been unloaded.',
+  },
+  {
     operation: 'POST /transactions/supplier-payments',
     restricted: 'FINISH_OPEN_WORK',
     rationale: 'Cash paid to a supplier leaves the drawer whether or not PumpOS records it.',

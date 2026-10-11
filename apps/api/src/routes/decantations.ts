@@ -1,19 +1,30 @@
 import { Hono, type Context } from 'hono';
-import type { DbClient } from '@pump/db';
+import type { DbClient, DbExecutor } from '@pump/db';
 import { canRecordDecantation, isAuthorizedForStation } from '@pump/shared';
 import {
   GetDecantation,
+  LinkDecantationPurchase,
   ListDecantations,
+  ListLinkablePurchases,
+  UnlinkDecantationPurchase,
+  decantationLinkSchema,
+  listLinkablePurchasesSchema,
   listDecantationsSchema,
   RecordDecantation,
   recordDecantationSchema,
   type RecordDecantationCommand,
+  type EventPublisher,
+  type Result,
+  err,
+  notFoundError,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { TimestampDocumentNumberGenerator } from '../infra/doc-numbers.js';
 import {
+  createDecantationLinker,
   createDecantationMeasurement,
+  DrizzleDecantationLinkRepository,
   DrizzleDecantationRepository,
   DrizzleDensityReadingRepository,
 } from '../infra/repositories/decantation-repositories.js';
@@ -78,6 +89,7 @@ async function record(c: Ctx, body: RecordDecantationCommand) {
       docNumbers,
       events,
       measurement: createDecantationMeasurement(tx, events),
+      linking: createDecantationLinker(tx, events, settings ?? undefined),
       ...(settings ? { settings } : {}),
     }).execute(body, buildContext(user, { stationId: body.stationId, ...clock }));
   });
@@ -127,9 +139,104 @@ decantationsRouter.get('/decantations', async (c) => {
     return stationNotFound(c);
   const result = await new ListDecantations({
     decantations: new DrizzleDecantationRepository(c.var.db),
+    links: new DrizzleDecantationLinkRepository(c.var.db),
   }).execute(query.data, buildContext(user, { stationId }));
   return sendResult(c, result);
 });
+
+decantationsRouter.get('/decantations/linkable-purchases', async (c) => {
+  const user = c.var.user;
+  // Authorize the station first so a foreign station is refused before validation.
+  const denied = guardStation(c, c.req.query('stationId'));
+  if (denied) return denied;
+  if (!(await loadStationClock(c.var.db, user.organizationId, c.req.query('stationId') as string)))
+    return stationNotFound(c);
+  const query = listLinkablePurchasesSchema.safeParse(c.req.query());
+  if (!query.success)
+    return c.json(
+      {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'stationId and productId are required' },
+      },
+      400,
+    );
+  const result = await new ListLinkablePurchases({
+    links: new DrizzleDecantationLinkRepository(c.var.db),
+  }).execute(query.data, buildContext(user, { stationId: query.data.stationId }));
+  return sendResult(c, result);
+});
+
+/** Load the Decantation's station so the link routes can authorize it. */
+async function stationOfDecantation(c: Ctx, id: string) {
+  const found = await new GetDecantation({
+    decantations: new DrizzleDecantationRepository(c.var.db),
+  }).execute({ decantationId: id }, buildContext(c.var.user, {}));
+  return found.success ? found.data.stationId : null;
+}
+
+async function linkChange(
+  c: Ctx,
+  decantationId: string,
+  run: (
+    tx: DbExecutor,
+    events: EventPublisher,
+    ctx: ReturnType<typeof buildContext>,
+    settings: Awaited<ReturnType<typeof loadStationDecantationSettings>>,
+  ) => Promise<Result<unknown>>,
+) {
+  const user = c.var.user;
+  if (!canRecordDecantation(user.role))
+    return forbidden(c, 'Insufficient permissions for decantations');
+  const stationId = await stationOfDecantation(c, decantationId);
+  if (!stationId) return sendResult(c, err(notFoundError('Decantation', decantationId)));
+  const denied = guardStation(c, stationId);
+  if (denied) return denied;
+  const clock = await loadStationClock(c.var.db, user.organizationId, stationId);
+  if (!clock) return stationNotFound(c);
+  const settings = await loadStationDecantationSettings(c.var.db, user.organizationId, stationId);
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    await lockStationInventory(tx, user.organizationId, stationId);
+    return run(tx, events, buildContext(user, { stationId, ...clock }), settings);
+  });
+  return sendResult(c, result);
+}
+
+decantationsRouter.put(
+  '/decantations/:id/purchases',
+  writePolicyGuard('PUT /transactions/decantations/:id/purchases'),
+  validateJson(decantationLinkSchema),
+  async (c) => {
+    const body = c.req.valid('json');
+    const id = c.req.param('id');
+    return linkChange(c, id, (tx, events, ctx, settings) =>
+      new LinkDecantationPurchase({
+        links: new DrizzleDecantationLinkRepository(tx),
+        decantations: new DrizzleDecantationRepository(tx),
+        settler: createDecantationMeasurement(tx, events),
+        events,
+        ...(settings ? { settings } : {}),
+      }).execute({ decantationId: id, ...body }, ctx),
+    );
+  },
+);
+
+decantationsRouter.delete(
+  '/decantations/:id/purchases/:productId',
+  writePolicyGuard('DELETE /transactions/decantations/:id/purchases/:productId'),
+  async (c) => {
+    const id = c.req.param('id');
+    const productId = c.req.param('productId');
+    return linkChange(c, id, (tx, events, ctx, settings) =>
+      new UnlinkDecantationPurchase({
+        links: new DrizzleDecantationLinkRepository(tx),
+        decantations: new DrizzleDecantationRepository(tx),
+        settler: createDecantationMeasurement(tx, events),
+        events,
+        ...(settings ? { settings } : {}),
+      }).execute({ decantationId: id, productId }, ctx),
+    );
+  },
+);
 
 decantationsRouter.get('/decantations/:id', async (c) => {
   const user = c.var.user;
@@ -137,6 +244,7 @@ decantationsRouter.get('/decantations/:id', async (c) => {
     return forbidden(c, 'Insufficient permissions for decantations');
   const result = await new GetDecantation({
     decantations: new DrizzleDecantationRepository(c.var.db),
+    links: new DrizzleDecantationLinkRepository(c.var.db),
   }).execute({ decantationId: c.req.param('id') }, buildContext(user, {}));
   if (
     result.success &&
