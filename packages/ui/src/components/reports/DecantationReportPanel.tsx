@@ -33,7 +33,7 @@ export const DecantationReportPanel: React.FC<DecantationReportPanelProps> = ({
   selectedStation,
 }) => {
   const stationId = selectedStation?.id ?? null;
-  const s = (selectedStation?.settings ?? {});
+  const s = selectedStation?.settings ?? {};
   const clock = useMemo(
     () => ({
       timeZone: s.timezone as string | undefined,
