@@ -24,7 +24,8 @@ import {
   resolveEntryDate,
   type PurchaseEntryFormValues,
 } from '@pump/shared';
-import { purchaseColumns, buildSupplierColumns } from './purchases/columns.js';
+import { buildPurchaseColumns, buildSupplierColumns } from './purchases/columns.js';
+import { LinkToDecantationDrawer } from './purchases/LinkToDecantationDrawer.js';
 import { SupplierFormDrawer } from './purchases/SupplierFormDrawer.js';
 import { SupplierStatementDrawer } from './purchases/SupplierStatementDrawer.js';
 import { SupplierPaymentDrawer } from './purchases/SupplierPaymentDrawer.js';
@@ -195,6 +196,8 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
 
   // Supplier form + statement drawers
   const [isPurchaseDrawerOpen, setIsPurchaseDrawerOpen] = useState(false);
+  const [linkingPurchase, setLinkingPurchase] = useState<any | null>(null);
+  const purchaseColumns = buildPurchaseColumns(setLinkingPurchase);
   const [isSupplierDrawerOpen, setIsSupplierDrawerOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<any | null>(null);
   const [statementSupplierId, setStatementSupplierId] = useState<string | null>(null);
@@ -794,6 +797,11 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
           </div>
         )}
       </div>
+
+      <LinkToDecantationDrawer
+        purchase={linkingPurchase}
+        onClose={() => setLinkingPurchase(null)}
+      />
 
       {/* Purchase Entry Drawer */}
       <Drawer isOpen={isPurchaseDrawerOpen} onClose={closePurchaseDrawer} title="Record Purchase">

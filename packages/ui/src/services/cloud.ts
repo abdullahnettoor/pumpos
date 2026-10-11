@@ -1092,6 +1092,34 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/purchases${suffix}`);
   }
 
+  /** Decantations of a station with per-product purchase links (#469). */
+  async getDecantations(stationId: string): Promise<any[]> {
+    const qs = new URLSearchParams({ stationId });
+    return request<any[]>(`/transactions/decantations?${qs.toString()}`);
+  }
+
+  async getLinkablePurchases(stationId: string, productId: string): Promise<any[]> {
+    const qs = new URLSearchParams({ stationId, productId });
+    return request<any[]>(`/transactions/decantations/linkable-purchases?${qs.toString()}`);
+  }
+
+  /** Link (or replace) the Fuel Purchase of one product on a Decantation. */
+  async linkDecantationPurchase(
+    decantationId: string,
+    payload: { productId: string; purchaseId: string },
+  ): Promise<any> {
+    return request<any>(`/transactions/decantations/${decantationId}/purchases`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async unlinkDecantationPurchase(decantationId: string, productId: string): Promise<any> {
+    return request<any>(`/transactions/decantations/${decantationId}/purchases/${productId}`, {
+      method: 'DELETE',
+    });
+  }
+
   async getPurchaseItems(purchaseId: string): Promise<any[]> {
     return request<any[]>(`/transactions/purchases/${purchaseId}/items`);
   }
