@@ -809,13 +809,12 @@ export function useLinkDecantationPurchase() {
         productId: v.productId,
         purchaseId: v.purchaseId,
       }),
-    onSuccess: () =>
-      Promise.all([
-        qc.invalidateQueries({ queryKey: ['purchases'] }),
-        qc.invalidateQueries({ queryKey: ['decantations'] }),
-        // Linking settles the invoice, which can move a product's weighted-average cost.
-        qc.invalidateQueries({ queryKey: ['products'] }),
-      ]),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['purchases'] });
+      void qc.invalidateQueries({ queryKey: ['decantations'] });
+      // Linking settles the invoice, which can move a product's weighted-average cost.
+      void qc.invalidateQueries({ queryKey: ['products'] });
+    },
   });
 }
 

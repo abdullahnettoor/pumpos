@@ -123,6 +123,7 @@ function setup(purchases: LinkableFuelPurchase[]) {
     settler: {
       settleInvoice: async (_c: ExecutionContext, i: { purchaseId: string }) =>
         void settled.push(i.purchaseId),
+      reverseLinkContribution: async () => {},
     },
     events,
     settings: { densityToleranceKgM3: 3, settlingTimeMinutes: 30 },
@@ -263,6 +264,15 @@ describe('UnlinkDecantationPurchase (#469)', () => {
     expect(r.success && r.data.unlinkedProductIds).toEqual(['ms']);
     expect(s.d.flags).toEqual([]);
     expect(types(s.store)).toContain(BusinessEvents.DECANTATION_PURCHASE_UNLINKED);
+  });
+
+  it('without a linked invoice there is no density to compare: a flag from the link goes, other flags stay', async () => {
+    const s = setup([purchase('p1')]);
+    await s.link.execute({ decantationId: 'd-1', productId: 'ms', purchaseId: 'p1' }, s.ctx);
+    expect(s.d.flags.map((f) => f.code)).toContain('DENSITY_OUT_OF_TOLERANCE');
+    s.d.flags.push({ code: 'SETTLING_TIME_SHORT', message: 'kept' } as never);
+    await s.unlink.execute({ decantationId: 'd-1', productId: 'ms' }, s.ctx);
+    expect(s.d.flags.map((f) => f.code)).toEqual(['SETTLING_TIME_SHORT']);
   });
 
   it('refuses when nothing is linked', async () => {

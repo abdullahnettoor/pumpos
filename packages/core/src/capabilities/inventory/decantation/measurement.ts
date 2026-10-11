@@ -16,6 +16,7 @@ import type { ProductRepository } from '../../station-setup/products/ports.js';
 import type { StockMovement, StockMovementRepository } from '../ports.js';
 import type {
   Decantation,
+  DecantationPurchaseLink,
   DecantationPurchaseRepository,
   DecantationRepository,
   DecantationTankLine,
@@ -215,7 +216,10 @@ export class DecantationMeasurementService implements DecantationMeasurement, Ta
     for (const link of links) {
       const d = await this.deps.decantations.findById(ctx.organizationId, link.decantationId);
       const lines = (d?.lines ?? []).filter((l) => l.productId === input.productId);
-      if (lines.length === 0 || lines.some((l) => l.status !== 'MEASURED')) return;
+      if (lines.length === 0 || lines.some((l) => l.status !== 'MEASURED')) {
+        await this.markSettling(links);
+        return;
+      }
       receivedByLink.set(link.id, round3(lines.reduce((s, l) => s + (l.receivedQty ?? 0), 0)));
     }
     const totalReceived = round3([...receivedByLink.values()].reduce((s, n) => s + n, 0));
@@ -245,6 +249,79 @@ export class DecantationMeasurementService implements DecantationMeasurement, Ta
     const oldCost = Number(product.costBasis ?? 0);
     const value = firstSettlement ? invoice.value : 0;
     const newCost = (baseQty * oldCost + value) / (baseQty + newReceived);
+    await this.deps.products.updateCostBasis(input.productId, String(round4(newCost)));
+  }
+
+  /**
+   * Some line of the invoice is still pending: hide stale received/variance so
+   * the report shows Settling. `varianceComputedAt` is kept on links that already
+   * contributed to cost, so a later settlement never re-adds the invoice value.
+   */
+  private async markSettling(links: DecantationPurchaseLink[]): Promise<void> {
+    for (const link of links)
+      if (link.receivedQty !== null || link.invoiceQty !== null || link.varianceQty !== null)
+        await this.deps.links.updateVariance({
+          ...link,
+          receivedQty: null,
+          invoiceQty: null,
+          varianceQty: null,
+        });
+  }
+
+  /**
+   * Reverses what a link added to the product's weighted-average cost, before the
+   * link is removed or replaced (unlink / replace / relink stay net zero).
+   * Approximation: a settled invoice's value was added once, on its first
+   * settlement, against the qty of the links settled then. On removal the link
+   * gives back qty = its received and value = invoice value x its received / Σ
+   * received of the settled links of that invoice. Cost never goes negative; a
+   * link that never settled contributed nothing and reverses nothing.
+   */
+  async reverseLinkContribution(
+    ctx: ExecutionContext,
+    input: { purchaseId: string; productId: string; decantationId: string },
+  ): Promise<void> {
+    const links = await this.deps.links.listForPurchaseProduct(
+      ctx.organizationId,
+      input.purchaseId,
+      input.productId,
+    );
+    const removed = links.find((l) => l.decantationId === input.decantationId);
+    if (!removed || !removed.varianceComputedAt) return;
+    const receivedOf = async (l: DecantationPurchaseLink) => {
+      const d = await this.deps.decantations.findById(ctx.organizationId, l.decantationId);
+      return round3(
+        (d?.lines ?? [])
+          .filter((x) => x.productId === input.productId)
+          .reduce((s, x) => s + (x.receivedQty ?? 0), 0),
+      );
+    };
+    let settledTotal = 0;
+    let removedQty = 0;
+    for (const l of links) {
+      if (!l.varianceComputedAt) continue;
+      const q = await receivedOf(l);
+      settledTotal += q;
+      if (l.id === removed.id) removedQty = q;
+    }
+    if (removedQty <= 0 || settledTotal <= 0) return;
+    const invoice = await this.deps.links.invoiceLine(
+      ctx.organizationId,
+      removed.stationId,
+      input.purchaseId,
+      input.productId,
+    );
+    if (!invoice) return;
+    const product = await this.deps.products.findById(input.productId);
+    if (!product || product.organizationId !== ctx.organizationId) return;
+    const onHand = await this.deps.movements.currentQuantityForProduct(
+      ctx.organizationId,
+      input.productId,
+    );
+    const remaining = onHand - removedQty;
+    if (remaining <= 0) return;
+    const value = (invoice.value * removedQty) / settledTotal;
+    const newCost = Math.max((onHand * Number(product.costBasis ?? 0) - value) / remaining, 0);
     await this.deps.products.updateCostBasis(input.productId, String(round4(newCost)));
   }
 

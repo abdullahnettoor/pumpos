@@ -3,6 +3,7 @@ import { Drawer } from '../Drawer.js';
 import { Button, DateText, EmptyState } from '../../pump-ds/index.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { useToast } from '../primitives/ToastProvider.js';
+import type { PurchaseLinkRow } from './columns.js';
 import {
   useDecantations,
   useLinkDecantationPurchase,
@@ -11,7 +12,7 @@ import {
 
 interface LinkToDecantationDrawerProps {
   /** The Fuel Purchase being linked; null while closed. */
-  purchase: any | null;
+  purchase: PurchaseLinkRow | null;
   onClose: () => void;
 }
 
@@ -43,7 +44,8 @@ export const LinkToDecantationDrawer: React.FC<LinkToDecantationDrawerProps> = (
       .filter((d) => (d.unlinkedProductIds ?? []).includes(productId))
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 
-  const doLink = async (decantation: any, productId: string) => {
+  const doLink = async (decantation: { id: string; documentNumber: string }, productId: string) => {
+    if (!purchase) return;
     try {
       await link.mutateAsync({
         decantationId: decantation.id,

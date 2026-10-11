@@ -39,7 +39,11 @@ import {
 } from '../infra/station-clock.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
-import { validateJson } from '../utils/validator.js';
+import { validateJson, validateParams } from '../utils/validator.js';
+import { z } from 'zod';
+
+const idParam = z.object({ id: z.string().uuid() });
+const idProductParams = z.object({ id: z.string().uuid(), productId: z.string().uuid() });
 
 type Variables = { db: DbClient; user: AuthenticatedPrincipal };
 type Ctx = Context<{ Variables: Variables }>;
@@ -205,10 +209,11 @@ async function linkChange(
 decantationsRouter.put(
   '/decantations/:id/purchases',
   writePolicyGuard('PUT /transactions/decantations/:id/purchases'),
+  validateParams(idParam),
   validateJson(decantationLinkSchema),
   async (c) => {
     const body = c.req.valid('json');
-    const id = c.req.param('id');
+    const { id } = c.req.valid('param');
     return linkChange(c, id, (tx, events, ctx, settings) =>
       new LinkDecantationPurchase({
         links: new DrizzleDecantationLinkRepository(tx),
@@ -224,9 +229,9 @@ decantationsRouter.put(
 decantationsRouter.delete(
   '/decantations/:id/purchases/:productId',
   writePolicyGuard('DELETE /transactions/decantations/:id/purchases/:productId'),
+  validateParams(idProductParams),
   async (c) => {
-    const id = c.req.param('id');
-    const productId = c.req.param('productId');
+    const { id, productId } = c.req.valid('param');
     return linkChange(c, id, (tx, events, ctx, settings) =>
       new UnlinkDecantationPurchase({
         links: new DrizzleDecantationLinkRepository(tx),

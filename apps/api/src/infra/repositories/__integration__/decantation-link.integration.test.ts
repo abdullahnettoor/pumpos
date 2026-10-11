@@ -292,10 +292,10 @@ describe.skipIf(!CONNECTION)(
       });
       if (!b.success) throw new Error(JSON.stringify(b.error));
       await linkUc(b.data.decantation.id, PRODUCT, PURCHASE);
-      // While b is pending the invoice is not fully measured: a keeps its sole-link variance.
+      // While b is pending the invoice is not fully measured: a shows Settling, no stale variance.
       expect(
         (await links()).find((l) => l.decantationId === a.data.decantation.id)?.varianceQty,
-      ).toBe('-7000.000');
+      ).toBeNull();
 
       const c = await record({
         decantationId: b.data.decantation.id,

@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { computeDecantationFlags, decantationFlagKey, type DecantationFlag } from '@pump/shared';
+import {
+  computeDecantationFlags,
+  decantationFlagKey,
+  DEFAULT_DECANTATION_SETTINGS,
+  type DecantationFlag,
+} from '@pump/shared';
 import {
   BusinessEvents,
   err,
@@ -39,10 +44,17 @@ export interface InvoiceSettler {
     ctx: ExecutionContext,
     input: { purchaseId: string; productId: string },
   ): Promise<void>;
+  /**
+   * Reverses the cost a link contributed. Call BEFORE the link row is removed or
+   * replaced (see DecantationMeasurementService.reverseLinkContribution).
+   */
+  reverseLinkContribution(
+    ctx: ExecutionContext,
+    input: { purchaseId: string; productId: string; decantationId: string },
+  ): Promise<void>;
 }
 
-/** Same defaults as RecordDecantation (kept here to avoid an import cycle). */
-const DEFAULT_TOLERANCES = { densityToleranceKgM3: 3, settlingTimeMinutes: 30 } as const;
+const DEFAULT_TOLERANCES = DEFAULT_DECANTATION_SETTINGS;
 
 export interface DecantationLinkerDeps {
   links: DecantationLinkRepository;
@@ -92,8 +104,21 @@ export class DecantationLinker {
     return this.deps.links.listViews(ctx.organizationId, [decantationId]);
   }
 
-  removeLink(ctx: ExecutionContext, decantationId: string, productId: string): Promise<void> {
-    return this.deps.links.remove(ctx.organizationId, decantationId, productId);
+  async removeLink(ctx: ExecutionContext, decantationId: string, productId: string): Promise<void> {
+    const prev = (await this.deps.links.listViews(ctx.organizationId, [decantationId])).find(
+      (v) => v.productId === productId,
+    );
+    if (prev) await this.reverse(ctx, prev.purchaseId, productId, decantationId);
+    await this.deps.links.remove(ctx.organizationId, decantationId, productId);
+  }
+
+  private async reverse(
+    ctx: ExecutionContext,
+    purchaseId: string,
+    productId: string,
+    decantationId: string,
+  ): Promise<void> {
+    await this.deps.settler?.reverseLinkContribution(ctx, { purchaseId, productId, decantationId });
   }
 
   /** Validate a link against the Decantation's lines and the purchase. */
@@ -123,6 +148,7 @@ export class DecantationLinker {
   ): Promise<{ changed: boolean; previousPurchaseId: string | null }> {
     const prev = existing.find((v) => v.productId === link.productId);
     if (prev?.purchaseId === link.purchaseId) return { changed: false, previousPurchaseId: null };
+    if (prev) await this.reverse(ctx, prev.purchaseId, link.productId, d.id);
     await this.deps.links.upsert({
       id: ctx.ids.newId(),
       organizationId: d.organizationId,
@@ -299,7 +325,7 @@ export class UnlinkDecantationPurchase implements UseCase<
         invariantViolation('That product is not linked to a purchase on this Decantation'),
       );
 
-    await this.deps.links.remove(ctx.organizationId, d.id, p.data.productId);
+    await this.linker.removeLink(ctx, d.id, p.data.productId);
     // Flags of the Decantation are recomputed without the removed invoice density.
     await this.linker.recomputeDensityFlags(ctx, d);
     await this.linker.settle(ctx, prev.purchaseId, p.data.productId);

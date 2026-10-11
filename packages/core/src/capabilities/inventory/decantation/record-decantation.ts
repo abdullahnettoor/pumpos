@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   computeDecantationFlags,
   decantationFlagKey,
+  DEFAULT_DECANTATION_SETTINGS,
   type DecantationFlag,
   type DecantationWarning,
 } from '@pump/shared';
@@ -41,8 +42,8 @@ import { decantationLinkSchema, purchaseDensity } from './linking.js';
 
 /** Fallback when the caller supplies no station settings (#464). */
 export const DEFAULT_DECANTATION_TOLERANCES = {
-  densityToleranceKgM3: 3,
-  settlingTimeMinutes: 30,
+  densityToleranceKgM3: DEFAULT_DECANTATION_SETTINGS.densityToleranceKgM3,
+  settlingTimeMinutes: DEFAULT_DECANTATION_SETTINGS.settlingTimeMinutes,
 } as const;
 
 const optNum = z.preprocess(

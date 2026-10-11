@@ -824,7 +824,14 @@ export class DrizzleDecantationLinkRepository implements DecantationLinkReposito
         invoiceDensity: schema.purchaseItems.invoiceDensity,
       })
       .from(schema.purchaseItems)
-      .where(eq(schema.purchaseItems.purchaseId, purchaseId));
+      .innerJoin(schema.purchases, eq(schema.purchases.id, schema.purchaseItems.purchaseId))
+      .where(
+        and(
+          eq(schema.purchaseItems.purchaseId, purchaseId),
+          eq(schema.purchases.organizationId, organizationId),
+          eq(schema.purchases.stationId, p.station_id),
+        ),
+      );
     return {
       id: p.id,
       stationId: p.station_id,

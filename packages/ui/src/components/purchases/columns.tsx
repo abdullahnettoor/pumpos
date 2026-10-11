@@ -5,12 +5,23 @@ import { StatusChip, DateText, Icon, Chip } from '../../pump-ds/index.js';
 
 /** Column builders for the Purchases screen tables (extracted from PurchasesList). */
 
+/** The purchase-row fields the Decantation link action reads. */
+export interface PurchaseLinkRow {
+  id: string;
+  stationId?: string | null;
+  businessDayId?: string | null;
+  awaitingDecantation?: boolean;
+  invoiceNumber?: string | null;
+  documentNumber?: string;
+  supplierName?: string;
+}
+
 /**
  * `onLinkToDecantation` adds a row action for Fuel Purchases still awaiting a
  * Decantation (#469).
  */
 export const buildPurchaseColumns = (
-  onLinkToDecantation?: (purchase: any) => void,
+  onLinkToDecantation?: (purchase: PurchaseLinkRow) => void,
 ): ColumnDef<any, any>[] => [
   {
     id: 'entryDate',
@@ -112,7 +123,7 @@ export const buildPurchaseColumns = (
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onLinkToDecantation(row.original);
+                  onLinkToDecantation(row.original as PurchaseLinkRow);
                 }}
                 style={{
                   background: 'none',
