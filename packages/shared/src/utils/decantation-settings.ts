@@ -1,9 +1,16 @@
 import { z } from 'zod';
+import {
+  DEFAULT_DENSITY_METHOD,
+  DEFAULT_DENSITY_TOLERANCE_KG_M3,
+  DENSITY_METHODS,
+  REFERENCE_TEMPERATURE_C,
+  type DensityMethod,
+} from './density.js';
 
-export const DECANTATION_REFERENCE_TEMPERATURE_C = 15;
-
-export const DECANTATION_DENSITY_METHODS = ['API_MPMS_11_1_ADJUNCT', 'OMC_TABLE_53B'] as const;
-export type DecantationDensityMethod = (typeof DECANTATION_DENSITY_METHODS)[number];
+// Single source for density constants is ./density.ts; these are the settings-facing names.
+export const DECANTATION_REFERENCE_TEMPERATURE_C = REFERENCE_TEMPERATURE_C;
+export const DECANTATION_DENSITY_METHODS = DENSITY_METHODS;
+export type DecantationDensityMethod = DensityMethod;
 export const DECANTATION_SETTINGS_KEYS = [
   'densityMethod',
   'densityToleranceKgM3',
@@ -45,8 +52,8 @@ export type DecantationSettings = {
 };
 
 export const DEFAULT_DECANTATION_SETTINGS: DecantationSettings = {
-  densityMethod: 'API_MPMS_11_1_ADJUNCT',
-  densityToleranceKgM3: 3,
+  densityMethod: DEFAULT_DENSITY_METHOD,
+  densityToleranceKgM3: DEFAULT_DENSITY_TOLERANCE_KG_M3,
   quantityTolerance: 0.2,
   settlingTimeMinutes: 30,
   densitySpecBands: {},
