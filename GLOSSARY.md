@@ -39,7 +39,7 @@ _Avoid_: Business Date (for office records), UTC date
 
 **Office Record**:
 Money handled by the office, not by Attendants: Collections, Supplier
-Payments, Expenses, Income and bank work. Carries an Entry Date, no Shift and
+Payments, Fuel Purchases, Expenses, Income and bank work. Carries an Entry Date, no Shift and
 no Business Day, and lives in the ledger.
 _Avoid_: day-anchored financial, back-office entry
 
@@ -283,8 +283,10 @@ Money paid to a supplier. An Office Record; never touches the Drawer.
 _Avoid_: vendor payment, purchase payment
 
 **Purchase**:
-Stock received from a supplier. A forecourt stock event anchored to the
-Business Day (sealed with it), never to a Shift. Paying for it is a separate
+A supplier invoice. A product Purchase adds stock and is anchored to the
+Business Day (sealed with it), never to a Shift. A **Fuel Purchase** is an
+Office Record (Entry Date): it records the payable only and never moves stock;
+fuel stock comes from Decantation (ADR 0007). Paying for either is a separate
 Supplier Payment.
 _Avoid_: procurement, inward
 
@@ -467,7 +469,31 @@ received, sold and adjusted totals.
 
 **Tank Transfer**:
 Fuel moved between two Tanks without a sale.
-_Avoid_: inter-tank move, decanting
+_Avoid_: inter-tank move
+
+**Decantation**:
+One tanker visit unloading into one or more station Tanks. The only event that
+adds fuel stock. Anchored to the Business Day, no Shift. Has one Tank Line per
+tank (dip before, RO Density, optional dip after) and optional Chamber checks;
+links one Fuel Purchase per product. Received quantity is always measured
+(ADR 0007).
+_Avoid_: fuel receipt, tanker receipt, unloading entry
+
+**Tank Line**:
+One tank a Decantation unloads into: its product, dips, RO Density and
+measured received quantity. Stock is added per Tank Line.
+_Avoid_: allocation, split
+
+**Chamber**:
+A compartment of the tanker. An optional Decantation check records its seal,
+dip mark (OK / Short / Excess) and whether it was emptied. Never moves stock.
+_Avoid_: compartment
+
+**RO Density**:
+Density the station measures from the tanker sample with its own instrument,
+compared with the Invoice Density. Recorded, never computed by PumpOS beyond
+the optional density calculator.
+_Avoid_: observed density (in UI), sample density
 
 ## Reports & Snapshots
 

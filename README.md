@@ -186,7 +186,7 @@ Current Roles:
 ## 📝 Guidelines & Code Quality Standards
 
 Before contributing or adding new features, review [AGENTS.md](AGENTS.md),
-[CONTEXT.md](CONTEXT.md), and the relevant accepted ADRs under `docs/adr/`:
+[GLOSSARY.md](GLOSSARY.md), and the relevant accepted ADRs under `docs/adr/`:
 
 - **UI Design Pattern**: List ➔ Drawer ➔ Edit. Avoid modal-heavy workflows. Keep interfaces clean, compact, and information-dense.
 - **Component Reuse**: Check `packages/ui` for existing components (`PageLayout`, `DataTable`, `Drawer`, etc.) before creating new ones.

@@ -5,7 +5,7 @@ of product truth. The precedence order is:
 
 1. [`AGENTS.md`](../../AGENTS.md) for hard architecture, security, and operational
    rules.
-2. [`CONTEXT.md`](../../CONTEXT.md) for canonical domain language.
+2. [`GLOSSARY.md`](../../GLOSSARY.md) for canonical domain language.
 3. Accepted ADRs in [`docs/adr/`](../adr/) for decisions and their amendments.
 4. These docs for implementation patterns, verified against current code and
    configuration. See the [documentation map](../README.md) for maintained,
