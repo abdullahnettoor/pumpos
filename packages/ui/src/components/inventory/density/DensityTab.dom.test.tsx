@@ -19,13 +19,16 @@ const STATION: Partial<Station> = {
   name: 'Highway Express Retail Outlet',
   code: 'HE01',
   settings: {
+    shift_grace_minutes: 0,
+    shift_lock_grace_days: 0,
+    offline_warning_days: 0,
+    offline_critical_days: 0,
     timezone: 'Asia/Kolkata',
-    densityTolerance: 3.0,
+    densityToleranceKgM3: 3.0,
     densitySpecBands: {
-      MS: { min: 720, max: 775 },
-      HSD: { min: 820, max: 860 },
+      'prod-ms': { minKgM3: 720, maxKgM3: 775 },
     },
-  } as any,
+  },
 };
 
 const PRODUCTS: Partial<Product>[] = [
@@ -90,6 +93,9 @@ const MOCK_TODAY_SUMMARY: DensityTodaySummary = {
   totalProducts: 2,
   recordedCount: 1,
   missingCount: 1,
+  missingProducts: [
+    { productId: 'prod-hsd', productName: 'High Speed Diesel', productCode: 'HSD' },
+  ],
   products: [
     {
       productId: 'prod-ms',
@@ -101,6 +107,7 @@ const MOCK_TODAY_SUMMARY: DensityTodaySummary = {
         { date: '2026-10-10', density15: 753.3 },
         { date: '2026-10-11', density15: 753.8 },
       ],
+      trendValues: [753.3, 753.8],
       lastReadings: [MOCK_READING_MS],
     },
     {
@@ -110,6 +117,7 @@ const MOCK_TODAY_SUMMARY: DensityTodaySummary = {
       todayRecorded: false,
       latestToday: null,
       trend14d: [{ date: '2026-10-09', density15: 832.1 }],
+      trendValues: [832.1],
       lastReadings: [],
     },
   ],
@@ -122,10 +130,10 @@ function seedQueryClient() {
   qc.setQueryData(queryKeys.tanks(STATION_ID), []);
   qc.setQueryData(queryKeys.nozzles(STATION_ID), []);
   qc.setQueryData(queryKeys.densityToday(STATION_ID, ''), MOCK_TODAY_SUMMARY);
-  qc.setQueryData(
-    queryKeys.densityReadings(STATION_ID, '', '', '', '', 500),
-    [MOCK_READING_MS, MOCK_READING_HSD_JUMP],
-  );
+  qc.setQueryData(queryKeys.densityReadings(STATION_ID, '', '', '', '', 500), [
+    MOCK_READING_MS,
+    MOCK_READING_HSD_JUMP,
+  ]);
   return qc;
 }
 
@@ -156,6 +164,30 @@ describe('DensityTab (Variant D)', () => {
 
     expect(screen.getByText(/High Speed Diesel \(HSD\)/i)).toBeDefined();
     expect(screen.getByText(/Today missing/i)).toBeDefined();
+
+    // Spec band comes only from Station Settings (keyed by product id); none when unset
+    expect(screen.getAllByText(/Spec:/i)).toHaveLength(1);
+    expect(screen.getByText(/Spec: 720–775 kg\/m³/)).toBeDefined();
+  });
+
+  it('shows no spec band when station settings define none', () => {
+    const qc = seedQueryClient();
+    qc.setQueryData(queryKeys.stations(), [
+      { ...STATION, settings: { ...STATION.settings, densitySpecBands: {} } },
+    ]);
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+    expect(screen.queryByText(/Spec:/i)).toBeNull();
+  });
+
+  it('defaults the drawer entry method from Station Settings', () => {
+    const qc = seedQueryClient();
+    qc.setQueryData(queryKeys.stations(), [
+      { ...STATION, settings: { ...STATION.settings, densityEntryMethod: 'DIRECT_15' } },
+    ]);
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+    fireEvent.click(screen.getByRole('button', { name: /Record density/i }));
+    expect(screen.getByText(/Record Density · Motor Spirit/i)).toBeDefined();
+    expect(screen.queryByText(/Observed Hydrometer/i)).toBeNull();
   });
 
   it('switches between Today and Register view via the segmented control', () => {
@@ -195,7 +227,6 @@ describe('DensityTab (Variant D)', () => {
     expect(screen.getByText(/Hydrometer \+ Temperature/i)).toBeDefined();
     expect(screen.getByRole('button', { name: /Save Reading/i })).toBeDefined();
   });
-
 
   it('renders morning save prompt banner when morning density reading is saved', () => {
     const qc = seedQueryClient();

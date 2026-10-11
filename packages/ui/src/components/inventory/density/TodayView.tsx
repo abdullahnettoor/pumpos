@@ -1,25 +1,22 @@
 import React from 'react';
-import {
-  Button,
-  Chip,
-  Icon,
-  Panel,
-  Sparkline,
-} from '../../../pump-ds/index.js';
+import { Button, Chip, Icon, Panel, Sparkline } from '../../../pump-ds/index.js';
 import { DeltaChip } from './DeltaChip.js';
-import type {
-  DensityTodayProductSummary,
-  DensityTodaySummary,
-} from '@pump/shared';
+import type { DensityTodayProductSummary, DensityTodaySummary } from '@pump/shared';
 
 export interface TodayViewProps {
   summary: DensityTodaySummary;
-  specBands?: Record<string, { min: number; max: number }>;
+  /** Station Settings spec bands, keyed by product id. */
+  specBands?: Record<string, { minKgM3?: number; maxKgM3?: number }>;
   tolerance?: number;
   morningPromptProduct: string | null;
   onDismissMorningPrompt: () => void;
   onPrintBoard: () => void;
   onRecord: (productId?: string) => void;
+}
+
+function formatBand(band: { minKgM3?: number; maxKgM3?: number }): string {
+  if (band.minKgM3 != null && band.maxKgM3 != null) return `${band.minKgM3}–${band.maxKgM3}`;
+  return band.minKgM3 != null ? `≥ ${band.minKgM3}` : `≤ ${band.maxKgM3}`;
 }
 
 export const TodayView: React.FC<TodayViewProps> = ({
@@ -31,7 +28,7 @@ export const TodayView: React.FC<TodayViewProps> = ({
   onPrintBoard,
   onRecord,
 }) => {
-  const missingProducts = summary.products.filter((p) => !p.todayRecorded);
+  const missingProducts = summary.missingProducts;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -132,11 +129,9 @@ export const TodayView: React.FC<TodayViewProps> = ({
         }}
       >
         {summary.products.map((prod) => {
-          const spec = specBands[prod.productCode];
+          const spec = specBands[prod.productId];
           const latest = prod.latestToday || prod.lastReadings[0] || null;
-          const trendNumbers = prod.trend14d
-            .map((t) => t.density15)
-            .filter((n): n is number => n !== null);
+          const trendNumbers = prod.trendValues;
 
           const isRecorded = prod.todayRecorded && prod.latestToday;
           const recordedTime = prod.latestToday?.recordedAt
@@ -195,7 +190,7 @@ export const TodayView: React.FC<TodayViewProps> = ({
                         marginTop: 4,
                       }}
                     >
-                      Spec: {spec.min}–{spec.max} kg/m³
+                      Spec: {formatBand(spec)} kg/m³
                     </div>
                   )}
                 </div>

@@ -20,16 +20,11 @@ export const DeltaChip: React.FC<DeltaChipProps> = ({
   }
 
   const isDecantation = kind === 'DECANTATION';
-  const hasJumpFlag =
-    Array.isArray(flags) && flags.some((f) => f === 'UNEXPLAINED_JUMP');
+  const hasJumpFlag = Array.isArray(flags) && flags.some((f) => f === 'UNEXPLAINED_JUMP');
   const isLargeJump = Math.abs(delta) > tolerance;
   const isUnexplained = hasJumpFlag || (isLargeJump && !isDecantation);
 
-  const tone = isUnexplained
-    ? 'danger'
-    : isDecantation && isLargeJump
-      ? 'info'
-      : 'neutral';
+  const tone = isUnexplained ? 'danger' : isDecantation && isLargeJump ? 'info' : 'neutral';
 
   const sign = delta > 0 ? '+' : '';
   const text = `${sign}${delta.toFixed(2)}`;

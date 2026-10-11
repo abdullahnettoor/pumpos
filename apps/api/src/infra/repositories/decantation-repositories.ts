@@ -1,5 +1,5 @@
-import { and, asc, desc, eq, gt, gte, inArray, lt, lte, sql } from 'drizzle-orm';
-import { roundDensity, shiftBusinessDate } from '@pump/shared';
+import { and, asc, desc, eq, gte, inArray, lt, lte, or, sql } from 'drizzle-orm';
+import { roundDensity } from '@pump/shared';
 import { schema, type DbExecutor } from '@pump/db';
 import {
   DecantationMeasurementService,
@@ -18,8 +18,6 @@ import {
   DensityReadingRepository,
   DensityReadingListQuery,
   DensityReadingWithContext,
-  DensityTodayProductSummary,
-  DensityTodaySummary,
 } from '@pump/core';
 import { DrizzleStockMovementRepository } from './inventory-repositories.js';
 import { DrizzleProductRepository } from './product.repo.js';
@@ -418,21 +416,35 @@ export class DrizzleDensityReadingRepository implements DensityReadingRepository
     organizationId: string,
     stationId: string,
     productId: string,
-    beforeRecordedAt?: string,
+    before?: { businessDate: string; recordedAt: string },
   ): Promise<DensityReading | null> {
     const conditions = [
       eq(schema.densityReadings.organizationId, organizationId),
       eq(schema.densityReadings.stationId, stationId),
       eq(schema.densityReadings.productId, productId),
     ];
-    if (beforeRecordedAt) {
-      conditions.push(lt(schema.densityReadings.recordedAt, new Date(beforeRecordedAt)));
+    if (before) {
+      // Register order is (business_date, recorded_at): the predecessor is the newest
+      // reading at or before this position, so a back-dated entry compares to the
+      // reading immediately before it. Ties on the instant count as preceding.
+      const previous = or(
+        lt(schema.densityReadings.businessDate, before.businessDate),
+        and(
+          eq(schema.densityReadings.businessDate, before.businessDate),
+          lte(schema.densityReadings.recordedAt, new Date(before.recordedAt)),
+        ),
+      );
+      if (previous) conditions.push(previous);
     }
     const [row] = await this.db
       .select()
       .from(schema.densityReadings)
       .where(and(...conditions))
-      .orderBy(desc(schema.densityReadings.recordedAt), desc(schema.densityReadings.createdAt))
+      .orderBy(
+        desc(schema.densityReadings.businessDate),
+        desc(schema.densityReadings.recordedAt),
+        desc(schema.densityReadings.createdAt),
+      )
       .limit(1);
 
     return row ? this.mapRow(row) : null;
@@ -458,8 +470,8 @@ export class DrizzleDensityReadingRepository implements DensityReadingRepository
           eq(schema.densityReadings.stationId, stationId),
           eq(schema.densityReadings.productId, productId),
           eq(schema.densityReadings.kind, 'DECANTATION'),
-          gt(schema.densityReadings.recordedAt, after),
-          lt(schema.densityReadings.recordedAt, before),
+          gte(schema.densityReadings.recordedAt, after),
+          lte(schema.densityReadings.recordedAt, before),
         ),
       )
       .limit(1);
@@ -479,8 +491,8 @@ export class DrizzleDensityReadingRepository implements DensityReadingRepository
           eq(schema.decantations.organizationId, organizationId),
           eq(schema.decantations.stationId, stationId),
           eq(schema.decantationTankLines.productId, productId),
-          gt(schema.decantations.createdAt, after),
-          lt(schema.decantations.createdAt, before),
+          gte(schema.decantations.createdAt, after),
+          lte(schema.decantations.createdAt, before),
         ),
       )
       .limit(1);
@@ -553,10 +565,7 @@ export class DrizzleDensityReadingRepository implements DensityReadingRepository
         if (i === 0) {
           ascItems[i].delta = null;
         } else {
-          ascItems[i].delta = roundDensity(
-            ascItems[i].density15 - ascItems[i - 1].density15,
-            2,
-          );
+          ascItems[i].delta = roundDensity(ascItems[i].density15 - ascItems[i - 1].density15, 2);
         }
       }
     }
@@ -564,17 +573,15 @@ export class DrizzleDensityReadingRepository implements DensityReadingRepository
     return items;
   }
 
-  async getTodaySummary(
+  async listFuelProductsWithActiveTanks(
     organizationId: string,
     stationId: string,
-    businessDate: string,
-  ): Promise<DensityTodaySummary> {
-    // 1. Get fuel products for this station (from tanks or products)
-    const tankProducts = await this.db
-      .select({
-        productId: schema.products.id,
-        productName: schema.products.name,
-        productCode: schema.products.code,
+  ): Promise<Array<{ id: string; name: string; code: string }>> {
+    return this.db
+      .selectDistinct({
+        id: schema.products.id,
+        name: schema.products.name,
+        code: schema.products.code,
       })
       .from(schema.tanks)
       .innerJoin(schema.products, eq(schema.tanks.productId, schema.products.id))
@@ -583,105 +590,11 @@ export class DrizzleDensityReadingRepository implements DensityReadingRepository
           eq(schema.tanks.organizationId, organizationId),
           eq(schema.tanks.stationId, stationId),
           eq(schema.tanks.status, 'ACTIVE'),
+          eq(schema.products.productType, 'FUEL'),
+          eq(schema.products.isActive, true),
         ),
-      );
-
-    const uniqueProducts = new Map<string, { id: string; name: string; code: string }>();
-    for (const tp of tankProducts) {
-      if (!uniqueProducts.has(tp.productId)) {
-        uniqueProducts.set(tp.productId, {
-          id: tp.productId,
-          name: tp.productName,
-          code: tp.productCode,
-        });
-      }
-    }
-
-    if (uniqueProducts.size === 0) {
-      const allFuel = await this.db
-        .select({
-          id: schema.products.id,
-          name: schema.products.name,
-          code: schema.products.code,
-        })
-        .from(schema.products)
-        .where(
-          and(
-            eq(schema.products.organizationId, organizationId),
-            eq(schema.products.productType, 'FUEL'),
-          ),
-        );
-      for (const p of allFuel) {
-        uniqueProducts.set(p.id, p);
-      }
-    }
-
-    // 2. Compute 14-day date window
-    const dates14: string[] = [];
-    for (let i = 13; i >= 0; i--) {
-      dates14.push(shiftBusinessDate(businessDate, -i));
-    }
-    const windowStart = dates14[0];
-
-    // 3. Fetch readings in date window
-    const windowReadings = await this.list({
-      organizationId,
-      stationId,
-      from: windowStart,
-      to: businessDate,
-      limit: 1000,
-    });
-
-    const byProd = new Map<string, DensityReadingWithContext[]>();
-    for (const r of windowReadings) {
-      if (!byProd.has(r.productId)) {
-        byProd.set(r.productId, []);
-      }
-      byProd.get(r.productId)!.push(r);
-    }
-
-    // 4. Build product summaries
-    const productSummaries: DensityTodayProductSummary[] = [];
-    let recordedCount = 0;
-
-    for (const prod of uniqueProducts.values()) {
-      const prodReadings = byProd.get(prod.id) ?? [];
-      const todayReadings = prodReadings.filter((r) => r.businessDate === businessDate);
-      const latestToday = todayReadings.length > 0 ? todayReadings[0] : null;
-      const todayRecorded = latestToday != null;
-      if (todayRecorded) recordedCount++;
-
-      const trend14d = dates14.map((d) => {
-        const onDate = prodReadings.filter((r) => r.businessDate === d);
-        return {
-          date: d,
-          density15: onDate.length > 0 ? onDate[0].density15 : null,
-        };
-      });
-
-      const lastReadings = prodReadings.slice(0, 4);
-
-      productSummaries.push({
-        productId: prod.id,
-        productName: prod.name,
-        productCode: prod.code,
-        latestToday,
-        todayRecorded,
-        trend14d,
-        lastReadings,
-      });
-    }
-
-    const totalProducts = uniqueProducts.size;
-    const missingCount = Math.max(0, totalProducts - recordedCount);
-
-    return {
-      businessDate,
-      products: productSummaries,
-      recordedCount,
-      missingCount,
-      totalProducts,
-    };
+      )
+      .orderBy(asc(schema.products.name));
   }
 }
 

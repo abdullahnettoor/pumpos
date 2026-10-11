@@ -149,7 +149,8 @@ export const WRITE_POLICY_DECLARATIONS: WritePolicyRegistry = declareWritePolici
   {
     operation: 'POST /transactions/density/readings',
     restricted: 'FINISH_OPEN_WORK',
-    rationale: 'Daily morning density checks complete shift opening routines and statutory compliance.',
+    rationale:
+      'Daily morning density checks complete shift opening routines and statutory compliance.',
   },
   {
     operation: 'POST /transactions/decantations',

@@ -197,6 +197,8 @@ export interface DensityTodayProductSummary {
   latestToday: DensityReadingWithContext | null;
   todayRecorded: boolean;
   trend14d: Array<{ date: string; density15: number | null }>;
+  /** Non-null 15 °C values of `trend14d`, oldest first (sparkline input). */
+  trendValues: number[];
   lastReadings: DensityReadingWithContext[];
 }
 
@@ -205,6 +207,7 @@ export interface DensityTodaySummary {
   products: DensityTodayProductSummary[];
   recordedCount: number;
   missingCount: number;
+  missingProducts: Array<{ productId: string; productName: string; productCode: string }>;
   totalProducts: number;
 }
 
@@ -214,7 +217,7 @@ export interface DensityReadingRepository {
     organizationId: string,
     stationId: string,
     productId: string,
-    beforeRecordedAt?: string,
+    before?: { businessDate: string; recordedAt: string },
   ): Promise<DensityReading | null>;
   hasInterveningDecantation(
     organizationId: string,
@@ -224,9 +227,9 @@ export interface DensityReadingRepository {
     beforeTimestamp: string,
   ): Promise<boolean>;
   list(query: DensityReadingListQuery): Promise<DensityReadingWithContext[]>;
-  getTodaySummary(
+  /** Active fuel products that have at least one active tank at the station. */
+  listFuelProductsWithActiveTanks(
     organizationId: string,
     stationId: string,
-    businessDate: string,
-  ): Promise<DensityTodaySummary>;
+  ): Promise<Array<{ id: string; name: string; code: string }>>;
 }

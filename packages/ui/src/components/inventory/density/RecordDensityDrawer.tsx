@@ -21,7 +21,9 @@ export interface RecordDensityDrawerProps {
   nozzles?: Array<{ id: string; name: string; productId: string }>;
   presetProductId?: string;
   defaultMethod?: DensityMethod;
+  /** Jump tolerance (kg/m³) for the live delta chip; not used by the 15 °C solver. */
   tolerance?: number;
+  defaultEntryMethod?: 'HYDROMETER' | 'DIRECT_15';
 }
 
 export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
@@ -35,12 +37,11 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
   presetProductId,
   defaultMethod = DEFAULT_DENSITY_METHOD,
   tolerance = DEFAULT_DENSITY_TOLERANCE_KG_M3,
+  defaultEntryMethod = 'HYDROMETER',
 }) => {
-  const [productId, setProductId] = useState<string>(
-    presetProductId || products[0]?.id || '',
-  );
+  const [productId, setProductId] = useState<string>(presetProductId || products[0]?.id || '');
   const [kind, setKind] = useState<'MORNING' | 'ADHOC'>('MORNING');
-  const [entryMethod, setEntryMethod] = useState<'HYDROMETER' | 'DIRECT_15'>('HYDROMETER');
+  const [entryMethod, setEntryMethod] = useState<'HYDROMETER' | 'DIRECT_15'>(defaultEntryMethod);
   const [sampledFrom, setSampledFrom] = useState<'NONE' | 'TANK' | 'NOZZLE'>('NONE');
   const [tankId, setTankId] = useState<string>('');
   const [nozzleId, setNozzleId] = useState<string>('');
@@ -52,14 +53,20 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync preset product when opening or changing preset
-  React.useEffect(() => {
-    if (presetProductId) {
-      setProductId(presetProductId);
-    } else if (products.length > 0 && !productId) {
-      setProductId(products[0].id);
-    }
-  }, [presetProductId, products, productId]);
+  // Re-derive form defaults when the drawer opens or its preset product changes
+  // (adjusting state during render rather than in an effect).
+  const [prevOpen, setPrevOpen] = useState(isOpen);
+  const [prevPreset, setPrevPreset] = useState(presetProductId);
+  if (isOpen !== prevOpen) {
+    setPrevOpen(isOpen);
+    // Entry method defaults from Station Settings each time the drawer opens.
+    if (isOpen) setEntryMethod(defaultEntryMethod);
+  }
+  if (presetProductId !== prevPreset) {
+    setPrevPreset(presetProductId);
+    if (presetProductId) setProductId(presetProductId);
+  }
+  if (!productId && products.length > 0) setProductId(products[0].id);
 
   const relevantTanks = useMemo(
     () => tanks.filter((t) => t.productId === productId),
@@ -80,16 +87,13 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
     const temp = parseFloat(observedTempC);
     if (!isNaN(obs) && !isNaN(temp) && obs > 0) {
       try {
-        return roundDensity(
-          density15FromObserved(obs, temp, { method: defaultMethod, tolerance }),
-          2,
-        );
+        return roundDensity(density15FromObserved(obs, temp, { method: defaultMethod }), 2);
       } catch {
         return null;
       }
     }
     return null;
-  }, [entryMethod, density15Direct, observedDensity, observedTempC, defaultMethod, tolerance]);
+  }, [entryMethod, density15Direct, observedDensity, observedTempC, defaultMethod]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,12 +131,9 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
       sampledFrom: sampledFrom === 'NONE' ? null : sampledFrom,
       tankId: sampledFrom === 'TANK' && tankId ? tankId : null,
       nozzleId: sampledFrom === 'NOZZLE' && nozzleId ? nozzleId : null,
-      observedDensity:
-        entryMethod === 'HYDROMETER' ? parseFloat(observedDensity) : undefined,
-      observedTempC:
-        entryMethod === 'HYDROMETER' ? parseFloat(observedTempC) : undefined,
-      density15:
-        entryMethod === 'DIRECT_15' ? parseFloat(density15Direct) : undefined,
+      observedDensity: entryMethod === 'HYDROMETER' ? parseFloat(observedDensity) : undefined,
+      observedTempC: entryMethod === 'HYDROMETER' ? parseFloat(observedTempC) : undefined,
+      density15: entryMethod === 'DIRECT_15' ? parseFloat(density15Direct) : undefined,
     };
 
     setSaving(true);
@@ -173,7 +174,10 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
         </div>
       }
     >
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <form
+        onSubmit={(e) => void handleSubmit(e)}
+        style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+      >
         {error && (
           <div
             style={{

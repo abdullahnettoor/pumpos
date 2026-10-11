@@ -22,10 +22,7 @@ import {
   CloudAccessService,
   CloudDesktopDownloadsService,
 } from '../services/cloud.js';
-import type {
-  DensityTodaySummary,
-  DensityReadingWithContext,
-} from '@pump/shared';
+import type { DensityTodaySummary, DensityReadingWithContext } from '@pump/shared';
 import type {
   BusinessDayStatusResponse,
   DailyCashBook,

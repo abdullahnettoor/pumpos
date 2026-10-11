@@ -54,6 +54,8 @@ export interface DensityTodayProductSummary {
   latestToday: DensityReadingWithContext | null;
   todayRecorded: boolean;
   trend14d: DensityTrendPoint[];
+  /** Non-null 15 °C values of `trend14d`, oldest first. */
+  trendValues: number[];
   lastReadings: DensityReadingWithContext[];
 }
 
@@ -62,6 +64,7 @@ export interface DensityTodaySummary {
   products: DensityTodayProductSummary[];
   recordedCount: number;
   missingCount: number;
+  missingProducts: Array<{ productId: string; productName: string; productCode: string }>;
   totalProducts: number;
 }
 

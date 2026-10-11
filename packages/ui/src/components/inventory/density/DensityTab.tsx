@@ -14,7 +14,7 @@ import { TodayView } from './TodayView.js';
 import { RegisterView } from './RegisterView.js';
 import { RecordDensityDrawer } from './RecordDensityDrawer.js';
 import { printDensityBoard } from './printDensityBoard.js';
-import type { RecordDensityReadingPayload } from '@pump/shared';
+import { resolveDecantationSettings, type RecordDensityReadingPayload } from '@pump/shared';
 
 export interface DensityTabProps {
   stationId: string;
@@ -40,9 +40,7 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
   const readingsQ = useDensityReadings(stationId);
 
   const fuelProducts = useMemo(() => {
-    return (productsQ.data ?? []).filter(
-      (p) => p.productType === 'FUEL' && p.isActive,
-    );
+    return (productsQ.data ?? []).filter((p) => p.productType === 'FUEL' && p.isActive);
   }, [productsQ.data]);
 
   const fuelTanks = useMemo(() => {
@@ -78,22 +76,10 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
     }
   };
 
-  const specBands = useMemo(() => {
-    const bands: Record<string, { min: number; max: number }> = {};
-    const settings = station?.settings;
-    if (settings && (settings as any).densitySpecBands) {
-      const b = (settings as any).densitySpecBands;
-      if (b.MS) bands.MS = b.MS;
-      if (b.HSD) bands.HSD = b.HSD;
-    }
-    // Standard default spec bands for MS and HSD if not set
-    if (!bands.MS) bands.MS = { min: 720, max: 775 };
-    if (!bands.HSD) bands.HSD = { min: 820, max: 860 };
-    return bands;
-  }, [station]);
-
-  const tolerance =
-    (station?.settings as any)?.densityTolerance ?? 3.0;
+  // Station Settings (#464) are the only source of spec bands, tolerance, method and entry default.
+  const settings = useMemo(() => resolveDecantationSettings(station?.settings), [station]);
+  const specBands = settings.densitySpecBands;
+  const tolerance = settings.densityToleranceKgM3;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -186,6 +172,8 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
         nozzles={fuelNozzles}
         presetProductId={presetProductId}
         tolerance={tolerance}
+        defaultMethod={settings.densityMethod}
+        defaultEntryMethod={settings.densityEntryMethod}
       />
     </div>
   );

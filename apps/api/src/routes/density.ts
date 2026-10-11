@@ -1,10 +1,14 @@
 import { Hono, type Context } from 'hono';
+import type { z } from 'zod';
 import type { DbClient } from '@pump/db';
 import { canRecordDensity, isAuthorizedForStation } from '@pump/shared';
 import {
   GetDensityTodaySummary,
   ListDensityReadings,
   RecordDensityReading,
+  getDensityTodaySummarySchema,
+  listDensityReadingsSchema,
+  recordDensityReadingSchema,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
@@ -17,6 +21,7 @@ import {
 } from '../infra/station-clock.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
+import { validateJson } from '../utils/validator.js';
 
 type Variables = { db: DbClient; user: AuthenticatedPrincipal };
 type Ctx = Context<{ Variables: Variables }>;
@@ -27,6 +32,21 @@ type Ctx = Context<{ Variables: Variables }>;
  * Mounted under `/transactions`. Owner / Manager / Accountant.
  */
 export const densityRouter = new Hono<{ Variables: Variables }>();
+
+function invalidQuery(c: Ctx, error: z.ZodError) {
+  return c.json(
+    {
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message:
+          error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ') ||
+          'Invalid query',
+      },
+    },
+    400,
+  );
+}
 
 const forbidden = (c: Ctx, message: string) =>
   c.json({ success: false, error: { code: 'FORBIDDEN', message } }, 403);
@@ -48,9 +68,10 @@ function guardStation(c: Ctx, stationId: string | null | undefined) {
 densityRouter.post(
   '/density/readings',
   writePolicyGuard('POST /transactions/density/readings'),
+  validateJson(recordDensityReadingSchema),
   async (c) => {
-    const body = await c.req.json().catch(() => ({}));
-    const denied = guardStation(c, body?.stationId);
+    const body = c.req.valid('json');
+    const denied = guardStation(c, body.stationId);
     if (denied) return denied;
 
     const user = c.var.user;
@@ -78,7 +99,9 @@ densityRouter.post(
 
 densityRouter.get('/density/readings', async (c) => {
   const user = c.var.user;
-  const stationId = c.req.query('stationId');
+  const query = listDensityReadingsSchema.safeParse(c.req.query());
+  if (!query.success) return invalidQuery(c, query.error);
+  const { stationId } = query.data;
   const denied = guardStation(c, stationId);
   if (denied) return denied;
 
@@ -87,24 +110,16 @@ densityRouter.get('/density/readings', async (c) => {
 
   const result = await new ListDensityReadings({
     densityReadings: new DrizzleDensityReadingRepository(c.var.db),
-  }).execute(
-    {
-      stationId: stationId!,
-      productId: c.req.query('productId'),
-      from: c.req.query('from'),
-      to: c.req.query('to'),
-      kind: c.req.query('kind') as any,
-      limit: c.req.query('limit') as any,
-    },
-    buildContext(user, { stationId, ...clock }),
-  );
+  }).execute(query.data, buildContext(user, { stationId, ...clock }));
 
   return sendResult(c, result);
 });
 
 densityRouter.get('/density/today', async (c) => {
   const user = c.var.user;
-  const stationId = c.req.query('stationId');
+  const query = getDensityTodaySummarySchema.safeParse(c.req.query());
+  if (!query.success) return invalidQuery(c, query.error);
+  const { stationId } = query.data;
   const denied = guardStation(c, stationId);
   if (denied) return denied;
 
@@ -113,13 +128,7 @@ densityRouter.get('/density/today', async (c) => {
 
   const result = await new GetDensityTodaySummary({
     densityReadings: new DrizzleDensityReadingRepository(c.var.db),
-  }).execute(
-    {
-      stationId: stationId!,
-      businessDate: c.req.query('businessDate'),
-    },
-    buildContext(user, { stationId, ...clock }),
-  );
+  }).execute(query.data, buildContext(user, { stationId, ...clock }));
 
   return sendResult(c, result);
 });

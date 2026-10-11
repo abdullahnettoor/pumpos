@@ -1,27 +1,37 @@
 import type { DensityTodaySummary } from '@pump/shared';
 
-export function printDensityBoard(summary: DensityTodaySummary, stationName: string) {
+const ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+export function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (ch) => ESCAPES[ch]);
+}
+
+/** Printable daily display board: black on white, one large 15 °C figure per product. */
+export function buildDensityBoardHtml(summary: DensityTodaySummary, stationName: string): string {
   const cells = summary.products
     .map((p) => {
       const val = p.latestToday ? p.latestToday.density15.toFixed(1) : '— — —';
       const missingClass = p.latestToday ? '' : 'missing';
       const status = p.latestToday ? 'kg/m³' : 'kg/m³ · not recorded today';
       return `<div class="prod-card">
-        <div class="prod-name">${p.productName} (${p.productCode})</div>
+        <div class="prod-name">${escapeHtml(p.productName)} (${escapeHtml(p.productCode)})</div>
         <div class="density-val ${missingClass}">${val}</div>
         <div class="density-unit">${status}</div>
       </div>`;
     })
     .join('');
 
-  const w = window.open('', '_blank', 'width=1100,height=780');
-  if (!w) return;
-
-  w.document.write(`<!doctype html>
+  return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Density Board - ${summary.businessDate}</title>
+  <title>Density Board - ${escapeHtml(summary.businessDate)}</title>
   <style>
     @page {
       size: A4 landscape;
@@ -32,12 +42,12 @@ export function printDensityBoard(summary: DensityTodaySummary, stationName: str
     }
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      color: #111827;
+      color: #000;
       margin: 0;
       background: #fff;
     }
     .board-container {
-      border: 4px solid #111827;
+      border: 4px solid #000;
       border-radius: 16px;
       padding: 28px 36px;
       height: 175mm;
@@ -49,7 +59,7 @@ export function printDensityBoard(summary: DensityTodaySummary, stationName: str
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 2px solid #e5e7eb;
+      border-bottom: 2px solid #000;
       padding-bottom: 12px;
     }
     .station-title {
@@ -60,7 +70,7 @@ export function printDensityBoard(summary: DensityTodaySummary, stationName: str
     .date-label {
       font-size: 20px;
       font-weight: 600;
-      color: #4b5563;
+      color: #000;
     }
     .board-title {
       text-align: center;
@@ -81,15 +91,15 @@ export function printDensityBoard(summary: DensityTodaySummary, stationName: str
     .prod-card {
       flex: 1;
       text-align: center;
-      border: 2px solid #d1d5db;
+      border: 2px solid #000;
       border-radius: 14px;
       padding: 24px 16px;
-      background: #f9fafb;
+      background: #fff;
     }
     .prod-name {
       font-size: 26px;
       font-weight: 700;
-      color: #1f2937;
+      color: #000;
       margin-bottom: 12px;
     }
     .density-val {
@@ -97,33 +107,33 @@ export function printDensityBoard(summary: DensityTodaySummary, stationName: str
       font-weight: 800;
       font-variant-numeric: tabular-nums;
       line-height: 1;
-      color: #111827;
+      color: #000;
     }
     .density-val.missing {
-      color: #9ca3af;
+      color: #000;
     }
     .density-unit {
       font-size: 20px;
       font-weight: 600;
-      color: #4b5563;
+      color: #000;
       margin-top: 12px;
     }
     .footer {
-      border-top: 2px solid #e5e7eb;
+      border-top: 2px solid #000;
       padding-top: 10px;
       font-size: 13px;
       text-align: center;
-      color: #6b7280;
+      color: #000;
     }
   </style>
 </head>
 <body>
   <div class="board-container">
     <div class="header">
-      <span class="station-title">${stationName}</span>
-      <span class="date-label">${summary.businessDate}</span>
+      <span class="station-title">${escapeHtml(stationName)}</span>
+      <span class="date-label">${escapeHtml(summary.businessDate)}</span>
     </div>
-    <div class="board-title">Density at 15 °C (Daily Display Board)</div>
+    <div class="board-title">Density at 15 °C</div>
     <div class="products-row">
       ${cells}
     </div>
@@ -137,6 +147,12 @@ export function printDensityBoard(summary: DensityTodaySummary, stationName: str
     };
   </script>
 </body>
-</html>`);
+</html>`;
+}
+
+export function printDensityBoard(summary: DensityTodaySummary, stationName: string) {
+  const w = window.open('', '_blank', 'width=1100,height=780');
+  if (!w) return;
+  w.document.write(buildDensityBoardHtml(summary, stationName));
   w.document.close();
 }

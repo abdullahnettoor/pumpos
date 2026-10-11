@@ -25,8 +25,6 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
     });
   }, [readings, selectedProduct, selectedKind]);
 
-  let lastDate = '';
-
   const thStyle: React.CSSProperties = {
     padding: '8px 12px',
     textAlign: 'left',
@@ -110,9 +108,8 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r) => {
-                const showDate = r.businessDate !== lastDate;
-                lastDate = r.businessDate;
+              {filtered.map((r, index) => {
+                const showDate = r.businessDate !== filtered[index - 1]?.businessDate;
 
                 const time = new Date(r.recordedAt).toLocaleTimeString([], {
                   hour: '2-digit',
@@ -120,24 +117,16 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
                 });
 
                 const sampledLabel =
-                  r.tankName ||
-                  r.nozzleName ||
-                  (r.sampledFrom ? r.sampledFrom : '—');
+                  r.tankName || r.nozzleName || (r.sampledFrom ? r.sampledFrom : '—');
 
                 const kindTone =
-                  r.kind === 'DECANTATION'
-                    ? 'info'
-                    : r.kind === 'MORNING'
-                      ? 'brand'
-                      : 'neutral';
+                  r.kind === 'DECANTATION' ? 'info' : r.kind === 'MORNING' ? 'brand' : 'neutral';
 
                 return (
                   <tr
                     key={r.id}
                     style={
-                      showDate
-                        ? { borderTop: '2px solid var(--color-border, #e5e7eb)' }
-                        : undefined
+                      showDate ? { borderTop: '2px solid var(--color-border, #e5e7eb)' } : undefined
                     }
                   >
                     <td style={{ ...tdStyle, fontWeight: showDate ? 600 : 400 }}>

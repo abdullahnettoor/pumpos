@@ -25,7 +25,10 @@ export const recordDensityReadingSchema = z
   .object({
     stationId: z.string().min(1, 'stationId is required'),
     productId: z.string().min(1, 'productId is required'),
-    businessDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD').optional(),
+    businessDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD')
+      .optional(),
     kind: z.enum(['MORNING', 'ADHOC']),
     sampledFrom: z.enum(['NOZZLE', 'TANK']).nullable().optional(),
     tankId: z.string().nullable().optional(),
@@ -72,9 +75,7 @@ export interface RecordDensityReadingDeps {
  * of the product exceeds tolerance without an intervening Decantation of that product.
  * Never blocks on jump; flags and emits DENSITY_RECORDED.
  */
-export class RecordDensityReading
-  implements UseCase<RecordDensityReadingCommand, DensityReading>
-{
+export class RecordDensityReading implements UseCase<RecordDensityReadingCommand, DensityReading> {
   constructor(private readonly deps: RecordDensityReadingDeps) {}
 
   async execute(
@@ -101,19 +102,17 @@ export class RecordDensityReading
         dayStartsAt: ctx.businessDayStartsAt,
       });
 
-    const tolerance =
-      this.deps.settings?.densityToleranceKgM3 ?? DEFAULT_DENSITY_TOLERANCE_KG_M3;
+    const tolerance = this.deps.settings?.densityToleranceKgM3 ?? DEFAULT_DENSITY_TOLERANCE_KG_M3;
     const method = this.deps.settings?.densityMethod ?? DEFAULT_DENSITY_METHOD;
 
     let density15Val: number;
-    let observedDensityVal: number | null = null;
-    let observedTempCVal: number | null = null;
+    let observedDensityVal: number | null;
+    let observedTempCVal: number | null;
 
     if (cmd.entryMethod === 'HYDROMETER') {
-      const calc15 = density15FromObserved(cmd.observedDensity!, cmd.observedTempC!, {
-        method,
-        tolerance,
-      });
+      // `tolerance` here would be the solver's convergence tolerance; the station's
+      // density tolerance is the jump threshold only, so it is not passed in.
+      const calc15 = density15FromObserved(cmd.observedDensity!, cmd.observedTempC!, { method });
       density15Val = roundDensity(calc15, 2);
       observedDensityVal = roundDensity(cmd.observedDensity!, 2);
       observedTempCVal = roundDensity(cmd.observedTempC!, 2);
@@ -128,7 +127,7 @@ export class RecordDensityReading
       ctx.organizationId,
       cmd.stationId,
       cmd.productId,
-      recordedAtIso,
+      { businessDate, recordedAt: recordedAtIso },
     );
 
     const flags: unknown[] = [];
@@ -142,14 +141,13 @@ export class RecordDensityReading
         const wasDecantation = prev.kind === 'DECANTATION';
         let hasInterveningDecantation = wasDecantation;
         if (!hasInterveningDecantation) {
-          hasInterveningDecantation =
-            await this.deps.densityReadings.hasInterveningDecantation(
-              ctx.organizationId,
-              cmd.stationId,
-              cmd.productId,
-              prev.recordedAt,
-              recordedAtIso,
-            );
+          hasInterveningDecantation = await this.deps.densityReadings.hasInterveningDecantation(
+            ctx.organizationId,
+            cmd.stationId,
+            cmd.productId,
+            prev.recordedAt <= recordedAtIso ? prev.recordedAt : recordedAtIso,
+            prev.recordedAt <= recordedAtIso ? recordedAtIso : prev.recordedAt,
+          );
         }
         if (!hasInterveningDecantation) {
           flags.push('UNEXPLAINED_JUMP');
@@ -174,7 +172,7 @@ export class RecordDensityReading
       density15: density15Val,
       decantationTankLineId: null,
       flags,
-      recordedBy: ctx.actorId ?? (ctx as any).userId ?? null,
+      recordedBy: ctx.actorId ?? null,
       recordedAt: recordedAtIso,
     };
 

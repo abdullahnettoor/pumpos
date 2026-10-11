@@ -28,9 +28,10 @@ export const listDensityReadingsSchema = z.object({
 
 export type ListDensityReadingsCommand = z.input<typeof listDensityReadingsSchema>;
 
-export class ListDensityReadings
-  implements UseCase<ListDensityReadingsCommand, DensityReadingWithContext[]>
-{
+export class ListDensityReadings implements UseCase<
+  ListDensityReadingsCommand,
+  DensityReadingWithContext[]
+> {
   constructor(private readonly deps: { densityReadings: DensityReadingRepository }) {}
 
   async execute(
