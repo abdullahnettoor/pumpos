@@ -37,6 +37,7 @@ import {
 } from '../query/stockCountMutation.js';
 // PROTOTYPE — Decantation milestone UI exploration; remove before merge.
 import { DecantationsPrototypeTab } from './inventory/decantation-prototype/DecantationsPrototypeTab.js';
+import { DensityRegisterPrototypeTab } from './inventory/decantation-prototype/DensityRegisterPrototypeTab.js';
 
 const transactionService = new CloudTransactionService();
 
@@ -44,7 +45,7 @@ interface InventoryListProps {
   selectedStation: any | null;
 }
 
-type TabType = 'tanks' | 'items' | 'movements' | 'variances' | 'decantations';
+type TabType = 'tanks' | 'items' | 'movements' | 'variances' | 'decantations' | 'density';
 
 const fmtL = (n: number) =>
   `${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
@@ -512,337 +513,340 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
               },
               { id: 'variances', label: 'Reconciliations', icon: <Icon name="scale" size="xs" /> },
               { id: 'decantations', label: 'Decantations', icon: <Icon name="truck" size="xs" /> },
+              { id: 'density', label: 'Density', icon: <Icon name="gauge" size="xs" /> },
             ]}
           />
         }
       >
         {activeTab === 'decantations' ? (
           <DecantationsPrototypeTab />
+        ) : activeTab === 'density' ? (
+          <DensityRegisterPrototypeTab />
         ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <KpiStrip columns="auto">
-            <KpiTile
-              dot="brand"
-              label="Total Fuel Stock"
-              value={kpis.totalFuelValue}
-              hint={kpis.totalFuelHint}
-            />
-            <KpiTile
-              dot={kpis.lowTanks > 0 ? 'warning' : 'success'}
-              valueTone={kpis.lowTanks > 0 ? 'warning' : undefined}
-              label="Tanks Low / Critical"
-              value={String(kpis.lowTanks)}
-              hint="below 35% capacity"
-            />
-            <KpiTile
-              dot={kpis.overTanks > 0 ? 'info' : 'neutral'}
-              valueTone={kpis.overTanks > 0 ? 'info' : undefined}
-              label="Book Stock Over Capacity"
-              value={String(kpis.overTanks)}
-              hint="may reconcile at shift close"
-            />
-            <KpiTile
-              dot={kpis.outOfStock > 0 ? 'warning' : 'success'}
-              valueTone={kpis.outOfStock > 0 ? 'warning' : undefined}
-              label="Out of Stock"
-              value={String(kpis.outOfStock)}
-              hint="zero on-hand"
-            />
-            <KpiTile
-              dot={kpis.oversold > 0 ? 'danger' : 'success'}
-              valueTone={kpis.oversold > 0 ? 'danger' : undefined}
-              label="Oversold Items"
-              value={String(kpis.oversold)}
-              hint="negative on-hand"
-            />
-            <KpiTile
-              dot="neutral"
-              label="Reconciliations"
-              value={String(kpis.variances)}
-              hint="variances logged"
-            />
-          </KpiStrip>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <KpiStrip columns="auto">
+              <KpiTile
+                dot="brand"
+                label="Total Fuel Stock"
+                value={kpis.totalFuelValue}
+                hint={kpis.totalFuelHint}
+              />
+              <KpiTile
+                dot={kpis.lowTanks > 0 ? 'warning' : 'success'}
+                valueTone={kpis.lowTanks > 0 ? 'warning' : undefined}
+                label="Tanks Low / Critical"
+                value={String(kpis.lowTanks)}
+                hint="below 35% capacity"
+              />
+              <KpiTile
+                dot={kpis.overTanks > 0 ? 'info' : 'neutral'}
+                valueTone={kpis.overTanks > 0 ? 'info' : undefined}
+                label="Book Stock Over Capacity"
+                value={String(kpis.overTanks)}
+                hint="may reconcile at shift close"
+              />
+              <KpiTile
+                dot={kpis.outOfStock > 0 ? 'warning' : 'success'}
+                valueTone={kpis.outOfStock > 0 ? 'warning' : undefined}
+                label="Out of Stock"
+                value={String(kpis.outOfStock)}
+                hint="zero on-hand"
+              />
+              <KpiTile
+                dot={kpis.oversold > 0 ? 'danger' : 'success'}
+                valueTone={kpis.oversold > 0 ? 'danger' : undefined}
+                label="Oversold Items"
+                value={String(kpis.oversold)}
+                hint="negative on-hand"
+              />
+              <KpiTile
+                dot="neutral"
+                label="Reconciliations"
+                value={String(kpis.variances)}
+                hint="variances logged"
+              />
+            </KpiStrip>
 
-          {activeTab === 'tanks' &&
-            (tanksQ.isLoading ? (
-              <div style={{ padding: '16px' }}>
+            {activeTab === 'tanks' &&
+              (tanksQ.isLoading ? (
+                <div style={{ padding: '16px' }}>
+                  <EmptyState
+                    compact
+                    icon={<Icon name="tank" size="md" />}
+                    title="Loading tanks…"
+                    description="Fetching current tank levels."
+                  />
+                </div>
+              ) : tanks.length === 0 ? (
                 <EmptyState
                   compact
                   icon={<Icon name="tank" size="md" />}
-                  title="Loading tanks…"
-                  description="Fetching current tank levels."
+                  title="No fuel tanks"
+                  description="No fuel tanks configured for this station."
                 />
-              </div>
-            ) : tanks.length === 0 ? (
-              <EmptyState
-                compact
-                icon={<Icon name="tank" size="md" />}
-                title="No fuel tanks"
-                description="No fuel tanks configured for this station."
-              />
-            ) : (
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                  gap: '12px',
-                }}
-              >
-                {tanks.map((tank: any) => {
-                  const cap = Number(tank.capacity) || 0;
-                  const vol = Number(tank.currentVolume) || 0;
-                  const pct = tankPct(vol, cap);
-                  const level = classifyTank(pct);
-                  const tone =
-                    level === 'critical'
-                      ? 'danger'
-                      : level === 'low'
-                        ? 'warning'
-                        : level === 'over'
-                          ? 'info'
-                          : 'success';
-                  const label =
-                    level === 'critical'
-                      ? 'Critical'
-                      : level === 'low'
-                        ? 'Low'
-                        : level === 'over'
-                          ? 'Over capacity'
-                          : 'OK';
-                  const highlighted = highlightId === tank.id;
-                  return (
-                    <div
-                      key={tank.id}
-                      ref={(el) => {
-                        if (el && highlighted)
-                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                      }}
-                      style={{
-                        backgroundColor: 'var(--bg-surface)',
-                        border: `1px solid ${highlighted ? 'var(--state-info-fg)' : 'var(--border-soft)'}`,
-                        borderRadius: 'var(--radius-card)',
-                        padding: '14px 16px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '12px',
-                        boxShadow: highlighted ? '0 0 0 3px var(--state-info-bg)' : undefined,
-                        transition: 'border-color 0.4s ease, box-shadow 0.4s ease',
-                      }}
-                    >
+              ) : (
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                    gap: '12px',
+                  }}
+                >
+                  {tanks.map((tank: any) => {
+                    const cap = Number(tank.capacity) || 0;
+                    const vol = Number(tank.currentVolume) || 0;
+                    const pct = tankPct(vol, cap);
+                    const level = classifyTank(pct);
+                    const tone =
+                      level === 'critical'
+                        ? 'danger'
+                        : level === 'low'
+                          ? 'warning'
+                          : level === 'over'
+                            ? 'info'
+                            : 'success';
+                    const label =
+                      level === 'critical'
+                        ? 'Critical'
+                        : level === 'low'
+                          ? 'Low'
+                          : level === 'over'
+                            ? 'Over capacity'
+                            : 'OK';
+                    const highlighted = highlightId === tank.id;
+                    return (
                       <div
+                        key={tank.id}
+                        ref={(el) => {
+                          if (el && highlighted)
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }}
                         style={{
+                          backgroundColor: 'var(--bg-surface)',
+                          border: `1px solid ${highlighted ? 'var(--state-info-fg)' : 'var(--border-soft)'}`,
+                          borderRadius: 'var(--radius-card)',
+                          padding: '14px 16px',
                           display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'flex-start',
-                          gap: '8px',
+                          flexDirection: 'column',
+                          gap: '12px',
+                          boxShadow: highlighted ? '0 0 0 3px var(--state-info-bg)' : undefined,
+                          transition: 'border-color 0.4s ease, box-shadow 0.4s ease',
                         }}
                       >
-                        <div style={{ minWidth: 0 }}>
-                          <h4
-                            style={{
-                              fontSize: '14px',
-                              fontWeight: 600,
-                              color: 'var(--text-strong)',
-                            }}
-                          >
-                            {tank.name}
-                          </h4>
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            gap: '8px',
+                          }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <h4
+                              style={{
+                                fontSize: '14px',
+                                fontWeight: 600,
+                                color: 'var(--text-strong)',
+                              }}
+                            >
+                              {tank.name}
+                            </h4>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                color: 'var(--text-muted)',
+                                fontWeight: 500,
+                              }}
+                            >
+                              {tank.productName} · {tank.productCode}
+                            </span>
+                          </div>
+                          <Chip tone={tone} size="xs">
+                            {label}
+                          </Chip>
+                        </div>
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'baseline',
+                          }}
+                        >
                           <span
                             style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              fontWeight: 500,
+                              fontSize: '22px',
+                              fontWeight: 700,
+                              color: 'var(--text-strong)',
+                              fontFamily: 'var(--font-mono)',
                             }}
                           >
-                            {tank.productName} · {tank.productCode}
+                            {vol.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
+                            <span
+                              style={{
+                                fontSize: '12px',
+                                fontWeight: 500,
+                                color: 'var(--text-muted)',
+                                marginLeft: '4px',
+                              }}
+                            >
+                              {tank.productUnit || 'L'}
+                            </span>
+                          </span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            of {cap.toLocaleString('en-IN')} {tank.productUnit || 'L'}
                           </span>
                         </div>
-                        <Chip tone={tone} size="xs">
-                          {label}
-                        </Chip>
-                      </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'baseline',
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: '22px',
-                            fontWeight: 700,
-                            color: 'var(--text-strong)',
-                            fontFamily: 'var(--font-mono)',
-                          }}
-                        >
-                          {vol.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
-                          <span
+                        <MeterRow
+                          label=""
+                          value={Math.min(vol, cap)}
+                          max={cap || 1}
+                          tone={level === 'over' ? 'info' : 'auto'}
+                          valueLabel={`${pct.toFixed(0)}% capacity`}
+                        />
+                        {level === 'over' && (
+                          <p
                             style={{
-                              fontSize: '12px',
-                              fontWeight: 500,
-                              color: 'var(--text-muted)',
-                              marginLeft: '4px',
+                              margin: 0,
+                              fontSize: '11px',
+                              lineHeight: 1.45,
+                              color: 'var(--state-info-fg)',
                             }}
                           >
-                            {tank.productUnit || 'L'}
-                          </span>
-                        </span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          of {cap.toLocaleString('en-IN')} {tank.productUnit || 'L'}
-                        </span>
+                            {OVER_CAPACITY_EXPLANATION}
+                          </p>
+                        )}
                       </div>
-                      <MeterRow
-                        label=""
-                        value={Math.min(vol, cap)}
-                        max={cap || 1}
-                        tone={level === 'over' ? 'info' : 'auto'}
-                        valueLabel={`${pct.toFixed(0)}% capacity`}
-                      />
-                      {level === 'over' && (
-                        <p
-                          style={{
-                            margin: 0,
-                            fontSize: '11px',
-                            lineHeight: 1.45,
-                            color: 'var(--state-info-fg)',
-                          }}
-                        >
-                          {OVER_CAPACITY_EXPLANATION}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+                    );
+                  })}
+                </div>
+              ))}
 
-          {activeTab === 'items' && (
-            <Panel
-              flush
-              title="Merchandise stock"
-              action={
-                <SearchBox
-                  value={itemSearch}
-                  onChange={setItemSearch}
-                  placeholder="Search product / code…"
-                />
-              }
-            >
-              {itemsQ.isLoading ? (
-                <div style={{ padding: '16px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Icon name="package" size="md" />}
-                    title="Loading…"
-                    description="Fetching merchandise stock."
+            {activeTab === 'items' && (
+              <Panel
+                flush
+                title="Merchandise stock"
+                action={
+                  <SearchBox
+                    value={itemSearch}
+                    onChange={setItemSearch}
+                    placeholder="Search product / code…"
                   />
-                </div>
-              ) : filteredItems.length === 0 ? (
-                <div style={{ padding: '12px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Icon name="package" size="md" />}
-                    title={items.length === 0 ? 'No merchandise' : 'No matches'}
-                    description={
-                      items.length === 0
-                        ? 'Add non-fuel products in Station Overview → Products.'
-                        : 'Try a different search.'
-                    }
+                }
+              >
+                {itemsQ.isLoading ? (
+                  <div style={{ padding: '16px' }}>
+                    <EmptyState
+                      compact
+                      icon={<Icon name="package" size="md" />}
+                      title="Loading…"
+                      description="Fetching merchandise stock."
+                    />
+                  </div>
+                ) : filteredItems.length === 0 ? (
+                  <div style={{ padding: '12px' }}>
+                    <EmptyState
+                      compact
+                      icon={<Icon name="package" size="md" />}
+                      title={items.length === 0 ? 'No merchandise' : 'No matches'}
+                      description={
+                        items.length === 0
+                          ? 'Add non-fuel products in Station Overview → Products.'
+                          : 'Try a different search.'
+                      }
+                    />
+                  </div>
+                ) : (
+                  <DataTable
+                    bare
+                    columns={itemColumns}
+                    data={filteredItems}
+                    emptyMessage="No merchandise."
+                    getRowId={(r: any) => r.productId}
+                    initialSorting={[{ id: 'name', desc: false }]}
+                    highlightRowId={highlightId}
                   />
-                </div>
-              ) : (
-                <DataTable
-                  bare
-                  columns={itemColumns}
-                  data={filteredItems}
-                  emptyMessage="No merchandise."
-                  getRowId={(r: any) => r.productId}
-                  initialSorting={[{ id: 'name', desc: false }]}
-                  highlightRowId={highlightId}
-                />
-              )}
-            </Panel>
-          )}
+                )}
+              </Panel>
+            )}
 
-          {activeTab === 'movements' && (
-            <Panel
-              flush
-              title="Stock movements"
-              action={
-                <SearchBox
-                  value={movementSearch}
-                  onChange={setMovementSearch}
-                  placeholder="Search product / type / tank…"
-                />
-              }
-            >
-              {movementsQ.isLoading ? (
-                <div style={{ padding: '16px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Icon name="arrow-left-right" size="md" />}
-                    title="Loading…"
-                    description="Fetching movements."
+            {activeTab === 'movements' && (
+              <Panel
+                flush
+                title="Stock movements"
+                action={
+                  <SearchBox
+                    value={movementSearch}
+                    onChange={setMovementSearch}
+                    placeholder="Search product / type / tank…"
                   />
-                </div>
-              ) : filteredMovements.length === 0 ? (
-                <div style={{ padding: '12px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Icon name="arrow-left-right" size="md" />}
-                    title={(movementsQ.data ?? []).length === 0 ? 'No movements' : 'No matches'}
-                    description={
-                      (movementsQ.data ?? []).length === 0
-                        ? 'No stock movements recorded.'
-                        : 'Try a different search.'
-                    }
+                }
+              >
+                {movementsQ.isLoading ? (
+                  <div style={{ padding: '16px' }}>
+                    <EmptyState
+                      compact
+                      icon={<Icon name="arrow-left-right" size="md" />}
+                      title="Loading…"
+                      description="Fetching movements."
+                    />
+                  </div>
+                ) : filteredMovements.length === 0 ? (
+                  <div style={{ padding: '12px' }}>
+                    <EmptyState
+                      compact
+                      icon={<Icon name="arrow-left-right" size="md" />}
+                      title={(movementsQ.data ?? []).length === 0 ? 'No movements' : 'No matches'}
+                      description={
+                        (movementsQ.data ?? []).length === 0
+                          ? 'No stock movements recorded.'
+                          : 'Try a different search.'
+                      }
+                    />
+                  </div>
+                ) : (
+                  <DataTable
+                    bare
+                    columns={movementColumns}
+                    data={filteredMovements}
+                    emptyMessage="No stock movements."
+                    getRowId={(r: any) => r.id}
                   />
-                </div>
-              ) : (
-                <DataTable
-                  bare
-                  columns={movementColumns}
-                  data={filteredMovements}
-                  emptyMessage="No stock movements."
-                  getRowId={(r: any) => r.id}
-                />
-              )}
-            </Panel>
-          )}
+                )}
+              </Panel>
+            )}
 
-          {activeTab === 'variances' && (
-            <Panel flush title="Reconciliations">
-              {variancesQ.isLoading ? (
-                <div style={{ padding: '16px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Icon name="scale" size="md" />}
-                    title="Loading…"
-                    description="Fetching variances."
+            {activeTab === 'variances' && (
+              <Panel flush title="Reconciliations">
+                {variancesQ.isLoading ? (
+                  <div style={{ padding: '16px' }}>
+                    <EmptyState
+                      compact
+                      icon={<Icon name="scale" size="md" />}
+                      title="Loading…"
+                      description="Fetching variances."
+                    />
+                  </div>
+                ) : (variancesQ.data ?? []).length === 0 ? (
+                  <div style={{ padding: '12px' }}>
+                    <EmptyState
+                      compact
+                      icon={<Icon name="scale" size="md" />}
+                      title="No reconciliations"
+                      description="No reconciliation logs or physical variances logged yet."
+                    />
+                  </div>
+                ) : (
+                  <DataTable
+                    bare
+                    columns={varianceColumns}
+                    data={variancesQ.data}
+                    emptyMessage="No variances."
+                    getRowId={(r: any) => r.id}
                   />
-                </div>
-              ) : (variancesQ.data ?? []).length === 0 ? (
-                <div style={{ padding: '12px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Icon name="scale" size="md" />}
-                    title="No reconciliations"
-                    description="No reconciliation logs or physical variances logged yet."
-                  />
-                </div>
-              ) : (
-                <DataTable
-                  bare
-                  columns={varianceColumns}
-                  data={variancesQ.data}
-                  emptyMessage="No variances."
-                  getRowId={(r: any) => r.id}
-                />
-              )}
-            </Panel>
-          )}
-        </div>
+                )}
+              </Panel>
+            )}
+          </div>
         )}
       </PageLayout>
 
