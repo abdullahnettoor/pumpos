@@ -15,6 +15,8 @@ export interface PendingTankDip {
   idempotencyKey: string;
   expectedQuantity?: number;
   varianceQuantity?: number;
+  /** Advisory messages from the stock count (never blocking). */
+  warnings?: string[];
 }
 
 export interface PendingTankDipWorkflow {
@@ -37,6 +39,7 @@ export interface PendingTankDipWorkflow {
 interface StockCountResult {
   expectedQuantity: number;
   varianceQuantity: number;
+  warnings?: Array<{ message: string }>;
 }
 
 interface ApplyPendingTankDipsOptions {
@@ -156,6 +159,7 @@ export async function applyPendingTankDips({
         error: undefined,
         expectedQuantity: Number(accepted.expectedQuantity),
         varianceQuantity: Number(accepted.varianceQuantity),
+        warnings: accepted.warnings?.map((w) => w.message),
       });
     } catch (error: unknown) {
       const mutationError =

@@ -276,6 +276,33 @@ describe('measurement: tank dip path', () => {
     expect(t.rows.get(created.data.decantation.id)!.lines[0].status).toBe('PENDING_MEASUREMENT');
     expect(t.movements.some((m) => m.movementType === 'Decantation')).toBe(false);
   });
+
+  it('warns (never blocks) when a dip is taken with a shift open and lines pending', async () => {
+    const t = setup({ openShift: true });
+    const created = await t.record.execute(cmd(), t.ctx());
+    if (!created.success) throw new Error('create');
+    const r = await t.count.execute(
+      { stationId: 'st-1', tankId: 't-ms', actualQuantity: 15700 },
+      t.ctx(),
+    );
+    if (!r.success) throw new Error('count');
+    expect(r.data.warnings).toEqual([
+      expect.objectContaining({
+        code: 'DECANTATION_PENDING_OPEN_SHIFT',
+        documentNumbers: [created.data.decantation.documentNumber],
+      }),
+    ]);
+  });
+
+  it('has no warning when nothing is pending', async () => {
+    const t = setup({ openShift: true });
+    const r = await t.count.execute(
+      { stationId: 'st-1', tankId: 't-ms', actualQuantity: 15700 },
+      t.ctx(),
+    );
+    if (!r.success) throw new Error('count');
+    expect(r.data.warnings).toEqual([]);
+  });
 });
 
 describe('invoice variance and WAC', () => {

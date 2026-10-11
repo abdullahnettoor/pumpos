@@ -32,6 +32,7 @@ export interface ShiftCloseSuccessProps {
     error?: string;
     expectedQuantity?: number;
     varianceQuantity?: number;
+    warnings?: string[];
   }>;
   onSaveTankDips?: () => void | Promise<unknown>;
   onDiscardTankDips?: () => void | Promise<unknown>;
@@ -203,6 +204,11 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
                 {dip.error && (
                   <div style={{ color: 'var(--state-danger-fg)', marginTop: 2 }}>{dip.error}</div>
                 )}
+                {dip.warnings?.map((w) => (
+                  <div key={w} style={{ color: 'var(--state-warning-fg)', marginTop: 2 }}>
+                    {w}
+                  </div>
+                ))}
               </div>
               <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
                 <div>{dip.actualQuantity.toFixed(1)} L</div>

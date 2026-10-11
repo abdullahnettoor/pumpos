@@ -52,6 +52,11 @@ export interface TankDipMeasurement {
     ctx: ExecutionContext,
     input: TankDipMeasurementInput,
   ): Promise<Result<TankDipMeasurementResult>>;
+  /** Document numbers of Decantations with a pending line for the tank (advisory). */
+  pendingDocumentNumbers(
+    ctx: ExecutionContext,
+    input: { stationId: string; tankId: string },
+  ): Promise<string[]>;
 }
 
 export interface DecantationMeasurementDeps {
@@ -115,6 +120,18 @@ export class DecantationMeasurementService implements DecantationMeasurement, Ta
       measuredNow.push(line);
     }
     return this.finish(ctx, decantation, measuredNow, movements, events);
+  }
+
+  async pendingDocumentNumbers(
+    ctx: ExecutionContext,
+    input: { stationId: string; tankId: string },
+  ): Promise<string[]> {
+    const pending = await this.deps.decantations.findPendingForTank(
+      ctx.organizationId,
+      input.stationId,
+      input.tankId,
+    );
+    return pending.map((d) => d.documentNumber);
   }
 
   /**

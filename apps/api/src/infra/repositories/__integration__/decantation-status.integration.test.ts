@@ -377,5 +377,18 @@ describe.skipIf(!CONNECTION)(
       });
       expect(JSON.stringify(body.data)).not.toContain('DEC-DRAFT');
     });
+
+    it('closing an older day ignores Decantations of later days (<= bound), flagged is the day only', async () => {
+      const response = await app().request(
+        `/transactions/decantations/day-close-warnings?stationId=${STATION}&businessDayId=${OLD_DAY}`,
+      );
+      const body = (await response.json()) as any;
+      expect(response.status).toBe(200);
+      expect(body.data).toEqual({
+        pendingMeasurement: ['DEC-OLD'],
+        purchaseNotLinked: [{ documentNumber: 'DEC-OLD', products: ['Petrol'] }],
+        flagged: ['DEC-OLD'],
+      });
+    });
   },
 );

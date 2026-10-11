@@ -169,6 +169,8 @@ export interface RecordStockCountResult {
   expectedQuantity: number;
   actualQuantity: number;
   varianceQuantity: number;
+  /** Advisory (e.g. DECANTATION_PENDING_OPEN_SHIFT); never blocks the dip. */
+  warnings?: Array<{ code: string; message: string; documentNumbers?: string[] }>;
 }
 
 function getHeaders(token: string) {

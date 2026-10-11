@@ -637,10 +637,36 @@ export class DrizzleDensityReadingRepository implements DensityReadingRepository
         recordedByName: schema.users.fullName,
       })
       .from(schema.densityReadings)
-      .leftJoin(schema.products, eq(schema.densityReadings.productId, schema.products.id))
-      .leftJoin(schema.tanks, eq(schema.densityReadings.tankId, schema.tanks.id))
-      .leftJoin(schema.nozzles, eq(schema.densityReadings.nozzleId, schema.nozzles.id))
-      .leftJoin(schema.users, eq(schema.densityReadings.recordedBy, schema.users.id))
+      .leftJoin(
+        schema.products,
+        and(
+          eq(schema.densityReadings.productId, schema.products.id),
+          eq(schema.products.organizationId, query.organizationId),
+        ),
+      )
+      .leftJoin(
+        schema.tanks,
+        and(
+          eq(schema.densityReadings.tankId, schema.tanks.id),
+          eq(schema.tanks.organizationId, query.organizationId),
+          eq(schema.tanks.stationId, query.stationId),
+        ),
+      )
+      .leftJoin(
+        schema.nozzles,
+        and(
+          eq(schema.densityReadings.nozzleId, schema.nozzles.id),
+          eq(schema.nozzles.organizationId, query.organizationId),
+          eq(schema.nozzles.stationId, query.stationId),
+        ),
+      )
+      .leftJoin(
+        schema.users,
+        and(
+          eq(schema.densityReadings.recordedBy, schema.users.id),
+          eq(schema.users.organizationId, query.organizationId),
+        ),
+      )
       .where(and(...conditions))
       .orderBy(
         desc(schema.densityReadings.businessDate),
@@ -800,11 +826,13 @@ export class DrizzleDecantationLinkRepository implements DecantationLinkReposito
     const rows = (await this.db.execute(sql`
       SELECT p.id, p.station_id, p.document_number, p.invoice_number, p.entry_date,
         (p.business_day_id IS NULL AND NOT EXISTS (
-          SELECT 1 FROM purchase_items x JOIN products xp ON xp.id = x.product_id
+          SELECT 1 FROM purchase_items x
+          JOIN products xp ON xp.id = x.product_id AND xp.organization_id = p.organization_id
           WHERE x.purchase_id = p.id AND xp.product_type <> 'FUEL'
         )) AS is_fuel,
         COALESCE(s.name, 'Unknown Supplier') AS supplier_name
-      FROM purchases p LEFT JOIN suppliers s ON s.id = p.supplier_id
+      FROM purchases p
+      LEFT JOIN suppliers s ON s.id = p.supplier_id AND s.organization_id = p.organization_id
       WHERE p.id = ${purchaseId} AND p.organization_id = ${organizationId}
     `)) as unknown as {
       id: string;
@@ -901,7 +929,8 @@ export class DrizzleDecantationLinkRepository implements DecantationLinkReposito
             AND pi.invoice_density IS NOT NULL) AS invoice_density
       FROM decantation_purchases dp
       JOIN purchases p ON p.id = dp.purchase_id
-      LEFT JOIN suppliers s ON s.id = p.supplier_id
+        AND p.organization_id = dp.organization_id AND p.station_id = dp.station_id
+      LEFT JOIN suppliers s ON s.id = p.supplier_id AND s.organization_id = dp.organization_id
       WHERE dp.organization_id = ${organizationId}
         AND dp.decantation_id IN (${sql.join(
           decantationIds.map((i) => sql`${i}`),
@@ -955,7 +984,8 @@ export class DrizzleDecantationLinkRepository implements DecantationLinkReposito
       WHERE p.organization_id = ${organizationId} AND p.station_id = ${stationId}
         AND p.business_day_id IS NULL
         AND NOT EXISTS (
-          SELECT 1 FROM purchase_items x JOIN products xp ON xp.id = x.product_id
+          SELECT 1 FROM purchase_items x
+          JOIN products xp ON xp.id = x.product_id AND xp.organization_id = p.organization_id
           WHERE x.purchase_id = p.id AND xp.product_type <> 'FUEL')
       GROUP BY p.id, p.document_number, p.invoice_number, p.entry_date, s.name, p.organization_id
       ORDER BY p.entry_date DESC, p.created_at DESC

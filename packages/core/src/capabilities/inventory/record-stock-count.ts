@@ -84,6 +84,14 @@ export interface RecordStockCountResult {
   /** True when a shift was open at the station: measurement + variance were
    * recorded but book stock was NOT reconciled (in-flight sales un-booked). */
   openShiftAtRecording: boolean;
+  /** Advisory only; never blocks the dip. */
+  warnings: StockCountWarning[];
+}
+
+export interface StockCountWarning {
+  code: 'DECANTATION_PENDING_OPEN_SHIFT';
+  message: string;
+  documentNumbers: string[];
 }
 
 /**
@@ -188,6 +196,20 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
       decantationLinesMeasured = measured.data.measuredLines;
     }
 
+    const warnings: StockCountWarning[] = [];
+    if (tank && openShiftAtRecording && this.deps.decantationMeasurement) {
+      const documentNumbers = await this.deps.decantationMeasurement.pendingDocumentNumbers(ctx, {
+        stationId: cmd.stationId,
+        tankId: tank.id,
+      });
+      if (documentNumbers.length > 0)
+        warnings.push({
+          code: 'DECANTATION_PENDING_OPEN_SHIFT',
+          message: `Decantation ${documentNumbers.join(', ')} stays pending: a Shift is open, so this dip does not measure it. Dip again after the Shift closes.`,
+          documentNumbers,
+        });
+    }
+
     const expected = isBulk
       ? await this.deps.movements.currentQuantityForTank(cmd.tankId as string)
       : await this.deps.movements.currentQuantityForProduct(ctx.organizationId, productId);
@@ -278,6 +300,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
       actualQuantity: actual,
       varianceQuantity,
       openShiftAtRecording,
+      warnings,
     });
   }
 }
