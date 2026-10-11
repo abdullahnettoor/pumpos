@@ -182,6 +182,8 @@ describe('GetPayables', () => {
       organizationId: 'org-1',
       purchasedFrom: '2026-10-01',
       purchasedTo: '2026-10-31',
+      fuelPurchaseFrom: '2026-11-01',
+      fuelPurchaseTo: '2026-11-30',
       paidFrom: '2026-11-01',
       paidTo: '2026-11-30',
     });
@@ -211,6 +213,8 @@ describe('GetSupplierPayable', () => {
       supplierId: 's-1',
       purchasedFrom: '2026-10-01',
       purchasedTo: '2026-10-31',
+      fuelPurchaseFrom: '2026-10-01',
+      fuelPurchaseTo: '2026-10-31',
       paidFrom: '2026-10-01',
       paidTo: '2026-10-31',
     });

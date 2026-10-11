@@ -98,7 +98,13 @@ export class DrizzleDssrDataReader implements DssrDataReader {
     const purchaseRows = await this.db
       .select({ amount: schema.purchases.amount })
       .from(schema.purchases)
-      .where(eq(schema.purchases.businessDayId, businessDayId));
+      .where(
+        and(
+          eq(schema.purchases.businessDayId, businessDayId),
+          organizationId ? eq(schema.purchases.organizationId, organizationId) : undefined,
+          stationId ? eq(schema.purchases.stationId, stationId) : undefined,
+        ),
+      );
 
     const saleRows = await this.db
       .select({

@@ -68,6 +68,7 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /transactions/decantations': 'refuses-foreign-station',
   'GET /transactions/density/readings': 'refuses-foreign-station',
   'GET /transactions/density/today': 'refuses-foreign-station',
+  'GET /transactions/decantations/day-close-warnings': 'refuses-foreign-station',
   'GET /transactions/decantations/:id': 'org-scoped-query',
   'GET /transactions/inventory/status': 'org-scoped-query',
   'GET /transactions/inventory/items': 'org-scoped-query',

@@ -29,6 +29,7 @@ import {
 } from '../pump-ds/index.js';
 import { DensityTab } from './inventory/density/index.js';
 import { tankPct, classifyTank, OVER_CAPACITY_EXPLANATION } from '../utils/stock.js';
+import { TankStatusChips } from './inventory/TankStatusChips.js';
 import {
   isAmbiguousMutationError,
   loadPendingStockCountRequest,
@@ -589,22 +590,6 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                   const vol = Number(tank.currentVolume) || 0;
                   const pct = tankPct(vol, cap);
                   const level = classifyTank(pct);
-                  const tone =
-                    level === 'critical'
-                      ? 'danger'
-                      : level === 'low'
-                        ? 'warning'
-                        : level === 'over'
-                          ? 'info'
-                          : 'success';
-                  const label =
-                    level === 'critical'
-                      ? 'Critical'
-                      : level === 'low'
-                        ? 'Low'
-                        : level === 'over'
-                          ? 'Over capacity'
-                          : 'OK';
                   const highlighted = highlightId === tank.id;
                   return (
                     <div
@@ -653,9 +638,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                             {tank.productName} · {tank.productCode}
                           </span>
                         </div>
-                        <Chip tone={tone} size="xs">
-                          {label}
-                        </Chip>
+                        <TankStatusChips tank={tank} />
                       </div>
                       <div
                         style={{

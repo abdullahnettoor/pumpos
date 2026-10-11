@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFieldArray } from 'react-hook-form';
 import {
-  purchaseEntryFormSchema,
+  purchaseEntryFormSchemaFor,
   resolveEntryDate,
   type PurchaseEntryFormValues,
 } from '@pump/shared';
@@ -27,7 +27,7 @@ export interface PurchasePayNow {
 export interface PurchaseEntryFormProps {
   suppliers: any[];
   products: any[];
-  /** All station tanks; the form filters to each line's product tanks. */
+  /** Kept for compatible callers; fuel invoices no longer allocate stock to tanks. */
   tanks: any[];
   defaultValues?: Partial<PurchaseEntryFormValues>;
   submitting: boolean;
@@ -73,12 +73,8 @@ const EMPTY_DEFAULTS: PurchaseEntryFormValues = {
 };
 
 /**
- * Remounted when the defaults change rather than reset by an effect. Besides
- * removing the effect, this fixes a real bug: `reset()` regenerated the
- * field-array ids *after* the auto-allocation effect had keyed its entry to the
- * old ones, so a single-tank fuel line opened with defaults showed an empty
- * tank allocation and refused to submit until the operator retyped the
- * quantity. Mounting fresh means the ids are stable from the start.
+ * Remounted when the defaults change rather than reset by an effect, keeping
+ * field-array ids stable for per-line amount inputs.
  */
 export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = (props) => (
   <PurchaseEntryFormBody key={JSON.stringify(props.defaultValues ?? {})} {...props} />
@@ -107,6 +103,13 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
 }) => {
   const today = resolveEntryDate({ timeZone });
 
+  // The fuel/product mix rule is part of the schema; it needs the catalogue.
+  const schema = useMemo(
+    () =>
+      purchaseEntryFormSchemaFor((id) => products.find((p) => p.id === id)?.productType === 'FUEL'),
+    [products],
+  );
+
   const {
     register,
     handleSubmit,
@@ -114,27 +117,14 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
     control,
     setValue,
     formState: { errors },
-  } = useZodForm<PurchaseEntryFormValues>(purchaseEntryFormSchema, {
+  } = useZodForm<PurchaseEntryFormValues>(schema, {
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
 
-  // A closed business day seals its stock (ADR 0003), and a closed day cannot be
-  // reopened, so the server refuses a purchase dated on one. Say so as soon as
-  // the date is picked instead of after submit (#308).
+  // Product stock purchases remain sealed by their Business Day. Fuel invoices
+  // are Office Records and do not consult Business Day status.
   const purchaseDate = watch('transactionDate') || '';
-  const dayStatusQ = useBusinessDayStatus(stationId, purchaseDate, {
-    enabled: !!stationId && !!purchaseDate,
-  });
-  const closedDate = dayStatusQ.data?.requestedState === 'CLOSED' ? purchaseDate : null;
-
-  // Tank allocations the operator has typed, keyed by field-array row id then
-  // tankId. What the form uses is derived below: an explicit split wins,
-  // otherwise a single-tank fuel line is filled automatically.
-  const [manualAllocations, setManualAllocations] = useState<
-    Record<string, Record<string, string>>
-  >({});
-  const [allocError, setAllocError] = useState<string | null>(null);
   // Fuel lines are entered as an invoice TOTAL (tax-inclusive); ₹/L is derived.
   // Keyed by field-array row id.
   const [lineTotals, setLineTotals] = useState<Record<string, string>>({});
@@ -157,7 +147,19 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
   // Round-tripping through the signature gives the derivations below an
   // identity that changes exactly when the values do, and nothing else.
   const linesSignature = JSON.stringify(watch('lines') ?? []);
-  const watchedLines = useMemo<any[]>(() => JSON.parse(linesSignature), [linesSignature]);
+  const watchedLines = useMemo<Partial<PurchaseEntryFormValues['lines'][number]>[]>(
+    () => JSON.parse(linesSignature),
+    [linesSignature],
+  );
+  const hasProductLines = watchedLines.some((line) => {
+    const p = products.find((x) => x.id === line?.productId);
+    return p && p.productType !== 'FUEL';
+  });
+  const dayStatusQ = useBusinessDayStatus(stationId, purchaseDate, {
+    enabled: hasProductLines && !!stationId && !!purchaseDate,
+  });
+  const closedDate =
+    hasProductLines && dayStatusQ.data?.requestedState === 'CLOSED' ? purchaseDate : null;
 
   // Fuel lines: derive unit price (₹/L) = total ÷ quantity, keeping the entered
   // total fixed as quantity changes.
@@ -166,7 +168,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
   // into the form, so its dependency list can be honest.
   const desiredFuelRates = useMemo(() => {
     const out: { path: `lines.${number}.unitPrice`; rate: number | undefined }[] = [];
-    watchedLines.forEach((line: any, i: number) => {
+    watchedLines.forEach((line, i) => {
       const fieldId = fields[i]?.id;
       const product = products.find((p) => p.id === line?.productId);
       if (product?.productType !== 'FUEL' || !fieldId) return;
@@ -182,30 +184,6 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
   useEffect(() => {
     for (const { path, rate } of desiredFuelRates) setValue(path, rate as unknown as number);
   }, [desiredFuelRates, setValue]);
-
-  /**
-   * Auto-fill a single-tank fuel line, drop anything held against a line that
-   * is no longer fuel, and let an explicit split override both. Derived during
-   * render rather than pushed into state by an effect, so it cannot lag a
-   * product or quantity change by a frame.
-   */
-  const allocations = useMemo(() => {
-    const out: Record<string, Record<string, string>> = {};
-    fields.forEach((f, i) => {
-      const line = watchedLines[i];
-      const product = products.find((p) => p.id === line?.productId);
-      if (product?.productType !== 'FUEL') return;
-      const manual = manualAllocations[f.id];
-      if (manual && Object.keys(manual).length) {
-        out[f.id] = manual;
-        return;
-      }
-      const productTanks = tanks.filter((t) => t.productId === line?.productId);
-      if (productTanks.length === 1 && line?.quantity)
-        out[f.id] = { [productTanks[0].id]: String(line.quantity) };
-    });
-    return out;
-  }, [fields, watchedLines, products, tanks, manualAllocations]);
 
   // ---- Invoice tax preview (client estimate; server is authoritative) ----
   // Only GST lines add tax on our side; fuel is recorded tax-inclusive.
@@ -231,7 +209,6 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
   );
 
   const submit = (values: PurchaseEntryFormValues) => {
-    setAllocError(null);
     const lines = values.lines.map((ln, i) => {
       const fieldId = fields[i]?.id;
       const product = products.find((p) => p.id === ln.productId);
@@ -242,22 +219,11 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
         const qty = Number(ln.quantity);
         if (total > 0 && qty > 0) unitPrice = total / qty;
       }
-      const productTanks = tanks.filter((t) => t.productId === ln.productId);
-      let tankAllocations: { tankId: string; quantity: number }[] | undefined;
-      if (isFuel && productTanks.length > 0) {
-        const alloc = (fieldId && allocations[fieldId]) || {};
-        tankAllocations = productTanks
-          .map((t) => ({ tankId: t.id, quantity: Number(alloc[t.id] || 0) }))
-          .filter((a) => a.quantity > 0);
-        const allocated = tankAllocations.reduce((s, a) => s + a.quantity, 0);
-        if (Math.abs(allocated - Number(ln.quantity)) >= 0.01) {
-          setAllocError(
-            `Tank allocation for ${product?.name ?? 'fuel'} (${allocated.toFixed(2)}L) must equal the line quantity (${Number(ln.quantity).toFixed(2)}L).`,
-          );
-          throw new Error('allocation-mismatch');
-        }
-      }
-      return { ...ln, unitPrice, tankAllocations };
+      return {
+        ...ln,
+        unitPrice,
+        invoiceDensity: isFuel && ln.invoiceDensity !== '' ? ln.invoiceDensity : undefined,
+      };
     });
     const paysNow = enablePayment && recordPayment && Number(paymentAmount) > 0;
     if (paysNow && !paymentAccountId) {
@@ -279,19 +245,19 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
     <form
       onSubmit={(e) => {
         handleSubmit(submit)(e).catch(() => {
-          /* allocation mismatch surfaced via allocError */
+          /* validation feedback is rendered inline */
         });
       }}
       style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
     >
-      {/* Dated by business day only; a purchase never belongs to a Shift (#308). */}
+      {/* Fuel uses Entry Date; product stock uses Business Date. */}
       <Field label={dateLabel}>
         <DateField disabled={submitting} {...register('transactionDate')} />
       </Field>
       {closedDate && (
         <Banner severity="warning" title={`${closedDate} is closed.`}>
-          Its stock is sealed, so a purchase cannot be recorded on it. Record this purchase on an
-          open day; the missing delivery will show as stock variance on {closedDate}.
+          Its stock is sealed, so a product purchase cannot be recorded on it. Record this purchase
+          on an open day; the sealed Business Day cannot accept a product stock purchase.
         </Banner>
       )}
 
@@ -378,15 +344,10 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
           const isGst = product?.taxCategory === 'GST';
           const gstRate = Number(product?.taxConfig?.gst_rate || 0);
           const cessRate = Number(product?.taxConfig?.cess || 0);
-          const productTanks = tanks.filter((t) => t.productId === line?.productId);
           const qty = Number(line?.quantity) || 0;
           const rate = Number(line?.unitPrice) || 0;
           const taxable = qty * rate;
           const fuelTotal = lineTotals[field.id] || '';
-          const alloc = allocations[field.id] || {};
-          const allocated = productTanks.reduce((s, tk) => s + (Number(alloc[tk.id]) || 0), 0);
-          const allocMismatch =
-            isFuel && productTanks.length > 1 && Math.abs(allocated - qty) >= 0.01;
 
           return (
             <div
@@ -422,12 +383,6 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
                     ]}
                     value={line?.productId ?? ''}
                     onChange={(v) => {
-                      setManualAllocations((prev) => {
-                        if (!prev[field.id]) return prev;
-                        const n = { ...prev };
-                        delete n[field.id];
-                        return n;
-                      });
                       setValue(`lines.${i}.productId` as const, v, { shouldValidate: true });
                     }}
                     placeholder="Select product…"
@@ -446,11 +401,6 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
                     disabled={submitting}
                     onClick={() => {
                       remove(i);
-                      setManualAllocations((prev) => {
-                        const n = { ...prev };
-                        delete n[field.id];
-                        return n;
-                      });
                       setLineTotals((prev) => {
                         const n = { ...prev };
                         delete n[field.id];
@@ -535,7 +485,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
                 <span>{isFuel ? `Cost: ${inr(taxable)}` : `Taxable: ${inr(taxable)}`}</span>
               </div>
 
-              {isFuel && productTanks.length > 0 && (
+              {isFuel && (
                 <div
                   style={{
                     display: 'flex',
@@ -545,73 +495,23 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
                     paddingTop: '8px',
                   }}
                 >
-                  <span style={{ fontSize: '11px', color: 'var(--text-strong)', fontWeight: 600 }}>
-                    Tank Drop Allocation
-                  </span>
-                  {productTanks.map((tank) => (
-                    <div
-                      key={tank.id}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 100px',
-                        gap: '8px',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {tank.name}
-                        {tank.capacity
-                          ? ` (Cap: ${Number(tank.capacity).toLocaleString('en-IN')}L)`
-                          : ''}
-                      </span>
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="0.00"
-                        disabled={submitting}
-                        value={alloc[tank.id] || ''}
-                        onChange={(e) =>
-                          setManualAllocations((prev) => ({
-                            ...prev,
-                            [field.id]: {
-                              ...(prev[field.id] ?? allocations[field.id] ?? {}),
-                              [tank.id]: e.target.value,
-                            },
-                          }))
-                        }
-                        style={{
-                          height: '28px',
-                          borderRadius: 'var(--radius-input)',
-                          border: '1px solid var(--border-strong)',
-                          padding: '0 8px',
-                          textAlign: 'right',
-                          fontSize: '12px',
-                        }}
-                      />
-                    </div>
-                  ))}
-                  {productTanks.length > 1 && (
-                    <div
-                      style={{
-                        fontSize: '11px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        color: allocMismatch ? 'var(--brand-danger)' : 'var(--brand-success)',
-                      }}
-                    >
-                      <span>
-                        Allocated: {allocated.toFixed(2)} / {qty.toFixed(2)} L
-                      </span>
-                      {allocMismatch && (
-                        <span style={{ fontWeight: 600 }}>Must equal line quantity</span>
-                      )}
-                    </div>
-                  )}
+                  <label style={labelStyle}>Invoice Density (kg/m³ @15 °C)</label>
+                  <NumberInput
+                    disabled={submitting}
+                    step="0.01"
+                    placeholder="Optional"
+                    {...register(`lines.${i}.invoiceDensity` as const)}
+                  />
                 </div>
               )}
             </div>
           );
         })}
+        {(errors.lines?.root?.message ?? errors.lines?.message) && (
+          <span role="alert" style={errorTextStyle}>
+            {errors.lines?.root?.message ?? errors.lines?.message}
+          </span>
+        )}
         {typeof errors.lines?.message === 'string' && (
           <span style={errorTextStyle}>{errors.lines.message}</span>
         )}
@@ -765,7 +665,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
         <TextInput placeholder={notesPlaceholder} disabled={submitting} {...register('notes')} />
       </Field>
 
-      {(allocError || error) && (
+      {error && (
         <div
           style={{
             backgroundColor: 'var(--state-danger-bg)',
@@ -776,7 +676,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
             border: '1px solid var(--border-soft)',
           }}
         >
-          {allocError || error}
+          {error}
         </div>
       )}
 

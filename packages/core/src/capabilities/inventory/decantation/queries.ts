@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { isValidBusinessDate } from '@pump/shared';
 import { err, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { Decantation, DecantationRepository } from './ports.js';
+import type { Decantation, DecantationDayCloseWarnings, DecantationRepository } from './ports.js';
 
 export interface GetDecantationCommand {
   /** When omitted the caller authorizes the returned Decantation's station. */
@@ -46,5 +46,42 @@ export class ListDecantations implements UseCase<ListDecantationsCommand, Decant
     if (p.data.from && p.data.to && p.data.from > p.data.to)
       return err(validationError('from must not be after to'));
     return ok(await this.deps.decantations.list({ organizationId: ctx.organizationId, ...p.data }));
+  }
+}
+
+export interface GetDecantationDayCloseWarningsCommand {
+  stationId: string;
+  businessDayId: string;
+}
+
+const dayCloseWarningsSchema = z.object({
+  stationId: z.string().min(1, 'stationId is required'),
+  businessDayId: z.string().min(1, 'businessDayId is required'),
+});
+
+/** Read advisory Decantation warnings for the selected Business Day close. */
+export class GetDecantationDayCloseWarnings implements UseCase<
+  GetDecantationDayCloseWarningsCommand,
+  DecantationDayCloseWarnings
+> {
+  constructor(private readonly deps: { decantations: DecantationRepository }) {}
+
+  async execute(
+    input: GetDecantationDayCloseWarningsCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<DecantationDayCloseWarnings>> {
+    const parsed = dayCloseWarningsSchema.safeParse(input);
+    if (!parsed.success)
+      return err(
+        validationError('Invalid GetDecantationDayCloseWarnings query', {
+          issues: parsed.error.flatten(),
+        }),
+      );
+    return ok(
+      await this.deps.decantations.getDayCloseWarnings({
+        organizationId: ctx.organizationId,
+        ...parsed.data,
+      }),
+    );
   }
 }

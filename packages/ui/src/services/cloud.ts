@@ -116,6 +116,29 @@ export interface RecordHandoverResult {
   replaced: boolean;
 }
 
+export interface DecantationDayCloseWarnings {
+  pendingMeasurement: string[];
+  purchaseNotLinked: { documentNumber: string; products: string[] }[];
+  flagged: string[];
+}
+
+export function formatDecantationWarningSummary(warnings: DecantationDayCloseWarnings): string {
+  const entries: string[] = [];
+  const describe = (label: string, documents: string[]) => {
+    if (documents.length > 0) entries.push(`${label}: ${documents.join(', ')}`);
+  };
+  describe('Pending measurement', warnings.pendingMeasurement);
+  if (warnings.purchaseNotLinked.length > 0) {
+    entries.push(
+      `Purchase not linked: ${warnings.purchaseNotLinked
+        .map(({ documentNumber, products }) => `${documentNumber} (${products.join(', ')})`)
+        .join(', ')}`,
+    );
+  }
+  describe('Flagged', warnings.flagged);
+  return entries.join('; ');
+}
+
 export interface RecordStockCountPayload {
   stationId: string;
   actualQuantity: number;
@@ -1129,18 +1152,22 @@ export class CloudTransactionService {
     return request<any[]>('/transactions/expenses');
   }
 
-  async getPurchases(): Promise<any[]> {
-    return request<any[]>('/transactions/purchases');
+  async getPurchases(stationId?: string): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (stationId) qs.set('stationId', stationId);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<any[]>(`/transactions/purchases${suffix}`);
   }
 
   async getPurchaseItems(purchaseId: string): Promise<any[]> {
     return request<any[]>(`/transactions/purchases/${purchaseId}/items`);
   }
 
-  async getPurchaseGstRegister(from?: string, to?: string): Promise<any[]> {
+  async getPurchaseGstRegister(from?: string, to?: string, stationId?: string): Promise<any[]> {
     const qs = new URLSearchParams();
     if (from) qs.set('from', from);
     if (to) qs.set('to', to);
+    if (stationId) qs.set('stationId', stationId);
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
     return request<any[]>(`/transactions/purchases/gst-register${suffix}`);
   }
@@ -1257,6 +1284,7 @@ export class CloudTransactionService {
       productId: string;
       quantity: number;
       unitPrice: number;
+      invoiceDensity?: number | string | null;
       tankAllocations?: { tankId: string; quantity: number }[];
     }[];
     /** Optional immediate payment recorded atomically with the purchase. */
@@ -1312,6 +1340,15 @@ export class CloudTransactionService {
 
   async getInventoryStatus(stationId: string): Promise<any[]> {
     return request<any[]>(`/transactions/inventory/status?stationId=${stationId}`);
+  }
+
+  async getDecantationDayCloseWarnings(
+    stationId: string,
+    businessDayId: string,
+  ): Promise<DecantationDayCloseWarnings> {
+    return request<DecantationDayCloseWarnings>(
+      `/transactions/decantations/day-close-warnings?stationId=${encodeURIComponent(stationId)}&businessDayId=${encodeURIComponent(businessDayId)}`,
+    );
   }
 
   async getInventoryItems(stationId: string): Promise<any[]> {
