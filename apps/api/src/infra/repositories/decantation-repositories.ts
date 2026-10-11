@@ -1,9 +1,11 @@
 import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { schema, type DbExecutor } from '@pump/db';
 import {
   DecantationMeasurementService,
   type DecantationPurchaseLink,
   type DecantationPurchaseRepository,
+  type DecantationDayCloseWarnings,
   type EventPublisher,
   type TankSalesReader,
   type Decantation,
@@ -341,6 +343,108 @@ export class DrizzleDecantationRepository implements DecantationRepository {
       .orderBy(desc(schema.businessDays.businessDate), desc(schema.decantations.createdAt))
       .limit(q.limit ?? 200);
     return this.hydrate(rows);
+  }
+
+  async getDayCloseWarnings({
+    organizationId,
+    stationId,
+    businessDayId,
+  }: {
+    organizationId: string;
+    stationId: string;
+    businessDayId: string;
+  }): Promise<DecantationDayCloseWarnings> {
+    const closeDay = alias(schema.businessDays, 'close_day');
+    const rows = await this.db
+      .selectDistinct({
+        documentNumber: schema.decantations.documentNumber,
+        decantationId: schema.decantations.id,
+        decantationBusinessDayId: schema.decantations.businessDayId,
+        status: schema.decantations.status,
+        flags: schema.decantations.flags,
+        lineStatus: schema.decantationTankLines.status,
+        productId: schema.decantationTankLines.productId,
+        productName: schema.products.name,
+        linkedPurchaseId: schema.decantationPurchases.purchaseId,
+      })
+      .from(schema.decantations)
+      .innerJoin(
+        schema.businessDays,
+        and(
+          eq(schema.businessDays.id, schema.decantations.businessDayId),
+          eq(schema.businessDays.organizationId, schema.decantations.organizationId),
+          eq(schema.businessDays.stationId, schema.decantations.stationId),
+        ),
+      )
+      .innerJoin(
+        closeDay,
+        and(
+          eq(closeDay.id, businessDayId),
+          eq(closeDay.organizationId, organizationId),
+          eq(closeDay.stationId, stationId),
+        ),
+      )
+      .leftJoin(
+        schema.decantationTankLines,
+        and(
+          eq(schema.decantationTankLines.decantationId, schema.decantations.id),
+          eq(schema.decantationTankLines.organizationId, schema.decantations.organizationId),
+          eq(schema.decantationTankLines.stationId, schema.decantations.stationId),
+        ),
+      )
+      .leftJoin(
+        schema.products,
+        and(
+          eq(schema.products.id, schema.decantationTankLines.productId),
+          eq(schema.products.organizationId, schema.decantations.organizationId),
+        ),
+      )
+      .leftJoin(
+        schema.decantationPurchases,
+        and(
+          eq(schema.decantationPurchases.decantationId, schema.decantations.id),
+          eq(schema.decantationPurchases.productId, schema.decantationTankLines.productId),
+          eq(schema.decantationPurchases.organizationId, schema.decantations.organizationId),
+          eq(schema.decantationPurchases.stationId, schema.decantations.stationId),
+        ),
+      )
+      .where(
+        and(
+          eq(schema.decantations.organizationId, organizationId),
+          eq(schema.decantations.stationId, stationId),
+          sql`${schema.decantations.status} <> 'DRAFT'`,
+          lte(schema.businessDays.businessDate, closeDay.businessDate),
+        ),
+      );
+
+    const pendingMeasurement = new Set<string>();
+    const unlinkedByDocument = new Map<string, Set<string>>();
+    const flagged = new Set<string>();
+    for (const row of rows) {
+      if (row.status === 'PENDING_MEASUREMENT' || row.lineStatus === 'PENDING_MEASUREMENT')
+        pendingMeasurement.add(row.documentNumber);
+      if (row.productId && !row.linkedPurchaseId) {
+        const products = unlinkedByDocument.get(row.documentNumber) ?? new Set<string>();
+        products.add(row.productName ?? row.productId);
+        unlinkedByDocument.set(row.documentNumber, products);
+      }
+      if (
+        row.decantationBusinessDayId === businessDayId &&
+        Array.isArray(row.flags) &&
+        row.flags.length > 0
+      )
+        flagged.add(row.documentNumber);
+    }
+    return {
+      pendingMeasurement: [...pendingMeasurement].sort(),
+      purchaseNotLinked: [...unlinkedByDocument]
+        .map(([documentNumber, products]) => ({
+          documentNumber,
+          products: [...products].sort(),
+        }))
+        .sort((a, b) => a.documentNumber.localeCompare(b.documentNumber)),
+      flagged: [...flagged].sort(),
+    };
   }
 }
 

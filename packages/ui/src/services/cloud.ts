@@ -112,6 +112,29 @@ export interface RecordHandoverResult {
   replaced: boolean;
 }
 
+export interface DecantationDayCloseWarnings {
+  pendingMeasurement: string[];
+  purchaseNotLinked: { documentNumber: string; products: string[] }[];
+  flagged: string[];
+}
+
+export function formatDecantationWarningSummary(warnings: DecantationDayCloseWarnings): string {
+  const entries: string[] = [];
+  const describe = (label: string, documents: string[]) => {
+    if (documents.length > 0) entries.push(`${label}: ${documents.join(', ')}`);
+  };
+  describe('Pending measurement', warnings.pendingMeasurement);
+  if (warnings.purchaseNotLinked.length > 0) {
+    entries.push(
+      `Purchase not linked: ${warnings.purchaseNotLinked
+        .map(({ documentNumber, products }) => `${documentNumber} (${products.join(', ')})`)
+        .join(', ')}`,
+    );
+  }
+  describe('Flagged', warnings.flagged);
+  return entries.join('; ');
+}
+
 export interface RecordStockCountPayload {
   stationId: string;
   actualQuantity: number;
@@ -1273,6 +1296,15 @@ export class CloudTransactionService {
 
   async getInventoryStatus(stationId: string): Promise<any[]> {
     return request<any[]>(`/transactions/inventory/status?stationId=${stationId}`);
+  }
+
+  async getDecantationDayCloseWarnings(
+    stationId: string,
+    businessDayId: string,
+  ): Promise<DecantationDayCloseWarnings> {
+    return request<DecantationDayCloseWarnings>(
+      `/transactions/decantations/day-close-warnings?stationId=${encodeURIComponent(stationId)}&businessDayId=${encodeURIComponent(businessDayId)}`,
+    );
   }
 
   async getInventoryItems(stationId: string): Promise<any[]> {
