@@ -721,9 +721,11 @@ export const StepSection: React.FC<{
   open: boolean;
   done: boolean;
   summary: React.ReactNode;
+  /** Render the summary as a card body under the header instead of one line. */
+  card?: boolean;
   onOpen: () => void;
   children: React.ReactNode;
-}> = ({ n, title, open, done, summary, onOpen, children }) => (
+}> = ({ n, title, open, done, summary, card, onOpen, children }) => (
   <div
     style={{
       border: `1px solid ${open ? 'var(--color-brand, #2563eb)' : 'var(--color-border, #e5e5e5)'}`,
@@ -768,7 +770,7 @@ export const StepSection: React.FC<{
         {done && !open ? <Icon name="check" size="xs" /> : n}
       </span>
       <span style={{ fontWeight: 600, fontSize: 13, flexShrink: 0 }}>{title}</span>
-      {!open && (
+      {!open && !(card && done) && (
         <span
           style={{
             fontSize: 12,
@@ -783,12 +785,18 @@ export const StepSection: React.FC<{
           {done ? summary : 'Not started'}
         </span>
       )}
+      {!open && card && done && <span style={{ flex: 1 }} />}
       {!open && done && (
         <span style={{ fontSize: 12, color: 'var(--color-brand, #2563eb)', flexShrink: 0 }}>
           Edit
         </span>
       )}
     </button>
+    {!open && card && done && (
+      <div style={{ padding: '0 12px 12px 44px', cursor: 'pointer' }} onClick={onOpen}>
+        {summary}
+      </div>
+    )}
     {open && <div style={{ padding: '12px 12px 4px' }}>{children}</div>}
   </div>
 );

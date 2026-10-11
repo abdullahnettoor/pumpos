@@ -24,7 +24,6 @@ type Mark = 'ok' | 'short' | 'excess' | '';
 interface Line {
   product: Product;
   tankId: string;
-  purchaseId: string | null;
   beforeDip: string;
   roDensity: string;
   doAfterDip: boolean;
@@ -43,7 +42,6 @@ interface Chamber {
 const newLine = (product: Product = 'HSD'): Line => ({
   product,
   tankId: TANKS.find((t) => t.product === product)!.id,
-  purchaseId: null,
   beforeDip: '',
   roDensity: '',
   doAfterDip: false,
@@ -61,8 +59,29 @@ const newChamber = (line = 0, capacity = '4000'): Chamber => ({
 
 const grid2: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 };
 const grid3: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 };
+const grid2b = grid2;
 
 const lineColor = ['#2563eb', '#c2410c', '#7c3aed', '#0f766e'];
+
+const KV: React.FC<{ items: [string, React.ReactNode][] }> = ({ items }) => (
+  <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 12 }}>
+    {items.map(([k, v]) => (
+      <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <span
+          style={{
+            fontSize: 10,
+            textTransform: 'uppercase',
+            letterSpacing: '.04em',
+            opacity: 0.55,
+          }}
+        >
+          {k}
+        </span>
+        <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{v}</span>
+      </div>
+    ))}
+  </div>
+);
 
 const LineTag: React.FC<{ i: number; label: string }> = ({ i, label }) => (
   <span
@@ -95,6 +114,15 @@ export const VariantMulti: React.FC<{
     newChamber(1),
     newChamber(1),
   ]);
+  const [purchaseIds, setPurchaseIds] = useState<string[]>([]);
+  const selected = PURCHASES.filter((p) => purchaseIds.includes(p.id));
+  const togglePurchase = (id: string) =>
+    setPurchaseIds((ids) => {
+      if (ids.includes(id)) return ids.filter((x) => x !== id);
+      const prod = PURCHASES.find((p) => p.id === id)!.product;
+      // One invoice per product per tanker visit (OMCs invoice per product).
+      return [...ids.filter((x) => PURCHASES.find((p) => p.id === x)!.product !== prod), id];
+    });
   const [open, setOpen] = useState(0);
   const [done, setDone] = useState<Set<number>>(new Set());
 
@@ -108,7 +136,7 @@ export const VariantMulti: React.FC<{
   const calc = useMemo(
     () =>
       lines.map((l, i) => {
-        const purchase = PURCHASES.find((p) => p.id === l.purchaseId);
+        const purchase = selected.find((p) => p.product === l.product);
         const tank = TANKS.find((t) => t.id === l.tankId);
         const ro = l.roDensity ? Number(l.roDensity) : null;
         const densityDiff =
@@ -118,7 +146,6 @@ export const VariantMulti: React.FC<{
           l.doAfterDip && l.afterDip && l.beforeDip
             ? receivedQty(Number(l.beforeDip), Number(l.afterDip), Number(l.salesDuring || 0))
             : null;
-        const qtyDiff = purchase && received != null ? received - purchase.qty : null;
         const myCh = checkChambers ? chambers.filter((c) => c.line === i) : [];
         const chamberTotal = myCh.reduce((a, c) => a + Number(c.capacity || 0), 0);
         return {
@@ -127,7 +154,6 @@ export const VariantMulti: React.FC<{
           densityDiff,
           densityOut,
           received,
-          qtyDiff,
           chamberTotal,
           chamberShort: myCh.some((c) => c.mark === 'short' || !c.sealOk),
           chamberExcess: myCh.some((c) => c.mark === 'excess'),
@@ -135,7 +161,19 @@ export const VariantMulti: React.FC<{
           label: `${tank?.name ?? '—'} · ${l.product}`,
         };
       }),
-    [lines, chambers, checkChambers, end],
+    [lines, chambers, checkChambers, end, purchaseIds],
+  );
+
+  // Variance is per INVOICE: Σ received of every tank line of that product.
+  const perInvoice = selected.map((p) => {
+    const idx = lines.map((l, i) => (l.product === p.product ? i : -1)).filter((i) => i >= 0);
+    const pending = idx.some((i) => calc[i].received == null);
+    const received = pending ? null : idx.reduce((a, i) => a + (calc[i].received ?? 0), 0);
+    const chamberTotal = idx.reduce((a, i) => a + calc[i].chamberTotal, 0);
+    return { p, idx, received, diff: received != null ? received - p.qty : null, chamberTotal };
+  });
+  const unlinkedProducts = [...new Set(lines.map((l) => l.product))].filter(
+    (pr) => !selected.some((p) => p.product === pr),
   );
 
   const flagged = calc.some((c) => c.densityOut || c.chamberShort || c.notEmptied);
@@ -164,7 +202,7 @@ export const VariantMulti: React.FC<{
         driver,
         tankId: l.tankId,
         product: l.product,
-        purchaseId: l.purchaseId,
+        purchaseId: calc[i].purchase?.id ?? null,
         beforeDip: Number(l.beforeDip || 0),
         roDensity: Number(l.roDensity || 0),
         start,
@@ -179,28 +217,114 @@ export const VariantMulti: React.FC<{
     onClose();
   };
 
-  /* ---------- summaries for collapsed steps ---------- */
-  const summaries = [
-    `${tankerNo || '—'} · ${driver || 'no driver'}`,
-    calc
-      .map(
-        (c, i) =>
-          `${c.label}: ${c.purchase ? fmtL(c.purchase.qty) : 'link later'}, before ${fmtL(
-            lines[i].beforeDip ? Number(lines[i].beforeDip) : null,
-          )}, RO ${lines[i].roDensity || '—'}`,
-      )
-      .join('  |  '),
-    checkChambers
-      ? `${chambers.length} chambers · ${chambers.filter((c) => c.mark === 'short').length} short · ${
-          chambers.filter((c) => c.mark === 'excess').length
-        } excess`
-      : 'Not checked',
-    `${start || '—'} → ${end || '—'}`,
-    calc
-      .map((c, i) =>
-        lines[i].doAfterDip ? `${c.label}: received ${fmtL(c.received)}` : `${c.label}: pending`,
-      )
-      .join('  |  '),
+  /* ---------- compact cards for completed steps ---------- */
+  const summaries: React.ReactNode[] = [
+    <div key="s0" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <KV
+        items={[
+          ['Tanker', tankerNo || '—'],
+          ['Driver', driver || '—'],
+        ]}
+      />
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {selected.map((p) => (
+          <Chip key={p.id} size="sm" tone="neutral">
+            {p.product} · {p.invoiceNo} · {fmtL(p.qty)} · {p.invoiceDensity} kg/m³
+          </Chip>
+        ))}
+        {unlinkedProducts.map((pr) => (
+          <Chip key={pr} size="sm" tone="warning">
+            {pr}: purchase not linked
+          </Chip>
+        ))}
+      </div>
+    </div>,
+    <div key="s1" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {lines.map((l, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ width: 120 }}>
+            <LineTag i={i} label={calc[i].label} />
+          </span>
+          <KV
+            items={[
+              ['Before', fmtL(l.beforeDip ? Number(l.beforeDip) : null)],
+              ['RO density', l.roDensity || '—'],
+              [
+                'Δ vs invoice',
+                calc[i].densityDiff != null ? (
+                  <Chip size="sm" tone={calc[i].densityOut ? 'danger' : 'success'}>
+                    {fmtSigned(calc[i].densityDiff!, 'kg/m³')}
+                  </Chip>
+                ) : (
+                  '—'
+                ),
+              ],
+            ]}
+          />
+        </div>
+      ))}
+    </div>,
+    checkChambers ? (
+      <div key="s2" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {chambers.map((c, i) => (
+          <Chip
+            key={i}
+            size="sm"
+            tone={
+              c.mark === 'short' || !c.sealOk
+                ? 'danger'
+                : c.mark === 'excess'
+                  ? 'info'
+                  : c.mark === 'ok'
+                    ? 'success'
+                    : 'neutral'
+            }
+          >
+            #{i + 1} {fmtL(Number(c.capacity || 0))} → {calc[c.line]?.label}
+            {c.mark ? ` · ${c.mark}` : ''}
+            {!c.sealOk ? ' · seal broken' : ''}
+          </Chip>
+        ))}
+      </div>
+    ) : (
+      <span key="s2" style={{ fontSize: 12, opacity: 0.6 }}>
+        Chambers not checked
+      </span>
+    ),
+    <KV
+      key="s3"
+      items={[
+        ['Start', start || '—'],
+        ['End', end || '—'],
+      ]}
+    />,
+    <div key="s4" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {lines.map((l, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ width: 120 }}>
+            <LineTag i={i} label={calc[i].label} />
+          </span>
+          {l.doAfterDip ? (
+            <KV
+              items={[
+                ['After', fmtL(Number(l.afterDip || 0))],
+                ['Sales during', fmtL(Number(l.salesDuring || 0))],
+                ['Received', fmtL(calc[i].received)],
+              ]}
+            />
+          ) : (
+            <Chip size="sm" tone="info">
+              Pending measurement — next Tank Dip
+            </Chip>
+          )}
+        </div>
+      ))}
+      {checkChambers && (
+        <span style={{ fontSize: 12, opacity: 0.7 }}>
+          Chambers emptied: {chambers.filter((c) => c.emptied).length}/{chambers.length}
+        </span>
+      )}
+    </div>,
   ];
 
   const markBtn = (i: number, v: Exclude<Mark, ''>, label: string) => {
@@ -256,10 +380,11 @@ export const VariantMulti: React.FC<{
       {/* 1 */}
       <StepSection
         n={1}
-        title="Tanker"
+        title="Tanker & invoices"
         open={open === 0}
         done={done.has(0)}
         summary={summaries[0]}
+        card
         onOpen={() => setOpen(0)}
       >
         <div style={grid2}>
@@ -274,25 +399,66 @@ export const VariantMulti: React.FC<{
             <TextInput value={driver} onChange={(e) => setDriver(e.target.value)} />
           </Field>
         </div>
-        {cont(0, 'Continue to Tanks & invoices')}
+        <div style={{ fontSize: 12, fontWeight: 600, margin: '2px 0 6px' }}>
+          Fuel Purchases on this tanker{' '}
+          <span style={{ fontWeight: 400, opacity: 0.6 }}>
+            · one per product · optional, can link later
+          </span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 12 }}>
+          {PURCHASES.map((p) => {
+            const on = purchaseIds.includes(p.id);
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => togglePurchase(p.id)}
+                style={{
+                  textAlign: 'left',
+                  padding: '8px 10px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  border: `1px solid ${on ? 'var(--color-brand,#2563eb)' : 'var(--color-border,#e5e5e5)'}`,
+                  background: on
+                    ? 'color-mix(in oklab, var(--color-brand,#2563eb) 8%, transparent)'
+                    : 'transparent',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
+                  <span>
+                    {on ? '✓ ' : ''}
+                    {p.product} · {p.invoiceNo}
+                  </span>
+                  <span>{fmtL(p.qty)}</span>
+                </div>
+                <div style={{ opacity: 0.65, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{p.invoiceDate}</span>
+                  <span>{p.invoiceDensity} kg/m³</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {cont(0, 'Continue to Tanks')}
       </StepSection>
 
       {/* 2 */}
       <StepSection
         n={2}
-        title="Tanks & invoices"
+        title="Tanks"
         open={open === 1}
         done={done.has(1)}
         summary={summaries[1]}
+        card
         onOpen={() => setOpen(1)}
       >
         <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 10 }}>
-          One line per tank this tanker unloads into. Each line links its own Fuel Purchase (OMC
-          invoices per product).
+          One line per tank this tanker unloads into. Invoice density comes from the invoice of the
+          line's product.
         </div>
         {lines.map((l, i) => {
           const c = calc[i];
-          const purchases = PURCHASES.filter((p) => p.product === l.product);
           return (
             <div
               key={i}
@@ -337,7 +503,6 @@ export const VariantMulti: React.FC<{
                       const p = e.target.value as Product;
                       updLine(i, {
                         product: p,
-                        purchaseId: null,
                         tankId: TANKS.find((t) => t.product === p)!.id,
                       });
                     }}
@@ -352,19 +517,6 @@ export const VariantMulti: React.FC<{
                       <option key={t.id} value={t.id}>
                         {t.name}
                         {usedTanks.has(t.id) && t.id !== l.tankId ? ' (used)' : ''}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Fuel Purchase">
-                  <Select
-                    value={l.purchaseId ?? ''}
-                    onChange={(e) => updLine(i, { purchaseId: e.target.value || null })}
-                  >
-                    <option value="">Link later</option>
-                    {purchases.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.invoiceNo} · {p.qty.toLocaleString('en-IN')} L
                       </option>
                     ))}
                   </Select>
@@ -418,6 +570,7 @@ export const VariantMulti: React.FC<{
         open={open === 2}
         done={done.has(2)}
         summary={summaries[2]}
+        card
         onOpen={() => setOpen(2)}
       >
         <label
@@ -533,18 +686,14 @@ export const VariantMulti: React.FC<{
               Add chamber
             </Button>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '10px 0' }}>
-              {calc.map((c, i) => (
+              {perInvoice.map((x) => (
                 <Chip
-                  key={i}
+                  key={x.p.id}
                   size="sm"
-                  tone={
-                    c.purchase && c.chamberTotal && c.chamberTotal !== c.purchase.qty
-                      ? 'warning'
-                      : 'neutral'
-                  }
+                  tone={x.chamberTotal && x.chamberTotal !== x.p.qty ? 'warning' : 'neutral'}
                 >
-                  {c.label}: chambers {fmtL(c.chamberTotal)}
-                  {c.purchase ? ` / invoice ${fmtL(c.purchase.qty)}` : ''}
+                  {x.p.product} {x.p.invoiceNo}: chambers {fmtL(x.chamberTotal)} / invoice{' '}
+                  {fmtL(x.p.qty)}
                 </Chip>
               ))}
             </div>
@@ -575,6 +724,7 @@ export const VariantMulti: React.FC<{
         open={open === 3}
         done={done.has(3)}
         summary={summaries[3]}
+        card
         onOpen={() => setOpen(3)}
       >
         <div style={grid2}>
@@ -595,6 +745,7 @@ export const VariantMulti: React.FC<{
         open={open === 4}
         done={done.has(4)}
         summary={summaries[4]}
+        card
         onOpen={() => setOpen(4)}
       >
         {checkChambers && (
@@ -685,34 +836,36 @@ export const VariantMulti: React.FC<{
         <div
           style={{ border: '1px solid var(--color-border,#e5e5e5)', borderRadius: 8, padding: 12 }}
         >
-          <SectionTitle>Review — per tank</SectionTitle>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <SectionTitle>Review — per invoice (variance)</SectionTitle>
+          <table
+            style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 12 }}
+          >
             <thead>
               <tr style={{ fontSize: 11, opacity: 0.6, textAlign: 'left' }}>
-                <th style={cell}>Tank</th>
-                <th style={{ ...cell, textAlign: 'right' }}>Invoice</th>
+                <th style={cell}>Invoice</th>
+                <th style={cell}>Tanks</th>
+                <th style={{ ...cell, textAlign: 'right' }}>Invoice qty</th>
                 <th style={{ ...cell, textAlign: 'right' }}>Received</th>
-                <th style={{ ...cell, textAlign: 'right' }}>Qty variance</th>
-                <th style={{ ...cell, textAlign: 'right' }}>Density Δ</th>
+                <th style={{ ...cell, textAlign: 'right' }}>Variance</th>
               </tr>
             </thead>
             <tbody>
-              {calc.map((c, i) => (
-                <tr key={i} style={{ borderTop: '1px solid var(--color-border,#eee)' }}>
+              {perInvoice.map((x) => (
+                <tr key={x.p.id} style={{ borderTop: '1px solid var(--color-border,#eee)' }}>
                   <td style={cell}>
-                    <LineTag i={i} label={c.label} />
-                    {!c.purchase && (
-                      <div>
-                        <Chip tone="warning" size="sm">
-                          Purchase not linked
-                        </Chip>
-                      </div>
-                    )}
+                    {x.p.product} · {x.p.invoiceNo}
                   </td>
-                  <td style={{ ...cell, textAlign: 'right' }}>{fmtL(c.purchase?.qty)}</td>
+                  <td style={cell}>
+                    {x.idx.map((i) => (
+                      <div key={i}>
+                        <LineTag i={i} label={calc[i].label} />
+                      </div>
+                    ))}
+                  </td>
+                  <td style={{ ...cell, textAlign: 'right' }}>{fmtL(x.p.qty)}</td>
                   <td style={{ ...cell, textAlign: 'right' }}>
-                    {c.received != null ? (
-                      fmtL(c.received)
+                    {x.received != null ? (
+                      fmtL(x.received)
                     ) : (
                       <Chip tone="info" size="sm">
                         Pending measurement
@@ -720,18 +873,42 @@ export const VariantMulti: React.FC<{
                     )}
                   </td>
                   <td style={{ ...cell, textAlign: 'right' }}>
-                    {c.qtyDiff != null ? (
-                      <Chip tone={c.qtyDiff < 0 ? 'danger' : 'success'} size="sm">
-                        {c.qtyDiff < 0 ? 'Short' : 'Excess'} {fmtSigned(c.qtyDiff, 'L')}
+                    {x.diff != null ? (
+                      <Chip tone={x.diff < 0 ? 'danger' : 'success'} size="sm">
+                        {x.diff < 0 ? 'Short' : 'Excess'} {fmtSigned(x.diff, 'L')}
                       </Chip>
                     ) : (
                       '—'
                     )}
                   </td>
+                </tr>
+              ))}
+              {unlinkedProducts.map((pr) => (
+                <tr key={pr} style={{ borderTop: '1px solid var(--color-border,#eee)' }}>
+                  <td style={cell} colSpan={5}>
+                    <Chip tone="warning" size="sm">
+                      {pr}: purchase not linked — variance waits for the invoice
+                    </Chip>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <SectionTitle>Per tank (stock)</SectionTitle>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <tbody>
+              {calc.map((c, i) => (
+                <tr key={i} style={{ borderTop: '1px solid var(--color-border,#eee)' }}>
+                  <td style={cell}>
+                    <LineTag i={i} label={c.label} />
+                  </td>
+                  <td style={{ ...cell, textAlign: 'right' }}>
+                    {c.received != null ? `+${fmtL(c.received)} to stock` : 'Pending measurement'}
+                  </td>
                   <td style={{ ...cell, textAlign: 'right' }}>
                     {c.densityDiff != null ? (
                       <Chip tone={c.densityOut ? 'danger' : 'success'} size="sm">
-                        {fmtSigned(c.densityDiff, 'kg/m³')}
+                        Δρ {fmtSigned(c.densityDiff, 'kg/m³')}
                       </Chip>
                     ) : (
                       '—'
