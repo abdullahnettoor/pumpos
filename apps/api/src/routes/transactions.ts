@@ -77,6 +77,7 @@ import {
   DrizzleStockVarianceRepository,
   DrizzleTankSalesWindowReader,
 } from '../infra/repositories/inventory-repositories.js';
+import { createDecantationMeasurement } from '../infra/repositories/decantation-repositories.js';
 import {
   DrizzleSaleRepository,
   DrizzleMerchandiseHandoverRepository,
@@ -3114,6 +3115,7 @@ transactionsRouter.post(
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
         events,
+        decantationMeasurement: createDecantationMeasurement(tx, events),
       }).execute(body, buildContext(user, { stationId: body?.stationId, ...stockClock }));
     });
     return sendResult(c, result);

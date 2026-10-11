@@ -280,7 +280,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
 
   /**
    * Per tank: book before the day (Σ movements of earlier Business Days of the
-   * station), and on the day the Purchases received, net Sale litres, and every
+   * station), and on the day the Purchases and Decantations received, net Sale litres, and every
    * other movement but dip reconciliations ('Variance'). One statement for all
    * dipped tanks. Movements of later days never count.
    */
@@ -297,12 +297,13 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       SELECT sm.tank_id AS "tankId",
         COALESCE(SUM(sm.quantity) FILTER (WHERE bd.business_date < ${businessDate}), 0) AS opening,
         COALESCE(SUM(sm.quantity) FILTER (
-          WHERE bd.id = ${businessDayId} AND sm.movement_type = 'Purchase'), 0) AS received,
+          WHERE bd.id = ${businessDayId}
+            AND sm.movement_type IN ('Purchase', 'Decantation')), 0) AS received,
         COALESCE(-SUM(sm.quantity) FILTER (
           WHERE bd.id = ${businessDayId} AND sm.movement_type = 'Sale'), 0) AS sold,
         COALESCE(SUM(sm.quantity) FILTER (
           WHERE bd.id = ${businessDayId}
-            AND sm.movement_type NOT IN ('Purchase', 'Sale', 'Variance')), 0) AS adjusted
+            AND sm.movement_type NOT IN ('Purchase', 'Decantation', 'Sale', 'Variance')), 0) AS adjusted
       FROM stock_movements sm
       JOIN business_days bd ON bd.id = sm.business_day_id
       WHERE sm.tank_id IN (${sql.join(

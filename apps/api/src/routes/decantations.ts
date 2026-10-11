@@ -6,6 +6,7 @@ import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { TimestampDocumentNumberGenerator } from '../infra/doc-numbers.js';
 import {
+  createDecantationMeasurement,
   DrizzleDecantationRepository,
   DrizzleDensityReadingRepository,
 } from '../infra/repositories/decantation-repositories.js';
@@ -59,6 +60,7 @@ async function record(c: Ctx, body: any) {
       businessDays: new DrizzleBusinessDayRepository(tx),
       docNumbers,
       events,
+      measurement: createDecantationMeasurement(tx, events),
       // #464: pass loadStationDecantationSettings(...) here once it lands.
     }).execute(body, buildContext(user, { stationId: body.stationId, ...clock }));
   });
