@@ -120,11 +120,18 @@ export class DrizzleDecantationRepository implements DecantationRepository {
     const oldLines = await this.db
       .select({ id: schema.decantationTankLines.id })
       .from(schema.decantationTankLines)
-      .where(eq(schema.decantationTankLines.decantationId, d.id));
+      .where(
+        and(
+          eq(schema.decantationTankLines.decantationId, d.id),
+          eq(schema.decantationTankLines.organizationId, d.organizationId),
+          eq(schema.decantationTankLines.stationId, d.stationId),
+        ),
+      );
     if (oldLines.length > 0) {
       await this.db.delete(schema.densityReadings).where(
         and(
           eq(schema.densityReadings.organizationId, d.organizationId),
+          eq(schema.densityReadings.stationId, d.stationId),
           inArray(
             schema.densityReadings.decantationTankLineId,
             oldLines.map((l) => l.id),
@@ -134,10 +141,22 @@ export class DrizzleDecantationRepository implements DecantationRepository {
     }
     await this.db
       .delete(schema.decantationChambers)
-      .where(eq(schema.decantationChambers.decantationId, d.id));
+      .where(
+        and(
+          eq(schema.decantationChambers.decantationId, d.id),
+          eq(schema.decantationChambers.organizationId, d.organizationId),
+          eq(schema.decantationChambers.stationId, d.stationId),
+        ),
+      );
     await this.db
       .delete(schema.decantationTankLines)
-      .where(eq(schema.decantationTankLines.decantationId, d.id));
+      .where(
+        and(
+          eq(schema.decantationTankLines.decantationId, d.id),
+          eq(schema.decantationTankLines.organizationId, d.organizationId),
+          eq(schema.decantationTankLines.stationId, d.stationId),
+        ),
+      );
     await this.insertChildren(d);
   }
 
@@ -146,15 +165,27 @@ export class DrizzleDecantationRepository implements DecantationRepository {
   ): Promise<Decantation[]> {
     if (headers.length === 0) return [];
     const ids = headers.map((h) => h.d.id);
+    // Headers come from one org-scoped query; children are re-scoped to the same tenant.
+    const orgIds = [...new Set(headers.map((h) => h.d.organizationId))];
     const lineRows = await this.db
       .select()
       .from(schema.decantationTankLines)
-      .where(inArray(schema.decantationTankLines.decantationId, ids))
+      .where(
+        and(
+          inArray(schema.decantationTankLines.decantationId, ids),
+          inArray(schema.decantationTankLines.organizationId, orgIds),
+        ),
+      )
       .orderBy(asc(schema.decantationTankLines.createdAt), asc(schema.decantationTankLines.id));
     const chamberRows = await this.db
       .select()
       .from(schema.decantationChambers)
-      .where(inArray(schema.decantationChambers.decantationId, ids))
+      .where(
+        and(
+          inArray(schema.decantationChambers.decantationId, ids),
+          inArray(schema.decantationChambers.organizationId, orgIds),
+        ),
+      )
       .orderBy(asc(schema.decantationChambers.chamberNo));
     return headers.map(({ d, businessDate }) => ({
       id: d.id,
@@ -405,14 +436,19 @@ export class DrizzleDecantationPurchaseRepository implements DecantationPurchase
       );
   }
 
-  async invoiceLine(organizationId: string, purchaseId: string, productId: string) {
+  async invoiceLine(
+    organizationId: string,
+    stationId: string,
+    purchaseId: string,
+    productId: string,
+  ) {
     const rows = (await this.db.execute(sql`
       SELECT COALESCE(SUM(pi.quantity), 0) AS quantity,
         COALESCE(SUM(pi.quantity * pi.unit_price), 0) AS value,
         COUNT(*)::int AS n
       FROM purchase_items pi
       JOIN purchases p ON p.id = pi.purchase_id
-      WHERE p.organization_id = ${organizationId}
+      WHERE p.organization_id = ${organizationId} AND p.station_id = ${stationId}
         AND pi.purchase_id = ${purchaseId} AND pi.product_id = ${productId}
     `)) as unknown as { quantity: string; value: string; n: number }[];
     const r = rows[0];
@@ -423,12 +459,20 @@ export class DrizzleDecantationPurchaseRepository implements DecantationPurchase
 export class DrizzleTankSalesReader implements TankSalesReader {
   constructor(private readonly db: DbExecutor) {}
 
-  async litresSoldBetween(tankId: string, fromIso: string, toIso: string): Promise<number> {
+  async litresSoldBetween(
+    organizationId: string,
+    stationId: string,
+    tankId: string,
+    fromIso: string,
+    toIso: string,
+  ): Promise<number> {
     const rows = (await this.db.execute(sql`
-      SELECT COALESCE(-SUM(quantity), 0) AS sold
-      FROM stock_movements
-      WHERE tank_id = ${tankId} AND movement_type = 'Sale'
-        AND created_at > ${fromIso}::timestamp AND created_at <= ${toIso}::timestamp
+      SELECT COALESCE(-SUM(sm.quantity), 0) AS sold
+      FROM stock_movements sm
+      JOIN tanks t ON t.id = sm.tank_id
+      WHERE sm.tank_id = ${tankId} AND sm.movement_type = 'Sale'
+        AND t.organization_id = ${organizationId} AND t.station_id = ${stationId}
+        AND sm.created_at > ${fromIso}::timestamp AND sm.created_at <= ${toIso}::timestamp
     `)) as unknown as { sold: string }[];
     return Number(rows[0]?.sold ?? 0);
   }

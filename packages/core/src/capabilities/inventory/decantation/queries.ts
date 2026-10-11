@@ -22,7 +22,7 @@ export class GetDecantation implements UseCase<GetDecantationCommand, Decantatio
 }
 
 const date = z.string().refine(isValidBusinessDate, 'must be a valid YYYY-MM-DD date');
-const listSchema = z.object({
+export const listDecantationsSchema = z.object({
   stationId: z.string().min(1, 'stationId is required'),
   from: date.optional(),
   to: date.optional(),
@@ -30,7 +30,7 @@ const listSchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional(),
 });
 
-export type ListDecantationsCommand = z.input<typeof listSchema>;
+export type ListDecantationsCommand = z.input<typeof listDecantationsSchema>;
 
 /** Decantations of a station by Business Date range / status, tank lines grouped. */
 export class ListDecantations implements UseCase<ListDecantationsCommand, Decantation[]> {
@@ -40,7 +40,7 @@ export class ListDecantations implements UseCase<ListDecantationsCommand, Decant
     input: ListDecantationsCommand,
     ctx: ExecutionContext,
   ): Promise<Result<Decantation[]>> {
-    const p = listSchema.safeParse(input);
+    const p = listDecantationsSchema.safeParse(input);
     if (!p.success)
       return err(validationError('Invalid ListDecantations query', { issues: p.error.flatten() }));
     if (p.data.from && p.data.to && p.data.from > p.data.to)

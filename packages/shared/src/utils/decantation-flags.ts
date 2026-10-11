@@ -15,11 +15,16 @@ export interface DecantationFlag {
   message: string;
 }
 
-export type DecantationWarningCode = 'CHAMBER_EXCESS' | 'CHAMBER_CAPACITY_MISMATCH';
+export type DecantationWarningCode =
+  | 'CHAMBER_EXCESS'
+  | 'CHAMBER_CAPACITY_MISMATCH'
+  /** after − before + sales < 0: the line stays pending until the next tank dip. */
+  | 'AFTER_DIP_BELOW_BEFORE';
 
 export interface DecantationWarning {
   code: DecantationWarningCode;
   chamberNo?: number;
+  tankLineId?: string;
   message: string;
 }
 

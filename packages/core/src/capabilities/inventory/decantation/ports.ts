@@ -132,6 +132,7 @@ export interface DecantationPurchaseRepository {
   /** Σ quantity and Σ quantity × unit price of the purchase's lines of a product. */
   invoiceLine(
     organizationId: string,
+    stationId: string,
     purchaseId: string,
     productId: string,
   ): Promise<{ quantity: number; value: number } | null>;
@@ -140,7 +141,13 @@ export interface DecantationPurchaseRepository {
 /** Litres dispensed from a tank, as booked by closed shifts. */
 export interface TankSalesReader {
   /** Σ −quantity of `Sale` movements of the tank with created_at in (from, to]. */
-  litresSoldBetween(tankId: string, fromIso: string, toIso: string): Promise<number>;
+  litresSoldBetween(
+    organizationId: string,
+    stationId: string,
+    tankId: string,
+    fromIso: string,
+    toIso: string,
+  ): Promise<number>;
 }
 
 export interface DensityReading {

@@ -14,6 +14,7 @@ import {
   DrizzleDecantationPurchaseRepository,
   DrizzleDecantationRepository,
   DrizzleDensityReadingRepository,
+  DrizzleTankSalesReader,
 } from '../decantation-repositories.js';
 import {
   DrizzleStockMovementRepository,
@@ -276,6 +277,38 @@ describe.skipIf(!CONNECTION)('Decantation measurement against real Postgres (#46
     if (!r.success) throw new Error(JSON.stringify(r.error));
     expect(r.data.decantation.status).toBe('MEASURED');
     expect(await stock(T2)).toBe(5050);
+  });
+
+  it('reads are tenant and station scoped: a foreign org or station gets nothing', async () => {
+    const FOREIGN = id(90);
+    const OTHER_STATION = id(91);
+    await db.insert(schema.stockMovements).values({
+      businessDayId: (await businessDay())!,
+      productId: PRODUCT,
+      tankId: T1,
+      movementType: 'Sale',
+      quantity: '-250',
+    } as never);
+    const sales = new DrizzleTankSalesReader(db);
+    const from = '2000-01-01T00:00:00Z';
+    const to = '2100-01-01T00:00:00Z';
+    expect(await sales.litresSoldBetween(ORG, STATION, T1, from, to)).toBe(250);
+    expect(await sales.litresSoldBetween(FOREIGN, STATION, T1, from, to)).toBe(0);
+    expect(await sales.litresSoldBetween(ORG, OTHER_STATION, T1, from, to)).toBe(0);
+
+    const links = new DrizzleDecantationPurchaseRepository(db);
+    expect(await links.invoiceLine(ORG, STATION, PURCHASE, PRODUCT)).toMatchObject({
+      quantity: 12000,
+    });
+    expect(await links.invoiceLine(FOREIGN, STATION, PURCHASE, PRODUCT)).toBeNull();
+    expect(await links.invoiceLine(ORG, OTHER_STATION, PURCHASE, PRODUCT)).toBeNull();
+
+    const decantations = new DrizzleDecantationRepository(db);
+    const [any] = await decantations.list({ organizationId: ORG, stationId: STATION });
+    expect(any).toBeDefined();
+    expect(await decantations.findById(FOREIGN, any.id)).toBeNull();
+    expect(await decantations.findPendingForTank(FOREIGN, STATION, T1)).toEqual([]);
+    expect(await decantations.list({ organizationId: FOREIGN, stationId: STATION })).toEqual([]);
   });
 
   const businessDay = async () => {
