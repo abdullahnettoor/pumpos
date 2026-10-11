@@ -8,7 +8,16 @@ import { Button, Chip, Icon } from '../../../pump-ds/index.js';
 import { Drawer } from '../../Drawer.js';
 import { Field, NumberInput, TextInput, Select } from '../../primitives/Field.js';
 import { DensityCalculator } from './DensityCalculator.js';
-import { DraftWarnings, ResultRows, SectionTitle, Warn, useDraft, type DraftApi } from './draft.js';
+import {
+  DraftWarnings,
+  ResultRows,
+  SectionTitle,
+  Warn,
+  newChamber,
+  useDraft,
+  type Chamber,
+  type DraftApi,
+} from './draft.js';
 import { fmtL, type ProtoDecantation } from './mock.js';
 
 interface Props {
@@ -67,7 +76,9 @@ const PurchasePicker: React.FC<{ api: DraftApi; asList?: boolean }> = ({ api, as
               padding: '8px 10px',
               borderRadius: 6,
               border: `1px solid ${on ? 'var(--color-brand, #2563eb)' : 'var(--color-border, #e5e5e5)'}`,
-              background: on ? 'color-mix(in oklab, var(--color-brand, #2563eb) 8%, transparent)' : 'transparent',
+              background: on
+                ? 'color-mix(in oklab, var(--color-brand, #2563eb) 8%, transparent)'
+                : 'transparent',
               cursor: 'pointer',
               fontSize: 12,
             }}
@@ -88,9 +99,18 @@ const PurchasePicker: React.FC<{ api: DraftApi; asList?: boolean }> = ({ api, as
       <button
         type="button"
         onClick={() => api.set('purchaseId', null)}
-        style={{ fontSize: 12, opacity: 0.7, background: 'none', border: 0, textAlign: 'left', cursor: 'pointer' }}
+        style={{
+          fontSize: 12,
+          opacity: 0.7,
+          background: 'none',
+          border: 0,
+          textAlign: 'left',
+          cursor: 'pointer',
+        }}
       >
-        {api.d.purchaseId ? 'Unlink — invoice not entered yet' : '✓ Link later (invoice not entered yet)'}
+        {api.d.purchaseId
+          ? 'Unlink — invoice not entered yet'
+          : '✓ Link later (invoice not entered yet)'}
       </button>
     </div>
   ) : (
@@ -112,8 +132,12 @@ const PurchasePicker: React.FC<{ api: DraftApi; asList?: boolean }> = ({ api, as
 const InvoiceReadout: React.FC<{ api: DraftApi }> = ({ api }) =>
   api.purchase ? (
     <div style={{ ...grid2, fontSize: 12, marginBottom: 12, opacity: 0.85 }}>
-      <span>Invoice qty: <strong>{fmtL(api.purchase.qty)}</strong></span>
-      <span>Invoice density: <strong>{api.purchase.invoiceDensity}</strong></span>
+      <span>
+        Invoice qty: <strong>{fmtL(api.purchase.qty)}</strong>
+      </span>
+      <span>
+        Invoice density: <strong>{api.purchase.invoiceDensity}</strong>
+      </span>
       <span>Rate: ₹{api.purchase.rate}</span>
       <span>Value: ₹{(api.purchase.qty * api.purchase.rate).toLocaleString('en-IN')}</span>
     </div>
@@ -132,7 +156,10 @@ const BeforeFields: React.FC<{ api: DraftApi }> = ({ api }) => (
         </Select>
       </Field>
       <Field label="Before dip (L)" required hint={`Book stock ${fmtL(api.tank?.bookStock)}`}>
-        <NumberInput value={api.d.beforeDip} onChange={(e) => api.set('beforeDip', e.target.value)} />
+        <NumberInput
+          value={api.d.beforeDip}
+          onChange={(e) => api.set('beforeDip', e.target.value)}
+        />
       </Field>
     </div>
     <Field label="RO density (kg/m³ at 15 °C)" required>
@@ -145,17 +172,17 @@ const BeforeFields: React.FC<{ api: DraftApi }> = ({ api }) => (
         <DensityCalculator compact onUse={(r) => api.set('roDensity', String(r))} />
       </div>
     </Field>
-    <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 12 }}>
-      <input type="checkbox" checked={api.d.sealOk} onChange={(e) => api.set('sealOk', e.target.checked)} />
-      Seals intact and chamber quantity verified
-    </label>
   </>
 );
 
 const UnloadFields: React.FC<{ api: DraftApi }> = ({ api }) => (
   <div style={grid2}>
     <Field label="Unloading start">
-      <TextInput type="time" value={api.d.start} onChange={(e) => api.set('start', e.target.value)} />
+      <TextInput
+        type="time"
+        value={api.d.start}
+        onChange={(e) => api.set('start', e.target.value)}
+      />
     </Field>
     <Field label="Unloading end">
       <TextInput type="time" value={api.d.end} onChange={(e) => api.set('end', e.target.value)} />
@@ -165,19 +192,30 @@ const UnloadFields: React.FC<{ api: DraftApi }> = ({ api }) => (
 
 const AfterFields: React.FC<{ api: DraftApi }> = ({ api }) => (
   <>
-    <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 12 }}>
+    <label
+      style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, marginBottom: 12 }}
+    >
       <input
+        style={{ marginTop: 3 }}
         type="checkbox"
         checked={api.d.doAfterDip}
         onChange={(e) => api.set('doAfterDip', e.target.checked)}
       />
-      Take after-unloading dip now <span style={{ opacity: 0.6 }}>(optional — holds sales on this tank)</span>
+      <span>
+        Take after-unloading dip now
+        <span style={{ display: 'block', fontSize: 12, opacity: 0.6 }}>
+          Optional — holds sales on this tank until the dip is taken
+        </span>
+      </span>
     </label>
     {api.d.doAfterDip && (
       <>
         <div style={grid2}>
           <Field label="After dip (L)" required>
-            <NumberInput value={api.d.afterDip} onChange={(e) => api.set('afterDip', e.target.value)} />
+            <NumberInput
+              value={api.d.afterDip}
+              onChange={(e) => api.set('afterDip', e.target.value)}
+            />
           </Field>
           <Field label="Dip taken at">
             <TextInput
@@ -198,15 +236,23 @@ const AfterFields: React.FC<{ api: DraftApi }> = ({ api }) => (
   </>
 );
 
-const SaveFooter: React.FC<{ api: DraftApi; onSave: Props['onSave']; onClose: () => void; extra?: React.ReactNode }> = ({
-  api,
-  onSave,
-  onClose,
-  extra,
-}) => {
-  const flagged = api.densityOut || !api.d.sealOk || api.earlyDip;
+const SaveFooter: React.FC<{
+  api: DraftApi;
+  onSave: Props['onSave'];
+  onClose: () => void;
+  extra?: React.ReactNode;
+}> = ({ api, onSave, onClose, extra }) => {
+  const flagged = api.flagged;
   return (
-    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', width: '100%', alignItems: 'center' }}>
+    <div
+      style={{
+        display: 'flex',
+        gap: 8,
+        justifyContent: 'flex-end',
+        width: '100%',
+        alignItems: 'center',
+      }}
+    >
       {extra}
       <span style={{ flex: 1 }} />
       <Button variant="ghost" size="sm" onClick={onClose}>
@@ -220,11 +266,187 @@ const SaveFooter: React.FC<{ api: DraftApi; onSave: Props['onSave']; onClose: ()
           onClose();
         }}
       >
-        {flagged ? 'Save with flag' : api.received != null ? 'Save Decantation' : 'Save — pending measurement'}
+        {flagged
+          ? 'Save with flag'
+          : api.received != null
+            ? 'Save Decantation'
+            : 'Save — pending measurement'}
       </Button>
     </div>
   );
 };
+
+/* ----------------------------- Tanker chambers ----------------------------- */
+
+const cell: React.CSSProperties = { padding: '4px 6px', fontSize: 12, verticalAlign: 'middle' };
+
+const ChambersBefore: React.FC<{ api: DraftApi }> = ({ api }) => {
+  const upd = (i: number, patch: Partial<Chamber>) =>
+    api.set(
+      'chambers',
+      api.d.chambers.map((c, j) => (j === i ? { ...c, ...patch } : c)),
+    );
+  const markBtn = (i: number, v: 'ok' | 'short', label: string) => {
+    const on = api.d.chambers[i].mark === v;
+    return (
+      <button
+        type="button"
+        onClick={() => upd(i, { mark: on ? '' : v })}
+        style={{
+          fontSize: 11,
+          padding: '2px 8px',
+          borderRadius: 4,
+          cursor: 'pointer',
+          border: '1px solid var(--color-border-strong, #ccc)',
+          background: on
+            ? v === 'ok'
+              ? 'var(--color-success-bg, #e7f6ec)'
+              : 'var(--color-danger-bg, #fdecec)'
+            : 'transparent',
+          color: on
+            ? v === 'ok'
+              ? 'var(--color-success-fg, #157f3c)'
+              : 'var(--color-danger-fg, #b42318)'
+            : 'inherit',
+          fontWeight: on ? 600 : 400,
+        }}
+      >
+        {label}
+      </button>
+    );
+  };
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+        Tanker chambers{' '}
+        <span style={{ fontWeight: 400, opacity: 0.6 }}>· optional check before unloading</span>
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ fontSize: 11, opacity: 0.6, textAlign: 'left' }}>
+            <th style={cell}>#</th>
+            <th style={cell}>Qty (L)</th>
+            <th style={cell}>Seal</th>
+            <th style={cell}>Dip mark</th>
+            <th style={cell}>Dip (mm)</th>
+            <th style={cell} />
+          </tr>
+        </thead>
+        <tbody>
+          {api.d.chambers.map((c, i) => (
+            <tr key={i} style={{ borderTop: '1px solid var(--color-border, #eee)' }}>
+              <td style={cell}>{i + 1}</td>
+              <td style={{ ...cell, width: 90 }}>
+                <NumberInput
+                  value={c.capacity}
+                  onChange={(e) => upd(i, { capacity: e.target.value })}
+                />
+              </td>
+              <td style={cell}>
+                <input
+                  type="checkbox"
+                  checked={c.sealOk}
+                  onChange={(e) => upd(i, { sealOk: e.target.checked })}
+                />
+              </td>
+              <td style={cell}>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {markBtn(i, 'ok', 'OK')}
+                  {markBtn(i, 'short', 'Short')}
+                </div>
+              </td>
+              <td style={{ ...cell, width: 80 }}>
+                <NumberInput
+                  placeholder="—"
+                  value={c.dipMm}
+                  onChange={(e) => upd(i, { dipMm: e.target.value })}
+                />
+              </td>
+              <td style={cell}>
+                <button
+                  type="button"
+                  aria-label="Remove chamber"
+                  onClick={() =>
+                    api.set(
+                      'chambers',
+                      api.d.chambers.filter((_, j) => j !== i),
+                    )
+                  }
+                  style={{ background: 'none', border: 0, cursor: 'pointer', opacity: 0.5 }}
+                >
+                  <Icon name="x" size="xs" />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: 4,
+        }}
+      >
+        <Button
+          variant="ghost"
+          size="xs"
+          leftIcon={<Icon name="plus" size="xs" />}
+          onClick={() => api.set('chambers', [...api.d.chambers, newChamber()])}
+        >
+          Add chamber
+        </Button>
+        <span style={{ fontSize: 12, opacity: 0.7 }}>
+          Total {fmtL(api.chamberTotal)}
+          {api.purchase && ` · invoice ${fmtL(api.purchase.qty)}`}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const ChambersEmptied: React.FC<{ api: DraftApi }> = ({ api }) =>
+  api.d.chambers.length ? (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Chambers emptied</div>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+        {api.d.chambers.map((c, i) => (
+          <label key={i} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={c.emptied}
+              onChange={(e) =>
+                api.set(
+                  'chambers',
+                  api.d.chambers.map((x, j) => (j === i ? { ...x, emptied: e.target.checked } : x)),
+                )
+              }
+            />
+            Chamber {i + 1}
+          </label>
+        ))}
+        <button
+          type="button"
+          onClick={() =>
+            api.set(
+              'chambers',
+              api.d.chambers.map((x) => ({ ...x, emptied: true })),
+            )
+          }
+          style={{
+            fontSize: 12,
+            background: 'none',
+            border: 0,
+            cursor: 'pointer',
+            color: 'var(--color-brand, #2563eb)',
+          }}
+        >
+          All emptied
+        </button>
+      </div>
+    </div>
+  ) : null;
 
 /* ---------------------------- Variant A: Stepper ---------------------------- */
 
@@ -253,7 +475,12 @@ export const VariantA: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
           />
         ) : (
           <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-            <Button variant="ghost" size="sm" disabled={step === 0} onClick={() => setStep(step - 1)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={step === 0}
+              onClick={() => setStep(step - 1)}
+            >
               Back
             </Button>
             <Button size="sm" onClick={() => setStep(step + 1)}>
@@ -286,7 +513,8 @@ export const VariantA: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
                 height: 3,
                 borderRadius: 2,
                 marginBottom: 4,
-                background: i <= step ? 'var(--color-brand, #2563eb)' : 'var(--color-border, #e5e5e5)',
+                background:
+                  i <= step ? 'var(--color-brand, #2563eb)' : 'var(--color-border, #e5e5e5)',
               }}
             />
             {i + 1}. {s}
@@ -302,6 +530,7 @@ export const VariantA: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
       )}
       {step === 1 && (
         <>
+          <ChambersBefore api={api} />
           <BeforeFields api={api} />
           {api.densityOut && (
             <Warn tone="danger">
@@ -314,6 +543,7 @@ export const VariantA: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
       {step === 2 && <UnloadFields api={api} />}
       {step === 3 && (
         <>
+          <ChambersEmptied api={api} />
           <AfterFields api={api} />
           <SectionTitle>Summary</SectionTitle>
           <ResultRows api={api} />
@@ -329,7 +559,7 @@ export const VariantA: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
 
 export const VariantB: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
   const api = useDraft();
-  const flagged = api.densityOut || !api.d.sealOk || api.earlyDip;
+  const flagged = api.flagged;
   return (
     <Drawer
       isOpen={isOpen}
@@ -355,14 +585,22 @@ export const VariantB: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
       >
         <strong style={{ marginRight: 4 }}>{api.tank?.name ?? '—'}</strong>
         {api.purchase ? (
-          <Chip tone="neutral" size="sm">Invoice {fmtL(api.purchase.qty)}</Chip>
+          <Chip tone="neutral" size="sm">
+            Invoice {fmtL(api.purchase.qty)}
+          </Chip>
         ) : (
-          <Chip tone="info" size="sm">Purchase not linked</Chip>
+          <Chip tone="info" size="sm">
+            Purchase not linked
+          </Chip>
         )}
         {api.received != null ? (
-          <Chip tone="neutral" size="sm">Received {fmtL(api.received)}</Chip>
+          <Chip tone="neutral" size="sm">
+            Received {fmtL(api.received)}
+          </Chip>
         ) : (
-          <Chip tone="info" size="sm">Pending measurement</Chip>
+          <Chip tone="info" size="sm">
+            Pending measurement
+          </Chip>
         )}
         {api.qtyDiff != null && (
           <Chip tone={api.qtyDiff < 0 ? 'danger' : 'success'} size="sm">
@@ -384,16 +622,22 @@ export const VariantB: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
 
       <SectionTitle n={1}>Vehicle & Invoice</SectionTitle>
       <VehicleFields api={api} />
-      <PurchasePicker api={api} />
-      <InvoiceReadout api={api} />
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+        Fuel Purchase{' '}
+        <span style={{ fontWeight: 400, opacity: 0.6 }}>· optional, can link later</span>
+      </div>
+      <PurchasePicker api={api} asList />
+      <div style={{ height: 14 }} />
 
       <SectionTitle n={2}>Before unloading</SectionTitle>
+      <ChambersBefore api={api} />
       <BeforeFields api={api} />
 
       <SectionTitle n={3}>Unloading</SectionTitle>
       <UnloadFields api={api} />
 
       <SectionTitle n={4}>After unloading</SectionTitle>
+      <ChambersEmptied api={api} />
       <AfterFields api={api} />
       <DraftWarnings api={api} />
     </Drawer>
@@ -423,8 +667,10 @@ export const VariantC: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
         <div style={{ width: 1, background: 'var(--color-border, #e5e5e5)' }} />
         <div style={col}>
           <SectionTitle>At the tank</SectionTitle>
+          <ChambersBefore api={api} />
           <BeforeFields api={api} />
           <UnloadFields api={api} />
+          <ChambersEmptied api={api} />
           <AfterFields api={api} />
         </div>
         <div style={{ width: 1, background: 'var(--color-border, #e5e5e5)' }} />
@@ -440,8 +686,8 @@ export const VariantC: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
 };
 
 export const VARIANTS = {
+  B: { name: 'Single page + live summary (recommended)', C: VariantB },
   A: { name: 'Stepper', C: VariantA },
-  B: { name: 'Single page + live summary', C: VariantB },
   C: { name: 'Split pane (wide)', C: VariantC },
 } as const;
 export type VariantKey = keyof typeof VARIANTS;

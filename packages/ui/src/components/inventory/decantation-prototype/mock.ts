@@ -170,7 +170,8 @@ export const flagsFor = (d: ProtoDecantation, purchases = PURCHASES): Flags => {
     density,
     densityOut: density != null && Math.abs(density) > SETTINGS.densityTolerance,
     qtyDiff,
-    qtyOut: qtyDiff != null && p != null && Math.abs(qtyDiff) > (p.qty * SETTINGS.qtyTolerancePct) / 100,
+    qtyOut:
+      qtyDiff != null && p != null && Math.abs(qtyDiff) > (p.qty * SETTINGS.qtyTolerancePct) / 100,
     unlinked: !p,
     pending: d.status === 'pending',
     sealIssue: !d.sealOk,

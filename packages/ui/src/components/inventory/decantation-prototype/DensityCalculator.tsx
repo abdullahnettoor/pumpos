@@ -60,9 +60,7 @@ export const DensityCalculator: React.FC<{
             padding: 12,
           }}
         >
-          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
-            Density calculator
-          </div>
+          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Density calculator</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <Field label="Hydrometer (kg/m³)" style={{ marginBottom: 0 }}>
               <NumberInput value={obs} onChange={(e) => setObs(e.target.value)} />
@@ -86,8 +84,7 @@ export const DensityCalculator: React.FC<{
             <strong>{result != null ? `${result} kg/m³` : '—'}</strong>
           </div>
           <div style={{ fontSize: 11, opacity: 0.6, marginTop: 6 }}>
-            Method: ASTM D1250 (station setting). Guide only — use your OMC booklet if it
-            differs.
+            Method: ASTM D1250 (station setting). Guide only — use your OMC booklet if it differs.
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 10 }}>
             <Button variant="ghost" size="xs" onClick={() => setOpen(false)}>

@@ -21,7 +21,7 @@ const KEYS = Object.keys(VARIANTS) as VariantKey[];
 
 const readVariant = (): VariantKey => {
   const v = new URLSearchParams(window.location.search).get('variant')?.toUpperCase();
-  return (KEYS as string[]).includes(v ?? '') ? (v as VariantKey) : 'A';
+  return (KEYS as string[]).includes(v ?? '') ? (v as VariantKey) : 'B';
 };
 
 const useVariant = () => {
@@ -114,12 +114,21 @@ const td: React.CSSProperties = {
 };
 const num: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
 
-const Row: React.FC<{ d: ProtoDecantation; onLink: (id: string, pid: string) => void }> = ({ d, onLink }) => {
+const Row: React.FC<{ d: ProtoDecantation; onLink: (id: string, pid: string) => void }> = ({
+  d,
+  onLink,
+}) => {
   const f = flagsFor(d);
   const p = purchaseById(d.purchaseId);
   const flagged = f.densityOut || f.sealIssue;
   return (
-    <tr style={flagged ? { background: 'color-mix(in oklab, var(--color-danger-fg, #b42318) 5%, transparent)' } : undefined}>
+    <tr
+      style={
+        flagged
+          ? { background: 'color-mix(in oklab, var(--color-danger-fg, #b42318) 5%, transparent)' }
+          : undefined
+      }
+    >
       <td style={td}>
         {d.date}
         <div style={{ fontSize: 11, opacity: 0.6 }}>
@@ -216,7 +225,9 @@ export const DecantationsPrototypeTab: React.FC = () => {
     };
   }, [rows]);
 
-  const waitingTanks = TANKS.filter((t) => rows.some((r) => r.tankId === t.id && r.status === 'pending'));
+  const waitingTanks = TANKS.filter((t) =>
+    rows.some((r) => r.tankId === t.id && r.status === 'pending'),
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -269,8 +280,8 @@ export const DecantationsPrototypeTab: React.FC = () => {
           }}
         >
           <Icon name="info" size="sm" />
-          {waitingTanks.map((t) => t.name).join(', ')}: <strong>Waiting on decantation</strong> — book
-          stock excludes the new fuel until the next Tank Dip is recorded.
+          {waitingTanks.map((t) => t.name).join(', ')}: <strong>Waiting on decantation</strong> —
+          book stock excludes the new fuel until the next Tank Dip is recorded.
         </div>
       )}
 
@@ -280,7 +291,11 @@ export const DecantationsPrototypeTab: React.FC = () => {
         action={
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <DensityCalculator />
-            <Button size="sm" leftIcon={<Icon name="truck" size="sm" />} onClick={() => setOpen(true)}>
+            <Button
+              size="sm"
+              leftIcon={<Icon name="truck" size="sm" />}
+              onClick={() => setOpen(true)}
+            >
               New Decantation
             </Button>
           </div>
@@ -306,7 +321,9 @@ export const DecantationsPrototypeTab: React.FC = () => {
                 <Row
                   key={d.id}
                   d={d}
-                  onLink={(id, pid) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, purchaseId: pid } : r)))}
+                  onLink={(id, pid) =>
+                    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, purchaseId: pid } : r)))
+                  }
                 />
               ))}
             </tbody>

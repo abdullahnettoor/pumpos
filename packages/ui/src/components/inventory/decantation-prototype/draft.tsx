@@ -27,7 +27,24 @@ export interface Draft {
   afterDip: string;
   afterDipAt: string;
   salesDuring: string;
+  chambers: Chamber[];
 }
+
+export interface Chamber {
+  capacity: string;
+  sealOk: boolean;
+  mark: 'ok' | 'short' | '';
+  dipMm: string;
+  emptied: boolean;
+}
+
+export const newChamber = (capacity = ''): Chamber => ({
+  capacity,
+  sealOk: true,
+  mark: '',
+  dipMm: '',
+  emptied: false,
+});
 
 export const emptyDraft = (): Draft => ({
   tankerNo: '',
@@ -44,6 +61,7 @@ export const emptyDraft = (): Draft => ({
   afterDip: '',
   afterDipAt: '',
   salesDuring: '',
+  chambers: [newChamber('4000'), newChamber('4000'), newChamber('4000')],
 });
 
 const minutes = (hhmm: string) => {
@@ -71,6 +89,10 @@ export const useDraft = () => {
       d.end &&
       d.afterDipAt &&
       minutes(d.afterDipAt) - minutes(d.end) < SETTINGS.settlingMinutes;
+    const chamberTotal = d.chambers.reduce((a, c) => a + Number(c.capacity || 0), 0);
+    const chamberMismatch = !!purchase && chamberTotal > 0 && chamberTotal !== purchase.qty;
+    const chamberShort = d.chambers.some((c) => c.mark === 'short' || !c.sealOk);
+    const notEmptied = d.chambers.length > 0 && d.end !== '' && d.chambers.some((c) => !c.emptied);
     const tanksForProduct = TANKS.filter((t) => t.product === d.product);
     const openPurchases = PURCHASES.filter((p) => p.product === d.product);
     return {
@@ -81,6 +103,15 @@ export const useDraft = () => {
       received,
       qtyDiff,
       earlyDip: !!earlyDip,
+      chamberTotal,
+      chamberMismatch,
+      chamberShort,
+      notEmptied,
+      flagged:
+        densityOut ||
+        chamberShort ||
+        !!earlyDip ||
+        (d.end !== '' && d.chambers.some((c) => !c.emptied)),
       tanksForProduct,
       openPurchases,
     };
@@ -102,7 +133,7 @@ export const useDraft = () => {
     salesDuring: Number(d.salesDuring || 0),
     status: derived.received != null ? 'measured' : 'pending',
     received: derived.received,
-    sealOk: d.sealOk,
+    sealOk: d.sealOk && !d.chambers.some((c) => c.mark === 'short' || !c.sealOk),
   });
 
   return { d, set, ...derived, toDecantation };
@@ -111,10 +142,10 @@ export const useDraft = () => {
 export type DraftApi = ReturnType<typeof useDraft>;
 
 /** Strong, non-blocking warning. PumpOS never rejects a tanker. */
-export const Warn: React.FC<{ children: React.ReactNode; tone?: 'warning' | 'danger' | 'info' }> = ({
-  children,
-  tone = 'warning',
-}) => {
+export const Warn: React.FC<{
+  children: React.ReactNode;
+  tone?: 'warning' | 'danger' | 'info';
+}> = ({ children, tone = 'warning' }) => {
   const bg = {
     warning: 'var(--color-warning-bg, #fff7e6)',
     danger: 'var(--color-danger-bg, #fdecec)',
@@ -155,8 +186,21 @@ export const DraftWarnings: React.FC<{ api: DraftApi }> = ({ api }) => (
         Owner.
       </Warn>
     )}
-    {!api.d.sealOk && (
-      <Warn tone="danger">Seal or quantity check failed. Saved Decantation will be flagged.</Warn>
+    {api.chamberShort && (
+      <Warn tone="danger">
+        <strong>Tanker arrived short or a seal is broken.</strong> Likely a transit loss to claim.
+        Saved Decantation will be flagged.
+      </Warn>
+    )}
+    {api.chamberMismatch && (
+      <Warn>
+        Chambers add up to {fmtL(api.chamberTotal)}, invoice says {fmtL(api.purchase?.qty)}.
+      </Warn>
+    )}
+    {api.notEmptied && (
+      <Warn tone="danger">
+        Not every chamber is marked emptied. Fuel may be left in the tanker — it will be flagged.
+      </Warn>
     )}
     {api.earlyDip && (
       <Warn>
@@ -165,7 +209,9 @@ export const DraftWarnings: React.FC<{ api: DraftApi }> = ({ api }) => (
       </Warn>
     )}
     {!api.purchase && (
-      <Warn tone="info">No Fuel Purchase linked. You can link it later; variance waits until then.</Warn>
+      <Warn tone="info">
+        No Fuel Purchase linked. You can link it later; variance waits until then.
+      </Warn>
     )}
     {!api.d.doAfterDip && (
       <Warn tone="info">
@@ -182,7 +228,13 @@ export const ResultRows: React.FC<{ api: DraftApi }> = ({ api }) => {
     ['Invoice qty', fmtL(api.purchase?.qty)],
     [
       'Received (measured)',
-      api.received != null ? fmtL(api.received) : <Chip tone="info" size="sm">Pending measurement</Chip>,
+      api.received != null ? (
+        fmtL(api.received)
+      ) : (
+        <Chip tone="info" size="sm">
+          Pending measurement
+        </Chip>
+      ),
     ],
     [
       'Quantity variance',
@@ -208,7 +260,9 @@ export const ResultRows: React.FC<{ api: DraftApi }> = ({ api }) => {
     ],
   ];
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 12px', fontSize: 13 }}>
+    <div
+      style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 12px', fontSize: 13 }}
+    >
       {rows.map(([k, v]) => (
         <React.Fragment key={k}>
           <span style={{ opacity: 0.65 }}>{k}</span>
@@ -219,7 +273,10 @@ export const ResultRows: React.FC<{ api: DraftApi }> = ({ api }) => {
   );
 };
 
-export const SectionTitle: React.FC<{ n?: number; children: React.ReactNode }> = ({ n, children }) => (
+export const SectionTitle: React.FC<{ n?: number; children: React.ReactNode }> = ({
+  n,
+  children,
+}) => (
   <div
     style={{
       display: 'flex',
