@@ -21,7 +21,7 @@ const KEYS = Object.keys(VARIANTS) as VariantKey[];
 
 const readVariant = (): VariantKey => {
   const v = new URLSearchParams(window.location.search).get('variant')?.toUpperCase();
-  return (KEYS as string[]).includes(v ?? '') ? (v as VariantKey) : 'B';
+  return (KEYS as string[]).includes(v ?? '') ? (v as VariantKey) : 'D';
 };
 
 const useVariant = () => {

@@ -96,22 +96,21 @@ const PurchasePicker: React.FC<{ api: DraftApi; asList?: boolean }> = ({ api, as
           </button>
         );
       })}
-      <button
-        type="button"
-        onClick={() => api.set('purchaseId', null)}
-        style={{
-          fontSize: 12,
-          opacity: 0.7,
-          background: 'none',
-          border: 0,
-          textAlign: 'left',
-          cursor: 'pointer',
-        }}
-      >
-        {api.d.purchaseId
-          ? 'Unlink — invoice not entered yet'
-          : '✓ Link later (invoice not entered yet)'}
-      </button>
+      <div>
+        <Button
+          variant={api.d.purchaseId ? 'secondary' : 'outline'}
+          size="xs"
+          leftIcon={<Icon name={api.d.purchaseId ? 'x' : 'clock'} size="xs" />}
+          onClick={() => api.set('purchaseId', null)}
+        >
+          {api.d.purchaseId ? 'Unlink' : 'Link later'}
+        </Button>
+        {!api.d.purchaseId && (
+          <span style={{ fontSize: 12, opacity: 0.6, marginLeft: 8 }}>
+            Selected — invoice not entered yet
+          </span>
+        )}
+      </div>
     </div>
   ) : (
     <Field label="Fuel Purchase (invoice)" hint="Optional. Can be linked later.">
@@ -308,7 +307,7 @@ const ChambersTable: React.FC<{ api: DraftApi }> = ({ api }) => {
       'chambers',
       api.d.chambers.map((c, j) => (j === i ? { ...c, ...patch } : c)),
     );
-  const markBtn = (i: number, v: 'ok' | 'short', label: string) => {
+  const markBtn = (i: number, v: 'ok' | 'short' | 'excess', label: string) => {
     const on = api.d.chambers[i].mark === v;
     return (
       <button
@@ -321,14 +320,18 @@ const ChambersTable: React.FC<{ api: DraftApi }> = ({ api }) => {
           cursor: 'pointer',
           border: '1px solid var(--color-border-strong, #ccc)',
           background: on
-            ? v === 'ok'
-              ? 'var(--color-success-bg, #e7f6ec)'
-              : 'var(--color-danger-bg, #fdecec)'
+            ? {
+                ok: 'var(--color-success-bg, #e7f6ec)',
+                short: 'var(--color-danger-bg, #fdecec)',
+                excess: 'var(--color-info-bg, #eaf3ff)',
+              }[v]
             : 'transparent',
           color: on
-            ? v === 'ok'
-              ? 'var(--color-success-fg, #157f3c)'
-              : 'var(--color-danger-fg, #b42318)'
+            ? {
+                ok: 'var(--color-success-fg, #157f3c)',
+                short: 'var(--color-danger-fg, #b42318)',
+                excess: 'var(--color-info-fg, #1d4ed8)',
+              }[v]
             : 'inherit',
           fontWeight: on ? 600 : 400,
         }}
@@ -375,6 +378,7 @@ const ChambersTable: React.FC<{ api: DraftApi }> = ({ api }) => {
                 <div style={{ display: 'flex', gap: 4 }}>
                   {markBtn(i, 'ok', 'OK')}
                   {markBtn(i, 'short', 'Short')}
+                  {markBtn(i, 'excess', 'Excess')}
                 </div>
               </td>
               <td style={{ ...cell, width: 80 }}>
@@ -448,24 +452,19 @@ const ChambersEmptied: React.FC<{ api: DraftApi }> = ({ api }) =>
             Chamber {i + 1}
           </label>
         ))}
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="xs"
+          leftIcon={<Icon name="check" size="xs" />}
           onClick={() =>
             api.set(
               'chambers',
               api.d.chambers.map((x) => ({ ...x, emptied: true })),
             )
           }
-          style={{
-            fontSize: 12,
-            background: 'none',
-            border: 0,
-            cursor: 'pointer',
-            color: 'var(--color-brand, #2563eb)',
-          }}
         >
           All emptied
-        </button>
+        </Button>
       </div>
     </div>
   ) : null;
@@ -712,8 +711,196 @@ export const VariantC: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
   );
 };
 
+/* ------------------- Variant D: Accordion stepper ------------------- */
+// Each step is an accordion section. One is open at a time; finished steps
+// collapse to a one-line summary and can be reopened by clicking the header.
+
+const StepSection: React.FC<{
+  n: number;
+  title: string;
+  open: boolean;
+  done: boolean;
+  summary: React.ReactNode;
+  onOpen: () => void;
+  children: React.ReactNode;
+}> = ({ n, title, open, done, summary, onOpen, children }) => (
+  <div
+    style={{
+      border: `1px solid ${open ? 'var(--color-brand, #2563eb)' : 'var(--color-border, #e5e5e5)'}`,
+      borderRadius: 8,
+      marginBottom: 10,
+      overflow: 'hidden',
+    }}
+  >
+    <button
+      type="button"
+      onClick={onOpen}
+      style={{
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '10px 12px',
+        background: open ? 'var(--color-surface-alt, #f7f7f7)' : 'transparent',
+        border: 0,
+        cursor: 'pointer',
+        textAlign: 'left',
+      }}
+    >
+      <span
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          flexShrink: 0,
+          display: 'grid',
+          placeItems: 'center',
+          fontSize: 11,
+          fontWeight: 600,
+          background: done
+            ? 'var(--color-success-bg, #e7f6ec)'
+            : open
+              ? 'var(--color-brand, #2563eb)'
+              : 'var(--color-surface-alt, #eee)',
+          color: done ? 'var(--color-success-fg, #157f3c)' : open ? '#fff' : 'inherit',
+        }}
+      >
+        {done && !open ? <Icon name="check" size="xs" /> : n}
+      </span>
+      <span style={{ fontWeight: 600, fontSize: 13, flexShrink: 0 }}>{title}</span>
+      {!open && (
+        <span
+          style={{
+            fontSize: 12,
+            opacity: 0.7,
+            flex: 1,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {done ? summary : 'Not started'}
+        </span>
+      )}
+      {!open && done && (
+        <span style={{ fontSize: 12, color: 'var(--color-brand, #2563eb)', flexShrink: 0 }}>
+          Edit
+        </span>
+      )}
+    </button>
+    {open && <div style={{ padding: '12px 12px 4px' }}>{children}</div>}
+  </div>
+);
+
+export const VariantD: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
+  const api = useDraft();
+  const [open, setOpen] = useState(0);
+  const [done, setDone] = useState<Set<number>>(new Set());
+  const next = (i: number) => {
+    setDone((s) => new Set(s).add(i));
+    setOpen(i + 1);
+  };
+  const d = api.d;
+  const chamberSummary = d.checkChambers
+    ? `${d.chambers.length} chambers · ${d.chambers.filter((c) => c.mark === 'short').length} short · ${d.chambers.filter((c) => c.mark === 'excess').length} excess`
+    : 'Chambers not checked';
+  const summaries = [
+    `${d.tankerNo || '—'} · ${d.driver || 'no driver'} · ${d.product} · ${api.purchase ? `${api.purchase.invoiceNo} (${fmtL(api.purchase.qty)})` : 'Purchase: link later'}`,
+    `${api.tank?.name ?? '—'} · before ${fmtL(d.beforeDip ? Number(d.beforeDip) : null)} · RO ${d.roDensity || '—'}${api.densityDiff != null ? ` (Δ ${api.densityDiff > 0 ? '+' : ''}${api.densityDiff})` : ''} · ${chamberSummary}`,
+    `${d.start || '—'} → ${d.end || '—'}`,
+    d.doAfterDip
+      ? `After ${fmtL(Number(d.afterDip || 0))} · received ${fmtL(api.received)}`
+      : 'No after dip — pending measurement',
+  ];
+  const stepNext = (i: number, label: string) => (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+      <Button size="sm" onClick={() => next(i)}>
+        {label}
+      </Button>
+    </div>
+  );
+  return (
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title="New Decantation"
+      widthVariant="wide"
+      footer={<SaveFooter api={api} onSave={onSave} onClose={onClose} />}
+    >
+      <StepSection
+        n={1}
+        title="Vehicle & Invoice"
+        open={open === 0}
+        done={done.has(0)}
+        summary={summaries[0]}
+        onOpen={() => setOpen(0)}
+      >
+        <VehicleFields api={api} />
+        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Fuel Purchase</div>
+        <PurchasePicker api={api} asList />
+        <div style={{ height: 12 }} />
+        {stepNext(0, 'Continue to Before unloading')}
+      </StepSection>
+      <StepSection
+        n={2}
+        title="Before unloading"
+        open={open === 1}
+        done={done.has(1)}
+        summary={summaries[1]}
+        onOpen={() => setOpen(1)}
+      >
+        <BeforeFields api={api} />
+        <ChamberToggle api={api} />
+        <ChambersBefore api={api} />
+        {api.densityOut && (
+          <Warn tone="danger">
+            <strong>Density off by {api.densityDiff} kg/m³</strong>. You can continue — it will be
+            flagged.
+          </Warn>
+        )}
+        {stepNext(1, 'Continue to Unloading')}
+      </StepSection>
+      <StepSection
+        n={3}
+        title="Unloading"
+        open={open === 2}
+        done={done.has(2)}
+        summary={summaries[2]}
+        onOpen={() => setOpen(2)}
+      >
+        <UnloadFields api={api} />
+        {stepNext(2, 'Continue to After unloading')}
+      </StepSection>
+      <StepSection
+        n={4}
+        title="After unloading"
+        open={open === 3}
+        done={done.has(3)}
+        summary={summaries[3]}
+        onOpen={() => setOpen(3)}
+      >
+        <ChambersEmptied api={api} />
+        <AfterFields api={api} />
+        {stepNext(3, 'Review')}
+      </StepSection>
+      {open === 4 && (
+        <div
+          style={{ border: '1px solid var(--color-border, #e5e5e5)', borderRadius: 8, padding: 12 }}
+        >
+          <SectionTitle>Review</SectionTitle>
+          <ResultRows api={api} />
+          <div style={{ height: 12 }} />
+          <DraftWarnings api={api} />
+        </div>
+      )}
+    </Drawer>
+  );
+};
+
 export const VARIANTS = {
-  B: { name: 'Single page + live summary (recommended)', C: VariantB },
+  D: { name: 'Accordion stepper', C: VariantD },
+  B: { name: 'Single page + live summary', C: VariantB },
   A: { name: 'Stepper', C: VariantA },
   C: { name: 'Split pane (wide)', C: VariantC },
 } as const;

@@ -34,7 +34,7 @@ export interface Draft {
 export interface Chamber {
   capacity: string;
   sealOk: boolean;
-  mark: 'ok' | 'short' | '';
+  mark: 'ok' | 'short' | 'excess' | '';
   dipMm: string;
   emptied: boolean;
 }
@@ -96,6 +96,7 @@ export const useDraft = () => {
     const chamberMismatch = !!purchase && chamberTotal > 0 && chamberTotal !== purchase.qty;
     const chamberShort = ch.some((c) => c.mark === 'short' || !c.sealOk);
     const notEmptied = ch.length > 0 && d.end !== '' && ch.some((c) => !c.emptied);
+    const chamberExcess = ch.some((c) => c.mark === 'excess');
     const tanksForProduct = TANKS.filter((t) => t.product === d.product);
     const openPurchases = PURCHASES.filter((p) => p.product === d.product);
     return {
@@ -109,6 +110,7 @@ export const useDraft = () => {
       chamberTotal,
       chamberMismatch,
       chamberShort,
+      chamberExcess,
       notEmptied,
       flagged: densityOut || chamberShort || !!earlyDip || notEmptied,
       tanksForProduct,
@@ -132,7 +134,8 @@ export const useDraft = () => {
     salesDuring: Number(d.salesDuring || 0),
     status: derived.received != null ? 'measured' : 'pending',
     received: derived.received,
-    sealOk: d.sealOk && !(d.checkChambers ? d.chambers : []).some((c) => c.mark === 'short' || !c.sealOk),
+    sealOk:
+      d.sealOk && !(d.checkChambers ? d.chambers : []).some((c) => c.mark === 'short' || !c.sealOk),
   });
 
   return { d, set, ...derived, toDecantation };
@@ -189,6 +192,12 @@ export const DraftWarnings: React.FC<{ api: DraftApi }> = ({ api }) => (
       <Warn tone="danger">
         <strong>Tanker arrived short or a seal is broken.</strong> Likely a transit loss to claim.
         Saved Decantation will be flagged.
+      </Warn>
+    )}
+    {api.chamberExcess && (
+      <Warn tone="info">
+        A chamber reads above its mark (excess). Often density/temperature related; recorded, not
+        flagged.
       </Warn>
     )}
     {api.chamberMismatch && (
