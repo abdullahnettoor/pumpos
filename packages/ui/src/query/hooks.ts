@@ -36,6 +36,8 @@ import type {
   DesktopDownloads,
   AttendantHandoverReport,
   AttendantReportFilters,
+  DecantationReport,
+  DecantationReportFilters,
   BusinessDayList,
   InsightsAttendantVariance,
   InsightsCreditHealth,
@@ -149,6 +151,8 @@ export const queryKeys = {
     ['dssr-range', stationId, from, to] as const,
   attendantHandoverReport: (stationId: string, from: string, to: string) =>
     ['attendant-handover-report', stationId, from, to] as const,
+  decantationReport: (stationId: string, from: string, to: string) =>
+    ['decantation-report', stationId, from, to] as const,
   insightsSales: (stationId: string, days: number) => ['insights-sales', stationId, days] as const,
   insightsAttendantVariance: (stationId: string, days: number) =>
     ['insights-attendant-variance', stationId, days] as const,
@@ -1120,6 +1124,24 @@ export function useDailyDssrRange(
  * Entitlement is NOT checked here — callers mount this behind the capability
  * gate, and the server refuses regardless of what the client believes.
  */
+/**
+ * Decantation Report over a Business Date range (ticket #473).
+ * Tanker visits, tank line dips, invoice reconciliation and chamber results.
+ */
+export function useDecantationReport(
+  filters: Partial<DecantationReportFilters> & { stationId: string | null | undefined },
+  options?: Options<DecantationReport>,
+) {
+  const { stationId, from = '', to = '' } = filters;
+  return useQuery({
+    queryKey: queryKeys.decantationReport(stationId ?? '', from, to),
+    queryFn: () => shiftService.getDecantationReport({ stationId: stationId!, from, to }),
+    enabled: !!stationId && !!from && !!to,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 export function useAttendantHandoverReport(
   filters: Partial<AttendantReportFilters> & { stationId: string | null | undefined },
   options?: Options<AttendantHandoverReport>,
@@ -1316,6 +1338,8 @@ export function useInvalidateOperational() {
       // The Attendant Handover Report reads closed-shift handovers, so closing
       // a shift (or correcting one) changes it within the same session.
       qc.invalidateQueries({ queryKey: ['attendant-handover-report'] }),
+      // Decantation Report: measurements and invoice settlement move it.
+      qc.invalidateQueries({ queryKey: ['decantation-report'] }),
       // Insights read sealed days; closing a Business Day adds one to the range.
       qc.invalidateQueries({ queryKey: ['insights-sales'] }),
       // ...and so do the part 2 blocks: closed-day Shift Summaries, Tank Dips and
