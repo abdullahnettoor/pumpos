@@ -333,6 +333,8 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     const purchase: Purchase = {
       id: purchaseId,
       documentNumber,
+      organizationId: ctx.organizationId,
+      stationId,
       shiftId: null,
       businessDayId,
       supplierId: supplier.id,

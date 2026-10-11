@@ -14,6 +14,8 @@ export class DrizzlePurchaseRepository implements PurchaseRepository {
     await this.db.insert(schema.purchases).values({
       id: p.id,
       documentNumber: p.documentNumber,
+      organizationId: p.organizationId,
+      stationId: p.stationId,
       shiftId: p.shiftId,
       businessDayId: p.businessDayId,
       supplierId: p.supplierId,

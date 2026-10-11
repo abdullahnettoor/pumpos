@@ -283,6 +283,8 @@ describe.skipIf(!CONNECTION)('Payables reader against real Postgres', () => {
       await db.insert(schema.purchases).values({
         id: purchaseId,
         documentNumber: `PUR-${purchaseId.slice(-6)}`,
+        organizationId: org,
+        stationId: station,
         businessDayId: dayId,
         supplierId,
         invoiceNumber: over.invoice ?? null,
