@@ -7,6 +7,7 @@ export * from './types/insights.js';
 export * from './types/receivables.js';
 export * from './types/payables.js';
 export * from './types/party-ledger.js';
+export * from './types/decantation.js';
 export * from './schemas/validation.js';
 export * from './permissions/guards.js';
 export * from './services/interfaces.js';

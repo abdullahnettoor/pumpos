@@ -68,4 +68,11 @@ describe('useInvalidateOperational', () => {
       expect(keys).toContain(key);
     }
   });
+
+  it('refreshes Decantations, linkable Fuel Purchases and tank stock with a Decantation write', () => {
+    const keys = invalidatedKeysAfterOperationalWrite();
+    for (const key of ['decantations', 'linkable-purchases', 'purchases', 'inventory-status']) {
+      expect(keys).toContain(key);
+    }
+  });
 });

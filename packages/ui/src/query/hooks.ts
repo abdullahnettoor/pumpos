@@ -2,6 +2,7 @@ import {
   useQueryClient,
   useQuery,
   useInfiniteQuery,
+  useQueries,
   type UseQueryOptions,
 } from '@tanstack/react-query';
 import {
@@ -45,6 +46,8 @@ import type {
   ReceivablesSummary,
   SupplierPayableSummary,
   InsightsStockLoss,
+  DecantationView,
+  LinkablePurchase,
 } from '@pump/shared';
 
 /**
@@ -116,6 +119,11 @@ export const queryKeys = {
   customerReceivable: (stationId: string, customerId: string) =>
     ['receivables', stationId, customerId] as const,
   inventoryStatus: (stationId: string) => ['inventory-status', stationId] as const,
+  /** Prefix of every Decantation list (invalidated as one by operational writes). */
+  decantationsPrefix: (stationId: string) => ['decantations', stationId] as const,
+  decantations: (stationId: string, status = '') => ['decantations', stationId, status] as const,
+  linkablePurchases: (stationId: string, productId: string) =>
+    ['linkable-purchases', stationId, productId] as const,
   decantationDayCloseWarnings: (stationId: string, businessDayId: string) =>
     ['decantation-day-close-warnings', stationId, businessDayId] as const,
   inventoryItems: (stationId: string) => ['inventory-items', stationId] as const,
@@ -920,6 +928,37 @@ export function useInventoryStatus(stationId: string | null | undefined, options
   });
 }
 
+/** Decantations of a station, tank lines grouped per tanker visit. Operational tier. */
+export function useDecantations(
+  stationId: string | null | undefined,
+  status = '',
+  options?: Options<DecantationView[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.decantations(stationId ?? '', status),
+    queryFn: () => txService.getDecantations(stationId!, status ? { status } : {}),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/** Linkable Fuel Purchases per product (one query each, shared cache keys). */
+export function useLinkablePurchases(
+  stationId: string | null | undefined,
+  productIds: readonly string[],
+  enabled = true,
+) {
+  return useQueries({
+    queries: productIds.map((productId) => ({
+      queryKey: queryKeys.linkablePurchases(stationId ?? '', productId),
+      queryFn: () => txService.getLinkablePurchases(stationId!, productId),
+      enabled: enabled && !!stationId,
+      ...TIER.operational,
+    })),
+  });
+}
+
 export function useDecantationDayCloseWarnings(
   stationId: string | null | undefined,
   businessDayId: string | null | undefined,
@@ -1268,6 +1307,9 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['expenses'] }),
       qc.invalidateQueries({ queryKey: ['income'] }),
       qc.invalidateQueries({ queryKey: ['purchases'] }),
+      // Decantations and the Fuel Purchases they link to move together (#469).
+      qc.invalidateQueries({ queryKey: ['decantations'] }),
+      qc.invalidateQueries({ queryKey: ['linkable-purchases'] }),
       qc.invalidateQueries({ queryKey: ['collections'] }),
       qc.invalidateQueries({ queryKey: ['customers'] }),
       // Receivables are settled FIFO from the same ledger as a customer's balance,

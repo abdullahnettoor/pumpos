@@ -35,6 +35,10 @@ import {
   ReceivablesSummary,
   SupplierPayableSummary,
   InsightsStockLoss,
+  DecantationView,
+  LinkablePurchase,
+  SaveDecantationBody,
+  SaveDecantationResult,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -1304,6 +1308,57 @@ export class CloudTransactionService {
   ): Promise<DecantationDayCloseWarnings> {
     return request<DecantationDayCloseWarnings>(
       `/transactions/decantations/day-close-warnings?stationId=${encodeURIComponent(stationId)}&businessDayId=${encodeURIComponent(businessDayId)}`,
+    );
+  }
+
+  /** Decantations of a station (one per tanker visit, tank lines grouped), newest first. */
+  async getDecantations(
+    stationId: string,
+    opts: { from?: string; to?: string; status?: string } = {},
+  ): Promise<DecantationView[]> {
+    const q = new URLSearchParams({ stationId });
+    for (const [k, v] of Object.entries(opts)) if (v) q.set(k, v);
+    return request<DecantationView[]>(`/transactions/decantations?${q.toString()}`);
+  }
+
+  /** Fuel Purchases of one product that a Decantation can be linked to (#469). */
+  async getLinkablePurchases(stationId: string, productId: string): Promise<LinkablePurchase[]> {
+    return request<LinkablePurchase[]>(
+      `/transactions/decantations/linkable-purchases?stationId=${encodeURIComponent(stationId)}&productId=${encodeURIComponent(productId)}`,
+    );
+  }
+
+  /** Create (no `decantationId`) or update a Decantation. Never blocks on flags. */
+  async saveDecantation(
+    payload: SaveDecantationBody,
+    opts: { decantationId?: string; idempotencyKey?: string } = {},
+  ): Promise<SaveDecantationResult> {
+    return request<SaveDecantationResult>(
+      opts.decantationId
+        ? `/transactions/decantations/${encodeURIComponent(opts.decantationId)}`
+        : '/transactions/decantations',
+      { method: opts.decantationId ? 'PUT' : 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts.idempotencyKey },
+    );
+  }
+
+  /** Link (or replace the link of) the Fuel Purchase of one product (#469). */
+  async linkDecantationPurchase(
+    decantationId: string,
+    body: { productId: string; purchaseId: string },
+    opts?: { idempotencyKey?: string },
+  ): Promise<DecantationView> {
+    return request<DecantationView>(
+      `/transactions/decantations/${encodeURIComponent(decantationId)}/purchases`,
+      { method: 'PUT', body: JSON.stringify(body) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
+  }
+
+  async unlinkDecantationPurchase(decantationId: string, productId: string): Promise<unknown> {
+    return request<unknown>(
+      `/transactions/decantations/${encodeURIComponent(decantationId)}/purchases/${encodeURIComponent(productId)}`,
+      { method: 'DELETE' },
     );
   }
 
