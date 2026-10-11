@@ -1,0 +1,78 @@
+import React from 'react';
+import { Chip } from '../../../pump-ds/index.js';
+import { KV, LineTag, Notice } from './StepSection.js';
+import { fmtLitres, fmtSignedLitres } from './format.js';
+import { lineLabel, type StepProps } from './stepShared.js';
+
+export const ReviewStep: React.FC<StepProps> = ({ values, tanks, flags, review }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Per invoice</div>
+      {review.invoices.length === 0 && review.unlinkedProductIds.length === 0 && (
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No invoices linked.</span>
+      )}
+      {review.invoices.map((inv) => (
+        <div key={inv.productId} style={{ marginBottom: 6 }}>
+          <KV
+            items={[
+              ['Product', tanks.find((t) => t.productId === inv.productId)?.productName ?? '—'],
+              ['Invoice', fmtLitres(inv.invoiceQty)],
+              ['Received', inv.received != null ? fmtLitres(inv.received) : 'Pending measurement'],
+              [
+                'Variance',
+                inv.variance == null ? (
+                  '—'
+                ) : (
+                  <Chip size="sm" tone={inv.outOfTolerance ? 'danger' : 'success'}>
+                    {inv.variance === 0
+                      ? 'Matches'
+                      : `${inv.variance > 0 ? 'Excess' : 'Short'} ${fmtSignedLitres(inv.variance)}`}
+                  </Chip>
+                ),
+              ],
+            ]}
+          />
+        </div>
+      ))}
+      {review.unlinkedProductIds.map((p) => (
+        <Chip key={p} size="sm" tone="warning">
+          {tanks.find((t) => t.productId === p)?.productName}: purchase not linked
+        </Chip>
+      ))}
+    </div>
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Per tank</div>
+      {values.lines.map((l, i) => {
+        const r = review.lines[i];
+        return (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+            <span style={{ width: 140 }}>
+              <LineTag i={i} label={lineLabel(tanks, l.tankId, i)} />
+            </span>
+            <KV
+              items={[
+                ['Before', fmtLitres(r?.beforeDip)],
+                ['Received', r?.received != null ? fmtLitres(r.received) : 'Pending'],
+                ['Stock after', r?.afterDip != null ? fmtLitres(r.afterDip) : 'Next Tank Dip'],
+              ]}
+            />
+          </div>
+        );
+      })}
+    </div>
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Flags</div>
+      {flags.flags.length === 0 ? (
+        <Chip size="sm" tone="success">
+          Nothing flagged
+        </Chip>
+      ) : (
+        flags.flags.map((f, i) => (
+          <Notice key={i} tone="danger">
+            {f.message}
+          </Notice>
+        ))
+      )}
+    </div>
+  </div>
+);

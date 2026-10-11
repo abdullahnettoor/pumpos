@@ -30,7 +30,7 @@ export const LinkToDecantationDrawer: React.FC<LinkToDecantationDrawerProps> = (
   const stationId: string | null = purchase?.stationId ?? null;
   const itemsQ = usePurchaseItems(purchase?.id ?? null);
   const decantationsQ = useDecantations(stationId);
-  const link = useLinkDecantationPurchase();
+  const link = useLinkDecantationPurchase(stationId);
 
   const products = React.useMemo(() => {
     const seen = new Map<string, string>();

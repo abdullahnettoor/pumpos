@@ -28,6 +28,8 @@ import {
   Icon,
 } from '../pump-ds/index.js';
 import { DensityTab } from './inventory/density/index.js';
+import { DecantationsTab } from './inventory/decantation/DecantationsTab.js';
+import { canRecordDecantation, type Role } from '@pump/shared';
 import { tankPct, classifyTank, OVER_CAPACITY_EXPLANATION } from '../utils/stock.js';
 import { TankStatusChips } from './inventory/TankStatusChips.js';
 import {
@@ -42,9 +44,11 @@ const transactionService = new CloudTransactionService();
 
 interface InventoryListProps {
   selectedStation: any | null;
+  /** Gates the Decantations tab (Owner, Manager, Accountant) and the Owner review banner. */
+  userRole?: Role | null;
 }
 
-type TabType = 'tanks' | 'density' | 'items' | 'movements' | 'variances';
+type TabType = 'tanks' | 'density' | 'items' | 'movements' | 'variances' | 'decantations';
 
 const fmtL = (n: number) =>
   `${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
@@ -319,7 +323,7 @@ const itemColumns: ColumnDef<any, any>[] = [
   },
 ];
 
-export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation }) => {
+export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, userRole }) => {
   const [selectedTab, setSelectedTab] = useState<TabType>('tanks');
   const stationId = selectedStation?.id ?? null;
   const invalidateOperational = useInvalidateOperational();
@@ -480,6 +484,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
   }
 
   const tanks = tanksQ.data ?? [];
+  const showDecantations = !!userRole && canRecordDecantation(userRole);
 
   return (
     <div className="animate-fade-in">
@@ -512,6 +517,15 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                 icon: <Icon name="arrow-left-right" size="xs" />,
               },
               { id: 'variances', label: 'Reconciliations', icon: <Icon name="scale" size="xs" /> },
+              ...(showDecantations
+                ? [
+                    {
+                      id: 'decantations',
+                      label: 'Decantations',
+                      icon: <Icon name="truck" size="xs" />,
+                    },
+                  ]
+                : []),
             ]}
           />
         }
@@ -791,6 +805,10 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
           )}
 
           {activeTab === 'density' && <DensityTab stationId={stationId} />}
+
+          {activeTab === 'decantations' && showDecantations && (
+            <DecantationsTab station={selectedStation} userRole={userRole} />
+          )}
 
           {activeTab === 'variances' && (
             <Panel flush title="Reconciliations">

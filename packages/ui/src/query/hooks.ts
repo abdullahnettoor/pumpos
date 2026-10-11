@@ -3,6 +3,7 @@ import {
   useQuery,
   useInfiniteQuery,
   useMutation,
+  useQueries,
   type UseQueryOptions,
 } from '@tanstack/react-query';
 import {
@@ -24,7 +25,11 @@ import {
   CloudDesktopDownloadsService,
   type DecantationDayCloseWarnings,
 } from '../services/cloud.js';
-import type { DensityTodaySummary, DensityReadingWithContext } from '@pump/shared';
+import type {
+  DensityTodaySummary,
+  DensityReadingWithContext,
+  SaveDecantationBody,
+} from '@pump/shared';
 import type {
   BusinessDayStatusResponse,
   DailyCashBook,
@@ -49,6 +54,8 @@ import type {
   ReceivablesSummary,
   SupplierPayableSummary,
   InsightsStockLoss,
+  DecantationView,
+  LinkablePurchase,
 } from '@pump/shared';
 
 /**
@@ -112,11 +119,7 @@ export const queryKeys = {
   purchases: (stationId?: string) =>
     stationId ? (['purchases', stationId] as const) : (['purchases'] as const),
   purchaseItems: (purchaseId: string) => ['purchase-items', purchaseId] as const,
-  /** Decantations (with purchase links) of a station; refreshed by link/unlink and operational writes. */
-  decantations: (stationId = '') =>
-    stationId ? (['decantations', stationId] as const) : (['decantations'] as const),
-  linkablePurchases: (stationId: string, productId: string) =>
-    ['decantations', 'linkable-purchases', stationId, productId] as const,
+  decantations: (stationId: string, status = '') => ['decantations', stationId, status] as const,
   collections: () => ['collections'] as const,
   creditSales: () => ['credit-sales'] as const,
   vehicles: (activeOnly = false) => ['vehicles', activeOnly] as const,
@@ -139,6 +142,10 @@ export const queryKeys = {
   customerReceivable: (stationId: string, customerId: string) =>
     ['receivables', stationId, customerId] as const,
   inventoryStatus: (stationId: string) => ['inventory-status', stationId] as const,
+  /** Prefix of every Decantation list (invalidated as one by operational writes). */
+  decantationsPrefix: (stationId: string) => ['decantations', stationId] as const,
+  linkablePurchases: (stationId: string, productId: string) =>
+    ['linkable-purchases', stationId, productId] as const,
   decantationDayCloseWarnings: (stationId: string, businessDayId: string) =>
     ['decantation-day-close-warnings', stationId, businessDayId] as const,
   inventoryItems: (stationId: string) => ['inventory-items', stationId] as const,
@@ -787,37 +794,6 @@ export function usePurchaseItems(purchaseId: string | null, options?: Options<an
   });
 }
 
-export function useDecantations(stationId: string | null, options?: Options<any[]>) {
-  return useQuery({
-    queryKey: queryKeys.decantations(stationId ?? ''),
-    queryFn: () => txService.getDecantations(stationId as string),
-    enabled: !!stationId,
-    ...TIER.operational,
-    ...options,
-  });
-}
-
-/**
- * Link (or replace) a Fuel Purchase on a Decantation, from either side. Refreshes
- * purchases (the 'Awaiting decantation' chip) and decantations (links, variance).
- */
-export function useLinkDecantationPurchase() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (v: { decantationId: string; productId: string; purchaseId: string }) =>
-      txService.linkDecantationPurchase(v.decantationId, {
-        productId: v.productId,
-        purchaseId: v.purchaseId,
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['purchases'] });
-      void qc.invalidateQueries({ queryKey: ['decantations'] });
-      // Linking settles the invoice, which can move a product's weighted-average cost.
-      void qc.invalidateQueries({ queryKey: ['products'] });
-    },
-  });
-}
-
 export function useCollections(options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.collections(),
@@ -983,6 +959,37 @@ export function useInventoryStatus(stationId: string | null | undefined, options
     enabled: !!stationId,
     ...TIER.operational,
     ...options,
+  });
+}
+
+/** Decantations of a station, tank lines grouped per tanker visit. Operational tier. */
+export function useDecantations(
+  stationId: string | null | undefined,
+  status = '',
+  options?: Options<DecantationView[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.decantations(stationId ?? '', status),
+    queryFn: () => txService.getDecantations(stationId!, status ? { status } : {}),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/** Linkable Fuel Purchases per product (one query each, shared cache keys). */
+export function useLinkablePurchases(
+  stationId: string | null | undefined,
+  productIds: readonly string[],
+  enabled = true,
+) {
+  return useQueries({
+    queries: productIds.map((productId) => ({
+      queryKey: queryKeys.linkablePurchases(stationId ?? '', productId),
+      queryFn: () => txService.getLinkablePurchases(stationId!, productId),
+      enabled: enabled && !!stationId,
+      ...TIER.operational,
+    })),
   });
 }
 
@@ -1354,7 +1361,9 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['expenses'] }),
       qc.invalidateQueries({ queryKey: ['income'] }),
       qc.invalidateQueries({ queryKey: ['purchases'] }),
+      // Decantations and the Fuel Purchases they link to move together (#469).
       qc.invalidateQueries({ queryKey: ['decantations'] }),
+      qc.invalidateQueries({ queryKey: ['linkable-purchases'] }),
       qc.invalidateQueries({ queryKey: ['collections'] }),
       qc.invalidateQueries({ queryKey: ['customers'] }),
       // Receivables are settled FIFO from the same ledger as a customer's balance,
@@ -1394,6 +1403,63 @@ export function useInvalidateOperational() {
     }
     return Promise.all(invalidations).then(() => undefined);
   };
+}
+
+/**
+ * Decantation writes (ADR 0007, #469). The write response drives the UI; the
+ * operational caches refresh in the background (never awaited), so a slow
+ * refetch cannot delay closing a drawer or showing success.
+ */
+export function useRecordDecantation(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: {
+      body: SaveDecantationBody;
+      decantationId?: string;
+      idempotencyKey?: string;
+    }) =>
+      txService.saveDecantation(vars.body, {
+        decantationId: vars.decantationId,
+        idempotencyKey: vars.idempotencyKey,
+      }),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
+}
+
+export function useLinkDecantationPurchase(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      decantationId: string;
+      productId: string;
+      purchaseId: string;
+      idempotencyKey?: string;
+    }) =>
+      txService.linkDecantationPurchase(
+        vars.decantationId,
+        { productId: vars.productId, purchaseId: vars.purchaseId },
+        { idempotencyKey: vars.idempotencyKey },
+      ),
+    onSuccess: () => {
+      void invalidate(stationId);
+      // Linking settles the invoice, which can move a product's weighted-average cost.
+      void qc.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+}
+
+export function useUnlinkDecantationPurchase(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: { decantationId: string; productId: string }) =>
+      txService.unlinkDecantationPurchase(vars.decantationId, vars.productId),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
 }
 
 export function useDensityTodaySummary(

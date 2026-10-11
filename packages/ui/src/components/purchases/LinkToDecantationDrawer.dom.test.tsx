@@ -91,10 +91,11 @@ describe('purchase row link action (#469)', () => {
     await act(async () => {
       fireEvent.click(screen.getAllByRole('button', { name: 'Link' })[0]);
     });
-    expect(linkDecantationPurchase).toHaveBeenCalledWith('d-new', {
-      productId: 'ms',
-      purchaseId: 'p-1',
-    });
+    expect(linkDecantationPurchase).toHaveBeenCalledWith(
+      'd-new',
+      { productId: 'ms', purchaseId: 'p-1' },
+      expect.anything(),
+    );
     expect(onClose).toHaveBeenCalled();
   });
 });
