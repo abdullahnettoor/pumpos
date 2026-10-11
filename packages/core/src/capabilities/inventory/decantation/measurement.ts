@@ -148,6 +148,8 @@ export class DecantationMeasurementService implements DecantationMeasurement, Ta
       const { d, l, since } = pending[i];
       const next = pending[i + 1];
       const sold = await this.deps.sales.litresSoldBetween(
+        ctx.organizationId,
+        input.stationId,
         l.tankId,
         since,
         next ? next.since : input.dipAt,
@@ -185,8 +187,11 @@ export class DecantationMeasurementService implements DecantationMeasurement, Ta
    * Per link: received = that Decantation's lines of the product; invoice_qty =
    * the purchase's quantity of the product; variance = Σ received over all linked
    * Decantations − invoice quantity (the same invoice-level figure on each link).
-   * WAC is applied once (first settlement of the link set): value = invoice value
-   * of the product, qty = Σ received; on-hand before = current on-hand − Σ received.
+   * WAC is applied per newly settled link (one never settled before; a settled
+   * link is never re-applied): qty = Σ received of the newly settled links, value
+   * = the invoice value on the very first settlement and 0 on later ones (the
+   * value was already counted), so total cost = invoice value over Σ received.
+   * On-hand before = current on-hand − the newly settled qty.
    */
   async settleInvoice(
     ctx: ExecutionContext,
@@ -200,6 +205,7 @@ export class DecantationMeasurementService implements DecantationMeasurement, Ta
     if (links.length === 0) return;
     const invoice = await this.deps.links.invoiceLine(
       ctx.organizationId,
+      links[0].stationId,
       input.purchaseId,
       input.productId,
     );
@@ -214,7 +220,9 @@ export class DecantationMeasurementService implements DecantationMeasurement, Ta
     }
     const totalReceived = round3([...receivedByLink.values()].reduce((s, n) => s + n, 0));
     const variance = round3(totalReceived - invoice.quantity);
-    const firstSettlement = links.every((l) => !l.varianceComputedAt);
+    const newLinks = links.filter((l) => !l.varianceComputedAt);
+    const firstSettlement = newLinks.length === links.length;
+    const newReceived = round3(newLinks.reduce((s, l) => s + (receivedByLink.get(l.id) ?? 0), 0));
     const now = ctx.clock.now().toISOString();
 
     for (const link of links)
@@ -226,16 +234,17 @@ export class DecantationMeasurementService implements DecantationMeasurement, Ta
         varianceComputedAt: now,
       });
 
-    if (!firstSettlement || totalReceived <= 0) return;
+    if (newLinks.length === 0 || newReceived <= 0) return;
     const product = await this.deps.products.findById(input.productId);
     if (!product || product.organizationId !== ctx.organizationId) return;
     const onHand = await this.deps.movements.currentQuantityForProduct(
       ctx.organizationId,
       input.productId,
     );
-    const baseQty = Math.max(onHand - totalReceived, 0);
+    const baseQty = Math.max(onHand - newReceived, 0);
     const oldCost = Number(product.costBasis ?? 0);
-    const newCost = (baseQty * oldCost + invoice.value) / (baseQty + totalReceived);
+    const value = firstSettlement ? invoice.value : 0;
+    const newCost = (baseQty * oldCost + value) / (baseQty + newReceived);
     await this.deps.products.updateCostBasis(input.productId, String(round4(newCost)));
   }
 

@@ -114,6 +114,22 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     });
   };
 
+  /** Sets one edge of a product's density band; an empty band is dropped. */
+  const setDensityBand = (productId: string, edge: 'minKgM3' | 'maxKgM3', raw: string) => {
+    const value = raw === '' ? undefined : Number(raw);
+    updateDecantationSettings((current) => {
+      const bands = { ...current.densitySpecBands };
+      const band = { ...bands[productId], [edge]: value };
+      if (band.minKgM3 === undefined && band.maxKgM3 === undefined) delete bands[productId];
+      else
+        bands[productId] = {
+          ...(band.minKgM3 === undefined ? {} : { minKgM3: band.minKgM3 }),
+          ...(band.maxKgM3 === undefined ? {} : { maxKgM3: band.maxKgM3 }),
+        };
+      return { ...current, densitySpecBands: bands };
+    });
+  };
+
   // Selecting a default station is a genuine side effect on the parent, not
   // local state being synced, so it stays an effect — but it is now honest
   // about what it depends on.
@@ -979,23 +995,9 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                                 className="mono-num"
                                 aria-label={`${product.name} minimum density`}
                                 value={band.minKgM3 ?? ''}
-                                onChange={(e) => {
-                                  const next = { ...decantationSettings.densitySpecBands };
-                                  const minKgM3 =
-                                    e.target.value === '' ? undefined : Number(e.target.value);
-                                  const maxKgM3 = next[product.id]?.maxKgM3;
-                                  if (minKgM3 === undefined && maxKgM3 === undefined)
-                                    delete next[product.id];
-                                  else
-                                    next[product.id] = {
-                                      ...(minKgM3 === undefined ? {} : { minKgM3 }),
-                                      ...(maxKgM3 === undefined ? {} : { maxKgM3 }),
-                                    };
-                                  updateDecantationSettings((current) => ({
-                                    ...current,
-                                    densitySpecBands: next,
-                                  }));
-                                }}
+                                onChange={(e) =>
+                                  setDensityBand(product.id, 'minKgM3', e.target.value)
+                                }
                               />
                             </Field>
                             <Field label="Maximum (kg/m³)">
@@ -1006,23 +1008,9 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                                 className="mono-num"
                                 aria-label={`${product.name} maximum density`}
                                 value={band.maxKgM3 ?? ''}
-                                onChange={(e) => {
-                                  const next = { ...decantationSettings.densitySpecBands };
-                                  const maxKgM3 =
-                                    e.target.value === '' ? undefined : Number(e.target.value);
-                                  const minKgM3 = next[product.id]?.minKgM3;
-                                  if (minKgM3 === undefined && maxKgM3 === undefined)
-                                    delete next[product.id];
-                                  else
-                                    next[product.id] = {
-                                      ...(minKgM3 === undefined ? {} : { minKgM3 }),
-                                      ...(maxKgM3 === undefined ? {} : { maxKgM3 }),
-                                    };
-                                  updateDecantationSettings((current) => ({
-                                    ...current,
-                                    densitySpecBands: next,
-                                  }));
-                                }}
+                                onChange={(e) =>
+                                  setDensityBand(product.id, 'maxKgM3', e.target.value)
+                                }
                               />
                             </Field>
                           </div>
