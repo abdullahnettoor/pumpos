@@ -1415,6 +1415,13 @@ export class CloudTransactionService {
     );
   }
 
+  async discardDecantation(decantationId: string): Promise<unknown> {
+    return request<unknown>(
+      `/transactions/decantations/${encodeURIComponent(decantationId)}/discard`,
+      { method: 'POST' },
+    );
+  }
+
   async unlinkDecantationPurchase(decantationId: string, productId: string): Promise<unknown> {
     return request<unknown>(
       `/transactions/decantations/${encodeURIComponent(decantationId)}/purchases/${encodeURIComponent(productId)}`,

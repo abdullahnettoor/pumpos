@@ -48,6 +48,7 @@ const EVENT_LABELS: Record<string, string> = {
   TANK_DIP_RECORDED: 'Tank dip recorded',
   DECANTATION_RECORDED: 'Decantation recorded',
   DECANTATION_FLAGGED: 'Decantation flagged',
+  DECANTATION_DISCARDED: 'Decantation draft discarded',
   DECANTATION_PURCHASE_LINKED: 'Decantation linked to purchase',
   DECANTATION_PURCHASE_UNLINKED: 'Decantation unlinked from purchase',
   DENSITY_RECORDED: 'Density recorded',

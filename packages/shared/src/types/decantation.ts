@@ -6,7 +6,7 @@
  */
 import type { DecantationFlag, DecantationWarning } from '../utils/decantation-flags.js';
 
-export type DecantationStatusView = 'DRAFT' | 'PENDING_MEASUREMENT' | 'MEASURED';
+export type DecantationStatusView = 'DRAFT' | 'PENDING_MEASUREMENT' | 'MEASURED' | 'DISCARDED';
 export type DecantationChamberMark = 'OK' | 'SHORT' | 'EXCESS';
 
 export interface DecantationTankLineView {

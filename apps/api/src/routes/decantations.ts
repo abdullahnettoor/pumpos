@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import type { DbClient, DbExecutor } from '@pump/db';
 import { canRecordDecantation, isAuthorizedForStation } from '@pump/shared';
 import {
+  DiscardDecantation,
   GetDecantation,
   LinkDecantationPurchase,
   GetDecantationDayCloseWarnings,
@@ -118,6 +119,30 @@ decantationsRouter.put(
   async (c) => {
     const body = c.req.valid('json');
     return record(c, { ...body, decantationId: c.req.param('id') });
+  },
+);
+
+decantationsRouter.post(
+  '/decantations/:id/discard',
+  writePolicyGuard('POST /transactions/decantations/:id/discard'),
+  validateParams(idParam),
+  async (c) => {
+    const { id } = c.req.valid('param');
+    const user = c.var.user;
+    if (!canRecordDecantation(user.role))
+      return forbidden(c, 'Insufficient permissions for decantations');
+    const stationId = await stationOfDecantation(c, id);
+    if (!stationId) return sendResult(c, err(notFoundError('Decantation', id)));
+    const denied = guardStation(c, stationId);
+    if (denied) return denied;
+    const result = await runInTransaction(c.var.db, async (tx, events) => {
+      await lockStationInventory(tx, user.organizationId, stationId);
+      return new DiscardDecantation({
+        decantations: new DrizzleDecantationRepository(tx),
+        events,
+      }).execute({ decantationId: id }, buildContext(user, { stationId }));
+    });
+    return sendResult(c, result);
   },
 );
 

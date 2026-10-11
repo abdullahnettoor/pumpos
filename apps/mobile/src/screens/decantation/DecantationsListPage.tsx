@@ -12,6 +12,7 @@ export const STATUS_BADGE = {
   DRAFT: { tone: 'warn', label: 'Unloading' },
   PENDING_MEASUREMENT: { tone: 'info', label: 'Pending measurement' },
   MEASURED: { tone: 'good', label: 'Measured' },
+  DISCARDED: { tone: 'warn', label: 'Discarded' },
 } as const;
 
 /** Opens a visit: a draft goes to Finish unloading, the rest to a read-only detail. */

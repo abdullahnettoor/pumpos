@@ -14,7 +14,7 @@ export const UnloadEndStep: React.FC<{ visit: Visit }> = ({ visit: v }) => (
     />
     {v.values.checkChambers && (
       <div className="flex flex-col gap-2">
-        <p className="text-[11.5px] font-semibold text-text-muted">Chambers emptied</p>
+        <p className="text-[12px] font-semibold text-text-muted">Chambers emptied</p>
         <div className="grid grid-cols-2 gap-2">
           {v.values.chambers.map((c, i) => (
             <Check
@@ -39,7 +39,7 @@ export const AfterDipStep: React.FC<{ visit: Visit }> = ({ visit: v }) => (
       return (
         <div key={l.id ?? i} className="flex flex-col gap-2.5 rounded-xl border border-line p-3">
           <span className="text-[12.5px] font-bold text-text-high">{name}</span>
-          <p className="num text-[11px] text-text-muted">
+          <p className="num text-[12px] text-text-muted">
             Before dip {fmtLitres(Number(l.beforeDip))}
           </p>
           <Check
@@ -96,7 +96,7 @@ export const ReviewStep: React.FC<{ visit: Visit }> = ({ visit: v }) => {
             <span className="block text-[12.5px] font-bold text-text-high">
               {productName(x.productId)} invoice
             </span>
-            <span className="num block text-[11px] text-text-muted">
+            <span className="num block text-[12px] text-text-muted">
               Invoice {fmtLitres(x.invoiceQty)} · received {fmtLitres(x.received)}
             </span>
           </span>

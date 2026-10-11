@@ -23,7 +23,7 @@ export const DecantationActions: React.FC<{ station: Station }> = ({ station }) 
       <button
         type="button"
         onClick={() => nav.push(<TankerArrivedPage station={station} />, 'tanker-arrived')}
-        className="rounded-[10px] bg-accent-soft px-2.5 py-1 text-[11px] font-extrabold text-accent"
+        className="rounded-[10px] bg-accent-soft px-2.5 py-1 text-[12px] font-extrabold text-accent"
       >
         Tanker arrived
       </button>

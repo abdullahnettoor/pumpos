@@ -86,7 +86,7 @@ export const DecantationDetailPage: React.FC<{ station: Station; decantationId: 
               <span className="block text-[12.5px] font-bold text-text-high">
                 {t.tankName} · {t.productName}
               </span>
-              <span className="num block text-[11px] text-text-muted">
+              <span className="num block text-[12px] text-text-muted">
                 Before dip {fmtLitres(t.beforeDip)}
               </span>
             </span>
@@ -110,7 +110,7 @@ export const DecantationDetailPage: React.FC<{ station: Station; decantationId: 
                 <span className="block text-[12.5px] font-bold text-text-high">
                   {productName(p)} invoice
                 </span>
-                <span className="num block truncate text-[11px] text-text-muted">
+                <span className="num block truncate text-[12px] text-text-muted">
                   {l
                     ? [l.invoiceNumber, l.supplierName, fmtLitres(l.invoiceQty)]
                         .filter(Boolean)
@@ -156,7 +156,7 @@ export const DecantationDetailPage: React.FC<{ station: Station; decantationId: 
               <span className="block text-[13px] font-bold text-text-high">
                 {o.invoiceNumber ?? o.documentNumber}
               </span>
-              <span className="num block text-[11px] text-text-muted">
+              <span className="num block text-[12px] text-text-muted">
                 {[o.supplierName, o.entryDate, fmtLitres(o.invoiceQty)].filter(Boolean).join(' · ')}
               </span>
             </button>

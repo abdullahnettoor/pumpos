@@ -14,6 +14,8 @@ const feed = vi.hoisted(() => ({
   tanks: [] as unknown[],
   decantations: [] as any[],
   saved: [] as any[],
+  discarded: [] as string[],
+  failNext: false,
   toasts: [] as string[],
 }));
 
@@ -44,7 +46,18 @@ vi.mock('@pump/ui', async (importOriginal) => {
       isPending: false,
       mutateAsync: async (vars: unknown) => {
         feed.saved.push(vars);
+        if (feed.failNext) {
+          feed.failNext = false;
+          throw Object.assign(new Error('network'), { status: undefined });
+        }
         return { decantation: { flags: [] }, warnings: [] };
+      },
+    }),
+    useDiscardDecantation: () => ({
+      isPending: false,
+      mutateAsync: async (vars: { decantationId: string }) => {
+        feed.discarded.push(vars.decantationId);
+        return {};
       },
     }),
     useLinkDecantationPurchase: () => ({ isPending: false, mutateAsync: async () => ({}) }),
@@ -154,7 +167,14 @@ const mount = (role: string, ui: React.ReactNode) =>
   );
 
 beforeEach(() => {
-  Object.assign(feed, { tanks: TANKS, decantations: [draft], saved: [], toasts: [] });
+  Object.assign(feed, {
+    tanks: TANKS,
+    decantations: [draft],
+    saved: [],
+    toasts: [],
+    discarded: [],
+    failNext: false,
+  });
 });
 afterEach(cleanup);
 
@@ -198,12 +218,12 @@ describe('Decantation entry points', () => {
 });
 
 describe('Tanker arrived (first half)', () => {
-  it('asks inline for the tanker and the before dip, and saves nothing', () => {
+  it('asks inline for the tanker and the before dip, and saves nothing', async () => {
     mount('Owner', <TankerArrivedPage station={station} />);
     fireEvent.click(screen.getByRole('button', { name: /Save · start unloading/ }));
-    expect(screen.getAllByRole('alert').length).toBeGreaterThan(0);
-    expect(screen.getByText('Enter the tanker number')).toBeTruthy();
-    expect(screen.getByText('Enter the before dip')).toBeTruthy();
+    await waitFor(() => expect(screen.getAllByRole('alert').length).toBeGreaterThan(0));
+    expect(screen.getAllByText('Tanker number is required').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Enter the before dip/)).toBeTruthy();
     expect(feed.saved).toHaveLength(0);
   });
 
@@ -274,5 +294,38 @@ describe('Finish unloading (second half)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Save/ }));
     await waitFor(() => expect(feed.saved).toHaveLength(1));
     expect(feed.saved[0].body.lines[0].afterDip).toBeUndefined();
+  });
+
+  it('discards a draft only after an inline confirm', async () => {
+    mount('Owner', <FinishUnloadingPage station={station} decantation={draft as never} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Discard draft' }));
+    expect(feed.discarded).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm discard' }));
+    await waitFor(() => expect(feed.discarded).toEqual(['dec-1']));
+  });
+
+  it('keeps the Idempotency-Key for an unchanged retry and renews it when the form changed', async () => {
+    mount('Owner', <FinishUnloadingPage station={station} decantation={draft as never} />);
+    feed.failNext = true;
+    fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    await waitFor(() => expect(feed.saved).toHaveLength(1));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    await waitFor(() => expect(feed.saved).toHaveLength(2));
+    expect(feed.saved[1].idempotencyKey).toBe(feed.saved[0].idempotencyKey);
+  });
+
+  it('renews the Idempotency-Key when the form changed after a failed attempt', async () => {
+    mount('Owner', <FinishUnloadingPage station={station} decantation={draft as never} />);
+    feed.failNext = true;
+    fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+
+    fireEvent.click(screen.getByLabelText(/Take after-unloading dip now/));
+    fireEvent.change(screen.getByLabelText('After dip (L) tank 1'), { target: { value: '9000' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    await waitFor(() => expect(feed.saved).toHaveLength(2));
+    expect(feed.saved[1].idempotencyKey).not.toBe(feed.saved[0].idempotencyKey);
   });
 });

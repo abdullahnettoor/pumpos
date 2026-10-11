@@ -54,9 +54,7 @@ export const TankerArrivedPage: React.FC<{ station: Station }> = ({ station }) =
           </p>
         )}
         {submitted && v.errors.any && (
-          <Warn tone="bad">
-            The tanker number, and a tank with its before dip, are needed to save.
-          </Warn>
+          <Warn tone="bad">{v.errors.summary ?? 'Check the highlighted fields to save.'}</Warn>
         )}
         <StepCard
           index={1}

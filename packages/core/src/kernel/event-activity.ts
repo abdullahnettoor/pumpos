@@ -272,6 +272,10 @@ export const EventActivityCatalog = {
     BusinessEvents.DECANTATION_RECORDED,
     'Decantation recorded',
   ),
+  [BusinessEvents.DECANTATION_DISCARDED]: info(
+    BusinessEvents.DECANTATION_DISCARDED,
+    'Decantation draft discarded',
+  ),
   [BusinessEvents.DECANTATION_FLAGGED]: warning(
     BusinessEvents.DECANTATION_FLAGGED,
     'Decantation flagged',

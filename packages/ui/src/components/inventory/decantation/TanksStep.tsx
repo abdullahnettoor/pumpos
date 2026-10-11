@@ -4,7 +4,7 @@ import { Button, Chip, Icon } from '../../../pump-ds/index.js';
 import { Field, NumberInput, Select } from '../../primitives/Field.js';
 import { DensityCalculatorPopover } from '../../primitives/DensityCalculatorPopover.js';
 import { KV, LINE_COLORS, LineTag, Notice } from './StepSection.js';
-import { emptyLine } from './decantationForm.js';
+import { chambersAfterLineRemoved, emptyLine } from './decantationForm.js';
 import { fmtLitres } from './format.js';
 import { grid, lineLabel, tankOf, SummaryCard, type StepProps } from './stepShared.js';
 
@@ -15,14 +15,9 @@ export const TanksStep: React.FC<
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
   const used = new Set(values.lines.map((l) => l.tankId));
   const removeLine = (i: number) => {
-    // Chambers pointing at a later line follow it; those on the removed line fall back to the first.
-    setValue(
-      'chambers',
-      getValues('chambers').map((c) => ({
-        ...c,
-        lineIndex: c.lineIndex === i ? 0 : c.lineIndex > i ? c.lineIndex - 1 : c.lineIndex,
-      })),
-    );
+    // A Decantation keeps at least one tank line. Chambers on the removed line become unassigned.
+    if (fields.length <= 1) return;
+    setValue('chambers', chambersAfterLineRemoved(getValues('chambers'), i));
     remove(i);
   };
   return (

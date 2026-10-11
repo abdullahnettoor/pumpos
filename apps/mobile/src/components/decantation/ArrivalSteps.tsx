@@ -28,7 +28,7 @@ export const TankerStep: React.FC<{ visit: Visit; showErrors: boolean }> = ({
           onChange={(x) => v.patch({ tankerNumber: x })}
         />
         {showErrors && v.errors.tanker && (
-          <p role="alert" className="text-[11px] text-bad-fg">
+          <p role="alert" className="text-[12px] text-bad-fg">
             {v.errors.tanker}
           </p>
         )}
@@ -39,7 +39,7 @@ export const TankerStep: React.FC<{ visit: Visit; showErrors: boolean }> = ({
         onChange={(x) => v.patch({ driverName: x })}
       />
     </div>
-    <p className="text-[11.5px] font-semibold text-text-muted">
+    <p className="text-[12px] font-semibold text-text-muted">
       Fuel Purchases · one per product · optional
     </p>
     {v.fuelProducts.map((p) => {
@@ -111,7 +111,7 @@ export const TanksStep: React.FC<{ visit: Visit; showErrors: boolean }> = ({
               ))}
             </SelectField>
             {showErrors && err?.tank && (
-              <p role="alert" className="text-[11px] text-bad-fg">
+              <p role="alert" className="text-[12px] text-bad-fg">
                 {err.tank}
               </p>
             )}
@@ -200,9 +200,10 @@ export const ChambersStep: React.FC<{ visit: Visit }> = ({ visit: v }) => (
             />
             <SelectField
               label="Into"
-              value={String(c.lineIndex)}
-              onChange={(x) => v.setChamber(i, { lineIndex: Number(x) })}
+              value={c.lineIndex == null ? '' : String(c.lineIndex)}
+              onChange={(x) => v.setChamber(i, { lineIndex: x === '' ? null : Number(x) })}
             >
+              <option value="">Not assigned</option>
               {v.values.lines.map((l, j) => (
                 <option key={j} value={j}>
                   {v.tanks.find((t) => t.id === l.tankId)?.name ?? `Tank ${j + 1}`}

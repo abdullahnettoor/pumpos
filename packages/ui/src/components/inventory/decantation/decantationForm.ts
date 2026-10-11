@@ -33,8 +33,8 @@ export interface DecantationLineValues {
 
 export interface DecantationChamberValues {
   capacity: string;
-  /** Index into `lines`: the tank this chamber unloads into. */
-  lineIndex: number;
+  /** Index into `lines`: the tank this chamber unloads into. `null` = not assigned. */
+  lineIndex: number | null;
   sealOk: boolean;
   mark: ChamberMarkValue;
   dipMm: string;
@@ -68,7 +68,10 @@ export const emptyLine = (tankId = ''): DecantationLineValues => ({
   salesDuring: '',
 });
 
-export const emptyChamber = (lineIndex = 0, capacity = ''): DecantationChamberValues => ({
+export const emptyChamber = (
+  lineIndex: number | null = 0,
+  capacity = '',
+): DecantationChamberValues => ({
   capacity,
   lineIndex,
   sealOk: true,
@@ -89,6 +92,35 @@ export const emptyDecantationForm = (date: string): DecantationFormValues => ({
   chambers: [],
   links: {},
 });
+
+/**
+ * Chambers after tank line `removed` is taken out: those unloading into it become
+ * unassigned (`null`, never an index that no longer exists); later lines shift up.
+ */
+export function chambersAfterLineRemoved(
+  chambers: DecantationChamberValues[],
+  removed: number,
+): DecantationChamberValues[] {
+  return chambers.map((c) => ({
+    ...c,
+    lineIndex:
+      c.lineIndex == null || c.lineIndex === removed
+        ? null
+        : c.lineIndex > removed
+          ? c.lineIndex - 1
+          : c.lineIndex,
+  }));
+}
+
+/** Form values without tank line `index`; a Decantation keeps at least one line. */
+export function withoutLine(v: DecantationFormValues, index: number): DecantationFormValues {
+  if (v.lines.length <= 1 || index < 0 || index >= v.lines.length) return v;
+  return {
+    ...v,
+    lines: v.lines.filter((_, j) => j !== index),
+    chambers: chambersAfterLineRemoved(v.chambers, index),
+  };
+}
 
 /* ── Station-time helpers ─────────────────────────────────────────────── */
 
@@ -182,7 +214,10 @@ export const decantationFormSchema = z.object({
       z.object({
         id: z.string().optional(),
         tankId: z.string().min(1, 'Choose the tank (a tank line needs it even in a draft)'),
-        beforeDip: quantity,
+        beforeDip: quantity.refine(
+          (s) => s.trim() !== '',
+          'Enter the before dip (a tank line needs it even in a draft)',
+        ),
         roDensity: quantity,
         observedDensity: quantity,
         observedTempC: z
@@ -198,7 +233,7 @@ export const decantationFormSchema = z.object({
   chambers: z.array(
     z.object({
       capacity: quantity,
-      lineIndex: z.number().int().min(0),
+      lineIndex: z.number().int().min(0).nullable(),
       sealOk: z.boolean(),
       mark: z.enum(['', 'OK', 'SHORT', 'EXCESS']),
       dipMm: quantity,
@@ -283,7 +318,9 @@ export function buildSaveBody(
       ...(c.mark ? { mark: c.mark } : {}),
       ...(num(c.dipMm) != null ? { dipMm: num(c.dipMm) } : {}),
       emptied: c.emptied,
-      tankLineIndex: Math.min(c.lineIndex, v.lines.length - 1),
+      ...(c.lineIndex != null && c.lineIndex < v.lines.length
+        ? { tankLineIndex: c.lineIndex }
+        : {}),
     }));
   }
   const links = Object.entries(v.links)
@@ -358,7 +395,7 @@ export function decantationToFormValues(
     checkChambers: d.chambersChecked,
     chambers: d.chambers.map((c) => ({
       capacity: str(c.capacityL),
-      lineIndex: (c.tankLineId ? lineIndexById.get(c.tankLineId) : undefined) ?? 0,
+      lineIndex: (c.tankLineId ? lineIndexById.get(c.tankLineId) : undefined) ?? null,
       sealOk: c.sealOk ?? true,
       mark: c.mark ?? '',
       dipMm: str(c.dipMm),

@@ -1,6 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useWatch } from 'react-hook-form';
 import {
   buildSaveBody,
+  decantationFormSchema,
+  useZodForm,
+  withoutLine,
   decantationToFormValues,
   emptyChamber,
   emptyDecantationForm,
@@ -30,6 +34,33 @@ export interface TankOption {
   productId: string;
   productName: string;
   currentVolume: number | null;
+}
+
+const DIRTY = { shouldDirty: true } as const;
+
+/** Depth-first first `message` of a react-hook-form error tree. */
+function firstMessage(e: unknown): string | undefined {
+  if (!e || typeof e !== 'object') return undefined;
+  const o = e as Record<string, unknown>;
+  if (typeof o.message === 'string' && o.message) return o.message;
+  for (const v of Object.values(o)) {
+    if (v === o.ref) continue;
+    const m = firstMessage(v);
+    if (m) return m;
+  }
+  return undefined;
+}
+
+function initialValues(timeZone: string, decantation?: DecantationView): DecantationFormValues {
+  if (decantation) {
+    const v = decantationToFormValues(decantation, timeZone);
+    // Finishing: the end time defaults to now, an editable suggestion.
+    return { ...v, unloadEnd: v.unloadEnd || nowTime(timeZone) };
+  }
+  return {
+    ...emptyDecantationForm(resolveEntryDate({ timeZone })),
+    unloadStart: nowTime(timeZone),
+  };
 }
 
 export const nowTime = (timeZone: string): string =>
@@ -75,60 +106,53 @@ export function useVisit(station: Station, decantation?: DecantationView) {
     return out;
   }, [fuelProducts, purchaseQs]);
 
-  const [values, setValues] = useState<DecantationFormValues>(() => {
-    if (decantation) {
-      const v = decantationToFormValues(decantation, timeZone);
-      // Finishing: the end time defaults to now, an editable suggestion.
-      return { ...v, unloadEnd: v.unloadEnd || nowTime(timeZone) };
-    }
-    return {
-      ...emptyDecantationForm(resolveEntryDate({ timeZone })),
-      unloadStart: nowTime(timeZone),
-    };
+  const form = useZodForm<DecantationFormValues>(decantationFormSchema, {
+    defaultValues: initialValues(timeZone, decantation),
   });
+  const values = useWatch({ control: form.control }) as DecantationFormValues;
+  const read = form.getValues;
 
   const patch = useCallback(
-    (p: Partial<DecantationFormValues>) => setValues((v) => ({ ...v, ...p })),
-    [],
+    (p: Partial<DecantationFormValues>) => {
+      for (const [k, x] of Object.entries(p))
+        form.setValue(k as keyof DecantationFormValues, x, DIRTY);
+    },
+    [form],
   );
   const setLine = useCallback(
-    (i: number, p: Partial<DecantationLineValues>) =>
-      setValues((v) => ({ ...v, lines: v.lines.map((l, j) => (j === i ? { ...l, ...p } : l)) })),
-    [],
+    (i: number, p: Partial<DecantationLineValues>) => {
+      for (const [k, x] of Object.entries(p))
+        form.setValue(`lines.${i}.${k}` as `lines.${number}.tankId`, x as never, DIRTY);
+    },
+    [form],
   );
   const addLine = useCallback(
-    () => setValues((v) => ({ ...v, lines: [...v.lines, emptyLine()] })),
-    [],
+    () => form.setValue('lines', [...read('lines'), emptyLine()], DIRTY),
+    [form, read],
   );
   const removeLine = useCallback(
-    (i: number) =>
-      setValues((v) => ({
-        ...v,
-        lines: v.lines.filter((_, j) => j !== i),
-        // Chambers point at lines by index: keep them on a line that still exists.
-        chambers: v.chambers.map((c) => ({
-          ...c,
-          lineIndex: c.lineIndex > i ? c.lineIndex - 1 : Math.min(c.lineIndex, v.lines.length - 2),
-        })),
-      })),
-    [],
+    (i: number) => {
+      const next = withoutLine(read(), i);
+      form.setValue('lines', next.lines, DIRTY);
+      form.setValue('chambers', next.chambers, DIRTY);
+    },
+    [form, read],
   );
   const setChamber = useCallback(
-    (i: number, p: Partial<DecantationChamberValues>) =>
-      setValues((v) => ({
-        ...v,
-        chambers: v.chambers.map((c, j) => (j === i ? { ...c, ...p } : c)),
-      })),
-    [],
+    (i: number, p: Partial<DecantationChamberValues>) => {
+      for (const [k, x] of Object.entries(p))
+        form.setValue(`chambers.${i}.${k}` as `chambers.${number}.sealOk`, x as never, DIRTY);
+    },
+    [form],
   );
   const addChamber = useCallback(
-    () => setValues((v) => ({ ...v, chambers: [...v.chambers, emptyChamber(0)] })),
-    [],
+    () => form.setValue('chambers', [...read('chambers'), emptyChamber(0)], DIRTY),
+    [form, read],
   );
   const setLink = useCallback(
     (productId: string, purchaseId: string) =>
-      setValues((v) => ({ ...v, links: { ...v.links, [productId]: purchaseId } })),
-    [],
+      form.setValue('links', { ...read('links'), [productId]: purchaseId }, DIRTY),
+    [form, read],
   );
 
   // Invoice facts of the picked Fuel Purchases (an edited visit falls back to what it links).
@@ -166,23 +190,21 @@ export function useVisit(station: Station, decantation?: DecantationView) {
     [values, tanks, invoiceQtyByProduct, settings.quantityTolerance],
   );
 
-  /** Inline problems that stop a save: the tanker, and a tank + before dip per line. */
-  const errors = useMemo(() => {
-    const lines = values.lines.map((l) => ({
-      tank: l.tankId ? undefined : 'Choose the tank',
-      beforeDip: l.beforeDip.trim() === '' ? 'Enter the before dip' : undefined,
-    }));
-    return {
-      tanker: values.tankerNumber.trim() ? undefined : 'Enter the tanker number',
-      lines,
-      any:
-        !values.tankerNumber.trim() ||
-        values.lines.length === 0 ||
-        lines.some((l) => l.tank || l.beforeDip),
-    };
-  }, [values]);
+  /** Runs the shared Zod schema; the field errors then show inline. */
+  const validate = useCallback(() => form.trigger(), [form]);
+  const fe = form.formState.errors;
+  const errors = {
+    tanker: fe.tankerNumber?.message,
+    lines: values.lines.map((_, i) => ({
+      tank: fe.lines?.[i]?.tankId?.message,
+      beforeDip: fe.lines?.[i]?.beforeDip?.message,
+    })),
+    /** First problem anywhere in the form, for a summary line. */
+    summary: firstMessage(fe),
+    any: Object.keys(fe).length > 0,
+  };
 
-  const body = (draft: boolean) => buildSaveBody(values, ctx, { draft });
+  const body = (draft: boolean) => buildSaveBody(form.getValues(), ctx, { draft });
 
   return {
     values,
@@ -203,6 +225,7 @@ export function useVisit(station: Station, decantation?: DecantationView) {
     flags,
     review,
     errors,
+    validate,
     body,
   };
 }

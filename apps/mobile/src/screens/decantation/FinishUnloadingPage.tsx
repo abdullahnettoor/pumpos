@@ -9,6 +9,7 @@ import {
 } from '../../components/decantation/FinishSteps.js';
 import { Warn } from '../../components/decantation/fields.js';
 import { useSaveVisit } from '../../components/decantation/useSaveVisit.js';
+import { DiscardDraft } from '../../components/decantation/DiscardDraft.js';
 import { useVisit } from '../../lib/decantation/useVisit.js';
 import { fmtLitres } from '../../lib/decantation/format.js';
 import { DetailPage } from '../../ui/index.js';
@@ -53,9 +54,7 @@ export const FinishUnloadingPage: React.FC<{ station: Station; decantation: Deca
           </p>
         )}
         {submitted && v.errors.any && (
-          <Warn tone="bad">
-            The tanker number, and a tank with its before dip, are needed to save.
-          </Warn>
+          <Warn tone="bad">{v.errors.summary ?? 'Check the highlighted fields to save.'}</Warn>
         )}
         <div className="rounded-xl border border-line bg-card-alt p-3 text-[12px] text-text-muted">
           Recorded on arrival:{' '}
@@ -93,6 +92,9 @@ export const FinishUnloadingPage: React.FC<{ station: Station; decantation: Deca
         >
           <ReviewStep visit={v} />
         </StepCard>
+        {decantation.status === 'DRAFT' && (
+          <DiscardDraft stationId={station.id} decantationId={decantation.id} />
+        )}
       </div>
     </DetailPage>
   );

@@ -9,6 +9,7 @@ import {
   isoToLocalTime,
   liveFlags,
   localTimeToIso,
+  withoutLine,
   type DecantationFormContext,
 } from './decantationForm.js';
 import type { DecantationView } from '@pump/shared';
@@ -225,5 +226,33 @@ describe('decantationToFormValues', () => {
       mark: 'OK',
       emptied: true,
     });
+  });
+});
+
+describe('withoutLine', () => {
+  const form = () => ({
+    ...emptyDecantationForm('2026-03-15'),
+    lines: [emptyLine('a'), emptyLine('b'), emptyLine('c')],
+    chambers: [emptyChamber(0), emptyChamber(1), emptyChamber(2)],
+  });
+
+  it('unassigns chambers on the removed line (never -1) and shifts later ones', () => {
+    const next = withoutLine(form(), 1);
+    expect(next.lines.map((l) => l.tankId)).toEqual(['a', 'c']);
+    expect(next.chambers.map((c) => c.lineIndex)).toEqual([0, null, 1]);
+  });
+
+  it('keeps at least one tank line', () => {
+    const single = { ...form(), lines: [emptyLine('a')], chambers: [emptyChamber(0)] };
+    expect(withoutLine(single, 0)).toBe(single);
+  });
+
+  it('sends an unassigned chamber without a tank line index', () => {
+    const body = buildSaveBody(
+      { ...withoutLine(form(), 1), checkChambers: true },
+      { ...ctx, tanks: [{ id: 'a', productId: 'p' }] },
+      { draft: false },
+    );
+    expect(body.chambers?.map((c) => c.tankLineIndex)).toEqual([0, undefined, 1]);
   });
 });

@@ -21,7 +21,7 @@ export type {
 export type { DecantationFlag, DecantationWarning, DecantationFlagCode };
 
 /** DRAFT and PENDING_MEASUREMENT are set here; MEASURED is set by measurement (#468). */
-export type DecantationStatus = 'DRAFT' | 'PENDING_MEASUREMENT' | 'MEASURED';
+export type DecantationStatus = 'DRAFT' | 'PENDING_MEASUREMENT' | 'MEASURED' | 'DISCARDED';
 export type DecantationLineStatus = 'PENDING_MEASUREMENT' | 'MEASURED';
 export type ChamberMark = 'OK' | 'SHORT' | 'EXCESS';
 

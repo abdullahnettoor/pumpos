@@ -392,5 +392,44 @@ describe.skipIf(!CONNECTION)(
         unloading: [],
       });
     });
+
+    it('discards a DRAFT: it leaves warnings and the default list, never a non-draft', async () => {
+      const refuse = await app().request(`/transactions/decantations/${PENDING}/discard`, {
+        method: 'POST',
+      });
+      expect(refuse.status).toBeGreaterThanOrEqual(400);
+
+      const ok = await app().request(`/transactions/decantations/${DRAFT}/discard`, {
+        method: 'POST',
+      });
+      expect(ok.status).toBe(200);
+      expect(((await ok.json()) as any).data.status).toBe('DISCARDED');
+
+      const warnings = (await (
+        await app().request(
+          `/transactions/decantations/day-close-warnings?stationId=${STATION}&businessDayId=${DAY}`,
+        )
+      ).json()) as any;
+      expect(warnings.data.unloading).toEqual([]);
+
+      const list = (await (
+        await app().request(`/transactions/decantations?stationId=${STATION}`)
+      ).json()) as any;
+      expect(list.data.map((d: any) => d.id)).not.toContain(DRAFT);
+      const discarded = (await (
+        await app().request(`/transactions/decantations?stationId=${STATION}&status=DISCARDED`)
+      ).json()) as any;
+      expect(discarded.data.map((d: any) => d.id)).toEqual([DRAFT]);
+
+      const tanks = (await (
+        await app().request(`/transactions/inventory/status?stationId=${STATION}`)
+      ).json()) as any;
+      expect(tanks.data.find((t: any) => t.id === TANK_DRAFT).waitingOnDecantation).toBe(false);
+
+      const again = await app().request(`/transactions/decantations/${DRAFT}/discard`, {
+        method: 'POST',
+      });
+      expect(again.status).toBeGreaterThanOrEqual(400);
+    });
   },
 );

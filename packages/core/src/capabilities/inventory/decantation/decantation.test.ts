@@ -11,6 +11,7 @@ import type { BusinessDay } from '../../station-ops/business-days/index.js';
 import type { Tank } from '../../station-setup/tanks/index.js';
 import { GetDecantation, ListDecantations } from './queries.js';
 import { RecordDecantation } from './record-decantation.js';
+import { DiscardDecantation } from './discard-decantation.js';
 import type { Decantation, DensityReading } from './ports.js';
 
 const day = (status: 'OPEN' | 'CLOSED' = 'OPEN'): BusinessDay => ({
@@ -244,5 +245,40 @@ describe('Get/ListDecantations', () => {
         .success,
     ).toBe(false);
     expect((await list.execute({ stationId: 'st-1' }, ctx())).success).toBe(true);
+  });
+});
+
+describe('DiscardDecantation', () => {
+  it('soft-discards only a DRAFT, keeps the row and emits DECANTATION_DISCARDED', async () => {
+    const { useCase, ctx, rows, store } = setup();
+    const shared = ctx();
+    const draft = await useCase.execute({ ...base, draft: true }, shared);
+    const measuredLike = await useCase.execute(
+      { ...base, lines: [{ ...base.lines[0], tankId: 't-hsd' }] },
+      shared,
+    );
+    if (!draft.success || !measuredLike.success) throw new Error('setup failed');
+    const repo = {
+      findById: async (_o: string, id: string) => rows.get(id) ?? null,
+      updateMeasurement: async (d: Decantation) => void rows.set(d.id, d),
+    };
+    const discard = new DiscardDecantation({
+      decantations: repo as never,
+      events: new InProcessEventDispatcher({ store }),
+    });
+    const refused = await discard.execute(
+      { decantationId: measuredLike.data.decantation.id },
+      ctx(),
+    );
+    expect(refused.success).toBe(false);
+
+    const r = await discard.execute({ decantationId: draft.data.decantation.id }, ctx());
+    expect(r.success).toBe(true);
+    expect(rows.get(draft.data.decantation.id)?.status).toBe('DISCARDED');
+    expect(rows.get(draft.data.decantation.id)?.lines).toHaveLength(1);
+    expect(store.events.map((e) => e.eventType)).toContain(BusinessEvents.DECANTATION_DISCARDED);
+
+    const again = await discard.execute({ decantationId: draft.data.decantation.id }, ctx());
+    expect(again.success).toBe(false);
   });
 });

@@ -36,7 +36,7 @@ export const Check: React.FC<{
     />
     <span className="min-w-0">
       <span className="block text-[13px] font-bold text-text-high">{title}</span>
-      {sub && <span className="block text-[11px] text-text-muted">{sub}</span>}
+      {sub && <span className="block text-[12px] text-text-muted">{sub}</span>}
     </span>
   </label>
 );
@@ -47,7 +47,7 @@ export const TimeField: React.FC<{
   onChange: (v: string) => void;
 }> = ({ label, value, onChange }) => (
   <label className="flex flex-col gap-1.5">
-    <span className="text-[11.5px] font-semibold text-text-muted">{label}</span>
+    <span className="text-[12px] font-semibold text-text-muted">{label}</span>
     <input
       type="time"
       value={value}

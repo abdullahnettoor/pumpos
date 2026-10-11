@@ -227,5 +227,6 @@ export * from './components/inventory/decantation/decantationReview.js';
 export { toDecantationRow } from './components/inventory/decantation/decantationRows.js';
 export type { DecantationRow } from './components/inventory/decantation/decantationRows.js';
 export { keepsIdempotencyKey } from './utils/idempotency.js';
+export { keyForBody, newSaveKey, resetSaveKey, type SaveKey } from './utils/saveKey.js';
 export { DecantationReportPanel } from './components/reports/DecantationReportPanel.js';
 export * from './components/inventory/density/index.js';
