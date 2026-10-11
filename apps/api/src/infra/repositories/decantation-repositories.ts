@@ -4,6 +4,11 @@ import { roundDensity } from '@pump/shared';
 import { schema, type DbExecutor } from '@pump/db';
 import {
   DecantationMeasurementService,
+  type DecantationLinkRepository,
+  type DecantationLinkView,
+  type LinkableFuelPurchase,
+  type LinkablePurchaseRow,
+  DecantationLinker,
   type DecantationPurchaseLink,
   type DecantationPurchaseRepository,
   type DecantationDayCloseWarnings,
@@ -783,6 +788,215 @@ export class DrizzleDecantationPurchaseRepository implements DecantationPurchase
     const r = rows[0];
     return r && r.n > 0 ? { quantity: Number(r.quantity), value: Number(r.value) } : null;
   }
+}
+
+export class DrizzleDecantationLinkRepository implements DecantationLinkRepository {
+  constructor(private readonly db: DbExecutor) {}
+
+  async findFuelPurchase(
+    organizationId: string,
+    purchaseId: string,
+  ): Promise<LinkableFuelPurchase | null> {
+    const rows = (await this.db.execute(sql`
+      SELECT p.id, p.station_id, p.document_number, p.invoice_number, p.entry_date,
+        (p.business_day_id IS NULL AND NOT EXISTS (
+          SELECT 1 FROM purchase_items x JOIN products xp ON xp.id = x.product_id
+          WHERE x.purchase_id = p.id AND xp.product_type <> 'FUEL'
+        )) AS is_fuel,
+        COALESCE(s.name, 'Unknown Supplier') AS supplier_name
+      FROM purchases p LEFT JOIN suppliers s ON s.id = p.supplier_id
+      WHERE p.id = ${purchaseId} AND p.organization_id = ${organizationId}
+    `)) as unknown as {
+      id: string;
+      station_id: string | null;
+      document_number: string;
+      invoice_number: string | null;
+      entry_date: string | null;
+      is_fuel: boolean;
+      supplier_name: string;
+    }[];
+    const p = rows[0];
+    if (!p || !p.station_id) return null;
+    const items = await this.db
+      .select({
+        productId: schema.purchaseItems.productId,
+        quantity: schema.purchaseItems.quantity,
+        invoiceDensity: schema.purchaseItems.invoiceDensity,
+      })
+      .from(schema.purchaseItems)
+      .innerJoin(schema.purchases, eq(schema.purchases.id, schema.purchaseItems.purchaseId))
+      .where(
+        and(
+          eq(schema.purchaseItems.purchaseId, purchaseId),
+          eq(schema.purchases.organizationId, organizationId),
+          eq(schema.purchases.stationId, p.station_id),
+        ),
+      );
+    return {
+      id: p.id,
+      stationId: p.station_id,
+      documentNumber: p.document_number,
+      invoiceNumber: p.invoice_number,
+      supplierName: p.supplier_name,
+      entryDate: p.entry_date,
+      isFuelPurchase: p.is_fuel,
+      lines: items.map((i) => ({
+        productId: i.productId,
+        quantity: Number(i.quantity),
+        invoiceDensity: num(i.invoiceDensity),
+      })),
+    };
+  }
+
+  async upsert(link: {
+    id: string;
+    organizationId: string;
+    stationId: string;
+    decantationId: string;
+    purchaseId: string;
+    productId: string;
+  }): Promise<void> {
+    await this.db
+      .insert(schema.decantationPurchases)
+      .values(link)
+      .onConflictDoUpdate({
+        target: [schema.decantationPurchases.decantationId, schema.decantationPurchases.productId],
+        set: {
+          purchaseId: link.purchaseId,
+          receivedQty: null,
+          invoiceQty: null,
+          varianceQty: null,
+          varianceComputedAt: null,
+          updatedAt: new Date(),
+        },
+      });
+  }
+
+  async remove(organizationId: string, decantationId: string, productId: string): Promise<void> {
+    await this.db
+      .delete(schema.decantationPurchases)
+      .where(
+        and(
+          eq(schema.decantationPurchases.organizationId, organizationId),
+          eq(schema.decantationPurchases.decantationId, decantationId),
+          eq(schema.decantationPurchases.productId, productId),
+        ),
+      );
+  }
+
+  async listViews(
+    organizationId: string,
+    decantationIds: string[],
+  ): Promise<DecantationLinkView[]> {
+    if (decantationIds.length === 0) return [];
+    const rows = (await this.db.execute(sql`
+      SELECT dp.decantation_id, dp.product_id, dp.purchase_id, dp.received_qty,
+        dp.variance_qty, dp.variance_computed_at, p.invoice_number,
+        COALESCE(s.name, 'Unknown Supplier') AS supplier_name,
+        COALESCE((SELECT SUM(pi.quantity) FROM purchase_items pi
+          WHERE pi.purchase_id = dp.purchase_id AND pi.product_id = dp.product_id), 0) AS invoice_qty,
+        (SELECT SUM(pi.quantity * pi.invoice_density) / NULLIF(SUM(pi.quantity), 0)
+          FROM purchase_items pi
+          WHERE pi.purchase_id = dp.purchase_id AND pi.product_id = dp.product_id
+            AND pi.invoice_density IS NOT NULL) AS invoice_density
+      FROM decantation_purchases dp
+      JOIN purchases p ON p.id = dp.purchase_id
+      LEFT JOIN suppliers s ON s.id = p.supplier_id
+      WHERE dp.organization_id = ${organizationId}
+        AND dp.decantation_id IN (${sql.join(
+          decantationIds.map((i) => sql`${i}`),
+          sql`, `,
+        )})
+      ORDER BY dp.created_at
+    `)) as unknown as {
+      decantation_id: string;
+      product_id: string;
+      purchase_id: string;
+      received_qty: string | null;
+      variance_qty: string | null;
+      variance_computed_at: Date | string | null;
+      invoice_number: string | null;
+      supplier_name: string;
+      invoice_qty: string;
+      invoice_density: string | null;
+    }[];
+    return rows.map((r) => ({
+      decantationId: r.decantation_id,
+      productId: r.product_id,
+      purchaseId: r.purchase_id,
+      invoiceNumber: r.invoice_number,
+      supplierName: r.supplier_name,
+      invoiceQty: Number(r.invoice_qty),
+      invoiceDensity:
+        r.invoice_density == null ? null : Math.round(Number(r.invoice_density) * 100) / 100,
+      receivedQty: num(r.received_qty),
+      varianceQty: num(r.variance_qty),
+      varianceComputedAt: r.variance_computed_at
+        ? new Date(r.variance_computed_at).toISOString()
+        : null,
+    }));
+  }
+
+  async listLinkable(
+    organizationId: string,
+    stationId: string,
+    productId: string,
+  ): Promise<LinkablePurchaseRow[]> {
+    const rows = (await this.db.execute(sql`
+      SELECT p.id, p.document_number, p.invoice_number, p.entry_date,
+        COALESCE(s.name, 'Unknown Supplier') AS supplier_name,
+        SUM(pi.quantity) AS invoice_qty,
+        SUM(pi.quantity * pi.invoice_density) / NULLIF(SUM(pi.quantity) FILTER (WHERE pi.invoice_density IS NOT NULL), 0) AS invoice_density,
+        (SELECT COUNT(*)::int FROM decantation_purchases dp
+          WHERE dp.purchase_id = p.id AND dp.organization_id = p.organization_id) AS linked_count
+      FROM purchases p
+      JOIN purchase_items pi ON pi.purchase_id = p.id AND pi.product_id = ${productId}
+      LEFT JOIN suppliers s ON s.id = p.supplier_id
+      WHERE p.organization_id = ${organizationId} AND p.station_id = ${stationId}
+        AND p.business_day_id IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM purchase_items x JOIN products xp ON xp.id = x.product_id
+          WHERE x.purchase_id = p.id AND xp.product_type <> 'FUEL')
+      GROUP BY p.id, p.document_number, p.invoice_number, p.entry_date, s.name, p.organization_id
+      ORDER BY p.entry_date DESC, p.created_at DESC
+      LIMIT 200
+    `)) as unknown as {
+      id: string;
+      document_number: string;
+      invoice_number: string | null;
+      entry_date: string | null;
+      supplier_name: string;
+      invoice_qty: string;
+      invoice_density: string | null;
+      linked_count: number;
+    }[];
+    return rows.map((r) => ({
+      purchaseId: r.id,
+      documentNumber: r.document_number,
+      invoiceNumber: r.invoice_number,
+      supplierName: r.supplier_name,
+      entryDate: r.entry_date,
+      invoiceQty: Number(r.invoice_qty),
+      invoiceDensity:
+        r.invoice_density == null ? null : Math.round(Number(r.invoice_density) * 100) / 100,
+      linkedDecantationCount: Number(r.linked_count),
+      awaitingDecantation: Number(r.linked_count) === 0,
+    }));
+  }
+}
+
+/** Wires linking to a transaction; settlement reuses the #468 measurement service. */
+export function createDecantationLinker(
+  tx: DbExecutor,
+  events: EventPublisher,
+  settings?: { densityToleranceKgM3: number; settlingTimeMinutes: number },
+): DecantationLinker {
+  return new DecantationLinker({
+    links: new DrizzleDecantationLinkRepository(tx),
+    decantations: new DrizzleDecantationRepository(tx),
+    settler: createDecantationMeasurement(tx, events),
+    ...(settings ? { settings } : {}),
+  });
 }
 
 export class DrizzleTankSalesReader implements TankSalesReader {

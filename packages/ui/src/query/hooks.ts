@@ -2,6 +2,7 @@ import {
   useQueryClient,
   useQuery,
   useInfiniteQuery,
+  useMutation,
   type UseQueryOptions,
 } from '@tanstack/react-query';
 import {
@@ -110,6 +111,12 @@ export const queryKeys = {
   income: (stationId = '', from = '', to = '') => ['income', stationId, from, to] as const,
   purchases: (stationId?: string) =>
     stationId ? (['purchases', stationId] as const) : (['purchases'] as const),
+  purchaseItems: (purchaseId: string) => ['purchase-items', purchaseId] as const,
+  /** Decantations (with purchase links) of a station; refreshed by link/unlink and operational writes. */
+  decantations: (stationId = '') =>
+    stationId ? (['decantations', stationId] as const) : (['decantations'] as const),
+  linkablePurchases: (stationId: string, productId: string) =>
+    ['decantations', 'linkable-purchases', stationId, productId] as const,
   collections: () => ['collections'] as const,
   creditSales: () => ['credit-sales'] as const,
   vehicles: (activeOnly = false) => ['vehicles', activeOnly] as const,
@@ -770,6 +777,47 @@ export function usePurchases(stationId = '', options?: Options<any[]>) {
   });
 }
 
+export function usePurchaseItems(purchaseId: string | null, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.purchaseItems(purchaseId ?? ''),
+    queryFn: () => txService.getPurchaseItems(purchaseId as string),
+    enabled: !!purchaseId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useDecantations(stationId: string | null, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.decantations(stationId ?? ''),
+    queryFn: () => txService.getDecantations(stationId as string),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
+ * Link (or replace) a Fuel Purchase on a Decantation, from either side. Refreshes
+ * purchases (the 'Awaiting decantation' chip) and decantations (links, variance).
+ */
+export function useLinkDecantationPurchase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { decantationId: string; productId: string; purchaseId: string }) =>
+      txService.linkDecantationPurchase(v.decantationId, {
+        productId: v.productId,
+        purchaseId: v.purchaseId,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['purchases'] });
+      void qc.invalidateQueries({ queryKey: ['decantations'] });
+      // Linking settles the invoice, which can move a product's weighted-average cost.
+      void qc.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+}
+
 export function useCollections(options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.collections(),
@@ -1306,6 +1354,7 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['expenses'] }),
       qc.invalidateQueries({ queryKey: ['income'] }),
       qc.invalidateQueries({ queryKey: ['purchases'] }),
+      qc.invalidateQueries({ queryKey: ['decantations'] }),
       qc.invalidateQueries({ queryKey: ['collections'] }),
       qc.invalidateQueries({ queryKey: ['customers'] }),
       // Receivables are settled FIFO from the same ledger as a customer's balance,

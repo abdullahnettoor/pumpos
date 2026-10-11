@@ -5,7 +5,24 @@ import { StatusChip, DateText, Icon, Chip } from '../../pump-ds/index.js';
 
 /** Column builders for the Purchases screen tables (extracted from PurchasesList). */
 
-export const purchaseColumns: ColumnDef<any, any>[] = [
+/** The purchase-row fields the Decantation link action reads. */
+export interface PurchaseLinkRow {
+  id: string;
+  stationId?: string | null;
+  businessDayId?: string | null;
+  awaitingDecantation?: boolean;
+  invoiceNumber?: string | null;
+  documentNumber?: string;
+  supplierName?: string;
+}
+
+/**
+ * `onLinkToDecantation` adds a row action for Fuel Purchases still awaiting a
+ * Decantation (#469).
+ */
+export const buildPurchaseColumns = (
+  onLinkToDecantation?: (purchase: PurchaseLinkRow) => void,
+): ColumnDef<any, any>[] => [
   {
     id: 'entryDate',
     accessorFn: (row) => row.entryDate ?? row.businessDate ?? row.shiftDate,
@@ -95,7 +112,39 @@ export const purchaseColumns: ColumnDef<any, any>[] = [
       </span>
     ),
   },
+  ...(onLinkToDecantation
+    ? [
+        {
+          id: 'linkDecantation',
+          header: '',
+          cell: ({ row }) =>
+            row.original.businessDayId == null && row.original.awaitingDecantation ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onLinkToDecantation(row.original as PurchaseLinkRow);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  color: 'var(--brand-primary)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Link to decantation
+              </button>
+            ) : null,
+        } as ColumnDef<any, any>,
+      ]
+    : []),
 ];
+
+export const purchaseColumns: ColumnDef<any, any>[] = buildPurchaseColumns();
 
 export const buildSupplierColumns = (
   openLedger: (s: any) => void,
