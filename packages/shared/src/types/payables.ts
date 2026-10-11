@@ -3,7 +3,7 @@
  * `GET /api/reports/payables/:supplierId`).
  *
  * What the Organization owes its suppliers, and how long the oldest Purchase has
- * waited. The figures come from the supplier ledger, settled FIFO (CONTEXT.md
+ * waited. The figures come from the supplier ledger, settled FIFO (GLOSSARY.md
  * "Payables"): a Supplier Payment (or a credit Adjustment) settles the OLDEST
  * open payable first. The mobile Money tab renders exactly what the API returns
  * and calculates nothing.

@@ -5,7 +5,7 @@ import type { SettlementCycle } from './entities.js';
  * `GET /api/reports/receivables/:customerId`).
  *
  * What customers owe, how old it is, and how they pay. The figures come from the
- * customer ledger, settled FIFO (CONTEXT.md "Receivable aging"): a Collection or
+ * customer ledger, settled FIFO (GLOSSARY.md "Receivable aging"): a Collection or
  * a credit Adjustment settles the oldest open debit first, and what is left of
  * each debit is aged from its Business Date to the Current Business Date. The
  * mobile Money tab renders exactly what the API returns and calculates nothing.

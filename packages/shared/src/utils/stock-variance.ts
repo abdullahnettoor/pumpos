@@ -8,7 +8,7 @@
  * block (#402).
  *
  * NEEDS OWNER DECISION. The repository defines no stock-variance tolerance
- * (CONTEXT.md, the ADRs, `record-stock-count` and the DSSR all report variance
+ * (GLOSSARY.md, the ADRs, `record-stock-count` and the DSSR all report variance
  * as a raw figure), so 0.5% of litres sold is a provisional default. It is one
  * constant so that confirming or changing it is a one-line edit, and it is a
  * Station default, not configurable per Station.

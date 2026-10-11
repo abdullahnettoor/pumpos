@@ -3,7 +3,7 @@
  * their credit limit, and the order of the lists. No React, no fetching, so the
  * rules below are pinned by `parties.test.ts` and shared by To collect / To pay.
  *
- * Customer balance = Σ credit sales − Σ collections (CONTEXT.md); a negative
+ * Customer balance = Σ credit sales − Σ collections (GLOSSARY.md); a negative
  * balance is an advance. Supplier balance = Σ purchases − Σ payments.
  */
 
