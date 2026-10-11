@@ -32,3 +32,15 @@ describe('Reports → Templates tab (#332)', () => {
     expect(screen.getByRole('tab', { name: /Daily DSSR/ })).toBeTruthy();
   });
 });
+
+describe('Reports → Decantations tab (#473)', () => {
+  it.each(['Owner', 'Manager', 'Accountant'] as const)('is shown to %s', (role) => {
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole={role} />);
+    expect(screen.getByRole('tab', { name: /Decantations/ })).toBeTruthy();
+  });
+
+  it('is hidden from Staff', () => {
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Staff" />);
+    expect(screen.queryByRole('tab', { name: /Decantations/ })).toBeNull();
+  });
+});
