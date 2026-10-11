@@ -5,7 +5,8 @@ import type { ExecutionContext, Result, UseCase } from '../../../kernel/index.js
 import type { Decantation, DecantationRepository } from './ports.js';
 
 export interface GetDecantationCommand {
-  stationId: string;
+  /** When omitted the caller authorizes the returned Decantation's station. */
+  stationId?: string;
   decantationId: string;
 }
 
@@ -14,7 +15,7 @@ export class GetDecantation implements UseCase<GetDecantationCommand, Decantatio
 
   async execute(input: GetDecantationCommand, ctx: ExecutionContext): Promise<Result<Decantation>> {
     const found = await this.deps.decantations.findById(ctx.organizationId, input.decantationId);
-    if (!found || found.stationId !== input.stationId)
+    if (!found || (input.stationId && found.stationId !== input.stationId))
       return err(notFoundError('Decantation', input.decantationId));
     return ok(found);
   }
