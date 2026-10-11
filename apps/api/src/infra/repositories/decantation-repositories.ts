@@ -443,7 +443,7 @@ export function createDecantationMeasurement(
     decantations: new DrizzleDecantationRepository(tx),
     links: new DrizzleDecantationPurchaseRepository(tx),
     movements: new DrizzleStockMovementRepository(tx),
-    products: new DrizzleProductRepository(tx as never),
+    products: new DrizzleProductRepository(tx),
     sales: new DrizzleTankSalesReader(tx),
     events,
   });
