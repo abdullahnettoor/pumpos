@@ -55,7 +55,12 @@ const renderTab = (props: Record<string, unknown> = {}, seed: Seed = {}) => {
     status = 'OPEN',
     businessDayId = 'bd-1',
     snapshotData = { businessDayId },
-    decantationWarnings = { pendingMeasurement: [], purchaseNotLinked: [], flagged: [], unloading: [] },
+    decantationWarnings = {
+      pendingMeasurement: [],
+      purchaseNotLinked: [],
+      flagged: [],
+      unloading: [],
+    },
     activeShift = null,
     openBusinessDays = [{ businessDate: TODAY, id: businessDayId }],
     recentBusinessDays = openBusinessDays.map((d) => ({
@@ -283,9 +288,7 @@ describe('BusinessDayTab', () => {
       await waitFor(() => expect(screen.getByText(/Pending measurement.*DEC-1/i)).toBeDefined());
       expect(screen.getByText(/Purchase not linked.*DEC-1 \(Petrol\)/i)).toBeDefined();
       expect(screen.getByText(/Flagged: DEC-2/i)).toBeDefined();
-      expect(
-        screen.getByText(/Tanker still unloading — finish or discard: DEC-9/i),
-      ).toBeDefined();
+      expect(screen.getByText(/Tanker still unloading — finish or discard: DEC-9/i)).toBeDefined();
       expect(closeDayButton()!.disabled).toBe(false);
 
       fireEvent.click(closeDayButton()!);
