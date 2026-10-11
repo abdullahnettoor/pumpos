@@ -24,6 +24,7 @@ const feed = vi.hoisted(() => ({
   status: null as unknown,
   range: [] as unknown[],
   tanks: [] as unknown[],
+  decantations: [] as unknown[],
   customers: [] as unknown[],
   suppliers: [] as unknown[],
   alerts: [] as unknown[],
@@ -43,6 +44,7 @@ vi.mock('@pump/ui', async (importOriginal) => {
     useShiftStatus: () => q(feed.status),
     useMyAssignment: () => q(feed.assignment),
     useInventoryStatus: () => q(feed.tanks),
+    useDecantations: () => q(feed.decantations),
     useCustomers: () => q(feed.customers),
     useSuppliers: () => q(feed.suppliers),
   };

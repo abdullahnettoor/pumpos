@@ -133,7 +133,7 @@ export interface DecantationReportVisit {
   driverName: string | null;
   unloadStartedAt: string | null;
   unloadEndedAt: string | null;
-  status: 'DRAFT' | 'PENDING_MEASUREMENT' | 'MEASURED';
+  status: 'DRAFT' | 'PENDING_MEASUREMENT' | 'MEASURED' | 'DISCARDED';
   flags: DecantationReportFlag[];
   notes: string | null;
   chamberSummary: DecantationReportChamberSummary;

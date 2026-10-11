@@ -5,6 +5,7 @@ import { SalesByProduct } from '../components/SalesByProduct.js';
 import { comparisonView, type Comparison } from '../lib/home/sales.js';
 import { useNav } from '../shell/nav.js';
 import { SectionLabel } from '../ui/index.js';
+import { DecantationActions, DecantationCard } from './home/DecantationEntry.js';
 import { HandoverCard } from './home/HandoverCard.js';
 import { HomeAttention } from './home/HomeAttention.js';
 import { LiveShiftStrip } from './home/LiveShiftStrip.js';
@@ -47,6 +48,7 @@ export const HomeScreen: React.FC<Props> = ({ station }) => {
   return (
     <div className="pb-2">
       <HandoverCard />
+      <DecantationCard station={station} />
       <LiveShiftStrip shift={m.live} loading={m.shiftLoading} />
 
       <SectionLabel right={m.comparison ? <ComparisonNote c={m.comparison} /> : undefined}>
@@ -96,7 +98,7 @@ export const HomeScreen: React.FC<Props> = ({ station }) => {
 
       {m.tanks.length > 0 && (
         <>
-          <SectionLabel>Tanks</SectionLabel>
+          <SectionLabel right={<DecantationActions station={station} />}>Tanks</SectionLabel>
           <TankGauges tanks={m.tanks} />
         </>
       )}

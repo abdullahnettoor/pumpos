@@ -282,7 +282,7 @@ export class DrizzleDecantationRepository implements DecantationRepository {
           eq(schema.decantationTankLines.stationId, stationId),
           eq(schema.decantationTankLines.tankId, tankId),
           eq(schema.decantationTankLines.status, 'PENDING_MEASUREMENT'),
-          sql`${schema.decantations.status} <> 'DRAFT'`,
+          sql`${schema.decantations.status} NOT IN ('DRAFT', 'DISCARDED')`,
         ),
       );
     if (ids.length === 0) return [];
@@ -343,6 +343,7 @@ export class DrizzleDecantationRepository implements DecantationRepository {
     if (q.from) conds.push(gte(schema.businessDays.businessDate, q.from));
     if (q.to) conds.push(lte(schema.businessDays.businessDate, q.to));
     if (q.status) conds.push(eq(schema.decantations.status, q.status));
+    else conds.push(sql`${schema.decantations.status} <> 'DISCARDED'`);
     const rows = await this.db
       .select({ d: schema.decantations, businessDate: schema.businessDays.businessDate })
       .from(schema.decantations)
@@ -420,15 +421,22 @@ export class DrizzleDecantationRepository implements DecantationRepository {
         and(
           eq(schema.decantations.organizationId, organizationId),
           eq(schema.decantations.stationId, stationId),
-          sql`${schema.decantations.status} <> 'DRAFT'`,
           lte(schema.businessDays.businessDate, closeDay.businessDate),
+          sql`${schema.decantations.status} <> 'DISCARDED'`,
         ),
       );
 
     const pendingMeasurement = new Set<string>();
     const unlinkedByDocument = new Map<string, Set<string>>();
     const flagged = new Set<string>();
+    const unloading = new Set<string>();
     for (const row of rows) {
+      // A DRAFT is a tanker still unloading: warn once, and keep it out of the
+      // measurement / linking / flag lists (it has none of those yet).
+      if (row.status === 'DRAFT') {
+        unloading.add(row.documentNumber);
+        continue;
+      }
       if (row.status === 'PENDING_MEASUREMENT' || row.lineStatus === 'PENDING_MEASUREMENT')
         pendingMeasurement.add(row.documentNumber);
       if (row.productId && !row.linkedPurchaseId) {
@@ -452,9 +460,17 @@ export class DrizzleDecantationRepository implements DecantationRepository {
         }))
         .sort((a, b) => a.documentNumber.localeCompare(b.documentNumber)),
       flagged: [...flagged].sort(),
+      unloading: [...unloading].sort(),
     };
   }
 }
+
+/** Density readings of a discarded Decantation are history, not register data. */
+const notDiscardedReading = (organizationId: string) =>
+  sql`(${schema.densityReadings.decantationTankLineId} IS NULL OR ${schema.densityReadings.decantationTankLineId} NOT IN (
+    SELECT dtl.id FROM decantation_tank_lines dtl
+    JOIN decantations d ON d.id = dtl.decantation_id
+    WHERE d.status = 'DISCARDED' AND d.organization_id = ${organizationId}))`;
 
 export class DrizzleDensityReadingRepository implements DensityReadingRepository {
   constructor(private readonly db: DbExecutor) {}
@@ -531,6 +547,7 @@ export class DrizzleDensityReadingRepository implements DensityReadingRepository
       eq(schema.densityReadings.organizationId, organizationId),
       eq(schema.densityReadings.stationId, stationId),
       eq(schema.densityReadings.productId, productId),
+      notDiscardedReading(organizationId),
     ];
     if (before) {
       // Register order is (business_date, recorded_at): the predecessor is the newest
@@ -579,6 +596,7 @@ export class DrizzleDensityReadingRepository implements DensityReadingRepository
           eq(schema.densityReadings.stationId, stationId),
           eq(schema.densityReadings.productId, productId),
           eq(schema.densityReadings.kind, 'DECANTATION'),
+          notDiscardedReading(organizationId),
           gte(schema.densityReadings.recordedAt, after),
           lte(schema.densityReadings.recordedAt, before),
         ),
@@ -599,6 +617,7 @@ export class DrizzleDensityReadingRepository implements DensityReadingRepository
         and(
           eq(schema.decantations.organizationId, organizationId),
           eq(schema.decantations.stationId, stationId),
+          sql`${schema.decantations.status} <> 'DISCARDED'`,
           eq(schema.decantationTankLines.productId, productId),
           gte(schema.decantations.createdAt, after),
           lte(schema.decantations.createdAt, before),
@@ -626,6 +645,7 @@ export class DrizzleDensityReadingRepository implements DensityReadingRepository
     if (query.kind) {
       conditions.push(eq(schema.densityReadings.kind, query.kind));
     }
+    conditions.push(notDiscardedReading(query.organizationId));
 
     const rows = await this.db
       .select({
@@ -760,6 +780,7 @@ export class DrizzleDecantationPurchaseRepository implements DecantationPurchase
           eq(schema.decantationPurchases.organizationId, organizationId),
           eq(schema.decantationPurchases.purchaseId, purchaseId),
           eq(schema.decantationPurchases.productId, productId),
+          sql`${schema.decantationPurchases.decantationId} NOT IN (SELECT id FROM decantations WHERE status = 'DISCARDED' AND organization_id = ${organizationId})`,
         ),
       );
     return rows.map((r) => this.toLink(r));
@@ -930,6 +951,7 @@ export class DrizzleDecantationLinkRepository implements DecantationLinkReposito
       FROM decantation_purchases dp
       JOIN purchases p ON p.id = dp.purchase_id
         AND p.organization_id = dp.organization_id AND p.station_id = dp.station_id
+      JOIN decantations dd ON dd.id = dp.decantation_id AND dd.status <> 'DISCARDED'
       LEFT JOIN suppliers s ON s.id = p.supplier_id AND s.organization_id = dp.organization_id
       WHERE dp.organization_id = ${organizationId}
         AND dp.decantation_id IN (${sql.join(
@@ -977,6 +999,7 @@ export class DrizzleDecantationLinkRepository implements DecantationLinkReposito
         SUM(pi.quantity) AS invoice_qty,
         SUM(pi.quantity * pi.invoice_density) / NULLIF(SUM(pi.quantity) FILTER (WHERE pi.invoice_density IS NOT NULL), 0) AS invoice_density,
         (SELECT COUNT(*)::int FROM decantation_purchases dp
+          JOIN decantations dd ON dd.id = dp.decantation_id AND dd.status <> 'DISCARDED'
           WHERE dp.purchase_id = p.id AND dp.organization_id = p.organization_id) AS linked_count
       FROM purchases p
       JOIN purchase_items pi ON pi.purchase_id = p.id AND pi.product_id = ${productId}

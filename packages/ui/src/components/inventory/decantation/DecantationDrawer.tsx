@@ -5,15 +5,17 @@ import { Drawer } from '../../Drawer.js';
 import { Button, Chip } from '../../../pump-ds/index.js';
 import { useToast } from '../../primitives/ToastProvider.js';
 import { useZodForm } from '../../../forms/useZodForm.js';
-import { createIdempotencyKey } from '../../../query/handoverMutation.js';
 import { keepsIdempotencyKey } from '../../../utils/idempotency.js';
+import { keyForBody, newSaveKey, resetSaveKey } from '../../../utils/saveKey.js';
 import {
   useBusinessDayStatus,
+  useDiscardDecantation,
   useInventoryStatus,
   useLinkablePurchases,
   useRecordDecantation,
   useUnlinkDecantationPurchase,
 } from '../../../query/hooks.js';
+import { DiscardDraftButton } from './DiscardDraftButton.js';
 import { StepSection } from './StepSection.js';
 import { AfterStep, AfterSummary } from './AfterStep.js';
 import { ChambersStep, ChambersSummary } from './ChambersStep.js';
@@ -202,7 +204,7 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
   const [done, setDone] = useState<Set<number>>(() => new Set(editing ? [0, 1, 2, 3, 4] : []));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const keyRef = useRef(createIdempotencyKey());
+  const keyRef = useRef(newSaveKey());
 
   const next = (i: number) => {
     setDone((s) => new Set(s).add(i));
@@ -213,25 +215,16 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
     form.handleSubmit(
       async (vals) => {
         if (submitting || !stationId) return;
-        // A Tank Line needs its before dip even in a draft (the column is required): say so
-        // on the field and never send the line, so the server cannot answer 400.
-        const missing = vals.lines.findIndex((l) => l.beforeDip.trim() === '');
-        if (missing >= 0) {
-          form.setError(`lines.${missing}.beforeDip`, {
-            message: 'Enter the before dip (a tank line needs it even in a draft)',
-          });
-          setOpen(1);
-          return;
-        }
         try {
           setSubmitting(true);
           setError(null);
+          const body = buildSaveBody(vals, ctx, { draft });
           const result = await record.mutateAsync({
-            body: buildSaveBody(vals, ctx, { draft }),
+            body,
             ...(decantation ? { decantationId: decantation.id } : {}),
-            idempotencyKey: keyRef.current,
+            idempotencyKey: keyForBody(keyRef.current, body),
           });
-          keyRef.current = createIdempotencyKey();
+          resetSaveKey(keyRef.current);
           const hasFlags = (result?.decantation?.flags?.length ?? 0) > 0 || flagged;
           toast.success(
             draft
@@ -244,7 +237,7 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
           onClose();
         } catch (err: any) {
           // Unknown outcome keeps the key so a retry cannot record the visit twice.
-          if (!keepsIdempotencyKey(err)) keyRef.current = createIdempotencyKey();
+          if (!keepsIdempotencyKey(err)) resetSaveKey(keyRef.current);
           setError(err?.message || 'Failed to save the Decantation');
         } finally {
           setSubmitting(false);
@@ -288,6 +281,19 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
     <ReviewStep key="b5" {...stepProps} />,
   ];
 
+  const discard = useDiscardDecantation(stationId);
+  const discardDraft = async () => {
+    if (!decantation) return;
+    try {
+      setError(null);
+      await discard.mutateAsync({ decantationId: decantation.id });
+      toast.success('Draft discarded.');
+      onClose();
+    } catch (err: any) {
+      setError(err?.message || 'Could not discard the draft');
+    }
+  };
+
   const footer = (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%' }}>
       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
@@ -300,6 +306,12 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
         </Chip>
       )}
       <span style={{ flex: 1 }} />
+      {decantation?.status === 'DRAFT' && (
+        <DiscardDraftButton
+          busy={submitting || discard.isPending}
+          onConfirm={() => void discardDraft()}
+        />
+      )}
       <Button variant="ghost" size="sm" onClick={onClose}>
         Cancel
       </Button>

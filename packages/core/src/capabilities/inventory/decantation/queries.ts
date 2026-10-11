@@ -40,7 +40,7 @@ export const listDecantationsSchema = z.object({
   stationId: z.string().min(1, 'stationId is required'),
   from: date.optional(),
   to: date.optional(),
-  status: z.enum(['DRAFT', 'PENDING_MEASUREMENT', 'MEASURED']).optional(),
+  status: z.enum(['DRAFT', 'PENDING_MEASUREMENT', 'MEASURED', 'DISCARDED']).optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
 });
 

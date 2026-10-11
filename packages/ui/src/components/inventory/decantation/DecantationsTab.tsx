@@ -32,6 +32,7 @@ const STATUS: Record<
   DRAFT: { label: 'Draft', tone: 'neutral' },
   PENDING_MEASUREMENT: { label: 'Pending measurement', tone: 'info' },
   MEASURED: { label: 'Measured', tone: 'success' },
+  DISCARDED: { label: 'Discarded', tone: 'neutral' },
 };
 
 const FLAG_LABEL: Record<string, string> = {

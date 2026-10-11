@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, inArray, lte } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import type {
   DecantationChamberSourceRow,
@@ -40,6 +40,7 @@ export class DrizzleDecantationReportReader implements DecantationReportReader {
       eq(schema.decantations.stationId, query.stationId),
       gte(schema.businessDays.businessDate, query.from),
       lte(schema.businessDays.businessDate, query.to),
+      sql`${schema.decantations.status} <> 'DISCARDED'`,
     ];
 
     const decRows = await this.db

@@ -1945,7 +1945,7 @@ transactionsRouter.get('/purchases', async (c) => {
           JOIN products pr ON pr.id = pi.product_id
           WHERE pi.purchase_id = ${schema.purchases.id} AND pr.product_type = 'FUEL'
         )
-        AND NOT EXISTS (SELECT 1 FROM decantation_purchases dp WHERE dp.purchase_id = ${schema.purchases.id})
+        AND NOT EXISTS (SELECT 1 FROM decantation_purchases dp JOIN decantations dd ON dd.id = dp.decantation_id WHERE dp.purchase_id = ${schema.purchases.id} AND dd.status <> 'DISCARDED')
       )`,
       supplierName: schema.suppliers.name,
       // Comma-joined distinct product names on the invoice — a quick "what was
@@ -3093,7 +3093,7 @@ transactionsRouter.get('/inventory/status', async (c) => {
           AND d.organization_id = ${user.organizationId}
           AND d.station_id = ${stationId}
           AND dtl.status = 'PENDING_MEASUREMENT'
-          AND d.status <> 'DRAFT'
+          AND d.status NOT IN ('DRAFT', 'DISCARDED')
       )`,
     })
     .from(schema.tanks)

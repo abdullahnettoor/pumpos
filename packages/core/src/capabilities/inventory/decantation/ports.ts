@@ -21,7 +21,7 @@ export type {
 export type { DecantationFlag, DecantationWarning, DecantationFlagCode };
 
 /** DRAFT and PENDING_MEASUREMENT are set here; MEASURED is set by measurement (#468). */
-export type DecantationStatus = 'DRAFT' | 'PENDING_MEASUREMENT' | 'MEASURED';
+export type DecantationStatus = 'DRAFT' | 'PENDING_MEASUREMENT' | 'MEASURED' | 'DISCARDED';
 export type DecantationLineStatus = 'PENDING_MEASUREMENT' | 'MEASURED';
 export type ChamberMark = 'OK' | 'SHORT' | 'EXCESS';
 
@@ -102,6 +102,8 @@ export interface DecantationDayCloseWarnings {
   pendingMeasurement: string[];
   purchaseNotLinked: DecantationPurchaseWarning[];
   flagged: string[];
+  /** DRAFT Decantations: a tanker still unloading (finish or discard). */
+  unloading: string[];
 }
 
 export interface DecantationRepository {
@@ -114,7 +116,7 @@ export interface DecantationRepository {
    */
   replace(decantation: Decantation): Promise<void>;
   list(query: DecantationListQuery): Promise<Decantation[]>;
-  /** Non-draft warnings through the selected Business Date, with flags for that day only. */
+  /** Warnings (drafts as `unloading`) through the selected Business Date, with flags for that day only. */
   getDayCloseWarnings(input: {
     organizationId: string;
     stationId: string;

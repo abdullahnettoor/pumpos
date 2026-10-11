@@ -83,13 +83,19 @@ export const ChambersStep: React.FC<StepProps> = ({ form, values, tanks, flags }
                             height: 8,
                             borderRadius: 4,
                             flexShrink: 0,
-                            background: LINE_COLORS[(c?.lineIndex ?? 0) % LINE_COLORS.length],
+                            background:
+                              c?.lineIndex == null
+                                ? 'var(--border-strong, #cbd5e1)'
+                                : LINE_COLORS[c.lineIndex % LINE_COLORS.length],
                           }}
                         />
                         <Select
                           aria-label={`Chamber ${i + 1} into tank`}
-                          {...register(`chambers.${i}.lineIndex`, { valueAsNumber: true })}
+                          {...register(`chambers.${i}.lineIndex`, {
+                            setValueAs: (x) => (x === '' || x == null ? null : Number(x)),
+                          })}
                         >
+                          <option value="">Not assigned</option>
                           {values.lines.map((l, j) => (
                             <option key={j} value={j}>
                               {lineLabel(tanks, l.tankId, j)}
@@ -210,7 +216,9 @@ export const ChambersSummary: React.FC<StepProps> = ({ values, tanks }) =>
           }
         >
           #{i + 1} {c.capacity ? fmtLitres(Number(c.capacity)) : '—'} →{' '}
-          {lineLabel(tanks, values.lines[c.lineIndex]?.tankId ?? '', c.lineIndex)}
+          {c.lineIndex == null
+            ? 'not assigned'
+            : lineLabel(tanks, values.lines[c.lineIndex]?.tankId ?? '', c.lineIndex)}
           {c.mark ? ` · ${c.mark.toLowerCase()}` : ''}
           {!c.sealOk ? ' · seal broken' : ''}
           {c.emptied ? ' · emptied' : ''}

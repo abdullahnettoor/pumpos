@@ -163,6 +163,12 @@ export const WRITE_POLICY_DECLARATIONS: WritePolicyRegistry = declareWritePolici
     rationale: 'The after dip and chamber checks complete a decantation already in progress.',
   },
   {
+    operation: 'POST /transactions/decantations/:id/discard',
+    restricted: 'FINISH_OPEN_WORK',
+    rationale:
+      'Clearing a draft for a tanker that never unloaded removes a stuck day-close warning.',
+  },
+  {
     operation: 'PUT /transactions/decantations/:id/purchases',
     restricted: 'FINISH_OPEN_WORK',
     rationale: 'Linking the invoice completes a tanker that has already been unloaded.',

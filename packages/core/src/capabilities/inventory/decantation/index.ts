@@ -1,6 +1,7 @@
 export * from './ports.js';
 export * from './record-decantation.js';
 export * from './queries.js';
+export * from './discard-decantation.js';
 export * from './measurement.js';
 export * from './linking.js';
 export * from './record-density-reading.js';

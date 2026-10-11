@@ -49,7 +49,7 @@ export interface DecantationSourceRow {
   unloadStartedAt: string | null;
   unloadEndedAt: string | null;
   chambersChecked: boolean;
-  status: 'DRAFT' | 'PENDING_MEASUREMENT' | 'MEASURED';
+  status: 'DRAFT' | 'PENDING_MEASUREMENT' | 'MEASURED' | 'DISCARDED';
   flags: DecantationReportFlag[];
   notes: string | null;
   createdAt: string;

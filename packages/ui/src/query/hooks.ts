@@ -1464,6 +1464,18 @@ export function useLinkDecantationPurchase(stationId: string | null | undefined)
   });
 }
 
+/** Discard a DRAFT Decantation; refreshes in the background (never awaited). */
+export function useDiscardDecantation(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: { decantationId: string }) =>
+      txService.discardDecantation(vars.decantationId),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
+}
+
 export function useUnlinkDecantationPurchase(stationId: string | null | undefined) {
   const invalidate = useInvalidateOperational();
   return useMutation({
