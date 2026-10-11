@@ -5,12 +5,16 @@ import {
   canManageProduct,
   canManageInfrastructure,
   canManageReportTemplates,
+  DECANTATION_SETTINGS_KEY_SET,
+  decantationSettingsSchema,
+  DECANTATION_SETTINGS_KEYS,
   canManageStaff,
   isManageableByManager,
   isAuthorizedForStation,
   normalizeIndianMobile,
   phoneToAuthEmail,
   stationSchema,
+  resolveDecantationSettings,
   userSchema,
   userUpdateSchema,
   fuelPriceSchema,
@@ -53,7 +57,11 @@ import { rateLimit } from '../infra/rate-limit.js';
 import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
 import { DrizzleStationCapacityPort } from '../infra/repositories/organization-access.repo.js';
 import { sendResult } from '../infra/send-result.js';
-import { stationNotFound, stationExistsInOrg } from '../infra/station-clock.js';
+import {
+  loadStationDecantationSettings,
+  stationNotFound,
+  stationExistsInOrg,
+} from '../infra/station-clock.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
 import {
   DrizzleStationRepository,
@@ -119,7 +127,37 @@ stationSetupRouter.get('/stations', async (c) => {
   const visible = all.filter((s) =>
     isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: s.id }),
   );
-  return c.json({ success: true, data: visible });
+  const data = visible.map((station) => ({
+    ...station,
+    settings: {
+      ...station.settings,
+      ...resolveDecantationSettings(station.settings),
+    },
+  }));
+  return c.json({
+    success: true,
+    data,
+  });
+});
+
+// GET /api/setup/stations/:id/decantation-settings
+stationSetupRouter.get('/stations/:id/decantation-settings', async (c) => {
+  const stationId = c.req.param('id');
+  if (
+    !isAuthorizedForStation(c.var.user, { organizationId: c.var.user.organizationId, stationId })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
+  }
+  const settings = await loadStationDecantationSettings(
+    c.var.db,
+    c.var.user.organizationId,
+    stationId,
+  );
+  if (!settings) return stationNotFound(c);
+  return c.json({ success: true, data: settings });
 });
 
 // POST /api/setup/stations
@@ -171,6 +209,40 @@ stationSetupRouter.put(
       );
     }
     const body = c.req.valid('json');
+    const submittedSettings = body.settings as Record<string, unknown> | undefined;
+    const updatesDecantationSettings =
+      !!submittedSettings &&
+      Object.keys(submittedSettings).some((key) => DECANTATION_SETTINGS_KEY_SET.has(key));
+    if (updatesDecantationSettings) {
+      if (!['Owner', 'Manager'].includes(user.role)) {
+        return c.json(
+          {
+            success: false,
+            error: {
+              code: 'FORBIDDEN',
+              message: 'Only an Owner or Manager can change Decantation settings',
+            },
+          },
+          403,
+        );
+      }
+      const decantationValues = Object.fromEntries(
+        DECANTATION_SETTINGS_KEYS.filter((key) => key in submittedSettings).map((key) => [
+          key,
+          submittedSettings[key],
+        ]),
+      );
+      const parsed = decantationSettingsSchema.safeParse(decantationValues);
+      if (!parsed.success) {
+        return c.json(
+          {
+            success: false,
+            error: { code: 'VALIDATION_ERROR', message: 'Invalid Decantation settings' },
+          },
+          400,
+        );
+      }
+    }
     // Report templates decide what prints for everyone (#332): only Owner and
     // Manager may change `settings.report_config`. Write access already implies
     // one of those roles today; this keeps the rule if write access widens.

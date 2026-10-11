@@ -1,8 +1,29 @@
 import { and, eq } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { businessDateSettings } from '@pump/shared';
+import {
+  businessDateSettings,
+  resolveDecantationSettings,
+  type DecantationSettings,
+} from '@pump/shared';
 
 export type StationClock = { timeZone: string; businessDayStartsAt: string };
+
+/** Load a station's decantation guidance settings using the org-scoped station lookup. */
+export async function loadStationDecantationSettings(
+  db: DbClient,
+  organizationId: string,
+  stationId: string,
+): Promise<DecantationSettings | null> {
+  const [row] = await db
+    .select({ settings: schema.stations.settings })
+    .from(schema.stations)
+    .where(
+      and(eq(schema.stations.id, stationId), eq(schema.stations.organizationId, organizationId)),
+    )
+    .limit(1);
+  if (!row) return null;
+  return resolveDecantationSettings(row.settings);
+}
 
 /** The platform defaults (Asia/Kolkata / 00:00) for routes without a station. */
 export function defaultStationClock(): StationClock {
