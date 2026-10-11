@@ -24,6 +24,8 @@ interface Props {
   onPress?: () => void;
   /** Show the chevron on a row that has `onPress` (default true). */
   chevron?: boolean;
+  /** Let `meta` wrap onto further lines instead of cutting it with an ellipsis. */
+  wrapMeta?: boolean;
 }
 
 /** One row of a `ListGroup`: leading, title + meta, end, chevron when it opens something. */
@@ -34,13 +36,18 @@ export const ListRow: React.FC<Props> = ({
   end,
   onPress,
   chevron = true,
+  wrapMeta,
 }) => {
   const content = (
     <>
       {leading}
       <div className="min-w-0 flex-1 text-left">
         <div className="truncate text-[13px] font-semibold text-text-high">{title}</div>
-        {meta && <div className="truncate text-[11px] text-text-muted">{meta}</div>}
+        {meta && (
+          <div className={`text-[11px] text-text-muted ${wrapMeta ? 'break-words' : 'truncate'}`}>
+            {meta}
+          </div>
+        )}
       </div>
       {end && (
         <div className="flex-shrink-0 text-right text-[13.5px] font-semibold text-text-high">

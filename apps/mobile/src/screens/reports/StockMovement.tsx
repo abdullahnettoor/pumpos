@@ -9,10 +9,15 @@ export const StockMovement: React.FC<{ tanks: readonly TankMovementRow[] }> = ({
       <ListRow
         key={t.key}
         title={t.title}
+        wrapMeta
         meta={
           <span className="num">
             <span className="block">{t.movement}</span>
-            {t.detail && <span className="block">{t.detail}</span>}
+            {t.detail.map((line) => (
+              <span key={line} className="block">
+                {line}
+              </span>
+            ))}
           </span>
         }
         end={
