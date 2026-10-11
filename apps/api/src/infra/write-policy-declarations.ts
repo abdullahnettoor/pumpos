@@ -147,6 +147,16 @@ export const WRITE_POLICY_DECLARATIONS: WritePolicyRegistry = declareWritePolici
     rationale: 'A tanker that has already been decanted must be recorded, or stock is wrong.',
   },
   {
+    operation: 'POST /transactions/decantations',
+    restricted: 'FINISH_OPEN_WORK',
+    rationale: 'A tanker that has already been unloaded must be recorded, or stock is wrong.',
+  },
+  {
+    operation: 'PUT /transactions/decantations/:id',
+    restricted: 'FINISH_OPEN_WORK',
+    rationale: 'The after dip and chamber checks complete a decantation already in progress.',
+  },
+  {
     operation: 'POST /transactions/supplier-payments',
     restricted: 'FINISH_OPEN_WORK',
     rationale: 'Cash paid to a supplier leaves the drawer whether or not PumpOS records it.',

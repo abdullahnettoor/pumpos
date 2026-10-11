@@ -86,6 +86,11 @@ export async function clearDemoData(
   const salesOf = sql`(select id from sales where shift_id in ${shiftsOf} or business_day_id in ${daysOf})`;
   const purchasesOf = sql`(select id from purchases where shift_id in ${shiftsOf} or business_day_id in ${daysOf} or supplier_id in (select id from suppliers where organization_id = ${id}))`;
   const statements = [
+    sql`delete from density_readings where organization_id = ${id}`,
+    sql`delete from decantation_purchases where organization_id = ${id}`,
+    sql`delete from decantation_chambers where organization_id = ${id}`,
+    sql`delete from decantation_tank_lines where organization_id = ${id}`,
+    sql`delete from decantations where organization_id = ${id}`,
     sql`delete from handover_terminal_entries where organization_id = ${id} or handover_id in (select id from attendant_handovers where organization_id = ${id})`,
     sql`delete from attendant_handovers where organization_id = ${id}`,
     sql`delete from shift_summaries where shift_id in ${shiftsOf}`,

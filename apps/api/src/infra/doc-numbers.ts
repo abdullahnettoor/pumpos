@@ -6,6 +6,7 @@ const PREFIXES: Record<string, string> = {
   PURCHASE: 'PUR',
   EXPENSE: 'EXP',
   PAYMENT: 'PAY',
+  DECANTATION: 'DEC',
 };
 
 /**
