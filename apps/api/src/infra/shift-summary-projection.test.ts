@@ -241,9 +241,16 @@ describe('projectShiftSummary', () => {
         {
           ho_rows: [handover('h1', '100', '40'), handover('h2', '60', '0')],
           credit_rows: [{ id: 'c1', amount: '250', customerId: 'cu1' }],
+          omc_card_total: 2000,
         },
       );
-      expect(out.payments).toEqual({ cash: 3000, upi: 160, card: 40, credit: 250 });
+      // OMC Card Sales settle to the OMC Wallet: their own bucket, so the split adds up to sales.
+      expect(out.payments).toEqual({ cash: 3000, upi: 160, card: 40, credit: 250, omcCard: 2000 });
+    });
+
+    it('carries a zero OMC card bucket for a Shift without OMC Card Sales', async () => {
+      const out = await project(populated, closeSnapshot, {});
+      expect((out.payments as { omcCard: number }).omcCard).toBe(0);
     });
 
     it('names the Dispenser Unit on each reading', async () => {

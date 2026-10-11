@@ -115,7 +115,7 @@ export function deriveTankMovement(snap: Snapshot): TankMovementRow[] {
         : null;
 
     let movement: string;
-    let detail: string[] = [];
+    let detail: string[];
     if (m) {
       movement = `Opening ${litres(num(m.openingQuantity))} → Closing ${litres(num(m.closingQuantity))} ${unit}`;
       detail = [
