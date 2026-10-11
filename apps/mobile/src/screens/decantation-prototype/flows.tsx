@@ -104,7 +104,7 @@ const statusOf = (api: VisitApi, i: number): StepStatus => {
     v.lines.every((l) => l.before && l.density),
     v.checkChambers ? v.chambers.every((c) => c.mark) : true,
     !!(v.start && v.end),
-    v.lines.every((l) => !l.afterDip || l.after),
+    !!v.end && v.lines.every((l) => !l.afterDip || l.after),
   ][i];
   if (
     (i === 1 && api.d.lines.some((l) => l.densityOut)) ||
