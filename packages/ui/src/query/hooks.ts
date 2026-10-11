@@ -2,6 +2,7 @@ import {
   useQueryClient,
   useQuery,
   useInfiniteQuery,
+  useMutation,
   useQueries,
   type UseQueryOptions,
 } from '@tanstack/react-query';
@@ -24,7 +25,11 @@ import {
   CloudDesktopDownloadsService,
   type DecantationDayCloseWarnings,
 } from '../services/cloud.js';
-import type { DensityTodaySummary, DensityReadingWithContext } from '@pump/shared';
+import type {
+  DensityTodaySummary,
+  DensityReadingWithContext,
+  SaveDecantationBody,
+} from '@pump/shared';
 import type {
   BusinessDayStatusResponse,
   DailyCashBook,
@@ -1387,6 +1392,60 @@ export function useInvalidateOperational() {
     }
     return Promise.all(invalidations).then(() => undefined);
   };
+}
+
+/**
+ * Decantation writes (ADR 0007, #469). The write response drives the UI; the
+ * operational caches refresh in the background (never awaited), so a slow
+ * refetch cannot delay closing a drawer or showing success.
+ */
+export function useRecordDecantation(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: {
+      body: SaveDecantationBody;
+      decantationId?: string;
+      idempotencyKey?: string;
+    }) =>
+      txService.saveDecantation(vars.body, {
+        decantationId: vars.decantationId,
+        idempotencyKey: vars.idempotencyKey,
+      }),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
+}
+
+export function useLinkDecantationPurchase(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: {
+      decantationId: string;
+      productId: string;
+      purchaseId: string;
+      idempotencyKey?: string;
+    }) =>
+      txService.linkDecantationPurchase(
+        vars.decantationId,
+        { productId: vars.productId, purchaseId: vars.purchaseId },
+        { idempotencyKey: vars.idempotencyKey },
+      ),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
+}
+
+export function useUnlinkDecantationPurchase(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: { decantationId: string; productId: string }) =>
+      txService.unlinkDecantationPurchase(vars.decantationId, vars.productId),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
 }
 
 export function useDensityTodaySummary(

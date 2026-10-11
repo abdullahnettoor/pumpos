@@ -224,7 +224,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
                   key={d.productName}
                   size="xs"
                   variant="soft"
-                  tone={Math.abs(d.diff) > settings.densityToleranceKgM3 ? 'danger' : 'success'}
+                  tone={d.outOfTolerance ? 'danger' : 'success'}
                 >
                   {d.productName} · {d.diff > 0 ? '+' : ''}
                   {d.diff} kg/m³
@@ -284,7 +284,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
         },
       },
     ],
-    [settings.densityToleranceKgM3],
+    [],
   );
 
   return (

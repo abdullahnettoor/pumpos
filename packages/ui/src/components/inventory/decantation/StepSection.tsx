@@ -9,6 +9,8 @@ export interface StepSectionProps {
   /** Compact card of the recorded values, shown once the step is finished and collapsed. */
   summary: React.ReactNode;
   onOpen: () => void;
+  /** Sealed-day record: shown as a card only, never opened for edit. */
+  readOnly?: boolean;
   children: React.ReactNode;
 }
 
@@ -23,6 +25,7 @@ export const StepSection: React.FC<StepSectionProps> = ({
   done,
   summary,
   onOpen,
+  readOnly = false,
   children,
 }) => (
   <section
@@ -37,8 +40,9 @@ export const StepSection: React.FC<StepSectionProps> = ({
   >
     <button
       type="button"
-      onClick={onOpen}
+      onClick={readOnly ? undefined : onOpen}
       aria-expanded={open}
+      disabled={readOnly}
       style={{
         width: '100%',
         display: 'flex',
@@ -47,7 +51,7 @@ export const StepSection: React.FC<StepSectionProps> = ({
         padding: '10px 12px',
         background: open ? 'var(--bg-surface-alt)' : 'transparent',
         border: 0,
-        cursor: 'pointer',
+        cursor: readOnly ? 'default' : 'pointer',
         textAlign: 'left',
         color: 'var(--text-strong)',
       }}
@@ -81,7 +85,11 @@ export const StepSection: React.FC<StepSectionProps> = ({
       </span>
       <span style={{ fontWeight: 600, fontSize: 13 }}>{title}</span>
       <span style={{ flex: 1 }} />
-      {done && !open && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Edit</span>}
+      {done && !open && (
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+          {readOnly ? 'Sealed' : 'Edit'}
+        </span>
+      )}
     </button>
     {open ? (
       <div style={{ padding: '4px 12px 12px' }}>{children}</div>
@@ -89,9 +97,9 @@ export const StepSection: React.FC<StepSectionProps> = ({
       <div
         style={{
           padding: '2px 12px 10px 44px',
-          cursor: 'pointer',
+          cursor: readOnly ? 'default' : 'pointer',
         }}
-        onClick={onOpen}
+        onClick={readOnly ? undefined : onOpen}
       >
         {summary}
       </div>

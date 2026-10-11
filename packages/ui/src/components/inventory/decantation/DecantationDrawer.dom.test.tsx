@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { renderWithProviders } from '../../../test/renderWithProviders.js';
 
 const saveDecantation = vi.fn();
-const invalidateOperational = vi.fn(async () => {});
+let dayState: 'OPEN' | 'CLOSED' = 'OPEN';
 
 vi.mock('../../../services/cloud.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -36,7 +36,7 @@ vi.mock('../../../query/hooks.js', async (importOriginal) => ({
   useInventoryStatus: () => ({ data: tanks }),
   useLinkablePurchases: (_s: string, ids: string[]) =>
     ids.map((id) => ({ data: id === 'p-hsd' ? [purchase] : [], isLoading: false })),
-  useInvalidateOperational: () => invalidateOperational,
+  useBusinessDayStatus: () => ({ data: { requestedState: dayState } }),
 }));
 
 const { DecantationDrawer } = await import('./DecantationDrawer.js');
@@ -67,7 +67,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-11T04:00:00.000Z'));
   saveDecantation.mockReset();
-  invalidateOperational.mockClear();
+  dayState = 'OPEN';
   onClose.mockReset();
   saveDecantation.mockResolvedValue({ decantation: { flags: [] }, warnings: [] });
 });
@@ -131,8 +131,6 @@ describe('DecantationDrawer save', () => {
     expect(body).not.toHaveProperty('draft');
     expect(body).not.toHaveProperty('links');
     expect(opts.idempotencyKey).toEqual(expect.any(String));
-    // Operational write: refreshes decantations, purchases and the station's inventory status.
-    expect(invalidateOperational).toHaveBeenCalledWith('st-1');
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -163,8 +161,29 @@ describe('DecantationDrawer save', () => {
     type('Tanker no.', 'KL-07-CB-4412');
     click('Continue to Tanks');
     fireEvent.change(screen.getByLabelText('Tank, line 1'), { target: { value: 't-hsd' } });
+    type('Before dip, line 1', '4000');
     await save('Save as draft');
     expect(saveDecantation.mock.calls[0][0]).toMatchObject({ draft: true });
+  });
+
+  it('never sends a draft line without a before dip: says so on the field instead', async () => {
+    open();
+    type('Tanker no.', 'KL-07-CB-4412');
+    click('Continue to Tanks');
+    fireEvent.change(screen.getByLabelText('Tank, line 1'), { target: { value: 't-hsd' } });
+    await save('Save as draft');
+    expect(saveDecantation).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/Enter the before dip \(a tank line needs it even in a draft\)/),
+    ).toBeTruthy();
+  });
+
+  it('names the missing tank on the field even for a draft', async () => {
+    open();
+    type('Tanker no.', 'KL-07-CB-4412');
+    await save('Save as draft');
+    expect(saveDecantation).not.toHaveBeenCalled();
+    expect(screen.getByText(/Choose the tank/)).toBeTruthy();
   });
 
   it('asks for the before dip on a full save and opens the Tanks step', async () => {
@@ -175,7 +194,7 @@ describe('DecantationDrawer save', () => {
     click('Continue to Tanker chambers');
     await save('Save Decantation');
     expect(saveDecantation).not.toHaveBeenCalled();
-    expect(screen.getByText('Enter the before dip')).toBeTruthy();
+    expect(screen.getByText(/Enter the before dip/)).toBeTruthy();
   });
 
   it('keeps the drawer open and shows the refusal when the save fails', async () => {
@@ -202,5 +221,64 @@ describe('DecantationDrawer save', () => {
       salesDuring: 50,
       afterDipAt: '2026-10-11T09:40:00.000Z',
     });
+  });
+});
+
+describe('DecantationDrawer on a sealed business day', () => {
+  const decantation: any = {
+    id: 'd-1',
+    stationId: 'st-1',
+    businessDayId: 'bd-1',
+    businessDate: '2026-10-09',
+    documentNumber: 'DEC-1',
+    tankerNumber: 'KL-07-CB-4412',
+    driverName: null,
+    unloadStartedAt: null,
+    unloadEndedAt: null,
+    chambersChecked: false,
+    status: 'PENDING_MEASUREMENT',
+    flags: [],
+    notes: null,
+    createdAt: '2026-10-09T05:00:00.000Z',
+    updatedAt: '2026-10-09T05:00:00.000Z',
+    chambers: [],
+    links: [],
+    lines: [
+      {
+        id: 'l-1',
+        tankId: 't-hsd',
+        productId: 'p-hsd',
+        beforeDip: 4000,
+        beforeDipAt: null,
+        observedDensity: null,
+        observedTempC: null,
+        roDensity: null,
+        afterDip: null,
+        afterDipAt: null,
+        salesDuring: 0,
+        receivedQty: null,
+        status: 'PENDING_MEASUREMENT',
+      },
+    ],
+  };
+
+  it('opens only the After unloading step for edit, with a note, and surfaces server errors', async () => {
+    dayState = 'CLOSED';
+    saveDecantation.mockRejectedValue(
+      new Error('Business day is closed; only an after dip can be added'),
+    );
+    renderWithProviders(
+      <DecantationDrawer isOpen station={station} decantation={decantation} onClose={onClose} />,
+    );
+    expect(screen.getByRole('note').textContent).toContain('closed');
+    // Other steps are read-only cards: their headers cannot be opened.
+    expect((header('Tanker & invoices') as HTMLButtonElement).disabled).toBe(true);
+    expect((header('Tanks') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Save as draft' })).toBeNull();
+    fireEvent.click(screen.getByLabelText('Measure line 1 now'));
+    type('After dip, line 1', '9000');
+    await save('Save after dip');
+    expect(saveDecantation.mock.calls[0][1]).toMatchObject({ decantationId: 'd-1' });
+    expect(screen.getByRole('alert').textContent).toContain('only an after dip');
   });
 });

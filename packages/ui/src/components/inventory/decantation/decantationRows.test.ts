@@ -69,6 +69,7 @@ describe('toDecantationRow', () => {
     const r = toDecantationRow(
       visit({
         status: 'MEASURED',
+        flags: [{ code: 'DENSITY_OUT_OF_TOLERANCE', tankLineId: 'a', message: 'off' }],
         lines: [
           line({
             id: 'a',
@@ -128,7 +129,7 @@ describe('toDecantationRow', () => {
       { productName: 'MS', kind: 'OK', qty: 0, outOfTolerance: false },
     ]);
     expect(r.density).toEqual([
-      { productName: 'HSD', diff: 4, invoiceDensity: 830, roDensity: 834 },
+      { productName: 'HSD', diff: 4, invoiceDensity: 830, roDensity: 834, outOfTolerance: true },
     ]);
     expect(r.unlinked).toEqual([]);
   });

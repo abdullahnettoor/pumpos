@@ -181,7 +181,7 @@ export const decantationFormSchema = z.object({
     .array(
       z.object({
         id: z.string().optional(),
-        tankId: z.string().min(1, 'Choose the tank'),
+        tankId: z.string().min(1, 'Choose the tank (a tank line needs it even in a draft)'),
         beforeDip: quantity,
         roDensity: quantity,
         observedDensity: quantity,

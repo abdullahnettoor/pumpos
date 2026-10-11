@@ -1,5 +1,5 @@
 /** Display model of one list row: one tanker visit with its tank lines grouped (ADR 0007). */
-import type { DecantationView } from '@pump/shared';
+import { densityDeviation, roundDensity, type DecantationView } from '@pump/shared';
 
 export interface DecantationNames {
   tanks: Record<string, string>;
@@ -28,12 +28,17 @@ export interface DecantationRow {
     qty: number;
     outOfTolerance: boolean;
   }[];
-  density: { productName: string; diff: number; invoiceDensity: number; roDensity: number }[];
+  density: {
+    productName: string;
+    diff: number;
+    invoiceDensity: number;
+    roDensity: number;
+    /** The server's DENSITY_OUT_OF_TOLERANCE flag on any line of this product. */
+    outOfTolerance: boolean;
+  }[];
   /** Names of products whose Fuel Purchase is not linked yet. */
   unlinked: string[];
 }
-
-const round1 = (n: number) => Math.round((n + Number.EPSILON) * 10) / 10;
 
 export function toDecantationRow(
   d: DecantationView,
@@ -61,18 +66,20 @@ export function toDecantationRow(
       };
     });
 
+  const flaggedLineIds = new Set(
+    d.flags.filter((f) => f.code === 'DENSITY_OUT_OF_TOLERANCE').map((f) => f.tankLineId),
+  );
   const density = links.flatMap((l) => {
-    const ros = d.lines
-      .filter((x) => x.productId === l.productId && x.roDensity != null)
-      .map((x) => x.roDensity as number);
-    if (l.invoiceDensity == null || ros.length === 0) return [];
-    const ro = ros.reduce((a, b) => a + b, 0) / ros.length;
+    const mine = d.lines.filter((x) => x.productId === l.productId && x.roDensity != null);
+    if (l.invoiceDensity == null || mine.length === 0) return [];
+    const ro = mine.reduce((a, x) => a + (x.roDensity as number), 0) / mine.length;
     return [
       {
         productName: productName(l.productId),
-        diff: round1(ro - l.invoiceDensity),
+        diff: roundDensity(densityDeviation(ro, l.invoiceDensity), 1),
         invoiceDensity: l.invoiceDensity,
-        roDensity: round1(ro),
+        roDensity: roundDensity(ro, 1),
+        outOfTolerance: mine.some((x) => flaggedLineIds.has(x.id)),
       },
     ];
   });

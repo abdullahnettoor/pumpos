@@ -5,30 +5,23 @@ import { Drawer } from '../../Drawer.js';
 import { Button, Chip } from '../../../pump-ds/index.js';
 import { useToast } from '../../primitives/ToastProvider.js';
 import { useZodForm } from '../../../forms/useZodForm.js';
-import { CloudTransactionService } from '../../../services/cloud.js';
 import { createIdempotencyKey } from '../../../query/handoverMutation.js';
 import { keepsIdempotencyKey } from '../../../utils/idempotency.js';
 import {
-  useInvalidateOperational,
+  useBusinessDayStatus,
   useInventoryStatus,
   useLinkablePurchases,
+  useRecordDecantation,
+  useUnlinkDecantationPurchase,
 } from '../../../query/hooks.js';
 import { StepSection } from './StepSection.js';
-import {
-  AfterStep,
-  AfterSummary,
-  ChambersStep,
-  ChambersSummary,
-  InvoicesStep,
-  InvoicesSummary,
-  ReviewStep,
-  TanksStep,
-  TanksSummary,
-  UnloadingStep,
-  UnloadingSummary,
-  type StepProps,
-  type TankOption,
-} from './DecantationSteps.js';
+import { AfterStep, AfterSummary } from './AfterStep.js';
+import { ChambersStep, ChambersSummary } from './ChambersStep.js';
+import { InvoicesStep, InvoicesSummary } from './InvoicesStep.js';
+import { ReviewStep } from './ReviewStep.js';
+import { TanksStep, TanksSummary } from './TanksStep.js';
+import { UnloadingStep, UnloadingSummary } from './UnloadingStep.js';
+import type { StepProps, TankOption } from './stepShared.js';
 import {
   buildSaveBody,
   decantationFormSchema,
@@ -40,7 +33,6 @@ import {
 } from './decantationForm.js';
 import { reviewDecantation } from './decantationReview.js';
 
-const txService = new CloudTransactionService();
 const DEFAULT_TIME_ZONE = 'Asia/Kolkata';
 
 export interface DecantationDrawerProps {
@@ -101,7 +93,8 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
     [station?.settings],
   );
   const toast = useToast();
-  const invalidateOperational = useInvalidateOperational();
+  const record = useRecordDecantation(stationId);
+  const unlink = useUnlinkDecantationPurchase(stationId);
   const tanksQ = useInventoryStatus(stationId);
 
   const tanks: TankOption[] = useMemo(
@@ -180,7 +173,32 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
   const flagged = flags.flags.length > 0;
 
   const editing = !!decantation;
+  // A sealed day accepts only the after dip (server rule): other steps become read-only cards.
+  const dayQ = useBusinessDayStatus(stationId, editing ? decantation?.businessDate : undefined, {
+    enabled: !!stationId && !!decantation?.businessDate,
+  });
+  const sealed = editing && dayQ.data?.requestedState === 'CLOSED';
+  const [savedLinks, setSavedLinks] = useState<Record<string, string>>(() =>
+    Object.fromEntries((decantation?.links ?? []).map((l) => [l.productId, l.purchaseId])),
+  );
   const [open, setOpen] = useState(editing ? 5 : 0);
+  const unlinkProduct = async (productId: string) => {
+    if (!decantation) return;
+    try {
+      setError(null);
+      await unlink.mutateAsync({ decantationId: decantation.id, productId });
+      setSavedLinks(({ [productId]: _gone, ...rest }) => rest);
+      form.setValue(
+        'links',
+        { ...form.getValues('links'), [productId]: '' },
+        { shouldDirty: true },
+      );
+      toast.success('Purchase unlinked.');
+    } catch (err: any) {
+      setError(err?.message || 'Could not unlink the purchase');
+    }
+  };
+
   const [done, setDone] = useState<Set<number>>(() => new Set(editing ? [0, 1, 2, 3, 4] : []));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -195,18 +213,21 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
     form.handleSubmit(
       async (vals) => {
         if (submitting || !stationId) return;
-        if (!draft) {
-          const missing = vals.lines.findIndex((l) => l.beforeDip.trim() === '');
-          if (missing >= 0) {
-            form.setError(`lines.${missing}.beforeDip`, { message: 'Enter the before dip' });
-            setOpen(1);
-            return;
-          }
+        // A Tank Line needs its before dip even in a draft (the column is required): say so
+        // on the field and never send the line, so the server cannot answer 400.
+        const missing = vals.lines.findIndex((l) => l.beforeDip.trim() === '');
+        if (missing >= 0) {
+          form.setError(`lines.${missing}.beforeDip`, {
+            message: 'Enter the before dip (a tank line needs it even in a draft)',
+          });
+          setOpen(1);
+          return;
         }
         try {
           setSubmitting(true);
           setError(null);
-          const result = await txService.saveDecantation(buildSaveBody(vals, ctx, { draft }), {
+          const result = await record.mutateAsync({
+            body: buildSaveBody(vals, ctx, { draft }),
             ...(decantation ? { decantationId: decantation.id } : {}),
             idempotencyKey: keyRef.current,
           });
@@ -220,7 +241,6 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
                 : 'Decantation saved.',
           );
           for (const w of result?.warnings ?? []) toast.info?.(w.message);
-          await invalidateOperational(stationId);
           onClose();
         } catch (err: any) {
           // Unknown outcome keeps the key so a retry cannot record the visit twice.
@@ -252,7 +272,15 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
     null,
   ];
   const bodies = [
-    <InvoicesStep key="b0" {...stepProps} purchases={purchases} fuelProducts={fuelProducts} />,
+    <InvoicesStep
+      key="b0"
+      {...stepProps}
+      purchases={purchases}
+      fuelProducts={fuelProducts}
+      savedLinks={savedLinks}
+      unlinkBusy={unlink.isPending}
+      onUnlink={decantation ? (p) => void unlinkProduct(p) : undefined}
+    />,
     <TanksStep key="b1" {...stepProps} invoiceDensityByProduct={invoiceDensityByProduct} />,
     <ChambersStep key="b2" {...stepProps} />,
     <UnloadingStep key="b3" {...stepProps} />,
@@ -275,16 +303,18 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
       <Button variant="ghost" size="sm" onClick={onClose}>
         Cancel
       </Button>
-      <Button variant="secondary" size="sm" disabled={submitting} onClick={() => save(true)}>
-        Save as draft
-      </Button>
+      {!sealed && (
+        <Button variant="secondary" size="sm" disabled={submitting} onClick={() => save(true)}>
+          Save as draft
+        </Button>
+      )}
       <Button
         variant={flagged ? 'danger' : 'primary'}
         size="sm"
         disabled={submitting}
         onClick={() => save(false)}
       >
-        {flagged ? 'Save with flag' : 'Save Decantation'}
+        {sealed ? 'Save after dip' : flagged ? 'Save with flag' : 'Save Decantation'}
       </Button>
     </div>
   );
@@ -312,18 +342,35 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
           {error}
         </div>
       )}
-      {STEP_TITLES.map((title, i) => (
+      {sealed && (
+        <div
+          role="note"
+          style={{
+            backgroundColor: 'var(--state-warning-bg)',
+            color: 'var(--state-warning-fg)',
+            padding: '8px 12px',
+            borderRadius: 'var(--radius-input)',
+            fontSize: 12,
+            marginBottom: 10,
+          }}
+        >
+          This business day is closed. Only the after dip can still be added; the rest of the record
+          is sealed.
+        </div>
+      )}
+      {STEP_TITLES.filter((_, i) => !(sealed && i === 5)).map((title, i) => (
         <StepSection
           key={title}
           n={i + 1}
           title={title}
-          open={open === i}
+          open={(sealed ? 4 : open) === i}
           done={done.has(i)}
           summary={summaries[i]}
+          readOnly={sealed && i !== 4}
           onOpen={() => setOpen(i)}
         >
           {bodies[i]}
-          {cont(i)}
+          {sealed ? null : cont(i)}
         </StepSection>
       ))}
     </Drawer>

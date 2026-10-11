@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import type { DecantationView } from '@pump/shared';
 import { Drawer } from '../../Drawer.js';
 import { useToast } from '../../primitives/ToastProvider.js';
-import { CloudTransactionService } from '../../../services/cloud.js';
 import { createIdempotencyKey } from '../../../query/handoverMutation.js';
-import { useInvalidateOperational, useLinkablePurchases } from '../../../query/hooks.js';
+import {
+  useLinkDecantationPurchase,
+  useLinkablePurchases,
+  useUnlinkDecantationPurchase,
+} from '../../../query/hooks.js';
 import { PurchaseCards } from './PurchaseCards.js';
-
-const txService = new CloudTransactionService();
+import { UnlinkButton } from './UnlinkButton.js';
 
 export interface LinkPurchaseDrawerProps {
   stationId: string | null;
@@ -32,7 +34,8 @@ const LinkForm: React.FC<LinkPurchaseDrawerProps & { decantation: DecantationVie
   onClose,
 }) => {
   const toast = useToast();
-  const invalidateOperational = useInvalidateOperational();
+  const link = useLinkDecantationPurchase(stationId);
+  const unlink = useUnlinkDecantationPurchase(stationId);
   const productIds = [...new Set(decantation.lines.map((l) => l.productId))];
   const queries = useLinkablePurchases(stationId, productIds);
   const [linked, setLinked] = useState<Record<string, string>>(() =>
@@ -47,18 +50,18 @@ const LinkForm: React.FC<LinkPurchaseDrawerProps & { decantation: DecantationVie
     setError(null);
     try {
       if (purchaseId) {
-        await txService.linkDecantationPurchase(
-          decantation.id,
-          { productId, purchaseId },
-          { idempotencyKey: createIdempotencyKey() },
-        );
+        await link.mutateAsync({
+          decantationId: decantation.id,
+          productId,
+          purchaseId,
+          idempotencyKey: createIdempotencyKey(),
+        });
         toast.success('Purchase linked.');
       } else {
-        await txService.unlinkDecantationPurchase(decantation.id, productId);
+        await unlink.mutateAsync({ decantationId: decantation.id, productId });
         toast.success('Purchase unlinked.');
       }
       setLinked((m) => ({ ...m, [productId]: purchaseId }));
-      if (stationId) await invalidateOperational(stationId);
     } catch (err: any) {
       setError(err?.message || 'Could not update the link');
     } finally {
@@ -89,8 +92,17 @@ const LinkForm: React.FC<LinkPurchaseDrawerProps & { decantation: DecantationVie
       )}
       {productIds.map((productId, i) => (
         <div key={productId} style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-            {productNames[productId] ?? 'Fuel'}
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 6 }}
+          >
+            <span style={{ fontWeight: 600 }}>{productNames[productId] ?? 'Fuel'}</span>
+            {linked[productId] && (
+              <UnlinkButton
+                label={productNames[productId] ?? 'Fuel'}
+                busy={busy === productId}
+                onConfirm={() => void select(productId, '')}
+              />
+            )}
           </div>
           <PurchaseCards
             purchases={queries[i]?.data ?? []}
