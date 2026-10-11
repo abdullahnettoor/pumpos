@@ -41,7 +41,7 @@ type Seed = {
   snapshotData?: Record<string, unknown> | null;
   decantationWarnings?: {
     pendingMeasurement: string[];
-    purchaseNotLinked: string[];
+    purchaseNotLinked: { documentNumber: string; products: string[] }[];
     flagged: string[];
   };
   activeShift?: unknown;
@@ -273,13 +273,13 @@ describe('BusinessDayTab', () => {
         {
           decantationWarnings: {
             pendingMeasurement: ['DEC-1'],
-            purchaseNotLinked: ['DEC-1'],
+            purchaseNotLinked: [{ documentNumber: 'DEC-1', products: ['Petrol'] }],
             flagged: ['DEC-2'],
           },
         },
       );
       await waitFor(() => expect(screen.getByText(/Pending measurement.*DEC-1/i)).toBeDefined());
-      expect(screen.getByText(/Purchase not linked.*DEC-1/i)).toBeDefined();
+      expect(screen.getByText(/Purchase not linked.*DEC-1 \(Petrol\)/i)).toBeDefined();
       expect(screen.getByText(/Flagged: DEC-2/i)).toBeDefined();
       expect(closeDayButton()!.disabled).toBe(false);
 

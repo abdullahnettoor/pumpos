@@ -1,9 +1,9 @@
 import { Hono, type Context } from 'hono';
-import { and, eq, ne } from 'drizzle-orm';
-import { schema, type DbClient } from '@pump/db';
+import type { DbClient } from '@pump/db';
 import { canRecordDecantation, isAuthorizedForStation } from '@pump/shared';
 import {
   GetDecantation,
+  GetDecantationDayCloseWarnings,
   ListDecantations,
   listDecantationsSchema,
   RecordDecantation,
@@ -147,57 +147,10 @@ decantationsRouter.get('/decantations/day-close-warnings', async (c) => {
       400,
     );
 
-  const rows = await c.var.db
-    .select({
-      documentNumber: schema.decantations.documentNumber,
-      flags: schema.decantations.flags,
-      lineStatus: schema.decantationTankLines.status,
-      productId: schema.decantationTankLines.productId,
-      linkedPurchaseId: schema.decantationPurchases.purchaseId,
-    })
-    .from(schema.decantations)
-    .leftJoin(
-      schema.decantationTankLines,
-      and(
-        eq(schema.decantationTankLines.decantationId, schema.decantations.id),
-        eq(schema.decantationTankLines.organizationId, user.organizationId),
-        eq(schema.decantationTankLines.stationId, stationId!),
-      ),
-    )
-    .leftJoin(
-      schema.decantationPurchases,
-      and(
-        eq(schema.decantationPurchases.decantationId, schema.decantations.id),
-        eq(schema.decantationPurchases.productId, schema.decantationTankLines.productId),
-        eq(schema.decantationPurchases.organizationId, user.organizationId),
-        eq(schema.decantationPurchases.stationId, stationId!),
-      ),
-    )
-    .where(
-      and(
-        eq(schema.decantations.organizationId, user.organizationId),
-        eq(schema.decantations.stationId, stationId!),
-        eq(schema.decantations.businessDayId, businessDayId),
-        ne(schema.decantations.status, 'DRAFT'),
-      ),
-    );
-
-  const pendingMeasurement = new Set<string>();
-  const purchaseNotLinked = new Set<string>();
-  const flagged = new Set<string>();
-  for (const row of rows) {
-    if (row.lineStatus === 'PENDING_MEASUREMENT') pendingMeasurement.add(row.documentNumber);
-    if (row.productId && !row.linkedPurchaseId) purchaseNotLinked.add(row.documentNumber);
-    if (Array.isArray(row.flags) && row.flags.length > 0) flagged.add(row.documentNumber);
-  }
-  return c.json({
-    success: true,
-    data: {
-      pendingMeasurement: [...pendingMeasurement].sort(),
-      purchaseNotLinked: [...purchaseNotLinked].sort(),
-      flagged: [...flagged].sort(),
-    },
-  });
+  const result = await new GetDecantationDayCloseWarnings({
+    decantations: new DrizzleDecantationRepository(c.var.db),
+  }).execute({ stationId: stationId!, businessDayId }, buildContext(user, { stationId }));
+  return sendResult(c, result);
 });
 
 decantationsRouter.get('/decantations/:id', async (c) => {

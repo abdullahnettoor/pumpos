@@ -114,8 +114,25 @@ export interface RecordHandoverResult {
 
 export interface DecantationDayCloseWarnings {
   pendingMeasurement: string[];
-  purchaseNotLinked: string[];
+  purchaseNotLinked: { documentNumber: string; products: string[] }[];
   flagged: string[];
+}
+
+export function formatDecantationWarningSummary(warnings: DecantationDayCloseWarnings): string {
+  const entries: string[] = [];
+  const describe = (label: string, documents: string[]) => {
+    if (documents.length > 0) entries.push(`${label}: ${documents.join(', ')}`);
+  };
+  describe('Pending measurement', warnings.pendingMeasurement);
+  if (warnings.purchaseNotLinked.length > 0) {
+    entries.push(
+      `Purchase not linked: ${warnings.purchaseNotLinked
+        .map(({ documentNumber, products }) => `${documentNumber} (${products.join(', ')})`)
+        .join(', ')}`,
+    );
+  }
+  describe('Flagged', warnings.flagged);
+  return entries.join('; ');
 }
 
 export interface RecordStockCountPayload {

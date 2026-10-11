@@ -25,6 +25,11 @@ const DRAFT = id(10);
 const FLAGGED = id(11);
 const LINKED = id(12);
 const PURCHASE = id(13);
+const PRODUCT_DIESEL = id(19);
+const OLD_DAY = id(20);
+const PARTIAL = id(21);
+const OLD_PENDING = id(22);
+const EMPTY_PENDING = id(26);
 
 const BOOTSTRAP = `
   do $$ begin
@@ -100,6 +105,14 @@ describe.skipIf(!CONNECTION)(
         productType: 'FUEL',
         unit: 'L',
       });
+      await db.insert(schema.products).values({
+        id: PRODUCT_DIESEL,
+        organizationId: ORG,
+        name: 'Diesel',
+        code: 'HSD',
+        productType: 'FUEL',
+        unit: 'L',
+      });
       await db.insert(schema.tanks).values([
         {
           id: TANK_PENDING,
@@ -131,6 +144,14 @@ describe.skipIf(!CONNECTION)(
         organizationId: ORG,
         stationId: STATION,
         businessDate: '2026-10-10',
+        status: 'OPEN',
+        openedBy: USER,
+      });
+      await db.insert(schema.businessDays).values({
+        id: OLD_DAY,
+        organizationId: ORG,
+        stationId: STATION,
+        businessDate: '2026-10-09',
         status: 'OPEN',
         openedBy: USER,
       });
@@ -187,6 +208,36 @@ describe.skipIf(!CONNECTION)(
           status: 'MEASURED',
           flags: [],
         },
+        {
+          id: PARTIAL,
+          organizationId: ORG,
+          stationId: STATION,
+          businessDayId: DAY,
+          documentNumber: 'DEC-PARTIAL',
+          tankerNumber: 'T5',
+          status: 'MEASURED',
+          flags: [],
+        },
+        {
+          id: OLD_PENDING,
+          organizationId: ORG,
+          stationId: STATION,
+          businessDayId: OLD_DAY,
+          documentNumber: 'DEC-OLD',
+          tankerNumber: 'T6',
+          status: 'PENDING_MEASUREMENT',
+          flags: [{ code: 'TANKER_SHORT', message: 'Older flagged record' }],
+        },
+        {
+          id: EMPTY_PENDING,
+          organizationId: ORG,
+          stationId: STATION,
+          businessDayId: DAY,
+          documentNumber: 'DEC-EMPTY',
+          tankerNumber: 'T7',
+          status: 'PENDING_MEASUREMENT',
+          flags: [],
+        },
       ]);
       await db.insert(schema.decantationTankLines).values([
         {
@@ -229,11 +280,48 @@ describe.skipIf(!CONNECTION)(
           beforeDip: '1000',
           status: 'MEASURED',
         },
+        {
+          id: id(23),
+          organizationId: ORG,
+          stationId: STATION,
+          decantationId: PARTIAL,
+          tankId: TANK_MEASURED,
+          productId: PRODUCT,
+          beforeDip: '1000',
+          status: 'MEASURED',
+        },
+        {
+          id: id(24),
+          organizationId: ORG,
+          stationId: STATION,
+          decantationId: PARTIAL,
+          tankId: TANK_MEASURED,
+          productId: PRODUCT_DIESEL,
+          beforeDip: '1000',
+          status: 'MEASURED',
+        },
+        {
+          id: id(25),
+          organizationId: ORG,
+          stationId: STATION,
+          decantationId: OLD_PENDING,
+          tankId: TANK_PENDING,
+          productId: PRODUCT,
+          beforeDip: '1000',
+          status: 'PENDING_MEASUREMENT',
+        },
       ]);
       await db.insert(schema.decantationPurchases).values({
         organizationId: ORG,
         stationId: STATION,
         decantationId: LINKED,
+        purchaseId: PURCHASE,
+        productId: PRODUCT,
+      });
+      await db.insert(schema.decantationPurchases).values({
+        organizationId: ORG,
+        stationId: STATION,
+        decantationId: PARTIAL,
         purchaseId: PURCHASE,
         productId: PRODUCT,
       });
@@ -278,8 +366,13 @@ describe.skipIf(!CONNECTION)(
       const body = (await response.json()) as any;
       expect(response.status).toBe(200);
       expect(body.data).toEqual({
-        pendingMeasurement: ['DEC-1'],
-        purchaseNotLinked: ['DEC-1', 'DEC-3'],
+        pendingMeasurement: ['DEC-1', 'DEC-EMPTY', 'DEC-OLD'],
+        purchaseNotLinked: [
+          { documentNumber: 'DEC-1', products: ['Petrol'] },
+          { documentNumber: 'DEC-3', products: ['Petrol'] },
+          { documentNumber: 'DEC-OLD', products: ['Petrol'] },
+          { documentNumber: 'DEC-PARTIAL', products: ['Diesel'] },
+        ],
         flagged: ['DEC-3'],
       });
       expect(JSON.stringify(body.data)).not.toContain('DEC-DRAFT');

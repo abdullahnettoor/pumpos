@@ -2990,10 +2990,15 @@ transactionsRouter.get('/inventory/status', async (c) => {
       waitingOnDecantation: sql<boolean>`EXISTS (
         SELECT 1
         FROM decantation_tank_lines dtl
-        INNER JOIN decantations d ON d.id = dtl.decantation_id
+        INNER JOIN decantations d
+          ON d.id = dtl.decantation_id
+          AND d.organization_id = dtl.organization_id
+          AND d.station_id = dtl.station_id
         WHERE dtl.tank_id = ${schema.tanks.id}
           AND dtl.organization_id = ${user.organizationId}
           AND dtl.station_id = ${stationId}
+          AND d.organization_id = ${user.organizationId}
+          AND d.station_id = ${stationId}
           AND dtl.status = 'PENDING_MEASUREMENT'
           AND d.status <> 'DRAFT'
       )`,

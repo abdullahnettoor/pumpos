@@ -78,6 +78,20 @@ describe('deriveStationAlerts', () => {
       'Petrol Tank critically low',
       'Petrol Tank waiting on decantation',
     ]);
-    expect(alerts[1].meta).toBe('Pending measurement');
+    expect(alerts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'tank-t1',
+          title: 'Petrol Tank critically low',
+          actionEntityId: 't1',
+        }),
+        expect.objectContaining({
+          id: 'decantation-t1',
+          title: 'Petrol Tank waiting on decantation',
+          meta: 'Pending measurement',
+          actionEntityId: 't1',
+        }),
+      ]),
+    );
   });
 });

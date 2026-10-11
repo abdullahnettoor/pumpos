@@ -16,7 +16,11 @@ import {
 import { DataTable } from '../primitives/DataTable.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
-import { CloudShiftService } from '../../services/cloud.js';
+import {
+  CloudShiftService,
+  formatDecantationWarningSummary,
+  type DecantationDayCloseWarnings,
+} from '../../services/cloud.js';
 import { inr, formatDate, formatQty } from '../../utils/format.js';
 import {
   useBusinessDayStatus,
@@ -29,7 +33,7 @@ import {
   queryKeys,
 } from '../../query/hooks.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
-import type { BusinessDayStatusItem, DecantationDayCloseWarnings } from '../../services/cloud.js';
+import type { BusinessDayStatusItem } from '../../services/cloud.js';
 
 const shiftService = new CloudShiftService();
 
@@ -82,18 +86,6 @@ function formatStationActivity(value: string, timeZone?: string): string {
     minute: '2-digit',
     timeZone,
   });
-}
-
-function formatDecantationWarningSummary(warnings: DecantationDayCloseWarnings): string {
-  const entries: string[] = [];
-  const describe = (label: string, documents: string[]) => {
-    if (documents.length === 0) return;
-    entries.push(`${label}: ${documents.join(', ')}`);
-  };
-  describe('Pending measurement', warnings.pendingMeasurement);
-  describe('Purchase not linked', warnings.purchaseNotLinked);
-  describe('Flagged', warnings.flagged);
-  return entries.join('; ');
 }
 
 export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
@@ -171,7 +163,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   const decantationWarningCount = decantationWarnings
     ? new Set([
         ...decantationWarnings.pendingMeasurement,
-        ...decantationWarnings.purchaseNotLinked,
+        ...decantationWarnings.purchaseNotLinked.map(({ documentNumber }) => documentNumber),
         ...decantationWarnings.flagged,
       ]).size
     : 0;
@@ -640,7 +632,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
         >
           <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
           <span>
-            Decantation warnings for this day:{' '}
+            Decantation warnings through this day:{' '}
             {formatDecantationWarningSummary(decantationWarnings!)}. You can still close the day.
           </span>
         </div>
