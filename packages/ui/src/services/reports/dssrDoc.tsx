@@ -15,7 +15,7 @@ import {
   type Col,
   type Cell,
 } from './shiftSummaryDoc.js';
-import { shiftDisplayLabel } from '@pump/shared';
+import { readDssrOmcCard, shiftDisplayLabel } from '@pump/shared';
 import type { DssrSection, DssrReportConfig } from './reportConfig.js';
 import { DEFAULT_DSSR_CONFIG } from './reportConfig.js';
 
@@ -101,6 +101,7 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     const pur = d.purchases || {};
     const pnl = d.pnl || {};
     const merch = d.merchandise || {};
+    const omc = readDssrOmcCard(d);
     const sTax = (d.salesTax || {}) as {
       gst?: Record<string, number>;
       vat?: Record<string, number>;
@@ -112,6 +113,8 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
           <ReconRow label="Merchandise Sales" value={inr(merch.salesValue)} />
           <ReconRow label="Normal Credit Sales" value={inr(credit.normalCredit)} color={C.amber} />
           <ReconRow label="Fleet Credit Sales" value={inr(credit.fleetCredit)} color={C.amber} />
+          {/* ADR 0001: OMC card fuel settles to the OMC Wallet; only snapshots that carry it print it. */}
+          {omc && <ReconRow label="OMC Card Sales" value={inr(omc.total)} />}
           <ReconRow label="Purchases" value={inr(pur.total)} />
           {/* T5 — output tax on sales: GST (merchandise) and VAT (fuel) kept apart. */}
           {Number(sTax.gst?.total || 0) > 0 && (

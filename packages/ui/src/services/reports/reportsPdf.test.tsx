@@ -275,6 +275,37 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     expect(sealed).not.toContain('DRAFT');
   });
 
+  it('prints OMC card sales in the DSSR sales summary only when the snapshot carries them', () => {
+    const texts = (node: any): string[] => {
+      if (node == null || typeof node === 'boolean') return [];
+      if (typeof node === 'string' || typeof node === 'number') return [String(node)];
+      if (Array.isArray(node)) return node.flatMap(texts);
+      if (typeof node.type === 'function' && node.type !== Text) {
+        return texts((node.type as any)(node.props));
+      }
+      return texts(node.props?.children);
+    };
+    const config = { sections: ['financial'] as any[], paper: 'A4' as const };
+    const render = (snapshotData: Record<string, unknown>) =>
+      texts(
+        (DssrDoc as any)({
+          dssr: {
+            businessDate: '2026-10-10',
+            snapshotData: { credit: { normalCredit: 0, fleetCredit: 34040 }, ...snapshotData },
+          },
+          config,
+        }),
+      );
+    const withOmc = render({ omcCard: { total: 2000, count: 1 } });
+    const at = withOmc.indexOf('OMC Card Sales');
+    expect(at).toBeGreaterThan(withOmc.indexOf('Fleet Credit Sales'));
+    expect(withOmc[at + 1]).toMatch(/2,000/);
+    // Unchanged for a snapshot frozen before the field and for a day without any.
+    const legacy = render({});
+    expect(legacy).not.toContain('OMC Card Sales');
+    expect(render({ omcCard: { total: 0, count: 0 } })).toEqual(legacy);
+  });
+
   it('generates real PDF buffer for Tax Invoice with verified vector mark in PDF stream', async () => {
     const invoice = {
       invoiceNumber: 'INV-2026-001',

@@ -26,3 +26,4 @@ export * from './utils/days-of-cover.js';
 export * from './utils/money.js';
 export * from './utils/identifiers.js';
 export * from './utils/stock-variance.js';
+export * from './utils/dssr-omc-card.js';
