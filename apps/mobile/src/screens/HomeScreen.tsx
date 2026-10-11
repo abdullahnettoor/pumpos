@@ -12,6 +12,8 @@ import { MoneyPosition } from './home/MoneyPosition.js';
 import { SalesHeadline } from './home/SalesHeadline.js';
 import { TankGauges } from './home/TankGauges.js';
 import { useHomeData } from './home/useHomeData.js';
+// PROTOTYPE (#476) — remove before merge.
+import { DecantationsPrototypePage } from './decantation-prototype/DecantationsPrototypePage.js';
 
 interface Props {
   station: Station;
@@ -96,7 +98,18 @@ export const HomeScreen: React.FC<Props> = ({ station }) => {
 
       {m.tanks.length > 0 && (
         <>
-          <SectionLabel>Tanks</SectionLabel>
+          <SectionLabel
+            right={
+              <button
+                type="button"
+                onClick={() => nav.push(<DecantationsPrototypePage />, 'decantations-prototype')}
+              >
+                Decantations ›
+              </button>
+            }
+          >
+            Tanks
+          </SectionLabel>
           <TankGauges tanks={m.tanks} />
         </>
       )}
