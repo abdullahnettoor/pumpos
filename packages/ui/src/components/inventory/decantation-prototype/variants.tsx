@@ -715,7 +715,7 @@ export const VariantC: React.FC<Props> = ({ isOpen, onClose, onSave }) => {
 // Each step is an accordion section. One is open at a time; finished steps
 // collapse to a one-line summary and can be reopened by clicking the header.
 
-const StepSection: React.FC<{
+export const StepSection: React.FC<{
   n: number;
   title: string;
   open: boolean;

@@ -15,13 +15,20 @@ import {
   tankById,
   type ProtoDecantation,
 } from './mock.js';
-import { VARIANTS, type VariantKey } from './variants.js';
+import { VARIANTS as BASE } from './variants.js';
+import { VariantMulti } from './VariantMulti.js';
+
+const VARIANTS = {
+  E: { name: 'Accordion + multiple tanks', C: null },
+  ...BASE,
+} as const;
+type VariantKey = keyof typeof VARIANTS;
 
 const KEYS = Object.keys(VARIANTS) as VariantKey[];
 
 const readVariant = (): VariantKey => {
   const v = new URLSearchParams(window.location.search).get('variant')?.toUpperCase();
-  return (KEYS as string[]).includes(v ?? '') ? (v as VariantKey) : 'D';
+  return (KEYS as string[]).includes(v ?? '') ? (v as VariantKey) : 'E';
 };
 
 const useVariant = () => {
@@ -137,7 +144,10 @@ const Row: React.FC<{ d: ProtoDecantation; onLink: (id: string, pid: string) => 
       </td>
       <td style={td}>
         {d.tankerNo}
-        <div style={{ fontSize: 11, opacity: 0.6 }}>{d.driver}</div>
+        <div style={{ fontSize: 11, opacity: 0.6 }}>
+          {d.driver}
+          {d.lineCount && d.lineCount > 1 ? ` · split into ${d.lineCount} tanks` : ''}
+        </div>
       </td>
       <td style={td}>
         {tankById(d.tankId)?.name} <span style={{ opacity: 0.6 }}>· {d.product}</span>
@@ -211,7 +221,6 @@ export const DecantationsPrototypeTab: React.FC = () => {
   const [variant, setVariant] = useVariant();
   const [rows, setRows] = useState<ProtoDecantation[]>(INITIAL_DECANTATIONS);
   const [open, setOpen] = useState(false);
-  const Drawer = VARIANTS[variant].C;
 
   const kpis = useMemo(() => {
     const fl = rows.map((r) => flagsFor(r));
@@ -343,12 +352,21 @@ export const DecantationsPrototypeTab: React.FC = () => {
         </Panel>
       )}
 
-      <Drawer
-        key={variant}
-        isOpen={open}
-        onClose={() => setOpen(false)}
-        onSave={(d) => setRows((rs) => [...rs, d])}
-      />
+      {variant === 'E' ? (
+        <VariantMulti
+          key={variant}
+          isOpen={open}
+          onClose={() => setOpen(false)}
+          onSave={(ds) => setRows((rs) => [...rs, ...ds])}
+        />
+      ) : (
+        React.createElement(BASE[variant as keyof typeof BASE].C, {
+          key: variant,
+          isOpen: open,
+          onClose: () => setOpen(false),
+          onSave: (d: ProtoDecantation) => setRows((rs) => [...rs, d]),
+        })
+      )}
       <PrototypeSwitcher current={variant} onChange={setVariant} />
     </div>
   );

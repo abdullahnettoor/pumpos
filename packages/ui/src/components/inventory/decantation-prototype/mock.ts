@@ -40,6 +40,8 @@ export interface ProtoDecantation {
   status: DecantationStatus;
   received: number | null;
   sealOk: boolean;
+  visitId?: string;
+  lineCount?: number;
 }
 
 export const SETTINGS = {
