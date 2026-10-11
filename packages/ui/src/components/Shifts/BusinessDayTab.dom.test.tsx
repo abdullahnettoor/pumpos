@@ -39,6 +39,11 @@ type Seed = {
   status?: string;
   businessDayId?: string;
   snapshotData?: Record<string, unknown> | null;
+  decantationWarnings?: {
+    pendingMeasurement: string[];
+    purchaseNotLinked: string[];
+    flagged: string[];
+  };
   activeShift?: unknown;
   openBusinessDays?: { businessDate: string; id?: string }[];
   recentBusinessDays?: Record<string, unknown>[];
@@ -49,6 +54,7 @@ const renderTab = (props: Record<string, unknown> = {}, seed: Seed = {}) => {
     status = 'OPEN',
     businessDayId = 'bd-1',
     snapshotData = { businessDayId },
+    decantationWarnings = { pendingMeasurement: [], purchaseNotLinked: [], flagged: [] },
     activeShift = null,
     openBusinessDays = [{ businessDate: TODAY, id: businessDayId }],
     recentBusinessDays = openBusinessDays.map((d) => ({
@@ -80,6 +86,10 @@ const renderTab = (props: Record<string, unknown> = {}, seed: Seed = {}) => {
   });
   client.setQueryData(queryKeys.shiftStatus(STATION.id, true), { activeShift });
   client.setQueryData(queryKeys.customers(true), []);
+  client.setQueryData(
+    queryKeys.decantationDayCloseWarnings(STATION.id, businessDayId),
+    decantationWarnings,
+  );
   return renderWithProviders(
     <BusinessDayTab
       selectedStation={STATION}
@@ -255,6 +265,29 @@ describe('BusinessDayTab', () => {
       await waitFor(() =>
         expect(screen.getByText(new RegExp(`immutable DSSR snapshot for ${TODAY}`))).toBeDefined(),
       );
+    });
+
+    it('shows pending, unlinked, and flagged Decantation warnings without blocking close', async () => {
+      renderTab(
+        {},
+        {
+          decantationWarnings: {
+            pendingMeasurement: ['DEC-1'],
+            purchaseNotLinked: ['DEC-1'],
+            flagged: ['DEC-2'],
+          },
+        },
+      );
+      await waitFor(() => expect(screen.getByText(/Pending measurement.*DEC-1/i)).toBeDefined());
+      expect(screen.getByText(/Purchase not linked.*DEC-1/i)).toBeDefined();
+      expect(screen.getByText(/Flagged: DEC-2/i)).toBeDefined();
+      expect(closeDayButton()!.disabled).toBe(false);
+
+      fireEvent.click(closeDayButton()!);
+      await waitFor(() => expect(screen.getByText('Close this business day?')).toBeDefined());
+      expect(screen.getByText(/Decantation warnings:/i)).toBeDefined();
+      fireEvent.click(screen.getByRole('button', { name: 'Close day' }));
+      await waitFor(() => expect(closeBusinessDay).toHaveBeenCalledWith('bd-1', STATION.id));
     });
   });
 

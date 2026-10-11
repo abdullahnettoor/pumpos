@@ -112,6 +112,12 @@ export interface RecordHandoverResult {
   replaced: boolean;
 }
 
+export interface DecantationDayCloseWarnings {
+  pendingMeasurement: string[];
+  purchaseNotLinked: string[];
+  flagged: string[];
+}
+
 export interface RecordStockCountPayload {
   stationId: string;
   actualQuantity: number;
@@ -1268,6 +1274,15 @@ export class CloudTransactionService {
 
   async getInventoryStatus(stationId: string): Promise<any[]> {
     return request<any[]>(`/transactions/inventory/status?stationId=${stationId}`);
+  }
+
+  async getDecantationDayCloseWarnings(
+    stationId: string,
+    businessDayId: string,
+  ): Promise<DecantationDayCloseWarnings> {
+    return request<DecantationDayCloseWarnings>(
+      `/transactions/decantations/day-close-warnings?stationId=${encodeURIComponent(stationId)}&businessDayId=${encodeURIComponent(businessDayId)}`,
+    );
   }
 
   async getInventoryItems(stationId: string): Promise<any[]> {

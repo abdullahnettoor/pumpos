@@ -60,4 +60,24 @@ describe('deriveStationAlerts', () => {
     ]);
     expect(alert.meta).toBe('Petrol · 30% · 3,000 L');
   });
+
+  it('shows a pending-measurement alert alongside the low-stock alert', () => {
+    const alerts = deriveStationAlerts([
+      {
+        id: 't1',
+        name: 'Petrol Tank',
+        productName: 'Petrol',
+        capacity: 10_000,
+        currentVolume: 900,
+        waitingOnDecantation: true,
+      },
+    ]);
+
+    expect(alerts).toHaveLength(2);
+    expect(alerts.map((alert) => alert.title)).toEqual([
+      'Petrol Tank critically low',
+      'Petrol Tank waiting on decantation',
+    ]);
+    expect(alerts[1].meta).toBe('Pending measurement');
+  });
 });

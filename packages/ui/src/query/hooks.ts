@@ -21,6 +21,7 @@ import {
   CloudPaymentTerminalService,
   CloudAccessService,
   CloudDesktopDownloadsService,
+  type DecantationDayCloseWarnings,
 } from '../services/cloud.js';
 import type {
   BusinessDayStatusResponse,
@@ -114,6 +115,8 @@ export const queryKeys = {
   customerReceivable: (stationId: string, customerId: string) =>
     ['receivables', stationId, customerId] as const,
   inventoryStatus: (stationId: string) => ['inventory-status', stationId] as const,
+  decantationDayCloseWarnings: (stationId: string, businessDayId: string) =>
+    ['decantation-day-close-warnings', stationId, businessDayId] as const,
   inventoryItems: (stationId: string) => ['inventory-items', stationId] as const,
   inventoryMovements: (stationId: string) => ['inventory-movements', stationId] as const,
   inventoryVariances: (stationId: string) => ['inventory-variances', stationId] as const,
@@ -915,6 +918,20 @@ export function useInventoryStatus(stationId: string | null | undefined, options
   });
 }
 
+export function useDecantationDayCloseWarnings(
+  stationId: string | null | undefined,
+  businessDayId: string | null | undefined,
+  options?: Options<DecantationDayCloseWarnings>,
+) {
+  return useQuery({
+    queryKey: queryKeys.decantationDayCloseWarnings(stationId ?? '', businessDayId ?? ''),
+    queryFn: () => txService.getDecantationDayCloseWarnings(stationId!, businessDayId!),
+    enabled: !!stationId && !!businessDayId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 export function useInventoryItems(stationId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.inventoryItems(stationId ?? ''),
@@ -1278,6 +1295,7 @@ export function useInvalidateOperational() {
         qc.invalidateQueries({ queryKey: ['inventory-items', stationId] }),
         qc.invalidateQueries({ queryKey: ['inventory-movements', stationId] }),
         qc.invalidateQueries({ queryKey: ['inventory-variances', stationId] }),
+        qc.invalidateQueries({ queryKey: ['decantation-day-close-warnings', stationId] }),
       );
     }
     return Promise.all(invalidations).then(() => undefined);

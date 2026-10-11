@@ -2987,6 +2987,16 @@ transactionsRouter.get('/inventory/status', async (c) => {
       productCode: schema.products.code,
       productUnit: schema.products.unit,
       total: sql<string>`COALESCE(SUM(${schema.stockMovements.quantity}), 0)`,
+      waitingOnDecantation: sql<boolean>`EXISTS (
+        SELECT 1
+        FROM decantation_tank_lines dtl
+        INNER JOIN decantations d ON d.id = dtl.decantation_id
+        WHERE dtl.tank_id = ${schema.tanks.id}
+          AND dtl.organization_id = ${user.organizationId}
+          AND dtl.station_id = ${stationId}
+          AND dtl.status = 'PENDING_MEASUREMENT'
+          AND d.status <> 'DRAFT'
+      )`,
     })
     .from(schema.tanks)
     .leftJoin(schema.products, eq(schema.products.id, schema.tanks.productId))
@@ -3009,6 +3019,7 @@ transactionsRouter.get('/inventory/status', async (c) => {
     productUnit: r.productUnit ?? 'L',
     capacity: Number(r.capacity),
     currentVolume: Math.max(0, Number(r.total ?? 0)),
+    waitingOnDecantation: Boolean(r.waitingOnDecantation),
   }));
 
   // Days of cover: ONE more aggregate statement (per-tank volume sold over the

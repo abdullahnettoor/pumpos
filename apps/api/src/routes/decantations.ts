@@ -1,5 +1,6 @@
 import { Hono, type Context } from 'hono';
-import type { DbClient } from '@pump/db';
+import { and, eq, ne } from 'drizzle-orm';
+import { schema, type DbClient } from '@pump/db';
 import { canRecordDecantation, isAuthorizedForStation } from '@pump/shared';
 import { GetDecantation, ListDecantations, RecordDecantation } from '@pump/core';
 import { buildContext } from '../infra/context.js';
@@ -114,6 +115,74 @@ decantationsRouter.get('/decantations', async (c) => {
     buildContext(user, { stationId: stationId! }),
   );
   return sendResult(c, result);
+});
+
+/** Non-blocking warnings shown before a Business Day is closed (ADR 0007). */
+decantationsRouter.get('/decantations/day-close-warnings', async (c) => {
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  const businessDayId = c.req.query('businessDayId');
+  const denied = guardStation(c, stationId);
+  if (denied) return denied;
+  if (!(await loadStationClock(c.var.db, user.organizationId, stationId)))
+    return stationNotFound(c);
+  if (!businessDayId)
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'businessDayId is required' } },
+      400,
+    );
+
+  const rows = await c.var.db
+    .select({
+      documentNumber: schema.decantations.documentNumber,
+      flags: schema.decantations.flags,
+      lineStatus: schema.decantationTankLines.status,
+      productId: schema.decantationTankLines.productId,
+      linkedPurchaseId: schema.decantationPurchases.purchaseId,
+    })
+    .from(schema.decantations)
+    .leftJoin(
+      schema.decantationTankLines,
+      and(
+        eq(schema.decantationTankLines.decantationId, schema.decantations.id),
+        eq(schema.decantationTankLines.organizationId, user.organizationId),
+        eq(schema.decantationTankLines.stationId, stationId!),
+      ),
+    )
+    .leftJoin(
+      schema.decantationPurchases,
+      and(
+        eq(schema.decantationPurchases.decantationId, schema.decantations.id),
+        eq(schema.decantationPurchases.productId, schema.decantationTankLines.productId),
+        eq(schema.decantationPurchases.organizationId, user.organizationId),
+        eq(schema.decantationPurchases.stationId, stationId!),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.decantations.organizationId, user.organizationId),
+        eq(schema.decantations.stationId, stationId!),
+        eq(schema.decantations.businessDayId, businessDayId),
+        ne(schema.decantations.status, 'DRAFT'),
+      ),
+    );
+
+  const pendingMeasurement = new Set<string>();
+  const purchaseNotLinked = new Set<string>();
+  const flagged = new Set<string>();
+  for (const row of rows) {
+    if (row.lineStatus === 'PENDING_MEASUREMENT') pendingMeasurement.add(row.documentNumber);
+    if (row.productId && !row.linkedPurchaseId) purchaseNotLinked.add(row.documentNumber);
+    if (Array.isArray(row.flags) && row.flags.length > 0) flagged.add(row.documentNumber);
+  }
+  return c.json({
+    success: true,
+    data: {
+      pendingMeasurement: [...pendingMeasurement].sort(),
+      purchaseNotLinked: [...purchaseNotLinked].sort(),
+      flagged: [...flagged].sort(),
+    },
+  });
 });
 
 decantationsRouter.get('/decantations/:id', async (c) => {
