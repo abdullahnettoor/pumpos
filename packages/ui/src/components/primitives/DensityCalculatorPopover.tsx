@@ -81,17 +81,20 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
     initialTempC != null ? String(initialTempC) : '',
   );
 
-  // Synchronize inputs when popover opens or initial values change
-  useEffect(() => {
-    if (open) {
-      if (initialObserved != null && !observedInput) {
-        setObservedInput(String(initialObserved));
+  const toggleOpen = () => {
+    setOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        if (initialObserved != null && !observedInput) {
+          setObservedInput(String(initialObserved));
+        }
+        if (initialTempC != null && !tempInput) {
+          setTempInput(String(initialTempC));
+        }
       }
-      if (initialTempC != null && !tempInput) {
-        setTempInput(String(initialTempC));
-      }
-    }
-  }, [open, initialObserved, initialTempC]);
+      return next;
+    });
+  };
 
   const observedNum = parseFloat(observedInput);
   const tempNum = parseFloat(tempInput);
@@ -422,7 +425,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
         aria-expanded={open}
         aria-label={title}
         title={title}
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggleOpen}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
