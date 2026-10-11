@@ -17,7 +17,11 @@ export const DECANTATION_SETTINGS_KEYS = [
   'quantityTolerance',
   'settlingTimeMinutes',
   'densitySpecBands',
+  'densityEntryMethod',
 ] as const;
+
+export const DECANTATION_DENSITY_ENTRY_METHODS = ['HYDROMETER', 'DIRECT_15'] as const;
+export type DecantationDensityEntryMethod = (typeof DECANTATION_DENSITY_ENTRY_METHODS)[number];
 
 export const decantationDensitySpecBandSchema = z
   .object({
@@ -37,6 +41,8 @@ export const decantationSettingsSchema = z.object({
   quantityTolerance: z.number().finite().min(0).max(100).optional(),
   settlingTimeMinutes: z.number().int().min(0).max(1440).optional(),
   densitySpecBands: z.record(decantationDensitySpecBandSchema).optional(),
+  /** Default entry method in the density drawer. */
+  densityEntryMethod: z.enum(DECANTATION_DENSITY_ENTRY_METHODS).optional(),
 });
 
 export type DecantationSettingsInput = z.input<typeof decantationSettingsSchema>;
@@ -49,6 +55,7 @@ export type DecantationSettings = {
   settlingTimeMinutes: number;
   /** Optional 15 °C density bounds keyed by product UUID. */
   densitySpecBands: Record<string, z.infer<typeof decantationDensitySpecBandSchema>>;
+  densityEntryMethod: DecantationDensityEntryMethod;
 };
 
 export const DEFAULT_DECANTATION_SETTINGS: DecantationSettings = {
@@ -57,6 +64,7 @@ export const DEFAULT_DECANTATION_SETTINGS: DecantationSettings = {
   quantityTolerance: 0.2,
   settlingTimeMinutes: 30,
   densitySpecBands: {},
+  densityEntryMethod: 'HYDROMETER',
 };
 
 export const DECANTATION_SETTINGS_KEY_SET: ReadonlySet<string> = new Set(DECANTATION_SETTINGS_KEYS);
@@ -76,6 +84,9 @@ export function resolveDecantationSettings(raw: unknown): DecantationSettings {
   );
   const settlingTimeMinutes = decantationSettingsSchema.shape.settlingTimeMinutes.safeParse(
     source.settlingTimeMinutes,
+  );
+  const densityEntryMethod = decantationSettingsSchema.shape.densityEntryMethod.safeParse(
+    source.densityEntryMethod,
   );
   const parsedBands: DecantationSettings['densitySpecBands'] = {};
   const storedBands = source.densitySpecBands;
@@ -110,5 +121,9 @@ export function resolveDecantationSettings(raw: unknown): DecantationSettings {
         ? settlingTimeMinutes.data
         : DEFAULT_DECANTATION_SETTINGS.settlingTimeMinutes,
     densitySpecBands: parsedBands,
+    densityEntryMethod:
+      densityEntryMethod.success && densityEntryMethod.data !== undefined
+        ? densityEntryMethod.data
+        : DEFAULT_DECANTATION_SETTINGS.densityEntryMethod,
   };
 }

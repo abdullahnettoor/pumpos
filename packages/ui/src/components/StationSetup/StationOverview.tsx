@@ -893,6 +893,23 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                       <option value="OMC_TABLE_53B">OMC Table 53B</option>
                     </Select>
                   </Field>
+                  <Field
+                    label="Default density entry"
+                    hint="Pre-selected method when recording a density reading."
+                  >
+                    <Select
+                      value={decantationSettings.densityEntryMethod}
+                      onChange={(e) =>
+                        updateDecantationSettings((current) => ({
+                          ...current,
+                          densityEntryMethod: e.target.value as typeof current.densityEntryMethod,
+                        }))
+                      }
+                    >
+                      <option value="HYDROMETER">Hydrometer + temperature</option>
+                      <option value="DIRECT_15">Direct 15 °C</option>
+                    </Select>
+                  </Field>
                   <Field label="Reference temperature">
                     <TextInput value={`${DECANTATION_REFERENCE_TEMPERATURE_C} °C`} disabled />
                   </Field>
