@@ -3,12 +3,12 @@
  * payloads the existing read endpoints return (DSSR preview, inventory status,
  * customer and supplier lists); the screen only renders them.
  */
-import { formatDaysOfCover, isBalancedVariance } from '@pump/shared';
-import { num, round2 } from '../num.js';
-import { plural, signedRupees } from '../format.js';
+import { formatDaysOfCover } from '@pump/shared';
+import { num } from '../num.js';
+import { plural } from '../format.js';
+import { dayCashVariance, type CashVariance } from '../cashVariance.js';
 import { owing, totalOwed, type MoneyParty } from '../money/parties.js';
-import { offLabel } from '../variance.js';
-import { shiftLabel, type Snapshot } from './sales.js';
+import type { Snapshot } from './sales.js';
 
 export type Tone = 'default' | 'good' | 'warn' | 'bad';
 
@@ -16,63 +16,14 @@ export interface Tile {
   /** Null when there is nothing to show yet (the tile prints "—"). */
   value: number | null;
   detail: string;
-  /** A second, lower-weight line (the attendant level of the cash variance). */
-  secondary?: string;
   tone: Tone;
 }
 export interface HomeTiles {
-  variance: Tile;
+  /** Both cash-variance levels (ADR 0005), shared with the Shift Summary. */
+  variance: CashVariance;
   margin: Tile;
   credit: Tile;
   purchases: Tile;
-}
-
-/** Beyond this many rupees a cash variance reads as a problem. */
-const VARIANCE_ALERT = 100;
-
-const isOff = (v: number) => !isBalancedVariance(v);
-
-/**
- * Cash variance at its two levels (ADR 0005), never added together:
- *  - the tile's figure is the OFFICE count variance of the closed Shifts, named
- *    by the Shift it came from;
- *  - the secondary line is the ATTENDANT variance (declared cash against each
- *    Drawer's expected cash), named by the Dispenser Unit.
- */
-function varianceTile(snap: Snapshot): Tile {
-  const closed = (snap.shifts ?? []).length;
-  if (closed === 0) return { value: null, detail: 'No closed Shift yet', tone: 'default' };
-
-  const drawer = snap.drawer ?? {};
-  const office = round2(num(drawer.totalCashVariance));
-  const shiftsOff = ((snap.shifts ?? []) as Snapshot[])
-    .map((s) => ({ name: shiftLabel(s), variance: num(s.cashVariance) }))
-    .filter((s) => isOff(s.variance));
-  const detail = isOff(office)
-    ? shiftsOff.length > 0
-      ? `${offLabel(shiftsOff)} · office count`
-      : 'Office count'
-    : plural(closed, 'closed Shift');
-
-  const dus = ((drawer.attendants ?? []) as Snapshot[]).map((a) => ({
-    name: String(a.duName ?? a.attendantName ?? 'Drawer'),
-    variance: num(a.variance),
-  }));
-  const attendant = round2(num(drawer.totalAttendantVariance));
-  const hasAttendantLevel = dus.length > 0 || drawer.totalAttendantVariance != null;
-  const dusOff = dus.filter((d) => isOff(d.variance));
-  const secondary = !hasAttendantLevel
-    ? undefined
-    : dusOff.length > 0
-      ? `Attendants ${signedRupees(attendant)} · ${offLabel(dusOff)}`
-      : `Attendants ${signedRupees(attendant)}`;
-
-  return {
-    value: office,
-    detail,
-    secondary,
-    tone: Math.abs(office) > VARIANCE_ALERT ? 'bad' : 'default',
-  };
 }
 
 function marginTile(snap: Snapshot): Tile {
@@ -91,7 +42,7 @@ export function deriveTiles(snap: Snapshot): HomeTiles {
   const credit = snap.credit ?? {};
   const purchases = snap.purchases ?? {};
   return {
-    variance: varianceTile(snap),
+    variance: dayCashVariance(snap),
     margin: marginTile(snap),
     credit: {
       value: num(credit.total),

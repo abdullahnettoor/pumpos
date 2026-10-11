@@ -5,7 +5,8 @@
 import { businessDateLabel, stationDay } from '../dates.js';
 import { round2 } from '../num.js';
 import { shiftLabel, type Snapshot } from '../home/sales.js';
-import { varianceBadge, type VarianceBadgeView } from '../variance.js';
+import type { VarianceBadgeView } from '../variance.js';
+import { shiftHeadlineBadge } from '../cashVariance.js';
 import { deriveSalesTotals } from './summary.js';
 import { deriveShiftVariance } from './variance.js';
 import { windowLabel } from './window.js';
@@ -19,6 +20,7 @@ export interface ShiftHistoryRow {
   window: string;
   /** Total sales from the snapshot (fuel + Product Sales): the figure the Shift Summary page leads with. */
   sales: number;
+  /** The Shift's headline variance, naming its level ("Attendants −₹125"). */
   badge: VarianceBadgeView;
   summary: ShiftSummaryRow;
 }
@@ -49,7 +51,7 @@ export function deriveShiftHistory(
       title: shiftLabel(s),
       window: windowLabel(s.openedAt, s.closedAt, ctx.timeZone),
       sales: deriveSalesTotals(snap).total,
-      badge: varianceBadge(deriveShiftVariance(snap).headline),
+      badge: shiftHeadlineBadge(deriveShiftVariance(snap)),
       summary: s,
     };
     days.set(date, [...(days.get(date) ?? []), row]);

@@ -13,7 +13,7 @@ import { rupees } from '../format.js';
 import type { OwnHandover } from '../handover/own.js';
 import { standing, type MoneyCustomer } from '../money/parties.js';
 import { deriveShiftVariance } from '../shifts/variance.js';
-import { varianceBadge } from '../variance.js';
+import { shiftHeadlineBadge } from '../cashVariance.js';
 import type { AlertSeverity, MobileAlert } from './types.js';
 
 /** A closed Shift's cash variance is raised only beyond this many rupees. */
@@ -90,14 +90,17 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
   for (const s of recent) {
     const v = deriveShiftVariance((s.snapshotData ?? {}) as Snapshot);
     if (Math.abs(v.headline) <= CASH_VARIANCE_ALERT_ABOVE) continue;
-    const badge = varianceBadge(v.headline);
+    const badge = shiftHeadlineBadge(v);
     const date = typeof s.businessDate === 'string' ? businessDateLabel(s.businessDate) : null;
     list.push({
       id: `var-${s.shiftId}`,
       severity: badge.tone === 'bad' ? 'danger' : 'warning',
       category: 'variance',
-      title: `${shiftLabel(s)} ${v.headline < 0 ? 'short' : 'over'} by ${rupees(Math.abs(num(v.headline)))}`,
-      meta: [v.headlineNote, date].filter(Boolean).join(' · '),
+      // Which level, as the Cash variance card names it: "Attendants short by ₹340".
+      title: `${shiftLabel(s)}: ${badge.label} ${v.headline < 0 ? 'short' : 'over'} by ${rupees(Math.abs(num(v.headline)))}`,
+      meta: [v.headlineLevel === 'office' ? null : v.headlineNote, date]
+        .filter(Boolean)
+        .join(' · '),
       action: { kind: 'variance', shiftId: String(s.shiftId) },
     });
   }

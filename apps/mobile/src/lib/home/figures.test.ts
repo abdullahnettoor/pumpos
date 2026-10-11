@@ -34,72 +34,14 @@ describe('deriveTiles', () => {
     purchases: { total: 1043200, count: 1 },
   };
 
-  it('keeps the office and attendant levels apart: value is the office count only', () => {
+  it('carries both cash-variance levels (detail in cashVariance.test.ts)', () => {
     const t = deriveTiles(closed);
-    expect(t.variance.value).toBe(0);
-    expect(t.variance.detail).toBe('1 closed Shift');
-    expect(t.variance.secondary).toBe('Attendants −₹340 · DU3 short');
-    expect(t.variance.tone).toBe('default');
-  });
-
-  it('never adds the attendant variance into the office figure', () => {
-    const t = deriveTiles({
-      ...closed,
-      shifts: [{ shiftSequence: 1, templateName: 'Shift 1', cashVariance: -60 }],
-      drawer: { ...closed.drawer, totalCashVariance: -60 },
-    });
-    expect(t.variance.value).toBe(-60);
-    expect(t.variance.detail).toBe('Shift 1 short · office count');
-    expect(t.variance.secondary).toBe('Attendants −₹340 · DU3 short');
-  });
-
-  it('names the Shift behind a large office variance and counts the others', () => {
-    const t = deriveTiles({
-      shifts: [
-        { shiftSequence: 1, templateName: 'Morning', cashVariance: 20 },
-        { shiftSequence: 2, cashVariance: -250 },
-        { shiftSequence: 3, cashVariance: 0 },
-      ],
-      drawer: { totalCashVariance: -230, attendants: [] },
-    });
-    expect(t.variance).toMatchObject({
-      value: -230,
-      detail: 'Shift 2 short +1 more · office count',
-      tone: 'bad',
-    });
-    expect(t.variance.secondary).toBeUndefined();
-  });
-
-  it('counts the other DUs when several are off, at the attendant level', () => {
-    const t = deriveTiles({
-      ...closed,
-      drawer: {
-        totalCashVariance: 0,
-        totalAttendantVariance: -90,
-        attendants: [
-          { duName: 'DU1', variance: 20 },
-          { duName: 'DU2', variance: -110 },
-          { duName: 'DU3', variance: 0 },
-        ],
-      },
-    });
-    expect(t.variance.secondary).toBe('Attendants −₹90 · DU2 short +1 more');
-    expect(t.variance.value).toBe(0);
-  });
-
-  it('falls back to "Office count" when the office is off but no Shift row says which', () => {
-    const t = deriveTiles({ ...closed, drawer: { totalCashVariance: -150, attendants: [] } });
-    expect(t.variance).toMatchObject({ value: -150, detail: 'Office count', tone: 'bad' });
-  });
-
-  it('is balanced, or unknown before any Shift has closed', () => {
-    expect(deriveTiles({ ...closed, drawer: { totalCashVariance: 0 } }).variance).toMatchObject({
-      value: 0,
-      detail: '1 closed Shift',
-      secondary: undefined,
-    });
-    const none = deriveTiles({});
-    expect(none.variance).toMatchObject({ value: null, detail: 'No closed Shift yet' });
+    expect(t.variance.levels.map((l) => [l.key, l.value])).toEqual([
+      ['attendants', -340],
+      ['office', 0],
+    ]);
+    expect(t.variance.tone).toBe('bad');
+    expect(deriveTiles({}).variance).toMatchObject({ levels: [], empty: 'No closed Shift yet' });
   });
 
   it('shows margin with its percentage, or asks for product costs', () => {

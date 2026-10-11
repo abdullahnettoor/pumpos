@@ -211,6 +211,7 @@ describe.skipIf(!CONNECTION)('Business Day list reader against real Postgres', (
           })),
         ],
         creditSales: [],
+        omcCardSales: [],
         stockVariances: [],
         saleItems: [],
         products: {},

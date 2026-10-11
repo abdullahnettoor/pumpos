@@ -127,10 +127,28 @@ describe('deriveTankMovement', () => {
       expect(row).toMatchObject({
         title: 'Tank 1 · Petrol',
         movement: 'Opening 14,450 → Closing 12,559.5 L',
-        detail: 'Sold 2,210.5 L · Received 300 L · Dip 12,541.5 L',
+        detail: ['Sold 2,210.5 L · Received 300 L', 'Dip 12,541.5 L'],
         variance: '−18 L',
         tone: 'bad', // 18 L is 0.81% of 2,210.5 L sold: over the 0.5% tolerance
       });
+    });
+    it('keeps 5-digit litres on short lines: sold and received, then the dip', () => {
+      const [row] = deriveTankMovement({
+        fuelStockVariance: [
+          tank({
+            actualQuantity: 20470,
+            tankMovement: {
+              ...movement,
+              openingQuantity: 12500,
+              receivedQuantity: 10000,
+              soldQuantity: 1885,
+              closingQuantity: 20615,
+            },
+          }),
+        ],
+      });
+      expect(row.detail).toEqual(['Sold 1,885 L · Received 10,000 L', 'Dip 20,470 L']);
+      expect(Math.max(...row.detail.map((l) => l.length))).toBeLessThanOrEqual(34);
     });
     it('judges the variance against what THIS tank sold, per the shared tolerance', () => {
       const big = deriveTankMovement({
@@ -155,7 +173,7 @@ describe('deriveTankMovement', () => {
           }),
         ],
       });
-      expect(row.detail).toBe('Sold 0 L · Dip 12,541.5 L');
+      expect(row.detail).toEqual(['Sold 0 L', 'Dip 12,541.5 L']);
       expect(row.tone).toBe('bad');
     });
   });
@@ -207,9 +225,9 @@ describe('deriveTankMovement', () => {
     });
     it('shows Sold only when the product has a single tank', () => {
       const rows = deriveTankMovement(snap);
-      expect(rows[0].detail).toBe('Sold 2,210 L');
-      expect(rows[1].detail).toBeUndefined();
-      expect(rows[2].detail).toBeUndefined();
+      expect(rows[0].detail).toEqual(['Sold 2,210 L']);
+      expect(rows[1].detail).toEqual([]);
+      expect(rows[2].detail).toEqual([]);
     });
     it('tolerates a variance against the one-tank product sales, else none', () => {
       const one = (varianceQuantity: number) =>

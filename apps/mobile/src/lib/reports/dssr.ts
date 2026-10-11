@@ -61,8 +61,12 @@ export interface TankMovementRow {
   title: string;
   /** "Opening 14,450 → Closing 12,560 L"; a snapshot frozen before #395: "Book 14,820 → Dip 14,802 L". */
   movement: string;
-  /** "Sold 2,210 L · Received 300 L · Dip 12,290 L"; an old snapshot: "Sold 2,210 L" for a one-tank product. */
-  detail?: string;
+  /**
+   * Detail lines under `movement`, each short enough for a 390px row with 5-digit
+   * litres: ["Sold 2,210 L · Received 300 L", "Dip 12,290 L"]; an old snapshot: ["Sold 2,210 L"]
+   * for a one-tank product, else none.
+   */
+  detail: string[];
   /** "−18 L", "+4 L", "0 L". */
   variance: string;
   tone: 'bad' | 'warn' | 'default';
@@ -103,19 +107,21 @@ export function deriveTankMovement(snap: Snapshot): TankMovementRow[] {
         : null;
 
     let movement: string;
-    let detail: string | undefined;
+    let detail: string[];
     if (m) {
       movement = `Opening ${litres(num(m.openingQuantity))} → Closing ${litres(num(m.closingQuantity))} ${unit}`;
       detail = [
-        `Sold ${litres(num(m.soldQuantity))} ${unit}`,
-        num(m.receivedQuantity) > 0 ? `Received ${litres(num(m.receivedQuantity))} ${unit}` : '',
+        [
+          `Sold ${litres(num(m.soldQuantity))} ${unit}`,
+          num(m.receivedQuantity) > 0 ? `Received ${litres(num(m.receivedQuantity))} ${unit}` : '',
+        ]
+          .filter(Boolean)
+          .join(' · '),
         `Dip ${litres(num(r.actualQuantity))} ${unit}`,
-      ]
-        .filter(Boolean)
-        .join(' · ');
+      ];
     } else {
       movement = `Book ${litres(num(r.expectedQuantity))} → Dip ${litres(num(r.actualQuantity))} ${unit}`;
-      detail = sold === null ? undefined : `Sold ${litres(sold)} ${unit}`;
+      detail = sold === null ? [] : [`Sold ${litres(sold)} ${unit}`];
     }
     return {
       key: `${r.tankName ?? 'tank'}-${i}`,

@@ -406,7 +406,9 @@ _Avoid_: wallet (standalone), fuel-card account
 
 **OMC Card Sale**:
 Fuel dispensed against an Oil Marketing Company card; settles into the OMC
-Wallet — never Drawer cash, never a station receivable.
+Wallet — never Drawer cash, never a station receivable. It appears in the DSSR
+and in the Shift Summary payment split as "OMC card", so the split adds up to
+total sales.
 _Avoid_: fuel-card sale
 
 ## Finance & Ledger

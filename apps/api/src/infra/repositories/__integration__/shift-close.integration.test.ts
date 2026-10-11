@@ -6,6 +6,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { schema, type DbClient } from '@pump/db';
+import { isBalancedVariance } from '@pump/shared';
 import { CloseShift, type ExecutionContext } from '@pump/core';
 import { runInTransaction } from '../../transaction.js';
 import { LedgerPostingService } from '../../ledger-posting.js';
@@ -60,6 +61,13 @@ const INCOME_CATEGORY = '00000000-0000-0000-0000-00000000b117';
 const CASH_ACCOUNT = '00000000-0000-0000-0000-00000000b118';
 const SALE_1 = '00000000-0000-0000-0000-00000000b119';
 const SALE_2 = '00000000-0000-0000-0000-00000000b11a';
+const SHIFT_B = '00000000-0000-0000-0000-00000000b11b';
+const SALE_B = [
+  '00000000-0000-0000-0000-00000000b11c',
+  '00000000-0000-0000-0000-00000000b11d',
+  '00000000-0000-0000-0000-00000000b11e',
+  '00000000-0000-0000-0000-00000000b11f',
+] as const;
 
 const BOOTSTRAP = `
   do $$ begin
@@ -428,6 +436,32 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       quantity: '20',
       unitPrice: '100',
     });
+
+    // OMC Card Sales (anonymous, settled to the OMC Wallet) are their own payment bucket.
+    await db.insert(schema.customerTransactions).values([
+      {
+        shiftId: SHIFT,
+        businessDayId: DAY,
+        customerId: null,
+        productId: FUEL,
+        attendantId: ATTENDANT,
+        duId: DU,
+        transactionType: 'OMC Sale',
+        referenceType: 'OMC_CARD_SALE',
+        amount: '750',
+      },
+      {
+        shiftId: SHIFT,
+        businessDayId: DAY,
+        customerId: null,
+        productId: FUEL,
+        attendantId: ATTENDANT,
+        duId: DU,
+        transactionType: 'OMC Sale',
+        referenceType: 'OMC_CARD_SALE',
+        amount: '250.50',
+      },
+    ]);
   }
 
   function ctx(): ExecutionContext {
@@ -572,9 +606,90 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
       ],
     });
     expect(snap.totalSalesValue).toBe(50 * 100 + 60 * 90 + 240);
-    expect(snap.payments).toEqual({ cash: 5100, upi: 100, card: 400, credit: 2000 });
+    expect(snap.payments).toEqual({
+      cash: 5100,
+      upi: 100,
+      // The counter-staff sale's 20 non-cash portion is on the terminal rail (no Handover declares it).
+      card: 420,
+      credit: 2000,
+      omcCard: 1000.5,
+    });
     expect(snap.nozzleReadings.map((r: any) => r.duName)).toEqual(['DU-1', 'DU-1']);
     expect(snap).not.toHaveProperty('cardCollectionsSum'); // collections are Office Records
+  });
+
+  it('reconciles a Shift of counter-staff Product Sales: cash + UPI + card + credit + OMC card = total sales', async () => {
+    // Counter staff (no Handover): ₹100 cash, ₹60 UPI, ₹40 card and ₹80 on credit.
+    await db.insert(schema.shifts).values({
+      id: SHIFT_B,
+      organizationId: ORG,
+      stationId: STATION,
+      businessDayId: DAY,
+      shiftTemplateId: TEMPLATE,
+      status: 'OPEN',
+      openedBy: MANAGER,
+    });
+    const methods = [
+      ['Cash', '100'],
+      ['UPI', '60'],
+      ['Card', '40'],
+      ['Credit', '80'],
+    ] as const;
+    await db.insert(schema.sales).values(
+      methods.map(([paymentMethod, total], i) => ({
+        id: SALE_B[i],
+        documentNumber: `SAL-B${i}`,
+        shiftId: SHIFT_B,
+        businessDayId: DAY,
+        saleType: 'Product',
+        paymentMethod,
+        customerId: paymentMethod === 'Credit' ? CUSTOMER : null,
+        attendantId: COUNTER_STAFF,
+        subtotalAmount: total,
+        taxAmount: '0',
+        totalAmount: total,
+      })),
+    );
+    await db.insert(schema.saleItems).values(
+      methods.map(([, total], i) => ({
+        saleId: SALE_B[i],
+        productId: OIL,
+        quantity: '1',
+        unitPrice: total,
+        taxAmount: '0',
+        lineTotal: total,
+      })),
+    );
+    // A product credit sale's ledger row is typed SALE (not CREDIT_SALE).
+    await db.insert(schema.customerTransactions).values({
+      shiftId: SHIFT_B,
+      businessDayId: DAY,
+      customerId: CUSTOMER,
+      attendantId: COUNTER_STAFF,
+      transactionType: 'Credit Sale',
+      referenceType: 'SALE',
+      referenceId: SALE_B[3],
+      amount: '80',
+    });
+
+    const closed = await runInTransaction(db, async (tx, events) =>
+      new CloseShift({
+        context: new DrizzleCloseShiftContextReader(tx),
+        shifts: new DrizzleShiftRepository(tx),
+        nozzleReadings: new DrizzleNozzleReadingRepository(tx),
+        stockMovements: new DrizzleStockMovementWriter(tx),
+        summaries: new DrizzleShiftSummaryWriter(tx),
+        projector: new DrizzleShiftSummaryProjector(tx),
+        events,
+      }).execute({ shiftId: SHIFT_B, closingCash: 100, nozzleReadings: [] }, ctx()),
+    );
+    expect(closed.success).toBe(true);
+    const snap = (closed as any).data.snapshot;
+    expect(snap.payments).toEqual({ cash: 100, upi: 60, card: 40, credit: 80, omcCard: 0 });
+    expect(snap.totalSalesValue).toBe(280);
+    const p = snap.payments;
+    const split = p.cash + p.upi + p.card + p.credit + p.omcCard - (snap.attendantVariance ?? 0);
+    expect(isBalancedVariance(split - snap.totalSalesValue)).toBe(true);
   });
 
   it('serves a stored Shift Summary to a Manager and refuses an Attendant on real Postgres', async () => {

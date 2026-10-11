@@ -34,6 +34,7 @@ const DAY_1 = '00000000-0000-0000-0000-00000000c201';
 const DAY_2 = '00000000-0000-0000-0000-00000000c202';
 const DAY_3 = '00000000-0000-0000-0000-00000000c203';
 const OTHER_DAY = '00000000-0000-0000-0000-00000000c211';
+const FLEET = '00000000-0000-0000-0000-00000000c401';
 
 const BOOTSTRAP = `
   do $$ begin
@@ -212,6 +213,42 @@ describe.skipIf(!CONNECTION)('DSSR tank stock movement against real Postgres', (
       lineTotal: '9000',
     } as never);
 
+    // Day 2 ledger rows: a fleet Credit Sale and two anonymous OMC Card Sales (one more on day 3).
+    await db.insert(schema.customers).values({
+      id: FLEET,
+      organizationId: ORG,
+      name: 'Sri Balaji Transports',
+      customerType: 'Fleet',
+    } as never);
+    const ledger = (businessDayId: string, over: Record<string, unknown>) => ({
+      businessDayId,
+      shiftId: businessDayId === DAY_2 ? SHIFT_2 : null,
+      ...over,
+    });
+    await db.insert(schema.customerTransactions).values([
+      ledger(DAY_2, {
+        customerId: FLEET,
+        transactionType: 'Credit Sale',
+        referenceType: 'CREDIT_SALE',
+        amount: '13800',
+      }),
+      ledger(DAY_2, {
+        transactionType: 'OMC Sale',
+        referenceType: 'OMC_CARD_SALE',
+        amount: '1500.50',
+      }),
+      ledger(DAY_2, {
+        transactionType: 'OMC Sale',
+        referenceType: 'OMC_CARD_SALE',
+        amount: '499.50',
+      }),
+      ledger(DAY_3, {
+        transactionType: 'OMC Sale',
+        referenceType: 'OMC_CARD_SALE',
+        amount: '777',
+      }),
+    ] as never);
+
     // Day 1: opening balance 10000 and a purchase of 6000, 1500 sold, dip posts -50.
     await move(DAY_1, TANK, 'OpeningBalance', 10000);
     await move(DAY_1, TANK, 'Purchase', 6000);
@@ -305,6 +342,19 @@ describe.skipIf(!CONNECTION)('DSSR tank stock movement against real Postgres', (
     expect(source.saleItems.map((line) => line.productId)).toEqual([OIL]);
     const payload = composeDssr(source) as { merchandise: { salesValue: number } };
     expect(payload.merchandise.salesValue).toBe(120);
+  });
+
+  it("reads the day's OMC Card Sales apart from Credit Sales, in the same statement", async () => {
+    const source = await new DrizzleDssrDataReader(db).readBusinessDay(DAY_2);
+    expect(source.creditSales).toEqual([{ customerType: 'Fleet', amount: 13800 }]);
+    expect(source.omcCardSales).toEqual([{ amount: 1500.5 }, { amount: 499.5 }]);
+    const payload = composeDssr(source) as Record<string, any>;
+    expect(payload.omcCard).toEqual({ total: 2000, count: 2 });
+    expect(payload.credit).toMatchObject({ total: 13800, count: 1 });
+    // Day 3's OMC sale is not day 2's.
+    const day3 = await new DrizzleDssrDataReader(db).readBusinessDay(DAY_3);
+    expect(day3.omcCardSales).toEqual([{ amount: 777 }]);
+    expect(day3.creditSales).toEqual([]);
   });
 
   it('leaves a day with no dips without a movement read', async () => {

@@ -13,6 +13,16 @@ import { num, round2 } from '../num.js';
 import type { Snapshot } from '../home/sales.js';
 import { byLargestVariance, offLabel, type DrawerOff } from '../variance.js';
 
+/** The level a variance figure belongs to; one name for it on every screen. */
+export type VarianceLevelKey = 'attendants' | 'office' | 'single';
+
+export const VARIANCE_LEVEL_LABEL: Record<VarianceLevelKey, string> = {
+  attendants: 'Attendants',
+  office: 'Office count',
+  // A single-level snapshot has one figure: counted cash against expected cash.
+  single: 'Counted cash',
+};
+
 export interface ShiftVariance {
   twoLevel: boolean;
   /** Σ Drawer variance; null for a snapshot closed under the single-level model. */
@@ -21,6 +31,8 @@ export interface ShiftVariance {
   office: number;
   /** The figure a row or headline shows: attendant when off, else office. */
   headline: number;
+  /** Which level `headline` is: name it wherever the figure is shown. */
+  headlineLevel: VarianceLevelKey;
   /** Who it belongs to: "DU3 short", "DU1 over +1 more", "Office count". */
   headlineNote: string;
   /** Drawers that are off, largest first. */
@@ -46,6 +58,11 @@ export function deriveShiftVariance(snap: Snapshot): ShiftVariance {
 
   const attendantOff = attendant !== null && off(attendant);
   const headline = attendantOff ? attendant : office;
+  const headlineLevel: VarianceLevelKey = !twoLevel
+    ? 'single'
+    : attendantOff
+      ? 'attendants'
+      : 'office';
   let headlineNote = 'Balanced';
   if (off(headline)) {
     headlineNote =
@@ -57,5 +74,5 @@ export function deriveShiftVariance(snap: Snapshot): ShiftVariance {
             : 'Over'
         : 'Office count';
   }
-  return { twoLevel, attendant, office, headline, headlineNote, drawersOff };
+  return { twoLevel, attendant, office, headline, headlineLevel, headlineNote, drawersOff };
 }

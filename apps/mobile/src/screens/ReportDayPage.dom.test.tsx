@@ -252,6 +252,27 @@ describe('ReportDayPage', () => {
     expect(screen.getByText('−18 L').className).toMatch(/text-bad-fg/);
   });
 
+  it('shows the OMC card sales beside the tiles when the snapshot carries them', () => {
+    const snap = payload('2026-10-06', false) as { snapshotData: Record<string, any> };
+    snap.snapshotData.omcCard = { total: 2000, count: 1 };
+    feed.snapshots['2026-10-06'] = snap;
+    mount('2026-10-06');
+    const row = screen.getByText('OMC card sales').closest('div.flex') as HTMLElement;
+    expect(row.textContent).toContain('1 slip');
+    expect(row.textContent).toContain('₹2,000');
+  });
+
+  it('shows no OMC line for a snapshot frozen before the field, or a day without any', () => {
+    mount('2026-10-08');
+    expect(screen.queryByText('OMC card sales')).toBeNull();
+    cleanup();
+    const snap = payload('2026-10-06', false) as { snapshotData: Record<string, any> };
+    snap.snapshotData.omcCard = { total: 0, count: 0 };
+    feed.snapshots['2026-10-06'] = snap;
+    mount('2026-10-06');
+    expect(screen.queryByText('OMC card sales')).toBeNull();
+  });
+
   it('shows each tank opening → closing, sold and the dip when the snapshot carries them', () => {
     const snap = payload('2026-10-06', false) as { snapshotData: Record<string, any> };
     snap.snapshotData.fuelStockVariance[0].tankMovement = {
@@ -265,7 +286,8 @@ describe('ReportDayPage', () => {
     feed.snapshots['2026-10-06'] = snap;
     mount('2026-10-06');
     expect(screen.getByText('Opening 17,030 → Closing 14,820 L')).toBeTruthy();
-    expect(screen.getByText('Sold 2,210 L · Dip 14,802 L')).toBeTruthy();
+    expect(screen.getByText('Sold 2,210 L')).toBeTruthy();
+    expect(screen.getByText('Dip 14,802 L')).toBeTruthy();
     expect(screen.getByText('−18 L').className).toMatch(/text-bad-fg/);
   });
 

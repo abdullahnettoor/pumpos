@@ -6,12 +6,18 @@
  * each deriver says what it does then (`products: null`, payments summed from
  * the Handovers, the Dispenser Unit from today's setup).
  */
-import { productCategoryOf } from '@pump/shared';
+import { isBalancedVariance, productCategoryOf } from '@pump/shared';
 import { wholeQuantityLabel } from '../money/quantity.js';
 import { num, round2 } from '../num.js';
 import { unitLabel } from '@pump/ui';
 import type { FuelLine, ProductLine, Snapshot } from '../home/sales.js';
-import { deriveShiftVariance, drawerName, type ShiftVariance } from './variance.js';
+import { VARIANCE_TOLERANCE } from '../variance.js';
+import {
+  VARIANCE_LEVEL_LABEL,
+  deriveShiftVariance,
+  drawerName,
+  type ShiftVariance,
+} from './variance.js';
 
 export interface NozzleLine {
   key: string;
@@ -37,7 +43,7 @@ export interface DrawerLine {
 }
 
 export interface OfficeCount {
-  /** "Office count vs declared" (two-level) or "Cash variance" (single-level). */
+  /** "Office count vs declared" (two-level) or "Counted cash" (single-level, as on the header card). */
   label: string;
   counted: number;
   /** What the office expected: declared cash for two-level, expected drawer cash otherwise. */
@@ -50,6 +56,8 @@ export interface ShiftPayments {
   upi: number;
   card: number;
   credit: number;
+  /** OMC Card Sales; null when the snapshot predates the bucket (it was not captured). */
+  omcCard: number | null;
 }
 
 export interface ShiftSummaryModel {
@@ -144,11 +152,18 @@ function drawerLines(snap: Snapshot): DrawerLine[] {
 function derivePayments(snap: Snapshot): ShiftPayments {
   if (snap.payments) {
     const p = snap.payments as Snapshot;
-    return { cash: num(p.cash), upi: num(p.upi), card: num(p.card), credit: num(p.credit) };
+    return {
+      cash: num(p.cash),
+      upi: num(p.upi),
+      card: num(p.card),
+      credit: num(p.credit),
+      omcCard: p.omcCard == null ? null : num(p.omcCard),
+    };
   }
   const handovers = list(snap.handovers);
   const drawers = list(snap.drawers);
   return {
+    omcCard: null,
     cash: snap.cashSalesSum != null ? num(snap.cashSalesSum) : sum(drawers, (d) => d.cashSales),
     upi: sum(handovers, (h) => h.upiHandedOver),
     card: sum(handovers, (h) => h.cardHandedOver),
@@ -211,7 +226,7 @@ function deriveOffice(snap: Snapshot, v: ShiftVariance): OfficeCount {
   const counted = num(snap.closingCash);
   // Two-level: the office expects what the Drawers declared; `expectedCash` is that figure.
   return {
-    label: v.twoLevel ? 'Office count vs declared' : 'Cash variance',
+    label: v.twoLevel ? 'Office count vs declared' : VARIANCE_LEVEL_LABEL.single,
     counted,
     expected: num(snap.expectedCash),
     variance: v.office,
@@ -237,17 +252,97 @@ export function deriveShiftSummary(snap: Snapshot, duNames: NozzleDuNames): Shif
 }
 
 export interface PaymentSlice {
-  key: 'cash' | 'upi' | 'card' | 'credit';
+  key: 'cash' | 'upi' | 'card' | 'credit' | 'omc';
   label: string;
   amount: number;
 }
 
-/** The four ways a Shift was paid, as the snapshot declares them. */
+/**
+ * How a Shift was paid, as the snapshot declares it. Cash, UPI, Card and Credit
+ * always show; "OMC card" (fuel paid by an Oil Marketing Company card, settled to
+ * the OMC Wallet) shows once the snapshot carries it and it is not zero.
+ */
 export function derivePaymentSlices(p: ShiftPayments): PaymentSlice[] {
-  return [
+  const slices: PaymentSlice[] = [
     { key: 'cash', label: 'Cash', amount: p.cash },
     { key: 'upi', label: 'UPI', amount: p.upi },
     { key: 'card', label: 'Card', amount: p.card },
     { key: 'credit', label: 'Credit', amount: p.credit },
   ];
+  if (p.omcCard != null && p.omcCard !== 0)
+    slices.push({ key: 'omc', label: 'OMC card', amount: p.omcCard });
+  return slices;
+}
+
+export interface PaymentGap {
+  kind: 'short' | 'over';
+  /** "Short" / "Over". */
+  label: string;
+  /** Always positive: the direction is the label. */
+  amount: number;
+  /** What the line means for the reader. */
+  note: string;
+  tone: 'bad' | 'warn';
+}
+
+/** Sales the stored payment figures do not account for: said out loud, never left as a bare gap. */
+export interface PaymentUnitemised {
+  /** Total sales minus what the buckets (and the attendant line) add up to; signed. */
+  amount: number;
+  note: string;
+}
+
+export interface PaymentSplitView {
+  slices: PaymentSlice[];
+  /** The attendant variance as its own line; null when balanced. */
+  gap: PaymentGap | null;
+  /** "Not itemised": set only when the lines above do not add up to `total`. */
+  unitemised: PaymentUnitemised | null;
+  /** Total sales: always shown, so the split can be checked against it. */
+  total: number;
+}
+
+/**
+ * The payment split that reconciles to Total sales. Cash is what the Drawers
+ * DECLARED, so an attendant shortage is sales that never reached a payment bucket:
+ * Cash + UPI + Card + Credit + OMC card + shortage = Total sales (an overage is
+ * cash declared beyond the sales, so it comes off instead). A new snapshot always
+ * adds up. One written before a bucket was stored may not: then the difference is
+ * its own "Not itemised" line (honest about what is unknown) and Total sales still
+ * shows. Nothing is recomputed from live data, only added up for display.
+ */
+export function derivePaymentSplit(
+  payments: ShiftPayments,
+  total: number,
+  attendantVariance: number | null,
+): PaymentSplitView {
+  const slices = derivePaymentSlices(payments);
+  const paid = round2(slices.reduce((s, x) => s + x.amount, 0));
+  const variance = attendantVariance ?? 0;
+  const gap: PaymentGap | null = isBalancedVariance(variance)
+    ? null
+    : {
+        kind: variance < 0 ? 'short' : 'over',
+        label: variance < 0 ? 'Short' : 'Over',
+        amount: Math.abs(variance),
+        note:
+          variance < 0
+            ? 'Attendant shortage: sold, not declared in Cash'
+            : 'Attendant overage: already counted in Cash',
+        tone: variance < 0 ? 'bad' : 'warn',
+      };
+  const rest = round2(total - (paid - variance));
+  // Within the rupee-rounding allowance the split counts as adding up.
+  const unitemised: PaymentUnitemised | null =
+    Math.abs(rest) < VARIANCE_TOLERANCE
+      ? null
+      : {
+          amount: rest,
+          // A snapshot with an OMC card bucket is new enough to have stored everything.
+          note:
+            payments.omcCard == null
+              ? 'Recorded before payment details were stored'
+              : 'Payment details do not add up to total sales',
+        };
+  return { slices, gap, unitemised, total };
 }

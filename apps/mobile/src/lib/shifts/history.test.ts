@@ -89,8 +89,34 @@ describe('deriveShiftHistory', () => {
     expect(day.rows[0]).toMatchObject({
       title: 'Shift 1',
       window: '6:00 am – 6:00 am',
-      badge: { tone: 'bad', text: '−₹340' },
+      badge: { tone: 'bad', text: 'Attendants −₹340' },
     });
+  });
+
+  it('names the office level when only the count is off, and says nothing extra when balanced', () => {
+    const [day] = deriveShiftHistory(
+      [
+        summary('a', '2026-10-09', '2026-10-09T00:30:00Z', {
+          cashVarianceModel: 2,
+          attendantVariance: 0,
+          officeCountVariance: 50,
+          cashVariance: 50,
+        }),
+        summary('b', '2026-10-09', '2026-10-09T08:30:00Z', {
+          cashVarianceModel: 2,
+          attendantVariance: 0,
+          officeCountVariance: 0,
+          cashVariance: 0,
+        }),
+        summary('c', '2026-10-09', '2026-10-09T09:30:00Z', {
+          cashVarianceModel: 1,
+          cashVariance: -80,
+        }),
+      ],
+      ctx,
+    );
+    const text = Object.fromEntries(day.rows.map((r) => [r.shiftId, r.badge.text]));
+    expect(text).toEqual({ a: 'Office count +₹50', b: 'Balanced', c: 'Counted cash −₹80' });
   });
 
   it('files a summary with no Business Date under the day it opened', () => {

@@ -1,4 +1,4 @@
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, eq, ne, or, sql } from 'drizzle-orm';
 import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import { productCategoryOf, type ProductType } from '@pump/shared';
 import { dssrFuelSalesValue, dssrNetVolume, dssrProductSalesValue } from '../dssr-snapshot-sql.js';
@@ -127,9 +127,13 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       .innerJoin(schema.sales, eq(schema.sales.id, schema.saleItems.saleId))
       .where(and(eq(schema.sales.businessDayId, businessDayId), ne(schema.sales.saleType, 'Fuel')));
 
-    // Credit receivables created today, with customer type (normal vs fleet).
-    const creditSaleRows = await this.db
+    // Credit receivables created today (with customer type: normal vs fleet) and
+    // the day's OMC Card Sales, in ONE statement: both are Business-Day anchored
+    // customer_transactions, told apart by type below.
+    const ledgerRows = await this.db
       .select({
+        transactionType: schema.customerTransactions.transactionType,
+        referenceType: schema.customerTransactions.referenceType,
         customerType: schema.customers.customerType,
         amount: schema.customerTransactions.amount,
       })
@@ -138,9 +142,20 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       .where(
         and(
           eq(schema.customerTransactions.businessDayId, businessDayId),
-          eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+          or(
+            eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+            and(
+              eq(schema.customerTransactions.transactionType, 'OMC Sale'),
+              eq(schema.customerTransactions.referenceType, 'OMC_CARD_SALE'),
+            ),
+          ),
         ),
       );
+    const creditSaleRows = ledgerRows.filter((r) => r.transactionType === 'Credit Sale');
+    // Told apart exactly as the WHERE above selects them (type AND reference type).
+    const omcCardRows = ledgerRows.filter(
+      (r) => r.transactionType === 'OMC Sale' && r.referenceType === 'OMC_CARD_SALE',
+    );
 
     // Business-day tank dip / stock-count reconciliation.
     const varianceRows = await this.db
@@ -230,6 +245,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         customerType: r.customerType ?? 'Regular',
         amount: Number(r.amount),
       })),
+      omcCardSales: omcCardRows.map((r) => ({ amount: Number(r.amount) })),
       stockVariances: varianceRows.map((r) => ({
         tankId: r.tankId ?? null,
         productId: r.productId,

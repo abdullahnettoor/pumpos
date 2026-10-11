@@ -62,6 +62,15 @@ export interface DssrCreditSale {
   amount: number;
 }
 
+/**
+ * An OMC Card Sale of the business day: fuel paid by an Oil Marketing Company
+ * card, settled to the OMC Wallet. Not a receivable and not a `sales` row, so
+ * without this the day's sales summary shows it nowhere.
+ */
+export interface DssrOmcCardSale {
+  amount: number;
+}
+
 /** Business-day tank dip / physical-count reconciliation. */
 export interface DssrStockVariance {
   /** The dipped tank (null for an item count). Added to the snapshot so readers need not match by name. */
@@ -114,6 +123,8 @@ export interface DssrSourceData {
   purchases: DssrPurchase[];
   sales: DssrSale[];
   creditSales: DssrCreditSale[];
+  /** The day's OMC Card Sales, anchored to the Business Day like Credit Sales. */
+  omcCardSales: DssrOmcCardSale[];
   stockVariances: DssrStockVariance[];
   /** Merchandise sale line items (productId + qty) for merchandise COGS. */
   saleItems: DssrSaleItem[];

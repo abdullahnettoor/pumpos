@@ -182,6 +182,10 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     else normalCredit += cs.amount;
   }
 
+  // --- OMC Card Sales: fuel paid by an OMC card, settled to the OMC Wallet. Not a
+  // receivable and not drawer cash; its own line beside Credit Sales (ADR 0001). ---
+  const omcCardTotal = round2(sum(source.omcCardSales.map((s) => s.amount)));
+
   // --- Purchases (forecourt stock events; paying for them is an Office Record) ---
   const purchasesTotal = sum(source.purchases.map((p) => p.amount));
 
@@ -322,6 +326,8 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       /** Number of credit slips (customer-ledger Credit Sales) behind the total. */
       count: source.creditSales.length,
     },
+    // Additive: snapshots frozen before it lack the key (readers print nothing for them).
+    omcCard: { total: omcCardTotal, count: source.omcCardSales.length },
     purchases: { total: purchasesTotal, count: source.purchases.length },
     pnl: {
       revenueFuel,
