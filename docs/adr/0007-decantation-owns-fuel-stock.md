@@ -28,7 +28,7 @@ Research: `docs/research/decantation-and-density.md`.
      that tank during unloading.
    - Without it: the next routine Tank Dip of that tank − before dip + nozzle
      sales between the two dips. Until that dip exists the Decantation is
-     *Pending measurement* and adds no stock; the tank shows "Waiting on
+     _Pending measurement_ and adds no stock; the tank shows "Waiting on
      decantation".
 4. **Linking.** One Fuel Purchase (one product per OMC invoice) links to one
    or more Decantations of that product. Either may be recorded first. An
