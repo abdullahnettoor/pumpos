@@ -208,6 +208,11 @@ export function canArchiveParty(role: Role): boolean {
   return role === 'Owner' || role === 'Manager';
 }
 
+/** Record / update Decantations (tanker unloads) and their density. Owner, Manager, Accountant. */
+export function canRecordDecantation(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
+}
+
 /** Record purchases / supplier payments. Owner, Manager, Accountant (not Staff). */
 export function canRecordPurchase(role: Role): boolean {
   return role === 'Owner' || role === 'Manager' || role === 'Accountant';
