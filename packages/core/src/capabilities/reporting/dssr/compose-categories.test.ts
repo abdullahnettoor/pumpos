@@ -10,6 +10,7 @@ const source = (overrides: Partial<DssrSourceData> = {}): DssrSourceData => ({
   purchases: [],
   sales: [],
   creditSales: [],
+  omcCardSales: [],
   stockVariances: [],
   saleItems: [],
   products: {},

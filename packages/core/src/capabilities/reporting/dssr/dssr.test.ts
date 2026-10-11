@@ -126,6 +126,7 @@ function source(): DssrSourceData {
       { customerType: 'Regular', amount: 1000 },
       { customerType: 'Fleet', amount: 4000 },
     ],
+    omcCardSales: [{ amount: 2000 }],
     stockVariances: [
       {
         tankName: 'T1',
@@ -184,6 +185,7 @@ describe('GenerateDssr', () => {
       expect(d.merchandise.byPaymentMethod.Credit).toBe(1180);
       expect(d.credit.normalCredit).toBe(1000);
       expect(d.credit.fleetCredit).toBe(4000);
+      expect(d.omcCard).toEqual({ total: 2000, count: 1 });
       // T5: output GST on merchandise, extracted from the MRP-inclusive line.
       expect(d.salesTax.gst.taxable).toBe(1423.73);
       expect(d.salesTax.gst.total).toBe(256.27);

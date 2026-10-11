@@ -85,7 +85,11 @@ function dayQueue(n: number): any[][] {
     rows({ amount: '1200' }), // purchases
     rows({ paymentMethod: 'Cash', saleType: 'Product', totalAmount: '500' }), // sales
     rows({ productId: 'p2', quantity: '1', lineTotal: '500' }), // sale lines
-    rows({ customerType: 'Fleet', amount: '4000' }), // credit sales
+    // ONE ledger statement: Credit Sales and OMC Card Sales, told apart by type
+    [
+      ...rows({ transactionType: 'Credit Sale', customerType: 'Fleet', amount: '4000' }),
+      ...rows({ transactionType: 'OMC Sale', customerType: null, amount: '250' }),
+    ],
     [
       {
         tankId: 'tank-1',
@@ -119,6 +123,7 @@ describe('GET /dssr/daily/preview open-day statement budget (#391)', () => {
     expect(counter).toEqual({ selects: 10, executes: 1 });
     // The Home screen's figures ride on the preview payload.
     expect(body.data.snapshotData.credit).toMatchObject({ count: n, total: 4000 * n });
+    expect(body.data.snapshotData.omcCard).toEqual({ count: n, total: 250 * n });
     expect(body.data.snapshotData.purchases).toEqual({ total: 1200 * n, count: n });
     expect(body.data.snapshotData.shifts[0]).toMatchObject({ fuelSalesValue: 98000 });
     // Product categories (#392) ride on the same products read: no extra statement.

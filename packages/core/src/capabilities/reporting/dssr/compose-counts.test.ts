@@ -7,6 +7,7 @@ const emptySource = (overrides: Partial<DssrSourceData> = {}): DssrSourceData =>
   purchases: [],
   sales: [],
   creditSales: [],
+  omcCardSales: [],
   stockVariances: [],
   saleItems: [],
   products: {},
@@ -28,6 +29,21 @@ describe('composeDssr document counts and per-shift fuel value (#391)', () => {
     ) as any;
     expect(d.credit).toMatchObject({ total: 5500, count: 3 });
     expect(d.purchases).toEqual({ total: 451200, count: 2 });
+  });
+
+  it("totals the day's OMC Card Sales and counts their slips, apart from Credit Sales", () => {
+    const d = composeDssr(
+      emptySource({
+        creditSales: [{ customerType: 'Fleet', amount: 4000 }],
+        omcCardSales: [{ amount: 1200.5 }, { amount: 799.5 }],
+      }),
+    ) as any;
+    expect(d.omcCard).toEqual({ total: 2000, count: 2 });
+    expect(d.credit).toMatchObject({ total: 4000, count: 1 });
+  });
+
+  it('reports zero OMC Card Sales for a day without any', () => {
+    expect((composeDssr(emptySource()) as any).omcCard).toEqual({ total: 0, count: 0 });
   });
 
   it('reports zero counts for a day with no credit sales or purchases', () => {
