@@ -59,7 +59,6 @@ const newChamber = (line = 0, capacity = '4000'): Chamber => ({
 
 const grid2: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 };
 const grid3: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 };
-const grid2b = grid2;
 
 const lineColor = ['#2563eb', '#c2410c', '#7c3aed', '#0f766e'];
 
