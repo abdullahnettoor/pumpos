@@ -39,7 +39,7 @@ _Avoid_: Business Date (for office records), UTC date
 
 **Office Record**:
 Money handled by the office, not by Attendants: Collections, Supplier
-Payments, Expenses, Income and bank work. Carries an Entry Date, no Shift and
+Payments, Fuel Purchases, Expenses, Income and bank work. Carries an Entry Date, no Shift and
 no Business Day, and lives in the ledger.
 _Avoid_: day-anchored financial, back-office entry
 
@@ -283,8 +283,10 @@ Money paid to a supplier. An Office Record; never touches the Drawer.
 _Avoid_: vendor payment, purchase payment
 
 **Purchase**:
-Stock received from a supplier. A forecourt stock event anchored to the
-Business Day (sealed with it), never to a Shift. Paying for it is a separate
+A supplier invoice. A product Purchase adds stock and is anchored to the
+Business Day (sealed with it), never to a Shift. A **Fuel Purchase** is an
+Office Record (Entry Date): it records the payable only and never moves stock;
+fuel stock comes from Decantation (ADR 0007). Paying for either is a separate
 Supplier Payment.
 _Avoid_: procurement, inward
 
@@ -416,7 +418,20 @@ _Avoid_: stock audit
 
 **Tank Transfer**:
 Fuel moved between two Tanks without a sale.
-_Avoid_: inter-tank move, decanting
+_Avoid_: inter-tank move
+
+**Decantation**:
+Unloading a tanker into a station Tank. The only event that adds fuel stock.
+Anchored to the Business Day, no Shift. Records the dip before unloading, RO
+Density, unloading times and an optional dip after unloading; links to a Fuel
+Purchase. Received quantity is always measured (ADR 0007).
+_Avoid_: fuel receipt, tanker receipt, unloading entry
+
+**RO Density**:
+Density the station measures from the tanker sample with its own instrument,
+compared with the Invoice Density. Recorded, never computed by PumpOS beyond
+the optional density calculator.
+_Avoid_: observed density (in UI), sample density
 
 ## Reports & Snapshots
 

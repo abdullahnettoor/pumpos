@@ -119,7 +119,7 @@ is explicit and idempotent (`GenerateDssr` returns the existing snapshot unless 
   and **also enforces org isolation in application code** (every use-case checks
   `ctx.organizationId`).
 - Roles: **Owner, Manager, Accountant, Staff, Attendant**. Current role
-  definitions are in `@pump/shared/permissions/guards.ts` and `CONTEXT.md`;
+  definitions are in `@pump/shared/permissions/guards.ts` and `GLOSSARY.md`;
   organization capabilities, limits, and subscription write policy are a
   separate access axis (ADR 0004).
 

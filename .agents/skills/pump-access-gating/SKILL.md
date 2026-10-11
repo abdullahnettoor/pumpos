@@ -20,7 +20,7 @@ An Owner of an unentitled Organization is refused. A paid-up Organization at
 its Station Limit is refused. The answers are independent, so check the one you
 actually mean.
 
-Canonical vocabulary lives in `CONTEXT.md`; the architecture and the business
+Canonical vocabulary lives in `GLOSSARY.md`; the architecture and the business
 rules settled during Phase E are in `docs/adr/0004-organization-access-control.md`
 (read its **Amendments** before changing a rule — several look arbitrary until
 you know why).

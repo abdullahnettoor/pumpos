@@ -1,6 +1,6 @@
 // Homepage copy and sample data. Every figure here is illustrative sample data,
 // labelled "Sample data" where it appears on the page. Keep domain terms aligned
-// with CONTEXT.md (attendant, Drawer, Handover, business day, DSR).
+// with GLOSSARY.md (attendant, Drawer, Handover, business day, DSR).
 
 export type Tone = 'danger' | 'amber';
 

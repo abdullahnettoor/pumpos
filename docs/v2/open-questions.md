@@ -1,7 +1,7 @@
 # Deferred Work & Open Questions
 
 This is a short index of deferred work, not a second product rulebook. Current
-rules are in `AGENTS.md`, `CONTEXT.md`, and accepted ADRs. Confirm an item is still
+rules are in `AGENTS.md`, `GLOSSARY.md`, and accepted ADRs. Confirm an item is still
 open in code and GitHub Issues before planning against it.
 
 ## 1. Dealer-held prepaid wallet (product decision still needed)

@@ -240,7 +240,7 @@ Accessories
 ```
 
 Product sales are separate from fuel sales, which derive from nozzle readings.
-See `CONTEXT.md` ("Sale", "Fuel Sale", "Product Sale") for the shared language.
+See `GLOSSARY.md` ("Sale", "Fuel Sale", "Product Sale") for the shared language.
 
 ---
 
@@ -746,7 +746,7 @@ Issues live in GitHub Issues for `abdullahnettoor/pumpos`; long-range planning r
 
 ### Domain docs
 
-Single-context: one `CONTEXT.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
+Single-context: one `GLOSSARY.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
 
 ### User flow
 
