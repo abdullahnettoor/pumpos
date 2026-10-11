@@ -5,7 +5,16 @@
 //   B — Tank cards: today's reading per tank, trend, quick inline entry.
 //   C — Matrix + board: tanks × days grid, and a printable "Today's density" board.
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Chip, Icon, KpiStrip, KpiTile, Panel, Sparkline } from '../../../pump-ds/index.js';
+import {
+  Button,
+  Chip,
+  Icon,
+  KpiStrip,
+  KpiTile,
+  Panel,
+  SegmentedControl,
+  Sparkline,
+} from '../../../pump-ds/index.js';
 import { Drawer } from '../../Drawer.js';
 import { Field, NumberInput, Select } from '../../primitives/Field.js';
 import { density15 } from './DensityCalculator.js';
@@ -682,25 +691,41 @@ const printBoard = (rows: Reading[]) => {
   w.document.close();
 };
 
-const VariantD: React.FC<VProps> = ({ rows, onRecord }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-      <Button
-        variant="secondary"
-        size="sm"
-        leftIcon={<Icon name="printer" size="sm" />}
-        onClick={() => printBoard(rows)}
-      >
-        Print board
-      </Button>
-      <Button size="sm" leftIcon={<Icon name="plus" size="sm" />} onClick={() => onRecord()}>
-        Record density
-      </Button>
+const VariantD: React.FC<VProps> = ({ rows, onRecord }) => {
+  const [view, setView] = useState<'today' | 'register'>('today');
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, alignItems: 'center' }}>
+        <SegmentedControl
+          aria-label="Density view"
+          options={[
+            { value: 'today', label: 'Today' },
+            { value: 'register', label: 'Register' },
+          ]}
+          value={view}
+          onChange={(v: string) => setView(v as 'today' | 'register')}
+        />
+        <span style={{ flex: 1 }} />
+        <Button
+          variant="secondary"
+          size="sm"
+          leftIcon={<Icon name="printer" size="sm" />}
+          onClick={() => printBoard(rows)}
+        >
+          Print board
+        </Button>
+        <Button size="sm" leftIcon={<Icon name="plus" size="sm" />} onClick={() => onRecord()}>
+          Record density
+        </Button>
+      </div>
+      {view === 'today' ? (
+        <VariantB rows={rows} onRecord={onRecord} />
+      ) : (
+        <VariantA rows={rows} onRecord={onRecord} />
+      )}
     </div>
-    <VariantB rows={rows} onRecord={onRecord} />
-    <VariantA rows={rows} onRecord={onRecord} />
-  </div>
-);
+  );
+};
 
 /* ------------------------------ Tab + switcher ------------------------------ */
 
