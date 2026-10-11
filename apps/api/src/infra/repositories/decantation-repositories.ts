@@ -420,7 +420,6 @@ export class DrizzleDecantationRepository implements DecantationRepository {
         and(
           eq(schema.decantations.organizationId, organizationId),
           eq(schema.decantations.stationId, stationId),
-          sql`${schema.decantations.status} <> 'DRAFT'`,
           lte(schema.businessDays.businessDate, closeDay.businessDate),
         ),
       );
@@ -428,7 +427,14 @@ export class DrizzleDecantationRepository implements DecantationRepository {
     const pendingMeasurement = new Set<string>();
     const unlinkedByDocument = new Map<string, Set<string>>();
     const flagged = new Set<string>();
+    const unloading = new Set<string>();
     for (const row of rows) {
+      // A DRAFT is a tanker still unloading: warn once, and keep it out of the
+      // measurement / linking / flag lists (it has none of those yet).
+      if (row.status === 'DRAFT') {
+        unloading.add(row.documentNumber);
+        continue;
+      }
       if (row.status === 'PENDING_MEASUREMENT' || row.lineStatus === 'PENDING_MEASUREMENT')
         pendingMeasurement.add(row.documentNumber);
       if (row.productId && !row.linkedPurchaseId) {
@@ -452,6 +458,7 @@ export class DrizzleDecantationRepository implements DecantationRepository {
         }))
         .sort((a, b) => a.documentNumber.localeCompare(b.documentNumber)),
       flagged: [...flagged].sort(),
+      unloading: [...unloading].sort(),
     };
   }
 }

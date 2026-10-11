@@ -8,9 +8,10 @@ describe('formatDecantationWarningSummary', () => {
         pendingMeasurement: ['DEC-1'],
         purchaseNotLinked: [{ documentNumber: 'DEC-1', products: ['Diesel', 'Petrol'] }],
         flagged: ['DEC-2'],
+        unloading: ['DEC-3'],
       }),
     ).toBe(
-      'Pending measurement: DEC-1; Purchase not linked: DEC-1 (Diesel, Petrol); Flagged: DEC-2',
+      'Tanker still unloading — finish or discard: DEC-3; Pending measurement: DEC-1; Purchase not linked: DEC-1 (Diesel, Petrol); Flagged: DEC-2',
     );
   });
 });

@@ -374,8 +374,9 @@ describe.skipIf(!CONNECTION)(
           { documentNumber: 'DEC-PARTIAL', products: ['Diesel'] },
         ],
         flagged: ['DEC-3'],
+        // A DRAFT is a tanker still unloading: its own non-blocking warning, never pending/unlinked.
+        unloading: ['DEC-DRAFT'],
       });
-      expect(JSON.stringify(body.data)).not.toContain('DEC-DRAFT');
     });
 
     it('closing an older day ignores Decantations of later days (<= bound), flagged is the day only', async () => {
@@ -388,6 +389,7 @@ describe.skipIf(!CONNECTION)(
         pendingMeasurement: ['DEC-OLD'],
         purchaseNotLinked: [{ documentNumber: 'DEC-OLD', products: ['Petrol'] }],
         flagged: ['DEC-OLD'],
+        unloading: [],
       });
     });
   },

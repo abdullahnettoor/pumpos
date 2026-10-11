@@ -165,6 +165,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
         ...decantationWarnings.pendingMeasurement,
         ...decantationWarnings.purchaseNotLinked.map(({ documentNumber }) => documentNumber),
         ...decantationWarnings.flagged,
+        ...(decantationWarnings.unloading ?? []),
       ]).size
     : 0;
 

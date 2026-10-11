@@ -126,6 +126,8 @@ export interface DecantationDayCloseWarnings {
   pendingMeasurement: string[];
   purchaseNotLinked: { documentNumber: string; products: string[] }[];
   flagged: string[];
+  /** Tanker still unloading (DRAFT Decantation): finish or discard. */
+  unloading: string[];
 }
 
 export function formatDecantationWarningSummary(warnings: DecantationDayCloseWarnings): string {
@@ -133,6 +135,7 @@ export function formatDecantationWarningSummary(warnings: DecantationDayCloseWar
   const describe = (label: string, documents: string[]) => {
     if (documents.length > 0) entries.push(`${label}: ${documents.join(', ')}`);
   };
+  describe('Tanker still unloading — finish or discard', warnings.unloading ?? []);
   describe('Pending measurement', warnings.pendingMeasurement);
   if (warnings.purchaseNotLinked.length > 0) {
     entries.push(
