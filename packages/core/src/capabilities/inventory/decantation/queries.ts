@@ -2,7 +2,12 @@ import { z } from 'zod';
 import { isValidBusinessDate } from '@pump/shared';
 import { err, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { Decantation, DecantationDayCloseWarnings, DecantationRepository } from './ports.js';
+import type {
+  DecantationDayCloseWarnings,
+  DecantationLinkRepository,
+  DecantationRepository,
+} from './ports.js';
+import { withLinks, type DecantationWithLinks } from './linking.js';
 
 export interface GetDecantationCommand {
   /** When omitted the caller authorizes the returned Decantation's station. */
@@ -10,14 +15,23 @@ export interface GetDecantationCommand {
   decantationId: string;
 }
 
-export class GetDecantation implements UseCase<GetDecantationCommand, Decantation> {
-  constructor(private readonly deps: { decantations: DecantationRepository }) {}
+export class GetDecantation implements UseCase<GetDecantationCommand, DecantationWithLinks> {
+  constructor(
+    private readonly deps: {
+      decantations: DecantationRepository;
+      links?: DecantationLinkRepository;
+    },
+  ) {}
 
-  async execute(input: GetDecantationCommand, ctx: ExecutionContext): Promise<Result<Decantation>> {
+  async execute(
+    input: GetDecantationCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<DecantationWithLinks>> {
     const found = await this.deps.decantations.findById(ctx.organizationId, input.decantationId);
     if (!found || (input.stationId && found.stationId !== input.stationId))
       return err(notFoundError('Decantation', input.decantationId));
-    return ok(found);
+    const views = (await this.deps.links?.listViews(ctx.organizationId, [found.id])) ?? [];
+    return ok(withLinks(found, views));
   }
 }
 
@@ -33,19 +47,33 @@ export const listDecantationsSchema = z.object({
 export type ListDecantationsCommand = z.input<typeof listDecantationsSchema>;
 
 /** Decantations of a station by Business Date range / status, tank lines grouped. */
-export class ListDecantations implements UseCase<ListDecantationsCommand, Decantation[]> {
-  constructor(private readonly deps: { decantations: DecantationRepository }) {}
+export class ListDecantations implements UseCase<ListDecantationsCommand, DecantationWithLinks[]> {
+  constructor(
+    private readonly deps: {
+      decantations: DecantationRepository;
+      links?: DecantationLinkRepository;
+    },
+  ) {}
 
   async execute(
     input: ListDecantationsCommand,
     ctx: ExecutionContext,
-  ): Promise<Result<Decantation[]>> {
+  ): Promise<Result<DecantationWithLinks[]>> {
     const p = listDecantationsSchema.safeParse(input);
     if (!p.success)
       return err(validationError('Invalid ListDecantations query', { issues: p.error.flatten() }));
     if (p.data.from && p.data.to && p.data.from > p.data.to)
       return err(validationError('from must not be after to'));
-    return ok(await this.deps.decantations.list({ organizationId: ctx.organizationId, ...p.data }));
+    const rows = await this.deps.decantations.list({
+      organizationId: ctx.organizationId,
+      ...p.data,
+    });
+    const views =
+      (await this.deps.links?.listViews(
+        ctx.organizationId,
+        rows.map((r) => r.id),
+      )) ?? [];
+    return ok(rows.map((r) => withLinks(r, views)));
   }
 }
 

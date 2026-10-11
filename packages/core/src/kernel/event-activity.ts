@@ -276,6 +276,14 @@ export const EventActivityCatalog = {
     BusinessEvents.DECANTATION_FLAGGED,
     'Decantation flagged',
   ),
+  [BusinessEvents.DECANTATION_PURCHASE_LINKED]: info(
+    BusinessEvents.DECANTATION_PURCHASE_LINKED,
+    'Decantation linked to purchase',
+  ),
+  [BusinessEvents.DECANTATION_PURCHASE_UNLINKED]: info(
+    BusinessEvents.DECANTATION_PURCHASE_UNLINKED,
+    'Decantation unlinked from purchase',
+  ),
   [BusinessEvents.DENSITY_RECORDED]: info(BusinessEvents.DENSITY_RECORDED, 'Density recorded'),
   [BusinessEvents.TANK_TRANSFER_COMPLETED]: success(
     BusinessEvents.TANK_TRANSFER_COMPLETED,

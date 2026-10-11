@@ -155,6 +155,69 @@ export interface DecantationPurchaseRepository {
   ): Promise<{ quantity: number; value: number } | null>;
 }
 
+/** A Fuel Purchase as seen by linking (#469). */
+export interface LinkableFuelPurchase {
+  id: string;
+  stationId: string;
+  documentNumber: string;
+  invoiceNumber: string | null;
+  supplierName: string;
+  entryDate: string | null;
+  /** True for an Office-Record Fuel Purchase (no Business Day, all lines fuel). */
+  isFuelPurchase: boolean;
+  lines: { productId: string; quantity: number; invoiceDensity: number | null }[];
+}
+
+/** A link with the purchase facts a reader needs (D8). */
+export interface DecantationLinkView {
+  decantationId: string;
+  productId: string;
+  purchaseId: string;
+  invoiceNumber: string | null;
+  supplierName: string;
+  invoiceQty: number;
+  invoiceDensity: number | null;
+  receivedQty: number | null;
+  varianceQty: number | null;
+  varianceComputedAt: string | null;
+}
+
+export interface LinkablePurchaseRow {
+  purchaseId: string;
+  documentNumber: string;
+  invoiceNumber: string | null;
+  supplierName: string;
+  entryDate: string | null;
+  invoiceQty: number;
+  invoiceDensity: number | null;
+  linkedDecantationCount: number;
+  awaitingDecantation: boolean;
+}
+
+/** Persistence used by linking (#469). Org-scoped. */
+export interface DecantationLinkRepository {
+  findFuelPurchase(
+    organizationId: string,
+    purchaseId: string,
+  ): Promise<LinkableFuelPurchase | null>;
+  /** Upsert on (decantation, product): replaces the purchase and clears variance. */
+  upsert(link: {
+    id: string;
+    organizationId: string;
+    stationId: string;
+    decantationId: string;
+    purchaseId: string;
+    productId: string;
+  }): Promise<void>;
+  remove(organizationId: string, decantationId: string, productId: string): Promise<void>;
+  listViews(organizationId: string, decantationIds: string[]): Promise<DecantationLinkView[]>;
+  listLinkable(
+    organizationId: string,
+    stationId: string,
+    productId: string,
+  ): Promise<LinkablePurchaseRow[]>;
+}
+
 /** Litres dispensed from a tank, as booked by closed shifts. */
 export interface TankSalesReader {
   /** Σ −quantity of `Sale` movements of the tank with created_at in (from, to]. */

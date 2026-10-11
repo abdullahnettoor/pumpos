@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   computeDecantationFlags,
   decantationFlagKey,
+  DEFAULT_DECANTATION_SETTINGS,
   type DecantationFlag,
   type DecantationWarning,
 } from '@pump/shared';
@@ -36,11 +37,13 @@ import type {
   DensityReading,
   DensityReadingRepository,
 } from './ports.js';
+import type { DecantationLinker, DecantationLinkInput } from './linking.js';
+import { decantationLinkSchema, purchaseDensity } from './linking.js';
 
 /** Fallback when the caller supplies no station settings (#464). */
 export const DEFAULT_DECANTATION_TOLERANCES = {
-  densityToleranceKgM3: 3,
-  settlingTimeMinutes: 30,
+  densityToleranceKgM3: DEFAULT_DECANTATION_SETTINGS.densityToleranceKgM3,
+  settlingTimeMinutes: DEFAULT_DECANTATION_SETTINGS.settlingTimeMinutes,
 } as const;
 
 const optNum = z.preprocess(
@@ -103,6 +106,8 @@ export const recordDecantationSchema = z.object({
   invoiceQuantity: optNum,
   lines: z.array(lineSchema).min(1, 'At least one tank line is required'),
   chambers: z.array(chamberSchema).optional(),
+  /** Fuel Purchase per product, saved in the same request (#469). */
+  links: z.array(decantationLinkSchema).optional(),
 });
 
 export type RecordDecantationCommand = z.input<typeof recordDecantationSchema>;
@@ -130,6 +135,8 @@ export interface RecordDecantationDeps {
   /** Station tolerances (#464); defaults apply when omitted. */
   settings?: { densityToleranceKgM3: number; settlingTimeMinutes: number };
   measurement?: DecantationMeasurement;
+  /** Fuel Purchase linking (#469); required to honour `links`. */
+  linking?: DecantationLinker;
 }
 
 export interface RecordDecantationResult {
@@ -223,6 +230,30 @@ export class RecordDecantation implements UseCase<
       tankById.set(tankId, { productId: tank.productId });
     }
 
+    // Fuel Purchase links (#469): validated before anything is written.
+    const linkInputs: DecantationLinkInput[] = cmd.links ?? [];
+    if (linkInputs.length > 0 && !this.deps.linking)
+      return err(invariantViolation('Fuel Purchase linking is not available'));
+    const productIds = new Set([...tankById.values()].map((t) => t.productId));
+    if (new Set(linkInputs.map((l) => l.productId)).size !== linkInputs.length)
+      return err(validationError('Only one purchase can be linked per product'));
+    const linkDensity = new Map<string, number>();
+    const currentLinks =
+      existing && this.deps.linking ? await this.deps.linking.listViews(ctx, existing.id) : [];
+    for (const v of currentLinks)
+      if (v.invoiceDensity != null && productIds.has(v.productId))
+        linkDensity.set(v.productId, v.invoiceDensity);
+    for (const link of linkInputs) {
+      const valid = await this.deps.linking!.validate(
+        ctx,
+        { stationId: cmd.stationId, productIds },
+        link,
+      );
+      if (!valid.success) return valid;
+      const density = purchaseDensity(valid.data, link.productId);
+      if (density != null) linkDensity.set(link.productId, density);
+    }
+
     // Stock anchor: lazy-open the current Business Day (or reuse the stored day on
     // update). A sealed (closed) day refuses the write, like other stock events.
     const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, {
@@ -279,7 +310,7 @@ export class RecordDecantation implements UseCase<
       lines: lines.map((l, i) => ({
         id: l.id,
         roDensity: l.roDensity,
-        invoiceDensity: cmd.lines[i].invoiceDensity ?? null,
+        invoiceDensity: cmd.lines[i].invoiceDensity ?? linkDensity.get(lines[i].productId) ?? null,
         afterDipAt: l.afterDipAt,
       })),
       chambers,
@@ -315,6 +346,27 @@ export class RecordDecantation implements UseCase<
 
     if (existing) await this.deps.decantations.replace(decantation);
     else await this.deps.decantations.insert(decantation);
+
+    // Persist links (replace per product) before measurement so settlement sees them.
+    const linkEvents: DomainEvent[] = [];
+    const toSettle: Array<{ purchaseId: string; productId: string }> = [];
+    if (this.deps.linking) {
+      const current = currentLinks;
+      // A product that left the Decantation takes its link with it.
+      for (const v of current.filter((c) => !productIds.has(c.productId))) {
+        await this.deps.linking.removeLink(ctx, decantationId, v.productId);
+        toSettle.push({ purchaseId: v.purchaseId, productId: v.productId });
+      }
+      for (const link of linkInputs) {
+        const r = await this.deps.linking.apply(ctx, decantation, link, current);
+        if (!r.changed) continue;
+        linkEvents.push(
+          this.deps.linking.linkedEvent(ctx, decantation, link, r.previousPurchaseId),
+        );
+        if (r.previousPurchaseId)
+          toSettle.push({ purchaseId: r.previousPurchaseId, productId: link.productId });
+      }
+    }
 
     // One RO-density reading per line (replaced on update by `replace`).
     const readings: DensityReading[] = lines
@@ -352,6 +404,19 @@ export class RecordDecantation implements UseCase<
       warnings.push(...belowBeforeWarnings(decantation.lines));
     }
 
+    // Settle invoices of changed links (no-op until every line is measured).
+    if (this.deps.linking) {
+      for (const link of linkInputs)
+        toSettle.push({ purchaseId: link.purchaseId, productId: link.productId });
+      const seen = new Set<string>();
+      for (const s of toSettle) {
+        const key = `${s.purchaseId}:${s.productId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        await this.deps.linking.settle(ctx, s.purchaseId, s.productId);
+      }
+    }
+
     const previous = new Set((existing?.flags ?? []).map(decantationFlagKey));
     const newFlags: DecantationFlag[] = flags.filter((f) => !previous.has(decantationFlagKey(f)));
 
@@ -377,6 +442,7 @@ export class RecordDecantation implements UseCase<
         },
       }),
     ];
+    events.push(...linkEvents);
     if (newFlags.length > 0) {
       events.push(
         relatedEventFromContext(ctx, {

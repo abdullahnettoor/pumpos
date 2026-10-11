@@ -348,4 +348,132 @@ describe('invoice variance and WAC', () => {
     await t.service.settleInvoice(t.ctx(), { purchaseId: 'p-1', productId: 'ms' });
     expect(t.product.costBasis).toBe(cost);
   });
+
+  describe('reversal on unlink / replace', () => {
+    const settledFixture = async () => {
+      const t = setup();
+      const a = await t.record.execute(cmd(), t.ctx());
+      if (!a.success) throw new Error('a');
+      t.links.push(link(a.data.decantation));
+      await t.record.execute(
+        {
+          ...cmd({ id: a.data.decantation.lines[0].id, afterDip: 15900 }),
+          decantationId: a.data.decantation.id,
+        },
+        t.ctx(),
+      );
+      return { t, a: a.data.decantation };
+    };
+    const removeLink = (t: ReturnType<typeof setup>, id: string) =>
+      void t.links.splice(
+        t.links.findIndex((l) => l.id === id),
+        1,
+      );
+
+    it('unlink then relink the same purchase leaves cost unchanged', async () => {
+      const { t, a } = await settledFixture();
+      const settledCost = Number(t.product.costBasis);
+      await t.service.reverseLinkContribution(t.ctx(), {
+        purchaseId: 'p-1',
+        productId: 'ms',
+        decantationId: a.id,
+      });
+      removeLink(t, 'lk-1');
+      expect(Number(t.product.costBasis)).toBeCloseTo(90, 3);
+      t.links.push(link(a));
+      await t.service.settleInvoice(t.ctx(), { purchaseId: 'p-1', productId: 'ms' });
+      expect(Number(t.product.costBasis)).toBeCloseTo(settledCost, 3);
+    });
+
+    it('replace A to B: cost reflects B only', async () => {
+      const { t, a } = await settledFixture();
+      await t.service.reverseLinkContribution(t.ctx(), {
+        purchaseId: 'p-1',
+        productId: 'ms',
+        decantationId: a.id,
+      });
+      removeLink(t, 'lk-1');
+      t.links.push({ ...link(a), id: 'lk-b', purchaseId: 'p-2' });
+      await t.service.settleInvoice(t.ctx(), { purchaseId: 'p-2', productId: 'ms' });
+      expect(Number(t.product.costBasis)).toBeCloseTo((4000 * 90 + 1_200_000) / 15900, 3);
+    });
+
+    it('split invoice: removing one link gives back only its share of the value', async () => {
+      const t = setup();
+      const a = await t.record.execute(cmd(), t.ctx());
+      if (!a.success) throw new Error('a');
+      t.links.push(link(a.data.decantation));
+      await t.record.execute(
+        {
+          ...cmd({ id: a.data.decantation.lines[0].id, afterDip: 10000 }),
+          decantationId: a.data.decantation.id,
+        },
+        t.ctx(),
+      );
+      const b = await t.record.execute(cmd({ beforeDip: 10000, afterDip: 16000 }), t.ctx());
+      if (!b.success) throw new Error('b');
+      t.links.push({ ...link(b.data.decantation), id: 'lk-2' });
+      await t.service.settleInvoice(t.ctx(), { purchaseId: 'p-1', productId: 'ms' });
+      await t.service.reverseLinkContribution(t.ctx(), {
+        purchaseId: 'p-1',
+        productId: 'ms',
+        decantationId: b.data.decantation.id,
+      });
+      removeLink(t, 'lk-2');
+      // 16,000 L total; b gives back 6,000 L and 6/12 of the invoice value
+      expect(Number(t.product.costBasis)).toBeCloseTo((4000 * 90 + 1_200_000 / 2) / 10000, 3);
+    });
+
+    it('never drives cost negative', async () => {
+      const { t, a } = await settledFixture();
+      t.product.costBasis = '1';
+      await t.service.reverseLinkContribution(t.ctx(), {
+        purchaseId: 'p-1',
+        productId: 'ms',
+        decantationId: a.id,
+      });
+      expect(Number(t.product.costBasis)).toBe(0);
+    });
+  });
+
+  it('a pending sibling clears stale variance so the invoice shows Settling', async () => {
+    const { t, a } = await settledFixtureForPending();
+    expect(a).toBeDefined();
+    expect(t.links.find((l) => l.id === 'lk-1')).toMatchObject({
+      receivedQty: null,
+      varianceQty: null,
+    });
+    expect(t.links.find((l) => l.id === 'lk-1')?.varianceComputedAt).not.toBeNull();
+  });
 });
+
+async function settledFixtureForPending() {
+  const t = setup();
+  const mk = (id: string, d: Decantation): DecantationPurchaseLink => ({
+    id,
+    organizationId: 'org-1',
+    stationId: 'st-1',
+    decantationId: d.id,
+    purchaseId: 'p-1',
+    productId: 'ms',
+    receivedQty: null,
+    invoiceQty: null,
+    varianceQty: null,
+    varianceComputedAt: null,
+  });
+  const a = await t.record.execute(cmd(), t.ctx());
+  if (!a.success) throw new Error('a');
+  t.links.push(mk('lk-1', a.data.decantation));
+  await t.record.execute(
+    {
+      ...cmd({ id: a.data.decantation.lines[0].id, afterDip: 10000 }),
+      decantationId: a.data.decantation.id,
+    },
+    t.ctx(),
+  );
+  const b = await t.record.execute(cmd({ beforeDip: 10000 }), t.ctx());
+  if (!b.success) throw new Error('b');
+  t.links.push(mk('lk-2', b.data.decantation));
+  await t.service.settleInvoice(t.ctx(), { purchaseId: 'p-1', productId: 'ms' });
+  return { t, a };
+}

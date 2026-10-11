@@ -118,6 +118,8 @@ export const queryKeys = {
   income: (stationId = '', from = '', to = '') => ['income', stationId, from, to] as const,
   purchases: (stationId?: string) =>
     stationId ? (['purchases', stationId] as const) : (['purchases'] as const),
+  purchaseItems: (purchaseId: string) => ['purchase-items', purchaseId] as const,
+  decantations: (stationId: string, status = '') => ['decantations', stationId, status] as const,
   collections: () => ['collections'] as const,
   creditSales: () => ['credit-sales'] as const,
   vehicles: (activeOnly = false) => ['vehicles', activeOnly] as const,
@@ -142,7 +144,6 @@ export const queryKeys = {
   inventoryStatus: (stationId: string) => ['inventory-status', stationId] as const,
   /** Prefix of every Decantation list (invalidated as one by operational writes). */
   decantationsPrefix: (stationId: string) => ['decantations', stationId] as const,
-  decantations: (stationId: string, status = '') => ['decantations', stationId, status] as const,
   linkablePurchases: (stationId: string, productId: string) =>
     ['linkable-purchases', stationId, productId] as const,
   decantationDayCloseWarnings: (stationId: string, businessDayId: string) =>
@@ -778,6 +779,16 @@ export function usePurchases(stationId = '', options?: Options<any[]>) {
   return useQuery({
     queryKey: stationId ? queryKeys.purchases(stationId) : queryKeys.purchases(),
     queryFn: () => txService.getPurchases(stationId || undefined),
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function usePurchaseItems(purchaseId: string | null, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.purchaseItems(purchaseId ?? ''),
+    queryFn: () => txService.getPurchaseItems(purchaseId as string),
+    enabled: !!purchaseId,
     ...TIER.operational,
     ...options,
   });
@@ -1419,6 +1430,7 @@ export function useRecordDecantation(stationId: string | null | undefined) {
 
 export function useLinkDecantationPurchase(stationId: string | null | undefined) {
   const invalidate = useInvalidateOperational();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: {
       decantationId: string;
@@ -1433,6 +1445,8 @@ export function useLinkDecantationPurchase(stationId: string | null | undefined)
       ),
     onSuccess: () => {
       void invalidate(stationId);
+      // Linking settles the invoice, which can move a product's weighted-average cost.
+      void qc.invalidateQueries({ queryKey: ['products'] });
     },
   });
 }
