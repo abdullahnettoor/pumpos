@@ -265,7 +265,8 @@ describe('ReportDayPage', () => {
     feed.snapshots['2026-10-06'] = snap;
     mount('2026-10-06');
     expect(screen.getByText('Opening 17,030 → Closing 14,820 L')).toBeTruthy();
-    expect(screen.getByText('Sold 2,210 L · Dip 14,802 L')).toBeTruthy();
+    expect(screen.getByText('Sold 2,210 L')).toBeTruthy();
+    expect(screen.getByText('Dip 14,802 L')).toBeTruthy();
     expect(screen.getByText('−18 L').className).toMatch(/text-bad-fg/);
   });
 

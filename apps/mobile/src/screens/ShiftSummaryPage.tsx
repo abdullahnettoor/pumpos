@@ -1,10 +1,12 @@
 import React from 'react';
 import { generateShiftSummaryPdf, useToast } from '@pump/ui';
 import type { Station } from '@pump/shared';
+import { CashVarianceCard } from '../components/CashVarianceCard.js';
 import { SalesByProduct } from '../components/SalesByProduct.js';
 import { businessDateLabel } from '../lib/dates.js';
 import { rupees, signedRupees } from '../lib/format.js';
 import type { ShiftSummaryRow } from '../lib/shifts/history.js';
+import { shiftCashVariance } from '../lib/cashVariance.js';
 import { derivePaymentSplit } from '../lib/shifts/summary.js';
 import { DetailPage, SectionLabel, StatTile, StatusBadge } from '../ui/index.js';
 import { DrawerReconciliation } from './shift-summary/DrawerReconciliation.js';
@@ -77,24 +79,8 @@ export const ShiftSummaryPage: React.FC<Props> = ({ station, shiftId, initial })
           ]
             .filter(Boolean)
             .join(' · ')}
-          trailing={
-            <div className="flex-shrink-0 text-right">
-              <p className="text-[11px] font-medium text-text-muted">Cash variance</p>
-              <p
-                className={`num mt-1 text-lg font-semibold ${
-                  v.headline === 0
-                    ? 'text-text-high'
-                    : v.headline < 0
-                      ? 'text-bad-fg'
-                      : 'text-warn-fg'
-                }`}
-              >
-                {signedRupees(v.headline, { plus: true })}
-              </p>
-              <p className="mt-0.5 text-[11px] text-text-muted">{v.headlineNote}</p>
-            </div>
-          }
         />
+        <CashVarianceCard wide variance={shiftCashVariance(v)} />
       </div>
 
       <SectionLabel>Payments</SectionLabel>

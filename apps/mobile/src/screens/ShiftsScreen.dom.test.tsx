@@ -435,12 +435,59 @@ describe('Shift Summary page', () => {
     expect(screen.queryByRole('region', { name: 'Live shift' })).toBeNull();
   });
 
-  it('headlines total sales and the cash variance, naming the DU', async () => {
+  it('headlines total sales and BOTH cash-variance levels, never summed', async () => {
     await openToday();
     expect(screen.getAllByText('Total sales').length).toBeGreaterThan(0);
-    const headline = screen.getByText('Cash variance').parentElement as HTMLElement;
-    expect(within(headline).getByText('−₹340')).toBeTruthy();
-    expect(within(headline).getByText('DU3 short')).toBeTruthy();
+    const card = screen.getByRole('group', { name: 'Cash variance' });
+    expect(within(card).getByText('Attendants')).toBeTruthy();
+    expect(within(card).getByText('−₹340')).toBeTruthy();
+    expect(within(card).getByText('DU3 short')).toBeTruthy();
+    expect(within(card).getByText('Office count')).toBeTruthy();
+    expect(within(card).getByText('₹0')).toBeTruthy();
+  });
+
+  it('Morning of the report-compare fixture: the split adds up to ₹1,81,400', async () => {
+    feed.summaries = [
+      row(
+        's-m',
+        '2026-10-09',
+        1,
+        '2026-10-09T00:30:00Z',
+        '2026-10-09T08:45:00Z',
+        closedSnapshot({
+          totalFuelSalesValue: 178070,
+          totalSalesValue: 181400,
+          productSales: { total: 3330, lines: [] },
+          payments: { cash: 71275, upi: 58000, card: 27000, credit: 23000, omcCard: 2000 },
+          attendantVariance: -125,
+          officeCountVariance: 50,
+          cashVariance: 50,
+          drawers: [
+            {
+              attendantId: 'a1',
+              duId: 'd1',
+              duName: 'DU-1',
+              attendantName: 'Ramesh Kumar',
+              expectedCash: 6097.5,
+              cashHandedOver: 5972.5,
+              variance: -125,
+            },
+          ],
+        }),
+      ),
+    ];
+    mount();
+    fireEvent.click(within(screen.getByRole('region', { name: /Today/ })).getByRole('button'));
+    await screen.findByRole('heading', { name: 'Shift 1 summary' });
+    const split = screen.getByText('OMC card').closest('div.rounded-\\[14px\\]') as HTMLElement;
+    expect(within(split).getByText('₹2,000')).toBeTruthy();
+    expect(within(split).getByText('Short').parentElement?.textContent).toContain('₹125');
+    expect(within(split).getByText('Total sales').parentElement?.textContent).toContain(
+      '₹1,81,400',
+    );
+    const card = screen.getByRole('group', { name: 'Cash variance' });
+    expect(within(card).getByText('−₹125')).toBeTruthy();
+    expect(within(card).getByText('+₹50')).toBeTruthy();
   });
 
   it('shows every section from the snapshot', async () => {
@@ -599,6 +646,9 @@ describe('Shift Summary page', () => {
     mount();
     fireEvent.click(within(screen.getByRole('region', { name: /Today/ })).getByRole('button'));
     await screen.findByRole('heading', { name: 'Shift 1 summary' });
+    const card = screen.getByRole('group', { name: 'Cash variance' });
+    expect(within(card).getByText('−₹80')).toBeTruthy();
+    expect(within(card).queryByText('Attendants')).toBeNull();
     expect(screen.getByText('Cash variance', { selector: 'p.text-\\[13px\\]' })).toBeTruthy();
     expect(screen.queryByText('Office count vs declared')).toBeNull();
   });

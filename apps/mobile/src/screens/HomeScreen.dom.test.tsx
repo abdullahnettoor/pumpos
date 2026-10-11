@@ -454,13 +454,17 @@ describe('Home: comparison and sparkline', () => {
 });
 
 describe('Home: tiles', () => {
-  it('shows office cash variance with the attendant level beneath, margin, credit slips and purchases', () => {
+  it('shows both cash-variance levels with equal weight, margin, credit slips and purchases', () => {
     renderHome();
     const tile = (label: string) => screen.getByText(label).parentElement!;
-    // Office count at the top, attendant level named by DU beneath: never summed.
-    expect(within(tile('Cash variance')).getByText('₹0')).toBeTruthy();
-    expect(within(tile('Cash variance')).getByText('1 closed Shift')).toBeTruthy();
-    expect(within(tile('Cash variance')).getByText('Attendants −₹340 · DU3 short')).toBeTruthy();
+    // Attendants (named by DU) and office count, side by side: never summed.
+    const variance = within(tile('Cash variance'));
+    expect(variance.getByText('Attendants')).toBeTruthy();
+    expect(variance.getByText('−₹340').className).toContain('text-bad-fg');
+    expect(variance.getByText('DU3 short')).toBeTruthy();
+    expect(variance.getByText('Office count')).toBeTruthy();
+    expect(variance.getByText('₹0').className).toContain('text-good');
+    expect(variance.getByText('1 closed Shift')).toBeTruthy();
     expect(within(tile('Gross margin')).getByText('₹21,720')).toBeTruthy();
     expect(within(tile('Credit sales')).getByText('4 slips')).toBeTruthy();
     expect(within(tile('Purchases')).getByText('1 purchase')).toBeTruthy();
