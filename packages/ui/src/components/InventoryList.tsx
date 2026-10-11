@@ -35,6 +35,8 @@ import {
   savePendingStockCountRequest,
   type StockCountRequestIdentity,
 } from '../query/stockCountMutation.js';
+// PROTOTYPE — Decantation milestone UI exploration; remove before merge.
+import { DecantationsPrototypeTab } from './inventory/decantation-prototype/DecantationsPrototypeTab.js';
 
 const transactionService = new CloudTransactionService();
 
@@ -42,7 +44,7 @@ interface InventoryListProps {
   selectedStation: any | null;
 }
 
-type TabType = 'tanks' | 'items' | 'movements' | 'variances';
+type TabType = 'tanks' | 'items' | 'movements' | 'variances' | 'decantations';
 
 const fmtL = (n: number) =>
   `${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
@@ -509,10 +511,14 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                 icon: <Icon name="arrow-left-right" size="xs" />,
               },
               { id: 'variances', label: 'Reconciliations', icon: <Icon name="scale" size="xs" /> },
+              { id: 'decantations', label: 'Decantations', icon: <Icon name="truck" size="xs" /> },
             ]}
           />
         }
       >
+        {activeTab === 'decantations' ? (
+          <DecantationsPrototypeTab />
+        ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <KpiStrip columns="auto">
             <KpiTile
@@ -837,6 +843,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
             </Panel>
           )}
         </div>
+        )}
       </PageLayout>
 
       <Drawer isOpen={countOpen} onClose={() => setCountOpen(false)} title="Stock Reconciliation">
