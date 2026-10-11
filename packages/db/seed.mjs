@@ -695,6 +695,8 @@ async function main() {
         businessDayId: ID.bday,
         productId: ID.prodDiesel,
         tankId: ID.tankDiesel,
+        // TODO(ADR 0007 / Decantation #477): stopgap — seed a Decantation instead
+        // once fuel stock comes only from Decantation.
         movementType: 'OpeningBalance',
         quantity: nz(10000),
         referenceType: 'demo-opening-stock',

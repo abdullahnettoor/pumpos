@@ -92,23 +92,24 @@ export class DrizzlePayablesReader implements PayablesReader {
     const org = q.organizationId;
     const rows = (await this.db.execute(sql`
       WITH ${supplierFifoCtes(org, sql`AND su.is_active`)},
+      -- A Purchase falls in the month by its own anchor: Product Purchases by
+      -- business day, Fuel Purchases (no business day) by Entry Date. A ledger
+      -- row whose purchase is missing counts on the business-day window.
+      month_purchases AS (
+        SELECT l.signed
+        FROM ledger l
+        LEFT JOIN purchases p ON p.id = l.reference_id AND p.organization_id = ${org}
+        WHERE l.type = 'Purchase'
+          AND (
+            ((p.business_day_id IS NOT NULL OR p.id IS NULL)
+              AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo})
+            OR ((p.id IS NOT NULL AND p.business_day_id IS NULL)
+              AND l.date >= ${q.fuelPurchaseFrom} AND l.date <= ${q.fuelPurchaseTo})
+          )
+      ),
       month_flow AS (
         SELECT
-          COALESCE(SUM(l.signed) FILTER (
-            WHERE l.type = 'Purchase' AND EXISTS (
-              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
-                AND p.organization_id = ${org} AND p.business_day_id IS NOT NULL
-            ) AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
-            OR l.type = 'Purchase' AND NOT EXISTS (
-              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
-                AND p.organization_id = ${org}
-            ) AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
-          ), 0) + COALESCE(SUM(l.signed) FILTER (
-            WHERE l.type = 'Purchase' AND EXISTS (
-              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
-                AND p.organization_id = ${org} AND p.business_day_id IS NULL
-            ) AND l.date >= ${q.fuelPurchaseFrom} AND l.date <= ${q.fuelPurchaseTo}
-          ), 0) AS purchased,
+          COALESCE((SELECT SUM(signed) FROM month_purchases), 0) AS purchased,
           COALESCE(SUM(-l.signed) FILTER (
             WHERE l.type = 'Payment' AND l.date >= ${q.paidFrom} AND l.date <= ${q.paidTo}
           ), 0) AS paid
@@ -162,38 +163,25 @@ export class DrizzlePayablesReader implements PayablesReader {
         ORDER BY l.date DESC, l.created_at DESC, l.id DESC
         LIMIT 1
       ),
+      -- A Purchase falls in the month by its own anchor: Product Purchases by
+      -- business day, Fuel Purchases (no business day) by Entry Date. A ledger
+      -- row whose purchase is missing counts on the business-day window.
+      month_purchases AS (
+        SELECT l.signed
+        FROM ledger l
+        LEFT JOIN purchases p ON p.id = l.reference_id AND p.organization_id = ${org}
+        WHERE l.type = 'Purchase'
+          AND (
+            ((p.business_day_id IS NOT NULL OR p.id IS NULL)
+              AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo})
+            OR ((p.id IS NOT NULL AND p.business_day_id IS NULL)
+              AND l.date >= ${q.fuelPurchaseFrom} AND l.date <= ${q.fuelPurchaseTo})
+          )
+      ),
       month_flow AS (
         SELECT
-          COALESCE(SUM(l.signed) FILTER (
-            WHERE l.type = 'Purchase' AND EXISTS (
-              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
-                AND p.organization_id = ${org} AND p.business_day_id IS NOT NULL
-            ) AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
-            OR l.type = 'Purchase' AND NOT EXISTS (
-              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
-                AND p.organization_id = ${org}
-            ) AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
-          ), 0) + COALESCE(SUM(l.signed) FILTER (
-            WHERE l.type = 'Purchase' AND EXISTS (
-              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
-                AND p.organization_id = ${org} AND p.business_day_id IS NULL
-            ) AND l.date >= ${q.fuelPurchaseFrom} AND l.date <= ${q.fuelPurchaseTo}
-          ), 0) AS purchased,
-          COUNT(*) FILTER (
-            WHERE l.type = 'Purchase' AND EXISTS (
-              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
-                AND p.organization_id = ${org} AND p.business_day_id IS NOT NULL
-            ) AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
-            OR l.type = 'Purchase' AND NOT EXISTS (
-              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
-                AND p.organization_id = ${org}
-            ) AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
-          )::int + COUNT(*) FILTER (
-            WHERE l.type = 'Purchase' AND EXISTS (
-              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
-                AND p.organization_id = ${org} AND p.business_day_id IS NULL
-            ) AND l.date >= ${q.fuelPurchaseFrom} AND l.date <= ${q.fuelPurchaseTo}
-          )::int AS purchase_count,
+          COALESCE((SELECT SUM(signed) FROM month_purchases), 0) AS purchased,
+          (SELECT COUNT(*) FROM month_purchases)::int AS purchase_count,
           COALESCE(SUM(-l.signed) FILTER (
             WHERE l.type = 'Payment' AND l.date >= ${q.paidFrom} AND l.date <= ${q.paidTo}
           ), 0) AS paid
@@ -211,8 +199,7 @@ export class DrizzlePayablesReader implements PayablesReader {
         JOIN products pr ON pr.id = pit.product_id AND pr.organization_id = ${org}
         WHERE l.type = 'Purchase' AND p.organization_id = ${org}
           AND ((p.business_day_id IS NOT NULL AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo})
-            OR (p.business_day_id IS NULL AND l.date >= ${q.fuelPurchaseFrom} AND l.date <= ${q.fuelPurchaseTo})
-            OR (p.id IS NULL AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}))
+            OR (p.business_day_id IS NULL AND l.date >= ${q.fuelPurchaseFrom} AND l.date <= ${q.fuelPurchaseTo}))
         GROUP BY pit.product_id, pr.name, pr.unit, pr.product_type
       )
       SELECT

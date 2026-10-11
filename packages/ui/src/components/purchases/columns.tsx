@@ -7,6 +7,7 @@ import { StatusChip, DateText, Icon, Chip } from '../../pump-ds/index.js';
 
 export const purchaseColumns: ColumnDef<any, any>[] = [
   {
+    id: 'entryDate',
     accessorFn: (row) => row.entryDate ?? row.businessDate ?? row.shiftDate,
     header: 'Date',
     cell: ({ row }) => (

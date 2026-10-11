@@ -139,6 +139,32 @@ describe('PurchaseEntryForm', () => {
     });
   });
 
+  describe('fuel and products on one invoice', () => {
+    it('refuses to submit and says why', async () => {
+      const onSubmit = vi.fn();
+      renderWithProviders(
+        <PurchaseEntryForm
+          {...baseProps({
+            onSubmit,
+            defaultValues: {
+              supplierId: 's1',
+              lines: [
+                { productId: PETROL.id, quantity: 100, unitPrice: 90 },
+                { productId: OIL.id, quantity: 10, unitPrice: 450 },
+              ] as never,
+            },
+          })}
+        />,
+      );
+      fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '9000' } });
+      submitForm();
+      await waitFor(() =>
+        expect(screen.getByText('Record fuel and products as separate purchases')).toBeDefined(),
+      );
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+  });
+
   describe('fuel invoice density', () => {
     it('submits optional invoice density without requiring a tank allocation', async () => {
       const onSubmit = vi.fn();

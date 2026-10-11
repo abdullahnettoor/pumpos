@@ -18,7 +18,12 @@ import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { useToast } from './primitives/ToastProvider.js';
 import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText, Icon } from '../pump-ds/index.js';
-import { resolveBusinessDate, resolveEntryDate, type PurchaseEntryFormValues } from '@pump/shared';
+import {
+  mixedPurchaseError,
+  resolveBusinessDate,
+  resolveEntryDate,
+  type PurchaseEntryFormValues,
+} from '@pump/shared';
 import { purchaseColumns, buildSupplierColumns } from './purchases/columns.js';
 import { SupplierFormDrawer } from './purchases/SupplierFormDrawer.js';
 import { SupplierStatementDrawer } from './purchases/SupplierStatementDrawer.js';
@@ -225,11 +230,12 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
   const handleAddPurchase = async (values: PurchaseEntryFormValues, payment?: PurchasePayNow) => {
     setFormError(null);
     if (!values.supplierId || values.lines.length === 0) return;
-    const fuelLineCount = values.lines.filter(
-      (line) => products.find((product) => product.id === line.productId)?.productType === 'FUEL',
-    ).length;
-    if (fuelLineCount > 0 && fuelLineCount !== values.lines.length) {
-      setFormError('Record fuel and products as separate purchases');
+    const mixed = mixedPurchaseError(
+      values.lines,
+      (id) => products.find((product) => product.id === id)?.productType === 'FUEL',
+    );
+    if (mixed) {
+      setFormError(mixed);
       return;
     }
 

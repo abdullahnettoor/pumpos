@@ -656,6 +656,29 @@ export const purchaseEntryFormSchema = z.object({
 });
 export type PurchaseEntryFormValues = z.infer<typeof purchaseEntryFormSchema>;
 
+export const MIXED_PURCHASE_MESSAGE = 'Record fuel and products as separate purchases';
+
+/**
+ * One invoice is either all fuel (a Fuel Purchase, an Office Record) or all
+ * products (a Product Purchase, a forecourt stock event) — never both. Returns
+ * the message when the lines mix the two, else null. The single rule behind the
+ * form refinement and the submit handlers.
+ */
+export function mixedPurchaseError(
+  lines: ReadonlyArray<{ productId: string }>,
+  isFuelProduct: (productId: string) => boolean,
+): string | null {
+  const fuel = lines.filter((l) => isFuelProduct(l.productId)).length;
+  return fuel > 0 && fuel !== lines.length ? MIXED_PURCHASE_MESSAGE : null;
+}
+
+/** `purchaseEntryFormSchema` plus the fuel/product mix rule (needs the catalogue). */
+export const purchaseEntryFormSchemaFor = (isFuelProduct: (productId: string) => boolean) =>
+  purchaseEntryFormSchema.superRefine((data, ctx) => {
+    const message = mixedPurchaseError(data.lines, isFuelProduct);
+    if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['lines'], message });
+  });
+
 export const merchandiseSaleLineFormSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
   quantity: z.coerce

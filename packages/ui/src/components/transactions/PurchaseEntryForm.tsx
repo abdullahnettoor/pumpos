@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFieldArray } from 'react-hook-form';
 import {
-  purchaseEntryFormSchema,
+  purchaseEntryFormSchemaFor,
   resolveEntryDate,
   type PurchaseEntryFormValues,
 } from '@pump/shared';
@@ -103,6 +103,13 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
 }) => {
   const today = resolveEntryDate({ timeZone });
 
+  // The fuel/product mix rule is part of the schema; it needs the catalogue.
+  const schema = useMemo(
+    () =>
+      purchaseEntryFormSchemaFor((id) => products.find((p) => p.id === id)?.productType === 'FUEL'),
+    [products],
+  );
+
   const {
     register,
     handleSubmit,
@@ -110,7 +117,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
     control,
     setValue,
     formState: { errors },
-  } = useZodForm<PurchaseEntryFormValues>(purchaseEntryFormSchema, {
+  } = useZodForm<PurchaseEntryFormValues>(schema, {
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
@@ -140,8 +147,11 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
   // Round-tripping through the signature gives the derivations below an
   // identity that changes exactly when the values do, and nothing else.
   const linesSignature = JSON.stringify(watch('lines') ?? []);
-  const watchedLines = useMemo<any[]>(() => JSON.parse(linesSignature), [linesSignature]);
-  const hasProductLines = watchedLines.some((line: any) => {
+  const watchedLines = useMemo<Partial<PurchaseEntryFormValues['lines'][number]>[]>(
+    () => JSON.parse(linesSignature),
+    [linesSignature],
+  );
+  const hasProductLines = watchedLines.some((line) => {
     const p = products.find((x) => x.id === line?.productId);
     return p && p.productType !== 'FUEL';
   });
@@ -158,7 +168,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
   // into the form, so its dependency list can be honest.
   const desiredFuelRates = useMemo(() => {
     const out: { path: `lines.${number}.unitPrice`; rate: number | undefined }[] = [];
-    watchedLines.forEach((line: any, i: number) => {
+    watchedLines.forEach((line, i) => {
       const fieldId = fields[i]?.id;
       const product = products.find((p) => p.id === line?.productId);
       if (product?.productType !== 'FUEL' || !fieldId) return;
@@ -497,6 +507,11 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
             </div>
           );
         })}
+        {(errors.lines?.root?.message ?? errors.lines?.message) && (
+          <span role="alert" style={errorTextStyle}>
+            {errors.lines?.root?.message ?? errors.lines?.message}
+          </span>
+        )}
         {typeof errors.lines?.message === 'string' && (
           <span style={errorTextStyle}>{errors.lines.message}</span>
         )}

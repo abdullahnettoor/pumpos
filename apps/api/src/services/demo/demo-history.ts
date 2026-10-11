@@ -414,6 +414,8 @@ export async function seedDemoHistory(
         ),
         'purchase',
       );
+      // TODO(ADR 0007 / Decantation #477): stopgap — replace these OpeningBalance
+      // movements with demo Decantations once fuel stock comes from Decantation.
       // OpeningBalance movements seed demo on-hand stock without misrepresenting
       // invoice quantity as measured fuel delivered.
       await stock.saveMany(

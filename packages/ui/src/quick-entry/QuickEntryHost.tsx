@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { resolveBusinessDate } from '@pump/shared';
+import { mixedPurchaseError, resolveBusinessDate } from '@pump/shared';
 import type {
   ExpenseEntryFormValues,
   CollectionEntryFormValues,
@@ -259,11 +259,12 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
       setError('Select a supplier and at least one line.');
       return;
     }
-    const fuelLineCount = values.lines.filter(
-      (line) => products.find((product) => product.id === line.productId)?.productType === 'FUEL',
-    ).length;
-    if (fuelLineCount > 0 && fuelLineCount !== values.lines.length) {
-      setError('Record fuel and products as separate purchases');
+    const mixed = mixedPurchaseError(
+      values.lines,
+      (id) => products.find((product) => product.id === id)?.productType === 'FUEL',
+    );
+    if (mixed) {
+      setError(mixed);
       return;
     }
     try {
