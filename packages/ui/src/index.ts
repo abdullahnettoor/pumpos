@@ -222,4 +222,5 @@ export { StationOnboardingLockout } from './components/StationSetup/StationOnboa
 export type { StationOnboardingLockoutProps } from './components/StationSetup/StationOnboardingLockout.js';
 export { STATION_SETUP_IN_PROGRESS } from './components/StationSetup/StationOnboardingLockout.js';
 
+export { DecantationReportPanel } from './components/reports/DecantationReportPanel.js';
 export * from './components/inventory/density/index.js';

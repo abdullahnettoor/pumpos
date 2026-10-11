@@ -17,11 +17,13 @@ import { InvoicesPanel } from './reports/InvoicesPanel.js';
 import { TaxRegisterPanel } from './reports/TaxRegisterPanel.js';
 import { ProfitLossView } from './reports/ProfitLossView.js';
 import { AttendantHandoverReportPanel } from './reports/AttendantHandoverReportPanel.js';
+import { DecantationReportPanel } from './reports/DecantationReportPanel.js';
 import { useCapability } from '../access/CapabilityGate.js';
 import {
   ATTENDANT_REPORT_CAPABILITY,
   canManageReportTemplates,
   canViewAttendantReport,
+  canViewReports,
 } from '@pump/shared';
 import { ReportTemplatesPanel } from './reports/templates/ReportTemplatesPanel.js';
 import { inr } from '../utils/format.js';
@@ -39,6 +41,7 @@ import {
   Users,
   BookText,
   LayoutTemplate,
+  Truck,
 } from 'lucide-react';
 import { useRunTask } from '../utils/runTask.js';
 
@@ -108,6 +111,7 @@ type ReportsTab =
   | 'cash-bank'
   | 'cash-book'
   | 'attendant-handovers'
+  | 'decantations'
   | 'templates';
 
 export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStation, userRole }) => {
@@ -272,6 +276,9 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
                   },
                 ]
               : []),
+            ...(canViewReports(userRole)
+              ? [{ id: 'decantations', label: 'Decantations', icon: <Truck size={13} /> }]
+              : []),
             ...(showTemplates
               ? [{ id: 'templates', label: 'Templates', icon: <LayoutTemplate size={13} /> }]
               : []),
@@ -391,6 +398,10 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
 
       {activeTab === 'attendant-handovers' && showAttendantReport && (
         <AttendantHandoverReportPanel selectedStation={selectedStation} />
+      )}
+
+      {activeTab === 'decantations' && canViewReports(userRole) && (
+        <DecantationReportPanel selectedStation={selectedStation} />
       )}
     </PageLayout>
   );

@@ -4,6 +4,7 @@ import { canManageFinancialAccounts, canViewAttendantReport, canViewReports } fr
 import {
   ATTENDANT_REPORT_CAPABILITY,
   GetAttendantHandoverReport,
+  GetDecantationReport,
   GetCustomerReceivable,
   GetInsightsAttendantVariance,
   GetInsightsCreditHealth,
@@ -17,6 +18,7 @@ import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { requireCapabilityGuard } from '../infra/capability-guard.js';
 import { DrizzleAttendantHandoverReportReader } from '../infra/repositories/attendant-report-repositories.js';
+import { DrizzleDecantationReportReader } from '../infra/repositories/decantation-report-repositories.js';
 import {
   DrizzleInsightsAttendantVarianceReader,
   DrizzleInsightsCreditHealthReader,
@@ -69,6 +71,33 @@ reportsRouter.get(
     return sendResult(c, result);
   },
 );
+/**
+ * GET /api/reports/decantations?stationId=&from=&to=
+ *
+ * Decantation Report (ticket #473, ADR 0007): tanker unloads, tank line dips,
+ * per-invoice variance and chamber results (Short/Excess/not emptied/seals broken).
+ * Exposes transit loss vs station loss across a Business Date range.
+ * Roles: Owner, Manager, Accountant (canViewReports). Read-only.
+ */
+reportsRouter.get('/decantations', async (c) => {
+  const user = c.var.user;
+  const scope = requireStationRead(
+    c,
+    canViewReports,
+    'Insufficient permissions to view Decantation Report',
+  );
+  if (scope instanceof Response) return scope;
+  const { stationId } = scope;
+
+  const from = c.req.query('from') ?? '';
+  const to = c.req.query('to') ?? '';
+
+  const result = await new GetDecantationReport({
+    reader: new DrizzleDecantationReportReader(c.var.db),
+  }).execute({ stationId, from, to }, buildContext(user, { stationId }));
+
+  return sendResult(c, result);
+});
 
 /**
  * GET /api/reports/insights/sales?stationId=&days=7|30|90

@@ -41,6 +41,12 @@ describe('useInvalidateOperational', () => {
     );
   });
 
+  it('refreshes the Decantation Report', () => {
+    expect(invalidatedKeysAfterOperationalWrite()).toContain(
+      queryKeys.decantationReport('station-1', '2026-03-01', '2026-03-31')[0],
+    );
+  });
+
   it('refreshes the shift, day and summary caches a write moves', () => {
     const keys = invalidatedKeysAfterOperationalWrite();
     for (const key of [
