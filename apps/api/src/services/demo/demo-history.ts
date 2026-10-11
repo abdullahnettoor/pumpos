@@ -18,7 +18,7 @@ import {
   type ExecutionContext,
   type Result,
 } from '@pump/core';
-import { resolveBusinessDate } from '@pump/shared';
+import { resolveBusinessDate, resolveEntryDate } from '@pump/shared';
 import { createDispatcher } from '../../infra/events.js';
 import { LedgerPostingService } from '../../infra/ledger-posting.js';
 import { TimestampDocumentNumberGenerator } from '../../infra/doc-numbers.js';
@@ -369,16 +369,24 @@ export async function seedDemoHistory(
       ).map((reading) => [reading.nozzleId, Number(reading.openingReading)]),
     );
 
-  const purchaseFuel = async (shiftId: string, at: Date, litresPerTank: number) => {
+  const purchaseFuel = async (
+    shiftId: string,
+    businessDayId: string,
+    at: Date,
+    litresPerTank: number,
+  ) => {
+    // Demo fuel stock is represented as opening stock until #467/#468 provide
+    // measured Decantation stock movements. Fuel invoices remain payable-only.
+    const stock = new DrizzleStockMovementRepository(tx);
     for (const product of [petrol, diesel]) {
       const productTanks = tanks.filter((tank) => tank.productId === product.id);
       if (productTanks.length === 0) continue;
       const quantity = litresPerTank * productTanks.length;
-      must(
+      const recorded = must(
         await new RecordPurchase({
           purchases: new DrizzlePurchaseRepository(tx),
           purchaseItems: new DrizzlePurchaseItemRepository(tx),
-          stock: new DrizzleStockMovementRepository(tx),
+          stock,
           supplierTxns: new DrizzleSupplierTransactionRepository(tx),
           suppliers: new DrizzleSupplierRepository(tx),
           products: new DrizzleProductRepository(tx),
@@ -392,22 +400,36 @@ export async function seedDemoHistory(
             supplierId: oilCompany.id,
             stationId,
             shiftId,
+            transactionDate: resolveEntryDate({ now: at, timeZone }),
             invoiceNumber: `IOC-${ids.newId().slice(0, 8).toUpperCase()}`,
             lines: [
               {
                 productId: product.id,
                 quantity,
                 unitPrice: Math.round(priceOf(product.id) * 0.96 * 100) / 100,
-                tankAllocations: productTanks.map((tank) => ({
-                  tankId: tank.id,
-                  quantity: litresPerTank,
-                })),
               },
             ],
           },
           context(at, manager.id),
         ),
         'purchase',
+      );
+      // OpeningBalance movements seed demo on-hand stock without misrepresenting
+      // invoice quantity as measured fuel delivered.
+      await stock.saveMany(
+        productTanks.map((tank) => ({
+          id: ids.newId(),
+          shiftId: null,
+          businessDayId,
+          productId: product.id,
+          tankId: tank.id,
+          movementType: 'OpeningBalance' as const,
+          quantity: String(litresPerTank),
+          referenceType: 'demo-opening-stock',
+          referenceId: recorded.purchase.id,
+          notes: 'Demo stock; fuel invoices do not move stock',
+          createdAt: at.toISOString(),
+        })),
       );
     }
   };
@@ -541,6 +563,7 @@ export async function seedDemoHistory(
     if (input.purchaseLitresPerTank)
       await purchaseFuel(
         opened.shift.id,
+        opened.shift.businessDayId,
         new Date(input.openAt.getTime() + 15 * 60_000),
         input.purchaseLitresPerTank,
       );

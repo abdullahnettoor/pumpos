@@ -91,6 +91,8 @@ const listQuery = (over: Partial<PayablesQuery> = {}): PayablesQuery => ({
   organizationId: ORG,
   purchasedFrom: MONTH.from,
   purchasedTo: MONTH.to,
+  fuelPurchaseFrom: MONTH.from,
+  fuelPurchaseTo: MONTH.to,
   paidFrom: MONTH.from,
   paidTo: MONTH.to,
   ...over,
@@ -259,8 +261,8 @@ describe.skipIf(!CONNECTION)('Payables reader against real Postgres', () => {
   }
 
   /**
-   * A Purchase: the purchases header (+ items) on the Business Day of `date`, and
-   * its payable on the supplier ledger (`entry_date` = that Business Date).
+   * A Purchase: product purchases anchor to the Business Day; fuel purchases
+   * use the Entry Date. Its payable uses the same anchor date.
    * Without `lines` the ledger row is a bare payable, as an imported one is.
    */
   async function purchase(
@@ -279,13 +281,19 @@ describe.skipIf(!CONNECTION)('Payables reader against real Postgres', () => {
     const station = over.station ?? STATION;
     const purchaseId = nextId();
     if (over.lines) {
-      const dayId = await businessDay(org, station, over.user ?? USER, date);
+      const isFuelPurchase = over.lines.every((line) =>
+        [DIESEL, PETROL, DIESEL_LTR, OTHER_DIESEL].includes(line.product as never),
+      );
+      const dayId = isFuelPurchase
+        ? null
+        : await businessDay(org, station, over.user ?? USER, date);
       await db.insert(schema.purchases).values({
         id: purchaseId,
         documentNumber: `PUR-${purchaseId.slice(-6)}`,
         organizationId: org,
         stationId: station,
         businessDayId: dayId,
+        entryDate: isFuelPurchase ? date : null,
         supplierId,
         invoiceNumber: over.invoice ?? null,
         amount: String(amount),

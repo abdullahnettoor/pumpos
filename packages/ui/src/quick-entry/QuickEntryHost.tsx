@@ -259,6 +259,13 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
       setError('Select a supplier and at least one line.');
       return;
     }
+    const fuelLineCount = values.lines.filter(
+      (line) => products.find((product) => product.id === line.productId)?.productType === 'FUEL',
+    ).length;
+    if (fuelLineCount > 0 && fuelLineCount !== values.lines.length) {
+      setError('Record fuel and products as separate purchases');
+      return;
+    }
     try {
       setSubmitting(true);
       setError(null);
@@ -266,6 +273,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
         productId: l.productId,
         quantity: Number(l.quantity),
         unitPrice: Number(l.unitPrice),
+        invoiceDensity: l.invoiceDensity === '' ? undefined : l.invoiceDensity,
         tankAllocations:
           l.tankAllocations && l.tankAllocations.length > 0 ? l.tankAllocations : undefined,
       }));
@@ -277,11 +285,10 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
         lines,
         payment: pay,
       };
-      // Purchases anchor to the business day by station + date, never a
-      // Shift (ADR 0005, #308).
+      // Purchase dates use station-local time; fuel records use Entry Date.
       await txService.recordPurchase({
         stationId: stationId ?? undefined,
-        transactionDate: values.transactionDate || businessDate,
+        transactionDate: values.transactionDate || undefined,
         ...base,
       });
       await done(pay ? 'Purchase recorded with payment.' : 'Purchase recorded.');

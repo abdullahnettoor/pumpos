@@ -210,20 +210,14 @@ export class DrizzleSupplierLedgerReader {
           ON p.id = st.reference_id
          AND st.reference_type = 'PURCHASE'
          AND p.supplier_id = st.supplier_id
-         AND EXISTS (
-           SELECT 1 FROM business_days purchase_day
-           WHERE purchase_day.id = p.business_day_id
-             AND purchase_day.organization_id = st.organization_id
-         )
-        LEFT JOIN business_days bd
-          ON bd.id = p.business_day_id AND bd.organization_id = st.organization_id
-        LEFT JOIN LATERAL (
+         AND p.organization_id = st.organization_id
+         LEFT JOIN LATERAL (
           SELECT STRING_AGG(DISTINCT pr.name, ', ' ORDER BY pr.name) AS product_name,
                  CASE WHEN COUNT(DISTINCT pr.unit) = 1 THEN SUM(pit.quantity)::text ELSE NULL END AS quantity,
                  CASE WHEN COUNT(DISTINCT pr.unit) = 1 THEN MIN(pr.unit) ELSE NULL END AS unit
           FROM purchase_items pit
           JOIN products pr ON pr.id = pit.product_id
-          WHERE pit.purchase_id = p.id AND bd.id IS NOT NULL
+           WHERE pit.purchase_id = p.id
           HAVING COUNT(*) > 0
         ) pi ON true
         WHERE st.organization_id = ${organizationId}

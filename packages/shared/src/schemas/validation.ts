@@ -637,15 +637,16 @@ export const purchaseLineFormSchema = z.object({
   unitPrice: z.coerce
     .number({ invalid_type_error: 'Rate is required' })
     .positive('Rate must be positive'),
-  // Fuel lines may split the received quantity across destination tanks. The
-  // form injects this on submit; it is not a user-typed RHF field.
+  // Fuel invoice lines may capture the supplier's density at 15 °C.
+  invoiceDensity: z.union([z.literal(''), z.coerce.number().positive().max(99999.99)]).optional(),
+  // Legacy product clients may still send this, but fuel no longer allocates stock.
   tankAllocations: z
     .array(z.object({ tankId: z.string(), quantity: z.coerce.number().nonnegative() }))
     .optional(),
 });
 export type PurchaseLineFormValues = z.infer<typeof purchaseLineFormSchema>;
 
-// A purchase is anchored to the business day by date, never a Shift (#308).
+// Purchase date is the Entry Date for fuel and the Business Date for products.
 export const purchaseEntryFormSchema = z.object({
   transactionDate: z.string().optional().default(''),
   supplierId: z.string().min(1, 'Supplier is required'),

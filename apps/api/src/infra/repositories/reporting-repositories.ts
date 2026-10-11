@@ -98,7 +98,13 @@ export class DrizzleDssrDataReader implements DssrDataReader {
     const purchaseRows = await this.db
       .select({ amount: schema.purchases.amount })
       .from(schema.purchases)
-      .where(eq(schema.purchases.businessDayId, businessDayId));
+      .where(
+        and(
+          eq(schema.purchases.businessDayId, businessDayId),
+          organizationId ? eq(schema.purchases.organizationId, organizationId) : undefined,
+          stationId ? eq(schema.purchases.stationId, stationId) : undefined,
+        ),
+      );
 
     const saleRows = await this.db
       .select({
@@ -297,12 +303,12 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       SELECT sm.tank_id AS "tankId",
         COALESCE(SUM(sm.quantity) FILTER (WHERE bd.business_date < ${businessDate}), 0) AS opening,
         COALESCE(SUM(sm.quantity) FILTER (
-          WHERE bd.id = ${businessDayId} AND sm.movement_type = 'Purchase'), 0) AS received,
+      WHERE bd.id = ${businessDayId} AND sm.movement_type IN ('Purchase', 'Decantation')), 0) AS received,
         COALESCE(-SUM(sm.quantity) FILTER (
           WHERE bd.id = ${businessDayId} AND sm.movement_type = 'Sale'), 0) AS sold,
         COALESCE(SUM(sm.quantity) FILTER (
           WHERE bd.id = ${businessDayId}
-            AND sm.movement_type NOT IN ('Purchase', 'Sale', 'Variance')), 0) AS adjusted
+            AND sm.movement_type NOT IN ('Purchase', 'Decantation', 'Sale', 'Variance')), 0) AS adjusted
       FROM stock_movements sm
       JOIN business_days bd ON bd.id = sm.business_day_id
       WHERE sm.tank_id IN (${sql.join(

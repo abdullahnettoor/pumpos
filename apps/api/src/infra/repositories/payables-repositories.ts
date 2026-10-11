@@ -95,7 +95,19 @@ export class DrizzlePayablesReader implements PayablesReader {
       month_flow AS (
         SELECT
           COALESCE(SUM(l.signed) FILTER (
-            WHERE l.type = 'Purchase' AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
+            WHERE l.type = 'Purchase' AND EXISTS (
+              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
+                AND p.organization_id = ${org} AND p.business_day_id IS NOT NULL
+            ) AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
+            OR l.type = 'Purchase' AND NOT EXISTS (
+              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
+                AND p.organization_id = ${org}
+            ) AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
+          ), 0) + COALESCE(SUM(l.signed) FILTER (
+            WHERE l.type = 'Purchase' AND EXISTS (
+              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
+                AND p.organization_id = ${org} AND p.business_day_id IS NULL
+            ) AND l.date >= ${q.fuelPurchaseFrom} AND l.date <= ${q.fuelPurchaseTo}
           ), 0) AS purchased,
           COALESCE(SUM(-l.signed) FILTER (
             WHERE l.type = 'Payment' AND l.date >= ${q.paidFrom} AND l.date <= ${q.paidTo}
@@ -153,30 +165,54 @@ export class DrizzlePayablesReader implements PayablesReader {
       month_flow AS (
         SELECT
           COALESCE(SUM(l.signed) FILTER (
-            WHERE l.type = 'Purchase' AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
+            WHERE l.type = 'Purchase' AND EXISTS (
+              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
+                AND p.organization_id = ${org} AND p.business_day_id IS NOT NULL
+            ) AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
+            OR l.type = 'Purchase' AND NOT EXISTS (
+              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
+                AND p.organization_id = ${org}
+            ) AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
+          ), 0) + COALESCE(SUM(l.signed) FILTER (
+            WHERE l.type = 'Purchase' AND EXISTS (
+              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
+                AND p.organization_id = ${org} AND p.business_day_id IS NULL
+            ) AND l.date >= ${q.fuelPurchaseFrom} AND l.date <= ${q.fuelPurchaseTo}
           ), 0) AS purchased,
           COUNT(*) FILTER (
-            WHERE l.type = 'Purchase' AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
+            WHERE l.type = 'Purchase' AND EXISTS (
+              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
+                AND p.organization_id = ${org} AND p.business_day_id IS NOT NULL
+            ) AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
+            OR l.type = 'Purchase' AND NOT EXISTS (
+              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
+                AND p.organization_id = ${org}
+            ) AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
+          )::int + COUNT(*) FILTER (
+            WHERE l.type = 'Purchase' AND EXISTS (
+              SELECT 1 FROM purchases p WHERE p.id = l.reference_id
+                AND p.organization_id = ${org} AND p.business_day_id IS NULL
+            ) AND l.date >= ${q.fuelPurchaseFrom} AND l.date <= ${q.fuelPurchaseTo}
           )::int AS purchase_count,
           COALESCE(SUM(-l.signed) FILTER (
             WHERE l.type = 'Payment' AND l.date >= ${q.paidFrom} AND l.date <= ${q.paidTo}
           ), 0) AS paid
         FROM ledger l
       ),
-      -- What this month's Purchases brought in, per product. A Purchase is found
-      -- through its ledger row (reference_id), then its items; the purchase's
-      -- Business Day is joined only to prove it belongs to this Organization.
+      -- What this month's Purchases brought in, per product. The purchase's
+      -- direct organization ownership applies to both date anchors.
       month_items AS (
         SELECT pit.product_id, pr.name, pr.unit, pr.product_type,
                SUM(pit.quantity) AS quantity, SUM(pit.line_total) AS value
         FROM ledger l
         JOIN purchases p
           ON p.id = l.reference_id AND l.reference_type = 'PURCHASE' AND p.supplier_id = l.supplier_id
-        JOIN business_days pbd
-          ON pbd.id = p.business_day_id AND pbd.organization_id = ${org}
         JOIN purchase_items pit ON pit.purchase_id = p.id
         JOIN products pr ON pr.id = pit.product_id AND pr.organization_id = ${org}
-        WHERE l.type = 'Purchase' AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}
+        WHERE l.type = 'Purchase' AND p.organization_id = ${org}
+          AND ((p.business_day_id IS NOT NULL AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo})
+            OR (p.business_day_id IS NULL AND l.date >= ${q.fuelPurchaseFrom} AND l.date <= ${q.fuelPurchaseTo})
+            OR (p.id IS NULL AND l.date >= ${q.purchasedFrom} AND l.date <= ${q.purchasedTo}))
         GROUP BY pit.product_id, pr.name, pr.unit, pr.product_type
       )
       SELECT
