@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { round2 } from '@pump/shared';
 import {
   BusinessEvents,
   err,
@@ -122,7 +123,6 @@ export interface RecordPurchaseResult {
   payable: SupplierTransaction;
 }
 
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const round4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
 const numOrNull = (n: number | null | undefined): string | null => (n == null ? null : String(n));
 

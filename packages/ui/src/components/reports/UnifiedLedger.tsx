@@ -15,6 +15,7 @@ import { ReportNote } from './ReportNote.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr, formatDate } from '../../utils/format.js';
 import { paperFromStation } from '../../services/reports/reportConfig.js';
+import { ledgerFileName } from '../../services/reports/ledgerFileName.js';
 import { KpiStrip, KpiTile, Panel, Button, EmptyState, Icon } from '../../pump-ds/index.js';
 
 /** Tone for the closing-balance KPI (kept local; the old KpiCard primitive is retired). */
@@ -363,8 +364,10 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
         generatedAt: new Date().toISOString(),
         paper: paperFromStation(selectedStation),
       });
-      const slug = (entityName || committed.type).replace(/[^a-z0-9]+/gi, '_');
-      await exportReactPdf(element, `Ledger_${slug}_${committed.from}_${committed.to}`);
+      await exportReactPdf(
+        element,
+        ledgerFileName('Ledger', entityName || committed.type, committed),
+      );
     } finally {
       setDownloading(false);
     }

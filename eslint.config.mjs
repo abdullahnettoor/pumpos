@@ -169,6 +169,47 @@ export default tseslint.config(
   },
 
   // ---------------------------------------------------------------------
+  // Mobile layering (apps/mobile/src): ui -> (nothing app-specific),
+  // lib -> (no UI), shell -> ui/lib. The shell is the router hub, so it may
+  // import screens; nothing below it may import upward. Enforced so the
+  // direction cannot silently reverse.
+  // ---------------------------------------------------------------------
+  {
+    files: ['apps/mobile/src/ui/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/shell/**', '**/screens/**', '**/components/**', '**/lib/**'],
+              message:
+                'apps/mobile ui/ is the base layer: it must not import shell, screens, components or lib.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['apps/mobile/src/lib/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/shell/**', '**/screens/**', '**/components/**'],
+              message:
+                'apps/mobile lib/ is pure app logic: it must not import shell, screens or components.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // ---------------------------------------------------------------------
   // Server / Node surfaces
   // ---------------------------------------------------------------------
   {

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { collectionEntryFormSchema, expenseEntryFormSchema } from './validation.js';
+import {
+  collectionEntryFormSchema,
+  expenseEntryFormSchema,
+  supplierPaymentEntryFormSchema,
+} from './validation.js';
 
 describe('expenseEntryFormSchema', () => {
   const base = { entryDate: '2026-09-01', categoryId: 'c1', amount: 10 };
@@ -33,5 +37,48 @@ describe('collectionEntryFormSchema', () => {
       collectionEntryFormSchema.safeParse({ ...base, paymentMethod: 'Cash', terminalId: 't1' })
         .success,
     ).toBe(false);
+  });
+
+  it('holds the amount to the column (numeric 12,2): above 0, 2 decimals, bounded', () => {
+    const message = (amount: unknown) => {
+      const r = collectionEntryFormSchema.safeParse({
+        ...base,
+        amount,
+        paymentMethod: 'Cash',
+        fundingAccountId: 'a',
+      });
+      return r.success ? null : r.error.issues[0].message;
+    };
+    expect(message(10)).toBeNull();
+    expect(message('9999999999.99')).toBeNull();
+    expect(message(0)).toBe('Amount must be positive');
+    expect(message(10.123)).toBe('Use at most 2 decimal places.');
+    expect(message(10_000_000_000)).toBe('That is more than a payment can hold.');
+  });
+});
+
+describe('supplierPaymentEntryFormSchema', () => {
+  const base = { entryDate: '2026-09-01', fundingAccountId: 'acc' };
+  const message = (amount: unknown, over: object = {}) => {
+    const r = supplierPaymentEntryFormSchema.safeParse({ ...base, amount, ...over });
+    return r.success ? null : r.error.issues[0].message;
+  };
+
+  it('holds the amount to the column (numeric 12,2) like a collection', () => {
+    expect(message(10)).toBeNull();
+    expect(message('9999999999.99')).toBeNull();
+    expect(message(0)).toBe('Amount must be positive');
+    expect(message(10.123)).toBe('Use at most 2 decimal places.');
+    expect(message(10_000_000_000)).toBe('That is more than a payment can hold.');
+  });
+
+  it('needs the account it is paid from and a YYYY-MM-DD entry date', () => {
+    expect(message(10, { fundingAccountId: '' })).toBe('Choose the account');
+    expect(message(10, { entryDate: '' })).toBe('Choose the entry date');
+  });
+
+  it('caps the reference at 500 characters', () => {
+    expect(message(10, { notes: 'x'.repeat(500) })).toBeNull();
+    expect(message(10, { notes: 'x'.repeat(501) })).not.toBeNull();
   });
 });

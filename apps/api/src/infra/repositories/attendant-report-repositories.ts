@@ -1,5 +1,6 @@
 import { and, eq, gte, inArray, isNotNull, lte, ne } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
+import { num } from '@pump/shared';
 import type {
   AttendantCreditSaleSourceRow,
   AttendantHandoverReportQuery,
@@ -11,8 +12,6 @@ import type {
   AttendantTerminalEntrySourceRow,
 } from '@pump/core';
 import { shiftSequenceSql } from '../shift-sequence-sql.js';
-
-const num = (v: string | number | null | undefined): number => Number(v ?? 0) || 0;
 
 /**
  * Reads Attendant Handovers of finalized Shifts for a Business-Date range.

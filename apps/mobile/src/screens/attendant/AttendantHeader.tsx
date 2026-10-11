@@ -1,0 +1,41 @@
+import React from 'react';
+import { initialsOf, PumpOSMark } from '@pump/ui';
+import { Avatar, scrollEdgeClass } from '../../ui/index.js';
+
+/**
+ * The attendant's whole chrome (pinned above the scrolling form): the PumpOS mark, the Station mark and name, who they are, and
+ * the avatar that opens the account sheet. There is nothing else to navigate
+ * to, so there is deliberately no menu, bell or station switcher.
+ */
+export const AttendantHeader: React.FC<{
+  stationName: string;
+  userName: string;
+  onOpenAccount: () => void;
+  /** The scroll edge (`scrollEdgeClass`): hairline + soft shadow once the form scrolls under the header. */
+  edgeClass?: string;
+}> = ({ stationName, userName, onOpenAccount, edgeClass = scrollEdgeClass(false) }) => (
+  <header
+    className={`mobile-safe-top relative z-20 flex flex-shrink-0 items-center gap-2.5 bg-card px-4 pb-2.5 ${edgeClass}`}
+  >
+    <PumpOSMark aria-hidden className="h-[21px] flex-shrink-0 text-accent" />
+    <span
+      aria-hidden
+      className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg bg-accent text-xs font-extrabold text-on-accent"
+    >
+      {initialsOf(stationName)}
+    </span>
+    <div className="min-w-0 flex-1 leading-tight">
+      <h1 className="m-0 truncate text-[15px] font-extrabold text-text-high">{stationName}</h1>
+      <p className="m-0 truncate text-[11px] text-text-muted">{userName} · Attendant</p>
+    </div>
+    <button
+      type="button"
+      onClick={onOpenAccount}
+      aria-label="Account"
+      aria-haspopup="dialog"
+      className="flex-shrink-0 rounded-full"
+    >
+      <Avatar name={userName} />
+    </button>
+  </header>
+);

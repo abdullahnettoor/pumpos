@@ -186,4 +186,16 @@ describe('page settings', () => {
       showLogo: true,
     });
   });
+
+  it('browsing the paper sizes with the arrows saves nothing and keeps the focus', async () => {
+    renderWithProviders(<ReportTemplatesPanel selectedStation={station} />);
+    screen.getByRole('radio', { name: 'A4' }).focus();
+    await act(async () => {
+      fireEvent.keyDown(screen.getByRole('radiogroup', { name: 'Paper size' }), {
+        key: 'ArrowRight',
+      });
+    });
+    expect(updateStation).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'Letter' }));
+  });
 });

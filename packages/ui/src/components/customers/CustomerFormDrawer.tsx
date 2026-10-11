@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { customerCreateSchema } from '@pump/shared';
+import { canChangeCreditLimit, customerCreateSchema } from '@pump/shared';
+import type { Role } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { Field, TextInput, MoneyInput, Textarea, Select } from '../primitives/Field.js';
 import { Checkbox } from '../primitives/Toggle.js';
@@ -18,6 +19,13 @@ interface CustomerFormDrawerProps {
   editingCustomer: any | null;
   stationId: string | null;
   onClose: () => void;
+  /**
+   * The signed-in user's Role. Editing a customer's credit limit is an Owner /
+   * Manager right (`canChangeCreditLimit`; the API refuses anyone else), so for
+   * other Roles the limit field is shown but locked when editing. Unknown = not
+   * locked (the API still decides).
+   */
+  userRole?: string;
   /** Fired with the newly-created customer (create mode only), e.g. to auto-select it. */
   onCreated?: (customer: any) => void;
 }
@@ -41,7 +49,10 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
   stationId,
   onClose,
   onCreated,
+  userRole,
 }) => {
+  const limitLocked =
+    Boolean(editingCustomer) && userRole !== undefined && !canChangeCreditLimit(userRole as Role);
   const invalidateOperational = useInvalidateOperational();
   const toast = useToast();
   const [drawerError, setDrawerError] = useState<string | null>(null);
@@ -99,10 +110,16 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
         name: data.name,
         phone: data.phone || null,
         customerType: data.customerType,
-        creditLimit:
-          (data.customerType === 'Credit' || data.customerType === 'Fleet') && data.creditLimit
-            ? Number(data.creditLimit)
-            : null,
+        // A locked limit is not sent at all: the server keeps what is stored.
+        ...(limitLocked
+          ? {}
+          : {
+              creditLimit:
+                (data.customerType === 'Credit' || data.customerType === 'Fleet') &&
+                data.creditLimit
+                  ? Number(data.creditLimit)
+                  : null,
+            }),
         fleetCode: data.customerType === 'Fleet' ? data.fleetCode : null,
         isPrepaid: data.customerType === 'Fleet' ? Boolean(data.isPrepaid) : false,
         settlementCycle,
@@ -209,11 +226,15 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
         </Field>
 
         {(custType === 'Credit' || custType === 'Fleet') && (
-          <Field label="Credit Limit" error={errors.creditLimit?.message}>
+          <Field
+            label="Credit Limit"
+            error={errors.creditLimit?.message}
+            hint={limitLocked ? 'Only an Owner or Manager can change the credit limit.' : undefined}
+          >
             <MoneyInput
               placeholder="50000"
               {...register('creditLimit', { valueAsNumber: true })}
-              disabled={isSubmitting}
+              disabled={isSubmitting || limitLocked}
               invalid={!!errors.creditLimit}
             />
           </Field>

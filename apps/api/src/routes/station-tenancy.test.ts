@@ -37,6 +37,7 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /shifts/my-assignment': 'org-scoped-query',
   'GET /shifts/handovers': 'org-scoped-query',
   'GET /shifts/shift-summaries': 'org-scoped-query',
+  'GET /shifts/shift-summaries/:shiftId': 'org-scoped-query',
 
   'GET /transactions/suppliers': 'not-station-scoped',
   'GET /transactions/suppliers/:id/ledger': 'org-scoped-query',
@@ -92,8 +93,17 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /dssr/daily/preview': 'org-scoped-query',
   'GET /dssr/profit-loss': 'org-scoped-query',
   'GET /dssr/daily/range': 'org-scoped-query',
+  'GET /dssr/days': 'refuses-foreign-station',
 
   'GET /reports/attendant-handovers': 'org-scoped-query',
+  'GET /reports/insights/sales': 'org-scoped-query',
+  'GET /reports/receivables': 'refuses-foreign-station',
+  'GET /reports/receivables/:customerId': 'refuses-foreign-station',
+  'GET /reports/payables': 'refuses-foreign-station',
+  'GET /reports/payables/:supplierId': 'refuses-foreign-station',
+  'GET /reports/insights/attendant-variance': 'org-scoped-query',
+  'GET /reports/insights/stock-loss': 'org-scoped-query',
+  'GET /reports/insights/credit-health': 'org-scoped-query',
 
   'GET /access': 'not-station-scoped',
 };

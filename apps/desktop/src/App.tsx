@@ -506,7 +506,7 @@ const App: React.FC = () => {
       case '/accounts':
         return <AccountsPanel selectedStation={selectedStation} />;
       case '/customers':
-        return <CustomersList selectedStation={selectedStation} />;
+        return <CustomersList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/reports':
         return <ReportsOverview selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/organization':

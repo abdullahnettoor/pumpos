@@ -58,6 +58,7 @@
 
   /* Brand/Accents */
   --brand-primary: #1f6a53; /* Petrol Green */
+  --text-on-brand: #ffffff; /* text and icons placed on --brand-primary */
   --brand-secondary: #2e5e88; /* Diesel Blue */
   --brand-warning: #b7811e; /* Signal Amber */
   --brand-danger: #b44a3f; /* Alert Red */

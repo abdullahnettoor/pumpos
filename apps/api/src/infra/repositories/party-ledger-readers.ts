@@ -1,15 +1,19 @@
 import { sql } from 'drizzle-orm';
 import type { DbClient } from '@pump/db';
-import { isValidBusinessDate } from '@pump/shared';
+import { isValidBusinessDate, type PartyLedgerEntry, type RangedPartyLedger } from '@pump/shared';
+import { onCustomerLedger } from '../customer-ledger-sql.js';
+import { supplierSignedAmount } from '../supplier-ledger-sql.js';
 import { shiftSequenceSql } from '../shift-sequence-sql.js';
 
 export type PartyLedgerRange = { from: string; to: string };
 
-export type RangedPartyLedger = {
+/** The statement row as the database returns it, before the entries are normalised. */
+interface RawStatement {
   periodOpeningBalance: string;
   closingBalance: string;
+  hasEarlier: boolean;
   entries: Array<Record<string, unknown>>;
-};
+}
 
 export function parsePartyLedgerRange(
   from: string | undefined,
@@ -23,7 +27,7 @@ export function parsePartyLedgerRange(
 }
 
 /** Keep row normalization shared between party statement sources. SQL numeric money stays text. */
-export function mapPartyLedgerEntries(entries: Array<Record<string, unknown>>) {
+export function mapPartyLedgerEntries(entries: Array<Record<string, unknown>>): PartyLedgerEntry[] {
   return entries.map((entry) => {
     const decimalString = (value: unknown) =>
       typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint'
@@ -49,7 +53,7 @@ export function mapPartyLedgerEntries(entries: Array<Record<string, unknown>>) {
     if ('method' in entry) mapped.method = entry.method ?? null;
     if ('reference' in entry) mapped.reference = entry.reference ?? null;
     if ('fundingAccountName' in entry) mapped.fundingAccountName = entry.fundingAccountName ?? null;
-    return mapped;
+    return mapped as unknown as PartyLedgerEntry;
   });
 }
 
@@ -95,7 +99,7 @@ export class DrizzleCustomerLedgerReader {
         LEFT JOIN customer_vehicles cv ON cv.id = ct.vehicle_id
         WHERE bd.organization_id = ${organizationId}
           AND ct.customer_id = ${customerId}
-          AND ct.transaction_type NOT IN ('OMC Sale', 'Collection')
+          AND ${onCustomerLedger('ct')}
           AND bd.business_date >= ${from}
           AND bd.business_date <= ${to}
         UNION ALL
@@ -127,14 +131,14 @@ export class DrizzleCustomerLedgerReader {
           AND co.entry_date <= ${to}
       ),
       opening AS (
-        SELECT COALESCE(SUM(signed_amount), 0)::numeric AS balance FROM (
+        SELECT COALESCE(SUM(signed_amount), 0)::numeric AS balance, COUNT(*) > 0 AS has_earlier FROM (
           SELECT CASE WHEN ct.transaction_type = 'Collection' THEN -ct.amount ELSE ct.amount END AS signed_amount
           FROM customer_transactions ct
           JOIN business_days bd
             ON bd.id = ct.business_day_id AND bd.organization_id = ${organizationId}
           WHERE bd.organization_id = ${organizationId}
             AND ct.customer_id = ${customerId}
-            AND ct.transaction_type NOT IN ('OMC Sale', 'Collection')
+            AND ${onCustomerLedger('ct')}
             AND bd.business_date < ${from}
           UNION ALL
           SELECT -co.amount AS signed_amount
@@ -151,6 +155,7 @@ export class DrizzleCustomerLedgerReader {
       )
       SELECT
         opening.balance::text AS "periodOpeningBalance",
+        opening.has_earlier AS "hasEarlier",
         (opening.balance + COALESCE((SELECT range_balance FROM ranged ORDER BY "businessDate" DESC, "createdAt" DESC, sort_order DESC, id DESC LIMIT 1), 0))::text AS "closingBalance",
         COALESCE((SELECT json_agg(json_build_object(
           'id', ranged.id, 'transactionType', ranged."transactionType", 'amount', ranged.amount,
@@ -162,10 +167,11 @@ export class DrizzleCustomerLedgerReader {
           'reference', ranged.reference, 'fundingAccountName', ranged."fundingAccountName"
         ) ORDER BY ranged."businessDate", ranged."createdAt", ranged.sort_order, ranged.id) FROM ranged), '[]'::json) AS entries
       FROM opening
-    `)) as unknown as Array<RangedPartyLedger>;
+    `)) as unknown as Array<RawStatement>;
     return {
       periodOpeningBalance: String(statement?.periodOpeningBalance ?? '0'),
       closingBalance: String(statement?.closingBalance ?? statement?.periodOpeningBalance ?? '0'),
+      hasEarlier: statement?.hasEarlier === true,
       entries: mapPartyLedgerEntries(statement?.entries ?? []),
     };
   }
@@ -196,7 +202,7 @@ export class DrizzleSupplierLedgerReader {
           NULL::text AS "tankerNumber",
           CASE WHEN st.transaction_type = 'Payment' THEN fa.account_type ELSE NULL END AS method,
           p.invoice_number AS reference,
-          CASE WHEN st.transaction_type = 'Payment' THEN -st.amount ELSE st.amount END AS signed_amount
+          ${supplierSignedAmount('st')} AS signed_amount
         FROM supplier_transactions st
         LEFT JOIN financial_accounts fa
           ON fa.id = st.funding_account_id AND fa.organization_id = st.organization_id
@@ -226,7 +232,8 @@ export class DrizzleSupplierLedgerReader {
           AND st.entry_date <= ${to}
       ),
       opening AS (
-        SELECT COALESCE(SUM(CASE WHEN st.transaction_type = 'Payment' THEN -st.amount ELSE st.amount END), 0)::numeric AS balance
+        SELECT COALESCE(SUM(${supplierSignedAmount('st')}), 0)::numeric AS balance,
+               COUNT(*) > 0 AS has_earlier
         FROM supplier_transactions st
         WHERE st.organization_id = ${organizationId}
           AND st.supplier_id = ${supplierId}
@@ -239,6 +246,7 @@ export class DrizzleSupplierLedgerReader {
       )
       SELECT
         opening.balance::text AS "periodOpeningBalance",
+        opening.has_earlier AS "hasEarlier",
         (opening.balance + COALESCE((SELECT range_balance FROM ranged ORDER BY "businessDate" DESC, "createdAt" DESC, id DESC LIMIT 1), 0))::text AS "closingBalance",
         COALESCE((SELECT json_agg(json_build_object(
           'id', ranged.id, 'transactionType', ranged."transactionType", 'amount', ranged.amount,
@@ -249,10 +257,11 @@ export class DrizzleSupplierLedgerReader {
           'fundingAccountName', ranged."fundingAccountName"
         ) ORDER BY ranged."businessDate", ranged."createdAt", ranged.id) FROM ranged), '[]'::json) AS entries
       FROM opening
-    `)) as unknown as Array<RangedPartyLedger>;
+    `)) as unknown as Array<RawStatement>;
     return {
       periodOpeningBalance: String(statement?.periodOpeningBalance ?? '0'),
       closingBalance: String(statement?.closingBalance ?? statement?.periodOpeningBalance ?? '0'),
+      hasEarlier: statement?.hasEarlier === true,
       entries: mapPartyLedgerEntries(statement?.entries ?? []),
     };
   }

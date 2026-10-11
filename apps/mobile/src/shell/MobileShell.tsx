@@ -1,0 +1,123 @@
+import React, { useCallback, useMemo, useState } from 'react';
+import type { Role, Station } from '@pump/shared';
+import { AccountSheet } from './AccountSheet.js';
+import { ShellContext } from './context.js';
+import { Dock } from './Dock.js';
+import { useNav } from './nav.js';
+import { Pane } from './Pane.js';
+import type { TabKey } from '../lib/tabKey.js';
+
+interface MobileShellProps {
+  userName: string;
+  userId?: string | null;
+  role: Role;
+  stations: Station[];
+  selectedStationId: string | null;
+  onSelectStation: (id: string) => void;
+  onSignOut: () => void;
+  /** A tab's own screen (its header included). Pushed detail pages come from `useNav().push`. */
+  renderRoot: (tab: TabKey) => React.ReactNode;
+  /** The Team page the Account sheet's Team row opens. App supplies it so the sheet does not import a screen. */
+  teamPage: React.ReactNode;
+}
+
+/**
+ * The Control Room shell for Owner / Manager / Accountant / Staff: pages in
+ * their own scroll panes, the floating dock (hidden on detail pages, whose
+ * bottom action bar takes its place), and the Account sheet.
+ *
+ * Every tab opened so far stays mounted, hidden, so a tab keeps its local
+ * state, scroll position and pushed pages while another tab is showing.
+ * Switching station remounts them all: pages belong to a station.
+ */
+export const MobileShell: React.FC<MobileShellProps> = ({
+  userName,
+  userId,
+  role,
+  stations,
+  selectedStationId,
+  onSelectStation,
+  onSignOut,
+  renderRoot,
+  teamPage,
+}) => {
+  const nav = useNav();
+  const [accountOpen, setAccountOpen] = useState(false);
+  const openAccount = useCallback(() => setAccountOpen(true), []);
+  const closeAccount = useCallback(() => setAccountOpen(false), []);
+
+  // Counts tab switches (0 = none yet); panes use it to play the enter animation once per switch.
+  const [switches, setSwitches] = useState({ tab: nav.active, count: 0 });
+  if (switches.tab !== nav.active) setSwitches({ tab: nav.active, count: switches.count + 1 });
+  const enterKey = switches.count;
+
+  const station = stations.find((s) => s.id === selectedStationId) ?? null;
+  const ctx = useMemo(
+    () => ({
+      station,
+      stationName: station?.name ?? 'PumpOS',
+      userName,
+      userId,
+      role,
+      openAccount,
+    }),
+    [station, userName, userId, role, openAccount],
+  );
+
+  const selectStation = (id: string) => {
+    if (id === selectedStationId) return;
+    nav.reset();
+    onSelectStation(id);
+  };
+
+  return (
+    <ShellContext.Provider value={ctx}>
+      <div className="app-column mobile-safe-top flex h-[100dvh] flex-col bg-background text-text-default">
+        {/* overflow-hidden: the panes are absolutely positioned in here, and a pane
+            entering (Pane's playEnter) is moved down 8px for 180ms. Unclipped, that
+            makes the document 8px taller than the screen, so a page scrollbar flashes
+            and the whole UI (dock included) narrows and jumps back on every tab switch. */}
+        <div
+          className="relative min-h-0 flex-1 overflow-hidden"
+          key={selectedStationId ?? 'no-station'}
+        >
+          {nav.visited.map((tab) => {
+            const stack = nav.stacks[tab] ?? [];
+            const tabActive = tab === nav.active;
+            return (
+              <React.Fragment key={tab}>
+                <Pane active={tabActive && stack.length === 0} enterKey={enterKey} enterOnMount>
+                  {renderRoot(tab)}
+                </Pane>
+                {stack.map((entry, i) => (
+                  <Pane
+                    key={entry.id}
+                    active={tabActive && i === stack.length - 1}
+                    bottom="full"
+                    enterKey={enterKey}
+                  >
+                    {entry.element}
+                  </Pane>
+                ))}
+              </React.Fragment>
+            );
+          })}
+          {nav.depth === 0 && (
+            <Dock tabs={nav.tabs} active={nav.active} onSelect={(tab) => nav.select(tab)} />
+          )}
+        </div>
+      </div>
+      <AccountSheet
+        open={accountOpen}
+        onClose={closeAccount}
+        userName={userName}
+        role={role}
+        stations={stations}
+        selectedStationId={selectedStationId}
+        onSelectStation={selectStation}
+        onSignOut={onSignOut}
+        teamPage={teamPage}
+      />
+    </ShellContext.Provider>
+  );
+};

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import type { Role } from '@pump/shared';
 import {
   CloudStationService,
   setApiBaseUrl,
@@ -10,10 +11,8 @@ import {
   startSession,
 } from '@pump/ui';
 
-export type UserRole = 'Owner' | 'Manager' | 'Accountant' | 'Staff' | 'Attendant';
-
 /** Resolve the API base URL from the current mobile host (mirrors console). */
-export function resolveApiUrl(): string | undefined {
+function resolveApiUrl(): string | undefined {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL as string;
   if (typeof window !== 'undefined') {
     const { hostname } = window.location;
@@ -36,8 +35,10 @@ const stationService = new CloudStationService();
 export interface SessionState {
   status: 'loading' | 'signed-out' | 'ready' | 'error';
   session: any;
-  role: UserRole | null;
+  role: Role | null;
   userName: string;
+  /** The signed-in user's member id (`users.id`), for the Team page. */
+  userId: string | null;
   error: { message: string; code?: string } | null;
 }
 
@@ -53,6 +54,7 @@ export function useSession(): SessionState {
     session: null,
     role: null,
     userName: '',
+    userId: null,
     error: null,
   });
 
@@ -65,7 +67,14 @@ export function useSession(): SessionState {
         // user's persisted static data (stations, etc.) can't bleed into or
         // stale the next session.
         clearClientSessionData(qc);
-        setState({ status: 'signed-out', session: null, role: null, userName: '', error: null });
+        setState({
+          status: 'signed-out',
+          session: null,
+          role: null,
+          userName: '',
+          userId: null,
+          error: null,
+        });
         return;
       }
       setAuthToken(session.access_token);
@@ -83,6 +92,7 @@ export function useSession(): SessionState {
           session,
           role: ctx.user.role,
           userName: ctx.user.fullName?.trim() || ctx.user.email,
+          userId: ctx.user.id ?? null,
           error: null,
         });
       } catch (e: any) {
@@ -91,6 +101,7 @@ export function useSession(): SessionState {
           session,
           role: null,
           userName: '',
+          userId: null,
           error: { message: e?.message ?? 'Failed to load session', code: e?.code },
         });
       }

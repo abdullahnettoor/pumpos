@@ -73,7 +73,35 @@ export {
   paperFromStation,
 } from './services/reports/reportConfig.js';
 export { letterheadFromStation } from './services/reports/letterhead.js';
-export { generateDssrPdf, generateShiftSummaryPdf } from './services/reports/generate.js';
+export {
+  generateDssrPdf,
+  generateShiftSummaryPdf,
+  generateStatementPdf,
+} from './services/reports/generate.js';
+export {
+  ADVANCE_NOTE,
+  PARTY_STATEMENT_WORDING,
+  customerStatementParty,
+  dateOf,
+  dayLabel,
+  deltaOf,
+  describeLedgerRow,
+  fullDayLabel,
+  monthLabel,
+  partyStatementDoc,
+  statementFilePrefix,
+  supplierStatementParty,
+} from './services/reports/partyStatement.js';
+export type {
+  LedgerRow,
+  PartyKind,
+  PartyStatementInput,
+  StatementCustomer,
+  StatementSupplier,
+} from './services/reports/partyStatement.js';
+export { fileSlug, ledgerFileName } from './services/reports/ledgerFileName.js';
+export { ledgerQuantityLabel, unitLabel } from './utils/ledgerQuantity.js';
+export type { LedgerQuantity } from './utils/ledgerQuantity.js';
 export { LedgerView, computeLedgerRows } from './components/ledger/LedgerView.js';
 export type {
   LedgerResolved,
@@ -154,6 +182,16 @@ export { Banner } from './components/primitives/Banner.js';
 export type { BannerProps, BannerSeverity } from './components/primitives/Banner.js';
 export { useZodForm } from './forms/useZodForm.js';
 export { formatMoney, inr, formatQty } from './utils/format.js';
+export { initialsOf } from './utils/initials.js';
+export {
+  collectionAccountTypes,
+  filterFundingAccounts,
+  reconcileFundingSelection,
+  SUPPLIER_PAYMENT_ACCOUNT_TYPES,
+  type CollectionMethod,
+} from './utils/fundingAccounts.js';
+export { collectionPayload, supplierPaymentPayload } from './utils/officeRecordPayloads.js';
+export { accountTypeLabel } from './utils/ledgerLabels.js';
 export { runTask, useRunTask } from './utils/runTask.js';
 export * from './pump-ds/icon/index.js';
 export * from './pump-ds/brand/index.js';
@@ -163,6 +201,13 @@ export * from './pump-ds/boot/index.js';
 export * from './pump-ds/meter/index.js';
 export { STATUS_BAR_HEIGHT_PX } from './pump-ds/shell/index.js';
 export * from './pump-ds/button/index.js';
+// Shared with the mobile Control Room primitives (apps/mobile/src/ui).
+export { Chip, StatusChip } from './pump-ds/chip/index.js';
+export type { ChipProps, ChipTone, StatusChipProps } from './pump-ds/chip/index.js';
+export { SegmentedControl } from './pump-ds/segmented/index.js';
+export type { SegmentedControlProps, SegmentedControlOption } from './pump-ds/segmented/index.js';
+export { PageHeader } from './pump-ds/page-header/index.js';
+export type { PageHeaderProps } from './pump-ds/page-header/index.js';
 
 // Post-sign-in boot: the branded wait screen and the parallel resolve behind it.
 export * from './boot/sessionBoot.js';

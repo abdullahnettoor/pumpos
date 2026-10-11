@@ -9,6 +9,9 @@ import {
   createOpenShiftFormSchema,
   attendantHandoverSchema,
   shiftCloseSchema,
+  creditLimitSchema,
+  customerCreateSchema,
+  CREDIT_LIMIT_MAX,
 } from './validation.js';
 
 describe('Validation Schemas Tests', () => {
@@ -332,6 +335,28 @@ describe('Validation Schemas Tests', () => {
       const payload = { draft: validDraft };
       const result = finalizeOnboardingSchema.safeParse(payload);
       expect(result.success).toBe(true);
+    });
+  });
+  describe('creditLimitSchema', () => {
+    const message = (n: unknown) => {
+      const r = creditLimitSchema.safeParse(n);
+      return r.success ? null : r.error.issues[0]?.message;
+    };
+
+    it('accepts none, zero, whole and 2-decimal amounts up to the column maximum', () => {
+      for (const ok of [undefined, null, 0, 50000, 1234.5, 0.01, CREDIT_LIMIT_MAX])
+        expect(creditLimitSchema.safeParse(ok).success).toBe(true);
+    });
+
+    it('rejects negatives, more than 2 decimals, and more than numeric(12,2) holds', () => {
+      expect(message(-1)).toBe('Enter 0 or more.');
+      expect(message(10.005)).toBe('Use at most 2 decimal places.');
+      expect(message(CREDIT_LIMIT_MAX + 1)).toBe('That is more than a limit can hold.');
+      expect(creditLimitSchema.safeParse(Number.NaN).success).toBe(false);
+    });
+
+    it('is the rule the Customer form uses', () => {
+      expect(customerCreateSchema.shape.creditLimit).toBe(creditLimitSchema);
     });
   });
 });

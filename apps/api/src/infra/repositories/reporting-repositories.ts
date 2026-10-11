@@ -1,10 +1,17 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne, or, sql } from 'drizzle-orm';
 import { schema, type DbClient, type DbExecutor } from '@pump/db';
+import { productCategoryOf, type ProductType } from '@pump/shared';
+import { dssrFuelSalesValue, dssrNetVolume, dssrProductSalesValue } from '../dssr-snapshot-sql.js';
+import { shiftSummaryNetVolumeSql } from '../shift-summary-sql.js';
 import type {
+  BusinessDayListQuery,
+  BusinessDayListReader,
+  BusinessDayListSource,
   DssrDataReader,
   DssrSnapshot,
   DssrSnapshotRepository,
   DssrSourceData,
+  DssrTankMovementSource,
 } from '@pump/core';
 import { shiftSequenceSql } from '../shift-sequence-sql.js';
 
@@ -67,6 +74,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       .select({
         organizationId: schema.businessDays.organizationId,
         stationId: schema.businessDays.stationId,
+        businessDate: schema.businessDays.businessDate,
       })
       .from(schema.businessDays)
       .where(eq(schema.businessDays.id, businessDayId))
@@ -99,7 +107,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         totalAmount: schema.sales.totalAmount,
       })
       .from(schema.sales)
-      .where(eq(schema.sales.businessDayId, businessDayId));
+      .where(and(eq(schema.sales.businessDayId, businessDayId), ne(schema.sales.saleType, 'Fuel')));
 
     // Merchandise sale line items (productId + qty + revenue) for merch COGS + per-product margin.
     const saleItemRows = await this.db
@@ -117,11 +125,15 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       })
       .from(schema.saleItems)
       .innerJoin(schema.sales, eq(schema.sales.id, schema.saleItems.saleId))
-      .where(eq(schema.sales.businessDayId, businessDayId));
+      .where(and(eq(schema.sales.businessDayId, businessDayId), ne(schema.sales.saleType, 'Fuel')));
 
-    // Credit receivables created today, with customer type (normal vs fleet).
-    const creditSaleRows = await this.db
+    // Credit receivables created today (with customer type: normal vs fleet) and
+    // the day's OMC Card Sales, in ONE statement: both are Business-Day anchored
+    // customer_transactions, told apart by type below.
+    const ledgerRows = await this.db
       .select({
+        transactionType: schema.customerTransactions.transactionType,
+        referenceType: schema.customerTransactions.referenceType,
         customerType: schema.customers.customerType,
         amount: schema.customerTransactions.amount,
       })
@@ -130,13 +142,26 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       .where(
         and(
           eq(schema.customerTransactions.businessDayId, businessDayId),
-          eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+          or(
+            eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+            and(
+              eq(schema.customerTransactions.transactionType, 'OMC Sale'),
+              eq(schema.customerTransactions.referenceType, 'OMC_CARD_SALE'),
+            ),
+          ),
         ),
       );
+    const creditSaleRows = ledgerRows.filter((r) => r.transactionType === 'Credit Sale');
+    // Told apart exactly as the WHERE above selects them (type AND reference type).
+    const omcCardRows = ledgerRows.filter(
+      (r) => r.transactionType === 'OMC Sale' && r.referenceType === 'OMC_CARD_SALE',
+    );
 
     // Business-day tank dip / stock-count reconciliation.
     const varianceRows = await this.db
       .select({
+        tankId: schema.stockVariances.tankId,
+        productId: schema.stockVariances.productId,
         tankName: schema.tanks.name,
         productName: schema.products.name,
         unit: schema.products.unit,
@@ -151,6 +176,15 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       .leftJoin(schema.products, eq(schema.products.id, schema.stockVariances.productId))
       .where(eq(schema.stockVariances.businessDayId, businessDayId));
 
+    // Each dipped tank's litres over the day, from stock_movements (#395).
+    const tankMovements = await this.readTankMovements(
+      businessDayId,
+      businessDay?.organizationId,
+      businessDay?.stationId,
+      businessDay?.businessDate,
+      varianceRows.flatMap((r) => (r.tankId ? [r.tankId] : [])),
+    );
+
     // Reference lookups for enriching the fuel roll-up with names + cost basis.
     const productRows = organizationId
       ? await this.db
@@ -160,6 +194,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
             code: schema.products.code,
             unit: schema.products.unit,
             costBasis: schema.products.costBasis,
+            productType: schema.products.productType,
           })
           .from(schema.products)
           .where(eq(schema.products.organizationId, organizationId))
@@ -173,7 +208,13 @@ export class DrizzleDssrDataReader implements DssrDataReader {
 
     const products: Record<
       string,
-      { name: string; code: string; unit: string; costBasis: number }
+      {
+        name: string;
+        code: string;
+        unit: string;
+        costBasis: number;
+        productType: ProductType | null;
+      }
     > = {};
     for (const p of productRows)
       products[p.id] = {
@@ -181,6 +222,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         code: p.code ?? '',
         unit: p.unit ?? 'L',
         costBasis: Number(p.costBasis ?? 0),
+        productType: productCategoryOf(p.productType),
       };
     const nozzles: Record<string, string> = {};
     for (const n of nozzleRows) nozzles[n.id] = n.name;
@@ -203,7 +245,10 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         customerType: r.customerType ?? 'Regular',
         amount: Number(r.amount),
       })),
+      omcCardSales: omcCardRows.map((r) => ({ amount: Number(r.amount) })),
       stockVariances: varianceRows.map((r) => ({
+        tankId: r.tankId ?? null,
+        productId: r.productId,
         tankName: r.tankName ?? 'Unknown',
         productName: r.productName ?? 'Unknown',
         unit: r.unit ?? '',
@@ -212,6 +257,9 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         actualQuantity: Number(r.actualQuantity),
         varianceQuantity: Number(r.varianceQuantity),
         reason: r.reason ?? null,
+        ...(r.tankId && tankMovements.has(r.tankId)
+          ? { tankMovement: tankMovements.get(r.tankId) }
+          : {}),
       })),
       saleItems: saleItemRows.map((r) => ({
         productId: r.productId,
@@ -227,6 +275,172 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       })),
       products,
       nozzles,
+    };
+  }
+
+  /**
+   * Per tank: book before the day (Σ movements of earlier Business Days of the
+   * station), and on the day the Purchases received, net Sale litres, and every
+   * other movement but dip reconciliations ('Variance'). One statement for all
+   * dipped tanks. Movements of later days never count.
+   */
+  private async readTankMovements(
+    businessDayId: string,
+    organizationId: string | undefined,
+    stationId: string | undefined,
+    businessDate: string | undefined,
+    tankIds: string[],
+  ): Promise<Map<string, DssrTankMovementSource>> {
+    const out = new Map<string, DssrTankMovementSource>();
+    if (!organizationId || !stationId || !businessDate || tankIds.length === 0) return out;
+    const rows = (await this.db.execute(sql`
+      SELECT sm.tank_id AS "tankId",
+        COALESCE(SUM(sm.quantity) FILTER (WHERE bd.business_date < ${businessDate}), 0) AS opening,
+        COALESCE(SUM(sm.quantity) FILTER (
+          WHERE bd.id = ${businessDayId} AND sm.movement_type = 'Purchase'), 0) AS received,
+        COALESCE(-SUM(sm.quantity) FILTER (
+          WHERE bd.id = ${businessDayId} AND sm.movement_type = 'Sale'), 0) AS sold,
+        COALESCE(SUM(sm.quantity) FILTER (
+          WHERE bd.id = ${businessDayId}
+            AND sm.movement_type NOT IN ('Purchase', 'Sale', 'Variance')), 0) AS adjusted
+      FROM stock_movements sm
+      JOIN business_days bd ON bd.id = sm.business_day_id
+      WHERE sm.tank_id IN (${sql.join(
+        tankIds.map((id) => sql`${id}`),
+        sql`, `,
+      )})
+        AND bd.organization_id = ${organizationId}
+        AND bd.station_id = ${stationId}
+        AND bd.business_date <= ${businessDate}
+      GROUP BY sm.tank_id
+    `)) as unknown as {
+      tankId: string;
+      opening: string;
+      received: string;
+      sold: string;
+      adjusted: string;
+    }[];
+    for (const r of rows)
+      out.set(r.tankId, {
+        tankId: r.tankId,
+        openingQuantity: Number(r.opening),
+        receivedQuantity: Number(r.received),
+        soldQuantity: Number(r.sold),
+        adjustedQuantity: Number(r.adjusted),
+      });
+    return out;
+  }
+}
+
+/**
+ * Business Day list reader (#394): the Reports tab's month page in ONE
+ * statement, whatever the number of days, Shifts or Sales.
+ *
+ * - CLOSED days: scalars are extracted from `dssr_snapshots.snapshot_data` (a
+ *   snapshot exists iff the day was closed); the snapshot JSON never reaches the
+ *   Worker. The paths live in `infra/dssr-snapshot-sql.ts`. A CLOSED day with no
+ *   snapshot is reported `hasSnapshot: false` with no figures — it is not rolled
+ *   up, because it is not Sealed.
+ * - OPEN days: rolled up from that day's Shift Summaries plus its Sales,
+ *   grouped in SQL. This is the same arithmetic `composeDssr` does (net fuel
+ *   litres, Σ fuel sales value, Σ office cash variance, Σ sale totals), minus
+ *   everything the list does not show. The live DSSR preview is deliberately not
+ *   built here — only for the one day a user opens.
+ *
+ * Every table is reached through an organization/station-scoped `business_days`
+ * row, so a foreign stationId yields no rows.
+ */
+export class DrizzleBusinessDayListReader implements BusinessDayListReader {
+  constructor(private readonly db: DbExecutor) {}
+
+  async load(q: BusinessDayListQuery): Promise<BusinessDayListSource> {
+    const [row] = (await this.db.execute(sql`
+      WITH days AS (
+        SELECT bd.id, bd.business_date, bd.status
+        FROM business_days bd
+        WHERE bd.organization_id = ${q.organizationId} AND bd.station_id = ${q.stationId}
+          AND ((bd.business_date >= ${q.monthFrom} AND bd.business_date <= ${q.monthTo})
+            OR (bd.business_date >= ${q.weekFrom} AND bd.business_date <= ${q.currentBusinessDate}))
+      ),
+      snap AS (
+        SELECT DISTINCT ON (ds.business_date) ds.business_date, ds.snapshot_data AS data
+        FROM dssr_snapshots ds
+        WHERE ds.organization_id = ${q.organizationId} AND ds.station_id = ${q.stationId}
+          AND ds.business_date IN (SELECT d.business_date FROM days d WHERE d.status = 'CLOSED')
+        ORDER BY ds.business_date, ds.generated_at DESC
+      ),
+      unsealed AS (
+        SELECT d.id, d.business_date
+        FROM days d
+        WHERE d.status <> 'CLOSED'
+      ),
+      shift_roll AS (
+        SELECT s.business_day_id AS id,
+          COUNT(*)::int AS shift_count,
+          SUM((ss.snapshot_data ->> 'totalFuelSalesValue')::numeric) AS fuel_sales,
+          SUM(${shiftSummaryNetVolumeSql('ss.snapshot_data')}) AS volume,
+          SUM((ss.snapshot_data ->> 'cashVariance')::numeric) AS cash_variance
+        FROM shifts s
+        JOIN shift_summaries ss ON ss.shift_id = s.id
+        WHERE s.business_day_id IN (SELECT u.id FROM unsealed u)
+        GROUP BY s.business_day_id
+      ),
+      sale_roll AS (
+        SELECT sa.business_day_id AS id, SUM(sa.total_amount) AS product_sales
+        FROM sales sa
+        WHERE sa.business_day_id IN (SELECT u.id FROM unsealed u)
+          AND sa.sale_type <> 'Fuel'
+        GROUP BY sa.business_day_id
+      ),
+      figures AS (
+        SELECT
+          d.business_date AS "businessDate",
+          d.status AS "dayStatus",
+          (sn.business_date IS NOT NULL) AS "hasSnapshot",
+          COALESCE(CASE WHEN sn.business_date IS NOT NULL
+            THEN ${dssrFuelSalesValue('sn.data')} ELSE sh.fuel_sales END, 0) AS "fuelSales",
+          COALESCE(CASE WHEN sn.business_date IS NOT NULL
+            THEN ${dssrProductSalesValue('sn.data')} ELSE sl.product_sales END, 0)
+            AS "productSales",
+          COALESCE(CASE WHEN sn.business_date IS NOT NULL
+            THEN ${dssrNetVolume('sn.data')} ELSE sh.volume END, 0) AS "volume",
+          COALESCE(CASE WHEN sn.business_date IS NOT NULL
+            THEN (sn.data -> 'drawer' ->> 'totalCashVariance')::numeric ELSE sh.cash_variance END, 0)
+            AS "cashVariance",
+          COALESCE(CASE WHEN sn.business_date IS NOT NULL
+            THEN (sn.data ->> 'shiftsIncluded')::int ELSE sh.shift_count END, 0) AS "shiftCount"
+        FROM days d
+        LEFT JOIN snap sn ON sn.business_date = d.business_date AND d.status = 'CLOSED'
+        LEFT JOIN shift_roll sh ON sh.id = d.id
+        LEFT JOIN sale_roll sl ON sl.id = d.id
+      )
+      SELECT
+        COALESCE((SELECT json_agg(f) FROM figures f), '[]'::json) AS days,
+        (SELECT COUNT(*)::int FROM business_days bd
+          WHERE bd.organization_id = ${q.organizationId} AND bd.station_id = ${q.stationId}
+            AND bd.status = 'OPEN' AND bd.business_date < ${q.currentBusinessDate}) AS "openPastDays",
+        (SELECT MAX(bd.business_date) FROM business_days bd
+          WHERE bd.organization_id = ${q.organizationId} AND bd.station_id = ${q.stationId}
+            AND bd.business_date < ${q.monthFrom}) AS "olderBusinessDate"
+    `)) as unknown as Array<{
+      days: Array<Record<string, unknown>> | null;
+      openPastDays: number | string | null;
+      olderBusinessDate: string | null;
+    }>;
+
+    return {
+      days: (row?.days ?? []).map((d) => ({
+        businessDate: String(d.businessDate),
+        dayStatus: d.dayStatus === 'CLOSED' ? 'CLOSED' : 'OPEN',
+        hasSnapshot: d.hasSnapshot === true,
+        fuelSales: Number(d.fuelSales ?? 0),
+        productSales: Number(d.productSales ?? 0),
+        volume: Number(d.volume ?? 0),
+        cashVariance: Number(d.cashVariance ?? 0),
+        shiftCount: Number(d.shiftCount ?? 0),
+      })),
+      openPastDays: Number(row?.openPastDays ?? 0),
+      olderBusinessDate: row?.olderBusinessDate ?? null,
     };
   }
 }

@@ -224,17 +224,53 @@ export type Col = {
   mono?: boolean;
   strong?: boolean;
 };
-export type Cell = { text: string; color?: string };
+export type Cell = {
+  text: string;
+  color?: string;
+  /** A muted second line under `text` (a statement row's facts). */
+  detail?: string;
+};
+
+/** One cell of a table row: its text, and the detail line under it when there is one. */
+const cellView = (cell: Cell, c: Col, base: any, tone?: string, key?: number) => {
+  const align = c.align === 'right' ? { textAlign: 'right' as const } : {};
+  const color = tone ? { color: tone } : {};
+  if (!cell.detail) {
+    return (
+      <Text key={key} style={[base, { flex: c.flex }, align, color]}>
+        {cell.text}
+      </Text>
+    );
+  }
+  return (
+    <View key={key} style={{ flex: c.flex, paddingVertical: 4, paddingHorizontal: 6 }}>
+      <Text style={[base, { paddingVertical: 0, paddingHorizontal: 0 }, align, color]}>
+        {cell.text}
+      </Text>
+      <Text style={{ fontSize: 7.5, color: C.muted, marginTop: 1 }}>{cell.detail}</Text>
+    </View>
+  );
+};
+
+/** A row with a second line never splits across pages; a plain row is left as it was. */
+const noSplit = (cells: Cell[]) => (cells.some((cell) => cell.detail) ? { wrap: false } : {});
+
+const baseStyle = (c: Col) =>
+  c.mono ? (c.strong ? s.cellMonoStrong : s.cellMono) : c.strong ? s.cellStrong : s.cell;
+
 export const TableView = ({
   columns,
   rows,
   total,
   totals,
+  lead,
 }: {
   columns: Col[];
   rows: Cell[][];
   total?: Cell[];
   totals?: Cell[][];
+  /** A bold line before the first row: a statement's opening balance. */
+  lead?: Cell[];
 }) => (
   <View>
     <View style={[s.tr, s.thRow]}>
@@ -247,51 +283,37 @@ export const TableView = ({
         </Text>
       ))}
     </View>
+    {lead ? (
+      <View wrap={false} style={[s.tr, { backgroundColor: C.surfaceAlt, marginBottom: 2 }]}>
+        {lead.map((cell, ci) =>
+          cellView(
+            cell,
+            columns[ci],
+            columns[ci].mono ? s.cellMonoStrong : s.cellStrong,
+            cell.color ?? C.ink,
+            ci,
+          ),
+        )}
+      </View>
+    ) : null}
     {rows.map((cells, ri) => (
-      <View key={ri} style={[s.tr, ri % 2 === 1 ? s.zebra : {}]}>
-        {cells.map((cell, ci) => {
-          const c = columns[ci];
-          const base = c.mono
-            ? c.strong
-              ? s.cellMonoStrong
-              : s.cellMono
-            : c.strong
-              ? s.cellStrong
-              : s.cell;
-          return (
-            <Text
-              key={ci}
-              style={[
-                base,
-                { flex: c.flex },
-                c.align === 'right' ? { textAlign: 'right' } : {},
-                cell.color ? { color: cell.color } : {},
-              ]}
-            >
-              {cell.text}
-            </Text>
-          );
-        })}
+      <View key={ri} {...noSplit(cells)} style={[s.tr, ri % 2 === 1 ? s.zebra : {}]}>
+        {cells.map((cell, ci) =>
+          cellView(cell, columns[ci], baseStyle(columns[ci]), cell.color, ci),
+        )}
       </View>
     ))}
     {[...(total ? [total] : []), ...(totals ?? [])].map((tRow, ti) => (
-      <View key={`t${ti}`} style={s.totalRow}>
-        {tRow.map((cell, ci) => {
-          const c = columns[ci];
-          return (
-            <Text
-              key={ci}
-              style={[
-                c.mono ? s.cellMonoStrong : s.cellStrong,
-                { flex: c.flex },
-                c.align === 'right' ? { textAlign: 'right' } : {},
-                { color: cell.color ?? C.ink },
-              ]}
-            >
-              {cell.text}
-            </Text>
-          );
-        })}
+      <View key={`t${ti}`} {...noSplit(tRow)} style={s.totalRow}>
+        {tRow.map((cell, ci) =>
+          cellView(
+            cell,
+            columns[ci],
+            columns[ci].mono ? s.cellMonoStrong : s.cellStrong,
+            cell.color ?? C.ink,
+            ci,
+          ),
+        )}
       </View>
     ))}
   </View>

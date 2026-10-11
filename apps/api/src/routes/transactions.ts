@@ -14,6 +14,7 @@ import {
   canRecordIncome,
   canRecordStockCount,
   canRecordHandover,
+  isAttendant,
   isHandoverSelfScoped,
   type Role,
 } from '@pump/shared';
@@ -43,6 +44,7 @@ import {
   RecordStockCount,
   GenerateInvoice,
   RecordMerchandiseHandover,
+  GetTankDaysOfCover,
   type Result,
 } from '@pump/core';
 import { buildContext, createCommandTrace } from '../infra/context.js';
@@ -73,6 +75,7 @@ import {
 import {
   DrizzleStockMovementRepository,
   DrizzleStockVarianceRepository,
+  DrizzleTankSalesWindowReader,
 } from '../infra/repositories/inventory-repositories.js';
 import {
   DrizzleSaleRepository,
@@ -92,6 +95,8 @@ import {
   DrizzleFinancialAccountRepository,
   DrizzlePaymentTerminalLookup,
 } from '../infra/repositories/finance-account-repositories.js';
+import { onCustomerLedger } from '../infra/customer-ledger-sql.js';
+import { supplierSignedAmount } from '../infra/supplier-ledger-sql.js';
 import { sendResult } from '../infra/send-result.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
 import {
@@ -291,7 +296,7 @@ transactionsRouter.get('/suppliers', async (c) => {
     db
       .select({
         supplierId: schema.supplierTransactions.supplierId,
-        balance: sql<string>`COALESCE(SUM(CASE WHEN ${schema.supplierTransactions.transactionType} = 'Payment' THEN -${schema.supplierTransactions.amount} ELSE ${schema.supplierTransactions.amount} END), 0)`,
+        balance: sql<string>`COALESCE(SUM(${supplierSignedAmount('supplier_transactions')}), 0)`,
       })
       .from(schema.supplierTransactions)
       .where(eq(schema.supplierTransactions.organizationId, user.organizationId))
@@ -447,6 +452,7 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
       data: {
         periodOpeningBalance: statement.periodOpeningBalance,
         closingBalance: statement.closingBalance,
+        hasEarlier: statement.hasEarlier,
         entries: statement.entries,
       },
     });
@@ -501,7 +507,7 @@ transactionsRouter.get('/customers', async (c) => {
           FROM customer_transactions ct
           JOIN business_days bd ON bd.id = ct.business_day_id
          WHERE bd.organization_id = ${user.organizationId}
-           AND ct.transaction_type NOT IN ('OMC Sale', 'Collection')
+           AND ${onCustomerLedger('ct')}
         UNION ALL
         SELECT co.customer_id, -co.amount
           FROM collections co
@@ -661,6 +667,7 @@ transactionsRouter.get('/customers/:id/ledger', async (c) => {
       data: {
         periodOpeningBalance: statement.periodOpeningBalance,
         closingBalance: statement.closingBalance,
+        hasEarlier: statement.hasEarlier,
         entries: statement.entries,
       },
     });
@@ -2711,6 +2718,9 @@ transactionsRouter.get('/shifts/:id/merchandise-handovers', async (c) => {
         eq(schema.sales.shiftId, shiftId),
         eq(schema.sales.captureMechanism, 'MERCH_HANDOVER'),
         eq(schema.businessDays.organizationId, user.organizationId),
+        // An Attendant sees only their own product handover: the rest of the
+        // shift's attendants are not theirs to read (#407). Office roles see all.
+        ...(isAttendant(user.role) ? [eq(schema.sales.attendantId, user.id)] : []),
       ),
     )
     .orderBy(desc(schema.sales.createdAt));
@@ -2989,7 +2999,7 @@ transactionsRouter.get('/inventory/status', async (c) => {
     )
     .groupBy(schema.tanks.id, schema.products.name, schema.products.code, schema.products.unit);
 
-  const enriched = rows.map((r) => ({
+  const levels = rows.map((r) => ({
     id: r.id,
     name: r.name,
     productId: r.productId,
@@ -2998,6 +3008,29 @@ transactionsRouter.get('/inventory/status', async (c) => {
     productUnit: r.productUnit ?? 'L',
     capacity: Number(r.capacity),
     currentVolume: Math.max(0, Number(r.total ?? 0)),
+  }));
+
+  // Days of cover: ONE more aggregate statement (per-tank volume sold over the
+  // last 7 closed Business Days), however many tanks the Station has. It is an
+  // enrichment: if the read fails the tank levels still go out, without cover.
+  let cover: Record<string, { avgDailyVolume7d: number | null; daysOfCover: number | null }> = {};
+  try {
+    const res = await new GetTankDaysOfCover({
+      reader: new DrizzleTankSalesWindowReader(db),
+    }).execute(
+      { stationId, tanks: levels.map((t) => ({ tankId: t.id, currentVolume: t.currentVolume })) },
+      buildContext(user, { stationId }),
+    );
+    if (res.success) cover = res.data;
+    else console.error('inventory/status: days of cover unavailable', res.error);
+  } catch (error) {
+    console.error('inventory/status: days of cover unavailable', error);
+  }
+
+  const enriched = levels.map((t) => ({
+    ...t,
+    avgDailyVolume7d: cover[t.id]?.avgDailyVolume7d ?? null,
+    daysOfCover: cover[t.id]?.daysOfCover ?? null,
   }));
   return c.json({ success: true, data: enriched });
 });

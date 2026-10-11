@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { reconcileDrawer } from '@pump/shared';
 import {
   BusinessEvents,
   err,
@@ -103,8 +104,6 @@ const commandSchema = z
       .optional(),
   })
   .strict();
-
-const roundPaise = (value: number) => Math.round(value * 100) / 100 || 0;
 
 function hasDuplicates(values: string[]): boolean {
   return new Set(values).size !== values.length;
@@ -315,17 +314,22 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
       : Number(cmd.upiHandedOver ?? 0);
 
     const cashHandedOver = Number(cmd.cashHandedOver);
-    const expectedTotal = expectedFuelSales + source.merchandiseCash;
-    const nonCash = cardHandedOver + upiHandedOver + source.creditSales + source.omcCardSales;
-    const declaredTotal = cashHandedOver + nonCash;
-    // Drawer Reconciliation (ADR 0005): the pouch holds the float plus the DU's
-    // cash sales, less what was dropped. DU cash sales are the metered total not
-    // settled by card, UPI, credit or OMC card.
+    // Drawer Reconciliation (ADR 0005), shared with the mobile live preview:
+    // the pouch holds the float plus the DU's cash sales, less what was dropped.
+    // DU cash sales are the metered total not settled by card, UPI, credit or OMC card.
     const openingFloat = source.openingFloat;
     const cashDrops = Number(cmd.cashDrops ?? 0);
-    const rawExpectedCash = openingFloat + expectedTotal - nonCash - cashDrops;
-    const expectedCash = roundPaise(rawExpectedCash);
-    const varianceAmount = roundPaise(cashHandedOver - rawExpectedCash);
+    const { expectedTotal, declaredTotal, expectedCash, varianceAmount } = reconcileDrawer({
+      openingFloat,
+      expectedFuelSales,
+      merchandiseCash: source.merchandiseCash,
+      cardHandedOver,
+      upiHandedOver,
+      creditSales: source.creditSales,
+      omcCardSales: source.omcCardSales,
+      cashHandedOver,
+      cashDrops,
+    });
     const now = ctx.clock.now().toISOString();
     const handover: AttendantHandover = {
       id: ctx.ids.newId(),

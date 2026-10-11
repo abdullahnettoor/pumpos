@@ -20,6 +20,7 @@ import {
   resolveOfficeEntry,
   type PaymentTerminalLookup,
 } from '../../finance/office-entry.js';
+import { hasAtMostTwoDecimals, OFFICE_PAYMENT_AMOUNT_MAX } from '@pump/shared';
 import type { CustomerRepository } from '../customers/index.js';
 
 export type CollectionPaymentMethod = 'Cash' | 'Card' | 'UPI' | 'BankTransfer';
@@ -93,7 +94,11 @@ export interface RecordCollectionCommand {
 
 const schema = z.object({
   customerId: z.string().min(1, 'customerId is required'),
-  amount: z.coerce.number().positive('amount must be positive'),
+  amount: z.coerce
+    .number()
+    .positive('amount must be positive')
+    .max(OFFICE_PAYMENT_AMOUNT_MAX, 'That is more than a payment can hold.')
+    .refine(hasAtMostTwoDecimals, 'Use at most 2 decimal places.'),
   paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'BankTransfer']),
   stationId: z.string().min(1).optional(),
   entryDate: z.string().optional(),

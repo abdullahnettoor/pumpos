@@ -129,4 +129,17 @@ describe('RecordCollection (Office Record, ADR 0005)', () => {
     const r = await run({ customerId: 'nope', fundingAccountId: 'cash' }).result;
     expect(r.success).toBe(false);
   });
+
+  it.each([9_999_999_999.995, 1.001])(
+    'rejects amounts the numeric(12,2) column cannot store: %s',
+    async (amount) => {
+      const r = await run({ amount, fundingAccountId: 'cash' }).result;
+      expect(r.success).toBe(false);
+    },
+  );
+
+  it('accepts the maximum numeric(12,2) amount', async () => {
+    const r = await run({ amount: 9_999_999_999.99, fundingAccountId: 'cash' }).result;
+    expect(r.success).toBe(true);
+  });
 });

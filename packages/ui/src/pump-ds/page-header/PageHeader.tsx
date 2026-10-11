@@ -10,6 +10,8 @@ import { cn } from '../lib/cn.js';
 
 export interface PageHeaderProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
   title: ReactNode;
+  /** Small line above the title (a station or section name). */
+  eyebrow?: ReactNode;
   subtitle?: ReactNode;
   /** Right-aligned actions (buttons, segmented controls). */
   actions?: ReactNode;
@@ -18,7 +20,7 @@ export interface PageHeaderProps extends Omit<HTMLAttributes<HTMLElement>, 'titl
 }
 
 export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function PageHeader(
-  { className, title, subtitle, actions, meta, ...rest },
+  { className, title, eyebrow, subtitle, actions, meta, ...rest },
   ref,
 ) {
   return (
@@ -28,6 +30,7 @@ export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function Page
       {...rest}
     >
       <div className="min-w-0">
+        {eyebrow}
         <h1 className="text-[18px] font-semibold leading-tight tracking-[-0.01em] text-ink-strong">
           {title}
         </h1>
