@@ -28,3 +28,4 @@ export * from './utils/identifiers.js';
 export * from './utils/stock-variance.js';
 export * from './utils/dssr-omc-card.js';
 export * from './utils/decantation-settings.js';
+export * from './utils/decantation-flags.js';

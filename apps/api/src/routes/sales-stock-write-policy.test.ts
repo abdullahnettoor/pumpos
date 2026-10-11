@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Role } from '@pump/shared';
 import { transactionsRouter } from './transactions.js';
+import { decantationsRouter } from './decantations.js';
 import { dssrRouter } from './dssr.js';
 import { WRITE_POLICY_DECLARATIONS } from '../infra/write-policy-declarations.js';
 import {
@@ -28,6 +29,7 @@ import {
 
 const ROUTERS: ReadonlyArray<[string, any]> = [
   ['/transactions', transactionsRouter],
+  ['/transactions', decantationsRouter],
   ['/dssr', dssrRouter],
 ];
 
@@ -37,6 +39,8 @@ type Subscription = { status: string; accessUntil?: string | null };
 const RECORDING: ReadonlyArray<[string, string, string]> = [
   ['POST', '/transactions/sales', 'the fuel or goods have already left'],
   ['POST', '/transactions/purchases', 'the tanker has already been decanted'],
+  ['POST', '/transactions/decantations', 'the tanker has already been unloaded'],
+  ['PUT', '/transactions/decantations/dec-1', 'the after dip completes an unload in progress'],
   ['POST', '/transactions/inventory/count', 'the dip reading explains the day’s variance'],
   [
     'POST',
@@ -113,6 +117,7 @@ describe('this family is completely covered', () => {
       `${method} ${path
         .replace('/sale-1/invoice', '/:id/invoice')
         .replace('/shifts/shift-1/', '/shifts/:id/')
+        .replace('/decantations/dec-1', '/decantations/:id')
         .replace('/merchandise-handovers/sale-1', '/merchandise-handovers/:saleId')
         .replace('/credit-sales/sale-1', '/credit-sales/:id')
         .replace('/omc-card-sales/sale-1', '/omc-card-sales/:id')}`,
@@ -135,6 +140,7 @@ describe('this family is completely covered', () => {
   it('guards every one of them', () => {
     const routes = [
       ...transactionsRouter.routes.map((r) => `${r.method} /transactions${r.path}`),
+      ...decantationsRouter.routes.map((r) => `${r.method} /transactions${r.path}`),
       ...dssrRouter.routes.map((r) => `${r.method} /dssr${r.path}`),
     ];
     const unguarded = OPERATIONS.filter(

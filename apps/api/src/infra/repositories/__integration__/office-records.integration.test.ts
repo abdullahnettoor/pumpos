@@ -401,6 +401,8 @@ describe.skipIf(!CONNECTION)('Office Records against real Postgres (ADR 0005)', 
     await db.insert(schema.purchases).values({
       id: RANGE_PURCHASE,
       documentNumber: 'PUR-RANGE-1',
+      organizationId: ORG,
+      stationId: STATION,
       businessDayId: DAY, // Business Date 2026-03-14, distinct from copied Entry Date below.
       supplierId: RANGE_SUPPLIER,
       invoiceNumber: 'INV-RANGE-1',
