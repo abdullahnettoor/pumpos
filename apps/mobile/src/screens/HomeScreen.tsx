@@ -1,10 +1,11 @@
 import React from 'react';
-import type { Station } from '@pump/shared';
+import { canRecordDensity, type Role, type Station } from '@pump/shared';
 import { DayTiles } from '../components/DayTiles.js';
 import { SalesByProduct } from '../components/SalesByProduct.js';
 import { comparisonView, type Comparison } from '../lib/home/sales.js';
 import { useNav } from '../shell/nav.js';
 import { SectionLabel } from '../ui/index.js';
+import { DecantationActions, DecantationCard } from './home/DecantationEntry.js';
 import { HandoverCard } from './home/HandoverCard.js';
 import { HomeAttention } from './home/HomeAttention.js';
 import { LiveShiftStrip } from './home/LiveShiftStrip.js';
@@ -12,9 +13,11 @@ import { MoneyPosition } from './home/MoneyPosition.js';
 import { SalesHeadline } from './home/SalesHeadline.js';
 import { TankGauges } from './home/TankGauges.js';
 import { useHomeData } from './home/useHomeData.js';
+import { DensityPage } from './density/DensityPage.js';
 
 interface Props {
   station: Station;
+  role?: Role;
 }
 
 const ComparisonNote: React.FC<{ c: Comparison }> = ({ c }) => {
@@ -38,15 +41,16 @@ const ComparisonNote: React.FC<{ c: Comparison }> = ({ c }) => {
  * (fuel from closed Shifts only, Product Sales live), the day's tiles, the top
  * alerts, Sales by product, tank gauges and the money position.
  */
-export const HomeScreen: React.FC<Props> = ({ station }) => {
+export const HomeScreen: React.FC<Props> = ({ station, role = null }) => {
   const nav = useNav();
-  const m = useHomeData(station);
+  const m = useHomeData(station, role);
   const t = m.tiles;
   const canOpen = (tab: 'reports' | 'money') => nav.tabs.includes(tab);
 
   return (
     <div className="pb-2">
       <HandoverCard />
+      <DecantationCard station={station} />
       <LiveShiftStrip shift={m.live} loading={m.shiftLoading} />
 
       <SectionLabel right={m.comparison ? <ComparisonNote c={m.comparison} /> : undefined}>
@@ -96,7 +100,20 @@ export const HomeScreen: React.FC<Props> = ({ station }) => {
 
       {m.tanks.length > 0 && (
         <>
-          <SectionLabel>Tanks</SectionLabel>
+          <SectionLabel
+            right={
+              <div className="flex items-center gap-2">
+                {role && canRecordDensity(role) && (
+                  <button type="button" onClick={() => nav.push(<DensityPage />, 'density')}>
+                    Density ›
+                  </button>
+                )}
+                <DecantationActions station={station} />
+              </div>
+            }
+          >
+            Tanks
+          </SectionLabel>
           <TankGauges tanks={m.tanks} />
         </>
       )}

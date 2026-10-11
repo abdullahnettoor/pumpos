@@ -1,8 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudStationService } from '../../services/cloud.js';
-import { queryKeys, useStations } from '../../query/hooks.js';
-import { Station } from '@pump/shared';
+import { queryKeys, useProducts, useStations } from '../../query/hooks.js';
+import {
+  DECANTATION_REFERENCE_TEMPERATURE_C,
+  decantationSettingsSchema,
+  resolveDecantationSettings,
+  Station,
+} from '@pump/shared';
 import { ProductsCatalog } from './ProductsCatalog.js';
 import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
@@ -21,6 +26,7 @@ const stationService = new CloudStationService();
 export interface StationOverviewProps {
   onStationSelected: (station: Station | null) => void;
   selectedStation: Station | null;
+  userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
 }
 
 /**
@@ -37,10 +43,12 @@ export const StationOverview: React.FC<StationOverviewProps> = (props) => (
 const StationOverviewBody: React.FC<StationOverviewProps> = ({
   onStationSelected,
   selectedStation,
+  userRole,
 }) => {
   // Read through the shared static-tier hook rather than fetching into local
   // state from an effect declared above its loader.
   const stationsQ = useStations();
+  const productsQ = useProducts();
   const stationsList = useMemo<Station[]>(() => stationsQ.data ?? [], [stationsQ.data]);
   const loading = stationsQ.isLoading;
   const qc = useQueryClient();
@@ -49,7 +57,14 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
   const [editing, setEditing] = useState(false);
   const [editingBusiness, setEditingBusiness] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    'general' | 'business' | 'products' | 'tanks' | 'dispensers' | 'terminals' | 'shifts'
+    | 'general'
+    | 'business'
+    | 'decantation'
+    | 'products'
+    | 'tanks'
+    | 'dispensers'
+    | 'terminals'
+    | 'shifts'
   >('general');
 
   // General tab form states
@@ -80,6 +95,40 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
   const [onboardingStatus, setOnboardingStatus] = useState<string>(
     selectedStation?.onboardingStatus || 'NOT_STARTED',
   );
+  const storedDecantationSettings = resolveDecantationSettings(selectedStation?.settings);
+  const [decantationDraft, setDecantationDraft] = useState<{
+    stationId: string;
+    values: typeof storedDecantationSettings;
+  } | null>(null);
+  const decantationSettings =
+    decantationDraft && decantationDraft.stationId === selectedStation?.id
+      ? decantationDraft.values
+      : storedDecantationSettings;
+  const updateDecantationSettings = (
+    update: (current: typeof storedDecantationSettings) => typeof storedDecantationSettings,
+  ) => {
+    if (!selectedStation) return;
+    setDecantationDraft({
+      stationId: selectedStation.id,
+      values: update(decantationSettings),
+    });
+  };
+
+  /** Sets one edge of a product's density band; an empty band is dropped. */
+  const setDensityBand = (productId: string, edge: 'minKgM3' | 'maxKgM3', raw: string) => {
+    const value = raw === '' ? undefined : Number(raw);
+    updateDecantationSettings((current) => {
+      const bands = { ...current.densitySpecBands };
+      const band = { ...bands[productId], [edge]: value };
+      if (band.minKgM3 === undefined && band.maxKgM3 === undefined) delete bands[productId];
+      else
+        bands[productId] = {
+          ...(band.minKgM3 === undefined ? {} : { minKgM3: band.minKgM3 }),
+          ...(band.maxKgM3 === undefined ? {} : { maxKgM3: band.maxKgM3 }),
+        };
+      return { ...current, densitySpecBands: bands };
+    });
+  };
 
   // Selecting a default station is a genuine side effect on the parent, not
   // local state being synced, so it stays an effect — but it is now honest
@@ -152,6 +201,29 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     }
   };
 
+  const handleSaveDecantation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStation) return;
+    const parsed = decantationSettingsSchema.safeParse(decantationSettings);
+    if (!parsed.success) {
+      toast.error('Check the Decantation settings and try again.');
+      return;
+    }
+    try {
+      const updated = await stationService.updateStation(selectedStation.id, {
+        settings: {
+          ...(selectedStation.settings || {}),
+          ...parsed.data,
+        },
+      });
+      onStationSelected(updated);
+      runTask(loadStations(), 'Saved, but the station list could not be refreshed.');
+      toast.success('Decantation settings saved.');
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
   if (loading) {
     return <LoadingSpinner text="Loading station overview..." />;
   }
@@ -182,6 +254,9 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
               { id: 'dispensers', label: 'Dispenser Units' },
               { id: 'terminals', label: 'Payment Terminals' },
               { id: 'shifts', label: 'Shift Templates' },
+              ...(userRole === 'Owner' || userRole === 'Manager'
+                ? [{ id: 'decantation', label: 'Decantation' }]
+                : []),
             ]}
           />
 
@@ -781,6 +856,205 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                   </div>
                 )}
               </div>
+            )}
+
+            {activeTab === 'decantation' && (userRole === 'Owner' || userRole === 'Manager') && (
+              <Form
+                onSubmit={handleSaveDecantation}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                  maxWidth: '760px',
+                }}
+              >
+                <div>
+                  <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                    Decantation guidance
+                  </h3>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    These station values help flag readings for review. They never prevent an
+                    operation.
+                  </p>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <Field label="Density method" hint="Used to convert observed density to 15 °C.">
+                    <Select
+                      value={decantationSettings.densityMethod}
+                      onChange={(e) =>
+                        updateDecantationSettings((current) => ({
+                          ...current,
+                          densityMethod: e.target.value as typeof current.densityMethod,
+                        }))
+                      }
+                    >
+                      <option value="API_MPMS_11_1_ADJUNCT">API MPMS 11.1 Adjunct</option>
+                      <option value="OMC_TABLE_53B">OMC Table 53B</option>
+                    </Select>
+                  </Field>
+                  <Field
+                    label="Default density entry"
+                    hint="Pre-selected method when recording a density reading."
+                  >
+                    <Select
+                      value={decantationSettings.densityEntryMethod}
+                      onChange={(e) =>
+                        updateDecantationSettings((current) => ({
+                          ...current,
+                          densityEntryMethod: e.target.value as typeof current.densityEntryMethod,
+                        }))
+                      }
+                    >
+                      <option value="HYDROMETER">Hydrometer + temperature</option>
+                      <option value="DIRECT_15">Direct 15 °C</option>
+                    </Select>
+                  </Field>
+                  <Field label="Reference temperature">
+                    <TextInput value={`${DECANTATION_REFERENCE_TEMPERATURE_C} °C`} disabled />
+                  </Field>
+                  <Field
+                    label="Density tolerance (kg/m³)"
+                    hint="Warn when RO density differs from invoice density by more than this value."
+                  >
+                    <TextInput
+                      type="number"
+                      min="0.1"
+                      max="100"
+                      step="0.1"
+                      className="mono-num"
+                      value={decantationSettings.densityToleranceKgM3}
+                      onChange={(e) =>
+                        updateDecantationSettings((current) => ({
+                          ...current,
+                          densityToleranceKgM3: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field
+                    label="Quantity tolerance (%)"
+                    hint="Percent of invoice quantity; 0.2 means 0.2%."
+                  >
+                    <TextInput
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      className="mono-num"
+                      value={decantationSettings.quantityTolerance}
+                      onChange={(e) =>
+                        updateDecantationSettings((current) => ({
+                          ...current,
+                          quantityTolerance: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field
+                    label="Settling time (minutes)"
+                    hint="Early post-unloading dips are flagged for review."
+                  >
+                    <TextInput
+                      type="number"
+                      min="0"
+                      max="1440"
+                      step="1"
+                      className="mono-num"
+                      value={decantationSettings.settlingTimeMinutes}
+                      onChange={(e) =>
+                        updateDecantationSettings((current) => ({
+                          ...current,
+                          settlingTimeMinutes: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                    Product density bands at 15 °C
+                  </h4>
+                  <p
+                    style={{
+                      fontSize: '12px',
+                      color: 'var(--text-muted)',
+                      marginTop: '4px',
+                      marginBottom: '10px',
+                    }}
+                  >
+                    Optional product-specific bounds in kg/m³. Leave both fields blank for no band.
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {(productsQ.data ?? [])
+                      .filter((product) => product.productType === 'FUEL')
+                      .map((product) => {
+                        const band = decantationSettings.densitySpecBands[product.id] ?? {};
+                        return (
+                          <div
+                            key={product.id}
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'minmax(180px, 1fr) 1fr 1fr',
+                              gap: '12px',
+                              alignItems: 'end',
+                            }}
+                          >
+                            <span style={{ fontSize: '13px', color: 'var(--text-default)' }}>
+                              {product.name}
+                            </span>
+                            <Field label={`Minimum (kg/m³)`}>
+                              <TextInput
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                className="mono-num"
+                                aria-label={`${product.name} minimum density`}
+                                value={band.minKgM3 ?? ''}
+                                onChange={(e) =>
+                                  setDensityBand(product.id, 'minKgM3', e.target.value)
+                                }
+                              />
+                            </Field>
+                            <Field label="Maximum (kg/m³)">
+                              <TextInput
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                className="mono-num"
+                                aria-label={`${product.name} maximum density`}
+                                value={band.maxKgM3 ?? ''}
+                                onChange={(e) =>
+                                  setDensityBand(product.id, 'maxKgM3', e.target.value)
+                                }
+                              />
+                            </Field>
+                          </div>
+                        );
+                      })}
+                    {!productsQ.isLoading &&
+                      !(productsQ.data ?? []).some((product) => product.productType === 'FUEL') && (
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                          No fuel products are set up for this station.
+                        </p>
+                      )}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    borderTop: '1px solid var(--border-soft)',
+                    paddingTop: '12px',
+                  }}
+                >
+                  <Button type="submit" variant="primary" size="sm">
+                    Save Decantation Settings
+                  </Button>
+                </div>
+              </Form>
             )}
 
             {activeTab === 'products' && <ProductsCatalog selectedStation={selectedStation} />}

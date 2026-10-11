@@ -96,7 +96,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const { data: products } = useProducts();
   const stationAlerts = useStationAlerts(selectedStation?.id, canSeeFinancials);
   const { data: expenses } = useExpenses({ enabled: canSeeFinancials });
-  const { data: purchases } = usePurchases({ enabled: canSeeFinancials });
+  const { data: purchases } = usePurchases(selectedStation?.id ?? '', {
+    enabled: canSeeFinancials,
+  });
   const { data: collections } = useCollections({ enabled: canSeeFinancials });
   const { data: customers } = useCustomers(true, { enabled: canSeeFinancials });
   const { data: suppliers } = useSuppliers(true, { enabled: canSeeFinancials });

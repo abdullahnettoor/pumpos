@@ -147,6 +147,38 @@ export const WRITE_POLICY_DECLARATIONS: WritePolicyRegistry = declareWritePolici
     rationale: 'A tanker that has already been decanted must be recorded, or stock is wrong.',
   },
   {
+    operation: 'POST /transactions/density/readings',
+    restricted: 'FINISH_OPEN_WORK',
+    rationale:
+      'Daily morning density checks complete shift opening routines and statutory compliance.',
+  },
+  {
+    operation: 'POST /transactions/decantations',
+    restricted: 'FINISH_OPEN_WORK',
+    rationale: 'A tanker that has already been unloaded must be recorded, or stock is wrong.',
+  },
+  {
+    operation: 'PUT /transactions/decantations/:id',
+    restricted: 'FINISH_OPEN_WORK',
+    rationale: 'The after dip and chamber checks complete a decantation already in progress.',
+  },
+  {
+    operation: 'POST /transactions/decantations/:id/discard',
+    restricted: 'FINISH_OPEN_WORK',
+    rationale:
+      'Clearing a draft for a tanker that never unloaded removes a stuck day-close warning.',
+  },
+  {
+    operation: 'PUT /transactions/decantations/:id/purchases',
+    restricted: 'FINISH_OPEN_WORK',
+    rationale: 'Linking the invoice completes a tanker that has already been unloaded.',
+  },
+  {
+    operation: 'DELETE /transactions/decantations/:id/purchases/:productId',
+    restricted: 'FINISH_OPEN_WORK',
+    rationale: 'Correcting a wrong link on a tanker that has already been unloaded.',
+  },
+  {
     operation: 'POST /transactions/supplier-payments',
     restricted: 'FINISH_OPEN_WORK',
     rationale: 'Cash paid to a supplier leaves the drawer whether or not PumpOS records it.',

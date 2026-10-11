@@ -268,6 +268,27 @@ export const EventActivityCatalog = {
   ),
   [BusinessEvents.FUEL_RECEIVED]: success(BusinessEvents.FUEL_RECEIVED, 'Fuel received'),
   [BusinessEvents.TANK_DIP_RECORDED]: info(BusinessEvents.TANK_DIP_RECORDED, 'Tank dip recorded'),
+  [BusinessEvents.DECANTATION_RECORDED]: success(
+    BusinessEvents.DECANTATION_RECORDED,
+    'Decantation recorded',
+  ),
+  [BusinessEvents.DECANTATION_DISCARDED]: info(
+    BusinessEvents.DECANTATION_DISCARDED,
+    'Decantation draft discarded',
+  ),
+  [BusinessEvents.DECANTATION_FLAGGED]: warning(
+    BusinessEvents.DECANTATION_FLAGGED,
+    'Decantation flagged',
+  ),
+  [BusinessEvents.DECANTATION_PURCHASE_LINKED]: info(
+    BusinessEvents.DECANTATION_PURCHASE_LINKED,
+    'Decantation linked to purchase',
+  ),
+  [BusinessEvents.DECANTATION_PURCHASE_UNLINKED]: info(
+    BusinessEvents.DECANTATION_PURCHASE_UNLINKED,
+    'Decantation unlinked from purchase',
+  ),
+  [BusinessEvents.DENSITY_RECORDED]: info(BusinessEvents.DENSITY_RECORDED, 'Density recorded'),
   [BusinessEvents.TANK_TRANSFER_COMPLETED]: success(
     BusinessEvents.TANK_TRANSFER_COMPLETED,
     'Tank transfer completed',

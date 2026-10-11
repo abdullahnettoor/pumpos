@@ -24,6 +24,8 @@ const feed = vi.hoisted(() => ({
   status: null as unknown,
   range: [] as unknown[],
   tanks: [] as unknown[],
+  role: 'Owner' as string,
+  decantations: [] as unknown[],
   customers: [] as unknown[],
   suppliers: [] as unknown[],
   alerts: [] as unknown[],
@@ -43,6 +45,8 @@ vi.mock('@pump/ui', async (importOriginal) => {
     useShiftStatus: () => q(feed.status),
     useMyAssignment: () => q(feed.assignment),
     useInventoryStatus: () => q(feed.tanks),
+    useDecantations: () => q(feed.decantations),
+    isoToLocalTime: (value: string) => value,
     useCustomers: () => q(feed.customers),
     useSuppliers: () => q(feed.suppliers),
   };
@@ -184,7 +188,10 @@ const renderHome = (
   render(
     <NavProvider tabs={tabs}>
       <NavProbe onNav={(n) => (nav = n)} />
-      <HomeScreen station={st} />
+      <HomeScreen
+        station={st}
+        role={feed.role as 'Owner' | 'Manager' | 'Accountant' | 'Staff' | 'Attendant'}
+      />
     </NavProvider>,
   );
 
@@ -293,7 +300,7 @@ describe('Home: your handover card', () => {
         }}
       >
         <NavProvider tabs={['home', 'shifts', 'reports', 'money', 'insights']}>
-          <HomeScreen station={st} />
+          <HomeScreen station={st} role="Manager" />
         </NavProvider>
       </ShellContext.Provider>,
     );
@@ -361,7 +368,7 @@ describe('Home: your handover card', () => {
     feed.assignment = null;
     rerender(
       <NavProvider tabs={['home']}>
-        <HomeScreen station={station(IST)} />
+        <HomeScreen station={station(IST)} role="Manager" />
       </NavProvider>,
     );
     expect(screen.queryByText(/Your handover/)).toBeNull();

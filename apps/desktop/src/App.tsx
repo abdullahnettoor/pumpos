@@ -480,6 +480,7 @@ const App: React.FC = () => {
         return (
           <StationOverview
             selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
             onStationSelected={(station: Station | null) => pickStation(station?.id ?? null)}
           />
         );
@@ -500,7 +501,7 @@ const App: React.FC = () => {
       case '/purchases':
         return <PurchasesList selectedStation={selectedStation} />;
       case '/inventory':
-        return <InventoryList selectedStation={selectedStation} />;
+        return <InventoryList selectedStation={selectedStation} userRole={userRole} />;
       case '/pricing':
         return <FuelPricingPanel selectedStation={selectedStation} />;
       case '/accounts':

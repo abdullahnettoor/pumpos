@@ -24,6 +24,8 @@ import {
   DesktopDownloads,
   AttendantHandoverReport,
   AttendantReportFilters,
+  DecantationReport,
+  DecantationReportFilters,
   BusinessDayList,
   InsightsAttendantVariance,
   InsightsCreditHealth,
@@ -35,6 +37,14 @@ import {
   ReceivablesSummary,
   SupplierPayableSummary,
   InsightsStockLoss,
+  DecantationView,
+  LinkablePurchase,
+  SaveDecantationBody,
+  SaveDecantationResult,
+  DensityReading,
+  DensityReadingWithContext,
+  DensityTodaySummary,
+  RecordDensityReadingPayload,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -112,6 +122,32 @@ export interface RecordHandoverResult {
   replaced: boolean;
 }
 
+export interface DecantationDayCloseWarnings {
+  pendingMeasurement: string[];
+  purchaseNotLinked: { documentNumber: string; products: string[] }[];
+  flagged: string[];
+  /** Tanker still unloading (DRAFT Decantation): finish or discard. */
+  unloading: string[];
+}
+
+export function formatDecantationWarningSummary(warnings: DecantationDayCloseWarnings): string {
+  const entries: string[] = [];
+  const describe = (label: string, documents: string[]) => {
+    if (documents.length > 0) entries.push(`${label}: ${documents.join(', ')}`);
+  };
+  describe('Tanker still unloading — finish or discard', warnings.unloading ?? []);
+  describe('Pending measurement', warnings.pendingMeasurement);
+  if (warnings.purchaseNotLinked.length > 0) {
+    entries.push(
+      `Purchase not linked: ${warnings.purchaseNotLinked
+        .map(({ documentNumber, products }) => `${documentNumber} (${products.join(', ')})`)
+        .join(', ')}`,
+    );
+  }
+  describe('Flagged', warnings.flagged);
+  return entries.join('; ');
+}
+
 export interface RecordStockCountPayload {
   stationId: string;
   actualQuantity: number;
@@ -136,6 +172,8 @@ export interface RecordStockCountResult {
   expectedQuantity: number;
   actualQuantity: number;
   varianceQuantity: number;
+  /** Advisory (e.g. DECANTATION_PENDING_OPEN_SHIFT); never blocks the dip. */
+  warnings?: Array<{ code: string; message: string; documentNumbers?: string[] }>;
 }
 
 function getHeaders(token: string) {
@@ -763,6 +801,15 @@ export class CloudShiftService {
    * Attendant Handover Report for a Business-Date range. Gated server-side on
    * the `reports.attendant` Product Capability.
    */
+  async getDecantationReport(filters: DecantationReportFilters): Promise<DecantationReport> {
+    const query = new URLSearchParams({
+      stationId: filters.stationId,
+      from: filters.from,
+      to: filters.to,
+    });
+    return request<DecantationReport>(`/reports/decantations?${query.toString()}`);
+  }
+
   async getAttendantHandoverReport(
     filters: AttendantReportFilters,
   ): Promise<AttendantHandoverReport> {
@@ -849,6 +896,46 @@ export class CloudShiftService {
 }
 
 export class CloudTransactionService {
+  async getDensityReadings(params: {
+    stationId: string;
+    productId?: string;
+    from?: string;
+    to?: string;
+    kind?: string;
+    limit?: number;
+  }): Promise<DensityReadingWithContext[]> {
+    const qs = new URLSearchParams({ stationId: params.stationId });
+    if (params.productId) qs.set('productId', params.productId);
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    if (params.kind) qs.set('kind', params.kind);
+    if (params.limit) qs.set('limit', String(params.limit));
+    return request<DensityReadingWithContext[]>(`/transactions/density/readings?${qs.toString()}`);
+  }
+
+  async getDensityTodaySummary(params: {
+    stationId: string;
+    businessDate?: string;
+  }): Promise<DensityTodaySummary> {
+    const qs = new URLSearchParams({ stationId: params.stationId });
+    if (params.businessDate) qs.set('businessDate', params.businessDate);
+    return request<DensityTodaySummary>(`/transactions/density/today?${qs.toString()}`);
+  }
+
+  async recordDensity(
+    payload: RecordDensityReadingPayload,
+    options?: { idempotencyKey?: string },
+  ): Promise<DensityReading> {
+    return request<DensityReading>(
+      '/transactions/density/readings',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      options,
+    );
+  }
+
   async getShiftTransactions(shiftId: string): Promise<any> {
     return request<any>(`/transactions/shifts/${shiftId}/transactions`);
   }
@@ -1085,18 +1172,22 @@ export class CloudTransactionService {
     return request<any[]>('/transactions/expenses');
   }
 
-  async getPurchases(): Promise<any[]> {
-    return request<any[]>('/transactions/purchases');
+  async getPurchases(stationId?: string): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (stationId) qs.set('stationId', stationId);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<any[]>(`/transactions/purchases${suffix}`);
   }
 
   async getPurchaseItems(purchaseId: string): Promise<any[]> {
     return request<any[]>(`/transactions/purchases/${purchaseId}/items`);
   }
 
-  async getPurchaseGstRegister(from?: string, to?: string): Promise<any[]> {
+  async getPurchaseGstRegister(from?: string, to?: string, stationId?: string): Promise<any[]> {
     const qs = new URLSearchParams();
     if (from) qs.set('from', from);
     if (to) qs.set('to', to);
+    if (stationId) qs.set('stationId', stationId);
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
     return request<any[]>(`/transactions/purchases/gst-register${suffix}`);
   }
@@ -1213,6 +1304,7 @@ export class CloudTransactionService {
       productId: string;
       quantity: number;
       unitPrice: number;
+      invoiceDensity?: number | string | null;
       tankAllocations?: { tankId: string; quantity: number }[];
     }[];
     /** Optional immediate payment recorded atomically with the purchase. */
@@ -1268,6 +1360,73 @@ export class CloudTransactionService {
 
   async getInventoryStatus(stationId: string): Promise<any[]> {
     return request<any[]>(`/transactions/inventory/status?stationId=${stationId}`);
+  }
+
+  async getDecantationDayCloseWarnings(
+    stationId: string,
+    businessDayId: string,
+  ): Promise<DecantationDayCloseWarnings> {
+    return request<DecantationDayCloseWarnings>(
+      `/transactions/decantations/day-close-warnings?stationId=${encodeURIComponent(stationId)}&businessDayId=${encodeURIComponent(businessDayId)}`,
+    );
+  }
+
+  /** Decantations of a station (one per tanker visit, tank lines grouped), newest first. */
+  async getDecantations(
+    stationId: string,
+    opts: { from?: string; to?: string; status?: string } = {},
+  ): Promise<DecantationView[]> {
+    const q = new URLSearchParams({ stationId });
+    for (const [k, v] of Object.entries(opts)) if (v) q.set(k, v);
+    return request<DecantationView[]>(`/transactions/decantations?${q.toString()}`);
+  }
+
+  /** Fuel Purchases of one product that a Decantation can be linked to (#469). */
+  async getLinkablePurchases(stationId: string, productId: string): Promise<LinkablePurchase[]> {
+    return request<LinkablePurchase[]>(
+      `/transactions/decantations/linkable-purchases?stationId=${encodeURIComponent(stationId)}&productId=${encodeURIComponent(productId)}`,
+    );
+  }
+
+  /** Create (no `decantationId`) or update a Decantation. Never blocks on flags. */
+  async saveDecantation(
+    payload: SaveDecantationBody,
+    opts: { decantationId?: string; idempotencyKey?: string } = {},
+  ): Promise<SaveDecantationResult> {
+    return request<SaveDecantationResult>(
+      opts.decantationId
+        ? `/transactions/decantations/${encodeURIComponent(opts.decantationId)}`
+        : '/transactions/decantations',
+      { method: opts.decantationId ? 'PUT' : 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts.idempotencyKey },
+    );
+  }
+
+  /** Link (or replace the link of) the Fuel Purchase of one product (#469). */
+  async linkDecantationPurchase(
+    decantationId: string,
+    body: { productId: string; purchaseId: string },
+    opts?: { idempotencyKey?: string },
+  ): Promise<DecantationView> {
+    return request<DecantationView>(
+      `/transactions/decantations/${encodeURIComponent(decantationId)}/purchases`,
+      { method: 'PUT', body: JSON.stringify(body) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
+  }
+
+  async discardDecantation(decantationId: string): Promise<unknown> {
+    return request<unknown>(
+      `/transactions/decantations/${encodeURIComponent(decantationId)}/discard`,
+      { method: 'POST' },
+    );
+  }
+
+  async unlinkDecantationPurchase(decantationId: string, productId: string): Promise<unknown> {
+    return request<unknown>(
+      `/transactions/decantations/${encodeURIComponent(decantationId)}/purchases/${encodeURIComponent(productId)}`,
+      { method: 'DELETE' },
+    );
   }
 
   async getInventoryItems(stationId: string): Promise<any[]> {

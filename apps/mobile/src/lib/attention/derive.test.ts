@@ -50,6 +50,88 @@ describe('deriveAlerts', () => {
     expect(a.action).toBeUndefined();
   });
 
+  it('raises actionable Decantation and density alerts only for back-office roles', () => {
+    const decantation = {
+      id: 'dec-1',
+      documentNumber: 'DEC-12',
+      tankerNumber: 'TN-42',
+      status: 'DRAFT',
+      flags: [],
+      unlinkedProductIds: [],
+      lines: [{ id: 'line-1', productId: 'p-ms', status: 'PENDING_MEASUREMENT' }],
+    } as unknown as AlertSources['decantations'] extends readonly (infer T)[] | undefined
+      ? T
+      : never;
+    const pending = {
+      ...decantation,
+      id: 'dec-2',
+      documentNumber: 'DEC-13',
+      tankerNumber: 'TN-43',
+      status: 'PENDING_MEASUREMENT',
+      flags: [],
+      unlinkedProductIds: ['p-ms'],
+    } as unknown as AlertSources['decantations'] extends readonly (infer T)[] | undefined
+      ? T
+      : never;
+    const flagged = {
+      ...pending,
+      id: 'dec-3',
+      documentNumber: 'DEC-14',
+      status: 'MEASURED',
+      flags: [{ code: 'TANKER_SHORT', message: 'Chamber short' }],
+      unlinkedProductIds: [],
+      lines: [{ id: 'line-3', productId: 'p-hsd', status: 'MEASURED' }],
+    } as unknown as AlertSources['decantations'] extends readonly (infer T)[] | undefined
+      ? T
+      : never;
+    const density = {
+      missingCount: 2,
+      totalProducts: 3,
+      missingProducts: [{ productId: 'p-ms', productName: 'Petrol', productCode: 'MS' }],
+    } as never;
+    const alerts = deriveAlerts({
+      ...none,
+      role: 'Accountant',
+      decantations: [decantation, pending, flagged],
+      densityToday: density,
+    });
+
+    expect(alerts.map((alert) => alert.id)).toEqual([
+      'dec-draft-dec-1',
+      'dec-pending-line-1',
+      'dec-unlinked-dec-2-p-ms',
+      'dec-flagged-dec-3',
+      'density-missing',
+    ]);
+    expect(alerts.map((alert) => alert.action)).toEqual([
+      { kind: 'decantation', decantationId: 'dec-1' },
+      { kind: 'decantation', decantationId: 'dec-2' },
+      { kind: 'decantation', decantationId: 'dec-2' },
+      { kind: 'decantation', decantationId: 'dec-3' },
+      { kind: 'density' },
+    ]);
+    for (const role of ['Owner', 'Manager', 'Accountant'] as const) {
+      const forRole = deriveAlerts({
+        ...none,
+        role,
+        decantations: [decantation, pending, flagged],
+        densityToday: density,
+      });
+      expect(forRole.map((alert) => alert.category)).toContain('decantation');
+      expect(forRole.map((alert) => alert.category)).toContain('density');
+    }
+    for (const role of ['Staff', 'Attendant'] as const) {
+      expect(
+        deriveAlerts({
+          ...none,
+          role,
+          decantations: [decantation, pending, flagged],
+          densityToday: density,
+        }),
+      ).toEqual([]);
+    }
+  });
+
   it('raises one day alert per past open day, newest first, opening that day', () => {
     const days = deriveAlerts({
       ...none,
@@ -227,7 +309,15 @@ describe('groupAlerts', () => {
   });
 
   it('knows the five kinds, in page order', () => {
-    expect(Object.keys(ALERT_KINDS)).toEqual(['stock', 'day', 'credit', 'variance', 'handover']);
+    expect(Object.keys(ALERT_KINDS)).toEqual([
+      'stock',
+      'day',
+      'credit',
+      'variance',
+      'handover',
+      'decantation',
+      'density',
+    ]);
   });
 });
 
@@ -241,5 +331,58 @@ describe('homeAlerts', () => {
     expect(alerts.map((a) => a.id)).toEqual(['day-2026-10-08', 'day-2026-10-07', 'handover-own']);
     expect(homeAlerts(alerts, 3).map((a) => a.id)).toEqual(['day-2026-10-08', 'day-2026-10-07']);
     expect(homeAlerts(alerts.slice(2), 2)).toEqual([]);
+  });
+
+  describe('Decantation attention details', () => {
+    type Dec = NonNullable<AlertSources['decantations']>[number];
+    const dec = (over: Record<string, unknown>) =>
+      ({
+        id: 'd1',
+        documentNumber: 'DEC-1',
+        tankerNumber: 'TN-1',
+        status: 'PENDING_MEASUREMENT',
+        flags: [],
+        unlinkedProductIds: ['p-ms'],
+        lines: [{ id: 'l1', productId: 'p-ms', status: 'PENDING_MEASUREMENT' }],
+        ...over,
+      }) as unknown as Dec;
+
+    it('skips DISCARDED Decantations for every attention item', () => {
+      const discarded = dec({
+        status: 'DISCARDED',
+        flags: [{ code: 'X', message: 'Chamber short' }],
+      });
+      expect(deriveAlerts({ ...none, role: 'Owner', decantations: [discarded] })).toEqual([]);
+    });
+
+    it('shows product names, falling back to a generic label for unknown ids', () => {
+      const alerts = deriveAlerts({
+        ...none,
+        role: 'Owner',
+        decantations: [dec({ unlinkedProductIds: ['p-ms', 'p-x'] })],
+        productNames: { 'p-ms': 'Petrol' },
+      });
+      const metas = alerts.map((a) => a.meta);
+      expect(metas).toContain('DEC-1 · Petrol');
+      expect(metas).toContain('DEC-1 · Fuel');
+      expect(metas.join(' ')).not.toContain('p-ms');
+    });
+  });
+
+  it('limits an Accountant to decantation, density and handover alerts', () => {
+    const src: AlertSources = {
+      ...none,
+      pastOpenDates: ['2026-10-08'],
+      stock: [{ id: 's', severity: 'danger', title: 'Low' }],
+      ownHandover: own(false),
+    };
+    expect(deriveAlerts({ ...src, role: 'Accountant' }).map((a) => a.category)).toEqual([
+      'handover',
+    ]);
+    expect(
+      deriveAlerts({ ...src, role: 'Owner' })
+        .map((a) => a.category)
+        .sort(),
+    ).toEqual(['day', 'handover', 'stock']);
   });
 });

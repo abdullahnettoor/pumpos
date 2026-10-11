@@ -77,7 +77,7 @@ function fakeDb() {
   return { db, writes };
 }
 
-function appAs(role: string) {
+function appAs(role: string, assignedStationIds = ['st-1']) {
   const { db, writes } = fakeDb();
   const app = new Hono<{ Variables: { db: any; user: any } }>();
   app.use('*', async (c, next) => {
@@ -88,7 +88,7 @@ function appAs(role: string) {
       fullName: 'User',
       organizationId: 'org-1',
       role,
-      assignedStationIds: ['st-1'],
+      assignedStationIds,
     });
     await next();
   });
@@ -100,11 +100,11 @@ const changedConfig = {
   settings: { report_config: { shiftSummary: ['header'], paper: 'LETTER', showLogo: false } },
 };
 
-const put = (app: Hono<any>) =>
+const put = (app: Hono<any>, body: Record<string, unknown> = changedConfig) =>
   app.request('/setup/stations/st-1', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(changedConfig),
+    body: JSON.stringify(body),
   });
 
 const savedSettings = (writes: Array<Record<string, unknown>>) =>
@@ -124,6 +124,65 @@ describe('PUT /setup/stations/:id report_config (#332)', () => {
     expect(res.status).toBe(403);
     const body = (await res.json()) as any;
     expect(body.error.code).toBe('FORBIDDEN');
+    expect(savedSettings(writes)).toBeUndefined();
+  });
+});
+
+describe('GET /setup/stations/:id/decantation-settings', () => {
+  it('returns resolved defaults for an authorized station', async () => {
+    const { app } = appAs('Manager');
+    const response = await app.request('/setup/stations/st-1/decantation-settings');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: {
+        densityMethod: 'API_MPMS_11_1_ADJUNCT',
+        densityToleranceKgM3: 3,
+        quantityTolerance: 0.2,
+        settlingTimeMinutes: 30,
+        densitySpecBands: {},
+      },
+    });
+  });
+
+  it('does not expose settings for a station the user cannot access', async () => {
+    const { app } = appAs('Staff', []);
+    const response = await app.request('/setup/stations/st-1/decantation-settings');
+
+    expect(response.status).toBe(403);
+  });
+});
+
+describe('PUT /setup/stations/:id Decantation settings', () => {
+  it.each(['Owner', 'Manager'])('lets %s save guidance settings', async (role) => {
+    const { app, writes } = appAs(role);
+    const settings = {
+      densityMethod: 'OMC_TABLE_53B',
+      densityToleranceKgM3: 4,
+      quantityTolerance: 0.15,
+      settlingTimeMinutes: 20,
+      densitySpecBands: { 'product-1': { minKgM3: 815, maxKgM3: 845 } },
+    };
+    const response = await put(app, { settings });
+
+    expect(response.status).toBe(200);
+    expect(savedSettings(writes)).toMatchObject(settings);
+  });
+
+  it('rejects invalid guidance settings without writing', async () => {
+    const { app, writes } = appAs('Manager');
+    const response = await put(app, { settings: { densityToleranceKgM3: -1 } });
+
+    expect(response.status).toBe(400);
+    expect(savedSettings(writes)).toBeUndefined();
+  });
+
+  it('keeps guidance settings read-only for other roles', async () => {
+    const { app, writes } = appAs('Accountant');
+    const response = await put(app, { settings: { densityToleranceKgM3: 4 } });
+
+    expect(response.status).toBe(403);
     expect(savedSettings(writes)).toBeUndefined();
   });
 });

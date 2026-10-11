@@ -65,6 +65,12 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /transactions/shifts/:id/merchandise-handovers': 'org-scoped-query',
   'GET /transactions/shifts/:id/merchandise-sales': 'org-scoped-query',
   'GET /transactions/shifts/:id/transactions': 'org-scoped-query',
+  'GET /transactions/decantations': 'refuses-foreign-station',
+  'GET /transactions/decantations/linkable-purchases': 'refuses-foreign-station',
+  'GET /transactions/density/readings': 'refuses-foreign-station',
+  'GET /transactions/density/today': 'refuses-foreign-station',
+  'GET /transactions/decantations/day-close-warnings': 'refuses-foreign-station',
+  'GET /transactions/decantations/:id': 'org-scoped-query',
   'GET /transactions/inventory/status': 'org-scoped-query',
   'GET /transactions/inventory/items': 'org-scoped-query',
   'GET /transactions/inventory/movements': 'org-scoped-query',
@@ -77,6 +83,7 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /finance/cash-book': 'org-scoped-query',
 
   'GET /setup/stations': 'not-station-scoped',
+  'GET /setup/stations/:id/decantation-settings': 'refuses-foreign-station',
   'GET /setup/tanks': 'org-scoped-query',
   'GET /setup/dispensers': 'org-scoped-query',
   'GET /setup/nozzles': 'org-scoped-query',
@@ -96,6 +103,7 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /dssr/days': 'refuses-foreign-station',
 
   'GET /reports/attendant-handovers': 'org-scoped-query',
+  'GET /reports/decantations': 'org-scoped-query',
   'GET /reports/insights/sales': 'org-scoped-query',
   'GET /reports/receivables': 'refuses-foreign-station',
   'GET /reports/receivables/:customerId': 'refuses-foreign-station',

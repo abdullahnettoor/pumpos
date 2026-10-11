@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useContext } from 'react';
+import { canRecordDecantation, canRecordDensity } from '@pump/shared';
 import type { BusinessDayListItem, Station } from '@pump/shared';
 import { useBusinessDayList } from '@pump/ui';
 import { shortDate } from '../lib/dates.js';
@@ -12,9 +13,21 @@ import {
   weekTile,
   type LiveTab,
 } from '../lib/reports/days.js';
+import { ShellContext } from '../shell/context.js';
 import { useNav } from '../shell/nav.js';
-import { ListGroup, Note, SectionLabel, StatTile, StatusBadge, TONE_TEXT } from '../ui/index.js';
+import {
+  ListGroup,
+  ListRow,
+  Note,
+  SectionLabel,
+  StatTile,
+  StatusBadge,
+  TONE_TEXT,
+} from '../ui/index.js';
 import { ChevronRightIcon } from '../ui/icons.js';
+import { DECANTATIONS_ROUTE } from '../lib/attention/routes.js';
+import { DecantationsListPage } from './decantation/DecantationsListPage.js';
+import { DensityPage } from './density/DensityPage.js';
 import { ReportDayPage } from './reports/ReportDayPage.js';
 
 const DayRow: React.FC<{
@@ -92,6 +105,7 @@ const DayRow: React.FC<{
  */
 export const ReportsScreen: React.FC<{ station: Station }> = ({ station }) => {
   const nav = useNav();
+  const role = useContext(ShellContext)?.role;
   const q = useBusinessDayList(station.id);
   const pages = q.data?.pages ?? [];
   const first = pages[0];
@@ -127,6 +141,26 @@ export const ReportsScreen: React.FC<{ station: Station }> = ({ station }) => {
 
   return (
     <>
+      {role && (canRecordDecantation(role) || canRecordDensity(role)) && (
+        <ListGroup className="mb-3">
+          {canRecordDecantation(role) && (
+            <ListRow
+              title="Decantations"
+              meta="Tanker visits and unloading"
+              onPress={() =>
+                nav.push(<DecantationsListPage station={station} />, DECANTATIONS_ROUTE)
+              }
+            />
+          )}
+          {canRecordDensity(role) && (
+            <ListRow
+              title="Density"
+              meta="Today and the register"
+              onPress={() => nav.push(<DensityPage />, 'density')}
+            />
+          )}
+        </ListGroup>
+      )}
       <div className="grid grid-cols-2 gap-2 px-3">
         <StatTile
           label="Last 7 days"

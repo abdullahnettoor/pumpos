@@ -16,7 +16,11 @@ import {
 import { DataTable } from '../primitives/DataTable.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
-import { CloudShiftService } from '../../services/cloud.js';
+import {
+  CloudShiftService,
+  formatDecantationWarningSummary,
+  type DecantationDayCloseWarnings,
+} from '../../services/cloud.js';
 import { inr, formatDate, formatQty } from '../../utils/format.js';
 import {
   useBusinessDayStatus,
@@ -25,6 +29,7 @@ import {
   useShiftStatus,
   useInvalidateOperational,
   useCustomers,
+  useDecantationDayCloseWarnings,
   queryKeys,
 } from '../../query/hooks.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
@@ -122,6 +127,10 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     enabled: !!stationId,
   });
   const selectedState = businessDayStatusQ.data?.requestedState;
+  const selectedBusinessDay = businessDayStatusQ.data?.requestedBusinessDay;
+  const dayCloseWarningsQ = useDecantationDayCloseWarnings(stationId, selectedBusinessDay?.id, {
+    enabled: !!stationId && !!selectedBusinessDay?.id && selectedState === 'OPEN' && canClose,
+  });
   const previewQ = useDailyDssrPreview(stationId, businessDate, {
     enabled: !!stationId && (selectedState === 'OPEN' || selectedState === 'NOT_CREATED'),
   } as any);
@@ -150,6 +159,15 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     (s: number, c: any) => s + Number(c.currentBalance || 0),
     0,
   );
+  const decantationWarnings = dayCloseWarningsQ.data;
+  const decantationWarningCount = decantationWarnings
+    ? new Set([
+        ...decantationWarnings.pendingMeasurement,
+        ...decantationWarnings.purchaseNotLinked.map(({ documentNumber }) => documentNumber),
+        ...decantationWarnings.flagged,
+        ...(decantationWarnings.unloading ?? []),
+      ]).size
+    : 0;
 
   const report = selectedState === 'CLOSED' ? snapshotQ.data : previewQ.data;
   const snap = report?.snapshotData ?? null;
@@ -299,7 +317,6 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   );
 
   const status = selectedState;
-  const selectedBusinessDay = businessDayStatusQ.data?.requestedBusinessDay;
   const hasOpenShift = !!activeShift && activeShift.businessDayId === selectedBusinessDay?.id;
   const liveAsOf =
     status !== 'CLOSED' && report?.generatedAt
@@ -339,13 +356,16 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
 
   const handleCloseDay = async () => {
     if (!snap?.businessDayId || !stationId) return;
+    const decantationNote = decantationWarningCount
+      ? `\n\nDecantation warnings: ${formatDecantationWarningSummary(decantationWarnings!)}. You can still close the day.`
+      : '';
     const eodNote =
       eodDueCustomers.length > 0
         ? `\n\n${eodDueCustomers.length} end-of-day customer${eodDueCustomers.length === 1 ? '' : 's'} still owe ${inr(eodDueTotal)} that was expected to be collected today.`
         : '';
     const ok = await confirm({
       title: 'Close this business day?',
-      message: `This generates the immutable DSSR snapshot for ${businessDate} and seals sales and stock. Late financial entries remain available and are flagged separately.${eodNote}`,
+      message: `This generates the immutable DSSR snapshot for ${businessDate} and seals sales and stock. Late financial entries remain available and are flagged separately.${decantationNote}${eodNote}`,
       confirmLabel: 'Close day',
     });
     if (!ok) return;
@@ -592,6 +612,29 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
               .join(', ')}
             {eodDueCustomers.length > 3 ? ` +${eodDueCustomers.length - 3} more` : ''}. You can
             still close the day.
+          </span>
+        </div>
+      )}
+
+      {status === 'OPEN' && canClose && decantationWarningCount > 0 && (
+        <div
+          role="status"
+          style={{
+            display: 'flex',
+            gap: '8px',
+            alignItems: 'flex-start',
+            padding: '8px 12px',
+            backgroundColor: 'var(--state-warning-bg)',
+            color: 'var(--state-warning-fg)',
+            borderRadius: 'var(--radius-input)',
+            fontSize: '12px',
+            border: '1px solid var(--border-soft)',
+          }}
+        >
+          <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+          <span>
+            Decantation warnings through this day:{' '}
+            {formatDecantationWarningSummary(decantationWarnings!)}. You can still close the day.
           </span>
         </div>
       )}

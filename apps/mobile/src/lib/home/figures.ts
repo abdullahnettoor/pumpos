@@ -86,6 +86,8 @@ export interface TankGauge {
    * (the gauge shows nothing).
    */
   cover: string;
+  /** A pending Decantation for this tank means current book stock is incomplete. */
+  waitingOnDecantation: boolean;
 }
 
 const unitText = (unit: unknown): string => (typeof unit === 'string' ? unit.trim() : '');
@@ -111,6 +113,7 @@ export function deriveTanks(rows: readonly unknown[] | undefined): TankGauge[] {
       level: pct === null ? 'unknown' : tankLevel(pct),
       volume: volumeLabel(volume, t.productUnit),
       cover: formatDaysOfCover(t.daysOfCover),
+      waitingOnDecantation: t.waitingOnDecantation === true,
     };
   });
 }

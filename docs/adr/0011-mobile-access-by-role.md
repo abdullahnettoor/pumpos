@@ -36,3 +36,11 @@ appears for every Role that may see alerts (Owner, Manager).
 - Mobile write actions (team, credit limit, Collection, Supplier Payment) use
   the same server guards as desktop; the mobile app hides what the Role can't
   do, but the server is the authority.
+
+## Amended 2026-10-11 (#476)
+
+Accountants still have no Home overview, but they record Decantations and
+density readings. They therefore see Decantation and density alerts (plus their
+own handover) in the header bell and Needs attention page, and reach the
+Decantations list and Density from the Reports tab. The role-to-alert-category
+policy lives in one place (`alertVisibleToRole` in `lib/attention/derive.ts`).

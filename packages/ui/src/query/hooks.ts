@@ -2,6 +2,8 @@ import {
   useQueryClient,
   useQuery,
   useInfiniteQuery,
+  useMutation,
+  useQueries,
   type UseQueryOptions,
 } from '@tanstack/react-query';
 import {
@@ -21,7 +23,14 @@ import {
   CloudPaymentTerminalService,
   CloudAccessService,
   CloudDesktopDownloadsService,
+  type DecantationDayCloseWarnings,
 } from '../services/cloud.js';
+import type {
+  DensityTodaySummary,
+  DensityReadingWithContext,
+  SaveDecantationBody,
+  RecordDensityReadingPayload,
+} from '@pump/shared';
 import type {
   BusinessDayStatusResponse,
   DailyCashBook,
@@ -33,6 +42,8 @@ import type {
   DesktopDownloads,
   AttendantHandoverReport,
   AttendantReportFilters,
+  DecantationReport,
+  DecantationReportFilters,
   BusinessDayList,
   InsightsAttendantVariance,
   InsightsCreditHealth,
@@ -44,6 +55,8 @@ import type {
   ReceivablesSummary,
   SupplierPayableSummary,
   InsightsStockLoss,
+  DecantationView,
+  LinkablePurchase,
 } from '@pump/shared';
 
 /**
@@ -72,6 +85,19 @@ const accessSvc = new CloudAccessService();
 const desktopDownloadsSvc = new CloudDesktopDownloadsService();
 
 export const queryKeys = {
+  densityReadings: (
+    stationId: string,
+    productId = '',
+    from = '',
+    to = '',
+    kind = '',
+    limit = 500,
+  ) => ['density-readings', stationId, productId, from, to, kind, limit] as const,
+  densityReadingsPrefix: (stationId: string) => ['density-readings', stationId] as const,
+  densityToday: (stationId: string, businessDate = '') =>
+    ['density-today', stationId, businessDate] as const,
+  densityTodayPrefix: (stationId: string) => ['density-today', stationId] as const,
+
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
   // Prefix keys for station-wide invalidation (TanStack matches by prefix).
   shiftStatusPrefix: (stationId: string) => ['shift-status', stationId] as const,
@@ -91,7 +117,10 @@ export const queryKeys = {
   merchandiseSales: (shiftId: string) => ['merchandise-sales', shiftId] as const,
   expenses: () => ['expenses'] as const,
   income: (stationId = '', from = '', to = '') => ['income', stationId, from, to] as const,
-  purchases: () => ['purchases'] as const,
+  purchases: (stationId?: string) =>
+    stationId ? (['purchases', stationId] as const) : (['purchases'] as const),
+  purchaseItems: (purchaseId: string) => ['purchase-items', purchaseId] as const,
+  decantations: (stationId: string, status = '') => ['decantations', stationId, status] as const,
   collections: () => ['collections'] as const,
   creditSales: () => ['credit-sales'] as const,
   vehicles: (activeOnly = false) => ['vehicles', activeOnly] as const,
@@ -114,6 +143,12 @@ export const queryKeys = {
   customerReceivable: (stationId: string, customerId: string) =>
     ['receivables', stationId, customerId] as const,
   inventoryStatus: (stationId: string) => ['inventory-status', stationId] as const,
+  /** Prefix of every Decantation list (invalidated as one by operational writes). */
+  decantationsPrefix: (stationId: string) => ['decantations', stationId] as const,
+  linkablePurchases: (stationId: string, productId: string) =>
+    ['linkable-purchases', stationId, productId] as const,
+  decantationDayCloseWarnings: (stationId: string, businessDayId: string) =>
+    ['decantation-day-close-warnings', stationId, businessDayId] as const,
   inventoryItems: (stationId: string) => ['inventory-items', stationId] as const,
   inventoryMovements: (stationId: string) => ['inventory-movements', stationId] as const,
   inventoryVariances: (stationId: string) => ['inventory-variances', stationId] as const,
@@ -124,6 +159,8 @@ export const queryKeys = {
     ['dssr-range', stationId, from, to] as const,
   attendantHandoverReport: (stationId: string, from: string, to: string) =>
     ['attendant-handover-report', stationId, from, to] as const,
+  decantationReport: (stationId: string, from: string, to: string) =>
+    ['decantation-report', stationId, from, to] as const,
   insightsSales: (stationId: string, days: number) => ['insights-sales', stationId, days] as const,
   insightsAttendantVariance: (stationId: string, days: number) =>
     ['insights-attendant-variance', stationId, days] as const,
@@ -512,12 +549,13 @@ export function useSalesTaxRegister(
 /** Input GST on purchases for a period. */
 export function usePurchaseGstRegister(
   params: { from?: string; to?: string },
+  stationId: string,
   options?: Options<any[]>,
 ) {
   return useQuery({
-    queryKey: queryKeys.purchaseGstRegister(params.from ?? '', params.to ?? ''),
+    queryKey: [...queryKeys.purchaseGstRegister(params.from ?? '', params.to ?? ''), stationId],
     queryFn: () =>
-      txService.getPurchaseGstRegister(params.from || undefined, params.to || undefined),
+      txService.getPurchaseGstRegister(params.from || undefined, params.to || undefined, stationId),
     ...TIER.operational,
     ...options,
   });
@@ -738,10 +776,20 @@ export function useExpenses(options?: Options<any[]>) {
   });
 }
 
-export function usePurchases(options?: Options<any[]>) {
+export function usePurchases(stationId = '', options?: Options<any[]>) {
   return useQuery({
-    queryKey: queryKeys.purchases(),
-    queryFn: () => txService.getPurchases(),
+    queryKey: stationId ? queryKeys.purchases(stationId) : queryKeys.purchases(),
+    queryFn: () => txService.getPurchases(stationId || undefined),
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function usePurchaseItems(purchaseId: string | null, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.purchaseItems(purchaseId ?? ''),
+    queryFn: () => txService.getPurchaseItems(purchaseId as string),
+    enabled: !!purchaseId,
     ...TIER.operational,
     ...options,
   });
@@ -915,6 +963,51 @@ export function useInventoryStatus(stationId: string | null | undefined, options
   });
 }
 
+/** Decantations of a station, tank lines grouped per tanker visit. Operational tier. */
+export function useDecantations(
+  stationId: string | null | undefined,
+  status = '',
+  options?: Options<DecantationView[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.decantations(stationId ?? '', status),
+    queryFn: () => txService.getDecantations(stationId!, status ? { status } : {}),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/** Linkable Fuel Purchases per product (one query each, shared cache keys). */
+export function useLinkablePurchases(
+  stationId: string | null | undefined,
+  productIds: readonly string[],
+  enabled = true,
+) {
+  return useQueries({
+    queries: productIds.map((productId) => ({
+      queryKey: queryKeys.linkablePurchases(stationId ?? '', productId),
+      queryFn: () => txService.getLinkablePurchases(stationId!, productId),
+      enabled: enabled && !!stationId,
+      ...TIER.operational,
+    })),
+  });
+}
+
+export function useDecantationDayCloseWarnings(
+  stationId: string | null | undefined,
+  businessDayId: string | null | undefined,
+  options?: Options<DecantationDayCloseWarnings>,
+) {
+  return useQuery({
+    queryKey: queryKeys.decantationDayCloseWarnings(stationId ?? '', businessDayId ?? ''),
+    queryFn: () => txService.getDecantationDayCloseWarnings(stationId!, businessDayId!),
+    enabled: !!stationId && !!businessDayId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 export function useInventoryItems(stationId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.inventoryItems(stationId ?? ''),
@@ -1038,6 +1131,24 @@ export function useDailyDssrRange(
  * Entitlement is NOT checked here — callers mount this behind the capability
  * gate, and the server refuses regardless of what the client believes.
  */
+/**
+ * Decantation Report over a Business Date range (ticket #473).
+ * Tanker visits, tank line dips, invoice reconciliation and chamber results.
+ */
+export function useDecantationReport(
+  filters: Partial<DecantationReportFilters> & { stationId: string | null | undefined },
+  options?: Options<DecantationReport>,
+) {
+  const { stationId, from = '', to = '' } = filters;
+  return useQuery({
+    queryKey: queryKeys.decantationReport(stationId ?? '', from, to),
+    queryFn: () => shiftService.getDecantationReport({ stationId: stationId!, from, to }),
+    enabled: !!stationId && !!from && !!to,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 export function useAttendantHandoverReport(
   filters: Partial<AttendantReportFilters> & { stationId: string | null | undefined },
   options?: Options<AttendantHandoverReport>,
@@ -1222,6 +1333,7 @@ export function useInvalidateOperational() {
   const qc = useQueryClient();
   return (stationId?: string | null) => {
     const invalidations = [
+      qc.invalidateQueries({ queryKey: ['purchase-gst-register'] }),
       qc.invalidateQueries({ queryKey: ['shift-status'] }),
       qc.invalidateQueries({ queryKey: ['business-day-status'] }),
       qc.invalidateQueries({ queryKey: ['shift-summaries'] }),
@@ -1233,6 +1345,8 @@ export function useInvalidateOperational() {
       // The Attendant Handover Report reads closed-shift handovers, so closing
       // a shift (or correcting one) changes it within the same session.
       qc.invalidateQueries({ queryKey: ['attendant-handover-report'] }),
+      // Decantation Report: measurements and invoice settlement move it.
+      qc.invalidateQueries({ queryKey: ['decantation-report'] }),
       // Insights read sealed days; closing a Business Day adds one to the range.
       qc.invalidateQueries({ queryKey: ['insights-sales'] }),
       // ...and so do the part 2 blocks: closed-day Shift Summaries, Tank Dips and
@@ -1248,6 +1362,9 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['expenses'] }),
       qc.invalidateQueries({ queryKey: ['income'] }),
       qc.invalidateQueries({ queryKey: ['purchases'] }),
+      // Decantations and the Fuel Purchases they link to move together (#469).
+      qc.invalidateQueries({ queryKey: ['decantations'] }),
+      qc.invalidateQueries({ queryKey: ['linkable-purchases'] }),
       qc.invalidateQueries({ queryKey: ['collections'] }),
       qc.invalidateQueries({ queryKey: ['customers'] }),
       // Receivables are settled FIFO from the same ledger as a customer's balance,
@@ -1270,6 +1387,8 @@ export function useInvalidateOperational() {
       // and new suppliers are created from PurchasesList — keep them fresh too.
       qc.invalidateQueries({ queryKey: ['suppliers'] }),
       qc.invalidateQueries({ queryKey: ['activity-groups'] }),
+      qc.invalidateQueries({ queryKey: ['density-readings'] }),
+      qc.invalidateQueries({ queryKey: ['density-today'] }),
       qc.invalidateQueries({ queryKey: ['activity-group'] }),
     ];
     if (stationId) {
@@ -1278,8 +1397,143 @@ export function useInvalidateOperational() {
         qc.invalidateQueries({ queryKey: ['inventory-items', stationId] }),
         qc.invalidateQueries({ queryKey: ['inventory-movements', stationId] }),
         qc.invalidateQueries({ queryKey: ['inventory-variances', stationId] }),
+        qc.invalidateQueries({ queryKey: ['density-readings', stationId] }),
+        qc.invalidateQueries({ queryKey: ['density-today', stationId] }),
+        qc.invalidateQueries({ queryKey: ['decantation-day-close-warnings', stationId] }),
       );
     }
     return Promise.all(invalidations).then(() => undefined);
   };
+}
+
+/**
+ * Decantation writes (ADR 0007, #469). The write response drives the UI; the
+ * operational caches refresh in the background (never awaited), so a slow
+ * refetch cannot delay closing a drawer or showing success.
+ */
+export function useRecordDecantation(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: {
+      body: SaveDecantationBody;
+      decantationId?: string;
+      idempotencyKey?: string;
+    }) =>
+      txService.saveDecantation(vars.body, {
+        decantationId: vars.decantationId,
+        idempotencyKey: vars.idempotencyKey,
+      }),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
+}
+
+/** Density Reading write; operational caches refresh in the background (never awaited). */
+export function useRecordDensityReading(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: { payload: RecordDensityReadingPayload; idempotencyKey?: string }) =>
+      txService.recordDensity(vars.payload, { idempotencyKey: vars.idempotencyKey }),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
+}
+
+export function useLinkDecantationPurchase(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      decantationId: string;
+      productId: string;
+      purchaseId: string;
+      idempotencyKey?: string;
+    }) =>
+      txService.linkDecantationPurchase(
+        vars.decantationId,
+        { productId: vars.productId, purchaseId: vars.purchaseId },
+        { idempotencyKey: vars.idempotencyKey },
+      ),
+    onSuccess: () => {
+      void invalidate(stationId);
+      // Linking settles the invoice, which can move a product's weighted-average cost.
+      void qc.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+}
+
+/** Discard a DRAFT Decantation; refreshes in the background (never awaited). */
+export function useDiscardDecantation(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: { decantationId: string }) =>
+      txService.discardDecantation(vars.decantationId),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
+}
+
+export function useUnlinkDecantationPurchase(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: { decantationId: string; productId: string }) =>
+      txService.unlinkDecantationPurchase(vars.decantationId, vars.productId),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
+}
+
+export function useDensityTodaySummary(
+  stationId: string | null | undefined,
+  businessDate?: string,
+  options?: Omit<UseQueryOptions<DensityTodaySummary, Error>, 'queryKey' | 'queryFn'>,
+) {
+  return useQuery({
+    queryKey: queryKeys.densityToday(stationId ?? '', businessDate ?? ''),
+    queryFn: () => txService.getDensityTodaySummary({ stationId: stationId!, businessDate }),
+    enabled: Boolean(stationId),
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
+    ...options,
+  });
+}
+
+export function useDensityReadings(
+  stationId: string | null | undefined,
+  params: {
+    productId?: string;
+    from?: string;
+    to?: string;
+    kind?: string;
+    limit?: number;
+  } = {},
+  options?: Omit<UseQueryOptions<DensityReadingWithContext[], Error>, 'queryKey' | 'queryFn'>,
+) {
+  return useQuery({
+    queryKey: queryKeys.densityReadings(
+      stationId ?? '',
+      params.productId ?? '',
+      params.from ?? '',
+      params.to ?? '',
+      params.kind ?? '',
+      params.limit ?? 500,
+    ),
+    queryFn: () =>
+      txService.getDensityReadings({
+        stationId: stationId!,
+        productId: params.productId,
+        from: params.from,
+        to: params.to,
+        kind: params.kind,
+        limit: params.limit,
+      }),
+    enabled: Boolean(stationId),
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
+    ...options,
+  });
 }

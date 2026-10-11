@@ -37,6 +37,19 @@ export function deriveStationAlerts(tanks: any[] = [], items: any[] = []): Stati
   const list: StationAlert[] = [];
 
   tanks.forEach((t: any) => {
+    if (t.waitingOnDecantation) {
+      list.push({
+        id: `decantation-${t.id}`,
+        severity: 'warning',
+        category: 'stock',
+        title: `${t.name} waiting on decantation`,
+        meta: 'Pending measurement',
+        actionLabel: 'Stock',
+        actionPath: '/inventory',
+        actionTab: 'tanks',
+        actionEntityId: t.id,
+      });
+    }
     const cap = Number(t.capacity) || 0;
     const vol = Number(t.currentVolume) || 0;
     if (!cap) return;

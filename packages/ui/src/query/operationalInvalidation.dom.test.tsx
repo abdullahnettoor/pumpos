@@ -41,6 +41,12 @@ describe('useInvalidateOperational', () => {
     );
   });
 
+  it('refreshes the Decantation Report', () => {
+    expect(invalidatedKeysAfterOperationalWrite()).toContain(
+      queryKeys.decantationReport('station-1', '2026-03-01', '2026-03-31')[0],
+    );
+  });
+
   it('refreshes the shift, day and summary caches a write moves', () => {
     const keys = invalidatedKeysAfterOperationalWrite();
     for (const key of [
@@ -65,6 +71,13 @@ describe('useInvalidateOperational', () => {
       'insights-stock-loss',
       'insights-credit-health',
     ]) {
+      expect(keys).toContain(key);
+    }
+  });
+
+  it('refreshes Decantations, linkable Fuel Purchases and tank stock with a Decantation write', () => {
+    const keys = invalidatedKeysAfterOperationalWrite();
+    for (const key of ['decantations', 'linkable-purchases', 'purchases', 'inventory-status']) {
       expect(keys).toContain(key);
     }
   });

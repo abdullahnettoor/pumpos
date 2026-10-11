@@ -246,7 +246,7 @@ function bday(): BusinessDay {
 }
 
 describe('RecordPurchase', () => {
-  it('rejects a purchase on a closed Business Day before writing anything', async () => {
+  it('rejects product stock purchases on a closed Business Day before writing anything', async () => {
     const purchases = new PurchaseRepo();
     const items = new PurchaseItemRepo();
     const stock = new StockRepo();
@@ -258,7 +258,7 @@ describe('RecordPurchase', () => {
       stock,
       supplierTxns,
       suppliers: new SupplierRepo([supplier()]),
-      products: new ProductRepo([fuelProduct()]),
+      products: new ProductRepo([lubeProduct()]),
       stations: new StationRepo([station()]),
       shifts: new ShiftRepo([]),
       businessDays: new BdRepo([{ ...bday(), status: 'CLOSED', closedAt: '2026-03-15T09:00:00Z' }]),
@@ -267,7 +267,7 @@ describe('RecordPurchase', () => {
     }).execute(
       {
         supplierId: 'sup-1',
-        productId: 'petrol-1',
+        productId: 'lube-1',
         quantity: 5000,
         unitPrice: 90,
         stationId: 'st-1',
@@ -284,7 +284,7 @@ describe('RecordPurchase', () => {
     expect(store.events).toHaveLength(0);
   });
 
-  it('raises a payable and increments tank stock, anchored to the business day with no shift', async () => {
+  it('records fuel purchases on the Entry Date without stock or WAC changes', async () => {
     const purchases = new PurchaseRepo();
     const stock = new StockRepo();
     const supplierTxns = new SupplierTxnRepo();
@@ -304,12 +304,10 @@ describe('RecordPurchase', () => {
     }).execute(
       {
         supplierId: 'sup-1',
-        productId: 'petrol-1',
-        quantity: 5000,
-        unitPrice: 90,
+        lines: [{ productId: 'petrol-1', quantity: 5000, unitPrice: 90, invoiceDensity: 842.25 }],
         invoiceNumber: 'INV-1',
         stationId: 'st-1',
-        tankAllocations: [{ tankId: 'tank-1', quantity: 5000 }],
+        transactionDate: '2026-03-14',
       },
       ctx(),
     );
@@ -317,21 +315,48 @@ describe('RecordPurchase', () => {
     if (result.success) {
       expect(result.data.purchase.amount).toBe('450000');
       expect(result.data.purchase.shiftId).toBeNull();
-      expect(result.data.purchase.businessDayId).toBe('bd-9');
+      expect(result.data.purchase.businessDayId).toBeNull();
+      expect(result.data.purchase.entryDate).toBe('2026-03-14');
+      expect(result.data.items[0].invoiceDensity).toBe('842.25');
     }
-    expect(stock.movements).toHaveLength(1);
-    expect(stock.movements[0].quantity).toBe('5000');
-    expect(stock.movements[0].tankId).toBe('tank-1');
+    expect(stock.movements).toHaveLength(0);
     expect(supplierTxns.rows[0].transactionType).toBe('Purchase');
-    // The payable moves no money and is dated on the purchase's Business Date.
+    // The payable moves no money and is dated on the purchase's Entry Date.
     expect(supplierTxns.rows[0].fundingAccountId).toBeNull();
-    expect(supplierTxns.rows[0].entryDate).toBe('2026-03-15');
-    expect(store.events.map((e) => e.eventType)).toContain(BusinessEvents.GOODS_RECEIVED);
+    expect(supplierTxns.rows[0].entryDate).toBe('2026-03-14');
+    expect(store.events.map((e) => e.eventType)).not.toContain(BusinessEvents.GOODS_RECEIVED);
+    expect(store.events.every((event) => event.businessDayId === null)).toBe(true);
+    expect(store.events.every((event) => event.payload.entryDate === '2026-03-14')).toBe(true);
   });
 
-  // ADR 0005 / #308: a purchase never stores a Shift. A legacy queued payload
-  // that sends only a shiftId (no date) must land on that Shift's business day
-  // (bd-8, yesterday), not today's (bd-9), whether or not ctx carries a station.
+  it('rejects a Fuel Purchase with a future Entry Date', async () => {
+    const result = await new RecordPurchase({
+      purchases: new PurchaseRepo(),
+      purchaseItems: new PurchaseItemRepo(),
+      stock: new StockRepo(),
+      supplierTxns: new SupplierTxnRepo(),
+      suppliers: new SupplierRepo([supplier()]),
+      products: new ProductRepo([fuelProduct()]),
+      stations: new StationRepo([station()]),
+      shifts: new ShiftRepo([]),
+      businessDays: new BdRepo([bday()]),
+      docNumbers,
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute(
+      {
+        supplierId: 'sup-1',
+        stationId: 'st-1',
+        transactionDate: '2026-03-16',
+        lines: [{ productId: 'petrol-1', quantity: 10, unitPrice: 90 }],
+      },
+      ctx(),
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.message).toBe('entryDate cannot be in the future');
+  });
+
+  // A legacy shiftId can still locate the station, but fuel remains an Office
+  // Record and defaults to the station's calendar date.
   const yesterdayShift: Shift = {
     id: 'sh-1',
     organizationId: 'org-1',
@@ -369,7 +394,6 @@ describe('RecordPurchase', () => {
         productId: 'petrol-1',
         quantity: 1000,
         unitPrice: 90,
-        tankAllocations: [{ tankId: 'tank-1', quantity: 1000 }],
         ...cmd,
       },
       context,
@@ -379,31 +403,33 @@ describe('RecordPurchase', () => {
     ['with ctx.stationId', ctx()],
     ['without ctx.stationId', { ...ctx(), stationId: null }],
   ])(
-    "replays a legacy shiftId-only payload onto the Shift's business day (%s)",
+    'uses the legacy shiftId only to resolve station for fuel Entry Date (%s)',
     async (_label, context) => {
       const result = await recordWith({ shiftId: 'sh-1' }, context as ExecutionContext);
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.purchase.businessDayId).toBe('bd-8');
+        expect(result.data.purchase.businessDayId).toBeNull();
+        expect(result.data.purchase.entryDate).toBe('2026-03-15');
         expect(result.data.purchase.shiftId).toBeNull();
       }
     },
   );
 
-  it('anchors station + date to that date, ignoring a stale shiftId, and stores no Shift', async () => {
+  it('anchors fuel to Entry Date even when a shiftId is also supplied', async () => {
     const result = await recordWith(
       { stationId: 'st-1', shiftId: 'sh-1', transactionDate: '2026-03-15' },
       ctx(),
     );
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.purchase.businessDayId).toBe('bd-9');
+      expect(result.data.purchase.businessDayId).toBeNull();
+      expect(result.data.purchase.entryDate).toBe('2026-03-15');
       expect(result.data.purchase.shiftId).toBeNull();
     }
   });
 
-  it('updates the product cost basis as a weighted average of existing stock and the purchase', async () => {
-    const products = new ProductRepo([{ ...fuelProduct(), costBasis: '88' }]);
+  it('updates product cost basis as a weighted average of stock and purchase', async () => {
+    const products = new ProductRepo([{ ...lubeProduct(), costBasis: '88' }]);
     const stock = new StockRepo(10000); // 10,000 L already on hand @ ₹88
     const result = await new RecordPurchase({
       purchases: new PurchaseRepo(),
@@ -421,11 +447,10 @@ describe('RecordPurchase', () => {
       // Buy 5,000 L @ ₹90.50 → (10000·88 + 5000·90.50) / 15000 = 88.8333
       {
         supplierId: 'sup-1',
-        productId: 'petrol-1',
+        productId: 'lube-1',
         quantity: 5000,
         unitPrice: 90.5,
         stationId: 'st-1',
-        tankAllocations: [{ tankId: 'tank-1', quantity: 5000 }],
       },
       ctx(),
     );
@@ -433,8 +458,8 @@ describe('RecordPurchase', () => {
     expect(products.rows[0].costBasis).toBe('88.8333');
   });
 
-  it('sets cost basis to the purchase price when there is no prior stock', async () => {
-    const products = new ProductRepo([{ ...fuelProduct(), costBasis: '0' }]);
+  it('sets product cost basis to purchase price when there is no prior stock', async () => {
+    const products = new ProductRepo([{ ...lubeProduct(), costBasis: '0' }]);
     const stock = new StockRepo(0);
     const result = await new RecordPurchase({
       purchases: new PurchaseRepo(),
@@ -451,11 +476,10 @@ describe('RecordPurchase', () => {
     }).execute(
       {
         supplierId: 'sup-1',
-        productId: 'petrol-1',
+        productId: 'lube-1',
         quantity: 5000,
         unitPrice: 90.5,
         stationId: 'st-1',
-        tankAllocations: [{ tankId: 'tank-1', quantity: 5000 }],
       },
       ctx(),
     );
@@ -463,7 +487,7 @@ describe('RecordPurchase', () => {
     expect(products.rows[0].costBasis).toBe('90.5');
   });
 
-  it('rejects tank allocations that do not sum to the quantity', async () => {
+  it('rejects product stock allocations that do not sum to the quantity', async () => {
     const result = await new RecordPurchase({
       purchases: new PurchaseRepo(),
       stock: new StockRepo(),
@@ -472,14 +496,14 @@ describe('RecordPurchase', () => {
       shifts: new ShiftRepo([]),
       businessDays: new BdRepo([bday()]),
       purchaseItems: new PurchaseItemRepo(),
-      products: new ProductRepo([fuelProduct()]),
+      products: new ProductRepo([lubeProduct()]),
       stations: new StationRepo([station()]),
       docNumbers,
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       {
         supplierId: 'sup-1',
-        productId: 'petrol-1',
+        productId: 'lube-1',
         quantity: 5000,
         unitPrice: 90,
         stationId: 'st-1',
@@ -490,7 +514,7 @@ describe('RecordPurchase', () => {
     expect(result.success).toBe(false);
   });
 
-  it('records a multi-line invoice with per-line GST and one stock movement per line', async () => {
+  it('rejects a mixed fuel and product invoice before writing anything', async () => {
     const purchases = new PurchaseRepo();
     const items = new PurchaseItemRepo();
     const stock = new StockRepo();
@@ -514,29 +538,90 @@ describe('RecordPurchase', () => {
         invoiceNumber: 'INV-2',
         stationId: 'st-1',
         lines: [
-          {
-            productId: 'petrol-1',
-            quantity: 5000,
-            unitPrice: 90,
-            tankAllocations: [{ tankId: 'tank-1', quantity: 5000 }],
-          },
+          { productId: 'petrol-1', quantity: 5000, unitPrice: 90 },
           { productId: 'lube-1', quantity: 10, unitPrice: 200 },
         ],
       },
       ctx(),
     );
+    expect(result.success).toBe(false);
+    if (!result.success)
+      expect(result.error.message).toBe('Record fuel and products as separate purchases');
+    expect(purchases.rows).toHaveLength(0);
+    expect(items.rows).toHaveLength(0);
+    expect(stock.movements).toHaveLength(0);
+    expect(supplierTxns.rows).toHaveLength(0);
+    expect(store.events).toHaveLength(0);
+  });
+
+  it('records a product-only invoice on the Business Day and moves stock', async () => {
+    const purchases = new PurchaseRepo();
+    const stock = new StockRepo();
+    const result = await new RecordPurchase({
+      purchases,
+      stock,
+      supplierTxns: new SupplierTxnRepo(),
+      suppliers: new SupplierRepo([supplier()]),
+      purchaseItems: new PurchaseItemRepo(),
+      products: new ProductRepo([lubeProduct()]),
+      stations: new StationRepo([station()]),
+      shifts: new ShiftRepo([]),
+      businessDays: new BdRepo([bday()]),
+      docNumbers,
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute(
+      {
+        supplierId: 'sup-1',
+        stationId: 'st-1',
+        lines: [{ productId: 'lube-1', quantity: 10, unitPrice: 200 }],
+      },
+      ctx(),
+    );
     expect(result.success).toBe(true);
     if (result.success) {
-      // Fuel line: 450000 taxable, no VAT configured. Lube line: 2000 + 18% GST (intra-state, no buyer state) = 2360.
-      expect(result.data.items).toHaveLength(2);
-      expect(result.data.purchase.taxableAmount).toBe('452000');
+      expect(result.data.purchase.businessDayId).toBe('bd-9');
+      expect(result.data.purchase.entryDate).toBeNull();
+      expect(result.data.movements).toHaveLength(1);
+      expect(result.data.payable.entryDate).toBe('2026-03-15');
+    }
+    expect(stock.movements).toHaveLength(1);
+  });
+
+  it('keeps product purchases on the Business Day and adds product stock', async () => {
+    const purchases = new PurchaseRepo();
+    const stock = new StockRepo();
+    const result = await new RecordPurchase({
+      purchases,
+      stock,
+      supplierTxns: new SupplierTxnRepo(),
+      suppliers: new SupplierRepo([supplier()]),
+      purchaseItems: new PurchaseItemRepo(),
+      products: new ProductRepo([lubeProduct()]),
+      stations: new StationRepo([station()]),
+      shifts: new ShiftRepo([]),
+      businessDays: new BdRepo([bday()]),
+      docNumbers,
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute(
+      {
+        supplierId: 'sup-1',
+        stationId: 'st-1',
+        lines: [{ productId: 'lube-1', quantity: 10, unitPrice: 200 }],
+      },
+      ctx(),
+    );
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.purchase.businessDayId).toBe('bd-9');
+      expect(result.data.purchase.entryDate).toBeNull();
+      expect(result.data.purchase.taxableAmount).toBe('2000');
       expect(result.data.purchase.cgstTotal).toBe('180');
       expect(result.data.purchase.sgstTotal).toBe('180');
-      expect(result.data.purchase.amount).toBe('452360');
-      // One movement per line.
-      expect(result.data.movements).toHaveLength(2);
+      expect(result.data.purchase.amount).toBe('2360');
+      expect(result.data.movements).toHaveLength(1);
     }
-    expect(items.rows).toHaveLength(2);
+    expect(stock.movements).toHaveLength(1);
   });
 });
 

@@ -1,15 +1,46 @@
 import React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { inr } from '../../utils/format.js';
-import { StatusChip, DateText, Icon } from '../../pump-ds/index.js';
+import { StatusChip, DateText, Icon, Chip } from '../../pump-ds/index.js';
 
 /** Column builders for the Purchases screen tables (extracted from PurchasesList). */
 
-export const purchaseColumns: ColumnDef<any, any>[] = [
+/** The purchase-row fields the Decantation link action reads. */
+export interface PurchaseLinkRow {
+  id: string;
+  stationId?: string | null;
+  businessDayId?: string | null;
+  awaitingDecantation?: boolean;
+  invoiceNumber?: string | null;
+  documentNumber?: string;
+  supplierName?: string;
+}
+
+/**
+ * `onLinkToDecantation` adds a row action for Fuel Purchases still awaiting a
+ * Decantation (#469).
+ */
+export const buildPurchaseColumns = (
+  onLinkToDecantation?: (purchase: PurchaseLinkRow) => void,
+): ColumnDef<any, any>[] => [
   {
-    accessorKey: 'businessDate',
+    id: 'entryDate',
+    accessorFn: (row) => row.entryDate ?? row.businessDate ?? row.shiftDate,
     header: 'Date',
-    cell: ({ row }) => <DateText value={row.original.businessDate ?? row.original.shiftDate} />,
+    cell: ({ row }) => (
+      <div
+        style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}
+      >
+        <DateText
+          value={row.original.entryDate ?? row.original.businessDate ?? row.original.shiftDate}
+        />
+        {row.original.businessDayId == null && row.original.awaitingDecantation && (
+          <Chip tone="warning" size="xs" variant="soft">
+            Awaiting decantation
+          </Chip>
+        )}
+      </div>
+    ),
   },
   {
     accessorKey: 'supplierName',
@@ -81,7 +112,39 @@ export const purchaseColumns: ColumnDef<any, any>[] = [
       </span>
     ),
   },
+  ...(onLinkToDecantation
+    ? [
+        {
+          id: 'linkDecantation',
+          header: '',
+          cell: ({ row }) =>
+            row.original.businessDayId == null && row.original.awaitingDecantation ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onLinkToDecantation(row.original as PurchaseLinkRow);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  color: 'var(--brand-primary)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Link to decantation
+              </button>
+            ) : null,
+        } as ColumnDef<any, any>,
+      ]
+    : []),
 ];
+
+export const purchaseColumns: ColumnDef<any, any>[] = buildPurchaseColumns();
 
 export const buildSupplierColumns = (
   openLedger: (s: any) => void,

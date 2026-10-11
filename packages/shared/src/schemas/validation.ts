@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { normalizeIndianMobile, INDIAN_MOBILE_MESSAGE } from '../utils/phone-auth.js';
 import { isValidBusinessDate } from '../utils/business-date.js';
+import { decantationSettingsSchema } from '../utils/decantation-settings.js';
 
 const timeStringSchema = z
   .string()
@@ -140,6 +141,7 @@ export const stationSchema = z.object({
         })
         .optional()
         .nullable(),
+      ...decantationSettingsSchema.shape,
     })
     .default({
       shift_grace_minutes: 15,
@@ -635,15 +637,16 @@ export const purchaseLineFormSchema = z.object({
   unitPrice: z.coerce
     .number({ invalid_type_error: 'Rate is required' })
     .positive('Rate must be positive'),
-  // Fuel lines may split the received quantity across destination tanks. The
-  // form injects this on submit; it is not a user-typed RHF field.
+  // Fuel invoice lines may capture the supplier's density at 15 °C.
+  invoiceDensity: z.union([z.literal(''), z.coerce.number().positive().max(99999.99)]).optional(),
+  // Legacy product clients may still send this, but fuel no longer allocates stock.
   tankAllocations: z
     .array(z.object({ tankId: z.string(), quantity: z.coerce.number().nonnegative() }))
     .optional(),
 });
 export type PurchaseLineFormValues = z.infer<typeof purchaseLineFormSchema>;
 
-// A purchase is anchored to the business day by date, never a Shift (#308).
+// Purchase date is the Entry Date for fuel and the Business Date for products.
 export const purchaseEntryFormSchema = z.object({
   transactionDate: z.string().optional().default(''),
   supplierId: z.string().min(1, 'Supplier is required'),
@@ -652,6 +655,29 @@ export const purchaseEntryFormSchema = z.object({
   lines: z.array(purchaseLineFormSchema).min(1, 'Add at least one line item'),
 });
 export type PurchaseEntryFormValues = z.infer<typeof purchaseEntryFormSchema>;
+
+export const MIXED_PURCHASE_MESSAGE = 'Record fuel and products as separate purchases';
+
+/**
+ * One invoice is either all fuel (a Fuel Purchase, an Office Record) or all
+ * products (a Product Purchase, a forecourt stock event) — never both. Returns
+ * the message when the lines mix the two, else null. The single rule behind the
+ * form refinement and the submit handlers.
+ */
+export function mixedPurchaseError(
+  lines: ReadonlyArray<{ productId: string }>,
+  isFuelProduct: (productId: string) => boolean,
+): string | null {
+  const fuel = lines.filter((l) => isFuelProduct(l.productId)).length;
+  return fuel > 0 && fuel !== lines.length ? MIXED_PURCHASE_MESSAGE : null;
+}
+
+/** `purchaseEntryFormSchema` plus the fuel/product mix rule (needs the catalogue). */
+export const purchaseEntryFormSchemaFor = (isFuelProduct: (productId: string) => boolean) =>
+  purchaseEntryFormSchema.superRefine((data, ctx) => {
+    const message = mixedPurchaseError(data.lines, isFuelProduct);
+    if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['lines'], message });
+  });
 
 export const merchandiseSaleLineFormSchema = z.object({
   productId: z.string().min(1, 'Product is required'),

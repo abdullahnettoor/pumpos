@@ -7,6 +7,9 @@ import { HandoverPage } from '../screens/HandoverPage.js';
 import { ShiftSummaryPage } from '../screens/ShiftSummaryPage.js';
 import { CustomerPage } from '../screens/money/CustomerPage.js';
 import { ReportDayPage } from '../screens/reports/ReportDayPage.js';
+import { DensityPage } from '../screens/density/DensityPage.js';
+import { DecantationsAttentionTarget } from './decantationTarget.js';
+import { decantationRoute } from '../lib/attention/routes.js';
 
 /**
  * Opens the one page an alert explains, pushed on the current tab so back
@@ -52,6 +55,14 @@ export function useAlertOpener(
             nav.push(<CustomerPage customer={action.customer} />, `customer:${action.customer.id}`);
         case 'handover':
           return () => nav.push(<HandoverPage />, 'handover');
+        case 'decantation':
+          return () =>
+            nav.push(
+              <DecantationsAttentionTarget decantationId={action.decantationId} />,
+              decantationRoute(action.decantationId),
+            );
+        case 'density':
+          return () => nav.push(<DensityPage />, 'density');
       }
     },
     [nav, station],

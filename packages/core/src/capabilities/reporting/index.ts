@@ -21,3 +21,6 @@ export * from './insights/get-insights-credit-health.js';
 export * from './payables/ports.js';
 export * from './payables/compose.js';
 export * from './payables/get-payables.js';
+export * from './decantation-report/ports.js';
+export * from './decantation-report/compose.js';
+export * from './decantation-report/get-decantation-report.js';

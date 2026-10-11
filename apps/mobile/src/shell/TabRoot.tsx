@@ -18,6 +18,8 @@ import { HomeHeader } from './HomeHeader.js';
 import { TabHeader } from './TabHeader.js';
 import { tabDef } from './tabs.js';
 import type { TabKey } from '../lib/tabKey.js';
+import { DensityPage } from '../screens/density/DensityPage.js';
+import { useNav } from './nav.js';
 
 interface Props {
   tab: TabKey;
@@ -28,6 +30,7 @@ interface Props {
 
 export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
   const { role } = useShell();
+  const nav = useNav();
   // Home is the overview for Owner and Manager (`canViewMobileHome`), with the
   // pinned handover card when they man a pump. An Accountant or Staff member who
   // mans a pump gets Home only for that card (see `tabsForRole`): no overview, no
@@ -39,7 +42,18 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
   if (handoverOnlyHome)
     return (
       <>
-        {header}
+        {role === 'Accountant' ? <TabHeader title={tabDef(tab).label} /> : header}
+        {role === 'Accountant' && tab === 'home' && (
+          <div className="px-3 pt-2">
+            <button
+              type="button"
+              className="hit-44 rounded-xl border border-line bg-card px-3 text-xs font-semibold text-accent"
+              onClick={() => nav.push(<DensityPage />, 'density')}
+            >
+              Density register
+            </button>
+          </div>
+        )}
         <HandoverCard />
       </>
     );
@@ -69,7 +83,7 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
     return (
       <>
         {header}
-        <HomeScreen station={station} />
+        <HomeScreen station={station} role={role} />
       </>
     );
 

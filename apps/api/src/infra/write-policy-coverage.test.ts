@@ -8,6 +8,8 @@ import { paymentTerminalsRouter } from '../routes/payment-terminals.js';
 import { productsRouter } from '../routes/products.js';
 import { shiftsRouter } from '../routes/shifts.js';
 import { stationSetupRouter } from '../routes/station-setup.js';
+import { decantationsRouter } from '../routes/decantations.js';
+import { densityRouter } from '../routes/density.js';
 import { transactionsRouter } from '../routes/transactions.js';
 import { WRITE_POLICY_DECLARATIONS } from './write-policy-declarations.js';
 
@@ -34,6 +36,8 @@ const MOUNTED: ReadonlyArray<[string, Hono<any>]> = [
   ['/setup', productsRouter as Hono<any>],
   ['/shifts', shiftsRouter as Hono<any>],
   ['/transactions', transactionsRouter as Hono<any>],
+  ['/transactions', decantationsRouter as Hono<any>],
+  ['/transactions', densityRouter as Hono<any>],
   ['/dssr', dssrRouter as Hono<any>],
   ['/finance', financeRouter as Hono<any>],
   // Read-only today. Enumerated anyway so the first mutation added under

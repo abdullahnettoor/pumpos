@@ -50,3 +50,19 @@ export const validateJson = (schema: ZodSchema, errorCode = 'VALIDATION_ERROR') 
 
   return guarded;
 };
+
+/** Validate path params at the edge, answering in the standard envelope. */
+export const validateParams = (schema: ZodSchema, errorCode = 'VALIDATION_ERROR') =>
+  zValidator('param', schema, (result, c) => {
+    if (!result.success)
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: errorCode,
+            message: result.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', '),
+          },
+        },
+        400,
+      );
+  });

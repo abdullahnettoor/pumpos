@@ -27,7 +27,11 @@ import {
   Form,
   Icon,
 } from '../pump-ds/index.js';
+import { DensityTab } from './inventory/density/index.js';
+import { DecantationsTab } from './inventory/decantation/DecantationsTab.js';
+import { canRecordDecantation, type Role } from '@pump/shared';
 import { tankPct, classifyTank, OVER_CAPACITY_EXPLANATION } from '../utils/stock.js';
+import { TankStatusChips } from './inventory/TankStatusChips.js';
 import {
   isAmbiguousMutationError,
   loadPendingStockCountRequest,
@@ -40,9 +44,11 @@ const transactionService = new CloudTransactionService();
 
 interface InventoryListProps {
   selectedStation: any | null;
+  /** Gates the Decantations tab (Owner, Manager, Accountant) and the Owner review banner. */
+  userRole?: Role | null;
 }
 
-type TabType = 'tanks' | 'items' | 'movements' | 'variances';
+type TabType = 'tanks' | 'density' | 'items' | 'movements' | 'variances' | 'decantations';
 
 const fmtL = (n: number) =>
   `${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
@@ -102,7 +108,7 @@ const movementColumns: ColumnDef<any, any>[] = [
     cell: ({ getValue }) => {
       const t = getValue() as string;
       const tone =
-        t === 'Purchase'
+        t === 'Purchase' || t === 'Decantation'
           ? 'info'
           : t === 'Variance'
             ? 'danger'
@@ -317,7 +323,7 @@ const itemColumns: ColumnDef<any, any>[] = [
   },
 ];
 
-export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation }) => {
+export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, userRole }) => {
   const [selectedTab, setSelectedTab] = useState<TabType>('tanks');
   const stationId = selectedStation?.id ?? null;
   const invalidateOperational = useInvalidateOperational();
@@ -362,6 +368,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
   const [countReason, setCountReason] = useState('');
   const [countSubmitting, setCountSubmitting] = useState(false);
   const [countError, setCountError] = useState<string | null>(null);
+  const [countNotice, setCountNotice] = useState<string[]>([]);
   const countRequestRef = useRef<StockCountRequestIdentity | null>(loadPendingStockCountRequest());
 
   const items = useMemo(() => itemsQ.data ?? [], [itemsQ.data]);
@@ -426,6 +433,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
     setCountActual('');
     setCountReason('');
     setCountError(null);
+    setCountNotice([]);
     setCountOpen(true);
   };
 
@@ -451,11 +459,12 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
       };
       countRequestRef.current = resolveStockCountRequestIdentity(countRequestRef.current, payload);
       savePendingStockCountRequest({ ...countRequestRef.current, payload });
-      await transactionService.recordStockCount(payload, {
+      const counted = await transactionService.recordStockCount(payload, {
         idempotencyKey: countRequestRef.current.idempotencyKey,
       });
       countRequestRef.current = null;
       savePendingStockCountRequest(null);
+      setCountNotice((counted.warnings ?? []).map((w) => w.message));
       setCountOpen(false);
       await invalidateOperational(stationId);
     } catch (err: any) {
@@ -478,6 +487,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
   }
 
   const tanks = tanksQ.data ?? [];
+  const showDecantations = !!userRole && canRecordDecantation(userRole);
 
   return (
     <div className="animate-fade-in">
@@ -502,6 +512,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
             onChange={(id) => setActiveTab(id as TabType)}
             tabs={[
               { id: 'tanks', label: 'Tank Status', icon: <Icon name="tank" size="xs" /> },
+              { id: 'density', label: 'Density Register', icon: <Icon name="gauge" size="xs" /> },
               { id: 'items', label: 'Merchandise Stock', icon: <Icon name="package" size="xs" /> },
               {
                 id: 'movements',
@@ -509,11 +520,44 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                 icon: <Icon name="arrow-left-right" size="xs" />,
               },
               { id: 'variances', label: 'Reconciliations', icon: <Icon name="scale" size="xs" /> },
+              ...(showDecantations
+                ? [
+                    {
+                      id: 'decantations',
+                      label: 'Decantations',
+                      icon: <Icon name="truck" size="xs" />,
+                    },
+                  ]
+                : []),
             ]}
           />
         }
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {countNotice.length > 0 && (
+            <div
+              role="status"
+              style={{
+                backgroundColor: 'var(--state-warning-bg)',
+                color: 'var(--state-warning-fg)',
+                padding: '8px 12px',
+                borderRadius: 'var(--radius-input)',
+                fontSize: '12px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: '12px',
+              }}
+            >
+              <span>{countNotice.join(' ')}</span>
+              <button
+                type="button"
+                onClick={() => setCountNotice([])}
+                style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
           <KpiStrip columns="auto">
             <KpiTile
               dot="brand"
@@ -587,22 +631,6 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                   const vol = Number(tank.currentVolume) || 0;
                   const pct = tankPct(vol, cap);
                   const level = classifyTank(pct);
-                  const tone =
-                    level === 'critical'
-                      ? 'danger'
-                      : level === 'low'
-                        ? 'warning'
-                        : level === 'over'
-                          ? 'info'
-                          : 'success';
-                  const label =
-                    level === 'critical'
-                      ? 'Critical'
-                      : level === 'low'
-                        ? 'Low'
-                        : level === 'over'
-                          ? 'Over capacity'
-                          : 'OK';
                   const highlighted = highlightId === tank.id;
                   return (
                     <div
@@ -651,9 +679,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                             {tank.productName} · {tank.productCode}
                           </span>
                         </div>
-                        <Chip tone={tone} size="xs">
-                          {label}
-                        </Chip>
+                        <TankStatusChips tank={tank} />
                       </div>
                       <div
                         style={{
@@ -803,6 +829,12 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                 />
               )}
             </Panel>
+          )}
+
+          {activeTab === 'density' && <DensityTab stationId={stationId} />}
+
+          {activeTab === 'decantations' && showDecantations && (
+            <DecantationsTab station={selectedStation} userRole={userRole} />
           )}
 
           {activeTab === 'variances' && (

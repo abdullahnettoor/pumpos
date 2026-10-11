@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   canOnboardStation,
+  canRecordDecantation,
+  canRecordDensity,
   canManageReportTemplates,
   canOpenShift,
   canCloseShift,
@@ -142,5 +144,25 @@ describe('mobile Control Room tab guards (#390)', () => {
     expect(canViewMobileHome(role)).toBe(home);
     expect(canViewMobileShifts(role)).toBe(shifts);
     expect(canViewMobileInsights(role)).toBe(insights);
+  });
+});
+
+describe('canRecordDensity', () => {
+  it('allows Owner, Manager and Accountant only', () => {
+    expect(
+      (['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant'] as const).filter((r) =>
+        canRecordDensity(r),
+      ),
+    ).toEqual(['Owner', 'Manager', 'Accountant']);
+  });
+});
+
+describe('canRecordDecantation', () => {
+  it('allows Owner, Manager and Accountant only', () => {
+    expect(
+      (['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant'] as const).filter((r) =>
+        canRecordDecantation(r),
+      ),
+    ).toEqual(['Owner', 'Manager', 'Accountant']);
   });
 });
