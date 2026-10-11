@@ -213,6 +213,43 @@ export function omcCardSalesTotal(shiftId: string) {
 `;
 }
 
+/**
+ * How the Shift's Product Sales were paid when no Handover declares it, as one
+ * jsonb object `{ card, upi, credit }` (a sub-select of the same Shift scope).
+ * A Handover declares its own seller's card/UPI, so only sales by someone with
+ * NO Handover this Shift (counter staff, an unassigned seller) are counted here
+ * (the same "inside a Handover" test as {@link reconTotalsJson}'s cash
+ * sellers). Cash is not here: the recon already carries it.
+ *  - Card / UPI method: the whole sale total.
+ *  - Cash method with a non-cash portion: that portion. The sale records no
+ *    rail for it, so it is counted as card.
+ *  - Credit method: the sale total, whoever sold it. Its ledger row is typed
+ *    'SALE' (not 'CREDIT_SALE'), so {@link creditSaleLinesJson} never sees it.
+ * With these the payment split adds up to the Shift's total sales.
+ */
+export function productSalePaymentsJson(shiftId: string) {
+  return sql`
+  (SELECT jsonb_build_object(
+      'card', COALESCE(SUM(t.total) FILTER (WHERE NOT t.inside AND t.method = 'Card'), 0)
+        + COALESCE(SUM(t.non_cash) FILTER (WHERE NOT t.inside AND t.method = 'Cash'), 0),
+      'upi', COALESCE(SUM(t.total) FILTER (WHERE NOT t.inside AND t.method = 'UPI'), 0),
+      'credit', COALESCE(SUM(t.total) FILTER (WHERE t.method = 'Credit'), 0)
+    )
+    FROM (
+      SELECT
+        s.payment_method AS method,
+        s.total_amount::float8 AS total,
+        COALESCE(s.non_cash_amount, 0)::float8 AS non_cash,
+        (s.attendant_id IS NOT NULL AND EXISTS (
+          SELECT 1 FROM attendant_handovers h
+          WHERE h.shift_id = ${shiftId} AND h.user_id = s.attendant_id
+        )) AS inside
+      FROM sales s
+      WHERE s.shift_id = ${shiftId} AND s.sale_type <> 'Fuel'
+    ) t)
+`;
+}
+
 /** Coerce a credit-sale line into the core CreditSaleRecord port shape. */
 export function toCreditSaleRecord(r: CreditSaleLineRow): CreditSaleRecord {
   return {

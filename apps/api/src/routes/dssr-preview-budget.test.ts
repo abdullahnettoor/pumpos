@@ -88,7 +88,12 @@ function dayQueue(n: number): any[][] {
     // ONE ledger statement: Credit Sales and OMC Card Sales, told apart by type
     [
       ...rows({ transactionType: 'Credit Sale', customerType: 'Fleet', amount: '4000' }),
-      ...rows({ transactionType: 'OMC Sale', customerType: null, amount: '250' }),
+      ...rows({
+        transactionType: 'OMC Sale',
+        referenceType: 'OMC_CARD_SALE',
+        customerType: null,
+        amount: '250',
+      }),
     ],
     [
       {

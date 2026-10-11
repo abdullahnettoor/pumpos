@@ -17,6 +17,6 @@ export { SectionLabel } from './SectionLabel.js';
 export { SegmentedControl } from './SegmentedControl.js';
 export { SheetButtons } from './SheetButtons.js';
 export { StateCard } from './StateCard.js';
-export { StatTile } from './StatTile.js';
+export { StatTile, StatTileShell } from './StatTile.js';
 export { TONE_FILL, TONE_TEXT, type Tone } from './tones.js';
 export { StatusBadge, type BadgeTone } from './StatusBadge.js';

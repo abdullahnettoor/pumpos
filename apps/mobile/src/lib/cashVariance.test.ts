@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { dayCashVariance, shiftCashVariance } from './cashVariance.js';
+import {
+  VARIANCE_ALERT,
+  dayCashVariance,
+  shiftCashVariance,
+  shiftHeadlineBadge,
+} from './cashVariance.js';
 import { deriveShiftVariance } from './shifts/variance.js';
 
 const brief = (c: ReturnType<typeof dayCashVariance>) =>
@@ -31,7 +36,25 @@ describe('dayCashVariance (Home and DSSR tile)', () => {
     expect(c.levels.map((l) => l.value)).toEqual([-125, 50]);
   });
 
-  it('the tile tone is the worst of the two levels', () => {
+  it('the tile turns red only above the alert threshold; a smaller variance is amber', () => {
+    const at = (attendant: number) => ({
+      shifts: [{ shiftSequence: 1, templateName: 'Morning', cashVariance: 0 }],
+      drawer: {
+        totalCashVariance: 0,
+        totalAttendantVariance: attendant,
+        attendants: [{ duName: 'DU-1', variance: attendant }],
+      },
+    });
+    const small = dayCashVariance(at(-60));
+    // The figure itself is still a shortage (red text); the card is not alarmed.
+    expect(small.levels[0]).toMatchObject({ value: -60, tone: 'bad' });
+    expect(small.tone).toBe('warn');
+    expect(dayCashVariance(at(-VARIANCE_ALERT)).tone).toBe('warn');
+    expect(dayCashVariance(at(-VARIANCE_ALERT - 1)).tone).toBe('bad');
+    expect(dayCashVariance(at(VARIANCE_ALERT + 1)).tone).toBe('bad');
+  });
+
+  it('the tile tone follows the alert threshold across both levels', () => {
     expect(dayCashVariance(day).tone).toBe('bad');
     const officeOnlyOver = {
       ...day,
@@ -157,5 +180,38 @@ describe('shiftCashVariance (Shift Summary header)', () => {
     const c = shiftCashVariance(deriveShiftVariance({ cashVariance: -80, drawers: [] }));
     expect(c.levels).toHaveLength(1);
     expect(c.levels[0]).toMatchObject({ key: 'single', value: -80, note: 'Short', tone: 'bad' });
+  });
+});
+
+describe('shiftHeadlineBadge (shift list and Needs Attention)', () => {
+  const badge = (snap: Record<string, unknown>) => shiftHeadlineBadge(deriveShiftVariance(snap));
+
+  it('names the attendant level when a Drawer is off', () => {
+    expect(
+      badge({ cashVarianceModel: 2, attendantVariance: -125, officeCountVariance: 50 }),
+    ).toMatchObject({ text: 'Attendants −₹125', label: 'Attendants', tone: 'bad' });
+  });
+
+  it('names the office level when only the count is off', () => {
+    expect(
+      badge({ cashVarianceModel: 2, attendantVariance: 0, officeCountVariance: 50 }),
+    ).toMatchObject({ text: 'Office count +₹50', tone: 'warn' });
+  });
+
+  it('uses the card labels, so a list row and the card never disagree', () => {
+    const v = deriveShiftVariance({ cashVarianceModel: 2, attendantVariance: -125 });
+    expect(shiftHeadlineBadge(v).label).toBe(shiftCashVariance(v).levels[0].label);
+    const single = deriveShiftVariance({ cashVariance: -80 });
+    expect(shiftHeadlineBadge(single).text).toBe('Counted cash −₹80');
+    expect(shiftCashVariance(single).levels[0].label).toBe('Counted cash');
+  });
+
+  it('is just "Balanced" when within tolerance', () => {
+    expect(
+      badge({ cashVarianceModel: 2, attendantVariance: 0, officeCountVariance: 0 }),
+    ).toMatchObject({
+      text: 'Balanced',
+      balanced: true,
+    });
   });
 });

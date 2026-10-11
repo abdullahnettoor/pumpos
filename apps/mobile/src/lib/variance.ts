@@ -10,7 +10,7 @@ import type { Tone } from '../ui/tones.js';
 import { signedRupees } from './format.js';
 
 /** A cash variance within this many rupees of zero is "on the nose" (rounds to ₹0). */
-const VARIANCE_TOLERANCE = 0.5;
+export const VARIANCE_TOLERANCE = 0.5;
 
 /**
  * Tone of a cash variance: a shortage is bad, a surplus is a warning (cash that

@@ -136,8 +136,8 @@ describe('deriveShiftSummary', () => {
     expect(p.drawers[0]).toMatchObject({ declared: null, expected: null, variance: null });
   });
 
-  it('labels a single-level snapshot "Cash variance"', () => {
-    expect(deriveShiftSummary({ cashVariance: -80 }, new Map()).office.label).toBe('Cash variance');
+  it('names a single-level snapshot "Counted cash", as the header card does', () => {
+    expect(deriveShiftSummary({ cashVariance: -80 }, new Map()).office.label).toBe('Counted cash');
   });
 });
 
@@ -292,7 +292,8 @@ const EVENING = {
 /** The identity the page must show: every slice plus the gap line is the total. */
 const added = (split: ReturnType<typeof derivePaymentSplit>) =>
   split.slices.reduce((s, x) => s + x.amount, 0) +
-  (split.gap ? (split.gap.kind === 'short' ? split.gap.amount : -split.gap.amount) : 0);
+  (split.gap ? (split.gap.kind === 'short' ? split.gap.amount : -split.gap.amount) : 0) +
+  (split.unitemised?.amount ?? 0);
 
 describe('derivePaymentSplit', () => {
   const split = (snap: typeof MORNING) => {
@@ -330,16 +331,25 @@ describe('derivePaymentSplit', () => {
     expect(added(s)).toBe(181235);
   });
 
-  it('a snapshot without the OMC bucket never invents an unexplained line', () => {
+  it('a new snapshot that adds up has nothing left unitemised', () => {
+    expect(split(MORNING).unitemised).toBeNull();
+    expect(split(EVENING).unitemised).toBeNull();
+  });
+
+  it('a snapshot without the OMC bucket keeps its total and names the missing ₹2,000', () => {
     const { omcCard: _omit, ...payments } = MORNING.payments;
     const legacy = { ...MORNING, payments };
     const m = deriveShiftSummary(legacy, new Map());
     expect(m.payments.omcCard).toBeNull();
     const s = derivePaymentSplit(m.payments, m.total, m.variance.attendant);
     expect(s.slices.map((x) => x.key)).toEqual(['cash', 'upi', 'card', 'credit']);
-    // ₹2,000 of OMC cannot be placed: show nothing extra, not a wrong ₹125 or ₹2,125.
-    expect(s.gap).toBeNull();
-    expect(s.total).toBeNull();
+    expect(s.gap).toMatchObject({ kind: 'short', amount: 125 });
+    expect(s.unitemised).toEqual({
+      amount: 2000,
+      note: 'Recorded before payment details were stored',
+    });
+    expect(s.total).toBe(181400);
+    expect(added(s)).toBe(181400);
   });
 
   it('a snapshot with no payments block at all (summed from the Handovers) shows nothing extra', () => {
@@ -354,13 +364,23 @@ describe('derivePaymentSplit', () => {
     );
     const s = derivePaymentSplit(m.payments, m.total, m.variance.attendant);
     expect(s.gap).toBeNull();
+    expect(s.unitemised).toBeNull();
     expect(s.total).toBe(1000);
   });
 
-  it('a variance that does not reconcile to the total is not shown', () => {
-    const odd = { ...MORNING, attendantVariance: -340 };
-    const s = split(odd);
-    expect(s.gap).toBeNull();
-    expect(s.total).toBeNull();
+  it('a snapshot that stored the OMC bucket but still does not add up says so', () => {
+    const s = split({ ...MORNING, attendantVariance: -340 });
+    expect(s.gap).toMatchObject({ kind: 'short', amount: 340 });
+    expect(s.unitemised).toEqual({
+      amount: -215,
+      note: 'Payment details do not add up to total sales',
+    });
+    expect(s.total).toBe(181400);
+    expect(added(s)).toBe(181400);
+  });
+
+  it('treats a rupee-rounding difference as adding up (the shared VARIANCE_TOLERANCE)', () => {
+    const m = deriveShiftSummary({ ...MORNING, totalSalesValue: 181400.4 }, new Map());
+    expect(derivePaymentSplit(m.payments, m.total, m.variance.attendant).unitemised).toBeNull();
   });
 });

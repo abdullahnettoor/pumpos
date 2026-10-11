@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 import { useDailyDssr, useDailyDssrPreview } from '@pump/ui';
-import { businessDateSettings } from '@pump/shared';
+import { businessDateSettings, readDssrOmcCard } from '@pump/shared';
 import type { BusinessDayListStatus, Station } from '@pump/shared';
 import { deriveTiles } from '../../lib/home/figures.js';
 import { deriveSales, readSnapshot } from '../../lib/home/sales.js';
-import { deriveOmcCard, deriveShiftRows, deriveTankMovement } from '../../lib/reports/dssr.js';
+import { deriveShiftRows, deriveTankMovement } from '../../lib/reports/dssr.js';
 
 /** What the two DSSR reads return (the services are untyped): a stored snapshot row or a preview. */
 interface DssrRow {
@@ -48,7 +48,7 @@ export function useDssrDay(
       draft: row.live === true,
       shifts,
       tiles: deriveTiles(snap),
-      omcCard: deriveOmcCard(snap),
+      omcCard: readDssrOmcCard(snap),
       sales: deriveSales(snap),
       tanks: deriveTankMovement(snap),
     };

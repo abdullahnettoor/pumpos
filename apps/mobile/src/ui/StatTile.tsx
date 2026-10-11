@@ -16,6 +16,21 @@ interface Props {
 }
 
 /**
+ * The tile's card (border, fill, padding, grid span), for a tile whose content is
+ * not one figure (the Cash variance card): same look, one definition.
+ */
+export const StatTileShell: React.FC<React.HTMLAttributes<HTMLDivElement> & { wide?: boolean }> = ({
+  wide,
+  className = '',
+  ...rest
+}) => (
+  <div
+    {...rest}
+    className={`rounded-[14px] border border-line bg-card p-3 ${wide ? 'col-span-2' : ''} ${className}`}
+  />
+);
+
+/**
  * A labelled figure in a card; lay out in `<div className="grid grid-cols-2 gap-2 px-3">`.
  * Not the design system's `KpiTile`: that is a featureless cell framed by a `KpiStrip`
  * (caps label, no wide variant or trailing sparkline); the mobile grid is separate bordered cards.
@@ -29,11 +44,7 @@ export const StatTile: React.FC<Props> = ({
   wide,
   trailing,
 }) => (
-  <div
-    className={`rounded-[14px] border border-line bg-card p-3 ${
-      wide ? 'col-span-2 flex items-end justify-between gap-3' : ''
-    }`}
-  >
+  <StatTileShell wide={wide} className={wide ? 'flex items-end justify-between gap-3' : ''}>
     <div className="min-w-0">
       <p className="text-[11px] font-medium text-text-muted">{label}</p>
       <p
@@ -45,5 +56,5 @@ export const StatTile: React.FC<Props> = ({
       {note && <p className="text-[11px] text-text-faint">{note}</p>}
     </div>
     {trailing}
-  </div>
+  </StatTileShell>
 );

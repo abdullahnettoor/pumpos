@@ -11,7 +11,13 @@ import { wholeQuantityLabel } from '../money/quantity.js';
 import { num, round2 } from '../num.js';
 import { unitLabel } from '@pump/ui';
 import type { FuelLine, ProductLine, Snapshot } from '../home/sales.js';
-import { deriveShiftVariance, drawerName, type ShiftVariance } from './variance.js';
+import { VARIANCE_TOLERANCE } from '../variance.js';
+import {
+  VARIANCE_LEVEL_LABEL,
+  deriveShiftVariance,
+  drawerName,
+  type ShiftVariance,
+} from './variance.js';
 
 export interface NozzleLine {
   key: string;
@@ -37,7 +43,7 @@ export interface DrawerLine {
 }
 
 export interface OfficeCount {
-  /** "Office count vs declared" (two-level) or "Cash variance" (single-level). */
+  /** "Office count vs declared" (two-level) or "Counted cash" (single-level, as on the header card). */
   label: string;
   counted: number;
   /** What the office expected: declared cash for two-level, expected drawer cash otherwise. */
@@ -220,7 +226,7 @@ function deriveOffice(snap: Snapshot, v: ShiftVariance): OfficeCount {
   const counted = num(snap.closingCash);
   // Two-level: the office expects what the Drawers declared; `expectedCash` is that figure.
   return {
-    label: v.twoLevel ? 'Office count vs declared' : 'Cash variance',
+    label: v.twoLevel ? 'Office count vs declared' : VARIANCE_LEVEL_LABEL.single,
     counted,
     expected: num(snap.expectedCash),
     variance: v.office,
@@ -279,26 +285,31 @@ export interface PaymentGap {
   tone: 'bad' | 'warn';
 }
 
-export interface PaymentSplitView {
-  slices: PaymentSlice[];
-  /** The attendant variance as its own line; null when balanced or when it cannot be reconciled. */
-  gap: PaymentGap | null;
-  /** Total sales, only when the split adds up to it (slices ± the gap): else nothing to reconcile against. */
-  total: number | null;
+/** Sales the stored payment figures do not account for: said out loud, never left as a bare gap. */
+export interface PaymentUnitemised {
+  /** Total sales minus what the buckets (and the attendant line) add up to; signed. */
+  amount: number;
+  note: string;
 }
 
-/** Rupee rounding: a split within 50 paise of the total counts as adding up. */
-const SPLIT_TOLERANCE = 0.5;
+export interface PaymentSplitView {
+  slices: PaymentSlice[];
+  /** The attendant variance as its own line; null when balanced. */
+  gap: PaymentGap | null;
+  /** "Not itemised": set only when the lines above do not add up to `total`. */
+  unitemised: PaymentUnitemised | null;
+  /** Total sales: always shown, so the split can be checked against it. */
+  total: number;
+}
 
 /**
  * The payment split that reconciles to Total sales. Cash is what the Drawers
  * DECLARED, so an attendant shortage is sales that never reached a payment bucket:
  * Cash + UPI + Card + Credit + OMC card + shortage = Total sales (an overage is
- * cash declared beyond the sales, so it comes off instead). The snapshot's own
- * attendant variance is the figure; nothing is recomputed, only added up for
- * display. When the stored figures do not add up (a snapshot that predates a
- * bucket, or product sales outside the Handovers) it shows nothing extra rather
- * than a wrong number.
+ * cash declared beyond the sales, so it comes off instead). A new snapshot always
+ * adds up. One written before a bucket was stored may not: then the difference is
+ * its own "Not itemised" line (honest about what is unknown) and Total sales still
+ * shows. Nothing is recomputed from live data, only added up for display.
  */
 export function derivePaymentSplit(
   payments: ShiftPayments,
@@ -308,21 +319,30 @@ export function derivePaymentSplit(
   const slices = derivePaymentSlices(payments);
   const paid = round2(slices.reduce((s, x) => s + x.amount, 0));
   const variance = attendantVariance ?? 0;
-  if (Math.abs(paid - variance - total) > SPLIT_TOLERANCE)
-    return { slices, gap: null, total: null };
-  if (isBalancedVariance(variance)) return { slices, gap: null, total };
-  const short = variance < 0;
-  return {
-    slices,
-    gap: {
-      kind: short ? 'short' : 'over',
-      label: short ? 'Short' : 'Over',
-      amount: Math.abs(variance),
-      note: short
-        ? 'Attendant shortage: sold, not declared in Cash'
-        : 'Attendant overage: already counted in Cash',
-      tone: short ? 'bad' : 'warn',
-    },
-    total,
-  };
+  const gap: PaymentGap | null = isBalancedVariance(variance)
+    ? null
+    : {
+        kind: variance < 0 ? 'short' : 'over',
+        label: variance < 0 ? 'Short' : 'Over',
+        amount: Math.abs(variance),
+        note:
+          variance < 0
+            ? 'Attendant shortage: sold, not declared in Cash'
+            : 'Attendant overage: already counted in Cash',
+        tone: variance < 0 ? 'bad' : 'warn',
+      };
+  const rest = round2(total - (paid - variance));
+  // Within the rupee-rounding allowance the split counts as adding up.
+  const unitemised: PaymentUnitemised | null =
+    Math.abs(rest) < VARIANCE_TOLERANCE
+      ? null
+      : {
+          amount: rest,
+          // A snapshot with an OMC card bucket is new enough to have stored everything.
+          note:
+            payments.omcCard == null
+              ? 'Recorded before payment details were stored'
+              : 'Payment details do not add up to total sales',
+        };
+  return { slices, gap, unitemised, total };
 }

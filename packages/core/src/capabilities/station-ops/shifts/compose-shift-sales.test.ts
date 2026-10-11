@@ -154,6 +154,29 @@ describe('composeShiftPayments', () => {
     ).toBe(15);
   });
 
+  it('adds the Product Sales no Handover declares to their buckets', () => {
+    const p = composeShiftPayments({
+      cashSales: 100,
+      handovers,
+      creditSalesTotal: 900,
+      omcCardTotal: 0,
+      productSalePayments: { card: 20, upi: 60.255, credit: 80 },
+    });
+    expect(p).toEqual({ cash: 100, upi: 210.76, card: 60, credit: 980, omcCard: 0 });
+  });
+
+  it('adds product credit to the Handovers credit fallback too', () => {
+    expect(
+      composeShiftPayments({
+        cashSales: 0,
+        handovers,
+        creditSalesTotal: 0,
+        omcCardTotal: 0,
+        productSalePayments: { credit: 5 },
+      }).credit,
+    ).toBe(20);
+  });
+
   it('carries the OMC Card Sales total as its own bucket', () => {
     expect(
       composeShiftPayments({ cashSales: 0, handovers, creditSalesTotal: 0, omcCardTotal: 2000.004 })

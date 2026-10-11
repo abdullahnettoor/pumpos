@@ -96,10 +96,37 @@ describe('deriveAlerts', () => {
         id: 'var-s1',
         category: 'variance',
         severity: 'danger',
-        title: 'Shift 1 short by ₹340',
+        title: 'Shift 1: Counted cash short by ₹340',
         action: { kind: 'variance', shiftId: 's1' },
       });
       expect(a.meta).toContain('Short');
+    });
+
+    it('names the level: attendants (with the Dispenser Unit) or the office count', () => {
+      const alerts = deriveAlerts({
+        ...none,
+        summaries: [
+          summary('s1', '2026-10-09T03:00:00Z', {
+            cashVarianceModel: 2,
+            attendantVariance: -340,
+            officeCountVariance: 0,
+            cashVariance: 0,
+            drawers: [{ duName: 'DU3', variance: -340 }],
+          }),
+          summary('s2', '2026-10-08T03:00:00Z', {
+            cashVarianceModel: 2,
+            attendantVariance: 0,
+            officeCountVariance: 250,
+            cashVariance: 250,
+          }),
+        ],
+      }).filter((a) => a.category === 'variance');
+      expect(alerts.map((a) => a.title)).toEqual([
+        'Shift 1: Attendants short by ₹340',
+        'Shift 1: Office count over by ₹250',
+      ]);
+      expect(alerts[0].meta).toContain('DU3 short');
+      expect(alerts[1].meta ?? '').not.toContain('Office count');
     });
 
     it('treats an overage as a warning, not danger', () => {
@@ -107,7 +134,7 @@ describe('deriveAlerts', () => {
         ...none,
         summaries: [summary('s1', '2026-10-09T03:00:00Z', single(250))],
       });
-      expect(a).toMatchObject({ severity: 'warning', title: 'Shift 1 over by ₹250' });
+      expect(a).toMatchObject({ severity: 'warning', title: 'Shift 1: Counted cash over by ₹250' });
     });
 
     it('ignores a variance at or under the threshold, and balanced shifts', () => {

@@ -133,6 +133,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
     const ledgerRows = await this.db
       .select({
         transactionType: schema.customerTransactions.transactionType,
+        referenceType: schema.customerTransactions.referenceType,
         customerType: schema.customers.customerType,
         amount: schema.customerTransactions.amount,
       })
@@ -151,7 +152,10 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         ),
       );
     const creditSaleRows = ledgerRows.filter((r) => r.transactionType === 'Credit Sale');
-    const omcCardRows = ledgerRows.filter((r) => r.transactionType === 'OMC Sale');
+    // Told apart exactly as the WHERE above selects them (type AND reference type).
+    const omcCardRows = ledgerRows.filter(
+      (r) => r.transactionType === 'OMC Sale' && r.referenceType === 'OMC_CARD_SALE',
+    );
 
     // Business-day tank dip / stock-count reconciliation.
     const varianceRows = await this.db

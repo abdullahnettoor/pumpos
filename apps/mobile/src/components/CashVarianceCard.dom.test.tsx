@@ -46,6 +46,22 @@ describe('CashVarianceCard', () => {
     expect(screen.getByText('+₹50')).toBeTruthy();
   });
 
+  it('is valid markup: each dl child holds only a dt and a dd, the note sits outside', () => {
+    const { container } = render(<CashVarianceCard wide variance={dayCashVariance(day)} />);
+    const groups = container.querySelectorAll('dl > div');
+    expect(groups).toHaveLength(2);
+    for (const g of groups) expect([...g.children].map((c) => c.tagName)).toEqual(['DT', 'DD']);
+    for (const dl of container.querySelectorAll('dl'))
+      expect([...dl.children].every((c) => c.tagName === 'DIV')).toBe(true);
+  });
+
+  it('shares the StatTile card shell', () => {
+    render(<CashVarianceCard variance={dayCashVariance(day)} />);
+    const cls = screen.getByRole('group', { name: 'Cash variance' }).className;
+    expect(cls).toContain('rounded-[14px]');
+    expect(cls).toContain('bg-card');
+  });
+
   it('prints a dash and the reason before any Shift closes', () => {
     render(<CashVarianceCard variance={dayCashVariance({})} />);
     expect(screen.getByText('—')).toBeTruthy();

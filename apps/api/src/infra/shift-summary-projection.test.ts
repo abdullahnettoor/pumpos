@@ -248,6 +248,34 @@ describe('projectShiftSummary', () => {
       expect(out.payments).toEqual({ cash: 3000, upi: 160, card: 40, credit: 250, omcCard: 2000 });
     });
 
+    it('adds Product Sales no Handover declares (counter-staff UPI, product credit) to the buckets', async () => {
+      const out = await project(
+        populated,
+        { ...closeSnapshot, reconciliation: { cashSales: 3000 } },
+        {
+          ho_rows: [handover('h1', '100', '40')],
+          product_payments: { card: 20, upi: 60, credit: 80 },
+        },
+      );
+      expect(out.payments).toMatchObject({ cash: 3000, upi: 160, card: 60, credit: 80 });
+    });
+
+    it('reads those Product Sale payments in the same single statement', async () => {
+      const { PgDialect } = await import('drizzle-orm/pg-core');
+      const statements: unknown[] = [];
+      const db = {
+        execute: async (q: unknown) => {
+          statements.push(q);
+          return [{ nr_rows: [], ho_rows: [], te_rows: [], credit_rows: [], product_rows: [] }];
+        },
+      };
+      await projectShiftSummary(db as never, shift, closeSnapshot);
+      expect(statements).toHaveLength(1);
+      const { sql: text } = new PgDialect().sqlToQuery(statements[0] as never);
+      expect(text).toContain("t.method = 'Credit'");
+      expect(text).toContain('AS product_payments');
+    });
+
     it('carries a zero OMC card bucket for a Shift without OMC Card Sales', async () => {
       const out = await project(populated, closeSnapshot, {});
       expect((out.payments as { omcCard: number }).omcCard).toBe(0);

@@ -84,10 +84,12 @@ interface HandoverRow {
 /**
  * How the Shift was paid, as declared: cash the Drawers took (floats excluded),
  * card and UPI from the Handovers, credit from the Shift's credit sales (else
- * what the Handovers declared) and OMC Card Sales from the OMC ledger rows. No
- * residual bucket: money no figure accounts for is not invented here (an
- * attendant shortage is the Drawer variance, shown by the reader as its own
- * line, not a payment method).
+ * what the Handovers declared) and OMC Card Sales from the OMC ledger rows.
+ * Product Sales no Handover declares (counter staff paying by card/UPI, product
+ * credit) are added to their buckets, so the split always adds up to total
+ * sales: cash + UPI + card + credit + OMC card − attendant variance. No residual
+ * bucket: an attendant shortage is the Drawer variance, shown by the reader as
+ * its own line, not a payment method.
  */
 export function composeShiftPayments(input: {
   cashSales: number;
@@ -95,16 +97,19 @@ export function composeShiftPayments(input: {
   creditSalesTotal: number;
   /** Σ the Shift's OMC Card Sales. */
   omcCardTotal: number;
+  /** Product Sales paid by card/UPI/credit that no Handover declares; absent = none. */
+  productSalePayments?: { card?: unknown; upi?: unknown; credit?: unknown };
 }): ShiftPayments {
+  const extra = input.productSalePayments ?? {};
   const sum = (pick: (h: HandoverRow) => unknown) =>
     round2(input.handovers.reduce((s, h) => s + num(pick(h)), 0));
   const credit =
     num(input.creditSalesTotal) > 0 ? num(input.creditSalesTotal) : sum((h) => h.creditHandedOver);
   return {
     cash: round2(num(input.cashSales)),
-    upi: sum((h) => h.upiHandedOver),
-    card: sum((h) => h.cardHandedOver),
-    credit: round2(credit),
+    upi: round2(sum((h) => h.upiHandedOver) + num(extra.upi)),
+    card: round2(sum((h) => h.cardHandedOver) + num(extra.card)),
+    credit: round2(credit + num(extra.credit)),
     omcCard: round2(num(input.omcCardTotal)),
   };
 }

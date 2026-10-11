@@ -321,10 +321,10 @@ describe('Shifts tab: history', () => {
     mount();
     const today = screen.getByRole('region', { name: 'Today · Fri, 9 Oct' });
     expect(within(today).getByText('6:00 am – 1:52 pm')).toBeTruthy();
-    expect(within(today).getByText('−₹340')).toBeTruthy();
+    expect(within(today).getByText('Attendants −₹340')).toBeTruthy();
     const yesterday = screen.getByRole('region', { name: 'Thu, 8 Oct' });
     expect(within(yesterday).getByText('Balanced')).toBeTruthy();
-    expect(within(yesterday).getByText('+₹120')).toBeTruthy();
+    expect(within(yesterday).getByText('Office count +₹120')).toBeTruthy();
   });
 
   it('has no share button on a row', () => {
@@ -649,7 +649,9 @@ describe('Shift Summary page', () => {
     const card = screen.getByRole('group', { name: 'Cash variance' });
     expect(within(card).getByText('−₹80')).toBeTruthy();
     expect(within(card).queryByText('Attendants')).toBeNull();
-    expect(screen.getByText('Cash variance', { selector: 'p.text-\\[13px\\]' })).toBeTruthy();
+    // One name for the single level on the header card and the Drawer section.
+    expect(within(card).getByText('Counted cash')).toBeTruthy();
+    expect(screen.getByText('Counted cash', { selector: 'p.text-\\[13px\\]' })).toBeTruthy();
     expect(screen.queryByText('Office count vs declared')).toBeNull();
   });
 });
