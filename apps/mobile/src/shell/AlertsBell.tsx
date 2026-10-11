@@ -11,8 +11,17 @@ import { useShell } from './context.js';
  * Home's header and every tab header (for a Role that may see alerts) render it.
  */
 export const AlertsBell: React.FC = () => {
-  const { station } = useShell();
-  const alerts = useMobileAlerts(station);
+  const { station, role } = useShell();
+  const allAlerts = useMobileAlerts(station, role);
+  const alerts =
+    role === 'Accountant'
+      ? allAlerts.filter(
+          (alert) =>
+            alert.category === 'decantation' ||
+            alert.category === 'density' ||
+            alert.category === 'handover',
+        )
+      : allAlerts;
   const openAttention = useOpenAttention();
   const count = alerts.length;
   const danger = alerts.some((a) => a.severity === 'danger');

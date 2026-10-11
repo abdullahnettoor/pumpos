@@ -15,6 +15,7 @@ import { standing, type MoneyCustomer } from '../money/parties.js';
 import { deriveShiftVariance } from '../shifts/variance.js';
 import { shiftHeadlineBadge } from '../cashVariance.js';
 import type { AlertSeverity, MobileAlert } from './types.js';
+import type { DensityTodaySummary, DecantationView, Role } from '@pump/shared';
 
 /** A closed Shift's cash variance is raised only beyond this many rupees. */
 const CASH_VARIANCE_ALERT_ABOVE = 200;
@@ -38,6 +39,9 @@ export interface AlertSources {
   /** Shift Summary rows (`GET /shifts/shift-summaries`). */
   summaries: readonly Snapshot[];
   ownHandover: OwnHandover | null;
+  role?: Role | null;
+  decantations?: readonly DecantationView[];
+  densityToday?: DensityTodaySummary | null;
 }
 
 const openedAt = (s: Snapshot) => {
@@ -52,6 +56,9 @@ const openedAt = (s: Snapshot) => {
  */
 export function deriveAlerts(src: AlertSources): MobileAlert[] {
   const list: MobileAlert[] = [];
+
+  const canSeeInventoryWork =
+    src.role === 'Owner' || src.role === 'Manager' || src.role === 'Accountant';
 
   for (const a of src.stock) {
     list.push({ id: a.id, severity: a.severity, category: 'stock', title: a.title, meta: a.meta });
@@ -114,6 +121,66 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
       title: 'Your handover is not saved',
       meta: [own.shiftName, own.duLabel].filter(Boolean).join(' · ') || undefined,
       action: { kind: 'handover' },
+    });
+  }
+
+  if (canSeeInventoryWork) {
+    for (const decantation of src.decantations ?? []) {
+      const action = { kind: 'decantation' as const, decantationId: decantation.id };
+      if (decantation.status === 'DRAFT') {
+        list.push({
+          id: `dec-draft-${decantation.id}`,
+          severity: 'warning',
+          category: 'decantation',
+          title: `${decantation.tankerNumber} still unloading`,
+          meta: 'Finish unloading',
+          action,
+        });
+      }
+      for (const line of decantation.lines) {
+        if (decantation.status !== 'DRAFT' && line.status === 'PENDING_MEASUREMENT') {
+          list.push({
+            id: `dec-pending-${line.id}`,
+            severity: 'warning',
+            category: 'decantation',
+            title: 'Pending measurement',
+            meta: `${decantation.documentNumber} · ${line.productId}`,
+            action,
+          });
+        }
+      }
+      for (const productId of decantation.unlinkedProductIds ?? []) {
+        list.push({
+          id: `dec-unlinked-${decantation.id}-${productId}`,
+          severity: 'warning',
+          category: 'decantation',
+          title: 'Fuel Purchase not linked',
+          meta: `${decantation.documentNumber} · ${productId}`,
+          action,
+        });
+      }
+      if (decantation.flags.length > 0) {
+        list.push({
+          id: `dec-flagged-${decantation.id}`,
+          severity: 'warning',
+          category: 'decantation',
+          title: 'Flagged Decantation',
+          meta: `${decantation.documentNumber} · ${decantation.flags.map((flag) => flag.message).join(', ')}`,
+          action,
+        });
+      }
+    }
+  }
+
+  const density = src.densityToday;
+  if (canSeeInventoryWork && density && density.missingCount > 0) {
+    list.push({
+      id: 'density-missing',
+      severity: 'warning',
+      category: 'density',
+      title: `Today's density missing (${density.missingCount}/${density.totalProducts})`,
+      meta: density.missingProducts.map((product) => product.productName).join(', '),
+      action: { kind: 'density' },
     });
   }
 

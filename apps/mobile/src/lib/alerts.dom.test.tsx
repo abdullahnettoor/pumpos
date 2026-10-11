@@ -6,6 +6,8 @@ import type { Station } from '@pump/shared';
 const feed = vi.hoisted(() => ({
   pastOpen: [] as { businessDate: string }[],
   assignment: null as unknown,
+  decantations: [] as unknown[],
+  densityToday: null as unknown,
 }));
 
 vi.mock('@pump/ui', async (importOriginal) => {
@@ -16,6 +18,8 @@ vi.mock('@pump/ui', async (importOriginal) => {
     useStationAlerts: () => [],
     useCustomers: () => q([]),
     useShiftSummaries: () => q([]),
+    useDecantations: () => q(feed.decantations),
+    useDensityTodaySummary: () => q(feed.densityToday),
     useMyAssignment: () => q(feed.assignment),
     useBusinessDayStatus: () => q({ pastOpenBusinessDays: feed.pastOpen }),
   };
@@ -23,7 +27,6 @@ vi.mock('@pump/ui', async (importOriginal) => {
 
 const { useMobileAlerts } = await import('./alerts.js');
 const station = { id: 'st-1', name: 'Highway Fuels', settings: {} } as unknown as Station;
-
 describe('useMobileAlerts: past open Business Days', () => {
   it('raises one alert per past open day, newest first, including older days behind a newer open one', () => {
     feed.pastOpen = [{ businessDate: '2026-10-08' }, { businessDate: '2026-10-06' }];
@@ -69,5 +72,38 @@ describe('useMobileAlerts: own handover', () => {
     feed.assignment = null;
     const { result } = renderHook(() => useMobileAlerts(station));
     expect(result.current).toEqual([]);
+  });
+});
+
+describe('useMobileAlerts: Decantation and density', () => {
+  it('loads and derives alerts for back-office roles, but not for Attendants or Staff', () => {
+    feed.pastOpen = [];
+    feed.assignment = null;
+    feed.decantations = [
+      {
+        id: 'dec-1',
+        documentNumber: 'DEC-1',
+        tankerNumber: 'TN-42',
+        status: 'PENDING_MEASUREMENT',
+        flags: [],
+        unlinkedProductIds: [],
+        lines: [{ id: 'line-1', productId: 'p1', status: 'PENDING_MEASUREMENT' }],
+      },
+    ];
+    feed.densityToday = {
+      missingCount: 1,
+      totalProducts: 2,
+      missingProducts: [{ productId: 'p1', productName: 'Petrol', productCode: 'MS' }],
+    };
+    for (const role of ['Owner', 'Manager', 'Accountant'] as const) {
+      const { result, unmount } = renderHook(() => useMobileAlerts(station, role));
+      expect(result.current.map((alert) => alert.category)).toEqual(['decantation', 'density']);
+      unmount();
+    }
+    for (const role of ['Attendant', 'Staff'] as const) {
+      const { result, unmount } = renderHook(() => useMobileAlerts(station, role));
+      expect(result.current).toEqual([]);
+      unmount();
+    }
   });
 });

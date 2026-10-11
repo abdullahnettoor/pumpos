@@ -15,6 +15,7 @@ const tank = (n: number): TankGauge => ({
   volume: '6,000 L',
   level: 'ok',
   cover: '',
+  waitingOnDecantation: false,
 });
 
 const columnsFor = (count: number) => {
@@ -41,5 +42,14 @@ describe('TankGauges grid', () => {
   it('renders one card per tank', () => {
     const { container } = render(<TankGauges tanks={[tank(1), tank(2)]} />);
     expect(container.querySelectorAll('[data-level]')).toHaveLength(2);
+  });
+
+  it('shows low-stock state and waiting on decantation together', () => {
+    const { getByText } = render(
+      <TankGauges tanks={[{ ...tank(1), level: 'red', pct: 8, waitingOnDecantation: true }]} />,
+    );
+    expect(getByText('8%')).toBeTruthy();
+    expect(getByText('Waiting on decantation')).toBeTruthy();
+    expect(getByText('Low')).toBeTruthy();
   });
 });

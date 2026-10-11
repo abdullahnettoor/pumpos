@@ -15,10 +15,12 @@ export type AlertAction =
   | { kind: 'day'; businessDate: string }
   | { kind: 'credit'; customer: MoneyCustomer }
   | { kind: 'variance'; shiftId: string }
-  | { kind: 'handover' };
+  | { kind: 'handover' }
+  | { kind: 'decantation'; decantationId: string }
+  | { kind: 'density' };
 
 /**
- * The five kinds. An action's kind is its alert's category, so the one
+ * Alert kinds. An action's kind is its alert's category, so the one
  * `ALERT_KINDS` map (labels, action word, owning tab) is exhaustive over both:
  * a new kind does not compile until it has an entry.
  */

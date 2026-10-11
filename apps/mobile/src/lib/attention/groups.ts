@@ -21,6 +21,8 @@ export const ALERT_KINDS: Record<AlertCategory, AlertKind> = {
   credit: { label: 'Credit', actionLabel: 'View', tab: 'money' },
   variance: { label: 'Cash variance', actionLabel: 'Open', tab: 'shifts' },
   handover: { label: 'Handover', actionLabel: 'Continue', tab: null },
+  decantation: { label: 'Decantations', actionLabel: 'Open', tab: null },
+  density: { label: 'Density', actionLabel: 'Open', tab: null },
 };
 
 const PAGE_ORDER = Object.keys(ALERT_KINDS) as AlertCategory[];

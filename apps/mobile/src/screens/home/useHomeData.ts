@@ -8,7 +8,7 @@ import {
   useSuppliers,
 } from '@pump/ui';
 import { businessDateSettings, resolveBusinessDate, shiftBusinessDate } from '@pump/shared';
-import type { Station } from '@pump/shared';
+import type { Role, Station } from '@pump/shared';
 import { useMobileAlerts } from '../../lib/alerts.js';
 import { deriveMoney, deriveTanks, deriveTiles } from '../../lib/home/figures.js';
 import { businessDateLabel } from '../../lib/dates.js';
@@ -28,7 +28,7 @@ import { useNow } from '../../lib/useNow.js';
  * DSSR preview, shift status, inventory; semi: customers, suppliers). The
  * derivations are pure and live in `lib/home`; this only wires queries to them.
  */
-export function useHomeData(station: Station) {
+export function useHomeData(station: Station, role: Role | null = null) {
   const { timeZone, dayStartsAt } = businessDateSettings(station.settings);
   const now = useNow();
   // The Current Business Date: station timezone, rolled back before Day Start.
@@ -43,7 +43,7 @@ export function useHomeData(station: Station) {
   const tanksQ = useInventoryStatus(station.id);
   const customersQ = useCustomers();
   const suppliersQ = useSuppliers();
-  const alerts = useMobileAlerts(station);
+  const alerts = useMobileAlerts(station, role);
 
   const preview = previewQ.data;
   const previous = previousQ.data;

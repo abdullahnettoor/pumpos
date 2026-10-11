@@ -28,6 +28,7 @@ export const NumberField: React.FC<{
   sub?: string;
   placeholder?: string;
   min?: number;
+  step?: number;
   error?: string;
   /** Leaving the field, e.g. to confirm an untouched reading. */
   onBlur?: () => void;
@@ -36,7 +37,19 @@ export const NumberField: React.FC<{
    * terminals each have a "Card"). Should start with the visible label.
    */
   ariaLabel?: string;
-}> = ({ label, value, onChange, meta, sub, placeholder, min = 0, error, onBlur, ariaLabel }) => {
+}> = ({
+  label,
+  value,
+  onChange,
+  meta,
+  sub,
+  placeholder,
+  min = 0,
+  step,
+  error,
+  onBlur,
+  ariaLabel,
+}) => {
   const noteId = useId();
   return (
     <div className="flex flex-col gap-1.5">
@@ -46,6 +59,7 @@ export const NumberField: React.FC<{
           type="number"
           inputMode="decimal"
           min={min}
+          step={step}
           value={value}
           placeholder={placeholder ?? '0'}
           onChange={(e) => onChange(e.target.value)}
