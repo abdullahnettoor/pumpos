@@ -100,7 +100,7 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
             { value: 'register', label: 'Register' },
           ]}
           value={view}
-          onChange={(v) => setView(v as 'today' | 'register')}
+          onChange={(v) => setView(v)}
         />
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
