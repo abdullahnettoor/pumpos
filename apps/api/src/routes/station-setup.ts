@@ -262,12 +262,12 @@ stationSetupRouter.put(
         403,
       );
     }
-    const db = c.var.db;
-    const useCase = new UpdateStation({
-      repository: new DrizzleStationRepository(db),
-      events: createDispatcher(db),
-    });
-    const result = await useCase.execute({ ...body, id: stationId }, buildContext(user));
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new UpdateStation({
+        repository: new DrizzleStationRepository(tx),
+        events,
+      }).execute({ ...body, id: stationId }, buildContext(user)),
+    );
     return sendResult(c, result);
   },
 );

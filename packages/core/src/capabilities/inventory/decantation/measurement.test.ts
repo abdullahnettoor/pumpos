@@ -198,6 +198,12 @@ describe('measurement: after dip path', () => {
     if (!r.success) throw new Error(JSON.stringify(r.error));
     expect(r.data.decantation.lines[0].status).toBe('PENDING_MEASUREMENT');
     expect(t.movements.some((x) => x.movementType === 'Decantation')).toBe(false);
+    expect(r.data.warnings).toContainEqual(
+      expect.objectContaining({
+        code: 'AFTER_DIP_BELOW_BEFORE',
+        tankLineId: r.data.decantation.lines[0].id,
+      }),
+    );
   });
 
   it('a draft never measures', async () => {
@@ -308,6 +314,36 @@ describe('invoice variance and WAC', () => {
     expect(Number(t.product.costBasis)).toBeCloseTo((4000 * 90 + 1_200_000) / 15900, 3);
 
     // idempotent: a second settle does not re-blend cost
+    const cost = t.product.costBasis;
+    await t.service.settleInvoice(t.ctx(), { purchaseId: 'p-1', productId: 'ms' });
+    expect(t.product.costBasis).toBe(cost);
+  });
+
+  it('split delivery: a later-linked Decantation adds its litres at 0 value, once', async () => {
+    const t = setup();
+    const a = await t.record.execute(cmd(), t.ctx());
+    if (!a.success) throw new Error('a');
+    t.links.push(link(a.data.decantation));
+    await t.record.execute(
+      {
+        ...cmd({ id: a.data.decantation.lines[0].id, afterDip: 10000 }),
+        decantationId: a.data.decantation.id,
+      },
+      t.ctx(),
+    );
+    // first: (4000*90 + 1,200,000) / 10,000 L
+    expect(Number(t.product.costBasis)).toBeCloseTo(156, 3);
+
+    // second tanker measured while not yet linked
+    const b = await t.record.execute(cmd({ beforeDip: 10000, afterDip: 16000 }), t.ctx());
+    if (!b.success) throw new Error('b');
+    expect(Number(t.product.costBasis)).toBeCloseTo(156, 3);
+    t.links.push({ ...link(b.data.decantation), id: 'lk-2' });
+    await t.service.settleInvoice(t.ctx(), { purchaseId: 'p-1', productId: 'ms' });
+    // total cost = invoice value over all received: (4000*90 + 1,200,000) / 16,000
+    expect(Number(t.product.costBasis)).toBeCloseTo((4000 * 90 + 1_200_000) / 16000, 3);
+    expect(t.links.every((l) => l.varianceQty === 0)).toBe(true);
+
     const cost = t.product.costBasis;
     await t.service.settleInvoice(t.ctx(), { purchaseId: 'p-1', productId: 'ms' });
     expect(t.product.costBasis).toBe(cost);
