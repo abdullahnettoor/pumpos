@@ -1,8 +1,11 @@
 export interface Purchase {
   id: string;
   documentNumber: string;
+  organizationId: string;
+  stationId: string;
   shiftId: string | null;
-  businessDayId: string;
+  /** Null for Fuel Purchases (anchored by entry date). */
+  businessDayId: string | null;
   supplierId: string;
   invoiceNumber: string | null;
   amount: string;
