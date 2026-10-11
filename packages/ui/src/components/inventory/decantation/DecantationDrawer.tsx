@@ -1,0 +1,331 @@
+import React, { useMemo, useRef, useState } from 'react';
+import { useWatch } from 'react-hook-form';
+import { resolveDecantationSettings, resolveEntryDate, type DecantationView } from '@pump/shared';
+import { Drawer } from '../../Drawer.js';
+import { Button, Chip } from '../../../pump-ds/index.js';
+import { useToast } from '../../primitives/ToastProvider.js';
+import { useZodForm } from '../../../forms/useZodForm.js';
+import { CloudTransactionService } from '../../../services/cloud.js';
+import { createIdempotencyKey } from '../../../query/handoverMutation.js';
+import { keepsIdempotencyKey } from '../../../utils/idempotency.js';
+import {
+  useInvalidateOperational,
+  useInventoryStatus,
+  useLinkablePurchases,
+} from '../../../query/hooks.js';
+import { StepSection } from './StepSection.js';
+import {
+  AfterStep,
+  AfterSummary,
+  ChambersStep,
+  ChambersSummary,
+  InvoicesStep,
+  InvoicesSummary,
+  ReviewStep,
+  TanksStep,
+  TanksSummary,
+  UnloadingStep,
+  UnloadingSummary,
+  type StepProps,
+  type TankOption,
+} from './DecantationSteps.js';
+import {
+  buildSaveBody,
+  decantationFormSchema,
+  decantationToFormValues,
+  emptyDecantationForm,
+  liveFlags,
+  type DecantationFormContext,
+  type DecantationFormValues,
+} from './decantationForm.js';
+import { reviewDecantation } from './decantationReview.js';
+
+const txService = new CloudTransactionService();
+const DEFAULT_TIME_ZONE = 'Asia/Kolkata';
+
+export interface DecantationDrawerProps {
+  isOpen: boolean;
+  onClose: () => void;
+  station: { id: string; settings?: unknown } | null;
+  /** Edit this Decantation (draft / pending). Omit for a new one. */
+  decantation?: DecantationView | null;
+}
+
+const STEP_TITLES = [
+  'Tanker & invoices',
+  'Tanks',
+  'Tanker chambers',
+  'Unloading',
+  'After unloading',
+  'Review',
+] as const;
+const NEXT_LABEL = [
+  'Continue to Tanks',
+  'Continue to Tanker chambers',
+  'Continue to Unloading',
+  'Continue to After unloading',
+  'Continue to Review',
+];
+
+/** The step that owns a failing field, so the stepper opens where the problem is. */
+const stepOfError = (errors: Record<string, unknown>): number => {
+  if (errors.tankerNumber) return 0;
+  const lines = errors.lines as Array<Record<string, unknown> | undefined> | undefined;
+  if (lines?.some((l) => l && (l.tankId || l.beforeDip || l.roDensity || l.observedDensity)))
+    return 1;
+  if (errors.chambers) return 2;
+  if (errors.unloadStart || errors.unloadEnd) return 3;
+  if (lines?.some((l) => l && (l.afterDip || l.afterDipTime || l.salesDuring))) return 4;
+  return 1;
+};
+
+/**
+ * Record / edit one tanker visit (Decantation, ADR 0007) as an accordion stepper in a
+ * wide drawer. Finished steps collapse into compact cards; flags and variance preview
+ * live and never block a save. `Drawer` renders nothing while closed, so the form
+ * below is rebuilt from props on every open.
+ */
+export const DecantationDrawer: React.FC<DecantationDrawerProps> = ({ isOpen, ...rest }) =>
+  isOpen ? <DecantationForm {...rest} /> : null;
+
+const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
+  onClose,
+  station,
+  decantation,
+}) => {
+  const stationId = station?.id ?? null;
+  const stationSettings = station?.settings as { timezone?: string } | undefined;
+  const timeZone = stationSettings?.timezone ?? DEFAULT_TIME_ZONE;
+  const settings = useMemo(
+    () => resolveDecantationSettings(station?.settings),
+    [station?.settings],
+  );
+  const toast = useToast();
+  const invalidateOperational = useInvalidateOperational();
+  const tanksQ = useInventoryStatus(stationId);
+
+  const tanks: TankOption[] = useMemo(
+    () =>
+      (tanksQ.data ?? []).map((t: any) => ({
+        id: t.id,
+        name: t.name,
+        productId: t.productId,
+        productName: t.productName ?? t.productCode ?? 'Fuel',
+        currentVolume: t.currentVolume != null ? Number(t.currentVolume) : null,
+      })),
+    [tanksQ.data],
+  );
+  const fuelProducts = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const t of tanks) if (!seen.has(t.productId)) seen.set(t.productId, t.productName);
+    return [...seen].map(([id, name]) => ({ id, name }));
+  }, [tanks]);
+
+  const purchaseQs = useLinkablePurchases(
+    stationId,
+    fuelProducts.map((p) => p.id),
+  );
+  const purchases = useMemo(() => {
+    const out: Record<
+      string,
+      { data: NonNullable<(typeof purchaseQs)[number]['data']>; loading: boolean }
+    > = {};
+    fuelProducts.forEach((p, i) => {
+      out[p.id] = { data: purchaseQs[i]?.data ?? [], loading: !!purchaseQs[i]?.isLoading };
+    });
+    return out;
+  }, [fuelProducts, purchaseQs]);
+
+  const form = useZodForm<DecantationFormValues>(decantationFormSchema, {
+    defaultValues: decantation
+      ? decantationToFormValues(decantation, timeZone)
+      : emptyDecantationForm(resolveEntryDate({ timeZone })),
+  });
+  const values = useWatch({ control: form.control }) as DecantationFormValues;
+
+  // Invoice facts of the picked Fuel Purchases (falls back to what an edited record already links).
+  const { invoiceDensityByProduct, invoiceQtyByProduct } = useMemo(() => {
+    const density: Record<string, number | null> = {};
+    const qty: Record<string, number | null> = {};
+    for (const l of decantation?.links ?? []) {
+      density[l.productId] = l.invoiceDensity;
+      qty[l.productId] = l.invoiceQty;
+    }
+    for (const [productId, purchaseId] of Object.entries(values.links ?? {})) {
+      const p = purchases[productId]?.data.find((x) => x.purchaseId === purchaseId);
+      if (p) {
+        density[productId] = p.invoiceDensity;
+        qty[productId] = p.invoiceQty;
+      }
+    }
+    return { invoiceDensityByProduct: density, invoiceQtyByProduct: qty };
+  }, [decantation?.links, values.links, purchases]);
+
+  const ctx: DecantationFormContext = useMemo(
+    () => ({
+      stationId: stationId ?? '',
+      timeZone,
+      tanks,
+      invoiceDensityByProduct,
+      invoiceQtyByProduct,
+      settings,
+    }),
+    [stationId, timeZone, tanks, invoiceDensityByProduct, invoiceQtyByProduct, settings],
+  );
+  const flags = useMemo(() => liveFlags(values, ctx), [values, ctx]);
+  const review = useMemo(
+    () => reviewDecantation(values, tanks, invoiceQtyByProduct, settings.quantityTolerance),
+    [values, tanks, invoiceQtyByProduct, settings.quantityTolerance],
+  );
+  const flagged = flags.flags.length > 0;
+
+  const editing = !!decantation;
+  const [open, setOpen] = useState(editing ? 5 : 0);
+  const [done, setDone] = useState<Set<number>>(() => new Set(editing ? [0, 1, 2, 3, 4] : []));
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const keyRef = useRef(createIdempotencyKey());
+
+  const next = (i: number) => {
+    setDone((s) => new Set(s).add(i));
+    setOpen(i + 1);
+  };
+
+  const save = (draft: boolean) =>
+    form.handleSubmit(
+      async (vals) => {
+        if (submitting || !stationId) return;
+        if (!draft) {
+          const missing = vals.lines.findIndex((l) => l.beforeDip.trim() === '');
+          if (missing >= 0) {
+            form.setError(`lines.${missing}.beforeDip`, { message: 'Enter the before dip' });
+            setOpen(1);
+            return;
+          }
+        }
+        try {
+          setSubmitting(true);
+          setError(null);
+          const result = await txService.saveDecantation(buildSaveBody(vals, ctx, { draft }), {
+            ...(decantation ? { decantationId: decantation.id } : {}),
+            idempotencyKey: keyRef.current,
+          });
+          keyRef.current = createIdempotencyKey();
+          const hasFlags = (result?.decantation?.flags?.length ?? 0) > 0 || flagged;
+          toast.success(
+            draft
+              ? 'Decantation saved as draft.'
+              : hasFlags
+                ? 'Decantation saved and flagged for review.'
+                : 'Decantation saved.',
+          );
+          for (const w of result?.warnings ?? []) toast.info?.(w.message);
+          await invalidateOperational(stationId);
+          onClose();
+        } catch (err: any) {
+          // Unknown outcome keeps the key so a retry cannot record the visit twice.
+          if (!keepsIdempotencyKey(err)) keyRef.current = createIdempotencyKey();
+          setError(err?.message || 'Failed to save the Decantation');
+        } finally {
+          setSubmitting(false);
+        }
+      },
+      (errors) => setOpen(stepOfError(errors as Record<string, unknown>)),
+    )();
+
+  const stepProps: StepProps = { form, values, tanks, settings, flags, review };
+  const cont = (i: number) =>
+    i < NEXT_LABEL.length ? (
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+        <Button size="sm" onClick={() => next(i)}>
+          {NEXT_LABEL[i]}
+        </Button>
+      </div>
+    ) : null;
+
+  const summaries = [
+    <InvoicesSummary key="s0" {...stepProps} purchases={purchases} />,
+    <TanksSummary key="s1" {...stepProps} invoiceDensityByProduct={invoiceDensityByProduct} />,
+    <ChambersSummary key="s2" {...stepProps} />,
+    <UnloadingSummary key="s3" {...stepProps} />,
+    <AfterSummary key="s4" {...stepProps} />,
+    null,
+  ];
+  const bodies = [
+    <InvoicesStep key="b0" {...stepProps} purchases={purchases} fuelProducts={fuelProducts} />,
+    <TanksStep key="b1" {...stepProps} invoiceDensityByProduct={invoiceDensityByProduct} />,
+    <ChambersStep key="b2" {...stepProps} />,
+    <UnloadingStep key="b3" {...stepProps} />,
+    <AfterStep key="b4" {...stepProps} />,
+    <ReviewStep key="b5" {...stepProps} />,
+  ];
+
+  const footer = (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%' }}>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+        {values.lines?.length ?? 0} tank{(values.lines?.length ?? 0) === 1 ? '' : 's'} · one tanker
+        visit
+      </span>
+      {flagged && (
+        <Chip size="sm" tone="danger">
+          {flags.flags.length} flag{flags.flags.length === 1 ? '' : 's'}
+        </Chip>
+      )}
+      <span style={{ flex: 1 }} />
+      <Button variant="ghost" size="sm" onClick={onClose}>
+        Cancel
+      </Button>
+      <Button variant="secondary" size="sm" disabled={submitting} onClick={() => save(true)}>
+        Save as draft
+      </Button>
+      <Button
+        variant={flagged ? 'danger' : 'primary'}
+        size="sm"
+        disabled={submitting}
+        onClick={() => save(false)}
+      >
+        {flagged ? 'Save with flag' : 'Save Decantation'}
+      </Button>
+    </div>
+  );
+
+  return (
+    <Drawer
+      isOpen
+      onClose={onClose}
+      title={decantation ? `Decantation ${decantation.documentNumber}` : 'New Decantation'}
+      widthVariant="wide"
+      footer={footer}
+    >
+      {error && (
+        <div
+          role="alert"
+          style={{
+            backgroundColor: 'var(--state-danger-bg)',
+            color: 'var(--state-danger-fg)',
+            padding: '8px 12px',
+            borderRadius: 'var(--radius-input)',
+            fontSize: 12,
+            marginBottom: 10,
+          }}
+        >
+          {error}
+        </div>
+      )}
+      {STEP_TITLES.map((title, i) => (
+        <StepSection
+          key={title}
+          n={i + 1}
+          title={title}
+          open={open === i}
+          done={done.has(i)}
+          summary={summaries[i]}
+          onOpen={() => setOpen(i)}
+        >
+          {bodies[i]}
+          {cont(i)}
+        </StepSection>
+      ))}
+    </Drawer>
+  );
+};
