@@ -61,7 +61,10 @@ export const TodayInOfficeCard: React.FC = () => {
           Nothing recorded yet today.
         </div>
       ) : (
-        <ul className="flex flex-col divide-y divide-border-soft text-xs" data-testid="office-records-list">
+        <ul
+          className="flex flex-col divide-y divide-border-soft text-xs"
+          data-testid="office-records-list"
+        >
           {top3.map((entry) => {
             const label = ledgerSourceLabel(entry.sourceType);
             const detail = entry.notes || entry.accountName;

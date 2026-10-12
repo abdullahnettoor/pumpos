@@ -9,11 +9,7 @@ import {
 } from '@pump/shared';
 import { formatBusinessDate, formatMoney, inr } from '../../../utils/format.js';
 import { cashAccountTotals } from '../../../utils/cashBook.js';
-import {
-  useDailyCashBook,
-  useDailyDssrPreview,
-  useInsightsSales,
-} from '../../../query/hooks.js';
+import { useDailyCashBook, useDailyDssrPreview, useInsightsSales } from '../../../query/hooks.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
 
@@ -126,19 +122,13 @@ export const MoneyCard: React.FC = () => {
       sealedArea,
       draftLine,
       prevLine,
-      bestCircle:
-        bestIdx >= 0 ? { cx: X(bestIdx).toFixed(1), cy: Y(bestVal).toFixed(1) } : null,
+      bestCircle: bestIdx >= 0 ? { cx: X(bestIdx).toFixed(1), cy: Y(bestVal).toFixed(1) } : null,
       fromLabel: trendData.range?.from ? formatBusinessDate(trendData.range.from) : '',
     };
   }, [trendData, hasEnoughHistory]);
 
   return (
-    <DashboardCard
-      card="money"
-      title="Sales so far"
-      query={todayPreviewQ}
-      placeholderHeight={260}
-    >
+    <DashboardCard card="money" title="Sales so far" query={todayPreviewQ} placeholderHeight={260}>
       <div className="flex flex-col gap-3">
         {!hasClosedShift ? (
           <div>
@@ -212,7 +202,10 @@ export const MoneyCard: React.FC = () => {
                 <div className="flex items-center text-xs">
                   <span className="text-ink-muted">Last 14 days</span>
                   <span className="ml-2 text-ink">
-                    avg <b className="font-mono font-medium">{formatCompactRupees(trendData.average)}</b>
+                    avg{' '}
+                    <b className="font-mono font-medium">
+                      {formatCompactRupees(trendData.average)}
+                    </b>
                   </span>
                   {trendData.changePct !== null && (
                     <span

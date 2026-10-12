@@ -172,7 +172,7 @@ function useAppWidth(): number {
 function renderBadge(path: string, b: SidebarBadges, collapsed: boolean): React.ReactNode {
   let count = 0;
   let dot = false;
-  let label = '';
+  let label: string;
   if (path === '/shifts' && b.shiftRunning) {
     dot = true;
     label = 'Shift running';
