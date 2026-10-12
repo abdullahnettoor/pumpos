@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { deriveStationAlerts } from './useStationAlerts.js';
+import {
+  alertBadgeCounts,
+  countOverdueCustomers,
+  deriveStationAlerts,
+} from './useStationAlerts.js';
 
 describe('deriveStationAlerts', () => {
   it('presents over-capacity book stock as informational with reconciliation context', () => {
@@ -213,5 +217,38 @@ describe('deriveStationAlerts — shift to-dos', () => {
       },
     );
     expect(alerts.map((a) => a.id)).toEqual(['tank-t1', 'handovers']);
+  });
+});
+
+describe('money alerts and badge counts', () => {
+  const tank = { id: 't1', name: 'T1', productName: 'Diesel', capacity: 1000, currentVolume: 100 };
+
+  it('counts customers whose oldest debit is older than 30 days', () => {
+    expect(
+      countOverdueCustomers([
+        { oldestUnpaidDays: 31 },
+        { oldestUnpaidDays: 30 },
+        { oldestUnpaidDays: null },
+        { oldestUnpaidDays: 90 },
+      ]),
+    ).toBe(2);
+    expect(countOverdueCustomers(undefined)).toBe(0);
+  });
+
+  it('derives badge counts from the alerts', () => {
+    const alerts = deriveStationAlerts([tank], [], null, { overdueCustomers: 3, openPastDays: 2 });
+    expect(alertBadgeCounts(alerts)).toEqual({
+      inventoryAlerts: 1,
+      overdueCustomers: 3,
+      openPastDays: 2,
+    });
+  });
+
+  it('without money input (Staff) the Inventory count is still there', () => {
+    expect(alertBadgeCounts(deriveStationAlerts([tank]))).toEqual({
+      inventoryAlerts: 1,
+      overdueCustomers: 0,
+      openPastDays: 0,
+    });
   });
 });
