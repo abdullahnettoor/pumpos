@@ -31,7 +31,7 @@ export const TodayInOfficeCard: React.FC = () => {
       )}
       <button
         type="button"
-        onClick={() => onNavigate('/reports')}
+        onClick={() => onNavigate('/reports', { openReportsTab: 'cash-book' })}
         className="text-brand hover:underline font-medium"
       >
         Cash Book ›

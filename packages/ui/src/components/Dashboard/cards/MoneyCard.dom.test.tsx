@@ -411,7 +411,7 @@ describe('TodayInOfficeCard (Today in the office)', () => {
     expect(screen.getByText(/Sree Transports/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cash Book ›' }));
-    expect(onNavigate).toHaveBeenCalledWith('/reports');
+    expect(onNavigate).toHaveBeenCalledWith('/reports', { openReportsTab: 'cash-book' });
   });
 });
 

@@ -189,6 +189,16 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
     setIsPurchaseDrawerOpen(true);
   };
 
+  // Deep link (dashboard "Plan purchase ›"): open the Record Purchase drawer once.
+  const openNewPurchaseRequested = intent?.openNewPurchase === true;
+  useEffect(() => {
+    if (!openNewPurchaseRequested) return;
+    clearNavIntent();
+    openPurchaseDrawer();
+    // openPurchaseDrawer only resets the form: it is not a dependency of the request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openNewPurchaseRequested]);
+
   const closePurchaseDrawer = () => {
     setIsPurchaseDrawerOpen(false);
     resetPurchaseForm();

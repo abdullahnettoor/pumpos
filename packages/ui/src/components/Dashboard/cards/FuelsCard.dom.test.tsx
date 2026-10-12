@@ -149,7 +149,7 @@ describe('FuelsCard', () => {
     mount('Owner');
     expect(screen.getByText('Not recorded')).toBeTruthy();
     fireEvent.click(screen.getByText('Record ›'));
-    expect(nav).toHaveBeenCalledWith('/inventory');
+    expect(nav).toHaveBeenCalledWith('/inventory', { focusInventoryTab: 'density' });
   });
 
   it.each(['Accountant', 'Staff'] as const)('not recorded hides Record for %s', (role) => {
@@ -174,6 +174,10 @@ describe('FuelsCard', () => {
     expect(screen.getByText(/Decantation pending/)).toBeTruthy();
     expect(screen.getByText('Decant ›')).toBeTruthy();
     expect(screen.getByText('Plan purchase ›')).toBeTruthy();
+    fireEvent.click(screen.getByText('Decant ›'));
+    expect(nav).toHaveBeenCalledWith('/inventory', { focusInventoryTab: 'decantations' });
+    fireEvent.click(screen.getByText('Plan purchase ›'));
+    expect(nav).toHaveBeenCalledWith('/purchases', { openNewPurchase: true });
     cleanup();
     mount('Staff');
     expect(screen.getByText(/Decantation pending/)).toBeTruthy();

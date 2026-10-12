@@ -25,6 +25,9 @@ interface Mapping {
  * destination. Icons are `pump-ds` Icon names. Unknown types fall back to a
  * neutral info pin that goes nowhere.
  */
+const toDecantations = (): NavIntent => ({ focusInventoryTab: 'decantations' });
+const toCashBook = (): NavIntent => ({ openReportsTab: 'cash-book' });
+
 const MAP: Record<string, Mapping> = {
   BUSINESS_DAY_OPENED: { icon: 'calendar', path: '/shifts' },
   BUSINESS_DAY_CLOSED: { icon: 'calendar', tone: 'success', path: '/shifts' },
@@ -40,9 +43,19 @@ const MAP: Record<string, Mapping> = {
   ATTENDANT_ASSIGNED: { icon: 'user', path: '/shifts' },
   HANDOVER_RECORDED: { icon: 'cash', tone: 'success', path: '/shifts' },
   CASH_DECLARED: { icon: 'cash', path: '/shifts' },
-  DECANTATION_RECORDED: { icon: 'tank', tone: 'info', path: '/inventory' },
-  DECANTATION_FLAGGED: { icon: 'tank', tone: 'warning', path: '/inventory' },
-  DECANTATION_DISCARDED: { icon: 'tank', tone: 'warning', path: '/inventory' },
+  DECANTATION_RECORDED: { icon: 'tank', tone: 'info', path: '/inventory', intent: toDecantations },
+  DECANTATION_FLAGGED: {
+    icon: 'tank',
+    tone: 'warning',
+    path: '/inventory',
+    intent: toDecantations,
+  },
+  DECANTATION_DISCARDED: {
+    icon: 'tank',
+    tone: 'warning',
+    path: '/inventory',
+    intent: toDecantations,
+  },
   FUEL_RECEIVED: { icon: 'truck', tone: 'info', path: '/inventory' },
   TANK_DIP_RECORDED: { icon: 'gauge', path: '/inventory' },
   TANK_TRANSFER_COMPLETED: { icon: 'arrow-left-right', path: '/inventory' },
@@ -51,14 +64,19 @@ const MAP: Record<string, Mapping> = {
   PHYSICAL_COUNT_COMPLETED: { icon: 'stock-count', path: '/inventory' },
   VARIANCE_RECORDED: { icon: 'alert-triangle', tone: 'warning', path: '/inventory' },
   DSSR_GENERATED: { icon: 'report', tone: 'success', path: '/reports' },
-  EXPENSE_RECORDED: { icon: 'expense', path: '/expenses' },
-  EXPENSE_VOIDED: { icon: 'expense', tone: 'warning', path: '/expenses' },
-  INCOME_RECORDED: { icon: 'income', tone: 'success', path: '/income' },
-  INCOME_VOIDED: { icon: 'income', tone: 'warning', path: '/income' },
-  PAYMENT_RECEIVED: { icon: 'wallet', tone: 'success', path: '/accounts' },
-  CREDIT_PAYMENT_RECEIVED: { icon: 'wallet', tone: 'success', path: '/customers' },
-  PAYMENT_MADE: { icon: 'wallet', path: '/accounts' },
-  SUPPLIER_PAID: { icon: 'wallet', path: '/purchases' },
+  EXPENSE_RECORDED: { icon: 'expense', path: '/reports', intent: toCashBook },
+  EXPENSE_VOIDED: { icon: 'expense', tone: 'warning', path: '/reports', intent: toCashBook },
+  INCOME_RECORDED: { icon: 'income', tone: 'success', path: '/reports', intent: toCashBook },
+  INCOME_VOIDED: { icon: 'income', tone: 'warning', path: '/reports', intent: toCashBook },
+  PAYMENT_RECEIVED: { icon: 'wallet', tone: 'success', path: '/reports', intent: toCashBook },
+  CREDIT_PAYMENT_RECEIVED: {
+    icon: 'wallet',
+    tone: 'success',
+    path: '/reports',
+    intent: toCashBook,
+  },
+  PAYMENT_MADE: { icon: 'wallet', path: '/reports', intent: toCashBook },
+  SUPPLIER_PAID: { icon: 'wallet', path: '/reports', intent: toCashBook },
   PURCHASE_CREATED: { icon: 'purchase', path: '/purchases' },
   CREDIT_SALE_CREATED: { icon: 'customer', path: '/customers' },
   CREDIT_SALE_VOIDED: { icon: 'customer', tone: 'warning', path: '/customers' },

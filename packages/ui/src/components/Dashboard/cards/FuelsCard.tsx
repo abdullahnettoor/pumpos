@@ -80,9 +80,9 @@ export const FuelsCard: React.FC = () => {
               canRecord={canRecord}
               canDecant={canPlanDecant}
               canPlan={canPlanDecant}
-              onRecord={() => onNavigate('/inventory')}
-              onDecant={() => onNavigate('/inventory')}
-              onPlan={() => onNavigate('/purchases')}
+              onRecord={() => onNavigate('/inventory', { focusInventoryTab: 'density' })}
+              onDecant={() => onNavigate('/inventory', { focusInventoryTab: 'decantations' })}
+              onPlan={() => onNavigate('/purchases', { openNewPurchase: true })}
             />
           );
         })}
