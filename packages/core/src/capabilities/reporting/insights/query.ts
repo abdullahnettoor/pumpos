@@ -8,8 +8,8 @@ export interface InsightsQueryCommand {
   days: number;
 }
 
-const rangeDays = z.union([z.literal(7), z.literal(30), z.literal(90)], {
-  message: 'days must be one of 7, 30, 90',
+const rangeDays = z.union([z.literal(7), z.literal(14), z.literal(30), z.literal(90)], {
+  message: 'days must be one of 7, 14, 30, 90',
 }) satisfies z.ZodType<InsightsRangeDays>;
 
 export const insightsQuerySchema = z.object({

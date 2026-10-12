@@ -8,7 +8,7 @@
  */
 
 /** Range lengths the Insights tab offers, in Business Days. */
-export const INSIGHTS_RANGE_DAYS = [7, 30, 90] as const;
+export const INSIGHTS_RANGE_DAYS = [7, 14, 30, 90] as const;
 export type InsightsRangeDays = (typeof INSIGHTS_RANGE_DAYS)[number];
 
 /** Closed Business Days each period needs before the tab compares it with the other. */
