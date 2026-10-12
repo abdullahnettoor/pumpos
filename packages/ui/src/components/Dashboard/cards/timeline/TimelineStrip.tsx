@@ -42,7 +42,7 @@ const PinButton: React.FC<{
       onMouseLeave={() => setOpen(false)}
       onFocus={() => setOpen(true)}
       onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
+        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false);
       }}
     >
       <button
