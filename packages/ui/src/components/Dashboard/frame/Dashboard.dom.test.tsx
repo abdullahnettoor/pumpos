@@ -24,7 +24,6 @@ const hooks = vi.hoisted(() => ({
   usePricing: vi.fn(),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
-vi.mock('../../../query/dashboardActivity.js', () => ({ useDayActivity: hooks.useDayActivity }));
 
 import { Dashboard } from './Dashboard.js';
 import { DashboardCard } from './DashboardCard.js';
@@ -152,6 +151,7 @@ describe('DashboardCard', () => {
         timeZone: undefined,
         dayStartsAt: undefined,
         businessDate: '2026-10-12',
+        entryDate: '2026-10-12',
         onNavigate: vi.fn(),
       }}
     >

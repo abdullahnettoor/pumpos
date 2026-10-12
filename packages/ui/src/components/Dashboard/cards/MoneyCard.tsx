@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
 import {
+  DASHBOARD_TREND_DAYS,
+  canSeeDashboardCard,
   comparisonView,
   deriveComparison,
   deriveSales,
@@ -7,20 +9,11 @@ import {
   readSnapshot,
   shiftBusinessDate,
 } from '@pump/shared';
-import { formatBusinessDate, formatMoney, inr } from '../../../utils/format.js';
-import { cashAccountTotals } from '../../../utils/cashBook.js';
+import { formatBusinessDate, formatCompactRupees, formatMoney } from '../../../utils/format.js';
+import { buildTrendChart, deriveCashInHand } from './money/moneyModel.js';
 import { useDailyCashBook, useDailyDssrPreview, useInsightsSales } from '../../../query/hooks.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
-
-export function formatCompactRupees(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return '—';
-  const abs = Math.abs(value);
-  if (abs >= 100_000) {
-    return `₹${(value / 100_000).toFixed(2)}L`;
-  }
-  return `₹${Math.round(value).toLocaleString('en-IN')}`;
-}
 
 /**
  * Money hero card: "Sales so far" + 14-day trend (#506).
@@ -31,16 +24,18 @@ export function formatCompactRupees(value: number | null | undefined): string {
  * - 14-day trend: sealed days solid, draft days dashed, previous dotted, best day marked
  */
 export const MoneyCard: React.FC = () => {
-  const { station, role, businessDate, onNavigate } = useDashboard();
+  const { station, role, businessDate, entryDate, onNavigate } = useDashboard();
   const enabled = useCardEnabled('money');
-  const canTrend = role === 'Owner' || role === 'Manager' || role === 'Accountant';
-  const isOwner = role === 'Owner';
+  const canTrend = canSeeDashboardCard('trend', role);
+  const isOwner = canSeeDashboardCard('liveMargin', role);
 
   const todayPreviewQ = useDailyDssrPreview(station.id, businessDate, { enabled });
   const prevDate = shiftBusinessDate(businessDate, -1);
   const prevPreviewQ = useDailyDssrPreview(station.id, prevDate, { enabled });
-  const insightsQ = useInsightsSales(station.id, 14, { enabled: enabled && canTrend });
-  const cashBookQ = useDailyCashBook(station.id, businessDate, { enabled });
+  const insightsQ = useInsightsSales(station.id, DASHBOARD_TREND_DAYS, {
+    enabled: enabled && canTrend,
+  });
+  const cashBookQ = useDailyCashBook(station.id, entryDate, { enabled });
 
   const todaySnap = useMemo(() => readSnapshot(todayPreviewQ.data), [todayPreviewQ.data]);
   const sales = useMemo(() => deriveSales(todaySnap), [todaySnap]);
@@ -56,76 +51,17 @@ export const MoneyCard: React.FC = () => {
 
   const margin = num(todaySnap.pnl?.grossMargin);
   const credit = num(todaySnap.credit?.total ?? todaySnap.settlements?.credit);
-  const cashInHand = num(
-    todaySnap.cashInHand ??
-      todaySnap.cashInHandClosing ??
-      cashBookQ.data?.accounts?.find((a) => a.accountType === 'CASH_IN_HAND')?.closing ??
-      cashAccountTotals(cashBookQ.data?.accounts ?? []).closing,
-  );
+  const cashInHand = deriveCashInHand(todaySnap, cashBookQ.data);
 
   const trendData = insightsQ.data;
   const showTrend = canTrend;
   const hasEnoughHistory = trendData && trendData.closedDays >= 3;
 
-  // Chart coordinate calculation
-  const chart = useMemo(() => {
-    if (!trendData || !hasEnoughHistory) return null;
-    const W = 320;
-    const H = 70;
-    const trend = trendData.trend ?? [];
-    if (trend.length === 0) return null;
-
-    const values = trend.map((d) => d.sales);
-    const min = Math.min(...values, 0);
-    const max = Math.max(...values, 1);
-
-    const X = (i: number) => 2 + (i / Math.max(1, trend.length - 1)) * (W - 4);
-    const Y = (v: number) => 6 + (1 - (v - min) / (max - min || 1)) * (H - 12);
-
-    // Sealed days are closed; draft days are open
-    const sealedCount = trend.filter((d) => d.closed).length;
-
-    const pathFor = (from: number, to: number) =>
-      trend
-        .slice(from, to)
-        .map((d, j) => `${j ? 'L' : 'M'}${X(from + j).toFixed(1)} ${Y(d.sales).toFixed(1)}`)
-        .join(' ');
-
-    const sealedLine = pathFor(0, sealedCount);
-    const sealedArea =
-      sealedCount > 0
-        ? `${sealedLine} L${X(sealedCount - 1).toFixed(1)} ${H} L${X(0).toFixed(1)} ${H} Z`
-        : '';
-
-    const hasDraft = sealedCount < trend.length;
-    const draftLine = hasDraft ? pathFor(Math.max(0, sealedCount - 1), trend.length) : '';
-
-    // Previous 14 baseline / dotted curve
-    const prevAvg = trendData.previousAverage ?? trendData.average;
-    const prevY = Y(prevAvg).toFixed(1);
-    const prevLine = `M${X(0).toFixed(1)} ${prevY} L${X(trend.length - 1).toFixed(1)} ${prevY}`;
-
-    // Best day circle
-    let bestIdx = -1;
-    let bestVal = -1;
-    trend.forEach((d, i) => {
-      if (d.closed && d.sales > bestVal) {
-        bestVal = d.sales;
-        bestIdx = i;
-      }
-    });
-
-    return {
-      W,
-      H,
-      sealedLine,
-      sealedArea,
-      draftLine,
-      prevLine,
-      bestCircle: bestIdx >= 0 ? { cx: X(bestIdx).toFixed(1), cy: Y(bestVal).toFixed(1) } : null,
-      fromLabel: trendData.range?.from ? formatBusinessDate(trendData.range.from) : '',
-    };
-  }, [trendData, hasEnoughHistory]);
+  const chart = useMemo(
+    () => (trendData && hasEnoughHistory ? buildTrendChart(trendData) : null),
+    [trendData, hasEnoughHistory],
+  );
+  const fromLabel = trendData?.range?.from ? formatBusinessDate(trendData.range.from) : '';
 
   return (
     <DashboardCard card="money" title="Sales so far" query={todayPreviewQ} placeholderHeight={260}>
@@ -229,6 +165,8 @@ export const MoneyCard: React.FC = () => {
                 {chart && (
                   <>
                     <svg
+                      role="img"
+                      aria-label="Sales trend, last 14 days"
                       viewBox={`0 0 ${chart.W} ${chart.H}`}
                       width="100%"
                       height={chart.H}
@@ -282,7 +220,7 @@ export const MoneyCard: React.FC = () => {
                       )}
                     </svg>
                     <div className="flex items-center justify-between text-[10px] text-ink-muted mt-1">
-                      <span>{chart.fromLabel}</span>
+                      <span>{fromLabel}</span>
                       <span className="mx-auto">dashed = draft days · dotted = previous 14</span>
                       <span>today</span>
                     </div>

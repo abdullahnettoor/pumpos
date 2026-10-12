@@ -48,6 +48,7 @@ import type {
   InsightsAttendantVariance,
   InsightsCreditHealth,
   InsightsRangeDays,
+  SalesInsightsDays,
   InsightsSales,
   CustomerReceivableSummary,
   PayablesSummary,
@@ -186,6 +187,9 @@ export const queryKeys = {
   activityGroups: (stationId: string, type: string, limit: number) =>
     ['activity-groups', stationId, type, limit] as const,
   activityGroup: (groupId: string) => ['activity-group', groupId] as const,
+  /** One station's activity for one Business Day (under the activity-groups prefix). */
+  dayActivity: (stationId: string, date: string) =>
+    ['activity-groups', stationId, 'day', date] as const,
   moneyMovements: (stationId: string, from: string, to: string) =>
     ['money-movements', stationId, from, to] as const,
   invoices: (stationId: string, from: string, to: string) =>
@@ -428,6 +432,21 @@ export function useActivityGroups(params?: { stationId?: string; type?: string; 
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.nextCursor,
     ...TIER.operational,
+  });
+}
+
+/** The dashboard timeline's events (operational tier, not persisted). */
+export function useDayActivity(
+  stationId: string | null | undefined,
+  date: string | null | undefined,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: queryKeys.dayActivity(stationId ?? '', date ?? ''),
+    queryFn: () => eventsSvc.getDayActivity(stationId!, date!),
+    ...TIER.operational,
+    ...options,
+    enabled: !!stationId && !!date && (options?.enabled ?? true),
   });
 }
 
@@ -1176,7 +1195,7 @@ export function useAttendantHandoverReport(
  */
 export function useInsightsSales(
   stationId: string | null | undefined,
-  days: InsightsRangeDays,
+  days: SalesInsightsDays,
   options?: Options<InsightsSales>,
 ) {
   return useQuery({

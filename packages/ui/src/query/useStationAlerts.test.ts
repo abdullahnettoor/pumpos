@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { deriveStationAlerts } from './useStationAlerts.js';
+import {
+  alertBadgeCounts,
+  countOverdueCustomers,
+  deriveStationAlerts,
+} from './useStationAlerts.js';
 
 describe('deriveStationAlerts', () => {
   it('presents over-capacity book stock as informational with reconciliation context', () => {
@@ -116,8 +120,6 @@ describe('deriveStationAlerts — shift to-dos', () => {
     const alerts = deriveStationAlerts([], [], {
       ...base,
       activeShift: shift({ scheduledEndTime: '23:00', handovers: [{ userId: 'u1', duId: 'd1' }] }),
-      shiftsClosedToday: 0,
-      plannedShiftCount: 1,
     });
     expect(alerts).toEqual([
       expect.objectContaining({
@@ -134,8 +136,6 @@ describe('deriveStationAlerts — shift to-dos', () => {
     const [alert] = deriveStationAlerts([], [], {
       ...base,
       activeShift: shift(),
-      shiftsClosedToday: 0,
-      plannedShiftCount: 1,
     });
     expect(alert).toMatchObject({ severity: 'danger', title: '2 handovers overdue' });
   });
@@ -144,8 +144,7 @@ describe('deriveStationAlerts — shift to-dos', () => {
     const [alert] = deriveStationAlerts([], [], {
       ...base,
       activeShift: null,
-      shiftsClosedToday: 1,
-      plannedShiftCount: 3,
+      nextShift: { sequence: 2 },
     });
     expect(alert).toMatchObject({
       id: 'open-shift',
@@ -156,37 +155,21 @@ describe('deriveStationAlerts — shift to-dos', () => {
     const [first] = deriveStationAlerts([], [], {
       ...base,
       activeShift: null,
-      shiftsClosedToday: 0,
-      plannedShiftCount: 2,
+      nextShift: { sequence: 1 },
     });
     expect(first.title).toBe('Open Shift 1');
   });
 
-  it('offers nothing once every planned shift has closed or with no templates', () => {
-    expect(
-      deriveStationAlerts([], [], {
-        ...base,
-        activeShift: null,
-        shiftsClosedToday: 2,
-        plannedShiftCount: 2,
-      }),
-    ).toEqual([]);
-    expect(
-      deriveStationAlerts([], [], {
-        ...base,
-        activeShift: null,
-        shiftsClosedToday: 0,
-        plannedShiftCount: 0,
-      }),
-    ).toEqual([]);
+  it('offers nothing when there is no next shift', () => {
+    expect(deriveStationAlerts([], [], { ...base, activeShift: null, nextShift: null })).toEqual(
+      [],
+    );
   });
 
   it('lists unrecorded morning density without a Record action', () => {
     const [alert] = deriveStationAlerts([], [], {
       ...base,
       activeShift: null,
-      shiftsClosedToday: 0,
-      plannedShiftCount: 0,
       densityToday: {
         missingCount: 1,
         missingProducts: [{ productId: 'p1', productName: 'Petrol', productCode: 'PET' }],
@@ -208,10 +191,41 @@ describe('deriveStationAlerts — shift to-dos', () => {
       {
         ...base,
         activeShift: shift({ scheduledEndTime: '23:00' }),
-        shiftsClosedToday: 0,
-        plannedShiftCount: 1,
       },
     );
     expect(alerts.map((a) => a.id)).toEqual(['tank-t1', 'handovers']);
+  });
+});
+
+describe('money alerts and badge counts', () => {
+  const tank = { id: 't1', name: 'T1', productName: 'Diesel', capacity: 1000, currentVolume: 100 };
+
+  it('counts customers whose oldest debit is older than 30 days', () => {
+    expect(
+      countOverdueCustomers([
+        { oldestUnpaidDays: 31 },
+        { oldestUnpaidDays: 30 },
+        { oldestUnpaidDays: null },
+        { oldestUnpaidDays: 90 },
+      ]),
+    ).toBe(2);
+    expect(countOverdueCustomers(undefined)).toBe(0);
+  });
+
+  it('derives badge counts from the alerts', () => {
+    const alerts = deriveStationAlerts([tank], [], null, { overdueCustomers: 3, openPastDays: 2 });
+    expect(alertBadgeCounts(alerts)).toEqual({
+      inventoryAlerts: 1,
+      overdueCustomers: 3,
+      openPastDays: 2,
+    });
+  });
+
+  it('without money input (Staff) the Inventory count is still there', () => {
+    expect(alertBadgeCounts(deriveStationAlerts([tank]))).toEqual({
+      inventoryAlerts: 1,
+      overdueCustomers: 0,
+      openPastDays: 0,
+    });
   });
 });

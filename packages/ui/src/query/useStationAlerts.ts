@@ -1,6 +1,12 @@
 import React from 'react';
-import { useInventoryStatus, useInventoryItems } from './hooks.js';
 import {
+  useBusinessDayStatus,
+  useInventoryItems,
+  useInventoryStatus,
+  useReceivables,
+} from './hooks.js';
+import {
+  RECEIVABLES_AGING_EDGES,
   daysOfCoverLeft,
   deriveDuHandoverStatuses,
   type DensityTodaySummary,
@@ -29,10 +35,8 @@ export interface ShiftAlertInput {
   timeZone: string;
   /** The running shift from GET /shifts/status (full), or null. */
   activeShift?: (HandoverShiftLike & { handovers?: HandoverShiftLike['handovers'] }) | null;
-  /** Closed shifts of the current Business Day. */
-  shiftsClosedToday: number;
-  /** Active Shift Templates: how many shifts the day is planned to have. */
-  plannedShiftCount: number;
+  /** The Shift to prompt for when none is running (`nextShiftToOpen`), or null. */
+  nextShift?: { sequence: number } | null;
   /** GET /transactions/density/today (only the missing-product fields are read). */
   densityToday?: Pick<DensityTodaySummary, 'missingCount' | 'missingProducts'> | null;
 }
@@ -40,7 +44,7 @@ export interface ShiftAlertInput {
 export interface StationAlert {
   id: string;
   severity: AlertSeverity;
-  category: 'stock' | 'oversold' | 'shift' | 'density';
+  category: 'stock' | 'oversold' | 'shift' | 'density' | 'receivable' | 'day';
   title: string;
   meta?: string;
   actionLabel?: string;
@@ -48,6 +52,62 @@ export interface StationAlert {
   /** Inventory tab + entity to focus when the alert is actioned (deep-link). */
   actionTab?: 'tanks' | 'items';
   actionEntityId?: string;
+  /** Number of things this alert stands for (badge counts). */
+  count?: number;
+}
+
+/** Money-side inputs (Owner/Manager/Accountant only; never fetched for Staff). */
+export interface MoneyAlertInput {
+  /** Customers whose oldest unpaid debit is past the mid aging edge. */
+  overdueCustomers: number;
+  /** Earlier Business Days still open. */
+  openPastDays: number;
+}
+
+export function countOverdueCustomers(
+  customers: { oldestUnpaidDays: number | null }[] = [],
+): number {
+  return customers.filter((c) => (c.oldestUnpaidDays ?? 0) > RECEIVABLES_AGING_EDGES.midMaxDays)
+    .length;
+}
+
+/** Receivable and open-day alerts, one each, carrying their count. */
+export function deriveMoneyAlerts(input: MoneyAlertInput): StationAlert[] {
+  const list: StationAlert[] = [];
+  if (input.overdueCustomers > 0) {
+    list.push({
+      id: 'overdue-customers',
+      severity: 'warning',
+      category: 'receivable',
+      title: `${input.overdueCustomers} overdue ${input.overdueCustomers === 1 ? 'customer' : 'customers'}`,
+      count: input.overdueCustomers,
+      actionLabel: 'Customers',
+      actionPath: '/customers',
+    });
+  }
+  if (input.openPastDays > 0) {
+    list.push({
+      id: 'open-past-days',
+      severity: 'warning',
+      category: 'day',
+      title: `${input.openPastDays} earlier ${input.openPastDays === 1 ? 'day' : 'days'} still open`,
+      count: input.openPastDays,
+      actionLabel: 'Review',
+      actionPath: '/shifts',
+    });
+  }
+  return list;
+}
+
+/** Counts the sidebar badges show, read from the derived alerts. */
+export function alertBadgeCounts(alerts: readonly StationAlert[]) {
+  const countOf = (id: string) => alerts.find((a) => a.id === id)?.count ?? 0;
+  return {
+    inventoryAlerts: alerts.filter((a) => a.category === 'stock' || a.category === 'oversold')
+      .length,
+    overdueCustomers: countOf('overdue-customers'),
+    openPastDays: countOf('open-past-days'),
+  };
 }
 
 const SEV_RANK: Record<AlertSeverity, number> = { danger: 0, warning: 1, info: 2 };
@@ -72,12 +132,12 @@ export function deriveShiftAlerts(input: ShiftAlertInput): StationAlert[] {
         actionPath: '/shifts',
       });
     }
-  } else if (input.plannedShiftCount > input.shiftsClosedToday) {
+  } else if (input.nextShift) {
     list.push({
       id: 'open-shift',
       severity: 'info',
       category: 'shift',
-      title: `Open Shift ${input.shiftsClosedToday + 1}`,
+      title: `Open Shift ${input.nextShift.sequence}`,
       actionLabel: 'Open',
       actionPath: '/shifts',
     });
@@ -101,6 +161,7 @@ export function deriveStationAlerts(
   tanks: any[] = [],
   items: any[] = [],
   shift?: ShiftAlertInput | null,
+  money?: MoneyAlertInput | null,
 ): StationAlert[] {
   const list: StationAlert[] = [];
 
@@ -170,6 +231,7 @@ export function deriveStationAlerts(
   // TODO: raise merchandise low-stock alerts here once products carry a reorder level.
 
   if (shift) list.push(...deriveShiftAlerts(shift));
+  if (money) list.push(...deriveMoneyAlerts(money));
 
   return list.sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity]);
 }
@@ -177,17 +239,32 @@ export function deriveStationAlerts(
 /**
  * `shift` (optional, memoised by the caller) adds the shift to-dos: the
  * dashboard's Your shift column passes it; the bell does not.
+ * `money` turns on the receivable / open-day alerts (their queries are only
+ * enabled when `money.enabled`, so Staff never request money data); only the
+ * sidebar badges ask for it.
  */
 export function useStationAlerts(
   stationId: string | null | undefined,
   enabled = true,
   shift?: ShiftAlertInput | null,
+  money?: { enabled: boolean; businessDate?: string } | null,
 ): StationAlert[] {
   const { data: tanks } = useInventoryStatus(stationId, { enabled } as any);
   const { data: items } = useInventoryItems(stationId, { enabled } as any);
+  const moneyOn = !!money?.enabled && enabled && !!stationId;
+  const { data: receivables } = useReceivables(stationId, { enabled: moneyOn });
+  const { data: day } = useBusinessDayStatus(stationId, money?.businessDate, {
+    enabled: moneyOn,
+  });
 
   return React.useMemo(() => {
     if (!enabled) return [];
-    return deriveStationAlerts(tanks || [], items || [], shift);
-  }, [tanks, items, enabled, shift]);
+    const moneyInput = moneyOn
+      ? {
+          overdueCustomers: countOverdueCustomers(receivables?.customers),
+          openPastDays: day?.pastOpenBusinessDays?.length ?? 0,
+        }
+      : null;
+    return deriveStationAlerts(tanks || [], items || [], shift, moneyInput);
+  }, [tanks, items, enabled, shift, moneyOn, receivables, day]);
 }

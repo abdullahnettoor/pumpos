@@ -166,22 +166,24 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
   );
   const gstItcTotal = gstTotals.cgst + gstTotals.sgst + gstTotals.igst + gstTotals.cess;
 
+  const buildPurchaseDefaults = (supplierId?: string): Partial<PurchaseEntryFormValues> => ({
+    // Fuel Purchases use station-timezone calendar Entry Date, never Day Start.
+    transactionDate: resolveEntryDate({ timeZone: stationSettings.timezone }),
+    supplierId: supplierId || suppliers[0]?.id || '',
+    invoiceNumber: '',
+    notes: '',
+    lines: [
+      {
+        productId: products[0]?.id ?? '',
+        quantity: undefined as unknown as number,
+        unitPrice: undefined as unknown as number,
+      },
+    ],
+  });
+
   const resetPurchaseForm = (supplierId?: string) => {
     setFormError(null);
-    setPurchaseDefaults({
-      // Fuel Purchases use station-timezone calendar Entry Date, never Day Start.
-      transactionDate: resolveEntryDate({ timeZone: stationSettings.timezone }),
-      supplierId: supplierId || suppliers[0]?.id || '',
-      invoiceNumber: '',
-      notes: '',
-      lines: [
-        {
-          productId: products[0]?.id ?? '',
-          quantity: undefined as unknown as number,
-          unitPrice: undefined as unknown as number,
-        },
-      ],
-    });
+    setPurchaseDefaults(buildPurchaseDefaults(supplierId));
   };
 
   const openPurchaseDrawer = (supplierId?: string) => {
@@ -189,7 +191,13 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
     setIsPurchaseDrawerOpen(true);
   };
 
+  // Deep link (dashboard "Plan purchase ›"): the drawer is derived open from the
+  // intent once suppliers and products have loaded, like the payment drawer.
+  const newPurchaseRequested =
+    intent?.openNewPurchase === true && !suppliersActiveQ.isLoading && !productsQ.isLoading;
+
   const closePurchaseDrawer = () => {
+    clearNavIntent();
     setIsPurchaseDrawerOpen(false);
     resetPurchaseForm();
   };
@@ -804,10 +812,18 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
       />
 
       {/* Purchase Entry Drawer */}
-      <Drawer isOpen={isPurchaseDrawerOpen} onClose={closePurchaseDrawer} title="Record Purchase">
+      <Drawer
+        isOpen={isPurchaseDrawerOpen || newPurchaseRequested}
+        onClose={closePurchaseDrawer}
+        title="Record Purchase"
+      >
         <PurchaseEntryForm
           dateLabel="Purchase Date"
-          defaultValues={purchaseDefaults}
+          defaultValues={
+            !isPurchaseDrawerOpen && newPurchaseRequested
+              ? buildPurchaseDefaults()
+              : purchaseDefaults
+          }
           suppliers={suppliers}
           products={products}
           tanks={tanks}

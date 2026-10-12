@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Role } from '../types/core.js';
 import {
   DASHBOARD_CARDS,
+  canRecordDensityFromDashboard,
   canSeeDashboardCard,
   dashboardCardsFor,
   shiftWorkspaceAction,
@@ -49,5 +50,11 @@ describe('shiftWorkspaceAction', () => {
     expect(shiftWorkspaceAction('Staff')).toBe('act');
     expect(shiftWorkspaceAction('Accountant')).toBe('view');
     expect(shiftWorkspaceAction('Attendant')).toBeNull();
+  });
+});
+
+describe('canRecordDensityFromDashboard', () => {
+  it('only Owner and Manager (gating table AND server guard)', () => {
+    expect(roles.map(canRecordDensityFromDashboard)).toEqual([true, true, false, false]);
   });
 });

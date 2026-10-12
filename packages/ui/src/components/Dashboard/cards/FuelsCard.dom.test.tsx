@@ -45,12 +45,14 @@ const reading = (d: number, kind = 'MORNING') =>
     density15: d,
     kind,
     businessDate: D,
+    entryDate: D,
     observedTempC: 30,
     recordedAt: '2026-10-12T01:00:00Z',
   }) as any;
 const dens = (over: object) =>
   q({
     businessDate: D,
+    entryDate: D,
     products: [
       {
         productId: 'p1',
@@ -90,6 +92,7 @@ const mount = (role: 'Owner' | 'Manager' | 'Accountant' | 'Staff' = 'Owner') =>
         timeZone: 'Asia/Kolkata',
         dayStartsAt: '06:00',
         businessDate: D,
+        entryDate: D,
         onNavigate: nav,
       }}
     >
@@ -146,7 +149,7 @@ describe('FuelsCard', () => {
     mount('Owner');
     expect(screen.getByText('Not recorded')).toBeTruthy();
     fireEvent.click(screen.getByText('Record ›'));
-    expect(nav).toHaveBeenCalledWith('/inventory');
+    expect(nav).toHaveBeenCalledWith('/inventory', { focusInventoryTab: 'density' });
   });
 
   it.each(['Accountant', 'Staff'] as const)('not recorded hides Record for %s', (role) => {
@@ -171,6 +174,10 @@ describe('FuelsCard', () => {
     expect(screen.getByText(/Decantation pending/)).toBeTruthy();
     expect(screen.getByText('Decant ›')).toBeTruthy();
     expect(screen.getByText('Plan purchase ›')).toBeTruthy();
+    fireEvent.click(screen.getByText('Decant ›'));
+    expect(nav).toHaveBeenCalledWith('/inventory', { focusInventoryTab: 'decantations' });
+    fireEvent.click(screen.getByText('Plan purchase ›'));
+    expect(nav).toHaveBeenCalledWith('/purchases', { openNewPurchase: true });
     cleanup();
     mount('Staff');
     expect(screen.getByText(/Decantation pending/)).toBeTruthy();

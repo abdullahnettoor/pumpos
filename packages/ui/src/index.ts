@@ -116,7 +116,6 @@ export * from './access/CapabilityGate.js';
 export * from './access/SubscriptionNotice.js';
 export * from './query/queryClient.js';
 export * from './query/hooks.js';
-export * from './query/dashboardActivity.js';
 export * from './query/handoverMutation.js';
 export * from './query/stockCountMutation.js';
 export { useStationAlerts } from './query/useStationAlerts.js';

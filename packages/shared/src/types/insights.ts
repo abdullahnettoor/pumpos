@@ -8,8 +8,12 @@
  */
 
 /** Range lengths the Insights tab offers, in Business Days. */
-export const INSIGHTS_RANGE_DAYS = [7, 14, 30, 90] as const;
+export const INSIGHTS_RANGE_DAYS = [7, 30, 90] as const;
 export type InsightsRangeDays = (typeof INSIGHTS_RANGE_DAYS)[number];
+
+/** The dashboard's trend window. Only the sales block accepts it; no picker offers it. */
+export const DASHBOARD_TREND_DAYS = 14 as const;
+export type SalesInsightsDays = InsightsRangeDays | typeof DASHBOARD_TREND_DAYS;
 
 /** Closed Business Days each period needs before the tab compares it with the other. */
 export const INSIGHTS_MIN_COMPARABLE_DAYS = 3;

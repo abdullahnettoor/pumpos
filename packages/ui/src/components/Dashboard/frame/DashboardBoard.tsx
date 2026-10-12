@@ -3,7 +3,7 @@ import { ForecourtColumn } from '../columns/ForecourtColumn.js';
 import { FuelsColumn } from '../columns/FuelsColumn.js';
 import { MoneyColumn } from '../columns/MoneyColumn.js';
 import { boardColumnsFor, boardTemplateFor } from './boardLayout.js';
-import { useContainerWidth } from './useContainerWidth.js';
+import { useContainerWidth } from '../../../hooks/useContainerWidth.js';
 
 /**
  * The responsive board. Layout follows the board's own width (see

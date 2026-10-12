@@ -336,6 +336,24 @@ describe('BusinessDayTab', () => {
       await waitFor(() => expect(screen.getByText(/3 closed · 1 open/i)).toBeDefined());
     });
 
+    it('filters the list to still-open past days when requested', async () => {
+      const onConsumed = vi.fn();
+      renderTab(
+        { openPastDaysRequested: true, onOpenPastDaysConsumed: onConsumed },
+        {
+          recentBusinessDays: [
+            day({ businessDate: TODAY, status: 'OPEN' }),
+            day({ businessDate: '2026-02-27', status: 'OPEN' }),
+            day({ businessDate: '2026-02-24', status: 'CLOSED' }),
+          ],
+        },
+      );
+      await screen.findByText(/Open past Business Days · 1/);
+      expect(screen.getAllByRole('button', { name: /27 Feb 2026/i }).length).toBeGreaterThan(0);
+      expect(onConsumed).toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: /Show all/i })).toBeTruthy();
+    });
+
     it('selecting a closed day moves the view to that date', async () => {
       renderTab({}, { recentBusinessDays: [day({ businessDate: '2026-02-24' })] });
       const [row] = await screen.findAllByRole('button', { name: /24 Feb 2026/i });

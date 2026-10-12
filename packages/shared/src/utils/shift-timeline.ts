@@ -6,7 +6,7 @@
  * day's last scheduled Shift has closed (so it stays visible between shifts).
  * `nextWindow` is the next scheduled template window, drawn as a ghost bar.
  */
-import { resolveBusinessDate } from './business-date.js';
+import { businessDayWindow, resolveBusinessDate } from './business-date.js';
 
 export interface TimelineTemplate {
   id: string;
@@ -61,34 +61,6 @@ const toMinutes = (hhmm: string): number => {
   return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
 };
 
-/** The UTC instant (ms) of a station-local wall-clock `date` + `HH:MM`. */
-export function stationInstant(date: string, hhmm: string, timeZone: string): number {
-  const minutes = toMinutes(hhmm);
-  const [y, mo, d] = date.split('-').map(Number);
-  const guess = Date.UTC(y, mo - 1, d, 0, minutes);
-  // Offset of the zone at that instant; one correction pass handles DST edges.
-  const offsetAt = (ms: number) => {
-    const p = Object.fromEntries(
-      new Intl.DateTimeFormat('en-CA', {
-        timeZone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hourCycle: 'h23',
-      })
-        .formatToParts(new Date(ms))
-        .map((x) => [x.type, x.value]),
-    ) as Record<string, string>;
-    const asUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
-    return asUtc - ms;
-  };
-  const first = guess - offsetAt(guess);
-  return guess - offsetAt(first);
-}
-
 function windowOf(t: TimelineTemplate, dayStartAt: number, dayStartMin: number): TimelineWindow {
   const offset = (toMinutes(t.startTime) - dayStartMin + DAY_MIN) % DAY_MIN;
   const length = (toMinutes(t.endTime) - toMinutes(t.startTime) + DAY_MIN) % DAY_MIN || DAY_MIN;
@@ -99,10 +71,10 @@ function windowOf(t: TimelineTemplate, dayStartAt: number, dayStartMin: number):
 export function dashboardTimeline(input: DashboardTimelineInput): DashboardTimeline {
   const { now, shifts, timeZone, dayStartsAt } = input;
   const businessDate = resolveBusinessDate({ now, timeZone, dayStartsAt });
-  const dayStartAt = stationInstant(businessDate, dayStartsAt, timeZone);
-  const next = new Date(`${businessDate}T00:00:00Z`);
-  next.setUTCDate(next.getUTCDate() + 1);
-  const dayEndAt = stationInstant(next.toISOString().slice(0, 10), dayStartsAt, timeZone);
+  const { from: dayStartAt, to: dayEndAt } = businessDayWindow(businessDate, {
+    timeZone,
+    dayStartsAt,
+  });
   const base = { businessDate, dayStartAt, dayEndAt };
 
   const hide = (reason: TimelineHiddenReason): DashboardTimeline => ({
@@ -128,4 +100,29 @@ export function dashboardTimeline(input: DashboardTimelineInput): DashboardTimel
   const nextWindow = remaining[0] ?? null;
   if (!nextWindow) return hide('day-complete');
   return { ...base, visible: true, reason: null, nextWindow };
+}
+
+export interface NextShift {
+  /** 1-based number of the Shift to open ("Open Shift 2"). */
+  sequence: number;
+  /** The template window the Shift would fill; null before the day's first Shift. */
+  window: TimelineWindow | null;
+}
+
+/**
+ * The Shift to prompt for when none is running ("Open Shift N"), by the same
+ * rule as the timeline: after a Shift has run, the next window that still has
+ * time left (a skipped window that has passed is not offered); before any
+ * Shift, the first active template.
+ */
+export function nextShiftToOpen(input: DashboardTimelineInput): NextShift | null {
+  if (input.shifts.some((s) => s.closedAt == null)) return null;
+  if (input.shifts.length === 0) {
+    const first = [...input.templates]
+      .filter((t) => t.isActive)
+      .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime))[0];
+    return first ? { sequence: 1, window: null } : null;
+  }
+  const { nextWindow } = dashboardTimeline(input);
+  return nextWindow ? { sequence: input.shifts.length + 1, window: nextWindow } : null;
 }

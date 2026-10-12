@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { stubContainerWidth } from './Dashboard/testing/containerWidth.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from './primitives/ToastProvider.js';
 import { AppShell, SIDEBAR_COLLAPSED_KEY, type NavItem } from './AppShell.js';
@@ -18,6 +19,7 @@ vi.mock('../query/useSidebarBadges.js', async (orig) => ({
   useSidebarBadges: () => mockBadges,
 }));
 
+let stub: ReturnType<typeof stubContainerWidth>;
 beforeEach(() => {
   const store = new Map<string, string>();
   Object.defineProperty(window, 'localStorage', {
@@ -29,11 +31,14 @@ beforeEach(() => {
       clear: () => store.clear(),
     },
   });
-  window.innerWidth = 1440;
+  stub = stubContainerWidth(1440);
   mockBadges = { shiftRunning: false, inventoryAlerts: 0, overdueCustomers: 0, openPastDays: 0 };
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  stub.restore();
+});
 
 const mockNavItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard' },
@@ -189,7 +194,7 @@ const shell = (props: Partial<React.ComponentProps<typeof AppShell>> = {}) =>
 describe('AppShell sidebar groups', () => {
   it('groups Operate / Money / Insight / Setup and filters by role', () => {
     shell({ userRole: 'Manager' });
-    const text = document.querySelector('nav.flex-1')!.textContent!;
+    const text = screen.getByRole('navigation').textContent!;
     expect(text).toMatch(/Operate.*Dashboard.*Shifts.*Pricing/);
     expect(text).toMatch(/Money.*Customers.*Purchases.*Expenses/);
     expect(text).toMatch(/Setup.*Station Overview/);
@@ -200,7 +205,7 @@ describe('AppShell sidebar groups', () => {
 
   it('shows Insight and Organization to an Owner', () => {
     shell();
-    const text = document.querySelector('nav.flex-1')!.textContent!;
+    const text = screen.getByRole('navigation').textContent!;
     expect(text).toMatch(/Insight.*Reports/);
     expect(text).toMatch(/Setup.*Station Overview.*Organization/);
   });
@@ -237,15 +242,16 @@ describe('AppShell collapse', () => {
     expect(screen.getByRole('button', { name: /expand sidebar/i })).not.toBeNull();
   });
 
-  it('becomes a 60px rail below 1200px and keeps the saved choice', () => {
-    window.innerWidth = 1100;
+  it('becomes an icon rail below 1200px of app width and keeps the saved choice', () => {
+    stub.restore();
+    stub = stubContainerWidth(1100);
     shell();
-    const aside = document.querySelector('aside') as HTMLElement;
-    expect(aside.style.width).toBe('60px');
+    expect(screen.getByRole('button', { name: /expand sidebar/i })).not.toBeNull();
+    expect(screen.queryByText('Operate')).toBeNull();
     expect(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBeNull();
-    window.innerWidth = 1400;
-    fireEvent(window, new Event('resize'));
-    expect(aside.style.width).toBe('220px');
+    act(() => stub.setWidth(1400));
+    expect(screen.getByRole('button', { name: /collapse sidebar/i })).not.toBeNull();
+    expect(screen.getByText('Operate')).not.toBeNull();
   });
 });
 

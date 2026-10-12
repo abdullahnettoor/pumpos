@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   businessDateDiffDays,
+  businessDayWindow,
+  localToInstant,
   monthBounds,
   resolveBusinessDate,
   resolveEntryDate,
@@ -75,5 +77,20 @@ describe('monthBounds', () => {
   it('rejects a malformed month', () => {
     expect(() => monthBounds('2026-13')).toThrow();
     expect(() => monthBounds('2026-1')).toThrow();
+  });
+});
+
+describe('localToInstant / businessDayWindow', () => {
+  it('converts station wall-clock to the UTC instant', () => {
+    expect(new Date(localToInstant('2026-10-12', '06:00', 'Asia/Kolkata')).toISOString()).toBe(
+      '2026-10-12T00:30:00.000Z',
+    );
+  });
+  it('spans 23h on a spring-forward day', () => {
+    const w = businessDayWindow('2026-03-08', {
+      timeZone: 'America/New_York',
+      dayStartsAt: '00:00',
+    });
+    expect((w.to - w.from) / 3_600_000).toBe(23);
   });
 });

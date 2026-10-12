@@ -125,3 +125,10 @@ export function formatElapsedSince(
   const mins = Math.floor(Math.max(0, Date.now() - d.getTime()) / 60_000);
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
+
+/** Compact ₹ amount for dashboard tiles: ₹1.25L from one lakh, whole rupees below. */
+export function formatCompactRupees(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  if (Math.abs(value) >= 100_000) return `₹${(value / 100_000).toFixed(2)}L`;
+  return `₹${Math.round(value).toLocaleString('en-IN')}`;
+}

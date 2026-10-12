@@ -5,7 +5,7 @@
  *    always formatted in UTC so the device's zone cannot shift the day.
  * Every Intl call for Home lives here.
  */
-import { resolveEntryDate } from '@pump/shared';
+import { resolveEntryDate, stationMinuteOfDay } from '@pump/shared';
 
 const LOCALE = 'en-IN';
 
@@ -19,17 +19,7 @@ export const stationTime = (ms: number, timeZone: string): string =>
     .format(new Date(ms))
     .toLowerCase();
 
-/** Minutes after local midnight of an instant in the station's timezone. */
-export function stationMinuteOfDay(ms: number, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone,
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(new Date(ms));
-  const at = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
-  return at('hour') * 60 + at('minute');
-}
+export { stationMinuteOfDay };
 
 /** `9 Oct` in the station's timezone. */
 export const stationDayMonth = (ms: number, timeZone: string): string =>

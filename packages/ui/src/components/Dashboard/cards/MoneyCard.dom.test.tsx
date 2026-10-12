@@ -26,6 +26,7 @@ const hooks = vi.hoisted(() => ({
   useDensityTodaySummary: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
   useInventoryStatus: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
   useInventoryItems: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
+  useBusinessDayStatus: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
   usePricing: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
@@ -56,6 +57,7 @@ const mount = (
   role: DashboardRole = 'Owner',
   onNavigate = vi.fn(),
   businessDate = '2026-10-12',
+  entryDate = '2026-10-12',
 ) =>
   render(
     <DashboardProvider
@@ -66,6 +68,7 @@ const mount = (
         timeZone: 'Asia/Kolkata',
         dayStartsAt: '06:00',
         businessDate,
+        entryDate,
         onNavigate,
       }}
     >
@@ -267,21 +270,8 @@ describe('MoneyCard (Sales so far + 14-day trend)', () => {
     fireEvent.click(insightsBtn);
     expect(onNavigate).toHaveBeenCalledWith('/reports');
 
-    // SVG elements
-    const svg = document.querySelector('svg');
-    expect(svg).toBeTruthy();
-
-    // Previous dotted line
-    const dotted = svg?.querySelector('path[stroke-dasharray="2 3"]');
-    expect(dotted).toBeTruthy();
-
-    // Draft dashed line
-    const dashed = svg?.querySelector('path[stroke-dasharray="4 3"]');
-    expect(dashed).toBeTruthy();
-
-    // Best day circle
-    const circle = svg?.querySelector('circle');
-    expect(circle).toBeTruthy();
+    // The chart's geometry (sealed/draft/previous lines, best day) is unit-tested in moneyModel.
+    expect(screen.getByRole('img', { name: /sales trend/i })).toBeTruthy();
   });
 });
 
@@ -408,7 +398,7 @@ describe('TodayInOfficeCard (Today in the office)', () => {
     expect(screen.getByText(/Sree Transports/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cash Book ›' }));
-    expect(onNavigate).toHaveBeenCalledWith('/reports');
+    expect(onNavigate).toHaveBeenCalledWith('/reports', { openReportsTab: 'cash-book' });
   });
 });
 
@@ -441,5 +431,15 @@ describe('Independent Failure Isolation in MoneyColumn', () => {
 
     // Office card is ready and visible!
     expect(screen.getByTestId('empty-office-records')).toBeTruthy();
+  });
+});
+
+describe('Office reads use the Entry Date, not the Business Date (ADR 0005)', () => {
+  it('queries the Cash Book by entry date before Day Start', () => {
+    hooks.useDailyDssrPreview.mockReturnValue(ok(null));
+    hooks.useInsightsSales.mockReturnValue(ok(null));
+    hooks.useDailyCashBook.mockReturnValue(ok({ accounts: [] }));
+    mount(<MoneyCard />, 'Owner', vi.fn(), '2026-10-11', '2026-10-12');
+    expect(hooks.useDailyCashBook).toHaveBeenCalledWith('st-1', '2026-10-12', expect.anything());
   });
 });

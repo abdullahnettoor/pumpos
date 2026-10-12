@@ -1,9 +1,8 @@
 import React from 'react';
-import { formatMoney } from '../../../utils/format.js';
+import { formatCompactRupees, formatMoney } from '../../../utils/format.js';
 import { usePayables, useReceivables } from '../../../query/hooks.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
-import { formatCompactRupees } from './MoneyCard.js';
 
 /**
  * Money column card: To collect / To pay (#506).

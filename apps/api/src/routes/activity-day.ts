@@ -92,6 +92,7 @@ activityDayRouter.get('/activity', async (c, next) => {
       SELECT count(*) - 1
       FROM events AS activity_group_members
       WHERE activity_group_members.organization_id = ${user.organizationId}
+        AND activity_group_members.station_id = ${stationId}
         AND activity_group_members.correlation_id = ${schema.events.correlationId}
         ${memberTypeFilter}
     )

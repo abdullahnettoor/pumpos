@@ -11,7 +11,6 @@ const hooks = vi.hoisted(() => ({
   useDayActivity: vi.fn(),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
-vi.mock('../../../query/dashboardActivity.js', () => ({ useDayActivity: hooks.useDayActivity }));
 
 import { TimelineCard } from './TimelineCard.js';
 import { DashboardProvider } from '../frame/DashboardContext.js';
@@ -29,6 +28,7 @@ const shift = (over: object) => ({
   templateName: 'Morning',
   shiftSequence: 1,
   businessDate: '2026-10-12',
+  entryDate: '2026-10-12',
   openedAt: '2026-10-12T00:30:00Z',
   closedAt: null,
   ...over,
@@ -55,6 +55,7 @@ const mount = (role: any = 'Owner') =>
         timeZone: 'Asia/Kolkata',
         dayStartsAt: '06:00',
         businessDate: '2026-10-12',
+        entryDate: '2026-10-12',
         onNavigate,
       }}
     >
@@ -117,6 +118,23 @@ describe('TimelineCard', () => {
     mount();
     expect(screen.getByTestId('timeline-bar-closed')).toBeTruthy();
     expect(screen.getByTestId('timeline-bar-ghost')).toBeTruthy();
+  });
+
+  it('matches a closed shift to its summary by shift id, not by open time', () => {
+    hooks.useDashboardSummary.mockReturnValue(
+      ok({ today: { shifts: [shift({ closedAt: '2026-10-12T08:30:00Z' })] } }),
+    );
+    hooks.useShiftSummaries.mockReturnValue(
+      ok([
+        {
+          shiftId: 's1',
+          openedAt: '2026-10-12T00:30:00.123456Z', // different precision on purpose
+          snapshotData: { fuelByProduct: [{ salesValue: 5000 }], cashVariance: -20 },
+        },
+      ]),
+    );
+    mount();
+    expect(screen.getByText(/Shift 1 · ₹5,000/)).toBeTruthy();
   });
 
   it('merges five cash drops into one pin with a count and opens the event', () => {

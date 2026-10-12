@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
+import { officeEntries } from './money/moneyModel.js';
 import { formatMoney } from '../../../utils/format.js';
 import { ledgerSourceLabel } from '../../../utils/ledgerLabels.js';
 import { useDailyCashBook } from '../../../query/hooks.js';
-import type { DailyCashBookEntry } from '../../../services/cloud.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
 
@@ -12,21 +12,12 @@ import { DashboardCard } from '../frame/DashboardCard.js';
  * Fails independently from the other Money cards.
  */
 export const TodayInOfficeCard: React.FC = () => {
-  const { station, businessDate, onNavigate } = useDashboard();
+  const { station, entryDate, onNavigate } = useDashboard();
   const enabled = useCardEnabled('money');
 
-  const cashBookQ = useDailyCashBook(station.id, businessDate, { enabled });
+  const cashBookQ = useDailyCashBook(station.id, entryDate, { enabled });
 
-  const allEntries = useMemo(() => {
-    const accs = cashBookQ.data?.accounts ?? [];
-    const entries: Array<DailyCashBookEntry & { accountName: string }> = [];
-    for (const a of accs) {
-      for (const e of a.entries ?? []) {
-        entries.push({ ...e, accountName: a.name });
-      }
-    }
-    return entries.sort((a, b) => (b.createdAt < a.createdAt ? -1 : 1));
-  }, [cashBookQ.data]);
+  const allEntries = useMemo(() => officeEntries(cashBookQ.data?.accounts), [cashBookQ.data]);
 
   const top3 = allEntries.slice(0, 3);
   const count = allEntries.length;
@@ -40,7 +31,7 @@ export const TodayInOfficeCard: React.FC = () => {
       )}
       <button
         type="button"
-        onClick={() => onNavigate('/reports')}
+        onClick={() => onNavigate('/reports', { openReportsTab: 'cash-book' })}
         className="text-brand hover:underline font-medium"
       >
         Cash Book ›

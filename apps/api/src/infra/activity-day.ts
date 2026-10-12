@@ -1,5 +1,10 @@
 import { BusinessEvents } from '@pump/core';
-import { shiftBusinessDate, type Role } from '@pump/shared';
+import {
+  canManageUsers,
+  canSeeDashboardCard,
+  businessDayWindow as sharedBusinessDayWindow,
+  type Role,
+} from '@pump/shared';
 
 const E = BusinessEvents;
 
@@ -17,6 +22,8 @@ export const FORECOURT_ACTIVITY_EVENTS: readonly string[] = [
   E.DECANTATION_RECORDED,
   E.DECANTATION_FLAGGED,
   E.DECANTATION_DISCARDED,
+  E.DECANTATION_PURCHASE_LINKED,
+  E.DECANTATION_PURCHASE_UNLINKED,
   E.FUEL_RECEIVED,
   E.TANK_DIP_RECORDED,
   E.TANK_TRANSFER_COMPLETED,
@@ -26,8 +33,12 @@ export const FORECOURT_ACTIVITY_EVENTS: readonly string[] = [
   E.VARIANCE_RECORDED,
 ];
 
-/** Office Records (entry-date world) added for Manager and Accountant. */
-export const OFFICE_ACTIVITY_EVENTS: readonly string[] = [
+/**
+ * Events hidden from Staff: Office Records (entry-date world) plus the sales
+ * and Product Purchase money events of the forecourt. Manager and Accountant
+ * see these on top of the forecourt set.
+ */
+export const STAFF_HIDDEN_ACTIVITY_EVENTS: readonly string[] = [
   E.EXPENSE_RECORDED,
   E.EXPENSE_VOIDED,
   E.INCOME_RECORDED,
@@ -46,47 +57,12 @@ export const OFFICE_ACTIVITY_EVENTS: readonly string[] = [
 
 /** Event types a role may read through the dated feed; Owner gets everything. */
 export function dashboardEventTypesForRole(role: Role): readonly string[] | null {
-  if (role === 'Owner') return null;
-  if (role === 'Manager' || role === 'Accountant') {
-    return [...FORECOURT_ACTIVITY_EVENTS, ...OFFICE_ACTIVITY_EVENTS];
+  if (!canSeeDashboardCard('timeline', role)) return [];
+  if (canManageUsers(role)) return null; // Owner
+  if (canSeeDashboardCard('timelineOfficeEvents', role)) {
+    return [...FORECOURT_ACTIVITY_EVENTS, ...STAFF_HIDDEN_ACTIVITY_EVENTS];
   }
-  if (role === 'Staff') return FORECOURT_ACTIVITY_EVENTS;
-  return [];
-}
-
-function zoneOffsetMs(instant: number, timeZone: string): number {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-CA', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    })
-      .formatToParts(new Date(instant))
-      .map((p) => [p.type, p.value]),
-  ) as Record<string, string>;
-  const asUtc = Date.UTC(
-    Number(parts.year),
-    Number(parts.month) - 1,
-    Number(parts.day),
-    Number(parts.hour) % 24,
-    Number(parts.minute),
-    Number(parts.second),
-  );
-  return asUtc - instant;
-}
-
-function localToInstant(date: string, hhmm: string, timeZone: string): Date {
-  const [y, m, d] = date.split('-').map(Number);
-  const [h, min] = hhmm.split(':').map((n) => Number(n) || 0);
-  const wall = Date.UTC(y, m - 1, d, h, min);
-  let instant = wall - zoneOffsetMs(wall, timeZone);
-  instant = wall - zoneOffsetMs(instant, timeZone);
-  return new Date(instant);
+  return FORECOURT_ACTIVITY_EVENTS;
 }
 
 /**
@@ -98,12 +74,9 @@ export function businessDayWindow(
   businessDate: string,
   clock: { timeZone: string; businessDayStartsAt: string },
 ): { from: Date; to: Date } {
-  return {
-    from: localToInstant(businessDate, clock.businessDayStartsAt, clock.timeZone),
-    to: localToInstant(
-      shiftBusinessDate(businessDate, 1),
-      clock.businessDayStartsAt,
-      clock.timeZone,
-    ),
-  };
+  const w = sharedBusinessDayWindow(businessDate, {
+    timeZone: clock.timeZone,
+    dayStartsAt: clock.businessDayStartsAt,
+  });
+  return { from: new Date(w.from), to: new Date(w.to) };
 }
