@@ -1,18 +1,32 @@
 import React, { useMemo } from 'react';
-import { dashboardTimeline, groupEventPins } from '@pump/shared';
+import { dashboardTimeline, groupEventPins, type TimelineTemplate } from '@pump/shared';
 import { Button } from '../../../pump-ds/index.js';
-import {
-  useDashboardSummary,
-  useDayActivity,
-  useShiftSummaries,
-  useShiftTemplates,
-} from '../../../query/hooks.js';
+import { useDashboardSummary, useDayActivity, useShiftTemplates } from '../../../query/hooks.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
 import { toTimelineEvent, type PinTarget } from './timeline/activityPins.js';
-import { buildBars, snapshotTotal, type ShiftBarInput } from './timeline/timelineModel.js';
-import { BarSummary, TimelineStrip } from './timeline/TimelineStrip.js';
+import {
+  buildBars,
+  clockLabel,
+  money,
+  scheduledEndAt,
+  type ShiftBarInput,
+} from './timeline/timelineModel.js';
+import { TimelineStrip } from './timeline/TimelineStrip.js';
 import { useTimelineCollapsed } from './timeline/useTimelineCollapsed.js';
+
+/** One shift of `GET /shifts/dashboard-summary` → `today.shifts[]`. */
+interface DaySummaryShift {
+  id: string;
+  shiftTemplateId: string;
+  openedAt: string;
+  closedAt?: string | null;
+  totalFuelSalesValue?: number | null;
+  cashVariance?: number | null;
+}
+
+/** Cash drops are not shown on the dashboard (P3.1). */
+const isCashDropEvent = (type: string) => /DROP/.test(type);
 
 /** Compact Business Day timeline: shift bars, merged event pins, collapsible. */
 export const TimelineCard: React.FC = () => {
@@ -22,86 +36,131 @@ export const TimelineCard: React.FC = () => {
   const status = useDashboardSummary(station.id, { enabled });
   const templates = useShiftTemplates({ enabled });
   const activity = useDayActivity(station.id, businessDate, { enabled });
-  const summaries = useShiftSummaries(station.id, { enabled });
   const [collapsed, toggle] = useTimelineCollapsed();
 
   const model = useMemo(() => {
     if (!status.data || !templates.data) return null;
-    const day: any[] = status.data.today?.shifts ?? [];
-    const tplName = new Map<string, string>(templates.data.map((t) => [t.id, t.name as string]));
-    const byShift = new Map<string, any>(
-      (summaries.data ?? []).map((s: any) => [s.shiftId, s.snapshotData]),
-    );
-    const inputs: ShiftBarInput[] = [...day]
-      .sort((x, y) => Date.parse(x.openedAt) - Date.parse(y.openedAt))
-      .map((s, i) => {
-        const snap = s.closedAt ? byShift.get(s.id) : null;
-        return {
-          id: s.id,
-          name: tplName.get(s.shiftTemplateId) ?? 'Shift',
-          sequence: i + 1,
-          openedAt: s.openedAt,
-          closedAt: s.closedAt ?? null,
-          total: snapshotTotal(snap),
-          variance: snap ? Number(snap.cashVariance || 0) : null,
-        };
-      });
+    const summary = status.data as { today?: { shifts?: DaySummaryShift[] } };
+    const day = summary.today?.shifts ?? [];
+    const templateList = templates.data as TimelineTemplate[];
+    const tplById = new Map(templateList.map((t) => [t.id, t]));
     const timeline = dashboardTimeline({
       now: new Date(now),
-      shifts: day.map((s: any) => ({
+      shifts: day.map((s) => ({
         shiftTemplateId: s.shiftTemplateId,
         openedAt: s.openedAt,
         closedAt: s.closedAt ?? null,
       })),
-      templates: templates.data,
+      templates: templateList,
       timeZone,
       dayStartsAt,
     });
+    const inputs: ShiftBarInput[] = [...day]
+      .sort((x, y) => Date.parse(x.openedAt) - Date.parse(y.openedAt))
+      .map((s, i) => {
+        const tpl = tplById.get(s.shiftTemplateId);
+        return {
+          id: s.id,
+          name: tpl?.name ?? 'Shift',
+          sequence: i + 1,
+          openedAt: s.openedAt,
+          closedAt: s.closedAt ?? null,
+          total: s.closedAt ? (s.totalFuelSalesValue ?? null) : null,
+          variance: s.closedAt ? (s.cashVariance ?? null) : null,
+          scheduledEndAt: scheduledEndAt(tpl, timeline, dayStartsAt),
+        };
+      });
     return { timeline, inputs };
-  }, [status.data, templates.data, summaries.data, timeZone, dayStartsAt, now]);
+  }, [status.data, templates.data, timeZone, dayStartsAt, now]);
 
-  const events = useMemo(() => (activity.data?.items ?? []).map(toTimelineEvent), [activity.data]);
+  const events = useMemo(
+    () =>
+      (activity.data?.items ?? [])
+        .filter((g) => !isCashDropEvent(g.primary.eventType))
+        .map(toTimelineEvent),
+    [activity.data],
+  );
   const pins = useMemo(() => groupEventPins(events), [events]);
 
   if (!enabled) return null;
   const failed = status.isError || templates.isError || activity.isError;
-  // Hidden state is only knowable once the shifts are in; render nothing until then.
-  if (!failed && (!model || status.isPending || templates.isPending)) return null;
+  // Hidden state is only knowable once the shifts are in.
   if (!failed && model && !model.timeline.visible) return null;
 
   const open = (t: PinTarget) => onNavigate(t.path, t.intent);
-  const bars = model ? buildBars(model.inputs, model.timeline, now) : [];
-  const live = bars.filter((b) => b.kind === 'running');
-  const closed = bars.filter((b) => b.kind === 'closed');
-  const summary = [
-    'Today',
-    closed.length ? `${closed.at(-1)!.label} closed` : null,
-    live.length ? `${live[0].label} live` : null,
-    `${events.length} event${events.length === 1 ? '' : 's'}`,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const bars = model ? buildBars(model.inputs, model.timeline, now, timeZone) : [];
+  const alerts = events.filter((e) => e.tone === 'danger').length;
+  const lastClosed = model?.inputs.filter((i) => i.closedAt).at(-1);
+  const live = model?.inputs.find((i) => !i.closedAt);
+  const toggleButton = (
+    <Button
+      variant="ghost"
+      size="xs"
+      className="ml-auto"
+      onClick={toggle}
+      aria-expanded={!collapsed}
+    >
+      {collapsed ? 'Show timeline ▾' : 'Collapse ▴'}
+    </Button>
+  );
 
   return (
     <DashboardCard
       card="timeline"
       title="Timeline"
-      variant="panel"
       query={[status, templates, activity]}
-      placeholderHeight={collapsed ? 20 : 76}
-      action={
-        <Button variant="ghost" size="xs" onClick={toggle} aria-expanded={!collapsed}>
-          {collapsed ? 'Show timeline ▾' : 'Hide ▴'}
-        </Button>
-      }
+      placeholderHeight={76}
     >
-      {collapsed ? (
-        <p className="text-[12.5px] text-ink-muted" data-testid="timeline-summary">
-          {summary}
-        </p>
-      ) : (
-        model && (
+      {model &&
+        (collapsed ? (
+          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[12.5px] text-ink-muted">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-strong">
+              Today
+            </span>
+            <span data-testid="timeline-summary" className="contents">
+              {lastClosed && (
+                <span>
+                  Shift {lastClosed.sequence} closed{' '}
+                  {clockLabel(Date.parse(lastClosed.closedAt!), timeZone)}
+                  {lastClosed.total != null && (
+                    <>
+                      {' · '}
+                      <b className="font-mono text-ink-strong">{money(lastClosed.total)}</b>
+                    </>
+                  )}
+                </span>
+              )}
+              {live && (
+                <span>
+                  Shift {live.sequence} live since {clockLabel(Date.parse(live.openedAt), timeZone)}
+                </span>
+              )}
+              <span>
+                {events.length} event{events.length === 1 ? '' : 's'}
+                {alerts > 0 && (
+                  <>
+                    {' · '}
+                    <b className="text-danger-fg">
+                      {alerts} alert{alerts === 1 ? '' : 's'}
+                    </b>
+                  </>
+                )}
+              </span>
+            </span>
+            {toggleButton}
+          </div>
+        ) : (
           <>
+            <div className="flex items-center gap-2.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-strong">
+                Today
+              </span>
+              <span className="text-[12px] text-ink-muted">
+                {clockLabel(model.timeline.dayStartAt, timeZone)} →{' '}
+                {clockLabel(model.timeline.dayEndAt, timeZone)}
+              </span>
+              {toggleButton}
+            </div>
             <TimelineStrip
               timeline={model.timeline}
               bars={bars}
@@ -110,10 +169,8 @@ export const TimelineCard: React.FC = () => {
               timeZone={timeZone}
               onOpen={open}
             />
-            <BarSummary bars={bars} />
           </>
-        )
-      )}
+        ))}
     </DashboardCard>
   );
 };
