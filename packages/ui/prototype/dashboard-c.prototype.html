@@ -330,14 +330,30 @@ function C2(role) {
       <div class="s num">${L(D.fuelL)} fuel (closed shifts) · ${inr(D.otherV)} products</div><div style="margin-top:3px">${delta(212880, 204300)} <span class="s">vs Thu Shift 1</span></div>
       <div class="row" style="gap:14px;margin-top:10px;padding-top:10px;border-top:1px solid color-mix(in srgb, var(--acc) 20%, var(--line))">
         ${can.margin(role) ? `<div><div class="s">Margin</div><div class="num good v">${inr(D.margin, true)}</div></div>` : ''}
-        <div><div class="s">Credit</div><div class="num warn v">${inr(D.credit, true)}</div></div><div><div class="s">Cash in hand</div><div class="num v">${inr(D.cashInHand, true)}</div></div></div></div>
+        <div><div class="s">Credit</div><div class="num warn v">${inr(D.credit, true)}</div></div><div><div class="s">Cash in hand</div><div class="num v">${inr(D.cashInHand, true)}</div></div></div>
+      ${can.trend(role) ? (() => {
+        const cur = [418, 391, 446, 430, 402, 455, 431, 470, 518, 466, 442, 461, 498], prev = [402, 410, 398, 433, 421, 409, 440, 428, 455, 437, 419, 444, 451];
+        const W = 320, H = 70, lo = 370, hi = 530, X = i => 2 + (i / 13) * (W - 4), Y = v => 6 + (1 - (v - lo) / (hi - lo)) * (H - 12);
+        const path = (a, from, to) => a.slice(from, to).map((v, j) => (j ? 'L' : 'M') + X(from + j).toFixed(1) + ' ' + Y(v).toFixed(1)).join(' ');
+        return `<div style="margin-top:12px;padding-top:10px;border-top:1px solid color-mix(in srgb, var(--acc) 20%, var(--line))">
+          <div class="row s"><span>Last 14 days</span><span style="margin-left:8px">avg <b class="num hi">₹4.48L</b></span><span style="margin-left:8px">${delta(448, 425)}</span><span class="lnk" style="margin-left:auto">Insights ›</span></div>
+          <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" style="display:block;margin-top:6px;overflow:visible">
+            <path d="${path(prev, 0, 13)}" fill="none" stroke="var(--fa)" stroke-width="1.2" stroke-dasharray="2 3"/>
+            <path d="${path(cur, 0, 11)} L${X(10)} ${H} L${X(0)} ${H} Z" fill="var(--acc)" opacity=".1"/>
+            <path d="${path(cur, 0, 11)}" fill="none" stroke="var(--acc)" stroke-width="2"/>
+            <path d="${path(cur, 10, 13)}" fill="none" stroke="var(--acc)" stroke-width="2" stroke-dasharray="4 3"/>
+            <circle cx="${X(8)}" cy="${Y(518)}" r="3" fill="var(--acc)"/>
+            <line x1="${X(13)}" x2="${X(13)}" y1="4" y2="${H}" stroke="var(--line2)" stroke-dasharray="2 3"/>
+          </svg>
+          <div class="row s" style="margin-top:3px;font-size:10px"><span>26 Sep</span><span style="margin-left:auto">dashed = draft days · dotted = previous 14</span><span style="margin-left:auto">today</span></div></div>`; })() : ''}
+    </div>
     <div class="card" style="padding:12px 14px;margin-bottom:8px">
       <div class="row"><span class="k">To collect</span><b class="num warn" style="margin-left:auto">${inr(D.receivables)}</b></div>
       <div class="stack" style="margin-top:8px;height:6px"><div style="flex:42;background:var(--good)"></div><div style="flex:31;background:var(--warn)"></div><div style="flex:27;background:var(--bad)"></div></div>
       <div class="row s" style="margin-top:5px;justify-content:space-between"><span>0–7d ₹2.87L</span><span>8–30d ₹2.11L</span><span class="bad">30d+ ₹1.84L</span></div>
       <div class="row" style="margin-top:12px"><span class="k">To pay</span><b class="num" style="margin-left:auto">${inr(D.payables)}</b></div></div>
-    <div class="card"><div class="ch"><span class="t">Today in the office</span></div>
-      <table class="t">${[['Collection · Sree Transports', 25000, 'good'], ['Collection · Calicut Cabs', 13500, 'good'], ['Expense · Generator diesel', -4200, 'bad'], ['Expense · Tea & snacks', -620, 'bad'], ['Income · Air pump', 1200, 'good']].map(([n, v, t]) =>
+    <div class="card"><div class="ch"><span class="t">Today in the office</span><span class="r">5 entries · <span class="lnk">Cash Book ›</span></span></div>
+      <table class="t">${[['Collection · Sree Transports', 25000, 'good'], ['Collection · Calicut Cabs', 13500, 'good'], ['Expense · Generator diesel', -4200, 'bad'], ].map(([n, v, t]) =>
         `<tr><td>${n}</td><td class="r ${t}">${v > 0 ? '+' : ''}${inr(v)}</td></tr>`).join('')}</table></div>
   </section>`;
 
@@ -381,7 +397,7 @@ function C2(role) {
   return `${topbarB(role)}<div class="body">${sidebar2(role)}<main class="main"><div class="page" style="max-width:none">
     ${header}${timeline}
     <div style="display:grid;grid-template-columns:${cols};gap:12px;align-items:start">${forecourt}${stock}${money}</div>
-    ${trend}${staffTodo}
+    ${staffTodo}
   </div></main></div>${statusbar()}`;
 }
 
