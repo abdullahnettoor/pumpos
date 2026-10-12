@@ -257,7 +257,6 @@ export const DesignSystemShellProtoPanel: React.FC = () => {
       >
         <div className="overflow-hidden rounded-card border border-border-soft">
           <TopBar
-            onToggleSidebar={() => note('Toggle sidebar')}
             stationName="Indiranagar HP"
             onOpenSearch={() => setOpen(true)}
             quickCreate={quickCreate}
