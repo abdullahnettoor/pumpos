@@ -46,6 +46,7 @@ export class GetDensityTodaySummary implements UseCase<
     const businessDate =
       cmd.businessDate ??
       resolveBusinessDate({
+        now: ctx.clock.now(),
         timeZone: ctx.timeZone,
         dayStartsAt: ctx.businessDayStartsAt,
       });
