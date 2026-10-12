@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
-import { activityDayRouter } from './activity-day.js';
+import { activityHandler } from './activity-day.js';
 import { businessDayWindow } from '../infra/activity-day.js';
 import { makeFakeDb } from './test-fakes.js';
 
@@ -18,8 +18,10 @@ function makeApp(db: unknown, role = 'Manager', assignedStationIds: string[] = [
     });
     await next();
   });
-  app.route('/', activityDayRouter);
-  app.get('/activity', (c) => c.json({ fellThrough: true }));
+  app.get(
+    '/activity',
+    activityHandler((c) => c.json({ fellThrough: true })),
+  );
   return app;
 }
 

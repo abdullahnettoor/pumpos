@@ -30,6 +30,10 @@ function source(over: Partial<InsightsSalesSource> = {}): InsightsSalesSource {
       { date: '2026-03-05', sales: 3000, volume: 300 },
       { date: '2026-03-07', sales: 2000, volume: 200 },
     ],
+    previousDays: [
+      { date: '2026-02-25', sales: 1500, volume: 150 },
+      { date: '2026-02-27', sales: 4500, volume: 450 },
+    ],
     previous: { sales: 6000, closedDays: 4, otherSales: 400 },
     fuelVolumes: [
       { productCode: 'HSD', unit: 'L', quantity: 300 },
@@ -217,6 +221,19 @@ describe('composeInsightsSales', () => {
     ]);
   });
 
+  it('draws the previous period day by day, one entry per calendar date', () => {
+    const r = composeInsightsSales(source());
+    expect(r.previousTrend).toHaveLength(7);
+    expect(r.previousTrend[0]).toEqual({
+      date: '2026-02-25',
+      sales: 1500,
+      volume: 150,
+      closed: true,
+    });
+    expect(r.previousTrend[1]).toEqual({ date: '2026-02-26', sales: 0, volume: 0, closed: false });
+    expect(r.previousTrend[6].date).toBe('2026-03-03');
+  });
+
   it('hides the change when the previous period has no closed days', () => {
     const r = composeInsightsSales(
       source({ previous: { sales: 0, closedDays: 0, otherSales: 0 } }),
@@ -232,6 +249,7 @@ describe('composeInsightsSales', () => {
         range: null,
         previousRange: null,
         days: [],
+        previousDays: [],
         previous: { sales: 0, closedDays: 0, otherSales: 0 },
         fuelVolumes: [],
         other: { total: 0, top: null },

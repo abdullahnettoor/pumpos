@@ -8,7 +8,7 @@ import {
   useProducts,
 } from '@pump/ui';
 import type { Role, Station } from '@pump/shared';
-import { businessDateSettings } from '@pump/shared';
+import { businessDateSettings, canRecordDensity } from '@pump/shared';
 import { deriveAlerts } from './attention/derive.js';
 import type { MobileAlert } from './attention/types.js';
 import { useOwnHandover } from './handover/useOwnHandover.js';
@@ -37,7 +37,8 @@ export function useMobileAlerts(station: Station | null, role: Role | null = nul
   });
   const productsQ = useProducts();
   const densityQ = useDensityTodaySummary(station?.id ?? null, undefined, {
-    enabled: !!station && canSeeInventoryAttention(role),
+    // Follows the shared guard (Staff record density too).
+    enabled: !!station && role !== null && canRecordDensity(role),
   });
 
   const productNames = useMemo(

@@ -15,6 +15,7 @@ import { standing, type MoneyCustomer } from '../money/parties.js';
 import { deriveShiftVariance } from '../shifts/variance.js';
 import { shiftHeadlineBadge } from '../cashVariance.js';
 import type { AlertCategory, AlertSeverity, MobileAlert } from './types.js';
+import { canRecordDensity } from '@pump/shared';
 import type { DensityTodaySummary, DecantationView, Role } from '@pump/shared';
 
 /** A closed Shift's cash variance is raised only beyond this many rupees. */
@@ -186,7 +187,7 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
   }
 
   const density = src.densityToday;
-  if (canSeeInventoryWork && density && density.missingCount > 0) {
+  if (src.role != null && canRecordDensity(src.role) && density && density.missingCount > 0) {
     list.push({
       id: 'density-missing',
       severity: 'warning',

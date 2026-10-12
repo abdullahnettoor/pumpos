@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { createDb, DbClient, schema } from '@pump/db';
 import {
@@ -15,7 +15,7 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
-import { Role, canManageUsers, organizationUpdateSchema } from '@pump/shared';
+import { Role, isOwner, organizationUpdateSchema } from '@pump/shared';
 import {
   BusinessEvents,
   SystemClock,
@@ -36,7 +36,7 @@ import { idempotency } from './infra/idempotency.js';
 import { verifySupabaseJwt } from './infra/supabase-jwt.js';
 import { SupabaseAdmin } from './infra/supabase-admin.js';
 import { DrizzleEventStore } from './infra/events.js';
-import { activityDayRouter } from './routes/activity-day.js';
+import { activityHandler } from './routes/activity-day.js';
 import { rateLimit } from './infra/rate-limit.js';
 import { resolveCorsOrigin } from './infra/cors.js';
 import type { AuthenticatedPrincipal } from './infra/authenticated-principal.js';
@@ -481,7 +481,7 @@ api.get('/organization', async (c) => {
 // PUT /api/organization - update org name + profile metadata (Owner only)
 api.put('/organization', async (c) => {
   const user = c.var.user;
-  if (!canManageUsers(user.role)) {
+  if (!isOwner(user.role)) {
     return c.json(
       {
         success: false,
@@ -513,21 +513,17 @@ api.put('/organization', async (c) => {
   return c.json({ success: true, data: updated });
 });
 
-api.route('/', activityDayRouter);
-
 // GET /api/activity - human-readable business-event activity groups (Owner only).
 // (Named /activity rather than /events so ad-blockers don't block it.)
-api.get('/activity', async (c) => {
+// `?date=` selects the role-filtered Business Day feed (routes/activity-day.ts);
+// without it this Owner-only audit feed answers. Dispatch is explicit.
+api.get(
+  '/activity',
+  activityHandler((c) => auditActivityFeed(c as unknown as Context<{ Variables: Variables }>)),
+);
+
+async function auditActivityFeed(c: Context<{ Variables: Variables }>) {
   const user = c.var.user;
-  if (!canManageUsers(user.role)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Only Owners can view the activity log' },
-      },
-      403,
-    );
-  }
   const stationId = c.req.query('stationId');
   const type = c.req.query('type');
   let limit: number;
@@ -609,12 +605,12 @@ api.get('/activity', async (c) => {
       hasMore && pageRows.length > 0 ? encodeActivityCursor(pageRows[pageRows.length - 1]) : null,
   };
   return c.json({ success: true, data });
-});
+}
 
 // GET /api/activity/:groupId - one grouped command, including lazy siblings.
 api.get('/activity/:groupId', async (c) => {
   const user = c.var.user;
-  if (!canManageUsers(user.role)) {
+  if (!isOwner(user.role)) {
     return c.json(
       {
         success: false,

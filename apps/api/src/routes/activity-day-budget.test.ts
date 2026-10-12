@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
 import { PgDialect } from 'drizzle-orm/pg-core';
-import { activityDayRouter } from './activity-day.js';
+import { activityHandler } from './activity-day.js';
 import { STAFF_HIDDEN_ACTIVITY_EVENTS } from '../infra/activity-day.js';
 import { makeFakeDb } from './test-fakes.js';
 
@@ -31,8 +31,10 @@ function makeApp(db: unknown, role = 'Manager') {
     });
     await next();
   });
-  app.route('/', activityDayRouter);
-  app.get('/activity', (c) => c.json({ auditFeed: true }));
+  app.get(
+    '/activity',
+    activityHandler((c) => c.json({ auditFeed: true })),
+  );
   return app;
 }
 
@@ -129,7 +131,8 @@ describe('dated feed role and tenant scoping', () => {
 
     const owner = capturingDb([]);
     await makeApp(owner.db, 'Owner').request(URL);
-    expect(compile(owner.captured.where).sql).not.toContain('"event_type" in');
+    // No role allow-list: the only bound types are the Office Record placement split.
+    expect(compile(owner.captured.where).params).not.toContain('SHIFT_OPENED');
   });
 
   it('scopes both the events query and the related count to the caller organization', async () => {
@@ -138,5 +141,47 @@ describe('dated feed role and tenant scoping', () => {
     expect(compile(captured.where).params).toContain(ORG);
     expect(compile((captured.fields as any).relatedCount).params).toContain(ORG);
     expect(compile(captured.where).params).toContain(STATION);
+  });
+});
+
+describe('Office Records are placed by Entry Date', () => {
+  // Station clock: Asia/Kolkata, Day Start 06:00 → Business Day 2026-01-01 starts
+  // 2026-01-01T00:30Z; its calendar (entry) day starts 2025-12-31T18:30Z.
+  const istStation = {
+    ...station,
+    settings: { timezone: 'Asia/Kolkata', business_day_starts_at: '06:00' },
+  };
+
+  it('binds the entry-date window (midnight, not Day Start) for office types and the business window for the rest', async () => {
+    const { db, captured } = (() => {
+      const f = makeFakeDb([[istStation], []]);
+      const captured: { where?: unknown } = {};
+      let call = 0;
+      const select = f.db.select;
+      f.db.select = () => {
+        call += 1;
+        const b = select();
+        if (call === 2) {
+          const where = b.where;
+          b.where = (cond: unknown) => {
+            captured.where = cond;
+            return where(cond);
+          };
+        }
+        return b;
+      };
+      return { db: f.db, captured };
+    })();
+    await makeApp(db, 'Manager').request(URL);
+    const { params } = compile(captured.where);
+    const times = params.filter(
+      (p): p is string => typeof p === 'string' && /^\d{4}-\d\d-\d\dT/.test(p),
+    );
+    // Business Day window (Day Start 06:00 IST) and entry-date window (00:00 IST).
+    expect(times).toContain('2026-01-01T00:30:00.000Z');
+    expect(times).toContain('2026-01-02T00:30:00.000Z');
+    expect(times).toContain('2025-12-31T18:30:00.000Z');
+    expect(times).toContain('2026-01-01T18:30:00.000Z');
+    expect(params).toContain('EXPENSE_RECORDED');
   });
 });
