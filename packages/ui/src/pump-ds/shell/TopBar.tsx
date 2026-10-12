@@ -13,7 +13,7 @@ import {
 
 /**
  * TopBar — the app-shell top bar. Composes pump-ds primitives into the real,
- * wired header: sidebar toggle · brand · station name · global search trigger
+ * wired header: brand · station breadcrumb · global search trigger
  * (⌘K) · + New · notifications · user menu.
  *
  * Ambient status (business day, sync, past-open-day warnings) lives in the
@@ -63,12 +63,22 @@ export interface BusinessDayOption {
 }
 
 export interface TopBarProps {
-  /** Callback to toggle sidebar collapse. Omit if shell is not collapsible. */
-  onToggleSidebar?: () => void;
   /** Brand wordmark or logo. Defaults to "PumpOS". */
   brand?: ReactNode;
-  /** Active station name, shown as quiet text next to the brand. */
+  /** Active station name, the first breadcrumb segment next to the brand. */
   stationName?: string;
+  /**
+   * Stations the user can switch between. The breadcrumb becomes a dropdown only
+   * when the caller passes `stationSwitcher` (the shared reachable-stations rule
+   * decides that, not this component); otherwise the name is plain text.
+   */
+  stationSwitcher?: {
+    stations: { id: string; name: string }[];
+    selectedId?: string | null;
+    onSelect: (id: string) => void;
+  } | null;
+  /** Current page label, the second breadcrumb segment (`Station / Page`). */
+  pageLabel?: string;
   /** Global search click/shortcut handler. Opens command palette. */
   onOpenSearch?: () => void;
   /** Search button placeholder text. Defaults to "Search customers, suppliers, products…". */
@@ -240,9 +250,10 @@ const WindowControls: React.FC<{
 };
 
 export const TopBar: React.FC<TopBarProps> = ({
-  onToggleSidebar,
   brand,
   stationName,
+  stationSwitcher = null,
+  pageLabel,
   onOpenSearch,
   searchPlaceholder = 'Search customers, suppliers, products\u2026',
   quickCreate = [],
@@ -285,12 +296,6 @@ export const TopBar: React.FC<TopBarProps> = ({
         className,
       )}
     >
-      {onToggleSidebar && (
-        <IconBtn onClick={onToggleSidebar} aria-label="Toggle sidebar">
-          <Icon name="menu" size="md" />
-        </IconBtn>
-      )}
-
       {brand && (
         <div
           className={cn(
@@ -309,16 +314,61 @@ export const TopBar: React.FC<TopBarProps> = ({
       {stationName && (
         <>
           <div className="mx-0.5 h-4 w-px bg-border-soft" />
-          <span
-            data-testid="topbar-station"
-            className={cn(
-              'select-none truncate text-[12.5px] font-medium text-ink-default',
-              titleBar && 'pointer-events-none',
+          <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5">
+            {stationSwitcher ? (
+              <Menu>
+                <MenuTrigger asChild>
+                  <button
+                    type="button"
+                    data-testid="topbar-station"
+                    aria-label={`Station: ${stationName}. Switch station`}
+                    className="inline-flex h-7 min-w-0 items-center gap-1 rounded-button px-1.5 text-[12.5px] font-medium text-ink-default transition-colors hover:bg-surface-alt"
+                    title={stationName}
+                  >
+                    <span className="truncate">{stationName}</span>
+                    <Icon name="chevron-down" size="xs" className="text-ink-faint" />
+                  </button>
+                </MenuTrigger>
+                <MenuContent align="start">
+                  <MenuLabel>Switch station</MenuLabel>
+                  {stationSwitcher.stations.map((st) => (
+                    <MenuItem key={st.id} onSelect={() => stationSwitcher.onSelect(st.id)}>
+                      {st.name}
+                      {st.id === stationSwitcher.selectedId ? ' \u2713' : ''}
+                    </MenuItem>
+                  ))}
+                </MenuContent>
+              </Menu>
+            ) : (
+              <span
+                data-testid="topbar-station"
+                className={cn(
+                  'select-none truncate text-[12.5px] font-medium text-ink-default',
+                  titleBar && 'pointer-events-none',
+                )}
+                title={stationName}
+              >
+                {stationName}
+              </span>
             )}
-            title={stationName}
-          >
-            {stationName}
-          </span>
+            {pageLabel && (
+              <>
+                <span aria-hidden="true" className="text-ink-faint">
+                  /
+                </span>
+                <span
+                  data-testid="topbar-page"
+                  aria-current="page"
+                  className={cn(
+                    'select-none truncate text-[12.5px] text-ink-muted',
+                    titleBar && 'pointer-events-none',
+                  )}
+                >
+                  {pageLabel}
+                </span>
+              </>
+            )}
+          </nav>
         </>
       )}
 

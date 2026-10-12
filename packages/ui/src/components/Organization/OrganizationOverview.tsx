@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Station, stationLimitMessage } from '@pump/shared';
+import { Station, stationLimitMessage, reachableStations, showStationDropdown } from '@pump/shared';
 import { PageLayout } from '../primitives/PageLayout.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { Chip, Button } from '../../pump-ds/index.js';
@@ -82,6 +82,11 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
       ? stationLimitMessage(stationCapacity.value)
       : undefined;
 
+  // Same rule as the top-bar breadcrumb: a switch is offered only when more than
+  // one station can be reached (this workspace is Owner-only: every station).
+  const canSwitchStation = showStationDropdown(
+    reachableStations({ role: 'Owner', assignedStationIds: [] }, stations),
+  );
   const hasReadyStation = stations.some(
     (s) => (s as any).onboardingStatus === 'READY_FOR_OPERATIONS',
   );
@@ -281,7 +286,7 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
                         Configure
                       </Button>
                     </div>
-                  ) : (
+                  ) : canSwitchStation ? (
                     <Button
                       variant="secondary"
                       size="sm"
@@ -290,7 +295,7 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
                     >
                       Set active
                     </Button>
-                  )}
+                  ) : null}
                 </div>
               );
             })
