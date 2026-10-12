@@ -11,12 +11,15 @@ const hooks = vi.hoisted(() => ({
   // Your shift (Staff) reads these; hidden for other roles, so never asserted here.
   useShiftStatus: vi.fn(),
   useShiftTemplates: vi.fn(),
-  usePricing: vi.fn(),
+  useShiftSummaries: vi.fn(),
+  useDayActivity: vi.fn(),
   useDensityTodaySummary: vi.fn(),
   useInventoryStatus: vi.fn(),
   useInventoryItems: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
+  usePricing: vi.fn(),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
+vi.mock('../../../query/dashboardActivity.js', () => ({ useDayActivity: hooks.useDayActivity }));
 
 import { Dashboard } from './Dashboard.js';
 import { DashboardCard } from './DashboardCard.js';
@@ -35,11 +38,13 @@ beforeEach(() => {
   stub = stubContainerWidth(1300);
   hooks.useBusinessDayStatus.mockReturnValue(ok({ pastOpenBusinessDays: [] }));
   hooks.useDashboardSummary.mockReturnValue(ok({ activeShift: null }));
-  hooks.useShiftStatus.mockReturnValue(ok({ activeShift: null }));
+  hooks.useShiftStatus.mockReturnValue(ok({ activeShift: null, recentClosedShifts: [] }));
   hooks.useShiftTemplates.mockReturnValue(ok([]));
-  hooks.usePricing.mockReturnValue(ok([]));
-  hooks.useDensityTodaySummary.mockReturnValue(ok({ products: [] }));
-  hooks.useInventoryStatus.mockReturnValue(ok([]));
+  hooks.useShiftSummaries.mockReturnValue(ok([]));
+  hooks.useDayActivity.mockReturnValue(ok({ items: [] }));
+  hooks.useDensityTodaySummary.mockReturnValue(ok(undefined));
+  hooks.useInventoryStatus.mockReturnValue(ok(undefined));
+  hooks.usePricing.mockReturnValue(ok(undefined));
 });
 afterEach(() => {
   cleanup();
