@@ -44,13 +44,7 @@ export const FuelsCard: React.FC = () => {
   );
   const canRecord = canRecordDensityFromDashboard(role);
 
-  const fuels = (pricingQ.data ?? []) as Array<{
-    productId: string;
-    productName: string;
-    productCode: string;
-    price: number;
-    effectiveFrom: string | null;
-  }>;
+  const fuels = pricingQ.data ?? [];
 
   return (
     <DashboardCard

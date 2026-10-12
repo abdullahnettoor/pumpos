@@ -296,7 +296,9 @@ describe('TimelineCard', () => {
     );
     const first = mount();
     fireEvent.click(screen.getByRole('button', { name: /collapse/i }));
-    expect(screen.getByTestId('timeline-summary').textContent).toContain('Shift 1 past scheduled end');
+    expect(screen.getByTestId('timeline-summary').textContent).toContain(
+      'Shift 1 past scheduled end',
+    );
     expect(screen.getByTestId('timeline-summary').textContent).toContain('1 event');
     first.unmount();
     mount();

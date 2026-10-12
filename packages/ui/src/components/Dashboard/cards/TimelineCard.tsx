@@ -25,16 +25,6 @@ import {
 import { TimelineStrip } from './timeline/TimelineStrip.js';
 import { useTimelineCollapsed } from './timeline/useTimelineCollapsed.js';
 
-/** One shift of `GET /shifts/dashboard-summary` → `today.shifts[]`. */
-interface DaySummaryShift {
-  id: string;
-  shiftTemplateId: string;
-  openedAt: string;
-  closedAt?: string | null;
-  totalFuelSalesValue?: number | null;
-  cashVariance?: number | null;
-}
-
 type Row = Record<string, any>;
 
 /** Drawers of the open shift that have not handed over yet. */
@@ -74,9 +64,8 @@ export const TimelineCard: React.FC = () => {
 
   const model = useMemo(() => {
     if (!status.data || !templates.data) return null;
-    const summary = status.data as { today?: { shifts?: DaySummaryShift[] } };
-    const day = summary.today?.shifts ?? [];
-    const templateList = templates.data as TimelineTemplate[];
+    const day = status.data.today?.shifts ?? [];
+    const templateList: TimelineTemplate[] = templates.data;
     const tplById = new Map(templateList.map((t) => [t.id, t]));
     const timeline = dashboardTimeline({
       now: new Date(now),

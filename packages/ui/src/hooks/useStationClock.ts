@@ -36,3 +36,21 @@ export function useStationClock(settings: unknown): StationClock {
     entryDate: resolveBusinessDate({ now, timeZone, dayStartsAt: '00:00' }),
   };
 }
+
+/**
+ * The current business date only. Ticks every minute but holds the date string
+ * in state, so React bails out of re-rendering until the date actually changes
+ * (the shell needs the date, not a ticking clock).
+ */
+export function useStationBusinessDate(settings: unknown): string {
+  const { timeZone, dayStartsAt } = businessDateSettings(settings);
+  const compute = () => resolveBusinessDate({ now: new Date(), timeZone, dayStartsAt });
+  const [date, setDate] = useState(compute);
+  useEffect(() => {
+    setDate(compute);
+    const timer = window.setInterval(() => setDate(compute), 60_000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeZone, dayStartsAt]);
+  return date;
+}

@@ -652,6 +652,45 @@ export interface BusinessDayStatusResponse {
   recentFromBusinessDate: string;
 }
 
+/** One shift of `today.shifts[]` in the dashboard summary. */
+export interface DaySummaryShift {
+  id: string;
+  shiftTemplateId: string;
+  openedAt: string;
+  closedAt?: string | null;
+  businessDate?: string | null;
+  shiftSequence?: number | null;
+  totalFuelSalesValue?: number | null;
+  cashVariance?: number | null;
+}
+
+/** `GET /shifts/dashboard-summary` (fields the dashboard reads). */
+export interface DashboardSummary {
+  today?: { businessDate?: string; shifts?: DaySummaryShift[] };
+  lastShift?: {
+    id: string;
+    templateName?: string | null;
+    businessDate?: string | null;
+    shiftSequence?: number | null;
+  } | null;
+  lastShiftSummary?: {
+    totalFuelSalesValue?: number | null;
+    totalVolumeSold?: number | null;
+    cashVariance?: number | null;
+  } | null;
+  activeShift?: Record<string, unknown> | null;
+  [key: string]: unknown;
+}
+
+/** One row of `GET /setup/pricing`. */
+export interface FuelPrice {
+  productId: string;
+  productName: string;
+  productCode: string;
+  price: number;
+  effectiveFrom: string | null;
+}
+
 export class CloudShiftService {
   async getShiftStatus(stationId: string, lite: boolean = false): Promise<any> {
     return request<any>(`/shifts/status?stationId=${stationId}${lite ? '&lite=true' : ''}`);
@@ -725,8 +764,8 @@ export class CloudShiftService {
     return request<any[]>(`/shifts/handovers?shiftId=${shiftId}`);
   }
 
-  async getDashboardSummary(stationId: string): Promise<any> {
-    return request<any>(`/shifts/dashboard-summary?stationId=${stationId}`);
+  async getDashboardSummary(stationId: string): Promise<DashboardSummary> {
+    return request<DashboardSummary>(`/shifts/dashboard-summary?stationId=${stationId}`);
   }
 
   async getShiftSummaries(stationId: string, limit = 200): Promise<any[]> {
@@ -1608,8 +1647,8 @@ export class CloudTransactionService {
 }
 
 export class CloudPricingService {
-  async getPricing(stationId: string): Promise<any[]> {
-    return request<any[]>(`/setup/pricing?stationId=${stationId}`);
+  async getPricing(stationId: string): Promise<FuelPrice[]> {
+    return request<FuelPrice[]>(`/setup/pricing?stationId=${stationId}`);
   }
 
   async getPricingHistory(stationId: string): Promise<any[]> {

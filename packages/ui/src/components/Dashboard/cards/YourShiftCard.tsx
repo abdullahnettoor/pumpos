@@ -37,8 +37,11 @@ export const YourShiftCard: React.FC = () => {
             activeShift,
             nextShift: nextShiftToOpen({
               now,
-              shifts: summaryQ.data.today?.shifts ?? [],
-              templates: templatesQ.data as TimelineTemplate[],
+              shifts: (summaryQ.data.today?.shifts ?? []).map((sh) => ({
+                ...sh,
+                closedAt: sh.closedAt ?? null,
+              })),
+              templates: templatesQ.data,
               timeZone,
               dayStartsAt,
             }),

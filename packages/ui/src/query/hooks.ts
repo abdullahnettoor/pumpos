@@ -27,6 +27,7 @@ import {
 } from '../services/cloud.js';
 import type {
   DensityTodaySummary,
+  ShiftTemplate,
   DensityReadingWithContext,
   SaveDecantationBody,
   RecordDensityReadingPayload,
@@ -34,6 +35,8 @@ import type {
 import type {
   BusinessDayStatusResponse,
   DailyCashBook,
+  DashboardSummary,
+  FuelPrice,
   FundingAccount,
   ProfitLossReport,
 } from '../services/cloud.js';
@@ -327,7 +330,7 @@ export function useNozzles(stationId: string | null | undefined, options?: Optio
   });
 }
 
-export function useShiftTemplates(options?: Options<any[]>) {
+export function useShiftTemplates(options?: Options<ShiftTemplate[]>) {
   return useQuery({
     queryKey: queryKeys.shiftTemplates(),
     queryFn: () => templateSvc.listTemplates(),
@@ -349,7 +352,7 @@ export function usePaymentTerminals(
   });
 }
 
-export function usePricing(stationId: string | null | undefined, options?: Options<any[]>) {
+export function usePricing(stationId: string | null | undefined, options?: Options<FuelPrice[]>) {
   return useQuery({
     queryKey: queryKeys.pricing(stationId ?? ''),
     queryFn: () => pricingSvc.getPricing(stationId!),
@@ -771,7 +774,10 @@ export function useShiftSummaryById(shiftId: string | null | undefined, options?
  * last-summary scalars, reopen/grace state, and today's rollup — one bounded
  * request instead of full shift status + every historical shift summary.
  */
-export function useDashboardSummary(stationId: string | null | undefined, options?: Options<any>) {
+export function useDashboardSummary(
+  stationId: string | null | undefined,
+  options?: Options<DashboardSummary>,
+) {
   return useQuery({
     queryKey: queryKeys.dashboardSummary(stationId ?? ''),
     queryFn: () => shiftService.getDashboardSummary(stationId!),

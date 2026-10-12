@@ -5,7 +5,7 @@ import { cn } from '../pump-ds/lib/cn.js';
 import { Icon, type IconName, ICON_REGISTRY } from '../pump-ds/icon/index.js';
 import { Station, canViewReports, type OperatorRole, type Role } from '@pump/shared';
 import { useContainerWidth } from '../hooks/useContainerWidth.js';
-import { useStationClock } from '../hooks/useStationClock.js';
+import { useStationBusinessDate } from '../hooks/useStationClock.js';
 import { useSidebarBadges, type SidebarBadges } from '../query/useSidebarBadges.js';
 import type { UserMenuAction } from '../pump-ds/shell/index.js';
 
@@ -285,7 +285,7 @@ export const AppShell: React.FC<AppShellProps> = ({
     }
   };
 
-  const { businessDate } = useStationClock(selectedStation?.settings);
+  const businessDate = useStationBusinessDate(selectedStation?.settings);
   const badges = useSidebarBadges(
     selectedStation?.id,
     stationReady && !!selectedStation,
