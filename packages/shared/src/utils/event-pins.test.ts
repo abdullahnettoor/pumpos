@@ -26,9 +26,18 @@ describe('groupEventPins', () => {
     expect(groupEventPins([ev('a', 0), ev('b', 45)])).toHaveLength(2);
   });
 
-  it('sorts unsorted input and chains neighbours', () => {
+  it('sorts unsorted input and measures from the pin anchor, not the previous event', () => {
     const pins = groupEventPins([ev('c', 80), ev('a', 0), ev('b', 40)]);
-    expect(pins.map((p) => p.events.map((e) => e.id))).toEqual([['a', 'b', 'c']]);
+    expect(pins.map((p) => p.events.map((e) => e.id))).toEqual([['a', 'b'], ['c']]);
+  });
+
+  it('never lets a steady stream of events collapse into one long pin', () => {
+    const drops = Array.from({ length: 9 }, (_, i) => ev(`d${i}`, i * 30)); // every 30 min, 4h
+    const pins = groupEventPins(drops);
+    expect(pins.length).toBeGreaterThan(1);
+    for (const p of pins) {
+      expect(Number(p.events.at(-1)!.at) - p.at).toBeLessThan(45 * 60_000);
+    }
   });
 
   it('takes icon and tone of the most severe event', () => {

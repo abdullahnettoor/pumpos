@@ -1,6 +1,6 @@
 /**
- * Timeline event pins. Events less than 45 minutes apart merge into one pin
- * that carries the icon and tone of its most severe event and the full list of
+ * Timeline event pins. Events less than 45 minutes after a pin's FIRST event
+ * merge into it, so a pin never spans 45 minutes or more. It carries the icon and tone of its most severe event and the full list of
  * grouped events.
  */
 
@@ -41,9 +41,10 @@ export interface EventPin {
 const ms = (v: number | string): number => (typeof v === 'number' ? v : Date.parse(v));
 
 /**
- * Chain-groups time-sorted events: an event joins the current pin when it is
- * strictly less than `windowMinutes` after the previous event in that pin
- * (exactly 45 minutes starts a new pin). Severity ties go to the earliest event.
+ * Groups time-sorted events by anchor: an event joins the current pin when it
+ * is strictly less than `windowMinutes` after the pin's first event (exactly 45
+ * minutes starts a new pin), so a busy stretch stays several readable pins.
+ * Severity ties go to the earliest event.
  */
 export function groupEventPins(
   events: readonly PinEvent[],
@@ -54,7 +55,7 @@ export function groupEventPins(
   const groups: PinEvent[][] = [];
   for (const e of sorted) {
     const cur = groups[groups.length - 1];
-    if (cur && ms(e.at) - ms(cur[cur.length - 1].at) < windowMs) cur.push(e);
+    if (cur && ms(e.at) - ms(cur[0].at) < windowMs) cur.push(e);
     else groups.push([e]);
   }
   return groups.map((g) => {
