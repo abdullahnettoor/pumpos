@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { DashboardTimeline, EventPin } from '@pump/shared';
 import { Icon, type IconName } from '../../../../pump-ds/index.js';
@@ -51,9 +51,11 @@ const PinPopover: React.FC<{
   pos: PopoverPos;
   events: TimelineEvent[];
   onOpen: (t: PinTarget) => void;
-}> = ({ pos, events, onOpen }) =>
+  listRef: React.RefObject<HTMLUListElement>;
+}> = ({ pos, events, onOpen, listRef }) =>
   createPortal(
     <ul
+      ref={listRef}
       role="list"
       data-testid="timeline-pin-list"
       className="fixed z-50 rounded-input border border-border-soft bg-surface p-1 shadow-lg"
@@ -83,7 +85,27 @@ const PinButton: React.FC<{
 }> = ({ pin, leftPct, onOpen }) => {
   const [pos, setPos] = useState<PopoverPos | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
   const show = () => ref.current && setPos(popoverPos(ref.current));
+  // Click-opened; closes on an outside press or Escape. The list lives in a
+  // portal, so "outside" is checked against both the pin and the list.
+  const open = pos !== null;
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: Event) => {
+      const t = e.target as Node;
+      if (!ref.current?.contains(t) && !listRef.current?.contains(t)) setPos(null);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setPos(null);
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
   const events = pin.events as TimelineEvent[];
   const first = events[0];
   const left = Math.min(100 - PIN_INSET_PCT, Math.max(PIN_INSET_PCT, leftPct));
@@ -92,12 +114,6 @@ const PinButton: React.FC<{
       ref={ref}
       className="absolute top-0 -translate-x-1/2"
       style={{ left: `${left}%` }}
-      onMouseEnter={show}
-      onMouseLeave={() => setPos(null)}
-      onFocus={show}
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget)) setPos(null);
-      }}
     >
       <button
         type="button"
@@ -109,14 +125,14 @@ const PinButton: React.FC<{
         } ${PIN_TONE[pin.tone]}`}
         onClick={() => {
           if (pin.count === 1 && first.target) onOpen(first.target);
-          else if (pos) setPos(null);
+          else if (open) setPos(null);
           else show();
         }}
       >
         <Icon name={pin.icon as IconName} size="xs" />
         {pin.count > 1 && <span>{pin.count}</span>}
       </button>
-      {pos && <PinPopover pos={pos} events={events} onOpen={onOpen} />}
+      {pos && <PinPopover pos={pos} events={events} onOpen={onOpen} listRef={listRef} />}
     </div>
   );
 };

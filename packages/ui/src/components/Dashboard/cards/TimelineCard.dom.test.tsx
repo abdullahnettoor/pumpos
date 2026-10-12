@@ -209,7 +209,7 @@ describe('TimelineCard', () => {
     const pin = screen.getAllByTestId('timeline-pin')[0];
     pin.parentElement!.getBoundingClientRect = () =>
       ({ left: -50, width: 20, bottom: 30, top: 10, right: -30 }) as DOMRect;
-    fireEvent.focus(pin);
+    fireEvent.click(pin);
     const list = screen.getByTestId('timeline-pin-list');
     expect(container.contains(list)).toBe(false);
     expect(list.parentElement).toBe(document.body);
@@ -242,9 +242,29 @@ describe('TimelineCard', () => {
     const pins = screen.getAllByTestId('timeline-pin');
     expect(pins).toHaveLength(1);
     expect(pins[0].getAttribute('data-count')).toBe('5');
-    fireEvent.focus(pins[0]);
+    fireEvent.click(pins[0]);
+    fireEvent.mouseLeave(pins[0].parentElement!);
     fireEvent.click(screen.getByText('HANDOVER_RECORDED 2'));
     expect(onNavigate).toHaveBeenCalledWith('/shifts', undefined);
+  });
+
+  it('keeps the list open after leaving the pin and closes on outside press or Escape', () => {
+    hooks.useDayActivity.mockReturnValue(
+      ok({ items: [0, 1].map((i) => ev(i, 'SHIFT_OPENED', `2026-10-12T00:${30 + i}:00Z`)) }),
+    );
+    mount();
+    const pin = screen.getAllByTestId('timeline-pin')[0];
+    fireEvent.click(pin);
+    fireEvent.mouseLeave(pin.parentElement!);
+    fireEvent.blur(pin);
+    expect(screen.getByTestId('timeline-pin-list')).toBeTruthy();
+    fireEvent.mouseDown(screen.getByTestId('timeline-pin-list'));
+    expect(screen.getByTestId('timeline-pin-list')).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('timeline-pin-list')).toBeNull();
+    fireEvent.click(pin);
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByTestId('timeline-pin-list')).toBeNull();
   });
 
   it('queries the activity feed for the station and business date', () => {
