@@ -32,7 +32,6 @@ export const MoneyCard: React.FC = () => {
 
   const todayPreviewQ = useDailyDssrPreview(station.id, businessDate, { enabled });
   const prevDate = shiftBusinessDate(businessDate, -1);
-  const prevPreviewQ = useDailyDssrPreview(station.id, prevDate, { enabled });
   const insightsQ = useInsightsSales(station.id, DASHBOARD_TREND_DAYS, {
     enabled: enabled && canTrend,
   });
@@ -41,6 +40,9 @@ export const MoneyCard: React.FC = () => {
   const todaySnap = useMemo(() => readSnapshot(todayPreviewQ.data), [todayPreviewQ.data]);
   const sales = useMemo(() => deriveSales(todaySnap), [todaySnap]);
   const hasClosedShift = sales.closedShifts.length > 0;
+  const prevPreviewQ = useDailyDssrPreview(station.id, prevDate, {
+    enabled: enabled && hasClosedShift,
+  });
 
   const comparison = useMemo(() => {
     if (!hasClosedShift) return null;
@@ -78,7 +80,7 @@ export const MoneyCard: React.FC = () => {
       >
         {!hasClosedShift ? (
           <div>
-            <div className="text-xs text-ink-muted">Sales so far today</div>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">Sales so far today</div>
             <div
               className="text-2xl font-medium tracking-tight text-ink font-mono mt-1"
               data-testid="sales-headline"
@@ -91,7 +93,7 @@ export const MoneyCard: React.FC = () => {
           </div>
         ) : (
           <div>
-            <div className="text-xs text-ink-muted">Sales so far today</div>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">Sales so far today</div>
             <div
               className="text-2xl font-medium tracking-tight text-ink font-mono mt-1"
               data-testid="sales-headline"
@@ -116,7 +118,7 @@ export const MoneyCard: React.FC = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-brand/20">
+        <div className="flex gap-3.5 pt-2.5 border-t border-brand/20">
           {isOwner && (
             <div data-testid="margin-tile">
               <div className="text-xs text-ink-muted">Margin</div>
