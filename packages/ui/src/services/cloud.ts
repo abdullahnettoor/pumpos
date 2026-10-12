@@ -1725,8 +1725,12 @@ export class CloudEventsService {
   }
 
   /** GET /activity?stationId&date — one Business Day's events for the dashboard timeline (#508). */
-  async getDayActivity(stationId: string, date: string): Promise<ActivityDayFeed> {
-    const qs = new URLSearchParams({ stationId, date });
+  async getDayActivity(
+    stationId: string,
+    date: string,
+    entryDate: string = date,
+  ): Promise<ActivityDayFeed> {
+    const qs = new URLSearchParams({ stationId, date, entryDate });
     return request<ActivityDayFeed>(`/activity?${qs.toString()}`);
   }
 

@@ -517,12 +517,9 @@ api.put('/organization', async (c) => {
 // (Named /activity rather than /events so ad-blockers don't block it.)
 // `?date=` selects the role-filtered Business Day feed (routes/activity-day.ts);
 // without it this Owner-only audit feed answers. Dispatch is explicit.
-api.get(
-  '/activity',
-  activityHandler((c) => auditActivityFeed(c as unknown as Context<{ Variables: Variables }>)),
-);
+api.get('/activity', activityHandler(auditActivityFeed));
 
-async function auditActivityFeed(c: Context<{ Variables: Variables }>) {
+async function auditActivityFeed(c: Context<{ Variables: Pick<Variables, 'db' | 'user'> }>) {
   const user = c.var.user;
   const stationId = c.req.query('stationId');
   const type = c.req.query('type');

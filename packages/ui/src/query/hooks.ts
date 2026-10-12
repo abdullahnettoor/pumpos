@@ -188,8 +188,8 @@ export const queryKeys = {
     ['activity-groups', stationId, type, limit] as const,
   activityGroup: (groupId: string) => ['activity-group', groupId] as const,
   /** One station's activity for one Business Day (under the activity-groups prefix). */
-  dayActivity: (stationId: string, date: string) =>
-    ['activity-groups', stationId, 'day', date] as const,
+  dayActivity: (stationId: string, date: string, entryDate: string = date) =>
+    ['activity-groups', stationId, 'day', date, entryDate] as const,
   moneyMovements: (stationId: string, from: string, to: string) =>
     ['money-movements', stationId, from, to] as const,
   invoices: (stationId: string, from: string, to: string) =>
@@ -439,13 +439,13 @@ export function useActivityGroups(params?: { stationId?: string; type?: string; 
 export function useDayActivity(
   stationId: string | null | undefined,
   date: string | null | undefined,
-  options?: { enabled?: boolean },
+  options?: { enabled?: boolean; entryDate?: string },
 ) {
+  const entryDate = options?.entryDate ?? date ?? '';
   return useQuery({
-    queryKey: queryKeys.dayActivity(stationId ?? '', date ?? ''),
-    queryFn: () => eventsSvc.getDayActivity(stationId!, date!),
+    queryKey: queryKeys.dayActivity(stationId ?? '', date ?? '', entryDate),
+    queryFn: () => eventsSvc.getDayActivity(stationId!, date!, entryDate),
     ...TIER.operational,
-    ...options,
     enabled: !!stationId && !!date && (options?.enabled ?? true),
   });
 }

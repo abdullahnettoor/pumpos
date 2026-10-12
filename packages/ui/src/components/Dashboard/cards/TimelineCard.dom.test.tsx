@@ -269,7 +269,11 @@ describe('TimelineCard', () => {
 
   it('queries the activity feed for the station and business date', () => {
     mount();
-    expect(hooks.useDayActivity).toHaveBeenCalledWith('st-1', '2026-10-12', { enabled: true });
+    expect(hooks.useDayActivity).toHaveBeenCalledWith(
+      'st-1',
+      '2026-10-12',
+      expect.objectContaining({ enabled: true }),
+    );
   });
 
   it('collapses to one line and remembers it', () => {
@@ -302,6 +306,10 @@ describe('TimelineCard', () => {
   it('renders nothing and does not enable queries for Attendant-like hidden roles', () => {
     const { container } = mount('Attendant');
     expect(container.firstChild).toBeNull();
-    expect(hooks.useDayActivity).toHaveBeenCalledWith('st-1', '2026-10-12', { enabled: false });
+    expect(hooks.useDayActivity).toHaveBeenCalledWith(
+      'st-1',
+      '2026-10-12',
+      expect.objectContaining({ enabled: false }),
+    );
   });
 });
