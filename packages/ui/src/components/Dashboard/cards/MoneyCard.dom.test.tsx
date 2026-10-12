@@ -270,21 +270,8 @@ describe('MoneyCard (Sales so far + 14-day trend)', () => {
     fireEvent.click(insightsBtn);
     expect(onNavigate).toHaveBeenCalledWith('/reports');
 
-    // SVG elements
-    const svg = document.querySelector('svg');
-    expect(svg).toBeTruthy();
-
-    // Previous dotted line
-    const dotted = svg?.querySelector('path[stroke-dasharray="2 3"]');
-    expect(dotted).toBeTruthy();
-
-    // Draft dashed line
-    const dashed = svg?.querySelector('path[stroke-dasharray="4 3"]');
-    expect(dashed).toBeTruthy();
-
-    // Best day circle
-    const circle = svg?.querySelector('circle');
-    expect(circle).toBeTruthy();
+    // The chart's geometry (sealed/draft/previous lines, best day) is unit-tested in moneyModel.
+    expect(screen.getByRole('img', { name: /sales trend/i })).toBeTruthy();
   });
 });
 

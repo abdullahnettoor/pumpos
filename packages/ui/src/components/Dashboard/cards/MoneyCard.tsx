@@ -165,6 +165,8 @@ export const MoneyCard: React.FC = () => {
                 {chart && (
                   <>
                     <svg
+                      role="img"
+                      aria-label="Sales trend, last 14 days"
                       viewBox={`0 0 ${chart.W} ${chart.H}`}
                       width="100%"
                       height={chart.H}

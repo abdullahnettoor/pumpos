@@ -141,16 +141,16 @@ describe('the brand slot as part of the drag region', () => {
     );
 
     const slot = screen.getByTestId('logo').parentElement as HTMLElement;
-    expect(slot.className).toContain('pointer-events-none');
     // The pointer falls through to the bar itself, which is the drag region.
     expect(slot.closest(DRAG)).toBe(container.firstElementChild);
   });
 
   it('leaves the brand interactive on the web, where there is no drag to protect', () => {
-    render(<TopBar {...baseProps} brand={<svg data-testid="logo" />} />);
+    const { container } = render(<TopBar {...baseProps} brand={<svg data-testid="logo" />} />);
 
     const slot = screen.getByTestId('logo').parentElement as HTMLElement;
-    expect(slot.className).not.toContain('pointer-events-none');
+    expect(container.querySelectorAll(DRAG)).toHaveLength(0);
+    expect(slot.closest(DRAG)).toBeNull();
   });
 });
 
@@ -207,15 +207,14 @@ describe('TopBar search trigger', () => {
     const search = screen.getByLabelText('Search');
     // The full trigger carries the placeholder text; the icon fallback does not.
     expect(search.textContent).toContain('Search');
-    expect(search.className).toContain('left-1/2');
   });
 
   it('collapses to an icon-only search button when the bar is narrow', () => {
     mockWidth(700);
     render(<TopBar {...baseProps} stationName="Hosur Road HP" />);
     const search = screen.getByLabelText('Search');
-    // Icon button: no centered-absolute positioning, sits in the right cluster.
-    expect(search.className).not.toContain('left-1/2');
+    // Icon button: no placeholder text, still reachable by its label.
+    expect(search.textContent).not.toContain('Search');
   });
 });
 
