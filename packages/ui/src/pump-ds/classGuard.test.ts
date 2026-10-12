@@ -182,7 +182,13 @@ describe('class guard: no class in dashboard / pump-ds / theme / shell is dead',
       }
       for (const lit of candidates) {
         for (const token of plainTokens(lit)) {
-          if (!looksLikeClass(token) || !checkable(token) || MARKER_CLASSES.has(token) || plain.has(token)) continue;
+          if (
+            !looksLikeClass(token) ||
+            !checkable(token) ||
+            MARKER_CLASSES.has(token) ||
+            plain.has(token)
+          )
+            continue;
           if (token.startsWith('group/') || token.startsWith('peer/')) continue;
           if (!generates(token)) dead.push(`${path.relative(SRC, file)}: ${token}`);
         }

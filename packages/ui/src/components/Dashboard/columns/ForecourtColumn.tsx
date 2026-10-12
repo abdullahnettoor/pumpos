@@ -1,11 +1,37 @@
 import React from 'react';
-import { TimelineCard } from '../cards/TimelineCard.js';
+import { shiftWorkspaceAction } from '@pump/shared';
 import { ForecourtCard } from '../cards/ForecourtCard.js';
+import { useForecourtModel } from '../cards/forecourt/useForecourtModel.js';
+import { ColumnHeader } from '../frame/ColumnHeader.js';
+import { useDashboard } from '../frame/DashboardContext.js';
 
-/** Left column: Timeline · Forecourt. Add cards here. */
-export const ForecourtColumn: React.FC = () => (
-  <>
-    <TimelineCard />
-    <ForecourtCard />
-  </>
-);
+/** Left column: Forecourt. Its section header lives here, not in the card. */
+export const ForecourtColumn: React.FC = () => {
+  const { role, onNavigate } = useDashboard();
+  const { model } = useForecourtModel();
+  const workspace = shiftWorkspaceAction(role);
+  // Placeholder subtitle: card agents may refine the copy.
+  const subtitle =
+    model?.kind === 'live'
+      ? `${model.name} · ${model.total} DU${model.total === 1 ? '' : 's'}`
+      : model
+        ? 'no shift open'
+        : undefined;
+  return (
+    <>
+      <ColumnHeader
+        title="Forecourt"
+        subtitle={subtitle}
+        action={
+          workspace === null
+            ? undefined
+            : {
+                label: workspace === 'act' ? 'Workspace' : 'View',
+                onClick: () => onNavigate('/shifts'),
+              }
+        }
+      />
+      <ForecourtCard />
+    </>
+  );
+};

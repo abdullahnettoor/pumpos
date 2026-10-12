@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Play } from 'lucide-react';
 import { nextShiftToOpen, type TimelineTemplate } from '@pump/shared';
 import { Button } from '../../../pump-ds/index.js';
@@ -21,11 +21,10 @@ import { shiftCashDrops } from './yourShift/cashDrops.js';
 
 /** Staff's Your shift (replaces Money). Owns its file; keep the export name. */
 export const YourShiftCard: React.FC = () => {
-  const { station, businessDate, timeZone, dayStartsAt, onNavigate } = useDashboard();
+  const { station, now, businessDate, timeZone, dayStartsAt, onNavigate } = useDashboard();
   const enabled = useCardEnabled('yourShift');
-  const now = useNow(enabled);
 
-  const shiftQ = useShiftStatus(station.id, false, { enabled });
+  const shiftQ = useShiftStatus(station.id, { enabled });
   const summaryQ = useDashboardSummary(station.id, { enabled });
   const templatesQ = useShiftTemplates({ enabled });
   const densityQ = useDensityTodaySummary(station.id, businessDate, { enabled });
@@ -36,14 +35,14 @@ export const YourShiftCard: React.FC = () => {
       enabled && shiftQ.data && summaryQ.data && templatesQ.data && densityQ.data
         ? {
             now: now.getTime(),
-            timeZone: timeZone ?? 'UTC',
+            timeZone,
             activeShift,
             nextShift: nextShiftToOpen({
               now,
               shifts: summaryQ.data.today?.shifts ?? [],
               templates: templatesQ.data as TimelineTemplate[],
-              timeZone: timeZone ?? 'UTC',
-              dayStartsAt: dayStartsAt ?? '00:00',
+              timeZone,
+              dayStartsAt,
             }),
             densityToday: densityQ.data,
           }
@@ -156,14 +155,3 @@ const TodoRow: React.FC<{ alert: StationAlert; onNavigate: (path: string) => voi
     </div>
   );
 };
-
-/** Minute ticker (only while enabled), like the header's clock. */
-function useNow(enabled: boolean): Date {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    if (!enabled) return;
-    const timer = window.setInterval(() => setNow(new Date()), 30_000);
-    return () => window.clearInterval(timer);
-  }, [enabled]);
-  return now;
-}

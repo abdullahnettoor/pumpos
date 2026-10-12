@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { shiftWorkspaceAction } from '@pump/shared';
 import { Eye, Play, Plus } from 'lucide-react';
 import { Button, PageHeader } from '../../../pump-ds/index.js';
@@ -13,14 +13,9 @@ import { formatAsOf, formatDashboardDate, formatDayStart } from './headerText.js
  * "Shift workspace").
  */
 export const DashboardHeader: React.FC = () => {
-  const { station, role, businessDate, dayStartsAt, timeZone, onNavigate } = useDashboard();
+  const { station, role, now, businessDate, dayStartsAt, timeZone, onNavigate } = useDashboard();
   const action = shiftWorkspaceAction(role);
   const summary = useDashboardSummary(station.id, { enabled: action !== null });
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 30_000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   const hasOpenShift = !!summary.data?.activeShift;
   const subtitle = `Business day ${formatDashboardDate(businessDate)} · open since ${formatDayStart(dayStartsAt)} · as of ${formatAsOf(now, timeZone)}`;

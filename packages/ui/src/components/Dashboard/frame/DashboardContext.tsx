@@ -7,15 +7,15 @@ import {
 } from '@pump/shared';
 import type { NavIntent } from '../../AppShell.js';
 
-export type DashboardRole = OperatorRole;
-
 export interface DashboardContextValue {
   station: Station;
-  role: DashboardRole;
+  role: OperatorRole;
   userName: string;
-  /** Station IANA timezone / Day Start ("HH:MM"), from `station.settings`. */
-  timeZone: string | undefined;
-  dayStartsAt: string | undefined;
+  /** One shared instant (30s tick) for every card: never run a per-card ticker. */
+  now: Date;
+  /** Station IANA timezone / Day Start ("HH:MM"); defaults already applied (useStationClock). */
+  timeZone: string;
+  dayStartsAt: string;
   /** The current Business Day's date (YYYY-MM-DD), rolled over by Day Start. */
   businessDate: string;
   /** Today's calendar date in the station timezone (no Day Start): dates Office Records (ADR 0005). */

@@ -17,7 +17,8 @@ const hooks = vi.hoisted(() => ({
 vi.mock('../../../query/hooks.js', () => hooks);
 
 import { YourShiftCard } from './YourShiftCard.js';
-import { DashboardProvider, type DashboardRole } from '../frame/DashboardContext.js';
+import type { OperatorRole } from '@pump/shared';
+import { DashboardProvider } from '../frame/DashboardContext.js';
 
 const STATION = {
   id: 'st-1',
@@ -55,13 +56,14 @@ const openShift = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-function mount(role: DashboardRole = 'Staff', onNavigate = vi.fn()) {
+function mount(role: OperatorRole = 'Staff', onNavigate = vi.fn()) {
   return render(
     <DashboardProvider
       value={{
         station: STATION,
         role,
         userName: 'Sam',
+        now: new Date(),
         timeZone: 'Asia/Kolkata',
         dayStartsAt: '06:00',
         businessDate: '2026-10-12',

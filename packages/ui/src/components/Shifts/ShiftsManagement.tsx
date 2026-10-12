@@ -121,7 +121,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     stationSettings.timezone,
     stationSettings.business_day_starts_at,
   );
-  const statusQ = useShiftStatus(stationId, false, { refetchOnWindowFocus: false });
+  const statusQ = useShiftStatus(stationId, { refetchOnWindowFocus: false });
   const invalidateOperational = useInvalidateOperational();
   const runTask = useRunTask();
   const qc = useQueryClient();

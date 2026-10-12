@@ -51,11 +51,7 @@ const PartError: React.FC<{ what: string; retry: () => void }> = ({ what, retry 
 );
 
 const Pulse: React.FC<{ h: number }> = ({ h }) => (
-  <div
-    className="animate-pulse rounded bg-surface-alt"
-    style={{ height: h }}
-    aria-hidden="true"
-  />
+  <div className="animate-pulse rounded bg-surface-alt" style={{ height: h }} aria-hidden="true" />
 );
 
 const DensityRow: React.FC<

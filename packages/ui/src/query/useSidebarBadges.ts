@@ -25,20 +25,23 @@ export const NO_BADGES: SidebarBadges = {
 };
 
 /**
- * `canSeeFinancials` false (Staff) skips only the money queries; stock alerts
+ * `includeMoneyAlerts` false (Staff) skips only the money queries; stock alerts
  * are not money data, so Staff still get the Inventory badge.
  */
 export function useSidebarBadges(
   stationId: string | null | undefined,
   enabled: boolean,
-  canSeeFinancials: boolean,
+  includeMoneyAlerts: boolean,
   businessDate?: string,
 ): SidebarBadges {
   const alerts = useStationAlerts(stationId, enabled, null, {
-    enabled: canSeeFinancials,
+    enabled: includeMoneyAlerts,
     businessDate,
   });
-  const { data: shift } = useShiftStatus(stationId, true, { enabled: enabled && !!stationId });
+  const { data: shift } = useShiftStatus(stationId, {
+    lite: true,
+    enabled: enabled && !!stationId,
+  });
 
   return React.useMemo(() => {
     if (!enabled) return NO_BADGES;

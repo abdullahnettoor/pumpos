@@ -1,17 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { shiftWorkspaceAction } from '@pump/shared';
-import { Fuel, Play } from 'lucide-react';
+import { Play } from 'lucide-react';
 import { Button, Chip, Dot } from '../../../pump-ds/index.js';
-import { useDashboardSummary, useShiftStatus, useShiftTemplates } from '../../../query/hooks.js';
 import { inr } from '../../../utils/format.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
-import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
-import {
-  deriveForecourt,
-  type DuRow,
-  type LastClosed,
-  type LiveForecourt,
-} from './forecourt/derive.js';
+import { useDashboard } from '../frame/DashboardContext.js';
+import { useForecourtModel } from './forecourt/useForecourtModel.js';
+import { type DuRow, type LastClosed, type LiveForecourt } from './forecourt/derive.js';
 
 const VarianceChip: React.FC<{ amount: number }> = ({ amount }) => (
   <Chip
@@ -150,69 +145,28 @@ const LastClosedBlock: React.FC<{ last: LastClosed; onOpen: () => void }> = ({ l
 );
 
 export const ForecourtCard: React.FC = () => {
-  const { station, role, timeZone, dayStartsAt, onNavigate } = useDashboard();
-  const enabled = useCardEnabled('forecourt');
-  const status = useShiftStatus(station.id, false, { enabled });
-  const summary = useDashboardSummary(station.id, { enabled });
-  const templates = useShiftTemplates({ enabled });
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), 30_000);
-    return () => window.clearInterval(t);
-  }, []);
-
+  const { role, onNavigate } = useDashboard();
+  const { model, queries } = useForecourtModel();
   const canAct = shiftWorkspaceAction(role) === 'act';
-  const model = enabled
-    ? deriveForecourt({
-        status: status.data,
-        summary: summary.data,
-        templates: templates.data,
-        now,
-        timeZone: timeZone ?? 'Asia/Kolkata',
-        dayStartsAt: dayStartsAt ?? '00:00',
-      })
-    : null;
-
-  const action =
-    shiftWorkspaceAction(role) === null ? undefined : (
-      <button
-        type="button"
-        className="text-[12.5px] font-medium text-brand hover:underline"
-        onClick={() => onNavigate('/shifts')}
-      >
-        {canAct ? 'Workspace ›' : 'View ›'}
-      </button>
-    );
-  const subtitle =
-    model?.kind === 'live'
-      ? `${model.name} · ${model.total} DU${model.total === 1 ? '' : 's'}`
-      : 'no shift open';
   const openSummary = (id: string) => onNavigate('/shifts', { openShiftSummaryId: id });
 
   return (
     <DashboardCard
       card="forecourt"
       title="Forecourt"
-      icon={<Fuel />}
-      action={
-        <span className="flex items-center gap-3 text-[11.5px] text-ink-muted">
-          {model && <span>{subtitle}</span>}
-          {action}
-        </span>
-      }
-      query={[status, summary, templates]}
+      variant="plain"
+      query={queries}
       placeholderHeight={330}
-      flush
     >
       {model?.kind === 'live' ? (
-        <div className="p-2">
+        <>
           <Live m={model} />
           {model.last && (
             <LastClosedBlock last={model.last} onOpen={() => openSummary(model.last!.shiftId)} />
           )}
-        </div>
+        </>
       ) : model ? (
-        <div className="p-2">
+        <>
           <div className="rounded-lg border border-border-soft bg-surface px-4 py-5 text-center">
             <div className="text-[13px] font-semibold text-ink">
               {model.kind === 'between' ? 'Between shifts' : 'No shift running'}
@@ -236,7 +190,7 @@ export const ForecourtCard: React.FC = () => {
           {model.last && (
             <LastClosedBlock last={model.last} onOpen={() => openSummary(model.last!.shiftId)} />
           )}
-        </div>
+        </>
       ) : null}
     </DashboardCard>
   );

@@ -82,6 +82,6 @@ describe('useOpenShiftLabel', () => {
   it('reads the lite branch of the shift-status query', () => {
     withOpenShift('2026-09-22T06:00:00.000Z');
     render(<Probe />);
-    expect(useShiftStatus).toHaveBeenCalledWith('st-1', true);
+    expect(useShiftStatus).toHaveBeenCalledWith('st-1', { lite: true });
   });
 });

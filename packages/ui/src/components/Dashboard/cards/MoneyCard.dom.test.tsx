@@ -35,7 +35,8 @@ import { MoneyCard } from './MoneyCard.js';
 import { ReceivablesPayablesCard } from './ReceivablesPayablesCard.js';
 import { TodayInOfficeCard } from './TodayInOfficeCard.js';
 import { MoneyColumn } from '../columns/MoneyColumn.js';
-import { DashboardProvider, type DashboardRole } from '../frame/DashboardContext.js';
+import type { OperatorRole } from '@pump/shared';
+import { DashboardProvider } from '../frame/DashboardContext.js';
 
 const STATION = {
   id: 'st-1',
@@ -54,7 +55,7 @@ const err = (error = new Error('Network error')) => ({
 
 const mount = (
   ui: React.ReactNode,
-  role: DashboardRole = 'Owner',
+  role: OperatorRole = 'Owner',
   onNavigate = vi.fn(),
   businessDate = '2026-10-12',
   entryDate = '2026-10-12',
@@ -65,6 +66,7 @@ const mount = (
         station: STATION,
         role,
         userName: 'Test User',
+        now: new Date(),
         timeZone: 'Asia/Kolkata',
         dayStartsAt: '06:00',
         businessDate,
@@ -328,7 +330,6 @@ describe('TodayInOfficeCard (Today in the office)', () => {
 
     mount(<TodayInOfficeCard />);
 
-    expect(screen.getByText('Today in the office')).toBeTruthy();
     expect(screen.getByTestId('empty-office-records').textContent).toContain(
       'Nothing recorded yet today.',
     );

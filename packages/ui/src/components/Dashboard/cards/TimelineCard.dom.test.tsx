@@ -52,6 +52,7 @@ const mount = (role: any = 'Owner') =>
         station: STATION,
         role,
         userName: 'A',
+        now: new Date(),
         timeZone: 'Asia/Kolkata',
         dayStartsAt: '06:00',
         businessDate: '2026-10-12',

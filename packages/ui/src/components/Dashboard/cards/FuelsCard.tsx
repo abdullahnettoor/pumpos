@@ -43,7 +43,13 @@ export const FuelsCard: React.FC = () => {
   }>;
 
   return (
-    <DashboardCard card="fuels" title="Fuels" query={pricingQ} placeholderHeight={320}>
+    <DashboardCard
+      card="fuels"
+      title="Fuels"
+      variant="plain"
+      query={pricingQ}
+      placeholderHeight={320}
+    >
       <div className="flex flex-col gap-3">
         {fuels.length === 0 && <p className="text-[12.5px] text-ink-muted">No fuels set up yet.</p>}
         {fuels.map((f) => {
