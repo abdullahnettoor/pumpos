@@ -1,0 +1,216 @@
+import {
+  dashboardTimeline,
+  deriveDuHandoverStatuses,
+  isHandoverDue,
+  type DuStatus,
+} from '@pump/shared';
+
+type Row = Record<string, any>;
+
+const num = (v: unknown): number => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/** "14:00" → "2:00 pm". */
+export function formatClock(hhmm: string | null | undefined): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm ?? '');
+  if (!m) return '';
+  const h = Number(m[1]);
+  const suffix = h >= 12 ? 'pm' : 'am';
+  return `${h % 12 === 0 ? 12 : h % 12}:${m[2]} ${suffix}`;
+}
+
+export function formatElapsed(openedAt: string, now: number): string {
+  const mins = Math.max(0, Math.floor((now - Date.parse(openedAt)) / 60_000));
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+export interface DuRow {
+  key: string;
+  duName: string;
+  attendant: string;
+  fuels: string;
+  status: DuStatus;
+  /** Declared cash once recorded; null while the handover is open. */
+  declared: number | null;
+  /** Server variance once recorded. */
+  variance: number | null;
+  /** Cash dropped on the recorded handover; unknown before then. */
+  dropped: number | null;
+}
+
+export interface LiveForecourt {
+  kind: 'live';
+  shiftId: string;
+  name: string;
+  /** Epoch-free label, e.g. "Live 3h 12m" or "Past scheduled end". */
+  pastEnd: boolean;
+  elapsed: string;
+  window: string | null;
+  endLabel: string | null;
+  recorded: number;
+  total: number;
+  floats: number;
+  drops: number;
+  open: number;
+  /** DUs not handed over first, then recorded; assignment order inside each. */
+  dus: DuRow[];
+  last: LastClosed | null;
+}
+
+export interface LastClosed {
+  shiftId: string;
+  name: string;
+  sales: number | null;
+  litres: number | null;
+  variance: number | null;
+}
+
+export interface IdleForecourt {
+  kind: 'between' | 'none';
+  /** "Shift 2 is scheduled from 2:00 pm." style hint, when known. */
+  hint: string | null;
+  last: LastClosed | null;
+}
+
+export type ForecourtModel = LiveForecourt | IdleForecourt;
+
+export interface DeriveInput {
+  status: Row | null | undefined;
+  summary: Row | null | undefined;
+  templates: Row[] | null | undefined;
+  now: number;
+  timeZone: string;
+  dayStartsAt: string;
+}
+
+function lastClosed(summary: Row | null | undefined): LastClosed | null {
+  const shift = summary?.lastShift as Row | null | undefined;
+  if (!shift) return null;
+  const s = summary?.lastShiftSummary as Row | null | undefined;
+  return {
+    shiftId: String(shift.id),
+    name: String(shift.templateName ?? 'Shift'),
+    sales: s && s.totalFuelSalesValue != null ? num(s.totalFuelSalesValue) : null,
+    litres: s && s.totalVolumeSold != null ? num(s.totalVolumeSold) : null,
+    variance: s && s.cashVariance != null ? num(s.cashVariance) : null,
+  };
+}
+
+export function deriveForecourt(input: DeriveInput): ForecourtModel {
+  const { status, summary, templates, now, timeZone, dayStartsAt } = input;
+  const shift = status?.activeShift as Row | null | undefined;
+  const last = lastClosed(summary);
+
+  if (!shift) {
+    const todayShifts = (summary?.today?.shifts ?? []) as Row[];
+    const tpls = (templates ?? []).map((t) => ({
+      id: String(t.id),
+      name: String(t.name),
+      startTime: String(t.startTime),
+      endTime: String(t.endTime),
+      isActive: t.isActive !== false,
+    }));
+    const tl = dashboardTimeline({
+      now: new Date(now),
+      shifts: todayShifts.map((s) => ({
+        shiftTemplateId: String(s.shiftTemplateId),
+        openedAt: s.openedAt,
+        closedAt: s.closedAt ?? null,
+      })),
+      templates: tpls,
+      timeZone,
+      dayStartsAt,
+    });
+    if (todayShifts.length > 0) {
+      const next = tl.nextWindow;
+      return {
+        kind: 'between',
+        hint: next ? `${next.name} is scheduled from ${clockOf(next.startAt, timeZone)}.` : null,
+        last,
+      };
+    }
+    const first = [...tpls]
+      .filter((t) => t.isActive)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime))[0];
+    return {
+      kind: 'none',
+      hint: first ? `${first.name} is scheduled from ${formatClock(first.startTime)}.` : null,
+      last,
+    };
+  }
+
+  const assignments = (shift.staffAssignments ?? []) as Row[];
+  const handovers = (shift.handovers ?? []) as Row[];
+  const readings = (shift.nozzleReadings ?? []) as Row[];
+  const statuses = deriveDuHandoverStatuses(
+    {
+      openedAt: String(shift.openedAt),
+      scheduledEndTime: shift.scheduledEndTime,
+      staffAssignments: assignments,
+      handovers,
+    },
+    now,
+    timeZone,
+  );
+  const dus = assignments.map((a, i): DuRow => {
+    const h = handovers.find((x) => x.userId === a.userId && x.duId === a.duId);
+    const fuels = Array.from(
+      new Set(
+        readings
+          .filter((r) => r.duId === a.duId)
+          .map((r) => `${r.nozzleName} (${r.productCode ?? r.productName})`),
+      ),
+    ).join(' · ');
+    return {
+      key: String(a.id ?? `${a.userId}:${a.duId}:${i}`),
+      duName: String(a.duName ?? a.duCode ?? 'DU'),
+      attendant: String(a.userName ?? 'Attendant'),
+      fuels,
+      status: statuses[i] ?? 'pending',
+      declared: h ? num(h.cashHandedOver) : null,
+      variance: h ? num(h.varianceAmount) : null,
+      dropped: h ? num(h.cashDrops) : null,
+    };
+  });
+  const sorted = [
+    ...dus.filter((d) => d.status !== 'recorded'),
+    ...dus.filter((d) => d.status === 'recorded'),
+  ];
+  const recon = (shift.reconciliation ?? {}) as Row;
+  const tpl = (templates ?? []).find((t) => t.id === shift.shiftTemplateId);
+  const end = (shift.scheduledEndTime ?? tpl?.endTime) as string | null | undefined;
+  const start = (shift.scheduledStartTime ?? tpl?.startTime) as string | null | undefined;
+  const recorded = dus.length - sorted.filter((d) => d.status !== 'recorded').length;
+  return {
+    kind: 'live',
+    shiftId: String(shift.id),
+    name: String(shift.templateName ?? 'Shift'),
+    pastEnd: isHandoverDue(String(shift.openedAt), now, shift.scheduledEndTime, timeZone),
+    elapsed: formatElapsed(String(shift.openedAt), now),
+    window: start && end ? `${formatClock(start)} → ${formatClock(end)}` : null,
+    endLabel: end ? formatClock(end) : null,
+    recorded,
+    total: dus.length,
+    floats:
+      recon.openingFloat != null
+        ? num(recon.openingFloat)
+        : assignments.reduce((s, a) => s + num(a.openingFloat), 0),
+    drops: num(recon.handoverCashDrops),
+    open: dus.length - recorded,
+    dus: sorted,
+    last,
+  };
+}
+
+function clockOf(ms: number, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-IN', {
+    timeZone,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
+    .format(new Date(ms))
+    .toLowerCase();
+}
