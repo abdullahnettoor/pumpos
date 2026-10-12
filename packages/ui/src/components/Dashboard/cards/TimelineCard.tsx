@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { dashboardTimeline, groupEventPins } from '@pump/shared';
 import { Button } from '../../../pump-ds/index.js';
-import { useDayActivity } from '../../../query/dashboardActivity.js';
 import { useDashboardSummary, useShiftSummaries, useShiftTemplates } from '../../../query/hooks.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';

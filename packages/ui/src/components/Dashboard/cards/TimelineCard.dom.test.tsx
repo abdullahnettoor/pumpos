@@ -11,7 +11,6 @@ const hooks = vi.hoisted(() => ({
   useDayActivity: vi.fn(),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
-vi.mock('../../../query/dashboardActivity.js', () => ({ useDayActivity: hooks.useDayActivity }));
 
 import { TimelineCard } from './TimelineCard.js';
 import { DashboardProvider } from '../frame/DashboardContext.js';

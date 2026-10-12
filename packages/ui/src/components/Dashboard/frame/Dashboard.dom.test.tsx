@@ -24,7 +24,6 @@ const hooks = vi.hoisted(() => ({
   usePricing: vi.fn(),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
-vi.mock('../../../query/dashboardActivity.js', () => ({ useDayActivity: hooks.useDayActivity }));
 
 import { Dashboard } from './Dashboard.js';
 import { DashboardCard } from './DashboardCard.js';
