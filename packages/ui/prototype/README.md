@@ -14,8 +14,9 @@ One dashboard for every web/desktop role, with gated components. `?role=owner|ma
 
 ## Confirmation round: `dashboard-confirm.prototype.html`
 Everything still open before the spec, switchable from the bottom control bar (or URL params):
-- **Timeline**: `?tl=off|collapsed|compact|full` (off = recommended phase 1).
-- **State**: `?state=busy|late|noshift|firstday|onboarding|loading|error`.
+- **Timeline**: `?tl=auto|off|collapsed|compact|full`. Chosen: `auto` = compact strip while a shift is running, hidden otherwise.
+- **State**: `?state=busy|late|noshift|firstday|onboarding|arrive|loading|error`. `arrive` replays card-wise loading (chosen: each card has its own request).
 - **Width**: `?w=auto|1366|1180|960|760` (three → two → one column, sidebar → icon rail).
 - **Data sources**: `?src=1` labels each block with its endpoint and cache tier.
 - **Role**: `?role=owner|manager|accountant|staff`.
+- **Station switcher**: `?org=multi|single&assigned=one|many`. The breadcrumb is a dropdown only when the user can reach >1 station (Owner: org stations; others: assigned stations).

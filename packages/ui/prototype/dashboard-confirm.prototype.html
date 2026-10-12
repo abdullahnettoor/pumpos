@@ -248,7 +248,7 @@ const sidebar2 = (role) => `<aside class="side">${navFor(role).map(([g, items]) 
   <div style="margin-top:auto;padding-top:10px"><button class="nav">${ic(I.panel, 16)}Collapse</button></div></aside>`;
 const topbarB = (role) => `<div class="topbar">
   <div class="brand"><span class="mark">${ic(I.drop, 15, 2.4)}</span></div>
-  <div class="row" style="gap:6px;font-size:13px"><button class="row hi" style="gap:6px;font-weight:700">Highway Fuels ${ic(I.down, 13, 2.4)}</button><span class="fa">/</span><span class="mu" style="font-weight:600">Dashboard</span></div>
+  <div class="row" style="gap:6px;font-size:13px">${stationCount(role) > 1 ? `<button class="row hi" style="gap:6px;font-weight:700" title="${stationCount(role)} stations">Highway Fuels ${ic(I.down, 13, 2.4)}</button>` : '<span class="hi" style="font-weight:700">Highway Fuels</span>'}<span class="fa">/</span><span class="mu" style="font-weight:600">Dashboard</span></div>
   <div style="flex:1;display:flex;justify-content:center"><div class="search" style="max-width:520px;width:100%">${ic(I.search, 15)}<span class="q">Jump to anything: a customer, a shift, “new expense”…</span><span class="kbd">⌘K</span></div></div>
   <button class="btn pri">${ic(I.plus, 15, 2.4)} New ${ic(I.down, 13, 2.4)}</button>
   <button class="ibtn" title="Alerts">${ic(I.bell, 18)}<span class="badge">${role === 'Staff' ? 2 : 4}</span></button>
@@ -258,7 +258,13 @@ const topbarB = (role) => `<div class="topbar">
    CONFIRMATION ROUND: timeline options, responsive layout, empty/edge states,
    corrected handover status, data sources per card.
    =================================================================== */
-const O = {};   // filled from controls: role, state, tl, w, src
+const O = {};
+/* Stations this user can switch between: Owner = every station in the org; other roles = stations they're assigned to. */
+const stationCount = (role) => O.org === 'single' ? 1 : role === 'Owner' ? 3 : (O.assigned === 'many' ? 2 : 1);
+/* Card-wise loading: each card has its own request and appears when its data arrives. */
+let ARR = new Set(); let arriveTimers = [];
+const pending = (k) => O.state === 'arrive' && !ARR.has(k);
+const isLoading = (k) => O.state === 'loading' || pending(k);   // filled from controls: role, state, tl, w, src
 
 const SRC = {
   notice: 'GET /shifts/business-days/status · operational 15s',
@@ -294,8 +300,9 @@ function scenario() {
 
 /* ---------------- timeline: full / compact / collapsed / off ---------------- */
 function timelineBlock(role, S) {
-  if (O.tl === 'off' || O.state === 'onboarding') return '';
-  if (O.state === 'loading') return skel(O.tl === 'collapsed' ? 44 : O.tl === 'compact' ? 76 : 150);
+  const mode = O.tl === 'auto' ? (S.shiftOpen && O.state !== 'firstday-noshift' ? 'compact' : 'off') : O.tl;
+  if (mode === 'off' || O.state === 'onboarding') return '';
+  if (isLoading('timeline')) return skel(mode === 'collapsed' ? 44 : mode === 'compact' ? 88 : 150);
   const start = 6, span = 24, x = (h) => ((h - start) / span) * 100;
   const lab = (h) => { const m = h % 24; return m === 0 ? '12a' : m < 12 ? m + 'a' : m === 12 ? '12p' : (m - 12) + 'p'; };
   const noShiftYet = O.state === 'noshift';
@@ -315,14 +322,14 @@ function timelineBlock(role, S) {
     : `<div class="hatch" style="position:absolute;left:${x(14)}%;width:${x(S.now) - x(14)}%;top:TOPpx;height:Hpx;border-radius:7px;border:1.5px dashed var(--${S.late ? 'warn' : 'acc'});color:var(--hi);padding:0 8px;font-size:11.5px;font-weight:600;overflow:hidden;white-space:nowrap;display:flex;align-items:center">Shift 2 · ${S.late ? 'past end, 4 handovers due' : 'live'}</div>`;
   const nowLine = (top, bottom) => `<div style="position:absolute;left:${x(S.now)}%;top:${top}px;bottom:${bottom}px;width:2px;background:var(--bad)"></div>`;
 
-  if (O.tl === 'collapsed') return `<div class="card row" style="padding:10px 16px;margin-bottom:12px;gap:14px">
+  if (mode === 'collapsed') return `<div class="card row" style="padding:10px 16px;margin-bottom:12px;gap:14px">
       <span class="sec-t">Today</span>
       <span class="s">${noShiftYet ? 'Shift 1 not opened yet (scheduled 6:00 am)' : `Shift 1 closed 1:52 pm · <b class="num hi">₹2,16,120</b>`}</span>
       ${noShiftYet ? '' : `<span class="s">Shift 2 ${S.late ? '<b class="warn">past scheduled end</b>' : 'live since 2:00 pm'}</span>`}
       <span class="s">${ev.length} event${ev.length === 1 ? '' : 's'}${ev.some(e => e[3] === 'bad') ? ' · <b class="bad">1 alert</b>' : ''}</span>
       <button class="lnk" style="margin-left:auto">Show timeline ▾</button></div>${srcTag('timeline')}`;
 
-  if (O.tl === 'compact') {
+  if (mode === 'compact') {
     const T = 22, H = 24, rank = { bad: 4, warn: 3, good: 2, info: 1, mu: 0 };
     const cg = []; for (const e of ev) { const g = cg[cg.length - 1]; if (g && e[0] - g.at < 0.75) g.items.push(e); else cg.push({ at: e[0], items: [e] }); }
     cg.forEach(g => g.items.sort((a, b) => rank[b[3]] - rank[a[3]]));
@@ -352,7 +359,7 @@ function timelineBlock(role, S) {
 
 /* ---------------- columns ---------------- */
 function forecourtCol(role, S) {
-  if (O.state === 'loading') return `<section>${secHead('Forecourt', '', '', 'forecourt')}${skel(330)}${skel(80)}</section>`;
+  if (isLoading('forecourt')) return `<section>${secHead('Forecourt', '', '', 'forecourt')}${skel(330)}${skel(80)}</section>`;
   const head = secHead('Forecourt', S.shiftOpen ? `Shift 2 · ${S.dus.length} DU${S.dus.length > 1 ? 's' : ''}` : 'no shift open', can.shiftActions(role) ? 'Workspace ›' : 'View ›', 'forecourt');
   if (!S.shiftOpen) return `<section>${head}
     <div class="card" style="padding:22px 18px;text-align:center">
@@ -386,7 +393,7 @@ function forecourtCol(role, S) {
 }
 
 function fuelsCol(role) {
-  if (O.state === 'loading') return `<section>${secHead('Fuels', '', '', 'fuels')}${skel(190)}${skel(170)}${skel(150)}</section>`;
+  if (isLoading('fuels')) return `<section>${secHead('Fuels', 'price · density · stock', role === 'Staff' ? '' : 'Inventory ›', 'fuels')}${skel(190)}${skel(170)}${skel(150)}</section>`;
   if (O.state === 'error') return `<section>${secHead('Fuels', 'price · density · stock', 'Inventory ›', 'fuels')}${errCard('fuel stock and density')}</section>`;
   const first = O.state === 'firstday';
   const FUELS = [
@@ -418,7 +425,7 @@ function fuelsCol(role) {
 
 function moneyCol(role) {
   if (!can.money(role)) return '';
-  if (O.state === 'loading') return `<section>${secHead('Money', '', '', 'money')}${skel(260)}${skel(110)}${skel(140)}</section>`;
+  if (O.state === 'loading') return `<section>${secHead('Money', 'office records by entry date', 'Cash Book ›', 'money')}${skel(260)}${skel(110)}${skel(140)}</section>`;
   const nos = O.state === 'noshift', first = O.state === 'firstday';
   const cur = [418, 391, 446, 430, 402, 455, 431, 470, 518, 466, 442, 461, 498], prev = [402, 410, 398, 433, 421, 409, 440, 428, 455, 437, 419, 444, 451];
   const W = 320, H = 70, lo = 370, hi = 530, X = i => 2 + (i / 13) * (W - 4), Y = v => 6 + (1 - (v - lo) / (hi - lo)) * (H - 12);
@@ -437,7 +444,7 @@ function moneyCol(role) {
     : `<div class="card"><div class="ch"><span class="t">Today in the office</span><span class="r">5 entries · <span class="lnk">Cash Book ›</span></span></div>
       <table class="t">${[['Collection · Sree Transports', 25000, 'good'], ['Collection · Calicut Cabs', 13500, 'good'], ['Expense · Generator diesel', -4200, 'bad']].map(([n, v, t]) => `<tr><td>${n}</td><td class="r ${t}">${v > 0 ? '+' : ''}${inr(v)}</td></tr>`).join('')}</table></div>`;
   return `<section>${secHead('Money', 'office records by entry date', 'Cash Book ›', 'money')}
-    <div class="card" style="padding:14px;margin-bottom:8px;background:var(--hero);border-color:color-mix(in srgb, var(--acc) 25%, var(--line))">
+    ${pending('hero') ? skel(260) : (() => `    <div class="card" style="padding:14px;margin-bottom:8px;background:var(--hero);border-color:color-mix(in srgb, var(--acc) 25%, var(--line))">
       <div class="k">Sales so far today</div>
       ${nos || first ? `<div class="num hi" style="font-size:24px;font-weight:500;margin-top:4px">₹0</div><div class="s">${nos ? 'No shift has closed yet today. Fuel counts at shift close.' : 'Fuel sales appear when the first shift closes.'}</div>`
         : `<div class="num hi" style="font-size:24px;font-weight:500;margin-top:4px">${inr(D.total)}</div>
@@ -447,19 +454,20 @@ function moneyCol(role) {
         <div><div class="s">Credit</div><div class="num warn v">${inr(D.credit, true)}</div></div><div><div class="s">Cash in hand</div><div class="num v">${inr(D.cashInHand, true)}</div></div></div>`}
       ${trend}
     </div>
-    ${O.state === 'error' ? errCard('receivables') : first ? `<div class="card" style="padding:12px 14px;margin-bottom:8px"><div class="row"><span class="k">To collect</span><b class="num" style="margin-left:auto">₹0</b></div><div class="s" style="margin-top:4px">No credit customers yet · <span class="lnk">Add customer ›</span></div><div class="row" style="margin-top:10px"><span class="k">To pay</span><b class="num" style="margin-left:auto">₹0</b></div></div>`
+`)()}
+    ${pending('collect') ? skel(110) : (() => `${O.state === 'error' ? errCard('receivables') : first ? `<div class="card" style="padding:12px 14px;margin-bottom:8px"><div class="row"><span class="k">To collect</span><b class="num" style="margin-left:auto">₹0</b></div><div class="s" style="margin-top:4px">No credit customers yet · <span class="lnk">Add customer ›</span></div><div class="row" style="margin-top:10px"><span class="k">To pay</span><b class="num" style="margin-left:auto">₹0</b></div></div>`
       : `<div class="card" style="padding:12px 14px;margin-bottom:8px">
       <div class="row"><span class="k">To collect</span><b class="num warn" style="margin-left:auto">${inr(D.receivables)}</b></div>
       <div class="stack" style="margin-top:8px;height:6px"><div style="flex:42;background:var(--good)"></div><div style="flex:31;background:var(--warn)"></div><div style="flex:27;background:var(--bad)"></div></div>
       <div class="row s" style="margin-top:5px;justify-content:space-between"><span>0–7d ₹2.87L</span><span>8–30d ₹2.11L</span><span class="bad">30d+ ₹1.84L</span></div>
-      <div class="row" style="margin-top:12px"><span class="k">To pay</span><b class="num" style="margin-left:auto">${inr(D.payables)}</b></div></div>`}
-    ${office}
+      <div class="row" style="margin-top:12px"><span class="k">To pay</span><b class="num" style="margin-left:auto">${inr(D.payables)}</b></div></div>`}`)()}
+    ${pending('office') ? skel(140) : office}
   </section>`;
 }
 
 function staffCol(role, S) {
   if (role !== 'Staff') return '';
-  if (O.state === 'loading') return `<section>${secHead('Your shift', '', '', 'staff')}${skel(220)}${skel(200)}</section>`;
+  if (isLoading('staff')) return `<section>${secHead('Your shift', '', '', 'staff')}${skel(220)}${skel(200)}</section>`;
   const open = S.dus.filter(d => !d.rec).length;
   const items = [
     ...(S.shiftOpen && open ? [[S.late ? 'warn' : 'info', I.cash, S.late ? `${open} handovers overdue` : `${open} handovers to record`, S.late ? 'Shift 2 ended at 10:00 pm' : 'Before Shift 2 ends at 10:00 pm', 'Open']] : []),
@@ -498,7 +506,7 @@ function page(role) {
   const header = `<div class="row" style="gap:10px;margin-bottom:12px">
     <div style="min-width:0"><div class="ttl" style="line-height:1.1">Dashboard</div><div class="s">${O.state === 'onboarding' ? 'Highway Fuels · setup in progress' : `Business day <b class="hi">Fri 9 Oct</b> · open since 6:00 am · as of ${S.nowLabel}`}</div></div>
     ${O.state === 'onboarding' ? '' : `<div style="margin-left:auto"><button class="btn sec">${ic(I.pump, 15)} ${!S.shiftOpen && can.shiftActions(role) ? 'Open shift' : can.shiftActions(role) ? 'Shift workspace' : 'View shift'}</button></div>`}</div>
-    ${role === 'Staff' || O.state === 'onboarding' || O.state === 'firstday' ? '' : `<div class="row notice" style="gap:10px;margin-bottom:12px;padding:9px 14px;border-radius:10px;background:var(--warn-soft);border:1px solid var(--warn-line)">
+    ${role === 'Staff' || O.state === 'onboarding' || O.state === 'firstday' || pending('notice') ? '' : `<div class="row notice" style="gap:10px;margin-bottom:12px;padding:9px 14px;border-radius:10px;background:var(--warn-soft);border:1px solid var(--warn-line)">
       <span class="warn">${ic(I.lock, 15)}</span>
       <span class="s" style="font-size:12.5px"><b class="hi">7 Oct and 8 Oct are still open.</b> Their daily reports stay drafts until each day is closed.</span>
       <button class="lnk" style="margin-left:auto;white-space:nowrap">Review in Shifts ›</button></div>${srcTag('notice')}`}`;
@@ -511,14 +519,17 @@ function page(role) {
 const P = new URLSearchParams(location.search);
 O.role = ['owner', 'manager', 'accountant', 'staff'].includes(P.get('role')) ? P.get('role') : 'owner';
 O.state = P.get('state') || 'busy';
-O.tl = P.get('tl') || 'off';
+O.tl = P.get('tl') || 'auto';
+O.org = P.get('org') || 'multi';
+O.assigned = P.get('assigned') || 'one';
 O.w = P.get('w') || 'auto';
 O.src = P.get('src') === '1';
 let theme = P.get('theme') === 'dark' ? 'dark' : 'light';
 let notesOn = !P.get('clean');
 const cap = (r) => r[0].toUpperCase() + r.slice(1);
 const NOTES = {
-  tl: { off: '<b>Timeline off (recommended for phase 1).</b> The live-shift line moves into the Forecourt card, so nothing is lost; the board starts ~190px higher.',
+  tl: { auto: '<b>Timeline: by shift status (chosen).</b> Compact strip while a shift is running (incl. past its scheduled end); hidden when no shift is open, on the first day before a shift, and before onboarding.',
+        off: '<b>Timeline off (recommended for phase 1).</b> The live-shift line moves into the Forecourt card, so nothing is lost; the board starts ~190px higher.',
         collapsed: '<b>Collapsed:</b> one line (shift closed, live shift, event count, alerts) with "Show timeline ▾". Costs 44px.',
         compact: '<b>Compact:</b> 76px strip; pins closer than 45 min of the same kind are grouped (5 drops → one pin with "5").',
         full: '<b>Full:</b> the round-3 timeline, now with grouped pins. Needs <code>/activity?date=</code> + role-filtered events.' },
@@ -527,6 +538,7 @@ const NOTES = {
            noshift: '6:20 am, no shift opened yet: Forecourt shows an empty state with Open shift (roles that may), sales ₹0 with an explanation, office empty.',
            firstday: 'First business day after onboarding: 1 DU, no density history, days of cover not computable yet, no trend, no customers.',
            onboarding: 'Station not ready: today\'s Welcome + Getting started checklist stays as-is (Owner/Manager); others see "setup in progress".',
+           arrive: '<b>Card-wise loading (chosen):</b> every card has its own request and appears the moment its data lands, in any order; a slow or failed endpoint only holds up its own card. Press ↻ Replay.',
            loading: 'Loading: each column shows skeletons of its real size, so nothing jumps when data arrives.',
            error: 'One endpoint fails (fuels, receivables): only that card shows Retry; the rest stays live.' },
 };
@@ -536,11 +548,15 @@ function render() {
   document.getElementById('root').innerHTML = `<div style="${wrapW}height:100vh"><div class="app ${theme}">${page(role)}</div></div>`;
   document.getElementById('ctl').innerHTML = `
     <label>Role<select data-k="role">${['owner', 'manager', 'accountant', 'staff'].map(r => `<option ${O.role === r ? 'selected' : ''} value="${r}">${cap(r)}</option>`).join('')}</select></label>
-    <label>State<select data-k="state">${[['busy', 'Busy day'], ['late', 'Past shift end'], ['noshift', 'No shift open'], ['firstday', 'First day'], ['onboarding', 'Pre-onboarding'], ['loading', 'Loading'], ['error', 'Partial error']].map(([v, n]) => `<option ${O.state === v ? 'selected' : ''} value="${v}">${n}</option>`).join('')}</select></label>
-    <label>Timeline<select data-k="tl">${[['off', 'Off (phase 1)'], ['collapsed', 'Collapsed'], ['compact', 'Compact'], ['full', 'Full']].map(([v, n]) => `<option ${O.tl === v ? 'selected' : ''} value="${v}">${n}</option>`).join('')}</select></label>
+    <label>State<select data-k="state">${[['busy', 'Busy day'], ['late', 'Past shift end'], ['noshift', 'No shift open'], ['firstday', 'First day'], ['onboarding', 'Pre-onboarding'], ['arrive', 'Cards arriving'], ['loading', 'Loading'], ['error', 'Partial error']].map(([v, n]) => `<option ${O.state === v ? 'selected' : ''} value="${v}">${n}</option>`).join('')}</select></label>
+    <label>Timeline<select data-k="tl">${[['auto', 'By shift status'], ['off', 'Off'], ['collapsed', 'Collapsed'], ['compact', 'Compact'], ['full', 'Full']].map(([v, n]) => `<option ${O.tl === v ? 'selected' : ''} value="${v}">${n}</option>`).join('')}</select></label>
+    <label>Org<select data-k="org">${[['multi', '3 stations'], ['single', '1 station']].map(([v, n]) => `<option ${O.org === v ? 'selected' : ''} value="${v}">${n}</option>`).join('')}</select></label>
+    <label>Assigned<select data-k="assigned">${[['one', '1 station'], ['many', '2 stations']].map(([v, n]) => `<option ${O.assigned === v ? 'selected' : ''} value="${v}">${n}</option>`).join('')}</select></label>
+    ${O.state === 'arrive' ? '<button data-t="replay">↻ Replay</button>' : ''}
     <label>Width<select data-k="w">${[['auto', 'Window'], ['1366', '1366'], ['1180', '1180'], ['960', '960'], ['760', '760']].map(([v, n]) => `<option ${O.w === v ? 'selected' : ''} value="${v}">${n}</option>`).join('')}</select></label>
     <button data-t="src" class="${O.src ? 'on' : ''}">Data sources</button><button data-t="theme">◐</button><button data-t="notes">i</button>`;
-  document.querySelectorAll('#ctl select').forEach(s => s.onchange = () => { O[s.dataset.k] = s.value; render(); });
+  document.querySelectorAll('#ctl select').forEach(s => s.onchange = () => { O[s.dataset.k] = s.value; if (s.dataset.k === 'state') startArrive(); render(); });
+  const rp = document.querySelector('[data-t=replay]'); if (rp) rp.onclick = () => { startArrive(); render(); };
   document.querySelector('[data-t=src]').onclick = () => { O.src = !O.src; render(); };
   document.querySelector('[data-t=theme]').onclick = () => { theme = theme === 'dark' ? 'light' : 'dark'; render(); };
   document.querySelector('[data-t=notes]').onclick = () => { notesOn = !notesOn; render(); };
@@ -548,9 +564,17 @@ function render() {
   n.innerHTML = `<button class="x" onclick="notesOn=false;render()">✕</button><h2>Confirm before the spec</h2>
     <p>${NOTES.tl[O.tl]}</p><p>${NOTES.state[O.state] || ''}</p>
     <p><b>Responsive:</b> ≥1200 three columns · 900–1200 two columns (Fuels on the right, Money under Forecourt) and the sidebar becomes an icon rail · &lt;900 one column. Try the Width menu.</p>
-    <p><b>Data sources</b> labels each block with its endpoint and cache tier.</p>`;
-  try { const u = new URL(location.href); for (const k of ['role', 'state', 'tl', 'w']) u.searchParams.set(k, O[k]); u.searchParams.set('theme', theme); O.src ? u.searchParams.set('src', '1') : u.searchParams.delete('src'); history.replaceState(null, '', u); } catch (e) {}
+    <p><b>Data sources</b> labels each block with its endpoint and cache tier.</p>
+    <p><b>Station switcher:</b> the breadcrumb only becomes a dropdown when the user can reach more than one station. Owner = stations in the org; other roles = stations they're assigned to. Try Org / Assigned with different roles.</p>`;
+  try { const u = new URL(location.href); for (const k of ['role', 'state', 'tl', 'w', 'org', 'assigned']) u.searchParams.set(k, O[k]); u.searchParams.set('theme', theme); O.src ? u.searchParams.set('src', '1') : u.searchParams.delete('src'); history.replaceState(null, '', u); } catch (e) {}
 }
+function startArrive() {
+  arriveTimers.forEach(clearTimeout); arriveTimers = []; ARR = new Set();
+  if (O.state !== 'arrive') return;
+  [['notice', 250], ['forecourt', 450], ['hero', 600], ['staff', 700], ['timeline', 850], ['office', 1000], ['fuels', 1400], ['collect', 1900]]
+    .forEach(([k, ms]) => arriveTimers.push(setTimeout(() => { ARR.add(k); render(); }, ms)));
+}
+startArrive();
 if (P.get('clean')) { document.getElementById('ctl').style.display = 'none'; }
 addEventListener('keydown', (e) => { if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
   if (e.key === 't') { theme = theme === 'dark' ? 'light' : 'dark'; render(); } if (e.key === 'n') { notesOn = !notesOn; render(); } });
