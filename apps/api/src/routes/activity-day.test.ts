@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { activityHandler } from './activity-day.js';
-import { businessDayWindow } from '../infra/activity-day.js';
+import { businessDayWindow, entryDateWindow } from '../infra/activity-day.js';
 import { makeFakeDb } from './test-fakes.js';
 
 function makeApp(db: unknown, role = 'Manager', assignedStationIds: string[] = [STATION]) {
@@ -121,5 +122,59 @@ describe('role filtering', () => {
     }
     expect(staff).toContain('SHIFT_OPENED');
     expect(staff).toContain('DECANTATION_RECORDED');
+  });
+});
+
+describe('entryDate placement (#512)', () => {
+  const dialect = new PgDialect();
+  const capture = async (query: string, role = 'Manager') => {
+    let where = '';
+    const { db } = makeFakeDb([[station], []]);
+    const orig = db.select;
+    db.select = () => {
+      const b = orig();
+      const w = b.where;
+      b.where = (cond: any) => {
+        const q = dialect.sqlToQuery(cond);
+        where = JSON.stringify(q);
+        return w(cond);
+      };
+      return b;
+    };
+    const res = await makeApp(db, role).request(`/activity?stationId=${STATION}&${query}`);
+    return { res, where };
+  };
+
+  it('matches a back-dated expense by payload entryDate, with occurredAt fallback', async () => {
+    const { res, where } = await capture('date=2026-10-12&entryDate=2026-10-10');
+    expect(res.status).toBe(200);
+    expect(where).toContain("payload\\\" ->> 'entryDate'");
+    expect(where).toContain('2026-10-10');
+    expect(where).toContain('is null');
+  });
+
+  it('before Day Start: office window follows entryDate, not the business date', async () => {
+    // 02:00 IST with Day Start 06:00 -> business date is yesterday, entry date today.
+    const { where } = await capture('date=2026-10-11&entryDate=2026-10-12');
+    const w = entryDateWindow('2026-10-12', { timeZone: 'Asia/Kolkata' });
+    expect(where).toContain('2026-10-12');
+    expect(where).toContain(w.from.toISOString());
+    expect(w.from.toISOString()).toBe('2026-10-11T18:30:00.000Z');
+  });
+
+  it('defaults entryDate to date and rejects an invalid one', async () => {
+    const { where } = await capture('date=2026-10-12');
+    expect(where).toContain('2026-10-12');
+    const bad = await capture('date=2026-10-12&entryDate=nope');
+    expect(bad.res.status).toBe(400);
+  });
+
+  it('never offers cash-drop event types to any role', async () => {
+    const { dashboardEventTypesForRole } = await import('../infra/activity-day.js');
+    for (const role of ['Manager', 'Accountant', 'Staff'] as const) {
+      expect((dashboardEventTypesForRole(role) ?? []).some((t) => /DROP/.test(t))).toBe(false);
+    }
+    const { BusinessEvents } = await import('@pump/core');
+    expect(Object.keys(BusinessEvents).some((t) => /DROP/.test(t))).toBe(false);
   });
 });

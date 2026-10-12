@@ -30,12 +30,20 @@ const isCashDropEvent = (type: string) => /DROP/.test(type);
 
 /** Compact Business Day timeline: shift bars, merged event pins, collapsible. */
 export const TimelineCard: React.FC = () => {
-  const { station, now: nowDate, businessDate, timeZone, dayStartsAt, onNavigate } = useDashboard();
+  const {
+    station,
+    now: nowDate,
+    businessDate,
+    entryDate,
+    timeZone,
+    dayStartsAt,
+    onNavigate,
+  } = useDashboard();
   const now = nowDate.getTime();
   const enabled = useCardEnabled('timeline');
   const status = useDashboardSummary(station.id, { enabled });
   const templates = useShiftTemplates({ enabled });
-  const activity = useDayActivity(station.id, businessDate, { enabled });
+  const activity = useDayActivity(station.id, businessDate, { enabled, entryDate });
   const [collapsed, toggle] = useTimelineCollapsed();
 
   const model = useMemo(() => {

@@ -33,12 +33,13 @@ import { findStationClock, stationNotFound } from '../infra/station-clock.js';
 type Env = { Variables: { db: DbClient; user: AuthenticatedPrincipal } };
 
 /**
- * GET /activity?stationId=&date= — one Business Day's Activity Groups, oldest
+ * GET /activity?stationId=&date=[&entryDate=] — one Business Day's Activity Groups, oldest
  * first, role-filtered on the server. Two statements however many events: the
  * station clock lookup and one grouped events query.
  *
- * Office Records are placed by Entry Date (station-timezone calendar day), the
- * rest by the Business Day window (ADR 0005).
+ * Office Records are placed by their payload Entry Date (`entryDate`, default
+ * `date`), falling back to the station calendar-day window of occurredAt when
+ * the payload carries none; the rest by the Business Day window (ADR 0005).
  */
 export const activityDayHandler = async (c: Context<Env>) => {
   const date = c.req.query('date') as string;
@@ -48,6 +49,8 @@ export const activityDayHandler = async (c: Context<Env>) => {
     c.json({ success: false, error: { code: 'VALIDATION_ERROR', message } }, 400);
   if (!stationId) return bad('Missing stationId');
   if (!isValidBusinessDate(date)) return bad('date must be a valid YYYY-MM-DD date');
+  const entryDate = c.req.query('entryDate') ?? date;
+  if (!isValidBusinessDate(entryDate)) return bad('entryDate must be a valid YYYY-MM-DD date');
 
   const allowed = dashboardEventTypesForRole(user.role);
   if (allowed !== null && allowed.length === 0) {
@@ -66,11 +69,12 @@ export const activityDayHandler = async (c: Context<Env>) => {
   const clock = await findStationClock(c.var.db, user.organizationId, stationId);
   if (!clock) return stationNotFound(c);
   const { from, to } = businessDayWindow(date, clock);
-  const entry = entryDateWindow(date, clock);
+  const entry = entryDateWindow(entryDate, clock);
   // Office Records the role may see are placed by Entry Date; everything else
   // by the Business Day window. A role that sees no Office Record type (Staff)
   // binds no office type at all.
   const office = OFFICE_ACTIVITY_EVENTS.filter((t) => allowed === null || allowed.includes(t));
+  const payloadEntryDate = sql`${schema.events.payload} ->> 'entryDate'`;
   const businessWindow = and(
     gte(schema.events.occurredAt, from),
     lt(schema.events.occurredAt, to),
@@ -82,8 +86,14 @@ export const activityDayHandler = async (c: Context<Env>) => {
           and(notInArray(schema.events.eventType, office), businessWindow),
           and(
             inArray(schema.events.eventType, office),
-            gte(schema.events.occurredAt, entry.from),
-            lt(schema.events.occurredAt, entry.to),
+            or(
+              eq(payloadEntryDate, entryDate),
+              and(
+                isNull(payloadEntryDate),
+                gte(schema.events.occurredAt, entry.from),
+                lt(schema.events.occurredAt, entry.to),
+              ),
+            ),
           ),
         )!;
 
