@@ -10,6 +10,9 @@ const hooks = vi.hoisted(() => ({
   useDashboardSummary: vi.fn(),
   useShiftStatus: vi.fn(),
   useShiftTemplates: vi.fn(),
+  usePricing: vi.fn(),
+  useDensityTodaySummary: vi.fn(),
+  useInventoryStatus: vi.fn(),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
 
@@ -32,6 +35,9 @@ beforeEach(() => {
   hooks.useDashboardSummary.mockReturnValue(ok({ activeShift: null }));
   hooks.useShiftStatus.mockReturnValue(ok({ activeShift: null }));
   hooks.useShiftTemplates.mockReturnValue(ok([]));
+  hooks.usePricing.mockReturnValue(ok([]));
+  hooks.useDensityTodaySummary.mockReturnValue(ok({ products: [] }));
+  hooks.useInventoryStatus.mockReturnValue(ok([]));
 });
 afterEach(() => {
   cleanup();
