@@ -99,9 +99,12 @@ describe('ForecourtCard live', () => {
     ]);
     expect(screen.getAllByText('Pending')).toHaveLength(5);
     expect(screen.getByText('1 / 6')).toBeTruthy();
+    expect(screen.queryByText(/Drops/)).toBeNull();
+    expect(screen.queryByText('dropped')).toBeNull();
+    expect(rows[0].textContent).not.toMatch(/₹/);
     expect(screen.getByText(/Live 3h 12m/)).toBeTruthy();
     expect(screen.getByText('5 to hand over by 10:00 pm')).toBeTruthy();
-    expect(within(rows[5]).getByTestId('variance-badge').textContent).toBe('Tallied');
+    expect(within(rows[5]).getByTestId('variance-badge').textContent).toBe('Balanced');
   });
 
   it('past end: Handover due + overdue; 1-DU layout', () => {
@@ -151,6 +154,43 @@ describe('ForecourtCard idle', () => {
     expect(nav).toHaveBeenCalledWith('/shifts');
     fireEvent.click(screen.getByText('Summary ›'));
     expect(nav).toHaveBeenCalledWith('/shifts', { openShiftSummaryId: 's1' });
+  });
+
+  it('day done: Day’s shifts done, no Open shift, even for Owner', () => {
+    vi.setSystemTime(Date.parse('2026-10-09T23:00:00+05:30'));
+    hooks.useShiftStatus.mockReturnValue(ok({ activeShift: null }));
+    hooks.useDashboardSummary.mockReturnValue(
+      ok({
+        ...idleSummary,
+        lastShift: { id: 's2', templateName: 'Shift 2', businessDate: '2026-10-08' },
+        today: {
+          shifts: [
+            {
+              shiftTemplateId: 't1',
+              openedAt: '2026-10-09T00:30:00.000Z',
+              closedAt: '2026-10-09T08:22:00.000Z',
+            },
+            {
+              shiftTemplateId: 't2',
+              openedAt: '2026-10-09T08:30:00.000Z',
+              closedAt: '2026-10-09T16:30:00.000Z',
+            },
+          ],
+        },
+      }),
+    );
+    mount('Owner');
+    expect(screen.getByText('Day’s shifts done')).toBeTruthy();
+    expect(screen.queryByText('Between shifts')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open shift' })).toBeNull();
+    expect(screen.getByTestId('last-closed').textContent).toContain('Shift 2 · Thu 8 Oct');
+  });
+
+  it('no shift open: Owner gets a primary Open shift', () => {
+    vi.setSystemTime(Date.parse('2026-10-09T06:20:00+05:30'));
+    hooks.useShiftStatus.mockReturnValue(ok({ activeShift: null }));
+    mount('Owner');
+    expect(screen.getByRole('button', { name: 'Open shift' })).toBeTruthy();
   });
 
   it('no shift open: no Open shift for Accountant', () => {

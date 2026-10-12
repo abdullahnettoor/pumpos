@@ -46,7 +46,7 @@ describe('deriveForecourt live', () => {
       ['DU3', 'pending'],
       ['DU1', 'recorded'],
     ]);
-    expect([m.recorded, m.total, m.open, m.floats, m.drops]).toEqual([1, 3, 2, 6000, 5000]);
+    expect([m.recorded, m.total, m.open, m.floats]).toEqual([1, 3, 2, 6000]);
     expect(m.endLabel).toBe('10:00 pm');
     expect(m.dus[2]).toMatchObject({ declared: 41000, variance: -120 });
     expect(m.dus[0].fuels).toBe('N3 (HSD)');
@@ -107,5 +107,42 @@ describe('deriveForecourt idle', () => {
       hint: 'Shift 1 is scheduled from 6:00 am.',
       last: null,
     });
+  });
+  it('Day Start order: a 00:00 template is not first when the day starts 06:00', () => {
+    const m = deriveForecourt({
+      ...base,
+      templates: [
+        { id: 'n', name: 'Night', startTime: '00:00', endTime: '06:00', isActive: true },
+        { id: 'm', name: 'Morning', startTime: '06:00', endTime: '14:00', isActive: true },
+      ],
+      status: { activeShift: null },
+      now: ist('06:20'),
+    });
+    expect(m).toMatchObject({ kind: 'none', hint: 'Morning is scheduled from 6:00 am.' });
+  });
+  it('day done when no window remains', () => {
+    const m = deriveForecourt({
+      ...base,
+      templates,
+      status: { activeShift: null },
+      summary: {
+        today: {
+          shifts: [
+            {
+              shiftTemplateId: 't1',
+              openedAt: new Date(ist('06:00')).toISOString(),
+              closedAt: new Date(ist('13:52')).toISOString(),
+            },
+            {
+              shiftTemplateId: 't2',
+              openedAt: new Date(ist('14:00')).toISOString(),
+              closedAt: new Date(ist('21:50')).toISOString(),
+            },
+          ],
+        },
+      },
+      now: ist('23:00'),
+    });
+    expect(m.kind).toBe('done');
   });
 });
