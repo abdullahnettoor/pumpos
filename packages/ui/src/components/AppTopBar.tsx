@@ -17,7 +17,7 @@ import {
   LayoutDashboard,
   Fuel,
 } from 'lucide-react';
-import { type Station } from '@pump/shared';
+import { type Station, reachableStations, showStationDropdown } from '@pump/shared';
 import { preReadyQuickCreateIds, type PreReadyQuickCreateId } from './quickCreateActions.js';
 import type { NavIntent } from './AppShell.js';
 import { openQuickEntry } from '../quick-entry/store.js';
@@ -64,7 +64,13 @@ export interface AppTopBarProps {
   pendingSyncCount?: number;
   onNavigate: (path: string, intent?: NavIntent) => void;
   onLogout: () => void | Promise<unknown>;
-  onToggleSidebar?: () => void;
+  /** Organization stations (already scoped server-side for non-owners). */
+  stations?: Station[];
+  /** The user's assigned station ids; defaults to `stations` (the API filters). */
+  assignedStationIds?: string[];
+  onStationChange?: (station: Station) => void;
+  /** Current page label, the breadcrumb's second segment. */
+  pageLabel?: string;
   /** When false the active station isn't operational yet (pre-onboarding hub):
    *  hide station alerts and operational quick-create; scope the
    *  “+ New” menu to getting-started actions. */
@@ -82,7 +88,10 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   pendingSyncCount = 0,
   onNavigate,
   onLogout,
-  onToggleSidebar,
+  stations = [],
+  assignedStationIds,
+  onStationChange,
+  pageLabel,
   stationReady = true,
   userMenuExtras,
 }) => {
@@ -98,6 +107,24 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   const { data: suppliers } = useSuppliers(true, { enabled: canSeeFinancials } as any);
   const { data: products } = useProducts();
   const stationAlerts = useStationAlerts(stationId, stationReady && canSeeFinancials);
+
+  // --- station breadcrumb: a dropdown only when more than one station is reachable ---
+  const stationSwitcher = useMemo(() => {
+    if (!onStationChange) return null;
+    const reachable = reachableStations(
+      { role: userRole, assignedStationIds: assignedStationIds ?? stations.map((s) => s.id) },
+      stations,
+    );
+    if (!showStationDropdown(reachable)) return null;
+    return {
+      stations: reachable.map((s) => ({ id: s.id, name: s.name })),
+      selectedId: selectedStation?.id,
+      onSelect: (id: string) => {
+        const next = reachable.find((s) => s.id === id);
+        if (next) onStationChange(next);
+      },
+    };
+  }, [stations, assignedStationIds, userRole, selectedStation?.id, onStationChange]);
 
   // --- quick create ---
   const quickCreate: QuickCreateAction[] = useMemo(() => {
@@ -351,9 +378,10 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
     <>
       <TopBar
         titleBar={titleBar}
-        onToggleSidebar={onToggleSidebar}
         brand={<PumpOSLockup />}
         stationName={selectedStation?.name}
+        stationSwitcher={stationSwitcher}
+        pageLabel={pageLabel}
         onOpenSearch={() => setOpen(true)}
         quickCreate={quickCreate}
         notifications={notifications}

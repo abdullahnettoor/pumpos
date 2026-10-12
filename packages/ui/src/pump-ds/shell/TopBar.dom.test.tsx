@@ -7,7 +7,6 @@ import { TopBar, type TitleBarIntegration } from './TopBar.js';
 afterEach(cleanup);
 
 const baseProps = {
-  onToggleSidebar: () => {},
   brand: 'PumpOS',
   userName: 'Asha Menon',
   userInitials: 'AM',
@@ -69,12 +68,23 @@ describe('TopBar as the desktop title bar', () => {
     }
   });
 
-  it('leaves the sidebar toggle clickable', () => {
-    const onToggleSidebar = vi.fn();
-    render(<TopBar {...baseProps} onToggleSidebar={onToggleSidebar} titleBar={macTitleBar} />);
-
-    fireEvent.click(screen.getByLabelText('Toggle sidebar'));
-    expect(onToggleSidebar).toHaveBeenCalledTimes(1);
+  it('leaves the station switcher clickable', () => {
+    render(
+      <TopBar
+        {...baseProps}
+        stationName="Indiranagar HP"
+        stationSwitcher={{
+          stations: [
+            { id: 's1', name: 'Indiranagar HP' },
+            { id: 's2', name: 'Whitefield' },
+          ],
+          selectedId: 's1',
+          onSelect: () => {},
+        }}
+        titleBar={macTitleBar}
+      />,
+    );
+    expect(screen.getByTestId('topbar-station').hasAttribute('data-tauri-drag-region')).toBe(false);
   });
 
   it('draws no window buttons where the OS still paints its own', () => {
@@ -206,5 +216,36 @@ describe('TopBar search trigger', () => {
     const search = screen.getByLabelText('Search');
     // Icon button: no centered-absolute positioning, sits in the right cluster.
     expect(search.className).not.toContain('left-1/2');
+  });
+});
+
+describe('TopBar station breadcrumb', () => {
+  it('shows plain text without a switcher', () => {
+    render(<TopBar {...baseProps} stationName="Indiranagar HP" pageLabel="Shifts" />);
+    const station = screen.getByTestId('topbar-station');
+    expect(station.tagName).toBe('SPAN');
+    expect(screen.getByTestId('topbar-page').textContent).toBe('Shifts');
+  });
+
+  it('shows a dropdown trigger when a switcher is given', () => {
+    render(
+      <TopBar
+        {...baseProps}
+        stationName="Indiranagar HP"
+        stationSwitcher={{
+          stations: [
+            { id: 's1', name: 'Indiranagar HP' },
+            { id: 's2', name: 'Whitefield' },
+          ],
+          selectedId: 's1',
+          onSelect: vi.fn(),
+        }}
+      />,
+    );
+    // Radix menu content is a portal jsdom can't drive; the contract here is
+    // that the station is a menu trigger (the Menu tests cover selection).
+    const trigger = screen.getByTestId('topbar-station');
+    expect(trigger.tagName).toBe('BUTTON');
+    expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
   });
 });
