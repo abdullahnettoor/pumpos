@@ -34,6 +34,21 @@ export interface Bar {
   late: boolean;
   /** Short sequence label ("Shift 2"). */
   name: string;
+  /** Actual times for the tooltip ("Opened 5:49 am · closed 1:52 pm"); null for a ghost. */
+  times: string | null;
+}
+
+/** The shift's Scheduled Shift Window on the axis, when its template is known. */
+function scheduledWindow(s: ShiftBarInput): { start: number; end: number } | null {
+  if (s.scheduledStartAt == null || s.scheduledEndAt == null) return null;
+  return s.scheduledEndAt > s.scheduledStartAt
+    ? { start: s.scheduledStartAt, end: s.scheduledEndAt }
+    : null;
+}
+
+function actualTimes(s: ShiftBarInput, timeZone: string): string {
+  const opened = `Opened ${clockLabel(Date.parse(s.openedAt), timeZone)}`;
+  return s.closedAt ? `${opened} · closed ${clockLabel(Date.parse(s.closedAt), timeZone)}` : opened;
 }
 
 const clampPct = (v: number) => Math.max(0, Math.min(100, v));
@@ -53,8 +68,12 @@ export function buildBars(
   timeZone: string,
 ): Bar[] {
   const bars: Bar[] = shifts.map((s) => {
-    const start = Date.parse(s.openedAt);
-    const end = s.closedAt ? Date.parse(s.closedAt) : now;
+    // The bar spans the shift's Scheduled Shift Window (its template timing);
+    // the actual opening is shown by the opening chip. A shift with no known
+    // window (ad-hoc, template since removed) falls back to its real times.
+    const window = scheduledWindow(s);
+    const start = window ? window.start : Date.parse(s.openedAt);
+    const end = window ? window.end : s.closedAt ? Date.parse(s.closedAt) : now;
     const left = axisPct(start, tl);
     const name = s.sequence ? `Shift ${s.sequence}` : s.name;
     const kind = s.closedAt ? 'closed' : 'running';
@@ -75,6 +94,7 @@ export function buildBars(
       name,
       text,
       late,
+      times: actualTimes(s, timeZone),
       varianceText:
         kind === 'closed' && s.variance
           ? `${s.variance < 0 ? '−' : '+'}${money(Math.abs(s.variance))}`
@@ -92,6 +112,7 @@ export function buildBars(
       kind: 'ghost',
       label: tl.nextWindow.name,
       name: `Shift ${shifts.length + 1}`,
+      times: null,
       text: `Shift ${shifts.length + 1} · scheduled ${formatClockInZone(tl.nextWindow.startAt, timeZone)}, not opened yet`,
       late: false,
       varianceText: null,
@@ -224,7 +245,9 @@ export function openingChips(
       tone = 'info';
       text = `${base} · ${-diff}m early`;
     }
-    return { id: s.id, leftPct: axisPct(opened, tl), text, tone };
+    // Anchored to the start of the bar, which sits on the scheduled window.
+    const anchor = scheduledWindow(s)?.start ?? opened;
+    return { id: s.id, leftPct: axisPct(anchor, tl), text, tone };
   });
 }
 

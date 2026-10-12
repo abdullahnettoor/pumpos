@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { axisTicks, openingChips, scheduleSegments, type ShiftBarInput } from './timelineModel.js';
+import {
+  axisTicks,
+  buildBars,
+  openingChips,
+  scheduleSegments,
+  type ShiftBarInput,
+} from './timelineModel.js';
 
 const MIN = 60_000;
 const tl = { dayStartAt: Date.UTC(2026, 9, 12, 0, 30), dayEndAt: Date.UTC(2026, 9, 13, 0, 30) }; // 6 am IST
@@ -87,5 +93,34 @@ describe('openingChips', () => {
   });
   it('is info when early', () => {
     expect(chip(-20)).toMatchObject({ tone: 'info', text: 'Opened 5:40 am · 20m early' });
+  });
+});
+
+describe('buildBars', () => {
+  const full = { ...tl, visible: true, reason: null, businessDate: '2026-10-12', nextWindow: null };
+  const base: ShiftBarInput = {
+    id: 's1',
+    name: 'Morning',
+    sequence: 1,
+    openedAt: new Date(tl.dayStartAt - 11 * MIN).toISOString(), // opened 11m early
+    closedAt: new Date(tl.dayStartAt + 7.9 * 60 * MIN).toISOString(),
+    total: 100,
+    variance: 0,
+    scheduledStartAt: tl.dayStartAt,
+    scheduledEndAt: tl.dayStartAt + 8 * 60 * MIN,
+  };
+
+  it('spans the Scheduled Shift Window, not the real open and close', () => {
+    const [bar] = buildBars([base], full, tl.dayStartAt + 10 * 60 * MIN, 'Asia/Kolkata');
+    expect(bar.leftPct).toBe(0);
+    expect(bar.widthPct).toBeCloseTo(33.33, 1);
+    expect(bar.times).toBe('Opened 5:49 am · closed 1:54 pm');
+  });
+
+  it('falls back to the real times when the shift has no known window', () => {
+    const adHoc = { ...base, scheduledStartAt: null, scheduledEndAt: null };
+    const [bar] = buildBars([adHoc], full, tl.dayStartAt + 10 * 60 * MIN, 'Asia/Kolkata');
+    expect(bar.leftPct).toBe(0); // clamped: opened before Day Start
+    expect(bar.widthPct).toBeCloseTo((7.9 / 24) * 100, 1);
   });
 });

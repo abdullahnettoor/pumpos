@@ -163,31 +163,8 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
   timeZone,
   onOpen,
 }) => (
-  <div className="relative mt-1 h-[92px] select-none" data-testid="timeline-strip">
-    <div className="absolute inset-x-0 top-10 h-6 overflow-hidden rounded-[7px] bg-surface-alt">
-      {segments.map((g) => (
-        <div
-          key={g.key}
-          data-testid="timeline-window"
-          className="absolute inset-y-0 border-l border-border-soft bg-surface-alt"
-          style={{ left: `${g.leftPct}%`, width: `${g.widthPct}%` }}
-        />
-      ))}
-    </div>
-    <div className="absolute inset-x-0 top-[66px] h-3.5 text-[10px] text-ink-faint">
-      {segments
-        .filter((g) => g.label)
-        .map((g) => (
-          <span
-            key={g.key}
-            data-testid="timeline-window-label"
-            className="absolute truncate whitespace-nowrap pl-1"
-            style={{ left: `${g.leftPct}%`, width: `${g.widthPct}%` }}
-          >
-            {g.label}
-          </span>
-        ))}
-    </div>
+  <div className="relative mt-1 h-[80px] select-none" data-testid="timeline-strip">
+    <div className="absolute inset-x-0 top-10 h-6 rounded-[7px] bg-surface-alt" />
     {chips.map((c) => (
       <span
         key={c.id}
@@ -202,7 +179,7 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
       <div
         key={b.id}
         data-testid={`timeline-bar-${b.kind}`}
-        title={b.text}
+        title={b.times ? `${b.text} · ${b.times}` : b.text}
         className={`absolute top-10 flex h-6 items-center overflow-hidden whitespace-nowrap rounded-[7px] px-2 text-[11.5px] ${
           b.late ? 'border-warning-fg' : b.kind === 'running' ? 'border-brand' : ''
         } ${BAR_CLASS[b.kind]}`}
@@ -236,7 +213,7 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
         <span
           key={t.leftPct}
           data-testid="timeline-axis-label"
-          className={`absolute ${i === 0 ? '' : i === all.length - 1 ? '-translate-x-full' : '-translate-x-1/2'}`}
+          className={`absolute whitespace-nowrap ${i === 0 ? '' : i === all.length - 1 ? '-translate-x-full' : '-translate-x-1/2'}`}
           style={{ left: `${t.leftPct}%` }}
         >
           {t.label}

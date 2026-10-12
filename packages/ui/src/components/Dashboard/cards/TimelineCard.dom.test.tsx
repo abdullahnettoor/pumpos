@@ -154,18 +154,20 @@ describe('TimelineCard', () => {
     expect(screen.getByTestId('timeline-now').className).toContain('bg-brand-danger');
   });
 
-  it('shows window labels and a late opening chip', () => {
+  it('draws the bar on the template window and marks the real opening with a chip', () => {
     hooks.useDashboardSummary.mockReturnValue(
       ok({ today: { shifts: [shift({ openedAt: '2026-10-12T01:10:00Z' })] } }), // 6:40 am IST
     );
     mount();
-    expect(screen.getAllByTestId('timeline-window-label').map((n) => n.textContent)).toEqual([
-      'Shift 1 · 6:00 am–2:00 pm',
-      'Shift 2 · 2:00 pm–10:00 pm',
-    ]);
-    expect(screen.getByTestId('timeline-opening-chip').textContent).toBe(
-      'Opened 6:40 am · 40m late',
-    );
+    // Shift 1 is scheduled 6:00 am–2:00 pm on a 6:00 am Day Start: 0% → 33.3%.
+    const bar = screen.getByTestId('timeline-bar-running');
+    expect(parseFloat(bar.style.left)).toBe(0);
+    expect(parseFloat(bar.style.width)).toBeCloseTo(33.33, 1);
+    expect(bar.title).toContain('Opened 6:40 am');
+    expect(screen.queryByTestId('timeline-window-label')).toBeNull();
+    const chip = screen.getByTestId('timeline-opening-chip');
+    expect(chip.textContent).toBe('Opened 6:40 am · 40m late');
+    expect(parseFloat(chip.style.left)).toBe(0);
   });
 
   it('labels a running bar live, and past end with a warning border', () => {
@@ -204,7 +206,7 @@ describe('TimelineCard', () => {
     );
   });
 
-  it('shows a 76px placeholder while loading, and nothing once known hidden', () => {
+  it('shows a placeholder while loading, and nothing once known hidden', () => {
     hooks.useDashboardSummary.mockReturnValue({
       data: undefined,
       isPending: true,
@@ -213,7 +215,7 @@ describe('TimelineCard', () => {
     });
     const { container } = mount();
     const ph = container.querySelector('[aria-busy="true"]') as HTMLElement;
-    expect(ph.style.height).toBe('92px');
+    expect(ph.style.height).toBe('90px');
   });
 
   it('does not show cash-drop events as pins', () => {
