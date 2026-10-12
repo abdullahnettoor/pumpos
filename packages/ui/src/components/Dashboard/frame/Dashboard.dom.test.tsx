@@ -9,8 +9,8 @@ const hooks = vi.hoisted(() => ({
   useBusinessDayStatus: vi.fn(),
   useDashboardSummary: vi.fn(),
   // Your shift (Staff) reads these; hidden for other roles, so never asserted here.
-  useShiftStatus: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
-  useShiftTemplates: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
+  useShiftStatus: vi.fn(),
+  useShiftTemplates: vi.fn(),
   useDensityTodaySummary: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
   useInventoryStatus: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
   useInventoryItems: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
@@ -34,6 +34,8 @@ beforeEach(() => {
   stub = stubContainerWidth(1300);
   hooks.useBusinessDayStatus.mockReturnValue(ok({ pastOpenBusinessDays: [] }));
   hooks.useDashboardSummary.mockReturnValue(ok({ activeShift: null }));
+  hooks.useShiftStatus.mockReturnValue(ok({ activeShift: null }));
+  hooks.useShiftTemplates.mockReturnValue(ok([]));
 });
 afterEach(() => {
   cleanup();
@@ -70,7 +72,8 @@ describe('header', () => {
   it('shows Open shift when none open and navigates', () => {
     const nav = vi.fn();
     mount('Manager', nav);
-    fireEvent.click(screen.getByRole('button', { name: /open shift/i }));
+    // The header and the Forecourt card both offer Open shift; the header's comes first.
+    fireEvent.click(screen.getAllByRole('button', { name: /open shift/i })[0]);
     expect(nav).toHaveBeenCalledWith('/shifts');
     expect(screen.getByText(/open since 6:00 am/)).toBeTruthy();
   });

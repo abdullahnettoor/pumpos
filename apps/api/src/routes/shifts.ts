@@ -239,6 +239,8 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         COALESCE((ss.snapshot_data ->> 'totalVolumeSold')::numeric,
                  (ss.snapshot_data ->> 'totalVolume')::numeric, 0) AS "totalVolumeSold",
         COALESCE((ss.snapshot_data ->> 'closingCash')::numeric, 0) AS "closingCash",
+        COALESCE((ss.snapshot_data ->> 'totalFuelSalesValue')::numeric, 0) AS "totalFuelSalesValue",
+        COALESCE((ss.snapshot_data ->> 'cashVariance')::numeric, 0) AS "cashVariance",
         COALESCE(ss.snapshot_data -> 'fuelByProduct', '[]'::jsonb) AS "fuelByProduct"
       FROM shifts s
       LEFT JOIN shift_templates t ON t.id = s.shift_template_id
@@ -259,11 +261,23 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
       JOIN business_days bd ON bd.id = s.business_day_id
       WHERE s.organization_id = ${orgId} AND s.station_id = ${stationId}
         AND bd.business_date = ${todayBusinessDate}
+    ),
+    today_shifts AS (
+      SELECT COALESCE(jsonb_agg(jsonb_build_object(
+        'shiftTemplateId', s.shift_template_id,
+        'openedAt', ${sql.raw(isoTs('s.opened_at'))},
+        'closedAt', ${sql.raw(isoTs('s.closed_at'))}
+      ) ORDER BY s.opened_at), '[]'::jsonb) AS j
+      FROM shifts s
+      JOIN business_days bd ON bd.id = s.business_day_id
+      WHERE s.organization_id = ${orgId} AND s.station_id = ${stationId}
+        AND bd.business_date = ${todayBusinessDate}
     )
     SELECT
       (SELECT row_to_json(open_shift) FROM open_shift) AS open_shift,
       (SELECT row_to_json(last_shift) FROM last_shift) AS last_shift,
-      (SELECT row_to_json(today) FROM today) AS today
+      (SELECT row_to_json(today) FROM today) AS today,
+      (SELECT j FROM today_shifts) AS today_shifts
   `);
 
   const openRaw = (row as any)?.open_shift as Record<string, any> | null;
@@ -311,6 +325,8 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
       ? {
           totalVolumeSold: Number(lastRaw.totalVolumeSold),
           closingCash: Number(lastRaw.closingCash),
+          totalFuelSalesValue: Number(lastRaw.totalFuelSalesValue ?? 0),
+          cashVariance: Number(lastRaw.cashVariance ?? 0),
           fuelUnits: Array.from(
             new Set(
               ((lastRaw.fuelByProduct as any[]) ?? []).map((p: any) => String(p?.unit ?? 'L')),
@@ -334,6 +350,8 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         fuelSalesValue: Number(todayRaw?.fuelSalesValue ?? 0),
         volume: Number(todayRaw?.volume ?? 0),
         cashVariance: Number(todayRaw?.cashVariance ?? 0),
+        /** Every shift of the current Business Day (feeds the dashboard timeline). */
+        shifts: ((row as any)?.today_shifts as unknown[] | null) ?? [],
       },
     },
   });
