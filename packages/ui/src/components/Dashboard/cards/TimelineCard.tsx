@@ -141,7 +141,7 @@ export const TimelineCard: React.FC = () => {
       card="timeline"
       title="Timeline"
       query={[status, templates, activity]}
-      placeholderHeight={90}
+      placeholderHeight={80}
     >
       {model &&
         (collapsed ? (

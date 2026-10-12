@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  axisTicks,
   buildBars,
+  hourTicks,
   openingChips,
   scheduleSegments,
   type ShiftBarInput,
@@ -42,31 +42,6 @@ describe('scheduleSegments', () => {
     expect(segs[0].leftPct + segs[0].widthPct).toBeCloseTo(100);
     expect(segs[1]).toMatchObject({ leftPct: 0, label: null });
     expect(segs[1].widthPct).toBeCloseTo((240 / 1440) * 100);
-  });
-});
-
-describe('axisTicks', () => {
-  it('ticks window starts and the final Day Start', () => {
-    const segs = scheduleSegments(
-      [tpl('a', '06:00', '14:00'), tpl('b', '14:00', '22:00'), tpl('c', '22:00', '06:00')],
-      tl,
-      '06:00',
-    );
-    expect(axisTicks(segs, tl, 'Asia/Kolkata').map((t) => t.label)).toEqual([
-      '6 am',
-      '2 pm',
-      '10 pm',
-      '6 am',
-    ]);
-  });
-
-  it('drops ticks closer than 4%', () => {
-    const segs = scheduleSegments(
-      [tpl('a', '06:00', '06:30'), tpl('b', '06:30', '14:00')],
-      tl,
-      '06:00',
-    );
-    expect(axisTicks(segs, tl, 'Asia/Kolkata').map((t) => t.leftPct)).toEqual([0, 100]);
   });
 });
 
@@ -122,5 +97,53 @@ describe('buildBars', () => {
     const [bar] = buildBars([adHoc], full, tl.dayStartAt + 10 * 60 * MIN, 'Asia/Kolkata');
     expect(bar.leftPct).toBe(0); // clamped: opened before Day Start
     expect(bar.widthPct).toBeCloseTo((7.9 / 24) * 100, 1);
+  });
+});
+
+describe('hourTicks', () => {
+  const segs = scheduleSegments(
+    [tpl('am', '06:00', '14:00'), tpl('pm', '14:00', '22:00'), tpl('nt', '22:00', '06:00')],
+    tl,
+    '06:00',
+  );
+  it('ticks every hour Day Start to Day Start and marks template boundaries major', () => {
+    const t = hourTicks(segs, tl, 'Asia/Kolkata');
+    expect(t).toHaveLength(25);
+    expect(t[0]).toMatchObject({ label: '6a', major: true });
+    expect(t[1]).toMatchObject({ label: '7a', major: false });
+    expect(t[8]).toMatchObject({ label: '2p', major: true });
+    expect(t[16]).toMatchObject({ label: '10p', major: true });
+    expect(t[24]).toMatchObject({ label: '6a', major: true });
+  });
+  it('ticks on the hour after a half-hour Day Start', () => {
+    const half = { dayStartAt: tl.dayStartAt - 30 * MIN, dayEndAt: tl.dayEndAt - 30 * MIN }; // 5:30 am
+    const t = hourTicks([], half, 'Asia/Kolkata');
+    expect(t[0].label).toBe('6a');
+    expect(t[0].leftPct).toBeCloseTo((30 / 1440) * 100, 3);
+  });
+});
+
+describe('running bar progress', () => {
+  it('is the elapsed share of the window', () => {
+    const full = {
+      ...tl,
+      visible: true,
+      reason: null,
+      businessDate: '2026-10-12',
+      nextWindow: null,
+    };
+    const live: ShiftBarInput = {
+      id: 'l',
+      name: 'S',
+      sequence: 1,
+      openedAt: new Date(tl.dayStartAt).toISOString(),
+      closedAt: null,
+      total: null,
+      variance: null,
+      scheduledStartAt: tl.dayStartAt,
+      scheduledEndAt: tl.dayStartAt + 8 * 60 * MIN,
+    };
+    const [bar] = buildBars([live], full, tl.dayStartAt + 2 * 60 * MIN, 'Asia/Kolkata');
+    expect(bar.progress).toBeCloseTo(0.25, 5);
   });
 });

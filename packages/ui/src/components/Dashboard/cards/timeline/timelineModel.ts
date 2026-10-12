@@ -1,5 +1,10 @@
 import type { DashboardTimeline, EventPin, TimelineTemplate } from '@pump/shared';
-import { formatClockInZone, formatHHMM, formatMoney } from '../../../../utils/format.js';
+import {
+  formatAxisHour,
+  formatClockInZone,
+  formatHHMM,
+  formatMoney,
+} from '../../../../utils/format.js';
 
 export interface ShiftBarInput {
   id: string;
@@ -36,6 +41,8 @@ export interface Bar {
   name: string;
   /** Actual times for the tooltip ("Opened 5:49 am · closed 1:52 pm"); null for a ghost. */
   times: string | null;
+  /** Running shift: share of its window already elapsed (0–1), hatched up to now. */
+  progress: number | null;
 }
 
 /** The shift's Scheduled Shift Window on the axis, when its template is known. */
@@ -95,6 +102,10 @@ export function buildBars(
       text,
       late,
       times: actualTimes(s, timeZone),
+      progress:
+        kind === 'running' && end > start
+          ? Math.max(0, Math.min(1, (now - start) / (end - start)))
+          : null,
       varianceText:
         kind === 'closed' && s.variance
           ? `${s.variance < 0 ? '−' : '+'}${money(Math.abs(s.variance))}`
@@ -113,6 +124,7 @@ export function buildBars(
       label: tl.nextWindow.name,
       name: `Shift ${shifts.length + 1}`,
       times: null,
+      progress: null,
       text: `Shift ${shifts.length + 1} · scheduled ${formatClockInZone(tl.nextWindow.startAt, timeZone)}, not opened yet`,
       late: false,
       varianceText: null,
@@ -127,8 +139,6 @@ export function buildBars(
 
 /** Opening within this many minutes of the scheduled start counts as on time. */
 export const OPENING_TOLERANCE_MIN = 15;
-/** Axis ticks closer than this (percent of the axis) are dropped. */
-const TICK_MIN_GAP_PCT = 4;
 
 const toMin = (hhmm: string): number => {
   const m = /^(\d{1,2}):(\d{2})/.exec(hhmm);
@@ -197,27 +207,6 @@ export function scheduleSegments(
   return out;
 }
 
-/** Axis ticks at each window start plus the final Day Start, deduped when close. */
-export function axisTicks(
-  segments: readonly ScheduleSegment[],
-  tl: Pick<DashboardTimeline, 'dayStartAt' | 'dayEndAt'>,
-  timeZone: string,
-): { leftPct: number; label: string }[] {
-  const pcts = [0, ...segments.filter((s) => s.leftPct > 0).map((s) => s.leftPct), 100];
-  const out: { leftPct: number; label: string }[] = [];
-  for (const p of pcts) {
-    const prev = out.at(-1);
-    if (prev && p - prev.leftPct < TICK_MIN_GAP_PCT) {
-      // Keep the final Day Start; drop the earlier near-duplicate.
-      if (p === 100) out.pop();
-      else continue;
-    }
-    const at = tl.dayStartAt + (p / 100) * (tl.dayEndAt - tl.dayStartAt);
-    out.push({ leftPct: p, label: clockLabel(Math.round(at / 60_000) * 60_000, timeZone) });
-  }
-  return out;
-}
-
 export interface OpeningChip {
   id: string;
   leftPct: number;
@@ -280,3 +269,43 @@ export function scheduledEndAt(
 /** Clock time in the station timezone: "6 am", "1:52 pm". */
 export const clockLabel = (at: number, timeZone: string): string =>
   formatClockInZone(at, timeZone, { compact: true });
+
+export interface HourTick {
+  leftPct: number;
+  label: string;
+  /** Day Start, the final Day Start and every template window start. */
+  major: boolean;
+}
+
+/**
+ * One tick per hour from Day Start to the next Day Start ("6a", "7a", …),
+ * with the shift template boundaries marked as major so the schedule reads
+ * off the axis. Hours are taken on the station clock, so a half-hour Day
+ * Start (05:30) still ticks on the hour.
+ */
+export function hourTicks(
+  segments: readonly ScheduleSegment[],
+  tl: Pick<DashboardTimeline, 'dayStartAt' | 'dayEndAt'>,
+  timeZone: string,
+): HourTick[] {
+  const span = tl.dayEndAt - tl.dayStartAt;
+  const majors = new Set([
+    0,
+    100,
+    ...segments.filter((g) => g.label).map((g) => Math.round(g.leftPct * 100) / 100),
+  ]);
+  const offsetMin = Number(
+    new Intl.DateTimeFormat('en-GB', { timeZone, minute: '2-digit' }).format(tl.dayStartAt),
+  );
+  const first = tl.dayStartAt + (offsetMin ? (60 - offsetMin) * 60_000 : 0);
+  const out: HourTick[] = [];
+  for (let at = first; at <= tl.dayEndAt; at += 3_600_000) {
+    const leftPct = ((at - tl.dayStartAt) / span) * 100;
+    out.push({
+      leftPct,
+      label: formatAxisHour(at, timeZone),
+      major: [...majors].some((m) => Math.abs(m - leftPct) < 0.5),
+    });
+  }
+  return out;
+}

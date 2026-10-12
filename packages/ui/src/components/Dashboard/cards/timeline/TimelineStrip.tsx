@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom';
 import type { DashboardTimeline, EventPin } from '@pump/shared';
 import { Icon, type IconName } from '../../../../pump-ds/index.js';
 import {
-  axisTicks,
   axisPct,
+  clockLabel,
+  hourTicks,
   type Bar,
   type OpeningChip,
   type ScheduleSegment,
@@ -153,6 +154,9 @@ const BAR_CLASS: Record<Bar['kind'], string> = {
   ghost: 'border-[1.5px] border-dashed border-border-strong text-ink-muted',
 };
 
+/** Hour labels this close (percent) to the now pill are hidden under it. */
+const NOW_LABEL_CLEARANCE_PCT = 2.2;
+
 export const TimelineStrip: React.FC<TimelineStripProps> = ({
   timeline,
   bars,
@@ -162,63 +166,91 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
   now,
   timeZone,
   onOpen,
-}) => (
-  <div className="relative mt-1 h-[80px] select-none" data-testid="timeline-strip">
-    <div className="absolute inset-x-0 top-10 h-6 rounded-[7px] bg-surface-alt" />
-    {chips.map((c) => (
-      <span
-        key={c.id}
-        data-testid="timeline-opening-chip"
-        className={`absolute top-[21px] flex h-4 items-center whitespace-nowrap rounded-full border bg-surface px-1.5 text-[10.5px] font-semibold ${CHIP_TONE[c.tone]}`}
-        style={{ left: `${c.leftPct}%` }}
-      >
-        {c.text}
-      </span>
-    ))}
-    {bars.map((b) => (
-      <div
-        key={b.id}
-        data-testid={`timeline-bar-${b.kind}`}
-        title={b.times ? `${b.text} · ${b.times}` : b.text}
-        className={`absolute top-10 flex h-6 items-center overflow-hidden whitespace-nowrap rounded-[7px] px-2 text-[11.5px] ${
-          b.late ? 'border-warning-fg' : b.kind === 'running' ? 'border-brand' : ''
-        } ${BAR_CLASS[b.kind]}`}
-        style={{
-          left: `${b.leftPct}%`,
-          width: `${b.widthPct}%`,
-          ...(b.kind === 'running' ? { backgroundImage: HATCH } : {}),
-        }}
-      >
-        <span className="truncate">{b.text}</span>
-        {b.varianceText && <span className="ml-1 shrink-0 opacity-75">· {b.varianceText}</span>}
+}) => {
+  const nowPct = axisPct(now, timeline);
+  const chipOf = new Map(chips.map((c) => [c.id, c]));
+  return (
+    <div className="relative mt-1 h-[70px] select-none" data-testid="timeline-strip">
+      <div className="absolute inset-x-0 top-[26px] h-6 rounded-[7px] bg-surface-alt" />
+      {bars.map((b) => {
+        const chip = chipOf.get(b.id);
+        return (
+          <div
+            key={b.id}
+            data-testid={`timeline-bar-${b.kind}`}
+            title={b.times ? `${b.text} · ${b.times}` : b.text}
+            className={`absolute top-[26px] flex h-6 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-[7px] px-2 text-[11.5px] ${
+              b.late ? 'border-warning-fg' : b.kind === 'running' ? 'border-brand' : ''
+            } ${BAR_CLASS[b.kind]}`}
+            style={{
+              left: `${b.leftPct}%`,
+              width: `${b.widthPct}%`,
+              // The live shift is hatched up to now; the rest of its window stays open.
+              ...(b.kind === 'running'
+                ? {
+                    backgroundImage: HATCH,
+                    backgroundSize: `${(b.progress ?? 1) * 100}% 100%`,
+                    backgroundRepeat: 'no-repeat',
+                  }
+                : {}),
+            }}
+          >
+            <span className="min-w-0 truncate">{b.text}</span>
+            {b.varianceText && <span className="shrink-0 opacity-75">· {b.varianceText}</span>}
+            {chip && (
+              <span
+                data-testid="timeline-opening-chip"
+                className={`ml-auto flex h-4 shrink-0 items-center rounded-full border bg-surface px-1.5 text-[10.5px] font-semibold ${CHIP_TONE[chip.tone]}`}
+              >
+                {chip.text}
+              </span>
+            )}
+          </div>
+        );
+      })}
+      <div className="absolute inset-x-0 top-0 h-5">
+        {pins.map((p) => (
+          <PinButton
+            key={`${p.at}-${p.events[0].id}`}
+            pin={p}
+            leftPct={axisPct(p.at, timeline)}
+            onOpen={onOpen}
+          />
+        ))}
       </div>
-    ))}
-    <div
-      data-testid="timeline-now"
-      className="absolute bottom-3 top-9 w-0.5 bg-brand-danger"
-      style={{ left: `${axisPct(now, timeline)}%` }}
-    />
-    <div className="absolute inset-x-0 top-0 h-5">
-      {pins.map((p) => (
-        <PinButton
-          key={`${p.at}-${p.events[0].id}`}
-          pin={p}
-          leftPct={axisPct(p.at, timeline)}
-          onOpen={onOpen}
-        />
-      ))}
+      <div className="absolute inset-x-0 top-[52px] h-4" aria-hidden="true">
+        {hourTicks(segments, timeline, timeZone).map((t, i, all) => (
+          <React.Fragment key={t.leftPct}>
+            <span
+              className={`absolute top-0 w-px ${t.major ? 'h-2 bg-ink-muted' : 'h-1 bg-border-strong'}`}
+              style={{ left: `${t.leftPct}%` }}
+            />
+            {Math.abs(t.leftPct - nowPct) >= NOW_LABEL_CLEARANCE_PCT && (
+              <span
+                data-testid="timeline-axis-label"
+                className={`absolute top-[7px] whitespace-nowrap text-[9.5px] leading-none ${
+                  t.major ? 'font-semibold text-ink' : 'text-ink-faint'
+                } ${i === 0 ? '' : i === all.length - 1 ? '-translate-x-full' : '-translate-x-1/2'}`}
+                style={{ left: `${t.leftPct}%` }}
+              >
+                {t.label}
+              </span>
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+      <div
+        data-testid="timeline-now"
+        className="pointer-events-none absolute top-[22px] z-10 h-[34px] w-0.5 -translate-x-1/2 bg-brand-danger"
+        style={{ left: `${nowPct}%` }}
+      />
+      <span
+        data-testid="timeline-now-label"
+        className="pointer-events-none absolute top-[56px] z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-brand-danger px-1.5 text-[9.5px] font-semibold leading-[14px] text-on-brand"
+        style={{ left: `${Math.min(97, Math.max(3, nowPct))}%` }}
+      >
+        {clockLabel(now, timeZone)}
+      </span>
     </div>
-    <div className="absolute inset-x-0 bottom-0 h-3 text-[10px] text-ink-muted">
-      {axisTicks(segments, timeline, timeZone).map((t, i, all) => (
-        <span
-          key={t.leftPct}
-          data-testid="timeline-axis-label"
-          className={`absolute whitespace-nowrap ${i === 0 ? '' : i === all.length - 1 ? '-translate-x-full' : '-translate-x-1/2'}`}
-          style={{ left: `${t.leftPct}%` }}
-        >
-          {t.label}
-        </span>
-      ))}
-    </div>
-  </div>
-);
+  );
+};

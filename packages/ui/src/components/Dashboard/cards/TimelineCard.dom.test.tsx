@@ -137,7 +137,7 @@ describe('TimelineCard', () => {
     );
     mount();
     const bar = screen.getByTestId('timeline-bar-closed');
-    expect(bar.textContent).toBe('Shift 1 · ₹2,16,120· −₹340');
+    expect(bar.textContent).toBe('Shift 1 · ₹2,16,120· −₹340Opened 6 am');
     expect(bar.querySelector('.opacity-75')?.textContent).toContain('−₹340');
   });
 
@@ -146,12 +146,14 @@ describe('TimelineCard', () => {
     expect(screen.getByText('Today')).toBeTruthy();
     expect(screen.getByText(/6 am → 6 am/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /collapse/i })).toBeTruthy();
-    expect(screen.getAllByTestId('timeline-axis-label').map((n) => n.textContent)).toEqual([
-      '6 am',
-      '2 pm',
-      '6 am',
-    ]);
+    // One label per hour, Day Start to Day Start (the one under the now pill is hidden).
+    const labels = screen.getAllByTestId('timeline-axis-label').map((n) => n.textContent);
+    expect(labels[0]).toBe('6a');
+    expect(labels.at(-1)).toBe('6a');
+    expect(labels).toContain('2p');
+    expect(labels.length).toBeGreaterThanOrEqual(23);
     expect(screen.getByTestId('timeline-now').className).toContain('bg-brand-danger');
+    expect(screen.getByTestId('timeline-now-label').textContent).toMatch(/\d+(:\d{2})? (am|pm)/);
   });
 
   it('draws the bar on the template window and marks the real opening with a chip', () => {
@@ -167,14 +169,14 @@ describe('TimelineCard', () => {
     expect(screen.queryByTestId('timeline-window-label')).toBeNull();
     const chip = screen.getByTestId('timeline-opening-chip');
     expect(chip.textContent).toBe('Opened 6:40 am · 40m late');
-    expect(parseFloat(chip.style.left)).toBe(0);
+    expect(bar.contains(chip)).toBe(true); // inside the bar, no row of its own
   });
 
   it('labels a running bar live, and past end with a warning border', () => {
     vi.setSystemTime(new Date('2026-10-12T06:30:00Z')); // 12:00 IST, before 2 pm end
     const first = mount();
     const live = screen.getByTestId('timeline-bar-running');
-    expect(live.textContent).toBe('Shift 1 · live');
+    expect(live.textContent).toBe('Shift 1 · liveOpened 6 am');
     expect(live.className).not.toContain('border-brand-warning');
     first.unmount();
     vi.setSystemTime(NOW); // 3 pm, past the 2 pm scheduled end
@@ -191,7 +193,7 @@ describe('TimelineCard', () => {
     );
     mount();
     const bar = screen.getByTestId('timeline-bar-running');
-    expect(bar.textContent).toBe('Shift 1 · past end, 1 handover due');
+    expect(bar.textContent).toMatch(/^Shift 1 · past end, 1 handover dueOpened /);
     expect(bar.className).toContain('border-warning-fg');
     expect(bar.className).not.toContain('border-brand');
   });
@@ -215,7 +217,7 @@ describe('TimelineCard', () => {
     });
     const { container } = mount();
     const ph = container.querySelector('[aria-busy="true"]') as HTMLElement;
-    expect(ph.style.height).toBe('90px');
+    expect(ph.style.height).toBe('80px');
   });
 
   it('does not show cash-drop events as pins', () => {
