@@ -116,6 +116,7 @@ export * from './access/CapabilityGate.js';
 export * from './access/SubscriptionNotice.js';
 export * from './query/queryClient.js';
 export * from './query/hooks.js';
+export * from './query/dashboardActivity.js';
 export * from './query/handoverMutation.js';
 export * from './query/stockCountMutation.js';
 export { useStationAlerts } from './query/useStationAlerts.js';
@@ -231,3 +232,5 @@ export { keepsIdempotencyKey } from './utils/idempotency.js';
 export { keyForBody, newSaveKey, resetSaveKey, type SaveKey } from './utils/saveKey.js';
 export { DecantationReportPanel } from './components/reports/DecantationReportPanel.js';
 export * from './components/inventory/density/index.js';
+
+export * from './theme/index.js';

@@ -1,2 +1,1 @@
-export { ThemeProvider, useTheme, type ThemeContextValue } from './ThemeProvider.js';
-export { AppearanceControl } from './AppearanceControl.js';
+export { ThemeProvider, useTheme, type ThemeContextValue, AppearanceControl } from '@pump/ui/theme';

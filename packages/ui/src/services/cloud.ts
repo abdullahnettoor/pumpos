@@ -1701,6 +1701,12 @@ export interface ActivityPage {
   nextCursor: string | null;
 }
 
+export interface ActivityDayFeed {
+  date: string;
+  items: ActivityGroupSummary[];
+  nextCursor: string | null;
+}
+
 export class CloudEventsService {
   async getActivityGroups(params?: {
     stationId?: string;
@@ -1715,6 +1721,12 @@ export class CloudEventsService {
     if (params?.cursor) qs.set('cursor', params.cursor);
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
     return request<ActivityPage>(`/activity${suffix}`);
+  }
+
+  /** GET /activity?stationId&date — one Business Day's events for the dashboard timeline (#508). */
+  async getDayActivity(stationId: string, date: string): Promise<ActivityDayFeed> {
+    const qs = new URLSearchParams({ stationId, date });
+    return request<ActivityDayFeed>(`/activity?${qs.toString()}`);
   }
 
   async getActivityGroup(groupId: string): Promise<ActivityGroupDetail> {

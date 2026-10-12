@@ -48,5 +48,20 @@
     "react-dom": "^18.3.1",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./theme": {
+      "types": "./dist/theme/index.d.ts",
+      "default": "./dist/theme/index.js"
+    },
+    "./theme/*": {
+      "types": "./dist/theme/*.d.ts",
+      "default": "./dist/theme/*.js"
+    },
+    "./src/*": "./src/*"
   }
 }

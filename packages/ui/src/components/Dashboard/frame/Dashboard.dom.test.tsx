@@ -13,8 +13,18 @@ const hooks = vi.hoisted(() => ({
   useDailyCashBook: vi.fn(),
   useReceivables: vi.fn(),
   usePayables: vi.fn(),
+  // Your shift (Staff) reads these; hidden for other roles, so never asserted here.
+  useShiftStatus: vi.fn(),
+  useShiftTemplates: vi.fn(),
+  useShiftSummaries: vi.fn(),
+  useDayActivity: vi.fn(),
+  useDensityTodaySummary: vi.fn(),
+  useInventoryStatus: vi.fn(),
+  useInventoryItems: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
+  usePricing: vi.fn(),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
+vi.mock('../../../query/dashboardActivity.js', () => ({ useDayActivity: hooks.useDayActivity }));
 
 import { Dashboard } from './Dashboard.js';
 import { DashboardCard } from './DashboardCard.js';
@@ -38,6 +48,13 @@ beforeEach(() => {
   hooks.useDailyCashBook.mockReturnValue(ok({ accounts: [] }));
   hooks.useReceivables.mockReturnValue(ok(null));
   hooks.usePayables.mockReturnValue(ok(null));
+  hooks.useShiftStatus.mockReturnValue(ok({ activeShift: null, recentClosedShifts: [] }));
+  hooks.useShiftTemplates.mockReturnValue(ok([]));
+  hooks.useShiftSummaries.mockReturnValue(ok([]));
+  hooks.useDayActivity.mockReturnValue(ok({ items: [] }));
+  hooks.useDensityTodaySummary.mockReturnValue(ok(undefined));
+  hooks.useInventoryStatus.mockReturnValue(ok(undefined));
+  hooks.usePricing.mockReturnValue(ok(undefined));
 });
 afterEach(() => {
   cleanup();
@@ -74,7 +91,8 @@ describe('header', () => {
   it('shows Open shift when none open and navigates', () => {
     const nav = vi.fn();
     mount('Manager', nav);
-    fireEvent.click(screen.getByRole('button', { name: /open shift/i }));
+    // The header and the Forecourt card both offer Open shift; the header's comes first.
+    fireEvent.click(screen.getAllByRole('button', { name: /open shift/i })[0]);
     expect(nav).toHaveBeenCalledWith('/shifts');
     expect(screen.getByText(/open since 6:00 am/)).toBeTruthy();
   });

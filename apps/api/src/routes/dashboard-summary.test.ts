@@ -116,6 +116,8 @@ describe('GET /dashboard-summary', () => {
     expect(body.data.lastShiftSummary).toEqual({
       totalVolumeSold: 740.5,
       closingCash: 9000,
+      totalFuelSalesValue: 0,
+      cashVariance: 0,
       fuelUnits: ['L'],
     });
     // Closed 5 min ago on an open day, no open shift, Owner → reopenable.

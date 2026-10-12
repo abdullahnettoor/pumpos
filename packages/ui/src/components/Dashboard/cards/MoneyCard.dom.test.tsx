@@ -10,6 +10,15 @@ const hooks = vi.hoisted(() => ({
   useDailyCashBook: vi.fn(),
   useReceivables: vi.fn(),
   usePayables: vi.fn(),
+  useShiftStatus: vi.fn(() => ({ data: { activeShift: null, recentClosedShifts: [] }, isPending: false, isError: false })),
+  useDashboardSummary: vi.fn(() => ({ data: { activeShift: null }, isPending: false, isError: false })),
+  useShiftTemplates: vi.fn(() => ({ data: [], isPending: false, isError: false })),
+  useShiftSummaries: vi.fn(() => ({ data: [], isPending: false, isError: false })),
+  useDayActivity: vi.fn(() => ({ data: { items: [] }, isPending: false, isError: false })),
+  useDensityTodaySummary: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
+  useInventoryStatus: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
+  useInventoryItems: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
+  usePricing: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
 

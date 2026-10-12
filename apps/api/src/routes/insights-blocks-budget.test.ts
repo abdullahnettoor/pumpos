@@ -163,7 +163,7 @@ describe.each(ROUTES)('GET /reports/insights/$name', ({ name, rows }) => {
 
   it('refuses a range length the tab does not offer, before reading', async () => {
     const { db, counter } = makeFakeDb(rows as unknown[]);
-    for (const days of ['14', '', 'abc']) {
+    for (const days of ['10', '', 'abc']) {
       expect((await makeApp(db).request(url(days))).status).toBe(400);
     }
     expect(counter.executes).toBe(0);
