@@ -21,8 +21,7 @@ export const ReceivablesPayablesCard: React.FC = () => {
 
   const totalReceivables = receivables?.total ?? 0;
   const totalPayables = payables?.total ?? 0;
-  const hasNoCreditCustomers =
-    (receivables?.customerCount ?? 0) === 0 && totalReceivables === 0;
+  const hasNoCreditCustomers = (receivables?.customerCount ?? 0) === 0 && totalReceivables === 0;
 
   const aging = receivables?.aging;
   const d0_7 = aging?.d0_7 ?? 0;
@@ -91,9 +90,7 @@ export const ReceivablesPayablesCard: React.FC = () => {
                 </span>
                 <span className={d30plus > 0 ? 'text-state-danger-fg' : ''}>
                   30d+{' '}
-                  <strong className="font-mono font-medium">
-                    {formatCompactRupees(d30plus)}
-                  </strong>
+                  <strong className="font-mono font-medium">{formatCompactRupees(d30plus)}</strong>
                 </span>
               </div>
             </div>
@@ -102,10 +99,7 @@ export const ReceivablesPayablesCard: React.FC = () => {
 
         <div className="pt-2 border-t border-border-soft flex items-baseline justify-between">
           <span className="text-xs text-ink-muted">To pay</span>
-          <span
-            className="font-mono text-sm font-medium text-ink"
-            data-testid="payables-total"
-          >
+          <span className="font-mono text-sm font-medium text-ink" data-testid="payables-total">
             {formatMoney(totalPayables, { decimals: 0 })}
           </span>
         </div>

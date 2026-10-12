@@ -10,8 +10,16 @@ const hooks = vi.hoisted(() => ({
   useDailyCashBook: vi.fn(),
   useReceivables: vi.fn(),
   usePayables: vi.fn(),
-  useShiftStatus: vi.fn(() => ({ data: { activeShift: null, recentClosedShifts: [] }, isPending: false, isError: false })),
-  useDashboardSummary: vi.fn(() => ({ data: { activeShift: null }, isPending: false, isError: false })),
+  useShiftStatus: vi.fn(() => ({
+    data: { activeShift: null, recentClosedShifts: [] },
+    isPending: false,
+    isError: false,
+  })),
+  useDashboardSummary: vi.fn(() => ({
+    data: { activeShift: null },
+    isPending: false,
+    isError: false,
+  })),
   useShiftTemplates: vi.fn(() => ({ data: [], isPending: false, isError: false })),
   useShiftSummaries: vi.fn(() => ({ data: [], isPending: false, isError: false })),
   useDayActivity: vi.fn(() => ({ data: { items: [] }, isPending: false, isError: false })),
