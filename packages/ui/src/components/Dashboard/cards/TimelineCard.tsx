@@ -18,8 +18,12 @@ import { isDashboardEvent, toTimelineEvent, type PinTarget } from './timeline/ac
 import {
   buildBars,
   clockLabel,
+  minutesLate,
   money,
+  openingChips,
   scheduledEndAt,
+  scheduledStartAt,
+  scheduleSegments,
   type ShiftBarInput,
 } from './timeline/timelineModel.js';
 import { TimelineStrip } from './timeline/TimelineStrip.js';
@@ -92,10 +96,12 @@ export const TimelineCard: React.FC = () => {
           total: s.closedAt ? (s.totalFuelSalesValue ?? null) : null,
           variance: s.closedAt ? (s.cashVariance ?? null) : null,
           scheduledEndAt: scheduledEndAt(tpl, timeline, dayStartsAt),
+          scheduledStartAt: scheduledStartAt(tpl, timeline, dayStartsAt),
           handoversDue: s.id === active?.id ? handoversDue(active, now, timeZone) : null,
         };
       });
-    return { timeline, inputs };
+    const segments = scheduleSegments(templateList, timeline, dayStartsAt);
+    return { timeline, inputs, segments };
   }, [status.data, templates.data, shiftStatus.data, timeZone, dayStartsAt, now]);
 
   const events = useMemo(
@@ -114,6 +120,7 @@ export const TimelineCard: React.FC = () => {
 
   const open = (t: PinTarget) => onNavigate(t.path, t.intent);
   const bars = model ? buildBars(model.inputs, model.timeline, now, timeZone) : [];
+  const chips = model ? openingChips(model.inputs, model.timeline, timeZone) : [];
   const alerts = events.filter((e) => e.tone === 'danger').length;
   const lastClosed = model?.inputs.filter((i) => i.closedAt).at(-1);
   const live = model?.inputs.find((i) => !i.closedAt);
@@ -134,7 +141,7 @@ export const TimelineCard: React.FC = () => {
       card="timeline"
       title="Timeline"
       query={[status, templates, activity]}
-      placeholderHeight={76}
+      placeholderHeight={92}
     >
       {model &&
         (collapsed ? (
@@ -164,6 +171,7 @@ export const TimelineCard: React.FC = () => {
                   <span>
                     Shift {live.sequence} live since{' '}
                     {clockLabel(Date.parse(live.openedAt), timeZone)}
+                    {minutesLate(live) != null && ` · opened ${minutesLate(live)}m late`}
                   </span>
                 ))}
               <span>
@@ -195,6 +203,8 @@ export const TimelineCard: React.FC = () => {
             <TimelineStrip
               timeline={model.timeline}
               bars={bars}
+              chips={chips}
+              segments={model.segments}
               pins={pins}
               now={now}
               timeZone={timeZone}

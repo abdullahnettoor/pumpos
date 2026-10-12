@@ -1,5 +1,5 @@
-import type { DashboardTimeline, EventPin } from '@pump/shared';
-import { formatAxisHour, formatClockInZone, formatMoney } from '../../../../utils/format.js';
+import type { DashboardTimeline, EventPin, TimelineTemplate } from '@pump/shared';
+import { formatClockInZone, formatHHMM, formatMoney } from '../../../../utils/format.js';
 
 export interface ShiftBarInput {
   id: string;
@@ -12,6 +12,8 @@ export interface ShiftBarInput {
   variance: number | null;
   /** Scheduled end of the shift's template window (epoch ms), when known. */
   scheduledEndAt?: number | null;
+  /** Scheduled start of the shift's template window (epoch ms), when known. */
+  scheduledStartAt?: number | null;
   /** Drawers still to hand over, when known. */
   handoversDue?: number | null;
 }
@@ -102,18 +104,136 @@ export function buildBars(
   return bars;
 }
 
-/** Axis ticks every 6h from Day Start to the next one ("6a", "12p", "6p", "12a", "6a"). */
+/** Opening within this many minutes of the scheduled start counts as on time. */
+export const OPENING_TOLERANCE_MIN = 15;
+/** Axis ticks closer than this (percent of the axis) are dropped. */
+const TICK_MIN_GAP_PCT = 4;
+
+const toMin = (hhmm: string): number => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+};
+
+export interface ScheduleSegment {
+  key: string;
+  templateId: string;
+  leftPct: number;
+  widthPct: number;
+  /** "Shift 1 · 6:00 am–2:00 pm"; null on the wrapped continuation of a window. */
+  label: string | null;
+}
+
+/** Scheduled start (epoch ms) of a template's window on this day axis. */
+export function scheduledStartAt(
+  tpl: { startTime: string } | undefined,
+  tl: Pick<DashboardTimeline, 'dayStartAt'>,
+  dayStartsAt: string,
+): number | null {
+  if (!tpl) return null;
+  return tl.dayStartAt + ((toMin(tpl.startTime) - toMin(dayStartsAt) + 1440) % 1440) * 60_000;
+}
+
+/**
+ * Active templates' Scheduled Shift Windows on the Day Start → Day Start axis,
+ * in Day Start order. A window crossing the Day Start is clipped at the axis end
+ * and continues from the axis start.
+ */
+export function scheduleSegments(
+  templates: readonly TimelineTemplate[],
+  tl: Pick<DashboardTimeline, 'dayStartAt' | 'dayEndAt'>,
+  dayStartsAt: string,
+): ScheduleSegment[] {
+  const dsMin = toMin(dayStartsAt);
+  const rows = templates
+    .filter((t) => t.isActive)
+    .map((t) => ({
+      t,
+      offset: (toMin(t.startTime) - dsMin + 1440) % 1440,
+      length: (toMin(t.endTime) - toMin(t.startTime) + 1440) % 1440 || 1440,
+    }))
+    .sort((a, b) => a.offset - b.offset);
+  const out: ScheduleSegment[] = [];
+  rows.forEach(({ t, offset, length }, i) => {
+    const label = `Shift ${i + 1} · ${formatHHMM(t.startTime)}–${formatHHMM(t.endTime)}`;
+    const first = Math.min(length, 1440 - offset);
+    out.push({
+      key: t.id,
+      templateId: t.id,
+      leftPct: (offset / 1440) * 100,
+      widthPct: (first / 1440) * 100,
+      label,
+    });
+    if (length > first) {
+      out.push({
+        key: `${t.id}-wrap`,
+        templateId: t.id,
+        leftPct: 0,
+        widthPct: ((length - first) / 1440) * 100,
+        label: null,
+      });
+    }
+  });
+  return out;
+}
+
+/** Axis ticks at each window start plus the final Day Start, deduped when close. */
 export function axisTicks(
+  segments: readonly ScheduleSegment[],
   tl: Pick<DashboardTimeline, 'dayStartAt' | 'dayEndAt'>,
   timeZone: string,
 ): { leftPct: number; label: string }[] {
+  const pcts = [0, ...segments.filter((s) => s.leftPct > 0).map((s) => s.leftPct), 100];
   const out: { leftPct: number; label: string }[] = [];
-  for (let h = 0; h <= 24; h += 6) {
-    const at = tl.dayStartAt + h * 3_600_000;
-    out.push({ leftPct: axisPct(at, tl), label: formatAxisHour(at, timeZone) });
+  for (const p of pcts) {
+    const prev = out.at(-1);
+    if (prev && p - prev.leftPct < TICK_MIN_GAP_PCT) {
+      // Keep the final Day Start; drop the earlier near-duplicate.
+      if (p === 100) out.pop();
+      else continue;
+    }
+    const at = tl.dayStartAt + (p / 100) * (tl.dayEndAt - tl.dayStartAt);
+    out.push({ leftPct: p, label: clockLabel(Math.round(at / 60_000) * 60_000, timeZone) });
   }
   return out;
 }
+
+export interface OpeningChip {
+  id: string;
+  leftPct: number;
+  text: string;
+  tone: 'success' | 'warning' | 'info';
+}
+
+/** "Opened 6:12 am", with "· 40m late" / "· 20m early" past the tolerance. */
+export function openingChips(
+  shifts: readonly ShiftBarInput[],
+  tl: Pick<DashboardTimeline, 'dayStartAt' | 'dayEndAt'>,
+  timeZone: string,
+): OpeningChip[] {
+  return shifts.map((s) => {
+    const opened = Date.parse(s.openedAt);
+    const diff =
+      s.scheduledStartAt != null ? Math.round((opened - s.scheduledStartAt) / 60_000) : 0;
+    const base = `Opened ${clockLabel(opened, timeZone)}`;
+    let tone: OpeningChip['tone'] = 'success';
+    let text = base;
+    if (diff > OPENING_TOLERANCE_MIN) {
+      tone = 'warning';
+      text = `${base} · ${diff}m late`;
+    } else if (diff < -OPENING_TOLERANCE_MIN) {
+      tone = 'info';
+      text = `${base} · ${-diff}m early`;
+    }
+    return { id: s.id, leftPct: axisPct(opened, tl), text, tone };
+  });
+}
+
+/** Minutes a shift opened after its scheduled start, when past the tolerance. */
+export const minutesLate = (s: ShiftBarInput): number | null => {
+  if (s.scheduledStartAt == null) return null;
+  const d = Math.round((Date.parse(s.openedAt) - s.scheduledStartAt) / 60_000);
+  return d > OPENING_TOLERANCE_MIN ? d : null;
+};
 
 export const pinPct = (pin: EventPin, tl: DashboardTimeline) => axisPct(pin.at, tl);
 

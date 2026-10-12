@@ -147,13 +147,25 @@ describe('TimelineCard', () => {
     expect(screen.getByText(/6 am → 6 am/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /collapse/i })).toBeTruthy();
     expect(screen.getAllByTestId('timeline-axis-label').map((n) => n.textContent)).toEqual([
-      '6a',
-      '12p',
-      '6p',
-      '12a',
-      '6a',
+      '6 am',
+      '2 pm',
+      '6 am',
     ]);
     expect(screen.getByTestId('timeline-now').className).toContain('bg-brand-danger');
+  });
+
+  it('shows window labels and a late opening chip', () => {
+    hooks.useDashboardSummary.mockReturnValue(
+      ok({ today: { shifts: [shift({ openedAt: '2026-10-12T01:10:00Z' })] } }), // 6:40 am IST
+    );
+    mount();
+    expect(screen.getAllByTestId('timeline-window-label').map((n) => n.textContent)).toEqual([
+      'Shift 1 · 6:00 am–2:00 pm',
+      'Shift 2 · 2:00 pm–10:00 pm',
+    ]);
+    expect(screen.getByTestId('timeline-opening-chip').textContent).toBe(
+      'Opened 6:40 am · 40m late',
+    );
   });
 
   it('labels a running bar live, and past end with a warning border', () => {
@@ -201,7 +213,7 @@ describe('TimelineCard', () => {
     });
     const { container } = mount();
     const ph = container.querySelector('[aria-busy="true"]') as HTMLElement;
-    expect(ph.style.height).toBe('76px');
+    expect(ph.style.height).toBe('92px');
   });
 
   it('does not show cash-drop events as pins', () => {

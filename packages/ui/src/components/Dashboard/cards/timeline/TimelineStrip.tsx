@@ -2,7 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { DashboardTimeline, EventPin } from '@pump/shared';
 import { Icon, type IconName } from '../../../../pump-ds/index.js';
-import { axisTicks, axisPct, type Bar } from './timelineModel.js';
+import {
+  axisTicks,
+  axisPct,
+  type Bar,
+  type OpeningChip,
+  type ScheduleSegment,
+} from './timelineModel.js';
 import type { PinTarget, TimelineEvent } from './activityPins.js';
 
 /** Pin chip colours: border + icon in the event's tone (prototype). */
@@ -25,6 +31,8 @@ const PIN_INSET_PCT = 1.5;
 export interface TimelineStripProps {
   timeline: DashboardTimeline;
   bars: Bar[];
+  chips: OpeningChip[];
+  segments: ScheduleSegment[];
   pins: EventPin[];
   now: number;
   timeZone: string;
@@ -133,6 +141,12 @@ const PinButton: React.FC<{
   );
 };
 
+const CHIP_TONE: Record<OpeningChip['tone'], string> = {
+  success: 'border-success-fg text-success-fg',
+  warning: 'border-warning-fg text-warning-fg',
+  info: 'border-info-fg text-info-fg',
+};
+
 const BAR_CLASS: Record<Bar['kind'], string> = {
   closed: 'bg-brand text-on-brand font-semibold',
   running: 'border-[1.5px] border-dashed text-ink-strong font-semibold',
@@ -142,19 +156,54 @@ const BAR_CLASS: Record<Bar['kind'], string> = {
 export const TimelineStrip: React.FC<TimelineStripProps> = ({
   timeline,
   bars,
+  chips,
+  segments,
   pins,
   now,
   timeZone,
   onOpen,
 }) => (
-  <div className="relative mt-1 h-[66px] select-none" data-testid="timeline-strip">
-    <div className="absolute inset-x-0 top-[22px] h-6 rounded-[7px] bg-surface-alt" />
+  <div className="relative mt-1 h-[92px] select-none" data-testid="timeline-strip">
+    <div className="absolute inset-x-0 top-10 h-6 overflow-hidden rounded-[7px] bg-surface-alt">
+      {segments.map((g) => (
+        <div
+          key={g.key}
+          data-testid="timeline-window"
+          className="absolute inset-y-0 border-l border-border-soft bg-surface-alt"
+          style={{ left: `${g.leftPct}%`, width: `${g.widthPct}%` }}
+        />
+      ))}
+    </div>
+    <div className="absolute inset-x-0 top-[66px] h-3.5 text-[10px] text-ink-faint">
+      {segments
+        .filter((g) => g.label)
+        .map((g) => (
+          <span
+            key={g.key}
+            data-testid="timeline-window-label"
+            className="absolute truncate whitespace-nowrap pl-1"
+            style={{ left: `${g.leftPct}%`, width: `${g.widthPct}%` }}
+          >
+            {g.label}
+          </span>
+        ))}
+    </div>
+    {chips.map((c) => (
+      <span
+        key={c.id}
+        data-testid="timeline-opening-chip"
+        className={`absolute top-[21px] flex h-4 items-center whitespace-nowrap rounded-full border bg-surface px-1.5 text-[10.5px] font-semibold ${CHIP_TONE[c.tone]}`}
+        style={{ left: `${c.leftPct}%` }}
+      >
+        {c.text}
+      </span>
+    ))}
     {bars.map((b) => (
       <div
         key={b.id}
         data-testid={`timeline-bar-${b.kind}`}
         title={b.text}
-        className={`absolute top-[22px] flex h-6 items-center overflow-hidden whitespace-nowrap rounded-[7px] px-2 text-[11.5px] ${
+        className={`absolute top-10 flex h-6 items-center overflow-hidden whitespace-nowrap rounded-[7px] px-2 text-[11.5px] ${
           b.late ? 'border-warning-fg' : b.kind === 'running' ? 'border-brand' : ''
         } ${BAR_CLASS[b.kind]}`}
         style={{
@@ -169,7 +218,7 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
     ))}
     <div
       data-testid="timeline-now"
-      className="absolute bottom-3 top-4 w-0.5 bg-brand-danger"
+      className="absolute bottom-3 top-9 w-0.5 bg-brand-danger"
       style={{ left: `${axisPct(now, timeline)}%` }}
     />
     <div className="absolute inset-x-0 top-0 h-5">
@@ -183,7 +232,7 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
       ))}
     </div>
     <div className="absolute inset-x-0 bottom-0 h-3 text-[10px] text-ink-muted">
-      {axisTicks(timeline, timeZone).map((t, i, all) => (
+      {axisTicks(segments, timeline, timeZone).map((t, i, all) => (
         <span
           key={t.leftPct}
           data-testid="timeline-axis-label"
