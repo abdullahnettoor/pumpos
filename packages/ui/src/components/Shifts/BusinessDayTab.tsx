@@ -43,6 +43,10 @@ interface BusinessDayTabProps {
   activeBusinessDayId?: string | null;
   requestedBusinessDate?: string | null;
   onBusinessDateSelected?: () => void;
+  /** Dashboard "Review in Shifts": show only still-open past Business Days. */
+  openPastDaysRequested?: boolean;
+  /** Called once the request is applied, so the host can drop its intent. */
+  onOpenPastDaysConsumed?: () => void;
   /**
    * Route elsewhere in the app. Used by "See older", which hands days beyond
    * the recent window to the Reports page's Daily DSSR list (#226).
@@ -94,6 +98,8 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   activeBusinessDayId,
   requestedBusinessDate,
   onBusinessDateSelected,
+  openPastDaysRequested,
+  onOpenPastDaysConsumed,
   onNavigate,
 }) => {
   const stationId = selectedStation?.id ?? null;
@@ -191,6 +197,19 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
    * list here could drift from it and offer a door that does not open.
    */
   const mayOpenReports = canViewReports(userRole);
+
+  // "Review in Shifts" from the dashboard notice: narrow the list to the
+  // still-open past days until the operator clears the filter.
+  const [onlyOpenPast, setOnlyOpenPast] = useState(false);
+  if (openPastDaysRequested && !onlyOpenPast) setOnlyOpenPast(true);
+  useEffect(() => {
+    if (openPastDaysRequested) onOpenPastDaysConsumed?.();
+  }, [openPastDaysRequested, onOpenPastDaysConsumed]);
+  const visibleBusinessDays = onlyOpenPast
+    ? recentBusinessDays.filter(
+        (day) => day.status === 'OPEN' && day.businessDate < currentBusinessDate,
+      )
+    : recentBusinessDays;
 
   useEffect(() => {
     if (
@@ -465,7 +484,17 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
         </div>
       </div>
 
-      <Panel flush title={`Recent Business Days · ${recentBusinessDays.length}`}>
+      <Panel
+        flush
+        title={`${onlyOpenPast ? 'Open past Business Days' : 'Recent Business Days'} · ${visibleBusinessDays.length}`}
+        action={
+          onlyOpenPast ? (
+            <Button variant="ghost" size="xs" onClick={() => setOnlyOpenPast(false)}>
+              Show all
+            </Button>
+          ) : undefined
+        }
+      >
         {currentBusinessDayStatusQ.isPending ? (
           <div style={{ padding: '12px' }}>
             <EmptyState
@@ -484,7 +513,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
               description="Recent Business Days could not be loaded. Check the connection and retry."
             />
           </div>
-        ) : recentBusinessDays.length === 0 ? (
+        ) : visibleBusinessDays.length === 0 ? (
           <div style={{ padding: '12px' }}>
             <EmptyState
               compact
@@ -499,7 +528,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {recentBusinessDays.map((day) => {
+            {visibleBusinessDays.map((day) => {
               const selected = day.businessDate === businessDate;
               const isOpen = day.status === 'OPEN';
               return (
