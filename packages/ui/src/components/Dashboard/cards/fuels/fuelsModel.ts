@@ -1,7 +1,11 @@
-import { canSeeDashboardCard, formatDaysOfCover, DAYS_OF_COVER_WINDOW } from '@pump/shared';
-import type { DashboardCard, DensityTodayProductSummary, Role } from '@pump/shared';
+import { formatDaysOfCover, DAYS_OF_COVER_WINDOW } from '@pump/shared';
+import type { DensityTodayProductSummary } from '@pump/shared';
 
-/** Tank fill thresholds for the Fuels card (spec #505): red below 25 %, amber below 40 %. */
+/**
+ * Tank fill thresholds for the Fuels card (spec #505): red below 25 %, amber
+ * below 40 %. Deliberately not `TANK_LEVEL` (utils/stock.ts, 15/35), which
+ * drives the alerts bell and Inventory.
+ */
 export const TANK_RED_BELOW = 25;
 export const TANK_AMBER_BELOW = 40;
 
@@ -9,18 +13,6 @@ export type TankTone = 'red' | 'amber' | 'ok' | 'unknown';
 
 export const tankTone = (pct: number | null): TankTone =>
   pct === null ? 'unknown' : pct < TANK_RED_BELOW ? 'red' : pct < TANK_AMBER_BELOW ? 'amber' : 'ok';
-
-/**
- * Who sees the density Record action. The gating table (spec: Owner, Manager,
- * Staff) AND the server rule (`canRecordDensity`: Owner, Manager, Accountant)
- * must both allow it, otherwise the API would refuse the write. The
- * intersection is Owner and Manager. Change it here, in one place, when the
- * two sources are reconciled.
- */
-export function canRecordDensityFromDashboard(role: Role): boolean {
-  const serverAllows = role === 'Owner' || role === 'Manager' || role === 'Accountant';
-  return canSeeDashboardCard('recordDensity' satisfies DashboardCard, role) && serverAllows;
-}
 
 export interface FuelTank {
   id: string;

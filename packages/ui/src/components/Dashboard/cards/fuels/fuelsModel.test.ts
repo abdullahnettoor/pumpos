@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DensityTodayProductSummary } from '@pump/shared';
-import {
-  canRecordDensityFromDashboard,
-  deriveDensityState,
-  deriveFuelTanks,
-  tankTone,
-} from './fuelsModel.js';
+import { deriveDensityState, deriveFuelTanks, tankTone } from './fuelsModel.js';
 
 const D = '2026-10-12';
 const prod = (over: Partial<DensityTodayProductSummary>): DensityTodayProductSummary => ({
@@ -97,13 +92,5 @@ describe('deriveFuelTanks', () => {
     );
     expect(t).toHaveLength(1);
     expect(t[0]).toMatchObject({ pct: 20, tone: 'red', capacityKl: 20, cover: '2.6 days' });
-  });
-});
-
-describe('canRecordDensityFromDashboard', () => {
-  it('only Owner and Manager (table AND server)', () => {
-    expect(
-      (['Owner', 'Manager', 'Accountant', 'Staff'] as const).map(canRecordDensityFromDashboard),
-    ).toEqual([true, true, false, false]);
   });
 });

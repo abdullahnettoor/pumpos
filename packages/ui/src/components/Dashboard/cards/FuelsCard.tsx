@@ -1,11 +1,14 @@
 import React, { useMemo } from 'react';
-import { canSeeDashboardCard, resolveDecantationSettings } from '@pump/shared';
+import {
+  canRecordDensityFromDashboard,
+  canSeeDashboardCard,
+  resolveDecantationSettings,
+} from '@pump/shared';
 import { DashboardCard } from '../frame/DashboardCard.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
 import { useDensityTodaySummary, useInventoryStatus, usePricing } from '../../../query/hooks.js';
 import { FuelBlock, type Part } from './fuels/FuelBlock.js';
 import {
-  canRecordDensityFromDashboard,
   deriveDensityState,
   deriveFuelTanks,
   type DensityState,

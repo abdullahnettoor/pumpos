@@ -6,6 +6,7 @@
 import {
   canOpenShift,
   canRecordDecantation,
+  canRecordDensity,
   canRecordPurchase,
   canViewReports,
 } from '../permissions/guards.js';
@@ -62,3 +63,12 @@ export function shiftWorkspaceAction(role: Role): 'act' | 'view' | null {
   if (role === 'Accountant') return 'view';
   return null;
 }
+
+/**
+ * Whether the dashboard shows the density Record action. The gating table
+ * (spec: Owner, Manager, Staff) AND the server rule `canRecordDensity` must
+ * both allow it, else the API would refuse the write: the intersection is
+ * Owner and Manager.
+ */
+export const canRecordDensityFromDashboard = (role: Role): boolean =>
+  canSeeDashboardCard('recordDensity', role) && canRecordDensity(role);
