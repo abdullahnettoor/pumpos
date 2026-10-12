@@ -23,7 +23,7 @@ import { DashboardCard } from '../frame/DashboardCard.js';
  * - 14-day trend: sealed days solid, draft days dashed, previous dotted, best day marked
  */
 export const MoneyCard: React.FC = () => {
-  const { station, role, businessDate, onNavigate } = useDashboard();
+  const { station, role, businessDate, entryDate, onNavigate } = useDashboard();
   const enabled = useCardEnabled('money');
   const canTrend = canSeeDashboardCard('trend', role);
   const isOwner = canSeeDashboardCard('liveMargin', role);
@@ -32,7 +32,7 @@ export const MoneyCard: React.FC = () => {
   const prevDate = shiftBusinessDate(businessDate, -1);
   const prevPreviewQ = useDailyDssrPreview(station.id, prevDate, { enabled });
   const insightsQ = useInsightsSales(station.id, 14, { enabled: enabled && canTrend });
-  const cashBookQ = useDailyCashBook(station.id, businessDate, { enabled });
+  const cashBookQ = useDailyCashBook(station.id, entryDate, { enabled });
 
   const todaySnap = useMemo(() => readSnapshot(todayPreviewQ.data), [todayPreviewQ.data]);
   const sales = useMemo(() => deriveSales(todaySnap), [todaySnap]);

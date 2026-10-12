@@ -56,6 +56,7 @@ const mount = (
   role: DashboardRole = 'Owner',
   onNavigate = vi.fn(),
   businessDate = '2026-10-12',
+  entryDate = '2026-10-12',
 ) =>
   render(
     <DashboardProvider
@@ -66,6 +67,7 @@ const mount = (
         timeZone: 'Asia/Kolkata',
         dayStartsAt: '06:00',
         businessDate,
+        entryDate,
         onNavigate,
       }}
     >
@@ -441,5 +443,15 @@ describe('Independent Failure Isolation in MoneyColumn', () => {
 
     // Office card is ready and visible!
     expect(screen.getByTestId('empty-office-records')).toBeTruthy();
+  });
+});
+
+describe('Office reads use the Entry Date, not the Business Date (ADR 0005)', () => {
+  it('queries the Cash Book by entry date before Day Start', () => {
+    hooks.useDailyDssrPreview.mockReturnValue(ok(null));
+    hooks.useInsightsSales.mockReturnValue(ok(null));
+    hooks.useDailyCashBook.mockReturnValue(ok({ accounts: [] }));
+    mount(<MoneyCard />, 'Owner', vi.fn(), '2026-10-11', '2026-10-12');
+    expect(hooks.useDailyCashBook).toHaveBeenCalledWith('st-1', '2026-10-12', expect.anything());
   });
 });

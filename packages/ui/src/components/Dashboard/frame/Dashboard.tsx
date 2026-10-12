@@ -1,6 +1,9 @@
 import React from 'react';
 import type { Station } from '@pump/shared';
-import { useStationBusinessDate } from '../../../hooks/useStationBusinessDate.js';
+import {
+  useStationBusinessDate,
+  useStationEntryDate,
+} from '../../../hooks/useStationBusinessDate.js';
 import type { NavIntent } from '../../AppShell.js';
 import { DashboardBoard } from './DashboardBoard.js';
 import { DashboardProvider, type DashboardRole } from './DashboardContext.js';
@@ -23,6 +26,7 @@ export const Dashboard: React.FC<{
     business_day_starts_at?: string;
   };
   const businessDate = useStationBusinessDate(settings.timezone, settings.business_day_starts_at);
+  const entryDate = useStationEntryDate(settings.timezone);
   return (
     <DashboardProvider
       value={{
@@ -32,6 +36,7 @@ export const Dashboard: React.FC<{
         timeZone: settings.timezone,
         dayStartsAt: settings.business_day_starts_at,
         businessDate,
+        entryDate,
         onNavigate,
       }}
     >

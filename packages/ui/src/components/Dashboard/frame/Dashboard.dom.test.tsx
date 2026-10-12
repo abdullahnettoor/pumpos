@@ -151,6 +151,7 @@ describe('DashboardCard', () => {
         timeZone: undefined,
         dayStartsAt: undefined,
         businessDate: '2026-10-12',
+        entryDate: '2026-10-12',
         onNavigate: vi.fn(),
       }}
     >

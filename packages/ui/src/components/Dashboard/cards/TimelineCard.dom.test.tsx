@@ -28,6 +28,7 @@ const shift = (over: object) => ({
   templateName: 'Morning',
   shiftSequence: 1,
   businessDate: '2026-10-12',
+  entryDate: '2026-10-12',
   openedAt: '2026-10-12T00:30:00Z',
   closedAt: null,
   ...over,
@@ -54,6 +55,7 @@ const mount = (role: any = 'Owner') =>
         timeZone: 'Asia/Kolkata',
         dayStartsAt: '06:00',
         businessDate: '2026-10-12',
+        entryDate: '2026-10-12',
         onNavigate,
       }}
     >

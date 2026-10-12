@@ -45,12 +45,14 @@ const reading = (d: number, kind = 'MORNING') =>
     density15: d,
     kind,
     businessDate: D,
+    entryDate: D,
     observedTempC: 30,
     recordedAt: '2026-10-12T01:00:00Z',
   }) as any;
 const dens = (over: object) =>
   q({
     businessDate: D,
+    entryDate: D,
     products: [
       {
         productId: 'p1',
@@ -90,6 +92,7 @@ const mount = (role: 'Owner' | 'Manager' | 'Accountant' | 'Staff' = 'Owner') =>
         timeZone: 'Asia/Kolkata',
         dayStartsAt: '06:00',
         businessDate: D,
+        entryDate: D,
         onNavigate: nav,
       }}
     >

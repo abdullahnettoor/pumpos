@@ -57,6 +57,7 @@ function mount(role: DashboardRole = 'Staff', onNavigate = vi.fn()) {
         timeZone: 'Asia/Kolkata',
         dayStartsAt: '06:00',
         businessDate: '2026-10-12',
+        entryDate: '2026-10-12',
         onNavigate,
       }}
     >

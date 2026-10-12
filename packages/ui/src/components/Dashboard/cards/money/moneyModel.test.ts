@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bestDayIndex, buildTrendChart, deriveCashInHand } from './moneyModel.js';
+import { bestDayIndex, buildTrendChart, deriveCashInHand, officeEntries } from './moneyModel.js';
 
 describe('deriveCashInHand', () => {
   const book = {
@@ -40,5 +40,31 @@ describe('trend chart', () => {
   it('has no draft line when all days are sealed and null for empty', () => {
     expect(buildTrendChart({ trend: trend.slice(0, 3), average: 1 })!.draftLine).toBe('');
     expect(buildTrendChart({ trend: [], average: 0 })).toBeNull();
+  });
+});
+
+describe('officeEntries', () => {
+  const e = (id: string, direction: 'in' | 'out', sourceType: string, at: string) => ({
+    id,
+    direction,
+    amount: 10,
+    sourceType,
+    sourceId: sourceType === 'TRANSFER' ? 'tx1' : id,
+    notes: null,
+    createdAt: at,
+  });
+  it('keeps a transfer once and sorts newest first', () => {
+    const rows = officeEntries([
+      {
+        name: 'Cash',
+        entries: [
+          e('a', 'out', 'TRANSFER', '2026-10-12T10:00'),
+          e('c', 'in', 'COLLECTION', '2026-10-12T08:00'),
+        ],
+      },
+      { name: 'Safe', entries: [e('b', 'in', 'TRANSFER', '2026-10-12T10:00')] },
+    ]);
+    expect(rows.map((r) => r.id)).toEqual(['a', 'c']);
+    expect(rows[0]!.accountName).toBe('Cash');
   });
 });

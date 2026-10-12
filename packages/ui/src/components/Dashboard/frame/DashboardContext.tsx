@@ -13,6 +13,8 @@ export interface DashboardContextValue {
   dayStartsAt: string | undefined;
   /** The current Business Day's date (YYYY-MM-DD), rolled over by Day Start. */
   businessDate: string;
+  /** Today's calendar date in the station timezone (no Day Start): dates Office Records (ADR 0005). */
+  entryDate: string;
   onNavigate: (path: string, intent?: NavIntent) => void;
 }
 

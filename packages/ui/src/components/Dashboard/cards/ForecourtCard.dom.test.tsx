@@ -55,6 +55,7 @@ function mount(role: 'Owner' | 'Manager' | 'Accountant' | 'Staff', nav = vi.fn()
         timeZone: 'Asia/Kolkata',
         dayStartsAt: '06:00',
         businessDate: '2026-10-09',
+        entryDate: '2026-10-09',
         onNavigate: nav,
       }}
     >
