@@ -30,26 +30,26 @@ export const TodayInOfficeCard: React.FC = () => {
       query={cashBookQ}
       placeholderHeight={140}
     >
-      {count > 0 && (
-        <div className="flex items-center justify-between pb-1.5 text-xs text-ink-muted">
-          <span className="font-medium text-ink">Today in the office</span>
+      <div className="flex items-center justify-between pb-1.5 text-xs text-ink-muted">
+        <span className="font-medium text-ink">Today in the office</span>
+        {count > 0 && (
           <span data-testid="entries-count">
             {count} {count === 1 ? 'entry' : 'entries'}
           </span>
-        </div>
-      )}
+        )}
+      </div>
       {top3.length === 0 ? (
-        <div className="text-xs text-ink-muted py-1" data-testid="empty-office-records">
+        <div className="text-[13px] text-ink-muted py-1" data-testid="empty-office-records">
           Nothing recorded yet today.
         </div>
       ) : (
         <ul
-          className="flex flex-col divide-y divide-border-soft text-xs"
+          className="flex flex-col divide-y divide-border-soft text-[13px]"
           data-testid="office-records-list"
         >
           {top3.map((entry) => {
             const label = ledgerSourceLabel(entry.sourceType);
-            const detail = entry.notes || entry.accountName;
+            const detail = entry.partyName || entry.notes || entry.accountName;
             const isIncome = entry.direction === 'in';
             return (
               <li

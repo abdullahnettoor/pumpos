@@ -109,6 +109,7 @@ export interface OfficeEntry {
   amount: number;
   sourceType: string;
   sourceId: string | null;
+  partyName?: string | null;
   notes: string | null;
   createdAt: string;
   accountName: string;

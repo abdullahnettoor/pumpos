@@ -80,7 +80,9 @@ export const MoneyCard: React.FC = () => {
       >
         {!hasClosedShift ? (
           <div>
-            <div className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">Sales so far today</div>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+              Sales so far today
+            </div>
             <div
               className="text-2xl font-medium tracking-tight text-ink font-mono mt-1"
               data-testid="sales-headline"
@@ -93,7 +95,9 @@ export const MoneyCard: React.FC = () => {
           </div>
         ) : (
           <div>
-            <div className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">Sales so far today</div>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+              Sales so far today
+            </div>
             <div
               className="text-2xl font-medium tracking-tight text-ink font-mono mt-1"
               data-testid="sales-headline"

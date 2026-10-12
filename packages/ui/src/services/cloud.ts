@@ -1790,6 +1790,8 @@ export interface DailyCashBookEntry {
   sourceType: string;
   sourceId: string | null;
   notes: string | null;
+  /** Customer / supplier the entry settles, when the API supplies it. */
+  partyName?: string | null;
   createdAt: string;
 }
 

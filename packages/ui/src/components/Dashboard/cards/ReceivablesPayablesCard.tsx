@@ -41,7 +41,9 @@ export const ReceivablesPayablesCard: React.FC = () => {
       <div className="flex flex-col gap-2.5">
         <div>
           <div className="flex items-baseline justify-between">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">To collect</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+              To collect
+            </span>
             <span
               className={`font-mono text-base font-semibold ${
                 totalReceivables > 0 ? 'text-warning-fg' : 'text-ink'
@@ -97,7 +99,9 @@ export const ReceivablesPayablesCard: React.FC = () => {
         </div>
 
         <div className="pt-2 border-t border-border-soft flex items-baseline justify-between">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">To pay</span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+            To pay
+          </span>
           <span className="font-mono text-sm font-medium text-ink" data-testid="payables-total">
             {formatMoney(totalPayables, { decimals: 0 })}
           </span>

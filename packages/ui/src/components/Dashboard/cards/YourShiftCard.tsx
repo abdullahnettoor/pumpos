@@ -66,6 +66,7 @@ export const YourShiftCard: React.FC = () => {
       title="Your shift"
       query={[shiftQ, summaryQ, templatesQ, densityQ]}
       placeholderHeight={160}
+      flush
       footer={
         <button
           type="button"
@@ -76,9 +77,9 @@ export const YourShiftCard: React.FC = () => {
         </button>
       }
     >
-      <section aria-label="To do" className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+      <section aria-label="To do" className="flex flex-col">
+        <div className="flex items-center justify-between border-b border-border-soft px-3.5 py-2.5">
+          <h3 className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
             To do
           </h3>
           <span
@@ -89,11 +90,11 @@ export const YourShiftCard: React.FC = () => {
           </span>
         </div>
         {todos.length === 0 ? (
-          <p className="text-[12.5px] text-ink-muted">Nothing to do.</p>
+          <p className="px-3.5 py-2.5 text-[12.5px] text-ink-muted">Nothing to do.</p>
         ) : (
-          <ul className="flex flex-col gap-2.5">
+          <ul className="flex flex-col divide-y divide-border-soft">
             {todos.map((a) => (
-              <li key={a.id}>
+              <li key={a.id} className="px-3.5 py-2.5">
                 <TodoRow alert={a} onNavigate={onNavigate} />
               </li>
             ))}
