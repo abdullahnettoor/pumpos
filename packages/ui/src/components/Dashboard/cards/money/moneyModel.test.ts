@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DailyCashBook } from '../../../../services/cloud.js';
+import type { DailyCashBook, DailyCashBookAccount } from '../../../../services/cloud.js';
 import { bestDayIndex, buildTrendChart, deriveCashInHand, officeEntries } from './moneyModel.js';
 
 describe('deriveCashInHand', () => {
@@ -101,7 +101,7 @@ describe('officeEntries', () => {
         ],
       },
       { name: 'Safe', entries: [e('b', 'in', 'TRANSFER', '2026-10-12T10:00')] },
-    ]);
+    ] as unknown as DailyCashBookAccount[]);
     expect(rows.map((r) => r.id)).toEqual(['a', 'c']);
     expect(rows[0]!.accountName).toBe('Cash');
   });

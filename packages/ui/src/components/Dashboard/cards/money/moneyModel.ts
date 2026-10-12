@@ -68,16 +68,16 @@ export function buildTrendChart(data: TrendInput, W = 320, H = 70): TrendChart |
   const pt = (i: number, v: number) => `${X(i).toFixed(1)} ${Y(v).toFixed(1)}`;
 
   const sealedIdx = trend.flatMap((d, i) => (d.closed ? [i] : []));
-  const sealedLine = sealedIdx.map((i, j) => `${j ? 'L' : 'M'}${pt(i, trend[i]!.sales)}`).join(' ');
-  const lastSealed = sealedIdx.length > 0 ? sealedIdx[sealedIdx.length - 1]! : -1;
+  const sealedLine = sealedIdx.map((i, j) => `${j ? 'L' : 'M'}${pt(i, trend[i].sales)}`).join(' ');
+  const lastSealed = sealedIdx.length > 0 ? sealedIdx[sealedIdx.length - 1] : -1;
   const sealedArea =
     sealedIdx.length > 0
-      ? `${sealedLine} L${X(lastSealed).toFixed(1)} ${H} L${X(sealedIdx[0]!).toFixed(1)} ${H} Z`
+      ? `${sealedLine} L${X(lastSealed).toFixed(1)} ${H} L${X(sealedIdx[0]).toFixed(1)} ${H} Z`
       : '';
   const draftIdx = trend.flatMap((_, i) =>
     lastSealed < trend.length - 1 && i >= Math.max(0, lastSealed) ? [i] : [],
   );
-  const draftLine = draftIdx.map((i, j) => `${j ? 'L' : 'M'}${pt(i, trend[i]!.sales)}`).join(' ');
+  const draftLine = draftIdx.map((i, j) => `${j ? 'L' : 'M'}${pt(i, trend[i].sales)}`).join(' ');
 
   // Previous period: only sealed days, a gap starts a new sub-path.
   let prevLine = '';
@@ -99,7 +99,7 @@ export function buildTrendChart(data: TrendInput, W = 320, H = 70): TrendChart |
     sealedArea,
     draftLine,
     prevLine,
-    bestCircle: best >= 0 ? { cx: X(best).toFixed(1), cy: Y(trend[best]!.sales).toFixed(1) } : null,
+    bestCircle: best >= 0 ? { cx: X(best).toFixed(1), cy: Y(trend[best].sales).toFixed(1) } : null,
   };
 }
 
