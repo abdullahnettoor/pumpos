@@ -93,7 +93,7 @@ export class RecordDensityReading implements UseCase<RecordDensityReadingCommand
       return err(notFoundError('Station', cmd.stationId));
     }
 
-    const recordedAtIso = cmd.recordedAt ?? new Date().toISOString();
+    const recordedAtIso = cmd.recordedAt ?? ctx.clock.now().toISOString();
     const businessDate =
       cmd.businessDate ??
       resolveBusinessDate({
