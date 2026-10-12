@@ -245,7 +245,7 @@ function C2(role) {
                [15.1, 'cash', 'Drop DU3 ₹10k', 'mu', 'shift'], [16.33, 'cash', 'Drop DU2 ₹20k', 'mu', 'shift'], [16.67, 'users', 'Collection ₹25k', 'good', 'office'], [17, 'drop', 'HSD < 20%', 'bad', 'stock']];
   const ev = all.filter(e => e[4] !== 'office' || can.officeEvents(role));
   const showMoney = can.money(role);
-  const cols = showMoney ? '1.15fr 1fr 1fr' : '1.3fr 1fr';
+  const cols = '1.15fr 1fr 1fr';
   const lab = (h) => { const m = h % 24; return m === 0 ? '12a' : m < 12 ? m + 'a' : m === 12 ? '12p' : (m - 12) + 'p'; };
 
   const header = `<div class="row" style="gap:10px;margin-bottom:12px">
@@ -394,14 +394,22 @@ function C2(role) {
     <div class="row s" style="gap:20px;padding:0 16px 12px"><span>Avg/day <b class="num hi">₹4.48L</b></span><span>vs previous 14 days ${delta(448, 425)}</span><span>Best <b class="hi">Sat 4 Oct</b></span><span>2 draft days can still change</span></div>
   </div>`; })();
 
-  const staffTodo = role !== 'Staff' ? '' : `<div class="card" style="margin-top:12px"><div class="ch"><span class="t">Your to-dos this shift</span></div>
-    ${[['warn', I.cash, 'DU3 handover due', 'Vinod M · ₹10,000 dropped so far'], ['bad', I.drop, 'HSD below 20%', 'Tell the manager · 0.9 day of cover']].map(([t, p, a, m]) =>
-      `<div class="alert"><span class="ai" style="background:var(--${t}-soft);color:var(--${t})">${ic(p, 15)}</span><div><div class="t">${a}</div><div class="m">${m}</div></div></div>`).join('')}</div>`;
+  const staffTodo = role !== 'Staff' ? '' : `<section>
+    <div class="row" style="margin:2px 2px 8px"><span class="sec-t">Your shift</span><span class="s" style="margin-left:8px">Shift 2 · since 2:00 pm</span></div>
+    <div class="card" style="margin-bottom:8px"><div class="ch"><span class="t">To do</span><span class="r"><span class="pill p-warn">4</span></span></div>
+      ${[['warn', I.cash, 'DU3 handover due', 'Vinod M · ₹10,000 dropped so far', 'Open'], ['warn', I.cash, 'DU5 handover due', 'Anil T · ₹15,000 dropped so far', 'Open'],
+         ['warn', I.drop, 'Premium density not recorded', 'Morning reading missing', 'Record'], ['bad', I.drop, 'Diesel tank below 20%', '0.9 day of cover · tell the manager', '']].map(([t, p, a, m, act]) =>
+        `<div class="alert"><span class="ai" style="background:var(--${t}-soft);color:var(--${t})">${ic(p, 15)}</span><div style="min-width:0"><div class="t">${a}</div><div class="m">${m}</div></div>${act ? `<button class="btn sec go" style="height:28px">${act}</button>` : ''}</div>`).join('')}
+    </div>
+    <div class="card" style="margin-bottom:8px"><div class="ch"><span class="t">Cash drops this shift</span><span class="r num">₹62,000</span></div>
+      <table class="t">${[['4:20 pm', 'DU2 · Sajid P', 20000], ['3:50 pm', 'DU5 · Anil T', 15000], ['3:30 pm', 'DU4 · Joseph V', 12000], ['3:06 pm', 'DU3 · Vinod M', 10000]].map(([t, w, v]) =>
+        `<tr><td class="mu num" style="width:84px;white-space:nowrap">${t}</td><td>${w}</td><td class="r hi">${inr(v)}</td></tr>`).join('')}</table>
+      <div class="s" style="padding:8px 16px;border-top:1px solid var(--line)">+1 more · <span class="lnk">Shift workspace ›</span></div></div>
+  </section>`;
 
   return `${topbarB(role)}<div class="body">${sidebar2(role)}<main class="main"><div class="page" style="max-width:none">
     ${header}${timeline}
-    <div style="display:grid;grid-template-columns:${cols};gap:12px;align-items:start">${forecourt}${stock}${money}</div>
-    ${staffTodo}
+    <div style="display:grid;grid-template-columns:${cols};gap:12px;align-items:start">${forecourt}${stock}${money}${staffTodo}</div>
   </div></main></div>${statusbar()}`;
 }
 
