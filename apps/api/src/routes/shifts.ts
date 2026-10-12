@@ -264,6 +264,7 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
     ),
     today_shifts AS (
       SELECT COALESCE(jsonb_agg(jsonb_build_object(
+        'id', s.id,
         'shiftTemplateId', s.shift_template_id,
         'openedAt', ${sql.raw(isoTs('s.opened_at'))},
         'closedAt', ${sql.raw(isoTs('s.closed_at'))}

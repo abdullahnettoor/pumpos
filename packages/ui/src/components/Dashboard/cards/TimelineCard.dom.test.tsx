@@ -120,6 +120,23 @@ describe('TimelineCard', () => {
     expect(screen.getByTestId('timeline-bar-ghost')).toBeTruthy();
   });
 
+  it('matches a closed shift to its summary by shift id, not by open time', () => {
+    hooks.useDashboardSummary.mockReturnValue(
+      ok({ today: { shifts: [shift({ closedAt: '2026-10-12T08:30:00Z' })] } }),
+    );
+    hooks.useShiftSummaries.mockReturnValue(
+      ok([
+        {
+          shiftId: 's1',
+          openedAt: '2026-10-12T00:30:00.123456Z', // different precision on purpose
+          snapshotData: { fuelByProduct: [{ salesValue: 5000 }], cashVariance: -20 },
+        },
+      ]),
+    );
+    mount();
+    expect(screen.getByText(/Shift 1 · ₹5,000/)).toBeTruthy();
+  });
+
   it('merges five cash drops into one pin with a count and opens the event', () => {
     hooks.useDayActivity.mockReturnValue(
       ok({

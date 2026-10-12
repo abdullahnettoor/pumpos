@@ -33,16 +33,15 @@ export const TimelineCard: React.FC = () => {
     if (!status.data || !templates.data || !timeZone || !dayStartsAt) return null;
     const day: any[] = status.data.today?.shifts ?? [];
     const tplName = new Map<string, string>(templates.data.map((t) => [t.id, t.name as string]));
-    // Summaries carry no id in the dashboard payload; match on the open instant.
-    const byOpen = new Map<number, any>(
-      (summaries.data ?? []).map((s: any) => [Date.parse(s.openedAt), s.snapshotData]),
+    const byShift = new Map<string, any>(
+      (summaries.data ?? []).map((s: any) => [s.shiftId, s.snapshotData]),
     );
     const inputs: ShiftBarInput[] = [...day]
       .sort((x, y) => Date.parse(x.openedAt) - Date.parse(y.openedAt))
       .map((s, i) => {
-        const snap = s.closedAt ? byOpen.get(Date.parse(s.openedAt)) : null;
+        const snap = s.closedAt ? byShift.get(s.id) : null;
         return {
-          id: `${s.shiftTemplateId}-${s.openedAt}`,
+          id: s.id,
           name: tplName.get(s.shiftTemplateId) ?? 'Shift',
           sequence: i + 1,
           openedAt: s.openedAt,
