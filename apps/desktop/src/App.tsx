@@ -37,6 +37,7 @@ import {
   keepSessionFresh,
   useRunTask,
   publishNavIntent,
+  useRoutePath,
 } from '@pump/ui';
 import { REPORTS_ROLES, Station } from '@pump/shared';
 import { environmentTag, showDeveloperSurfaces } from './buildEnv.js';
@@ -61,12 +62,15 @@ const stationService = new CloudStationService();
 // which is `localhost` in every packaged desktop build (#116). See buildEnv.ts.
 
 const App: React.FC = () => {
-  const [currentPath, setCurrentPath] = useState('/dashboard');
+  const [currentPath, setCurrentPath] = useRoutePath('/dashboard');
   // Deep-link intents travel through the nav-intent store; see console/App.tsx.
-  const navigate = useCallback((path: string, intent?: import('@pump/ui').NavIntent) => {
-    setCurrentPath(path);
-    publishNavIntent(intent);
-  }, []);
+  const navigate = useCallback(
+    (path: string, intent?: import('@pump/ui').NavIntent) => {
+      setCurrentPath(path);
+      publishNavIntent(intent);
+    },
+    [setCurrentPath],
+  );
   const [syncStatus, setSyncStatus] = useState<
     'online' | 'offline' | 'synced' | 'pending' | 'failed'
   >(typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'online');

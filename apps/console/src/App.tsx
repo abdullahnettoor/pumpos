@@ -38,6 +38,7 @@ import {
   useRunTask,
   publishNavIntent,
   clearNavIntent,
+  useRoutePath,
 } from '@pump/ui';
 import type { NavIntent } from '@pump/ui';
 import { canOnboardStation, REPORTS_ROLES, Station } from '@pump/shared';
@@ -93,14 +94,17 @@ const isLocalDev = (() => {
 })();
 
 export const App: React.FC = () => {
-  const [currentPath, setCurrentPath] = useState('/dashboard');
+  const [currentPath, setCurrentPath] = useRoutePath('/dashboard');
   // A deep-link intent (e.g. open a customer's statement from global search)
   // travels through the nav-intent store rather than as a prop, so the
   // destination can derive from it instead of reacting to it in an effect.
-  const navigate = useCallback((path: string, intent?: NavIntent) => {
-    setCurrentPath(path);
-    publishNavIntent(intent);
-  }, []);
+  const navigate = useCallback(
+    (path: string, intent?: NavIntent) => {
+      setCurrentPath(path);
+      publishNavIntent(intent);
+    },
+    [setCurrentPath],
+  );
   const [syncStatus, setSyncStatus] = useState<
     'online' | 'offline' | 'synced' | 'pending' | 'failed'
   >(typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'online');
