@@ -285,9 +285,10 @@ function scenario() {
   const late = st === 'late';
   return {
     st, late,
-    now: late ? 22.33 : st === 'noshift' ? 6.33 : 17.2,
-    nowLabel: late ? '10:20 pm' : st === 'noshift' ? '6:20 am' : '5:12 pm',
-    shiftOpen: st !== 'noshift' && st !== 'firstday-noshift',
+    between: st === 'between',
+    now: late ? 22.33 : st === 'noshift' ? 6.33 : st === 'between' ? 14.17 : 17.2,
+    nowLabel: late ? '10:20 pm' : st === 'noshift' ? '6:20 am' : st === 'between' ? '2:10 pm' : '5:12 pm',
+    shiftOpen: st !== 'noshift' && st !== 'between',
     dus: st === 'firstday' ? [{ id: 'DU1', who: 'Ramesh K', noz: 'MS · HSD', drops: 0, rec: false }]
       : [{ id: 'DU2', who: 'Sajid P', noz: 'HSD · HSD', drops: 20000, rec: true, decl: 21480, v: 0 },
          { id: 'DU6', who: 'Faisal K', noz: 'MS · HSD', drops: 5000, rec: true, decl: 18320, v: -120 },
@@ -300,7 +301,8 @@ function scenario() {
 
 /* ---------------- timeline: full / compact / collapsed / off ---------------- */
 function timelineBlock(role, S) {
-  const mode = O.tl === 'auto' ? (S.shiftOpen && O.state !== 'firstday-noshift' ? 'compact' : 'off') : O.tl;
+  // Visible from the first shift of the day until its last scheduled shift (active templates) has closed.
+  const mode = O.tl === 'auto' ? (S.shiftOpen || S.between ? 'compact' : 'off') : O.tl;
   if (mode === 'off' || O.state === 'onboarding') return '';
   if (isLoading('timeline')) return skel(mode === 'collapsed' ? 44 : mode === 'compact' ? 88 : 150);
   const start = 6, span = 24, x = (h) => ((h - start) / span) * 100;
@@ -312,13 +314,14 @@ function timelineBlock(role, S) {
     [16.33, 'cash', 'Drop DU2 ₹20k', 'mu', 'drop'], [16.4, 'cash', 'Drop DU6 ₹5k', 'mu', 'drop'],
     [16.67, 'users', 'Collection ₹25k', 'good', 'office'], [17, 'drop', 'HSD < 20%', 'bad', 'stock'],
     ...(S.late ? [[22, 'cal', 'Shift 2 scheduled end', 'warn', 'shift']] : [])];
-  const ev = evAll.filter(e => e[4] !== 'office' || can.officeEvents(role));
+  const ev = evAll.filter(e => (e[4] !== 'office' || can.officeEvents(role)) && e[0] <= S.now && !(S.between && e[2] === 'Shift 2 opened'));
   // group events closer than 45 minutes into one pin
   const groups = []; for (const e of ev) { const g = groups[groups.length - 1]; if (g && e[0] - g.at < 0.75 && e[4] === g.kind) { g.items.push(e); } else groups.push({ at: e[0], kind: e[4], items: [e] }); }
   const pin = (g, top, size = 22) => { const e = g.items[0], n = g.items.length, tone = e[3];
     return `<div title="${g.items.map(i => i[2]).join(' · ')}" style="position:absolute;left:calc(${x(g.at)}% - ${size / 2}px);top:${top}px;min-width:${size}px;height:${size}px;padding:0 ${n > 1 ? 5 : 0}px;border-radius:99px;background:var(--surface);border:1.5px solid var(--${tone === 'mu' ? 'line2' : tone});color:var(--${tone === 'mu' ? 'mu' : tone});display:flex;align-items:center;justify-content:center;gap:3px;font-size:10px;font-weight:600">${ic(I[e[1]], 11, 2.2)}${n > 1 ? n : ''}</div>`; };
   const s1 = noShiftYet ? '' : `<div style="position:absolute;left:0;width:${x(13.87)}%;top:TOPpx;height:Hpx;border-radius:7px;background:var(--acc);color:var(--on-acc);padding:0 10px;font-size:11.5px;font-weight:600;overflow:hidden;white-space:nowrap;display:flex;align-items:center">Shift 1 · <span class="num" style="margin-left:4px">₹2,16,120</span><span style="opacity:.75;margin-left:4px">· −₹340</span></div>`;
-  const s2 = noShiftYet ? `<div style="position:absolute;left:0;width:${x(14)}%;top:TOPpx;height:Hpx;border-radius:7px;border:1.5px dashed var(--line2);color:var(--mu);padding:0 10px;font-size:11.5px;display:flex;align-items:center;white-space:nowrap">Shift 1 · scheduled 6:00 am, not opened</div>`
+  const s2 = S.between ? `<div style="position:absolute;left:${x(14)}%;width:${x(22) - x(14)}%;top:TOPpx;height:Hpx;border-radius:7px;border:1.5px dashed var(--line2);color:var(--mu);padding:0 8px;font-size:11.5px;display:flex;align-items:center;white-space:nowrap;overflow:hidden">Shift 2 · scheduled 2:00 pm, not opened yet</div>`
+    : noShiftYet ? `<div style="position:absolute;left:0;width:${x(14)}%;top:TOPpx;height:Hpx;border-radius:7px;border:1.5px dashed var(--line2);color:var(--mu);padding:0 10px;font-size:11.5px;display:flex;align-items:center;white-space:nowrap">Shift 1 · scheduled 6:00 am, not opened</div>`
     : `<div class="hatch" style="position:absolute;left:${x(14)}%;width:${x(S.now) - x(14)}%;top:TOPpx;height:Hpx;border-radius:7px;border:1.5px dashed var(--${S.late ? 'warn' : 'acc'});color:var(--hi);padding:0 8px;font-size:11.5px;font-weight:600;overflow:hidden;white-space:nowrap;display:flex;align-items:center">Shift 2 · ${S.late ? 'past end, 4 handovers due' : 'live'}</div>`;
   const nowLine = (top, bottom) => `<div style="position:absolute;left:${x(S.now)}%;top:${top}px;bottom:${bottom}px;width:2px;background:var(--bad)"></div>`;
 
@@ -364,11 +367,12 @@ function forecourtCol(role, S) {
   if (!S.shiftOpen) return `<section>${head}
     <div class="card" style="padding:22px 18px;text-align:center">
       <div style="width:44px;height:44px;border-radius:12px;background:var(--alt);display:grid;place-items:center;margin:0 auto;color:var(--mu)">${ic(I.pump, 22)}</div>
-      <div class="hi" style="font-weight:600;margin-top:10px">No shift running</div>
-      <div class="s" style="margin-top:3px">Shift 1 is scheduled from 6:00 am. Nothing has been sold on the forecourt yet today.</div>
+      <div class="hi" style="font-weight:600;margin-top:10px">${S.between ? 'Between shifts' : 'No shift running'}</div>
+      <div class="s" style="margin-top:3px">${S.between ? 'Shift 1 closed at 1:52 pm. Shift 2 is scheduled from 2:00 pm.' : 'Shift 1 is scheduled from 6:00 am. Nothing has been sold on the forecourt yet today.'}</div>
       ${can.shiftActions(role) ? `<button class="btn pri" style="margin-top:12px">${ic(I.play, 15)} Open shift</button>` : '<div class="s" style="margin-top:10px">A manager or staff member opens the shift.</div>'}</div>
-    <div class="card" style="padding:12px 14px;margin-top:8px"><div class="row"><span class="k">Last closed: Shift 2 · Thu 8 Oct</span><span class="lnk" style="margin-left:auto">Summary ›</span></div>
-      <div class="row" style="margin-top:6px;gap:18px"><div><div class="s">Sales</div><div class="num v">${inr(259010)}</div></div><div><div class="s">Litres</div><div class="num v">2,541</div></div><div><div class="s">Variance</div>${vbadge(0)}</div></div></div></section>`;
+    ${S.between ? `<div class="card" style="padding:12px 14px;margin-top:8px"><div class="row"><span class="k">Last closed: Shift 1</span><span class="lnk" style="margin-left:auto">Summary ›</span></div>
+      <div class="row" style="margin-top:6px;gap:18px"><div><div class="s">Sales</div><div class="num v">${inr(216120)}</div></div><div><div class="s">Litres</div><div class="num v">2,211</div></div><div><div class="s">Variance</div>${vbadge(-340)}</div></div></div>` : `<div class="card" style="padding:12px 14px;margin-top:8px"><div class="row"><span class="k">Last closed: Shift 2 · Thu 8 Oct</span><span class="lnk" style="margin-left:auto">Summary ›</span></div>
+      <div class="row" style="margin-top:6px;gap:18px"><div><div class="s">Sales</div><div class="num v">${inr(259010)}</div></div><div><div class="s">Litres</div><div class="num v">2,541</div></div><div><div class="s">Variance</div>${vbadge(0)}</div></div></div>`}</section>`;
   const rec = S.dus.filter(d => d.rec), open = S.dus.filter(d => !d.rec);
   const stOf = (d) => d.rec ? 'Recorded' : S.late ? 'Handover due' : 'Pending';
   const sorted = [...open, ...rec];
@@ -471,7 +475,7 @@ function staffCol(role, S) {
   const open = S.dus.filter(d => !d.rec).length;
   const items = [
     ...(S.shiftOpen && open ? [[S.late ? 'warn' : 'info', I.cash, S.late ? `${open} handovers overdue` : `${open} handovers to record`, S.late ? 'Shift 2 ended at 10:00 pm' : 'Before Shift 2 ends at 10:00 pm', 'Open']] : []),
-    ...(!S.shiftOpen ? [['info', I.play, 'Open Shift 1', 'Scheduled from 6:00 am', 'Open shift']] : []),
+    ...(!S.shiftOpen ? [['info', I.play, S.between ? 'Open Shift 2' : 'Open Shift 1', S.between ? 'Scheduled from 2:00 pm' : 'Scheduled from 6:00 am', 'Open shift']] : []),
     ['warn', I.drop, O.state === 'firstday' ? 'Record morning density' : 'Premium density not recorded', O.state === 'firstday' ? 'Petrol, Diesel and Premium' : 'Morning reading missing', 'Record'],
     ...(O.state === 'firstday' ? [] : [['bad', I.drop, 'Diesel tank below 20%', '0.9 day of cover · tell the manager', '']]),
   ];
@@ -528,13 +532,14 @@ let theme = P.get('theme') === 'dark' ? 'dark' : 'light';
 let notesOn = !P.get('clean');
 const cap = (r) => r[0].toUpperCase() + r.slice(1);
 const NOTES = {
-  tl: { auto: '<b>Timeline: by shift status (chosen).</b> Compact strip while a shift is running (incl. past its scheduled end); hidden when no shift is open, on the first day before a shift, and before onboarding.',
+  tl: { auto: '<b>Timeline: by shift status (chosen).</b> Compact strip from the first shift of the business day until its last scheduled shift (active shift templates) closes, so it stays visible between shifts; hidden before the first shift and before onboarding.',
         off: '<b>Timeline off (recommended for phase 1).</b> The live-shift line moves into the Forecourt card, so nothing is lost; the board starts ~190px higher.',
         collapsed: '<b>Collapsed:</b> one line (shift closed, live shift, event count, alerts) with "Show timeline ▾". Costs 44px.',
         compact: '<b>Compact:</b> 76px strip; pins closer than 45 min of the same kind are grouped (5 drops → one pin with "5").',
         full: '<b>Full:</b> the round-3 timeline, now with grouped pins. Needs <code>/activity?date=</code> + role-filtered events.' },
   state: { busy: 'Busy day at 5:12 pm. Shift 2 ends at 10 pm, so un-handed-over DUs are <b>Pending</b> (corrected: "due" only applies after the scheduled end, for the whole shift).',
            late: '10:20 pm, past Shift 2\'s scheduled end: every DU not yet handed over is <b>Handover due</b>, same rule as mobile\'s <code>deriveLiveShiftCard</code>.',
+           between: '2:10 pm: Shift 1 closed, Shift 2 (next active template) not opened yet. The timeline <b>stays visible</b> with the scheduled window ghosted; it hides only before the first shift of the day and after the day\'s last scheduled shift closes.',
            noshift: '6:20 am, no shift opened yet: Forecourt shows an empty state with Open shift (roles that may), sales ₹0 with an explanation, office empty.',
            firstday: 'First business day after onboarding: 1 DU, no density history, days of cover not computable yet, no trend, no customers.',
            onboarding: 'Station not ready: today\'s Welcome + Getting started checklist stays as-is (Owner/Manager); others see "setup in progress".',
@@ -548,7 +553,7 @@ function render() {
   document.getElementById('root').innerHTML = `<div style="${wrapW}height:100vh"><div class="app ${theme}">${page(role)}</div></div>`;
   document.getElementById('ctl').innerHTML = `
     <label>Role<select data-k="role">${['owner', 'manager', 'accountant', 'staff'].map(r => `<option ${O.role === r ? 'selected' : ''} value="${r}">${cap(r)}</option>`).join('')}</select></label>
-    <label>State<select data-k="state">${[['busy', 'Busy day'], ['late', 'Past shift end'], ['noshift', 'No shift open'], ['firstday', 'First day'], ['onboarding', 'Pre-onboarding'], ['arrive', 'Cards arriving'], ['loading', 'Loading'], ['error', 'Partial error']].map(([v, n]) => `<option ${O.state === v ? 'selected' : ''} value="${v}">${n}</option>`).join('')}</select></label>
+    <label>State<select data-k="state">${[['busy', 'Busy day'], ['late', 'Past shift end'], ['between', 'Between shifts'], ['noshift', 'No shift open'], ['firstday', 'First day'], ['onboarding', 'Pre-onboarding'], ['arrive', 'Cards arriving'], ['loading', 'Loading'], ['error', 'Partial error']].map(([v, n]) => `<option ${O.state === v ? 'selected' : ''} value="${v}">${n}</option>`).join('')}</select></label>
     <label>Timeline<select data-k="tl">${[['auto', 'By shift status'], ['off', 'Off'], ['collapsed', 'Collapsed'], ['compact', 'Compact'], ['full', 'Full']].map(([v, n]) => `<option ${O.tl === v ? 'selected' : ''} value="${v}">${n}</option>`).join('')}</select></label>
     <label>Org<select data-k="org">${[['multi', '3 stations'], ['single', '1 station']].map(([v, n]) => `<option ${O.org === v ? 'selected' : ''} value="${v}">${n}</option>`).join('')}</select></label>
     <label>Assigned<select data-k="assigned">${[['one', '1 station'], ['many', '2 stations']].map(([v, n]) => `<option ${O.assigned === v ? 'selected' : ''} value="${v}">${n}</option>`).join('')}</select></label>

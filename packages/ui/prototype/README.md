@@ -14,7 +14,7 @@ One dashboard for every web/desktop role, with gated components. `?role=owner|ma
 
 ## Confirmation round: `dashboard-confirm.prototype.html`
 Everything still open before the spec, switchable from the bottom control bar (or URL params):
-- **Timeline**: `?tl=auto|off|collapsed|compact|full`. Chosen: `auto` = compact strip while a shift is running, hidden otherwise.
+- **Timeline**: `?tl=auto|off|collapsed|compact|full`. Chosen: `auto` = compact strip from the first shift of the day until its last scheduled shift closes (stays visible between shifts).
 - **State**: `?state=busy|late|noshift|firstday|onboarding|arrive|loading|error`. `arrive` replays card-wise loading (chosen: each card has its own request).
 - **Width**: `?w=auto|1366|1180|960|760` (three → two → one column, sidebar → icon rail).
 - **Data sources**: `?src=1` labels each block with its endpoint and cache tier.
