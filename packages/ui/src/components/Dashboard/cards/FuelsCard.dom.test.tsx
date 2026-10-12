@@ -9,6 +9,7 @@ const hooks = vi.hoisted(() => ({
   usePricing: vi.fn(),
   useDensityTodaySummary: vi.fn(),
   useInventoryStatus: vi.fn(),
+  useDecantations: vi.fn(),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
 
@@ -47,6 +48,7 @@ const reading = (d: number, kind = 'MORNING') =>
     businessDate: D,
     entryDate: D,
     observedTempC: 30,
+    observedDensity: 744,
     recordedAt: '2026-10-12T01:00:00Z',
   }) as any;
 const dens = (over: object) =>
@@ -107,6 +109,7 @@ beforeEach(() => {
     dens({ latestToday: reading(741), trend14d: TREND, trendValues: [740, 741] }),
   );
   hooks.useInventoryStatus.mockReturnValue(q([TANK]));
+  hooks.useDecantations.mockReturnValue(q([]));
 });
 afterEach(() => {
   cleanup();
@@ -118,9 +121,14 @@ describe('FuelsCard', () => {
     mount();
     expect(screen.getByText('Petrol')).toBeTruthy();
     expect(screen.getByText(/₹104\.50\/L/)).toBeTruthy();
-    expect(screen.getByText(/\+1\.0 vs yesterday/)).toBeTruthy();
+    expect(screen.getByText(/\+1\.0 vs yday/)).toBeTruthy();
     expect(screen.getByText('60%')).toBeTruthy();
-    expect(screen.getByText('3.4 days cover')).toBeTruthy();
+    expect(screen.getByText('3.4')).toBeTruthy();
+    expect(screen.getByText(/days cover/)).toBeTruthy();
+    expect(screen.getByText('12.0 of 20 KL')).toBeTruthy();
+    expect(screen.getByText(/744\.0 at 30 °C/)).toBeTruthy();
+    expect(screen.getByText('₹104.50/L')).toBeTruthy();
+    expect(screen.queryByText('Plan purchase ›')).toBeNull();
     expect(screen.getByTestId('fuel-MS').dataset.alert).toBe('false');
   });
 
@@ -169,21 +177,42 @@ describe('FuelsCard', () => {
     expect(screen.getByTestId('fuel-MS').dataset.alert).toBe('true');
   });
 
-  it('pending decantation: Decant for Manager, not Staff; Plan purchase gated', () => {
-    hooks.useInventoryStatus.mockReturnValue(q([{ ...TANK, waitingOnDecantation: true }]));
+  it('low tank with nothing pending: Plan purchase shows for Manager only', () => {
+    hooks.useInventoryStatus.mockReturnValue(q([{ ...TANK, currentVolume: 4000 }]));
     mount('Manager');
-    expect(screen.getByText(/Decantation pending/)).toBeTruthy();
-    expect(screen.getByText('Decant ›')).toBeTruthy();
-    expect(screen.getByText('Plan purchase ›')).toBeTruthy();
-    fireEvent.click(screen.getByText('Decant ›'));
-    expect(nav).toHaveBeenCalledWith('/inventory', { focusInventoryTab: 'decantations' });
     fireEvent.click(screen.getByText('Plan purchase ›'));
     expect(nav).toHaveBeenCalledWith('/purchases', { openNewPurchase: true });
     cleanup();
     mount('Staff');
-    expect(screen.getByText(/Decantation pending/)).toBeTruthy();
-    expect(screen.queryByText('Decant ›')).toBeNull();
     expect(screen.queryByText('Plan purchase ›')).toBeNull();
+  });
+
+  it('pending decantation: quantity and time, Decant for Manager not Staff, no Plan purchase', () => {
+    hooks.useInventoryStatus.mockReturnValue(
+      q([{ ...TANK, currentVolume: 4000, waitingOnDecantation: true }]),
+    );
+    hooks.useDecantations.mockReturnValue(
+      q([
+        {
+          status: 'PENDING_MEASUREMENT',
+          createdAt: '2026-10-12T06:00:00Z',
+          unloadStartedAt: '2026-10-12T06:00:00Z',
+          lines: [{ productId: 'p1' }],
+          links: [{ productId: 'p1', invoiceQty: 12000 }],
+        },
+      ]),
+    );
+    mount('Manager');
+    expect(screen.getByText('12.0 KL')).toBeTruthy();
+    expect(screen.getByText(/tanker waiting to decant/)).toBeTruthy();
+    expect(screen.getByText(/since 11:30 am/)).toBeTruthy();
+    expect(screen.queryByText('Plan purchase ›')).toBeNull();
+    fireEvent.click(screen.getByText('Decant ›'));
+    expect(nav).toHaveBeenCalledWith('/inventory', { focusInventoryTab: 'decantations' });
+    cleanup();
+    mount('Staff');
+    expect(screen.getByText(/Tanker waiting to decant/)).toBeTruthy();
+    expect(screen.queryByText('Decant ›')).toBeNull();
   });
 
   it('parts load and fail independently', () => {
