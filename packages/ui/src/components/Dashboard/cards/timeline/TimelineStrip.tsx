@@ -30,6 +30,8 @@ const PinButton: React.FC<{
   onOpen: (t: PinTarget) => void;
 }> = ({ pin, leftPct, onOpen }) => {
   const [open, setOpen] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   const events = pin.events as TimelineEvent[];
   const first = events[0];
   return (

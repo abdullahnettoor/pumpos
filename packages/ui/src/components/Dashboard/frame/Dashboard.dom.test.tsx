@@ -73,7 +73,8 @@ describe('header', () => {
   it('shows Open shift when none open and navigates', () => {
     const nav = vi.fn();
     mount('Manager', nav);
-    fireEvent.click(screen.getByRole('button', { name: /open shift/i }));
+    // The header and the Forecourt card both offer Open shift; the header's comes first.
+    fireEvent.click(screen.getAllByRole('button', { name: /open shift/i })[0]);
     expect(nav).toHaveBeenCalledWith('/shifts');
     expect(screen.getByText(/open since 6:00 am/)).toBeTruthy();
   });

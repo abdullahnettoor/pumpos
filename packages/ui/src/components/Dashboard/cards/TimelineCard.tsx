@@ -1,8 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { dashboardTimeline, groupEventPins } from '@pump/shared';
 import { Button } from '../../../pump-ds/index.js';
 import { useDayActivity } from '../../../query/dashboardActivity.js';
-import { useShiftStatus, useShiftSummaries, useShiftTemplates } from '../../../query/hooks.js';
+import { useDashboardSummary, useShiftSummaries, useShiftTemplates } from '../../../query/hooks.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
 import { toTimelineEvent, type PinTarget } from './timeline/activityPins.js';
@@ -14,36 +14,39 @@ import { useTimelineCollapsed } from './timeline/useTimelineCollapsed.js';
 export const TimelineCard: React.FC = () => {
   const { station, businessDate, timeZone, dayStartsAt, onNavigate } = useDashboard();
   const enabled = useCardEnabled('timeline');
-  const status = useShiftStatus(station.id, true, { enabled });
+  const status = useDashboardSummary(station.id, { enabled });
   const templates = useShiftTemplates({ enabled });
   const activity = useDayActivity(station.id, businessDate, { enabled });
   const summaries = useShiftSummaries(station.id, { enabled });
   const [collapsed, toggle] = useTimelineCollapsed();
 
-  const now = Date.now();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
   const model = useMemo(() => {
     if (!status.data || !templates.data || !timeZone || !dayStartsAt) return null;
-    const active = status.data.activeShift ? [status.data.activeShift] : [];
-    const day = [...(status.data.recentClosedShifts ?? []), ...active].filter(
-      (s: any) => s.businessDate === businessDate,
+    const day: any[] = status.data.today?.shifts ?? [];
+    const tplName = new Map<string, string>(templates.data.map((t) => [t.id, t.name as string]));
+    // Summaries carry no id in the dashboard payload; match on the open instant.
+    const byOpen = new Map<number, any>(
+      (summaries.data ?? []).map((s: any) => [Date.parse(s.openedAt), s.snapshotData]),
     );
-    const byShift = new Map<string, any>(
-      (summaries.data ?? []).map((s: any) => [s.shiftId, s.snapshotData]),
-    );
-    const inputs: ShiftBarInput[] = day
-      .map((s: any) => {
-        const snap = s.closedAt ? byShift.get(s.id) : null;
+    const inputs: ShiftBarInput[] = [...day]
+      .sort((x, y) => Date.parse(x.openedAt) - Date.parse(y.openedAt))
+      .map((s, i) => {
+        const snap = s.closedAt ? byOpen.get(Date.parse(s.openedAt)) : null;
         return {
-          id: s.id,
-          name: s.templateName ?? 'Shift',
-          sequence: s.shiftSequence ?? null,
+          id: `${s.shiftTemplateId}-${s.openedAt}`,
+          name: tplName.get(s.shiftTemplateId) ?? 'Shift',
+          sequence: i + 1,
           openedAt: s.openedAt,
           closedAt: s.closedAt ?? null,
           total: snapshotTotal(snap),
           variance: snap ? Number(snap.cashVariance || 0) : null,
         };
-      })
-      .sort((a, b) => Date.parse(a.openedAt) - Date.parse(b.openedAt));
+      });
     const timeline = dashboardTimeline({
       now: new Date(now),
       shifts: day.map((s: any) => ({
@@ -51,21 +54,12 @@ export const TimelineCard: React.FC = () => {
         openedAt: s.openedAt,
         closedAt: s.closedAt ?? null,
       })),
-      templates: templates.data as any[],
+      templates: templates.data,
       timeZone,
       dayStartsAt,
     });
     return { timeline, inputs };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    status.data,
-    templates.data,
-    summaries.data,
-    businessDate,
-    timeZone,
-    dayStartsAt,
-    Math.floor(now / 60_000),
-  ]);
+  }, [status.data, templates.data, summaries.data, timeZone, dayStartsAt, now]);
 
   const events = useMemo(() => (activity.data?.items ?? []).map(toTimelineEvent), [activity.data]);
   const pins = useMemo(() => groupEventPins(events), [events]);

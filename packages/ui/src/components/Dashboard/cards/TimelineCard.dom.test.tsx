@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Station } from '@pump/shared';
 
 const hooks = vi.hoisted(() => ({
-  useShiftStatus: vi.fn(),
+  useDashboardSummary: vi.fn(),
   useShiftTemplates: vi.fn(),
   useShiftSummaries: vi.fn(),
   useDayActivity: vi.fn(),
@@ -73,7 +73,7 @@ beforeEach(() => {
   hooks.useShiftTemplates.mockReturnValue(ok(TEMPLATES));
   hooks.useShiftSummaries.mockReturnValue(ok([]));
   hooks.useDayActivity.mockReturnValue(ok({ items: [] }));
-  hooks.useShiftStatus.mockReturnValue(ok({ activeShift: shift({}), recentClosedShifts: [] }));
+  hooks.useDashboardSummary.mockReturnValue(ok({ today: { shifts: [shift({})] } }));
 });
 afterEach(() => {
   cleanup();
@@ -90,19 +90,20 @@ describe('TimelineCard', () => {
   });
 
   it('is hidden before the first shift', () => {
-    hooks.useShiftStatus.mockReturnValue(ok({ activeShift: null, recentClosedShifts: [] }));
+    hooks.useDashboardSummary.mockReturnValue(ok({ today: { shifts: [] } }));
     const { container } = mount();
     expect(container.firstChild).toBeNull();
   });
 
   it('is hidden once the day is complete', () => {
-    hooks.useShiftStatus.mockReturnValue(
+    hooks.useDashboardSummary.mockReturnValue(
       ok({
-        activeShift: null,
-        recentClosedShifts: [
-          shift({ closedAt: '2026-10-12T08:00:00Z' }),
-          shift({ id: 's2', shiftTemplateId: 't2', closedAt: '2026-10-12T09:00:00Z' }),
-        ],
+        today: {
+          shifts: [
+            shift({ closedAt: '2026-10-12T08:00:00Z' }),
+            shift({ id: 's2', shiftTemplateId: 't2', closedAt: '2026-10-12T09:00:00Z' }),
+          ],
+        },
       }),
     );
     const { container } = mount();
@@ -110,8 +111,8 @@ describe('TimelineCard', () => {
   });
 
   it('shows a ghost bar between shifts', () => {
-    hooks.useShiftStatus.mockReturnValue(
-      ok({ activeShift: null, recentClosedShifts: [shift({ closedAt: '2026-10-12T08:30:00Z' })] }),
+    hooks.useDashboardSummary.mockReturnValue(
+      ok({ today: { shifts: [shift({ closedAt: '2026-10-12T08:30:00Z' })] } }),
     );
     mount();
     expect(screen.getByTestId('timeline-bar-closed')).toBeTruthy();
