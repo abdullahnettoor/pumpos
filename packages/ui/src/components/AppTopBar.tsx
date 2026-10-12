@@ -17,7 +17,13 @@ import {
   LayoutDashboard,
   Fuel,
 } from 'lucide-react';
-import { type Station, reachableStations, showStationDropdown } from '@pump/shared';
+import {
+  type OperatorRole,
+  type Station,
+  canViewReports,
+  reachableStations,
+  showStationDropdown,
+} from '@pump/shared';
 import { preReadyQuickCreateIds, type PreReadyQuickCreateId } from './quickCreateActions.js';
 import type { NavIntent } from './AppShell.js';
 import { openQuickEntry } from '../quick-entry/store.js';
@@ -58,7 +64,7 @@ import { useDesktopTitleBar } from '../utils/desktopTitleBar.js';
 export interface AppTopBarProps {
   selectedStation: Station | null;
   navItems: { label: string; path: string; roles?: string[] }[];
-  userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
+  userRole: OperatorRole;
   userName: string;
   syncStatus: SyncStatus;
   pendingSyncCount?: number;
@@ -100,7 +106,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   // Desktop only: makes this bar double as the OS window title bar (#117).
   // `null` in the browser, where the top bar renders exactly as before.
   const titleBar = useDesktopTitleBar();
-  const canSeeFinancials = userRole !== 'Staff';
+  const canSeeFinancials = canViewReports(userRole);
   const stationId = selectedStation?.id;
 
   const { data: customers } = useCustomers(true, { enabled: canSeeFinancials } as any);

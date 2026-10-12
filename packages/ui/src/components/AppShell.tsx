@@ -3,7 +3,7 @@ import { AppTopBar } from './AppTopBar.js';
 import { AppStatusBar } from './AppStatusBar.js';
 import { cn } from '../pump-ds/lib/cn.js';
 import { Icon, type IconName, ICON_REGISTRY } from '../pump-ds/icon/index.js';
-import { Station } from '@pump/shared';
+import { Station, canViewReports, type OperatorRole, type Role } from '@pump/shared';
 import { useStationBusinessDate } from '../hooks/useStationBusinessDate.js';
 import { useSidebarBadges, type SidebarBadges } from '../query/useSidebarBadges.js';
 import type { UserMenuAction } from '../pump-ds/shell/index.js';
@@ -264,7 +264,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   const badges = useSidebarBadges(
     selectedStation?.id,
     stationReady && !!selectedStation,
-    userRole !== 'Staff',
+    canViewReports(userRole as Role),
     businessIso,
   );
 
@@ -322,7 +322,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         <AppTopBar
           selectedStation={selectedStation}
           navItems={navItems}
-          userRole={(userRole as 'Owner' | 'Manager' | 'Accountant' | 'Staff') || 'Staff'}
+          userRole={(userRole as OperatorRole) || 'Staff'}
           userName={userName}
           syncStatus={syncStatus}
           pendingSyncCount={pendingSyncCount}

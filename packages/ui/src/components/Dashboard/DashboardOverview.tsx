@@ -10,7 +10,7 @@ import {
 } from '../Desktop/desktopDownload.js';
 import { isDesktopApp } from '../../utils/platform.js';
 import { Button, PageHeader, EmptyState } from '../../pump-ds/index.js';
-import { Station, canOnboardStation } from '@pump/shared';
+import { Station, canOnboardStation, canViewReports, type OperatorRole } from '@pump/shared';
 import { STATION_SETUP_IN_PROGRESS } from '../StationSetup/StationOnboardingLockout.js';
 import type { NavIntent } from '../AppShell.js';
 import { TriangleAlert, Fuel, Users } from 'lucide-react';
@@ -18,7 +18,7 @@ import { Dashboard } from './frame/Dashboard.js';
 
 interface DashboardOverviewProps {
   selectedStation: Station | null;
-  userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
+  userRole: OperatorRole;
   userName: string;
   onNavigate: (path: string, intent?: NavIntent) => void;
 }
@@ -31,7 +31,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   userName,
   onNavigate,
 }) => {
-  const canSeeFinancials = userRole !== 'Staff';
+  const canSeeFinancials = canViewReports(userRole);
   const { data: customers } = useCustomers(true, { enabled: canSeeFinancials });
   const { data: suppliers } = useSuppliers(true, { enabled: canSeeFinancials });
   const { data: users } = useUsers();
