@@ -14,6 +14,10 @@ import {
 
 type Row = Record<string, any>;
 
+/** "Shift 2" from the day sequence; the template name when it is unknown. */
+const shiftName = (s: Row): string =>
+  s.shiftSequence ? `Shift ${Number(s.shiftSequence)}` : String(s.templateName ?? 'Shift');
+
 const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -89,7 +93,7 @@ function lastClosed(
   const shift = summary?.lastShift as Row | null | undefined;
   if (!shift) return null;
   const s = summary?.lastShiftSummary as Row | null | undefined;
-  const name = String(shift.templateName ?? 'Shift');
+  const name = shiftName(shift);
   const date = typeof shift.businessDate === 'string' ? shift.businessDate : null;
   return {
     shiftId: String(shift.id),
@@ -192,7 +196,7 @@ export function deriveForecourt(input: DeriveInput): ForecourtModel {
   return {
     kind: 'live',
     shiftId: String(shift.id),
-    name: String(shift.templateName ?? 'Shift'),
+    name: shiftName(shift),
     pastEnd: isHandoverDue(String(shift.openedAt), now, shift.scheduledEndTime, timeZone),
     elapsed: formatElapsed(String(shift.openedAt), now),
     window: start && end ? `${formatHHMM(start)} → ${formatHHMM(end)}` : null,
