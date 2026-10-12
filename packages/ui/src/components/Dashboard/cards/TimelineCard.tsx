@@ -111,7 +111,7 @@ export const TimelineCard: React.FC = () => {
       {model &&
         (collapsed ? (
           <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[12.5px] text-ink-muted">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-strong">
+            <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
               Today
             </span>
             <span data-testid="timeline-summary" className="contents">
@@ -149,7 +149,7 @@ export const TimelineCard: React.FC = () => {
         ) : (
           <>
             <div className="flex items-center gap-2.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-strong">
+              <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
                 Today
               </span>
               <span className="text-[12px] text-ink-muted">

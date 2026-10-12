@@ -11,7 +11,7 @@ import { type DuRow, type LastClosed, type LiveForecourt } from './forecourt/der
 const VarianceChip: React.FC<{ amount: number }> = ({ amount }) => (
   <Chip
     size="sm"
-    tone={amount === 0 ? 'success' : amount < 0 ? 'danger' : 'info'}
+    tone={amount === 0 ? 'success' : amount < 0 ? 'danger' : 'warning'}
     data-testid="variance-badge"
   >
     {amount === 0 ? 'Balanced' : `${amount > 0 ? '+' : '−'}${inr(Math.abs(amount))}`}
@@ -20,7 +20,7 @@ const VarianceChip: React.FC<{ amount: number }> = ({ amount }) => (
 
 const DuLine: React.FC<{ du: DuRow }> = ({ du }) => (
   <li
-    className="flex items-center gap-3 px-3.5 py-2 text-[12.5px]"
+    className="flex items-center gap-3 px-3.5 py-2 text-[13px]"
     data-testid="du-row"
     data-status={du.status}
   >

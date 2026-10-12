@@ -27,6 +27,8 @@ export interface FuelTank {
   currentKl: number;
   /** "2.6 days"; '' when there is no sales history. */
   cover: string;
+  /** Days of cover as a number; null when there is no sales history. */
+  coverDays: number | null;
   waitingOnDecantation: boolean;
 }
 
@@ -59,6 +61,10 @@ export function deriveFuelTanks(rows: readonly InventoryTankRow[], productId: st
         capacityKl: capacity / 1000,
         currentKl: volume / 1000,
         cover: formatDaysOfCover(t.daysOfCover),
+        coverDays:
+          t.daysOfCover == null || !Number.isFinite(Number(t.daysOfCover))
+            ? null
+            : Number(t.daysOfCover),
         waitingOnDecantation: t.waitingOnDecantation === true,
       };
     });
