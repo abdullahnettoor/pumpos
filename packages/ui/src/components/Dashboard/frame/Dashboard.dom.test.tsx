@@ -8,6 +8,9 @@ import { stubContainerWidth } from '../testing/containerWidth.js';
 const hooks = vi.hoisted(() => ({
   useBusinessDayStatus: vi.fn(),
   useDashboardSummary: vi.fn(),
+  usePricing: vi.fn(),
+  useDensityTodaySummary: vi.fn(),
+  useInventoryStatus: vi.fn(),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
 
@@ -28,6 +31,9 @@ beforeEach(() => {
   stub = stubContainerWidth(1300);
   hooks.useBusinessDayStatus.mockReturnValue(ok({ pastOpenBusinessDays: [] }));
   hooks.useDashboardSummary.mockReturnValue(ok({ activeShift: null }));
+  hooks.usePricing.mockReturnValue(ok([]));
+  hooks.useDensityTodaySummary.mockReturnValue(ok({ products: [] }));
+  hooks.useInventoryStatus.mockReturnValue(ok([]));
 });
 afterEach(() => {
   cleanup();
