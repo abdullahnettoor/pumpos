@@ -55,6 +55,6 @@ describe('shiftWorkspaceAction', () => {
 
 describe('canRecordDensityFromDashboard', () => {
   it('only Owner and Manager (gating table AND server guard)', () => {
-    expect(roles.map(canRecordDensityFromDashboard)).toEqual([true, true, false, false]);
+    expect(roles.map(canRecordDensityFromDashboard)).toEqual([true, true, false, true]);
   });
 });

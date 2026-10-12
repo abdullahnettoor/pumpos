@@ -1,9 +1,27 @@
-import { Hono } from 'hono';
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import type { Context } from 'hono';
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  notInArray,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { canManageUsers, isAuthorizedForStation, isValidBusinessDate } from '@pump/shared';
+import { isAuthorizedForStation, isOwner, isValidBusinessDate } from '@pump/shared';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
-import { businessDayWindow, dashboardEventTypesForRole } from '../infra/activity-day.js';
+import {
+  OFFICE_ACTIVITY_EVENTS,
+  businessDayWindow,
+  dashboardEventTypesForRole,
+  entryDateWindow,
+} from '../infra/activity-day.js';
 import {
   activityEventFields,
   activityJoins,
@@ -14,31 +32,17 @@ import { findStationClock, stationNotFound } from '../infra/station-clock.js';
 
 type Env = { Variables: { db: DbClient; user: AuthenticatedPrincipal } };
 
-export const activityDayRouter = new Hono<Env>();
-
 /**
  * GET /activity?stationId=&date= — one Business Day's Activity Groups, oldest
- * first, role-filtered on the server. Without `date` this falls through to the
- * Owner-only audit feed. Two statements however many events: the station
- * clock lookup and one grouped events query.
+ * first, role-filtered on the server. Two statements however many events: the
+ * station clock lookup and one grouped events query.
+ *
+ * Office Records are placed by Entry Date (station-timezone calendar day), the
+ * rest by the Business Day window (ADR 0005).
  */
-activityDayRouter.get('/activity', async (c, next) => {
-  const date = c.req.query('date');
+export const activityDayHandler = async (c: Context<Env>) => {
+  const date = c.req.query('date') as string;
   const user = c.var.user;
-  if (date === undefined) {
-    // The undated feed is the Owner-only audit log (served by the next handler).
-    if (!canManageUsers(user.role)) {
-      return c.json(
-        {
-          success: false,
-          error: { code: 'FORBIDDEN', message: 'Only Owners can view the activity log' },
-        },
-        403,
-      );
-    }
-    return next();
-  }
-
   const stationId = c.req.query('stationId');
   const bad = (message: string) =>
     c.json({ success: false, error: { code: 'VALIDATION_ERROR', message } }, 400);
@@ -62,13 +66,32 @@ activityDayRouter.get('/activity', async (c, next) => {
   const clock = await findStationClock(c.var.db, user.organizationId, stationId);
   if (!clock) return stationNotFound(c);
   const { from, to } = businessDayWindow(date, clock);
+  const entry = entryDateWindow(date, clock);
+  // Office Records the role may see are placed by Entry Date; everything else
+  // by the Business Day window. A role that sees no Office Record type (Staff)
+  // binds no office type at all.
+  const office = OFFICE_ACTIVITY_EVENTS.filter((t) => allowed === null || allowed.includes(t));
+  const businessWindow = and(
+    gte(schema.events.occurredAt, from),
+    lt(schema.events.occurredAt, to),
+  )!;
+  const placedByDate =
+    office.length === 0
+      ? businessWindow
+      : or(
+          and(notInArray(schema.events.eventType, office), businessWindow),
+          and(
+            inArray(schema.events.eventType, office),
+            gte(schema.events.occurredAt, entry.from),
+            lt(schema.events.occurredAt, entry.to),
+          ),
+        )!;
 
   const primaryRole = sql`${schema.events.metadata} -> 'grouping' ->> 'role'`;
   const conds: SQL[] = [
     eq(schema.events.organizationId, user.organizationId),
     eq(schema.events.stationId, stationId),
-    gte(schema.events.occurredAt, from),
-    lt(schema.events.occurredAt, to),
+    placedByDate,
     or(
       isNull(schema.events.correlationId),
       and(isNotNull(schema.events.correlationId), eq(primaryRole, 'primary')),
@@ -119,4 +142,26 @@ activityDayRouter.get('/activity', async (c, next) => {
     };
   });
   return c.json({ success: true, data: { date, items, nextCursor: null } });
-});
+};
+
+/**
+ * The one `GET /activity` handler. Dispatch is explicit on `date`: dated
+ * requests are the role-filtered Business Day feed; undated ones are the
+ * Owner-only audit log (`auditFeed`) behind an explicit owner check. Nothing
+ * depends on `next()` fall-through or route registration order.
+ */
+export function activityHandler(auditFeed: (c: Context<Env>) => Response | Promise<Response>) {
+  return (c: Context<Env>) => {
+    if (c.req.query('date') !== undefined) return activityDayHandler(c);
+    if (!isOwner(c.var.user.role)) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Owners can view the activity log' },
+        },
+        403,
+      );
+    }
+    return auditFeed(c);
+  };
+}

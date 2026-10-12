@@ -52,6 +52,8 @@ export interface InsightsSalesSource {
   previousRange: InsightsDateRange | null;
   /** Closed days of the current period, oldest first. */
   days: InsightsClosedDayRow[];
+  /** Closed days of the previous period, oldest first (feeds `previousTrend`). */
+  previousDays: InsightsClosedDayRow[];
   previous: { sales: number; closedDays: number; otherSales: number };
   /** Net volume per fuel grade and unit over the current period; core separates litres from the rest. */
   fuelVolumes: InsightsFuelVolumeRow[];

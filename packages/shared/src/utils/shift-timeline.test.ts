@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   dashboardTimeline,
+  isDayShiftsDone,
   nextShiftToOpen,
   type TimelineShift,
   type TimelineTemplate,
@@ -149,5 +150,57 @@ describe('nextShiftToOpen', () => {
         two,
       ),
     ).toBeNull();
+  });
+});
+
+describe('template order follows Day Start', () => {
+  // Day Start 06:00: a 00:00 template is the LAST window of the day, not the first.
+  const tpl: TimelineTemplate[] = [
+    { id: 'mid', name: 'Midnight', startTime: '00:00', endTime: '06:00', isActive: true },
+    { id: 'am', name: 'Morning', startTime: '06:00', endTime: '14:00', isActive: true },
+  ];
+
+  it('offers the 06:00 template first before any shift runs', () => {
+    const next = nextShiftToOpen({
+      now: at('2026-10-09T01:00:00Z'),
+      shifts: [],
+      templates: tpl,
+      ...clock,
+    });
+    expect(next).toEqual({ sequence: 1, window: null });
+    // The ghost window after the first shift is also in Day Start order.
+    const after = run(
+      '2026-10-09T08:45:00Z',
+      [shift('am', '2026-10-09T00:40:00Z', '2026-10-09T08:30:00Z')],
+      tpl,
+    );
+    expect(after.nextWindow).toMatchObject({ templateId: 'mid' });
+    expect(after.nextWindow!.startAt).toBeGreaterThan(Date.parse('2026-10-09T08:30:00Z'));
+  });
+});
+
+describe('isDayShiftsDone', () => {
+  const input = (now: string, shifts: TimelineShift[]) => ({
+    now: at(now),
+    shifts,
+    templates,
+    ...clock,
+  });
+  const all = [
+    shift('t1', '2026-10-09T00:40:00Z', '2026-10-09T08:30:00Z'),
+    shift('t2', '2026-10-09T08:30:00Z', '2026-10-09T16:30:00Z'),
+    shift('t3', '2026-10-09T16:30:00Z', '2026-10-10T00:20:00Z'),
+  ];
+
+  it('is false before any shift, while one runs, and while a window remains', () => {
+    expect(isDayShiftsDone(input('2026-10-09T01:00:00Z', []))).toBe(false);
+    expect(
+      isDayShiftsDone(input('2026-10-09T05:00:00Z', [shift('t1', '2026-10-09T00:40:00Z', null)])),
+    ).toBe(false);
+    expect(isDayShiftsDone(input('2026-10-09T08:45:00Z', all.slice(0, 1)))).toBe(false);
+  });
+
+  it('is true once every template ran and closed', () => {
+    expect(isDayShiftsDone(input('2026-10-10T00:25:00Z', all))).toBe(true);
   });
 });

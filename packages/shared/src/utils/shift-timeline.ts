@@ -56,6 +56,10 @@ export interface DashboardTimelineInput {
 
 const DAY_MIN = 1440;
 
+/** Minutes from the Day Start to `hhmm`, wrapping past midnight: Scheduled Shift Window order. */
+const minutesFromDayStart = (hhmm: string, dayStartsAt: string): number =>
+  (toMinutes(hhmm) - toMinutes(dayStartsAt) + DAY_MIN) % DAY_MIN;
+
 const toMinutes = (hhmm: string): number => {
   const m = /^(\d{1,2}):(\d{2})/.exec(hhmm);
   return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
@@ -120,9 +124,28 @@ export function nextShiftToOpen(input: DashboardTimelineInput): NextShift | null
   if (input.shifts.length === 0) {
     const first = [...input.templates]
       .filter((t) => t.isActive)
-      .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime))[0];
+      .sort(
+        (a, b) =>
+          minutesFromDayStart(a.startTime, input.dayStartsAt) -
+          minutesFromDayStart(b.startTime, input.dayStartsAt),
+      )[0];
     return first ? { sequence: 1, window: null } : null;
   }
   const { nextWindow } = dashboardTimeline(input);
   return nextWindow ? { sequence: input.shifts.length + 1, window: nextWindow } : null;
+}
+
+/**
+ * True once the Business Day's scheduled Shifts are all done: at least one Shift
+ * ran, none is open and no template window with time left remains (the same
+ * "no next window" rule as `nextShiftToOpen` / the hidden `day-complete`
+ * timeline). Forecourt uses it to say "Day's shifts done" instead of "Between
+ * shifts" and to withhold the Open shift prompt.
+ */
+export function isDayShiftsDone(input: DashboardTimelineInput): boolean {
+  return (
+    input.shifts.length > 0 &&
+    nextShiftToOpen(input) === null &&
+    !input.shifts.some((s) => s.closedAt == null)
+  );
 }

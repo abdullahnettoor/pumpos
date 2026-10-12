@@ -267,10 +267,14 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         'id', s.id,
         'shiftTemplateId', s.shift_template_id,
         'openedAt', ${sql.raw(isoTs('s.opened_at'))},
-        'closedAt', ${sql.raw(isoTs('s.closed_at'))}
+        'closedAt', ${sql.raw(isoTs('s.closed_at'))},
+        -- From the immutable Shift Summary snapshot; null until the shift closes.
+        'totalFuelSalesValue', (ss.snapshot_data ->> 'totalFuelSalesValue')::numeric,
+        'cashVariance', (ss.snapshot_data ->> 'cashVariance')::numeric
       ) ORDER BY s.opened_at), '[]'::jsonb) AS j
       FROM shifts s
       JOIN business_days bd ON bd.id = s.business_day_id
+      LEFT JOIN shift_summaries ss ON ss.shift_id = s.id
       WHERE s.organization_id = ${orgId} AND s.station_id = ${stationId}
         AND bd.business_date = ${todayBusinessDate}
     )
@@ -352,7 +356,13 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         volume: Number(todayRaw?.volume ?? 0),
         cashVariance: Number(todayRaw?.cashVariance ?? 0),
         /** Every shift of the current Business Day (feeds the dashboard timeline). */
-        shifts: ((row as any)?.today_shifts as unknown[] | null) ?? [],
+        /** Closed shifts carry `totalFuelSalesValue` / `cashVariance` from their snapshot (null while open). */
+        shifts: (((row as any)?.today_shifts as Record<string, any>[] | null) ?? []).map((sh) => ({
+          ...sh,
+          totalFuelSalesValue:
+            sh.totalFuelSalesValue == null ? null : Number(sh.totalFuelSalesValue),
+          cashVariance: sh.cashVariance == null ? null : Number(sh.cashVariance),
+        })),
       },
     },
   });

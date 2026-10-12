@@ -100,6 +100,9 @@ export class DrizzleInsightsSalesReader implements InsightsSalesReader {
         COALESCE((SELECT json_agg(json_build_object(
           'date', date, 'sales', sales, 'volume', volume) ORDER BY date)
           FROM sealed_days WHERE current_period), '[]'::json) AS days,
+        COALESCE((SELECT json_agg(json_build_object(
+          'date', date, 'sales', sales, 'volume', volume) ORDER BY date)
+          FROM sealed_days WHERE NOT current_period), '[]'::json) AS previous_days,
         COALESCE((SELECT json_build_object(
           'sales', COALESCE(SUM(sales), 0),
           'otherSales', COALESCE(SUM(other_sales), 0),
@@ -120,6 +123,11 @@ export class DrizzleInsightsSalesReader implements InsightsSalesReader {
       range: bounds ? { from: bounds.from, to: bounds.to } : null,
       previousRange: bounds ? { from: bounds.previousFrom, to: bounds.previousTo } : null,
       days: ((row.days ?? []) as any[]).map((d) => ({
+        date: String(d.date),
+        sales: num(d.sales),
+        volume: num(d.volume),
+      })),
+      previousDays: ((row.previous_days ?? []) as any[]).map((d) => ({
         date: String(d.date),
         sales: num(d.sales),
         volume: num(d.volume),

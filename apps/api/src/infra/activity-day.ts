@@ -1,6 +1,6 @@
 import { BusinessEvents } from '@pump/core';
 import {
-  canManageUsers,
+  isOwner,
   canSeeDashboardCard,
   businessDayWindow as sharedBusinessDayWindow,
   type Role,
@@ -55,10 +55,25 @@ export const STAFF_HIDDEN_ACTIVITY_EVENTS: readonly string[] = [
   E.DSSR_GENERATED,
 ];
 
+/**
+ * Office Record events (ADR 0005): placed by ENTRY DATE (the station-timezone
+ * calendar date, no Day Start rollback), never by the Business Day window.
+ */
+export const OFFICE_ACTIVITY_EVENTS: readonly string[] = [
+  E.EXPENSE_RECORDED,
+  E.EXPENSE_VOIDED,
+  E.INCOME_RECORDED,
+  E.INCOME_VOIDED,
+  E.PAYMENT_RECEIVED,
+  E.PAYMENT_MADE,
+  E.SUPPLIER_PAID,
+  E.CREDIT_PAYMENT_RECEIVED,
+];
+
 /** Event types a role may read through the dated feed; Owner gets everything. */
 export function dashboardEventTypesForRole(role: Role): readonly string[] | null {
   if (!canSeeDashboardCard('timeline', role)) return [];
-  if (canManageUsers(role)) return null; // Owner
+  if (isOwner(role)) return null; // Owner
   if (canSeeDashboardCard('timelineOfficeEvents', role)) {
     return [...FORECOURT_ACTIVITY_EVENTS, ...STAFF_HIDDEN_ACTIVITY_EVENTS];
   }
@@ -79,4 +94,17 @@ export function businessDayWindow(
     dayStartsAt: clock.businessDayStartsAt,
   });
   return { from: new Date(w.from), to: new Date(w.to) };
+}
+
+/**
+ * The half-open UTC interval of one station-timezone calendar day: where Office
+ * Record events of `entryDate` sit. Same as a Business Day window with Day Start
+ * 00:00, so an office entry at 02:00 belongs to its own calendar date even when
+ * the Day Start is 06:00.
+ */
+export function entryDateWindow(
+  entryDate: string,
+  clock: { timeZone: string },
+): { from: Date; to: Date } {
+  return businessDayWindow(entryDate, { timeZone: clock.timeZone, businessDayStartsAt: '00:00' });
 }

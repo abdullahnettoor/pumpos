@@ -29,7 +29,7 @@ type Ctx = Context<{ Variables: Variables }>;
 /**
  * Density register (ticket #471): daily morning readings, ad-hoc readings,
  * 15 °C calculations, unexplained jump detection, and today's display board summary.
- * Mounted under `/transactions`. Owner / Manager / Accountant.
+ * Mounted under `/transactions`. Owner / Manager / Accountant / Staff (not Attendant).
  */
 export const densityRouter = new Hono<{ Variables: Variables }>();
 

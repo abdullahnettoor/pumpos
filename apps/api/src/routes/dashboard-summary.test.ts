@@ -92,12 +92,16 @@ describe('GET /dashboard-summary', () => {
                 shiftTemplateId: 'tpl-1',
                 openedAt: '2026-03-15T00:30:00.000Z',
                 closedAt: '2026-03-15T08:30:00.000Z',
+                totalFuelSalesValue: '216120.5',
+                cashVariance: -340,
               },
               {
                 id: 'sh-2',
                 shiftTemplateId: 'tpl-2',
                 openedAt: '2026-03-15T08:45:00.000Z',
                 closedAt: null,
+                totalFuelSalesValue: null,
+                cashVariance: null,
               },
             ],
           },
@@ -124,12 +128,16 @@ describe('GET /dashboard-summary', () => {
         shiftTemplateId: 'tpl-1',
         openedAt: '2026-03-15T00:30:00.000Z',
         closedAt: '2026-03-15T08:30:00.000Z',
+        totalFuelSalesValue: 216120.5,
+        cashVariance: -340,
       },
       {
         id: 'sh-2',
         shiftTemplateId: 'tpl-2',
         openedAt: '2026-03-15T08:45:00.000Z',
         closedAt: null,
+        totalFuelSalesValue: null,
+        cashVariance: null,
       },
     ]);
 

@@ -99,6 +99,8 @@ export interface InsightsSales {
   previousAverage: number;
   best: { date: string; sales: number } | null;
   trend: InsightsTrendDay[];
+  /** The previous equal period's per-day series, same shape as `trend` (one entry per calendar date). */
+  previousTrend: InsightsTrendDay[];
   productMix: InsightsProductMixLine[];
   /** Fuel metered in other units than litres: noted beside the mix. */
   otherUnitFuels: InsightsOtherUnitFuel[];

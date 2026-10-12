@@ -208,9 +208,9 @@ export function canArchiveParty(role: Role): boolean {
   return role === 'Owner' || role === 'Manager';
 }
 
-/** Record product density readings (morning / ad-hoc). Owner, Manager, Accountant. */
+/** Record/read product density readings (morning / ad-hoc). Owner, Manager, Accountant, Staff. */
 export function canRecordDensity(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
+  return role === 'Owner' || role === 'Manager' || role === 'Accountant' || role === 'Staff';
 }
 
 /** Record / update Decantations (tanker unloads) and their density. Owner, Manager, Accountant. */
@@ -226,6 +226,11 @@ export function canRecordPurchase(role: Role): boolean {
 // ----------------------------------------------------
 // User Management
 // ----------------------------------------------------
+
+/** The Organization Owner: explicit identity check (not a capability). */
+export function isOwner(role: Role): boolean {
+  return role === 'Owner';
+}
 
 export function canManageUsers(role: Role): boolean {
   return role === 'Owner';

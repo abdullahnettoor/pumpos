@@ -278,9 +278,17 @@ describe('ReportsScreen', () => {
     },
   );
 
-  it.each(['Staff', 'Attendant'] as const)('hides both entries from %s', (role) => {
+  it('gives Staff the Density entry but not Decantations', () => {
     seed();
-    mount(['reports'], role);
+    mount(['reports'], 'Staff');
+    expect(screen.queryByRole('button', { name: /Decantations/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Density/ }));
+    expect(screen.getByText('Density page')).toBeTruthy();
+  });
+
+  it('hides both entries from Attendant', () => {
+    seed();
+    mount(['reports'], 'Attendant');
     expect(screen.queryByRole('button', { name: /Decantations/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Density/ })).toBeNull();
   });
