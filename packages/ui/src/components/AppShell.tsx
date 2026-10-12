@@ -4,6 +4,7 @@ import { AppStatusBar } from './AppStatusBar.js';
 import { cn } from '../pump-ds/lib/cn.js';
 import { Icon, type IconName, ICON_REGISTRY } from '../pump-ds/icon/index.js';
 import { Station, canViewReports, type OperatorRole, type Role } from '@pump/shared';
+import { useContainerWidth } from '../hooks/useContainerWidth.js';
 import { useStationBusinessDate } from '../hooks/useStationBusinessDate.js';
 import { useSidebarBadges, type SidebarBadges } from '../query/useSidebarBadges.js';
 import type { UserMenuAction } from '../pump-ds/shell/index.js';
@@ -146,7 +147,7 @@ const NAV_GROUPS: { heading: string; paths: string[] }[] = [
   { heading: 'Setup', paths: ['/setup/station', '/organization'] },
 ];
 
-/** Below this app width the sidebar becomes a 60px icon rail on its own. */
+/** Below this app (shell) width the sidebar becomes a 60px icon rail on its own. */
 export const RAIL_BREAKPOINT = 1200;
 export const SIDEBAR_COLLAPSED_KEY = 'pump.sidebar.collapsed';
 
@@ -156,16 +157,6 @@ function readCollapsed(): boolean {
   } catch {
     return false;
   }
-}
-
-function useAppWidth(): number {
-  const [w, setW] = useState(() => (typeof window === 'undefined' ? 1440 : window.innerWidth));
-  useEffect(() => {
-    const on = () => setW(window.innerWidth);
-    window.addEventListener('resize', on);
-    return () => window.removeEventListener('resize', on);
-  }, []);
-  return w;
 }
 
 /** The live badge for a nav item, or null. Dot on a rail, count/dot beside the label. */
@@ -241,7 +232,9 @@ export const AppShell: React.FC<AppShellProps> = ({
   // icon rail and the choice is remembered per device; below RAIL_BREAKPOINT
   // the rail is forced regardless (without overwriting the saved choice).
   const [userCollapsed, setUserCollapsed] = useState(readCollapsed);
-  const narrow = useAppWidth() < RAIL_BREAKPOINT;
+  const [shellRef, shellWidth] = useContainerWidth<HTMLDivElement>();
+  // 0 = not measured yet: stay expanded rather than flash a rail.
+  const narrow = shellWidth > 0 && shellWidth < RAIL_BREAKPOINT;
   const collapsed = userCollapsed || narrow;
   const toggleCollapsed = () => {
     const next = !userCollapsed;
@@ -305,6 +298,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 
   return (
     <div
+      ref={shellRef}
       className="app-shell"
       style={{
         display: 'flex',
