@@ -209,7 +209,7 @@ export function zoneOffsetMs(instant: number, timeZone: string): number {
 export function localToInstant(date: string, hhmm: string, timeZone: string): number {
   const [y, m, d] = date.split('-').map(Number);
   const [h, min] = hhmm.split(':').map((n) => Number(n) || 0);
-  const wall = Date.UTC(y!, m! - 1, d!, h, min);
+  const wall = Date.UTC(y, m - 1, d, h, min);
   const first = wall - zoneOffsetMs(wall, timeZone);
   return wall - zoneOffsetMs(first, timeZone);
 }

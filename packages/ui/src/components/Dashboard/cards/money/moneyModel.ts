@@ -85,7 +85,7 @@ export function buildTrendChart(data: TrendInput, W = 320, H = 70): TrendChart |
     sealedArea,
     draftLine,
     prevLine,
-    bestCircle: best >= 0 ? { cx: X(best).toFixed(1), cy: Y(trend[best]!.sales).toFixed(1) } : null,
+    bestCircle: best >= 0 ? { cx: X(best).toFixed(1), cy: Y(trend[best].sales).toFixed(1) } : null,
   };
 }
 
