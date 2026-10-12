@@ -5,6 +5,8 @@
  * station timezone; otherwise Pending.
  */
 
+import { stationMinuteOfDay } from './business-date.js';
+
 export type DuStatus = 'recorded' | 'pending' | 'due';
 
 const MINUTES_PER_DAY = 1440;
@@ -13,18 +15,6 @@ const timeToMinutes = (hhmm: string | null | undefined): number | null => {
   const m = /^(\d{1,2}):(\d{2})/.exec(hhmm ?? '');
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 };
-
-/** Minutes after local midnight of an instant (ms) in the station's timezone. */
-export function stationMinuteOfDay(ms: number, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone,
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(new Date(ms));
-  const at = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
-  return at('hour') * 60 + at('minute');
-}
 
 /**
  * True once the Shift has run past its template's scheduled end. The end is the

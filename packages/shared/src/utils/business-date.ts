@@ -174,3 +174,68 @@ export function businessDateSettings(settings: unknown): { timeZone: string; day
       (typeof s.business_day_starts_at === 'string' && s.business_day_starts_at) || '00:00',
   };
 }
+
+/** Offset (ms) of a timezone from UTC at an instant; positive east of UTC. */
+export function zoneOffsetMs(instant: number, timeZone: string): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(new Date(instant))
+      .map((p) => [p.type, p.value]),
+  ) as Record<string, string>;
+  const asUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour) % 24,
+    Number(parts.minute),
+    Number(parts.second),
+  );
+  return asUtc - Math.floor(instant / 1000) * 1000;
+}
+
+/**
+ * The UTC instant (ms) at which a station's wall clock reads `date` + `HH:MM`.
+ * One correction pass handles DST edges.
+ */
+export function localToInstant(date: string, hhmm: string, timeZone: string): number {
+  const [y, m, d] = date.split('-').map(Number);
+  const [h, min] = hhmm.split(':').map((n) => Number(n) || 0);
+  const wall = Date.UTC(y!, m! - 1, d!, h, min);
+  const first = wall - zoneOffsetMs(wall, timeZone);
+  return wall - zoneOffsetMs(first, timeZone);
+}
+
+/**
+ * The half-open interval `[from, to)` (epoch ms) of one Business Day: from the
+ * station's Day Start on `businessDate` to the next Day Start.
+ */
+export function businessDayWindow(
+  businessDate: string,
+  clock: { timeZone: string; dayStartsAt: string },
+): { from: number; to: number } {
+  return {
+    from: localToInstant(businessDate, clock.dayStartsAt, clock.timeZone),
+    to: localToInstant(shiftBusinessDate(businessDate, 1), clock.dayStartsAt, clock.timeZone),
+  };
+}
+
+/** Minutes after local midnight of an instant (ms) in the station's timezone. */
+export function stationMinuteOfDay(ms: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(ms));
+  const at = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return at('hour') * 60 + at('minute');
+}

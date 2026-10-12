@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { activityDayRouter } from './activity-day.js';
-import { OFFICE_ACTIVITY_EVENTS } from '../infra/activity-day.js';
+import { STAFF_HIDDEN_ACTIVITY_EVENTS } from '../infra/activity-day.js';
 import { makeFakeDb } from './test-fakes.js';
 
 /**
@@ -111,11 +111,15 @@ describe('dated feed role and tenant scoping', () => {
     expect(res.status).toBe(200);
     const where = compile(captured.where);
     expect(where.params).toContain('SHIFT_OPENED');
-    for (const office of OFFICE_ACTIVITY_EVENTS) expect(where.params).not.toContain(office);
+    for (const office of STAFF_HIDDEN_ACTIVITY_EVENTS) expect(where.params).not.toContain(office);
     const fields = captured.fields as { relatedCount: unknown };
     const related = compile(fields.relatedCount);
     expect(related.params).toContain('SHIFT_OPENED');
-    for (const office of OFFICE_ACTIVITY_EVENTS) expect(related.params).not.toContain(office);
+    for (const office of STAFF_HIDDEN_ACTIVITY_EVENTS) expect(related.params).not.toContain(office);
+    expect(related.sql).toContain('station_id');
+    expect(related.params).toContain(STATION);
+    // Decantation/tanker events belong to the forecourt set Staff may see.
+    expect(where.params).toContain('DECANTATION_RECORDED');
   });
 
   it('Manager queries Office Record types too; Owner has no type filter', async () => {
