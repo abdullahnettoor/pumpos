@@ -71,7 +71,7 @@ export const TodayInOfficeCard: React.FC = () => {
                 </span>
                 <span
                   className={`font-mono font-medium shrink-0 ${
-                    isIncome ? 'text-state-success-fg' : 'text-state-danger-fg'
+                    isIncome ? 'text-success-fg' : 'text-danger-fg'
                   }`}
                 >
                   {isIncome ? '+' : '-'}

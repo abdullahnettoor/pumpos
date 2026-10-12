@@ -51,11 +51,11 @@ export const AppearanceControl: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Appearance</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Appearance</p>
       <div
         role="radiogroup"
         aria-label="Appearance"
-        className="grid grid-cols-3 gap-1 rounded-xl border border-line bg-card-alt p-1"
+        className="grid grid-cols-3 gap-1 rounded-xl border border-border-soft bg-surface-alt p-1"
       >
         {THEME_PREFERENCES.map((p, i) => {
           const active = preference === p;
@@ -71,8 +71,8 @@ export const AppearanceControl: React.FC = () => {
               tabIndex={active ? 0 : -1}
               onClick={() => setPreference(p)}
               onKeyDown={(e) => onKeyDown(e, i)}
-              className={`rounded-lg py-1.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                active ? 'bg-card text-text-high shadow-chip' : 'text-text-muted'
+              className={`rounded-lg py-1.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                active ? 'bg-surface text-ink shadow-sm' : 'text-ink-muted'
               }`}
             >
               {LABELS[p]}

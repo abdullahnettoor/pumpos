@@ -64,8 +64,8 @@ const DuLine: React.FC<{ du: DuRow }> = ({ du }) => (
 );
 
 const Live: React.FC<{ m: LiveForecourt }> = ({ m }) => (
-  <div className="rounded-lg border border-line bg-surface">
-    <div className="border-b border-line px-3.5 py-3">
+  <div className="rounded-lg border border-border-soft bg-surface">
+    <div className="border-b border-border-soft px-3.5 py-3">
       <div className="flex items-center gap-2 text-[13px]">
         <Dot tone={m.pastEnd ? 'warning' : 'success'} pulse={!m.pastEnd} />
         <b className="font-semibold text-ink">
@@ -84,7 +84,7 @@ const Live: React.FC<{ m: LiveForecourt }> = ({ m }) => (
           <i
             key={i}
             className={`h-1.5 flex-1 rounded-full ${
-              i < m.recorded ? 'bg-success-fg' : m.pastEnd ? 'bg-warning-fg' : 'bg-line'
+              i < m.recorded ? 'bg-success-fg' : m.pastEnd ? 'bg-warning-fg' : 'bg-surface-alt'
             }`}
           />
         ))}
@@ -105,7 +105,7 @@ const Live: React.FC<{ m: LiveForecourt }> = ({ m }) => (
         )}
       </div>
     </div>
-    <ul className="divide-y divide-line">
+    <ul className="divide-y divide-border-soft">
       {m.dus.map((d) => (
         <DuLine key={d.key} du={d} />
       ))}
@@ -115,7 +115,7 @@ const Live: React.FC<{ m: LiveForecourt }> = ({ m }) => (
 
 const LastClosedBlock: React.FC<{ last: LastClosed; onOpen: () => void }> = ({ last, onOpen }) => (
   <div
-    className="mt-2 rounded-lg border border-line bg-surface px-3.5 py-3"
+    className="mt-2 rounded-lg border border-border-soft bg-surface px-3.5 py-3"
     data-testid="last-closed"
   >
     <div className="flex items-center">
@@ -213,7 +213,7 @@ export const ForecourtCard: React.FC = () => {
         </div>
       ) : model ? (
         <div className="p-2">
-          <div className="rounded-lg border border-line bg-surface px-4 py-5 text-center">
+          <div className="rounded-lg border border-border-soft bg-surface px-4 py-5 text-center">
             <div className="text-[13px] font-semibold text-ink">
               {model.kind === 'between' ? 'Between shifts' : 'No shift running'}
             </div>

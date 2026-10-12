@@ -13,7 +13,7 @@ const TONE: Record<string, string> = {
 };
 
 const HATCH =
-  'repeating-linear-gradient(45deg, rgba(37,99,235,.35) 0 4px, rgba(37,99,235,.12) 4px 8px)';
+  'repeating-linear-gradient(45deg, color-mix(in srgb, var(--brand-primary) 35%, transparent) 0 4px, color-mix(in srgb, var(--brand-primary) 12%, transparent) 4px 8px)';
 
 export interface TimelineStripProps {
   timeline: DashboardTimeline;
@@ -114,10 +114,10 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
           title={b.label}
           className={`absolute inset-y-0 flex items-center overflow-hidden rounded-input px-1.5 text-[11px] ${
             b.kind === 'closed'
-              ? 'bg-primary/80 text-white'
+              ? 'bg-brand text-on-brand'
               : b.kind === 'running'
-                ? 'border border-primary/50 text-ink'
-                : 'border border-dashed border-border text-ink-muted'
+                ? 'border border-brand text-ink'
+                : 'border border-dashed border-border-strong text-ink-muted'
           }`}
           style={{
             left: `${b.leftPct}%`,

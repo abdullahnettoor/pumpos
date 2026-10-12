@@ -73,7 +73,7 @@ export const YourShiftCard: React.FC = () => {
       footer={
         <button
           type="button"
-          className="text-[12.5px] text-accent hover:underline"
+          className="text-[12.5px] text-brand hover:underline"
           onClick={() => onNavigate('/shifts')}
         >
           Shift workspace ›
@@ -116,7 +116,7 @@ export const YourShiftCard: React.FC = () => {
               {drops.length > 3 && (
                 <div className="text-[12px] text-ink-muted">+{drops.length - 3} more</div>
               )}
-              <div className="flex items-center justify-between border-t border-border pt-2 text-[12.5px]">
+              <div className="flex items-center justify-between border-t border-border-soft pt-2 text-[12.5px]">
                 <span className="text-ink-muted">Total</span>
                 <span className="font-semibold tabular-nums">{formatMoney(total)}</span>
               </div>
