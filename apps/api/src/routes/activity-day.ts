@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { isAuthorizedForStation, isValidBusinessDate } from '@pump/shared';
+import { canManageUsers, isAuthorizedForStation, isValidBusinessDate } from '@pump/shared';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { businessDayWindow, dashboardEventTypesForRole } from '../infra/activity-day.js';
 import {
@@ -24,9 +24,21 @@ export const activityDayRouter = new Hono<Env>();
  */
 activityDayRouter.get('/activity', async (c, next) => {
   const date = c.req.query('date');
-  if (date === undefined) return next();
-
   const user = c.var.user;
+  if (date === undefined) {
+    // The undated feed is the Owner-only audit log (served by the next handler).
+    if (!canManageUsers(user.role)) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Owners can view the activity log' },
+        },
+        403,
+      );
+    }
+    return next();
+  }
+
   const stationId = c.req.query('stationId');
   const bad = (message: string) =>
     c.json({ success: false, error: { code: 'VALIDATION_ERROR', message } }, 400);
@@ -65,6 +77,15 @@ activityDayRouter.get('/activity', async (c, next) => {
   if (allowed !== null) conds.push(inArray(schema.events.eventType, [...allowed]));
 
   const joins = activityJoins(user.organizationId);
+  // Count only siblings this role may see, so Staff never learn of hidden
+  // Office Record siblings. Same single correlated subquery: no extra statement.
+  const memberTypeFilter =
+    allowed === null
+      ? sql``
+      : sql`AND activity_group_members.event_type IN (${sql.join(
+          allowed.map((t) => sql`${t}`),
+          sql`, `,
+        )})`;
   const relatedCount = sql<number>`CASE
     WHEN ${schema.events.correlationId} IS NULL THEN 0
     ELSE (
@@ -72,6 +93,7 @@ activityDayRouter.get('/activity', async (c, next) => {
       FROM events AS activity_group_members
       WHERE activity_group_members.organization_id = ${user.organizationId}
         AND activity_group_members.correlation_id = ${schema.events.correlationId}
+        ${memberTypeFilter}
     )
   END`
     .mapWith(Number)

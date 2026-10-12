@@ -56,7 +56,7 @@ describe('GET /activity?date=', () => {
 
   it('falls through to the audit feed without a date', async () => {
     const { db } = makeFakeDb();
-    const res = await makeApp(db).request(`/activity?stationId=${STATION}`);
+    const res = await makeApp(db, 'Owner').request(`/activity?stationId=${STATION}`);
     expect(await res.json()).toEqual({ fellThrough: true });
   });
 
