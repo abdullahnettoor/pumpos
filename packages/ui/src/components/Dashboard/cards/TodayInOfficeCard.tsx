@@ -44,9 +44,9 @@ export const TodayInOfficeCard: React.FC = () => {
       card="money"
       title="Today in the office"
       query={cashBookQ}
-      action={headerAction}
       placeholderHeight={140}
     >
+      <div className="mb-1.5 flex justify-end">{headerAction}</div>
       {top3.length === 0 ? (
         <div className="text-xs text-ink-muted py-1" data-testid="empty-office-records">
           Nothing recorded yet today.
@@ -71,7 +71,7 @@ export const TodayInOfficeCard: React.FC = () => {
                 </span>
                 <span
                   className={`font-mono font-medium shrink-0 ${
-                    isIncome ? 'text-state-success-fg' : 'text-state-danger-fg'
+                    isIncome ? 'text-success-fg' : 'text-danger-fg'
                   }`}
                 >
                   {isIncome ? '+' : '-'}

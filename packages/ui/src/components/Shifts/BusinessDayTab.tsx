@@ -143,7 +143,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   const snapshotQ = useDailyDssr(stationId, businessDate, {
     enabled: !!stationId && selectedState === 'CLOSED',
   } as any);
-  const shiftStatusQ = useShiftStatus(stationId, true, { enabled: !!stationId } as any);
+  const shiftStatusQ = useShiftStatus(stationId, { lite: true, enabled: !!stationId });
   const shiftStatus = shiftStatusQ.data;
   const activeShift = shiftStatus?.activeShift;
 

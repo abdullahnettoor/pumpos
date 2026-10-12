@@ -51,11 +51,7 @@ const PartError: React.FC<{ what: string; retry: () => void }> = ({ what, retry 
 );
 
 const Pulse: React.FC<{ h: number }> = ({ h }) => (
-  <div
-    className="animate-pulse rounded bg-surface-sunken"
-    style={{ height: h }}
-    aria-hidden="true"
-  />
+  <div className="animate-pulse rounded bg-surface-alt" style={{ height: h }} aria-hidden="true" />
 );
 
 const DensityRow: React.FC<
@@ -122,7 +118,7 @@ const DensityRow: React.FC<
 const TankRow: React.FC<{ tank: FuelTank }> = ({ tank }) => (
   <li className="flex items-center gap-2 text-[12px]" data-tone={tank.tone}>
     <span className="w-16 shrink-0 truncate text-ink-muted">{tank.name}</span>
-    <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-sunken" aria-hidden="true">
+    <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-alt" aria-hidden="true">
       <span
         className={`block h-full rounded-full ${TONE_BAR[tank.tone]}`}
         style={{ width: `${tank.fill}%` }}
@@ -148,7 +144,7 @@ export const FuelBlock: React.FC<FuelBlockProps> = (p) => {
 
   return (
     <article
-      className={`rounded-lg border p-3 ${alert ? 'border-danger-fg' : 'border-line'}`}
+      className={`rounded-lg border p-3 ${alert ? 'border-danger-fg' : 'border-border-soft'}`}
       data-testid={`fuel-${p.code}`}
       data-alert={alert ? 'true' : 'false'}
     >
@@ -180,7 +176,7 @@ export const FuelBlock: React.FC<FuelBlockProps> = (p) => {
           </ul>
         )}
         {pending.length > 0 && (
-          <div className="flex items-center justify-between gap-2 rounded bg-warning-soft px-2 py-1 text-[12px] text-warning-fg">
+          <div className="flex items-center justify-between gap-2 rounded bg-warning-bg px-2 py-1 text-[12px] text-warning-fg">
             <span>Decantation pending · {pending.map((t) => t.name).join(', ')}</span>
             {p.canDecant && (
               <Button variant="ghost" size="xs" onClick={p.onDecant}>

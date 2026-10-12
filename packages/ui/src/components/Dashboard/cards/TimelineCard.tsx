@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { dashboardTimeline, groupEventPins } from '@pump/shared';
 import { Button } from '../../../pump-ds/index.js';
 import {
@@ -16,7 +16,8 @@ import { useTimelineCollapsed } from './timeline/useTimelineCollapsed.js';
 
 /** Compact Business Day timeline: shift bars, merged event pins, collapsible. */
 export const TimelineCard: React.FC = () => {
-  const { station, businessDate, timeZone, dayStartsAt, onNavigate } = useDashboard();
+  const { station, now: nowDate, businessDate, timeZone, dayStartsAt, onNavigate } = useDashboard();
+  const now = nowDate.getTime();
   const enabled = useCardEnabled('timeline');
   const status = useDashboardSummary(station.id, { enabled });
   const templates = useShiftTemplates({ enabled });
@@ -24,13 +25,8 @@ export const TimelineCard: React.FC = () => {
   const summaries = useShiftSummaries(station.id, { enabled });
   const [collapsed, toggle] = useTimelineCollapsed();
 
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(t);
-  }, []);
   const model = useMemo(() => {
-    if (!status.data || !templates.data || !timeZone || !dayStartsAt) return null;
+    if (!status.data || !templates.data) return null;
     const day: any[] = status.data.today?.shifts ?? [];
     const tplName = new Map<string, string>(templates.data.map((t) => [t.id, t.name as string]));
     const byShift = new Map<string, any>(
@@ -90,6 +86,7 @@ export const TimelineCard: React.FC = () => {
     <DashboardCard
       card="timeline"
       title="Timeline"
+      variant="panel"
       query={[status, templates, activity]}
       placeholderHeight={collapsed ? 20 : 76}
       action={
@@ -110,7 +107,7 @@ export const TimelineCard: React.FC = () => {
               bars={bars}
               pins={pins}
               now={now}
-              timeZone={timeZone!}
+              timeZone={timeZone}
               onOpen={open}
             />
             <BarSummary bars={bars} />

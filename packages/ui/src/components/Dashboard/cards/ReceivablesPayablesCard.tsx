@@ -44,7 +44,7 @@ export const ReceivablesPayablesCard: React.FC = () => {
             <span className="text-xs text-ink-muted">To collect</span>
             <span
               className={`font-mono text-base font-semibold ${
-                totalReceivables > 0 ? 'text-state-warning-fg' : 'text-ink'
+                totalReceivables > 0 ? 'text-warning-fg' : 'text-ink'
               }`}
               data-testid="receivables-total"
             >
@@ -70,9 +70,9 @@ export const ReceivablesPayablesCard: React.FC = () => {
                 role="progressbar"
                 aria-label="Receivables aging"
               >
-                {p1 > 0 && <div style={{ width: `${p1}%` }} className="bg-state-success-fg" />}
-                {p2 > 0 && <div style={{ width: `${p2}%` }} className="bg-state-warning-fg" />}
-                {p3 > 0 && <div style={{ width: `${p3}%` }} className="bg-state-danger-fg" />}
+                {p1 > 0 && <div style={{ width: `${p1}%` }} className="bg-success-fg" />}
+                {p2 > 0 && <div style={{ width: `${p2}%` }} className="bg-warning-fg" />}
+                {p3 > 0 && <div style={{ width: `${p3}%` }} className="bg-danger-fg" />}
               </div>
               <div className="flex items-center justify-between text-[11px] text-ink-muted">
                 <span>
@@ -87,7 +87,7 @@ export const ReceivablesPayablesCard: React.FC = () => {
                     {formatCompactRupees(d8_30)}
                   </strong>
                 </span>
-                <span className={d30plus > 0 ? 'text-state-danger-fg' : ''}>
+                <span className={d30plus > 0 ? 'text-danger-fg' : ''}>
                   30d+{' '}
                   <strong className="font-mono font-medium">{formatCompactRupees(d30plus)}</strong>
                 </span>

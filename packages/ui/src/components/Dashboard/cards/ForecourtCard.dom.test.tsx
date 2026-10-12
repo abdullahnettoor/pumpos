@@ -12,6 +12,7 @@ const hooks = vi.hoisted(() => ({
 vi.mock('../../../query/hooks.js', () => hooks);
 
 import { DashboardProvider } from '../frame/DashboardContext.js';
+import { ForecourtColumn } from '../columns/ForecourtColumn.js';
 import { ForecourtCard } from './ForecourtCard.js';
 
 const STATION = { id: 'st-1', name: 'Hwy', settings: {} } as unknown as Station;
@@ -45,13 +46,18 @@ const live = (count: number, opened: string) => ({
   },
 });
 
-function mount(role: 'Owner' | 'Manager' | 'Accountant' | 'Staff', nav = vi.fn()) {
+function mount(
+  role: 'Owner' | 'Manager' | 'Accountant' | 'Staff',
+  nav = vi.fn(),
+  ui: React.ReactNode = <ForecourtCard />,
+) {
   render(
     <DashboardProvider
       value={{
         station: STATION,
         role,
         userName: 'A',
+        now: new Date(),
         timeZone: 'Asia/Kolkata',
         dayStartsAt: '06:00',
         businessDate: '2026-10-09',
@@ -59,7 +65,7 @@ function mount(role: 'Owner' | 'Manager' | 'Accountant' | 'Staff', nav = vi.fn()
         onNavigate: nav,
       }}
     >
-      <ForecourtCard />
+      {ui}
     </DashboardProvider>,
   );
   return nav;
@@ -107,13 +113,13 @@ describe('ForecourtCard live', () => {
     expect(screen.getByText('1 overdue')).toBeTruthy();
   });
 
-  it('Accountant sees View › and Staff Workspace ›', () => {
+  it('column header: Accountant sees View › and Staff Workspace ›', () => {
     vi.setSystemTime(Date.parse('2026-10-09T17:12:00+05:30'));
     hooks.useShiftStatus.mockReturnValue(ok(live(1, '2026-10-09T08:30:00.000Z')));
-    mount('Accountant');
+    mount('Accountant', vi.fn(), <ForecourtColumn />);
     expect(screen.getByText('View ›')).toBeTruthy();
     cleanup();
-    mount('Staff');
+    mount('Staff', vi.fn(), <ForecourtColumn />);
     expect(screen.getByText('Workspace ›')).toBeTruthy();
   });
 });
@@ -182,6 +188,6 @@ describe('ForecourtCard query states', () => {
     hooks.useShiftStatus.mockReturnValue(ok({ activeShift: null }));
     mount('Attendant' as never);
     expect(screen.queryByText('Forecourt')).toBeNull();
-    expect(hooks.useShiftStatus).toHaveBeenCalledWith('st-1', false, { enabled: false });
+    expect(hooks.useShiftStatus).toHaveBeenCalledWith('st-1', { enabled: false });
   });
 });

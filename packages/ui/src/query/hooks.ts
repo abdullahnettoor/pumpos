@@ -685,10 +685,14 @@ export function useTanks(stationId: string | null | undefined, options?: Options
   });
 }
 
+/**
+ * Shift status for a station. `lite: true` fetches the light payload (no
+ * assignments/handovers); it is part of the query key, so lite and full are
+ * cached separately.
+ */
 export function useShiftStatus(
   stationId: string | null | undefined,
-  lite = false,
-  options?: Options<any>,
+  { lite = false, ...options }: Options<any> & { lite?: boolean } = {},
 ) {
   return useQuery({
     queryKey: queryKeys.shiftStatus(stationId ?? '', lite),

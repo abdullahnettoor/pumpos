@@ -94,7 +94,7 @@ export const MoneyCard: React.FC = () => {
             {compView && (
               <div
                 className={`text-xs mt-1 font-medium ${
-                  compView.tone === 'bad' ? 'text-state-danger-fg' : 'text-ink'
+                  compView.tone === 'bad' ? 'text-danger-fg' : 'text-ink'
                 }`}
               >
                 {compView.arrow ? `${compView.arrow} ` : ''}
@@ -108,14 +108,14 @@ export const MoneyCard: React.FC = () => {
           {isOwner && (
             <div data-testid="margin-tile">
               <div className="text-[11px] uppercase tracking-wider text-ink-muted">Margin</div>
-              <div className="font-mono text-sm font-medium text-state-success-fg">
+              <div className="font-mono text-sm font-medium text-success-fg">
                 {formatCompactRupees(margin)}
               </div>
             </div>
           )}
           <div data-testid="credit-tile">
             <div className="text-[11px] uppercase tracking-wider text-ink-muted">Credit</div>
-            <div className="font-mono text-sm font-medium text-state-warning-fg">
+            <div className="font-mono text-sm font-medium text-warning-fg">
               {formatCompactRupees(credit)}
             </div>
           </div>
@@ -146,7 +146,7 @@ export const MoneyCard: React.FC = () => {
                   {trendData.changePct !== null && (
                     <span
                       className={`ml-2 font-mono font-medium ${
-                        trendData.changePct >= 0 ? 'text-state-success-fg' : 'text-state-danger-fg'
+                        trendData.changePct >= 0 ? 'text-success-fg' : 'text-danger-fg'
                       }`}
                     >
                       {trendData.changePct >= 0 ? '+' : ''}

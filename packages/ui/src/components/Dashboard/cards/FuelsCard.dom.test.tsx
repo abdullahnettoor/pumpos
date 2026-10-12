@@ -89,6 +89,7 @@ const mount = (role: 'Owner' | 'Manager' | 'Accountant' | 'Staff' = 'Owner') =>
         station: STATION,
         role,
         userName: 'A',
+        now: new Date(),
         timeZone: 'Asia/Kolkata',
         dayStartsAt: '06:00',
         businessDate: D,

@@ -5,7 +5,7 @@ import { cn } from '../pump-ds/lib/cn.js';
 import { Icon, type IconName, ICON_REGISTRY } from '../pump-ds/icon/index.js';
 import { Station, canViewReports, type OperatorRole, type Role } from '@pump/shared';
 import { useContainerWidth } from '../hooks/useContainerWidth.js';
-import { useStationBusinessDate } from '../hooks/useStationBusinessDate.js';
+import { useStationClock } from '../hooks/useStationClock.js';
 import { useSidebarBadges, type SidebarBadges } from '../query/useSidebarBadges.js';
 import type { UserMenuAction } from '../pump-ds/shell/index.js';
 
@@ -159,34 +159,70 @@ function readCollapsed(): boolean {
   }
 }
 
+type BadgeTone = 'success' | 'warning' | 'danger';
+
+/**
+ * Live sidebar badges, keyed by nav path. `read` returns the label and either
+ * a count or a dot, or null when there is nothing to show. Tones follow the
+ * prototype: Inventory danger, Customers / Reports warning, running shift a
+ * success dot.
+ */
+const NAV_BADGES: Record<
+  string,
+  { tone: BadgeTone; read: (b: SidebarBadges) => { label: string; count?: number } | null }
+> = {
+  '/shifts': { tone: 'success', read: (b) => (b.shiftRunning ? { label: 'Shift running' } : null) },
+  '/inventory': {
+    tone: 'danger',
+    read: (b) =>
+      b.inventoryAlerts > 0
+        ? { label: `${b.inventoryAlerts} inventory alerts`, count: b.inventoryAlerts }
+        : null,
+  },
+  '/customers': {
+    tone: 'warning',
+    read: (b) =>
+      b.overdueCustomers > 0
+        ? { label: `${b.overdueCustomers} overdue customers`, count: b.overdueCustomers }
+        : null,
+  },
+  '/reports': {
+    tone: 'warning',
+    read: (b) =>
+      b.openPastDays > 0
+        ? { label: `${b.openPastDays} open past days`, count: b.openPastDays }
+        : null,
+  },
+};
+
+const BADGE_DOT: Record<BadgeTone, string> = {
+  success: 'bg-success-fg',
+  warning: 'bg-warning-fg',
+  danger: 'bg-danger-fg',
+};
+const BADGE_CHIP: Record<BadgeTone, string> = {
+  success: 'bg-success-bg text-success-fg',
+  warning: 'bg-warning-bg text-warning-fg',
+  danger: 'bg-danger-bg text-danger-fg',
+};
+
 /** The live badge for a nav item, or null. Dot on a rail, count/dot beside the label. */
 function renderBadge(path: string, b: SidebarBadges, collapsed: boolean): React.ReactNode {
-  let count = 0;
-  let dot = false;
-  let label: string;
-  if (path === '/shifts' && b.shiftRunning) {
-    dot = true;
-    label = 'Shift running';
-  } else if (path === '/inventory' && b.inventoryAlerts > 0) {
-    count = b.inventoryAlerts;
-    label = `${count} inventory alerts`;
-  } else if (path === '/customers' && b.overdueCustomers > 0) {
-    count = b.overdueCustomers;
-    label = `${count} overdue customers`;
-  } else if (path === '/reports' && b.openPastDays > 0) {
-    count = b.openPastDays;
-    label = `${count} open past days`;
-  } else return null;
+  const entry = NAV_BADGES[path];
+  const badge = entry?.read(b);
+  if (!entry || !badge) return null;
+  const { tone } = entry;
+  const testId = `nav-badge-${path.slice(1)}`;
 
-  if (dot || collapsed) {
+  if (badge.count === undefined || collapsed) {
     return (
       <span
         role="img"
-        aria-label={label}
-        data-testid={`nav-badge-${path.slice(1)}`}
+        aria-label={badge.label}
+        data-testid={testId}
         className={cn(
           'size-1.5 rounded-full',
-          dot ? 'bg-success-fg' : 'bg-danger-fg',
+          BADGE_DOT[tone],
           collapsed ? 'absolute right-2 top-1.5' : 'ml-auto',
         )}
       />
@@ -195,11 +231,14 @@ function renderBadge(path: string, b: SidebarBadges, collapsed: boolean): React.
   return (
     <span
       role="img"
-      aria-label={label}
-      data-testid={`nav-badge-${path.slice(1)}`}
-      className="ml-auto inline-flex min-w-[18px] items-center justify-center rounded-chip bg-surface-alt px-1.5 font-mono text-[10px] font-medium text-ink-strong"
+      aria-label={badge.label}
+      data-testid={testId}
+      className={cn(
+        'ml-auto inline-flex min-w-[18px] items-center justify-center rounded-chip px-1.5 font-mono text-[10px] font-medium',
+        BADGE_CHIP[tone],
+      )}
     >
-      {count > 99 ? '99+' : count}
+      {badge.count > 99 ? '99+' : badge.count}
     </span>
   );
 }
@@ -246,19 +285,13 @@ export const AppShell: React.FC<AppShellProps> = ({
     }
   };
 
-  const stationSettings = (selectedStation?.settings ?? {}) as {
-    timezone?: string;
-    business_day_starts_at?: string;
-  };
-  const businessIso = useStationBusinessDate(
-    stationSettings.timezone,
-    stationSettings.business_day_starts_at,
-  );
+  const { businessDate } = useStationClock(selectedStation?.settings);
   const badges = useSidebarBadges(
     selectedStation?.id,
     stationReady && !!selectedStation,
+    // Money alerts (overdue customers, open past days) follow Reports access.
     canViewReports(userRole as Role),
-    businessIso,
+    businessDate,
   );
 
   // App-wide: stop mouse-wheel from changing a focused number input's value
