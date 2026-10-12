@@ -84,6 +84,16 @@ const MAP: Record<string, Mapping> = {
   RETAIL_SALE_VOIDED: { icon: 'cart', tone: 'warning', path: '/shifts' },
 };
 
+/** Cash drops never appear on the dashboard (#512 P3.1); one explicit list. */
+const HIDDEN_EVENT_TYPES: ReadonlySet<string> = new Set([
+  'CASH_DROP_RECORDED',
+  'CASH_DROP_VOIDED',
+  'CASH_DROPPED',
+]);
+
+/** Whether an activity event belongs on the dashboard timeline. */
+export const isDashboardEvent = (eventType: string): boolean => !HIDDEN_EVENT_TYPES.has(eventType);
+
 const FALLBACK: Mapping = { icon: 'info' };
 
 function toneOf(m: Mapping, apiTone: ActivityGroupSummary['primary']['tone']): PinTone {

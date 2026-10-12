@@ -4,7 +4,7 @@ import { Eye, Play, Plus } from 'lucide-react';
 import { Button, PageHeader } from '../../../pump-ds/index.js';
 import { useDashboardSummary } from '../../../query/hooks.js';
 import { useDashboard } from './DashboardContext.js';
-import { formatAsOf, formatDashboardDate, formatDayStart } from './headerText.js';
+import { formatClockInZone, formatHHMM, formatShortDay } from '../../../utils/format.js';
 
 /**
  * "Dashboard" + the business-day line + a single shift action. No day stepper,
@@ -18,7 +18,7 @@ export const DashboardHeader: React.FC = () => {
   const summary = useDashboardSummary(station.id, { enabled: action !== null });
 
   const hasOpenShift = !!summary.data?.activeShift;
-  const subtitle = `Business day ${formatDashboardDate(businessDate)} · open since ${formatDayStart(dayStartsAt)} · as of ${formatAsOf(now, timeZone)}`;
+  const subtitle = `Business day ${formatShortDay(businessDate)} · open since ${formatHHMM(dayStartsAt)} · as of ${formatClockInZone(now, timeZone)}`;
 
   return (
     <PageHeader

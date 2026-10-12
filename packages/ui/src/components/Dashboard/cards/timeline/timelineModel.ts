@@ -1,5 +1,5 @@
 import type { DashboardTimeline, EventPin } from '@pump/shared';
-import { formatMoney } from '../../../../utils/format.js';
+import { formatAxisHour, formatClockInZone, formatMoney } from '../../../../utils/format.js';
 
 export interface ShiftBarInput {
   id: string;
@@ -90,14 +90,7 @@ export function buildBars(
       kind: 'ghost',
       label: tl.nextWindow.name,
       name: `Shift ${shifts.length + 1}`,
-      text: `Shift ${shifts.length + 1} · scheduled ${new Intl.DateTimeFormat('en-IN', {
-        timeZone,
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      })
-        .format(tl.nextWindow.startAt)
-        .toLowerCase()}, not opened yet`,
+      text: `Shift ${shifts.length + 1} · scheduled ${formatClockInZone(tl.nextWindow.startAt, timeZone)}, not opened yet`,
       late: false,
       varianceText: null,
       leftPct: left,
@@ -114,12 +107,10 @@ export function axisTicks(
   tl: Pick<DashboardTimeline, 'dayStartAt' | 'dayEndAt'>,
   timeZone: string,
 ): { leftPct: number; label: string }[] {
-  const fmt = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hour12: true });
   const out: { leftPct: number; label: string }[] = [];
   for (let h = 0; h <= 24; h += 6) {
     const at = tl.dayStartAt + h * 3_600_000;
-    const label = fmt.format(at).replace(/\s?(AM|PM)/i, (_, m: string) => m[0].toLowerCase());
-    out.push({ leftPct: axisPct(at, tl), label });
+    out.push({ leftPct: axisPct(at, tl), label: formatAxisHour(at, timeZone) });
   }
   return out;
 }
@@ -144,14 +135,5 @@ export function scheduledEndAt(
 }
 
 /** Clock time in the station timezone: "6 am", "1:52 pm". */
-export function clockLabel(at: number, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  }).formatToParts(at);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
-  const min = get('minute');
-  return `${get('hour')}${min === '00' ? '' : `:${min}`} ${get('dayPeriod').toLowerCase()}`;
-}
+export const clockLabel = (at: number, timeZone: string): string =>
+  formatClockInZone(at, timeZone, { compact: true });

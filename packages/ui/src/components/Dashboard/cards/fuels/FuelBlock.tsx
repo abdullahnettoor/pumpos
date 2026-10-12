@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button, Chip, Sparkline } from '../../../../pump-ds/index.js';
 import { formatBusinessDate, formatMoney } from '../../../../utils/format.js';
-import { formatClock, formatDayMonth, klText } from './fuelFormat.js';
+import { formatClockInZone, formatDayMonth, formatQty } from '../../../../utils/format.js';
 import {
   coverFallback,
   isYesterday,
@@ -115,7 +115,7 @@ const DensityRow: React.FC<
         <div className="text-[12px] text-ink-muted">
           {observed != null && `${observed.toFixed(1)} `}
           {state.tempC != null && `at ${state.tempC} °C · `}
-          {formatClock(state.at, timeZone)}
+          {formatClockInZone(state.at, timeZone)}
         </div>
       </div>
       {trend.length > 1 && (
@@ -162,7 +162,7 @@ const TankRow: React.FC<{ tank: FuelTank }> = ({ tank }) => (
     <div className="min-w-0 flex-1">
       <div className="truncate text-[13px] font-medium text-ink">{tank.name}</div>
       <div className="text-[12px] text-ink-muted">
-        {klText(tank.currentKl)} of {tank.capacityKl.toFixed(0)} KL
+        {formatQty(tank.currentKl, 1)} of {tank.capacityKl.toFixed(0)} KL
       </div>
     </div>
     <div className="shrink-0 text-right">
@@ -246,12 +246,12 @@ export const FuelBlock: React.FC<FuelBlockProps> = (p) => {
           <span>
             {pd?.qtyL != null ? (
               <>
-                <b>{klText(pd.qtyL / 1000)} KL</b> tanker waiting to decant
+                <b>{formatQty(pd.qtyL / 1000, 1)} KL</b> tanker waiting to decant
               </>
             ) : (
               <>Tanker waiting to decant · {pending.map((t) => t.name).join(', ')}</>
             )}
-            {pd?.since && ` · since ${formatClock(pd.since, p.timeZone)}`}
+            {pd?.since && ` · since ${formatClockInZone(pd.since, p.timeZone)}`}
           </span>
           {p.canDecant && (
             <Button variant="ghost" size="xs" onClick={p.onDecant}>

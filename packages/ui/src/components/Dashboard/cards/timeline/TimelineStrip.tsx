@@ -110,11 +110,7 @@ const PinButton: React.FC<{
   const first = events[0];
   const left = Math.min(100 - PIN_INSET_PCT, Math.max(PIN_INSET_PCT, leftPct));
   return (
-    <div
-      ref={ref}
-      className="absolute top-0 -translate-x-1/2"
-      style={{ left: `${left}%` }}
-    >
+    <div ref={ref} className="absolute top-0 -translate-x-1/2" style={{ left: `${left}%` }}>
       <button
         type="button"
         data-testid="timeline-pin"

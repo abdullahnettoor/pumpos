@@ -7,7 +7,7 @@ import { TodayInOfficeCard } from '../cards/TodayInOfficeCard.js';
 import { YourShiftCard } from '../cards/YourShiftCard.js';
 import { ColumnHeader } from '../frame/ColumnHeader.js';
 import { useDashboard } from '../frame/DashboardContext.js';
-import { formatAsOf } from '../frame/headerText.js';
+import { formatClockInZone } from '../../../utils/format.js';
 
 /** Staff's "Your shift" header (same query key as YourShiftCard: no extra request). */
 const YourShiftHeader: React.FC = () => {
@@ -16,7 +16,7 @@ const YourShiftHeader: React.FC = () => {
   const shift = status.data?.activeShift as
     { shiftSequence?: number; openedAt?: string } | null | undefined;
   const subtitle = shift?.openedAt
-    ? `${shift.shiftSequence ? `Shift ${shift.shiftSequence} · ` : ''}since ${formatAsOf(new Date(shift.openedAt), timeZone)}`
+    ? `${shift.shiftSequence ? `Shift ${shift.shiftSequence} · ` : ''}since ${formatClockInZone(shift.openedAt, timeZone)}`
     : 'no shift open';
   return <ColumnHeader title="Your shift" subtitle={subtitle} />;
 };

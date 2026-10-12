@@ -4,7 +4,7 @@ import { Button } from '../../../pump-ds/index.js';
 import { useDashboardSummary, useDayActivity, useShiftTemplates } from '../../../query/hooks.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
-import { toTimelineEvent, type PinTarget } from './timeline/activityPins.js';
+import { isDashboardEvent, toTimelineEvent, type PinTarget } from './timeline/activityPins.js';
 import {
   buildBars,
   clockLabel,
@@ -24,9 +24,6 @@ interface DaySummaryShift {
   totalFuelSalesValue?: number | null;
   cashVariance?: number | null;
 }
-
-/** Cash drops are not shown on the dashboard (P3.1). */
-const isCashDropEvent = (type: string) => /DROP/.test(type);
 
 /** Compact Business Day timeline: shift bars, merged event pins, collapsible. */
 export const TimelineCard: React.FC = () => {
@@ -76,7 +73,7 @@ export const TimelineCard: React.FC = () => {
   const events = useMemo(
     () =>
       (activity.data?.items ?? [])
-        .filter((g) => !isCashDropEvent(g.primary.eventType))
+        .filter((g) => isDashboardEvent(g.primary.eventType))
         .map(toTimelineEvent),
     [activity.data],
   );
