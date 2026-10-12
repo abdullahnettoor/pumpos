@@ -1,7 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { dashboardTimeline, groupEventPins } from '@pump/shared';
 import { Button } from '../../../pump-ds/index.js';
-import { useDashboardSummary, useShiftSummaries, useShiftTemplates } from '../../../query/hooks.js';
+import {
+  useDashboardSummary,
+  useDayActivity,
+  useShiftSummaries,
+  useShiftTemplates,
+} from '../../../query/hooks.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
 import { toTimelineEvent, type PinTarget } from './timeline/activityPins.js';
