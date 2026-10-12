@@ -88,6 +88,16 @@ describe('board layout', () => {
   });
 });
 
+describe('Fuels column action', () => {
+  it('offers Inventory › to Manager but not Staff', () => {
+    mount('Manager');
+    expect(screen.getByRole('button', { name: /Inventory/ })).toBeTruthy();
+    cleanup();
+    mount('Staff');
+    expect(screen.queryByRole('button', { name: /Inventory/ })).toBeNull();
+  });
+});
+
 describe('header', () => {
   it('shows Open shift when none open and navigates', () => {
     const nav = vi.fn();

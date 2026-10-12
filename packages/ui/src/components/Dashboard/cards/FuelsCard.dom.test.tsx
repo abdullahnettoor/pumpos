@@ -213,7 +213,6 @@ describe('FuelsCard', () => {
     mount('Staff');
     expect(screen.queryByText(/tanker waiting to decant/i)).toBeNull();
     expect(screen.queryByText('Decant ›')).toBeNull();
-    expect(screen.queryByText('Inventory ›')).toBeNull();
   });
 
   it('parts load and fail independently', () => {
