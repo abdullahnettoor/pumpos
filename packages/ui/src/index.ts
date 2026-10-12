@@ -5,6 +5,7 @@ export { openQuickEntry, closeQuickEntry, useQuickEntry } from './quick-entry/st
 export type { QuickEntryType, QuickEntryState } from './quick-entry/store.js';
 export { publishNavIntent, clearNavIntent, useNavIntent } from './nav-intent/store.js';
 export type { NavIntent } from './nav-intent/store.js';
+export { useRoutePath } from './nav-intent/useRoutePath.js';
 export * from './components/Drawer.js';
 export { ErrorBoundary } from './components/ErrorBoundary.js';
 export { Login } from './components/Auth/Login.js';
