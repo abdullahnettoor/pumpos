@@ -10,13 +10,14 @@ export const ForecourtColumn: React.FC = () => {
   const { role, onNavigate } = useDashboard();
   const { model } = useForecourtModel();
   const workspace = shiftWorkspaceAction(role);
-  // Placeholder subtitle: card agents may refine the copy.
   const subtitle =
     model?.kind === 'live'
       ? `${model.name} · ${model.total} DU${model.total === 1 ? '' : 's'}`
-      : model
-        ? 'no shift open'
-        : undefined;
+      : model?.kind === 'done'
+        ? 'day’s shifts done'
+        : model
+          ? 'no shift open'
+          : undefined;
   return (
     <>
       <ColumnHeader

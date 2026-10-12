@@ -333,7 +333,8 @@ describe('TodayInOfficeCard (Today in the office)', () => {
     expect(screen.getByTestId('empty-office-records').textContent).toContain(
       'Nothing recorded yet today.',
     );
-    expect(screen.getByRole('button', { name: 'Cash Book ›' })).toBeTruthy();
+    // The Cash Book link lives once, in the Money column header.
+    expect(screen.queryByRole('button', { name: 'Cash Book ›' })).toBeNull();
   });
 
   it('renders latest 3 records and entry count with link to Cash Book', () => {
@@ -398,8 +399,103 @@ describe('TodayInOfficeCard (Today in the office)', () => {
     expect(screen.getByText(/Calicut Cabs/)).toBeTruthy();
     expect(screen.getByText(/Sree Transports/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cash Book ›' }));
+    // Money outflow uses a true minus, inflow a plus.
+    expect(screen.getByTestId('office-records-list').textContent).toContain('−₹4,200');
+    expect(screen.getByTestId('office-records-list').textContent).not.toContain('-₹');
+    expect(screen.queryByRole('button', { name: 'Cash Book ›' })).toBeNull();
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it('the Money column header carries the single Cash Book link', () => {
+    hooks.useDailyDssrPreview.mockReturnValue(ok(null));
+    hooks.useInsightsSales.mockReturnValue(ok(null));
+    hooks.useDailyCashBook.mockReturnValue(ok({ accounts: [] }));
+    hooks.useReceivables.mockReturnValue(ok({ total: 0, customerCount: 0 }));
+    hooks.usePayables.mockReturnValue(ok({ total: 0 }));
+    const onNavigate = vi.fn();
+    mount(<MoneyColumn />, 'Owner', onNavigate);
+    const links = screen.getAllByRole('button', { name: 'Cash Book ›' });
+    expect(links).toHaveLength(1);
+    fireEvent.click(links[0]!);
     expect(onNavigate).toHaveBeenCalledWith('/reports', { openReportsTab: 'cash-book' });
+  });
+});
+
+describe('Money trend states and cash in hand', () => {
+  const closedShift = {
+    fuel: { totalSalesValue: 100, byProduct: [] },
+    merchandise: { salesValue: 0 },
+    cashInHand: 999999,
+    shifts: [{ shiftSequence: 1, templateName: 'Shift 1', fuelSalesValue: 100 }],
+  };
+  const day = (d: number, sales: number, closed = true) => ({
+    date: `2026-10-${String(d).padStart(2, '0')}`,
+    sales,
+    volume: 0,
+    closed,
+  });
+  const trendOk = {
+    closedDays: 5,
+    average: 150,
+    changePct: 1,
+    range: { from: '2026-10-01', to: '2026-10-05' },
+    trend: [day(1, 100), day(2, 140), day(3, 120), day(4, 160, false)],
+    previousTrend: [day(1, 90), day(2, 110), day(3, 0, false), day(4, 105)],
+  };
+
+  beforeEach(() => {
+    hooks.useDailyDssrPreview.mockReturnValue(ok(closedShift));
+    hooks.useDailyCashBook.mockReturnValue(ok({ accounts: [] }));
+  });
+
+  it('shows a placeholder while the trend loads, not the history message', () => {
+    hooks.useInsightsSales.mockReturnValue({ data: undefined, isPending: true, isError: false });
+    mount(<MoneyCard />);
+    expect(screen.getByTestId('trend-placeholder')).toBeTruthy();
+    expect(screen.queryByText(/appears once 3 business days/)).toBeNull();
+  });
+
+  it('shows an inline Retry when the trend fails; the hero stays', () => {
+    const e = err();
+    hooks.useInsightsSales.mockReturnValue(e);
+    mount(<MoneyCard />);
+    expect(screen.getByTestId('sales-headline')).toBeTruthy();
+    expect(screen.queryByText(/appears once 3 business days/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(e.refetch).toHaveBeenCalled();
+  });
+
+  it('shows the history message only with fewer than 3 closed days', () => {
+    hooks.useInsightsSales.mockReturnValue(ok({ closedDays: 2, trend: [] }));
+    mount(<MoneyCard />);
+    expect(screen.getByText(/appears once 3 business days/)).toBeTruthy();
+  });
+
+  it('draws the previous period series dotted, with gaps skipped', () => {
+    hooks.useInsightsSales.mockReturnValue(ok(trendOk));
+    mount(<MoneyCard />);
+    const dotted = document.querySelector('path[stroke-dasharray="2 3"]');
+    expect(dotted).toBeTruthy();
+    // 3 sealed previous points, one gap: two sub-paths.
+    expect(dotted!.getAttribute('d')!.match(/M/g)).toHaveLength(2);
+  });
+
+  it('Staff see no trend', () => {
+    hooks.useInsightsSales.mockReturnValue(ok(trendOk));
+    mount(<MoneyCard />, 'Staff');
+    expect(screen.queryByRole('img', { name: /sales trend/i })).toBeNull();
+  });
+
+  it('Cash in hand comes only from the Cash Book, never the DSSR preview', () => {
+    hooks.useInsightsSales.mockReturnValue(ok(trendOk));
+    mount(<MoneyCard />);
+    expect(screen.getByTestId('cash-in-hand-tile').textContent).toContain('—');
+    cleanup();
+    hooks.useDailyCashBook.mockReturnValue(
+      ok({ accounts: [{ accountType: 'CASH_IN_HAND', closing: 4200, entries: [] }] }),
+    );
+    mount(<MoneyCard />);
+    expect(screen.getByTestId('cash-in-hand-tile').textContent).toContain('₹4,200');
   });
 });
 

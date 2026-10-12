@@ -111,6 +111,8 @@ export interface NextShift {
   sequence: number;
   /** The template window the Shift would fill; null before the day's first Shift. */
   window: TimelineWindow | null;
+  /** The first active template (in Scheduled Shift Window order) before the day's first Shift; else null. */
+  firstTemplate?: TimelineTemplate | null;
 }
 
 /**
@@ -129,7 +131,7 @@ export function nextShiftToOpen(input: DashboardTimelineInput): NextShift | null
           minutesFromDayStart(a.startTime, input.dayStartsAt) -
           minutesFromDayStart(b.startTime, input.dayStartsAt),
       )[0];
-    return first ? { sequence: 1, window: null } : null;
+    return first ? { sequence: 1, window: null, firstTemplate: first } : null;
   }
   const { nextWindow } = dashboardTimeline(input);
   return nextWindow ? { sequence: input.shifts.length + 1, window: nextWindow } : null;

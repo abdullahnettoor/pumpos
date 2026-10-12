@@ -1,20 +1,14 @@
 import { num } from '@pump/shared';
-import { cashAccountTotals } from '../../../../utils/cashBook.js';
-
-type Row = Record<string, any>;
+import type { DailyCashBook, DailyCashBookAccount } from '../../../../services/cloud.js';
 
 /**
- * Cash in Hand for the headline tile: the day snapshot's figure first, then the
- * live Cash Book's Cash in Hand account, then the cash accounts' total.
+ * Cash in Hand for the headline tile: the Cash Book's Cash in Hand (Office)
+ * account closing. The DSSR is sales-only and never carries it (ADR 0005);
+ * null until the Cash Book is read.
  */
-export function deriveCashInHand(snap: Row | null | undefined, cashBook: Row | null | undefined) {
-  const accounts: Row[] = cashBook?.accounts ?? [];
-  return num(
-    snap?.cashInHand ??
-      snap?.cashInHandClosing ??
-      accounts.find((a) => a.accountType === 'CASH_IN_HAND')?.closing ??
-      cashAccountTotals(accounts as any).closing,
-  );
+export function deriveCashInHand(cashBook: DailyCashBook | null | undefined): number | null {
+  const acc = cashBook?.accounts.find((a) => a.accountType === 'CASH_IN_HAND');
+  return acc ? num(acc.closing) : null;
 }
 
 export interface TrendPoint {
@@ -23,8 +17,8 @@ export interface TrendPoint {
 }
 export interface TrendInput {
   trend?: TrendPoint[];
-  average: number;
-  previousAverage?: number | null;
+  /** The previous period's per-day series (same length/alignment as `trend`). */
+  previousTrend?: TrendPoint[];
 }
 
 export interface TrendChart {
@@ -50,32 +44,52 @@ export function bestDayIndex(trend: TrendPoint[]): number {
   return bestIdx;
 }
 
-/** SVG geometry of the trend line: sealed solid, draft dashed, previous-average baseline. */
+/**
+ * SVG geometry of the trend: sealed solid (gaps skipped), draft dashed from the
+ * last sealed point, previous period's own daily series dotted. The Y scale
+ * fits the data range with padding (never forced to include 0).
+ */
 export function buildTrendChart(data: TrendInput, W = 320, H = 70): TrendChart | null {
   const trend = data.trend ?? [];
   if (trend.length === 0) return null;
-  const values = trend.map((d) => d.sales);
-  const min = Math.min(...values, 0);
-  const max = Math.max(...values, 1);
+  const prev = data.previousTrend ?? [];
+  const sealedVals = [...trend, ...prev].filter((d) => d.closed).map((d) => d.sales);
+  const values = sealedVals.length > 0 ? sealedVals : trend.map((d) => d.sales);
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  const pad = (hi - lo) * 0.1 || Math.abs(hi) * 0.1 || 1;
+  const min = lo - pad;
+  const max = hi + pad;
   const X = (i: number) => 2 + (i / Math.max(1, trend.length - 1)) * (W - 4);
-  const Y = (v: number) => 6 + (1 - (v - min) / (max - min || 1)) * (H - 12);
+  const Y = (v: number) => {
+    const c = Math.min(max, Math.max(min, v));
+    return 6 + (1 - (c - min) / (max - min)) * (H - 12);
+  };
+  const pt = (i: number, v: number) => `${X(i).toFixed(1)} ${Y(v).toFixed(1)}`;
 
-  const sealedCount = trend.filter((d) => d.closed).length;
-  const pathFor = (from: number, to: number) =>
-    trend
-      .slice(from, to)
-      .map((d, j) => `${j ? 'L' : 'M'}${X(from + j).toFixed(1)} ${Y(d.sales).toFixed(1)}`)
-      .join(' ');
-
-  const sealedLine = pathFor(0, sealedCount);
+  const sealedIdx = trend.flatMap((d, i) => (d.closed ? [i] : []));
+  const sealedLine = sealedIdx.map((i, j) => `${j ? 'L' : 'M'}${pt(i, trend[i].sales)}`).join(' ');
+  const lastSealed = sealedIdx.length > 0 ? sealedIdx[sealedIdx.length - 1] : -1;
   const sealedArea =
-    sealedCount > 0
-      ? `${sealedLine} L${X(sealedCount - 1).toFixed(1)} ${H} L${X(0).toFixed(1)} ${H} Z`
+    sealedIdx.length > 0
+      ? `${sealedLine} L${X(lastSealed).toFixed(1)} ${H} L${X(sealedIdx[0]).toFixed(1)} ${H} Z`
       : '';
-  const draftLine =
-    sealedCount < trend.length ? pathFor(Math.max(0, sealedCount - 1), trend.length) : '';
-  const prevY = Y(data.previousAverage ?? data.average).toFixed(1);
-  const prevLine = `M${X(0).toFixed(1)} ${prevY} L${X(trend.length - 1).toFixed(1)} ${prevY}`;
+  const draftIdx = trend.flatMap((_, i) =>
+    lastSealed < trend.length - 1 && i >= Math.max(0, lastSealed) ? [i] : [],
+  );
+  const draftLine = draftIdx.map((i, j) => `${j ? 'L' : 'M'}${pt(i, trend[i].sales)}`).join(' ');
+
+  // Previous period: only sealed days, a gap starts a new sub-path.
+  let prevLine = '';
+  let open = false;
+  prev.slice(0, trend.length).forEach((d, i) => {
+    if (!d.closed) {
+      open = false;
+      return;
+    }
+    prevLine += `${open ? ' L' : prevLine ? ' M' : 'M'}${pt(i, d.sales)}`;
+    open = true;
+  });
   const best = bestDayIndex(trend);
 
   return {
@@ -107,12 +121,14 @@ const TRANSFER_SOURCES = new Set(['TRANSFER', 'DEPOSIT']);
  * Every Office Record of the Cash Book, newest first. A transfer or deposit
  * posts to two accounts; it is one record, kept once (its outgoing leg).
  */
-export function officeEntries(accounts: readonly Row[] | null | undefined): OfficeEntry[] {
+export function officeEntries(
+  accounts: readonly DailyCashBookAccount[] | null | undefined,
+): OfficeEntry[] {
   const seen = new Set<string>();
   const out: OfficeEntry[] = [];
   const legs: OfficeEntry[] = [];
   for (const a of accounts ?? []) {
-    for (const e of (a.entries ?? []) as Row[]) legs.push({ ...(e as any), accountName: a.name });
+    for (const e of a.entries ?? []) legs.push({ ...e, accountName: a.name });
   }
   // Outgoing legs first so a transfer is represented by the account it left.
   legs.sort((x, y) => Number(y.direction === 'out') - Number(x.direction === 'out'));

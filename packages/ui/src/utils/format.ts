@@ -132,3 +132,19 @@ export function formatCompactRupees(value: number | null | undefined): string {
   if (Math.abs(value) >= 100_000) return `₹${(value / 100_000).toFixed(2)}L`;
   return `₹${Math.round(value).toLocaleString('en-IN')}`;
 }
+
+/** Elapsed between two instants as `Nh Nm`; clamps negatives to `0h 0m`. */
+export function formatElapsedBetween(fromMs: number, toMs: number): string {
+  const mins = Math.max(0, Math.floor((toMs - fromMs) / 60_000));
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+/** A business date (`YYYY-MM-DD`) as `Thu 8 Oct`; the input when invalid. */
+export function formatShortDay(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const part = (o: Intl.DateTimeFormatOptions) =>
+    dt.toLocaleDateString('en-IN', { ...o, timeZone: 'UTC' });
+  return `${part({ weekday: 'short' })} ${d} ${part({ month: 'short' })}`;
+}

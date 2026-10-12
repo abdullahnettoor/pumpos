@@ -7,7 +7,6 @@ import type { Station } from '@pump/shared';
 const hooks = vi.hoisted(() => ({
   useDashboardSummary: vi.fn(),
   useShiftTemplates: vi.fn(),
-  useShiftSummaries: vi.fn(),
   useDayActivity: vi.fn(),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
@@ -52,7 +51,7 @@ const mount = (role: any = 'Owner') =>
         station: STATION,
         role,
         userName: 'A',
-        now: new Date(),
+        now: new Date(Date.now()),
         timeZone: 'Asia/Kolkata',
         dayStartsAt: '06:00',
         businessDate: '2026-10-12',
@@ -73,7 +72,6 @@ beforeEach(() => {
     setItem: (k: string, v: string) => void store.set(k, v),
   });
   hooks.useShiftTemplates.mockReturnValue(ok(TEMPLATES));
-  hooks.useShiftSummaries.mockReturnValue(ok([]));
   hooks.useDayActivity.mockReturnValue(ok({ items: [] }));
   hooks.useDashboardSummary.mockReturnValue(ok({ today: { shifts: [shift({})] } }));
 });
@@ -121,24 +119,118 @@ describe('TimelineCard', () => {
     expect(screen.getByTestId('timeline-bar-ghost')).toBeTruthy();
   });
 
-  it('matches a closed shift to its summary by shift id, not by open time', () => {
+  it('labels a closed bar with the server total and a dimmed variance', () => {
+    hooks.useDashboardSummary.mockReturnValue(
+      ok({
+        today: {
+          shifts: [
+            shift({
+              closedAt: '2026-10-12T08:30:00Z',
+              totalFuelSalesValue: 216120,
+              cashVariance: -340,
+            }),
+          ],
+        },
+      }),
+    );
+    mount();
+    const bar = screen.getByTestId('timeline-bar-closed');
+    expect(bar.textContent).toBe('Shift 1 · ₹2,16,120· −₹340');
+    expect(bar.querySelector('.opacity-75')?.textContent).toContain('−₹340');
+  });
+
+  it('shows the heading, axis labels and a now line', () => {
+    mount();
+    expect(screen.getByText('Today')).toBeTruthy();
+    expect(screen.getByText(/6 am → 6 am/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /collapse/i })).toBeTruthy();
+    expect(screen.getAllByTestId('timeline-axis-label').map((n) => n.textContent)).toEqual([
+      '6a',
+      '12p',
+      '6p',
+      '12a',
+      '6a',
+    ]);
+    expect(screen.getByTestId('timeline-now').className).toContain('bg-brand-danger');
+  });
+
+  it('labels a running bar live, and past end with a warning border', () => {
+    vi.setSystemTime(new Date('2026-10-12T06:30:00Z')); // 12:00 IST, before 2 pm end
+    const first = mount();
+    const live = screen.getByTestId('timeline-bar-running');
+    expect(live.textContent).toBe('Shift 1 · live');
+    expect(live.className).not.toContain('border-brand-warning');
+    first.unmount();
+    vi.setSystemTime(NOW); // 3 pm, past the 2 pm scheduled end
+    mount();
+    const bar = screen.getByTestId('timeline-bar-running');
+    expect(bar.textContent).toBe('Shift 1 · past end');
+    expect(bar.className).toContain('border-brand-warning');
+  });
+
+  it('labels the ghost bar with its scheduled start', () => {
     hooks.useDashboardSummary.mockReturnValue(
       ok({ today: { shifts: [shift({ closedAt: '2026-10-12T08:30:00Z' })] } }),
     );
-    hooks.useShiftSummaries.mockReturnValue(
-      ok([
-        {
-          shiftId: 's1',
-          openedAt: '2026-10-12T00:30:00.123456Z', // different precision on purpose
-          snapshotData: { fuelByProduct: [{ salesValue: 5000 }], cashVariance: -20 },
-        },
-      ]),
-    );
     mount();
-    expect(screen.getByText(/Shift 1 · ₹5,000/)).toBeTruthy();
+    expect(screen.getByTestId('timeline-bar-ghost').textContent).toBe(
+      'Shift 2 · scheduled 2:00 pm, not opened yet',
+    );
   });
 
-  it('merges five cash drops into one pin with a count and opens the event', () => {
+  it('shows a 76px placeholder while loading, and nothing once known hidden', () => {
+    hooks.useDashboardSummary.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    const { container } = mount();
+    const ph = container.querySelector('[aria-busy="true"]') as HTMLElement;
+    expect(ph.style.height).toBe('76px');
+  });
+
+  it('does not show cash-drop events as pins', () => {
+    hooks.useDayActivity.mockReturnValue(
+      ok({ items: [ev(1, 'CASH_DROP_RECORDED', '2026-10-12T03:10:00Z')] }),
+    );
+    mount();
+    expect(screen.queryAllByTestId('timeline-pin')).toHaveLength(0);
+  });
+
+  it('renders the pin list in a portal outside the card and clamps it to the viewport', () => {
+    vi.stubGlobal('innerWidth', 1000);
+    hooks.useDayActivity.mockReturnValue(
+      ok({
+        items: [0, 1].map((i) => ev(i, 'SHIFT_OPENED', `2026-10-12T00:${30 + i}:00Z`)),
+      }),
+    );
+    const { container } = mount();
+    const pin = screen.getAllByTestId('timeline-pin')[0];
+    pin.parentElement!.getBoundingClientRect = () =>
+      ({ left: -50, width: 20, bottom: 30, top: 10, right: -30 }) as DOMRect;
+    fireEvent.focus(pin);
+    const list = screen.getByTestId('timeline-pin-list');
+    expect(container.contains(list)).toBe(false);
+    expect(list.parentElement).toBe(document.body);
+    expect(list.style.left).toBe('8px');
+  });
+
+  it('draws a pin as a chip with an inline count, not a corner badge', () => {
+    hooks.useDayActivity.mockReturnValue(
+      ok({
+        items: [0, 1].map((i) => ev(i, 'SHIFT_OPENED', `2026-10-12T00:${30 + i}:00Z`)),
+      }),
+    );
+    mount();
+    const pin = screen.getAllByTestId('timeline-pin')[0];
+    expect(pin.className).toContain('border-[1.5px]');
+    expect(pin.className).toContain('h-5');
+    expect(pin.textContent).toBe('2');
+    expect(pin.querySelector('.absolute')).toBeNull();
+  });
+
+  it('merges five handovers into one pin with a count and opens the event', () => {
     hooks.useDayActivity.mockReturnValue(
       ok({
         items: [0, 1, 2, 3, 4].map((i) =>
@@ -165,8 +257,8 @@ describe('TimelineCard', () => {
       ok({ items: [ev(1, 'SHIFT_OPENED', '2026-10-12T00:30:00Z')] }),
     );
     const first = mount();
-    fireEvent.click(screen.getByRole('button', { name: /hide/i }));
-    expect(screen.getByTestId('timeline-summary').textContent).toContain('Shift 1 live');
+    fireEvent.click(screen.getByRole('button', { name: /collapse/i }));
+    expect(screen.getByTestId('timeline-summary').textContent).toContain('Shift 1 live since');
     expect(screen.getByTestId('timeline-summary').textContent).toContain('1 event');
     first.unmount();
     mount();
