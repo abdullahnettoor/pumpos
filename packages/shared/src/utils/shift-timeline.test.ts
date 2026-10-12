@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { dashboardTimeline, type TimelineShift, type TimelineTemplate } from './shift-timeline.js';
+import {
+  dashboardTimeline,
+  nextShiftToOpen,
+  type TimelineShift,
+  type TimelineTemplate,
+} from './shift-timeline.js';
 
 const clock = { timeZone: 'Asia/Kolkata', dayStartsAt: '06:00' };
 const at = (iso: string) => new Date(iso);
@@ -111,5 +116,38 @@ describe('dashboardTimeline', () => {
       [],
     );
     expect(r.visible).toBe(false);
+  });
+});
+
+describe('nextShiftToOpen', () => {
+  const two = templates.slice(0, 2);
+  const next = (now: string, shifts: TimelineShift[], tpl = templates) =>
+    nextShiftToOpen({ now: at(now), shifts, templates: tpl, ...clock });
+
+  it('is Shift 1 before any shift, when templates exist', () => {
+    expect(next('2026-10-09T01:00:00Z', [])).toEqual({ sequence: 1, window: null });
+    expect(next('2026-10-09T01:00:00Z', [], [])).toBeNull();
+  });
+
+  it('is the next number between shifts', () => {
+    const r = next('2026-10-09T08:45:00Z', [
+      shift('t1', '2026-10-09T00:40:00Z', '2026-10-09T08:30:00Z'),
+    ]);
+    expect(r).toMatchObject({ sequence: 2, window: { templateId: 't2' } });
+  });
+
+  it('is null while a shift runs', () => {
+    expect(next('2026-10-09T05:00:00Z', [shift('t1', '2026-10-09T00:40:00Z', null)])).toBeNull();
+  });
+
+  it('does not offer a skipped window that has passed', () => {
+    // Evening (14:00–22:00 IST) skipped; it is 23:00 IST and only Morning ran.
+    expect(
+      next(
+        '2026-10-09T17:30:00Z',
+        [shift('t1', '2026-10-09T00:40:00Z', '2026-10-09T08:30:00Z')],
+        two,
+      ),
+    ).toBeNull();
   });
 });

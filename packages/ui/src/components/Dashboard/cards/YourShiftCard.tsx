@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Play } from 'lucide-react';
+import { nextShiftToOpen, type TimelineTemplate } from '@pump/shared';
 import { Button } from '../../../pump-ds/index.js';
 import { formatMoney } from '../../../utils/format.js';
 import {
@@ -20,7 +21,7 @@ import { shiftCashDrops } from './yourShift/cashDrops.js';
 
 /** Staff's Your shift (replaces Money). Owns its file; keep the export name. */
 export const YourShiftCard: React.FC = () => {
-  const { station, businessDate, timeZone, onNavigate } = useDashboard();
+  const { station, businessDate, timeZone, dayStartsAt, onNavigate } = useDashboard();
   const enabled = useCardEnabled('yourShift');
   const now = useNow(enabled);
 
@@ -37,10 +38,13 @@ export const YourShiftCard: React.FC = () => {
             now: now.getTime(),
             timeZone: timeZone ?? 'UTC',
             activeShift,
-            shiftsClosedToday: Number(summaryQ.data.today?.shiftsClosed ?? 0),
-            plannedShiftCount: (templatesQ.data as { isActive?: boolean }[]).filter(
-              (t) => t.isActive !== false,
-            ).length,
+            nextShift: nextShiftToOpen({
+              now,
+              shifts: summaryQ.data.today?.shifts ?? [],
+              templates: templatesQ.data as TimelineTemplate[],
+              timeZone: timeZone ?? 'UTC',
+              dayStartsAt: dayStartsAt ?? '00:00',
+            }),
             densityToday: densityQ.data,
           }
         : null,
@@ -52,6 +56,7 @@ export const YourShiftCard: React.FC = () => {
       densityQ.data,
       now,
       timeZone,
+      dayStartsAt,
       activeShift,
     ],
   );

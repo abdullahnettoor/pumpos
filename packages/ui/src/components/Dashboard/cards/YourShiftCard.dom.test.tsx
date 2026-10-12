@@ -11,6 +11,8 @@ const hooks = vi.hoisted(() => ({
   useDensityTodaySummary: vi.fn(),
   useInventoryStatus: vi.fn(),
   useInventoryItems: vi.fn(),
+  useReceivables: vi.fn(),
+  useBusinessDayStatus: vi.fn(),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
 
@@ -31,6 +33,12 @@ const TEMPLATES = [
   { id: 't1', name: 'Shift 1', startTime: '06:00', endTime: '14:00', isActive: true },
   { id: 't2', name: 'Shift 2', startTime: '14:00', endTime: '22:00', isActive: true },
 ];
+const MORNING_CLOSED = {
+  id: 's1',
+  shiftTemplateId: 't1',
+  openedAt: '2026-10-12T00:30:00.000Z',
+  closedAt: '2026-10-12T08:30:00.000Z',
+};
 const NO_DENSITY_GAP = { missingCount: 0, missingProducts: [] };
 
 // 2026-10-12 15:00 IST (the shift's scheduled end, 14:00, has passed)
@@ -68,11 +76,13 @@ function mount(role: DashboardRole = 'Staff', onNavigate = vi.fn()) {
 
 function givenData(over: Partial<Record<keyof typeof hooks, unknown>> = {}) {
   hooks.useShiftStatus.mockReturnValue(ok({ activeShift: openShift() }));
-  hooks.useDashboardSummary.mockReturnValue(ok({ today: { shiftsClosed: 0 } }));
+  hooks.useDashboardSummary.mockReturnValue(ok({ today: { shifts: [] } }));
   hooks.useShiftTemplates.mockReturnValue(ok(TEMPLATES));
   hooks.useDensityTodaySummary.mockReturnValue(ok(NO_DENSITY_GAP));
   hooks.useInventoryStatus.mockReturnValue(ok([]));
   hooks.useInventoryItems.mockReturnValue(ok([]));
+  hooks.useReceivables.mockReturnValue(ok(undefined));
+  hooks.useBusinessDayStatus.mockReturnValue(ok(undefined));
   Object.entries(over).forEach(([k, v]) =>
     (hooks[k as keyof typeof hooks] as any).mockReturnValue(v),
   );
@@ -114,11 +124,21 @@ describe('YourShiftCard — states', () => {
   it('offers Open Shift N between shifts, with no open shift and no cash drops', () => {
     givenData({
       useShiftStatus: ok({ activeShift: null }),
-      useDashboardSummary: ok({ today: { shiftsClosed: 1 } }),
+      useDashboardSummary: ok({ today: { shifts: [MORNING_CLOSED] } }),
     });
     mount();
     expect(screen.getByText('Open Shift 2')).toBeTruthy();
     expect(screen.getByText('No shift open.')).toBeTruthy();
+  });
+
+  it('does not offer a skipped window that has already passed', () => {
+    vi.setSystemTime(Date.parse('2026-10-12T17:30:00.000Z')); // 11:00 pm IST, Shift 2 window over
+    givenData({
+      useShiftStatus: ok({ activeShift: null }),
+      useDashboardSummary: ok({ today: { shifts: [MORNING_CLOSED] } }),
+    });
+    mount();
+    expect(screen.queryByText(/Open Shift/)).toBeNull();
   });
 
   it('offers Open Shift 1 on the first Business Day', () => {

@@ -101,3 +101,28 @@ export function dashboardTimeline(input: DashboardTimelineInput): DashboardTimel
   if (!nextWindow) return hide('day-complete');
   return { ...base, visible: true, reason: null, nextWindow };
 }
+
+export interface NextShift {
+  /** 1-based number of the Shift to open ("Open Shift 2"). */
+  sequence: number;
+  /** The template window the Shift would fill; null before the day's first Shift. */
+  window: TimelineWindow | null;
+}
+
+/**
+ * The Shift to prompt for when none is running ("Open Shift N"), by the same
+ * rule as the timeline: after a Shift has run, the next window that still has
+ * time left (a skipped window that has passed is not offered); before any
+ * Shift, the first active template.
+ */
+export function nextShiftToOpen(input: DashboardTimelineInput): NextShift | null {
+  if (input.shifts.some((s) => s.closedAt == null)) return null;
+  if (input.shifts.length === 0) {
+    const first = [...input.templates]
+      .filter((t) => t.isActive)
+      .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime))[0];
+    return first ? { sequence: 1, window: null } : null;
+  }
+  const { nextWindow } = dashboardTimeline(input);
+  return nextWindow ? { sequence: input.shifts.length + 1, window: nextWindow } : null;
+}

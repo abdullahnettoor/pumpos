@@ -35,10 +35,8 @@ export interface ShiftAlertInput {
   timeZone: string;
   /** The running shift from GET /shifts/status (full), or null. */
   activeShift?: (HandoverShiftLike & { handovers?: HandoverShiftLike['handovers'] }) | null;
-  /** Closed shifts of the current Business Day. */
-  shiftsClosedToday: number;
-  /** Active Shift Templates: how many shifts the day is planned to have. */
-  plannedShiftCount: number;
+  /** The Shift to prompt for when none is running (`nextShiftToOpen`), or null. */
+  nextShift?: { sequence: number } | null;
   /** GET /transactions/density/today (only the missing-product fields are read). */
   densityToday?: Pick<DensityTodaySummary, 'missingCount' | 'missingProducts'> | null;
 }
@@ -134,12 +132,12 @@ export function deriveShiftAlerts(input: ShiftAlertInput): StationAlert[] {
         actionPath: '/shifts',
       });
     }
-  } else if (input.plannedShiftCount > input.shiftsClosedToday) {
+  } else if (input.nextShift) {
     list.push({
       id: 'open-shift',
       severity: 'info',
       category: 'shift',
-      title: `Open Shift ${input.shiftsClosedToday + 1}`,
+      title: `Open Shift ${input.nextShift.sequence}`,
       actionLabel: 'Open',
       actionPath: '/shifts',
     });

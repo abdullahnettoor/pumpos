@@ -26,6 +26,7 @@ const hooks = vi.hoisted(() => ({
   useDensityTodaySummary: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
   useInventoryStatus: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
   useInventoryItems: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
+  useBusinessDayStatus: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
   usePricing: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
