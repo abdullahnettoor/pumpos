@@ -135,7 +135,7 @@ const PinButton: React.FC<{
 
 const BAR_CLASS: Record<Bar['kind'], string> = {
   closed: 'bg-brand text-on-brand font-semibold',
-  running: 'border-[1.5px] border-dashed border-brand text-ink-strong font-semibold',
+  running: 'border-[1.5px] border-dashed text-ink-strong font-semibold',
   ghost: 'border-[1.5px] border-dashed border-border-strong text-ink-muted',
 };
 
@@ -155,7 +155,7 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
         data-testid={`timeline-bar-${b.kind}`}
         title={b.text}
         className={`absolute top-[22px] flex h-6 items-center overflow-hidden whitespace-nowrap rounded-[7px] px-2 text-[11.5px] ${
-          b.late ? 'border-[1.5px] border-dashed border-brand-warning' : ''
+          b.late ? 'border-warning-fg' : b.kind === 'running' ? 'border-brand' : ''
         } ${BAR_CLASS[b.kind]}`}
         style={{
           left: `${b.leftPct}%`,

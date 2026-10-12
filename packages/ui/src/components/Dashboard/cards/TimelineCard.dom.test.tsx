@@ -7,6 +7,7 @@ import type { Station } from '@pump/shared';
 const hooks = vi.hoisted(() => ({
   useDashboardSummary: vi.fn(),
   useShiftTemplates: vi.fn(),
+  useShiftStatus: vi.fn(),
   useDayActivity: vi.fn(),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
@@ -72,6 +73,7 @@ beforeEach(() => {
     setItem: (k: string, v: string) => void store.set(k, v),
   });
   hooks.useShiftTemplates.mockReturnValue(ok(TEMPLATES));
+  hooks.useShiftStatus.mockReturnValue(ok({ activeShift: null }));
   hooks.useDayActivity.mockReturnValue(ok({ items: [] }));
   hooks.useDashboardSummary.mockReturnValue(ok({ today: { shifts: [shift({})] } }));
 });
@@ -162,10 +164,22 @@ describe('TimelineCard', () => {
     expect(live.className).not.toContain('border-brand-warning');
     first.unmount();
     vi.setSystemTime(NOW); // 3 pm, past the 2 pm scheduled end
+    hooks.useShiftStatus.mockReturnValue(
+      ok({
+        activeShift: {
+          id: 's1',
+          openedAt: '2026-10-12T00:30:00Z',
+          scheduledEndTime: '14:00',
+          staffAssignments: [{ id: 'a1', userId: 'u1', duId: 'd1' }],
+          handovers: [],
+        },
+      }),
+    );
     mount();
     const bar = screen.getByTestId('timeline-bar-running');
-    expect(bar.textContent).toBe('Shift 1 · past end');
-    expect(bar.className).toContain('border-brand-warning');
+    expect(bar.textContent).toBe('Shift 1 · past end, 1 handover due');
+    expect(bar.className).toContain('border-warning-fg');
+    expect(bar.className).not.toContain('border-brand');
   });
 
   it('labels the ghost bar with its scheduled start', () => {
@@ -282,7 +296,7 @@ describe('TimelineCard', () => {
     );
     const first = mount();
     fireEvent.click(screen.getByRole('button', { name: /collapse/i }));
-    expect(screen.getByTestId('timeline-summary').textContent).toContain('Shift 1 live since');
+    expect(screen.getByTestId('timeline-summary').textContent).toContain('Shift 1 past scheduled end');
     expect(screen.getByTestId('timeline-summary').textContent).toContain('1 event');
     first.unmount();
     mount();

@@ -1,7 +1,17 @@
 import React, { useMemo } from 'react';
-import { dashboardTimeline, groupEventPins, type TimelineTemplate } from '@pump/shared';
+import {
+  dashboardTimeline,
+  deriveDuHandoverStatuses,
+  groupEventPins,
+  type TimelineTemplate,
+} from '@pump/shared';
 import { Button } from '../../../pump-ds/index.js';
-import { useDashboardSummary, useDayActivity, useShiftTemplates } from '../../../query/hooks.js';
+import {
+  useDashboardSummary,
+  useDayActivity,
+  useShiftStatus,
+  useShiftTemplates,
+} from '../../../query/hooks.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
 import { isDashboardEvent, toTimelineEvent, type PinTarget } from './timeline/activityPins.js';
@@ -25,6 +35,24 @@ interface DaySummaryShift {
   cashVariance?: number | null;
 }
 
+type Row = Record<string, any>;
+
+/** Drawers of the open shift that have not handed over yet. */
+function handoversDue(shift: Row | null | undefined, now: number, timeZone: string): number | null {
+  if (!shift) return null;
+  const statuses = deriveDuHandoverStatuses(
+    {
+      openedAt: String(shift.openedAt),
+      scheduledEndTime: shift.scheduledEndTime,
+      staffAssignments: shift.staffAssignments ?? [],
+      handovers: shift.handovers ?? [],
+    },
+    now,
+    timeZone,
+  );
+  return statuses.filter((x) => x !== 'recorded').length;
+}
+
 /** Compact Business Day timeline: shift bars, merged event pins, collapsible. */
 export const TimelineCard: React.FC = () => {
   const {
@@ -39,6 +67,7 @@ export const TimelineCard: React.FC = () => {
   const now = nowDate.getTime();
   const enabled = useCardEnabled('timeline');
   const status = useDashboardSummary(station.id, { enabled });
+  const shiftStatus = useShiftStatus(station.id, { enabled });
   const templates = useShiftTemplates({ enabled });
   const activity = useDayActivity(station.id, businessDate, { enabled, entryDate });
   const [collapsed, toggle] = useTimelineCollapsed();
@@ -60,6 +89,7 @@ export const TimelineCard: React.FC = () => {
       timeZone,
       dayStartsAt,
     });
+    const active = (shiftStatus.data as { activeShift?: Row | null } | undefined)?.activeShift;
     const inputs: ShiftBarInput[] = [...day]
       .sort((x, y) => Date.parse(x.openedAt) - Date.parse(y.openedAt))
       .map((s, i) => {
@@ -73,10 +103,11 @@ export const TimelineCard: React.FC = () => {
           total: s.closedAt ? (s.totalFuelSalesValue ?? null) : null,
           variance: s.closedAt ? (s.cashVariance ?? null) : null,
           scheduledEndAt: scheduledEndAt(tpl, timeline, dayStartsAt),
+          handoversDue: s.id === active?.id ? handoversDue(active, now, timeZone) : null,
         };
       });
     return { timeline, inputs };
-  }, [status.data, templates.data, timeZone, dayStartsAt, now]);
+  }, [status.data, templates.data, shiftStatus.data, timeZone, dayStartsAt, now]);
 
   const events = useMemo(
     () =>
@@ -135,11 +166,17 @@ export const TimelineCard: React.FC = () => {
                   )}
                 </span>
               )}
-              {live && (
-                <span>
-                  Shift {live.sequence} live since {clockLabel(Date.parse(live.openedAt), timeZone)}
-                </span>
-              )}
+              {live &&
+                (live.scheduledEndAt != null && now > live.scheduledEndAt ? (
+                  <span>
+                    Shift {live.sequence} <b className="text-warning-fg">past scheduled end</b>
+                  </span>
+                ) : (
+                  <span>
+                    Shift {live.sequence} live since{' '}
+                    {clockLabel(Date.parse(live.openedAt), timeZone)}
+                  </span>
+                ))}
               <span>
                 {events.length} event{events.length === 1 ? '' : 's'}
                 {alerts > 0 && (
