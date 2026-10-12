@@ -47,7 +47,6 @@ export function useStationBusinessDate(settings: unknown): string {
   const compute = () => resolveBusinessDate({ now: new Date(), timeZone, dayStartsAt });
   const [date, setDate] = useState(compute);
   useEffect(() => {
-    setDate(compute);
     const timer = window.setInterval(() => setDate(compute), 60_000);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps

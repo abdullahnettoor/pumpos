@@ -182,7 +182,7 @@ export function formatAxisHour(ms: number, timeZone?: string): string {
   const h = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hour12: true }).format(
     ms,
   );
-  return h.replace(/\s?(AM|PM)/i, (_, m: string) => m[0]!.toLowerCase());
+  return h.replace(/\s?(AM|PM)/i, (_, m: string) => m[0].toLowerCase());
 }
 
 /** `6 Oct` from an ISO instant (in `timeZone`) or a `YYYY-MM-DD` business date. */
