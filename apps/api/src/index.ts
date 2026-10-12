@@ -40,9 +40,7 @@ import { activityDayRouter } from './routes/activity-day.js';
 import { rateLimit } from './infra/rate-limit.js';
 import { resolveCorsOrigin } from './infra/cors.js';
 import type { AuthenticatedPrincipal } from './infra/authenticated-principal.js';
-import {
-  readActivityMetadata,
-} from './infra/activity.js';
+import { readActivityMetadata } from './infra/activity.js';
 import {
   activityEventFields,
   activityJoins,
