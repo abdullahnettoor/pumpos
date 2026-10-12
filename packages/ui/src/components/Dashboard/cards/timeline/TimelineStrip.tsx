@@ -61,13 +61,14 @@ const PinPopover: React.FC<{
   events: TimelineEvent[];
   onOpen: (t: PinTarget) => void;
   listRef: React.RefObject<HTMLUListElement>;
-}> = ({ pos, events, onOpen, listRef }) =>
+  timeZone: string;
+}> = ({ pos, events, onOpen, listRef, timeZone }) =>
   createPortal(
     <ul
       ref={listRef}
       role="list"
       data-testid="timeline-pin-list"
-      className="fixed z-50 rounded-input border border-border-soft bg-surface p-1 shadow-lg"
+      className="fixed z-50 m-0 list-none rounded-input border border-border-soft bg-surface p-1 shadow-lg"
       style={{ left: pos.left, top: pos.top, width: POPOVER_W }}
     >
       {events.map((ev) => (
@@ -79,7 +80,13 @@ const PinPopover: React.FC<{
             className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-[12px] text-ink enabled:hover:bg-surface-alt"
           >
             <Icon name={ev.icon as IconName} size="xs" />
-            <span className="truncate">{ev.label}</span>
+            <span className="min-w-0 flex-1 truncate">{ev.label}</span>
+            <span
+              data-testid="timeline-pin-time"
+              className="shrink-0 text-[11px] tabular-nums text-ink-muted"
+            >
+              {clockLabel(typeof ev.at === 'number' ? ev.at : Date.parse(ev.at), timeZone)}
+            </span>
           </button>
         </li>
       ))}
@@ -91,7 +98,8 @@ const PinButton: React.FC<{
   pin: EventPin;
   leftPct: number;
   onOpen: (t: PinTarget) => void;
-}> = ({ pin, leftPct, onOpen }) => {
+  timeZone: string;
+}> = ({ pin, leftPct, onOpen, timeZone }) => {
   const [pos, setPos] = useState<PopoverPos | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -137,7 +145,15 @@ const PinButton: React.FC<{
         <Icon name={pin.icon as IconName} size="xs" />
         {pin.count > 1 && <span>{pin.count}</span>}
       </button>
-      {pos && <PinPopover pos={pos} events={events} onOpen={onOpen} listRef={listRef} />}
+      {pos && (
+        <PinPopover
+          pos={pos}
+          events={events}
+          onOpen={onOpen}
+          listRef={listRef}
+          timeZone={timeZone}
+        />
+      )}
     </div>
   );
 };
@@ -215,6 +231,7 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
             pin={p}
             leftPct={axisPct(p.at, timeline)}
             onOpen={onOpen}
+            timeZone={timeZone}
           />
         ))}
       </div>

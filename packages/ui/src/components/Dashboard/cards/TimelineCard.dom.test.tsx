@@ -274,6 +274,14 @@ describe('TimelineCard', () => {
     expect(pins[0].getAttribute('data-count')).toBe('5');
     fireEvent.click(pins[0]);
     fireEvent.mouseLeave(pins[0].parentElement!);
+    // Each event shows its own station-time clock (03:10Z = 8:40 am IST).
+    expect(screen.getAllByTestId('timeline-pin-time').map((n) => n.textContent)).toEqual([
+      '8:40 am',
+      '8:45 am',
+      '8:50 am',
+      '8:55 am',
+      '9 am',
+    ]);
     fireEvent.click(screen.getByText('HANDOVER_RECORDED 2'));
     expect(onNavigate).toHaveBeenCalledWith('/shifts', undefined);
   });
