@@ -195,61 +195,71 @@ export const MoneyCard: React.FC = () => {
 
                 {chart && trendData && (
                   <>
-                    <svg
-                      role="img"
-                      aria-label="Sales trend, last 14 days"
-                      viewBox={`0 0 ${chart.W} ${chart.H}`}
-                      width="100%"
-                      height={chart.H}
-                      preserveAspectRatio="none"
-                      className="block mt-2 overflow-visible"
-                    >
-                      {chart.prevLine && (
-                        <path
-                          d={chart.prevLine}
-                          fill="none"
-                          stroke="currentColor"
-                          className="text-ink-muted opacity-40"
-                          strokeWidth="1.2"
-                          strokeDasharray="2 3"
-                        />
-                      )}
-                      {chart.sealedArea && (
-                        <path
-                          d={chart.sealedArea}
-                          fill="currentColor"
-                          className="text-brand opacity-10"
-                        />
-                      )}
-                      {chart.sealedLine && (
-                        <path
-                          d={chart.sealedLine}
-                          fill="none"
-                          stroke="currentColor"
-                          className="text-brand"
-                          strokeWidth="2"
-                        />
-                      )}
-                      {chart.draftLine && (
-                        <path
-                          d={chart.draftLine}
-                          fill="none"
-                          stroke="currentColor"
-                          className="text-brand"
-                          strokeWidth="2"
-                          strokeDasharray="4 3"
-                        />
-                      )}
+                    {/* The SVG stretches to the card width (preserveAspectRatio="none"),
+                        so strokes use non-scaling-stroke and the best-day dot is an
+                        HTML overlay: an SVG <circle> would be squashed into an ellipse. */}
+                    <div className="relative mt-2">
+                      <svg
+                        role="img"
+                        aria-label="Sales trend, last 14 days"
+                        viewBox={`0 0 ${chart.W} ${chart.H}`}
+                        width="100%"
+                        height={chart.H}
+                        preserveAspectRatio="none"
+                        className="block overflow-visible"
+                      >
+                        {chart.prevLine && (
+                          <path
+                            d={chart.prevLine}
+                            fill="none"
+                            stroke="currentColor"
+                            className="text-ink-muted opacity-40"
+                            strokeWidth="1.2"
+                            vectorEffect="non-scaling-stroke"
+                            strokeDasharray="2 3"
+                          />
+                        )}
+                        {chart.sealedArea && (
+                          <path
+                            d={chart.sealedArea}
+                            fill="currentColor"
+                            className="text-brand opacity-10"
+                          />
+                        )}
+                        {chart.sealedLine && (
+                          <path
+                            d={chart.sealedLine}
+                            fill="none"
+                            stroke="currentColor"
+                            className="text-brand"
+                            strokeWidth="2"
+                            vectorEffect="non-scaling-stroke"
+                          />
+                        )}
+                        {chart.draftLine && (
+                          <path
+                            d={chart.draftLine}
+                            fill="none"
+                            stroke="currentColor"
+                            className="text-brand"
+                            strokeWidth="2"
+                            vectorEffect="non-scaling-stroke"
+                            strokeDasharray="4 3"
+                          />
+                        )}
+                      </svg>
                       {chart.bestCircle && (
-                        <circle
-                          cx={chart.bestCircle.cx}
-                          cy={chart.bestCircle.cy}
-                          r="3"
-                          fill="currentColor"
-                          className="text-brand"
+                        <span
+                          data-testid="trend-best-day"
+                          aria-hidden="true"
+                          className="pointer-events-none absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand"
+                          style={{
+                            left: `${(Number(chart.bestCircle.cx) / chart.W) * 100}%`,
+                            top: `${Number(chart.bestCircle.cy)}px`,
+                          }}
                         />
                       )}
-                    </svg>
+                    </div>
                     <div className="flex items-center justify-between text-[10px] text-ink-muted mt-1">
                       <span>{fromLabel}</span>
                       <span className="mx-auto">dashed = draft days · dotted = previous 14</span>

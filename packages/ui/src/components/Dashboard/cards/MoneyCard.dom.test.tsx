@@ -273,7 +273,10 @@ describe('MoneyCard (Sales so far + 14-day trend)', () => {
     expect(onNavigate).toHaveBeenCalledWith('/reports');
 
     // The chart's geometry (sealed/draft/previous lines, best day) is unit-tested in moneyModel.
-    expect(screen.getByRole('img', { name: /sales trend/i })).toBeTruthy();
+    const svg = screen.getByRole('img', { name: /sales trend/i });
+    // The stretched SVG would squash a <circle> into an ellipse: the best day is an HTML dot.
+    expect(svg.querySelector('circle')).toBeNull();
+    expect(screen.getByTestId('trend-best-day')).toBeTruthy();
   });
 });
 
