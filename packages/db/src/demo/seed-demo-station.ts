@@ -1,4 +1,9 @@
 import { eq } from 'drizzle-orm';
+import {
+  DEFAULT_DECANTATION_SETTINGS,
+  createFuelVatConfig,
+  type DecantationSettings,
+} from '@pump/shared';
 import * as schema from '../schema.js';
 import type { DbExecutor } from '../client.js';
 
@@ -11,6 +16,47 @@ export interface SeedDemoStationOptions {
   nozzles?: number;
   attendants?: number;
 }
+
+/**
+ * Demo tax values. Fuel is outside GST: it carries state VAT embedded in the
+ * pole price (`FUEL_VAT`, price-inclusive) and never a `gst_rate`. The rates
+ * are demo values of Kerala sales tax on petrol and diesel; a real station
+ * sets its own. Lubricants and merchandise are GST goods (HSN/SAC are demo
+ * values too).
+ */
+export const DEMO_FUEL_TAX = {
+  petrol: { vatRate: 30.08, hsn: '2710' },
+  diesel: { vatRate: 22.76, hsn: '2710' },
+} as const;
+
+export const demoFuelTax = (fuel: { vatRate: number; hsn: string }) => ({
+  taxCategory: 'FUEL_VAT',
+  isTaxable: false,
+  taxConfig: createFuelVatConfig({ vat_rate: fuel.vatRate, hsn_code: fuel.hsn }),
+});
+
+const gstTax = (hsn: string) => ({
+  taxCategory: 'GST',
+  isTaxable: true,
+  taxConfig: { gst_rate: 18, hsn_code: hsn },
+});
+
+/**
+ * Demo decantation settings. Density specification bands (15 °C, kg/m³) are
+ * demo station values keyed by product id once the products exist.
+ */
+export const DEMO_DECANTATION_SETTINGS: Omit<DecantationSettings, 'densitySpecBands'> = {
+  ...DEFAULT_DECANTATION_SETTINGS,
+  densityMethod: 'API_MPMS_11_1_ADJUNCT',
+  densityToleranceKgM3: 3,
+  quantityTolerance: 0.2,
+  settlingTimeMinutes: 30,
+  densityEntryMethod: 'HYDROMETER',
+};
+export const DEMO_DENSITY_BANDS = {
+  petrol: { minKgM3: 720, maxKgM3: 775 },
+  diesel: { minKgM3: 820, maxKgM3: 860 },
+} as const;
 
 const DEFAULTS = {
   stationName: 'Sample Fuels',
@@ -114,6 +160,7 @@ export async function seedDemoStation(tx: DbExecutor, input: SeedDemoStationOpti
         inventoryType: 'BULK',
         stockTracked: true,
         unit: 'L',
+        ...demoFuelTax(DEMO_FUEL_TAX.petrol),
         isActive: true,
       },
       {
@@ -124,6 +171,7 @@ export async function seedDemoStation(tx: DbExecutor, input: SeedDemoStationOpti
         inventoryType: 'BULK',
         stockTracked: true,
         unit: 'L',
+        ...demoFuelTax(DEMO_FUEL_TAX.diesel),
         isActive: true,
       },
     ])
@@ -139,6 +187,7 @@ export async function seedDemoStation(tx: DbExecutor, input: SeedDemoStationOpti
         inventoryType: 'ITEM',
         stockTracked: true,
         unit: 'PCS',
+        ...gstTax('2710'),
         isActive: true,
       },
       {
@@ -149,6 +198,7 @@ export async function seedDemoStation(tx: DbExecutor, input: SeedDemoStationOpti
         inventoryType: 'ITEM',
         stockTracked: true,
         unit: 'PCS',
+        ...gstTax('3820'),
         isActive: true,
       },
       {
@@ -159,10 +209,25 @@ export async function seedDemoStation(tx: DbExecutor, input: SeedDemoStationOpti
         inventoryType: 'ITEM',
         stockTracked: true,
         unit: 'PCS',
+        ...gstTax('3403'),
         isActive: true,
       },
     ])
     .returning();
+  const [petrolProduct, dieselProduct] = products;
+  await tx
+    .update(schema.stations)
+    .set({
+      settings: {
+        ...(station.settings as Record<string, unknown>),
+        ...DEMO_DECANTATION_SETTINGS,
+        densitySpecBands: {
+          [petrolProduct.id]: DEMO_DENSITY_BANDS.petrol,
+          [dieselProduct.id]: DEMO_DENSITY_BANDS.diesel,
+        },
+      },
+    })
+    .where(eq(schema.stations.id, station.id));
   await tx.insert(schema.shiftTemplates).values([
     {
       organizationId: options.organizationId,

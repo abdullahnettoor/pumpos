@@ -11,6 +11,7 @@
  */
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
+import { createFuelVatConfig } from '@pump/shared';
 import * as schema from './dist/schema.js';
 
 const url = process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL;
@@ -74,11 +75,36 @@ const ID = {
   accCash: '00000000-0000-4000-8000-000000001401',
   accPetty: '00000000-0000-4000-8000-000000001402',
   accBank: '00000000-0000-4000-8000-000000001403',
+  purchaseItemFuel: '00000000-0000-4000-8000-000000001501',
+  mvOpeningPetrol: '00000000-0000-4000-8000-000000001303',
+  mvOpeningDiesel: '00000000-0000-4000-8000-000000001304',
+  mvDecantation: '00000000-0000-4000-8000-000000001305',
+  decantation: '00000000-0000-4000-8000-000000001601',
+  decantationLine: '00000000-0000-4000-8000-000000001602',
+  decantationChamber: '00000000-0000-4000-8000-000000001603',
+  decantationLink: '00000000-0000-4000-8000-000000001604',
+  densityPetrol: '00000000-0000-4000-8000-000000001701',
+  densityDiesel: '00000000-0000-4000-8000-000000001702',
+  densityDecantation: '00000000-0000-4000-8000-000000001703',
 };
 
 const today = new Date();
 const businessDate = today.toISOString().slice(0, 10); // YYYY-MM-DD
 const nz = (v) => String(v);
+
+// Fuel is outside GST: state VAT is embedded in the pole price (FUEL_VAT).
+// The rates are demo values of Kerala sales tax; a station sets its own.
+const fuelTax = (vatRate, hsn = '2710') => ({
+  taxCategory: 'FUEL_VAT',
+  isTaxable: false,
+  taxConfig: createFuelVatConfig({ vat_rate: vatRate, hsn_code: hsn }),
+});
+// Lubricants, merchandise and services are GST goods (demo HSN/SAC values).
+const gstTax = (hsn) => ({
+  taxCategory: 'GST',
+  isTaxable: true,
+  taxConfig: { gst_rate: 18, hsn_code: hsn },
+});
 
 async function main() {
   await db
@@ -163,8 +189,8 @@ async function main() {
         productType: 'FUEL',
         inventoryType: 'BULK',
         stockTracked: true,
-        isTaxable: false,
         unit: 'L',
+        ...fuelTax(30.08),
       },
       {
         id: ID.prodDiesel,
@@ -174,8 +200,8 @@ async function main() {
         productType: 'FUEL',
         inventoryType: 'BULK',
         stockTracked: true,
-        isTaxable: false,
         unit: 'L',
+        ...fuelTax(22.76),
       },
       {
         id: ID.prodCng,
@@ -185,8 +211,8 @@ async function main() {
         productType: 'FUEL',
         inventoryType: 'BULK',
         stockTracked: true,
-        isTaxable: false,
         unit: 'kg',
+        ...fuelTax(14.5, '2711'),
       },
       {
         id: ID.prodOil,
@@ -196,8 +222,8 @@ async function main() {
         productType: 'LUBRICANT',
         inventoryType: 'ITEM',
         stockTracked: true,
-        isTaxable: true,
         unit: 'pc',
+        ...gstTax('2710'),
       },
       {
         id: ID.prodCoolant,
@@ -207,8 +233,8 @@ async function main() {
         productType: 'LUBRICANT',
         inventoryType: 'ITEM',
         stockTracked: true,
-        isTaxable: true,
         unit: 'pc',
+        ...gstTax('3820'),
       },
       {
         id: ID.prodWasher,
@@ -218,8 +244,8 @@ async function main() {
         productType: 'ACCESSORY',
         inventoryType: 'ITEM',
         stockTracked: true,
-        isTaxable: true,
         unit: 'pc',
+        ...gstTax('3402'),
       },
       {
         id: ID.prodService,
@@ -229,8 +255,8 @@ async function main() {
         productType: 'SERVICE',
         inventoryType: 'NONE',
         stockTracked: false,
-        isTaxable: true,
         unit: 'job',
+        ...gstTax('9987'),
       },
     ])
     .onConflictDoNothing();
@@ -637,7 +663,8 @@ async function main() {
     ])
     .onConflictDoNothing();
 
-  // Fuel invoice is an Office Record; demo inventory is seeded independently.
+  // Fuel Purchase is an Office Record (ADR 0007): invoice, entry date, no Business Day,
+  // never moves stock. Fuel lines are tax-inclusive (VAT embedded), no GST split.
   await db
     .insert(schema.purchases)
     .values({
@@ -651,8 +678,160 @@ async function main() {
       supplierId: ID.supplierIoc,
       invoiceNumber: 'IOC-99812',
       amount: nz(900000),
+      taxableAmount: nz(900000),
       notes: 'Diesel tanker 10000L',
     })
+    .onConflictDoNothing();
+  await db
+    .insert(schema.purchaseItems)
+    .values({
+      id: ID.purchaseItemFuel,
+      purchaseId: ID.purchaseFuel,
+      productId: ID.prodDiesel,
+      quantity: nz(10000),
+      unitPrice: nz(90),
+      taxCategory: 'FUEL_VAT',
+      vatRate: nz(22.76),
+      hsnCode: '2710',
+      taxableAmount: nz(900000),
+      lineTotal: nz(900000),
+      invoiceDensity: nz(833.0),
+    })
+    .onConflictDoNothing();
+
+  // The tanker visit (Decantation) is what adds fuel stock: one Tank Line measured
+  // from an after dip taken after settling, linked to the invoice (Short 15 L).
+  const decantAt = (hour, minute) => {
+    const at = new Date(today);
+    at.setHours(hour, minute, 0, 0);
+    return at;
+  };
+  await db
+    .insert(schema.decantations)
+    .values({
+      id: ID.decantation,
+      organizationId: ID.org,
+      stationId: ID.station,
+      businessDayId: ID.bday,
+      documentNumber: 'DEC-000001',
+      tankerNumber: 'KL-07-BX-4412',
+      driverName: 'Suresh Kumar',
+      unloadStartedAt: decantAt(9, 0),
+      unloadEndedAt: decantAt(9, 40),
+      chambersChecked: true,
+      status: 'MEASURED',
+      flags: [],
+      recordedBy: ID.userManager,
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(schema.decantationTankLines)
+    .values({
+      id: ID.decantationLine,
+      organizationId: ID.org,
+      stationId: ID.station,
+      decantationId: ID.decantation,
+      tankId: ID.tankDiesel,
+      productId: ID.prodDiesel,
+      beforeDip: nz(6000),
+      beforeDipAt: decantAt(8, 50),
+      observedDensity: nz(829.5),
+      observedTempC: nz(29),
+      roDensity: nz(833.2),
+      afterDip: nz(15985),
+      afterDipAt: decantAt(10, 20),
+      salesDuring: nz(0),
+      receivedQty: nz(9985),
+      measuredBy: 'AFTER_DIP',
+      measuredAt: decantAt(10, 20),
+      status: 'MEASURED',
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(schema.decantationChambers)
+    .values({
+      id: ID.decantationChamber,
+      organizationId: ID.org,
+      stationId: ID.station,
+      decantationId: ID.decantation,
+      tankLineId: ID.decantationLine,
+      chamberNo: 1,
+      capacityL: nz(10000),
+      sealOk: true,
+      mark: 'OK',
+      emptied: true,
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(schema.decantationPurchases)
+    .values({
+      id: ID.decantationLink,
+      organizationId: ID.org,
+      stationId: ID.station,
+      decantationId: ID.decantation,
+      purchaseId: ID.purchaseFuel,
+      productId: ID.prodDiesel,
+      receivedQty: nz(9985),
+      invoiceQty: nz(10000),
+      varianceQty: nz(-15),
+      varianceComputedAt: decantAt(10, 20),
+    })
+    .onConflictDoNothing();
+
+  // Density register: a Morning reading per product plus the tanker's RO Density.
+  await db
+    .insert(schema.densityReadings)
+    .values([
+      {
+        id: ID.densityPetrol,
+        organizationId: ID.org,
+        stationId: ID.station,
+        businessDate,
+        productId: ID.prodPetrol,
+        kind: 'MORNING',
+        sampledFrom: 'TANK',
+        tankId: ID.tankPetrol,
+        entryMethod: 'HYDROMETER',
+        observedDensity: nz(743.5),
+        observedTempC: nz(28),
+        density15: nz(747.2),
+        recordedBy: ID.userManager,
+        recordedAt: decantAt(6, 0),
+      },
+      {
+        id: ID.densityDiesel,
+        organizationId: ID.org,
+        stationId: ID.station,
+        businessDate,
+        productId: ID.prodDiesel,
+        kind: 'MORNING',
+        sampledFrom: 'TANK',
+        tankId: ID.tankDiesel,
+        entryMethod: 'HYDROMETER',
+        observedDensity: nz(829.0),
+        observedTempC: nz(28),
+        density15: nz(832.5),
+        recordedBy: ID.userManager,
+        recordedAt: decantAt(6, 5),
+      },
+      {
+        id: ID.densityDecantation,
+        organizationId: ID.org,
+        stationId: ID.station,
+        businessDate,
+        productId: ID.prodDiesel,
+        kind: 'DECANTATION',
+        sampledFrom: 'TANK',
+        tankId: ID.tankDiesel,
+        entryMethod: 'HYDROMETER',
+        observedDensity: nz(829.5),
+        observedTempC: nz(29),
+        density15: nz(833.2),
+        decantationTankLineId: ID.decantationLine,
+        recordedBy: ID.userManager,
+        recordedAt: decantAt(10, 20),
+      },
+    ])
     .onConflictDoNothing();
 
   // Credit sale + a cash collection against credit
@@ -685,23 +864,44 @@ async function main() {
     })
     .onConflictDoNothing();
 
-  // Stock movements: opening/demo stock + fuel sale (shift)
+  // Stock movements: onboarding opening stock, the measured Decantation (fuel
+  // stock comes only from it; no 'Purchase' movement for fuel) and a fuel sale.
   await db
     .insert(schema.stockMovements)
     .values([
       {
-        id: ID.mvPurchase,
+        id: ID.mvOpeningPetrol,
+        shiftId: null,
+        businessDayId: ID.bday,
+        productId: ID.prodPetrol,
+        tankId: ID.tankPetrol,
+        movementType: 'OpeningBalance',
+        quantity: nz(5000),
+        referenceType: 'onboarding-opening-stock',
+        notes: 'Onboarding opening stock',
+      },
+      {
+        id: ID.mvOpeningDiesel,
         shiftId: null,
         businessDayId: ID.bday,
         productId: ID.prodDiesel,
         tankId: ID.tankDiesel,
-        // TODO(ADR 0007 / Decantation #477): stopgap — seed a Decantation instead
-        // once fuel stock comes only from Decantation.
         movementType: 'OpeningBalance',
-        quantity: nz(10000),
-        referenceType: 'demo-opening-stock',
-        referenceId: ID.purchaseFuel,
-        notes: 'Tanker decant',
+        quantity: nz(6000),
+        referenceType: 'onboarding-opening-stock',
+        notes: 'Onboarding opening stock',
+      },
+      {
+        id: ID.mvDecantation,
+        shiftId: null,
+        businessDayId: ID.bday,
+        productId: ID.prodDiesel,
+        tankId: ID.tankDiesel,
+        movementType: 'Decantation',
+        quantity: nz(9985),
+        referenceType: 'decantation_tank_line',
+        referenceId: ID.decantationLine,
+        notes: 'Decantation DEC-000001 (after dip)',
       },
       {
         id: ID.mvSalePetrol,
@@ -734,6 +934,8 @@ async function main() {
     'sales',
     'expenses',
     'purchases',
+    'decantations',
+    'densityReadings',
     'collections',
     'stockMovements',
   ]) {
