@@ -8,6 +8,11 @@ import { stubContainerWidth } from '../testing/containerWidth.js';
 const hooks = vi.hoisted(() => ({
   useBusinessDayStatus: vi.fn(),
   useDashboardSummary: vi.fn(),
+  useDailyDssrPreview: vi.fn(),
+  useInsightsSales: vi.fn(),
+  useDailyCashBook: vi.fn(),
+  useReceivables: vi.fn(),
+  usePayables: vi.fn(),
   // Your shift (Staff) reads these; hidden for other roles, so never asserted here.
   useShiftStatus: vi.fn(),
   useShiftTemplates: vi.fn(),
@@ -38,6 +43,11 @@ beforeEach(() => {
   stub = stubContainerWidth(1300);
   hooks.useBusinessDayStatus.mockReturnValue(ok({ pastOpenBusinessDays: [] }));
   hooks.useDashboardSummary.mockReturnValue(ok({ activeShift: null }));
+  hooks.useDailyDssrPreview.mockReturnValue(ok(null));
+  hooks.useInsightsSales.mockReturnValue(ok(null));
+  hooks.useDailyCashBook.mockReturnValue(ok({ accounts: [] }));
+  hooks.useReceivables.mockReturnValue(ok(null));
+  hooks.usePayables.mockReturnValue(ok(null));
   hooks.useShiftStatus.mockReturnValue(ok({ activeShift: null, recentClosedShifts: [] }));
   hooks.useShiftTemplates.mockReturnValue(ok([]));
   hooks.useShiftSummaries.mockReturnValue(ok([]));

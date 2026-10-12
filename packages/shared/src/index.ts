@@ -39,3 +39,5 @@ export * from './utils/shift-timeline.js';
 export * from './utils/reachable-stations.js';
 export * from './utils/event-pins.js';
 export * from './utils/dashboard-gating.js';
+
+export * from './utils/sales-headline.js';

@@ -275,7 +275,7 @@ describe('GetInsightsSales', () => {
 
   it('rejects a range length the tab does not offer', async () => {
     const res = await new GetInsightsSales({ reader: readerFor([]) }).execute(
-      { stationId: STATION, days: 14 as never },
+      { stationId: STATION, days: 10 as never },
       ctx(),
     );
     expect(res.success).toBe(false);

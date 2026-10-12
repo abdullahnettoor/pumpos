@@ -241,7 +241,7 @@ describe('the Insights part 2 use cases', () => {
         return [];
       },
     };
-    for (const days of [14, 0, Number.NaN]) {
+    for (const days of [10, 0, Number.NaN]) {
       const a = await new GetInsightsAttendantVariance({ reader }).execute(
         { stationId: 'st-1', days },
         ctx,
