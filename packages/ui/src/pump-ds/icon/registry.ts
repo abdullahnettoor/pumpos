@@ -51,6 +51,8 @@ import {
   Lock,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Minus,
   Package,
   Pencil,
@@ -121,6 +123,8 @@ export const ICON_REGISTRY = {
   'eye-off': EyeOff,
   sliders: Sliders,
   menu: Menu,
+  'panel-left-close': PanelLeftClose,
+  'panel-left-open': PanelLeftOpen,
   bell: Bell,
   command: Command,
 

@@ -421,7 +421,8 @@ export const AppShell: React.FC<AppShellProps> = ({
               </div>
             ))}
           </nav>
-          <div className="border-t border-border-soft px-2 py-2">
+          {/* Sidebar foot: same row style as the nav items above (prototype). */}
+          <div className="px-2 pb-2 pt-1">
             <button
               type="button"
               onClick={toggleCollapsed}
@@ -429,11 +430,13 @@ export const AppShell: React.FC<AppShellProps> = ({
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               title={collapsed ? 'Expand sidebar' : undefined}
               className={cn(
-                'flex w-full items-center rounded-button py-2 text-[13px] font-medium text-ink-muted transition-colors hover:bg-surface-alt hover:text-ink-strong disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent',
+                'flex w-full items-center rounded-button py-2 text-[13px] font-medium text-ink-default transition-colors hover:bg-surface-alt hover:text-ink-strong disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent',
                 collapsed ? 'justify-center px-0' : 'gap-3 px-3',
               )}
             >
-              <Icon name="menu" size="md" />
+              <span className="flex items-center text-ink-muted">
+                <Icon name={collapsed ? 'panel-left-open' : 'panel-left-close'} size="md" />
+              </span>
               {!collapsed && <span>Collapse</span>}
             </button>
           </div>
