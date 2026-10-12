@@ -8,11 +8,13 @@ import { stubContainerWidth } from '../testing/containerWidth.js';
 const hooks = vi.hoisted(() => ({
   useBusinessDayStatus: vi.fn(),
   useDashboardSummary: vi.fn(),
+  // Your shift (Staff) reads these; hidden for other roles, so never asserted here.
   useShiftStatus: vi.fn(),
   useShiftTemplates: vi.fn(),
   usePricing: vi.fn(),
   useDensityTodaySummary: vi.fn(),
   useInventoryStatus: vi.fn(),
+  useInventoryItems: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
 }));
 vi.mock('../../../query/hooks.js', () => hooks);
 
