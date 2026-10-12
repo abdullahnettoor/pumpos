@@ -126,7 +126,7 @@ describe('nextShiftToOpen', () => {
     nextShiftToOpen({ now: at(now), shifts, templates: tpl, ...clock });
 
   it('is Shift 1 before any shift, when templates exist', () => {
-    expect(next('2026-10-09T01:00:00Z', [])).toEqual({ sequence: 1, window: null });
+    expect(next('2026-10-09T01:00:00Z', [])).toMatchObject({ sequence: 1, window: null });
     expect(next('2026-10-09T01:00:00Z', [], [])).toBeNull();
   });
 
@@ -167,7 +167,7 @@ describe('template order follows Day Start', () => {
       templates: tpl,
       ...clock,
     });
-    expect(next).toEqual({ sequence: 1, window: null });
+    expect(next).toMatchObject({ sequence: 1, window: null, firstTemplate: { id: 'am' } });
     // The ghost window after the first shift is also in Day Start order.
     const after = run(
       '2026-10-09T08:45:00Z',
