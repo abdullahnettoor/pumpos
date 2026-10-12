@@ -8,11 +8,12 @@ import { DashboardCard } from '../frame/DashboardCard.js';
 
 /**
  * Money column card: Today in the office (#506).
- * Shows the latest 3 Office Records of today's Entry Date, total count, and Cash Book › link.
+ * Latest 3 Office Records of today's Entry Date as a table, with the entry count.
+ * The Cash Book › link lives once, in the Money column header.
  * Fails independently from the other Money cards.
  */
 export const TodayInOfficeCard: React.FC = () => {
-  const { station, entryDate, onNavigate } = useDashboard();
+  const { station, entryDate } = useDashboard();
   const enabled = useCardEnabled('money');
 
   const cashBookQ = useDailyCashBook(station.id, entryDate, { enabled });
@@ -22,23 +23,6 @@ export const TodayInOfficeCard: React.FC = () => {
   const top3 = allEntries.slice(0, 3);
   const count = allEntries.length;
 
-  const headerAction = (
-    <div className="flex items-center gap-1.5 text-xs">
-      {count > 0 && (
-        <span className="text-ink-muted" data-testid="entries-count">
-          {count} {count === 1 ? 'entry' : 'entries'} ·
-        </span>
-      )}
-      <button
-        type="button"
-        onClick={() => onNavigate('/reports', { openReportsTab: 'cash-book' })}
-        className="text-brand hover:underline font-medium"
-      >
-        Cash Book ›
-      </button>
-    </div>
-  );
-
   return (
     <DashboardCard
       card="money"
@@ -46,7 +30,14 @@ export const TodayInOfficeCard: React.FC = () => {
       query={cashBookQ}
       placeholderHeight={140}
     >
-      <div className="mb-1.5 flex justify-end">{headerAction}</div>
+      {count > 0 && (
+        <div className="flex items-center justify-between pb-1.5 text-xs text-ink-muted">
+          <span className="font-medium text-ink">Today in the office</span>
+          <span data-testid="entries-count">
+            {count} {count === 1 ? 'entry' : 'entries'}
+          </span>
+        </div>
+      )}
       {top3.length === 0 ? (
         <div className="text-xs text-ink-muted py-1" data-testid="empty-office-records">
           Nothing recorded yet today.
@@ -74,7 +65,7 @@ export const TodayInOfficeCard: React.FC = () => {
                     isIncome ? 'text-success-fg' : 'text-danger-fg'
                   }`}
                 >
-                  {isIncome ? '+' : '-'}
+                  {isIncome ? '+' : '−'}
                   {formatMoney(entry.amount, { decimals: 0 })}
                 </span>
               </li>

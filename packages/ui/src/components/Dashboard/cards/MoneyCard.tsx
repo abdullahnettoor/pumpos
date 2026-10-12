@@ -11,6 +11,7 @@ import {
 } from '@pump/shared';
 import { formatBusinessDate, formatCompactRupees, formatMoney } from '../../../utils/format.js';
 import { buildTrendChart, deriveCashInHand } from './money/moneyModel.js';
+import { Button } from '../../../pump-ds/index.js';
 import { useDailyCashBook, useDailyDssrPreview, useInsightsSales } from '../../../query/hooks.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
@@ -51,11 +52,11 @@ export const MoneyCard: React.FC = () => {
 
   const margin = num(todaySnap.pnl?.grossMargin);
   const credit = num(todaySnap.credit?.total ?? todaySnap.settlements?.credit);
-  const cashInHand = deriveCashInHand(todaySnap, cashBookQ.data);
+  const cashInHand = deriveCashInHand(cashBookQ.data);
 
   const trendData = insightsQ.data;
   const showTrend = canTrend;
-  const hasEnoughHistory = trendData && trendData.closedDays >= 3;
+  const hasEnoughHistory = !!trendData && trendData.closedDays >= 3;
 
   const chart = useMemo(
     () => (trendData && hasEnoughHistory ? buildTrendChart(trendData) : null),
@@ -64,12 +65,22 @@ export const MoneyCard: React.FC = () => {
   const fromLabel = trendData?.range?.from ? formatBusinessDate(trendData.range.from) : '';
 
   return (
-    <DashboardCard card="money" title="Sales so far" query={todayPreviewQ} placeholderHeight={260}>
-      <div className="flex flex-col gap-3">
+    <DashboardCard
+      card="money"
+      title="Sales so far"
+      query={todayPreviewQ}
+      placeholderHeight={260}
+      variant="plain"
+    >
+      <div
+        className="flex flex-col gap-3 rounded-lg border border-brand/25 bg-linear-to-r from-success-bg to-surface p-3.5"
+        data-testid="money-hero"
+      >
         {!hasClosedShift ? (
           <div>
+            <div className="text-xs text-ink-muted">Sales so far today</div>
             <div
-              className="text-2xl font-medium tracking-tight text-ink font-mono"
+              className="text-2xl font-medium tracking-tight text-ink font-mono mt-1"
               data-testid="sales-headline"
             >
               ₹0
@@ -80,8 +91,9 @@ export const MoneyCard: React.FC = () => {
           </div>
         ) : (
           <div>
+            <div className="text-xs text-ink-muted">Sales so far today</div>
             <div
-              className="text-2xl font-medium tracking-tight text-ink font-mono"
+              className="text-2xl font-medium tracking-tight text-ink font-mono mt-1"
               data-testid="sales-headline"
             >
               {formatMoney(sales.total, { decimals: 0 })}
@@ -94,7 +106,7 @@ export const MoneyCard: React.FC = () => {
             {compView && (
               <div
                 className={`text-xs mt-1 font-medium ${
-                  compView.tone === 'bad' ? 'text-danger-fg' : 'text-ink'
+                  compView.tone === 'bad' ? 'text-danger-fg' : 'text-success-fg'
                 }`}
               >
                 {compView.arrow ? `${compView.arrow} ` : ''}
@@ -104,23 +116,23 @@ export const MoneyCard: React.FC = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-border-soft">
+        <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-brand/20">
           {isOwner && (
             <div data-testid="margin-tile">
-              <div className="text-[11px] uppercase tracking-wider text-ink-muted">Margin</div>
+              <div className="text-xs text-ink-muted">Margin</div>
               <div className="font-mono text-sm font-medium text-success-fg">
                 {formatCompactRupees(margin)}
               </div>
             </div>
           )}
           <div data-testid="credit-tile">
-            <div className="text-[11px] uppercase tracking-wider text-ink-muted">Credit</div>
+            <div className="text-xs text-ink-muted">Credit</div>
             <div className="font-mono text-sm font-medium text-warning-fg">
               {formatCompactRupees(credit)}
             </div>
           </div>
           <div data-testid="cash-in-hand-tile">
-            <div className="text-[11px] uppercase tracking-wider text-ink-muted">Cash in hand</div>
+            <div className="text-xs text-ink-muted">Cash in hand</div>
             <div className="font-mono text-sm font-medium text-ink">
               {formatCompactRupees(cashInHand)}
             </div>
@@ -128,8 +140,21 @@ export const MoneyCard: React.FC = () => {
         </div>
 
         {showTrend && (
-          <div className="pt-2.5 border-t border-border-soft">
-            {!hasEnoughHistory ? (
+          <div className="pt-2.5 border-t border-brand/20">
+            {insightsQ.isError ? (
+              <div className="flex items-center gap-3 text-xs text-ink-muted" role="alert">
+                <span>Couldn&apos;t load the 14-day trend ·</span>
+                <Button variant="secondary" size="xs" onClick={() => void insightsQ.refetch()}>
+                  Retry
+                </Button>
+              </div>
+            ) : insightsQ.isPending || !trendData ? (
+              <div
+                className="h-[88px] animate-pulse rounded bg-surface-alt"
+                data-testid="trend-placeholder"
+                aria-busy="true"
+              />
+            ) : !hasEnoughHistory ? (
               <div className="text-xs text-ink-muted">
                 The 14-day trend appears once 3 business days are closed.
               </div>
@@ -162,7 +187,7 @@ export const MoneyCard: React.FC = () => {
                   </button>
                 </div>
 
-                {chart && (
+                {chart && trendData && (
                   <>
                     <svg
                       role="img"
