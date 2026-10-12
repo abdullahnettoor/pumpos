@@ -144,15 +144,15 @@ describe('FuelsCard', () => {
     expect(screen.getByText(/first reading/)).toBeTruthy();
   });
 
-  it('not recorded offers Record to Owner and navigates', () => {
+  it.each(['Owner', 'Staff'] as const)('not recorded offers Record to %s and navigates', (role) => {
     hooks.useDensityTodaySummary.mockReturnValue(dens({}));
-    mount('Owner');
+    mount(role);
     expect(screen.getByText('Not recorded')).toBeTruthy();
     fireEvent.click(screen.getByText('Record ›'));
     expect(nav).toHaveBeenCalledWith('/inventory', { focusInventoryTab: 'density' });
   });
 
-  it.each(['Accountant', 'Staff'] as const)('not recorded hides Record for %s', (role) => {
+  it.each(['Accountant'] as const)('not recorded hides Record for %s', (role) => {
     hooks.useDensityTodaySummary.mockReturnValue(dens({}));
     mount(role);
     expect(screen.getByText('Not recorded')).toBeTruthy();
