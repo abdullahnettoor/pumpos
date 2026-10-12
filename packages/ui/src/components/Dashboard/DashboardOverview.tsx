@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { useCustomers, useDesktopDownloads, useSuppliers, useUsers } from '../../query/hooks.js';
-import { GettingStartedChecklist, type ChecklistStep } from './GettingStartedChecklist.js';
+import {
+  GettingStartedChecklist,
+  isStepComplete,
+  type ChecklistStep,
+} from './GettingStartedChecklist.js';
 import { useChecklistSkips } from './checklistStorage.js';
 import {
   desktopOptionsForThisBrowser,
@@ -23,6 +27,8 @@ interface DashboardOverviewProps {
   onNavigate: (path: string, intent?: NavIntent) => void;
 }
 
+const GS_DISMISSED_KEY = 'pumpos_gs_dismissed';
+
 const OPTIONAL_STEP_IDS = ['team', 'suppliers', 'customers', 'desktop'];
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
@@ -34,6 +40,21 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const canSeeFinancials = canViewReports(userRole);
   const { data: customers } = useCustomers(true, { enabled: canSeeFinancials });
   const { data: suppliers } = useSuppliers(true, { enabled: canSeeFinancials });
+  const [gsDismissed, setGsDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(GS_DISMISSED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const dismissGettingStarted = () => {
+    try {
+      localStorage.setItem(GS_DISMISSED_KEY, '1');
+    } catch {
+      /* storage blocked */
+    }
+    setGsDismissed(true);
+  };
   const { data: users } = useUsers();
   const {
     skipped: skippedSteps,
@@ -211,12 +232,22 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   // Past this point the station is operational — narrow for TypeScript.
   if (!selectedStation) return null;
 
+  // A freshly-onboarded (but ready) station: show the getting-started checklist
+  // above the board until the essentials are done or the user dismisses it.
+  const showGettingStarted =
+    canManageOnboarding && !gsDismissed && gsSteps.some((s) => !isStepComplete(s));
+
   return (
     <Dashboard
       station={selectedStation}
       role={userRole}
       userName={userName}
       onNavigate={onNavigate}
+      aboveBoard={
+        showGettingStarted ? (
+          <GettingStartedChecklist steps={gsSteps} dismissible onDismiss={dismissGettingStarted} />
+        ) : null
+      }
     />
   );
 };

@@ -20,7 +20,9 @@ export const Dashboard: React.FC<{
   role: DashboardRole;
   userName: string;
   onNavigate: (path: string, intent?: NavIntent) => void;
-}> = ({ station, role, userName, onNavigate }) => {
+  /** Optional content between the header and the board (the Getting Started checklist). */
+  aboveBoard?: React.ReactNode;
+}> = ({ station, role, userName, onNavigate, aboveBoard }) => {
   const settings = (station.settings ?? {}) as {
     timezone?: string;
     business_day_starts_at?: string;
@@ -42,6 +44,7 @@ export const Dashboard: React.FC<{
     >
       <div className="animate-fade-in flex flex-col gap-3">
         <DashboardHeader />
+        {aboveBoard}
         <OpenDaysNotice />
         <DashboardBoard />
       </div>
