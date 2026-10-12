@@ -53,7 +53,7 @@
   .daychip { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); font-size: 12px; color: var(--tx); }
   .dot { width: 7px; height: 7px; border-radius: 9px; background: var(--good); flex-shrink: 0; }
   .live { box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); }
-  .pill { font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 99px; white-space: nowrap; }
+  .pill { font-family: var(--font-sans); font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 99px; white-space: nowrap; }
   .p-warn { background: var(--warn-soft); color: var(--warn); } .p-bad { background: var(--bad-soft); color: var(--bad); } .p-ok { background: var(--good-soft); color: var(--good); }
   .p-mu { background: var(--alt); color: var(--mu); border: 1px solid var(--line); } .p-info { background: var(--info-soft); color: var(--info); }
   .search { flex: 1; max-width: 460px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: var(--alt); display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--fa); font-size: 12.5px; }
@@ -244,10 +244,13 @@ function C2(role) {
   const cols = showMoney ? '1.15fr 1fr 1fr' : '1.3fr 1fr';
   const lab = (h) => { const m = h % 24; return m === 0 ? '12a' : m < 12 ? m + 'a' : m === 12 ? '12p' : (m - 12) + 'p'; };
 
-  const header = `<div class="row" style="gap:10px;margin-bottom:14px;flex-wrap:wrap">
+  const header = `<div class="row" style="gap:10px;margin-bottom:12px">
     <div><div class="ttl" style="line-height:1.1">Dashboard</div><div class="s">Business day <b class="hi">Fri 9 Oct</b> · open since 6:00 am · as of 5:12 pm</div></div>
-    ${role === 'Staff' ? '' : '<button class="pill p-warn" style="border:0;margin-left:6px" title="Opens Reports">2 earlier days still open: 7 & 8 Oct ›</button>'}
-    <div style="margin-left:auto;display:flex;gap:8px">${can.shiftActions(role) ? `<button class="btn sec">${ic(I.cash, 15)} Cash drop</button>` : ''}<button class="btn sec">${ic(I.pump, 15)} ${can.shiftActions(role) ? 'Shift workspace' : 'View shift'}</button></div></div>`;
+    <div style="margin-left:auto"><button class="btn sec">${ic(I.pump, 15)} ${can.shiftActions(role) ? 'Shift workspace' : 'View shift'}</button></div></div>
+    ${role === 'Staff' ? '' : `<div class="row" style="gap:10px;margin-bottom:12px;padding:9px 14px;border-radius:10px;background:var(--warn-soft);border:1px solid var(--warn-line)">
+      <span class="warn">${ic(I.lock, 15)}</span>
+      <span class="s" style="font-size:12.5px"><b class="hi">7 Oct and 8 Oct are still open.</b> Their daily reports stay drafts until each day is closed.</span>
+      <button class="lnk" style="margin-left:auto">Review in Shifts ›</button></div>`}`;
 
   const timeline = `<div class="card" style="padding:14px 16px 12px;margin-bottom:12px">
     <div class="row" style="margin-bottom:10px"><span class="hi" style="font-weight:800">Today's timeline</span><span class="s" style="margin-left:10px">6:00 am → 6:00 am</span>
@@ -263,41 +266,61 @@ function C2(role) {
     <div class="row s" style="gap:16px;margin-top:20px;flex-wrap:wrap">${ev.map(([h, icn, t, tone]) => `<span class="row" style="gap:5px"><span class="${tone === 'mu' ? '' : tone}">${ic(I[icn], 12, 2.2)}</span>${t}</span>`).join('')}</div>
   </div>`;
 
+  const DUS = [
+    { id: 'DU3', who: 'Vinod M', noz: 'HSD · XP95', drops: 10000, st: 'Handover due' },
+    { id: 'DU5', who: 'Anil T', noz: 'MS · MS', drops: 15000, st: 'Handover due' },
+    { id: 'DU2', who: 'Sajid P', noz: 'HSD · HSD', drops: 20000, st: 'Recorded', decl: 21480, v: 0 },
+    { id: 'DU6', who: 'Faisal K', noz: 'MS · HSD', drops: 5000, st: 'Recorded', decl: 18320, v: -120 },
+    { id: 'DU1', who: 'Ramesh K', noz: 'MS · MS', drops: 0, st: 'Pending' },
+    { id: 'DU4', who: 'Joseph V', noz: 'HSD · HSD', drops: 12000, st: 'Pending' },
+  ];
+  const recorded = DUS.filter(d => d.st === 'Recorded').length;
   const forecourt = `<section>
-    <div class="row" style="margin:2px 2px 8px"><span class="hi" style="font-weight:800">Forecourt</span><span class="s" style="margin-left:8px">Shift 2 · 1 of 3 handed over</span><span class="lnk" style="margin-left:auto">${can.shiftActions(role) ? 'Workspace ›' : 'View ›'}</span></div>
-    ${D.dus.map(d => `<div class="card" style="padding:12px 14px;margin-bottom:8px;${d.st === 'Handover due' ? 'border-color:var(--warn-line)' : ''}">
-      <div class="row"><span class="av" style="border-radius:8px;width:34px;height:34px;background:var(--alt);color:var(--hi)">${d.id}</span><div style="margin-left:10px"><div class="hi" style="font-weight:700">${d.who}</div><div class="s">${d.noz}</div></div><span style="margin-left:auto">${stPill(d.st)}</span></div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)">
-        ${[['Float', inr(d.float)], ['Drops', inr(d.drops)], ['Declared', d.decl ? inr(d.decl) : '—']].map(([k, v]) => `<div><div class="s">${k}</div><div class="num v" style="font-size:13px">${v}</div></div>`).join('')}</div></div>`).join('')}
-    <div class="card" style="padding:12px 14px"><div class="row"><span class="k">Last closed: Shift 1</span><span class="lnk" style="margin-left:auto">Summary ›</span></div>
+    <div class="row" style="margin:2px 2px 8px"><span class="hi" style="font-weight:800">Forecourt</span><span class="s" style="margin-left:8px">Shift 2 · 6 DUs</span><span class="lnk" style="margin-left:auto">${can.shiftActions(role) ? 'Workspace ›' : 'View ›'}</span></div>
+    <div class="card">
+      <div style="padding:12px 14px;border-bottom:1px solid var(--line)">
+        <div class="row"><span class="k">Handovers</span><b class="num hi" style="margin-left:auto">${recorded} / ${DUS.length}</b></div>
+        <div style="display:flex;gap:3px;margin-top:7px">${DUS.map(d => `<i style="flex:1;height:6px;border-radius:9px;background:${d.st === 'Recorded' ? 'var(--good)' : d.st === 'Handover due' ? 'var(--warn)' : 'var(--track)'}"></i>`).join('')}</div>
+        <div class="row s" style="margin-top:7px;gap:14px"><span>Floats <b class="num hi">₹12,000</b></span><span>Drops <b class="num hi">₹62,000</b></span><span style="margin-left:auto" class="warn">2 handovers due</span></div>
+      </div>
+      <table class="t">
+        ${DUS.map(d => `<tr>
+          <td style="width:46px;padding-right:0"><b class="hi">${d.id}</b></td>
+          <td><span class="hi" style="font-weight:600">${d.who}</span><div class="s">${d.noz}</div></td>
+          <td class="r" style="white-space:nowrap">${d.st === 'Recorded' ? `${inr(d.decl)}<div class="s" style="font-family:var(--font-sans)">declared</div>` : `${inr(d.drops)}<div class="s" style="font-family:var(--font-sans)">dropped</div>`}</td>
+          <td class="r" style="width:110px">${d.st === 'Recorded' ? vbadge(d.v) : stPill(d.st)}</td></tr>`).join('')}
+      </table>
+    </div>
+    <div class="card" style="padding:12px 14px;margin-top:8px"><div class="row"><span class="k">Last closed: Shift 1</span><span class="lnk" style="margin-left:auto">Summary ›</span></div>
       <div class="row" style="margin-top:6px;gap:18px"><div><div class="s">Sales</div><div class="num v">${inr(216120)}</div></div><div><div class="s">Litres</div><div class="num v">2,211</div></div><div><div class="s">Variance</div>${vbadge(-340)}</div></div></div>
-    <div class="card" style="margin-top:8px"><div class="ch"><span class="t">Today's prices</span><span class="r">${role === 'Owner' || role === 'Manager' ? '<span class="lnk">Pricing ›</span>' : ''}</span></div>
-      <table class="t">${D.fuel.map(f => `<tr><td><span class="sw" style="background:${f.c}"></span>${f.name}</td><td class="r hi">₹${f.rate.toFixed(2)}</td><td class="r s">since 6 Oct</td></tr>`).join('')}</table></div>
   </section>`;
 
+  const FUELS = [
+    { k: 'MS', name: 'Petrol', c: 'var(--acc)', price: 102.92, since: '6 Oct', dens: 748.6, dd: 0.4, obs: '744.9 at 31.5 °C · 6:10 am', tr: [747.9, 748.2, 748.0, 748.3, 748.1, 748.2, 748.6], flag: '',
+      tanks: [{ n: 'Tank 1', pct: 62, kl: 12.4, cap: 20, days: 2.6 }, { n: 'Tank 4', pct: 48, kl: 9.6, cap: 20, days: 2.0 }] },
+    { k: 'HSD', name: 'Diesel', c: 'var(--info)', price: 89.58, since: '6 Oct', dens: 836.4, dd: 4.3, obs: '832.0 at 32.0 °C · 6:14 am', tr: [831.8, 832.4, 832.0, 832.2, 831.9, 832.1, 836.4], flag: 'jump',
+      tanks: [{ n: 'Tank 2', pct: 18, kl: 3.6, cap: 20, days: 0.9 }], decant: true },
+    { k: 'XP95', name: 'Premium', c: 'var(--warn)', price: 111.40, since: '6 Oct', dens: null, tr: [744.2, 744.5, 744.1, 744.3, 744.4, 744.2], flag: 'missing',
+      tanks: [{ n: 'Tank 3', pct: 74, kl: 7.4, cap: 10, days: 9 }] },
+  ];
   const stock = `<section>
-    <div class="row" style="margin:2px 2px 8px"><span class="hi" style="font-weight:800">Stock & prices</span><span class="s" style="margin-left:8px">dip 6:00 am</span><span class="lnk" style="margin-left:auto">${role === 'Staff' ? '' : 'Inventory ›'}</span></div>
-    ${D.tanks.map(t => `<div class="card" style="padding:12px 14px;margin-bottom:8px;display:flex;gap:12px;align-items:center;${t.pct < 25 ? 'border-color:var(--bad-line)' : ''}">
-      <div class="tube" style="height:58px;width:18px"><i style="height:${t.pct}%;background:${tc(t.pct)}"></i></div>
-      <div style="flex:1"><div class="row"><b class="hi">${t.name}</b><span class="num" style="margin-left:auto;font-weight:700;color:${tc(t.pct)}">${t.pct}%</span></div>
-        <div class="row s" style="margin-top:3px"><span class="num">${t.kl} of ${t.cap} KL</span><span style="margin-left:auto"><b class="num ${t.days < 1.5 ? 'bad' : 'hi'}">${t.days}</b> days cover</span></div>
-        ${t.pct < 25 && can.planPurchase(role) ? '<button class="btn sec" style="height:26px;margin-top:8px;font-size:11.5px">Plan purchase</button>' : ''}</div></div>`).join('')}
-    ${role === 'Staff' ? '' : `<div class="card" style="padding:12px 14px;margin-bottom:8px;border-color:var(--warn-line);background:var(--warn-soft)"><div class="row"><span class="warn">${ic(I.truck, 16)}</span><b class="hi" style="margin-left:8px">HSD tanker waiting to decant</b><span class="lnk" style="margin-left:auto">Decant ›</span></div><div class="s" style="margin-top:3px">Received 11:30 am · 12 KL</div></div>`}
-    <div class="card" style="margin-bottom:8px">
-      <div class="ch"><span class="t">Density today</span><span class="s">at 15 °C · kg/m³</span><span class="r">${role === 'Accountant' ? '' : '<span class="lnk">Record ›</span>'}<span class="lnk">Register ›</span></span></div>
-      <table class="t">${[
-        ['MS', 'Petrol', 748.6, 0.4, '744.9 at 31.5 °C · 6:10 am', [747.9, 748.2, 748.0, 748.3, 748.1, 748.2, 748.6], ''],
-        ['HSD', 'Diesel', 836.4, 4.3, '832.0 at 32.0 °C · 6:14 am', [831.8, 832.4, 832.0, 832.2, 831.9, 832.1, 836.4], 'jump'],
-        ['XP95', 'Premium', null, null, '', [744.2, 744.5, 744.1, 744.3, 744.4, 744.2], 'missing'],
-      ].map(([k, n, d, dd, obs, tr, flag]) => `<tr>
-        <td><b class="hi">${n}</b> <span class="fa">${k}</span>${obs ? `<div class="s" style="white-space:nowrap">${obs}</div>` : ''}</td>
-        <td style="padding-left:0;padding-right:0;width:70px">${tr.length > 1 ? `<svg width="70" height="22" viewBox="0 0 70 22"><path d="${spark(tr, 70, 22, 3)}" fill="none" stroke="var(${flag === 'jump' ? '--bad' : '--fa'})" stroke-width="1.5"/></svg>` : ''}</td>
-        <td class="r">${flag === 'missing'
-          ? `<span class="pill p-warn" style="font-family:var(--font-sans)">Not recorded</span>`
-          : `<span class="hi" style="font-weight:600">${d.toFixed(1)}</span><div class="s ${flag === 'jump' ? 'bad' : ''}" style="font-family:var(--font-mono)">${dd > 0 ? '+' : ''}${dd.toFixed(1)} vs yday</div>`}
-          ${flag === 'jump' ? '<div><span class="pill p-bad" style="font-family:var(--font-sans)">Unexplained jump</span></div>' : ''}</td></tr>`).join('')}</table>
-      <div style="padding:8px 14px;border-top:1px solid var(--line)" class="s">Change over ±3.0 kg/m³ without a decantation is flagged</div>
-    </div>
+    <div class="row" style="margin:2px 2px 8px"><span class="hi" style="font-weight:800">Fuels</span><span class="s" style="margin-left:8px">price · density · stock</span><span class="lnk" style="margin-left:auto">${role === 'Staff' ? '' : 'Inventory ›'}</span></div>
+    ${FUELS.map(f => `<div class="card" style="margin-bottom:8px;${f.tanks.some(t => t.pct < 25) || f.flag === 'jump' ? 'border-color:var(--bad-line)' : ''}">
+      <div class="row" style="padding:11px 14px 8px;gap:8px"><span class="sw" style="background:${f.c};margin:0"></span><b class="hi" style="font-size:13.5px">${f.name}</b><span class="fa">${f.k}</span>
+        <span style="margin-left:auto;text-align:right"><b class="num hi" style="font-size:15px">₹${f.price.toFixed(2)}</b><span class="s">/L</span><div class="s">since ${f.since}</div></span></div>
+      <div class="row" style="padding:8px 14px;border-top:1px dashed var(--line);gap:10px">
+        <div style="min-width:0"><div class="k">Density at 15 °C</div>${f.obs ? `<div class="s" style="white-space:nowrap">${f.obs}</div>` : ''}</div>
+        <svg style="margin-left:auto;flex-shrink:0" width="60" height="20" viewBox="0 0 60 20"><path d="${spark(f.tr, 60, 20, 3)}" fill="none" stroke="var(${f.flag === 'jump' ? '--bad' : '--fa'})" stroke-width="1.5"/></svg>
+        <div style="text-align:right;min-width:92px">${f.flag === 'missing' ? `<span class="pill p-warn">Not recorded</span>${role === 'Accountant' ? '' : '<div><button class="lnk">Record ›</button></div>'}`
+          : `<b class="num hi">${f.dens.toFixed(1)}</b><div class="s num ${f.flag === 'jump' ? 'bad' : ''}">${f.dd > 0 ? '+' : ''}${f.dd.toFixed(1)} vs yday</div>${f.flag === 'jump' ? '<span class="pill p-bad">Unexplained jump</span>' : ''}`}</div></div>
+      ${f.tanks.map(t => `<div class="row" style="padding:8px 14px;border-top:1px dashed var(--line);gap:10px">
+        <div class="tube" style="height:30px;width:12px;border-radius:4px"><i style="height:${t.pct}%;background:${tc(t.pct)}"></i></div>
+        <div><b class="hi" style="font-size:12.5px">${t.n}</b><div class="s num">${t.kl} of ${t.cap} KL</div></div>
+        <div style="margin-left:auto;text-align:right"><b class="num" style="color:${tc(t.pct)}">${t.pct}%</b><div class="s"><b class="num ${t.days < 1.5 ? 'bad' : 'hi'}">${t.days}</b> days cover</div></div></div>`).join('')}
+      ${f.decant && role !== 'Staff' ? `<div class="row" style="padding:8px 14px;border-top:1px solid var(--warn-line);background:var(--warn-soft);border-radius:0 0 10px 10px;gap:8px"><span class="warn">${ic(I.truck, 15)}</span><span class="s"><b class="hi">12 KL tanker waiting to decant</b> · since 11:30 am</span><span class="lnk" style="margin-left:auto">Decant ›</span></div>` : ''}
+      ${f.tanks.some(t => t.pct < 25) && can.planPurchase(role) && !f.decant ? '<div style="padding:0 14px 10px"><button class="btn sec" style="height:26px;font-size:11.5px">Plan purchase</button></div>' : ''}
+    </div>`).join('')}
+    <div class="s" style="padding:0 4px">Density changes over ±3.0 kg/m³ without a decantation are flagged. Dip at 6:00 am.</div>
   </section>`;
 
   const money = !showMoney ? '' : `<section>
