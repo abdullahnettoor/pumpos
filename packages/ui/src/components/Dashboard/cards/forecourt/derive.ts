@@ -1,9 +1,11 @@
 import {
-  dashboardTimeline,
   deriveDuHandoverStatuses,
+  isDayShiftsDone,
   isHandoverDue,
+  nextShiftToOpen,
   type DuStatus,
 } from '@pump/shared';
+import { formatElapsedBetween, formatShortDay } from '../../../../utils/format.js';
 
 type Row = Record<string, any>;
 
@@ -21,10 +23,8 @@ export function formatClock(hhmm: string | null | undefined): string {
   return `${h % 12 === 0 ? 12 : h % 12}:${m[2]} ${suffix}`;
 }
 
-export function formatElapsed(openedAt: string, now: number): string {
-  const mins = Math.max(0, Math.floor((now - Date.parse(openedAt)) / 60_000));
-  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
-}
+export const formatElapsed = (openedAt: string, now: number): string =>
+  formatElapsedBetween(Date.parse(openedAt), now);
 
 export interface DuRow {
   key: string;
@@ -36,8 +36,6 @@ export interface DuRow {
   declared: number | null;
   /** Server variance once recorded. */
   variance: number | null;
-  /** Cash dropped on the recorded handover; unknown before then. */
-  dropped: number | null;
 }
 
 export interface LiveForecourt {
@@ -52,7 +50,6 @@ export interface LiveForecourt {
   recorded: number;
   total: number;
   floats: number;
-  drops: number;
   open: number;
   /** DUs not handed over first, then recorded; assignment order inside each. */
   dus: DuRow[];
@@ -62,13 +59,15 @@ export interface LiveForecourt {
 export interface LastClosed {
   shiftId: string;
   name: string;
+  /** "Shift 2 · Thu 8 Oct" when the shift is not of the current Business Day. */
+  label: string;
   sales: number | null;
   litres: number | null;
   variance: number | null;
 }
 
 export interface IdleForecourt {
-  kind: 'between' | 'none';
+  kind: 'between' | 'done' | 'none';
   /** "Shift 2 is scheduled from 2:00 pm." style hint, when known. */
   hint: string | null;
   last: LastClosed | null;
@@ -83,15 +82,24 @@ export interface DeriveInput {
   now: number;
   timeZone: string;
   dayStartsAt: string;
+  /** Current Business Date; a last-closed shift of another date shows its day. */
+  businessDate?: string;
 }
 
-function lastClosed(summary: Row | null | undefined): LastClosed | null {
+function lastClosed(
+  summary: Row | null | undefined,
+  businessDate: string | undefined,
+): LastClosed | null {
   const shift = summary?.lastShift as Row | null | undefined;
   if (!shift) return null;
   const s = summary?.lastShiftSummary as Row | null | undefined;
+  const name = String(shift.templateName ?? 'Shift');
+  const date = typeof shift.businessDate === 'string' ? shift.businessDate : null;
   return {
     shiftId: String(shift.id),
-    name: String(shift.templateName ?? 'Shift'),
+    name,
+    label:
+      date && businessDate && date !== businessDate ? `${name} · ${formatShortDay(date)}` : name,
     sales: s && s.totalFuelSalesValue != null ? num(s.totalFuelSalesValue) : null,
     litres: s && s.totalVolumeSold != null ? num(s.totalVolumeSold) : null,
     variance: s && s.cashVariance != null ? num(s.cashVariance) : null,
@@ -99,9 +107,9 @@ function lastClosed(summary: Row | null | undefined): LastClosed | null {
 }
 
 export function deriveForecourt(input: DeriveInput): ForecourtModel {
-  const { status, summary, templates, now, timeZone, dayStartsAt } = input;
+  const { status, summary, templates, now, timeZone, dayStartsAt, businessDate } = input;
   const shift = status?.activeShift as Row | null | undefined;
-  const last = lastClosed(summary);
+  const last = lastClosed(summary, businessDate);
 
   if (!shift) {
     const todayShifts = (summary?.today?.shifts ?? []) as Row[];
@@ -112,7 +120,7 @@ export function deriveForecourt(input: DeriveInput): ForecourtModel {
       endTime: String(t.endTime),
       isActive: t.isActive !== false,
     }));
-    const tl = dashboardTimeline({
+    const timelineInput = {
       now: new Date(now),
       shifts: todayShifts.map((s) => ({
         shiftTemplateId: String(s.shiftTemplateId),
@@ -122,18 +130,21 @@ export function deriveForecourt(input: DeriveInput): ForecourtModel {
       templates: tpls,
       timeZone,
       dayStartsAt,
-    });
+    };
+    const next = nextShiftToOpen(timelineInput);
     if (todayShifts.length > 0) {
-      const next = tl.nextWindow;
+      if (isDayShiftsDone(timelineInput)) {
+        return { kind: 'done', hint: 'All of today’s scheduled shifts have closed.', last };
+      }
       return {
         kind: 'between',
-        hint: next ? `${next.name} is scheduled from ${clockOf(next.startAt, timeZone)}.` : null,
+        hint: next?.window
+          ? `${next.window.name} is scheduled from ${clockOf(next.window.startAt, timeZone)}.`
+          : null,
         last,
       };
     }
-    const first = [...tpls]
-      .filter((t) => t.isActive)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime))[0];
+    const first = next?.firstTemplate;
     return {
       kind: 'none',
       hint: first ? `${first.name} is scheduled from ${formatClock(first.startTime)}.` : null,
@@ -171,7 +182,6 @@ export function deriveForecourt(input: DeriveInput): ForecourtModel {
       status: statuses[i] ?? 'pending',
       declared: h ? num(h.cashHandedOver) : null,
       variance: h ? num(h.varianceAmount) : null,
-      dropped: h ? num(h.cashDrops) : null,
     };
   });
   const sorted = [
@@ -197,7 +207,6 @@ export function deriveForecourt(input: DeriveInput): ForecourtModel {
       recon.openingFloat != null
         ? num(recon.openingFloat)
         : assignments.reduce((s, a) => s + num(a.openingFloat), 0),
-    drops: num(recon.handoverCashDrops),
     open: dus.length - recorded,
     dus: sorted,
     last,

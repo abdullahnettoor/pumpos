@@ -8,7 +8,7 @@ import { deriveForecourt, type ForecourtModel } from './derive.js';
  * clock come from the dashboard context.
  */
 export function useForecourtModel() {
-  const { station, now, timeZone, dayStartsAt } = useDashboard();
+  const { station, now, timeZone, dayStartsAt, businessDate } = useDashboard();
   const enabled = useCardEnabled('forecourt');
   const status = useShiftStatus(station.id, { enabled });
   const summary = useDashboardSummary(station.id, { enabled });
@@ -21,6 +21,7 @@ export function useForecourtModel() {
         now: now.getTime(),
         timeZone,
         dayStartsAt,
+        businessDate,
       })
     : null;
   return { model, queries: [status, summary, templates] };
