@@ -204,6 +204,25 @@ function plainCssClasses(): Set<string> {
   return new Set([...css.matchAll(/\.([A-Za-z_][\w-]*)/g)].map((m) => m[1]!));
 }
 
+/**
+ * `border-dashed` / `border-dotted` set `border-style` on ALL four sides. With
+ * no Preflight, the sides without an explicit width then draw at `medium`
+ * (~3px): a side-only rule like `border-t border-dashed` becomes a thick dashed
+ * frame. Dash one side with `border-t [--tw-border-style:dashed]` instead.
+ */
+const SIDE_WIDTH = /^border-[tblrxyse](-|$)/;
+const ALL_WIDTH = /^border(-\d+|-\[[^\]]*px\])?$/;
+export function findSideOnlyDashes(text: string): string[] {
+  const out: string[] = [];
+  for (const lit of stringLiterals(text)) {
+    const toks = plainTokens(lit).map((t) => t.replace(/^.*:/, ''));
+    if (!toks.some((t) => t === 'border-dashed' || t === 'border-dotted')) continue;
+    if (toks.some((t) => SIDE_WIDTH.test(t)) && !toks.some((t) => ALL_WIDTH.test(t)))
+      out.push(lit.trim());
+  }
+  return out;
+}
+
 describe('class guard: no class in dashboard / pump-ds / theme / shell is dead', () => {
   it('every className token compiles to CSS', async () => {
     const generates = await makeBuilder();
@@ -222,5 +241,14 @@ describe('class guard: no class in dashboard / pump-ds / theme / shell is dead',
     const fixture =
       "const M = { a: 'bg-line' };\nconst x = <i className={`x ${M.a}`} />; const w = 'text-white';";
     expect(findDeadTokens(fixture, generates).sort()).toEqual(['bg-line', 'text-white']);
+  });
+  it('no side-only dashed borders (border-dashed styles every side)', () => {
+    const bad: string[] = [];
+    for (const file of sourceFiles())
+      for (const lit of findSideOnlyDashes(readFileSync(file, 'utf8')))
+        bad.push(`${path.relative(SRC, file)}: ${lit}`);
+    expect(bad).toEqual([]);
+    expect(findSideOnlyDashes("const R = 'border-t border-dashed px-3';")).toHaveLength(1);
+    expect(findSideOnlyDashes("const R = 'border border-dashed';")).toHaveLength(0);
   });
 });

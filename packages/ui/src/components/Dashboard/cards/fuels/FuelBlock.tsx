@@ -70,7 +70,7 @@ const Label: React.FC<React.PropsWithChildren> = ({ children }) => (
   <div className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">{children}</div>
 );
 
-const ROW = 'border-t border-dashed border-border-soft px-3 py-2';
+const ROW = 'border-t [--tw-border-style:dashed] border-border-soft px-3 py-2';
 
 const DensityRow: React.FC<
   Pick<FuelBlockProps, 'density' | 'timeZone' | 'businessDate' | 'canRecord' | 'onRecord'>
