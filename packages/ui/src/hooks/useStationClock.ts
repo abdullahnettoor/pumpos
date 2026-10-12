@@ -44,12 +44,14 @@ export function useStationClock(settings: unknown): StationClock {
  */
 export function useStationBusinessDate(settings: unknown): string {
   const { timeZone, dayStartsAt } = businessDateSettings(settings);
-  const compute = () => resolveBusinessDate({ now: new Date(), timeZone, dayStartsAt });
-  const [date, setDate] = useState(compute);
+  const [date, setDate] = useState(() =>
+    resolveBusinessDate({ now: new Date(), timeZone, dayStartsAt }),
+  );
   useEffect(() => {
-    const timer = window.setInterval(() => setDate(compute), 60_000);
+    const tick = () => setDate(resolveBusinessDate({ now: new Date(), timeZone, dayStartsAt }));
+    tick();
+    const timer = window.setInterval(tick, 60_000);
     return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeZone, dayStartsAt]);
   return date;
 }
