@@ -123,14 +123,13 @@ describe('YourShiftCard — states', () => {
     expect(screen.getByText('1 handover to record')).toBeTruthy();
   });
 
-  it('offers Open Shift N between shifts, with no open shift and no cash drops', () => {
+  it('offers Open Shift N between shifts', () => {
     givenData({
       useShiftStatus: ok({ activeShift: null }),
       useDashboardSummary: ok({ today: { shifts: [MORNING_CLOSED] } }),
     });
     mount();
     expect(screen.getByText('Open Shift 2')).toBeTruthy();
-    expect(screen.getByText('No shift open.')).toBeTruthy();
   });
 
   it('does not offer a skipped window that has already passed', () => {
@@ -149,7 +148,23 @@ describe('YourShiftCard — states', () => {
     expect(screen.getByText('Open Shift 1')).toBeTruthy();
   });
 
-  it('lists unrecorded morning density as "tell the manager", with no Record action', () => {
+  it('lists unrecorded morning density with a Record action that opens the density register', () => {
+    givenData({
+      useDensityTodaySummary: ok({
+        missingCount: 1,
+        missingProducts: [{ productId: 'p1', productName: 'Petrol', productCode: 'PET' }],
+      }),
+    });
+    const onNavigate = vi.fn();
+    mount('Staff', onNavigate);
+    const row = screen.getByText('Morning density not recorded').parentElement!.parentElement!;
+    expect(within(row).getByText('Petrol')).toBeTruthy();
+    expect(within(row).queryByText(/tell the manager/)).toBeNull();
+    fireEvent.click(within(row).getByRole('button', { name: 'Record' }));
+    expect(onNavigate).toHaveBeenCalledWith('/inventory', { focusInventoryTab: 'density' });
+  });
+
+  it('shows a count chip for the to-do list and renders no cash drops', () => {
     givenData({
       useDensityTodaySummary: ok({
         missingCount: 1,
@@ -157,71 +172,9 @@ describe('YourShiftCard — states', () => {
       }),
     });
     mount();
-    const row = screen.getByText('Morning density not recorded').closest('div')!.parentElement!;
-    expect(within(row).getByText(/Petrol · tell the manager/)).toBeTruthy();
-    expect(within(row).queryByRole('button')).toBeNull();
-  });
-
-  it('lists cash drops with the total and "+N more" beyond three', () => {
-    givenData({
-      useShiftStatus: ok({
-        activeShift: openShift({
-          handovers: [
-            {
-              id: 'h1',
-              userId: 'u1',
-              duId: 'd1',
-              cashDrops: '1000',
-              createdAt: '2026-10-12T05:00:00.000Z',
-              duName: 'DU 1',
-              attendantName: 'Ravi',
-            },
-            {
-              id: 'h2',
-              userId: 'u2',
-              duId: 'd2',
-              cashDrops: '500',
-              createdAt: '2026-10-12T06:00:00.000Z',
-              duName: 'DU 2',
-              attendantName: 'Asha',
-            },
-            {
-              id: 'h3',
-              userId: 'u3',
-              duId: 'd3',
-              cashDrops: '0',
-              createdAt: '2026-10-12T06:30:00.000Z',
-              duName: 'DU 3',
-              attendantName: 'Kiran',
-            },
-            {
-              id: 'h4',
-              userId: 'u4',
-              duId: 'd4',
-              cashDrops: '250',
-              createdAt: '2026-10-12T07:00:00.000Z',
-              duName: 'DU 4',
-              attendantName: 'Meena',
-            },
-            {
-              id: 'h5',
-              userId: 'u5',
-              duId: 'd5',
-              cashDrops: '100',
-              createdAt: '2026-10-12T07:30:00.000Z',
-              duName: 'DU 5',
-              attendantName: 'Jose',
-            },
-          ],
-        }),
-      }),
-    });
-    mount();
-    const section = screen.getByRole('region', { name: 'Cash drops this shift' });
-    expect(within(section).getByText(/Ravi/)).toBeTruthy();
-    expect(within(section).queryByText(/Kiran/)).toBeNull(); // zero drops are not listed
-    expect(within(section).getByText('+1 more')).toBeTruthy();
-    expect(within(section).getByText('₹1,850.00')).toBeTruthy();
+    expect(screen.getByLabelText('2 to do').textContent).toBe('2');
+    expect(screen.queryByText(/Cash drops/i)).toBeNull();
+    expect(screen.queryByText(/₹/)).toBeNull();
   });
 
   it('shows the loading placeholder while its reads are pending', () => {
