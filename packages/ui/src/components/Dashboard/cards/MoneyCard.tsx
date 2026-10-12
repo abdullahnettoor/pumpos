@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import {
+  DASHBOARD_TREND_DAYS,
   canSeeDashboardCard,
   comparisonView,
   deriveComparison,
@@ -31,7 +32,9 @@ export const MoneyCard: React.FC = () => {
   const todayPreviewQ = useDailyDssrPreview(station.id, businessDate, { enabled });
   const prevDate = shiftBusinessDate(businessDate, -1);
   const prevPreviewQ = useDailyDssrPreview(station.id, prevDate, { enabled });
-  const insightsQ = useInsightsSales(station.id, 14, { enabled: enabled && canTrend });
+  const insightsQ = useInsightsSales(station.id, DASHBOARD_TREND_DAYS, {
+    enabled: enabled && canTrend,
+  });
   const cashBookQ = useDailyCashBook(station.id, entryDate, { enabled });
 
   const todaySnap = useMemo(() => readSnapshot(todayPreviewQ.data), [todayPreviewQ.data]);

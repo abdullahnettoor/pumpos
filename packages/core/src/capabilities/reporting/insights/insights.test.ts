@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { INSIGHTS_RANGE_DAYS } from '@pump/shared';
+import { DASHBOARD_TREND_DAYS, INSIGHTS_RANGE_DAYS } from '@pump/shared';
 import { FixedClock, SequentialIdGenerator } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
 import { composeInsightsSales, eachDate, percentChange, periodChange } from './compose.js';
@@ -275,11 +275,19 @@ describe('GetInsightsSales', () => {
 
   it('rejects a range length the tab does not offer', async () => {
     const res = await new GetInsightsSales({ reader: readerFor([]) }).execute(
-      { stationId: STATION, days: 10 as never },
+      { stationId: STATION, days: 12 as never },
       ctx(),
     );
     expect(res.success).toBe(false);
     if (!res.success) expect(res.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it("also accepts the dashboard's trend window", async () => {
+    const res = await new GetInsightsSales({ reader: readerFor([]) }).execute(
+      { stationId: STATION, days: DASHBOARD_TREND_DAYS },
+      ctx(),
+    );
+    expect(res.success).toBe(true);
   });
 
   it('accepts every range length the tab offers', async () => {

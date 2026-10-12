@@ -2,7 +2,7 @@ import type { InsightsSales } from '@pump/shared';
 import { err, ok, validationError } from '../../../kernel/index.js';
 import type { ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import { composeInsightsSales } from './compose.js';
-import { insightsQuerySchema, type InsightsQueryCommand } from './query.js';
+import { salesInsightsQuerySchema, type InsightsQueryCommand } from './query.js';
 import type { InsightsSalesReader } from './ports.js';
 
 export interface GetInsightsSalesDeps {
@@ -25,7 +25,7 @@ export class GetInsightsSales implements UseCase<InsightsQueryCommand, InsightsS
     input: InsightsQueryCommand,
     ctx: ExecutionContext,
   ): Promise<Result<InsightsSales>> {
-    const p = insightsQuerySchema.safeParse(input);
+    const p = salesInsightsQuerySchema.safeParse(input);
     if (!p.success) {
       return err(validationError('Invalid GetInsightsSales query', { issues: p.error.flatten() }));
     }

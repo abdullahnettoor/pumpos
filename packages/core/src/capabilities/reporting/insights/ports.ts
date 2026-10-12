@@ -1,4 +1,4 @@
-import type { InsightsDateRange, InsightsRangeDays } from '@pump/shared';
+import type { InsightsDateRange, SalesInsightsDays } from '@pump/shared';
 
 /**
  * Insights (sales block) — source data ports.
@@ -14,7 +14,7 @@ import type { InsightsDateRange, InsightsRangeDays } from '@pump/shared';
 export interface InsightsRangeQuery {
   organizationId: string;
   stationId: string;
-  days: InsightsRangeDays;
+  days: SalesInsightsDays;
 }
 
 /** One CLOSED Business Day of the current period. */

@@ -30,6 +30,7 @@ import {
   InsightsAttendantVariance,
   InsightsCreditHealth,
   InsightsRangeDays,
+  SalesInsightsDays,
   InsightsSales,
   CustomerReceivableSummary,
   PayablesSummary,
@@ -826,7 +827,7 @@ export class CloudShiftService {
    * Insights sales block (trend, product mix, Shift performance) over the last
    * `days` closed Business Days. Sealed data only: a given range end never changes.
    */
-  async getInsightsSales(stationId: string, days: InsightsRangeDays): Promise<InsightsSales> {
+  async getInsightsSales(stationId: string, days: SalesInsightsDays): Promise<InsightsSales> {
     const query = new URLSearchParams({ stationId, days: String(days) });
     return request<InsightsSales>(`/reports/insights/sales?${query.toString()}`);
   }

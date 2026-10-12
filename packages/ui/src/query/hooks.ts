@@ -48,6 +48,7 @@ import type {
   InsightsAttendantVariance,
   InsightsCreditHealth,
   InsightsRangeDays,
+  SalesInsightsDays,
   InsightsSales,
   CustomerReceivableSummary,
   PayablesSummary,
@@ -1194,7 +1195,7 @@ export function useAttendantHandoverReport(
  */
 export function useInsightsSales(
   stationId: string | null | undefined,
-  days: InsightsRangeDays,
+  days: SalesInsightsDays,
   options?: Options<InsightsSales>,
 ) {
   return useQuery({
