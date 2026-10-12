@@ -64,10 +64,13 @@ const stationService = new CloudStationService();
 const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useRoutePath('/dashboard');
   // Deep-link intents travel through the nav-intent store; see console/App.tsx.
-  const navigate = useCallback((path: string, intent?: import('@pump/ui').NavIntent) => {
-    setCurrentPath(path);
-    publishNavIntent(intent);
-  }, []);
+  const navigate = useCallback(
+    (path: string, intent?: import('@pump/ui').NavIntent) => {
+      setCurrentPath(path);
+      publishNavIntent(intent);
+    },
+    [setCurrentPath],
+  );
   const [syncStatus, setSyncStatus] = useState<
     'online' | 'offline' | 'synced' | 'pending' | 'failed'
   >(typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'online');
