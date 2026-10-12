@@ -1,5 +1,5 @@
 import React from 'react';
-import { resolveDecantationSettings } from '@pump/shared';
+import { canViewInventoryNav, resolveDecantationSettings } from '@pump/shared';
 import { useDensityTodaySummary } from '../../../query/hooks.js';
 import { FuelsCard } from '../cards/FuelsCard.js';
 import { ColumnHeader } from '../frame/ColumnHeader.js';
@@ -7,7 +7,7 @@ import { useDashboard } from '../frame/DashboardContext.js';
 
 /** Middle column: Fuels (price, density, tanks, decantation). */
 export const FuelsColumn: React.FC = () => {
-  const { onNavigate, station, businessDate } = useDashboard();
+  const { onNavigate, station, businessDate, role } = useDashboard();
   const densityQ = useDensityTodaySummary(station.id, businessDate);
   const products = densityQ.data?.products ?? [];
   const firstDay =
@@ -22,7 +22,11 @@ export const FuelsColumn: React.FC = () => {
       <ColumnHeader
         title="Fuels"
         subtitle="price · density · stock"
-        action={{ label: 'Inventory', onClick: () => onNavigate('/inventory') }}
+        action={
+          canViewInventoryNav(role)
+            ? { label: 'Inventory', onClick: () => onNavigate('/inventory') }
+            : undefined
+        }
       />
       <FuelsCard />
       <p className="px-1 text-[11.5px] text-ink-muted">{footnote}</p>

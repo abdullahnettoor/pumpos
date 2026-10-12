@@ -68,7 +68,11 @@ export function shiftWorkspaceAction(role: Role): 'act' | 'view' | null {
  * Whether the dashboard shows the density Record action. The gating table
  * (spec: Owner, Manager, Staff) AND the server rule `canRecordDensity` must
  * both allow it, else the API would refuse the write: the intersection is
- * Owner and Manager.
+ * Owner, Manager and Staff.
  */
 export const canRecordDensityFromDashboard = (role: Role): boolean =>
   canSeeDashboardCard('recordDensity', role) && canRecordDensity(role);
+
+/** Roles with an Inventory nav entry (desktop App.tsx); Staff only deep-link to Density. */
+export const canViewInventoryNav = (role: Role): boolean =>
+  role === 'Owner' || role === 'Manager' || role === 'Accountant';

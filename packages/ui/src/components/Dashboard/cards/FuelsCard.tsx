@@ -44,13 +44,7 @@ export const FuelsCard: React.FC = () => {
   );
   const canRecord = canRecordDensityFromDashboard(role);
 
-  const fuels = (pricingQ.data ?? []) as Array<{
-    productId: string;
-    productName: string;
-    productCode: string;
-    price: number;
-    effectiveFrom: string | null;
-  }>;
+  const fuels = pricingQ.data ?? [];
 
   return (
     <DashboardCard
@@ -62,7 +56,7 @@ export const FuelsCard: React.FC = () => {
     >
       <div className="flex flex-col gap-3">
         {fuels.length === 0 && <p className="text-[12.5px] text-ink-muted">No fuels set up yet.</p>}
-        {fuels.map((f) => {
+        {fuels.map((f, idx) => {
           const density: Part<{ state: DensityState; trend: number[] }> = densityQ.isError
             ? { status: 'error', retry: () => void densityQ.refetch() }
             : densityQ.data
@@ -99,6 +93,7 @@ export const FuelsCard: React.FC = () => {
               }
               timeZone={timeZone}
               businessDate={businessDate}
+              swatch={idx}
               canRecord={canRecord}
               canDecant={canPlanDecant}
               canPlan={canPlanDecant}

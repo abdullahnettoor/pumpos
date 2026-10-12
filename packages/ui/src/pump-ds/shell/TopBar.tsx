@@ -174,7 +174,7 @@ const IconBtn = forwardRef<
     >
       {children}
       {badge != null && badge > 0 && (
-        <span className="absolute right-1 top-1 inline-flex min-w-[14px] items-center justify-center rounded-full bg-danger-fg px-1 text-[9px] font-bold leading-[14px] text-white">
+        <span className="absolute right-1 top-1 inline-flex min-w-[14px] items-center justify-center rounded-full bg-danger-fg px-1 text-[9px] font-bold leading-[14px] text-on-brand">
           {badge > 9 ? '9+' : badge}
         </span>
       )}
@@ -239,7 +239,7 @@ const WindowControls: React.FC<{
         type="button"
         aria-label="Close window"
         onClick={() => void controls.close()}
-        className={cn(btn, 'hover:bg-danger-fg hover:text-white')}
+        className={cn(btn, 'hover:bg-danger-fg hover:text-on-brand')}
       >
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
           <path d="M0 0l10 10M10 0L0 10" stroke="currentColor" strokeWidth="1" />

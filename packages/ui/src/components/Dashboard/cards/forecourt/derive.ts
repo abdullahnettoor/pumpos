@@ -5,23 +5,23 @@ import {
   nextShiftToOpen,
   type DuStatus,
 } from '@pump/shared';
-import { formatElapsedBetween, formatShortDay } from '../../../../utils/format.js';
+import {
+  formatClockInZone,
+  formatElapsedBetween,
+  formatHHMM,
+  formatShortDay,
+} from '../../../../utils/format.js';
 
 type Row = Record<string, any>;
+
+/** "Shift 2" from the day sequence; the template name when it is unknown. */
+const shiftName = (s: Row): string =>
+  s.shiftSequence ? `Shift ${Number(s.shiftSequence)}` : String(s.templateName ?? 'Shift');
 
 const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
-
-/** "14:00" → "2:00 pm". */
-export function formatClock(hhmm: string | null | undefined): string {
-  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm ?? '');
-  if (!m) return '';
-  const h = Number(m[1]);
-  const suffix = h >= 12 ? 'pm' : 'am';
-  return `${h % 12 === 0 ? 12 : h % 12}:${m[2]} ${suffix}`;
-}
 
 export const formatElapsed = (openedAt: string, now: number): string =>
   formatElapsedBetween(Date.parse(openedAt), now);
@@ -93,7 +93,7 @@ function lastClosed(
   const shift = summary?.lastShift as Row | null | undefined;
   if (!shift) return null;
   const s = summary?.lastShiftSummary as Row | null | undefined;
-  const name = String(shift.templateName ?? 'Shift');
+  const name = shiftName(shift);
   const date = typeof shift.businessDate === 'string' ? shift.businessDate : null;
   return {
     shiftId: String(shift.id),
@@ -139,7 +139,7 @@ export function deriveForecourt(input: DeriveInput): ForecourtModel {
       return {
         kind: 'between',
         hint: next?.window
-          ? `${next.window.name} is scheduled from ${clockOf(next.window.startAt, timeZone)}.`
+          ? `${next.window.name} is scheduled from ${formatClockInZone(next.window.startAt, timeZone)}.`
           : null,
         last,
       };
@@ -147,7 +147,7 @@ export function deriveForecourt(input: DeriveInput): ForecourtModel {
     const first = next?.firstTemplate;
     return {
       kind: 'none',
-      hint: first ? `${first.name} is scheduled from ${formatClock(first.startTime)}.` : null,
+      hint: first ? `${first.name} is scheduled from ${formatHHMM(first.startTime)}.` : null,
       last,
     };
   }
@@ -196,11 +196,11 @@ export function deriveForecourt(input: DeriveInput): ForecourtModel {
   return {
     kind: 'live',
     shiftId: String(shift.id),
-    name: String(shift.templateName ?? 'Shift'),
+    name: shiftName(shift),
     pastEnd: isHandoverDue(String(shift.openedAt), now, shift.scheduledEndTime, timeZone),
     elapsed: formatElapsed(String(shift.openedAt), now),
-    window: start && end ? `${formatClock(start)} → ${formatClock(end)}` : null,
-    endLabel: end ? formatClock(end) : null,
+    window: start && end ? `${formatHHMM(start)} → ${formatHHMM(end)}` : null,
+    endLabel: end ? formatHHMM(end) : null,
     recorded,
     total: dus.length,
     floats:
@@ -211,15 +211,4 @@ export function deriveForecourt(input: DeriveInput): ForecourtModel {
     dus: sorted,
     last,
   };
-}
-
-function clockOf(ms: number, timeZone: string): string {
-  return new Intl.DateTimeFormat('en-IN', {
-    timeZone,
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  })
-    .format(new Date(ms))
-    .toLowerCase();
 }

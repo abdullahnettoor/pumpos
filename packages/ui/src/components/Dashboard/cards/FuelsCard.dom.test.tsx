@@ -120,14 +120,14 @@ describe('FuelsCard', () => {
   it('shows header, density with change and tank cover', () => {
     mount();
     expect(screen.getByText('Petrol')).toBeTruthy();
-    expect(screen.getByText(/₹104\.50\/L/)).toBeTruthy();
+    expect(screen.getByText(/₹104\.50/)).toBeTruthy();
     expect(screen.getByText(/\+1\.0 vs yday/)).toBeTruthy();
     expect(screen.getByText('60%')).toBeTruthy();
     expect(screen.getByText('3.4')).toBeTruthy();
     expect(screen.getByText(/days cover/)).toBeTruthy();
     expect(screen.getByText('12.0 of 20 KL')).toBeTruthy();
     expect(screen.getByText(/744\.0 at 30 °C/)).toBeTruthy();
-    expect(screen.getByText('₹104.50/L')).toBeTruthy();
+    expect(screen.getByText('/L')).toBeTruthy();
     expect(screen.queryByText('Plan purchase ›')).toBeNull();
     expect(screen.getByTestId('fuel-MS').dataset.alert).toBe('false');
   });
@@ -203,7 +203,7 @@ describe('FuelsCard', () => {
       ]),
     );
     mount('Manager');
-    expect(screen.getByText('12.0 KL')).toBeTruthy();
+    expect(screen.getByText(/12\.0 KL/)).toBeTruthy();
     expect(screen.getByText(/tanker waiting to decant/)).toBeTruthy();
     expect(screen.getByText(/since 11:30 am/)).toBeTruthy();
     expect(screen.queryByText('Plan purchase ›')).toBeNull();
@@ -211,7 +211,7 @@ describe('FuelsCard', () => {
     expect(nav).toHaveBeenCalledWith('/inventory', { focusInventoryTab: 'decantations' });
     cleanup();
     mount('Staff');
-    expect(screen.getByText(/Tanker waiting to decant/)).toBeTruthy();
+    expect(screen.queryByText(/tanker waiting to decant/i)).toBeNull();
     expect(screen.queryByText('Decant ›')).toBeNull();
   });
 

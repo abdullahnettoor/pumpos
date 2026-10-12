@@ -15,8 +15,6 @@ export interface DashboardCardProps {
   card: CardId;
   /** Shown in the header and the error text ("Couldn't load <title>"). */
   title: string;
-  icon?: React.ReactNode;
-  action?: React.ReactNode;
   /**
    * The card's own query (or all of them). Pending → placeholder, error →
    * "Couldn't load … · Retry" (retries only the failed ones). Omit for cards
@@ -35,10 +33,8 @@ export interface DashboardCardProps {
    * `ColumnHeader` carries the section title. `plain`: no frame when ready,
    * for cards whose content is itself one or more bordered cards (Forecourt
    * blocks, one card per fuel); loading/error keep a bordered footprint.
-   * `panel`: legacy titled Panel (own uppercase header + action), for cards
-   * not under a column header (the full-width timeline).
    */
-  variant?: 'card' | 'plain' | 'panel';
+  variant?: 'card' | 'plain';
   children: React.ReactNode;
 }
 
@@ -52,8 +48,6 @@ export interface DashboardCardProps {
 export const DashboardCard: React.FC<DashboardCardProps> = ({
   card,
   title,
-  icon,
-  action,
   query,
   placeholderHeight,
   footer,
@@ -61,8 +55,6 @@ export const DashboardCard: React.FC<DashboardCardProps> = ({
   variant = 'card',
   children,
 }) => {
-  const headed = variant === 'panel';
-  const headerProps = headed ? { title, icon } : {};
   const visible = useCardEnabled(card);
   if (!visible) return null;
 
@@ -72,7 +64,7 @@ export const DashboardCard: React.FC<DashboardCardProps> = ({
 
   if (failed.length > 0) {
     return (
-      <Panel {...headerProps} data-dashboard-card={card} data-state="error">
+      <Panel data-dashboard-card={card} data-state="error">
         <div className="flex items-center gap-3 text-[12.5px] text-ink-muted" role="alert">
           <span>Couldn&apos;t load {title.toLowerCase()} ·</span>
           <Button
@@ -89,7 +81,7 @@ export const DashboardCard: React.FC<DashboardCardProps> = ({
 
   if (pending) {
     return (
-      <Panel {...headerProps} data-dashboard-card={card} data-state="loading">
+      <Panel data-dashboard-card={card} data-state="loading">
         <div
           aria-busy="true"
           aria-label={`Loading ${title.toLowerCase()}`}
@@ -109,14 +101,7 @@ export const DashboardCard: React.FC<DashboardCardProps> = ({
   }
 
   return (
-    <Panel
-      {...headerProps}
-      action={headed ? action : undefined}
-      footer={footer}
-      flush={flush}
-      data-dashboard-card={card}
-      data-state="ready"
-    >
+    <Panel footer={footer} flush={flush} data-dashboard-card={card} data-state="ready">
       {children}
     </Panel>
   );

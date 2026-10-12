@@ -43,7 +43,7 @@ function walk(target: string): string[] {
 
 function sourceFiles(): string[] {
   return SCOPES.flatMap(walk).filter(
-    (f) => /\.tsx$/.test(f) && !/\.(test|dom\.test|stories)\.tsx$/.test(f),
+    (f) => /\.tsx?$/.test(f) && !/\.(test|dom\.test|stories)\.tsx?$/.test(f),
   );
 }
 
@@ -152,6 +152,46 @@ async function makeBuilder() {
   };
 }
 
+/** Default-palette colours the design system forbids (spec): never valid even if Tailwind compiles them. */
+const FORBIDDEN =
+  /^(?:[a-z-]+:)*(?:bg|text|border|divide|ring|from|to|via|fill|stroke)-(?:white|black)(?:\/\d+)?$/;
+const COLOR_UTILITY = /^(bg|text|border|divide|ring|from|to|via|fill|stroke|shadow|outline)-/;
+
+/** Dead / forbidden tokens in `text`; `generates` decides whether a token compiles. */
+export function findDeadTokens(
+  text: string,
+  generates: (t: string) => boolean,
+  plain: Set<string> = new Set(),
+): string[] {
+  const dead: string[] = [];
+  const candidates = new Set<string>(classContexts(text));
+  // Class maps declared outside className (e.g. `TONE = { a: 'bg-x text-y' }`):
+  // a literal counts when most of its tokens are real utilities. Single-token
+  // colour utilities are also checked (`TONE_BAR = { a: 'bg-line' }`).
+  for (const lit of stringLiterals(text)) {
+    const toks = plainTokens(lit);
+    if (!toks.length || !toks.every(looksLikeClass)) continue;
+    if (toks.length === 1) {
+      if (COLOR_UTILITY.test(toks[0]!)) candidates.add(lit);
+      continue;
+    }
+    if (toks.filter((t) => generates(t)).length * 2 >= toks.length) candidates.add(lit);
+  }
+  for (const lit of candidates) {
+    for (const token of plainTokens(lit)) {
+      if (!looksLikeClass(token) || !checkable(token)) continue;
+      if (FORBIDDEN.test(token)) {
+        dead.push(token);
+        continue;
+      }
+      if (MARKER_CLASSES.has(token) || plain.has(token)) continue;
+      if (token.startsWith('group/') || token.startsWith('peer/')) continue;
+      if (!generates(token)) dead.push(token);
+    }
+  }
+  return dead;
+}
+
 const regexEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Minimal CSS.escape (node has none): enough for Tailwind candidates.
@@ -171,29 +211,16 @@ describe('class guard: no class in dashboard / pump-ds / theme / shell is dead',
     const dead: string[] = [];
     for (const file of sourceFiles()) {
       const text = readFileSync(file, 'utf8');
-      const inContext = new Set(classContexts(text));
-      const candidates = new Set<string>(inContext);
-      // Class maps declared outside className (e.g. `TONE = { a: 'bg-x text-y' }`):
-      // a literal counts when most of its tokens are real utilities.
-      for (const lit of stringLiterals(text)) {
-        const toks = plainTokens(lit);
-        if (toks.length < 2 || !toks.every(looksLikeClass)) continue;
-        if (toks.filter((t) => generates(t)).length * 2 >= toks.length) candidates.add(lit);
-      }
-      for (const lit of candidates) {
-        for (const token of plainTokens(lit)) {
-          if (
-            !looksLikeClass(token) ||
-            !checkable(token) ||
-            MARKER_CLASSES.has(token) ||
-            plain.has(token)
-          )
-            continue;
-          if (token.startsWith('group/') || token.startsWith('peer/')) continue;
-          if (!generates(token)) dead.push(`${path.relative(SRC, file)}: ${token}`);
-        }
-      }
+      for (const t of findDeadTokens(text, generates, plain))
+        dead.push(`${path.relative(SRC, file)}: ${t}`);
     }
     expect([...new Set(dead)].sort(), 'classes that generate no CSS').toEqual([]);
+  });
+
+  it('self-test: reports dead classes in .ts class maps and single-token values', async () => {
+    const generates = await makeBuilder();
+    const fixture =
+      "const M = { a: 'bg-line' };\nconst x = <i className={`x ${M.a}`} />; const w = 'text-white';";
+    expect(findDeadTokens(fixture, generates).sort()).toEqual(['bg-line', 'text-white']);
   });
 });

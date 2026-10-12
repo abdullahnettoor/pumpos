@@ -1,7 +1,7 @@
 import React from 'react';
-import { Button, Chip, Sparkline } from '../../../../pump-ds/index.js';
+import { Button, Chip, Icon, Sparkline } from '../../../../pump-ds/index.js';
 import { formatBusinessDate, formatMoney } from '../../../../utils/format.js';
-import { formatClock, formatDayMonth, klText } from './fuelFormat.js';
+import { formatClockInZone, formatDayMonth, formatQty } from '../../../../utils/format.js';
 import {
   coverFallback,
   isYesterday,
@@ -27,6 +27,8 @@ const TONE_BAR: Record<TankTone, string> = {
   unknown: 'bg-ink-faint',
 };
 
+const SWATCH = ['bg-brand', 'bg-info-fg', 'bg-warning-fg'];
+
 /** Part state: each of density / tanks loads (and fails) on its own. */
 export type Part<T> =
   { status: 'loading' } | { status: 'error'; retry: () => void } | { status: 'ready'; value: T };
@@ -41,6 +43,8 @@ export interface FuelBlockProps {
   pendingDecant: PendingDecant | null;
   timeZone: string | undefined;
   businessDate: string;
+  /** Index of the fuel in the list; picks the header swatch colour. */
+  swatch: number;
   canRecord: boolean;
   canDecant: boolean;
   canPlan: boolean;
@@ -115,7 +119,7 @@ const DensityRow: React.FC<
         <div className="text-[12px] text-ink-muted">
           {observed != null && `${observed.toFixed(1)} `}
           {state.tempC != null && `at ${state.tempC} °C · `}
-          {formatClock(state.at, timeZone)}
+          {formatClockInZone(state.at, timeZone)}
         </div>
       </div>
       {trend.length > 1 && (
@@ -132,11 +136,15 @@ const DensityRow: React.FC<
           {state.density.toFixed(1)}
         </div>
         <div className="text-[11.5px] text-ink-muted">
-          {change
-            ? `${change.delta > 0 ? '+' : ''}${change.delta.toFixed(1)} vs ${
+          {change ? (
+            <span className={state.kind === 'jump' ? 'text-danger-fg' : undefined}>
+              {`${change.delta > 0 ? '+' : ''}${change.delta.toFixed(1)} vs ${
                 isYesterday(change.from, businessDate) ? 'yday' : formatBusinessDate(change.from)
-              }`
-            : 'first reading'}
+              }`}
+            </span>
+          ) : (
+            'first reading'
+          )}
         </div>
         {state.kind === 'jump' && (
           <Chip tone="danger" size="xs">
@@ -160,9 +168,9 @@ const TankRow: React.FC<{ tank: FuelTank }> = ({ tank }) => (
       />
     </span>
     <div className="min-w-0 flex-1">
-      <div className="truncate text-[13px] font-medium text-ink">{tank.name}</div>
-      <div className="text-[12px] text-ink-muted">
-        {klText(tank.currentKl)} of {tank.capacityKl.toFixed(0)} KL
+      <div className="truncate text-[12.5px] font-semibold text-ink">{tank.name}</div>
+      <div className="font-mono text-[12px] text-ink-muted">
+        {formatQty(tank.currentKl, 1)} of {tank.capacityKl.toFixed(0)} KL
       </div>
     </div>
     <div className="shrink-0 text-right">
@@ -170,10 +178,12 @@ const TankRow: React.FC<{ tank: FuelTank }> = ({ tank }) => (
         {tank.pct === null ? '—' : `${tank.pct}%`}
       </div>
       <div className="text-[12px] text-ink-muted">
-        {tank.cover ? (
+        {tank.coverDays != null ? (
           <>
-            <span className="font-semibold text-ink">{tank.cover.replace(/ days?$/, '')}</span>
-            {' days cover'}
+            <b className={tank.coverDays < 1.5 ? 'text-danger-fg' : 'text-ink'}>
+              {formatQty(tank.coverDays, 1)}
+            </b>{' '}
+            {formatQty(tank.coverDays, 1) === '1.0' ? 'day' : 'days'} cover
           </>
         ) : (
           coverFallback
@@ -201,13 +211,23 @@ export const FuelBlock: React.FC<FuelBlockProps> = (p) => {
     >
       <header className="flex items-center justify-between gap-2 px-3 py-2.5">
         <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-brand" aria-hidden="true" />
+          <span
+            className="size-2 shrink-0 rounded-[3px] ${SWATCH[p.swatch % SWATCH.length]}"
+            aria-hidden="true"
+          />
           <h3 className="text-[14px] font-semibold text-ink">{p.name}</h3>
           <span className="text-[11px] text-ink-muted">{p.code}</span>
         </div>
         <div className="text-right">
           <div className="font-mono text-[15px] font-semibold tabular-nums text-ink">
-            {p.price > 0 ? `${formatMoney(p.price)}/L` : 'No price'}
+            {p.price > 0 ? (
+              <>
+                {formatMoney(p.price)}
+                <span className="text-[11px] font-normal text-ink-muted">/L</span>
+              </>
+            ) : (
+              'No price'
+            )}
           </div>
           {p.effectiveFrom && (
             <div className="text-[11px] text-ink-muted">
@@ -241,23 +261,26 @@ export const FuelBlock: React.FC<FuelBlockProps> = (p) => {
           </Button>
         </div>
       )}
-      {pending.length > 0 && (
-        <div className="flex items-center justify-between gap-2 bg-warning-bg px-3 py-2 text-[12px] text-warning-fg">
-          <span>
-            {pd?.qtyL != null ? (
-              <>
-                <b>{klText(pd.qtyL / 1000)} KL</b> tanker waiting to decant
-              </>
-            ) : (
-              <>Tanker waiting to decant · {pending.map((t) => t.name).join(', ')}</>
-            )}
-            {pd?.since && ` · since ${formatClock(pd.since, p.timeZone)}`}
+      {pending.length > 0 && p.canDecant && (
+        <div className="flex items-center justify-between gap-2 border-t border-warning-fg/30 bg-warning-bg px-3 py-2 text-[12px] text-ink-muted">
+          <span className="flex items-center gap-1.5">
+            <Icon name="truck" size="xs" className="text-warning-fg" />
+            <span>
+              {pd?.qtyL != null ? (
+                <b className="text-ink">
+                  {formatQty(pd.qtyL / 1000, 1)} KL tanker waiting to decant
+                </b>
+              ) : (
+                <b className="text-ink">
+                  Tanker waiting to decant · {pending.map((t) => t.name).join(', ')}
+                </b>
+              )}
+              {pd?.since && ` · since ${formatClockInZone(pd.since, p.timeZone)}`}
+            </span>
           </span>
-          {p.canDecant && (
-            <Button variant="ghost" size="xs" onClick={p.onDecant}>
-              Decant ›
-            </Button>
-          )}
+          <Button variant="ghost" size="xs" onClick={p.onDecant}>
+            Decant ›
+          </Button>
         </div>
       )}
     </article>
