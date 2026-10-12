@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import { and, asc, eq, getTableColumns, getTableName, inArray, is, sql as dsql } from 'drizzle-orm';
 import { PgTable } from 'drizzle-orm/pg-core';
 import { ok } from '@pump/core';
+import { resolveEntryDate, shiftBusinessDate } from '@pump/shared';
 import { schema, type DbClient } from '@pump/db';
 import { runInTransaction } from '../../transaction.js';
 import {
@@ -279,9 +280,11 @@ describe.skipIf(!CONNECTION)('demo stations against real Postgres', () => {
         .select()
         .from(schema.stockVariances)
         .where(eq(schema.stockVariances.organizationId, demo.organizationId));
-      expect(variances).toHaveLength(1);
-      expect(Number(variances[0].varianceQuantity)).toBe(-18);
-      expect(variances[0].reason).toBeTruthy();
+      // The routine dip that measured the pending HSD tanker found no variance.
+      const found = variances.filter((row) => Number(row.varianceQuantity) !== 0);
+      expect(found).toHaveLength(1);
+      expect(Number(found[0].varianceQuantity)).toBe(-18);
+      expect(found[0].reason).toBeTruthy();
     });
 
     it('puts KSRTC at about 94% of its limit through several attendant credit sales', async () => {
@@ -353,6 +356,219 @@ describe.skipIf(!CONNECTION)('demo stations against real Postgres', () => {
         for (let i = 1; i < readings.length; i += 1)
           expect(Number(readings[i].openingReading)).toBe(Number(readings[i - 1].closingReading));
       }
+    });
+
+    it('taxes demo fuels as VAT (no GST) and lubricants as 18% GST', async () => {
+      const products = await db
+        .select()
+        .from(schema.products)
+        .where(eq(schema.products.organizationId, demo.organizationId));
+      const fuels = products.filter((product) => product.productType === 'FUEL');
+      expect(fuels.map((fuel) => fuel.name).sort()).toEqual(['Diesel', 'Petrol']);
+      for (const fuel of fuels) {
+        const config = fuel.taxConfig as Record<string, unknown>;
+        expect(fuel.taxCategory).toBe('FUEL_VAT');
+        expect(fuel.isTaxable).toBe(false);
+        expect(config.vat_rate).toBeGreaterThan(0);
+        expect(config).not.toHaveProperty('gst_rate');
+        expect(config.hsn_code).toBe('2710');
+      }
+      for (const product of products.filter((item) => item.productType !== 'FUEL')) {
+        const config = product.taxConfig as Record<string, unknown>;
+        expect(product.taxCategory).toBe('GST');
+        expect(config.gst_rate).toBe(18);
+      }
+      const items = await db
+        .select({ item: schema.purchaseItems, purchase: schema.purchases })
+        .from(schema.purchaseItems)
+        .innerJoin(schema.purchases, eq(schema.purchases.id, schema.purchaseItems.purchaseId))
+        .where(eq(schema.purchases.organizationId, demo.organizationId));
+      expect(items.length).toBeGreaterThanOrEqual(4);
+      for (const { item, purchase } of items) {
+        expect(item.taxCategory).toBe('FUEL_VAT');
+        expect(Number(item.cgst) + Number(item.sgst) + Number(item.igst)).toBe(0);
+        expect(item.lineTotal).toBe(item.taxableAmount);
+        expect(Number(item.invoiceDensity)).toBeGreaterThan(700);
+        // Fuel invoices are Office Records: entry date, no business day.
+        expect(purchase.entryDate).not.toBeNull();
+        expect(purchase.businessDayId).toBeNull();
+      }
+    });
+
+    it('seeds the Decantation & Density story', async () => {
+      const decantations = await db
+        .select()
+        .from(schema.decantations)
+        .where(eq(schema.decantations.organizationId, demo.organizationId))
+        .orderBy(asc(schema.decantations.createdAt));
+      expect(decantations).toHaveLength(4);
+      const statusOf = (row: (typeof decantations)[number]) => row.status;
+      const lines = await db
+        .select()
+        .from(schema.decantationTankLines)
+        .where(eq(schema.decantationTankLines.organizationId, demo.organizationId));
+      const measured = decantations.filter((row) => statusOf(row) === 'MEASURED');
+      expect(measured.length).toBeGreaterThanOrEqual(3);
+      // Exactly one draft: today's tanker, still unloading.
+      const drafts = decantations.filter((row) => row.status === 'DRAFT');
+      expect(drafts).toHaveLength(1);
+      expect(drafts[0].unloadEndedAt).toBeNull();
+      // One flagged TANKER_SHORT (chamber short, seal broken).
+      const flagged = decantations.filter((row) =>
+        (row.flags as Array<{ code: string }>).some((flag) => flag.code === 'TANKER_SHORT'),
+      );
+      expect(flagged).toHaveLength(1);
+      // Every measured line has a link with invoice, received and variance.
+      const links = await db
+        .select()
+        .from(schema.decantationPurchases)
+        .where(eq(schema.decantationPurchases.organizationId, demo.organizationId));
+      const measuredIds = new Set(measured.map((row) => row.id));
+      const measuredLinks = links.filter((link) => measuredIds.has(link.decantationId));
+      expect(measuredLinks).toHaveLength(4); // 2 products on day -6 + day -4 + day -2
+      for (const link of measuredLinks) {
+        expect(link.varianceComputedAt).not.toBeNull();
+        expect(Number(link.varianceQty)).toBe(Number(link.receivedQty) - Number(link.invoiceQty));
+      }
+      const variances = measuredLinks.map((link) => Number(link.varianceQty)).sort((a, b) => a - b);
+      expect(variances).toEqual([-60, -32, -24, 15]);
+      // The day -4 HSD tanker had no after dip: measured by a later routine dip.
+      expect(lines.filter((line) => line.measuredBy === 'TANK_DIP')).toHaveLength(1);
+      expect(lines.filter((line) => line.measuredBy === 'AFTER_DIP')).toHaveLength(3);
+      // RO density within tolerance of the invoice, except nothing is flagged for density.
+      for (const row of decantations)
+        expect((row.flags as Array<{ code: string }>).map((flag) => flag.code)).not.toContain(
+          'DENSITY_OUT_OF_TOLERANCE',
+        );
+      // Today's draft is linked to this morning's invoice.
+      expect(links.some((link) => link.decantationId === drafts[0].id)).toBe(true);
+
+      // Each Tank Line's RO density is within the station tolerance of its invoice's.
+      const tankRows = await db
+        .select()
+        .from(schema.tanks)
+        .where(eq(schema.tanks.organizationId, demo.organizationId));
+      const productOfTank = new Map(tankRows.map((tank) => [tank.id, tank.productId]));
+      const items = await db
+        .select()
+        .from(schema.purchaseItems)
+        .where(
+          inArray(
+            schema.purchaseItems.purchaseId,
+            links.map((link) => link.purchaseId),
+          ),
+        );
+      for (const line of lines) {
+        const link = links.find(
+          (candidate) =>
+            candidate.decantationId === line.decantationId &&
+            candidate.productId === productOfTank.get(line.tankId),
+        );
+        const item = items.find(
+          (candidate) =>
+            candidate.purchaseId === link?.purchaseId && candidate.productId === link?.productId,
+        );
+        expect(item?.invoiceDensity).toBeTruthy();
+        expect(Math.abs(Number(line.roDensity) - Number(item?.invoiceDensity))).toBeLessThanOrEqual(
+          3,
+        );
+      }
+
+      // The TANK_DIP line was measured on day -3, between shifts (none open).
+      const [dipLine] = lines.filter((line) => line.measuredBy === 'TANK_DIP');
+      const measuredAt = new Date(dipLine.measuredAt as Date);
+      expect(resolveEntryDate({ now: measuredAt, timeZone: 'Asia/Kolkata' })).toBe(
+        shiftBusinessDate(TODAY, -3),
+      );
+      const shiftRows = await db
+        .select()
+        .from(schema.shifts)
+        .where(eq(schema.shifts.organizationId, demo.organizationId));
+      const openAtDip = shiftRows.filter(
+        (shift) =>
+          shift.openedAt <= measuredAt && (shift.closedAt === null || shift.closedAt > measuredAt),
+      );
+      expect(openAtDip).toHaveLength(0);
+    });
+
+    it('never books fuel Purchase stock; fuel stock is Decantation + opening only', async () => {
+      const tanks = await db
+        .select()
+        .from(schema.tanks)
+        .where(eq(schema.tanks.organizationId, demo.organizationId));
+      const movements = await db
+        .select()
+        .from(schema.stockMovements)
+        .where(
+          inArray(
+            schema.stockMovements.tankId,
+            tanks.map((tank) => tank.id),
+          ),
+        )
+        .orderBy(asc(schema.stockMovements.createdAt));
+      expect(movements.some((movement) => movement.movementType === 'Purchase')).toBe(false);
+      const types = new Set(movements.map((movement) => movement.movementType));
+      expect(types).toContain('Decantation');
+      const opening = movements.filter((movement) => movement.movementType === 'OpeningBalance');
+      expect(opening).toHaveLength(tanks.length);
+      for (const movement of opening) expect(movement.notes).toBe('Onboarding opening stock');
+      // Tanks stay positive and within capacity through the whole history.
+      // Metered sales are booked when their shift closes (their own createdAt is
+      // the write time), so order each movement by when it really happened.
+      const shifts = await db
+        .select()
+        .from(schema.shifts)
+        .where(eq(schema.shifts.organizationId, demo.organizationId));
+      const closedAt = new Map(shifts.map((shift) => [shift.id, shift.closedAt]));
+      const happenedAt = (movement: (typeof movements)[number]) =>
+        ((movement.shiftId && closedAt.get(movement.shiftId)) || movement.createdAt).getTime();
+      for (const tank of tanks) {
+        let running = 0;
+        for (const movement of movements
+          .filter((item) => item.tankId === tank.id)
+          .sort((a, b) => happenedAt(a) - happenedAt(b))) {
+          running += Number(movement.quantity);
+          expect(running, `${tank.name} after ${movement.movementType}`).toBeGreaterThan(0);
+          expect(running).toBeLessThanOrEqual(Number(tank.capacity));
+        }
+      }
+    });
+
+    it('keeps a density register: a Morning reading per product per closed day, today 1/2', async () => {
+      const readings = await db
+        .select()
+        .from(schema.densityReadings)
+        .where(eq(schema.densityReadings.organizationId, demo.organizationId));
+      const morning = readings.filter((reading) => reading.kind === 'MORNING');
+      const dates = [...new Set(morning.map((reading) => reading.businessDate))].sort();
+      expect(dates).toHaveLength(8);
+      for (const date of dates.filter((value) => value !== TODAY))
+        expect(morning.filter((reading) => reading.businessDate === date)).toHaveLength(2);
+      expect(morning.filter((reading) => reading.businessDate === TODAY)).toHaveLength(1);
+      expect(readings.filter((reading) => reading.kind === 'ADHOC')).toHaveLength(1);
+      expect(readings.filter((reading) => reading.kind === 'DECANTATION').length).toBeGreaterThan(
+        3,
+      );
+      expect(readings.some((reading) => (reading.flags as unknown[]).length > 0)).toBe(false);
+      for (const reading of readings) {
+        const value = Number(reading.density15);
+        expect(value).toBeGreaterThan(740);
+        expect(value).toBeLessThan(840);
+      }
+    });
+
+    it('stores explicit decantation settings and spec bands on the station', async () => {
+      const [station] = await db
+        .select()
+        .from(schema.stations)
+        .where(eq(schema.stations.organizationId, demo.organizationId));
+      const settings = station.settings as Record<string, unknown>;
+      expect(settings).toMatchObject({
+        densityToleranceKgM3: 3,
+        settlingTimeMinutes: 30,
+        densityEntryMethod: 'HYDROMETER',
+      });
+      expect(Object.keys(settings.densitySpecBands as object)).toHaveLength(2);
     });
 
     it('seeds a second organisation independently: no shared IDs, no cross-organisation rows', async () => {
