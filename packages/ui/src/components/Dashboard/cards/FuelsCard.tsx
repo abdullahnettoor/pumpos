@@ -6,13 +6,20 @@ import {
 } from '@pump/shared';
 import { DashboardCard } from '../frame/DashboardCard.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
-import { useDensityTodaySummary, useInventoryStatus, usePricing } from '../../../query/hooks.js';
+import {
+  useDecantations,
+  useDensityTodaySummary,
+  useInventoryStatus,
+  usePricing,
+} from '../../../query/hooks.js';
 import { FuelBlock, type Part } from './fuels/FuelBlock.js';
 import {
   deriveDensityState,
+  derivePendingDecant,
   deriveFuelTanks,
   type DensityState,
   type FuelTank,
+  type InventoryTankRow,
 } from './fuels/fuelsModel.js';
 
 /**
@@ -27,12 +34,15 @@ export const FuelsCard: React.FC = () => {
   const densityQ = useDensityTodaySummary(station.id, businessDate, { enabled });
   const inventoryQ = useInventoryStatus(station.id, { enabled });
 
+  const canPlanDecant = canSeeDashboardCard('planPurchaseDecant', role);
+  const decantsQ = useDecantations(station.id, 'PENDING_MEASUREMENT', {
+    enabled: enabled && canPlanDecant,
+  });
   const tolerance = useMemo(
     () => resolveDecantationSettings(station.settings).densityToleranceKgM3,
     [station.settings],
   );
   const canRecord = canRecordDensityFromDashboard(role);
-  const canPlanDecant = canSeeDashboardCard('planPurchaseDecant', role);
 
   const fuels = (pricingQ.data ?? []) as Array<{
     productId: string;
@@ -70,7 +80,10 @@ export const FuelsCard: React.FC = () => {
           const tanks: Part<FuelTank[]> = inventoryQ.isError
             ? { status: 'error', retry: () => void inventoryQ.refetch() }
             : inventoryQ.data
-              ? { status: 'ready', value: deriveFuelTanks(inventoryQ.data, f.productId) }
+              ? {
+                  status: 'ready',
+                  value: deriveFuelTanks(inventoryQ.data as InventoryTankRow[], f.productId),
+                }
               : { status: 'loading' };
           return (
             <FuelBlock
@@ -81,6 +94,9 @@ export const FuelsCard: React.FC = () => {
               effectiveFrom={f.effectiveFrom}
               density={density}
               tanks={tanks}
+              pendingDecant={
+                canPlanDecant ? derivePendingDecant(decantsQ.data ?? [], f.productId) : null
+              }
               timeZone={timeZone}
               businessDate={businessDate}
               canRecord={canRecord}

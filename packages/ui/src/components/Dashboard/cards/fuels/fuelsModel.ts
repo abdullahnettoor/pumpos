@@ -1,5 +1,5 @@
-import { formatDaysOfCover, DAYS_OF_COVER_WINDOW } from '@pump/shared';
-import type { DensityTodayProductSummary } from '@pump/shared';
+import { formatDaysOfCover, DAYS_OF_COVER_WINDOW, shiftBusinessDate } from '@pump/shared';
+import type { DecantationView, DensityTodayProductSummary } from '@pump/shared';
 
 /**
  * Tank fill thresholds for the Fuels card (spec #505): red below 25 %, amber
@@ -23,14 +23,27 @@ export interface FuelTank {
   /** Tube fill 0–100. */
   fill: number;
   capacityKl: number;
+  /** Current stock in KL. */
+  currentKl: number;
   /** "2.6 days"; '' when there is no sales history. */
   cover: string;
   waitingOnDecantation: boolean;
 }
 
+/** One row of `GET /transactions/inventory/status` (fields this card reads). */
+export interface InventoryTankRow {
+  id: string;
+  name?: string | null;
+  productId: string;
+  capacity: number | string;
+  currentVolume: number | string;
+  daysOfCover?: number | null;
+  waitingOnDecantation?: boolean;
+}
+
 const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
-export function deriveFuelTanks(rows: readonly any[], productId: string): FuelTank[] {
+export function deriveFuelTanks(rows: readonly InventoryTankRow[], productId: string): FuelTank[] {
   return rows
     .filter((t) => t.productId === productId)
     .map((t) => {
@@ -44,6 +57,7 @@ export function deriveFuelTanks(rows: readonly any[], productId: string): FuelTa
         tone: tankTone(pct),
         fill: pct === null ? 0 : Math.min(100, pct),
         capacityKl: capacity / 1000,
+        currentKl: volume / 1000,
         cover: formatDaysOfCover(t.daysOfCover),
         waitingOnDecantation: t.waitingOnDecantation === true,
       };
@@ -57,12 +71,26 @@ export type DensityState =
       kind: 'recorded';
       density: number;
       tempC: number | null;
+      observedDensity: number | null;
       at: string;
       change: DensityChange | null;
     }
-  | { kind: 'jump'; density: number; tempC: number | null; at: string; change: DensityChange }
+  | {
+      kind: 'jump';
+      density: number;
+      tempC: number | null;
+      observedDensity: number | null;
+      at: string;
+      change: DensityChange;
+    }
   | { kind: 'not-recorded'; last: number | null }
-  | { kind: 'no-history'; density: number; tempC: number | null; at: string };
+  | {
+      kind: 'no-history';
+      density: number;
+      tempC: number | null;
+      observedDensity: number | null;
+      at: string;
+    };
 
 export interface DensityChange {
   delta: number;
@@ -70,14 +98,9 @@ export interface DensityChange {
   from: string;
 }
 
-const shiftDate = (date: string, days: number): string => {
-  const [y, m, d] = date.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
-};
-
 /** Whether `from` is the day before `businessDate` (so it reads "vs yesterday"). */
 export const isYesterday = (from: string, businessDate: string) =>
-  from === shiftDate(businessDate, -1);
+  from === shiftBusinessDate(businessDate, -1);
 
 /**
  * Density state for one fuel. A change beyond the station tolerance is a jump
@@ -94,7 +117,12 @@ export function deriveDensityState(
     .find((t) => t.date < businessDate && t.density15 != null);
   const r = p.latestToday;
   if (!r) return { kind: 'not-recorded', last: earlier?.density15 ?? null };
-  const base = { density: r.density15, tempC: r.observedTempC ?? null, at: r.recordedAt };
+  const base = {
+    density: r.density15,
+    tempC: r.observedTempC ?? null,
+    observedDensity: r.observedDensity ?? null,
+    at: r.recordedAt,
+  };
   if (!earlier) return { kind: 'no-history', ...base };
   const change: DensityChange = {
     delta: Math.round((r.density15 - (earlier.density15 as number)) * 10) / 10,
@@ -111,3 +139,44 @@ export function deriveDensityState(
 /** A fuel card gets the red outline for a low tank or a density jump. */
 export const needsAttention = (tanks: FuelTank[], density: DensityState | null) =>
   tanks.some((t) => t.tone === 'red') || density?.kind === 'jump';
+
+/** The tanker waiting to be measured for one fuel (quantity/time may be unknown). */
+export interface PendingDecant {
+  /** Litres per the linked purchase invoice; null when not linked yet. */
+  qtyL: number | null;
+  /** ISO instant the unload started (else the record was created). */
+  since: string | null;
+}
+
+/**
+ * Pending Decantation for a fuel, from the Decantation list (PENDING_MEASUREMENT).
+ * The tank status endpoint only carries a boolean; quantity comes from the
+ * linked invoice and time from the unload start.
+ */
+export function derivePendingDecant(
+  decants: readonly DecantationView[],
+  productId: string,
+): PendingDecant | null {
+  const mine = decants
+    .filter(
+      (d) => d.status === 'PENDING_MEASUREMENT' && d.lines.some((l) => l.productId === productId),
+    )
+    .sort((a, b) =>
+      (a.unloadStartedAt ?? a.createdAt).localeCompare(b.unloadStartedAt ?? b.createdAt),
+    );
+  if (mine.length === 0) return null;
+  let qty = 0;
+  let known = false;
+  for (const d of mine) {
+    const q = d.links?.find((l) => l.productId === productId)?.invoiceQty;
+    if (q != null) {
+      qty += q;
+      known = true;
+    }
+  }
+  return { qtyL: known ? qty : null, since: mine[0].unloadStartedAt ?? mine[0].createdAt };
+}
+
+/** Plan purchase is offered only for a low tank with nothing waiting to decant. */
+export const shouldPlanPurchase = (tanks: FuelTank[]) =>
+  tanks.some((t) => t.tone === 'red') && !tanks.some((t) => t.waitingOnDecantation);

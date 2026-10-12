@@ -20,6 +20,7 @@ const hooks = vi.hoisted(() => ({
   useDayActivity: vi.fn(),
   useDensityTodaySummary: vi.fn(),
   useInventoryStatus: vi.fn(),
+  useDecantations: vi.fn(),
   useInventoryItems: vi.fn(() => ({ data: undefined, isPending: false, isError: false })),
   usePricing: vi.fn(),
 }));
@@ -53,6 +54,7 @@ beforeEach(() => {
   hooks.useDayActivity.mockReturnValue(ok({ items: [] }));
   hooks.useDensityTodaySummary.mockReturnValue(ok(undefined));
   hooks.useInventoryStatus.mockReturnValue(ok(undefined));
+  hooks.useDecantations.mockReturnValue(ok(undefined));
   hooks.usePricing.mockReturnValue(ok(undefined));
 });
 afterEach(() => {

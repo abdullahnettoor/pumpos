@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { DensityTodayProductSummary } from '@pump/shared';
-import { deriveDensityState, deriveFuelTanks, tankTone } from './fuelsModel.js';
+import {
+  deriveDensityState,
+  deriveFuelTanks,
+  derivePendingDecant,
+  shouldPlanPurchase,
+  tankTone,
+} from './fuelsModel.js';
 
 const D = '2026-10-12';
 const prod = (over: Partial<DensityTodayProductSummary>): DensityTodayProductSummary => ({
@@ -92,5 +98,31 @@ describe('deriveFuelTanks', () => {
     );
     expect(t).toHaveLength(1);
     expect(t[0]).toMatchObject({ pct: 20, tone: 'red', capacityKl: 20, cover: '2.6 days' });
+  });
+});
+
+describe('derivePendingDecant / shouldPlanPurchase', () => {
+  const d = (over: object) =>
+    ({
+      status: 'PENDING_MEASUREMENT',
+      createdAt: '2026-10-12T06:00:00Z',
+      unloadStartedAt: null,
+      lines: [{ productId: 'p1' }],
+      links: [{ productId: 'p1', invoiceQty: 12000 }],
+      ...over,
+    }) as never;
+  it('sums linked invoice qty, uses earliest time; null when none', () => {
+    expect(derivePendingDecant([d({})], 'p1')).toEqual({
+      qtyL: 12000,
+      since: '2026-10-12T06:00:00Z',
+    });
+    expect(derivePendingDecant([d({ links: [] })], 'p1')?.qtyL).toBeNull();
+    expect(derivePendingDecant([d({ status: 'MEASURED' })], 'p1')).toBeNull();
+  });
+  it('plan only for a red tank without pending decantation', () => {
+    const t = (tone: string, w = false) => ({ tone, waitingOnDecantation: w }) as never;
+    expect(shouldPlanPurchase([t('red')])).toBe(true);
+    expect(shouldPlanPurchase([t('red'), t('ok', true)])).toBe(false);
+    expect(shouldPlanPurchase([t('amber')])).toBe(false);
   });
 });
