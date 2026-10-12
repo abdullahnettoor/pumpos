@@ -29,6 +29,12 @@ export const DEMO_FUEL_TAX = {
   diesel: { vatRate: 22.76, hsn: '2710' },
 } as const;
 
+/** CNG (HSN 2711) is taxed as fuel VAT too, at its own demo rate. */
+export const DEMO_CNG_TAX = { vatRate: 14.5, hsn: '2711' } as const;
+
+/** Station clock the demo seeds are dated against. */
+export const DEMO_STATION_CLOCK = { timeZone: 'Asia/Kolkata', dayStartsAt: '05:00' } as const;
+
 export const demoFuelTax = (fuel: { vatRate: number; hsn: string }) => ({
   taxCategory: 'FUEL_VAT',
   isTaxable: false,
@@ -98,8 +104,8 @@ export async function seedDemoStation(tx: DbExecutor, input: SeedDemoStationOpti
         shift_lock_grace_days: 3,
         offline_warning_days: 3,
         offline_critical_days: 7,
-        business_day_starts_at: '05:00',
-        timezone: 'Asia/Kolkata',
+        business_day_starts_at: DEMO_STATION_CLOCK.dayStartsAt,
+        timezone: DEMO_STATION_CLOCK.timeZone,
         demo_setup: {
           tanks: options.tanks,
           nozzles: options.nozzles,

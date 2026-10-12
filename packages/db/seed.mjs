@@ -11,7 +11,13 @@
  */
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { createFuelVatConfig } from '@pump/shared';
+import { resolveBusinessDate, resolveEntryDate } from '@pump/shared';
+import {
+  DEMO_CNG_TAX,
+  DEMO_FUEL_TAX,
+  DEMO_STATION_CLOCK,
+  demoFuelTax,
+} from './dist/demo/seed-demo-station.js';
 import * as schema from './dist/schema.js';
 
 const url = process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL;
@@ -89,16 +95,16 @@ const ID = {
 };
 
 const today = new Date();
-const businessDate = today.toISOString().slice(0, 10); // YYYY-MM-DD
+// Station clock (timezone + Day Start), never a UTC slice of the instant.
+const businessDate = resolveBusinessDate({
+  now: today,
+  timeZone: DEMO_STATION_CLOCK.timeZone,
+  dayStartsAt: DEMO_STATION_CLOCK.dayStartsAt,
+});
+const entryDate = resolveEntryDate({ now: today, timeZone: DEMO_STATION_CLOCK.timeZone });
 const nz = (v) => String(v);
 
-// Fuel is outside GST: state VAT is embedded in the pole price (FUEL_VAT).
-// The rates are demo values of Kerala sales tax; a station sets its own.
-const fuelTax = (vatRate, hsn = '2710') => ({
-  taxCategory: 'FUEL_VAT',
-  isTaxable: false,
-  taxConfig: createFuelVatConfig({ vat_rate: vatRate, hsn_code: hsn }),
-});
+const fuelTax = demoFuelTax;
 // Lubricants, merchandise and services are GST goods (demo HSN/SAC values).
 const gstTax = (hsn) => ({
   taxCategory: 'GST',
@@ -165,6 +171,10 @@ async function main() {
       address: 'NH-44, Demo City',
       phone: '+91 90000 00000',
       onboardingStatus: 'COMPLETED',
+      settings: {
+        business_day_starts_at: DEMO_STATION_CLOCK.dayStartsAt,
+        timezone: DEMO_STATION_CLOCK.timeZone,
+      },
       isActive: true,
     })
     .onConflictDoNothing();
@@ -190,7 +200,7 @@ async function main() {
         inventoryType: 'BULK',
         stockTracked: true,
         unit: 'L',
-        ...fuelTax(30.08),
+        ...fuelTax(DEMO_FUEL_TAX.petrol),
       },
       {
         id: ID.prodDiesel,
@@ -201,7 +211,7 @@ async function main() {
         inventoryType: 'BULK',
         stockTracked: true,
         unit: 'L',
-        ...fuelTax(22.76),
+        ...fuelTax(DEMO_FUEL_TAX.diesel),
       },
       {
         id: ID.prodCng,
@@ -212,7 +222,7 @@ async function main() {
         inventoryType: 'BULK',
         stockTracked: true,
         unit: 'kg',
-        ...fuelTax(14.5, '2711'),
+        ...fuelTax(DEMO_CNG_TAX),
       },
       {
         id: ID.prodOil,
@@ -636,7 +646,7 @@ async function main() {
     .onConflictDoNothing();
 
   // Expenses are Office Records on an Entry Date: petty cash (tea) + bank (electricity)
-  const office = { organizationId: ID.org, stationId: ID.station, entryDate: businessDate };
+  const office = { organizationId: ID.org, stationId: ID.station, entryDate };
   await db
     .insert(schema.expenses)
     .values([
@@ -674,7 +684,7 @@ async function main() {
       businessDayId: null,
       organizationId: ID.org,
       stationId: ID.station,
-      entryDate: businessDate,
+      entryDate,
       supplierId: ID.supplierIoc,
       invoiceNumber: 'IOC-99812',
       amount: nz(900000),

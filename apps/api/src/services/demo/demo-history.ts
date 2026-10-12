@@ -7,26 +7,18 @@ import {
   OpenShift,
   RecordCollection,
   RecordCreditSale,
-  RecordDecantation,
-  RecordDensityReading,
   RecordExpense,
   RecordFuelPrice,
   RecordHandover,
-  RecordPurchase,
-  RecordStockCount,
   RecordSupplierPayment,
   UuidGenerator,
   type EventPublisher,
   type ExecutionContext,
-  type Result,
 } from '@pump/core';
-import {
-  density15FromObserved,
-  resolveBusinessDate,
-  resolveDecantationSettings,
-  roundDensity,
-  vcf,
-} from '@pump/shared';
+import { resolveBusinessDate } from '@pump/shared';
+import { createDensityHelpers } from './demo-density.js';
+import { createDecantationHelpers } from './demo-decantations.js';
+import { DemoSeedError, must, type DemoContext } from './demo-context.js';
 import { createDispatcher } from '../../infra/events.js';
 import { LedgerPostingService } from '../../infra/ledger-posting.js';
 import { TimestampDocumentNumberGenerator } from '../../infra/doc-numbers.js';
@@ -46,18 +38,12 @@ import {
   DrizzleDispenserRepository,
   DrizzleFuelPriceRepository,
   DrizzleNozzleRepository,
-  DrizzleStationRepository,
-  DrizzleTankRepository,
 } from '../../infra/repositories/setup-repositories.js';
 import {
   DrizzleDssrDataReader,
   DrizzleDssrSnapshotRepository,
 } from '../../infra/repositories/reporting-repositories.js';
-import {
-  DrizzlePurchaseItemRepository,
-  DrizzlePurchaseRepository,
-  DrizzleSupplierTransactionRepository,
-} from '../../infra/repositories/purchasing-repositories.js';
+import { DrizzleSupplierTransactionRepository } from '../../infra/repositories/purchasing-repositories.js';
 import {
   DrizzleCollectionRepository,
   DrizzleCustomerLedgerRepository,
@@ -69,17 +55,8 @@ import {
   DrizzlePaymentTerminalLookup,
 } from '../../infra/repositories/finance-account-repositories.js';
 import { DrizzleExpenseRepository } from '../../infra/repositories/finance-repositories.js';
-import {
-  DrizzleStockMovementRepository,
-  DrizzleStockVarianceRepository,
-} from '../../infra/repositories/inventory-repositories.js';
-import {
-  createDecantationLinker,
-  createDecantationMeasurement,
-  DrizzleDecantationRepository,
-  DrizzleDensityReadingRepository,
-} from '../../infra/repositories/decantation-repositories.js';
-import { DrizzleProductRepository } from '../../infra/repositories/product.repo.js';
+import { DrizzleStockMovementRepository } from '../../infra/repositories/inventory-repositories.js';
+import {} from '../../infra/repositories/decantation-repositories.js';
 
 /** Closed days of history before today. */
 export const DEMO_HISTORY_DAYS = 7;
@@ -89,8 +66,6 @@ const PRICES = { petrol: 102.5, diesel: 89.7 } as const;
 const OPENING_FLOAT = 5_000;
 /** Litres per fuel tank at onboarding (the very first day's opening stock). */
 const OPENING_STOCK_PER_TANK = 4_000;
-/** Indian Oil invoices fuel at ~96% of the pole price (tax-inclusive). */
-const PURCHASE_RATE = 0.96;
 /** 15 °C density of each product's tank on the morning of age 7 … 1 (kg/m³). */
 const MORNING_DENSITY = {
   petrol: [747.4, 747.1, 747.5, 747.5, 747.3, 747.6, 748.4],
@@ -118,17 +93,6 @@ export interface DemoHistoryResult {
   eveningShiftId: string;
   pendingHandoverId: string;
   closedBusinessDays: number;
-}
-
-class DemoSeedError extends Error {}
-
-function must<T>(result: Result<T>, step: string): T {
-  if (!result.success) {
-    throw new DemoSeedError(
-      `Demo history step "${step}" failed: ${result.error.code} ${result.error.message}`,
-    );
-  }
-  return result.data;
 }
 
 function shiftDate(date: string, days: number): string {
@@ -397,228 +361,31 @@ export async function seedDemoHistory(
   const stockMovements = new DrizzleStockMovementRepository(tx);
   const bookOf = (tankId: string) => stockMovements.currentQuantityForTank(tankId);
   const tanksOf = (productId: string) => tanks.filter((tank) => tank.productId === productId);
-  const decantationSettings = resolveDecantationSettings(station.settings);
-  const settings = {
-    densityToleranceKgM3: decantationSettings.densityToleranceKgM3,
-    settlingTimeMinutes: decantationSettings.settlingTimeMinutes,
-  };
-  const iso = (date: Date) => date.toISOString();
   const minutes = (base: Date, delta: number) => new Date(base.getTime() + delta * 60_000);
 
-  /** Hydrometer reading (0.5 kg/m³ resolution) of a sample at `tempC`. */
-  const hydrometer = (density15: number, tempC: number) => ({
-    observedDensity: Math.round(density15 * vcf(density15, tempC) * 2) / 2,
-    observedTempC: tempC,
-  });
-  const standardDensity = (reading: { observedDensity: number; observedTempC: number }) =>
-    roundDensity(
-      density15FromObserved(reading.observedDensity, reading.observedTempC, {
-        method: decantationSettings.densityMethod,
-      }),
-      2,
-    );
-
-  /** A product's density reading (Morning or Ad-hoc) from a hydrometer sample. */
-  const recordDensity = async (input: {
-    productId: string;
-    date: string;
-    at: Date;
-    kind: 'MORNING' | 'ADHOC';
-    density15: number;
-    tempC: number;
-    tankId?: string;
-  }) =>
-    must(
-      await new RecordDensityReading({
-        densityReadings: new DrizzleDensityReadingRepository(tx),
-        events,
-        ids: { generate: () => ids.newId() },
-        settings: {
-          densityToleranceKgM3: decantationSettings.densityToleranceKgM3,
-          densityMethod: decantationSettings.densityMethod,
-        },
-      }).execute(
-        {
-          stationId,
-          productId: input.productId,
-          businessDate: input.date,
-          kind: input.kind,
-          sampledFrom: 'TANK',
-          tankId: input.tankId ?? null,
-          entryMethod: 'HYDROMETER',
-          ...hydrometer(input.density15, input.tempC),
-          recordedAt: iso(input.at),
-        },
-        context(input.at, manager.id),
-      ),
-      'density reading',
-    );
-
-  /** A fuel invoice (Office Record on its entry date): never moves stock. */
-  const fuelInvoice = async (input: {
-    date: string;
-    at: Date;
-    productId: string;
-    quantity: number;
-    invoiceDensity: number;
-  }) =>
-    must(
-      await new RecordPurchase({
-        purchases: new DrizzlePurchaseRepository(tx),
-        purchaseItems: new DrizzlePurchaseItemRepository(tx),
-        stock: stockMovements,
-        supplierTxns: new DrizzleSupplierTransactionRepository(tx),
-        suppliers: new DrizzleSupplierRepository(tx),
-        products: new DrizzleProductRepository(tx),
-        stations: new DrizzleStationRepository(tx),
-        shifts,
-        businessDays,
-        docNumbers,
-        events,
-      }).execute(
-        {
-          supplierId: oilCompany.id,
-          stationId,
-          transactionDate: input.date,
-          invoiceNumber: `IOC-${ids.newId().slice(0, 8).toUpperCase()}`,
-          lines: [
-            {
-              productId: input.productId,
-              quantity: input.quantity,
-              unitPrice: Math.round(priceOf(input.productId) * PURCHASE_RATE * 100) / 100,
-              invoiceDensity: input.invoiceDensity,
-            },
-          ],
-        },
-        context(input.at, accountant.id),
-      ),
-      'fuel invoice',
-    ).purchase;
-
-  interface TankerLoad {
-    productId: string;
-    purchaseId: string;
-    /** Invoice quantity (round KL). */
-    invoiceQty: number;
-    invoiceDensity: number;
-    /** Measured litres minus invoice litres (negative = Short). */
-    variance: number;
-    /** RO Density at 15 °C (hydrometer sample at `tempC`). */
-    roDensity: number;
-    tempC: number;
-  }
-  interface TankerChamber {
-    capacityL: number;
-    load: number;
-    sealOk?: boolean;
-    mark?: 'OK' | 'SHORT' | 'EXCESS';
-  }
-
-  /**
-   * One tanker visit through RecordDecantation: tank lines split per product
-   * over its tanks, optional chamber checks, RO density, and the Fuel Purchase
-   * linked per product. Without `afterAt` the lines stay pending (or the whole
-   * visit stays a DRAFT while still unloading). Returns the tanks' dip targets
-   * so a later routine dip can resolve a pending visit.
-   */
-  const tanker = async (input: {
-    arriveAt: Date;
-    startAt: Date;
-    endAt?: Date;
-    afterAt?: Date;
-    recordAt: Date;
-    tankerNumber: string;
-    driverName: string;
-    loads: TankerLoad[];
-    chambers?: TankerChamber[];
-    draft?: boolean;
-  }) => {
-    const lines: Record<string, unknown>[] = [];
-    const lineIndexes: number[][] = [];
-    const dipTargets: Array<{ tankId: string; productId: string; actual: number }> = [];
-    for (const load of input.loads) {
-      const loadTanks = tanksOf(load.productId);
-      const share = load.invoiceQty / loadTanks.length;
-      const varianceShare = load.variance / loadTanks.length;
-      const reading = hydrometer(load.roDensity, load.tempC);
-      lineIndexes.push([]);
-      for (const tank of loadTanks) {
-        const before = await bookOf(tank.id);
-        const actual = Math.round((before + share + varianceShare) * 1000) / 1000;
-        lineIndexes[lineIndexes.length - 1].push(lines.length);
-        dipTargets.push({ tankId: tank.id, productId: load.productId, actual });
-        lines.push({
-          tankId: tank.id,
-          beforeDip: before,
-          beforeDipAt: iso(input.arriveAt),
-          ...reading,
-          roDensity: standardDensity(reading),
-          invoiceDensity: load.invoiceDensity,
-          salesDuring: 0,
-          ...(input.afterAt ? { afterDip: actual, afterDipAt: iso(input.afterAt) } : {}),
-        });
-      }
-    }
-    const chambers = (input.chambers ?? []).map((chamber, index) => {
-      const lineIndex = lineIndexes[chamber.load];
-      return {
-        chamberNo: index + 1,
-        capacityL: chamber.capacityL,
-        sealOk: chamber.sealOk ?? true,
-        mark: chamber.mark ?? 'OK',
-        emptied: true,
-        tankLineIndex: lineIndex[index % lineIndex.length],
-      };
-    });
-    const recorded = must(
-      await new RecordDecantation({
-        decantations: new DrizzleDecantationRepository(tx),
-        densityReadings: new DrizzleDensityReadingRepository(tx),
-        tanks: new DrizzleTankRepository(tx),
-        businessDays,
-        docNumbers,
-        events,
-        settings,
-        measurement: createDecantationMeasurement(tx, events),
-        linking: createDecantationLinker(tx, events, settings),
-      }).execute(
-        {
-          stationId,
-          tankerNumber: input.tankerNumber,
-          driverName: input.driverName,
-          unloadStartedAt: iso(input.startAt),
-          ...(input.endAt ? { unloadEndedAt: iso(input.endAt) } : {}),
-          chambersChecked: chambers.length > 0,
-          invoiceQuantity: input.loads.reduce((sum, load) => sum + load.invoiceQty, 0),
-          ...(input.draft ? { draft: true } : {}),
-          lines,
-          chambers,
-          links: input.loads.map((load) => ({
-            productId: load.productId,
-            purchaseId: load.purchaseId,
-          })),
-        } as never,
-        context(input.recordAt, manager.id),
-      ),
-      'decantation',
-    );
-    return { decantation: recorded.decantation, dipTargets };
+  const demo: DemoContext = {
+    tx,
+    events,
+    ids,
+    docNumbers,
+    stationId,
+    stationSettings: station.settings,
+    context,
+    shifts,
+    businessDays,
+    stockMovements,
+    managerId: manager.id,
+    accountantId: accountant.id,
+    supplierId: oilCompany.id,
+    tanksOf,
+    bookOf,
+    priceOf,
   };
-
-  /** A routine Tank Dip between shifts (resolves pending Decantation lines). */
-  const routineDip = async (tankId: string, actualQuantity: number, at: Date, reason: string) =>
-    must(
-      await new RecordStockCount({
-        movements: stockMovements,
-        variances: new DrizzleStockVarianceRepository(tx),
-        tanks: new DrizzleTankRepository(tx),
-        shifts,
-        businessDays,
-        events,
-        decantationMeasurement: createDecantationMeasurement(tx, events),
-      }).execute({ stationId, tankId, actualQuantity, reason }, context(at, manager.id)),
-      'routine tank dip',
-    );
+  const { recordDensity, ...densityHelpers } = createDensityHelpers(demo);
+  const { fuelInvoice, tanker, routineDip } = createDecantationHelpers(demo, {
+    recordDensity,
+    ...densityHelpers,
+  });
 
   const creditSale = async (
     shiftId: string,
@@ -801,6 +568,10 @@ export async function seedDemoHistory(
     const at = (time: string) => stationInstant(date, time, timeZone);
     const dayIndex = DEMO_HISTORY_DAYS - age;
 
+    // Ordering that keeps the −18 L dip exact: the day −4 tanker (no after dip)
+    // is resolved by a routine dip on day −3, so its tank line absorbs that
+    // delta. Today's tanker arrives only after the −18 L dip, so neither can
+    // shift the other's book stock.
     // The morning after the HSD tanker with no after dip: a routine Tank Dip
     // between shifts (none open) measures it.
     if (pendingDips.length > 0 && age === 3) {

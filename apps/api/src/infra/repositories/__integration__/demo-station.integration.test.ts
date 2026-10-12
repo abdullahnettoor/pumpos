@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import { and, asc, eq, getTableColumns, getTableName, inArray, is, sql as dsql } from 'drizzle-orm';
 import { PgTable } from 'drizzle-orm/pg-core';
 import { ok } from '@pump/core';
+import { resolveEntryDate, shiftBusinessDate } from '@pump/shared';
 import { schema, type DbClient } from '@pump/db';
 import { runInTransaction } from '../../transaction.js';
 import {
@@ -441,6 +442,53 @@ describe.skipIf(!CONNECTION)('demo stations against real Postgres', () => {
         );
       // Today's draft is linked to this morning's invoice.
       expect(links.some((link) => link.decantationId === drafts[0].id)).toBe(true);
+
+      // Each Tank Line's RO density is within the station tolerance of its invoice's.
+      const tankRows = await db
+        .select()
+        .from(schema.tanks)
+        .where(eq(schema.tanks.organizationId, demo.organizationId));
+      const productOfTank = new Map(tankRows.map((tank) => [tank.id, tank.productId]));
+      const items = await db
+        .select()
+        .from(schema.purchaseItems)
+        .where(
+          inArray(
+            schema.purchaseItems.purchaseId,
+            links.map((link) => link.purchaseId),
+          ),
+        );
+      for (const line of lines) {
+        const link = links.find(
+          (candidate) =>
+            candidate.decantationId === line.decantationId &&
+            candidate.productId === productOfTank.get(line.tankId),
+        );
+        const item = items.find(
+          (candidate) =>
+            candidate.purchaseId === link?.purchaseId && candidate.productId === link?.productId,
+        );
+        expect(item?.invoiceDensity).toBeTruthy();
+        expect(Math.abs(Number(line.roDensity) - Number(item?.invoiceDensity))).toBeLessThanOrEqual(
+          3,
+        );
+      }
+
+      // The TANK_DIP line was measured on day -3, between shifts (none open).
+      const [dipLine] = lines.filter((line) => line.measuredBy === 'TANK_DIP');
+      const measuredAt = new Date(dipLine.measuredAt as Date);
+      expect(resolveEntryDate({ now: measuredAt, timeZone: 'Asia/Kolkata' })).toBe(
+        shiftBusinessDate(TODAY, -3),
+      );
+      const shiftRows = await db
+        .select()
+        .from(schema.shifts)
+        .where(eq(schema.shifts.organizationId, demo.organizationId));
+      const openAtDip = shiftRows.filter(
+        (shift) =>
+          shift.openedAt <= measuredAt && (shift.closedAt === null || shift.closedAt > measuredAt),
+      );
+      expect(openAtDip).toHaveLength(0);
     });
 
     it('never books fuel Purchase stock; fuel stock is Decantation + opening only', async () => {
