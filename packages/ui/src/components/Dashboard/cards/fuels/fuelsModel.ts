@@ -186,3 +186,17 @@ export function derivePendingDecant(
 /** Plan purchase is offered only for a low tank with nothing waiting to decant. */
 export const shouldPlanPurchase = (tanks: FuelTank[]) =>
   tanks.some((t) => t.tone === 'red') && !tanks.some((t) => t.waitingOnDecantation);
+
+/**
+ * Header swatch colour for a fuel, as in the prototype: Petrol (MS) brand,
+ * Diesel (HSD) info, anything else (premium grades, CNG…) in a stable cycle.
+ * Keyed on the product, not its list position, so a fuel keeps its colour
+ * whatever order the API returns.
+ */
+const OTHER_SWATCHES = ['bg-warning-fg', 'bg-danger-fg', 'bg-ink-muted'] as const;
+export function fuelSwatch(code: string, name: string, index: number): string {
+  const key = `${code} ${name}`.toUpperCase();
+  if (/\b(MS|PETROL)\b/.test(key.replace(/[^A-Z0-9]+/g, ' '))) return 'bg-brand';
+  if (/\b(HSD|DIESEL)\b/.test(key.replace(/[^A-Z0-9]+/g, ' '))) return 'bg-info-fg';
+  return OTHER_SWATCHES[index % OTHER_SWATCHES.length];
+}

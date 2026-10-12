@@ -223,6 +223,18 @@ export function findSideOnlyDashes(text: string): string[] {
   return out;
 }
 
+/**
+ * `className="… ${x}"` is a plain string, not a template: the `${…}` is
+ * rendered literally and the class never applies (the Fuels swatch shipped
+ * colourless this way). Interpolation needs `className={`…`}`.
+ */
+export function findQuotedInterpolations(text: string): string[] {
+  const out: string[] = [];
+  const re = /className=(["'])([^"']*\$\{[^"']*)\1/g;
+  for (let m = re.exec(text); m; m = re.exec(text)) out.push(m[2]);
+  return out;
+}
+
 describe('class guard: no class in dashboard / pump-ds / theme / shell is dead', () => {
   it('every className token compiles to CSS', async () => {
     const generates = await makeBuilder();
@@ -250,5 +262,14 @@ describe('class guard: no class in dashboard / pump-ds / theme / shell is dead',
     expect(bad).toEqual([]);
     expect(findSideOnlyDashes("const R = 'border-t border-dashed px-3';")).toHaveLength(1);
     expect(findSideOnlyDashes("const R = 'border border-dashed';")).toHaveLength(0);
+  });
+  it('no ${…} inside a quoted className (it renders literally)', () => {
+    const bad: string[] = [];
+    for (const file of sourceFiles())
+      for (const lit of findQuotedInterpolations(readFileSync(file, 'utf8')))
+        bad.push(`${path.relative(SRC, file)}: ${lit}`);
+    expect(bad).toEqual([]);
+    expect(findQuotedInterpolations('<i className="size-2 ${SW[i]}" />')).toHaveLength(1);
+    expect(findQuotedInterpolations('<i className={`size-2 ${SW[i]}`} />')).toHaveLength(0);
   });
 });

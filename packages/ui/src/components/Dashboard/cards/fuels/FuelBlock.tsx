@@ -27,8 +27,6 @@ const TONE_BAR: Record<TankTone, string> = {
   unknown: 'bg-ink-faint',
 };
 
-const SWATCH = ['bg-brand', 'bg-info-fg', 'bg-warning-fg'];
-
 /** Part state: each of density / tanks loads (and fails) on its own. */
 export type Part<T> =
   { status: 'loading' } | { status: 'error'; retry: () => void } | { status: 'ready'; value: T };
@@ -43,8 +41,8 @@ export interface FuelBlockProps {
   pendingDecant: PendingDecant | null;
   timeZone: string | undefined;
   businessDate: string;
-  /** Index of the fuel in the list; picks the header swatch colour. */
-  swatch: number;
+  /** Header swatch class (`fuelSwatch`). */
+  swatch: string;
   canRecord: boolean;
   canDecant: boolean;
   canPlan: boolean;
@@ -211,10 +209,7 @@ export const FuelBlock: React.FC<FuelBlockProps> = (p) => {
     >
       <header className="flex items-center justify-between gap-2 px-3 py-2.5">
         <div className="flex items-center gap-2">
-          <span
-            className="size-2 shrink-0 rounded-[3px] ${SWATCH[p.swatch % SWATCH.length]}"
-            aria-hidden="true"
-          />
+          <span className={`size-2 shrink-0 rounded-[3px] ${p.swatch}`} aria-hidden="true" />
           <h3 className="text-[14px] font-semibold text-ink">{p.name}</h3>
           <span className="text-[11px] text-ink-muted">{p.code}</span>
         </div>

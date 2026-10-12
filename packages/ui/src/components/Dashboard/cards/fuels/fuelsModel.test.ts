@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DensityTodayProductSummary } from '@pump/shared';
 import {
+  fuelSwatch,
   deriveDensityState,
   deriveFuelTanks,
   derivePendingDecant,
@@ -124,5 +125,14 @@ describe('derivePendingDecant / shouldPlanPurchase', () => {
     expect(shouldPlanPurchase([t('red')])).toBe(true);
     expect(shouldPlanPurchase([t('red'), t('ok', true)])).toBe(false);
     expect(shouldPlanPurchase([t('amber')])).toBe(false);
+  });
+});
+
+describe('fuelSwatch', () => {
+  it('colours a fuel by what it is, not its list position', () => {
+    expect(fuelSwatch('DEMO-MS-a753c7', 'Petrol', 1)).toBe('bg-brand');
+    expect(fuelSwatch('HSD', 'Diesel', 0)).toBe('bg-info-fg');
+    expect(fuelSwatch('XP95', 'Premium', 0)).toBe('bg-warning-fg');
+    expect(fuelSwatch('CNG', 'CNG', 1)).not.toBe(fuelSwatch('XP95', 'Premium', 0));
   });
 });

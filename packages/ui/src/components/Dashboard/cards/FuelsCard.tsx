@@ -17,6 +17,7 @@ import {
   deriveDensityState,
   derivePendingDecant,
   deriveFuelTanks,
+  fuelSwatch,
   type DensityState,
   type FuelTank,
   type InventoryTankRow,
@@ -93,7 +94,7 @@ export const FuelsCard: React.FC = () => {
               }
               timeZone={timeZone}
               businessDate={businessDate}
-              swatch={idx}
+              swatch={fuelSwatch(f.productCode, f.productName, idx)}
               canRecord={canRecord}
               canDecant={canPlanDecant}
               canPlan={canPlanDecant}
