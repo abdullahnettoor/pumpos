@@ -3,12 +3,13 @@
  * View-only: everything here is read from the server's own figures (handover
  * rows, reconciliation totals), never recomputed.
  */
-import { businessDateLabel, stationMinuteOfDay } from '../dates.js';
+import { handoverStatus, isHandoverDue, type DuStatus as SharedDuStatus } from '@pump/shared';
+import { businessDateLabel } from '../dates.js';
 import { elapsedLabel, sinceLabel } from '../home/live.js';
 import { num } from '../num.js';
 import { shiftLabel, type Snapshot } from '../home/sales.js';
 
-export type DuStatus = 'recorded' | 'pending' | 'due';
+export type DuStatus = SharedDuStatus;
 
 export interface LiveDu {
   key: string;
@@ -35,31 +36,7 @@ export interface LiveShiftCard {
   dus: LiveDu[];
 }
 
-const MINUTES_PER_DAY = 1440;
-
-const timeToMinutes = (hhmm: string | null | undefined): number | null => {
-  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm ?? '');
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
-};
-
-/**
- * True once the Shift has run past its template's scheduled end. The end is the
- * first occurrence of the template's end time after the Shift opened, so a night
- * Shift (10 pm – 6 am) is due at 6 am the next morning. Without a schedule a
- * Shift is never "due".
- */
-export function isHandoverDue(
-  openedAt: string,
-  now: number,
-  scheduledEnd: string | null | undefined,
-  timeZone: string,
-): boolean {
-  const opened = Date.parse(openedAt);
-  const end = timeToMinutes(scheduledEnd);
-  if (!Number.isFinite(opened) || end === null) return false;
-  const untilEnd = (end - stationMinuteOfDay(opened, timeZone) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
-  return now - opened >= untilEnd * 60_000;
-}
+export { isHandoverDue };
 
 export function deriveLiveShiftCard(
   status: unknown,
@@ -81,7 +58,7 @@ export function deriveLiveShiftCard(
       key: String(a.id ?? `${a.userId}:${a.duId}:${i}`),
       duName: String(a.duName ?? a.duCode ?? 'DU'),
       attendant: String(a.userName ?? 'Attendant'),
-      status: h ? 'recorded' : due ? 'due' : 'pending',
+      status: handoverStatus(Boolean(h), due),
       declared: h ? num(h.cashHandedOver) : null,
       variance: h ? num(h.varianceAmount) : null,
     };

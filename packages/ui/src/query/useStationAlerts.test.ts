@@ -95,3 +95,123 @@ describe('deriveStationAlerts', () => {
     );
   });
 });
+
+describe('deriveStationAlerts — shift to-dos', () => {
+  const TZ = 'Asia/Kolkata';
+  // 2026-10-12 15:00 IST
+  const NOW = Date.parse('2026-10-12T09:30:00.000Z');
+  const shift = (over: Record<string, unknown> = {}) => ({
+    openedAt: '2026-10-12T02:30:00.000Z', // 8:00 am IST
+    scheduledEndTime: '14:00',
+    staffAssignments: [
+      { userId: 'u1', duId: 'd1' },
+      { userId: 'u2', duId: 'd2' },
+    ],
+    handovers: [],
+    ...over,
+  });
+  const base = { now: NOW, timeZone: TZ };
+
+  it('asks for handovers to record while the shift is running', () => {
+    const alerts = deriveStationAlerts([], [], {
+      ...base,
+      activeShift: shift({ scheduledEndTime: '23:00', handovers: [{ userId: 'u1', duId: 'd1' }] }),
+      shiftsClosedToday: 0,
+      plannedShiftCount: 1,
+    });
+    expect(alerts).toEqual([
+      expect.objectContaining({
+        id: 'handovers',
+        category: 'shift',
+        title: '1 handover to record',
+        actionLabel: 'Open',
+        actionPath: '/shifts',
+      }),
+    ]);
+  });
+
+  it('marks unrecorded handovers overdue past the scheduled end', () => {
+    const [alert] = deriveStationAlerts([], [], {
+      ...base,
+      activeShift: shift(),
+      shiftsClosedToday: 0,
+      plannedShiftCount: 1,
+    });
+    expect(alert).toMatchObject({ severity: 'danger', title: '2 handovers overdue' });
+  });
+
+  it('offers Open Shift N between shifts and when no shift has opened', () => {
+    const [alert] = deriveStationAlerts([], [], {
+      ...base,
+      activeShift: null,
+      shiftsClosedToday: 1,
+      plannedShiftCount: 3,
+    });
+    expect(alert).toMatchObject({
+      id: 'open-shift',
+      title: 'Open Shift 2',
+      actionLabel: 'Open',
+      actionPath: '/shifts',
+    });
+    const [first] = deriveStationAlerts([], [], {
+      ...base,
+      activeShift: null,
+      shiftsClosedToday: 0,
+      plannedShiftCount: 2,
+    });
+    expect(first.title).toBe('Open Shift 1');
+  });
+
+  it('offers nothing once every planned shift has closed or with no templates', () => {
+    expect(
+      deriveStationAlerts([], [], {
+        ...base,
+        activeShift: null,
+        shiftsClosedToday: 2,
+        plannedShiftCount: 2,
+      }),
+    ).toEqual([]);
+    expect(
+      deriveStationAlerts([], [], {
+        ...base,
+        activeShift: null,
+        shiftsClosedToday: 0,
+        plannedShiftCount: 0,
+      }),
+    ).toEqual([]);
+  });
+
+  it('lists unrecorded morning density without a Record action', () => {
+    const [alert] = deriveStationAlerts([], [], {
+      ...base,
+      activeShift: null,
+      shiftsClosedToday: 0,
+      plannedShiftCount: 0,
+      densityToday: {
+        missingCount: 1,
+        missingProducts: [{ productId: 'p1', productName: 'Petrol', productCode: 'PET' }],
+      },
+    });
+    expect(alert).toMatchObject({
+      id: 'density',
+      category: 'density',
+      title: 'Morning density not recorded',
+      meta: 'Petrol',
+    });
+    expect(alert.actionLabel).toBeUndefined();
+  });
+
+  it('keeps stock alerts alongside shift to-dos, sorted by severity', () => {
+    const alerts = deriveStationAlerts(
+      [{ id: 't1', name: 'Tank 1', productName: 'Petrol', capacity: 10_000, currentVolume: 900 }],
+      [],
+      {
+        ...base,
+        activeShift: shift({ scheduledEndTime: '23:00' }),
+        shiftsClosedToday: 0,
+        plannedShiftCount: 1,
+      },
+    );
+    expect(alerts.map((a) => a.id)).toEqual(['tank-t1', 'handovers']);
+  });
+});

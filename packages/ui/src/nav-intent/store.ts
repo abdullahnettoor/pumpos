@@ -42,6 +42,11 @@ export interface NavIntent {
   /** Open a specific Business Day in the Shifts workspace. */
   openBusinessDayDate?: string;
   /**
+   * Open Shifts → Business Day with the list filtered to still-open past
+   * Business Days (dashboard open-days notice).
+   */
+  openPastDays?: boolean;
+  /**
    * Open one closed shift's **Shift Summary** (Shifts → History). Distinct from
    * `openDssrDate`: a shift summary is the shift-close snapshot, a DSSR is the
    * business-day-close snapshot.
