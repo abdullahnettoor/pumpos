@@ -1,7 +1,7 @@
 import React from 'react';
 import { Chip } from '../../../pump-ds/index.js';
 import type { LinkablePurchase } from '@pump/shared';
-import { fmtLitres } from './format.js';
+import { formatQuantity } from '../../../utils/format.js';
 
 /**
  * Fuel Purchase cards of one product. One invoice per product per tanker visit:
@@ -52,7 +52,7 @@ export const PurchaseCards: React.FC<{
                 {on ? '✓ ' : ''}
                 {p.invoiceNumber || p.documentNumber}
               </span>
-              <span>{fmtLitres(p.invoiceQty)}</span>
+              <span>{formatQuantity(p.invoiceQty, 'L')}</span>
             </div>
             <div
               style={{

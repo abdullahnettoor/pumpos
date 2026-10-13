@@ -10,22 +10,9 @@ import { productCategoryOf } from './product-category.js';
 import { shiftBusinessDate } from './business-date.js';
 import type { ProductType } from '../types/core.js';
 import { num } from './money.js';
-
-export type Snapshot = Record<string, any>;
-
-/** The unit as shown: `L` for any litre spelling, `kg` for kilograms; blank reads as litres. */
-export const unitLabel = (unit: unknown): string => {
-  const u = typeof unit === 'string' ? unit.trim() : '';
-  if (!u || /^(l|ltr|litre|liter)s?$/i.test(u)) return 'L';
-  if (/^(kg|kilogram)s?$/i.test(u)) return 'kg';
-  return u;
-};
-
-/** `22,000 L` (whole units; litres and nos are never fractional in practice). */
-export const wholeQuantityLabel = (quantity: number, unit: string): string => {
-  const u = unit ? unitLabel(unit) : '';
-  return `${Math.round(quantity).toLocaleString('en-IN')} ${u}`.trim();
-};
+import { readSnapshot, type Snapshot } from './dssr-snapshot.js';
+import { unitLabel, volumeLabel } from './quantity-label.js';
+import { readDssrNetVolume } from './dssr-range-kpis.js';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
@@ -34,12 +21,6 @@ export const businessWeekday = (businessDate: string): string => {
   const [y, m, d] = businessDate.split('-').map(Number);
   return WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
 };
-
-/** The payload of a preview (`{ snapshotData }`), a bare snapshot, or nothing. */
-export function readSnapshot(data: unknown): Snapshot {
-  const d = data as Snapshot | null | undefined;
-  return (d?.snapshotData ?? d ?? {}) as Snapshot;
-}
 
 export interface FuelLine {
   key: string;
@@ -131,9 +112,6 @@ export function deriveSales(snap: Snapshot): SalesFigures {
     }))
     .sort((a, b) => b.value - a.value);
 
-  const perUnit = new Map<string, number>();
-  for (const f of fuel) perUnit.set(f.unit, (perUnit.get(f.unit) ?? 0) + f.quantity);
-
   const fuelValue = num(snap.fuel?.totalSalesValue);
   const productsValue = num(snap.merchandise?.salesValue);
   const products = productLines(snap, productsValue);
@@ -150,8 +128,7 @@ export function deriveSales(snap: Snapshot): SalesFigures {
   return {
     fuel,
     fuelValue,
-    fuelVolumeLabel:
-      [...perUnit].map(([unit, qty]) => wholeQuantityLabel(qty, unit)).join(' · ') || '0 L',
+    fuelVolumeLabel: volumeLabel(readDssrNetVolume(snap)),
     products,
     productsValue,
     productUnits: products.reduce((s, p) => s + p.quantity, 0),

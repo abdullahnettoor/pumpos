@@ -1,11 +1,12 @@
 import React from 'react';
-import { formatCompactRupees, formatMoney } from '../../../utils/format.js';
+import { formatCompactMoney, formatMoney } from '../../../utils/format.js';
+import { MONEY_TERMS } from '../../../utils/moneyTerms.js';
 import { usePayables, useReceivables } from '../../../query/hooks.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
 
 /**
- * Money column card: To collect / To pay (#506).
+ * Money column card: Receivable / Payable (#506, naming #519).
  * Fails independently from the other Money cards.
  */
 export const ReceivablesPayablesCard: React.FC = () => {
@@ -34,7 +35,7 @@ export const ReceivablesPayablesCard: React.FC = () => {
   return (
     <DashboardCard
       card="money"
-      title="To collect / To pay"
+      title={`${MONEY_TERMS.receivable} / ${MONEY_TERMS.payable}`}
       query={[receivablesQ, payablesQ]}
       placeholderHeight={130}
     >
@@ -42,7 +43,7 @@ export const ReceivablesPayablesCard: React.FC = () => {
         <div>
           <div className="flex items-baseline justify-between">
             <span className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
-              To collect
+              {MONEY_TERMS.receivable}
             </span>
             <span
               className={`font-mono text-base font-semibold ${
@@ -80,18 +81,18 @@ export const ReceivablesPayablesCard: React.FC = () => {
                 <span>
                   0–7d{' '}
                   <strong className="font-mono font-medium text-ink">
-                    {formatCompactRupees(d0_7)}
+                    {formatCompactMoney(d0_7)}
                   </strong>
                 </span>
                 <span>
                   8–30d{' '}
                   <strong className="font-mono font-medium text-ink">
-                    {formatCompactRupees(d8_30)}
+                    {formatCompactMoney(d8_30)}
                   </strong>
                 </span>
                 <span className={d30plus > 0 ? 'text-danger-fg' : ''}>
                   30d+{' '}
-                  <strong className="font-mono font-medium">{formatCompactRupees(d30plus)}</strong>
+                  <strong className="font-mono font-medium">{formatCompactMoney(d30plus)}</strong>
                 </span>
               </div>
             </div>
@@ -100,7 +101,7 @@ export const ReceivablesPayablesCard: React.FC = () => {
 
         <div className="pt-2 border-t border-border-soft flex items-baseline justify-between">
           <span className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
-            To pay
+            {MONEY_TERMS.payable}
           </span>
           <span className="font-mono text-sm font-medium text-ink" data-testid="payables-total">
             {formatMoney(totalPayables, { decimals: 0 })}

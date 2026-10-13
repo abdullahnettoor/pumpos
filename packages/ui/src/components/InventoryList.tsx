@@ -32,6 +32,7 @@ import { DensityTab } from './inventory/density/index.js';
 import { DecantationsTab } from './inventory/decantation/DecantationsTab.js';
 import { canRecordDecantation, type Role } from '@pump/shared';
 import { tankPct, classifyTank, OVER_CAPACITY_EXPLANATION } from '../utils/stock.js';
+import { formatQuantity } from '../utils/format.js';
 import { TankStatusChips } from './inventory/TankStatusChips.js';
 import {
   isAmbiguousMutationError,
@@ -50,9 +51,6 @@ interface InventoryListProps {
 }
 
 type TabType = 'tanks' | 'density' | 'items' | 'movements' | 'variances' | 'decantations';
-
-const fmtL = (n: number) =>
-  `${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
 
 const SearchBox: React.FC<{
   value: string;
@@ -391,13 +389,14 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
         (/^(l|liters?|litres?)$/i.test(a[0]) ? 0 : 1) -
         (/^(l|liters?|litres?)$/i.test(b[0]) ? 0 : 1),
     );
-    const fmtV = (v: number) =>
-      Number(v).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     const tankCount = `${tanksData.length} ${tanksData.length === 1 ? 'tank' : 'tanks'}`;
-    const totalFuelValue = entries.length ? `${fmtV(entries[0][1])} ${entries[0][0]}` : fmtL(0);
-    const totalFuelHint = [...entries.slice(1).map(([u, v]) => `${fmtV(v)} ${u}`), tankCount].join(
-      ' · ',
-    );
+    const totalFuelValue = entries.length
+      ? formatQuantity(entries[0][1], entries[0][0])
+      : formatQuantity(0, 'L');
+    const totalFuelHint = [
+      ...entries.slice(1).map(([u, v]) => formatQuantity(v, u)),
+      tankCount,
+    ].join(' · ');
     const tankLevels = tanksData.map((t: any) =>
       classifyTank(tankPct(t.currentVolume, t.capacity)),
     );

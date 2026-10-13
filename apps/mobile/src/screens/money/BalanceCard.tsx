@@ -1,6 +1,6 @@
 import React, { useId } from 'react';
 import { PausedReason, usePausedAction } from '../../ui/PausedAction.js';
-import { inr } from '@pump/ui';
+import { inr, MONEY_TERMS } from '@pump/ui';
 import type { ReceivablesAging } from '@pump/shared';
 import { standing, type MoneyCustomer, type StandingState } from '../../lib/money/parties.js';
 import { StatusBadge } from '../../ui/StatusBadge.js';
@@ -25,10 +25,10 @@ export const SURFACE: Record<StandingState, string> = {
 };
 
 const LABEL: Record<StandingState, string> = {
-  over: 'Owes you',
-  near: 'Owes you',
-  under: 'Owes you',
-  advance: 'Advance',
+  over: MONEY_TERMS.owesYou,
+  near: MONEY_TERMS.owesYou,
+  under: MONEY_TERMS.owesYou,
+  advance: MONEY_TERMS.advance,
   settled: 'Settled',
 };
 

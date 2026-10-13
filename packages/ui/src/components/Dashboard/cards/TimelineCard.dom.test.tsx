@@ -276,7 +276,7 @@ describe('TimelineCard', () => {
       refetch: vi.fn(),
     });
     const { container } = mount();
-    const ph = container.querySelector('[aria-busy="true"]') as HTMLElement;
+    const ph = container.querySelector('[role="status"]') as HTMLElement;
     expect(ph.style.height).toBe('80px');
   });
 

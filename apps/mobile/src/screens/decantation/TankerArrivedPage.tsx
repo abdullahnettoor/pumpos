@@ -10,7 +10,7 @@ import {
 import { Warn } from '../../components/decantation/fields.js';
 import { useSaveVisit } from '../../components/decantation/useSaveVisit.js';
 import { useVisit } from '../../lib/decantation/useVisit.js';
-import { fmtLitres } from '../../lib/decantation/format.js';
+import { formatQuantity } from '@pump/ui';
 import { DetailPage } from '../../ui/index.js';
 
 /**
@@ -78,7 +78,7 @@ export const TankerArrivedPage: React.FC<{ station: Station }> = ({ station }) =
           summary={lines
             .map(
               (l) =>
-                `${v.tanks.find((t) => t.id === l.tankId)?.name ?? '—'}: ${l.beforeDip ? fmtLitres(Number(l.beforeDip)) : '—'}`,
+                `${v.tanks.find((t) => t.id === l.tankId)?.name ?? '—'}: ${l.beforeDip ? formatQuantity(Number(l.beforeDip), 'L') : '—'}`,
             )
             .join(' · ')}
           defaultOpen

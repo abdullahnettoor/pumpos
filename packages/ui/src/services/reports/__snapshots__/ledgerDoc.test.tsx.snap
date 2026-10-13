@@ -199,7 +199,7 @@ exports[`LedgerDoc as the desktop Unified Ledger uses it > lays out exactly the 
                 "type": "TEXT",
               },
               {
-                "children": "₹-3,000",
+                "children": "−₹3,000",
                 "props": {
                   "style": [
                     {
@@ -577,7 +577,7 @@ exports[`LedgerDoc as the desktop Unified Ledger uses it > lays out exactly the 
                 "type": "TEXT",
               },
               {
-                "children": "₹-3,000.00",
+                "children": "−₹3,000.00",
                 "props": {
                   "style": [
                     {
@@ -710,7 +710,7 @@ exports[`LedgerDoc as the desktop Unified Ledger uses it > lays out exactly the 
                 "type": "TEXT",
               },
               {
-                "children": "₹-3,000.00",
+                "children": "−₹3,000.00",
                 "props": {
                   "style": [
                     {

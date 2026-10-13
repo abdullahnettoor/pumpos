@@ -169,6 +169,16 @@ describe('ReportsScreen', () => {
     });
   });
 
+  it('compacts the tile figure only; a day row shows and speaks the exact amount', () => {
+    seed();
+    mount();
+    const tile = screen.getByText('Last 7 days').parentElement!;
+    expect(within(tile).getByText('₹31.96L')).toBeTruthy();
+    const row = screen.getByRole('button', { name: /^Wed 7 Oct, Draft/ });
+    expect(within(row).getByText('₹51,800')).toBeTruthy();
+    expect(row.getAttribute('aria-label')).not.toMatch(/₹[\d.]+(k|L|Cr)\b/);
+  });
+
   it('gives each row a label that carries its figures, with the decoration hidden', () => {
     seed();
     mount();

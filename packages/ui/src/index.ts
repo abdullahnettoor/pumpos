@@ -189,7 +189,20 @@ export type { DensityCalculatorPopoverProps } from './components/primitives/Dens
 export { Banner } from './components/primitives/Banner.js';
 export type { BannerProps, BannerSeverity } from './components/primitives/Banner.js';
 export { useZodForm } from './forms/useZodForm.js';
-export { formatMoney, inr, formatQty } from './utils/format.js';
+export {
+  formatMoney,
+  inr,
+  formatQty,
+  MINUS,
+  formatSignedMoney,
+  signedMoneyParts,
+  formatQuantity,
+  formatCompactMoney,
+} from './utils/format.js';
+// signedMoneyParts / FigureSign / SignedFigure have no caller yet: the stacked #518 (PR #548) uses them for variance tones.
+export type { FigureSign, SignedFigure } from './utils/format.js';
+export { MONEY_TERMS } from './utils/moneyTerms.js';
+export type { MoneyTerm } from './utils/moneyTerms.js';
 export { initialsOf } from './utils/initials.js';
 export {
   collectionAccountTypes,
@@ -216,6 +229,12 @@ export { SegmentedControl } from './pump-ds/segmented/index.js';
 export type { SegmentedControlProps, SegmentedControlOption } from './pump-ds/segmented/index.js';
 export { PageHeader } from './pump-ds/page-header/index.js';
 export type { PageHeaderProps } from './pump-ds/page-header/index.js';
+export { DataSection, isAccessRefusal } from './pump-ds/data-section/index.js';
+export type {
+  DataSectionProps,
+  DataSectionState,
+  SectionQuery,
+} from './pump-ds/data-section/index.js';
 
 // Post-sign-in boot: the branded wait screen and the parallel resolve behind it.
 export * from './boot/sessionBoot.js';
