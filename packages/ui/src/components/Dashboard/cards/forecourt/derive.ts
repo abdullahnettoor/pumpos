@@ -7,6 +7,7 @@ import {
 } from '@pump/shared';
 import {
   formatClockInZone,
+  formatDayMonth,
   formatElapsedBetween,
   formatHHMM,
   formatShortDay,
@@ -44,6 +45,8 @@ export interface LiveForecourt {
   name: string;
   /** Epoch-free label, e.g. "Live 3h 12m" or "Past scheduled end". */
   pastEnd: boolean;
+  /** "13 Oct" when the running shift belongs to an earlier Business Day; else null. */
+  dateTag: string | null;
   elapsed: string;
   window: string | null;
   endLabel: string | null;
@@ -197,6 +200,10 @@ export function deriveForecourt(input: DeriveInput): ForecourtModel {
     kind: 'live',
     shiftId: String(shift.id),
     name: shiftName(shift),
+    dateTag:
+      typeof shift.businessDate === 'string' && businessDate && shift.businessDate !== businessDate
+        ? formatDayMonth(shift.businessDate)
+        : null,
     pastEnd: isHandoverDue(String(shift.openedAt), now, shift.scheduledEndTime, timeZone),
     elapsed: formatElapsed(String(shift.openedAt), now),
     window: start && end ? `${formatHHMM(start)} → ${formatHHMM(end)}` : null,
@@ -212,3 +219,13 @@ export function deriveForecourt(input: DeriveInput): ForecourtModel {
     last,
   };
 }
+
+/** Live line: "Live 7h 20m", with " · Shift 3 · 13 Oct" for a carry-over shift. */
+export const liveHeadline = (m: LiveForecourt): string => {
+  const base = m.pastEnd ? 'Past scheduled end' : `Live ${m.elapsed}`;
+  return m.dateTag ? `${base} · ${m.name} · ${m.dateTag}` : base;
+};
+
+/** Column header subtitle: "Shift 3 · 13 Oct · 3 DUs". */
+export const liveSubtitle = (m: LiveForecourt): string =>
+  `${[m.name, m.dateTag].filter(Boolean).join(' · ')} · ${m.total} DU${m.total === 1 ? '' : 's'}`;

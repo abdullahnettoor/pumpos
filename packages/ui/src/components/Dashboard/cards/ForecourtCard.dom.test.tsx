@@ -116,6 +116,17 @@ describe('ForecourtCard live', () => {
     expect(screen.getByText('1 overdue')).toBeTruthy();
   });
 
+  it('carry-over shift of an earlier day carries its date', () => {
+    vi.setSystemTime(Date.parse('2026-10-09T17:12:00+05:30'));
+    const l = live(3, '2026-10-09T08:30:00.000Z');
+    hooks.useShiftStatus.mockReturnValue(
+      ok({ activeShift: { ...l.activeShift, businessDate: '2026-10-08', shiftSequence: 3 } }),
+    );
+    mount('Manager', vi.fn(), <ForecourtColumn />);
+    expect(screen.getByText(/Live 3h 12m · Shift 3 · 8 Oct/)).toBeTruthy();
+    expect(screen.getByText('Shift 3 · 8 Oct · 3 DUs')).toBeTruthy();
+  });
+
   it('column header: Accountant sees View › and Staff Workspace ›', () => {
     vi.setSystemTime(Date.parse('2026-10-09T17:12:00+05:30'));
     hooks.useShiftStatus.mockReturnValue(ok(live(1, '2026-10-09T08:30:00.000Z')));

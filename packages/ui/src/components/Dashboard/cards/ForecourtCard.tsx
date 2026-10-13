@@ -6,7 +6,12 @@ import { inr, formatQty } from '../../../utils/format.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
 import { useDashboard } from '../frame/DashboardContext.js';
 import { useForecourtModel } from './forecourt/useForecourtModel.js';
-import { type DuRow, type LastClosed, type LiveForecourt } from './forecourt/derive.js';
+import {
+  liveHeadline,
+  type DuRow,
+  type LastClosed,
+  type LiveForecourt,
+} from './forecourt/derive.js';
 
 const VarianceChip: React.FC<{ amount: number }> = ({ amount }) => (
   <Chip
@@ -58,9 +63,7 @@ const Live: React.FC<{ m: LiveForecourt }> = ({ m }) => (
     <div className="border-b border-border-soft px-3.5 py-3">
       <div className="flex items-center gap-2 text-[13px] font-semibold">
         <Dot tone={m.pastEnd ? 'warning' : 'success'} pulse={!m.pastEnd} />
-        <b className="font-semibold text-ink">
-          {m.pastEnd ? 'Past scheduled end' : `Live ${m.elapsed}`}
-        </b>
+        <b className="font-semibold text-ink">{liveHeadline(m)}</b>
         {m.window && <span className="font-semibold text-ink-muted">{m.window}</span>}
       </div>
       <div className="mt-2.5 flex items-center justify-between text-[12.5px]">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveForecourt } from './derive.js';
+import { deriveForecourt, liveHeadline, liveSubtitle } from './derive.js';
 
 const TZ = 'Asia/Kolkata';
 // 2026-10-09 at the given IST wall time.
@@ -144,5 +144,29 @@ describe('deriveForecourt idle', () => {
       now: ist('23:00'),
     });
     expect(m.kind).toBe('done');
+  });
+});
+
+describe('carry-over shift date tag', () => {
+  const run = (businessDate: string | undefined, over: Record<string, unknown> = {}) => {
+    const m = deriveForecourt({
+      ...base,
+      businessDate: '2026-10-14',
+      status: { activeShift: shift({ businessDate, shiftSequence: 3, ...over }) },
+      now: ist('17:12'),
+    });
+    if (m.kind !== 'live') throw new Error('expected live');
+    return m;
+  };
+  it('tags a shift of an earlier Business Day', () => {
+    const m = run('2026-10-13');
+    expect(m.dateTag).toBe('13 Oct');
+    expect(liveHeadline(m)).toBe('Live 3h 12m · Shift 3 · 13 Oct');
+    expect(liveSubtitle(m)).toBe('Shift 3 · 13 Oct · 3 DUs');
+  });
+  it('no tag for today’s shift or unknown date', () => {
+    expect(run('2026-10-14').dateTag).toBeNull();
+    expect(run(undefined).dateTag).toBeNull();
+    expect(liveSubtitle(run('2026-10-14'))).toBe('Shift 3 · 3 DUs');
   });
 });

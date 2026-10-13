@@ -1,6 +1,7 @@
 import React from 'react';
 import { shiftWorkspaceAction } from '@pump/shared';
 import { ForecourtCard } from '../cards/ForecourtCard.js';
+import { liveSubtitle } from '../cards/forecourt/derive.js';
 import { useForecourtModel } from '../cards/forecourt/useForecourtModel.js';
 import { ColumnHeader } from '../frame/ColumnHeader.js';
 import { useDashboard } from '../frame/DashboardContext.js';
@@ -12,7 +13,7 @@ export const ForecourtColumn: React.FC = () => {
   const workspace = shiftWorkspaceAction(role);
   const subtitle =
     model?.kind === 'live'
-      ? `${model.name} · ${model.total} DU${model.total === 1 ? '' : 's'}`
+      ? liveSubtitle(model)
       : model?.kind === 'done'
         ? 'day’s shifts done'
         : model
