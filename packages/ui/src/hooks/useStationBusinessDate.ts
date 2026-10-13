@@ -11,8 +11,3 @@ export function useStationBusinessDate(timeZone?: string, dayStartsAt?: string):
 
   return resolveBusinessDate({ now, timeZone, dayStartsAt });
 }
-
-/** Today's Entry Date: the station-timezone calendar date, Day Start never applies (ADR 0005). */
-export function useStationEntryDate(timeZone?: string): string {
-  return useStationBusinessDate(timeZone, '00:00');
-}
