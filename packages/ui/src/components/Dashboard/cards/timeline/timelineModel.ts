@@ -217,6 +217,8 @@ export interface OpeningChip {
   id: string;
   leftPct: number;
   text: string;
+  /** Same without "Opened ", for bars too short for the full text. */
+  shortText: string;
   tone: 'success' | 'warning' | 'info';
 }
 
@@ -230,19 +232,20 @@ export function openingChips(
     const opened = Date.parse(s.openedAt);
     const diff =
       s.scheduledStartAt != null ? Math.round((opened - s.scheduledStartAt) / 60_000) : 0;
-    const base = `Opened ${clockLabel(opened, timeZone)}`;
+    const base = clockLabel(opened, timeZone);
     let tone: OpeningChip['tone'] = 'success';
-    let text = base;
+    let short = base;
     if (diff > OPENING_TOLERANCE_MIN) {
       tone = 'warning';
-      text = `${base} · ${diff}m late`;
+      short = `${base} · ${diff}m late`;
     } else if (diff < -OPENING_TOLERANCE_MIN) {
       tone = 'info';
-      text = `${base} · ${-diff}m early`;
+      short = `${base} · ${-diff}m early`;
     }
+    const text = `Opened ${short}`;
     // Anchored to the start of the bar, which sits on the scheduled window.
     const anchor = scheduledWindow(s)?.start ?? opened;
-    return { id: s.id, leftPct: axisPct(anchor, tl), text, tone };
+    return { id: s.id, leftPct: axisPct(anchor, tl), text, shortText: short, tone };
   });
 }
 

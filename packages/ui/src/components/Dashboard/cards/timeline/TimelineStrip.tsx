@@ -170,6 +170,9 @@ const BAR_CLASS: Record<Bar['kind'], string> = {
   ghost: 'border-[1.5px] border-dashed border-border-strong text-ink-muted',
 };
 
+/** Bars narrower than this (percent of the axis) show the shorter opening chip. */
+const SHORT_BAR_PCT = 25;
+
 /** Hour labels this close (percent) to the now pill are hidden under it. */
 const NOW_LABEL_CLEARANCE_PCT = 2.2;
 
@@ -211,14 +214,14 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
                 : {}),
             }}
           >
-            <span className="min-w-0 truncate">{b.text}</span>
+            <span className="min-w-[5.5rem] truncate">{b.text}</span>
             {b.varianceText && <span className="shrink-0 opacity-75">· {b.varianceText}</span>}
             {chip && (
               <span
                 data-testid="timeline-opening-chip"
-                className={`ml-auto flex h-4 shrink-0 items-center rounded-full border bg-surface px-1.5 text-[10.5px] font-semibold ${CHIP_TONE[chip.tone]}`}
+                className={`ml-auto flex h-4 min-w-0 items-center truncate rounded-full border bg-surface px-1.5 text-[10.5px] font-semibold ${CHIP_TONE[chip.tone]}`}
               >
-                {chip.text}
+                {b.widthPct < SHORT_BAR_PCT ? chip.shortText : chip.text}
               </span>
             )}
           </div>

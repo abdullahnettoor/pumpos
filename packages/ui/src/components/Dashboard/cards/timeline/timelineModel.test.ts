@@ -66,6 +66,11 @@ describe('openingChips', () => {
   it('is warning when late', () => {
     expect(chip(40)).toMatchObject({ tone: 'warning', text: 'Opened 6:40 am · 40m late' });
   });
+  it('has a short text without "Opened " for narrow bars', () => {
+    expect(chip(12).shortText).toBe('6:12 am');
+    expect(chip(40).shortText).toBe('6:40 am · 40m late');
+    expect(chip(-20).shortText).toBe('5:40 am · 20m early');
+  });
   it('is info when early', () => {
     expect(chip(-20)).toMatchObject({ tone: 'info', text: 'Opened 5:40 am · 20m early' });
   });
