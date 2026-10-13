@@ -30,7 +30,7 @@ describe('DailyDssrView (ADR 0005: sales-only)', () => {
     expect(screen.queryByText(/Supplier Payments/)).toBeNull();
     expect(screen.queryByText(/Operating Expenses/)).toBeNull();
     expect(screen.getAllByText(/Gross Margin/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Daily Cash Book/)).toBeTruthy();
+    expect(screen.getByText(/Accounts → Daily cash book/)).toBeTruthy();
   });
 
   describe('OMC Card Sales (ADR 0001)', () => {

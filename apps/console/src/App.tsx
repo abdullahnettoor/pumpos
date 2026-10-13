@@ -39,9 +39,11 @@ import {
   publishNavIntent,
   clearNavIntent,
   useRoutePath,
+  NAV_PAGES,
+  ROUTES,
 } from '@pump/ui';
 import type { NavIntent } from '@pump/ui';
-import { canOnboardStation, REPORTS_ROLES, Station } from '@pump/shared';
+import { canOnboardStation, Station } from '@pump/shared';
 import { MobileBlock, useIsUnsupportedMobile } from './MobileBlock.js';
 
 const resolveApiUrl = (): string | undefined => {
@@ -300,27 +302,19 @@ export const App: React.FC = () => {
       : currentPath;
 
   const navItems = navAssumesReady
-    ? [
-        { label: 'Dashboard', path: '/dashboard' },
-        { label: 'Shifts', path: '/shifts', roles: ['Owner', 'Manager', 'Accountant', 'Staff'] },
-        { label: 'Station Overview', path: '/setup/station', roles: ['Owner', 'Manager'] },
-        { label: 'Expenses', path: '/expenses' },
-        { label: 'Income', path: '/income' },
-        { label: 'Purchases', path: '/purchases', roles: ['Owner', 'Manager', 'Accountant'] },
-        { label: 'Inventory', path: '/inventory', roles: ['Owner', 'Manager', 'Accountant'] },
-        { label: 'Pricing', path: '/pricing', roles: ['Owner', 'Manager'] },
-        { label: 'Accounts', path: '/accounts', roles: ['Owner', 'Manager', 'Accountant'] },
-        { label: 'Customers', path: '/customers' },
-        { label: 'Reports', path: '/reports', roles: [...REPORTS_ROLES] },
-        { label: 'Organization', path: '/organization', roles: ['Owner'] },
-      ]
+    ? [...NAV_PAGES]
     : [
-        { label: 'Dashboard', path: '/dashboard' },
-        { label: 'Organization', path: '/organization', roles: ['Owner', 'Manager'] },
+        { label: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
+        {
+          label: 'Organization',
+          path: '/organization',
+          icon: 'organization',
+          roles: ['Owner', 'Manager'],
+        },
       ];
 
   const navItemsWithDev = isLocalDev
-    ? [...navItems, { label: 'Design System', path: '/design-system' }]
+    ? [...navItems, { label: 'Design System', path: '/design-system', icon: 'design-system' }]
     : navItems;
 
   const renderContent = () => {
@@ -537,9 +531,15 @@ export const App: React.FC = () => {
       case '/expenses':
         return <ExpensesList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/income':
-        return <IncomeList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
-      case '/purchases':
-        return <PurchasesList selectedStation={selectedStation} />;
+        return (
+          <IncomeList
+            selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
+            onNavigate={navigate}
+          />
+        );
+      case ROUTES.suppliers:
+        return <PurchasesList selectedStation={selectedStation} onNavigate={navigate} />;
       case '/inventory':
         return <InventoryList selectedStation={selectedStation} />;
       case '/pricing':

@@ -45,6 +45,7 @@ import { useStationAlerts } from '../query/useStationAlerts.js';
 import { inr } from '../utils/format.js';
 import { useRunTask } from '../utils/runTask.js';
 import { useDesktopTitleBar } from '../utils/desktopTitleBar.js';
+import { ROUTES } from '../nav-intent/routes.js';
 
 /**
  * AppTopBar — the data container that wires the pure pump-ds `TopBar` +
@@ -190,7 +191,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         id: 'supplier-payment',
         label: 'Supplier payment',
         icon: <Wallet />,
-        onSelect: () => onNavigate('/purchases', { open: 'supplier-payment' }),
+        onSelect: () => onNavigate(ROUTES.suppliers, { open: 'supplier-payment' }),
       },
       {
         id: 'credit',
@@ -332,7 +333,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
             meta: bal > 0 ? `${inr(bal)} due` : '',
             keywords: [s.phone, s.metadata?.gstin, s.metadata?.tradeName].filter(Boolean),
             onSelect: () =>
-              onNavigate('/purchases', { focusSupplierId: s.id, open: 'supplier-statement' }),
+              onNavigate(ROUTES.suppliers, { focusSupplierId: s.id, open: 'supplier-statement' }),
           };
         }),
       });

@@ -181,7 +181,7 @@ describe('FuelsCard', () => {
     hooks.useInventoryStatus.mockReturnValue(q([{ ...TANK, currentVolume: 4000 }]));
     mount('Manager');
     fireEvent.click(screen.getByText('Plan purchase ›'));
-    expect(nav).toHaveBeenCalledWith('/purchases', { openNewPurchase: true });
+    expect(nav).toHaveBeenCalledWith('/suppliers', { openNewPurchase: true });
     cleanup();
     mount('Staff');
     expect(screen.queryByText('Plan purchase ›')).toBeNull();

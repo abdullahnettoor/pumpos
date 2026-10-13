@@ -19,6 +19,7 @@ import { STATION_SETUP_IN_PROGRESS } from '../StationSetup/StationOnboardingLock
 import type { NavIntent } from '../AppShell.js';
 import { TriangleAlert, Fuel, Users } from 'lucide-react';
 import { Dashboard } from './frame/Dashboard.js';
+import { ROUTES } from '../../nav-intent/routes.js';
 
 interface DashboardOverviewProps {
   selectedStation: Station | null;
@@ -111,7 +112,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       locked: !isReadyStation,
       lockedHint: 'Available once your station is live.',
       actionLabel: 'Add',
-      onAction: () => onNavigate('/purchases'),
+      onAction: () => onNavigate(ROUTES.suppliers),
     },
     {
       id: 'customers',

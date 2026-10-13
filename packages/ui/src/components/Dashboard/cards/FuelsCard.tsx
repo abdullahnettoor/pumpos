@@ -22,6 +22,7 @@ import {
   type FuelTank,
   type InventoryTankRow,
 } from './fuels/fuelsModel.js';
+import { ROUTES } from '../../../nav-intent/routes.js';
 
 /**
  * Fuels column card: one block per fuel (price, density at 15 °C, tanks with
@@ -100,7 +101,7 @@ export const FuelsCard: React.FC = () => {
               canPlan={canPlanDecant}
               onRecord={() => onNavigate('/inventory', { focusInventoryTab: 'density' })}
               onDecant={() => onNavigate('/inventory', { focusInventoryTab: 'decantations' })}
-              onPlan={() => onNavigate('/purchases', { openNewPurchase: true })}
+              onPlan={() => onNavigate(ROUTES.suppliers, { openNewPurchase: true })}
             />
           );
         })}
