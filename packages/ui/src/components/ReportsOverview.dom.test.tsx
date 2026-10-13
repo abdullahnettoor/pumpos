@@ -11,6 +11,18 @@ vi.mock('../query/hooks.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   useDailyDssrRange: () => ({ data: range.data, isLoading: false, error: null }),
 }));
+const preview = vi.hoisted(() => ({
+  fn: (() => new Promise(() => {})) as (stationId: string, date: string) => Promise<unknown>,
+}));
+vi.mock('../services/cloud.js', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../services/cloud.js')>();
+  class CloudShiftService extends mod.CloudShiftService {
+    getDailyDssrPreview(stationId: string, date: string) {
+      return preview.fn(stationId, date) as any;
+    }
+  }
+  return { ...mod, CloudShiftService };
+});
 vi.mock('../access/CapabilityGate.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   useCapability: () => ({ status: 'enabled' }),
@@ -105,6 +117,45 @@ describe('Reports sub-navigation (#540)', () => {
     expect(screen.getByRole('radiogroup', { name: 'Ledger view' }).textContent).toBe(
       'PartyCash & bank',
     );
+  });
+});
+
+describe('Reports → DSSR deep link (review #545)', () => {
+  const deferred = () => {
+    let reject!: (e: unknown) => void;
+    const promise = new Promise((_, rej) => (reject = rej));
+    return { promise, reject };
+  };
+
+  it('switching report while the day loads does not snap back to the DSSR', async () => {
+    const load = deferred();
+    preview.fn = () => load.promise;
+    act(() => publishNavIntent({ openDssrDate: '2026-10-01' }));
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
+    expect(item('DSSR')!.getAttribute('aria-current')).toBe('page');
+
+    fireEvent.click(item('Ledgers')!);
+    await act(async () => {
+      load.reject(new Error('no snapshot'));
+      await load.promise.catch(() => {});
+    });
+
+    expect(item('Ledgers')!.getAttribute('aria-current')).toBe('page');
+    expect(item('DSSR')!.getAttribute('aria-current')).toBeNull();
+  });
+
+  it('a deep link left alone settles on the DSSR and releases the intent', async () => {
+    const load = deferred();
+    preview.fn = () => load.promise;
+    act(() => publishNavIntent({ openDssrDate: '2026-10-01' }));
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
+    await act(async () => {
+      load.reject(new Error('no snapshot'));
+      await load.promise.catch(() => {});
+    });
+    expect(item('DSSR')!.getAttribute('aria-current')).toBe('page');
+    fireEvent.click(item('Ledgers')!);
+    expect(item('Ledgers')!.getAttribute('aria-current')).toBe('page');
   });
 });
 

@@ -181,6 +181,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
     if (handledTokenRef.current === intentToken) return;
     handledTokenRef.current = intentToken;
     let cancelled = false;
+    let settled = false;
     runTask(
       (async () => {
         try {
@@ -191,16 +192,25 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
           // operator can generate one.
           if (!cancelled) setSelectedDate(date);
         } finally {
-          // Commit the tab before dropping the intent that derived it, or a
-          // Reports page already on another report snaps back to it.
-          setSelectedTab('daily-dssr');
-          clearNavIntent();
+          // Cancelled: the operator moved on (another report, another deep
+          // link) while this loaded — committing the DSSR tab would snap them
+          // back. Whoever cancelled owns the tab and the intent now.
+          if (!cancelled) {
+            // Commit the tab before dropping the intent that derived it, or a
+            // Reports page already on another report snaps back to it.
+            setSelectedTab('daily-dssr');
+            clearNavIntent();
+          }
+          settled = true;
         }
       })(),
       'Could not open the report for that day.',
     );
     return () => {
       cancelled = true;
+      // Re-run (StrictMode, a new runTask) while still loading: let the next
+      // effect pick the same intent up instead of leaving it pending forever.
+      if (!settled) handledTokenRef.current = null;
     };
   }, [intent?.openDssrDate, intentToken, stationId, runTask]);
 
