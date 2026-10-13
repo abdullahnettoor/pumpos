@@ -224,6 +224,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
           data={summaries}
           isLoading={summariesQ.isLoading}
           error={summariesQ.error}
+          onRetry={summariesQ.refetch}
           bare
           getRowId={(d: any) => d.id}
           emptyMessage="No closed shifts yet. Close an active shift to generate your first summary."

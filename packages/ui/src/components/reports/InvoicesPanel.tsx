@@ -46,6 +46,7 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
     data: sales,
     isLoading,
     error,
+    refetch,
   } = useSales({ stationId: selectedStation?.id, from: range.from, to: range.to });
 
   // Memoised so `kpis` below actually memoises: a bare `|| []` hands the
@@ -227,6 +228,7 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
             columns={columns}
             data={rows}
             error={error}
+            onRetry={refetch}
             emptyMessage="No merchandise sales in this range."
             getRowId={(r: any) => r.id}
             initialSorting={[{ id: 'businessDate', desc: true }]}

@@ -20,6 +20,8 @@ export * from './shell/index.js';
 export * from './page-header/index.js';
 export * from './panel/index.js';
 export * from './empty-state/index.js';
+export * from './skeleton/index.js';
+export * from './data-section/index.js';
 export * from './input/index.js';
 export * from './date/index.js';
 export * from './meter/index.js';

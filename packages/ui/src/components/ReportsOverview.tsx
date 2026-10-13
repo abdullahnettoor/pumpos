@@ -367,6 +367,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
                 columns={dssrColumns}
                 data={dssrList}
                 error={dssrQ.error}
+                onRetry={dssrQ.refetch}
                 emptyMessage="No daily DSSR reports."
                 getRowId={(r: any) => r.id}
                 onRowClick={(r: any) => setActiveDailyDssr(r)}

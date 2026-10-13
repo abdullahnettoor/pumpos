@@ -28,6 +28,17 @@ a time — never in place.
 5. **Naming maps to the domain, not the catalog.** `BusinessDayPill`, not
    `DatePill4`. `StatusChip`, not `Badge12`.
 
+6. **Never show an empty state for a failed query.** "No expenses yet" when
+   the request failed tells the operator something false. A region that
+   loads its own data goes in a `DataSection` (`data-section/`): skeleton
+   while pending, "Couldn't load <title> · Retry" when any of its queries
+   fails (Retry refetches only the failed ones), the empty state only after
+   every query succeeded with nothing to show, otherwise the content. One
+   section failing never blanks the page. Use `shape="card"` for a Panel,
+   `shape="bare"` for a table/list region (`DataTable` does this itself; pass
+   it `onRetry={q.refetch}`). Gate with `enabled`, and give the queries the
+   same flag so a hidden section sends no request.
+
 ## Load order (apps must follow this)
 
 ```ts
