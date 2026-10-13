@@ -285,7 +285,7 @@ describe('per-card isolation', () => {
     mount('Owner');
     const errored = document.querySelectorAll('[data-state="error"]');
     expect(errored).toHaveLength(1);
-    expect(errored[0]!.textContent).toMatch(/Couldn't load to collect \/ to pay/);
+    expect(errored[0]!.textContent).toMatch(/Couldn't load receivable \/ payable/);
     expect(screen.getAllByRole('button', { name: 'Retry' })).toHaveLength(1);
     // The rest of the board still renders.
     expect(document.querySelectorAll('[data-state="ready"]').length).toBeGreaterThan(1);
