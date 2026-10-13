@@ -41,3 +41,4 @@ export * from './utils/event-pins.js';
 export * from './utils/dashboard-gating.js';
 
 export * from './utils/sales-headline.js';
+export * from './utils/dssr-range-kpis.js';
