@@ -70,7 +70,11 @@ const toMinutes = (hhmm: string): number => {
  * offset from the Day Start and runs for its own length (end = start + length),
  * so a 22:00–06:00 window is 8h whatever the Day Start is.
  */
-export function templateWindow(t: TimelineTemplate, dayStartAt: number, dayStartMin: number): TimelineWindow {
+export function templateWindow(
+  t: TimelineTemplate,
+  dayStartAt: number,
+  dayStartMin: number,
+): TimelineWindow {
   const offset = (toMinutes(t.startTime) - dayStartMin + DAY_MIN) % DAY_MIN;
   const length = (toMinutes(t.endTime) - toMinutes(t.startTime) + DAY_MIN) % DAY_MIN || DAY_MIN;
   const startAt = dayStartAt + offset * 60_000;
