@@ -1,7 +1,7 @@
 import React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../primitives/DataTable.js';
-import { formatMoney } from '../../utils/format.js';
+import { formatMoney, formatSignedMoney } from '../../utils/format.js';
 import { isBalancedVariance } from '@pump/shared';
 
 /** One Attendant's Drawer, as reconciled by the server (ADR 0005, #278). */
@@ -41,8 +41,7 @@ export const VarianceFigure: React.FC<{ value: number; label?: boolean }> = ({ v
       : 'var(--state-success-fg)';
   return (
     <span style={{ ...num, color }}>
-      {value > 0 ? '+' : ''}
-      {formatMoney(value, { symbol: false })}
+      {formatSignedMoney(value, { symbol: false, plus: true })}
       {label && ` ${varianceWord(value)}`}
     </span>
   );

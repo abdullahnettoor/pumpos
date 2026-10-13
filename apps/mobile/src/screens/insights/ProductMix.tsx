@@ -1,6 +1,6 @@
 import React from 'react';
 import type { InsightsSales } from '@pump/shared';
-import { compactRupees } from '../../lib/format.js';
+import { compactRupees, rupees } from '../../lib/format.js';
 import { percent } from '../../lib/insights/format.js';
 import { ChangeBadge } from './ChangeBadge.js';
 
@@ -79,7 +79,7 @@ export const ProductMix: React.FC<{ data: InsightsSales; days: number }> = ({ da
             <ChangeBadge changePct={o.changePct} days={days} />
             {o.top && (
               <span>
-                Top: {o.top.name} · {compactRupees(o.top.revenue)}
+                Top: {o.top.name} · {rupees(o.top.revenue)}
               </span>
             )}
           </div>

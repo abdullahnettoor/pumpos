@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import React from 'react';
-import { LedgerDoc, signedInr, type LedgerDocProps } from './ledgerDoc.js';
+import { LedgerDoc, type LedgerDocProps } from './ledgerDoc.js';
 import { C } from './shiftSummaryDoc.js';
 
 /**
@@ -78,6 +78,13 @@ describe('LedgerDoc as the desktop Unified Ledger uses it', () => {
     expect(treeOf((LedgerDoc as any)(empty))).toMatchSnapshot();
   });
 
+  it('signs a negative balance with a true minus before the rupee, never ₹-', () => {
+    const t = textOf((LedgerDoc as any)(desktopProps));
+    expect(t).toContain('\u2212₹3,000.00');
+    expect(t).toContain('\u2212₹3,000');
+    expect(t.join('')).not.toMatch(/-₹|₹-/);
+  });
+
   it('prints the generated line only when asked', () => {
     const line = (props: LedgerDocProps) => textOf((LedgerDoc as any)(props)).join('');
     expect(line(desktopProps)).not.toContain('\u2022 Generated');
@@ -121,10 +128,9 @@ describe('LedgerDoc as a party statement', () => {
     expect(t).toContain('Advance');
   });
 
-  it('prints a negative balance with the sign in front of the rupee', () => {
-    expect(signedInr(-1200)).toBe('-₹1,200.00');
-    expect(signedInr('1200')).toBe('₹1,200.00');
-    expect(text(statement)).toContain('-₹1,200.00');
+  it('prints a negative balance with a true minus in front of the rupee', () => {
+    expect(text(statement)).toContain('\u2212₹1,200.00');
+    expect(text(statement).join('')).not.toMatch(/-₹|₹-/);
   });
 
   it('does not paint an advance in the danger colour; the desktop ledger still paints a shortfall', () => {

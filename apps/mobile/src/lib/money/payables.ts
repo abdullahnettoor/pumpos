@@ -17,7 +17,7 @@ import type {
   SupplierProductPurchase,
 } from '@pump/shared';
 import { accountTypeLabel, dayLabel, monthLabel } from '@pump/ui';
-import { compactRupees, plural } from '../format.js';
+import { plural, rupees } from '../format.js';
 import { daysLabel, type Tile } from './receivables.js';
 import { wholeQuantityLabel } from './quantity.js';
 
@@ -71,7 +71,7 @@ export function purchasedTile(
   const litres = Math.round(m.quantity);
   return {
     label: 'Purchased this month',
-    value: compactRupees(m.purchased),
+    value: rupees(m.purchased),
     sub: [plural(m.purchaseCount, 'purchase'), litres > 0 ? wholeQuantityLabel(litres, 'L') : null]
       .filter(Boolean)
       .join(' · '),
@@ -85,7 +85,7 @@ export function paidThisMonthTile(
 ): Tile {
   return {
     label: 'Paid this month',
-    value: compactRupees(m.paid),
+    value: rupees(m.paid),
     sub: last
       ? `Last: ${[dayLabel(last.entryDate), last.method ? accountTypeLabel(last.method) : null]
           .filter(Boolean)
@@ -99,7 +99,7 @@ export interface ProductRow {
   name: string;
   /** `12,000 L`. */
   quantity: string;
-  /** `₹10.4L`. */
+  /** `₹10,40,000`. */
   value: string;
 }
 
@@ -108,5 +108,5 @@ export const productRows = (products: readonly SupplierProductPurchase[]): Produ
     productId: p.productId,
     name: p.name,
     quantity: wholeQuantityLabel(p.quantity, p.unit),
-    value: compactRupees(p.value),
+    value: rupees(p.value),
   }));

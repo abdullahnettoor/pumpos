@@ -32,11 +32,11 @@ describe('signedMoney', () => {
 });
 
 describe('compactRupees', () => {
-  it('abbreviates from a lakh, whole rupees below', () => {
+  it('abbreviates from a thousand, whole rupees below', () => {
     expect(compactRupees(3227000)).toBe('₹32.27L');
     expect(compactRupees(682000)).toBe('₹6.82L');
     expect(compactRupees(25000000)).toBe('₹2.5Cr');
-    expect(compactRupees(48200)).toBe('₹48,200');
+    expect(compactRupees(48200)).toBe('₹48.2k');
     expect(compactRupees(850)).toBe('₹850');
     expect(compactRupees(0)).toBe('₹0');
     expect(compactRupees(-340)).toBe('−₹340');

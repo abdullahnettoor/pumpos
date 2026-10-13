@@ -1,5 +1,5 @@
 import React from 'react';
-import { isoToLocalTime } from '@pump/ui';
+import { isoToLocalTime, formatQuantity } from '@pump/ui';
 import type { DecantationView, Station } from '@pump/shared';
 import { StepCard } from '../../components/handover/StepCard.js';
 import {
@@ -11,7 +11,6 @@ import { Warn } from '../../components/decantation/fields.js';
 import { useSaveVisit } from '../../components/decantation/useSaveVisit.js';
 import { DiscardDraft } from '../../components/decantation/DiscardDraft.js';
 import { useVisit } from '../../lib/decantation/useVisit.js';
-import { fmtLitres } from '../../lib/decantation/format.js';
 import { DetailPage } from '../../ui/index.js';
 
 /**
@@ -61,7 +60,7 @@ export const FinishUnloadingPage: React.FC<{ station: Station; decantation: Deca
           {v.values.lines
             .map(
               (l) =>
-                `${v.tanks.find((t) => t.id === l.tankId)?.name ?? 'Tank'} ${fmtLitres(Number(l.beforeDip))}`,
+                `${v.tanks.find((t) => t.id === l.tankId)?.name ?? 'Tank'} ${formatQuantity(Number(l.beforeDip), 'L')}`,
             )
             .join(' · ')}
         </div>

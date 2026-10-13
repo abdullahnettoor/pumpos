@@ -1,6 +1,6 @@
 import React from 'react';
 import { INSIGHTS_MIN_COMPARABLE_DAYS, type InsightsSales } from '@pump/shared';
-import { compactRupees } from '../../lib/format.js';
+import { compactRupees, rupees } from '../../lib/format.js';
 import { rangeLabel, weekdayDate, weekdayInitial } from '../../lib/insights/format.js';
 import { barGap, LABELLED_BARS, trendChart } from '../../lib/insights/trend.js';
 import { ChangeBadge } from './ChangeBadge.js';
@@ -9,9 +9,9 @@ import { ChangeBadge } from './ChangeBadge.js';
 function chartSummary(data: InsightsSales, weekly: boolean): string {
   const what = weekly ? 'Weekly average sales per closed day' : 'Daily sales';
   const best = data.best
-    ? `, best day ${weekdayDate(data.best.date)} ${compactRupees(data.best.sales)}`
+    ? `, best day ${weekdayDate(data.best.date)} ${rupees(data.best.sales)}`
     : '';
-  return `${what}, ${rangeLabel(data.range!.from, data.range!.to)}: total ${compactRupees(data.total)}${best}`;
+  return `${what}, ${rangeLabel(data.range!.from, data.range!.to)}: total ${rupees(data.total)}${best}`;
 }
 
 export const SalesTrend: React.FC<{ data: InsightsSales; days: number }> = ({ data, days }) => {
@@ -64,14 +64,13 @@ export const SalesTrend: React.FC<{ data: InsightsSales; days: number }> = ({ da
           <>
             Best day:{' '}
             <b className="font-semibold text-text-high">
-              {weekdayDate(data.best.date)} · {compactRupees(data.best.sales)}
+              {weekdayDate(data.best.date)} · {rupees(data.best.sales)}
             </b>{' '}
             ·{' '}
           </>
         )}
-        avg <b className="num font-semibold text-text-high">{compactRupees(data.average)}</b> a
-        closed day
-        {data.previousAverage > 0 && <> (prior {compactRupees(data.previousAverage)})</>}
+        avg <b className="num font-semibold text-text-high">{rupees(data.average)}</b> a closed day
+        {data.previousAverage > 0 && <> (prior {rupees(data.previousAverage)})</>}
       </p>
       {data.changePct === null && data.previousClosedDays > 0 && (
         <p className="mt-1 text-[11px] text-text-faint">

@@ -1,5 +1,5 @@
 import React from 'react';
-import { fmtLitres, fmtSignedLitres } from '../../lib/decantation/format.js';
+import { formatQuantity } from '@pump/ui';
 import { nowTime, type Visit } from '../../lib/decantation/useVisit.js';
 import { StatusBadge } from '../../ui/index.js';
 import { Check, NumberField, TimeField, Warn } from './fields.js';
@@ -40,7 +40,7 @@ export const AfterDipStep: React.FC<{ visit: Visit }> = ({ visit: v }) => (
         <div key={l.id ?? i} className="flex flex-col gap-2.5 rounded-xl border border-line p-3">
           <span className="text-[12.5px] font-bold text-text-high">{name}</span>
           <p className="num text-[12px] text-text-muted">
-            Before dip {fmtLitres(Number(l.beforeDip))}
+            Before dip {formatQuantity(Number(l.beforeDip), 'L')}
           </p>
           <Check
             checked={l.doAfterDip}
@@ -97,14 +97,16 @@ export const ReviewStep: React.FC<{ visit: Visit }> = ({ visit: v }) => {
               {productName(x.productId)} invoice
             </span>
             <span className="num block text-[12px] text-text-muted">
-              Invoice {fmtLitres(x.invoiceQty)} · received {fmtLitres(x.received)}
+              Invoice {formatQuantity(x.invoiceQty, 'L')} · received{' '}
+              {formatQuantity(x.received, 'L')}
             </span>
           </span>
           {x.variance == null ? (
             <StatusBadge tone="info">Pending</StatusBadge>
           ) : (
             <StatusBadge tone={x.outOfTolerance ? 'bad' : 'good'} num>
-              {x.variance < 0 ? 'Short' : 'Excess'} {fmtSignedLitres(x.variance)}
+              {x.variance < 0 ? 'Short' : 'Excess'}{' '}
+              {formatQuantity(x.variance, 'L', { plus: true })}
             </StatusBadge>
           )}
         </div>
@@ -121,7 +123,7 @@ export const ReviewStep: React.FC<{ visit: Visit }> = ({ visit: v }) => {
             <StatusBadge tone="info">Pending measurement</StatusBadge>
           ) : (
             <span className="num text-[12.5px] font-semibold text-text-high">
-              +{fmtLitres(l.received)} received
+              +{formatQuantity(l.received, 'L')} received
             </span>
           )}
         </div>

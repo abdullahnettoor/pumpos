@@ -16,7 +16,7 @@ import { useDecantations, useInventoryStatus } from '../../../query/hooks.js';
 import { DecantationDrawer } from './DecantationDrawer.js';
 import { LinkPurchaseDrawer } from './LinkPurchaseDrawer.js';
 import { toDecantationRow, type DecantationRow } from './decantationRows.js';
-import { fmtLitres } from './format.js';
+import { formatQuantity } from '../../../utils/format.js';
 
 type Filter = 'all' | 'flagged' | 'pending' | 'unlinked';
 
@@ -157,7 +157,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
                   {' '}
                   · {t.productName}
                   {t.status === 'MEASURED' && t.receivedQty != null
-                    ? ` · ${fmtLitres(t.receivedQty)}`
+                    ? ` · ${formatQuantity(t.receivedQty, 'L')}`
                     : ''}
                 </span>
               </span>
@@ -170,14 +170,22 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
         header: 'Invoice qty',
         enableSorting: false,
         cell: ({ row }) =>
-          row.original.invoiceQty != null ? fmtLitres(row.original.invoiceQty) : <Muted />,
+          row.original.invoiceQty != null ? (
+            formatQuantity(row.original.invoiceQty, 'L')
+          ) : (
+            <Muted />
+          ),
       },
       {
         id: 'received',
         header: 'Received',
         enableSorting: false,
         cell: ({ row }) =>
-          row.original.receivedQty != null ? fmtLitres(row.original.receivedQty) : <Muted />,
+          row.original.receivedQty != null ? (
+            formatQuantity(row.original.receivedQty, 'L')
+          ) : (
+            <Muted />
+          ),
       },
       {
         id: 'variance',
@@ -205,7 +213,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
                 >
                   {v.kind === 'OK'
                     ? `${v.productName} · Matches`
-                    : `${v.productName} · ${v.kind === 'SHORT' ? 'Short' : 'Excess'} ${fmtLitres(v.qty)}`}
+                    : `${v.productName} · ${v.kind === 'SHORT' ? 'Short' : 'Excess'} ${formatQuantity(v.qty, 'L')}`}
                 </Chip>
               ))}
             </div>
