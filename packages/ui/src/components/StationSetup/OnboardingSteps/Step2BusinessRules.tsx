@@ -1,5 +1,5 @@
 import React from 'react';
-import { OnboardingDraft, OperatingDaySchedule } from '@pump/shared';
+import { DEFAULT_TANK_LEVEL_SETTINGS, OnboardingDraft, OperatingDaySchedule } from '@pump/shared';
 import { Chip } from '../../../pump-ds/index.js';
 import { formatWeekday } from '../onboardingDraft.js';
 import { Checkbox } from '../../primitives/Toggle.js';
@@ -226,6 +226,19 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
               }}
             >
               Starts at {draft.businessRules.businessDayStartsAt}
+            </div>
+          </div>
+          <div>
+            <span style={fieldLabelStyle}>Tank Levels</span>
+            <div
+              style={{ marginTop: '4px', fontSize: '12px', color: 'var(--text-default)' }}
+              data-testid="tank-level-defaults"
+            >
+              Critical below {DEFAULT_TANK_LEVEL_SETTINGS.criticalBelowPct}% · low below{' '}
+              {DEFAULT_TANK_LEVEL_SETTINGS.lowBelowPct}% of capacity
+            </div>
+            <div style={{ marginTop: '2px', fontSize: '11px', color: 'var(--text-muted)' }}>
+              Change later in Station Setup → Business Rules.
             </div>
           </div>
           <div>

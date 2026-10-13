@@ -297,6 +297,14 @@ export function canManageReportTemplates(role: Role): boolean {
   return role === 'Owner' || role === 'Manager';
 }
 
+/**
+ * Station tank-level thresholds (#520): when a tank turns low or critical on
+ * every screen. Owner and Manager only.
+ */
+export function canManageTankLevels(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager';
+}
+
 export function canViewAttendantReport(role: Role): boolean {
   return role === 'Owner' || role === 'Manager' || role === 'Accountant';
 }

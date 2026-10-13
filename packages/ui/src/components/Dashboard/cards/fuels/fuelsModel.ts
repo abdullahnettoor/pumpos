@@ -1,35 +1,18 @@
-import { formatDaysOfCover, DAYS_OF_COVER_WINDOW, shiftBusinessDate } from '@pump/shared';
-import type { DecantationView, DensityTodayProductSummary } from '@pump/shared';
+import { DAYS_OF_COVER_WINDOW, deriveTankLevel, shiftBusinessDate } from '@pump/shared';
+import type {
+  DecantationView,
+  DensityTodayProductSummary,
+  TankLevel,
+  TankLevelSettings,
+} from '@pump/shared';
 
 /**
- * Tank fill thresholds for the Fuels card (spec #505): red below 25 %, amber
- * below 40 %. Deliberately not `TANK_LEVEL` (utils/stock.ts, 15/35), which
- * drives the alerts bell and Inventory.
+ * One tank in a fuel block: the shared tank-level model (#520) — tone from the
+ * station's tank levels, the same ones the alerts bell and mobile use.
  */
-export const TANK_RED_BELOW = 25;
-export const TANK_AMBER_BELOW = 40;
-
-export type TankTone = 'red' | 'amber' | 'ok' | 'unknown';
-
-export const tankTone = (pct: number | null): TankTone =>
-  pct === null ? 'unknown' : pct < TANK_RED_BELOW ? 'red' : pct < TANK_AMBER_BELOW ? 'amber' : 'ok';
-
-export interface FuelTank {
+export interface FuelTank extends TankLevel {
   id: string;
   name: string;
-  /** 0–100+ percent of capacity; null when the tank has no capacity. */
-  pct: number | null;
-  tone: TankTone;
-  /** Tube fill 0–100. */
-  fill: number;
-  capacityKl: number;
-  /** Current stock in KL. */
-  currentKl: number;
-  /** "2.6 days"; '' when there is no sales history. */
-  cover: string;
-  /** Days of cover as a number; null when there is no sales history. */
-  coverDays: number | null;
-  waitingOnDecantation: boolean;
 }
 
 /** One row of `GET /transactions/inventory/status` (fields this card reads). */
@@ -43,31 +26,18 @@ export interface InventoryTankRow {
   waitingOnDecantation?: boolean;
 }
 
-const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-
-export function deriveFuelTanks(rows: readonly InventoryTankRow[], productId: string): FuelTank[] {
+export function deriveFuelTanks(
+  rows: readonly InventoryTankRow[],
+  productId: string,
+  tankLevels: TankLevelSettings,
+): FuelTank[] {
   return rows
     .filter((t) => t.productId === productId)
-    .map((t) => {
-      const capacity = num(t.capacity);
-      const volume = Math.max(0, num(t.currentVolume));
-      const pct = capacity > 0 ? (volume / capacity) * 100 : null;
-      return {
-        id: String(t.id),
-        name: String(t.name ?? ''),
-        pct: pct === null ? null : Math.round(pct),
-        tone: tankTone(pct),
-        fill: pct === null ? 0 : Math.min(100, pct),
-        capacityKl: capacity / 1000,
-        currentKl: volume / 1000,
-        cover: formatDaysOfCover(t.daysOfCover),
-        coverDays:
-          t.daysOfCover == null || !Number.isFinite(Number(t.daysOfCover))
-            ? null
-            : Number(t.daysOfCover),
-        waitingOnDecantation: t.waitingOnDecantation === true,
-      };
-    });
+    .map((t) => ({
+      id: String(t.id),
+      name: String(t.name ?? ''),
+      ...deriveTankLevel(t, tankLevels),
+    }));
 }
 
 export const coverFallback = `cover after ${DAYS_OF_COVER_WINDOW} days of sales`;
@@ -142,9 +112,9 @@ export function deriveDensityState(
   return { kind: 'recorded', ...base, change };
 }
 
-/** A fuel card gets the red outline for a low tank or a density jump. */
+/** A fuel card gets the red outline for a critical tank or a density jump. */
 export const needsAttention = (tanks: FuelTank[], density: DensityState | null) =>
-  tanks.some((t) => t.tone === 'red') || density?.kind === 'jump';
+  tanks.some((t) => t.tone === 'critical') || density?.kind === 'jump';
 
 /** The tanker waiting to be measured for one fuel (quantity/time may be unknown). */
 export interface PendingDecant {
@@ -183,9 +153,9 @@ export function derivePendingDecant(
   return { qtyL: known ? qty : null, since: mine[0].unloadStartedAt ?? mine[0].createdAt };
 }
 
-/** Plan purchase is offered only for a low tank with nothing waiting to decant. */
+/** Plan purchase is offered only for a critical tank with nothing waiting to decant. */
 export const shouldPlanPurchase = (tanks: FuelTank[]) =>
-  tanks.some((t) => t.tone === 'red') && !tanks.some((t) => t.waitingOnDecantation);
+  tanks.some((t) => t.tone === 'critical') && !tanks.some((t) => t.waitingOnDecantation);
 
 /**
  * Header swatch colour for a fuel, as in the prototype: Petrol (MS) brand,

@@ -3,10 +3,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CloudStationService } from '../../services/cloud.js';
 import { queryKeys, useProducts, useStations } from '../../query/hooks.js';
 import {
+  canManageTankLevels,
   DECANTATION_REFERENCE_TEMPERATURE_C,
   decantationSettingsSchema,
   resolveDecantationSettings,
+  resolveTankLevelSettings,
+  TANK_LEVEL_SETTINGS_KEY,
   Station,
+  type TankLevelSettings,
 } from '@pump/shared';
 import { ProductsCatalog } from './ProductsCatalog.js';
 import { TanksGrid } from './TanksGrid.js';
@@ -19,6 +23,7 @@ import { LoadingSpinner } from '../LoadingSpinner.js';
 import { PageHeader, Panel, Button, EmptyState, Chip, Form } from '../../pump-ds/index.js';
 import { Building2 } from 'lucide-react';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
+import { TankLevelSettingsPanel } from './TankLevelSettingsPanel.js';
 import { useRunTask } from '../../utils/runTask.js';
 
 const stationService = new CloudStationService();
@@ -59,6 +64,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
   const [activeTab, setActiveTab] = useState<
     | 'general'
     | 'business'
+    | 'rules'
     | 'decantation'
     | 'products'
     | 'tanks'
@@ -224,6 +230,26 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     }
   };
 
+  /**
+   * Tank levels colour every tank on every screen (#520). The server refuses
+   * anyone but an Owner or Manager; the station list is invalidated (not
+   * awaited) so the Dashboard, alerts and Inventory pick the change up.
+   */
+  const handleSaveTankLevels = async (tankLevels: TankLevelSettings) => {
+    if (!selectedStation) return;
+    try {
+      const updated = await stationService.updateStation(selectedStation.id, {
+        settings: { ...(selectedStation.settings || {}), [TANK_LEVEL_SETTINGS_KEY]: tankLevels },
+      });
+      onStationSelected(updated);
+      runTask(loadStations(), 'Saved, but the station list could not be refreshed.');
+      toast.success('Tank levels saved.');
+    } catch (err: any) {
+      toast.error(err.message);
+      throw err;
+    }
+  };
+
   if (loading) {
     return <LoadingSpinner text="Loading station overview..." />;
   }
@@ -249,6 +275,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
             tabs={[
               { id: 'general', label: 'General Info' },
               { id: 'business', label: 'Business & Branding' },
+              { id: 'rules', label: 'Business Rules' },
               { id: 'products', label: 'Products Catalog' },
               { id: 'tanks', label: 'Storage Tanks' },
               { id: 'dispensers', label: 'Dispenser Units' },
@@ -1055,6 +1082,15 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                   </Button>
                 </div>
               </Form>
+            )}
+
+            {activeTab === 'rules' && (
+              <TankLevelSettingsPanel
+                key={selectedStation.id}
+                value={resolveTankLevelSettings(selectedStation.settings)}
+                canEdit={canManageTankLevels(userRole)}
+                onSave={handleSaveTankLevels}
+              />
             )}
 
             {activeTab === 'products' && <ProductsCatalog selectedStation={selectedStation} />}

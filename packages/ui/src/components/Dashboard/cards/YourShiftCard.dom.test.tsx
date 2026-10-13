@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Station } from '@pump/shared';
 
 const hooks = vi.hoisted(() => ({
+  useTankLevelSettings: vi.fn(() => ({ criticalBelowPct: 25, lowBelowPct: 40 })),
   useShiftStatus: vi.fn(),
   useDashboardSummary: vi.fn(),
   useShiftTemplates: vi.fn(),

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Chip } from '../../pump-ds/index.js';
+import type { TankLevelSettings } from '@pump/shared';
 import { classifyTank, tankPct } from '../../utils/stock.js';
 
 export interface TankStatusChipsProps {
@@ -8,13 +9,15 @@ export interface TankStatusChipsProps {
     currentVolume: number | string;
     waitingOnDecantation?: boolean;
   };
+  /** The station's tank levels (`useTankLevelSettings`). */
+  tankLevels: TankLevelSettings;
 }
 
 /** Keeps the normal stock state visible alongside a pending Decantation state. */
-export const TankStatusChips: React.FC<TankStatusChipsProps> = ({ tank }) => {
+export const TankStatusChips: React.FC<TankStatusChipsProps> = ({ tank, tankLevels }) => {
   const capacity = Number(tank.capacity) || 0;
   const volume = Number(tank.currentVolume) || 0;
-  const level = classifyTank(tankPct(volume, capacity));
+  const level = classifyTank(tankPct(volume, capacity), tankLevels);
   const tone =
     level === 'critical'
       ? 'danger'

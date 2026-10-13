@@ -4,13 +4,16 @@ import {
   useInventoryItems,
   useInventoryStatus,
   useReceivables,
+  useTankLevelSettings,
 } from './hooks.js';
 import {
+  DEFAULT_TANK_LEVEL_SETTINGS,
   RECEIVABLES_AGING_EDGES,
   daysOfCoverLeft,
   deriveDuHandoverStatuses,
   type DensityTodaySummary,
   type HandoverShiftLike,
+  type TankLevelSettings,
 } from '@pump/shared';
 import { formatQty } from '../utils/format.js';
 import { tankPct, classifyTank, OVER_CAPACITY_EXPLANATION } from '../utils/stock.js';
@@ -23,8 +26,7 @@ import { tankPct, classifyTank, OVER_CAPACITY_EXPLANATION } from '../utils/stock
  * Currently covers stock health (tanks low/critical/over capacity) and oversold inventory.
  * Sync alerts are added by the consumer (they come from connection state, not
  * station data); variance/receivable alerts can be layered on by the consumer
- * from its own data. Thresholds are sensible defaults — make them
- * station-configurable later.
+ * from its own data. Tank thresholds are the station's tank levels (#520).
  */
 
 export type AlertSeverity = 'danger' | 'warning' | 'info';
@@ -162,6 +164,7 @@ export function deriveStationAlerts(
   items: any[] = [],
   shift?: ShiftAlertInput | null,
   money?: MoneyAlertInput | null,
+  tankLevels: TankLevelSettings = DEFAULT_TANK_LEVEL_SETTINGS,
 ): StationAlert[] {
   const list: StationAlert[] = [];
 
@@ -183,7 +186,7 @@ export function deriveStationAlerts(
     const vol = Number(t.currentVolume) || 0;
     if (!cap) return;
     const pct = tankPct(vol, cap);
-    const level = classifyTank(pct);
+    const level = classifyTank(pct, tankLevels);
     if (level === 'ok') return;
     list.push({
       id: `tank-${t.id}`,
@@ -251,6 +254,7 @@ export function useStationAlerts(
 ): StationAlert[] {
   const { data: tanks } = useInventoryStatus(stationId, { enabled } as any);
   const { data: items } = useInventoryItems(stationId, { enabled } as any);
+  const tankLevels = useTankLevelSettings(stationId);
   const moneyOn = !!money?.enabled && enabled && !!stationId;
   const { data: receivables } = useReceivables(stationId, { enabled: moneyOn });
   const { data: day } = useBusinessDayStatus(stationId, money?.businessDate, {
@@ -265,6 +269,6 @@ export function useStationAlerts(
           openPastDays: day?.pastOpenBusinessDays?.length ?? 0,
         }
       : null;
-    return deriveStationAlerts(tanks || [], items || [], shift, moneyInput);
-  }, [tanks, items, enabled, shift, moneyOn, receivables, day]);
+    return deriveStationAlerts(tanks || [], items || [], shift, moneyInput, tankLevels);
+  }, [tanks, items, enabled, shift, moneyOn, receivables, day, tankLevels]);
 }

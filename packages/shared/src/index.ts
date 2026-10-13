@@ -32,6 +32,7 @@ export * from './utils/stock-variance.js';
 export * from './utils/dssr-omc-card.js';
 export * from './utils/density.js';
 export * from './utils/decantation-settings.js';
+export * from './utils/tank-level.js';
 export * from './utils/decantation-flags.js';
 export * from './utils/density-form.js';
 export * from './utils/handover-status.js';

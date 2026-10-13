@@ -46,7 +46,9 @@ describe('TankGauges grid', () => {
 
   it('shows low-stock state and waiting on decantation together', () => {
     const { getByText } = render(
-      <TankGauges tanks={[{ ...tank(1), level: 'red', pct: 8, waitingOnDecantation: true }]} />,
+      <TankGauges
+        tanks={[{ ...tank(1), level: 'critical', pct: 8, waitingOnDecantation: true }]}
+      />,
     );
     expect(getByText('8%')).toBeTruthy();
     expect(getByText('Waiting on decantation')).toBeTruthy();

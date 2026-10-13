@@ -568,16 +568,25 @@ describe('Home: attention', () => {
 });
 
 describe('Home: tanks, money, removed sections', () => {
-  it('colours tank gauges red below 25% and amber below 40%', () => {
+  it('colours tank gauges critical below 25% and low below 40% by default', () => {
     const { container } = renderHome();
     const level = (title: string) =>
       screen.getByText(title).closest('[data-level]')!.getAttribute('data-level');
     expect(level('MS')).toBe('ok'); // 62%
-    expect(level('HSD')).toBe('red'); // 18%
-    expect(level('XP95')).toBe('amber'); // 35%
+    expect(level('HSD')).toBe('critical'); // 18%
+    expect(level('XP95')).toBe('low'); // 35%
     expect(container.querySelectorAll('[data-level]')).toHaveLength(3);
     expect(screen.getByText('18%')).toBeTruthy();
     expect(screen.getByText('12.4 KL')).toBeTruthy();
+  });
+
+  it('colours tank gauges by the station tank levels (#520)', () => {
+    renderHome(station({ ...IST, tankLevels: { criticalBelowPct: 20, lowBelowPct: 70 } }));
+    const level = (title: string) =>
+      screen.getByText(title).closest('[data-level]')!.getAttribute('data-level');
+    expect(level('MS')).toBe('low'); // 62%
+    expect(level('HSD')).toBe('critical'); // 18%
+    expect(level('XP95')).toBe('low'); // 35%
   });
 
   it('shows days of cover on a gauge, and nothing for a tank without sales history', () => {

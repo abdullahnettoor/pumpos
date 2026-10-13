@@ -186,3 +186,34 @@ describe('PUT /setup/stations/:id Decantation settings', () => {
     expect(savedSettings(writes)).toBeUndefined();
   });
 });
+
+describe('PUT /setup/stations/:id tank levels (#520)', () => {
+  const tankLevels = { criticalBelowPct: 15, lowBelowPct: 35 };
+
+  it.each(['Owner', 'Manager'])('lets %s save tank-level thresholds', async (role) => {
+    const { app, writes } = appAs(role);
+    const response = await put(app, { settings: { tankLevels } });
+
+    expect(response.status).toBe(200);
+    expect(savedSettings(writes)?.tankLevels).toEqual(tankLevels);
+  });
+
+  it.each(['Accountant', 'Staff'])('refuses %s and writes nothing', async (role) => {
+    const { app, writes } = appAs(role);
+    const response = await put(app, { settings: { tankLevels } });
+
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as any).error.code).toBe('FORBIDDEN');
+    expect(savedSettings(writes)).toBeUndefined();
+  });
+
+  it('rejects a critical threshold at or above low without writing', async () => {
+    const { app, writes } = appAs('Owner');
+    const response = await put(app, {
+      settings: { tankLevels: { criticalBelowPct: 40, lowBelowPct: 30 } },
+    });
+
+    expect(response.status).toBe(400);
+    expect(savedSettings(writes)).toBeUndefined();
+  });
+});

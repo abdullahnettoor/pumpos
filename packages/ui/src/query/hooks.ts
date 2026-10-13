@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   useQueryClient,
   useQuery,
@@ -25,6 +26,7 @@ import {
   CloudDesktopDownloadsService,
   type DecantationDayCloseWarnings,
 } from '../services/cloud.js';
+import { resolveTankLevelSettings, type TankLevelSettings } from '@pump/shared';
 import type {
   DensityTodaySummary,
   ShiftTemplate,
@@ -299,6 +301,19 @@ export function useStationTimeZone(stationId: string | null | undefined): string
   const { data } = useStations();
   const station = (data ?? []).find((s: any) => s.id === stationId);
   return (station?.settings as { timezone?: string } | undefined)?.timezone;
+}
+
+/**
+ * The station's tank levels (#520) from the (static, persisted) stations cache:
+ * the one source for every tank colour (Dashboard, alerts, Inventory, mobile).
+ * A station save invalidates `queryKeys.stations()`, so a change shows on every
+ * screen. Defaults (25 / 40) until the station is known.
+ */
+export function useTankLevelSettings(stationId: string | null | undefined): TankLevelSettings {
+  const { data } = useStations();
+  const station = (data ?? []).find((s: any) => s.id === stationId);
+  const settings = station?.settings;
+  return useMemo(() => resolveTankLevelSettings(settings), [settings]);
 }
 
 export function useUsers(options?: Options<any[]>) {

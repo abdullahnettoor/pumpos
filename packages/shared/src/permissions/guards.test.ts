@@ -4,6 +4,7 @@ import {
   canRecordDecantation,
   canRecordDensity,
   canManageReportTemplates,
+  canManageTankLevels,
   canOpenShift,
   canCloseShift,
   canReopenShift,
@@ -130,6 +131,16 @@ describe('canManageReportTemplates (#332)', () => {
     expect(canManageReportTemplates('Accountant')).toBe(false);
     expect(canManageReportTemplates('Staff')).toBe(false);
     expect(canManageReportTemplates('Attendant' as never)).toBe(false);
+  });
+});
+
+describe('canManageTankLevels (#520)', () => {
+  it('allows Owner and Manager only', () => {
+    expect(canManageTankLevels('Owner')).toBe(true);
+    expect(canManageTankLevels('Manager')).toBe(true);
+    expect(canManageTankLevels('Accountant')).toBe(false);
+    expect(canManageTankLevels('Staff')).toBe(false);
+    expect(canManageTankLevels('Attendant' as never)).toBe(false);
   });
 });
 

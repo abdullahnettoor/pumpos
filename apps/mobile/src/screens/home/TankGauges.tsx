@@ -2,18 +2,18 @@ import React from 'react';
 import type { TankGauge, TankGaugeLevel } from '../../lib/home/figures.js';
 
 const FILL: Record<TankGaugeLevel, string> = {
-  red: 'bg-bad',
-  amber: 'bg-warn',
+  critical: 'bg-bad',
+  low: 'bg-warn',
   ok: 'bg-good',
   unknown: 'bg-text-faint',
 };
 const TEXT: Record<TankGaugeLevel, string> = {
-  red: 'text-bad',
-  amber: 'text-warn',
+  critical: 'text-bad',
+  low: 'text-warn',
   ok: 'text-good',
   unknown: 'text-text-muted',
 };
-const STATE: Partial<Record<TankGaugeLevel, string>> = { red: 'Low', amber: 'Getting low' };
+const STATE: Partial<Record<TankGaugeLevel, string>> = { critical: 'Low', low: 'Getting low' };
 
 /** One tank takes the full width, two split it, three or more fill three columns. */
 const GAUGE_COLUMNS: Record<1 | 2 | 3, string> = {
@@ -26,7 +26,7 @@ const gaugeColumns = (count: number): string =>
 
 /**
  * A tube gauge per tank: fill, percent, volume and days of cover (when the
- * tank has sales history); red below 25%, amber below 40%.
+ * tank has sales history); coloured by the station's tank levels (#520).
  */
 export const TankGauges: React.FC<{ tanks: readonly TankGauge[] }> = ({ tanks }) => (
   <div className={`grid ${gaugeColumns(tanks.length)} gap-2 px-3`}>

@@ -5,7 +5,9 @@ import {
   canManageProduct,
   canManageInfrastructure,
   canManageReportTemplates,
+  canManageTankLevels,
   DECANTATION_SETTINGS_KEY_SET,
+  TANK_LEVEL_SETTINGS_KEY,
   decantationSettingsSchema,
   DECANTATION_SETTINGS_KEYS,
   canManageStaff,
@@ -258,6 +260,22 @@ stationSetupRouter.put(
             code: 'FORBIDDEN',
             message: 'Only an Owner or Manager can change report templates',
           },
+        },
+        403,
+      );
+    }
+    // Tank-level thresholds (#520) colour every tank on every screen: Owner and
+    // Manager only. The UpdateStation use-case enforces the same rule (and only
+    // when the value actually changes); this answers early at the edge.
+    if (
+      body.settings &&
+      TANK_LEVEL_SETTINGS_KEY in (body.settings as Record<string, unknown>) &&
+      !canManageTankLevels(user.role)
+    ) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only an Owner or Manager can change tank levels' },
         },
         403,
       );

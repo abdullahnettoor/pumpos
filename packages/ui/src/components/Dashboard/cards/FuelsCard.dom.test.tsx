@@ -6,6 +6,7 @@ import type { Station } from '@pump/shared';
 import { renderWithProviders } from '../../../test/renderWithProviders.js';
 
 const hooks = vi.hoisted(() => ({
+  useTankLevelSettings: vi.fn(() => ({ criticalBelowPct: 25, lowBelowPct: 40 })),
   usePricing: vi.fn(),
   useDensityTodaySummary: vi.fn(),
   useInventoryStatus: vi.fn(),
@@ -110,6 +111,7 @@ beforeEach(() => {
   );
   hooks.useInventoryStatus.mockReturnValue(q([TANK]));
   hooks.useDecantations.mockReturnValue(q([]));
+  hooks.useTankLevelSettings.mockReturnValue({ criticalBelowPct: 25, lowBelowPct: 40 });
 });
 afterEach(() => {
   cleanup();
@@ -175,6 +177,15 @@ describe('FuelsCard', () => {
     mount();
     expect(screen.getByText('cover after 7 days of sales')).toBeTruthy();
     expect(screen.getByTestId('fuel-MS').dataset.alert).toBe('true');
+  });
+
+  it('colours the tank by the station tank levels (#520)', () => {
+    hooks.useInventoryStatus.mockReturnValue(q([{ ...TANK, currentVolume: 4000 }])); // 20%
+    hooks.useTankLevelSettings.mockReturnValue({ criticalBelowPct: 10, lowBelowPct: 30 });
+    mount();
+    expect(hooks.useTankLevelSettings).toHaveBeenCalledWith('st-1');
+    expect(screen.getByText('20%').className).toContain('text-warning-fg');
+    expect(screen.getByTestId('fuel-MS').dataset.alert).toBe('false');
   });
 
   it('low tank with nothing pending: Plan purchase shows for Manager only', () => {
