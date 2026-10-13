@@ -3,6 +3,7 @@ import { PinnedToolbar } from '../ui/PinnedHeader.js';
 import { SegmentedControl } from '../ui/SegmentedControl.js';
 import { useNav } from '../shell/nav.js';
 import type { Station } from '@pump/shared';
+import { MONEY_TERMS } from '@pump/ui';
 import type { MoneyCustomer, MoneySupplier } from '../lib/money/parties.js';
 import { CustomerPage } from './money/CustomerPage.js';
 import { SearchField } from './money/SearchField.js';
@@ -14,8 +15,8 @@ type List = 'collect' | 'pay';
 const isList = (v: string): v is List => v === 'collect' || v === 'pay';
 
 const LISTS = [
-  { value: 'collect', label: 'To collect' },
-  { value: 'pay', label: 'To pay' },
+  { value: 'collect', label: MONEY_TERMS.receivable },
+  { value: 'pay', label: MONEY_TERMS.payable },
 ] as const;
 
 interface Props {
@@ -29,7 +30,7 @@ interface Props {
 }
 
 /**
- * Money tab: who owes you (To collect) and whom you owe (To pay). Rows open a
+ * Money tab: who owes you (Receivable) and whom you owe (Payable). Rows open a
  * detail page on the Money stack. The tab root stays mounted while a page is
  * open, so the list, search and scroll are where you left them.
  */
@@ -37,7 +38,7 @@ export const MoneyScreen: React.FC<Props> = ({ station = null, renderSupplierPag
   const nav = useNav();
   const [list, setList] = useState<List>('collect');
   const [query, setQuery] = useState('');
-  // Home's To pay tile asks for a segment (`nav.select('money', { view })`); apply each request once.
+  // Home's Payable tile asks for a segment (`nav.select('money', { view })`); apply each request once.
   const request = nav.views.money;
   const [applied, setApplied] = useState(0);
   if (request && request.seq !== applied) {

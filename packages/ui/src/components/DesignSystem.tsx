@@ -36,12 +36,23 @@ import { Menu, Popover } from './primitives/Menu.js';
 import { Banner } from './primitives/Banner.js';
 import { Drawer } from './Drawer.js';
 import { Chip } from '../pump-ds/index.js';
-import { inr, formatMoney, formatQty } from '../utils/format.js';
+import {
+  inr,
+  formatMoney,
+  formatQty,
+  formatSignedMoney,
+  signedMoneyParts,
+  formatCompactMoney,
+  formatQuantity,
+} from '../utils/format.js';
+import { MONEY_TERMS } from '../utils/moneyTerms.js';
 import {
   PumpDsButtonsPanel,
   PumpDsComponentsPanel,
   PumpDsMetricsPanel,
+  PumpDsStatusPanel,
 } from './DesignSystemPumpDs.js';
+import { DataSectionShowcase } from './DesignSystemDataSection.js';
 import { DesignSystemShellProtoPanel } from './DesignSystemShellProto.js';
 import { useRunTask } from '../utils/runTask.js';
 
@@ -904,7 +915,7 @@ const ComponentsPanel: React.FC = () => {
 
       <Section
         title="Data table"
-        description="Dense sortable table (TanStack Table) with built-in loading / empty / error states. Click a header to sort. Use for all operational lists instead of hand-rolled tables."
+        description="Dense sortable table (TanStack Table) with built-in loading / empty / error / refusal states (see Data states). Click a header to sort. Use for all operational lists instead of hand-rolled tables."
       >
         <DataTable
           columns={DEMO_COLUMNS}
@@ -915,7 +926,7 @@ const ComponentsPanel: React.FC = () => {
 
       <Section
         title="Skeletons"
-        description="Shimmer placeholders for lazy / partial loading — render the page shell immediately and swap these in for cards or rows while their data loads, instead of blocking the whole screen."
+        description="Pulsing placeholders (pump-ds Skeleton; SkeletonGrid is deprecated) for lazy / partial loading — render the page shell immediately and swap these in for cards or rows while their data loads, instead of blocking the whole screen."
       >
         <SkeletonGrid count={3} />
       </Section>
@@ -1186,7 +1197,7 @@ const DataMoneyPanel: React.FC = () => {
     <div>
       <Section
         title="Money formatter"
-        description="Always render currency via inr() — 2-decimal, grouped, ₹ prefix. Never hand-roll toLocaleString for money."
+        description="Always render currency via inr() — 2-decimal, grouped, ₹ prefix; a signed figure via formatSignedMoney (true minus, no negative zero); a quantity via formatQuantity; tiles via formatCompactMoney. Never hand-roll toLocaleString for money."
       >
         <Card>
           <table
@@ -1201,7 +1212,27 @@ const DataMoneyPanel: React.FC = () => {
                   call: 'formatMoney(1234.5, { symbol: false })',
                   out: formatMoney(1234.5, { symbol: false }),
                 },
-                { call: 'formatQty(3210.75)', out: formatQty(3210.75) },
+                {
+                  call: 'formatSignedMoney(-1200.5, { plus: true })',
+                  out: formatSignedMoney(-1200.5, { plus: true }),
+                },
+                {
+                  call: 'formatSignedMoney(85, { plus: true, symbol: false })',
+                  out: formatSignedMoney(85, { plus: true, symbol: false }),
+                },
+                {
+                  call: 'signedMoneyParts(-340, { decimals: 0 }).sign',
+                  out: signedMoneyParts(-340, { decimals: 0 }).sign,
+                },
+                { call: 'formatCompactMoney(287000)', out: formatCompactMoney(287000) },
+                { call: "formatQuantity(1240.5, 'L')", out: formatQuantity(1240.5, 'L') },
+                { call: "formatQuantity(18.46, 'KL')", out: formatQuantity(18.46, 'KL') },
+                {
+                  call: "formatQuantity(12345.678, 'L', { decimals: 3 })",
+                  out: formatQuantity(12345.678, 'L', { decimals: 3 }),
+                },
+                { call: 'MONEY_TERMS.receivable', out: MONEY_TERMS.receivable },
+                { call: 'MONEY_TERMS.owesYou', out: MONEY_TERMS.owesYou },
               ].map((r) => (
                 <tr key={r.call} style={{ borderBottom: '1px solid var(--border-soft)' }}>
                   <td style={{ padding: '6px 8px' }}>
@@ -1336,9 +1367,11 @@ const TABS = [
   { id: 'buttons', label: 'Buttons' },
   { id: 'inputs', label: 'Inputs & Forms' },
   { id: 'components', label: 'Components' },
+  { id: 'status', label: 'Status vocabulary' },
   { id: 'overlays', label: 'Overlays' },
   { id: 'feedback', label: 'Feedback' },
   { id: 'data', label: 'Data & Money' },
+  { id: 'data-states', label: 'Data states' },
   { id: 'shell-proto', label: 'Shell · proto' },
 ];
 
@@ -1366,6 +1399,7 @@ export const DesignSystem: React.FC = () => {
           <PumpDsComponentsPanel />
         </>
       )}
+      {active === 'status' && <PumpDsStatusPanel />}
       {active === 'overlays' && <OverlaysPanel />}
       {active === 'feedback' && <FeedbackPanel />}
       {active === 'data' && (
@@ -1373,6 +1407,14 @@ export const DesignSystem: React.FC = () => {
           <DataMoneyPanel />
           <PumpDsMetricsPanel />
         </>
+      )}
+      {active === 'data-states' && (
+        <Section
+          title="DataSection · states"
+          description="A region that loads its own data shows exactly one of these. Loading while a request is fetching or paused offline (a disabled query shows nothing); “Couldn't load … · Retry” for network/server faults; the server's message and no Retry for an access refusal (403 / access policy); the empty state only after success; otherwise the content. Fake queries — no network."
+        >
+          <DataSectionShowcase />
+        </Section>
       )}
       {active === 'shell-proto' && <DesignSystemShellProtoPanel />}
     </PageLayout>

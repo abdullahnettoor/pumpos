@@ -5,6 +5,7 @@
  */
 import { deriveTankLevel, formatDaysOfCover } from '@pump/shared';
 import type { TankLevelSettings, TankTone } from '@pump/shared';
+import { MONEY_TERMS } from '@pump/ui';
 import { num } from '../num.js';
 import { plural } from '../format.js';
 import { dayCashVariance, type CashVariance } from '../cashVariance.js';
@@ -47,7 +48,8 @@ export function deriveTiles(snap: Snapshot): HomeTiles {
     margin: marginTile(snap),
     credit: {
       value: num(credit.total),
-      detail: typeof credit.count === 'number' ? plural(credit.count, 'slip') : 'Receivable',
+      detail:
+        typeof credit.count === 'number' ? plural(credit.count, 'slip') : MONEY_TERMS.receivable,
       tone: num(credit.total) > 0 ? 'warn' : 'default',
     },
     purchases: {

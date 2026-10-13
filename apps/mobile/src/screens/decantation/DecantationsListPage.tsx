@@ -5,9 +5,8 @@ import {
   type DecantationView,
   type Station,
 } from '@pump/shared';
-import { isoToLocalTime, toDecantationRow, useDecantations } from '@pump/ui';
+import { isoToLocalTime, toDecantationRow, useDecantations, formatQuantity } from '@pump/ui';
 import { useDecantationNames } from '../../lib/decantation/names.js';
-import { fmtLitres } from '../../lib/decantation/format.js';
 import { decantationRoute } from '../../lib/attention/routes.js';
 import { ShellContext } from '../../shell/context.js';
 import { TankerArrivedPage } from './TankerArrivedPage.js';
@@ -84,7 +83,7 @@ export const DecantationsListPage: React.FC<{ station: Station }> = ({ station }
               r.tanks.map((t) => t.tankName).join(' + '),
               d.businessDate,
               isoToLocalTime(d.unloadStartedAt ?? d.createdAt, tz),
-              r.receivedQty != null ? fmtLitres(r.receivedQty) : null,
+              r.receivedQty != null ? formatQuantity(r.receivedQty, 'L') : null,
             ]
               .filter(Boolean)
               .join(' · ');

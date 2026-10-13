@@ -368,6 +368,8 @@ export const IncomeList: React.FC<IncomeListProps> = ({
                   columns={ledgerColumns}
                   data={filteredIncome}
                   error={incomeQ.error}
+                  title="income"
+                  onRetry={incomeQ.refetch}
                   emptyMessage="No matching income found."
                   getRowId={(r: any) => r.id}
                   initialSorting={[{ id: 'entryDate', desc: true }]}

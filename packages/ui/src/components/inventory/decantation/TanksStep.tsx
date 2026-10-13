@@ -5,7 +5,7 @@ import { Field, NumberInput, Select } from '../../primitives/Field.js';
 import { DensityCalculatorPopover } from '../../primitives/DensityCalculatorPopover.js';
 import { KV, LINE_COLORS, LineTag, Notice } from './StepSection.js';
 import { chambersAfterLineRemoved, emptyLine } from './decantationForm.js';
-import { fmtLitres } from './format.js';
+import { formatQuantity } from '../../../utils/format.js';
 import { grid, lineLabel, tankOf, SummaryCard, type StepProps } from './stepShared.js';
 
 export const TanksStep: React.FC<
@@ -87,7 +87,7 @@ export const TanksStep: React.FC<
                 label="Before dip (L)"
                 required
                 error={errs?.beforeDip?.message}
-                hint={tank ? `Book ${fmtLitres(tank.currentVolume)}` : undefined}
+                hint={tank ? `Book ${formatQuantity(tank.currentVolume, 'L')}` : undefined}
               >
                 <NumberInput
                   aria-label={`Before dip, line ${i + 1}`}
@@ -161,7 +161,7 @@ export const TanksSummary: React.FC<
           </span>
           <KV
             items={[
-              ['Before', l.beforeDip ? fmtLitres(Number(l.beforeDip)) : '—'],
+              ['Before', l.beforeDip ? formatQuantity(Number(l.beforeDip), 'L') : '—'],
               ['RO density', l.roDensity || '—'],
               ...(f
                 ? ([

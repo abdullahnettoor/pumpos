@@ -2,7 +2,7 @@ import React from 'react';
 import { Chip } from '../../../pump-ds/index.js';
 import { Field, NumberInput, TextInput } from '../../primitives/Field.js';
 import { KV, LINE_COLORS, LineTag, Notice } from './StepSection.js';
-import { fmtLitres } from './format.js';
+import { formatQuantity } from '../../../utils/format.js';
 import { grid, lineLabel, SummaryCard, type StepProps } from './stepShared.js';
 
 export const AfterStep: React.FC<StepProps> = ({ form, values, tanks, flags, review }) => {
@@ -60,7 +60,9 @@ export const AfterStep: React.FC<StepProps> = ({ form, values, tanks, flags, rev
                   />
                 </Field>
                 <Field label="Received">
-                  <div style={{ paddingTop: 8, fontWeight: 600 }}>{fmtLitres(received)}</div>
+                  <div style={{ paddingTop: 8, fontWeight: 600 }}>
+                    {formatQuantity(received, 'L')}
+                  </div>
                 </Field>
               </div>
             ) : (
@@ -86,9 +88,9 @@ export const AfterSummary: React.FC<StepProps> = ({ values, tanks, review }) => 
         {l.doAfterDip ? (
           <KV
             items={[
-              ['After', l.afterDip ? fmtLitres(Number(l.afterDip)) : '—'],
-              ['Sales during', fmtLitres(Number(l.salesDuring || 0))],
-              ['Received', fmtLitres(review.lines[i]?.received)],
+              ['After', l.afterDip ? formatQuantity(Number(l.afterDip), 'L') : '—'],
+              ['Sales during', formatQuantity(Number(l.salesDuring || 0), 'L')],
+              ['Received', formatQuantity(review.lines[i]?.received, 'L')],
             ]}
           />
         ) : (

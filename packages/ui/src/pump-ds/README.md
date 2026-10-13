@@ -28,6 +28,34 @@ a time — never in place.
 5. **Naming maps to the domain, not the catalog.** `BusinessDayPill`, not
    `DatePill4`. `StatusChip`, not `Badge12`.
 
+6. **Never show an empty state for a failed query.** "No expenses yet" when
+   the request failed tells the operator something false. A region that
+   loads its own data goes in a `DataSection` (`data-section/`), given the
+   query results themselves:
+   - **loading** only while `isPending && fetchStatus !== 'idle'` — a skeleton.
+     A query paused offline (`fetchStatus: 'paused'`) is still loading, never
+     empty. Don't key on `isLoading`: it is false for a paused query.
+   - **not yet requested** (`isPending`, `fetchStatus: 'idle'` — disabled or
+     waiting on a dependency; TanStack v5 keeps it pending forever) renders
+     nothing, or the skeleton when `enabled` is passed `true`.
+   - **refused** (403 / `FORBIDDEN`, or `isAccessPolicyError`:
+     `CAPABILITY_NOT_ENTITLED`, `LIMIT_REACHED`, `SUBSCRIPTION_RESTRICTED`,
+     `ORGANIZATION_SUSPENDED`) shows the server's refusal message and **no
+     Retry** — retrying can't change the answer. Only when every failure is a
+     refusal.
+   - **failed** (any other failure, even mixed with refusals) shows "Couldn't
+     load <title> · Retry" (Retry refetches only the failed queries that can be
+     retried, never the refused ones).
+   - **empty** only after every query succeeded with nothing to show,
+     otherwise the content.
+
+   One section failing never blanks the page. `shape="card"` frames every
+   state in a Panel, `shape="cards"` frames only loading/error (for content
+   that is itself bordered cards), `shape="bare"` adds no frame for a
+   table/list region (`DataTable` does this itself; pass it `title`,
+   `error={q.error}` and `onRetry={q.refetch}`). Gate with `enabled`, and give
+   the queries the same flag so a hidden section sends no request.
+
 ## Load order (apps must follow this)
 
 ```ts

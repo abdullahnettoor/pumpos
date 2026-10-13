@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowLeft, Printer, Download, AlertTriangle, Info } from 'lucide-react';
 import { Button } from '../pump-ds/index.js';
-import { formatDateTime, formatMoney, inr } from '../utils/format.js';
+import { formatDateTime, formatSignedMoney, inr } from '../utils/format.js';
 import { ReportNote } from './reports/ReportNote.js';
 import { useRunTask } from '../utils/runTask.js';
 import { readDssrOmcCard, shiftDisplayLabel } from '@pump/shared';
@@ -1023,7 +1023,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
                   >
                     {shift.attendantVariance == null
                       ? '—'
-                      : `${Number(shift.attendantVariance) > 0 ? '+' : ''}${formatMoney(Number(shift.attendantVariance), { symbol: false })}`}
+                      : formatSignedMoney(shift.attendantVariance, { symbol: false, plus: true })}
                   </td>
                   <td
                     style={{
@@ -1034,8 +1034,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
                       fontFamily: 'var(--font-mono)',
                     }}
                   >
-                    {variance > 0 ? '+' : ''}
-                    {formatMoney(variance, { symbol: false })}
+                    {formatSignedMoney(variance, { symbol: false, plus: true })}
                   </td>
                 </tr>
               );
@@ -1086,8 +1085,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
                         color: v < 0 ? 'var(--brand-danger)' : 'var(--text-default)',
                       }}
                     >
-                      {v > 0 ? '+' : ''}
-                      {formatMoney(v, { symbol: false })}
+                      {formatSignedMoney(v, { symbol: false, plus: true })}
                     </td>
                   </tr>
                 );

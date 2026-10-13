@@ -61,7 +61,7 @@ describe('tiles', () => {
   it('purchased: value, purchase count and litres', () => {
     expect(purchasedTile({ purchased: 2072200, purchaseCount: 2, quantity: 22000 })).toEqual({
       label: 'Purchased this month',
-      value: '₹20.72L',
+      value: '₹20,72,200',
       sub: '2 purchases · 22,000 L',
     });
   });
@@ -76,7 +76,7 @@ describe('tiles', () => {
         { paid: 980000 },
         { amount: 980000, entryDate: '2026-10-06', method: 'BANK', fundingAccountName: 'SBI' },
       ),
-    ).toEqual({ label: 'Paid this month', value: '₹9.8L', sub: 'Last: 6 Oct · Bank' });
+    ).toEqual({ label: 'Paid this month', value: '₹9,80,000', sub: 'Last: 6 Oct · Bank' });
     expect(
       paidThisMonthTile(
         { paid: 1 },
@@ -117,9 +117,9 @@ describe('purchases by product', () => {
     ).toBe('500 L');
   });
 
-  it('formats the quantity with its unit and the value compactly', () => {
+  it('formats the quantity with its unit and the exact value', () => {
     expect(
       productRows([{ productId: 'p', name: 'HSD', unit: 'L', quantity: 12000, value: 1043200 }]),
-    ).toEqual([{ productId: 'p', name: 'HSD', quantity: '12,000 L', value: '₹10.43L' }]);
+    ).toEqual([{ productId: 'p', name: 'HSD', quantity: '12,000 L', value: '₹10,43,200' }]);
   });
 });

@@ -5,7 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 /**
- * Money tab: To collect / To pay lists and the Customer page. `@pump/ui` is the
+ * Money tab: Receivable / Payable lists and the Customer page. `@pump/ui` is the
  * mock seam for the customers / suppliers lists and the customer ledger, as in
  * the other mobile screen tests.
  */
@@ -231,7 +231,7 @@ const receivableRow = (customerId: string, balance: number, days: number | null)
   aging: { d0_7: balance, d8_30: 0, d30plus: 0 },
 });
 
-describe('To collect with the receivables summary', () => {
+describe('Receivable with the receivables summary', () => {
   const summary = () => ({
     total: 590400,
     customerCount: 6,
@@ -248,11 +248,11 @@ describe('To collect with the receivables summary', () => {
     receivables.list = summary();
     mount({ station: STATION });
     const split = screen.getByTestId('aging-split');
-    expect(within(split).getByText('₹2.87L')).toBeTruthy();
+    expect(within(split).getByText('₹2,87,000')).toBeTruthy();
     expect(within(split).getByText('0–7 days')).toBeTruthy();
-    expect(within(split).getByText('₹2.11L')).toBeTruthy();
+    expect(within(split).getByText('₹2,11,000')).toBeTruthy();
     expect(within(split).getByText('8–30 days')).toBeTruthy();
-    expect(within(split).getByText('₹1.84L')).toBeTruthy();
+    expect(within(split).getByText('₹1,84,000')).toBeTruthy();
     expect(within(split).getByText('30+ days')).toBeTruthy();
     // Sits inside the hero, under the total.
     expect(screen.getByText('Receivables · 6 customers').closest('section')!.contains(split)).toBe(
@@ -285,7 +285,7 @@ describe('To collect with the receivables summary', () => {
     expect(tone('Calicut Cabs')).toBe('muted');
     expect(within(row('Sree Transports')).getByText('Oldest today')).toBeTruthy();
     expect(row('KTC Logistics').getAttribute('aria-label')).toBe(
-      'KTC Logistics, ₹2,14,600.00 owed, over limit, oldest 32 days',
+      'KTC Logistics, Owes you ₹2,14,600.00, over limit, oldest 32 days',
     );
   });
 
@@ -327,7 +327,7 @@ describe('To collect with the receivables summary', () => {
   });
 });
 
-describe('To collect', () => {
+describe('Receivable', () => {
   it('shows the receivable total and customer count, largest balance first', () => {
     mount();
     // 61400+214600+128900+84300+96200+5000 (advances and settled do not count)
@@ -378,12 +378,14 @@ describe('To collect', () => {
   it('labels each row for assistive tech and hides the bar inside the button', () => {
     mount();
     expect(row('KTC Logistics').getAttribute('aria-label')).toBe(
-      'KTC Logistics, ₹2,14,600.00 owed, over limit',
+      'KTC Logistics, Owes you ₹2,14,600.00, over limit',
     );
     expect(row('Malabar Travels').getAttribute('aria-label')).toBe(
-      'Malabar Travels, ₹1,28,900.00 owed, near limit',
+      'Malabar Travels, Owes you ₹1,28,900.00, near limit',
     );
-    expect(row('Calicut Cabs').getAttribute('aria-label')).toBe('Calicut Cabs, ₹61,400.00 owed');
+    expect(row('Calicut Cabs').getAttribute('aria-label')).toBe(
+      'Calicut Cabs, Owes you ₹61,400.00',
+    );
     for (const b of screen.getAllByRole('button').filter((b) => b.querySelector('[data-tone]'))) {
       expect(within(b).queryByRole('progressbar')).toBeNull();
       expect(b.querySelector('[data-tone]')!.getAttribute('aria-hidden')).toBe('true');
@@ -398,13 +400,13 @@ describe('To collect', () => {
 
   it('describes a row as type and limit', () => {
     mount();
-    expect(within(row('KTC Logistics')).getByText('Fleet · limit ₹2L')).toBeTruthy();
-    expect(within(row('Govt Hospital')).getByText('Credit · limit ₹1L')).toBeTruthy();
+    expect(within(row('KTC Logistics')).getByText('Fleet · limit ₹2,00,000')).toBeTruthy();
+    expect(within(row('Govt Hospital')).getByText('Credit · limit ₹1,00,000')).toBeTruthy();
   });
 });
 
-describe('To pay', () => {
-  const toPay = () => fireEvent.click(screen.getByRole('radio', { name: 'To pay' }));
+describe('Payable', () => {
+  const toPay = () => fireEvent.click(screen.getByRole('radio', { name: 'Payable' }));
 
   it('shows the payable total and supplier count, with no due-date text', () => {
     mount();
@@ -422,7 +424,7 @@ describe('To pay', () => {
     fireEvent.change(screen.getByLabelText('Search suppliers'), { target: { value: 'square' } });
     expect(screen.getByText('Square Deal')).toBeTruthy();
     expect(screen.queryByText('HPCL Kozhikode Depot')).toBeNull();
-    fireEvent.click(screen.getByRole('radio', { name: 'To collect' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Receivable' }));
     expect((screen.getByLabelText('Search customers') as HTMLInputElement).value).toBe('');
   });
 
@@ -440,8 +442,8 @@ describe('To pay', () => {
   });
 });
 
-describe('To pay with the payables summary', () => {
-  const toPay = () => fireEvent.click(screen.getByRole('radio', { name: 'To pay' }));
+describe('Payable with the payables summary', () => {
+  const toPay = () => fireEvent.click(screen.getByRole('radio', { name: 'Payable' }));
   const summary = () => ({
     total: 1081600,
     supplierCount: 2,
@@ -470,8 +472,10 @@ describe('To pay with the payables summary', () => {
     toPay();
     const hero = screen.getByText('Payables · 2 suppliers').closest('section') as HTMLElement;
     expect(within(hero).getByText('₹10,81,600.00')).toBeTruthy();
-    expect(within(hero).getByText('Paid this month').nextSibling?.textContent).toBe('₹10.2L');
-    expect(within(hero).getByText('Purchased this month').nextSibling?.textContent).toBe('₹21.4L');
+    expect(within(hero).getByText('Paid this month').nextSibling?.textContent).toBe('₹10,20,000');
+    expect(within(hero).getByText('Purchased this month').nextSibling?.textContent).toBe(
+      '₹21,40,000',
+    );
   });
 
   it('says which month each figure covers only when the two differ', () => {
@@ -1057,7 +1061,7 @@ describe('Supplier page', () => {
     mount({
       station: STATION,
       renderSupplierPage: (s) => <SupplierPage supplier={s} station={STATION as any} />,
-    }) && fireEvent.click(screen.getByRole('radio', { name: 'To pay' }));
+    }) && fireEvent.click(screen.getByRole('radio', { name: 'Payable' }));
   const openSupplier = (name: string) => {
     mountSupplier();
     fireEvent.change(screen.getByLabelText('Search suppliers'), { target: { value: name } });
@@ -1072,7 +1076,7 @@ describe('Supplier page', () => {
     ...over,
   });
 
-  it('opens from a To pay row with GSTIN, vendor code, call button and the amount owed', () => {
+  it('opens from a Payable row with GSTIN, vendor code, call button and the amount owed', () => {
     suppliers.push(
       sup({
         name: 'Indus Fuels',
@@ -1180,10 +1184,10 @@ describe('Supplier page', () => {
       openSupplier('HPCL');
       const tiles = within(screen.getByRole('group', { name: 'This month' }));
       expect(tiles.getByText('Purchased this month')).toBeTruthy();
-      expect(tiles.getByText('₹20.72L')).toBeTruthy();
+      expect(tiles.getByText('₹20,72,200')).toBeTruthy();
       expect(tiles.getByText('2 purchases · 22,000 L')).toBeTruthy();
       expect(tiles.getByText('Paid this month')).toBeTruthy();
-      expect(tiles.getByText('₹9.8L')).toBeTruthy();
+      expect(tiles.getByText('₹9,80,000')).toBeTruthy();
       expect(tiles.getByText('Last: 6 Oct · Bank')).toBeTruthy();
     });
 
@@ -1212,7 +1216,7 @@ describe('Supplier page', () => {
       const items = list.getAllByRole('listitem').map((li) => li.textContent);
       expect(items[0]).toContain('HSD');
       expect(items[0]).toContain('12,000 L');
-      expect(items[0]).toContain('₹10.43L');
+      expect(items[0]).toContain('₹10,43,200');
       expect(items[1]).toContain('MS');
       expect(items[1]).toContain('10,000 L');
     });
@@ -1447,17 +1451,17 @@ describe('Supplier page', () => {
       await new Promise((r) => setTimeout(r, 30));
     });
     // (this harness remounts the root; the shell keeps it mounted)
-    expect(screen.getByRole('radio', { name: 'To pay' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Payable' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'HPCL Kozhikode Depot' })).toBeNull();
   });
 
-  it('opens on To collect, and on To pay when Home asks for it (once per request)', () => {
+  it('opens on Receivable, and on Payable when Home asks for it (once per request)', () => {
     mount();
     expect(screen.getByPlaceholderText('Search customers')).toBeTruthy();
     act(() => holder.nav.select('money', { view: 'pay' }));
     expect(screen.getByPlaceholderText('Search suppliers')).toBeTruthy();
     // The user switches back by hand; a plain tab select does not re-apply the old request.
-    fireEvent.click(screen.getByRole('radio', { name: 'To collect' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Receivable' }));
     act(() => holder.nav.select('money'));
     expect(screen.getByPlaceholderText('Search customers')).toBeTruthy();
     // A second request for the same view applies again.

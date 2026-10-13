@@ -132,7 +132,7 @@ describe('DecantationsTab', () => {
     expect(within(rowA).getByText(/Tank 2/)).toBeTruthy();
     expect(within(rowA).getByText(/Tank 3/)).toBeTruthy();
     expect(within(rowA).getByText('Pending measurement')).toBeTruthy();
-    expect(within(rowA).getByText('12,000 L')).toBeTruthy();
+    expect(within(rowA).getByText('12,000.00 L')).toBeTruthy();
     // MS purchase is not linked; HSD is.
     expect(within(rowA).getByText(/Purchase not linked/)).toBeTruthy();
     expect(screen.getAllByRole('row').length).toBe(3); // header + 2 visits
@@ -143,7 +143,7 @@ describe('DecantationsTab', () => {
     const rowB = screen.getByText('KL-07-B').closest('tr')!;
     expect(within(rowB).getByText('Measured')).toBeTruthy();
     expect(within(rowB).getByText(/Short/)).toBeTruthy();
-    expect(within(rowB).getByText(/100 L/)).toBeTruthy();
+    expect(within(rowB).getByText(/100.00 L/)).toBeTruthy();
     expect(within(rowB).getByText(/\+5(\.0)? kg\/m³/)).toBeTruthy();
     expect(within(rowB).getByText(/Tanker short/)).toBeTruthy();
   });

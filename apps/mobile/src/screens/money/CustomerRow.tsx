@@ -1,6 +1,6 @@
 import React from 'react';
-import { inr } from '@pump/ui';
-import { compactRupees } from '../../lib/format.js';
+import { inr, MONEY_TERMS } from '@pump/ui';
+import { rupees } from '../../lib/format.js';
 import { limitOf, standing, type MoneyCustomer, type Standing } from '../../lib/money/parties.js';
 import { oldestCaption } from '../../lib/money/receivables.js';
 import { Avatar } from '../../ui/Avatar.js';
@@ -8,27 +8,25 @@ import { ChevronRightIcon } from '../../ui/icons.js';
 import { BalanceFigure } from './BalanceFigure.js';
 import { LimitBar } from './LimitBar.js';
 
-/** "Fleet · limit ₹2L", or just the type when no limit is set. */
+/** "Fleet · limit ₹2,00,000", or just the type when no limit is set. */
 const metaOf = (c: MoneyCustomer): string => {
   const limit = limitOf(c);
-  return [c.customerType, limit ? `limit ${compactRupees(limit)}` : null]
-    .filter(Boolean)
-    .join(' · ');
+  return [c.customerType, limit ? `limit ${rupees(limit)}` : null].filter(Boolean).join(' · ');
 };
 
-/** What a screen reader hears for the whole row: "KTC, ₹2,14,600.00 owed, over limit". */
+/** What a screen reader hears for the whole row: "KTC, Owes you ₹2,14,600.00, over limit". */
 const spokenLabel = (name: string, s: Standing, oldest: string | null): string => {
   const money =
     s.state === 'advance'
-      ? `${inr(-s.balance)} advance`
+      ? `${MONEY_TERMS.advance} ${inr(-s.balance)}`
       : s.state === 'settled'
         ? 'settled'
-        : `${inr(s.balance)} owed`;
+        : `${MONEY_TERMS.owesYou} ${inr(s.balance)}`;
   const limit = s.state === 'over' ? 'over limit' : s.state === 'near' ? 'near limit' : null;
   return [name, money, limit, oldest?.toLowerCase()].filter(Boolean).join(', ');
 };
 
-/** One To collect row: avatar, name, type and limit, balance (red over the limit), how long the oldest debt has waited, and the limit bar. */
+/** One Receivable row: avatar, name, type and limit, balance (red over the limit), how long the oldest debt has waited, and the limit bar. */
 export const CustomerRow: React.FC<{
   customer: MoneyCustomer;
   onPress: () => void;

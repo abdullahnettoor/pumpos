@@ -1,6 +1,5 @@
 import React from 'react';
-import { emptyChamber } from '@pump/ui';
-import { fmtLitres } from '../../lib/decantation/format.js';
+import { emptyChamber, formatQuantity } from '@pump/ui';
 import type { Visit } from '../../lib/decantation/useVisit.js';
 import {
   AddButton,
@@ -54,7 +53,11 @@ export const TankerStep: React.FC<{ visit: Visit; showErrors: boolean }> = ({
           <option value="">Not linked yet</option>
           {options.map((o) => (
             <option key={o.purchaseId} value={o.purchaseId}>
-              {[o.invoiceNumber ?? o.documentNumber, o.supplierName, fmtLitres(o.invoiceQty)]
+              {[
+                o.invoiceNumber ?? o.documentNumber,
+                o.supplierName,
+                formatQuantity(o.invoiceQty, 'L'),
+              ]
                 .filter(Boolean)
                 .join(' · ')}
             </option>
@@ -122,7 +125,9 @@ export const TanksStep: React.FC<{ visit: Visit; showErrors: boolean }> = ({
               ariaLabel={`Before dip (L) tank ${i + 1}`}
               value={l.beforeDip}
               meta={
-                tank?.currentVolume != null ? `Book ${fmtLitres(tank.currentVolume)}` : undefined
+                tank?.currentVolume != null
+                  ? `Book ${formatQuantity(tank.currentVolume, 'L')}`
+                  : undefined
               }
               error={showErrors ? err?.beforeDip : undefined}
               onChange={(x) => v.setLine(i, { beforeDip: x })}

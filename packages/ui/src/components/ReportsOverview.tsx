@@ -17,8 +17,16 @@ import { ProfitLossView } from './reports/ProfitLossView.js';
 import { AttendantHandoverReportPanel } from './reports/AttendantHandoverReportPanel.js';
 import { DecantationReportPanel } from './reports/DecantationReportPanel.js';
 import { useCapability } from '../access/CapabilityGate.js';
-import { ATTENDANT_REPORT_CAPABILITY, canViewAttendantReport, canViewReports } from '@pump/shared';
-import { inr } from '../utils/format.js';
+import {
+  ATTENDANT_REPORT_CAPABILITY,
+  deriveDssrRangeKpis,
+  readDssrCashSales,
+  readDssrNetVolume,
+  readSnapshot,
+  canViewAttendantReport,
+  canViewReports,
+} from '@pump/shared';
+import { formatQty, inr } from '../utils/format.js';
 import { resolveBusinessDate } from '@pump/shared';
 import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText } from '../pump-ds/index.js';
 import { Play, Zap } from 'lucide-react';
@@ -45,15 +53,26 @@ const dssrColumns: ColumnDef<any, any>[] = [
     id: 'volume',
     header: 'Net Volume Sold',
     cell: ({ row }) => {
-      const snap = row.original.snapshotData || {};
-      const bp = (snap.fuel?.byProduct || []) as any[];
-      const units = Array.from(new Set(bp.map((p: any) => p.unit || 'L')));
-      const vol = Number(snap.fuel?.totalNetVolume ?? snap.totalVolumeSold ?? 0);
-      const label = units.length === 1 ? units[0] : units.length > 1 ? '' : 'L';
+      const perUnit = Object.entries(readDssrNetVolume(readSnapshot(row.original)));
+      const label =
+        perUnit.map(([unit, qty]) => formatQty(qty, 2, unit)).join(' · ') || formatQty(0, 2, 'L');
       return (
         <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
-          {vol.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          {label ? ` ${label}` : ''}
+          {label}
+        </span>
+      );
+    },
+  },
+  {
+    // Per-day source of the "Cash sales" tile. Days frozen before #516 carry no
+    // figure and read "—" until regenerated, never ₹0.
+    id: 'cashSales',
+    header: 'Cash sales',
+    cell: ({ row }) => {
+      const cash = readDssrCashSales(readSnapshot(row.original));
+      return (
+        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
+          {cash == null ? '—' : inr(cash)}
         </span>
       );
     },
@@ -146,16 +165,8 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
   // dependency list a new array on every render while the query is loading.
   const dssrList = useMemo(() => dssrQ.data ?? [], [dssrQ.data]);
 
-  const kpis = useMemo(() => {
-    let volume = 0;
-    let cash = 0;
-    for (const d of dssrList) {
-      const x = d.snapshotData || {};
-      volume += Number(x.totalVolumeSold || 0);
-      cash += Number(x.totalCashCollections || 0);
-    }
-    return { count: dssrList.length, volume, cash };
-  }, [dssrList]);
+  // Read through the shared DSSR reader (#516): the component never sums raw keys.
+  const kpis = useMemo(() => deriveDssrRangeKpis(dssrList), [dssrList]);
 
   // Deep-link: opening a past business day from the top-bar anchor dropdown.
   // Uses the on-the-fly preview so it works whether or not a snapshot exists.
@@ -170,6 +181,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
     if (handledTokenRef.current === intentToken) return;
     handledTokenRef.current = intentToken;
     let cancelled = false;
+    let settled = false;
     runTask(
       (async () => {
         try {
@@ -180,16 +192,25 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
           // operator can generate one.
           if (!cancelled) setSelectedDate(date);
         } finally {
-          // Commit the tab before dropping the intent that derived it, or a
-          // Reports page already on another report snaps back to it.
-          setSelectedTab('daily-dssr');
-          clearNavIntent();
+          // Cancelled: the operator moved on (another report, another deep
+          // link) while this loaded — committing the DSSR tab would snap them
+          // back. Whoever cancelled owns the tab and the intent now.
+          if (!cancelled) {
+            // Commit the tab before dropping the intent that derived it, or a
+            // Reports page already on another report snaps back to it.
+            setSelectedTab('daily-dssr');
+            clearNavIntent();
+          }
+          settled = true;
         }
       })(),
       'Could not open the report for that day.',
     );
     return () => {
       cancelled = true;
+      // Re-run (StrictMode, a new runTask) while still loading: let the next
+      // effect pick the same intent up instead of leaving it pending forever.
+      if (!settled) handledTokenRef.current = null;
     };
   }, [intent?.openDssrDate, intentToken, stationId, runTask]);
 
@@ -294,14 +315,20 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
                 <KpiTile
                   dot="info"
                   label="Net Volume Sold"
-                  value={`${kpis.volume.toLocaleString('en-IN', { maximumFractionDigits: 0 })} L`}
+                  value={kpis.volumeLabel}
                   hint="period"
                 />
+                {/* Cash received for sales by shift Drawers. Collections are Office
+                    Records (ADR 0005) and live in the Daily Cash Book. */}
                 <KpiTile
                   dot="success"
-                  label="Cash Collected"
-                  value={inr(kpis.cash)}
-                  hint="period"
+                  label="Cash sales"
+                  value={kpis.cashSales == null ? '—' : inr(kpis.cashSales)}
+                  hint={
+                    kpis.daysWithoutCash > 0
+                      ? `${kpis.daysWithoutCash} older ${kpis.daysWithoutCash === 1 ? 'day' : 'days'} not counted`
+                      : 'period'
+                  }
                 />
               </KpiStrip>
 
@@ -368,6 +395,8 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
                     columns={dssrColumns}
                     data={dssrList}
                     error={dssrQ.error}
+                    title="daily reports"
+                    onRetry={dssrQ.refetch}
                     emptyMessage="No daily DSSR reports."
                     getRowId={(r: any) => r.id}
                     onRowClick={(r: any) => setActiveDailyDssr(r)}

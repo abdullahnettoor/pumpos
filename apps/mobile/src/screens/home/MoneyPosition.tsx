@@ -1,10 +1,11 @@
 import React from 'react';
+import { MONEY_TERMS } from '@pump/ui';
 import { compactRupees } from '../../lib/format.js';
 import type { MoneyPosition as Money } from '../../lib/home/figures.js';
 import { useNav } from '../../shell/nav.js';
 import { StatTile } from '../../ui/index.js';
 
-/** To collect / To pay: each opens Money on its own segment (when the Role has it). */
+/** Receivable / Payable: each opens Money on its own segment (when the Role has it). */
 export const MoneyPosition: React.FC<{ money: Money }> = ({ money }) => {
   const nav = useNav();
   const canOpen = nav.tabs.includes('money');
@@ -36,8 +37,8 @@ export const MoneyPosition: React.FC<{ money: Money }> = ({ money }) => {
   };
   return (
     <div className="grid grid-cols-2 gap-2 px-3">
-      {tile('To collect', money.toCollect, 'warn', 'collect')}
-      {tile('To pay', money.toPay, 'default', 'pay')}
+      {tile(MONEY_TERMS.receivable, money.toCollect, 'warn', 'collect')}
+      {tile(MONEY_TERMS.payable, money.toPay, 'default', 'pay')}
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import React from 'react';
-import { Chip } from '../../../pump-ds/index.js';
+import { Chip, VarianceChip } from '../../../pump-ds/index.js';
 import { KV, LineTag, Notice } from './StepSection.js';
-import { fmtLitres, fmtSignedLitres } from './format.js';
+import { formatQuantity } from '../../../utils/format.js';
 import { lineLabel, type StepProps } from './stepShared.js';
 
 export const ReviewStep: React.FC<StepProps> = ({ values, tanks, flags, review }) => (
@@ -16,18 +16,24 @@ export const ReviewStep: React.FC<StepProps> = ({ values, tanks, flags, review }
           <KV
             items={[
               ['Product', tanks.find((t) => t.productId === inv.productId)?.productName ?? '—'],
-              ['Invoice', fmtLitres(inv.invoiceQty)],
-              ['Received', inv.received != null ? fmtLitres(inv.received) : 'Pending measurement'],
+              ['Invoice', formatQuantity(inv.invoiceQty, 'L')],
+              [
+                'Received',
+                inv.received != null ? formatQuantity(inv.received, 'L') : 'Pending measurement',
+              ],
               [
                 'Variance',
                 inv.variance == null ? (
                   '—'
                 ) : (
-                  <Chip size="sm" tone={inv.outOfTolerance ? 'danger' : 'success'}>
-                    {inv.variance === 0
-                      ? 'Matches'
-                      : `${inv.variance > 0 ? 'Excess' : 'Short'} ${fmtSignedLitres(inv.variance)}`}
-                  </Chip>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <VarianceChip size="sm" kind="stock" amount={inv.variance} />
+                    {inv.outOfTolerance && (
+                      <Chip size="sm" tone="danger">
+                        Out of tolerance
+                      </Chip>
+                    )}
+                  </span>
                 ),
               ],
             ]}
@@ -51,9 +57,12 @@ export const ReviewStep: React.FC<StepProps> = ({ values, tanks, flags, review }
             </span>
             <KV
               items={[
-                ['Before', fmtLitres(r?.beforeDip)],
-                ['Received', r?.received != null ? fmtLitres(r.received) : 'Pending'],
-                ['Stock after', r?.afterDip != null ? fmtLitres(r.afterDip) : 'Next Tank Dip'],
+                ['Before', formatQuantity(r?.beforeDip, 'L')],
+                ['Received', r?.received != null ? formatQuantity(r.received, 'L') : 'Pending'],
+                [
+                  'Stock after',
+                  r?.afterDip != null ? formatQuantity(r.afterDip, 'L') : 'Next Tank Dip',
+                ],
               ]}
             />
           </div>

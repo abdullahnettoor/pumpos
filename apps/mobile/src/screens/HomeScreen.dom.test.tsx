@@ -472,7 +472,7 @@ describe('Home: tiles', () => {
     expect(variance.getByText('Office count')).toBeTruthy();
     expect(variance.getByText('₹0').className).toContain('text-good');
     expect(variance.getByText('1 closed Shift')).toBeTruthy();
-    expect(within(tile('Gross margin')).getByText('₹21,720')).toBeTruthy();
+    expect(within(tile('Gross margin')).getByText('₹21.7k')).toBeTruthy();
     expect(within(tile('Credit sales')).getByText('4 slips')).toBeTruthy();
     expect(within(tile('Purchases')).getByText('1 purchase')).toBeTruthy();
     expect(within(tile('Purchases')).getByText('₹10.43L')).toBeTruthy();
@@ -598,20 +598,22 @@ describe('Home: tanks, money, removed sections', () => {
     expect(within(gauge('XP95')).queryByText(/day/)).toBeNull();
   });
 
-  it('opens Money from To collect and To pay', () => {
+  it('opens Money from Receivable and Payable', () => {
     renderHome();
-    const collect = screen.getByText('To collect').closest('button')!;
+    const collect = screen.getByText('Receivable').closest('button')!;
     expect(within(collect).getByText('₹6.82L')).toBeTruthy();
     expect(within(collect).getByText('2 customers to collect')).toBeTruthy();
     fireEvent.click(collect);
     expect(nav.active).toBe('money');
-    expect(within(screen.getByText('To pay').closest('button')!).getByText('₹10.43L')).toBeTruthy();
+    expect(
+      within(screen.getByText('Payable').closest('button')!).getByText('₹10.43L'),
+    ).toBeTruthy();
     expect(nav.views.money?.view).toBe('collect');
   });
 
-  it('opens Money on its To pay segment from the To pay tile', () => {
+  it('opens Money on its Payable segment from the Payable tile', () => {
     renderHome();
-    fireEvent.click(screen.getByText('To pay').closest('button')!);
+    fireEvent.click(screen.getByText('Payable').closest('button')!);
     expect(nav.active).toBe('money');
     expect(nav.views.money?.view).toBe('pay');
   });

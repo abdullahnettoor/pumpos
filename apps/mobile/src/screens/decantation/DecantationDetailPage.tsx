@@ -7,12 +7,13 @@ import {
   useLinkablePurchases,
   useLinkDecantationPurchase,
   useToast,
+  formatQuantity,
 } from '@pump/ui';
 import { resolveDecantationSettings } from '@pump/shared';
 import { useDecantationNames } from '../../lib/decantation/names.js';
-import { fmtLitres, fmtSignedLitres } from '../../lib/decantation/format.js';
 import { BottomSheet, DetailPage, StateCard, StatusBadge } from '../../ui/index.js';
 import { STATUS_BADGE } from './DecantationsListPage.js';
+import { StockVariance } from '../../components/decantation/FinishSteps.js';
 
 /**
  * Read-only view of a recorded visit (a finished one is sealed), with the one
@@ -87,14 +88,14 @@ export const DecantationDetailPage: React.FC<{ station: Station; decantationId: 
                 {t.tankName} · {t.productName}
               </span>
               <span className="num block text-[12px] text-text-muted">
-                Before dip {fmtLitres(t.beforeDip)}
+                Before dip {formatQuantity(t.beforeDip, 'L')}
               </span>
             </span>
             {t.receivedQty == null ? (
               <StatusBadge tone="info">Pending measurement</StatusBadge>
             ) : (
               <span className="num text-[12.5px] font-semibold text-text-high">
-                +{fmtLitres(t.receivedQty)}
+                +{formatQuantity(t.receivedQty, 'L')}
               </span>
             )}
           </div>
@@ -112,7 +113,7 @@ export const DecantationDetailPage: React.FC<{ station: Station; decantationId: 
                 </span>
                 <span className="num block truncate text-[12px] text-text-muted">
                   {l
-                    ? [l.invoiceNumber, l.supplierName, fmtLitres(l.invoiceQty)]
+                    ? [l.invoiceNumber, l.supplierName, formatQuantity(l.invoiceQty, 'L')]
                         .filter(Boolean)
                         .join(' · ')
                     : 'Purchase not linked'}
@@ -120,9 +121,7 @@ export const DecantationDetailPage: React.FC<{ station: Station; decantationId: 
               </span>
               {l ? (
                 l.varianceQty != null ? (
-                  <StatusBadge tone="good" num>
-                    {fmtSignedLitres(l.varianceQty)}
-                  </StatusBadge>
+                  <StockVariance variance={l.varianceQty} />
                 ) : null
               ) : (
                 <button
@@ -157,7 +156,9 @@ export const DecantationDetailPage: React.FC<{ station: Station; decantationId: 
                 {o.invoiceNumber ?? o.documentNumber}
               </span>
               <span className="num block text-[12px] text-text-muted">
-                {[o.supplierName, o.entryDate, fmtLitres(o.invoiceQty)].filter(Boolean).join(' · ')}
+                {[o.supplierName, o.entryDate, formatQuantity(o.invoiceQty, 'L')]
+                  .filter(Boolean)
+                  .join(' · ')}
               </span>
             </button>
           ))}
