@@ -28,6 +28,37 @@ a time — never in place.
 5. **Naming maps to the domain, not the catalog.** `BusinessDayPill`, not
    `DatePill4`. `StatusChip`, not `Badge12`.
 
+## Style check
+
+`classGuard.test.ts` scans every source file in `packages/ui/src` (tests
+excluded) and counts, per file:
+
+| Rule             | Flags                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| `dead-class`     | Tailwind classes that generate no CSS (`bg-line`, `text-accent`)                     |
+| `undefined-var`  | `var(--x)` where `--x` is defined nowhere                                            |
+| `raw-color`      | hex / `rgb(a)` in a class or style value, incl. `var(--x, #fff)` fallbacks           |
+| `palette-class`  | Tailwind's default palette (`text-gray-500`, `bg-blue-600`, `text-white`)            |
+| `fill-text-pair` | a solid fill with the wrong `text-on-*` (`bg-danger-fg text-on-brand`, `hover:` too) |
+
+Plain CSS classes defined in `index.css` are allowed. PDF documents
+(`@react-pdf/renderer`, `pdfmake`) may use hex: they have no CSS variables.
+
+```sh
+npm run test:classes -w @pump/ui          # run the check (CI runs it too)
+npm run test:classes:update -w @pump/ui   # lower the allow-list after a fix
+```
+
+Today's violations are recorded in `class-guard/allowlist.json` as
+`rule → file → count`. The check fails when a file gains a violation, when a
+file not on the list has one, and when a file has **fewer** than its entry.
+
+**Lowering an entry.** After fixing violations, run `test:classes:update` and
+commit the rewritten `allowlist.json`. The command only ever lowers entries and
+drops them at zero; it never raises or adds one, so a new violation has to be
+fixed, not listed. If two PRs conflict in `allowlist.json`, take either side and
+re-run the command on the merged branch.
+
 ## Load order (apps must follow this)
 
 ```ts
