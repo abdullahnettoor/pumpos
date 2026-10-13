@@ -108,6 +108,15 @@ describe('header', () => {
     expect(screen.getByText(/open since 6:00 am/)).toBeTruthy();
   });
 
+  it('says "as of" when the live data last arrived, not the wall clock', () => {
+    hooks.useDashboardSummary.mockReturnValue({
+      ...ok({ activeShift: null }),
+      dataUpdatedAt: Date.parse('2026-10-12T04:00:00Z'), // 9:30 am IST
+    });
+    mount('Owner');
+    expect(screen.getByText(/as of 9:30 am/)).toBeTruthy();
+  });
+
   it('shows Shift workspace when a shift is open, View shift for Accountant', () => {
     hooks.useDashboardSummary.mockReturnValue(ok({ activeShift: { id: 's' } }));
     mount('Owner');

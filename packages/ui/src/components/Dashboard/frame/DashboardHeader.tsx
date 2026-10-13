@@ -18,7 +18,11 @@ export const DashboardHeader: React.FC = () => {
   const summary = useDashboardSummary(station.id, { enabled: action !== null });
 
   const hasOpenShift = !!summary.data?.activeShift;
-  const subtitle = `Business day ${formatShortDay(businessDate)} · open since ${formatHHMM(dayStartsAt)} · as of ${formatClockInZone(now, timeZone)}`;
+  // "as of" is when the live data last arrived, not the wall clock: it must
+  // not claim freshness the cards don't have. The dashboard summary feeds the
+  // Forecourt, timeline and sales figures and refetches with them.
+  const asOf = summary.dataUpdatedAt > 0 ? summary.dataUpdatedAt : now;
+  const subtitle = `Business day ${formatShortDay(businessDate)} · open since ${formatHHMM(dayStartsAt)} · as of ${formatClockInZone(asOf, timeZone)}`;
 
   return (
     <PageHeader
