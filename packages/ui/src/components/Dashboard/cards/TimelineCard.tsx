@@ -80,7 +80,7 @@ export const TimelineCard: React.FC = () => {
     const { from: dayStartAt } = businessDayWindow(businessDate, { timeZone, dayStartsAt });
     const carryOver = deriveCarryOver({
       active: active ?? status.data.activeShift,
-      lastShift: status.data.lastShift as Row | null | undefined,
+      lastShift: status.data.lastShift,
       businessDate,
       dayStartAt,
     });
