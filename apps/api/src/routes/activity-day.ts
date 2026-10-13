@@ -74,6 +74,14 @@ export const activityDayHandler = async (c: Context<Env>) => {
   // by the Business Day window. A role that sees no Office Record type (Staff)
   // binds no office type at all.
   const office = OFFICE_ACTIVITY_EVENTS.filter((t) => allowed === null || allowed.includes(t));
+  // Bound office events by occurred_at too, so the query never scans the whole
+  // org history. A record's Entry Date can be back- or forward-dated, so allow
+  // one day either side of the entry-date window.
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const officeBound = and(
+    gte(schema.events.occurredAt, new Date(entry.from.getTime() - DAY_MS)),
+    lt(schema.events.occurredAt, new Date(entry.to.getTime() + DAY_MS)),
+  )!;
   const payloadEntryDate = sql`${schema.events.payload} ->> 'entryDate'`;
   const businessWindow = and(
     gte(schema.events.occurredAt, from),
@@ -86,6 +94,7 @@ export const activityDayHandler = async (c: Context<Env>) => {
           and(notInArray(schema.events.eventType, office), businessWindow),
           and(
             inArray(schema.events.eventType, office),
+            officeBound,
             or(
               eq(payloadEntryDate, entryDate),
               and(

@@ -183,5 +183,8 @@ describe('Office Records are placed by Entry Date', () => {
     expect(times).toContain('2025-12-31T18:30:00.000Z');
     expect(times).toContain('2026-01-01T18:30:00.000Z');
     expect(params).toContain('EXPENSE_RECORDED');
+    // Office branch is also bounded by occurred_at, one day either side of the entry window.
+    expect(times).toContain('2025-12-30T18:30:00.000Z');
+    expect(times).toContain('2026-01-02T18:30:00.000Z');
   });
 });
