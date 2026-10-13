@@ -24,7 +24,14 @@ export const signedRupees = (n: number, opts: { plus?: boolean } = {}): string =
  */
 export const signedMoney = (n: number): string => formatSignedMoney(n);
 
-/** The shared compact form, for tiles with little room: `₹38.5k`, `₹6.82L`, `₹2.5Cr`. */
+/**
+ * The shared compact form (`₹38.5k`, `₹6.82L`, `₹2.5Cr`), for a stat tile's
+ * figure or a hero figure ONLY: Home and DSSR day tiles, Money position, the
+ * Reports "Last 7 days" tile, and the Insights headline figures. Everywhere else
+ * (list and detail rows, a party's facts, statements, aging legends, prose and
+ * every aria-label) shows the exact amount with `rupees` (`₹40,000`): a reader
+ * acting on a figure needs it whole, and a screen reader should not say "k".
+ */
 export const compactRupees = (n: number): string => formatCompactMoney(n);
 
 export const plural = (n: number, one: string, many = `${one}s`): string =>

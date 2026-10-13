@@ -9,7 +9,7 @@ import { badgeTone } from '../../ui/tones.js';
 import { varianceBadge } from '../variance.js';
 import { dateParts, MONTH_NAMES, shortDate, weekdayOf } from '../dates.js';
 import { wholeQuantityLabel } from '../money/quantity.js';
-import { compactRupees, plural } from '../format.js';
+import { compactRupees, plural, rupees } from '../format.js';
 
 /** Weekday and day of month from a `YYYY-MM-DD` Business Date (calendar label, no timezone). */
 export function dayParts(businessDate: string): { weekday: string; day: number } {
@@ -130,7 +130,7 @@ export function dayView(day: BusinessDayListItem, liveTab: LiveTab | null): DayV
     note = 'No DSSR for this day';
     bar = 'none';
   } else {
-    headline = compactRupees(day.totalSales);
+    headline = rupees(day.totalSales);
     const v = varianceBadge(day.cashVariance);
     if (v.balanced) note = 'Cash balanced';
     else {

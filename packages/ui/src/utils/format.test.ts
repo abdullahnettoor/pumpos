@@ -21,8 +21,25 @@ describe('formatMoney', () => {
     expect(formatMoney(-1200, { decimals: 0 })).toBe('−₹1,200');
   });
 
-  it('supports money cells that provide their own currency label', () => {
-    expect(formatMoney(-0.126, { symbol: false })).toBe('-0.13');
+  it('supports money cells that provide their own currency label, with the same sign rule', () => {
+    expect(formatMoney(-0.126, { symbol: false })).toBe('−0.13');
+    expect(formatMoney(-1200, { symbol: false })).toBe('−1,200.00');
+    expect(formatMoney(1200, { symbol: false })).toBe('1,200.00');
+    expect(formatMoney(-1200, { symbol: false })).not.toContain('-');
+  });
+
+  it('never prints a negative zero', () => {
+    expect(formatMoney(-0.001, { symbol: false })).toBe('0.00');
+    expect(formatMoney(-0.001)).toBe('₹0.00');
+    expect(formatMoney(-0.4, { decimals: 0 })).toBe('₹0');
+  });
+
+  it('reads a missing amount as zero, a non-finite one as a dash', () => {
+    expect(formatMoney(null)).toBe('₹0.00');
+    expect(formatMoney(undefined, { symbol: false })).toBe('0.00');
+    expect(formatMoney(Number.NaN)).toBe('—');
+    expect(formatMoney('abc', { symbol: false })).toBe('—');
+    expect(formatMoney(Number.POSITIVE_INFINITY)).toBe('—');
   });
 });
 
@@ -97,9 +114,15 @@ describe('signedMoneyParts', () => {
     expect(formatSignedMoney(0.4, { decimals: 0, plus: true })).toBe('₹0');
   });
 
-  it('treats a missing or unparseable amount as zero', () => {
+  it('treats a missing amount as zero and a non-finite one as a dash', () => {
     expect(formatSignedMoney(null)).toBe('₹0.00');
-    expect(formatSignedMoney('abc')).toBe('₹0.00');
+    expect(signedMoneyParts('abc')).toEqual({ text: '—', sign: 'zero', magnitude: '—' });
+  });
+
+  it('drops the symbol on request, keeping the true minus and the plus', () => {
+    expect(formatSignedMoney(-12.5, { symbol: false, plus: true })).toBe('−12.50');
+    expect(formatSignedMoney(12.5, { symbol: false, plus: true })).toBe('+12.50');
+    expect(formatSignedMoney(0.001, { symbol: false, plus: true })).toBe('0.00');
   });
 });
 
@@ -128,6 +151,11 @@ describe('formatQuantity', () => {
     expect(formatQuantity(-42, 'L')).toBe('−42.00 L');
     expect(formatQuantity(6.5, 'L', { plus: true })).toBe('+6.50 L');
     expect(formatQuantity(-0.001, 'L', { plus: true })).toBe('0.00 L');
+  });
+
+  it('takes explicit decimals for a meter or dip reading', () => {
+    expect(formatQuantity(12345.6789, 'L', { decimals: 3 })).toBe('12,345.679 L');
+    expect(formatQuantity(1240, 'L', { decimals: 1 })).toBe('1,240.0 L');
   });
 
   it('returns a dash for a missing amount', () => {
@@ -161,7 +189,14 @@ describe('formatCompactMoney', () => {
     expect(formatCompactMoney(-340)).toBe('−₹340');
   });
 
-  it('returns a dash for a missing amount', () => {
+  it('keeps Indian grouping on a very large crore figure', () => {
+    expect(formatCompactMoney(1e12)).toBe('₹1,00,000Cr');
+    expect(formatCompactMoney(-12345e7)).toBe('−₹12,345Cr');
+  });
+
+  it('returns a dash for a missing or non-finite amount, as formatMoney does', () => {
     expect(formatCompactMoney(null)).toBe('—');
+    expect(formatCompactMoney(Number.NaN)).toBe('—');
+    expect(formatCompactMoney('abc')).toBe(formatMoney('abc'));
   });
 });

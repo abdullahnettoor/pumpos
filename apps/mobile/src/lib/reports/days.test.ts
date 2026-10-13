@@ -83,13 +83,13 @@ describe('dayView', () => {
       weekday: 'Thu',
       dayOfMonth: 8,
       statusLabel: 'Sealed',
-      headline: '₹4.66L',
+      headline: '₹4,66,000',
       bar: 'scaled',
       volume: '4,752 L',
       note: 'Cash balanced',
       noteTone: 'plain',
       action: 'report',
-      label: 'Thu 8 Oct, Sealed, ₹4.66L, 4,752 L, Cash balanced',
+      label: 'Thu 8 Oct, Sealed, ₹4,66,000, 4,752 L, Cash balanced',
     });
   });
   it('flags a short or over cash variance with its sign and tone', () => {

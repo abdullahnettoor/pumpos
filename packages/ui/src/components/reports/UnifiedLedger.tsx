@@ -10,6 +10,7 @@ import { LedgerView } from '../ledger/LedgerView.js';
 import { computeLedgerRows } from '../ledger/LedgerView.js';
 import type { LedgerResolved } from '../ledger/LedgerView.js';
 import { Combobox } from '../primitives/Combobox.js';
+import { MONEY_TERMS } from '../../utils/moneyTerms.js';
 import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
 import { ReportNote } from './ReportNote.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
@@ -80,7 +81,7 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
   customer: {
     needsEntity: true,
     amountLabel: 'Amount',
-    balanceLabel: 'Receivable',
+    balanceLabel: MONEY_TERMS.receivable,
     kpiDebitLabel: 'Credit Sales',
     kpiCreditLabel: 'Collections',
     emptyText: 'No transactions for this customer in the selected range.',
@@ -113,7 +114,7 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
   supplier: {
     needsEntity: true,
     amountLabel: 'Amount',
-    balanceLabel: 'Payable',
+    balanceLabel: MONEY_TERMS.payable,
     kpiDebitLabel: 'Purchases',
     kpiCreditLabel: 'Payments',
     emptyText: 'No transactions for this supplier in the selected range.',

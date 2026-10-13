@@ -94,21 +94,20 @@ export const LedgerDoc: React.FC<LedgerDocProps> = ({
     { header: balanceLabel, flex: 1.5, align: 'right', mono: true, strong: true },
   ];
   // `inr` / `inr0` sign a negative as `−₹1,200.00` (the shared signed-money rule).
-  const money = inr;
   const kpiMoney = partyAccount ? inr : inr0;
   const cellRows: Cell[][] = rows.map((r) => [
     { text: r.dateLabel },
     { text: r.particulars, detail: r.detail },
-    { text: r.debit ? money(r.debit) : '' },
-    { text: r.credit ? money(r.credit) : '', color: r.credit ? C.success : undefined },
-    { text: money(r.balance) },
+    { text: r.debit ? inr(r.debit) : '' },
+    { text: r.credit ? inr(r.credit) : '', color: r.credit ? C.success : undefined },
+    { text: inr(r.balance) },
   ]);
   const totalRow: Cell[] = [
     closing ? { text: 'CLOSING BALANCE', detail: closing.note } : { text: 'TOTALS' },
     { text: '' },
-    { text: money(totals.debit) },
-    { text: money(totals.credit), color: C.success },
-    { text: money(totals.balance), color: C.ink },
+    { text: inr(totals.debit) },
+    { text: inr(totals.credit), color: C.success },
+    { text: inr(totals.balance), color: C.ink },
   ];
   const leadRow: Cell[] | undefined =
     opening === undefined
@@ -118,7 +117,7 @@ export const LedgerDoc: React.FC<LedgerDocProps> = ({
           { text: '' },
           { text: '' },
           { text: '' },
-          { text: money(opening), color: C.ink },
+          { text: inr(opening), color: C.ink },
         ];
   // A negative balance is a shortfall on the desktop ledger, an advance on a party's account.
   const balanceTone = totals.balance < 0 && !partyAccount ? C.danger : C.ink;

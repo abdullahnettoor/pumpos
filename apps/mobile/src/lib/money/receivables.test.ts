@@ -59,7 +59,7 @@ describe('customer tiles', () => {
   it('shows the last payment with its date and how long ago', () => {
     expect(
       lastPaymentTile({ amount: 40000, entryDate: '2026-09-18', method: 'UPI', daysAgo: 21 }),
-    ).toEqual({ label: 'Last payment', value: '₹40k', sub: '18 Sep · 21 days ago' });
+    ).toEqual({ label: 'Last payment', value: '₹40,000', sub: '18 Sep · 21 days ago' });
     expect(
       lastPaymentTile({ amount: 500, entryDate: '2026-10-09', method: 'Cash', daysAgo: 0 })?.sub,
     ).toBe('9 Oct · today');
@@ -84,7 +84,7 @@ describe('customer tiles', () => {
     const month = { credit: 81900, slips: 23, litres: 812.4, paid: 0 };
     expect(creditTile(month)).toEqual({
       label: 'Credit this month',
-      value: '₹81.9k',
+      value: '₹81,900',
       sub: '23 slips · 812 L',
     });
     expect(creditTile({ ...month, slips: 1, litres: 0 }).sub).toBe('1 slip');

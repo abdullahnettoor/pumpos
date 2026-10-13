@@ -77,7 +77,7 @@ export function useCustomerStatementData(customerId: string, range: DateRange) {
  * What suppliers are owed: this month's purchased vs paid and, per supplier,
  * how many Purchases are unpaid and since when. Settled FIFO by the server in one
  * statement; there is no summary without a Station (the month and age are
- * measured with its clock), so the To pay list then shows its plain balances.
+ * measured with its clock), so the Payable list then shows its plain balances.
  */
 export function usePayablesData(stationId: string | null | undefined) {
   const q = usePayables(stationId);
