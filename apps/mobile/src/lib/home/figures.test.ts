@@ -10,8 +10,8 @@ describe('rupee formatting', () => {
     expect(signedRupees(-340)).toBe('−₹340');
     expect(signedRupees(340)).toBe('₹340');
   });
-  it('abbreviates only from a lakh up', () => {
-    expect(compactRupees(27520)).toBe('₹27,520');
+  it('abbreviates from a thousand up', () => {
+    expect(compactRupees(27520)).toBe('₹27.5k');
     expect(compactRupees(682400)).toBe('₹6.82L');
     expect(compactRupees(1043200)).toBe('₹10.43L');
     expect(compactRupees(25000000)).toBe('₹2.5Cr');

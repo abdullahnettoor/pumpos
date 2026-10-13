@@ -5,7 +5,7 @@ import { Field, TextInput } from '../../primitives/Field.js';
 import { PurchaseCards } from './PurchaseCards.js';
 import { UnlinkButton } from './UnlinkButton.js';
 import { KV } from './StepSection.js';
-import { fmtLitres } from './format.js';
+import { formatQuantity } from '../../../utils/format.js';
 import { grid, tankOf, SummaryCard, type StepProps } from './stepShared.js';
 
 export const InvoicesStep: React.FC<
@@ -95,7 +95,7 @@ export const InvoicesSummary: React.FC<
           <Chip key={productId} size="sm" tone="neutral">
             {tanks.find((t) => t.productId === productId)?.productName} ·{' '}
             {purchase?.invoiceNumber || purchase?.documentNumber || 'linked'}
-            {purchase ? ` · ${fmtLitres(purchase.invoiceQty)}` : ''}
+            {purchase ? ` · ${formatQuantity(purchase.invoiceQty, 'L')}` : ''}
             {purchase?.invoiceDensity != null ? ` · ${purchase.invoiceDensity} kg/m³` : ''}
           </Chip>
         ))}

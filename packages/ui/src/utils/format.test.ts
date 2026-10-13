@@ -1,10 +1,24 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { formatMoney, inr, formatBusinessDate, formatElapsedSince } from './format.js';
+import {
+  formatMoney,
+  inr,
+  formatBusinessDate,
+  formatElapsedSince,
+  formatSignedMoney,
+  signedMoneyParts,
+  formatQuantity,
+  formatCompactMoney,
+} from './format.js';
 
 describe('formatMoney', () => {
   it('formats INR with Indian grouping and exactly two decimal places', () => {
     expect(inr(102078.132)).toBe('₹1,02,078.13');
     expect(inr(5000)).toBe('₹5,000.00');
+  });
+
+  it('puts a true minus before the rupee symbol, never ₹-1,200', () => {
+    expect(inr(-1200)).toBe('−₹1,200.00');
+    expect(formatMoney(-1200, { decimals: 0 })).toBe('−₹1,200');
   });
 
   it('supports money cells that provide their own currency label', () => {
@@ -53,5 +67,101 @@ describe('formatElapsedSince', () => {
 
   it('returns the fallback for an unparseable input', () => {
     expect(formatElapsedSince(null)).toBe('—');
+  });
+});
+
+describe('formatSignedMoney', () => {
+  it('puts a true minus sign (U+2212) before the rupee symbol', () => {
+    expect(formatSignedMoney(-1200)).toBe('\u2212₹1,200.00');
+    expect(formatSignedMoney('-1200.5')).toBe('−₹1,200.50');
+    expect(formatSignedMoney(1200)).toBe('₹1,200.00');
+  });
+});
+
+describe('signedMoneyParts', () => {
+  it('reports the sign so a caller can choose a tone', () => {
+    expect(signedMoneyParts(-340, { decimals: 0 })).toEqual({
+      text: '−₹340',
+      sign: 'negative',
+      magnitude: '₹340',
+    });
+    expect(signedMoneyParts(120, { decimals: 0, plus: true })).toEqual({
+      text: '+₹120',
+      sign: 'positive',
+      magnitude: '₹120',
+    });
+  });
+
+  it('reads an amount that rounds to nothing as unsigned zero', () => {
+    expect(signedMoneyParts(-0.004)).toEqual({ text: '₹0.00', sign: 'zero', magnitude: '₹0.00' });
+    expect(formatSignedMoney(0.4, { decimals: 0, plus: true })).toBe('₹0');
+  });
+
+  it('treats a missing or unparseable amount as zero', () => {
+    expect(formatSignedMoney(null)).toBe('₹0.00');
+    expect(formatSignedMoney('abc')).toBe('₹0.00');
+  });
+});
+
+describe('formatQuantity', () => {
+  it('shows litres to 2 decimals with Indian grouping, any litre spelling as L', () => {
+    expect(formatQuantity(102078.5, 'L')).toBe('1,02,078.50 L');
+    expect(formatQuantity(1240, 'Ltr')).toBe('1,240.00 L');
+    expect(formatQuantity('22000', 'litres')).toBe('22,000.00 L');
+  });
+
+  it('shows kilolitres to 1 decimal', () => {
+    expect(formatQuantity(18.46, 'KL')).toBe('18.5 KL');
+  });
+
+  it('shows density to 1 decimal', () => {
+    expect(formatQuantity(832.46, 'kg/m³')).toBe('832.5 kg/m³');
+    expect(formatQuantity(832.46, 'kg/m3')).toBe('832.5 kg/m³');
+  });
+
+  it('shows counted units whole', () => {
+    expect(formatQuantity(1200, 'Nos')).toBe('1,200 Nos');
+    expect(formatQuantity(3, 'pcs')).toBe('3 pcs');
+  });
+
+  it('signs a quantity with a true minus, and a plus when asked', () => {
+    expect(formatQuantity(-42, 'L')).toBe('−42.00 L');
+    expect(formatQuantity(6.5, 'L', { plus: true })).toBe('+6.50 L');
+    expect(formatQuantity(-0.001, 'L', { plus: true })).toBe('0.00 L');
+  });
+
+  it('returns a dash for a missing amount', () => {
+    expect(formatQuantity(null, 'L')).toBe('—');
+    expect(formatQuantity(undefined, 'L', { fallback: '' })).toBe('');
+  });
+});
+
+describe('formatCompactMoney', () => {
+  it('abbreviates thousands, lakhs and crores, trimming trailing zeros', () => {
+    expect(formatCompactMoney(287000)).toBe('₹2.87L');
+    expect(formatCompactMoney(38500)).toBe('₹38.5k');
+    expect(formatCompactMoney(48000)).toBe('₹48k');
+    expect(formatCompactMoney(200000)).toBe('₹2L');
+    expect(formatCompactMoney(25000000)).toBe('₹2.5Cr');
+  });
+
+  it('shows whole rupees below a thousand', () => {
+    expect(formatCompactMoney(850)).toBe('₹850');
+    expect(formatCompactMoney(0)).toBe('₹0');
+  });
+
+  it('carries into the next unit instead of reading 100k or 100L', () => {
+    expect(formatCompactMoney(999.6)).toBe('₹1k');
+    expect(formatCompactMoney(99960)).toBe('₹1L');
+    expect(formatCompactMoney(9999999)).toBe('₹1Cr');
+  });
+
+  it('signs a negative with a true minus', () => {
+    expect(formatCompactMoney(-250000)).toBe('−₹2.5L');
+    expect(formatCompactMoney(-340)).toBe('−₹340');
+  });
+
+  it('returns a dash for a missing amount', () => {
+    expect(formatCompactMoney(null)).toBe('—');
   });
 });

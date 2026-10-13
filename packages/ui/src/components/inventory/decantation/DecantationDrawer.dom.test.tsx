@@ -214,7 +214,7 @@ describe('DecantationDrawer save', () => {
     type('After dip, line 1', '9000');
     type('After dip time, line 1', '15:10');
     type('Sales during, line 1', '50');
-    expect(screen.getByText('5,050 L')).toBeTruthy();
+    expect(screen.getByText('5,050.00 L')).toBeTruthy();
     await save('Save Decantation');
     expect(saveDecantation.mock.calls[0][0].lines[0]).toMatchObject({
       afterDip: 9000,

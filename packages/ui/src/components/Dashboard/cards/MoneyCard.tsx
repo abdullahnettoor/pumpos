@@ -9,7 +9,7 @@ import {
   readSnapshot,
   shiftBusinessDate,
 } from '@pump/shared';
-import { formatBusinessDate, formatCompactRupees, formatMoney } from '../../../utils/format.js';
+import { formatBusinessDate, formatCompactMoney, formatMoney } from '../../../utils/format.js';
 import { buildTrendChart, deriveCashInHand } from './money/moneyModel.js';
 import { Button } from '../../../pump-ds/index.js';
 import { useDailyCashBook, useDailyDssrPreview, useInsightsSales } from '../../../query/hooks.js';
@@ -127,20 +127,20 @@ export const MoneyCard: React.FC = () => {
             <div data-testid="margin-tile">
               <div className="text-xs text-ink-muted">Margin</div>
               <div className="font-mono text-sm font-medium text-success-fg">
-                {formatCompactRupees(margin)}
+                {formatCompactMoney(margin)}
               </div>
             </div>
           )}
           <div data-testid="credit-tile">
             <div className="text-xs text-ink-muted">Credit</div>
             <div className="font-mono text-sm font-medium text-warning-fg">
-              {formatCompactRupees(credit)}
+              {formatCompactMoney(credit)}
             </div>
           </div>
           <div data-testid="cash-in-hand-tile">
             <div className="text-xs text-ink-muted">Cash in hand</div>
             <div className="font-mono text-sm font-medium text-ink">
-              {formatCompactRupees(cashInHand)}
+              {formatCompactMoney(cashInHand)}
             </div>
           </div>
         </div>
@@ -170,9 +170,7 @@ export const MoneyCard: React.FC = () => {
                   <span className="text-ink-muted">Last 14 days</span>
                   <span className="ml-2 text-ink">
                     avg{' '}
-                    <b className="font-mono font-medium">
-                      {formatCompactRupees(trendData.average)}
-                    </b>
+                    <b className="font-mono font-medium">{formatCompactMoney(trendData.average)}</b>
                   </span>
                   {trendData.changePct !== null && (
                     <span

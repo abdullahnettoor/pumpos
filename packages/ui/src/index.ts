@@ -187,7 +187,19 @@ export type { DensityCalculatorPopoverProps } from './components/primitives/Dens
 export { Banner } from './components/primitives/Banner.js';
 export type { BannerProps, BannerSeverity } from './components/primitives/Banner.js';
 export { useZodForm } from './forms/useZodForm.js';
-export { formatMoney, inr, formatQty } from './utils/format.js';
+export {
+  formatMoney,
+  inr,
+  formatQty,
+  MINUS,
+  formatSignedMoney,
+  signedMoneyParts,
+  formatQuantity,
+  formatCompactMoney,
+} from './utils/format.js';
+export type { FigureSign, SignedFigure } from './utils/format.js';
+export { MONEY_TERMS } from './utils/moneyTerms.js';
+export type { MoneyTerm } from './utils/moneyTerms.js';
 export { initialsOf } from './utils/initials.js';
 export {
   collectionAccountTypes,

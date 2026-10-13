@@ -173,7 +173,7 @@ describe('ReportsScreen', () => {
     seed();
     mount();
     const row = screen.getByRole('button', { name: /^Wed 7 Oct, Draft/ });
-    expect(row.getAttribute('aria-label')).toBe('Wed 7 Oct, Draft, ₹51,800, 4,752 L, Cash −₹1,250');
+    expect(row.getAttribute('aria-label')).toBe('Wed 7 Oct, Draft, ₹51.8k, 4,752 L, Cash −₹1,250');
     // The chevron and the bar are decorative.
     expect(row.querySelectorAll('[aria-hidden="true"]').length).toBeGreaterThanOrEqual(2);
   });

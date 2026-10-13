@@ -11,7 +11,7 @@ import {
   Path,
 } from '@react-pdf/renderer';
 import { MARK_VIEWBOX, MARK_PATH } from '../../pump-ds/brand/Brand.js';
-import { formatMoney } from '../../utils/format.js';
+import { formatSignedMoney } from '../../utils/format.js';
 
 // Embed Plus Jakarta Sans + Geist Mono (matches the app type; Mono is used
 // for all numeric/currency cells and MUST carry the rupee glyph ₹ — Noto Sans
@@ -57,8 +57,10 @@ export const C = {
   white: '#FFFFFF',
 };
 
-export const inr = (n: any) => formatMoney(n);
-export const inr0 = (n: any) => `\u20b9${Number(n || 0).toLocaleString('en-IN')}`;
+/** PDF money: paise kept, a negative signed `−₹1,200.00` (the app's one signed-money rule). */
+export const inr = (n: any) => formatSignedMoney(n);
+/** PDF money in whole rupees: `−₹1,200`. */
+export const inr0 = (n: any) => formatSignedMoney(n, { decimals: 0 });
 export const vol3 = (n: any) =>
   `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} L`;
 export const vol1 = (n: any) =>

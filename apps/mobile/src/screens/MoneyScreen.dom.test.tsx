@@ -404,7 +404,7 @@ describe('To collect', () => {
 });
 
 describe('To pay', () => {
-  const toPay = () => fireEvent.click(screen.getByRole('radio', { name: 'To pay' }));
+  const toPay = () => fireEvent.click(screen.getByRole('radio', { name: 'Payable' }));
 
   it('shows the payable total and supplier count, with no due-date text', () => {
     mount();
@@ -422,7 +422,7 @@ describe('To pay', () => {
     fireEvent.change(screen.getByLabelText('Search suppliers'), { target: { value: 'square' } });
     expect(screen.getByText('Square Deal')).toBeTruthy();
     expect(screen.queryByText('HPCL Kozhikode Depot')).toBeNull();
-    fireEvent.click(screen.getByRole('radio', { name: 'To collect' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Receivable' }));
     expect((screen.getByLabelText('Search customers') as HTMLInputElement).value).toBe('');
   });
 
@@ -441,7 +441,7 @@ describe('To pay', () => {
 });
 
 describe('To pay with the payables summary', () => {
-  const toPay = () => fireEvent.click(screen.getByRole('radio', { name: 'To pay' }));
+  const toPay = () => fireEvent.click(screen.getByRole('radio', { name: 'Payable' }));
   const summary = () => ({
     total: 1081600,
     supplierCount: 2,
@@ -674,21 +674,21 @@ describe('Customer page', () => {
     it('shows the aging split inside the balance card', () => {
       openKtc();
       const split = within(balance()).getByTestId('aging-split');
-      expect(within(split).getByText('₹86,400')).toBeTruthy();
+      expect(within(split).getByText('₹86.4k')).toBeTruthy();
       expect(within(split).getByText('0–7 days')).toBeTruthy();
-      expect(within(split).getByText('₹78,000')).toBeTruthy();
-      expect(within(split).getByText('₹50,200')).toBeTruthy();
+      expect(within(split).getByText('₹78k')).toBeTruthy();
+      expect(within(split).getByText('₹50.2k')).toBeTruthy();
       expect(within(split).getByText('30+ days')).toBeTruthy();
     });
 
     it('shows last payment, usually pays in, credit and paid this month', () => {
       openKtc();
       const behaviour = within(screen.getByRole('group', { name: 'Payment behaviour' }));
-      expect(behaviour.getByText('₹40,000')).toBeTruthy();
+      expect(behaviour.getByText('₹40k')).toBeTruthy();
       expect(behaviour.getByText('18 Sep · 21 days ago')).toBeTruthy();
       expect(behaviour.getByText('24 days')).toBeTruthy();
       expect(behaviour.getByText('avg, last 6 settled sales')).toBeTruthy();
-      expect(behaviour.getByText('₹81,900')).toBeTruthy();
+      expect(behaviour.getByText('₹81.9k')).toBeTruthy();
       expect(behaviour.getByText('23 slips · 812 L')).toBeTruthy();
       expect(behaviour.getByText('Paid this month')).toBeTruthy();
       expect(behaviour.getByText('Settles: open account')).toBeTruthy();
@@ -711,7 +711,7 @@ describe('Customer page', () => {
       const items = vehicles.getAllByRole('listitem');
       expect(items[0].textContent).toContain('KL-11-AB-4521');
       expect(items[0].textContent).toContain('Truck');
-      expect(items[0].textContent).toContain('₹52,300');
+      expect(items[0].textContent).toContain('₹52.3k');
       expect(items[2].textContent).toContain('Bus');
       const widths = vehicles
         .getAllByTestId('vehicle-bar')
@@ -1057,7 +1057,7 @@ describe('Supplier page', () => {
     mount({
       station: STATION,
       renderSupplierPage: (s) => <SupplierPage supplier={s} station={STATION as any} />,
-    }) && fireEvent.click(screen.getByRole('radio', { name: 'To pay' }));
+    }) && fireEvent.click(screen.getByRole('radio', { name: 'Payable' }));
   const openSupplier = (name: string) => {
     mountSupplier();
     fireEvent.change(screen.getByLabelText('Search suppliers'), { target: { value: name } });
@@ -1447,7 +1447,7 @@ describe('Supplier page', () => {
       await new Promise((r) => setTimeout(r, 30));
     });
     // (this harness remounts the root; the shell keeps it mounted)
-    expect(screen.getByRole('radio', { name: 'To pay' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Payable' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'HPCL Kozhikode Depot' })).toBeNull();
   });
 
@@ -1457,7 +1457,7 @@ describe('Supplier page', () => {
     act(() => holder.nav.select('money', { view: 'pay' }));
     expect(screen.getByPlaceholderText('Search suppliers')).toBeTruthy();
     // The user switches back by hand; a plain tab select does not re-apply the old request.
-    fireEvent.click(screen.getByRole('radio', { name: 'To collect' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Receivable' }));
     act(() => holder.nav.select('money'));
     expect(screen.getByPlaceholderText('Search customers')).toBeTruthy();
     // A second request for the same view applies again.

@@ -14,12 +14,6 @@ import {
   type Letterhead,
 } from './shiftSummaryDoc.js';
 
-/** A signed rupee amount: `-₹1,200.00` (never `₹-1,200.00`). */
-export const signedInr = (value: string | number): string => {
-  const n = Number(value);
-  return Number.isFinite(n) && n < 0 ? `-${inr(-n)}` : inr(n);
-};
-
 export interface LedgerDocRow {
   dateLabel: string;
   particulars: string;
@@ -46,7 +40,7 @@ export interface LedgerDocProps {
   partyLines?: string[];
   /**
    * The account of one party (a customer or supplier statement): amounts print
-   * exact and signed (`-₹1,200.00`), and a negative balance is an advance held,
+   * exact (`−₹1,200.00`), and a negative balance is an advance held,
    * not a shortfall, so it is not shown in the danger colour. Unset (the
    * desktop Unified Ledger): whole-rupee KPIs and a negative balance in red.
    */
@@ -99,8 +93,9 @@ export const LedgerDoc: React.FC<LedgerDocProps> = ({
     { header: creditLabel, flex: 1.4, align: 'right', mono: true },
     { header: balanceLabel, flex: 1.5, align: 'right', mono: true, strong: true },
   ];
-  const money = partyAccount ? signedInr : inr;
-  const kpiMoney = partyAccount ? signedInr : inr0;
+  // `inr` / `inr0` sign a negative as `−₹1,200.00` (the shared signed-money rule).
+  const money = inr;
+  const kpiMoney = partyAccount ? inr : inr0;
   const cellRows: Cell[][] = rows.map((r) => [
     { text: r.dateLabel },
     { text: r.particulars, detail: r.detail },

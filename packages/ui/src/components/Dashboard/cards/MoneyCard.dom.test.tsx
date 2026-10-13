@@ -280,7 +280,7 @@ describe('MoneyCard (Sales so far + 14-day trend)', () => {
   });
 });
 
-describe('ReceivablesPayablesCard (To collect / To pay)', () => {
+describe('ReceivablesPayablesCard (Receivable / Payable)', () => {
   it('renders empty credit state for new station with Add customer link', () => {
     hooks.useReceivables.mockReturnValue(
       ok({
@@ -294,7 +294,7 @@ describe('ReceivablesPayablesCard (To collect / To pay)', () => {
     const onNavigate = vi.fn();
     mount(<ReceivablesPayablesCard />, 'Owner', onNavigate);
 
-    expect(screen.getByText('To collect')).toBeTruthy();
+    expect(screen.getByText('Receivable')).toBeTruthy();
     expect(screen.getByTestId('receivables-total').textContent).toContain('0');
     expect(screen.getByText(/No credit customers yet/)).toBeTruthy();
 
@@ -302,7 +302,7 @@ describe('ReceivablesPayablesCard (To collect / To pay)', () => {
     fireEvent.click(addBtn);
     expect(onNavigate).toHaveBeenCalledWith('/customers', { open: 'new-customer' });
 
-    expect(screen.getByText('To pay')).toBeTruthy();
+    expect(screen.getByText('Payable')).toBeTruthy();
     expect(screen.getByTestId('payables-total').textContent).toContain('15,000');
   });
 
@@ -498,7 +498,7 @@ describe('Money trend states and cash in hand', () => {
       ok({ accounts: [{ accountType: 'CASH_IN_HAND', closing: 4200, entries: [] }] }),
     );
     mount(<MoneyCard />);
-    expect(screen.getByTestId('cash-in-hand-tile').textContent).toContain('₹4,200');
+    expect(screen.getByTestId('cash-in-hand-tile').textContent).toContain('₹4.2k');
   });
 });
 
@@ -527,7 +527,7 @@ describe('Independent Failure Isolation in MoneyColumn', () => {
     expect(screen.getByTestId('sales-headline')).toBeTruthy();
 
     // Receivables card shows error and Retry!
-    expect(screen.getByText(/Couldn't load to collect \/ to pay/)).toBeTruthy();
+    expect(screen.getByText(/Couldn't load receivable \/ payable/)).toBeTruthy();
 
     // Office card is ready and visible!
     expect(screen.getByTestId('empty-office-records')).toBeTruthy();

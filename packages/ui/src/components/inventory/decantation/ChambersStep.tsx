@@ -4,7 +4,7 @@ import { Button, Chip, Icon } from '../../../pump-ds/index.js';
 import { NumberInput, Select } from '../../primitives/Field.js';
 import { LINE_COLORS, Notice } from './StepSection.js';
 import { emptyChamber } from './decantationForm.js';
-import { fmtLitres } from './format.js';
+import { formatQuantity } from '../../../utils/format.js';
 import { lineLabel, type StepProps } from './stepShared.js';
 
 const MARKS: { value: 'OK' | 'SHORT' | 'EXCESS'; label: string; tone: string }[] = [
@@ -215,7 +215,7 @@ export const ChambersSummary: React.FC<StepProps> = ({ values, tanks }) =>
                   : 'neutral'
           }
         >
-          #{i + 1} {c.capacity ? fmtLitres(Number(c.capacity)) : '—'} →{' '}
+          #{i + 1} {c.capacity ? formatQuantity(Number(c.capacity), 'L') : '—'} →{' '}
           {c.lineIndex == null
             ? 'not assigned'
             : lineLabel(tanks, values.lines[c.lineIndex]?.tankId ?? '', c.lineIndex)}
