@@ -1,7 +1,7 @@
 import type { BusinessDayListItem, BusinessDayListStatus, BusinessDayListWeek } from '@pump/shared';
 import { dateParts, MONTH_NAMES, shortDate, weekdayOf } from '../dates.js';
 import { wholeQuantityLabel } from '../money/quantity.js';
-import { compactRupees, plural, signedRupees } from '../format.js';
+import { compactRupees, plural, rupees, signedRupees } from '../format.js';
 
 /** Weekday and day of month from a `YYYY-MM-DD` Business Date (calendar label, no timezone). */
 export function dayParts(businessDate: string): { weekday: string; day: number } {
@@ -115,7 +115,7 @@ export function dayView(day: BusinessDayListItem, liveTab: LiveTab | null): DayV
     note = 'No DSSR for this day';
     bar = 'none';
   } else {
-    headline = compactRupees(day.totalSales);
+    headline = rupees(day.totalSales);
     if (day.cashVariance === 0) note = 'Cash balanced';
     else {
       note = `Cash ${day.cashVariance > 0 ? '+' : ''}${signedRupees(day.cashVariance)}`;

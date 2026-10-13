@@ -602,7 +602,7 @@ describe('Home: tanks, money, removed sections', () => {
     expect(nav.views.money?.view).toBe('collect');
   });
 
-  it('opens Money on its To pay segment from the Payable tile', () => {
+  it('opens Money on its Payable segment from the Payable tile', () => {
     renderHome();
     fireEvent.click(screen.getByText('Payable').closest('button')!);
     expect(nav.active).toBe('money');

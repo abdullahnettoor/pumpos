@@ -15,7 +15,7 @@ import {
   type ReceivablesAging,
 } from '@pump/shared';
 import { dayLabel } from '@pump/ui';
-import { compactRupees, plural } from '../format.js';
+import { plural, rupees } from '../format.js';
 
 export type AgingKey = keyof ReceivablesAging;
 export type AgingTone = 'good' | 'warn' | 'bad';
@@ -81,7 +81,7 @@ export function lastPaymentTile(p: CustomerLastPayment | null | undefined): Tile
   const when = p.daysAgo <= 0 ? 'today' : `${plural(p.daysAgo, 'day')} ago`;
   return {
     label: 'Last payment',
-    value: compactRupees(p.amount),
+    value: rupees(p.amount),
     sub: [dayLabel(p.entryDate), when].join(' · '),
   };
 }
@@ -101,7 +101,7 @@ export function creditTile(m: CustomerMonthFigures): Tile {
   const litres = Math.round(m.litres);
   return {
     label: 'Credit this month',
-    value: compactRupees(m.credit),
+    value: rupees(m.credit),
     sub: [plural(m.slips, 'slip'), litres > 0 ? `${litres.toLocaleString('en-IN')} L` : null]
       .filter(Boolean)
       .join(' · '),
@@ -113,7 +113,7 @@ export const settlesLabel = (cycle: string | null | undefined): string =>
   cycle === 'EOD' ? 'Settles: end of day' : 'Settles: open account';
 
 export function paidTile(m: CustomerMonthFigures, cycle: string | null | undefined): Tile {
-  return { label: 'Paid this month', value: compactRupees(m.paid), sub: settlesLabel(cycle) };
+  return { label: 'Paid this month', value: rupees(m.paid), sub: settlesLabel(cycle) };
 }
 
 export interface VehicleBar extends CustomerVehicleSpend {

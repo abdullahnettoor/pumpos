@@ -1,7 +1,7 @@
 /**
  * Pure figures behind the Money tab: who owes what, how close a Customer is to
  * their credit limit, and the order of the lists. No React, no fetching, so the
- * rules below are pinned by `parties.test.ts` and shared by To collect / To pay.
+ * rules below are pinned by `parties.test.ts` and shared by Receivable / Payable.
  *
  * Customer balance = Σ credit sales − Σ collections (GLOSSARY.md); a negative
  * balance is an advance. Supplier balance = Σ purchases − Σ payments.
@@ -52,7 +52,7 @@ export const limitOf = (c: Pick<MoneyCustomer, 'creditLimit'>): number | null =>
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
-/** Parties that are owed money (balance above zero), the To collect / To pay lists. */
+/** Parties that are owed money (balance above zero), the Receivable / Payable lists. */
 export const owing = <T extends MoneyParty>(parties: readonly T[]): T[] =>
   parties.filter((p) => balanceOf(p) >= SETTLED_BELOW);
 

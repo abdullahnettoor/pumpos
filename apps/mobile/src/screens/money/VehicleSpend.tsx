@@ -1,6 +1,6 @@
 import React from 'react';
 import type { CustomerVehicleSpend } from '@pump/shared';
-import { compactRupees, plural } from '../../lib/format.js';
+import { plural, rupees } from '../../lib/format.js';
 import { vehicleBars } from '../../lib/money/receivables.js';
 import { SectionLabel } from '../../ui/SectionLabel.js';
 
@@ -30,7 +30,7 @@ export const VehicleSpend: React.FC<{ vehicles: readonly CustomerVehicleSpend[] 
                 {v.registration}
               </span>
               <span className="num text-[13px] font-semibold text-text-high">
-                {compactRupees(v.amount)}
+                {rupees(v.amount)}
               </span>
             </div>
             <div aria-hidden="true" className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-track">

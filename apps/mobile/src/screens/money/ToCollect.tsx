@@ -28,7 +28,7 @@ interface Props {
 }
 
 /**
- * To collect: what customers owe (Σ credit sales − Σ collections), largest first.
+ * Receivable: what customers owe (Σ credit sales − Σ collections), largest first.
  * Only customers who owe are listed; a search looks across all of them, so a
  * settled customer can still be found and opened. The hero carries the aging
  * split and each row how long its oldest debt has waited; both come from the

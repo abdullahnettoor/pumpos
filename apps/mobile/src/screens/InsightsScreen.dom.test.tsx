@@ -208,9 +208,9 @@ describe('InsightsScreen', () => {
     state.data = report;
     renderScreen();
     expect(screen.getByText('₹32.27L')).toBeTruthy();
-    expect(screen.getByText(/Wed 7 Oct · ₹20L/)).toBeTruthy();
+    expect(screen.getByText(/Wed 7 Oct · ₹20,00,000/)).toBeTruthy();
     expect(screen.getByText('Lubes & others')).toBeTruthy();
-    expect(screen.getByText(/Top: 20W-40 1L · ₹9.3k/)).toBeTruthy();
+    expect(screen.getByText(/Top: 20W-40 1L · ₹9,300/)).toBeTruthy();
     expect(screen.getByText('₹48.2k')).toBeTruthy();
     expect(screen.getByText(/Morning · 7 shifts/)).toBeTruthy();
     expect(screen.getByText('−₹210')).toBeTruthy();
@@ -221,7 +221,7 @@ describe('InsightsScreen', () => {
     renderScreen();
     const chart = screen.getByRole('img', { name: /Daily sales/ });
     expect(chart.getAttribute('aria-label')).toBe(
-      'Daily sales, 3–9 Oct: total ₹32.27L, best day Wed 7 Oct ₹20L',
+      'Daily sales, 3–9 Oct: total ₹32,27,000, best day Wed 7 Oct ₹20,00,000',
     );
     expect(chart.querySelectorAll('[aria-hidden="true"]').length).toBe(report.trend.length);
   });
@@ -481,11 +481,11 @@ describe('InsightsScreen: credit health', () => {
     blocks.credit.data = creditHealth;
     renderScreen();
     const block = screen.getByRole('region', { name: 'Credit health' });
-    expect(within(block).getByText('₹3.41L')).toBeTruthy();
-    expect(within(block).getByText('₹2.96L')).toBeTruthy();
+    expect(within(block).getByText('₹3,41,000')).toBeTruthy();
+    expect(within(block).getByText('₹2,96,000')).toBeTruthy();
     expect(within(block).getByText(/Credit given exceeded collections by/)).toBeTruthy();
     expect(within(block).queryByText(/Receivables/)).toBeNull();
-    expect(within(block).getByText('₹45k')).toBeTruthy();
+    expect(within(block).getByText('₹45,000')).toBeTruthy();
     expect(within(block).getByText('11%')).toBeTruthy();
     expect(within(block).getByText(/13\.7% vs prior 7/)).toBeTruthy();
   });
@@ -495,7 +495,7 @@ describe('InsightsScreen: credit health', () => {
     blocks.credit.data = { ...creditHealth, collected: 400000, receivablesChange: -59000 };
     renderScreen();
     expect(screen.getByText(/Collections exceeded credit given by/)).toBeTruthy();
-    expect(screen.getByText('₹59k')).toBeTruthy();
+    expect(screen.getByText('₹59,000')).toBeTruthy();
   });
 
   it('shows no change badge or share when they are not comparable', () => {
