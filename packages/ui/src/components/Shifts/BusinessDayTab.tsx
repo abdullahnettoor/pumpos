@@ -760,7 +760,8 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
                 <strong>
                   {snap.shiftsIncluded || 0} closed shift{snap.shiftsIncluded === 1 ? '' : 's'}
                 </strong>{' '}
-                plus live merchandise, credit and purchases. Office money is in the Daily Cash Book.
+                plus live merchandise, credit and purchases. Office money is in Accounts → Daily
+                cash book.
                 {hasOpenShift
                   ? " Fuel from the currently open shift isn't counted until it closes (nozzle readings are taken at close)."
                   : ' Fuel for a shift is counted once that shift closes.'}

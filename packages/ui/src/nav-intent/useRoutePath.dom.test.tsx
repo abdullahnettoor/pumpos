@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { useRoutePath } from './useRoutePath.js';
+import { LEGACY_ROUTES } from './routes.js';
 
 afterEach(() => {
   window.history.replaceState(null, '', '/');
@@ -46,5 +47,38 @@ describe('useRoutePath', () => {
       window.dispatchEvent(new HashChangeEvent('hashchange'));
     });
     expect(result.current[0]).toBe('/sales');
+  });
+
+  describe('renamed routes', () => {
+    it.each(Object.entries(LEGACY_ROUTES))('a reload of #%s lands on %s', (oldPath, newPath) => {
+      window.history.replaceState(null, '', `/#${oldPath}`);
+      const { result } = renderHook(() => useRoutePath('/dashboard'));
+      expect(result.current[0]).toBe(newPath);
+      expect(window.location.hash).toBe(`#${newPath}`);
+    });
+
+    it('rewrites the old hash in place rather than adding a history entry', () => {
+      window.history.replaceState(null, '', '/#/purchases');
+      const before = window.history.length;
+      renderHook(() => useRoutePath('/dashboard'));
+      expect(window.location.hash).toBe('#/suppliers');
+      expect(window.history.length).toBe(before);
+    });
+
+    it('resolves a navigation to an old route', () => {
+      const { result } = renderHook(() => useRoutePath('/dashboard'));
+      act(() => result.current[1]('/purchases'));
+      expect(result.current[0]).toBe('/suppliers');
+      expect(window.location.hash).toBe('#/suppliers');
+    });
+
+    it('resolves an old route reached by back/forward', () => {
+      const { result } = renderHook(() => useRoutePath('/dashboard'));
+      act(() => {
+        window.history.replaceState(null, '', '/#/purchases');
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      });
+      expect(result.current[0]).toBe('/suppliers');
+    });
   });
 });

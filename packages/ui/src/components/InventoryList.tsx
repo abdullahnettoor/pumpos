@@ -27,6 +27,7 @@ import {
   DateText,
   Form,
   Icon,
+  ConceptIcon,
 } from '../pump-ds/index.js';
 import { DensityTab } from './inventory/density/index.js';
 import { DecantationsTab } from './inventory/decantation/DecantationsTab.js';
@@ -509,7 +510,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
   return (
     <div className="animate-fade-in">
       <PageLayout
-        title="Inventory Management"
+        title="Inventory"
         subtitle="Monitor tank stock levels, audit physical dip variances, and inspect fuel movements."
         actions={
           <Button
@@ -528,24 +529,28 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as TabType)}
             tabs={[
-              { id: 'tanks', label: 'Tank Status', icon: <Icon name="tank" size="xs" /> },
-              { id: 'density', label: 'Density Register', icon: <Icon name="gauge" size="xs" /> },
-              { id: 'items', label: 'Merchandise Stock', icon: <Icon name="package" size="xs" /> },
-              {
-                id: 'movements',
-                label: 'Stock Movements',
-                icon: <Icon name="arrow-left-right" size="xs" />,
-              },
-              { id: 'variances', label: 'Reconciliations', icon: <Icon name="scale" size="xs" /> },
+              { id: 'tanks', label: 'Tanks', icon: <ConceptIcon concept="tanks" /> },
               ...(showDecantations
                 ? [
                     {
                       id: 'decantations',
                       label: 'Decantations',
-                      icon: <Icon name="truck" size="xs" />,
+                      icon: <ConceptIcon concept="decantations" />,
                     },
                   ]
                 : []),
+              { id: 'density', label: 'Density', icon: <ConceptIcon concept="density" /> },
+              {
+                id: 'items',
+                label: 'Product stock',
+                icon: <ConceptIcon concept="product-stock" />,
+              },
+              { id: 'movements', label: 'Movements', icon: <ConceptIcon concept="movements" /> },
+              {
+                id: 'variances',
+                label: 'Reconciliations',
+                icon: <ConceptIcon concept="reconciliations" />,
+              },
             ]}
           />
         }
@@ -783,7 +788,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
                     title={items.length === 0 ? 'No merchandise' : 'No matches'}
                     description={
                       items.length === 0
-                        ? 'Add non-fuel products in Station Overview → Products.'
+                        ? 'Add non-fuel products in Station → Products.'
                         : 'Try a different search.'
                     }
                   />

@@ -21,17 +21,17 @@ Captured on the preview console against a freshly onboarded station ("Hilltop Fu
 
 ## Catalog, CRM, purchasing setup, team
 
-- Station Overview → Products Catalog → **Import CSV**: choose file → validated preview →
+- Station → Products → **Import CSV**: choose file → validated preview →
   **Import N products** (price + opening stock in one file) `[16–18]`
-- Customers → Customer Registry → **Add Customer** (Regular / Credit / Fleet; credit limit,
+- Customers → Customers → **Add Customer** (Regular / Credit / Fleet; credit limit,
   fleet code, GST) `[19–21]`
-- Purchases → Supplier Registry → **Add Supplier** `[22–23]`
+- Suppliers → Suppliers → **Add Supplier** `[22–23]`
 - Organization → Team → **Add Team Member** (phone/email + password, role, station
   assignment) `[24–26]`
 
 ## Shift lifecycle
 
-- Shifts → Active Shift → open form: template, business date, opening cash float,
+- Shifts → Live shift → open form: template, business date, opening cash float,
   opening nozzle readings, attendant→DU + POS→DU assignment → **Start Shift Operations** `[27–29]`
 - Quick actions: Add Expense (E) `[31]` · Log Collection (C) `[37]` · Merchandise Sale (M) `[30]` ·
   Add Purchase (P) — fuel drop with tank allocation `[32]`
@@ -45,11 +45,11 @@ Captured on the preview console against a freshly onboarded station ("Hilltop Fu
 ## Business day & reporting
 
 - Shifts → Business Day → **Close business day** → confirm **Close day** → seals immutable DSSR `[45–47]`
-- Reports → Daily DSSR → Recent DSSRs → DSSR detail (P&L, fuel by product, dip variance) `[48–49]`
+- Reports → DSSR → Recent DSSRs → DSSR detail (P&L, fuel by product, dip variance) `[48–49]`
 
 ## Everything else
 
-- Inventory (Tank Status / Merchandise Stock / Movements / Reconciliations) `[50]`
+- Inventory (Tanks / Product stock / Movements / Reconciliations) `[50]`
 - Accounts (cash, bank, clearing; transfers, settle to bank) `[51]`
 - Expenses ledger `[52]` · Pricing (fuel rates + merchandise MRP) `[53]`
 - Dashboard after a full day `[54]`

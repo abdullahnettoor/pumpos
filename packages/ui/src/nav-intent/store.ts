@@ -52,9 +52,13 @@ export interface NavIntent {
    * business-day-close snapshot.
    */
   openShiftSummaryId?: string;
-  /** Open a specific tab of the Reports page. */
-  openReportsTab?: 'cash-book';
-  /** Open the Record Purchase drawer on arrival at Purchases. */
+  /** Open a specific report in the Reports sub-navigation. */
+  openReportsTab?: 'gst';
+  /** With `openReportsTab: 'gst'`: which GST view to show. */
+  openGstView?: 'sales' | 'purchases' | 'income';
+  /** Open a specific tab of the Accounts page (the Daily cash book lives there). */
+  openAccountsTab?: 'cash-book';
+  /** Open the Record Purchase drawer on arrival at Suppliers → Purchases. */
   openNewPurchase?: boolean;
   /** Open a specific tab on the Organization page. */
   openOrganizationTab?: 'desktop';

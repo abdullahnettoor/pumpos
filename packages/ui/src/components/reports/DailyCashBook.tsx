@@ -123,7 +123,7 @@ export const DailyCashBook: React.FC<DailyCashBookProps> = ({ selectedStation })
         flush
         title={
           <>
-            Daily Cash Book — <DateText value={date} />
+            Daily cash book — <DateText value={date} />
           </>
         }
       >

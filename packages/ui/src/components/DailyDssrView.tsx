@@ -163,7 +163,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
         <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
         <span>
           Sales-only report for this business day. Collections, expenses, income and supplier
-          payments are office records by entry date — see Reports → Daily Cash Book.
+          payments are office records by entry date — see Accounts → Daily cash book.
         </span>
       </div>
 

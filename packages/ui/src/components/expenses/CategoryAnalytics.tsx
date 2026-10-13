@@ -1,15 +1,44 @@
 import React, { useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { useExpenses } from '../../query/hooks.js';
+import { useExpenses, useIncome } from '../../query/hooks.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr } from '../../utils/format.js';
 import { KpiStrip, KpiTile, Panel, EmptyState, Icon } from '../../pump-ds/index.js';
 
-export interface ExpenseAnalyticsProps {
+export interface CategoryAnalyticsProps {
   selectedStation: any | null;
+  /** Which office record to break down. Income reuses the same view (#540). */
+  kind?: 'expense' | 'income';
 }
+
+const COPY = {
+  expense: {
+    total: 'Total expenses',
+    withAmount: 'with spend',
+    panel: 'Spend by category',
+    loading: 'Fetching expenses.',
+    empty: 'No expenses',
+    emptyRange: 'No expenses in this date range.',
+    emptyTable: 'No expenses in this range.',
+    tone: 'danger' as const,
+    color: 'var(--brand-danger)',
+    icon: 'receipt' as const,
+  },
+  income: {
+    total: 'Total income',
+    withAmount: 'with income',
+    panel: 'Income by category',
+    loading: 'Fetching income.',
+    empty: 'No income',
+    emptyRange: 'No income in this date range.',
+    emptyTable: 'No income in this range.',
+    tone: 'success' as const,
+    color: 'var(--state-success-fg)',
+    icon: 'arrow-down' as const,
+  },
+};
 
 interface CategoryRow {
   name: string;
@@ -19,19 +48,29 @@ interface CategoryRow {
 }
 
 /**
- * ExpenseAnalytics — the "by category" view: expenses over an entry-date range
+ * CategoryAnalytics — the "by category" view: expenses over an entry-date range
  * AGGREGATED per category (one row each: entries, total, share of spend). This
- * is deliberately NOT the per-entry ledger (that lives in the Expenses → Ledger
+ * is deliberately NOT the per-entry ledger (that lives in the Expenses → Expenses
  * tab); it answers "where is the money going". Shared by the Expenses screen
- * "By Category" tab and the Reports "Expense Register" tab. VOIDED excluded.
+ * "By category" tab and the Reports "Expense register". The Income screen's
+ * "By category" tab reads the same view with `kind="income"`. VOIDED excluded.
  */
-export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStation }) => {
+export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
+  selectedStation,
+  kind = 'expense',
+}) => {
+  const copy = COPY[kind];
   const s = selectedStation?.settings || {};
   // Office records are dated by entry date (station calendar date), not the sales day.
   const clock = { timeZone: s.timezone };
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
 
-  const { data: expenses, isLoading } = useExpenses();
+  const expensesQ = useExpenses({ enabled: kind === 'expense' });
+  const incomeQ = useIncome(
+    { stationId: selectedStation?.id ?? undefined },
+    { enabled: kind === 'income' },
+  );
+  const { data: expenses, isLoading } = kind === 'income' ? incomeQ : expensesQ;
 
   const active = useMemo(
     () =>
@@ -87,7 +126,7 @@ export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStat
             style={{
               fontWeight: 700,
               fontFamily: 'var(--font-mono)',
-              color: 'var(--brand-danger)',
+              color: copy.color,
             }}
           >
             {inr(getValue())}
@@ -115,7 +154,7 @@ export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStat
                     display: 'block',
                     width: `${pct}%`,
                     height: '100%',
-                    background: 'var(--brand-danger)',
+                    background: copy.color,
                     borderRadius: '3px',
                   }}
                 />
@@ -136,7 +175,7 @@ export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStat
         },
       },
     ],
-    [],
+    [copy.color],
   );
 
   return (
@@ -145,9 +184,9 @@ export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStat
 
       <KpiStrip columns="auto">
         <KpiTile
-          dot="danger"
-          valueTone="danger"
-          label="Total Expenses"
+          dot={copy.tone}
+          valueTone={copy.tone}
+          label={copy.total}
           value={inr(total)}
           hint={`${range.from} → ${range.to}`}
         />
@@ -156,7 +195,7 @@ export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStat
           dot="neutral"
           label="Categories"
           value={String(byCategory.length)}
-          hint="with spend"
+          hint={copy.withAmount}
         />
         <KpiTile
           dot="warning"
@@ -166,23 +205,23 @@ export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStat
         />
       </KpiStrip>
 
-      <Panel flush title="Spend by category">
+      <Panel flush title={copy.panel}>
         {isLoading ? (
           <div style={{ padding: '16px' }}>
             <EmptyState
               compact
-              icon={<Icon name="receipt" size="md" />}
+              icon={<Icon name={copy.icon} size="md" />}
               title="Loading…"
-              description="Fetching expenses."
+              description={copy.loading}
             />
           </div>
         ) : byCategory.length === 0 ? (
           <div style={{ padding: '12px' }}>
             <EmptyState
               compact
-              icon={<Icon name="receipt" size="md" />}
-              title="No expenses"
-              description="No expenses in this date range."
+              icon={<Icon name={copy.icon} size="md" />}
+              title={copy.empty}
+              description={copy.emptyRange}
             />
           </div>
         ) : (
@@ -190,7 +229,7 @@ export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStat
             bare
             columns={columns}
             data={byCategory}
-            emptyMessage="No expenses in this range."
+            emptyMessage={copy.emptyTable}
             getRowId={(r) => r.name}
             initialSorting={[{ id: 'total', desc: true }]}
           />

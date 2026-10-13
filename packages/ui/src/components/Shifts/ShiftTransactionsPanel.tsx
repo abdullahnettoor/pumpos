@@ -111,7 +111,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
             </h3>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
               Record credit sales against this shift. Purchases, expenses and collections are not
-              part of a shift — record them from Purchases, Expenses or Customers.
+              part of a shift — record them from Suppliers, Expenses or Customers.
             </p>
           </div>
           {isReadOnly && (

@@ -238,7 +238,7 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
               {DEFAULT_TANK_LEVEL_SETTINGS.lowBelowPct}% of capacity
             </div>
             <div style={{ marginTop: '2px', fontSize: '11px', color: 'var(--text-muted)' }}>
-              Change later in Station Setup → Business Rules.
+              Change later in Station → Rules.
             </div>
           </div>
           <div>

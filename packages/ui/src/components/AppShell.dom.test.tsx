@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from './primitives/ToastProvider.js';
 import { AppShell, SIDEBAR_COLLAPSED_KEY, type NavItem } from './AppShell.js';
 import type { SidebarBadges } from '../query/useSidebarBadges.js';
+import { NAV_PAGES } from '../nav-intent/routes.js';
 
 let mockBadges: SidebarBadges = {
   shiftRunning: false,
@@ -43,7 +44,7 @@ afterEach(() => {
 const mockNavItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'Shifts', path: '/shifts' },
-  { label: 'Station Overview', path: '/setup/station' },
+  { label: 'Station', path: '/setup/station' },
   { label: 'Expenses', path: '/expenses' },
   { label: 'Pricing', path: '/pricing' },
   { label: 'Customers', path: '/customers' },
@@ -172,13 +173,7 @@ const station = (id: string, name: string) => ({ id, name }) as any;
 const shell = (props: Partial<React.ComponentProps<typeof AppShell>> = {}) =>
   renderWithProviders(
     <AppShell
-      navItems={[
-        ...mockNavItems,
-        { label: 'Purchases', path: '/purchases' },
-        { label: 'Inventory', path: '/inventory' },
-        { label: 'Reports', path: '/reports', roles: ['Owner'] },
-        { label: 'Organization', path: '/organization', roles: ['Owner'] },
-      ]}
+      navItems={[...NAV_PAGES]}
       currentPath="/shifts"
       onNavigate={() => {}}
       userRole="Owner"
@@ -191,23 +186,62 @@ const shell = (props: Partial<React.ComponentProps<typeof AppShell>> = {}) =>
     </AppShell>,
   );
 
-describe('AppShell sidebar groups', () => {
-  it('groups Operate / Money / Insight / Setup and filters by role', () => {
-    shell({ userRole: 'Manager' });
-    const text = screen.getByRole('navigation').textContent!;
-    expect(text).toMatch(/Operate.*Dashboard.*Shifts.*Pricing/);
-    expect(text).toMatch(/Money.*Customers.*Purchases.*Expenses/);
-    expect(text).toMatch(/Setup.*Station Overview/);
-    expect(text).not.toContain('Insight');
-    expect(text).not.toContain('Reports');
-    expect(text).not.toContain('Organization');
+const sidebar = () => screen.getByRole('navigation').textContent!;
+
+describe('AppShell sidebar groups (#540)', () => {
+  it('shows the five groups to an Owner, in order', () => {
+    shell();
+    expect(sidebar()).toBe(
+      [
+        'Operate',
+        'Dashboard',
+        'Shifts',
+        'Inventory',
+        'Pricing',
+        'Parties',
+        'Customers',
+        'Suppliers',
+        'Books',
+        'Accounts',
+        'Expenses',
+        'Income',
+        'Insight',
+        'Reports',
+        'Setup',
+        'Station',
+        'Organization',
+      ].join(''),
+    );
   });
 
-  it('shows Insight and Organization to an Owner', () => {
-    shell();
-    const text = screen.getByRole('navigation').textContent!;
-    expect(text).toMatch(/Insight.*Reports/);
-    expect(text).toMatch(/Setup.*Station Overview.*Organization/);
+  it('filters pages by role: Manager has no Organization', () => {
+    shell({ userRole: 'Manager' });
+    expect(sidebar()).toMatch(/Setup.*Station/);
+    expect(sidebar()).not.toContain('Organization');
+  });
+
+  it('filters pages by role: Accountant sees Books and Reports but no Pricing or Setup', () => {
+    shell({ userRole: 'Accountant' });
+    expect(sidebar()).toMatch(/Parties.*Customers.*Suppliers.*Books.*Accounts.*Insight.*Reports/);
+    expect(sidebar()).not.toContain('Pricing');
+    expect(sidebar()).not.toContain('Setup');
+  });
+
+  it('filters pages by role: Staff sees only their pages', () => {
+    shell({ userRole: 'Staff' });
+    expect(sidebar()).toMatch(
+      /Operate.*Dashboard.*Shifts.*Parties.*Customers.*Books.*Expenses.*Income/,
+    );
+    for (const hidden of ['Inventory', 'Suppliers', 'Accounts', 'Reports', 'Station', 'Insight']) {
+      expect(sidebar()).not.toContain(hidden);
+    }
+  });
+
+  it('navigates to Suppliers on its new route', () => {
+    const onNavigate = vi.fn();
+    shell({ onNavigate });
+    fireEvent.click(screen.getByRole('button', { name: 'Suppliers' }));
+    expect(onNavigate).toHaveBeenCalledWith('/suppliers');
   });
 
   it('shows the breadcrumb page label', () => {
