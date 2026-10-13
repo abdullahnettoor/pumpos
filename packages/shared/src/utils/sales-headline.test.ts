@@ -5,12 +5,11 @@ import {
   deriveSales,
   deriveSplitBar,
   deriveTrend,
-  readSnapshot,
   sparklinePath,
-  unitLabel,
-  wholeQuantityLabel,
   businessWeekday,
 } from './sales-headline.js';
+import { readSnapshot } from './dssr-snapshot.js';
+import { unitLabel, volumeLabel, wholeQuantityLabel } from './quantity-label.js';
 
 const preview = {
   businessDate: '2026-10-09',
@@ -70,6 +69,16 @@ describe('sales-headline shared utilities', () => {
     expect(unitLabel('ltr')).toBe('L');
     expect(unitLabel('kilograms')).toBe('kg');
     expect(wholeQuantityLabel(2211, 'L')).toBe('2,211 L');
+    expect(
+      volumeLabel(
+        new Map([
+          ['L', 100],
+          ['kg', 40],
+        ]),
+      ),
+    ).toBe('100 L · 40 kg');
+    expect(volumeLabel({ L: 2211 })).toBe('2,211 L');
+    expect(volumeLabel({})).toBe('0 L');
     expect(businessWeekday('2026-10-09')).toBe('Fri');
   });
 

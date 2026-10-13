@@ -28,6 +28,8 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
   let netVolume = 0;
   let fuelSalesValue = 0;
   let totalCashVariance = 0;
+  // Cash the Drawers took for sales, floats excluded (Σ declared + drops − float).
+  let cashSales = 0;
   const nozzleAgg: Record<string, FuelAgg & { nozzleId: string; nozzleName: string }> = {};
   const productAgg: Record<string, FuelAgg> = {};
   const shifts: {
@@ -64,6 +66,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     netVolume += sNet;
     fuelSalesValue += Number(snap.totalFuelSalesValue ?? 0);
     totalCashVariance += Number(snap.cashVariance ?? 0);
+    cashSales += Number(snap.payments?.cash ?? snap.reconciliation?.cashSales ?? 0);
     const twoLevel = isTwoLevelVarianceSnapshot(snap);
     let shiftAttendantVariance = 0;
     const drawerRows = twoLevel && Array.isArray(snap.drawers) ? snap.drawers : [];
@@ -319,6 +322,12 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       byPaymentMethod: salesByMethod,
     },
     salesTax,
+    /**
+     * Cash received for the day's sales by closed shifts' Drawers (#516).
+     * Additive: snapshots frozen before it lack the key (readers show no figure).
+     * Collections are Office Records, not here (ADR 0005).
+     */
+    cashSales: round2(cashSales),
     credit: {
       normalCredit,
       fleetCredit,
