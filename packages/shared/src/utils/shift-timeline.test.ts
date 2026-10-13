@@ -204,3 +204,78 @@ describe('isDayShiftsDone', () => {
     expect(isDayShiftsDone(input('2026-10-10T00:25:00Z', all))).toBe(true);
   });
 });
+
+describe('carry-over shift (opened in an earlier Business Day)', () => {
+  // Day Start 05:00 IST (23:30Z previous day); Shift 3 of 13 Oct 22:00→06:00 IST.
+  const c5 = { timeZone: 'Asia/Kolkata', dayStartsAt: '05:00' };
+  const carryRunning = {
+    openedAt: '2026-10-13T16:30:00Z', // 22:00 IST on the 13th
+    closedAt: null,
+    sequence: 3,
+    businessDate: '2026-10-13',
+  };
+  const input = (now: string, over: object = {}) => ({
+    now: at(now),
+    shifts: [] as TimelineShift[],
+    templates,
+    carryOver: carryRunning,
+    ...c5,
+    ...over,
+  });
+
+  it('05:30 on the 14th: visible, today first template ghosted', () => {
+    const r = dashboardTimeline(input('2026-10-14T00:00:00Z')); // 05:30 IST
+    expect(r.businessDate).toBe('2026-10-14');
+    expect(r.visible).toBe(true);
+    expect(r.nextWindow?.templateId).toBe('t1');
+    expect(nextShiftToOpen(input('2026-10-14T00:00:00Z'))).toBeNull();
+    expect(isDayShiftsDone(input('2026-10-14T00:00:00Z'))).toBe(false);
+  });
+
+  it('without carry-over the same moment is before-first-shift', () => {
+    const r = dashboardTimeline(input('2026-10-14T00:00:00Z', { carryOver: null }));
+    expect(r).toMatchObject({ visible: false, reason: 'before-first-shift' });
+  });
+
+  it('closed carry-over keeps the strip visible; sequence of next shift is 1', () => {
+    const closed = { ...carryRunning, closedAt: '2026-10-14T00:35:00Z' };
+    const i = input('2026-10-14T01:00:00Z', { carryOver: closed });
+    expect(dashboardTimeline(i).visible).toBe(true);
+    expect(nextShiftToOpen(i)).toMatchObject({ sequence: 1 });
+  });
+
+  it('stays visible while running even if no template window remains', () => {
+    const r = dashboardTimeline(
+      input('2026-10-14T00:00:00Z', {
+        templates: [{ id: 'a', name: 'A', startTime: '05:00', endTime: '06:00', isActive: true }],
+        carryOver: carryRunning,
+        // window 05:00–06:00 IST has not ended at 05:30, use a later now below
+      }),
+    );
+    expect(r.visible).toBe(true);
+    const late = dashboardTimeline(
+      input('2026-10-14T10:00:00Z', {
+        templates: [{ id: 'a', name: 'A', startTime: '05:00', endTime: '06:00', isActive: true }],
+      }),
+    );
+    expect(late).toMatchObject({ visible: true, nextWindow: null });
+  });
+
+  it('Day Start 00:00: 22:00→02:00 shift running at 00:30', () => {
+    const r = dashboardTimeline({
+      now: at('2026-10-13T19:00:00Z'), // 00:30 IST on the 14th
+      shifts: [],
+      templates: [{ id: 'a', name: 'A', startTime: '06:00', endTime: '14:00', isActive: true }],
+      carryOver: {
+        openedAt: '2026-10-13T16:30:00Z',
+        closedAt: null,
+        sequence: 3,
+        businessDate: '2026-10-13',
+      },
+      timeZone: 'Asia/Kolkata',
+      dayStartsAt: '00:00',
+    });
+    expect(r).toMatchObject({ visible: true, businessDate: '2026-10-14' });
+    expect(r.nextWindow?.templateId).toBe('a');
+  });
+});

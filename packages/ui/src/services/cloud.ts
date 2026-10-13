@@ -670,6 +670,8 @@ export interface DashboardSummary {
   lastShift?: {
     id: string;
     templateName?: string | null;
+    openedAt?: string | null;
+    closedAt?: string | null;
     businessDate?: string | null;
     shiftSequence?: number | null;
   } | null;

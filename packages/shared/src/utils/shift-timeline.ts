@@ -22,6 +22,20 @@ export interface TimelineShift {
   closedAt: string | number | null;
 }
 
+/**
+ * A shift opened in an EARLIER Business Day that is still running (or closed
+ * after today's Day Start). It is not one of today's shifts and is never
+ * matched to a template window, but it means a shift has run today.
+ */
+export interface TimelineCarryOver {
+  openedAt: string | number;
+  closedAt: string | number | null;
+  sequence: number | null;
+  /** Business Date (YYYY-MM-DD) the shift belongs to. */
+  businessDate: string;
+  scheduledEndAt?: number | null;
+}
+
 export interface TimelineWindow {
   templateId: string;
   name: string;
@@ -52,6 +66,8 @@ export interface DashboardTimelineInput {
   templates: readonly TimelineTemplate[];
   timeZone: string;
   dayStartsAt: string;
+  /** Shift of an earlier Business Day running (or closed) in today's axis. */
+  carryOver?: TimelineCarryOver | null;
 }
 
 const DAY_MIN = 1440;
@@ -97,7 +113,8 @@ export function dashboardTimeline(input: DashboardTimelineInput): DashboardTimel
     nextWindow: null,
   });
 
-  if (shifts.length === 0) return hide('before-first-shift');
+  const carry = input.carryOver ?? null;
+  if (shifts.length === 0 && !carry) return hide('before-first-shift');
   if (shifts.some((s) => s.closedAt == null)) {
     return { ...base, visible: true, reason: null, nextWindow: null };
   }
@@ -111,7 +128,12 @@ export function dashboardTimeline(input: DashboardTimelineInput): DashboardTimel
     .sort((a, b) => a.startAt - b.startAt);
 
   const nextWindow = remaining[0] ?? null;
-  if (!nextWindow) return hide('day-complete');
+  if (!nextWindow) {
+    // A running carry-over keeps the strip visible on its own.
+    return carry && carry.closedAt == null
+      ? { ...base, visible: true, reason: null, nextWindow: null }
+      : hide('day-complete');
+  }
   return { ...base, visible: true, reason: null, nextWindow };
 }
 
@@ -132,6 +154,7 @@ export interface NextShift {
  */
 export function nextShiftToOpen(input: DashboardTimelineInput): NextShift | null {
   if (input.shifts.some((s) => s.closedAt == null)) return null;
+  if (input.carryOver && input.carryOver.closedAt == null) return null;
   if (input.shifts.length === 0) {
     const first = [...input.templates]
       .filter((t) => t.isActive)
@@ -157,6 +180,7 @@ export function isDayShiftsDone(input: DashboardTimelineInput): boolean {
   return (
     input.shifts.length > 0 &&
     nextShiftToOpen(input) === null &&
-    !input.shifts.some((s) => s.closedAt == null)
+    !input.shifts.some((s) => s.closedAt == null) &&
+    !(input.carryOver && input.carryOver.closedAt == null)
   );
 }
