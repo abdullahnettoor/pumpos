@@ -6,8 +6,9 @@ import { cn } from '../lib/cn.js';
  * loading. Size it like the real content (pass `height`) so nothing shifts
  * when the data lands. The pulse stops under `prefers-reduced-motion`.
  *
- * Give it an `aria-label` ("Loading sales") when it stands for a whole
- * section; it is marked `aria-busy`.
+ * It is a `role="status"` region; give it an `aria-label` ("Loading sales")
+ * when it stands for a whole section. Decorative lines inside a larger
+ * placeholder pass `role="presentation"` and `aria-hidden`.
  */
 export interface SkeletonProps extends HTMLAttributes<HTMLDivElement> {
   /** Block height in px (or any CSS length). */
@@ -23,7 +24,7 @@ export const Skeleton = forwardRef<HTMLDivElement, SkeletonProps>(function Skele
   return (
     <div
       ref={ref}
-      aria-busy="true"
+      role="status"
       className={cn('rounded-input bg-surface-alt motion-safe:animate-pulse', className)}
       style={{ height, width, ...style }}
       {...rest}

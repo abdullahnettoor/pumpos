@@ -52,4 +52,24 @@ describe('DataTable states', () => {
     expect(screen.getByRole('table')).toBeTruthy();
     expect(screen.getByText('Diesel')).toBeTruthy();
   });
+
+  it('access refusal: the server message, no Retry', () => {
+    const err = Object.assign(new Error('Your plan does not include this report.'), {
+      code: 'CAPABILITY_NOT_ENTITLED',
+      status: 403,
+    });
+    render(
+      <DataTable
+        columns={columns}
+        data={[]}
+        error={err}
+        onRetry={vi.fn()}
+        title="invoices"
+        emptyMessage="No invoices."
+      />,
+    );
+    expect(screen.getByRole('alert').textContent).toBe('Your plan does not include this report.');
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(screen.queryByText('No invoices.')).toBeNull();
+  });
 });

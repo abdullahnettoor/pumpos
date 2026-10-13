@@ -7,9 +7,13 @@ import { DataSection, type SectionQuery } from './DataSection.js';
 const q = (over: Partial<SectionQuery> = {}): SectionQuery => ({
   isPending: false,
   isError: false,
+  fetchStatus: 'idle',
   refetch: vi.fn(),
   ...over,
 });
+/** A query with a request in flight. */
+const fetching = (over: Partial<SectionQuery> = {}) =>
+  q({ isPending: true, fetchStatus: 'fetching', ...over });
 
 afterEach(cleanup);
 
@@ -18,13 +22,13 @@ const section = () => document.querySelector('[data-state]')!;
 describe('DataSection', () => {
   it('pending: a skeleton sized like the body, no content', () => {
     render(
-      <DataSection title="Sales" query={q({ isPending: true })} placeholderHeight={120}>
+      <DataSection title="Sales" query={fetching()} placeholderHeight={120}>
         <span>body</span>
       </DataSection>,
     );
-    const skeleton = screen.getByLabelText('Loading sales');
-    expect(skeleton.getAttribute('aria-busy')).toBe('true');
+    const skeleton = screen.getByRole('status', { name: 'Loading sales' });
     expect(skeleton.style.height).toBe('120px');
+    expect(section().getAttribute('aria-busy')).toBe('true');
     expect(screen.queryByText('body')).toBeNull();
     expect(section().getAttribute('data-state')).toBe('loading');
   });
@@ -50,7 +54,7 @@ describe('DataSection', () => {
     render(
       <DataSection
         title="Sales"
-        query={[q({ isPending: true }), q({ isError: true })]}
+        query={[fetching(), q({ isError: true })]}
         isEmpty
         empty={<span>nothing yet</span>}
         placeholderHeight={80}
@@ -65,7 +69,11 @@ describe('DataSection', () => {
 
   it('error without a refetch: message only, no Retry', () => {
     render(
-      <DataSection title="Sales" query={{ isPending: false, isError: true }} placeholderHeight={80}>
+      <DataSection
+        title="Sales"
+        query={{ isPending: false, isError: true, fetchStatus: 'idle' }}
+        placeholderHeight={80}
+      >
         <span>body</span>
       </DataSection>,
     );
@@ -118,12 +126,7 @@ describe('DataSection', () => {
 
   it('gated off: renders nothing (its queries are disabled by the caller)', () => {
     const { container } = render(
-      <DataSection
-        title="Sales"
-        enabled={false}
-        query={q({ isPending: true })}
-        placeholderHeight={80}
-      >
+      <DataSection title="Sales" enabled={false} query={fetching()} placeholderHeight={80}>
         <span>body</span>
       </DataSection>,
     );
@@ -146,20 +149,15 @@ describe('DataSection', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
   });
 
-  it('frameWhenReady=false: framed placeholder/error, unframed content', () => {
+  it('shape="cards": framed placeholder/error, unframed content', () => {
     const { rerender } = render(
-      <DataSection
-        title="Fuels"
-        frameWhenReady={false}
-        query={q({ isPending: true })}
-        placeholderHeight={80}
-      >
+      <DataSection title="Fuels" shape="cards" query={fetching()} placeholderHeight={80}>
         <span>body</span>
       </DataSection>,
     );
     expect(section().className).toMatch(/rounded-card/);
     rerender(
-      <DataSection title="Fuels" frameWhenReady={false} query={q()} placeholderHeight={80}>
+      <DataSection title="Fuels" shape="cards" query={q()} placeholderHeight={80}>
         <span>body</span>
       </DataSection>,
     );
@@ -173,5 +171,150 @@ describe('DataSection', () => {
       </DataSection>,
     );
     expect(section().getAttribute('data-dashboard-card')).toBe('money');
+  });
+
+  it('bare shape: the skeleton is sized exactly, with no extra padding', () => {
+    render(
+      <DataSection title="Sales" shape="bare" query={fetching()} placeholderHeight={90}>
+        <span>body</span>
+      </DataSection>,
+    );
+    expect(section().className).not.toMatch(/p-4/);
+    expect(screen.getByRole('status').style.height).toBe('90px');
+  });
+
+  describe('fetch status', () => {
+    it('a disabled query (pending, idle) shows no endless skeleton', () => {
+      const { container } = render(
+        <DataSection
+          title="Sales"
+          query={q({ isPending: true, fetchStatus: 'idle' })}
+          isEmpty
+          empty={<span>nothing yet</span>}
+          placeholderHeight={80}
+        >
+          <span>body</span>
+        </DataSection>,
+      );
+      expect(screen.queryByRole('status')).toBeNull();
+      expect(screen.queryByText('nothing yet')).toBeNull();
+      expect(container.innerHTML).toBe('');
+    });
+
+    it('not yet requested with enabled passed true: the placeholder', () => {
+      render(
+        <DataSection
+          title="Sales"
+          enabled
+          query={q({ isPending: true, fetchStatus: 'idle' })}
+          placeholderHeight={80}
+        >
+          <span>body</span>
+        </DataSection>,
+      );
+      expect(screen.getByLabelText('Loading sales')).toBeTruthy();
+    });
+
+    it('a query paused offline stays loading, never the empty state', () => {
+      render(
+        <DataSection
+          title="Sales"
+          query={q({ isPending: true, fetchStatus: 'paused' })}
+          isEmpty
+          empty={<span>nothing yet</span>}
+          placeholderHeight={80}
+        >
+          <span>body</span>
+        </DataSection>,
+      );
+      expect(section().getAttribute('data-state')).toBe('loading');
+      expect(screen.getByLabelText('Loading sales')).toBeTruthy();
+      expect(screen.queryByText('nothing yet')).toBeNull();
+    });
+
+    it('a paused query that already has data shows the content', () => {
+      render(
+        <DataSection
+          title="Sales"
+          query={q({ isPending: false, fetchStatus: 'paused' })}
+          placeholderHeight={80}
+        >
+          <span>body</span>
+        </DataSection>,
+      );
+      expect(screen.getByText('body')).toBeTruthy();
+    });
+  });
+
+  describe('access refusals', () => {
+    const refusal = (code: string, status: number, message: string) =>
+      Object.assign(new Error(message), { code, status });
+
+    it.each([
+      ['FORBIDDEN', 403],
+      ['CAPABILITY_NOT_ENTITLED', 403],
+      ['SUBSCRIPTION_RESTRICTED', 403],
+      ['ORGANIZATION_SUSPENDED', 403],
+      ['LIMIT_REACHED', 409],
+    ])('%s: the refusal message, no Retry', (code, status) => {
+      render(
+        <DataSection
+          title="Sales"
+          query={q({ isError: true, error: refusal(code, status, `Refused: ${code}`) })}
+          isEmpty
+          empty={<span>nothing yet</span>}
+          placeholderHeight={80}
+        >
+          <span>body</span>
+        </DataSection>,
+      );
+      expect(section().getAttribute('data-state')).toBe('refused');
+      expect(screen.getByRole('alert').textContent).toBe(`Refused: ${code}`);
+      expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+      expect(screen.queryByText('nothing yet')).toBeNull();
+    });
+
+    it('a bare 403 with no message falls back to a plain sentence', () => {
+      render(
+        <DataSection
+          title="Sales"
+          query={q({ isError: true, error: { status: 403 } })}
+          placeholderHeight={80}
+        >
+          <span>body</span>
+        </DataSection>,
+      );
+      expect(screen.getByRole('alert').textContent).toBe("You don't have access to sales.");
+    });
+
+    it('network/server errors keep Retry', () => {
+      const net = q({
+        isError: true,
+        error: Object.assign(new Error('x'), { code: 'NETWORK_ERROR' }),
+      });
+      const srv = q({ isError: true, error: Object.assign(new Error('x'), { status: 500 }) });
+      render(
+        <DataSection title="Sales" query={[net, srv]} placeholderHeight={80}>
+          <span>body</span>
+        </DataSection>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      expect(net.refetch).toHaveBeenCalledTimes(1);
+      expect(srv.refetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('mixed: the refusal message, Retry only for the genuine fault', () => {
+      const refused = q({ isError: true, error: refusal('FORBIDDEN', 403, 'Managers only.') });
+      const fault = q({ isError: true, error: Object.assign(new Error('x'), { status: 502 }) });
+      render(
+        <DataSection title="Sales" query={[refused, fault]} placeholderHeight={80}>
+          <span>body</span>
+        </DataSection>,
+      );
+      expect(screen.getByRole('alert').textContent).toMatch(/Managers only\./);
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      expect(fault.refetch).toHaveBeenCalledTimes(1);
+      expect(refused.refetch).not.toHaveBeenCalled();
+    });
   });
 });

@@ -350,6 +350,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                   columns={ledgerColumns}
                   data={filteredExpenses}
                   error={expensesQ.error}
+                  title="expenses"
                   onRetry={expensesQ.refetch}
                   emptyMessage="No matching expenses found."
                   getRowId={(r: any) => r.id}

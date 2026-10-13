@@ -340,6 +340,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
               data={visible}
               isLoading={decantationsQ.isLoading}
               error={decantationsQ.error}
+              title="decantations"
               onRetry={decantationsQ.refetch}
               emptyMessage="No Decantations match this filter."
               getRowId={(r) => r.decantation.id}

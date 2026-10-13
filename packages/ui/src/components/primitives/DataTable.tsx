@@ -14,6 +14,7 @@ export interface DataTableProps<T> {
   columns: ColumnDef<T, any>[];
   data: T[] | undefined;
   isLoading?: boolean;
+  /** The query's error. An access refusal (403 / access policy) shows its message, no Retry. */
   error?: Error | null;
   /** Re-runs the failed query (usually the query's `refetch`). Adds Retry to the error. */
   onRetry?: () => unknown;
@@ -37,7 +38,8 @@ export interface DataTableProps<T> {
 
 /**
  * Dense, sortable table built on TanStack Table. Its loading / error (with
- * Retry) / empty states come from the shared `DataSection` (bare shape). Replaces the hand-rolled `<table>`/styled-div lists that each
+ * Retry) / access-refusal / empty states come from the shared `DataSection`
+ * (bare shape). Replaces the hand-rolled `<table>`/styled-div lists that each
  * screen re-implemented. Designed for real operational data density (12–13px).
  */
 export function DataTable<T>({
@@ -94,7 +96,13 @@ export function DataTable<T>({
       <DataSection
         shape="bare"
         title={title}
-        query={{ isPending: !!isLoading, isError: !!error, refetch: onRetry }}
+        query={{
+          isPending: !!isLoading,
+          fetchStatus: isLoading ? 'fetching' : 'idle',
+          isError: !!error,
+          error,
+          refetch: onRetry,
+        }}
         placeholderHeight={placeholderHeight}
         isEmpty={!data || data.length === 0}
         empty={<div style={stateBox}>{emptyMessage}</div>}

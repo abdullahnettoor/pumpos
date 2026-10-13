@@ -214,7 +214,7 @@ export { SegmentedControl } from './pump-ds/segmented/index.js';
 export type { SegmentedControlProps, SegmentedControlOption } from './pump-ds/segmented/index.js';
 export { PageHeader } from './pump-ds/page-header/index.js';
 export type { PageHeaderProps } from './pump-ds/page-header/index.js';
-export { DataSection } from './pump-ds/data-section/index.js';
+export { DataSection, isAccessRefusal } from './pump-ds/data-section/index.js';
 export type {
   DataSectionProps,
   DataSectionState,

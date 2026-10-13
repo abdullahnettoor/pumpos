@@ -224,6 +224,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
           data={summaries}
           isLoading={summariesQ.isLoading}
           error={summariesQ.error}
+          title="shift history"
           onRetry={summariesQ.refetch}
           bare
           getRowId={(d: any) => d.id}

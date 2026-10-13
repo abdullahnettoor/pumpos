@@ -228,6 +228,7 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
             columns={columns}
             data={rows}
             error={error}
+            title="invoices"
             onRetry={refetch}
             emptyMessage="No merchandise sales in this range."
             getRowId={(r: any) => r.id}

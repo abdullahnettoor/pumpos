@@ -44,11 +44,14 @@ export const DashboardCard: React.FC<DashboardCardProps> = ({
   card,
   variant = 'card',
   ...props
-}) => (
-  <DataSection
-    {...props}
-    enabled={useCardEnabled(card)}
-    frameWhenReady={variant === 'card'}
-    data-dashboard-card={card}
-  />
-);
+}) => {
+  const enabled = useCardEnabled(card);
+  return (
+    <DataSection
+      {...props}
+      enabled={enabled}
+      shape={variant === 'plain' ? 'cards' : 'card'}
+      data-dashboard-card={card}
+    />
+  );
+};
