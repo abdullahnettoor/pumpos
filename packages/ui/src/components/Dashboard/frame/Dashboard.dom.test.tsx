@@ -117,6 +117,30 @@ describe('header', () => {
     expect(screen.getByText(/as of 9:30 am/)).toBeTruthy();
   });
 
+  it("shows Shift workspace, not Open shift, once the day's shifts are done", () => {
+    hooks.useShiftTemplates.mockReturnValue(
+      ok([{ id: 't1', name: 'Morning', startTime: '06:00', endTime: '14:00', isActive: true }]),
+    );
+    hooks.useDashboardSummary.mockReturnValue(
+      ok({
+        activeShift: null,
+        today: {
+          shifts: [
+            {
+              id: 's1',
+              shiftTemplateId: 't1',
+              openedAt: '2026-10-12T00:30:00Z',
+              closedAt: '2026-10-12T08:30:00Z',
+            },
+          ],
+        },
+      }),
+    );
+    mount('Owner');
+    expect(screen.getByRole('button', { name: 'Shift workspace' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /open shift/i })).toBeNull();
+  });
+
   it('shows Shift workspace when a shift is open, View shift for Accountant', () => {
     hooks.useDashboardSummary.mockReturnValue(ok({ activeShift: { id: 's' } }));
     mount('Owner');
