@@ -45,7 +45,7 @@ const ev = (i: number, type: string, at: string) => ({
 });
 
 const onNavigate = vi.fn();
-const mount = (role: any = 'Owner') =>
+const mount = (role: any = 'Owner', dayStartsAt = '06:00', businessDate = '2026-10-12') =>
   render(
     <DashboardProvider
       value={{
@@ -54,8 +54,8 @@ const mount = (role: any = 'Owner') =>
         userName: 'A',
         now: new Date(Date.now()),
         timeZone: 'Asia/Kolkata',
-        dayStartsAt: '06:00',
-        businessDate: '2026-10-12',
+        dayStartsAt,
+        businessDate,
         entryDate: '2026-10-12',
         onNavigate,
       }}
@@ -196,6 +196,54 @@ describe('TimelineCard', () => {
     expect(bar.textContent).toMatch(/^Shift 1 · past end, 1 handover dueOpened /);
     expect(bar.className).toContain('border-warning-fg');
     expect(bar.className).not.toContain('border-brand');
+  });
+
+  describe.each(['05:30', '00:00'])('night template with Day Start %s', (dayStart) => {
+    const NIGHT = [
+      { id: 'n1', name: 'Night', startTime: '22:00', endTime: '06:00', isActive: true },
+    ];
+    // Opened 22:00 IST on 11 Oct; business date: Day Start 05:30 -> 10-11, 00:00 -> 10-11.
+    const run = (nowIso: string) => {
+      vi.setSystemTime(new Date(nowIso));
+      hooks.useShiftTemplates.mockReturnValue(ok(NIGHT));
+      hooks.useDashboardSummary.mockReturnValue(
+        ok({
+          today: {
+            shifts: [
+              shift({
+                shiftTemplateId: 'n1',
+                openedAt: '2026-10-11T16:30:00Z',
+                businessDate: '2026-10-11',
+              }),
+            ],
+          },
+        }),
+      );
+      hooks.useShiftStatus.mockReturnValue(
+        ok({
+          activeShift: {
+            id: 's1',
+            openedAt: '2026-10-11T16:30:00Z',
+            scheduledEndTime: '06:00',
+            staffAssignments: [{ id: 'a1', userId: 'u1', duId: 'd1' }],
+            handovers: [],
+          },
+        }),
+      );
+      mount('Owner', dayStart, '2026-10-11');
+    };
+    it('is live, not late, at 22:30', () => {
+      run('2026-10-11T17:00:00Z'); // 22:30 IST
+      const bar = screen.getByTestId('timeline-bar-running');
+      expect(bar.textContent).toMatch(/^Shift 1 · live/);
+      expect(bar.className).not.toContain('border-warning-fg');
+    });
+    it('is late at 06:30', () => {
+      run('2026-10-12T01:00:00Z'); // 06:30 IST next morning
+      const bar = screen.getByTestId('timeline-bar-running');
+      expect(bar.textContent).toMatch(/^Shift 1 · past end, 1 handover due/);
+      expect(bar.className).toContain('border-warning-fg');
+    });
   });
 
   it('labels the ghost bar with its scheduled start', () => {

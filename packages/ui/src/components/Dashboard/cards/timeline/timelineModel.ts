@@ -1,4 +1,9 @@
-import type { DashboardTimeline, EventPin, TimelineTemplate } from '@pump/shared';
+import {
+  templateWindow,
+  type DashboardTimeline,
+  type EventPin,
+  type TimelineTemplate,
+} from '@pump/shared';
 import {
   formatAxisHour,
   formatClockInZone,
@@ -19,7 +24,9 @@ export interface ShiftBarInput {
   scheduledEndAt?: number | null;
   /** Scheduled start of the shift's template window (epoch ms), when known. */
   scheduledStartAt?: number | null;
-  /** Drawers still to hand over, when known. */
+  /** Running shift past its scheduled end by the shared `isHandoverDue` rule. */
+  late?: boolean;
+  /** Drawers whose handover is due, when known. */
   handoversDue?: number | null;
 }
 
@@ -84,7 +91,7 @@ export function buildBars(
     const left = axisPct(start, tl);
     const name = s.sequence ? `Shift ${s.sequence}` : s.name;
     const kind = s.closedAt ? 'closed' : 'running';
-    const late = kind === 'running' && s.scheduledEndAt != null && now > s.scheduledEndAt;
+    const late = kind === 'running' && s.late === true;
     const due = s.handoversDue ?? 0;
     const text =
       kind === 'closed'
@@ -156,12 +163,11 @@ export interface ScheduleSegment {
 
 /** Scheduled start (epoch ms) of a template's window on this day axis. */
 export function scheduledStartAt(
-  tpl: { startTime: string } | undefined,
+  tpl: TimelineTemplate | undefined,
   tl: Pick<DashboardTimeline, 'dayStartAt'>,
   dayStartsAt: string,
 ): number | null {
-  if (!tpl) return null;
-  return tl.dayStartAt + ((toMin(tpl.startTime) - toMin(dayStartsAt) + 1440) % 1440) * 60_000;
+  return tpl ? templateWindow(tpl, tl.dayStartAt, toMin(dayStartsAt)).startAt : null;
 }
 
 /**
@@ -251,19 +257,13 @@ export const pinPct = (pin: EventPin, tl: DashboardTimeline) => axisPct(pin.at, 
 
 export const money = (n: number) => formatMoney(n, { decimals: 0 });
 
-/** Scheduled end (epoch ms) of a template window that opened a shift on this day axis. */
+/** Scheduled end (epoch ms) of a template window: its start plus its length (shared rule). */
 export function scheduledEndAt(
-  tpl: { startTime: string; endTime: string } | undefined,
+  tpl: TimelineTemplate | undefined,
   tl: Pick<DashboardTimeline, 'dayStartAt'>,
   dayStartsAt: string,
 ): number | null {
-  if (!tpl) return null;
-  const mins = (h: string) => {
-    const m = /^(\d{1,2}):(\d{2})/.exec(h);
-    return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
-  };
-  const end = (mins(tpl.endTime) - mins(dayStartsAt) + 1440) % 1440 || 1440;
-  return tl.dayStartAt + end * 60_000;
+  return tpl ? templateWindow(tpl, tl.dayStartAt, toMin(dayStartsAt)).endAt : null;
 }
 
 /** Clock time in the station timezone: "6 am", "1:52 pm". */

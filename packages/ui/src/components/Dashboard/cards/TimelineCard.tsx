@@ -3,6 +3,7 @@ import {
   dashboardTimeline,
   deriveDuHandoverStatuses,
   groupEventPins,
+  isHandoverDue,
   type TimelineTemplate,
 } from '@pump/shared';
 import { Button } from '../../../pump-ds/index.js';
@@ -31,7 +32,7 @@ import { useTimelineCollapsed } from './timeline/useTimelineCollapsed.js';
 
 type Row = Record<string, any>;
 
-/** Drawers of the open shift that have not handed over yet. */
+/** Drawers of the open shift whose handover is due (shared status). */
 function handoversDue(shift: Row | null | undefined, now: number, timeZone: string): number | null {
   if (!shift) return null;
   const statuses = deriveDuHandoverStatuses(
@@ -44,7 +45,7 @@ function handoversDue(shift: Row | null | undefined, now: number, timeZone: stri
     now,
     timeZone,
   );
-  return statuses.filter((x) => x !== 'recorded').length;
+  return statuses.filter((x) => x === 'due').length;
 }
 
 /** Compact Business Day timeline: shift bars, merged event pins, collapsible. */
@@ -97,6 +98,7 @@ export const TimelineCard: React.FC = () => {
           variance: s.closedAt ? (s.cashVariance ?? null) : null,
           scheduledEndAt: scheduledEndAt(tpl, timeline, dayStartsAt),
           scheduledStartAt: scheduledStartAt(tpl, timeline, dayStartsAt),
+          late: !s.closedAt && isHandoverDue(String(s.openedAt), now, tpl?.endTime, timeZone),
           handoversDue: s.id === active?.id ? handoversDue(active, now, timeZone) : null,
         };
       });
@@ -163,7 +165,7 @@ export const TimelineCard: React.FC = () => {
                 </span>
               )}
               {live &&
-                (live.scheduledEndAt != null && now > live.scheduledEndAt ? (
+                (live.late ? (
                   <span>
                     Shift {live.sequence} <b className="text-warning-fg">past scheduled end</b>
                   </span>
