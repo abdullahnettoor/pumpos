@@ -1,12 +1,14 @@
 import {
   templateWindow,
   type DashboardTimeline,
+  type TimelineCarryOver,
   type EventPin,
   type TimelineTemplate,
 } from '@pump/shared';
 import {
   formatAxisHour,
   formatClockInZone,
+  formatDayMonth,
   formatHHMM,
   formatMoney,
 } from '../../../../utils/format.js';
@@ -50,6 +52,8 @@ export interface Bar {
   times: string | null;
   /** Running shift: share of its window already elapsed (0–1), hatched up to now. */
   progress: number | null;
+  /** Shift of an earlier Business Day drawn from the axis start. */
+  carry?: boolean;
 }
 
 /** The shift's Scheduled Shift Window on the axis, when its template is known. */
@@ -311,4 +315,80 @@ export function hourTicks(
     });
   }
   return out;
+}
+
+type Row = Record<string, any>;
+
+/**
+ * The shift of an earlier Business Day to draw from the axis start: the
+ * running one, else the most recent closed one when it closed after today's
+ * Day Start. Null when none applies.
+ */
+export function deriveCarryOver(input: {
+  active: Row | null | undefined;
+  lastShift: Row | null | undefined;
+  businessDate: string;
+  dayStartAt: number;
+  scheduledEndAt?: number | null;
+}): TimelineCarryOver | null {
+  const { active, lastShift, businessDate, dayStartAt } = input;
+  const earlier = (d: unknown): d is string => typeof d === 'string' && d < businessDate;
+  if (active && earlier(active.businessDate) && active.openedAt) {
+    return {
+      openedAt: String(active.openedAt),
+      closedAt: null,
+      sequence: active.shiftSequence != null ? Number(active.shiftSequence) : null,
+      businessDate: active.businessDate,
+      scheduledEndAt: input.scheduledEndAt ?? null,
+    };
+  }
+  if (
+    lastShift &&
+    lastShift.status === 'CLOSED' &&
+    lastShift.openedAt &&
+    lastShift.closedAt &&
+    earlier(lastShift.businessDate) &&
+    Date.parse(String(lastShift.closedAt)) > dayStartAt
+  ) {
+    return {
+      openedAt: String(lastShift.openedAt),
+      closedAt: String(lastShift.closedAt),
+      sequence: lastShift.shiftSequence != null ? Number(lastShift.shiftSequence) : null,
+      businessDate: lastShift.businessDate,
+    };
+  }
+  return null;
+}
+
+/** The carry-over bar: axis start → now (running) or → close (closed). */
+export function buildCarryBar(
+  c: TimelineCarryOver,
+  tl: DashboardTimeline,
+  now: number,
+  timeZone: string,
+  late = false,
+): Bar {
+  const running = c.closedAt == null;
+  const name = c.sequence ? `Shift ${c.sequence}` : 'Shift';
+  const from = `${name} · from ${formatDayMonth(c.businessDate)}`;
+  const end = running ? now : Date.parse(String(c.closedAt));
+  const opened = Date.parse(String(c.openedAt));
+  return {
+    id: 'carry-over',
+    kind: running ? 'running' : 'closed',
+    label: name,
+    name,
+    carry: true,
+    text: running ? `${from} · ${late ? 'past end' : 'live'}` : from,
+    late: running && late,
+    times: `Opened ${clockLabel(opened, timeZone)} on ${formatDayMonth(c.businessDate)}${
+      running ? '' : ` · closed ${clockLabel(end, timeZone)}`
+    }`,
+    progress: running ? 1 : null,
+    leftPct: 0,
+    widthPct: Math.max(0.5, axisPct(end, tl)),
+    total: null,
+    variance: null,
+    varianceText: null,
+  };
 }

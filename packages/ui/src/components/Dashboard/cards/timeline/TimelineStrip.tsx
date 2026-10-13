@@ -214,6 +214,11 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
                 : {}),
             }}
           >
+            {b.carry && (
+              <span aria-hidden="true" data-testid="timeline-carry-marker" className="shrink-0">
+                ‹
+              </span>
+            )}
             <span className="min-w-[5.5rem] truncate">{b.text}</span>
             {b.varianceText && <span className="shrink-0 opacity-75">· {b.varianceText}</span>}
             {chip && (

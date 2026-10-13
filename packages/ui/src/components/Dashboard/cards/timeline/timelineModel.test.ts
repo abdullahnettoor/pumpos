@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildBars,
+  buildCarryBar,
+  deriveCarryOver,
   hourTicks,
   openingChips,
   scheduleSegments,
@@ -150,5 +152,77 @@ describe('running bar progress', () => {
     };
     const [bar] = buildBars([live], full, tl.dayStartAt + 2 * 60 * MIN, 'Asia/Kolkata');
     expect(bar.progress).toBeCloseTo(0.25, 5);
+  });
+});
+
+describe('carry-over', () => {
+  const dayStartAt = Date.UTC(2026, 9, 13, 23, 30); // 05:00 IST on the 14th
+  const tl5 = { dayStartAt, dayEndAt: dayStartAt + 1440 * MIN };
+  const active = {
+    businessDate: '2026-10-13',
+    openedAt: '2026-10-13T16:30:00Z',
+    shiftSequence: 3,
+  };
+  it('running: from an earlier day only', () => {
+    expect(
+      deriveCarryOver({ active, lastShift: null, businessDate: '2026-10-14', dayStartAt }),
+    ).toMatchObject({ closedAt: null, sequence: 3, businessDate: '2026-10-13' });
+    expect(
+      deriveCarryOver({
+        active: { ...active, businessDate: '2026-10-14' },
+        lastShift: null,
+        businessDate: '2026-10-14',
+        dayStartAt,
+      }),
+    ).toBeNull();
+  });
+  const last = {
+    status: 'CLOSED',
+    openedAt: '2026-10-13T16:30:00Z',
+    closedAt: '2026-10-14T00:35:00Z',
+    businessDate: '2026-10-13',
+    shiftSequence: 3,
+  };
+  it('closed: kept when it closed after today’s Day Start, also beside a running shift of today', () => {
+    const today = { businessDate: '2026-10-14', openedAt: '2026-10-14T00:40:00Z' };
+    for (const a of [null, today]) {
+      expect(
+        deriveCarryOver({ active: a, lastShift: last, businessDate: '2026-10-14', dayStartAt }),
+      ).toMatchObject({ closedAt: last.closedAt, sequence: 3 });
+    }
+  });
+  it('closed before Day Start or of today: none', () => {
+    const args = { active: null, businessDate: '2026-10-14', dayStartAt };
+    expect(
+      deriveCarryOver({ ...args, lastShift: { ...last, closedAt: '2026-10-13T23:00:00Z' } }),
+    ).toBeNull();
+    expect(
+      deriveCarryOver({ ...args, lastShift: { ...last, businessDate: '2026-10-14' } }),
+    ).toBeNull();
+  });
+  it('bar spans the axis start to now (running) or to close (closed)', () => {
+    const now = dayStartAt + 30 * MIN;
+    const run = buildCarryBar(
+      { openedAt: active.openedAt, closedAt: null, sequence: 3, businessDate: '2026-10-13' },
+      { ...tl5, businessDate: '2026-10-14', visible: true, reason: null, nextWindow: null },
+      now,
+      'Asia/Kolkata',
+    );
+    expect(run).toMatchObject({ kind: 'running', leftPct: 0, carry: true, progress: 1 });
+    expect(run.text).toBe('Shift 3 · from 13 Oct · live');
+    expect(run.widthPct).toBeCloseTo((30 / 1440) * 100);
+    const closed = buildCarryBar(
+      {
+        openedAt: active.openedAt,
+        closedAt: last.closedAt,
+        sequence: 3,
+        businessDate: '2026-10-13',
+      },
+      { ...tl5, businessDate: '2026-10-14', visible: true, reason: null, nextWindow: null },
+      now + 600 * MIN,
+      'Asia/Kolkata',
+    );
+    expect(closed).toMatchObject({ kind: 'closed', text: 'Shift 3 · from 13 Oct' });
+    expect(closed.widthPct).toBeCloseTo((65 / 1440) * 100);
   });
 });

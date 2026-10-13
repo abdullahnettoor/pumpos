@@ -421,4 +421,62 @@ describe('TimelineCard', () => {
       expect.objectContaining({ enabled: false }),
     );
   });
+
+  describe('carry-over shift (Day Start 05:00, Shift 3 of 13 Oct 22:00→06:00)', () => {
+    const TPL = [
+      { id: 't1', name: 'S1', startTime: '05:00', endTime: '13:00', isActive: true },
+      { id: 't2', name: 'S2', startTime: '13:00', endTime: '22:00', isActive: true },
+      { id: 't3', name: 'S3', startTime: '22:00', endTime: '05:00', isActive: true },
+    ];
+    const carryShift = {
+      id: 'c3',
+      businessDate: '2026-10-13',
+      shiftSequence: 3,
+      openedAt: '2026-10-13T16:30:00Z',
+      scheduledEndTime: '06:00',
+    };
+    const at = (iso: string) => {
+      vi.setSystemTime(new Date(iso));
+      hooks.useShiftTemplates.mockReturnValue(ok(TPL));
+    };
+    it('05:30: running carry-over bar, no 14 Oct shift, first template as ghost', () => {
+      at('2026-10-14T00:00:00Z');
+      hooks.useDashboardSummary.mockReturnValue(
+        ok({ today: { shifts: [] }, activeShift: carryShift, lastShift: null }),
+      );
+      hooks.useShiftStatus.mockReturnValue(ok({ activeShift: carryShift }));
+      mount('Owner', '05:00', '2026-10-14');
+      expect(screen.getByTestId('timeline-bar-running').textContent).toContain(
+        'Shift 3 · from 13 Oct · live',
+      );
+      expect(screen.getByTestId('timeline-carry-marker')).toBeTruthy();
+      expect(screen.getByTestId('timeline-bar-ghost').textContent).toContain('Shift 1');
+    });
+    it('07:00: carry-over closed 06:05, Shift 1 opened 06:10', () => {
+      at('2026-10-14T01:30:00Z');
+      const today = shift({
+        id: 'n1',
+        shiftTemplateId: 't1',
+        businessDate: '2026-10-14',
+        openedAt: '2026-10-14T00:40:00Z',
+      });
+      hooks.useDashboardSummary.mockReturnValue(
+        ok({
+          today: { shifts: [today] },
+          activeShift: { ...today, shiftSequence: 1 },
+          lastShift: {
+            ...carryShift,
+            status: 'CLOSED',
+            closedAt: '2026-10-14T00:35:00Z',
+          },
+        }),
+      );
+      hooks.useShiftStatus.mockReturnValue(ok({ activeShift: { ...today, shiftSequence: 1 } }));
+      mount('Owner', '05:00', '2026-10-14');
+      expect(screen.getByTestId('timeline-bar-closed').textContent).toContain(
+        'Shift 3 · from 13 Oct',
+      );
+      expect(screen.getByTestId('timeline-bar-running').textContent).toContain('Shift 1');
+    });
+  });
 });

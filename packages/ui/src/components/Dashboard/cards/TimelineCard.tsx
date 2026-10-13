@@ -1,11 +1,13 @@
 import React, { useMemo } from 'react';
 import {
+  businessDayWindow,
   dashboardTimeline,
   deriveDuHandoverStatuses,
   groupEventPins,
   isHandoverDue,
   type TimelineTemplate,
 } from '@pump/shared';
+import { formatDayMonth } from '../../../utils/format.js';
 import { Button } from '../../../pump-ds/index.js';
 import {
   useDashboardSummary,
@@ -18,6 +20,8 @@ import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
 import { isDashboardEvent, toTimelineEvent, type PinTarget } from './timeline/activityPins.js';
 import {
   buildBars,
+  buildCarryBar,
+  deriveCarryOver,
   clockLabel,
   minutesLate,
   money,
@@ -72,7 +76,20 @@ export const TimelineCard: React.FC = () => {
     const day = status.data.today?.shifts ?? [];
     const templateList: TimelineTemplate[] = templates.data;
     const tplById = new Map(templateList.map((t) => [t.id, t]));
+    const active = (shiftStatus.data as { activeShift?: Row | null } | undefined)?.activeShift;
+    const { from: dayStartAt } = businessDayWindow(businessDate, { timeZone, dayStartsAt });
+    const carryOver = deriveCarryOver({
+      active: active ?? status.data.activeShift,
+      lastShift: status.data.lastShift as Row | null | undefined,
+      businessDate,
+      dayStartAt,
+    });
+    const carryLate =
+      carryOver != null &&
+      carryOver.closedAt == null &&
+      isHandoverDue(String(carryOver.openedAt), now, active?.scheduledEndTime, timeZone);
     const timeline = dashboardTimeline({
+      carryOver,
       now: new Date(now),
       shifts: day.map((s) => ({
         shiftTemplateId: s.shiftTemplateId,
@@ -83,7 +100,6 @@ export const TimelineCard: React.FC = () => {
       timeZone,
       dayStartsAt,
     });
-    const active = (shiftStatus.data as { activeShift?: Row | null } | undefined)?.activeShift;
     const inputs: ShiftBarInput[] = [...day]
       .sort((x, y) => Date.parse(x.openedAt) - Date.parse(y.openedAt))
       .map((s, i) => {
@@ -103,8 +119,8 @@ export const TimelineCard: React.FC = () => {
         };
       });
     const segments = scheduleSegments(templateList, timeline, dayStartsAt);
-    return { timeline, inputs, segments };
-  }, [status.data, templates.data, shiftStatus.data, timeZone, dayStartsAt, now]);
+    return { timeline, inputs, segments, carryOver, carryLate };
+  }, [status.data, templates.data, shiftStatus.data, timeZone, dayStartsAt, businessDate, now]);
 
   const events = useMemo(
     () =>
@@ -121,7 +137,14 @@ export const TimelineCard: React.FC = () => {
   if (model && !model.timeline.visible) return null;
 
   const open = (t: PinTarget) => onNavigate(t.path, t.intent);
-  const bars = model ? buildBars(model.inputs, model.timeline, now, timeZone) : [];
+  const bars = model
+    ? [
+        ...(model.carryOver
+          ? [buildCarryBar(model.carryOver, model.timeline, now, timeZone, model.carryLate)]
+          : []),
+        ...buildBars(model.inputs, model.timeline, now, timeZone),
+      ]
+    : [];
   const chips = model ? openingChips(model.inputs, model.timeline, timeZone) : [];
   const alerts = events.filter((e) => e.tone === 'danger').length;
   const lastClosed = model?.inputs.filter((i) => i.closedAt).at(-1);
@@ -152,6 +175,17 @@ export const TimelineCard: React.FC = () => {
               Today
             </span>
             <span data-testid="timeline-summary" className="contents">
+              {model.carryOver && (
+                <span>
+                  Shift {model.carryOver.sequence} from{' '}
+                  {formatDayMonth(model.carryOver.businessDate)}{' '}
+                  {model.carryOver.closedAt
+                    ? `closed ${clockLabel(Date.parse(String(model.carryOver.closedAt)), timeZone)}`
+                    : model.carryLate
+                      ? 'past scheduled end'
+                      : 'live'}
+                </span>
+              )}
               {lastClosed && (
                 <span>
                   Shift {lastClosed.sequence} closed{' '}
