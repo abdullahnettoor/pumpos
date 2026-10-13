@@ -166,6 +166,30 @@ describe('open-days notice', () => {
     expect(nav).toHaveBeenCalledWith('/shifts', { openPastDays: true });
   });
 
+  it('running shift’s own day: info copy, no warning', () => {
+    open(['2026-10-13']);
+    hooks.useShiftStatus.mockReturnValue(
+      ok({ activeShift: { businessDate: '2026-10-13', shiftSequence: 3 } }),
+    );
+    mount('Owner');
+    expect(screen.getByText(/closes after Shift 3 is handed over/)).toBeTruthy();
+    expect(screen.queryByText(/still open/)).toBeNull();
+    expect(
+      document.querySelector('[data-dashboard-card="openDaysNotice"]')!.getAttribute('data-tone'),
+    ).toBe('info');
+    expect(screen.getByText(/Review in Shifts/)).toBeTruthy();
+  });
+
+  it('running shift’s day plus another open day: both sentences', () => {
+    open(['2026-10-12', '2026-10-13']);
+    hooks.useShiftStatus.mockReturnValue(
+      ok({ activeShift: { businessDate: '2026-10-13', shiftSequence: 3 } }),
+    );
+    mount('Owner');
+    expect(screen.getByText(/closes after Shift 3 is handed over/)).toBeTruthy();
+    expect(screen.getByText(/is still open/)).toBeTruthy();
+  });
+
   it('is hidden when no past days are open', () => {
     mount('Owner');
     expect(screen.queryByText(/still open/)).toBeNull();
