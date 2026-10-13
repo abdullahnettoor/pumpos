@@ -149,6 +149,8 @@
   .tab { padding:8px 12px; font-size:13px; font-weight:500; color:var(--mu); border-bottom:2px solid transparent; margin-bottom:-1px; display:flex; gap:4px; align-items:center; }
   .tab.on { color:var(--hi); font-weight:600; border-color:var(--acc); }
   .tab .mv { color:var(--info); font-size:16px; line-height:0; }
+  .tab .ti { display:inline-flex; color:var(--fa); margin-right:2px; } .tab.on .ti { color:var(--acc); }
+  .tab .flag { font-size:10px; color:var(--warn); margin-left:2px; }
   .tb { gap:10px; margin-top:12px; flex-wrap:wrap; }
   .kpis { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; margin-top:12px; }
   .kp { padding:12px 14px; } .kp + .kp { border-left:1px solid var(--line); }
@@ -185,6 +187,40 @@ const pct = (a, b) => { const p = (a - b) / b * 100; return `<span class="num ${
 const chip = (t, l) => `<span class="pill p-${t}">${l}</span>`;
 const S = { r: ['ok', 'ok'] };
 
+/* One icon per concept (#523): same glyph wherever the concept appears — sidebar, tabs, Reports list, command palette.
+   Names map to the pump-ds Icon registry; ⚑ = no obvious icon, picked for review. */
+const GLYPH = {
+  pump: I.pump, clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', cal: I.cal,
+  tank: '<ellipse cx="12" cy="5" rx="7" ry="2.5"/><path d="M5 5v14c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V5"/><path d="M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/>',
+  truck: I.truck, gauge: '<path d="M12 14l4-4"/><path d="M3.3 17a9 9 0 1 1 17.4 0"/>', box: I.box, arrows: '<path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="m17 20 4-4-4-4"/><path d="M21 16H7"/>',
+  scale: '<path d="M12 3v18M5 21h14"/><path d="m3 13 3-7 3 7a3 3 0 0 1-6 0zM15 13l3-7 3 7a3 3 0 0 1-6 0z"/><path d="M5 6h14"/>',
+  fuel: I.drop, users: I.users, card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>', wallet: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="16.5" cy="14.5" r="1.2"/>',
+  car: '<path d="M5 17h14M6 17v2M18 17v2"/><path d="M3 13l2-6h14l2 6v4H3z"/><circle cx="7.5" cy="14" r="1"/><circle cx="16.5" cy="14" r="1"/>',
+  building: I.org, cart: '<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.5 12h12l2-8H6"/>', bank: I.bank,
+  book: '<path d="M2 4h7a3 3 0 0 1 3 3v14a2 2 0 0 0-2-2H2z"/><path d="M22 4h-7a3 3 0 0 0-3 3v14a2 2 0 0 1 2-2h8z"/>', receipt: '<path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+  pie: '<path d="M21 12A9 9 0 1 1 12 3v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>', income: I.inn, info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  palette: '<circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.2"/><circle cx="12" cy="7.5" r="1.2"/><circle cx="16" cy="10" r="1.2"/><path d="M12 21a2 2 0 0 1 0-4h2a3 3 0 0 0 3-3"/>',
+  sliders: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  layout: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>', pin: '<path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>', monitor: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  doc: I.doc, clipboard: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1H9z"/><path d="M9 11h6M9 15h4"/>',
+  trend: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>', file: '<path d="M6 2h8l5 5v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v5h5"/>',
+  percent: '<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>', tag: I.tag,
+};
+const TAB_ICON = {
+  'Live shift': 'pump', 'Business days': 'cal', 'History': 'clock',
+  'Tanks': 'tank', 'Decantations': 'truck', 'Density': 'gauge', 'Product stock': 'box', 'Movements': 'arrows', 'Reconciliations': 'scale',
+  'Fuels': 'fuel', 'Products': 'box', 'Customers': 'users', 'Credit sales': 'card', 'Collections': 'wallet', 'Vehicles': 'car',
+  'Suppliers': 'building', 'Purchases': 'cart', 'Payments': 'wallet', 'Accounts': 'bank', 'Daily cash book': 'book', 'Transfers': 'arrows',
+  'Expenses': 'receipt', 'Income': 'income', 'By category': 'pie',
+  'General': 'info', 'Branding': 'palette', 'Dispensers': 'pump', 'Payment terminals': 'card', 'Shift templates': 'clock', 'Rules': 'sliders', 'Report templates': 'layout',
+  'Stations': 'pin', 'Team': 'users', 'Activity': 'activity', 'Profile': 'user', 'Desktop app': 'monitor',
+  'DSSR': 'doc', 'Attendant handovers': 'clipboard', 'Profit & loss': 'trend', 'Ledgers': 'book', 'Invoices': 'file', 'GST': 'percent', 'Expense register': 'receipt',
+};
+const FLAG = new Set(['Branding', 'Rules', 'Report templates']);
+const tabIcon = (t) => TAB_ICON[t] ? `<span class="ti">${ic(GLYPH[TAB_ICON[t]], 14, 2)}</span>` : '';
+
+
 /* ---------- NAV (#540) ---------- */
 const NAV = [
   ['Operate', [['dashboard', 'Dashboard', I.dash], ['shifts', 'Shifts', I.pump, 'dot'], ['inventory', 'Inventory', I.box, '1'], ['pricing', 'Pricing', I.tag]]],
@@ -219,7 +255,7 @@ const statusbar = () => `<div class="statusbar"><span class="row" style="gap:6px
 /* ---------- Page Frame (#523) ---------- */
 const labelOf = (k) => NAV.flatMap(g => g[1]).find(x => x[0] === k)[1];
 const tabsBar = (k) => !TABS[k].length ? '' : `<div class="tabs">${TABS[k].map((t, i) => { const on = (O.tab[k] ?? 0) === i, mv = MOVED[k + ':' + t];
-  return `<button class="tab ${on ? 'on' : ''}" data-tab="${k}:${i}">${t}${mv ? `<span class="mv" title="${mv}">•</span>` : ''}</button>`; }).join('')}</div>`;
+  return `<button class="tab ${on ? 'on' : ''}" data-tab="${k}:${i}">${tabIcon(t)}${t}${FLAG.has(t) ? '<span class="flag" title="icon picked for review">⚑</span>' : ''}${mv ? `<span class="mv" title="${mv}">•</span>` : ''}</button>`; }).join('')}</div>`;
 const frame = (k, { subtitle = '', actions = '', toolbar = '' } = {}) => `<div class="row" style="gap:10px;align-items:flex-start">
     <div><div class="ttl">${labelOf(k)}</div>${subtitle ? `<div class="s" style="font-size:13px">${subtitle}</div>` : ''}</div>
     <div style="margin-left:auto;display:flex;gap:8px">${actions}</div></div>
@@ -267,7 +303,7 @@ function accounts() {
 }
 const REP = [['Sales', [['dssr', 'DSSR'], ['att', 'Attendant handovers'], ['dec', 'Decantations']]], ['Finance', [['pnl', 'Profit & loss'], ['ledg', 'Ledgers'], ['inv', 'Invoices']]], ['Tax & registers', [['gst', 'GST'], ['expreg', 'Expense register']]]];
 function reports() {
-  const sub = `<aside class="subnav">${REP.map(([g, items]) => `<div class="grp" style="padding-left:10px">${g}</div>${items.map(([k, n]) => `<button class="nav ${O.rep === k ? 'on' : ''}" data-rep="${k}">${n}</button>`).join('')}`).join('')}</aside>`;
+  const sub = `<aside class="subnav">${REP.map(([g, items]) => `<div class="grp" style="padding-left:10px">${g}</div>${items.map(([k, n]) => `<button class="nav ${O.rep === k ? 'on' : ''}" data-rep="${k}">${ic(GLYPH[TAB_ICON[n] || 'doc'], 16)}${n}</button>`).join('')}`).join('')}</aside>`;
   let body;
   if (O.rep === 'gst') body = `<div class="row"><span class="sec-t">GST</span><span class="s" style="margin-left:8px">one report: sales, purchases (ITC) and income</span></div>
     <div class="seg2" style="margin:10px 0">${['Sales', 'Purchases (ITC)', 'Income'].map(x => `<button class="${O.gst === x ? 'on' : ''}" data-gst="${x}">${x}</button>`).join('')}</div>
@@ -343,7 +379,7 @@ function render() {
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { const [p, i] = b.dataset.tab.split(':'); O.tab[p] = +i; render(); });
   document.querySelectorAll('[data-rep]').forEach(b => b.onclick = () => { O.rep = b.dataset.rep; render(); });
   document.querySelectorAll('[data-gst]').forEach(b => b.onclick = () => { O.gst = b.dataset.gst; render(); });
-  document.getElementById('ctl').innerHTML = `<span>Navigation & structure prototype</span><button data-t="theme">◐ ${O.theme}</button><button data-t="notes">notes</button>${O.notes && NOTES[k] ? `<div class="note">${NOTES[k]} <span style="opacity:.6">Tabs with • were moved or renamed.</span></div>` : ''}`;
+  document.getElementById('ctl').innerHTML = `<span>Navigation & structure prototype</span><button data-t="theme">◐ ${O.theme}</button><button data-t="notes">notes</button>${O.notes && NOTES[k] ? `<div class="note">${NOTES[k]} <span style="opacity:.6">Tabs with • were moved or renamed; ⚑ = icon picked for your review.</span></div>` : ''}`;
   document.querySelector('[data-t=theme]').onclick = () => { O.theme = O.theme === 'light' ? 'dark' : 'light'; render(); };
   document.querySelector('[data-t=notes]').onclick = () => { O.notes = !O.notes; render(); };
   try { const u = new URL(location.href); u.searchParams.set('page', k); history.replaceState(null, '', u); } catch (e) {}
