@@ -3,7 +3,8 @@
  * payloads the existing read endpoints return (DSSR preview, inventory status,
  * customer and supplier lists); the screen only renders them.
  */
-import { formatDaysOfCover } from '@pump/shared';
+import { deriveTankLevel, formatDaysOfCover } from '@pump/shared';
+import type { TankLevelSettings, TankTone } from '@pump/shared';
 import { MONEY_TERMS } from '@pump/ui';
 import { num } from '../num.js';
 import { plural } from '../format.js';
@@ -62,14 +63,8 @@ export function deriveTiles(snap: Snapshot): HomeTiles {
   };
 }
 
-/** Fill levels below which a tank gauge turns red / amber. */
-const TANK_RED_BELOW = 25;
-const TANK_AMBER_BELOW = 40;
-
-export type TankGaugeLevel = 'red' | 'amber' | 'ok' | 'unknown';
-
-export const tankLevel = (pct: number): Exclude<TankGaugeLevel, 'unknown'> =>
-  pct < TANK_RED_BELOW ? 'red' : pct < TANK_AMBER_BELOW ? 'amber' : 'ok';
+/** A gauge's colour: the shared tank-level tone (#520), from the station's tank levels. */
+export type TankGaugeLevel = TankTone;
 
 export interface TankGauge {
   id: string;
@@ -100,22 +95,30 @@ function volumeLabel(volume: number, unit: unknown): string {
   return `${Math.round(volume).toLocaleString('en-IN')} ${unitText(unit)}`;
 }
 
-export function deriveTanks(rows: readonly unknown[] | undefined): TankGauge[] {
+export function deriveTanks(
+  rows: readonly unknown[] | undefined,
+  tankLevels: TankLevelSettings,
+): TankGauge[] {
   return ((rows ?? []) as Snapshot[]).map((t) => {
-    const capacity = num(t.capacity);
-    const volume = Math.max(0, num(t.currentVolume));
-    const pct = capacity > 0 ? (volume / capacity) * 100 : null;
-    const rounded = pct === null ? null : Math.round(pct);
+    const level = deriveTankLevel(
+      {
+        capacity: num(t.capacity),
+        currentVolume: num(t.currentVolume),
+        daysOfCover: t.daysOfCover as number | string | null | undefined,
+        waitingOnDecantation: t.waitingOnDecantation === true,
+      },
+      tankLevels,
+    );
     return {
       id: String(t.id),
       title: String(t.productCode || t.productName || t.name),
       tankName: String(t.name ?? ''),
-      pct: rounded,
-      fill: pct === null ? 0 : Math.min(100, pct),
-      level: pct === null ? 'unknown' : tankLevel(pct),
-      volume: volumeLabel(volume, t.productUnit),
+      pct: level.pct,
+      fill: level.fill,
+      level: level.tone,
+      volume: volumeLabel(level.stock, t.productUnit),
       cover: formatDaysOfCover(t.daysOfCover),
-      waitingOnDecantation: t.waitingOnDecantation === true,
+      waitingOnDecantation: level.waitingOnDecantation,
     };
   });
 }

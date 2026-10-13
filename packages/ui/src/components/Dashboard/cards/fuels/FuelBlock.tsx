@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Chip, Icon, Sparkline } from '../../../../pump-ds/index.js';
+import { Button, Chip, Icon, Sparkline, TankGauge } from '../../../../pump-ds/index.js';
 import { formatBusinessDate, formatMoney } from '../../../../utils/format.js';
 import { formatClockInZone, formatDayMonth, formatQty } from '../../../../utils/format.js';
 import {
@@ -10,22 +10,7 @@ import {
   type PendingDecant,
   type DensityState,
   type FuelTank,
-  type TankTone,
 } from './fuelsModel.js';
-
-const TONE_TEXT: Record<TankTone, string> = {
-  red: 'text-danger-fg',
-  amber: 'text-warning-fg',
-  ok: 'text-success-fg',
-  unknown: 'text-ink-muted',
-};
-
-const TONE_BAR: Record<TankTone, string> = {
-  red: 'bg-danger-fg',
-  amber: 'bg-warning-fg',
-  ok: 'bg-success-fg',
-  unknown: 'bg-ink-faint',
-};
 
 /** Part state: each of density / tanks loads (and fails) on its own. */
 export type Part<T> =
@@ -154,40 +139,10 @@ const DensityRow: React.FC<
   );
 };
 
+/** Pending decantation shows in the block's own banner, so the gauge leaves it out. */
 const TankRow: React.FC<{ tank: FuelTank }> = ({ tank }) => (
-  <li className={`${ROW} flex items-center gap-3`} data-tone={tank.tone}>
-    <span
-      className="relative h-[30px] w-3 shrink-0 overflow-hidden rounded-sm border border-border-strong bg-surface-alt"
-      aria-hidden="true"
-    >
-      <span
-        className={`absolute inset-x-0 bottom-0 ${TONE_BAR[tank.tone]}`}
-        style={{ height: `${tank.fill}%` }}
-      />
-    </span>
-    <div className="min-w-0 flex-1">
-      <div className="truncate text-[12.5px] font-semibold text-ink">{tank.name}</div>
-      <div className="font-mono text-[12px] text-ink-muted">
-        {formatQty(tank.currentKl, 1)} of {tank.capacityKl.toFixed(0)} KL
-      </div>
-    </div>
-    <div className="shrink-0 text-right">
-      <div className={`font-mono text-[13px] font-semibold tabular-nums ${TONE_TEXT[tank.tone]}`}>
-        {tank.pct === null ? '—' : `${tank.pct}%`}
-      </div>
-      <div className="text-[12px] text-ink-muted">
-        {tank.coverDays != null ? (
-          <>
-            <b className={tank.coverDays < 1.5 ? 'text-danger-fg' : 'text-ink'}>
-              {formatQty(tank.coverDays, 1)}
-            </b>{' '}
-            {formatQty(tank.coverDays, 1) === '1.0' ? 'day' : 'days'} cover
-          </>
-        ) : (
-          coverFallback
-        )}
-      </div>
-    </div>
+  <li className={ROW} data-tone={tank.tone}>
+    <TankGauge name={tank.name} level={tank} coverFallback={coverFallback} showStatus={false} />
   </li>
 );
 

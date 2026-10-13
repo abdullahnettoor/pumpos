@@ -1,16 +1,13 @@
-/**
- * Canonical stock-health thresholds — the SINGLE source of truth so the
- * dashboard/bell alerts, inventory tank cards, and tank KPIs all
- * agree. Previously each surface used its own cutoffs (alerts 5/15, cards
- * 15/35, KPI 35), so a tank could read "Low" on one screen and raise no alert
- * on another. Percentages are of tank capacity.
- *
- * TODO: make these per-station configurable (stations.settings) once operators
- * ask for it; keep the same classifier so every surface stays in sync.
- */
-export const TANK_LEVEL = { critical: 15, low: 35 } as const;
+import { tankTone, type TankLevelSettings } from '@pump/shared';
 
-export type TankLevel = 'critical' | 'low' | 'ok' | 'over';
+/**
+ * Stock-health classification for the alerts bell and Inventory. The
+ * thresholds are the station's tank levels (`resolveTankLevelSettings`,
+ * default 25/40, #520), the same ones the Dashboard and mobile gauges use, so
+ * a tank never reads "low" on one screen and "ok" on another. Percentages are
+ * of tank capacity.
+ */
+export type StockHealth = 'critical' | 'low' | 'ok' | 'over';
 
 export const OVER_CAPACITY_EXPLANATION =
   'Open-shift dispensed fuel may not be deducted from book stock yet. It reconciles when the shift closes.';
@@ -22,10 +19,9 @@ export function tankPct(volume: number, capacity: number): number {
   return Math.max(0, ((Number(volume) || 0) / cap) * 100);
 }
 
-/** Classify a fill percentage into canonical stock-health states. */
-export function classifyTank(pct: number): TankLevel {
+/** Classify a fill percentage against the station's tank levels. */
+export function classifyTank(pct: number, settings: TankLevelSettings): StockHealth {
   if (pct > 100) return 'over';
-  if (pct < TANK_LEVEL.critical) return 'critical';
-  if (pct < TANK_LEVEL.low) return 'low';
-  return 'ok';
+  const tone = tankTone(pct, settings);
+  return tone === 'unknown' ? 'ok' : tone;
 }

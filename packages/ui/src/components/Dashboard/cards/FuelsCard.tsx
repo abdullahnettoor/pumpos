@@ -11,6 +11,7 @@ import {
   useDensityTodaySummary,
   useInventoryStatus,
   usePricing,
+  useTankLevelSettings,
 } from '../../../query/hooks.js';
 import { FuelBlock, type Part } from './fuels/FuelBlock.js';
 import {
@@ -45,6 +46,7 @@ export const FuelsCard: React.FC = () => {
     [station.settings],
   );
   const canRecord = canRecordDensityFromDashboard(role);
+  const tankLevels = useTankLevelSettings(station.id);
 
   const fuels = pricingQ.data ?? [];
 
@@ -78,7 +80,11 @@ export const FuelsCard: React.FC = () => {
             : inventoryQ.data
               ? {
                   status: 'ready',
-                  value: deriveFuelTanks(inventoryQ.data as InventoryTankRow[], f.productId),
+                  value: deriveFuelTanks(
+                    inventoryQ.data as InventoryTankRow[],
+                    f.productId,
+                    tankLevels,
+                  ),
                 }
               : { status: 'loading' };
           return (

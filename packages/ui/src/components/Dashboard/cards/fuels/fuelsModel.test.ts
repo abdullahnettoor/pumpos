@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { DensityTodayProductSummary } from '@pump/shared';
+import { DEFAULT_TANK_LEVEL_SETTINGS, type DensityTodayProductSummary } from '@pump/shared';
 import {
   fuelSwatch,
   deriveDensityState,
   deriveFuelTanks,
   derivePendingDecant,
   shouldPlanPurchase,
-  tankTone,
 } from './fuelsModel.js';
 
 const D = '2026-10-12';
@@ -23,13 +22,6 @@ const prod = (over: Partial<DensityTodayProductSummary>): DensityTodayProductSum
 });
 const reading = (density15: number, kind = 'MORNING', businessDate = D) =>
   ({ density15, kind, businessDate, observedTempC: 30, recordedAt: '2026-10-12T01:00:00Z' }) as any;
-
-describe('tankTone', () => {
-  it('red below 25, amber below 40', () => {
-    expect([24.9, 25, 39.9, 40].map(tankTone)).toEqual(['red', 'amber', 'amber', 'ok']);
-    expect(tankTone(null)).toBe('unknown');
-  });
-});
 
 describe('deriveDensityState', () => {
   const trend = [
@@ -96,9 +88,24 @@ describe('deriveFuelTanks', () => {
         },
       ],
       'p1',
+      DEFAULT_TANK_LEVEL_SETTINGS,
     );
     expect(t).toHaveLength(1);
-    expect(t[0]).toMatchObject({ pct: 20, tone: 'red', capacityKl: 20, cover: '2.6 days' });
+    expect(t[0]).toMatchObject({
+      id: 'a',
+      name: 'T1',
+      pct: 20,
+      tone: 'critical',
+      stock: 4000,
+      capacity: 20000,
+      daysOfCover: 2.6,
+    });
+  });
+
+  it('colours tanks by the station tank levels (#520)', () => {
+    const row = { id: 'a', name: 'T1', productId: 'p1', capacity: 20000, currentVolume: 4000 };
+    const relaxed = { criticalBelowPct: 10, lowBelowPct: 25 };
+    expect(deriveFuelTanks([row], 'p1', relaxed)[0]?.tone).toBe('low');
   });
 });
 
@@ -120,11 +127,11 @@ describe('derivePendingDecant / shouldPlanPurchase', () => {
     expect(derivePendingDecant([d({ links: [] })], 'p1')?.qtyL).toBeNull();
     expect(derivePendingDecant([d({ status: 'MEASURED' })], 'p1')).toBeNull();
   });
-  it('plan only for a red tank without pending decantation', () => {
+  it('plan only for a critical tank without pending decantation', () => {
     const t = (tone: string, w = false) => ({ tone, waitingOnDecantation: w }) as never;
-    expect(shouldPlanPurchase([t('red')])).toBe(true);
-    expect(shouldPlanPurchase([t('red'), t('ok', true)])).toBe(false);
-    expect(shouldPlanPurchase([t('amber')])).toBe(false);
+    expect(shouldPlanPurchase([t('critical')])).toBe(true);
+    expect(shouldPlanPurchase([t('critical'), t('ok', true)])).toBe(false);
+    expect(shouldPlanPurchase([t('low')])).toBe(false);
   });
 });
 

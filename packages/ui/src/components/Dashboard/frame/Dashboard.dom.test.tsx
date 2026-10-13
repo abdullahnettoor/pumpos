@@ -6,6 +6,7 @@ import type { Station } from '@pump/shared';
 import { stubContainerWidth } from '../testing/containerWidth.js';
 
 const hooks = vi.hoisted(() => ({
+  useTankLevelSettings: vi.fn(() => ({ criticalBelowPct: 25, lowBelowPct: 40 })),
   useBusinessDayStatus: vi.fn(),
   useDashboardSummary: vi.fn(),
   useDailyDssrPreview: vi.fn(),

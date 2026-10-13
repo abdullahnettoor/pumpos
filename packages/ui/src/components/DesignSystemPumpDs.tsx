@@ -15,6 +15,7 @@ import {
   Panel,
   EmptyState,
   MeterRow,
+  TankGauge,
   BreakdownBar,
   Sparkline,
   type PumpStatus,
@@ -26,6 +27,7 @@ import {
   type ButtonVariant,
   type ButtonSize,
 } from '../pump-ds/index.js';
+import { DEFAULT_TANK_LEVEL_SETTINGS, deriveTankLevel } from '@pump/shared';
 import { TimelineNowPill } from './Dashboard/cards/timeline/TimelineStrip.js';
 import {
   Fuel,
@@ -43,6 +45,12 @@ import {
   Droplet,
   TrendingUp,
 } from 'lucide-react';
+
+const TANK_SAMPLES: ReadonlyArray<[string, number, number | null]> = [
+  ['Tank 1 · MS', 12400, 4.2],
+  ['Tank 2 · HSD', 6800, 1.1],
+  ['Tank 3 · XP95', 3100, null],
+];
 
 /**
  * pump-ds showcase — the real design system living surface. Each pump-ds
@@ -660,27 +668,23 @@ const DashboardBlocks: React.FC = () => (
           }
         >
           <div className="space-y-3">
-            <MeterRow
-              label="Tank 1"
-              sublabel="XP-95"
-              value={7200}
-              max={9000}
-              valueLabel="7,200 / 9,000 L"
-            />
-            <MeterRow
-              label="Tank 2"
-              sublabel="HSD"
-              value={320}
-              max={9000}
-              valueLabel="320 / 9,000 L"
-            />
-            <MeterRow
-              label="Tank 3"
-              sublabel="MS-9"
-              value={1150}
-              max={9000}
-              valueLabel="1,150 / 9,000 L"
-            />
+            {(
+              [
+                ['Tank 1 · XP-95', 7200],
+                ['Tank 2 · HSD', 320],
+                ['Tank 3 · MS', 1150],
+              ] as const
+            ).map(([name, volume]) => (
+              <TankGauge
+                key={name}
+                name={name}
+                variant="bar"
+                level={deriveTankLevel(
+                  { capacity: 9000, currentVolume: volume },
+                  DEFAULT_TANK_LEVEL_SETTINGS,
+                )}
+              />
+            ))}
           </div>
         </Panel>
         <Panel
@@ -714,6 +718,40 @@ const DashboardBlocks: React.FC = () => (
         <MeterRow label="Healthy" value={7200} max={9000} valueLabel="80%" />
         <MeterRow label="Running low" value={1080} max={9000} valueLabel="12%" />
         <MeterRow label="Critical" value={270} max={9000} valueLabel="3%" />
+      </div>
+    </div>
+
+    {/* TankGauge (#520) */}
+    <div>
+      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+        TankGauge · tube + bar · station tank levels (default critical &lt;25% · low &lt;40%)
+      </div>
+      <div className="grid gap-4 rounded-card border border-border-soft bg-surface p-4 sm:grid-cols-2">
+        <div className="space-y-3">
+          {TANK_SAMPLES.map(([name, volume, cover]) => (
+            <TankGauge
+              key={name}
+              name={name}
+              level={deriveTankLevel(
+                { capacity: 20000, currentVolume: volume, daysOfCover: cover },
+                DEFAULT_TANK_LEVEL_SETTINGS,
+              )}
+            />
+          ))}
+        </div>
+        <div className="space-y-3">
+          {TANK_SAMPLES.map(([name, volume, cover]) => (
+            <TankGauge
+              key={name}
+              name={name}
+              variant="bar"
+              level={deriveTankLevel(
+                { capacity: 20000, currentVolume: volume, daysOfCover: cover },
+                DEFAULT_TANK_LEVEL_SETTINGS,
+              )}
+            />
+          ))}
+        </div>
       </div>
     </div>
 
