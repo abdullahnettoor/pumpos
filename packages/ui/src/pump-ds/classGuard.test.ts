@@ -8,11 +8,16 @@
  *                    v4 skips unknown utilities silently and there is no
  *                    Preflight, so a dead class shows up only as a missing fill.
  * - `undefined-var`  `var(--x)` where `--x` is defined nowhere.
- * - `raw-color`      hex / `rgb(a)` in a class or a style value, including
+ * - `raw-color`      hex / `rgb(a)` / `hsl(a)` in any string: classes, style
+ *                    values, constants, ternaries, SVG attributes, and
  *                    fallbacks like `var(--text-on-brand, #fff)`.
  * - `palette-class`  Tailwind's default palette (`text-gray-500`, `text-white`).
  * - `fill-text-pair` a solid tone fill with a `text-on-*` that is not its pair
- *                    (`bg-danger-fg text-on-brand`, `hover:` states too).
+ *                    (`bg-danger-fg text-on-brand`, `hover:` states too),
+ *                    also when split across ternary branches or `cn()` args.
+ *
+ * Class strings are `className` / `cn()` values, plus any other string whose
+ * tokens are all class-shaped with at least one utility prefix (class maps).
  *
  * Today's violations are in `class-guard/allowlist.json` (rule → file →
  * count). The test fails when a file gains violations, when a file not on the
@@ -38,6 +43,7 @@ import {
   scanSource,
   sourceDefinitions,
   type Findings,
+  type ScanResult,
 } from './class-guard/scan.js';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -148,9 +154,10 @@ describe('style check: packages/ui/src stays within the design system', () => {
   });
 });
 
-describe('style check rules', () => {
-  const fake = (ok: string[]) => ({ generates: (t: string) => ok.includes(t) });
+/** A compiler that knows only `ok`. */
+const fake = (ok: string[]) => ({ generates: (t: string) => ok.includes(t) });
 
+describe('style check rules', () => {
   it('dead-class: a class that compiles to nothing, in className and in .ts class maps', async () => {
     const generates = await makeBuilder();
     const fixture =
@@ -243,13 +250,94 @@ describe('style check rules', () => {
       expect(findFillTextMismatches(ok), ok).toEqual([]);
   });
 
-  it('fill-text-pair: paired text-on-* utilities compile once mapped and pass the scan', () => {
+  // Uses a fake compiler that pretends the pairs exist. Against the real
+  // tailwind.css `text-on-danger` (and the other non-brand pairs) is still a
+  // dead class until #518 (PR #548) maps them; this only checks the pairing logic.
+  it('fill-text-pair: a correct pair passes and a wrong one is flagged (fake compiler, real pairs land in #518)', () => {
     const ctx = fake(['bg-danger-fg', 'text-on-danger', 'bg-brand', 'text-on-brand']);
     const fixture =
       "<i className='bg-danger-fg text-on-danger' />; const B = 'bg-brand text-on-danger';";
     const f = scanSource(fixture, 'x.tsx', ctx);
     expect(f['dead-class']).toEqual([]);
     expect(f['fill-text-pair']).toEqual(['bg-brand + text-on-danger']);
+  });
+
+  it('fill-text-pair: a pair split across strings (ternary in a template, cn() args, consts)', () => {
+    const ok = fake([]);
+    const pair = (src: string) => scanSource(src, 'x.tsx', ok)['fill-text-pair'];
+    expect(pair("<i className={`${ok ? 'bg-brand' : 'bg-danger-fg'} text-on-brand`} />")).toEqual([
+      'bg-danger-fg + text-on-brand',
+    ]);
+    expect(pair("const c = (ok) => `${ok ? 'bg-brand' : 'bg-danger-fg'} text-on-brand`;")).toEqual([
+      'bg-danger-fg + text-on-brand',
+    ]);
+    expect(pair("<i className={cn('px-2 bg-danger-fg', ok && 'text-on-brand')} />")).toEqual([
+      'bg-danger-fg + text-on-brand',
+    ]);
+    expect(pair("const base = 'bg-danger-fg';\nconst x = cn(base, 'text-on-brand');")).toEqual([
+      'bg-danger-fg + text-on-brand',
+    ]);
+    expect(
+      pair(
+        "const T = { a: 'bg-brand', b: 'bg-danger-fg' };\n<i className={cn(T[tone], 'text-on-danger')} />",
+      ),
+    ).toEqual(['bg-brand + text-on-danger']);
+    // Each branch carries its own pair: no mismatch across branches.
+    expect(
+      pair(
+        "<i className={cn('p-2', ok ? 'bg-brand text-on-brand' : 'bg-danger-fg text-on-danger')} />",
+      ),
+    ).toEqual([]);
+    // Counted once when one literal already holds the mismatch.
+    expect(pair("<i className={cn('bg-danger-fg text-on-brand', 'p-2')} />")).toEqual([
+      'bg-danger-fg + text-on-brand',
+    ]);
+  });
+});
+
+describe('style check: strings outside className', () => {
+  const none = { generates: () => false };
+
+  it('dead-class: a class map of mostly-dead tokens is still a class string', () => {
+    const map = "const TONE = { warn: 'bg-line text-accent' };\n<i className={TONE.warn} />;";
+    expect(scanSource(map, 'x.tsx', none)['dead-class']).toEqual(['bg-line', 'text-accent']);
+    const prop = '<Field labelClassName="text-accent border-subtle" />';
+    expect(scanSource(prop, 'x.tsx', none)['dead-class']).toEqual(['text-accent', 'border-subtle']);
+    const variant = "const R = 'hover:bg-line';";
+    expect(scanSource(variant, 'x.tsx', none)['dead-class']).toEqual(['hover:bg-line']);
+  });
+
+  it('dead-class: copy, keys and CSS values are not class strings', () => {
+    const fixture = [
+      "const a = 'Shift closed: text-only summary';",
+      "const b = 'Border colour for the text-field';",
+      "const c = 'pumpos:pending-stock-count';",
+      "const d = { transition: 'border-color 150ms ease', boxSizing: 'border-box' };",
+      "const e = 'flex items-center gap-2';",
+    ].join('\n');
+    const f = scanSource(fixture, 'x.tsx', fake(['flex', 'items-center', 'gap-2']));
+    expect(f['dead-class']).toEqual([]);
+    expect(f['raw-color']).toEqual([]);
+  });
+
+  it('raw-color: hex / rgb / hsl in any string, incl. consts, ternaries and SVG attributes', () => {
+    const fixture = [
+      "const C = { a: '#fff' };",
+      "const fg = ok ? '#123' : '#456';",
+      'const s = `rgba(0, 0, 0, ${alpha})`;',
+      "const h = 'hsl(10 20% 30%)';",
+      '<path fill="#E5E7EB" stroke="url(#grad)" />;',
+      "const copy = 'Order #123 for Acme';",
+      "const anchor = '#settings';",
+    ].join('\n');
+    expect(scanSource(fixture, 'x.tsx', fake([]))['raw-color']).toEqual([
+      'value: #fff',
+      'value: #123',
+      'value: #456',
+      'value: rgba(',
+      'value: hsl(',
+      'value: #E5E7EB',
+    ]);
   });
 });
 
@@ -296,10 +384,8 @@ describe('style check ratchet', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Older checks (#512), still scoped to the dashboard / pump-ds / theme / shell.
-// ---------------------------------------------------------------------------
-
+// Older #512 pitfalls, still required at zero in the dashboard / pump-ds /
+// theme / shell scope. `scanSource` reports them; they are not ratcheted.
 const LEGACY_SCOPES = [
   'components/Dashboard/',
   'pump-ds/',
@@ -309,111 +395,28 @@ const LEGACY_SCOPES = [
 ];
 const legacyScopeFiles = () =>
   SOURCE_FILES.filter((f) => LEGACY_SCOPES.some((s) => f === s || f.startsWith(s)));
-
-/** Index of the matching close bracket for the opener at `start`. */
-function balancedEnd(text: string, start: number): number {
-  const pairs: Record<string, string> = { '(': ')', '{': '}', '[': ']' };
-  const stack: string[] = [];
-  let quote: string | null = null;
-  for (let i = start; i < text.length; i++) {
-    const ch = text[i]!;
-    if (quote) {
-      if (ch === '\\') i++;
-      else if (ch === quote) quote = null;
-      continue;
-    }
-    if (ch === '"' || ch === "'" || ch === '`') quote = ch;
-    else if (pairs[ch]) stack.push(pairs[ch]!);
-    else if (stack.length && ch === stack[stack.length - 1]) {
-      stack.pop();
-      if (stack.length === 0) return i;
-    }
-  }
-  return text.length;
-}
-
-/** Literal chunks of every string in `text`, recursing into template `${…}` expressions. */
-function stringChunks(text: string): string[] {
-  const out: string[] = [];
-  let i = 0;
-  while (i < text.length) {
-    const q = text[i]!;
-    if (q !== '"' && q !== "'" && q !== '`') {
-      i++;
-      continue;
-    }
-    let j = i + 1;
-    let chunk = '';
-    while (j < text.length && text[j] !== q) {
-      if (text[j] === '\\') {
-        j += 2;
-        continue;
-      }
-      if (q === '`' && text[j] === '$' && text[j + 1] === '{') {
-        const end = balancedEnd(text, j + 1);
-        out.push(...stringChunks(text.slice(j + 2, end)));
-        chunk += ' ';
-        j = end + 1;
-        continue;
-      }
-      chunk += text[j];
-      j++;
-    }
-    out.push(chunk);
-    i = j + 1;
-  }
-  return out;
-}
-
-/**
- * `border-dashed` / `border-dotted` set `border-style` on ALL four sides. With
- * no Preflight, the sides without an explicit width then draw at `medium`
- * (~3px): a side-only rule like `border-t border-dashed` becomes a thick dashed
- * frame. Dash one side with `border-t [--tw-border-style:dashed]` instead.
- */
-const SIDE_WIDTH = /^border-[tblrxyse](-|$)/;
-const ALL_WIDTH = /^border(-\d+|-\[[^\]]*px\])?$/;
-export function findSideOnlyDashes(text: string): string[] {
-  const out: string[] = [];
-  for (const lit of stringChunks(text)) {
-    const toks = lit
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((t) => t.replace(/^.*:/, ''));
-    if (!toks.some((t) => t === 'border-dashed' || t === 'border-dotted')) continue;
-    if (toks.some((t) => SIDE_WIDTH.test(t)) && !toks.some((t) => ALL_WIDTH.test(t)))
-      out.push(lit.trim());
-  }
-  return out;
-}
-
-/**
- * `className="… ${x}"` is a plain string, not a template: the `${…}` is
- * rendered literally and the class never applies (the Fuels swatch shipped
- * colourless this way). Interpolation needs `className={`…`}`.
- */
-export function findQuotedInterpolations(text: string): string[] {
-  const out: string[] = [];
-  const re = /className=(["'])([^"']*\$\{[^"']*)\1/g;
-  for (let m = re.exec(text); m; m = re.exec(text)) out.push(m[2]);
-  return out;
-}
+const pitfalls = (src: string, file = 'x.tsx'): ScanResult =>
+  scanSource(src, file, { generates: () => true });
 
 describe('class guard: border and interpolation pitfalls (dashboard / pump-ds / theme / shell)', () => {
   it('no side-only dashed borders (border-dashed styles every side)', () => {
-    const bad: string[] = [];
-    for (const file of legacyScopeFiles())
-      for (const lit of findSideOnlyDashes(read(file))) bad.push(`${file}: ${lit}`);
+    const bad = legacyScopeFiles().flatMap((file) =>
+      pitfalls(read(file), file)['side-only-dash'].map((lit) => `${file}: ${lit}`),
+    );
     expect(bad).toEqual([]);
-    expect(findSideOnlyDashes("const R = 'border-t border-dashed px-3';")).toHaveLength(1);
-    expect(findSideOnlyDashes("const R = 'border border-dashed';")).toHaveLength(0);
+    expect(pitfalls("const R = 'border-t border-dashed px-3';")['side-only-dash']).toHaveLength(1);
+    expect(
+      pitfalls('<i className={`border-b ${x} hover:border-dotted`} />')['side-only-dash'],
+    ).toHaveLength(1);
+    expect(pitfalls("const R = 'border border-dashed';")['side-only-dash']).toHaveLength(0);
   });
+
   it('no ${…} inside a quoted className (it renders literally)', () => {
-    const bad: string[] = [];
-    for (const file of legacyScopeFiles())
-      for (const lit of findQuotedInterpolations(read(file))) bad.push(`${file}: ${lit}`);
+    const bad = legacyScopeFiles().flatMap((file) =>
+      pitfalls(read(file), file)['quoted-interpolation'].map((lit) => `${file}: ${lit}`),
+    );
     expect(bad).toEqual([]);
-    expect(findQuotedInterpolations('<i className="size-2 ${SW[i]}" />')).toHaveLength(1);
-    expect(findQuotedInterpolations('<i className={`size-2 ${SW[i]}`} />')).toHaveLength(0);
+    expect(pitfalls('<i className="size-2 ${SW[i]}" />')['quoted-interpolation']).toHaveLength(1);
+    expect(pitfalls('<i className={`size-2 ${SW[i]}`} />')['quoted-interpolation']).toHaveLength(0);
   });
 });

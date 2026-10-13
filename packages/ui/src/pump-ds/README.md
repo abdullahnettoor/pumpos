@@ -37,12 +37,34 @@ excluded) and counts, per file:
 | ---------------- | ------------------------------------------------------------------------------------ |
 | `dead-class`     | Tailwind classes that generate no CSS (`bg-line`, `text-accent`)                     |
 | `undefined-var`  | `var(--x)` where `--x` is defined nowhere                                            |
-| `raw-color`      | hex / `rgb(a)` in a class or style value, incl. `var(--x, #fff)` fallbacks           |
+| `raw-color`      | hex / `rgb(a)` / `hsl(a)` in **any** string literal (see below)                      |
 | `palette-class`  | Tailwind's default palette (`text-gray-500`, `bg-blue-600`, `text-white`)            |
 | `fill-text-pair` | a solid fill with the wrong `text-on-*` (`bg-danger-fg text-on-brand`, `hover:` too) |
 
-Plain CSS classes defined in `index.css` are allowed. PDF documents
+**What counts as a class string.** `className` / `class` values and every
+argument of `cn()`, `clsx()`, `twMerge()`, `cva()`, `cx()`. Any other string
+(a class map like `TONE = { warn: '…' }`, a `labelClassName="…"` prop) counts
+when every token is class-shaped (no capitals or trailing punctuation outside
+`[…]`) and at least one token has a utility prefix: a colour utility
+(`bg-`, `text-`, `border-`, …), a palette class, or a Tailwind variant
+(`hover:`, `md:`, `data-[…]:`). Whether the tokens compile does not matter, so
+a map of dead tokens is still checked. Copy (`'Shift closed: text-only'`) and
+storage keys (`'pumpos:pending-stock-count'`) are not class strings.
+
+**Raw colours.** A hex, `rgb()`/`rgba()` or `hsl()`/`hsla()` in any string
+literal in a `.ts`/`.tsx` source counts: classes, style props, constants
+(`const C = { a: '#fff' }`), ternaries (`ok ? '#123' : '#456'`), SVG
+attributes. Not counted: `url(#id)` references, and a hex inside copy (the
+string has capitals outside the hex, as in `'Order #123'`). PDF documents
 (`@react-pdf/renderer`, `pdfmake`) may use hex: they have no CSS variables.
+
+**Fill/text pairs across strings.** A `className` / `cn()` value is expanded
+into every class string it can produce: ternary branches inside a template
+combined with its static parts, all args of one `cn()` call, and local `const`
+strings and object maps it names. `${ok ? 'bg-brand' : 'bg-danger-fg'} text-on-brand`
+and `cn(base, 'text-on-brand')` are both checked.
+
+Plain CSS classes defined in `index.css` are allowed.
 
 ```sh
 npm run test:classes -w @pump/ui          # run the check (CI runs it too)

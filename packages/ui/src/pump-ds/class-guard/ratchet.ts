@@ -17,20 +17,21 @@ export interface RatchetProblem {
   actual: number;
 }
 
-function keys(a: Counts, b: Counts): Rule[] {
-  return [...new Set([...Object.keys(a), ...Object.keys(b)])].sort() as Rule[];
+function rulesOf(actual: Counts, allowed: Counts): Rule[] {
+  return [...new Set([...Object.keys(actual), ...Object.keys(allowed)])].sort() as Rule[];
 }
 
 /** Every file whose count differs from its entry (missing entry = 0). */
 export function compareToAllowList(actual: Counts, allowed: Counts): RatchetProblem[] {
   const out: RatchetProblem[] = [];
-  for (const rule of keys(actual, allowed)) {
-    const a = actual[rule] ?? {};
-    const l = allowed[rule] ?? {};
-    for (const file of [...new Set([...Object.keys(a), ...Object.keys(l)])].sort()) {
-      const n = a[file] ?? 0;
-      const max = l[file] ?? 0;
-      if (n !== max) out.push({ rule, file, allowed: max, actual: n });
+  for (const rule of rulesOf(actual, allowed)) {
+    const actualByFile = actual[rule] ?? {};
+    const allowedByFile = allowed[rule] ?? {};
+    const files = new Set([...Object.keys(actualByFile), ...Object.keys(allowedByFile)]);
+    for (const file of [...files].sort()) {
+      const count = actualByFile[file] ?? 0;
+      const max = allowedByFile[file] ?? 0;
+      if (count !== max) out.push({ rule, file, allowed: max, actual: count });
     }
   }
   return out;
@@ -45,12 +46,12 @@ export function lowerAllowList(actual: Counts, allowed: Counts): Counts {
   const out: Counts = {};
   for (const rule of Object.keys(allowed).sort() as Rule[]) {
     const entries: Record<string, number> = {};
-    const a = actual[rule] ?? {};
+    const actualByFile = actual[rule] ?? {};
     for (const [file, max] of Object.entries(allowed[rule] ?? {}).sort(([x], [y]) =>
       x.localeCompare(y),
     )) {
-      const n = Math.min(a[file] ?? 0, max);
-      if (n > 0) entries[file] = n;
+      const lowered = Math.min(actualByFile[file] ?? 0, max);
+      if (lowered > 0) entries[file] = lowered;
     }
     if (Object.keys(entries).length) out[rule] = entries;
   }
