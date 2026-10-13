@@ -4,6 +4,7 @@ import { Checkbox } from '../primitives/Toggle.js';
 import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPopover.js';
 import { Button } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
+import { formatVariance, VARIANCE_TONE_TEXT as TONE_TEXT } from '../../utils/variance.js';
 import { DrawerReconciliationTable, VarianceFigure } from './DrawerReconciliationTable.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
@@ -153,6 +154,7 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
 
   const expectedCash = cashLines.expectedOfficeCash;
   const cashVariance = closingCash - expectedCash;
+  const officeVariance = formatVariance(cashVariance, 'cash');
   const hasWarnings = warnings.length > 0;
   // Every Drawer must be handed over before close (#287).
   const pendingDrawers = (cashSummary?.drawers ?? []).filter((d) => d.cashHandedOver === null);
@@ -487,20 +489,12 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
               />
             </div>
 
-            <div
-              className="close-wizard-variance"
-              data-state={cashVariance === 0 ? 'match' : cashVariance > 0 ? 'surplus' : 'shortage'}
-            >
-              Office count variance: {cashVariance > 0 ? '+' : ''}
-              {inr(cashVariance)}
-              {cashVariance === 0
-                ? ' (Perfect Match)'
-                : cashVariance > 0
-                  ? ' (Cash Surplus)'
-                  : ' (Cash Shortage)'}
+            <div className="close-wizard-variance" data-state={officeVariance.state}>
+              Office count variance: {officeVariance.text}
+              {officeVariance.state !== 'balanced' && ` ${officeVariance.label.toLowerCase()}`}
             </div>
 
-            {cashVariance !== 0 && (
+            {officeVariance.state !== 'balanced' && (
               <div className="close-wizard-why">
                 <button
                   type="button"
@@ -694,15 +688,10 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
               </div>
               <div
                 className="close-wizard-row close-wizard-row--total"
-                style={{
-                  color: cashVariance === 0 ? 'var(--state-success-fg)' : 'var(--brand-danger)',
-                }}
+                style={{ color: TONE_TEXT[officeVariance.tone] }}
               >
                 <span>Office count variance</span>
-                <span className="font-mono">
-                  {cashVariance > 0 ? '+' : ''}
-                  {inr(cashVariance)}
-                </span>
+                <span className="font-mono">{officeVariance.text}</span>
               </div>
               <div className="close-wizard-row">
                 <span>Dip Readings Captured</span>

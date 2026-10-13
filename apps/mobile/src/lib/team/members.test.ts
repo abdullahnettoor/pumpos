@@ -27,6 +27,11 @@ describe('memberStatus', () => {
     expect(memberStatus(m({ hasLogin: false }), new Set()).label).toBe('No login');
     expect(memberStatus(m({}), new Set()).label).toBe('Active');
   });
+
+  it('reads Inactive grey, never red, and Active green (shared vocabulary, #518)', () => {
+    expect(memberStatus(m({ status: 'INACTIVE' }), on).tone).toBe('muted');
+    expect(memberStatus(m({}), new Set()).tone).toBe('good');
+  });
 });
 
 describe('onShiftIds', () => {

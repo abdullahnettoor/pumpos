@@ -1,15 +1,10 @@
 import React from 'react';
 import { DuChip } from '../../components/DuChip.js';
 import { rupees } from '../../lib/format.js';
-import type { DuStatus, LiveDu, LiveShiftCard as LiveCard } from '../../lib/shifts/liveCard.js';
+import { handoverState } from '@pump/shared';
+import type { LiveDu, LiveShiftCard as LiveCard } from '../../lib/shifts/liveCard.js';
 import { varianceBadge } from '../../lib/variance.js';
-import { StatusBadge, type BadgeTone } from '../../ui/index.js';
-
-const STATUS: Record<DuStatus, { label: string; tone: BadgeTone }> = {
-  recorded: { label: 'Recorded', tone: 'good' },
-  pending: { label: 'Pending', tone: 'muted' },
-  due: { label: 'Handover due', tone: 'warn' },
-};
+import { StatusBadge } from '../../ui/index.js';
 
 const Figure: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div className="min-w-0 border-l border-line px-2.5 first:border-l-0">
@@ -19,7 +14,6 @@ const Figure: React.FC<{ label: string; value: string }> = ({ label, value }) =>
 );
 
 const DuRow: React.FC<{ du: LiveDu }> = ({ du }) => {
-  const status = STATUS[du.status];
   const variance = du.variance === null ? null : varianceBadge(du.variance);
   return (
     <li className="flex items-center gap-2.5 border-t border-line px-3 py-[11px] first:border-t-0">
@@ -32,7 +26,7 @@ const DuRow: React.FC<{ du: LiveDu }> = ({ du }) => {
             : `Declared ${rupees(du.declared)} · ${variance?.balanced ? 'balanced' : `var ${variance?.text}`}`}
         </p>
       </div>
-      <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+      <StatusBadge state={handoverState(du.status)} />
     </li>
   );
 };

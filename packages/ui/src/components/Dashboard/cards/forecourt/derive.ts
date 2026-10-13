@@ -3,6 +3,7 @@ import {
   isDayShiftsDone,
   isHandoverDue,
   nextShiftToOpen,
+  statusPresentation,
   type DuStatus,
 } from '@pump/shared';
 import {
@@ -222,7 +223,8 @@ export function deriveForecourt(input: DeriveInput): ForecourtModel {
 
 /** Live line: "Live 7h 20m", with " · Shift 3 · 13 Oct" for a carry-over shift. */
 export const liveHeadline = (m: LiveForecourt): string => {
-  const base = m.pastEnd ? 'Past scheduled end' : `Live ${m.elapsed}`;
+  const state = statusPresentation(m.pastEnd ? 'shift-past-end' : 'shift-live');
+  const base = m.pastEnd ? state.label : `${state.label} ${m.elapsed}`;
   return m.dateTag ? `${base} · ${m.name} · ${m.dateTag}` : base;
 };
 

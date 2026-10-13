@@ -60,6 +60,14 @@
   --color-brand-warning: var(--brand-warning);
   --color-brand-danger: var(--brand-danger);
   --color-on-brand: var(--text-on-brand);
+  /* Text on a solid tone fill, paired per fill (#518): bg-danger-fg / bg-brand-danger
+   * + text-on-danger, bg-warning-fg + text-on-warning, bg-success-fg +
+   * text-on-success, bg-info-fg + text-on-info, bg-ink-strong + text-on-neutral. */
+  --color-on-danger: var(--text-on-danger);
+  --color-on-warning: var(--text-on-warning);
+  --color-on-success: var(--text-on-success);
+  --color-on-info: var(--text-on-info);
+  --color-on-neutral: var(--text-on-neutral);
 
   /* Surfaces + borders */
   --color-canvas: var(--bg-canvas);

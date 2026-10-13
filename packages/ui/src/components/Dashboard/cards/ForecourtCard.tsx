@@ -1,7 +1,7 @@
 import React from 'react';
-import { shiftWorkspaceAction } from '@pump/shared';
+import { handoverState, shiftWorkspaceAction, statusPresentation } from '@pump/shared';
 import { Fuel, Play } from 'lucide-react';
-import { Button, Chip, Dot } from '../../../pump-ds/index.js';
+import { Button, Dot, StatusChip, VarianceChip } from '../../../pump-ds/index.js';
 import { inr, formatQty } from '../../../utils/format.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
 import { useDashboard } from '../frame/DashboardContext.js';
@@ -12,16 +12,6 @@ import {
   type LastClosed,
   type LiveForecourt,
 } from './forecourt/derive.js';
-
-const VarianceChip: React.FC<{ amount: number }> = ({ amount }) => (
-  <Chip
-    size="sm"
-    tone={amount === 0 ? 'success' : amount < 0 ? 'danger' : 'warning'}
-    data-testid="variance-badge"
-  >
-    {amount === 0 ? 'Balanced' : `${amount > 0 ? '+' : '−'}${inr(Math.abs(amount))}`}
-  </Chip>
-);
 
 const DuLine: React.FC<{ du: DuRow }> = ({ du }) => (
   <li
@@ -44,15 +34,9 @@ const DuLine: React.FC<{ du: DuRow }> = ({ du }) => (
     </div>
     <div className="w-[104px] shrink-0 text-right">
       {du.status === 'recorded' ? (
-        <VarianceChip amount={du.variance ?? 0} />
-      ) : du.status === 'due' ? (
-        <Chip size="sm" tone="warning">
-          Handover due
-        </Chip>
+        <VarianceChip size="sm" amount={du.variance ?? 0} data-testid="variance-badge" />
       ) : (
-        <Chip size="sm" tone="neutral">
-          Pending
-        </Chip>
+        <StatusChip size="sm" status={handoverState(du.status)} showIcon={false} />
       )}
     </div>
   </li>
@@ -62,7 +46,10 @@ const Live: React.FC<{ m: LiveForecourt }> = ({ m }) => (
   <div className="rounded-lg border border-border-soft bg-surface">
     <div className="border-b border-border-soft px-3.5 py-3">
       <div className="flex items-center gap-2 text-[13px] font-semibold">
-        <Dot tone={m.pastEnd ? 'warning' : 'success'} pulse={!m.pastEnd} />
+        <Dot
+          tone={statusPresentation(m.pastEnd ? 'shift-past-end' : 'shift-live').tone}
+          pulse={!m.pastEnd}
+        />
         <b className="font-semibold text-ink">{liveHeadline(m)}</b>
         {m.window && <span className="font-semibold text-ink-muted">{m.window}</span>}
       </div>
@@ -135,7 +122,11 @@ const LastClosedBlock: React.FC<{ last: LastClosed; onOpen: () => void }> = ({ l
       </div>
       <div>
         <div className="text-[11px] text-ink-muted">Variance</div>
-        {last.variance == null ? <div>—</div> : <VarianceChip amount={last.variance} />}
+        {last.variance == null ? (
+          <div>—</div>
+        ) : (
+          <VarianceChip size="sm" amount={last.variance} data-testid="variance-badge" />
+        )}
       </div>
     </div>
   </div>

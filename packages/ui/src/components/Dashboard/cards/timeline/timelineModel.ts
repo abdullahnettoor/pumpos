@@ -12,6 +12,7 @@ import {
   formatHHMM,
   formatMoney,
 } from '../../../../utils/format.js';
+import { formatVariance } from '../../../../utils/variance.js';
 
 export interface ShiftBarInput {
   id: string;
@@ -117,10 +118,7 @@ export function buildBars(
         kind === 'running' && end > start
           ? Math.max(0, Math.min(1, (now - start) / (end - start)))
           : null,
-      varianceText:
-        kind === 'closed' && s.variance
-          ? `${s.variance < 0 ? '−' : '+'}${money(Math.abs(s.variance))}`
-          : null,
+      varianceText: kind === 'closed' ? closedVarianceText(s.variance) : null,
       leftPct: left,
       widthPct: Math.max(0.5, axisPct(end, tl) - left),
       total: s.total,
@@ -263,6 +261,17 @@ export const minutesLate = (s: ShiftBarInput): number | null => {
 export const pinPct = (pin: EventPin, tl: DashboardTimeline) => axisPct(pin.at, tl);
 
 export const money = (n: number) => formatMoney(n, { decimals: 0 });
+
+/**
+ * A closed shift's variance on its bar: nothing when balanced (by
+ * `isBalancedVariance`, via `formatVariance`), else the signed whole-rupee
+ * figure. Never "+₹0" for a sub-paisa residue.
+ */
+export function closedVarianceText(variance: number | null): string | null {
+  if (variance == null) return null;
+  const v = formatVariance(variance, 'cash', { decimals: 0 });
+  return v.state === 'balanced' ? null : v.text;
+}
 
 /** Scheduled end (epoch ms) of a template window: its start plus its length (shared rule). */
 export function scheduledEndAt(
