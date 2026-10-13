@@ -27,6 +27,7 @@ import {
 } from '../services/cloud.js';
 import type {
   DensityTodaySummary,
+  ShiftTemplate,
   DensityReadingWithContext,
   SaveDecantationBody,
   RecordDensityReadingPayload,
@@ -34,6 +35,8 @@ import type {
 import type {
   BusinessDayStatusResponse,
   DailyCashBook,
+  DashboardSummary,
+  FuelPrice,
   FundingAccount,
   ProfitLossReport,
 } from '../services/cloud.js';
@@ -48,6 +51,7 @@ import type {
   InsightsAttendantVariance,
   InsightsCreditHealth,
   InsightsRangeDays,
+  SalesInsightsDays,
   InsightsSales,
   CustomerReceivableSummary,
   PayablesSummary,
@@ -186,6 +190,9 @@ export const queryKeys = {
   activityGroups: (stationId: string, type: string, limit: number) =>
     ['activity-groups', stationId, type, limit] as const,
   activityGroup: (groupId: string) => ['activity-group', groupId] as const,
+  /** One station's activity for one Business Day (under the activity-groups prefix). */
+  dayActivity: (stationId: string, date: string, entryDate: string = date) =>
+    ['activity-groups', stationId, 'day', date, entryDate] as const,
   moneyMovements: (stationId: string, from: string, to: string) =>
     ['money-movements', stationId, from, to] as const,
   invoices: (stationId: string, from: string, to: string) =>
@@ -323,7 +330,7 @@ export function useNozzles(stationId: string | null | undefined, options?: Optio
   });
 }
 
-export function useShiftTemplates(options?: Options<any[]>) {
+export function useShiftTemplates(options?: Options<ShiftTemplate[]>) {
   return useQuery({
     queryKey: queryKeys.shiftTemplates(),
     queryFn: () => templateSvc.listTemplates(),
@@ -345,7 +352,7 @@ export function usePaymentTerminals(
   });
 }
 
-export function usePricing(stationId: string | null | undefined, options?: Options<any[]>) {
+export function usePricing(stationId: string | null | undefined, options?: Options<FuelPrice[]>) {
   return useQuery({
     queryKey: queryKeys.pricing(stationId ?? ''),
     queryFn: () => pricingSvc.getPricing(stationId!),
@@ -428,6 +435,21 @@ export function useActivityGroups(params?: { stationId?: string; type?: string; 
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.nextCursor,
     ...TIER.operational,
+  });
+}
+
+/** The dashboard timeline's events (operational tier, not persisted). */
+export function useDayActivity(
+  stationId: string | null | undefined,
+  date: string | null | undefined,
+  options?: { enabled?: boolean; entryDate?: string },
+) {
+  const entryDate = options?.entryDate ?? date ?? '';
+  return useQuery({
+    queryKey: queryKeys.dayActivity(stationId ?? '', date ?? '', entryDate),
+    queryFn: () => eventsSvc.getDayActivity(stationId!, date!, entryDate),
+    ...TIER.operational,
+    enabled: !!stationId && !!date && (options?.enabled ?? true),
   });
 }
 
@@ -666,10 +688,14 @@ export function useTanks(stationId: string | null | undefined, options?: Options
   });
 }
 
+/**
+ * Shift status for a station. `lite: true` fetches the light payload (no
+ * assignments/handovers); it is part of the query key, so lite and full are
+ * cached separately.
+ */
 export function useShiftStatus(
   stationId: string | null | undefined,
-  lite = false,
-  options?: Options<any>,
+  { lite = false, ...options }: Options<any> & { lite?: boolean } = {},
 ) {
   return useQuery({
     queryKey: queryKeys.shiftStatus(stationId ?? '', lite),
@@ -748,7 +774,10 @@ export function useShiftSummaryById(shiftId: string | null | undefined, options?
  * last-summary scalars, reopen/grace state, and today's rollup — one bounded
  * request instead of full shift status + every historical shift summary.
  */
-export function useDashboardSummary(stationId: string | null | undefined, options?: Options<any>) {
+export function useDashboardSummary(
+  stationId: string | null | undefined,
+  options?: Options<DashboardSummary>,
+) {
   return useQuery({
     queryKey: queryKeys.dashboardSummary(stationId ?? ''),
     queryFn: () => shiftService.getDashboardSummary(stationId!),
@@ -1176,7 +1205,7 @@ export function useAttendantHandoverReport(
  */
 export function useInsightsSales(
   stationId: string | null | undefined,
-  days: InsightsRangeDays,
+  days: SalesInsightsDays,
   options?: Options<InsightsSales>,
 ) {
   return useQuery({

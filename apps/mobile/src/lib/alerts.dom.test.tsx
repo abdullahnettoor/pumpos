@@ -77,7 +77,7 @@ describe('useMobileAlerts: own handover', () => {
 });
 
 describe('useMobileAlerts: Decantation and density', () => {
-  it('loads and derives alerts for back-office roles, but not for Attendants or Staff', () => {
+  it('loads and derives alerts for back-office roles, density for Staff too, nothing for Attendants', () => {
     feed.pastOpen = [];
     feed.assignment = null;
     feed.decantations = [
@@ -101,10 +101,11 @@ describe('useMobileAlerts: Decantation and density', () => {
       expect(result.current.map((alert) => alert.category)).toEqual(['decantation', 'density']);
       unmount();
     }
-    for (const role of ['Attendant', 'Staff'] as const) {
-      const { result, unmount } = renderHook(() => useMobileAlerts(station, role));
-      expect(result.current).toEqual([]);
-      unmount();
-    }
+    const staff = renderHook(() => useMobileAlerts(station, 'Staff'));
+    expect(staff.result.current.map((alert) => alert.category)).toEqual(['density']);
+    staff.unmount();
+    const attendant = renderHook(() => useMobileAlerts(station, 'Attendant'));
+    expect(attendant.result.current).toEqual([]);
+    attendant.unmount();
   });
 });

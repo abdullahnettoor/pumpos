@@ -24,7 +24,7 @@ export interface NavIntent {
   /** Focus a specific supplier (opens their statement drawer). */
   focusSupplierId?: string;
   /** Focus a specific inventory tab + entity (tank card / merchandise row). */
-  focusInventoryTab?: 'tanks' | 'items';
+  focusInventoryTab?: 'tanks' | 'items' | 'density' | 'decantations';
   focusInventoryId?: string;
   /**
    * Open a drawer immediately on arrival at the destination page.
@@ -42,11 +42,20 @@ export interface NavIntent {
   /** Open a specific Business Day in the Shifts workspace. */
   openBusinessDayDate?: string;
   /**
+   * Open Shifts → Business Day with the list filtered to still-open past
+   * Business Days (dashboard open-days notice).
+   */
+  openPastDays?: boolean;
+  /**
    * Open one closed shift's **Shift Summary** (Shifts → History). Distinct from
    * `openDssrDate`: a shift summary is the shift-close snapshot, a DSSR is the
    * business-day-close snapshot.
    */
   openShiftSummaryId?: string;
+  /** Open a specific tab of the Reports page. */
+  openReportsTab?: 'cash-book';
+  /** Open the Record Purchase drawer on arrival at Purchases. */
+  openNewPurchase?: boolean;
   /** Open a specific tab on the Organization page. */
   openOrganizationTab?: 'desktop';
 }

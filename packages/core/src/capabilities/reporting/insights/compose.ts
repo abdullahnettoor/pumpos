@@ -101,6 +101,16 @@ export function composeInsightsSales(source: InsightsSalesSource): InsightsSales
       })
     : [];
 
+  const previousByDate = new Map(source.previousDays.map((d) => [d.date, d]));
+  const previousTrend: InsightsTrendDay[] = source.previousRange
+    ? eachDate(source.previousRange.from, source.previousRange.to).map((date) => {
+        const day = previousByDate.get(date);
+        return day
+          ? { date, sales: day.sales, volume: day.volume, closed: true }
+          : { date, sales: 0, volume: 0, closed: false };
+      })
+    : [];
+
   const litreRows = source.fuelVolumes.filter((p) => isLitre(p.unit));
   const totalLitres = litreRows.reduce((sum, p) => sum + p.quantity, 0);
   const productMix = litreRows
@@ -134,6 +144,7 @@ export function composeInsightsSales(source: InsightsSalesSource): InsightsSales
     previousAverage: previous.closedDays > 0 ? round2(previousTotal / previous.closedDays) : 0,
     best,
     trend,
+    previousTrend,
     productMix,
     otherUnitFuels,
     otherProducts: {

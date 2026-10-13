@@ -148,12 +148,12 @@ describe('mobile Control Room tab guards (#390)', () => {
 });
 
 describe('canRecordDensity', () => {
-  it('allows Owner, Manager and Accountant only', () => {
+  it('allows Owner, Manager, Accountant and Staff (not Attendant)', () => {
     expect(
       (['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant'] as const).filter((r) =>
         canRecordDensity(r),
       ),
-    ).toEqual(['Owner', 'Manager', 'Accountant']);
+    ).toEqual(['Owner', 'Manager', 'Accountant', 'Staff']);
   });
 });
 

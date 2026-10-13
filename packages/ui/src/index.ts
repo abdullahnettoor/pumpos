@@ -231,3 +231,5 @@ export { keepsIdempotencyKey } from './utils/idempotency.js';
 export { keyForBody, newSaveKey, resetSaveKey, type SaveKey } from './utils/saveKey.js';
 export { DecantationReportPanel } from './components/reports/DecantationReportPanel.js';
 export * from './components/inventory/density/index.js';
+
+export * from './theme/index.js';

@@ -45,9 +45,10 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
   const { data: preview } = useDailyDssrPreview(selectedStation?.id, todayBiz, {
     enabled: !!selectedStation?.id && todayInRange,
   } as any);
-  const { data: shiftStatus } = useShiftStatus(selectedStation?.id, true, {
+  const { data: shiftStatus } = useShiftStatus(selectedStation?.id, {
+    lite: true,
     enabled: !!selectedStation?.id && todayInRange,
-  } as any);
+  });
   const hasOpenShift = !!shiftStatus?.activeShift;
   const closedShiftsToday = Number(preview?.snapshotData?.shiftsIncluded || 0);
   const liveAsOf = preview?.generatedAt

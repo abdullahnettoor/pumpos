@@ -30,6 +30,7 @@ import {
   InsightsAttendantVariance,
   InsightsCreditHealth,
   InsightsRangeDays,
+  SalesInsightsDays,
   InsightsSales,
   CustomerReceivableSummary,
   PayablesSummary,
@@ -651,6 +652,47 @@ export interface BusinessDayStatusResponse {
   recentFromBusinessDate: string;
 }
 
+/** One shift of `today.shifts[]` in the dashboard summary. */
+export interface DaySummaryShift {
+  id: string;
+  shiftTemplateId: string;
+  openedAt: string;
+  closedAt?: string | null;
+  businessDate?: string | null;
+  shiftSequence?: number | null;
+  totalFuelSalesValue?: number | null;
+  cashVariance?: number | null;
+}
+
+/** `GET /shifts/dashboard-summary` (fields the dashboard reads). */
+export interface DashboardSummary {
+  today?: { businessDate?: string; shifts?: DaySummaryShift[] };
+  lastShift?: {
+    id: string;
+    templateName?: string | null;
+    openedAt?: string | null;
+    closedAt?: string | null;
+    businessDate?: string | null;
+    shiftSequence?: number | null;
+  } | null;
+  lastShiftSummary?: {
+    totalFuelSalesValue?: number | null;
+    totalVolumeSold?: number | null;
+    cashVariance?: number | null;
+  } | null;
+  activeShift?: Record<string, unknown> | null;
+  [key: string]: unknown;
+}
+
+/** One row of `GET /setup/pricing`. */
+export interface FuelPrice {
+  productId: string;
+  productName: string;
+  productCode: string;
+  price: number;
+  effectiveFrom: string | null;
+}
+
 export class CloudShiftService {
   async getShiftStatus(stationId: string, lite: boolean = false): Promise<any> {
     return request<any>(`/shifts/status?stationId=${stationId}${lite ? '&lite=true' : ''}`);
@@ -724,8 +766,8 @@ export class CloudShiftService {
     return request<any[]>(`/shifts/handovers?shiftId=${shiftId}`);
   }
 
-  async getDashboardSummary(stationId: string): Promise<any> {
-    return request<any>(`/shifts/dashboard-summary?stationId=${stationId}`);
+  async getDashboardSummary(stationId: string): Promise<DashboardSummary> {
+    return request<DashboardSummary>(`/shifts/dashboard-summary?stationId=${stationId}`);
   }
 
   async getShiftSummaries(stationId: string, limit = 200): Promise<any[]> {
@@ -826,7 +868,7 @@ export class CloudShiftService {
    * Insights sales block (trend, product mix, Shift performance) over the last
    * `days` closed Business Days. Sealed data only: a given range end never changes.
    */
-  async getInsightsSales(stationId: string, days: InsightsRangeDays): Promise<InsightsSales> {
+  async getInsightsSales(stationId: string, days: SalesInsightsDays): Promise<InsightsSales> {
     const query = new URLSearchParams({ stationId, days: String(days) });
     return request<InsightsSales>(`/reports/insights/sales?${query.toString()}`);
   }
@@ -1607,8 +1649,8 @@ export class CloudTransactionService {
 }
 
 export class CloudPricingService {
-  async getPricing(stationId: string): Promise<any[]> {
-    return request<any[]>(`/setup/pricing?stationId=${stationId}`);
+  async getPricing(stationId: string): Promise<FuelPrice[]> {
+    return request<FuelPrice[]>(`/setup/pricing?stationId=${stationId}`);
   }
 
   async getPricingHistory(stationId: string): Promise<any[]> {
@@ -1701,6 +1743,12 @@ export interface ActivityPage {
   nextCursor: string | null;
 }
 
+export interface ActivityDayFeed {
+  date: string;
+  items: ActivityGroupSummary[];
+  nextCursor: string | null;
+}
+
 export class CloudEventsService {
   async getActivityGroups(params?: {
     stationId?: string;
@@ -1715,6 +1763,16 @@ export class CloudEventsService {
     if (params?.cursor) qs.set('cursor', params.cursor);
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
     return request<ActivityPage>(`/activity${suffix}`);
+  }
+
+  /** GET /activity?stationId&date — one Business Day's events for the dashboard timeline (#508). */
+  async getDayActivity(
+    stationId: string,
+    date: string,
+    entryDate: string = date,
+  ): Promise<ActivityDayFeed> {
+    const qs = new URLSearchParams({ stationId, date, entryDate });
+    return request<ActivityDayFeed>(`/activity?${qs.toString()}`);
   }
 
   async getActivityGroup(groupId: string): Promise<ActivityGroupDetail> {
@@ -1777,6 +1835,8 @@ export interface DailyCashBookEntry {
   sourceType: string;
   sourceId: string | null;
   notes: string | null;
+  /** Customer / supplier the entry settles, when the API supplies it. */
+  partyName?: string | null;
   createdAt: string;
 }
 

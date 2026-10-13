@@ -137,7 +137,11 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
   // Report layouts decide what prints for everyone, so only Owner and Manager
   // may change them (#332). Others print with the saved layout.
   const showTemplates = canManageReportTemplates(userRole);
-  const activeTab: ReportsTab = intent?.openDssrDate ? 'daily-dssr' : selectedTab;
+  const activeTab: ReportsTab = intent?.openDssrDate
+    ? 'daily-dssr'
+    : intent?.openReportsTab === 'cash-book' && userRole !== 'Staff'
+      ? 'cash-book'
+      : selectedTab;
   const setActiveTab = (tab: ReportsTab) => {
     clearNavIntent();
     setSelectedTab(tab);

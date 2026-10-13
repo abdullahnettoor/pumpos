@@ -45,7 +45,7 @@ const chipVariants = cva(
       variant: {
         soft: '',
         outline: 'bg-transparent border',
-        solid: 'text-white',
+        solid: 'text-on-brand',
       },
       tone: {
         brand: '',

@@ -430,6 +430,7 @@ describe.skipIf(!CONNECTION)('Insights sales reader against real Postgres', () =
       range: null,
       previousRange: null,
       days: [],
+      previousDays: [],
       previous: { sales: 0, closedDays: 0, otherSales: 0 },
       fuelVolumes: [],
       other: { total: 0, top: null },

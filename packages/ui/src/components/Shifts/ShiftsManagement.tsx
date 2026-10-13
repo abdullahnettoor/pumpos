@@ -121,7 +121,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     stationSettings.timezone,
     stationSettings.business_day_starts_at,
   );
-  const statusQ = useShiftStatus(stationId, false, { refetchOnWindowFocus: false });
+  const statusQ = useShiftStatus(stationId, { refetchOnWindowFocus: false });
   const invalidateOperational = useInvalidateOperational();
   const runTask = useRunTask();
   const qc = useQueryClient();
@@ -144,11 +144,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const intentBusinessDay = intent?.openBusinessDayDate ?? null;
   // Deep link to one closed shift's summary (dashboard "Last closed shift" card).
   const intentShiftSummaryId = intent?.openShiftSummaryId ?? null;
-  const shiftSubTab = intentBusinessDay
-    ? 'business-day'
-    : intentShiftSummaryId
-      ? 'history'
-      : selectedSubTab;
+  const intentOpenPastDays = intent?.openPastDays === true;
+  const shiftSubTab =
+    intentBusinessDay || intentOpenPastDays
+      ? 'business-day'
+      : intentShiftSummaryId
+        ? 'history'
+        : selectedSubTab;
   const requestedBusinessDayDate = intentBusinessDay ?? selectedBusinessDayDate;
   const setShiftSubTab = (tab: 'today' | 'business-day' | 'history') => {
     clearNavIntent();
@@ -883,6 +885,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           activeBusinessDayId={activeShift?.businessDayId ?? null}
           requestedBusinessDate={requestedBusinessDayDate}
           onBusinessDateSelected={() => setRequestedBusinessDayDate(null)}
+          openPastDaysRequested={intentOpenPastDays}
+          onOpenPastDaysConsumed={() => {
+            setSelectedSubTab('business-day');
+            clearNavIntent();
+          }}
           onNavigate={onNavigate}
         />
       </div>

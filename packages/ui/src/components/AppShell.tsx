@@ -3,7 +3,10 @@ import { AppTopBar } from './AppTopBar.js';
 import { AppStatusBar } from './AppStatusBar.js';
 import { cn } from '../pump-ds/lib/cn.js';
 import { Icon, type IconName, ICON_REGISTRY } from '../pump-ds/icon/index.js';
-import { Station } from '@pump/shared';
+import { Station, canViewReports, type OperatorRole, type Role } from '@pump/shared';
+import { useContainerWidth } from '../hooks/useContainerWidth.js';
+import { useStationBusinessDate } from '../hooks/useStationClock.js';
+import { useSidebarBadges, type SidebarBadges } from '../query/useSidebarBadges.js';
 import type { UserMenuAction } from '../pump-ds/shell/index.js';
 
 export interface NavItem {
@@ -135,12 +138,110 @@ function resolveNavIcon(item: NavItem): IconName {
  * into a trailing group. Sections with no visible items are dropped.
  */
 const NAV_GROUPS: { heading: string; paths: string[] }[] = [
-  { heading: 'Operations', paths: ['/dashboard', '/shifts', '/inventory', '/pricing'] },
-  { heading: 'Sales & CRM', paths: ['/customers'] },
-  { heading: 'Purchasing', paths: ['/purchases'] },
-  { heading: 'Finance', paths: ['/accounts', '/expenses', '/income', '/reports'] },
+  { heading: 'Operate', paths: ['/dashboard', '/shifts', '/inventory', '/pricing'] },
+  {
+    heading: 'Money',
+    paths: ['/customers', '/purchases', '/accounts', '/expenses', '/income'],
+  },
+  { heading: 'Insight', paths: ['/reports'] },
   { heading: 'Setup', paths: ['/setup/station', '/organization'] },
 ];
+
+/** Below this app (shell) width the sidebar becomes a 60px icon rail on its own. */
+export const RAIL_BREAKPOINT = 1200;
+export const SIDEBAR_COLLAPSED_KEY = 'pump.sidebar.collapsed';
+
+function readCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+type BadgeTone = 'success' | 'warning' | 'danger';
+
+/**
+ * Live sidebar badges, keyed by nav path. `read` returns the label and either
+ * a count or a dot, or null when there is nothing to show. Tones follow the
+ * prototype: Inventory danger, Customers / Reports warning, running shift a
+ * success dot.
+ */
+const NAV_BADGES: Record<
+  string,
+  { tone: BadgeTone; read: (b: SidebarBadges) => { label: string; count?: number } | null }
+> = {
+  '/shifts': { tone: 'success', read: (b) => (b.shiftRunning ? { label: 'Shift running' } : null) },
+  '/inventory': {
+    tone: 'danger',
+    read: (b) =>
+      b.inventoryAlerts > 0
+        ? { label: `${b.inventoryAlerts} inventory alerts`, count: b.inventoryAlerts }
+        : null,
+  },
+  '/customers': {
+    tone: 'warning',
+    read: (b) =>
+      b.overdueCustomers > 0
+        ? { label: `${b.overdueCustomers} overdue customers`, count: b.overdueCustomers }
+        : null,
+  },
+  '/reports': {
+    tone: 'warning',
+    read: (b) =>
+      b.openPastDays > 0
+        ? { label: `${b.openPastDays} open past days`, count: b.openPastDays }
+        : null,
+  },
+};
+
+const BADGE_DOT: Record<BadgeTone, string> = {
+  success: 'bg-success-fg',
+  warning: 'bg-warning-fg',
+  danger: 'bg-danger-fg',
+};
+const BADGE_CHIP: Record<BadgeTone, string> = {
+  success: 'bg-success-bg text-success-fg',
+  warning: 'bg-warning-bg text-warning-fg',
+  danger: 'bg-danger-bg text-danger-fg',
+};
+
+/** The live badge for a nav item, or null. Dot on a rail, count/dot beside the label. */
+function renderBadge(path: string, b: SidebarBadges, collapsed: boolean): React.ReactNode {
+  const entry = NAV_BADGES[path];
+  const badge = entry?.read(b);
+  if (!entry || !badge) return null;
+  const { tone } = entry;
+  const testId = `nav-badge-${path.slice(1)}`;
+
+  if (badge.count === undefined || collapsed) {
+    return (
+      <span
+        role="img"
+        aria-label={badge.label}
+        data-testid={testId}
+        className={cn(
+          'size-1.5 rounded-full',
+          BADGE_DOT[tone],
+          collapsed ? 'absolute right-2 top-1.5' : 'ml-auto',
+        )}
+      />
+    );
+  }
+  return (
+    <span
+      role="img"
+      aria-label={badge.label}
+      data-testid={testId}
+      className={cn(
+        'ml-auto inline-flex min-w-[18px] items-center justify-center rounded-chip px-1.5 font-mono text-[10px] font-medium',
+        BADGE_CHIP[tone],
+      )}
+    >
+      {badge.count > 99 ? '99+' : badge.count}
+    </span>
+  );
+}
 
 export const AppShell: React.FC<AppShellProps> = ({
   children,
@@ -152,7 +253,9 @@ export const AppShell: React.FC<AppShellProps> = ({
   syncStatus,
   pendingSyncCount = 0,
   onLogout,
+  stations = [],
   selectedStation = null,
+  onStationChange,
   stationsLoading = false,
   environmentTag = null,
   stationReady = true,
@@ -164,8 +267,32 @@ export const AppShell: React.FC<AppShellProps> = ({
   onCheckUpdates,
   checkingUpdates,
 }) => {
-  // Sidebar expanded by default; the top-bar hamburger collapses it to an icon rail.
-  const [collapsed, setCollapsed] = useState(false);
+  // Expanded by default. The Collapse control at the sidebar foot toggles an
+  // icon rail and the choice is remembered per device; below RAIL_BREAKPOINT
+  // the rail is forced regardless (without overwriting the saved choice).
+  const [userCollapsed, setUserCollapsed] = useState(readCollapsed);
+  const [shellRef, shellWidth] = useContainerWidth<HTMLDivElement>();
+  // 0 = not measured yet: stay expanded rather than flash a rail.
+  const narrow = shellWidth > 0 && shellWidth < RAIL_BREAKPOINT;
+  const collapsed = userCollapsed || narrow;
+  const toggleCollapsed = () => {
+    const next = !userCollapsed;
+    setUserCollapsed(next);
+    try {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0');
+    } catch {
+      /* storage unavailable: the choice just won't persist */
+    }
+  };
+
+  const businessDate = useStationBusinessDate(selectedStation?.settings);
+  const badges = useSidebarBadges(
+    selectedStation?.id,
+    stationReady && !!selectedStation,
+    // Money alerts (overdue customers, open past days) follow Reports access.
+    canViewReports(userRole as Role),
+    businessDate,
+  );
 
   // App-wide: stop mouse-wheel from changing a focused number input's value
   // (a common source of accidental edits while scrolling). Blurring the input on
@@ -204,6 +331,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 
   return (
     <div
+      ref={shellRef}
       className="app-shell"
       style={{
         display: 'flex',
@@ -221,13 +349,15 @@ export const AppShell: React.FC<AppShellProps> = ({
         <AppTopBar
           selectedStation={selectedStation}
           navItems={navItems}
-          userRole={(userRole as 'Owner' | 'Manager' | 'Accountant' | 'Staff') || 'Staff'}
+          userRole={(userRole as OperatorRole) || 'Staff'}
           userName={userName}
           syncStatus={syncStatus}
           pendingSyncCount={pendingSyncCount}
           onNavigate={onNavigate}
           onLogout={onLogout}
-          onToggleSidebar={() => setCollapsed((c) => !c)}
+          stations={stations}
+          onStationChange={onStationChange}
+          pageLabel={visibleNavItems.find((n) => n.path === currentPath)?.label}
           stationReady={stationReady}
           userMenuExtras={userMenuExtras}
         />
@@ -239,7 +369,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         <aside
           className="no-print"
           style={{
-            width: collapsed ? '72px' : '220px',
+            width: collapsed ? '60px' : '220px',
             backgroundColor: 'var(--bg-surface-alt)',
             borderRight: '1px solid var(--border-soft)',
             display: 'flex',
@@ -267,7 +397,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                         onClick={() => onNavigate(item.path)}
                         title={collapsed ? item.label : undefined}
                         className={cn(
-                          'flex w-full items-center rounded-button text-[13px] transition-colors',
+                          'relative flex w-full items-center rounded-button text-[13px] transition-colors',
                           collapsed ? 'justify-center px-0 py-2' : 'gap-3 px-3 py-2',
                           isActive
                             ? 'bg-info-bg font-semibold text-info-fg'
@@ -283,6 +413,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                           <Icon name={resolveNavIcon(item)} size="md" />
                         </span>
                         {!collapsed && <span className="truncate">{item.label}</span>}
+                        {renderBadge(item.path, badges, collapsed)}
                       </button>
                     );
                   })}
@@ -290,6 +421,25 @@ export const AppShell: React.FC<AppShellProps> = ({
               </div>
             ))}
           </nav>
+          {/* Sidebar foot: same row style as the nav items above (prototype). */}
+          <div className="px-2 pb-2 pt-1">
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              disabled={narrow}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={collapsed ? 'Expand sidebar' : undefined}
+              className={cn(
+                'flex w-full items-center rounded-button py-2 text-[13px] font-medium text-ink-default transition-colors hover:bg-surface-alt hover:text-ink-strong disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent',
+                collapsed ? 'justify-center px-0' : 'gap-3 px-3',
+              )}
+            >
+              <span className="flex items-center text-ink-muted">
+                <Icon name={collapsed ? 'panel-left-open' : 'panel-left-close'} size="md" />
+              </span>
+              {!collapsed && <span>Collapse</span>}
+            </button>
+          </div>
         </aside>
 
         {/* Content canvas */}

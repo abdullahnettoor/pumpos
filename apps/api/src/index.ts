@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { createDb, DbClient, schema } from '@pump/db';
 import {
@@ -15,14 +15,13 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
-import { Role, canManageUsers, organizationUpdateSchema } from '@pump/shared';
+import { Role, isOwner, organizationUpdateSchema } from '@pump/shared';
 import {
   BusinessEvents,
   SystemClock,
   UuidGenerator,
   createEvent,
   type DomainEvent,
-  type EventTone,
 } from '@pump/core';
 import { desktopDownloadsRouter } from './routes/desktop-downloads.js';
 import { TENANT_ROUTERS } from './routes/tenant-routers.js';
@@ -37,16 +36,19 @@ import { idempotency } from './infra/idempotency.js';
 import { verifySupabaseJwt } from './infra/supabase-jwt.js';
 import { SupabaseAdmin } from './infra/supabase-admin.js';
 import { DrizzleEventStore } from './infra/events.js';
+import { activityHandler } from './routes/activity-day.js';
 import { rateLimit } from './infra/rate-limit.js';
 import { resolveCorsOrigin } from './infra/cors.js';
 import type { AuthenticatedPrincipal } from './infra/authenticated-principal.js';
+import { readActivityMetadata } from './infra/activity.js';
 import {
-  readActivityMetadata,
-  renderActivityFallback,
-  resolveActivityActor,
-  type ActivityActor,
-  type ActivityGroupingRole,
-} from './infra/activity.js';
+  activityEventFields,
+  activityJoins,
+  formatActivityEvent,
+  type ActivityEvent,
+  type ActivityEventRow,
+  type ActivityGroupSummary,
+} from './infra/activity-events.js';
 
 // --- Auth cache (per-isolate) --------------------------------------------
 // Cloudflare Workers reuse isolates across many requests, so a module-level
@@ -242,50 +244,6 @@ app.get('/health', (c) => {
 // Authenticated Routes Group
 const api = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-type ActivityEventRow = {
-  eventId: string;
-  eventType: string;
-  stationId: string | null;
-  stationName: string | null;
-  aggregateType: string;
-  aggregateId: string;
-  occurredAt: Date;
-  recordedAt: Date;
-  actorId: string | null;
-  actorName: string | null;
-  actorEmail: string | null;
-  correlationId: string | null;
-  causationId: string | null;
-  metadata: unknown;
-};
-
-interface ActivityEvent {
-  eventId: string;
-  eventType: string;
-  stationId: string | null;
-  stationName: string | null;
-  aggregateType: string;
-  aggregateId: string;
-  occurredAt: Date;
-  recordedAt: Date;
-  correlationId: string | null;
-  causationId: string | null;
-  groupingRole: ActivityGroupingRole | null;
-  actor: ActivityActor;
-  title: string;
-  description: string;
-  tone: EventTone;
-  renderStatus: 'rendered' | 'fallback';
-}
-
-interface ActivityGroupSummary {
-  groupId: string;
-  primary: ActivityEvent;
-  relatedCount: number;
-  primaryRecordedAt: Date;
-  isLegacy: boolean;
-}
-
 interface ActivityPage {
   items: ActivityGroupSummary[];
   nextCursor: string | null;
@@ -302,23 +260,6 @@ interface ActivityCursor {
 
 const ACTIVITY_UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-const activityEventFields = {
-  eventId: schema.events.eventId,
-  eventType: schema.events.eventType,
-  stationId: schema.events.stationId,
-  stationName: schema.stations.name,
-  aggregateType: schema.events.aggregateType,
-  aggregateId: schema.events.aggregateId,
-  occurredAt: schema.events.occurredAt,
-  recordedAt: schema.events.recordedAt,
-  actorId: schema.events.actorId,
-  actorName: schema.users.fullName,
-  actorEmail: schema.users.email,
-  correlationId: schema.events.correlationId,
-  causationId: schema.events.causationId,
-  metadata: schema.events.metadata,
-};
 
 function encodeActivityCursor(row: Pick<ActivityEventRow, 'recordedAt' | 'eventId'>): string {
   return btoa(JSON.stringify({ recordedAt: row.recordedAt.toISOString(), eventId: row.eventId }))
@@ -371,32 +312,6 @@ function isValidActivityGroupId(value: string): boolean {
   return ACTIVITY_UUID_PATTERN.test(value);
 }
 
-function formatActivityEvent(row: ActivityEventRow, isLegacy = false): ActivityEvent {
-  const metadata = readActivityMetadata(row.metadata);
-  const rendered = renderActivityFallback({ eventType: row.eventType, metadata: row.metadata });
-  return {
-    eventId: row.eventId,
-    eventType: row.eventType,
-    stationId: row.stationId,
-    stationName: row.stationName,
-    aggregateType: row.aggregateType,
-    aggregateId: row.aggregateId,
-    occurredAt: row.occurredAt,
-    recordedAt: row.recordedAt,
-    correlationId: row.correlationId,
-    causationId: row.causationId,
-    groupingRole: isLegacy ? 'primary' : metadata.groupingRole,
-    actor: resolveActivityActor(row.metadata, row.actorId, {
-      fullName: row.actorName,
-      email: row.actorEmail,
-    }),
-    title: rendered.title,
-    description: rendered.description,
-    tone: rendered.tone,
-    renderStatus: rendered.renderStatus,
-  };
-}
-
 function activityGroupFilter(
   organizationId: string,
   stationId: string | undefined,
@@ -422,19 +337,6 @@ function activityGroupFilter(
       ${stationFilter}
       ${typeFilter}
   )`;
-}
-
-function activityJoins(organizationId: string) {
-  return {
-    station: and(
-      eq(schema.stations.id, schema.events.stationId),
-      eq(schema.stations.organizationId, organizationId),
-    ),
-    actor: and(
-      eq(schema.users.id, schema.events.actorId),
-      eq(schema.users.organizationId, organizationId),
-    ),
-  };
 }
 
 // Auth Middleware (validates JWT tokens issued by Supabase Auth)
@@ -579,7 +481,7 @@ api.get('/organization', async (c) => {
 // PUT /api/organization - update org name + profile metadata (Owner only)
 api.put('/organization', async (c) => {
   const user = c.var.user;
-  if (!canManageUsers(user.role)) {
+  if (!isOwner(user.role)) {
     return c.json(
       {
         success: false,
@@ -613,17 +515,12 @@ api.put('/organization', async (c) => {
 
 // GET /api/activity - human-readable business-event activity groups (Owner only).
 // (Named /activity rather than /events so ad-blockers don't block it.)
-api.get('/activity', async (c) => {
+// `?date=` selects the role-filtered Business Day feed (routes/activity-day.ts);
+// without it this Owner-only audit feed answers. Dispatch is explicit.
+api.get('/activity', activityHandler(auditActivityFeed));
+
+async function auditActivityFeed(c: Context<{ Variables: Pick<Variables, 'db' | 'user'> }>) {
   const user = c.var.user;
-  if (!canManageUsers(user.role)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Only Owners can view the activity log' },
-      },
-      403,
-    );
-  }
   const stationId = c.req.query('stationId');
   const type = c.req.query('type');
   let limit: number;
@@ -705,12 +602,12 @@ api.get('/activity', async (c) => {
       hasMore && pageRows.length > 0 ? encodeActivityCursor(pageRows[pageRows.length - 1]) : null,
   };
   return c.json({ success: true, data });
-});
+}
 
 // GET /api/activity/:groupId - one grouped command, including lazy siblings.
 api.get('/activity/:groupId', async (c) => {
   const user = c.var.user;
-  if (!canManageUsers(user.role)) {
+  if (!isOwner(user.role)) {
     return c.json(
       {
         success: false,

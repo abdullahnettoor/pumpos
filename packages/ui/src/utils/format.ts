@@ -125,3 +125,74 @@ export function formatElapsedSince(
   const mins = Math.floor(Math.max(0, Date.now() - d.getTime()) / 60_000);
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
+
+/** Compact ₹ amount for dashboard tiles: ₹1.25L from one lakh, whole rupees below. */
+export function formatCompactRupees(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  if (Math.abs(value) >= 100_000) return `₹${(value / 100_000).toFixed(2)}L`;
+  return `₹${Math.round(value).toLocaleString('en-IN')}`;
+}
+
+/** Elapsed between two instants as `Nh Nm`; clamps negatives to `0h 0m`. */
+export function formatElapsedBetween(fromMs: number, toMs: number): string {
+  const mins = Math.max(0, Math.floor((toMs - fromMs) / 60_000));
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+/** A business date (`YYYY-MM-DD`) as `Thu 8 Oct`; the input when invalid. */
+export function formatShortDay(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const part = (o: Intl.DateTimeFormatOptions) =>
+    dt.toLocaleDateString('en-IN', { ...o, timeZone: 'UTC' });
+  return `${part({ weekday: 'short' })} ${d} ${part({ month: 'short' })}`;
+}
+
+/** Clock time in a timezone, lowercase: `6:10 am` (`compact`: `6 am` on the hour). */
+export function formatClockInZone(
+  value: string | number | Date,
+  timeZone?: string,
+  opts: { compact?: boolean } = {},
+): string {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  const min = get('minute');
+  const mm = opts.compact && min === '00' ? '' : `:${min}`;
+  return `${get('hour')}${mm} ${get('dayPeriod').toLowerCase()}`;
+}
+
+/** `HH:MM` (24h) as `2:00 pm`; empty when unparseable. */
+export function formatHHMM(hhmm: string | null | undefined): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm ?? '');
+  if (!m) return '';
+  const h = Number(m[1]);
+  return `${h % 12 === 0 ? 12 : h % 12}:${m[2]} ${h >= 12 ? 'pm' : 'am'}`;
+}
+
+/** Timeline axis hour: `6a`, `12p`. */
+export function formatAxisHour(ms: number, timeZone?: string): string {
+  const h = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hour12: true }).format(
+    ms,
+  );
+  return h.replace(/\s?(AM|PM)/i, (_, m: string) => m[0].toLowerCase());
+}
+
+/** `6 Oct` from an ISO instant (in `timeZone`) or a `YYYY-MM-DD` business date. */
+export function formatDayMonth(value: string | number | Date, timeZone?: string): string {
+  const dateOnly = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const d = dateOnly ? new Date(`${value}T00:00:00Z`) : new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: dateOnly ? 'UTC' : timeZone,
+  });
+}

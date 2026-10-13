@@ -1,6 +1,7 @@
 import React from 'react';
 import { clearNavIntent } from '../nav-intent/store.js';
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { installWindowFocusRefetch } from './windowFocus.js';
 import { persistQueryClient } from '@tanstack/query-persist-client-core';
 import { runTask } from '../utils/runTask.js';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
@@ -111,11 +112,13 @@ function invalidateAccessOnPolicyError(client: QueryClient, error: unknown): voi
  * Shared QueryClient factory. App shells (web, desktop) create one client and
  * wrap their tree in {@link QueryProvider}; all data hooks in @pump/ui read from
  * this single cache. Defaults favour operator workflows: short stale time,
- * refetch on focus (a shift screen left open should catch new transactions),
+ * refetch on focus — tab switch, restore, or the window regaining focus from
+ * another app (see windowFocus.ts) — so a screen left open catches up,
  * and a single retry (the API is on a low-latency edge) — except resource-limit
  * failures, which are never retried.
  */
 export function createQueryClient(): QueryClient {
+  installWindowFocusRefetch();
   const client: QueryClient = new QueryClient({
     queryCache: new QueryCache({
       onError: (error) => invalidateAccessOnPolicyError(client, error),

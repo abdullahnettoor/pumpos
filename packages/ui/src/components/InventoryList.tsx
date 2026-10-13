@@ -338,7 +338,10 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
   // the intent rather than copied into state by an effect, so the deep link
   // wins until the operator picks a different tab, which clears it.
   const intent = useNavIntent();
-  const focusTab = intent?.focusInventoryTab ?? null;
+  const showDecantations = !!userRole && canRecordDecantation(userRole);
+  // A deep link to a tab this role cannot see falls back to the chosen tab.
+  const requestedTab = intent?.focusInventoryTab ?? null;
+  const focusTab = requestedTab === 'decantations' && !showDecantations ? null : requestedTab;
   const activeTab = focusTab ?? selectedTab;
   const highlightId = focusTab ? (intent?.focusInventoryId ?? null) : null;
 
@@ -487,7 +490,6 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
   }
 
   const tanks = tanksQ.data ?? [];
-  const showDecantations = !!userRole && canRecordDecantation(userRole);
 
   return (
     <div className="animate-fade-in">
