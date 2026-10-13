@@ -180,6 +180,9 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
           // operator can generate one.
           if (!cancelled) setSelectedDate(date);
         } finally {
+          // Commit the tab before dropping the intent that derived it, or a
+          // Reports page already on another report snaps back to it.
+          setSelectedTab('daily-dssr');
           clearNavIntent();
         }
       })(),
@@ -389,7 +392,12 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
             <GstReport
               selectedStation={selectedStation}
               initialView={intent?.openReportsTab === 'gst' ? intent.openGstView : undefined}
-              onViewChange={() => clearNavIntent()}
+              onViewChange={() => {
+                // Commit the durable half (we are on GST) before clearing the
+                // deep link that derived it — clearing alone falls back to DSSR.
+                setSelectedTab('gst');
+                clearNavIntent();
+              }}
             />
           )}
 

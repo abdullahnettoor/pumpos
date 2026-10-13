@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithProviders } from '../test/renderWithProviders.js';
 import { publishNavIntent, __resetNavIntentForTests } from '../nav-intent/store.js';
 import { CustomersList } from './CustomersList.js';
@@ -156,6 +156,14 @@ describe('page tabs (#540)', () => {
     expect((await tabsOf('Accounts')).selected).toContain('Daily cash book');
   });
 
+  it('Accounts: the Daily cash book shows no account actions', async () => {
+    renderWithProviders(<AccountsPanel selectedStation={station} />);
+    expect(await screen.findByRole('button', { name: /New Account/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: /Daily cash book/ }));
+    expect(screen.queryByRole('button', { name: /New Account/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Transfer/ })).toBeNull();
+  });
+
   it('Suppliers: the new-purchase deep link opens on Purchases', async () => {
     act(() => publishNavIntent({ openNewPurchase: true }));
     renderWithProviders(<PurchasesList selectedStation={station} />);
@@ -167,4 +175,52 @@ describe('page tabs (#540)', () => {
     renderWithProviders(<CustomersList selectedStation={station} userRole="Owner" />);
     expect((await tabsOf('Customers')).selected).toContain('Customers');
   });
+
+  it('Suppliers: closing the new-purchase drawer stays on Purchases (review #545)', async () => {
+    act(() => publishNavIntent({ openNewPurchase: true }));
+    renderWithProviders(<PurchasesList selectedStation={station} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Close Drawer' }));
+    expect(screen.queryByRole('button', { name: 'Close Drawer' })).toBeNull();
+    expect((await tabsOf('Suppliers')).selected).toContain('Purchases');
+  });
+
+  it('Customers: dropping a focus deep link stays on the customer list', async () => {
+    renderWithProviders(<CustomersList selectedStation={station} userRole="Owner" />);
+    fireEvent.click(await screen.findByRole('tab', { name: /Collections/ }));
+    act(() => publishNavIntent({ focusCustomerId: 'c1', open: 'customer-statement' }));
+    expect((await tabsOf('Customers')).selected).toContain('Customers');
+    // An action that drops the intent commits its derived tab first.
+    fireEvent.click(screen.getByRole('button', { name: /Add Customer/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Close Drawer' }));
+    expect((await tabsOf('Customers')).selected).toContain('Customers');
+  });
+});
+
+describe('Income GST by role (review #545: #540 keeps role filtering unchanged)', () => {
+  it('Staff, who have no Reports, see Income GST in place on a GST tab', async () => {
+    renderWithProviders(
+      <IncomeList selectedStation={station} userRole="Staff" onNavigate={() => {}} />,
+    );
+    const t = await tabsOf('Income');
+    expect(t.labels).toEqual(['Income', 'By category', 'GST']);
+    expect(screen.queryByRole('button', { name: /GST in Reports/ })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: /GST/ }));
+    expect(await screen.findByText(/Output GST you collected on other income/)).toBeTruthy();
+  });
+
+  it.each(['Owner', 'Manager', 'Accountant'] as const)(
+    '%s keeps the link to Reports → GST instead',
+    async (role) => {
+      const onNavigate = vi.fn();
+      renderWithProviders(
+        <IncomeList selectedStation={station} userRole={role} onNavigate={onNavigate} />,
+      );
+      expect((await tabsOf('Income')).labels).toEqual(['Income', 'By category']);
+      fireEvent.click(screen.getByRole('button', { name: /GST in Reports/ }));
+      expect(onNavigate).toHaveBeenCalledWith('/reports', {
+        openReportsTab: 'gst',
+        openGstView: 'income',
+      });
+    },
+  );
 });

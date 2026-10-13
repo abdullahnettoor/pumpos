@@ -25,7 +25,8 @@ import {
   Icon,
   ConceptIcon,
 } from '../pump-ds/index.js';
-import { ExpenseAnalytics } from './expenses/ExpenseAnalytics.js';
+import { CategoryAnalytics } from './expenses/CategoryAnalytics.js';
+import { IncomeGstPanel } from './reports/gst/IncomeGstPanel.js';
 import { ROUTES } from '../nav-intent/routes.js';
 import type { NavIntent } from '../nav-intent/store.js';
 import { Tabs } from './primitives/Tabs.js';
@@ -36,7 +37,7 @@ import { useRunTask } from '../utils/runTask.js';
 
 const transactionService = new CloudTransactionService();
 
-type IncomeTab = 'ledger' | 'analytics';
+type IncomeTab = 'ledger' | 'analytics' | 'gst';
 
 interface IncomeListProps {
   selectedStation: any | null;
@@ -73,6 +74,13 @@ export const IncomeList: React.FC<IncomeListProps> = ({
   const canVoid = canVoidExpense((userRole as any) ?? 'Staff');
 
   const [activeTab, setActiveTab] = useState<IncomeTab>('ledger');
+  /*
+   * Income GST lives in Reports → GST (#540), but Reports is not every Income
+   * role's page: Staff record income and always saw its output GST here. Roles
+   * that can reach Reports get the link; the rest keep the view in place, so
+   * the move changes where it is, never who sees it.
+   */
+  const reportsGst = canViewReports((userRole as any) ?? 'Staff');
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', entryClock));
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
@@ -204,7 +212,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({
         subtitle="Record indirect / other income — rentals, commissions, scrap, interest — and reconcile it into cash, bank or owner."
         actions={
           <div style={{ display: 'flex', gap: '8px' }}>
-            {onNavigate && canViewReports((userRole as any) ?? 'Staff') && (
+            {reportsGst && onNavigate && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -247,6 +255,9 @@ export const IncomeList: React.FC<IncomeListProps> = ({
                 label: 'By category',
                 icon: <ConceptIcon concept="by-category" />,
               },
+              ...(reportsGst
+                ? []
+                : [{ id: 'gst', label: 'GST', icon: <ConceptIcon concept="gst" /> }]),
             ]}
           />
         }
@@ -367,8 +378,10 @@ export const IncomeList: React.FC<IncomeListProps> = ({
         )}
 
         {activeTab === 'analytics' && (
-          <ExpenseAnalytics selectedStation={selectedStation} kind="income" />
+          <CategoryAnalytics selectedStation={selectedStation} kind="income" />
         )}
+
+        {activeTab === 'gst' && !reportsGst && <IncomeGstPanel selectedStation={selectedStation} />}
       </PageLayout>
 
       <Drawer isOpen={isDrawerOpen} onClose={closeDrawer} title="Record Income">

@@ -7,7 +7,7 @@ import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr } from '../../utils/format.js';
 import { KpiStrip, KpiTile, Panel, EmptyState, Icon } from '../../pump-ds/index.js';
 
-export interface ExpenseAnalyticsProps {
+export interface CategoryAnalyticsProps {
   selectedStation: any | null;
   /** Which office record to break down. Income reuses the same view (#540). */
   kind?: 'expense' | 'income';
@@ -15,7 +15,7 @@ export interface ExpenseAnalyticsProps {
 
 const COPY = {
   expense: {
-    total: 'Total Expenses',
+    total: 'Total expenses',
     withAmount: 'with spend',
     panel: 'Spend by category',
     loading: 'Fetching expenses.',
@@ -27,7 +27,7 @@ const COPY = {
     icon: 'receipt' as const,
   },
   income: {
-    total: 'Total Income',
+    total: 'Total income',
     withAmount: 'with income',
     panel: 'Income by category',
     loading: 'Fetching income.',
@@ -48,14 +48,14 @@ interface CategoryRow {
 }
 
 /**
- * ExpenseAnalytics — the "by category" view: expenses over an entry-date range
+ * CategoryAnalytics — the "by category" view: expenses over an entry-date range
  * AGGREGATED per category (one row each: entries, total, share of spend). This
- * is deliberately NOT the per-entry ledger (that lives in the Expenses → Ledger
+ * is deliberately NOT the per-entry ledger (that lives in the Expenses → Expenses
  * tab); it answers "where is the money going". Shared by the Expenses screen
  * "By category" tab and the Reports "Expense register". The Income screen's
  * "By category" tab reads the same view with `kind="income"`. VOIDED excluded.
  */
-export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({
+export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
   selectedStation,
   kind = 'expense',
 }) => {

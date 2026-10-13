@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
+import { useNavIntent, clearNavIntent, getNavIntentState } from '../nav-intent/store.js';
 import { CloudTransactionService } from '../services/cloud.js';
 import { collectionPayload } from '../utils/officeRecordPayloads.js';
 import {
@@ -69,6 +69,16 @@ export function summarizeCustomerBalances(customers: any[]) {
 
 export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, userRole }) => {
   const [selectedTab, setSelectedTab] = useState<TabType>('registry');
+  /**
+   * Drop a pending deep link without moving the operator. A focus intent
+   * derives the Customers tab, so that tab is committed to local state before
+   * the intent is cleared (the ShiftsManagement pattern); clearing alone would
+   * fall back to whichever tab was chosen before the link arrived.
+   */
+  const consumeIntent = () => {
+    if (getNavIntentState().intent?.focusCustomerId) setSelectedTab('registry');
+    clearNavIntent();
+  };
 
   const stationId = selectedStation?.id ?? null;
   const customersActiveQ = useCustomers(true);
@@ -216,12 +226,12 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
   const [customerDrawerOpen, setCustomerDrawerOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any | null>(null);
   const openCreateCustomer = () => {
-    clearNavIntent();
+    consumeIntent();
     setEditingCustomer(null);
     setCustomerDrawerOpen(true);
   };
   const openEditCustomer = (cust: any) => {
-    clearNavIntent();
+    consumeIntent();
     setEditingCustomer(cust);
     setCustomerDrawerOpen(true);
   };
@@ -286,7 +296,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
   };
 
   const openCollectionDrawer = (customerId?: string) => {
-    clearNavIntent();
+    consumeIntent();
     resetCollectionForm(customerId);
     setCollectionDrawerOpen(true);
   };
@@ -328,7 +338,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
   // derivation is safe here in a way it would not be for an entry drawer.
   const isCustomerDrawerOpen = intent?.open === 'new-customer' || customerDrawerOpen;
   const closeCustomerDrawer = () => {
-    clearNavIntent();
+    consumeIntent();
     setCustomerDrawerOpen(false);
   };
 
@@ -342,7 +352,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
    * while a focus intent is pending would otherwise do nothing on screen.
    */
   const showStatementFor = (id: string | null) => {
-    clearNavIntent();
+    consumeIntent();
     setStatementCustomerId(id);
   };
   const closeStatement = () => showStatementFor(null);

@@ -77,6 +77,26 @@ describe('Reports sub-navigation (#540)', () => {
     expect(screen.getByRole('radio', { name: 'Income' }).getAttribute('aria-checked')).toBe('true');
   });
 
+  it('switching view after a GST deep link stays on GST (review #545)', () => {
+    act(() => publishNavIntent({ openReportsTab: 'gst', openGstView: 'purchases' }));
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Income' }));
+    expect(item('GST')!.getAttribute('aria-current')).toBe('page');
+    expect(item('DSSR')!.getAttribute('aria-current')).toBeNull();
+    expect(screen.getByRole('radio', { name: 'Income' }).getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('GST views share one period', () => {
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
+    fireEvent.click(item('GST')!);
+    fireEvent.click(screen.getByRole('radio', { name: 'Purchases (ITC)' }));
+    const firstDate = () => document.querySelector('input[type="date"]') as HTMLInputElement;
+    fireEvent.change(firstDate(), { target: { value: '2026-01-01' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Income' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Purchases (ITC)' }));
+    expect(firstDate().value).toBe('2026-01-01');
+  });
+
   it('Ledgers holds the party ledger and cash & bank', () => {
     renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
     fireEvent.click(item('Ledgers')!);

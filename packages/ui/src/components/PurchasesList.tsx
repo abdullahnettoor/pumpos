@@ -67,6 +67,16 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
     clearNavIntent();
     setSelectedTab(tab);
   };
+  /**
+   * Drop the deep link without moving the operator: the tab it derived is
+   * committed to local state first, as ShiftsManagement does. Clearing alone
+   * falls back to `selectedTab`, so closing the "Plan purchase ›" drawer would
+   * jump to the Suppliers tab.
+   */
+  const consumeIntent = () => {
+    setSelectedTab(activeTab);
+    clearNavIntent();
+  };
 
   const stationId = selectedStation?.id ?? null;
   const purchasesQ = usePurchases(stationId ?? '');
@@ -186,7 +196,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
     intent?.openNewPurchase === true && !suppliersActiveQ.isLoading && !productsQ.isLoading;
 
   const closePurchaseDrawer = () => {
-    clearNavIntent();
+    consumeIntent();
     setIsPurchaseDrawerOpen(false);
     resetPurchaseForm();
   };
@@ -205,12 +215,12 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
   const isPaymentDrawerOpen = intent?.open === 'supplier-payment' || paymentDrawerOpen;
   /** See CustomersList: a setter competing with a derived intent must clear it. */
   const showStatementFor = (id: string | null) => {
-    clearNavIntent();
+    consumeIntent();
     setStatementSupplierId(id);
   };
   const closeStatement = () => showStatementFor(null);
   const closePaymentDrawer = () => {
-    clearNavIntent();
+    consumeIntent();
     setPaymentDrawerOpen(false);
   };
   const openCreateSupplier = () => {

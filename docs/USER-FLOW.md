@@ -220,7 +220,8 @@ are stock events on the business day.
   entry date, paid-from account. Wrong entry? Void it with a reason — nothing is deleted.
 - **Income** (non-fuel income like rent, commissions): Sidebar → **Income** →
   **Record Income**. **By category** totals income per category; output GST
-  on income is in **Reports → GST → Income**.
+  on income is in **Reports → GST → Income** (Staff, who have no Reports,
+  see it on the Income page's **GST** tab).
 - **Collections**: Sidebar → **Customers** → **Collections** tab → **Log
   Customer Collection**. Customer statements: **Customers** tab → **Customer Account
   Statement**. OMC-CMS fleet-card settlement is supported; customer-owned

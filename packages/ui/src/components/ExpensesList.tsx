@@ -32,7 +32,7 @@ import {
   ConceptIcon,
 } from '../pump-ds/index.js';
 import { buildExpenseColumns } from './expenses/columns.js';
-import { ExpenseAnalytics } from './expenses/ExpenseAnalytics.js';
+import { CategoryAnalytics } from './expenses/CategoryAnalytics.js';
 import { CategoryManagerDrawer } from './expenses/CategoryManagerDrawer.js';
 import { CASH_ACCOUNT_TYPES } from '../utils/ledgerLabels.js';
 import { useRunTask } from '../utils/runTask.js';
@@ -360,7 +360,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
           </div>
         )}
 
-        {activeTab === 'analytics' && <ExpenseAnalytics selectedStation={selectedStation} />}
+        {activeTab === 'analytics' && <CategoryAnalytics selectedStation={selectedStation} />}
       </PageLayout>
 
       <Drawer isOpen={isDrawerOpen} onClose={closeDrawer} title="Log New Expense">
