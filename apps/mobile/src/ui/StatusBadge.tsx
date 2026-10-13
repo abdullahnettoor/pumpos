@@ -6,13 +6,13 @@ import { badgeTone, type BadgeTone } from './tones.js';
 export { badgeTone, type BadgeTone };
 
 /** The mobile tone names, mapped onto the design system's `Chip` tones. */
-const TONE: Record<BadgeTone, ChipTone> = {
+const TONE = {
   good: 'success',
   warn: 'warning',
   bad: 'danger',
   info: 'info',
   muted: 'neutral',
-};
+} as const satisfies Record<BadgeTone, ChipTone>;
 
 type Props = {
   /** Put figures in the mono face (a variance amount). */
@@ -34,10 +34,11 @@ type Props = {
  */
 export const StatusBadge: React.FC<Props> = (props) => {
   const p = props.state ? statusPresentation(props.state) : null;
-  const tone = p ? badgeTone(p.tone) : (props.tone ?? 'muted');
+  // A vocabulary state's shared tone is already a Chip tone: no round trip.
+  const tone: ChipTone = p ? p.tone : TONE[props.tone ?? 'muted'];
   return (
     <Chip
-      tone={TONE[tone]}
+      tone={tone}
       className={`text-[10.5px] font-bold ${props.num ? 'num' : ''} ${p?.struck ? 'line-through' : ''}`}
     >
       {p ? p.label : props.children}

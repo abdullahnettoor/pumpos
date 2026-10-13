@@ -37,10 +37,24 @@ export interface StatusPresentation {
   struck?: boolean;
 }
 
+/**
+ * A variance's tone by state. Narrower than `StatusTone` so a renderer that maps
+ * variance tones (mobile figures) is exhaustive: a new state or tone here fails
+ * its map at compile time.
+ */
+const VARIANCE_TONE = {
+  balanced: 'success',
+  surplus: 'warning',
+  short: 'danger',
+} as const satisfies Record<VarianceStatusState, StatusTone>;
+
+/** The tones a variance can read in. */
+export type VarianceTone = (typeof VARIANCE_TONE)[VarianceStatusState];
+
 const VOCABULARY: Record<PumpState, StatusPresentation> = {
-  balanced: { label: 'Balanced', tone: 'success' },
-  surplus: { label: 'Surplus', tone: 'warning' },
-  short: { label: 'Short', tone: 'danger' },
+  balanced: { label: 'Balanced', tone: VARIANCE_TONE.balanced },
+  surplus: { label: 'Surplus', tone: VARIANCE_TONE.surplus },
+  short: { label: 'Short', tone: VARIANCE_TONE.short },
 
   'handover-pending': { label: 'Pending', tone: 'neutral' },
   'handover-due': { label: 'Handover due', tone: 'warning' },
@@ -78,6 +92,7 @@ export type VarianceKind = 'cash' | 'stock';
 
 export interface VariancePresentation extends StatusPresentation {
   state: VarianceStatusState;
+  tone: VarianceTone;
   /** Which side of zero, agreeing with the balanced rule: `zero` iff balanced. */
   sign: 'negative' | 'zero' | 'positive';
 }
@@ -100,5 +115,5 @@ export function variancePresentation(
       ? 'surplus'
       : 'short';
   const sign = state === 'balanced' ? 'zero' : state === 'surplus' ? 'positive' : 'negative';
-  return { state, sign, label: VOCABULARY[state].label, tone: VOCABULARY[state].tone };
+  return { state, sign, label: VOCABULARY[state].label, tone: VARIANCE_TONE[state] };
 }

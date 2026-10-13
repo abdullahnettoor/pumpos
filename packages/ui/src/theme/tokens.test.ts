@@ -127,9 +127,11 @@ describe('dark tokens contrast ratios', () => {
 });
 
 /**
- * Text on a solid tone fill (#518). Each `--text-on-*` is paired with the
- * fills it sits on (the pump-ds class guard enforces the pairing), and must
- * read at WCAG AA (>= 4.5:1) on every one of them, in light and in dark.
+ * Text on a solid tone fill (#518). Each `--text-on-*` is meant for the fills
+ * listed here and must read at WCAG AA (>= 4.5:1) on every one of them, in
+ * light and in dark. This checks contrast only; nothing yet stops a component
+ * from pairing a fill with the wrong `text-on-*` (the pump-ds class guard
+ * enforces that once #543 lands).
  */
 const TEXT_ON_FILLS: Record<string, string[]> = {
   '--text-on-brand': ['--brand-primary'],

@@ -5,7 +5,7 @@ import {
   type BusinessDayListWeek,
   type DayStatusState,
 } from '@pump/shared';
-import { badgeTone } from '../../ui/tones.js';
+import { badgeTone, type BadgeTone } from '../../ui/tones.js';
 import { varianceBadge } from '../variance.js';
 import { dateParts, MONTH_NAMES, shortDate, weekdayOf } from '../dates.js';
 import { wholeQuantityLabel } from '../money/quantity.js';
@@ -61,7 +61,7 @@ export function liveTabFor(tabs: readonly string[]): LiveTab | null {
 
 interface StatusPresentation {
   label: string;
-  tone: 'good' | 'warn' | 'bad' | 'muted';
+  tone: BadgeTone;
   /** What tapping the row does (`live`: open the Role's live-day tab, see `liveTabFor`). */
   action: 'live' | 'report' | 'none';
 }
@@ -69,7 +69,7 @@ interface StatusPresentation {
 /** A day state's word and tone from the shared vocabulary (#518), in mobile tones. */
 const vocab = (state: DayStatusState, action: StatusPresentation['action']): StatusPresentation => {
   const p = statusPresentation(state);
-  return { label: p.label, tone: badgeTone(p.tone) as StatusPresentation['tone'], action };
+  return { label: p.label, tone: badgeTone(p.tone), action };
 };
 
 /** The one status -> presentation map for the day list. */

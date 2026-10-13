@@ -22,6 +22,12 @@ describe('formatVariance: the variance figure as read on every screen', () => {
     expect(formatVariance(-340.5, 'cash')).toMatchObject({ text: '\u2212₹340.50', tone: 'danger' });
   });
 
+  it('drops the ₹ on request, keeping the sign', () => {
+    expect(formatVariance(1200, 'cash', { symbol: false }).text).toBe('+1,200.00');
+    expect(formatVariance(-340.5, 'cash', { symbol: false }).text).toBe('\u2212340.50');
+    expect(formatVariance(0, 'cash', { symbol: false }).text).toBe('Balanced');
+  });
+
   it('drops paise on request but keeps them under ₹1 so a real variance never reads ₹0', () => {
     expect(formatVariance(-1240.4, 'cash', { decimals: 0 }).text).toBe('\u2212₹1,240');
     expect(formatVariance(0.3, 'cash', { decimals: 0 }).text).toBe('+₹0.30');

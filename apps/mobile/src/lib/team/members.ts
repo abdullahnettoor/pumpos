@@ -3,7 +3,7 @@
  * whether they are on the open shift. Pure; no React and no fetching.
  */
 import { statusPresentation, type PartyStatusState, type Role } from '@pump/shared';
-import { badgeTone } from '../../ui/tones.js';
+import { badgeTone, type BadgeTone } from '../../ui/tones.js';
 
 /** One row of `GET /setup/users` (the server drops the auth id and sends `hasLogin`). */
 export interface TeamMember {
@@ -26,17 +26,18 @@ export const isInactive = (m: Pick<TeamMember, 'status'>): boolean => m.status =
 export const loginIdentity = (m: Pick<TeamMember, 'email' | 'phone'>): string | null =>
   m.email?.trim() || m.phone?.trim() || null;
 
-export type MemberStatusTone = 'good' | 'warn' | 'bad' | 'muted';
+export type MemberStatusTone = BadgeTone;
 
 export interface MemberStatus {
-  label: 'On shift' | 'Active' | 'No login' | 'Inactive';
+  /** On shift, No login, or a party word from the shared vocabulary (Active / Inactive). */
+  label: string;
   tone: MemberStatusTone;
 }
 
 /** Active / Inactive from the shared vocabulary (#518): Inactive is grey, never red. */
 const party = (state: PartyStatusState): MemberStatus => {
   const p = statusPresentation(state);
-  return { label: p.label as MemberStatus['label'], tone: badgeTone(p.tone) as MemberStatusTone };
+  return { label: p.label, tone: badgeTone(p.tone) };
 };
 
 /**

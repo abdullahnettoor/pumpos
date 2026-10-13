@@ -1,4 +1,4 @@
-import type { StatusTone } from '@pump/shared';
+import type { StatusTone, VarianceTone } from '@pump/shared';
 
 /**
  * The one tone vocabulary for figures and fills: which Tailwind class a tone
@@ -27,13 +27,23 @@ export const TONE_FILL: Record<'accent' | 'good' | 'warn' | 'bad', string> = {
 /** The pill tones (`StatusBadge`). */
 export type BadgeTone = 'good' | 'warn' | 'bad' | 'info' | 'muted';
 
-const BADGE_TONE: Record<StatusTone, BadgeTone> = {
+const BADGE_TONE = {
   success: 'good',
   warning: 'warn',
   danger: 'bad',
   info: 'info',
   neutral: 'muted',
-};
+} as const satisfies Record<StatusTone, BadgeTone>;
 
 /** A shared-vocabulary tone (#518, `statusPresentation`) in the mobile tone names. */
 export const badgeTone = (tone: StatusTone): BadgeTone => BADGE_TONE[tone];
+
+/**
+ * A variance's shared tone (#518) as a figure tone: exhaustive over
+ * `VarianceTone`, so a new variance tone fails here at compile time.
+ */
+export const VARIANCE_FIGURE_TONE = {
+  success: 'good',
+  warning: 'warn',
+  danger: 'bad',
+} as const satisfies Record<VarianceTone, Tone>;

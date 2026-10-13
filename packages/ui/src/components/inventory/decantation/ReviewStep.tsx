@@ -1,8 +1,7 @@
 import React from 'react';
-import { Chip } from '../../../pump-ds/index.js';
+import { Chip, VarianceChip } from '../../../pump-ds/index.js';
 import { KV, LineTag, Notice } from './StepSection.js';
 import { formatQuantity } from '../../../utils/format.js';
-import { formatVariance } from '../../../utils/variance.js';
 import { lineLabel, type StepProps } from './stepShared.js';
 
 export const ReviewStep: React.FC<StepProps> = ({ values, tanks, flags, review }) => (
@@ -27,9 +26,14 @@ export const ReviewStep: React.FC<StepProps> = ({ values, tanks, flags, review }
                 inv.variance == null ? (
                   '—'
                 ) : (
-                  <Chip size="sm" tone={inv.outOfTolerance ? 'danger' : 'success'}>
-                    {formatVariance(inv.variance, 'stock').text}
-                  </Chip>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <VarianceChip size="sm" kind="stock" amount={inv.variance} />
+                    {inv.outOfTolerance && (
+                      <Chip size="sm" tone="danger">
+                        Out of tolerance
+                      </Chip>
+                    )}
+                  </span>
                 ),
               ],
             ]}

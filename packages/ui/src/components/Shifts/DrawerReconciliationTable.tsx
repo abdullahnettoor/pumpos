@@ -1,9 +1,9 @@
 import React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../primitives/DataTable.js';
-import { formatMoney, MINUS } from '../../utils/format.js';
+import { formatMoney } from '../../utils/format.js';
 import { variancePresentation } from '@pump/shared';
-import { VARIANCE_TONE_TEXT as TONE_TEXT } from '../../utils/variance.js';
+import { formatVariance, VARIANCE_TONE_TEXT as TONE_TEXT } from '../../utils/variance.js';
 import { StatusChip } from '../../pump-ds/chip/index.js';
 
 /** One Attendant's Drawer, as reconciled by the server (ADR 0005, #278). */
@@ -36,13 +36,27 @@ const Num: React.FC<{ v: number | null }> = ({ v }) => <span style={num}>{money(
  * (surplus / short). No ₹ symbol: the table caption states the currency.
  */
 export const VarianceFigure: React.FC<{ value: number; label?: boolean }> = ({ value, label }) => {
-  const v = variancePresentation(value, 'cash');
-  const figure = formatMoney(Math.abs(value), { symbol: false });
+  const v = formatVariance(value, 'cash', { symbol: false });
   return (
     <span style={{ ...num, color: TONE_TEXT[v.tone] }}>
-      {v.sign === 'zero' ? v.label : `${v.sign === 'negative' ? MINUS : '+'}${figure}`}
+      {v.text}
       {label && v.sign !== 'zero' && ` ${v.label.toLowerCase()}`}
     </span>
+  );
+};
+
+/** The footer's total variance: the figure, then its word when not balanced. */
+const TotalVariance: React.FC<{ value: number }> = ({ value }) => {
+  const v = variancePresentation(value, 'cash');
+  return (
+    <div style={{ lineHeight: 1.3 }}>
+      <VarianceFigure value={value} />
+      {v.sign !== 'zero' && (
+        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>
+          {v.label.toLowerCase()}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -142,14 +156,7 @@ const buildColumns = (
             pending || totalVariance === undefined ? (
               <Num v={null} />
             ) : (
-              <div style={{ lineHeight: 1.3 }}>
-                <VarianceFigure value={totalVariance} />
-                {variancePresentation(totalVariance, 'cash').sign !== 'zero' && (
-                  <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>
-                    {variancePresentation(totalVariance, 'cash').label.toLowerCase()}
-                  </div>
-                )}
-              </div>
+              <TotalVariance value={totalVariance} />
             )
         : undefined,
     },

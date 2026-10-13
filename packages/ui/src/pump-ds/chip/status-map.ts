@@ -48,8 +48,10 @@ export type PumpStatus =
   | PumpState
   // Lifecycle
   | 'open'
+  /** @deprecated Use `shift-closed` (same word and tone). */
   | 'closed'
   | 'locked'
+  /** @deprecated Use `day-draft` (same word and tone). */
   | 'draft'
   | 'active'
   | 'inactive'
@@ -69,7 +71,9 @@ export type PumpStatus =
   | 'overpaid'
   // Variance
   | 'variance'
+  /** @deprecated Use `short` (reads "Short", red). */
   | 'shortage'
+  /** @deprecated Use `surplus` (reads "Surplus", amber). */
   | 'excess'
   | 'balanced';
 
@@ -97,9 +101,11 @@ const vocab = (
 export const STATUS_MAP: Record<PumpStatus, StatusMeta> = {
   // Lifecycle
   open: { label: 'Open', tone: 'success', icon: PlayCircle },
-  closed: { label: 'Closed', tone: 'neutral', icon: Lock },
+  /** @deprecated Alias of `shift-closed`. */
+  closed: vocab('shift-closed', Lock),
   locked: { label: 'Locked', tone: 'neutral', icon: Lock },
-  draft: { label: 'Draft', tone: 'neutral', icon: Pencil },
+  /** @deprecated Alias of `day-draft`: one word, one colour. */
+  draft: vocab('day-draft', Pencil),
   active: vocab('active', Check),
   inactive: vocab('inactive', Minus),
   archived: { label: 'Archived', tone: 'neutral', icon: Archive },
@@ -107,7 +113,9 @@ export const STATUS_MAP: Record<PumpStatus, StatusMeta> = {
   // Sync
   synced: { label: 'Synced', tone: 'success', icon: CheckCircle },
   syncing: { label: 'Syncing', tone: 'info', icon: RefreshCw, pulse: true },
-  pending: { label: 'Pending', tone: 'warning', icon: Clock, pulse: true },
+  // "Pending" is grey wherever it appears (#518: one word, one colour); the
+  // pulse says the sync is still in flight.
+  pending: vocab('handover-pending', Clock, { pulse: true }),
   offline: { label: 'Offline', tone: 'neutral', icon: CloudOff },
   'sync-failed': { label: 'Sync failed', tone: 'danger', icon: AlertTriangle },
 
@@ -123,9 +131,10 @@ export const STATUS_MAP: Record<PumpStatus, StatusMeta> = {
 
   // Variance
   variance: { label: 'Variance', tone: 'danger', icon: AlertTriangle },
-  shortage: { label: 'Shortage', tone: 'danger', icon: TrendingDown },
-  // A surplus is amber everywhere (#518): cash or stock that should be explained.
-  excess: { label: 'Excess', tone: 'warning', icon: TrendingUp },
+  /** @deprecated Alias of `short`. */
+  shortage: vocab('short', TrendingDown),
+  /** @deprecated Alias of `surplus`: amber everywhere (#518). */
+  excess: vocab('surplus', TrendingUp),
   balanced: vocab('balanced', Check),
   surplus: vocab('surplus', TrendingUp),
   short: vocab('short', TrendingDown),

@@ -106,6 +106,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   } = snapshotData;
   // Two-level variance (#287) only for snapshots closed under that model.
   const twoLevel = Number(cashVarianceModel) >= 2;
+  const cashVarianceDisplay = formatVariance(cashVariance, 'cash');
   const shiftLabel = shiftDisplayLabel({ businessDate, shiftSequence, shiftId });
 
   // Fuel unit handling (L for liquids, kg for CNG/Auto-LPG). A tank/nozzle
@@ -1392,10 +1393,10 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
           <span
             style={{
               fontFamily: 'var(--font-mono)',
-              color: VARIANCE_TONE_TEXT[formatVariance(cashVariance, 'cash').tone],
+              color: VARIANCE_TONE_TEXT[cashVarianceDisplay.tone],
             }}
           >
-            {formatVariance(cashVariance, 'cash').text}
+            {cashVarianceDisplay.text}
           </span>
         </div>
       </div>

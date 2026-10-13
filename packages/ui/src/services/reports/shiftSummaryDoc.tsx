@@ -58,14 +58,18 @@ export const C = {
   white: '#FFFFFF',
 };
 
-/** Variance tones on paper (#518): balanced green, surplus amber, short red. */
-const PDF_TONE: Record<StatusTone, string> = {
+/**
+ * Shared tones on paper (#518): balanced green, surplus amber, short red. Hex,
+ * since react-pdf has no CSS variables; exhaustive over `StatusTone`, so a new
+ * tone fails here at compile time.
+ */
+const PDF_TONE = {
   success: C.success,
   warning: C.amber,
   danger: C.danger,
   info: C.ink,
   neutral: C.muted,
-};
+} satisfies Record<StatusTone, string>;
 
 /** PDF money: paise kept, a negative signed `−₹1,200.00` (the app's one signed-money rule). */
 export const inr = (n: any) => formatSignedMoney(n);

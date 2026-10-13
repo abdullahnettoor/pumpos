@@ -4,7 +4,7 @@
  * Insights, so the same amount never reads two ways on two screens.
  */
 import { formatVariance } from '@pump/ui';
-import { badgeTone, type BadgeTone, type Tone } from '../ui/tones.js';
+import { VARIANCE_FIGURE_TONE, type Tone } from '../ui/tones.js';
 
 /** A cash variance within this many rupees of zero is "on the nose" (rounds to ₹0). */
 export const VARIANCE_TOLERANCE = 0.5;
@@ -21,7 +21,7 @@ export function varianceTone(amount: number, tolerance = VARIANCE_TOLERANCE): To
 }
 
 export interface VarianceBadgeView {
-  tone: Extract<BadgeTone, 'good' | 'warn' | 'bad'>;
+  tone: (typeof VARIANCE_FIGURE_TONE)[keyof typeof VARIANCE_FIGURE_TONE];
   /** Balanced / +₹120 / −₹340. */
   text: string;
   /** Within the server's balance rule (`isBalancedVariance`): branch on this, not on `text`. */
@@ -39,7 +39,7 @@ export function varianceBadge(v: number): VarianceBadgeView {
   // rounding would read "₹0" for a real variance.
   const f = formatVariance(v, 'cash', { decimals: 0 });
   return {
-    tone: badgeTone(f.tone) as VarianceBadgeView['tone'],
+    tone: VARIANCE_FIGURE_TONE[f.tone],
     text: f.text,
     balanced: f.state === 'balanced',
   };

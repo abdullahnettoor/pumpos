@@ -16,12 +16,16 @@ export interface VarianceDisplay extends VariancePresentation {
  * shared vocabulary (`variancePresentation`, balanced by `isBalancedVariance`);
  * the figure from the one signed-money / quantity format (#519). Cash in
  * rupees, stock in litres. `decimals: 0` gives whole rupees, except under ₹1
- * where rounding would show a real variance as ₹0.
+ * where rounding would show a real variance as ₹0. `symbol: false` drops the ₹.
  */
 export function formatVariance(
   amount: number | string | null | undefined,
   kind: VarianceKind,
-  opts: { decimals?: number } = {},
+  opts: {
+    decimals?: number;
+    /** `false` drops the ₹ (a table whose caption states the currency). Cash only. */
+    symbol?: boolean;
+  } = {},
 ): VarianceDisplay {
   const p = variancePresentation(amount, kind);
   if (p.state === 'balanced') return { ...p, text: p.label };
@@ -32,6 +36,7 @@ export function formatVariance(
       : signedMoneyParts(n, {
           plus: true,
           decimals: Math.abs(n) < 1 ? 2 : (opts.decimals ?? 2),
+          symbol: opts.symbol,
         }).text;
   return { ...p, text };
 }
