@@ -85,4 +85,20 @@ describe('Reports → Daily DSSR KPI strip (#516)', () => {
     expect(tile('Net Volume Sold').textContent).toContain('500 L');
     expect(tile('Cash sales').textContent).toContain('—');
   });
+
+  it('lists each day\'s cash sales so the tile is traceable, "—" for days without it', () => {
+    range.data = [
+      day('2026-10-09', { shiftsIncluded: 2, fuel: fuel(1120, 1060), cashSales: 71275 }),
+      day('2026-09-01', { totalVolumeSold: 500 }),
+    ];
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
+    expect(screen.getByRole('columnheader', { name: /Cash sales/ })).toBeTruthy();
+    const rows = screen.getAllByRole('row').slice(1);
+    const cashCell = (r: HTMLElement) => {
+      const headers = screen.getAllByRole('columnheader');
+      const i = headers.findIndex((h) => /Cash sales/.test(h.textContent ?? ''));
+      return r.querySelectorAll('td')[i].textContent;
+    };
+    expect(rows.map(cashCell)).toEqual(['₹71,275.00', '—']);
+  });
 });

@@ -22,6 +22,7 @@ import { useCapability } from '../access/CapabilityGate.js';
 import {
   ATTENDANT_REPORT_CAPABILITY,
   deriveDssrRangeKpis,
+  readDssrCashSales,
   readDssrNetVolume,
   readSnapshot,
   canManageReportTemplates,
@@ -29,7 +30,7 @@ import {
   canViewReports,
 } from '@pump/shared';
 import { ReportTemplatesPanel } from './reports/templates/ReportTemplatesPanel.js';
-import { inr } from '../utils/format.js';
+import { formatQty, inr } from '../utils/format.js';
 import { resolveBusinessDate } from '@pump/shared';
 import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText } from '../pump-ds/index.js';
 import {
@@ -71,15 +72,24 @@ const dssrColumns: ColumnDef<any, any>[] = [
     cell: ({ row }) => {
       const perUnit = Object.entries(readDssrNetVolume(readSnapshot(row.original)));
       const label =
-        perUnit
-          .map(
-            ([unit, qty]) =>
-              `${qty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${unit}`,
-          )
-          .join(' · ') || '0.00 L';
+        perUnit.map(([unit, qty]) => formatQty(qty, 2, unit)).join(' · ') || formatQty(0, 2, 'L');
       return (
         <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
           {label}
+        </span>
+      );
+    },
+  },
+  {
+    // Per-day source of the "Cash sales" tile. Days frozen before #516 carry no
+    // figure and read "—" until regenerated, never ₹0.
+    id: 'cashSales',
+    header: 'Cash sales',
+    cell: ({ row }) => {
+      const cash = readDssrCashSales(readSnapshot(row.original));
+      return (
+        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
+          {cash == null ? '—' : inr(cash)}
         </span>
       );
     },

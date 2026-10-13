@@ -56,22 +56,22 @@ describe('readDssrCashSales', () => {
 
 describe('deriveDssrRangeKpis', () => {
   it('sums net volume and cash sales across closed days', () => {
-    const k = deriveDssrRangeKpis([
+    const kpis = deriveDssrRangeKpis([
       closedDay,
       { ...closedDay, id: 'd2', snapshotData: { ...closedDay.snapshotData, cashSales: 1000 } },
     ]);
-    expect(k.count).toBe(2);
-    expect(k.volumeLabel).toBe('4,360 L');
-    expect(k.cashSales).toBe(72275.5);
-    expect(k.daysWithoutCash).toBe(0);
+    expect(kpis.count).toBe(2);
+    expect(kpis.volumeLabel).toBe('4,360 L');
+    expect(kpis.cashSales).toBe(72275.5);
+    expect(kpis.daysWithoutCash).toBe(0);
   });
 
   it('counts older days that carry no cash figure instead of reading them as zero', () => {
     const old = { id: 'd0', businessDate: '2026-10-01', snapshotData: { totalVolumeSold: 500 } };
-    const k = deriveDssrRangeKpis([closedDay, old]);
-    expect(k.volumeLabel).toBe('2,680 L');
-    expect(k.cashSales).toBe(71275.5);
-    expect(k.daysWithoutCash).toBe(1);
+    const kpis = deriveDssrRangeKpis([closedDay, old]);
+    expect(kpis.volumeLabel).toBe('2,680 L');
+    expect(kpis.cashSales).toBe(71275.5);
+    expect(kpis.daysWithoutCash).toBe(1);
   });
 
   it('reads an empty range as zero litres and no cash figure', () => {

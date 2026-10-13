@@ -6,7 +6,8 @@
  * by the shifts' Drawers. Collections are Office Records and live in the Cash Book.
  */
 import { num, round2 } from './money.js';
-import { readSnapshot, unitLabel, wholeQuantityLabel, type Snapshot } from './sales-headline.js';
+import { readSnapshot, type Snapshot } from './dssr-snapshot.js';
+import { unitLabel, volumeLabel } from './quantity-label.js';
 
 /**
  * Net volume sold on one day, per display unit. Reads the per-product roll-up
@@ -45,22 +46,21 @@ export interface DssrRangeKpis {
 
 export function deriveDssrRangeKpis(range: readonly unknown[] | undefined): DssrRangeKpis {
   const perUnit = new Map<string, number>();
-  let cash: number | null = null;
+  let cashTotal: number | null = null;
   let daysWithoutCash = 0;
   const rows = range ?? [];
   for (const row of rows) {
     const snap = readSnapshot(row);
     for (const [unit, qty] of Object.entries(readDssrNetVolume(snap)))
       perUnit.set(unit, (perUnit.get(unit) ?? 0) + qty);
-    const c = readDssrCashSales(snap);
-    if (c == null) daysWithoutCash += 1;
-    else cash = (cash ?? 0) + c;
+    const cash = readDssrCashSales(snap);
+    if (cash == null) daysWithoutCash += 1;
+    else cashTotal = (cashTotal ?? 0) + cash;
   }
   return {
     count: rows.length,
-    volumeLabel:
-      [...perUnit].map(([unit, qty]) => wholeQuantityLabel(qty, unit)).join(' · ') || '0 L',
-    cashSales: cash == null ? null : round2(cash),
+    volumeLabel: volumeLabel(perUnit),
+    cashSales: cashTotal == null ? null : round2(cashTotal),
     daysWithoutCash,
   };
 }
