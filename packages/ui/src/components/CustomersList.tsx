@@ -21,7 +21,16 @@ import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
 import { useToast } from './primitives/ToastProvider.js';
-import { Panel, Button, Chip, KpiStrip, KpiTile, EmptyState, Icon } from '../pump-ds/index.js';
+import {
+  Panel,
+  Button,
+  Chip,
+  KpiStrip,
+  KpiTile,
+  EmptyState,
+  Icon,
+  ConceptIcon,
+} from '../pump-ds/index.js';
 import { resolveBusinessDate, type CollectionEntryFormValues } from '@pump/shared';
 import {
   buildCustomerColumns,
@@ -59,7 +68,7 @@ export function summarizeCustomerBalances(customers: any[]) {
 }
 
 export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, userRole }) => {
-  const [selectedTab, setSelectedTab] = useState<TabType>('transactions');
+  const [selectedTab, setSelectedTab] = useState<TabType>('registry');
 
   const stationId = selectedStation?.id ?? null;
   const customersActiveQ = useCustomers(true);
@@ -368,7 +377,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
 
   return (
     <PageLayout
-      title="Customer Fleet Accounts"
+      title="Customers"
       subtitle="Manage fleet customer profiles, credit limits, and record shift collections."
       actions={
         <>
@@ -412,10 +421,14 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
           activeId={activeTab}
           onChange={(id) => setActiveTab(id as TabType)}
           tabs={[
-            { id: 'transactions', label: 'Collections', icon: <Icon name="wallet" size="xs" /> },
-            { id: 'sales', label: 'Credit Sales', icon: <Icon name="card" size="xs" /> },
-            { id: 'registry', label: 'Customer Registry', icon: <Icon name="users" size="xs" /> },
-            { id: 'vehicles', label: 'Vehicles', icon: <Icon name="truck" size="xs" /> },
+            { id: 'registry', label: 'Customers', icon: <ConceptIcon concept="customers" /> },
+            { id: 'sales', label: 'Credit sales', icon: <ConceptIcon concept="credit-sales" /> },
+            {
+              id: 'transactions',
+              label: 'Collections',
+              icon: <ConceptIcon concept="collections" />,
+            },
+            { id: 'vehicles', label: 'Vehicles', icon: <ConceptIcon concept="vehicles" /> },
           ]}
         />
       }

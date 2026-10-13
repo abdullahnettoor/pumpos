@@ -24,8 +24,14 @@ import { ACCOUNT_TYPE_LABEL, LEDGER_SOURCE_LABEL } from '../../utils/ledgerLabel
 import { inr } from '../../utils/format.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Wallet, ArrowLeft, ArrowLeftRight, Banknote } from 'lucide-react';
+import { Tabs } from '../primitives/Tabs.js';
+import { ConceptIcon } from '../../pump-ds/icon/index.js';
+import { DailyCashBook } from '../reports/DailyCashBook.js';
+import { useNavIntent, clearNavIntent } from '../../nav-intent/store.js';
 
 const financeSvc = new CloudFinanceService();
+
+type AccountsTab = 'accounts' | 'cash-book';
 
 type AccountType = 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
 
@@ -104,6 +110,17 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
 
   const { data: accounts, isLoading } = useFinancialAccounts(stationId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Tabs: Accounts (live balances) · Daily cash book (moved from Reports, #540).
+  // The dashboard "Cash Book ›" link and Office Record pins deep-link here.
+  const intent = useNavIntent();
+  const intentCashBook = intent?.openAccountsTab === 'cash-book';
+  const [selectedTab, setSelectedTab] = useState<AccountsTab>('accounts');
+  const activeTab: AccountsTab = intentCashBook ? 'cash-book' : selectedTab;
+  const setActiveTab = (tab: AccountsTab) => {
+    clearNavIntent();
+    setSelectedTab(tab);
+  };
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
 
   // Overview totals for the list header (cash = cash-in-hand + petty cash).
@@ -410,7 +427,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
   };
 
   // ---- Per-account ledger view ----
-  if (selected) {
+  if (selected && !intentCashBook) {
     const totals = { moneyIn: 0, moneyOut: 0 };
     for (const e of ledger?.entries || []) {
       if (e.direction === 'in') totals.moneyIn += Number(e.amount || 0);
@@ -695,6 +712,22 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
     <PageLayout
       title="Accounts"
       subtitle="Cash, bank, petty cash and card/UPI clearing balances."
+      toolbar={
+        <Tabs
+          variant="underline"
+          aria-label="Accounts"
+          activeId={activeTab}
+          onChange={(id) => setActiveTab(id as AccountsTab)}
+          tabs={[
+            { id: 'accounts', label: 'Accounts', icon: <ConceptIcon concept="accounts" /> },
+            {
+              id: 'cash-book',
+              label: 'Daily cash book',
+              icon: <ConceptIcon concept="daily-cash-book" />,
+            },
+          ]}
+        />
+      }
       actions={
         <div style={{ display: 'flex', gap: '8px' }}>
           <Button
@@ -712,7 +745,9 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
         </div>
       }
     >
-      {isLoading ? (
+      {activeTab === 'cash-book' ? (
+        <DailyCashBook selectedStation={selectedStation} />
+      ) : isLoading ? (
         <LoadingSpinner />
       ) : (accounts || []).length === 0 ? (
         <EmptyState

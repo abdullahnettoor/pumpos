@@ -8,6 +8,7 @@ import { YourShiftCard } from '../cards/YourShiftCard.js';
 import { ColumnHeader } from '../frame/ColumnHeader.js';
 import { useDashboard } from '../frame/DashboardContext.js';
 import { formatClockInZone } from '../../../utils/format.js';
+import { ROUTES } from '../../../nav-intent/routes.js';
 
 /** Staff's "Your shift" header (same query key as YourShiftCard: no extra request). */
 const YourShiftHeader: React.FC = () => {
@@ -35,7 +36,7 @@ export const MoneyColumn: React.FC = () => {
             subtitle="office records by entry date"
             action={{
               label: 'Cash Book',
-              onClick: () => onNavigate('/reports', { openReportsTab: 'cash-book' }),
+              onClick: () => onNavigate(ROUTES.accounts, { openAccountsTab: 'cash-book' }),
             }}
           />
           <MoneyCard />

@@ -84,6 +84,17 @@ import {
   X,
   XCircle,
   Zap,
+  Activity,
+  Car,
+  ClipboardList,
+  Droplet,
+  File,
+  Landmark,
+  MapPin,
+  Monitor,
+  Palette,
+  PanelsTopLeft,
+  PieChart,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -231,6 +242,20 @@ export const ICON_REGISTRY = {
   settings: Settings,
   shield: Shield,
   logout: LogOut,
+
+  // Navigation concepts (#540): glyphs the concept → icon map needs.
+  pump: Fuel,
+  droplet: Droplet,
+  bank: Landmark,
+  pie: PieChart,
+  palette: Palette,
+  'map-pin': MapPin,
+  monitor: Monitor,
+  car: Car,
+  activity: Activity,
+  clipboard: ClipboardList,
+  file: File,
+  layout: PanelsTopLeft,
 } as const satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICON_REGISTRY;

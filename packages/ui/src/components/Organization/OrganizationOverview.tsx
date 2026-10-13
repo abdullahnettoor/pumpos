@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Station, stationLimitMessage, reachableStations, showStationDropdown } from '@pump/shared';
 import { PageLayout } from '../primitives/PageLayout.js';
 import { Tabs } from '../primitives/Tabs.js';
-import { Chip, Button } from '../../pump-ds/index.js';
+import { Chip, Button, ConceptIcon } from '../../pump-ds/index.js';
 import { UserRolesAssignment } from '../StationSetup/UserRolesAssignment.js';
 import { OrgProfile } from './OrgProfile.js';
 import { ActivityFeed } from './ActivityFeed.js';
@@ -11,6 +11,7 @@ import { DesktopAppPanel } from '../Desktop/DesktopAppPanel.js';
 import { isDesktopApp } from '../../utils/platform.js';
 import { useAccess } from '../../query/hooks.js';
 import { clearNavIntent, useNavIntent } from '../../nav-intent/store.js';
+import { ROUTES } from '../../nav-intent/routes.js';
 
 type OrgTab = 'stations' | 'team' | 'activity' | 'profile' | 'desktop';
 
@@ -102,11 +103,24 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
           activeId={tab}
           onChange={(id) => setTab(id as OrgTab)}
           tabs={[
-            { id: 'stations', label: 'Stations', badge: stations.length },
-            { id: 'team', label: 'Team' },
-            { id: 'activity', label: 'Activity' },
-            { id: 'profile', label: 'Profile' },
-            ...(showDesktopTab ? [{ id: 'desktop', label: 'Desktop app' }] : []),
+            {
+              id: 'stations',
+              label: 'Stations',
+              icon: <ConceptIcon concept="stations" />,
+              badge: stations.length,
+            },
+            { id: 'team', label: 'Team', icon: <ConceptIcon concept="team" /> },
+            { id: 'activity', label: 'Activity', icon: <ConceptIcon concept="activity" /> },
+            { id: 'profile', label: 'Profile', icon: <ConceptIcon concept="profile" /> },
+            ...(showDesktopTab
+              ? [
+                  {
+                    id: 'desktop',
+                    label: 'Desktop app',
+                    icon: <ConceptIcon concept="desktop-app" />,
+                  },
+                ]
+              : []),
           ]}
         />
       }
@@ -281,7 +295,7 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => onNavigate('/setup/station')}
+                        onClick={() => onNavigate(ROUTES.station)}
                       >
                         Configure
                       </Button>

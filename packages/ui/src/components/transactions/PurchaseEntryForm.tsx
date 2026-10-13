@@ -95,7 +95,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
   invoiceLabel = 'Invoice Number',
   invoicePlaceholder,
   notesPlaceholder,
-  supplierEmptyMessage = 'No active suppliers found. Please add or enable suppliers in the Supplier Registry tab.',
+  supplierEmptyMessage = 'No active suppliers found. Please add or enable suppliers in the Suppliers tab.',
   dateLabel = 'Purchase Date',
   stationId,
   timeZone,

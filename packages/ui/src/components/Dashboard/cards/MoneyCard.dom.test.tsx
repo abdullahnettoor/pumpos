@@ -420,7 +420,7 @@ describe('TodayInOfficeCard (Today in the office)', () => {
     const links = screen.getAllByRole('button', { name: 'Cash Book ›' });
     expect(links).toHaveLength(1);
     fireEvent.click(links[0]!);
-    expect(onNavigate).toHaveBeenCalledWith('/reports', { openReportsTab: 'cash-book' });
+    expect(onNavigate).toHaveBeenCalledWith('/accounts', { openAccountsTab: 'cash-book' });
   });
 });
 

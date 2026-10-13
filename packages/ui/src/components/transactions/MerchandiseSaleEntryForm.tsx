@@ -176,7 +176,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
 
       {products.length === 0 ? (
         <div style={{ fontSize: '12px', color: 'var(--brand-warning)', padding: '6px 0' }}>
-          No non-fuel products found. Add merchandise products in Station Overview → Products first.
+          No non-fuel products found. Add merchandise products in Station → Products first.
         </div>
       ) : (
         <div>

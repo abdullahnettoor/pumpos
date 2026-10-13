@@ -29,6 +29,7 @@ import {
   SearchInput,
   Select,
   Icon,
+  ConceptIcon,
 } from '../pump-ds/index.js';
 import { buildExpenseColumns } from './expenses/columns.js';
 import { ExpenseAnalytics } from './expenses/ExpenseAnalytics.js';
@@ -234,11 +235,11 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as TabType)}
             tabs={[
-              { id: 'ledger', label: 'Ledger', icon: <Icon name="receipt" size="xs" /> },
+              { id: 'ledger', label: 'Expenses', icon: <ConceptIcon concept="expenses" /> },
               {
                 id: 'analytics',
-                label: 'By Category',
-                icon: <Icon name="arrow-left-right" size="xs" />,
+                label: 'By category',
+                icon: <ConceptIcon concept="by-category" />,
               },
             ]}
           />

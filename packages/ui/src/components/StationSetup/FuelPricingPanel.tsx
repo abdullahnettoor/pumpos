@@ -23,6 +23,7 @@ import {
 } from '../../pump-ds/index.js';
 import { Fuel, Package, Search } from 'lucide-react';
 import { useRunTask } from '../../utils/runTask.js';
+import { ConceptIcon } from '../../pump-ds/icon/index.js';
 
 const pricingService = new CloudPricingService();
 const productService = new CloudProductService();
@@ -298,8 +299,12 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as TabType)}
             tabs={[
-              { id: 'fuels', label: 'Fuels', icon: <Fuel size={15} /> },
-              { id: 'merchandise', label: 'Merchandise', icon: <Package size={15} /> },
+              { id: 'fuels', label: 'Fuels', icon: <ConceptIcon concept="fuels" /> },
+              {
+                id: 'merchandise',
+                label: 'Products',
+                icon: <ConceptIcon concept="products" />,
+              },
             ]}
           />
         }
@@ -330,7 +335,7 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
                     compact
                     icon={<Fuel />}
                     title="No fuel products"
-                    description="Configure fuel products in Station Overview → Products first."
+                    description="Configure fuel products in Station → Products first."
                   />
                 </div>
               ) : (
@@ -482,7 +487,7 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
                     title={merchandise.length === 0 ? 'No merchandise' : 'No matches'}
                     description={
                       merchandise.length === 0
-                        ? 'Add non-fuel products in Station Overview → Products.'
+                        ? 'Add non-fuel products in Station → Products.'
                         : 'Try a different search.'
                     }
                   />

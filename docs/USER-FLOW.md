@@ -10,9 +10,10 @@ and agents driving it.
 
 **Navigation model.** The app is a sidebar + top bar + content area:
 
-- **Sidebar groups**: Operations (Dashboard, Shifts, Inventory, Pricing) ·
-  Sales & CRM (Customers) · Purchasing (Purchases) · Finance (Accounts,
-  Expenses, Income, Reports) · Setup (Station Overview, Organization).
+- **Sidebar groups**: Operate (Dashboard, Shifts, Inventory, Pricing) ·
+  Parties (Customers, Suppliers) · Books (Accounts, Expenses, Income) ·
+  Insight (Reports) · Setup (Station, Organization). Each page opens on its
+  main list tab.
 - **Top bar**: station picker · ⌘K search · **+ New** quick-create menu
   (Expense, Income, Collection, Merchandise sale, Purchase, Supplier payment,
   Credit sale, Customer, Team member…) · notifications · user menu.
@@ -73,7 +74,7 @@ here become the opening baseline for all future reconciliation.
 
 ## 3. Build the product catalog (with stock and price)
 
-Sidebar → **Station Overview** → **Products Catalog** tab. Fuels already exist
+Sidebar → **Station** → **Products** tab. Fuels already exist
 from onboarding; add merchandise (engine oil, coolant, accessories…).
 
 **One at a time**: **New Catalog Item** → name, code, product type (Lubricant,
@@ -87,23 +88,23 @@ type **Item (packaged stock)** → **Create Item**.
 category, sellingPrice, costPriceExGst, openingStock` → **Choose CSV file** →
 **Import N products**. Price and opening stock land in one import.
 
-Done when: Inventory → **Merchandise Stock** shows every item with its opening
+Done when: Inventory → **Product stock** shows every item with its opening
 quantity.
 
 Later price changes: Sidebar → **Pricing** → **Fuels** tab ("Record a fuel
-rate": product, Rate/L, effective-from) or **Merchandise** tab → **Set price**.
+rate": product, Rate/L, effective-from) or **Products** tab → **Set price**.
 
 ## 4. Register customers and suppliers
 
-**Customers** (fleet/credit accounts): Sidebar → **Customers** → **Customer
-Registry** tab → **Register New Customer** → name, phone, account type,
+**Customers** (fleet/credit accounts): Sidebar → **Customers** → **Customers**
+tab → **Register New Customer** → name, phone, account type,
 settlement cycle, **credit limit**, fleet code, opening due, GSTIN/billing
 details. Add fleet vehicles under the **Vehicles** tab → **Add Vehicle**. Customer
 records may show legacy prepaid fields; dealer-held prepaid wallet top-up/drawdown
 is not a supported workflow.
 
-**Suppliers** (OMC + merchandise vendors): Sidebar → **Purchases** →
-**Supplier Registry** tab → **Register New Supplier** → name, contact, GSTIN,
+**Suppliers** (OMC + merchandise vendors): Sidebar → **Suppliers** →
+**Suppliers** tab → **Register New Supplier** → name, contact, GSTIN,
 opening balance.
 
 Done when: every regular credit customer and supplier exists — shift
@@ -126,7 +127,7 @@ Roles:
 
 ## 6. Open a shift
 
-Sidebar → **Shifts** → **Active Shift** tab → open-shift form:
+Sidebar → **Shifts** → **Live shift** tab → open-shift form:
 
 1. Pick the **Shift template** and confirm the **Shift Business Date** (it
    defaults correctly for the station's day-start; before 06:00 the date is
@@ -186,7 +187,7 @@ credit sales are in before you close.
 
 ## 8. Close the shift
 
-Active Shift → **Close Shift** — a 4-step wizard:
+Live shift → **Close Shift** — a 4-step wizard:
 
 1. **Cash Reconciliation** — "Count safe cash by denomination". Expected
    drawer cash = Σ opening floats + cash sales − cash drops, the sum of the
@@ -210,45 +211,49 @@ allowed, never future) and the **account** the money moved through. They
 never attach to a shift or business day. Purchases are the exception: they
 are stock events on the business day.
 
-- **Purchases**: Sidebar → **Purchases** → **Record Purchase** → supplier,
-  product lines, invoice; **Record payment now** or pay later via **Record
-  Supplier Payment**. Supplier statements: **Supplier Registry** → statement.
-  GST input credit sits under the **GST / ITC** tab.
+- **Purchases**: Sidebar → **Suppliers** → **Purchases** tab → **Add Purchase** →
+  supplier, product lines, invoice; **Record payment now** or pay later via
+  **Record Payment**. Supplier statements: **Suppliers** tab → statement.
+  GST input credit is in **Reports → GST → Purchases (ITC)**.
 - **Expenses**: Sidebar → **Expenses** → **Log New Expense** → category
   (manage via **Manage expense categories** → **New category**), amount,
   entry date, paid-from account. Wrong entry? Void it with a reason — nothing is deleted.
 - **Income** (non-fuel income like rent, commissions): Sidebar → **Income** →
-  **Record Income**.
+  **Record Income**. **By category** totals income per category; output GST
+  on income is in **Reports → GST → Income**.
 - **Collections**: Sidebar → **Customers** → **Collections** tab → **Log
-  Customer Collection**. Customer statements: Registry → **Customer Account
+  Customer Collection**. Customer statements: **Customers** tab → **Customer Account
   Statement**. OMC-CMS fleet-card settlement is supported; customer-owned
   prepaid wallet top-up/drawdown is not currently available.
 - **Accounts** (cash, bank, petty cash, card/UPI clearing): Sidebar →
   **Accounts** → **New Account**, **Transfer Money** (e.g. safe cash →
   bank deposit), **Settle to Bank** (clear card/UPI settlements into the
   bank account), **Add Entry** (bank charges, interest, adjustments),
-  per-account statements, **Set opening balance**.
+  per-account statements, **Set opening balance**. The **Daily cash book** tab
+  shows each account's opening, in, out and closing for one entry date, live.
 
 ## 10. Inventory checks
 
 Sidebar → **Inventory**:
 
-- **Tank Status** — live fuel stock vs capacity.
-- **Merchandise Stock** — packaged-item quantities; **Record Intake** for
+- **Tanks** — live fuel stock vs capacity.
+- **Decantations** — tanker unloads into tanks.
+- **Density** — today's density checks and the register.
+- **Product stock** — packaged-item quantities; **Record Intake** for
   stock received outside a purchase.
-- **Stock Movements** — the audit trail; every movement, no exceptions.
+- **Movements** — the audit trail; every movement, no exceptions.
 - **Reconciliations** — **Stock Reconciliation** drawer: physically count,
   enter actual, and the system records expected vs actual variance with a
   reason.
 
 ## 11. Close the business day → DSSR
 
-When all of a date's shifts are closed: **Shifts** → **Business Day** tab →
+When all of a date's shifts are closed: **Shifts** → **Business days** tab →
 **Close day** → confirm "Close this business day?". This generates the
 immutable **DSSR** (Daily Station Sales Report) — a sales-only report of all
 shift summaries plus the day's sales, credit sales, purchases and stock — and
 seals the day. Office money (collections, expenses, income, supplier
-payments) is in **Reports → Daily Cash Book**, dated by entry date.
+payments) is in **Accounts → Daily cash book**, dated by entry date.
 
 Days close independently: you can close Monday on Friday; an unclosed past
 day never blocks today.
@@ -257,10 +262,17 @@ Done when: toast "Business day closed · DSSR generated."
 
 ## 12. Reports
 
-Sidebar → **Reports**: **Daily DSSR** (generate/view snapshots) · **Profit &
-Loss** (Owner) · **Ledger** · **Invoices** · **Tax Register** · **Cash &
-Bank** · **Daily Cash Book** (each account's opening, in, out and closing for
-one date, live) · **Expense Register** · **Attendant Handovers**.
+Sidebar → **Reports**, grouped in a list beside the report:
+
+- **Sales**: **DSSR** (generate/view snapshots) · **Attendant handovers** ·
+  **Decantations**
+- **Finance**: **Profit & loss** (Owner) · **Ledgers** (Party · Cash & bank) ·
+  **Invoices**
+- **Tax & registers**: **GST** (Sales · Purchases (ITC) · Income) ·
+  **Expense register**
+
+The Daily cash book is in **Accounts**; report print layouts are in
+**Station → Report templates**.
 
 ## 13. The mobile app
 

@@ -7,6 +7,7 @@ import { Station, canViewReports, type OperatorRole, type Role } from '@pump/sha
 import { useContainerWidth } from '../hooks/useContainerWidth.js';
 import { useStationBusinessDate } from '../hooks/useStationClock.js';
 import { useSidebarBadges, type SidebarBadges } from '../query/useSidebarBadges.js';
+import { NAV_GROUPS, ROUTES } from '../nav-intent/routes.js';
 import type { UserMenuAction } from '../pump-ds/shell/index.js';
 
 export interface NavItem {
@@ -78,6 +79,7 @@ function resolveNavIcon(item: NavItem): IconName {
       return 'dashboard';
     case 'shifts':
       return 'shifts';
+    case 'station':
     case 'station overview':
       return 'station';
     case 'products catalog':
@@ -96,6 +98,8 @@ function resolveNavIcon(item: NavItem): IconName {
       return 'expenses';
     case 'income':
       return 'income';
+    case 'suppliers':
+      return 'supplier';
     case 'purchases':
       return 'purchases';
     case 'customers':
@@ -132,21 +136,6 @@ function resolveNavIcon(item: NavItem): IconName {
   }
 }
 
-/**
- * Sidebar section grouping. Items are matched to sections by `path`; order
- * within a section follows the `paths` order here. Anything unmatched falls
- * into a trailing group. Sections with no visible items are dropped.
- */
-const NAV_GROUPS: { heading: string; paths: string[] }[] = [
-  { heading: 'Operate', paths: ['/dashboard', '/shifts', '/inventory', '/pricing'] },
-  {
-    heading: 'Money',
-    paths: ['/customers', '/purchases', '/accounts', '/expenses', '/income'],
-  },
-  { heading: 'Insight', paths: ['/reports'] },
-  { heading: 'Setup', paths: ['/setup/station', '/organization'] },
-];
-
 /** Below this app (shell) width the sidebar becomes a 60px icon rail on its own. */
 export const RAIL_BREAKPOINT = 1200;
 export const SIDEBAR_COLLAPSED_KEY = 'pump.sidebar.collapsed';
@@ -171,22 +160,25 @@ const NAV_BADGES: Record<
   string,
   { tone: BadgeTone; read: (b: SidebarBadges) => { label: string; count?: number } | null }
 > = {
-  '/shifts': { tone: 'success', read: (b) => (b.shiftRunning ? { label: 'Shift running' } : null) },
-  '/inventory': {
+  [ROUTES.shifts]: {
+    tone: 'success',
+    read: (b) => (b.shiftRunning ? { label: 'Shift running' } : null),
+  },
+  [ROUTES.inventory]: {
     tone: 'danger',
     read: (b) =>
       b.inventoryAlerts > 0
         ? { label: `${b.inventoryAlerts} inventory alerts`, count: b.inventoryAlerts }
         : null,
   },
-  '/customers': {
+  [ROUTES.customers]: {
     tone: 'warning',
     read: (b) =>
       b.overdueCustomers > 0
         ? { label: `${b.overdueCustomers} overdue customers`, count: b.overdueCustomers }
         : null,
   },
-  '/reports': {
+  [ROUTES.reports]: {
     tone: 'warning',
     read: (b) =>
       b.openPastDays > 0

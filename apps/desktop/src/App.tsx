@@ -38,8 +38,10 @@ import {
   useRunTask,
   publishNavIntent,
   useRoutePath,
+  NAV_PAGES,
+  ROUTES,
 } from '@pump/ui';
-import { REPORTS_ROLES, Station } from '@pump/shared';
+import { Station } from '@pump/shared';
 import { environmentTag, showDeveloperSurfaces } from './buildEnv.js';
 import { useDesktopUpdates } from './updates/useDesktopUpdates.js';
 import { UpdateNotice } from './updates/UpdateNotice.js';
@@ -317,20 +319,7 @@ const App: React.FC = () => {
 
   // Dynamic Navigation items based on onboarding status
   const navItems = navAssumesReady
-    ? [
-        { label: 'Dashboard', path: '/dashboard' },
-        { label: 'Shifts', path: '/shifts', roles: ['Owner', 'Manager', 'Accountant', 'Staff'] },
-        { label: 'Station Overview', path: '/setup/station', roles: ['Owner', 'Manager'] },
-        { label: 'Expenses', path: '/expenses' },
-        { label: 'Income', path: '/income' },
-        { label: 'Purchases', path: '/purchases', roles: ['Owner', 'Manager', 'Accountant'] },
-        { label: 'Inventory', path: '/inventory', roles: ['Owner', 'Manager', 'Accountant'] },
-        { label: 'Pricing', path: '/pricing', roles: ['Owner', 'Manager'] },
-        { label: 'Accounts', path: '/accounts', roles: ['Owner', 'Manager', 'Accountant'] },
-        { label: 'Customers', path: '/customers' },
-        { label: 'Reports', path: '/reports', roles: [...REPORTS_ROLES] },
-        { label: 'Organization', path: '/organization', roles: ['Owner'] },
-      ]
+    ? [...NAV_PAGES]
     : [{ label: 'Onboarding Setup', path: '/onboarding', roles: ['Owner', 'Manager'] }];
 
   const navItemsWithDev = showDeveloperSurfaces
@@ -501,9 +490,15 @@ const App: React.FC = () => {
       case '/expenses':
         return <ExpensesList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/income':
-        return <IncomeList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
-      case '/purchases':
-        return <PurchasesList selectedStation={selectedStation} />;
+        return (
+          <IncomeList
+            selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
+            onNavigate={navigate}
+          />
+        );
+      case ROUTES.suppliers:
+        return <PurchasesList selectedStation={selectedStation} onNavigate={navigate} />;
       case '/inventory':
         return <InventoryList selectedStation={selectedStation} userRole={userRole} />;
       case '/pricing':
