@@ -50,6 +50,7 @@ import {
   PumpDsButtonsPanel,
   PumpDsComponentsPanel,
   PumpDsMetricsPanel,
+  PumpDsStatusPanel,
 } from './DesignSystemPumpDs.js';
 import { DataSectionShowcase } from './DesignSystemDataSection.js';
 import { DesignSystemShellProtoPanel } from './DesignSystemShellProto.js';
@@ -1366,6 +1367,7 @@ const TABS = [
   { id: 'buttons', label: 'Buttons' },
   { id: 'inputs', label: 'Inputs & Forms' },
   { id: 'components', label: 'Components' },
+  { id: 'status', label: 'Status vocabulary' },
   { id: 'overlays', label: 'Overlays' },
   { id: 'feedback', label: 'Feedback' },
   { id: 'data', label: 'Data & Money' },
@@ -1397,6 +1399,7 @@ export const DesignSystem: React.FC = () => {
           <PumpDsComponentsPanel />
         </>
       )}
+      {active === 'status' && <PumpDsStatusPanel />}
       {active === 'overlays' && <OverlaysPanel />}
       {active === 'feedback' && <FeedbackPanel />}
       {active === 'data' && (

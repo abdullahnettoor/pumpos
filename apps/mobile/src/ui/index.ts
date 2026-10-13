@@ -19,4 +19,4 @@ export { SheetButtons } from './SheetButtons.js';
 export { StateCard } from './StateCard.js';
 export { StatTile, StatTileShell } from './StatTile.js';
 export { TONE_FILL, TONE_TEXT, type Tone } from './tones.js';
-export { StatusBadge, type BadgeTone } from './StatusBadge.js';
+export { StatusBadge, badgeTone, type BadgeTone } from './StatusBadge.js';

@@ -197,7 +197,7 @@ export {
   formatQuantity,
   formatCompactMoney,
 } from './utils/format.js';
-// signedMoneyParts / FigureSign / SignedFigure have no caller yet: the stacked #518 (PR #548) uses them for variance tones.
+// signedMoneyParts / FigureSign / SignedFigure: the variance vocabulary (utils/variance.ts, #518) builds on them.
 export type { FigureSign, SignedFigure } from './utils/format.js';
 export { MONEY_TERMS } from './utils/moneyTerms.js';
 export type { MoneyTerm } from './utils/moneyTerms.js';
@@ -221,8 +221,15 @@ export * from './pump-ds/meter/index.js';
 export { STATUS_BAR_HEIGHT_PX } from './pump-ds/shell/index.js';
 export * from './pump-ds/button/index.js';
 // Shared with the mobile Control Room primitives (apps/mobile/src/ui).
-export { Chip, StatusChip } from './pump-ds/chip/index.js';
-export type { ChipProps, ChipTone, StatusChipProps } from './pump-ds/chip/index.js';
+export { Chip, StatusChip, VarianceChip } from './pump-ds/chip/index.js';
+export type {
+  ChipProps,
+  ChipTone,
+  StatusChipProps,
+  VarianceChipProps,
+} from './pump-ds/chip/index.js';
+export { formatVariance } from './utils/variance.js';
+export type { VarianceDisplay } from './utils/variance.js';
 export { SegmentedControl } from './pump-ds/segmented/index.js';
 export type { SegmentedControlProps, SegmentedControlOption } from './pump-ds/segmented/index.js';
 export { PageHeader } from './pump-ds/page-header/index.js';

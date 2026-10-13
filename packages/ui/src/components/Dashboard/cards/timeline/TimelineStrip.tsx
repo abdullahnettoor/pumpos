@@ -176,6 +176,20 @@ const SHORT_BAR_PCT = 25;
 /** Hour labels this close (percent) to the now pill are hidden under it. */
 const NOW_LABEL_CLEARANCE_PCT = 2.2;
 
+/**
+ * The "now" clock pill under the timeline's red line: solid danger with its
+ * paired `text-on-danger`. Placement comes from the caller's `className`.
+ */
+export const TimelineNowPill: React.FC<React.HTMLAttributes<HTMLSpanElement>> = ({
+  className,
+  ...rest
+}) => (
+  <span
+    className={`whitespace-nowrap rounded-full bg-brand-danger px-1.5 text-[9.5px] font-semibold leading-[14px] text-on-danger ${className ?? ''}`}
+    {...rest}
+  />
+);
+
 export const TimelineStrip: React.FC<TimelineStripProps> = ({
   timeline,
   bars,
@@ -269,13 +283,13 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
         className="pointer-events-none absolute top-[22px] z-10 h-[34px] w-0.5 -translate-x-1/2 bg-brand-danger"
         style={{ left: `${nowPct}%` }}
       />
-      <span
+      <TimelineNowPill
         data-testid="timeline-now-label"
-        className="pointer-events-none absolute top-[56px] z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-brand-danger px-1.5 text-[9.5px] font-semibold leading-[14px] text-on-brand"
+        className="pointer-events-none absolute top-[56px] z-10 -translate-x-1/2"
         style={{ left: `${Math.min(97, Math.max(3, nowPct))}%` }}
       >
         {clockLabel(now, timeZone)}
-      </span>
+      </TimelineNowPill>
     </div>
   );
 };

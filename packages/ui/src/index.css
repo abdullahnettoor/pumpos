@@ -77,6 +77,15 @@
   --state-info-bg: #e8f0f7;
   --state-info-fg: #2e5e88;
 
+  /* Text on solid tone fills (#518): one per fill, each >= 4.5:1 against it in
+   * both themes (theme/tokens.test.ts). Danger covers --state-danger-fg and
+   * --brand-danger; neutral covers --text-strong (bg-ink-strong). */
+  --text-on-danger: #ffffff;
+  --text-on-warning: #ffffff;
+  --text-on-success: #ffffff;
+  --text-on-info: #ffffff;
+  --text-on-neutral: #ffffff;
+
   /* Border Radiuses */
   --radius-card: 10px;
   --radius-input: 8px;
@@ -131,6 +140,13 @@
 
   --state-info-bg: #12263a;
   --state-info-fg: #6cb6ff;
+
+  /* Text on solid tone fills: the light fills turn bright here, so near-black. */
+  --text-on-danger: #06110c;
+  --text-on-warning: #06110c;
+  --text-on-success: #06110c;
+  --text-on-info: #06110c;
+  --text-on-neutral: #06110c;
 }
 
 /* Base Resets */
@@ -1199,13 +1215,18 @@ select:disabled {
   border: 1px solid var(--border-soft);
 }
 
-.close-wizard-variance[data-state='match'] {
+.close-wizard-variance[data-state='balanced'] {
   color: var(--state-success-fg);
   background-color: var(--state-success-bg);
 }
 
-.close-wizard-variance[data-state='surplus'],
-.close-wizard-variance[data-state='shortage'] {
+/* A surplus is amber, a shortage red (#518). */
+.close-wizard-variance[data-state='surplus'] {
+  color: var(--state-warning-fg);
+  background-color: var(--state-warning-bg);
+}
+
+.close-wizard-variance[data-state='short'] {
   color: var(--brand-danger);
   background-color: var(--state-danger-bg);
 }

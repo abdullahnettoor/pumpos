@@ -13,6 +13,7 @@ import { resolveDecantationSettings } from '@pump/shared';
 import { useDecantationNames } from '../../lib/decantation/names.js';
 import { BottomSheet, DetailPage, StateCard, StatusBadge } from '../../ui/index.js';
 import { STATUS_BADGE } from './DecantationsListPage.js';
+import { StockVariance } from '../../components/decantation/FinishSteps.js';
 
 /**
  * Read-only view of a recorded visit (a finished one is sealed), with the one
@@ -120,9 +121,7 @@ export const DecantationDetailPage: React.FC<{ station: Station; decantationId: 
               </span>
               {l ? (
                 l.varianceQty != null ? (
-                  <StatusBadge tone="good" num>
-                    {formatQuantity(l.varianceQty, 'L', { plus: true })}
-                  </StatusBadge>
+                  <StockVariance variance={l.varianceQty} />
                 ) : null
               ) : (
                 <button

@@ -23,6 +23,7 @@ import {
   useRecordHandoverMutation,
 } from '../../query/handoverMutation.js';
 import { inr } from '../../utils/format.js';
+import { formatVariance, VARIANCE_TONE_TEXT } from '../../utils/variance.js';
 import { compareNatural } from '@pump/shared';
 import { useRunTask } from '../../utils/runTask.js';
 
@@ -621,6 +622,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   const cashDropsNum = Number(formValues.cashDrops) || 0;
   const variance =
     Math.round((totalDeclared - expectedTotal - openingFloatNum + cashDropsNum) * 100) / 100 || 0;
+  const handoverVariance = formatVariance(acceptedResult?.varianceAmount ?? variance, 'cash');
 
   // Volume sanity: credit litres billed for a fuel must not exceed the litres
   // metered (and not testing) for that fuel at this DU. Reactive to the readings.
@@ -2001,23 +2003,14 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                 borderTop: '1px solid var(--border-soft)',
                 paddingTop: '8px',
                 marginTop: '4px',
-                color:
-                  (acceptedResult?.varianceAmount ?? variance) === 0
-                    ? 'var(--state-success-fg)'
-                    : (acceptedResult?.varianceAmount ?? variance) > 0
-                      ? 'var(--brand-warning)'
-                      : 'var(--brand-danger)',
+                color: VARIANCE_TONE_TEXT[handoverVariance.tone],
               }}
             >
               <span>Handover Variance:</span>
               <span style={{ fontFamily: 'var(--font-mono)' }}>
-                {(acceptedResult?.varianceAmount ?? variance) > 0 ? '+' : ''}
-                {inr(acceptedResult?.varianceAmount ?? variance)}
-                {(acceptedResult?.varianceAmount ?? variance) === 0
-                  ? ' (Balanced)'
-                  : (acceptedResult?.varianceAmount ?? variance) > 0
-                    ? ' (Surplus)'
-                    : ' (Shortage)'}
+                {handoverVariance.text}
+                {handoverVariance.state !== 'balanced' &&
+                  ` ${handoverVariance.label.toLowerCase()}`}
               </span>
             </div>
           </div>

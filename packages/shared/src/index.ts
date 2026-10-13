@@ -35,6 +35,7 @@ export * from './utils/decantation-settings.js';
 export * from './utils/decantation-flags.js';
 export * from './utils/density-form.js';
 export * from './utils/handover-status.js';
+export * from './utils/status-vocabulary.js';
 export * from './utils/shift-timeline.js';
 export * from './utils/reachable-stations.js';
 export * from './utils/event-pins.js';

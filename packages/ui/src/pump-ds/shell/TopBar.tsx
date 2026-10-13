@@ -156,7 +156,12 @@ function useContainerWidth<T extends HTMLElement>(): [React.RefObject<T>, number
   return [ref, width];
 }
 
-const IconBtn = forwardRef<
+/**
+ * The top-bar icon button (notifications, window chrome): a ghost square with
+ * an optional count badge, solid danger with its paired `text-on-danger`.
+ * Exported for the Design System showcase.
+ */
+export const IconBtn = forwardRef<
   HTMLButtonElement,
   // `aria-label` is required, not optional: this control never renders text, so
   // without one it reaches a screen reader as an anonymous "button".
@@ -174,7 +179,7 @@ const IconBtn = forwardRef<
     >
       {children}
       {badge != null && badge > 0 && (
-        <span className="absolute right-1 top-1 inline-flex min-w-[14px] items-center justify-center rounded-full bg-danger-fg px-1 text-[9px] font-bold leading-[14px] text-on-brand">
+        <span className="absolute right-1 top-1 inline-flex min-w-[14px] items-center justify-center rounded-full bg-danger-fg px-1 text-[9px] font-bold leading-[14px] text-on-danger">
           {badge > 9 ? '9+' : badge}
         </span>
       )}
@@ -239,7 +244,7 @@ const WindowControls: React.FC<{
         type="button"
         aria-label="Close window"
         onClick={() => void controls.close()}
-        className={cn(btn, 'hover:bg-danger-fg hover:text-on-brand')}
+        className={cn(btn, 'hover:bg-danger-fg hover:text-on-danger')}
       >
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
           <path d="M0 0l10 10M10 0L0 10" stroke="currentColor" strokeWidth="1" />

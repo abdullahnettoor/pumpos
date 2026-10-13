@@ -66,7 +66,7 @@ describe('barWidths', () => {
 
 describe('DAY_STATUS', () => {
   it('has one presentation per status, and only Report missing does not open', () => {
-    expect(DAY_STATUS.LIVE).toMatchObject({ label: 'Live', tone: 'good', action: 'live' });
+    expect(DAY_STATUS.LIVE).toMatchObject({ label: 'Open', tone: 'good', action: 'live' });
     expect(DAY_STATUS.DRAFT).toMatchObject({ label: 'Draft', tone: 'warn', action: 'report' });
     expect(DAY_STATUS.SEALED).toMatchObject({ label: 'Sealed', tone: 'muted', action: 'report' });
     expect(DAY_STATUS.REPORT_MISSING).toMatchObject({
@@ -102,6 +102,9 @@ describe('dayView', () => {
       noteTone: 'warn',
     });
   });
+  it('reads a variance under half a paisa as balanced: the one balanced rule (#518)', () => {
+    expect(dayView(item({ cashVariance: 0.004 }), 'home').note).toBe('Cash balanced');
+  });
   it('shows a dash for litres when no Shift has closed', () => {
     expect(dayView(item({ status: 'DRAFT', shiftCount: 0, volume: 0 }), 'home').volume).toBe('—');
   });
@@ -114,7 +117,7 @@ describe('dayView', () => {
       bar: 'hatched',
       action: 'live',
       liveTab: 'home',
-      label: 'Thu 8 Oct, Live, In progress, See Home',
+      label: 'Thu 8 Oct, Open, In progress, See Home',
     });
     expect(v.label).not.toContain('21');
   });
