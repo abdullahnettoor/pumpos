@@ -71,9 +71,11 @@ const isUnrequested = (q: SectionQuery) => q.isPending && q.fetchStatus === 'idl
  * loading, error and empty states. A failing request affects only its section:
  * there is no page-level spinner or error.
  *
- * - any query refused (403 / access policy) → the refusal message, no Retry
- * - any query errored → "Couldn't load <title> · Retry" (Retry refetches only
- *   the failed queries). Never the empty state: a failed query is not "empty".
+ * - every failed query refused (403 / access policy) → the refusal message,
+ *   no Retry
+ * - any other failure, alone or mixed with refusals → "Couldn't load <title>
+ *   · Retry" (Retry refetches only the failed queries that can be retried, not
+ *   the refused ones). Never the empty state: a failed query is not "empty".
  * - fetching or paused offline → a skeleton sized like the body
  * - not yet requested → nothing (the skeleton when `enabled` is passed `true`)
  * - all succeeded and `isEmpty` → `empty`
@@ -103,8 +105,10 @@ export const DataSection: React.FC<DataSectionProps> = ({
     return null;
   }
 
+  // Refused only when nothing else failed: a refusal message beside a Retry
+  // would read as "retrying may grant access".
   const state: DataSectionState =
-    refused.length > 0
+    failed.length > 0 && refused.length === failed.length
       ? 'refused'
       : failed.length > 0
         ? 'error'
@@ -120,7 +124,7 @@ export const DataSection: React.FC<DataSectionProps> = ({
 
   const body =
     state === 'refused' || state === 'error' ? (
-      <ErrorRow label={label} failed={failed} refused={refused} />
+      <ErrorRow label={label} failed={failed} refused={refused} allRefused={state === 'refused'} />
     ) : state === 'loading' ? (
       <Skeleton aria-label={`Loading ${label}`} height={placeholderHeight} />
     ) : state === 'empty' ? (
@@ -172,10 +176,11 @@ const ErrorRow: React.FC<{
   label: string;
   failed: SectionQuery[];
   refused: SectionQuery[];
-}> = ({ label, failed, refused }) => {
+  allRefused: boolean;
+}> = ({ label, failed, refused, allRefused }) => {
   // A refusal can't be retried away; only genuine faults get Retry.
   const retryable = failed.filter((q) => q.refetch && !refused.includes(q));
-  const text = refused.length > 0 ? refusalMessage(refused[0], label) : `Couldn't load ${label}`;
+  const text = allRefused ? refusalMessage(refused[0], label) : `Couldn't load ${label}`;
   return (
     <div className="flex items-center gap-3 text-[12.5px] text-ink-muted" role="alert">
       <span>

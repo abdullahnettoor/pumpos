@@ -41,9 +41,11 @@ a time — never in place.
    - **refused** (403 / `FORBIDDEN`, or `isAccessPolicyError`:
      `CAPABILITY_NOT_ENTITLED`, `LIMIT_REACHED`, `SUBSCRIPTION_RESTRICTED`,
      `ORGANIZATION_SUSPENDED`) shows the server's refusal message and **no
-     Retry** — retrying can't change the answer.
-   - **failed** shows "Couldn't load <title> · Retry" (Retry refetches only
-     the failed queries).
+     Retry** — retrying can't change the answer. Only when every failure is a
+     refusal.
+   - **failed** (any other failure, even mixed with refusals) shows "Couldn't
+     load <title> · Retry" (Retry refetches only the failed queries that can be
+     retried, never the refused ones).
    - **empty** only after every query succeeded with nothing to show,
      otherwise the content.
 

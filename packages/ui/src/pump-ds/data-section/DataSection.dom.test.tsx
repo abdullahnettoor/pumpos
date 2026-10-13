@@ -303,7 +303,7 @@ describe('DataSection', () => {
       expect(srv.refetch).toHaveBeenCalledTimes(1);
     });
 
-    it('mixed: the refusal message, Retry only for the genuine fault', () => {
+    it('mixed: the generic error, Retry only for the genuine fault', () => {
       const refused = q({ isError: true, error: refusal('FORBIDDEN', 403, 'Managers only.') });
       const fault = q({ isError: true, error: Object.assign(new Error('x'), { status: 502 }) });
       render(
@@ -311,10 +311,26 @@ describe('DataSection', () => {
           <span>body</span>
         </DataSection>,
       );
-      expect(screen.getByRole('alert').textContent).toMatch(/Managers only\./);
+      // Never the refusal beside a Retry: it would read as "retrying may grant access".
+      expect(section().getAttribute('data-state')).toBe('error');
+      expect(screen.getByRole('alert').textContent).toBe("Couldn't load sales ·Retry");
+      expect(screen.queryByText(/Managers only/)).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
       expect(fault.refetch).toHaveBeenCalledTimes(1);
       expect(refused.refetch).not.toHaveBeenCalled();
+    });
+
+    it('several refusals and nothing else: the refusal message, no Retry', () => {
+      const a = q({ isError: true, error: refusal('FORBIDDEN', 403, 'Managers only.') });
+      const b = q({ isError: true, error: refusal('CAPABILITY_NOT_ENTITLED', 403, 'Upgrade.') });
+      render(
+        <DataSection title="Sales" query={[a, b]} placeholderHeight={80}>
+          <span>body</span>
+        </DataSection>,
+      );
+      expect(section().getAttribute('data-state')).toBe('refused');
+      expect(screen.getByRole('alert').textContent).toBe('Managers only.');
+      expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
     });
   });
 });
