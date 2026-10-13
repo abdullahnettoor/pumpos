@@ -1,5 +1,5 @@
 import React, { type ReactNode } from 'react';
-import type { TankLevel, TankTone } from '@pump/shared';
+import { TANK_TONE_LABEL, type TankLevel, type TankTone } from '@pump/shared';
 import { cn } from '../lib/cn.js';
 import { formatQty } from '../../utils/format.js';
 import { stockOfCapacity } from './stockOfCapacity.js';
@@ -44,9 +44,6 @@ const TONE_FILL: Record<TankTone, string> = {
   unknown: 'bg-ink-faint',
 };
 
-/** Screen-reader word for a tone the colour alone carries. */
-const TONE_WORD: Partial<Record<TankTone, string>> = { critical: 'Critical', low: 'Low' };
-
 /** Days of cover under which the figure turns red. */
 const SHORT_COVER_DAYS = 1.5;
 
@@ -84,7 +81,7 @@ export const TankGauge: React.FC<TankGaugeProps> = ({
       {level.pct === null ? '—' : `${level.pct}%`}
     </span>
   );
-  const word = TONE_WORD[level.tone];
+  const word = TANK_TONE_LABEL[level.tone];
   const stock = (
     <span className="font-mono text-[12px] text-ink-muted">
       {stockOfCapacity(level.stock, level.capacity, unit)}

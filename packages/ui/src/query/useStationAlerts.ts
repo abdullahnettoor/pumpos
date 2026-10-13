@@ -11,6 +11,7 @@ import {
   RECEIVABLES_AGING_EDGES,
   daysOfCoverLeft,
   deriveDuHandoverStatuses,
+  TANK_TONE_ALERT,
   type DensityTodaySummary,
   type HandoverShiftLike,
   type TankLevelSettings,
@@ -194,10 +195,10 @@ export function deriveStationAlerts(
       category: 'stock',
       title:
         level === 'critical'
-          ? `${t.name} critically low`
+          ? `${t.name} ${TANK_TONE_ALERT.critical}`
           : level === 'over'
             ? `${t.name} book stock over capacity`
-            : `${t.name} running low`,
+            : `${t.name} ${TANK_TONE_ALERT.low}`,
       meta:
         level === 'over'
           ? `${t.productName} · ${pct.toFixed(0)}% · ${formatQty(vol, 0)} L. ${OVER_CAPACITY_EXPLANATION}`

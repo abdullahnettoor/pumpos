@@ -646,27 +646,23 @@ const DashboardBlocks: React.FC = () => (
           }
         >
           <div className="space-y-3">
-            <MeterRow
-              label="Tank 1"
-              sublabel="XP-95"
-              value={7200}
-              max={9000}
-              valueLabel="7,200 / 9,000 L"
-            />
-            <MeterRow
-              label="Tank 2"
-              sublabel="HSD"
-              value={320}
-              max={9000}
-              valueLabel="320 / 9,000 L"
-            />
-            <MeterRow
-              label="Tank 3"
-              sublabel="MS-9"
-              value={1150}
-              max={9000}
-              valueLabel="1,150 / 9,000 L"
-            />
+            {(
+              [
+                ['Tank 1 · XP-95', 7200],
+                ['Tank 2 · HSD', 320],
+                ['Tank 3 · MS', 1150],
+              ] as const
+            ).map(([name, volume]) => (
+              <TankGauge
+                key={name}
+                name={name}
+                variant="bar"
+                level={deriveTankLevel(
+                  { capacity: 9000, currentVolume: volume },
+                  DEFAULT_TANK_LEVEL_SETTINGS,
+                )}
+              />
+            ))}
           </div>
         </Panel>
         <Panel

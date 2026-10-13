@@ -1,6 +1,6 @@
 import React from 'react';
 import { Chip } from '../../pump-ds/index.js';
-import type { TankLevelSettings } from '@pump/shared';
+import { TANK_TONE_LABEL, type TankLevelSettings } from '@pump/shared';
 import { classifyTank, tankPct } from '../../utils/stock.js';
 
 export interface TankStatusChipsProps {
@@ -27,13 +27,11 @@ export const TankStatusChips: React.FC<TankStatusChipsProps> = ({ tank, tankLeve
           ? 'info'
           : 'success';
   const label =
-    level === 'critical'
-      ? 'Critical'
-      : level === 'low'
-        ? 'Low'
-        : level === 'over'
-          ? 'Over capacity'
-          : 'OK';
+    level === 'critical' || level === 'low'
+      ? TANK_TONE_LABEL[level]
+      : level === 'over'
+        ? 'Over capacity'
+        : 'OK';
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '4px' }}>

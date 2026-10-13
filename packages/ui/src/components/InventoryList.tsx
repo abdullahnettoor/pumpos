@@ -36,7 +36,7 @@ import {
   tankPct,
   classifyTank,
   OVER_CAPACITY_EXPLANATION,
-  type TankLevel,
+  type StockHealth,
 } from '../utils/stock.js';
 import { TankStatusChips } from './inventory/TankStatusChips.js';
 import {
@@ -50,7 +50,8 @@ import {
 const transactionService = new CloudTransactionService();
 
 /** Meter colour per stock level: the station's tank levels, not MeterRow's auto tone. */
-const METER_TONE: Record<TankLevel, 'danger' | 'warning' | 'brand' | 'info'> = {
+// TODO(#536): adopt TankGauge tones
+const METER_TONE: Record<StockHealth, 'danger' | 'warning' | 'brand' | 'info'> = {
   critical: 'danger',
   low: 'warning',
   ok: 'brand',

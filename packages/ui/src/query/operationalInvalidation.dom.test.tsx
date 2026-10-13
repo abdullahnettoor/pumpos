@@ -33,6 +33,10 @@ function invalidatedKeysAfterOperationalWrite(): string[] {
 }
 
 describe('useInvalidateOperational', () => {
+  it('refreshes the stations cache, which carries the tank levels (#520)', () => {
+    expect(invalidatedKeysAfterOperationalWrite()).toContain(queryKeys.stations()[0]);
+  });
+
   it('refreshes the Attendant Handover Report, which reads closed-shift handovers', () => {
     // Closing or correcting a shift changes this report; without the
     // invalidation an operator keeps seeing the pre-close variance.

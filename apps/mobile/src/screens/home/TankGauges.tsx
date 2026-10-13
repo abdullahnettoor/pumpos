@@ -1,4 +1,5 @@
 import React from 'react';
+import { TANK_TONE_LABEL } from '@pump/shared';
 import type { TankGauge, TankGaugeLevel } from '../../lib/home/figures.js';
 
 const FILL: Record<TankGaugeLevel, string> = {
@@ -13,7 +14,6 @@ const TEXT: Record<TankGaugeLevel, string> = {
   ok: 'text-good',
   unknown: 'text-text-muted',
 };
-const STATE: Partial<Record<TankGaugeLevel, string>> = { critical: 'Low', low: 'Getting low' };
 
 /** One tank takes the full width, two split it, three or more fill three columns. */
 const GAUGE_COLUMNS: Record<1 | 2 | 3, string> = {
@@ -25,6 +25,9 @@ const gaugeColumns = (count: number): string =>
   GAUGE_COLUMNS[Math.min(Math.max(count, 1), 3) as 1 | 2 | 3];
 
 /**
+ * Mobile keeps its own tube (#520), but the tone (`t.level`) and its word
+ * come only from the shared tank model; these maps are just its palette.
+ *
  * A tube gauge per tank: fill, percent, volume and days of cover (when the
  * tank has sales history); coloured by the station's tank levels (#520).
  */
@@ -49,7 +52,9 @@ export const TankGauges: React.FC<{ tanks: readonly TankGauge[] }> = ({ tanks })
           <p className="truncate text-xs font-bold text-text-high">{t.title}</p>
           <p className={`num mt-1.5 text-lg font-semibold ${TEXT[t.level]}`}>
             {t.pct === null ? '—' : `${t.pct}%`}
-            {STATE[t.level] && <span className="sr-only"> {STATE[t.level]}</span>}
+            {TANK_TONE_LABEL[t.level] && (
+              <span className="sr-only"> {TANK_TONE_LABEL[t.level]}</span>
+            )}
           </p>
           <p className="mt-0.5 text-[10px] leading-snug text-text-muted">
             <span className="num">{t.volume}</span>

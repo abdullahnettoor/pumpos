@@ -7,7 +7,7 @@ import { tankTone, type TankLevelSettings } from '@pump/shared';
  * a tank never reads "low" on one screen and "ok" on another. Percentages are
  * of tank capacity.
  */
-export type TankLevel = 'critical' | 'low' | 'ok' | 'over';
+export type StockHealth = 'critical' | 'low' | 'ok' | 'over';
 
 export const OVER_CAPACITY_EXPLANATION =
   'Open-shift dispensed fuel may not be deducted from book stock yet. It reconciles when the shift closes.';
@@ -20,7 +20,7 @@ export function tankPct(volume: number, capacity: number): number {
 }
 
 /** Classify a fill percentage against the station's tank levels. */
-export function classifyTank(pct: number, settings: TankLevelSettings): TankLevel {
+export function classifyTank(pct: number, settings: TankLevelSettings): StockHealth {
   if (pct > 100) return 'over';
   const tone = tankTone(pct, settings);
   return tone === 'unknown' ? 'ok' : tone;
