@@ -439,7 +439,7 @@ describe('TimelineCard', () => {
       vi.setSystemTime(new Date(iso));
       hooks.useShiftTemplates.mockReturnValue(ok(TPL));
     };
-    it('05:30: running carry-over bar, no 14 Oct shift, first template as ghost', () => {
+    it('05:30: running carry-over bar, no 14 Oct shift, no ghost while it runs', () => {
       at('2026-10-14T00:00:00Z');
       hooks.useDashboardSummary.mockReturnValue(
         ok({ today: { shifts: [] }, activeShift: carryShift, lastShift: null }),
@@ -450,7 +450,8 @@ describe('TimelineCard', () => {
         'Shift 3 · from 13 Oct · live',
       );
       expect(screen.getByTestId('timeline-carry-marker')).toBeTruthy();
-      expect(screen.getByTestId('timeline-bar-ghost').textContent).toContain('Shift 1');
+      // One open shift per station: today's first window can't be opened yet.
+      expect(screen.queryByTestId('timeline-bar-ghost')).toBeNull();
     });
     it('07:00: carry-over closed 06:05, Shift 1 opened 06:10', () => {
       at('2026-10-14T01:30:00Z');

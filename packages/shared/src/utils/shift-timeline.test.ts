@@ -223,11 +223,12 @@ describe('carry-over shift (opened in an earlier Business Day)', () => {
     ...over,
   });
 
-  it('05:30 on the 14th: visible, today first template ghosted', () => {
+  it('05:30 on the 14th: visible, no ghost while the carry-over still runs', () => {
     const r = dashboardTimeline(input('2026-10-14T00:00:00Z')); // 05:30 IST
     expect(r.businessDate).toBe('2026-10-14');
     expect(r.visible).toBe(true);
-    expect(r.nextWindow?.templateId).toBe('t1');
+    // Only one shift is open per station: nothing can be opened yet.
+    expect(r.nextWindow).toBeNull();
     expect(nextShiftToOpen(input('2026-10-14T00:00:00Z'))).toBeNull();
     expect(isDayShiftsDone(input('2026-10-14T00:00:00Z'))).toBe(false);
   });
@@ -276,6 +277,6 @@ describe('carry-over shift (opened in an earlier Business Day)', () => {
       dayStartsAt: '00:00',
     });
     expect(r).toMatchObject({ visible: true, businessDate: '2026-10-14' });
-    expect(r.nextWindow?.templateId).toBe('a');
+    expect(r.nextWindow).toBeNull(); // the carry-over still runs: nothing to open yet
   });
 });

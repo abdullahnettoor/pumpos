@@ -115,7 +115,10 @@ export function dashboardTimeline(input: DashboardTimelineInput): DashboardTimel
 
   const carry = input.carryOver ?? null;
   if (shifts.length === 0 && !carry) return hide('before-first-shift');
-  if (shifts.some((s) => s.closedAt == null)) {
+  // A shift is running (today's, or a carry-over from an earlier Business
+  // Day): only one shift is open per station, so nothing else can be opened
+  // yet and no next window is drawn.
+  if (shifts.some((s) => s.closedAt == null) || (carry && carry.closedAt == null)) {
     return { ...base, visible: true, reason: null, nextWindow: null };
   }
 
@@ -128,12 +131,7 @@ export function dashboardTimeline(input: DashboardTimelineInput): DashboardTimel
     .sort((a, b) => a.startAt - b.startAt);
 
   const nextWindow = remaining[0] ?? null;
-  if (!nextWindow) {
-    // A running carry-over keeps the strip visible on its own.
-    return carry && carry.closedAt == null
-      ? { ...base, visible: true, reason: null, nextWindow: null }
-      : hide('day-complete');
-  }
+  if (!nextWindow) return hide('day-complete');
   return { ...base, visible: true, reason: null, nextWindow };
 }
 
