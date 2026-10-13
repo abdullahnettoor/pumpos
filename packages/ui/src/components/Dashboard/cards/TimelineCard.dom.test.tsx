@@ -97,6 +97,18 @@ describe('TimelineCard', () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it('stays hidden when the activity feed failed but the strip is known hidden', () => {
+    hooks.useDashboardSummary.mockReturnValue(ok({ today: { shifts: [] } }));
+    hooks.useDayActivity.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      refetch: vi.fn(),
+    });
+    const { container } = mount();
+    expect(container.firstChild).toBeNull();
+  });
+
   it('is hidden once the day is complete', () => {
     hooks.useDashboardSummary.mockReturnValue(
       ok({
@@ -376,6 +388,15 @@ describe('TimelineCard', () => {
     mount();
     expect(screen.getByTestId('timeline-summary')).toBeTruthy();
     expect(screen.getByRole('button', { name: /show timeline/i })).toBeTruthy();
+  });
+
+  it('collapsed line says when the next shift is scheduled', () => {
+    hooks.useDashboardSummary.mockReturnValue(
+      ok({ today: { shifts: [shift({ closedAt: '2026-10-12T08:30:00Z' })] } }),
+    );
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: /collapse/i }));
+    expect(screen.getByTestId('timeline-summary').textContent).toContain('Shift 2 scheduled 2 pm');
   });
 
   it('shows a retry when the activity feed fails', () => {

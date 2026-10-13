@@ -116,9 +116,9 @@ export const TimelineCard: React.FC = () => {
   const pins = useMemo(() => groupEventPins(events), [events]);
 
   if (!enabled) return null;
-  const failed = status.isError || templates.isError || activity.isError;
-  // Hidden state is only knowable once the shifts are in.
-  if (!failed && model && !model.timeline.visible) return null;
+  // Visibility depends on the shifts and templates only, so a hidden strip
+  // stays hidden even when the activity feed failed.
+  if (model && !model.timeline.visible) return null;
 
   const open = (t: PinTarget) => onNavigate(t.path, t.intent);
   const bars = model ? buildBars(model.inputs, model.timeline, now, timeZone) : [];
@@ -176,6 +176,12 @@ export const TimelineCard: React.FC = () => {
                     {minutesLate(live) != null && ` · opened ${minutesLate(live)}m late`}
                   </span>
                 ))}
+              {model.timeline.nextWindow && (
+                <span>
+                  Shift {model.inputs.length + 1} scheduled{' '}
+                  {clockLabel(model.timeline.nextWindow.startAt, timeZone)}
+                </span>
+              )}
               <span>
                 {events.length} event{events.length === 1 ? '' : 's'}
                 {alerts > 0 && (
