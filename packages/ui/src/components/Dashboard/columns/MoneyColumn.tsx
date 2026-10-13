@@ -35,7 +35,7 @@ export const MoneyColumn: React.FC = () => {
             title="Money"
             subtitle="office records by entry date"
             action={{
-              label: 'Cash Book',
+              label: 'Daily cash book',
               onClick: () => onNavigate(ROUTES.accounts, { openAccountsTab: 'cash-book' }),
             }}
           />

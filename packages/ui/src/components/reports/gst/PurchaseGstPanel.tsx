@@ -4,21 +4,31 @@ import { LoadingSpinner } from '../../LoadingSpinner.js';
 import { inr } from '../../../utils/format.js';
 import { Button, DateText, Icon } from '../../../pump-ds/index.js';
 import { resolveEntryDate } from '@pump/shared';
+import type { DateRange } from '../../primitives/DateRangeField.js';
 
 /**
  * GST → Purchases (ITC): input credit on GST purchase lines. Moved unchanged
  * from the old Purchases "GST / ITC" tab into the one GST report (#540).
  */
-export const PurchaseGstPanel: React.FC<{ selectedStation: any | null }> = ({
-  selectedStation,
-}) => {
+export const PurchaseGstPanel: React.FC<{
+  selectedStation: any | null;
+  /** Controlled period (shared across the GST views). Omitted = own state. */
+  range?: DateRange;
+  onRangeChange?: (range: DateRange) => void;
+}> = ({ selectedStation, range, onRangeChange }) => {
   const stationId = selectedStation?.id ?? null;
   const stationSettings = selectedStation?.settings || {};
   // GST / ITC register
   // Station-timezone calendar dates, never UTC (#288).
   const gstToday = resolveEntryDate({ timeZone: stationSettings.timezone });
-  const [gstFrom, setGstFrom] = useState(`${gstToday.slice(0, 8)}01`);
-  const [gstTo, setGstTo] = useState(gstToday);
+  const [ownRange, setOwnRange] = useState<DateRange>(() => ({
+    from: `${gstToday.slice(0, 8)}01`,
+    to: gstToday,
+  }));
+  const { from: gstFrom, to: gstTo } = range ?? ownRange;
+  const setRange = onRangeChange ?? setOwnRange;
+  const setGstFrom = (from: string) => setRange({ from, to: gstTo });
+  const setGstTo = (to: string) => setRange({ from: gstFrom, to });
   // Mounted only while this GST view is showing, so the query runs only then.
   const gstQ = usePurchaseGstRegister({ from: gstFrom, to: gstTo }, stationId ?? '', {
     enabled: !!stationId,

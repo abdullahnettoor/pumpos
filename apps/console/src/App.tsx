@@ -304,12 +304,17 @@ export const App: React.FC = () => {
   const navItems = navAssumesReady
     ? [...NAV_PAGES]
     : [
-        { label: 'Dashboard', path: '/dashboard' },
-        { label: 'Organization', path: '/organization', roles: ['Owner', 'Manager'] },
+        { label: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
+        {
+          label: 'Organization',
+          path: '/organization',
+          icon: 'organization',
+          roles: ['Owner', 'Manager'],
+        },
       ];
 
   const navItemsWithDev = isLocalDev
-    ? [...navItems, { label: 'Design System', path: '/design-system' }]
+    ? [...navItems, { label: 'Design System', path: '/design-system', icon: 'design-system' }]
     : navItems;
 
   const renderContent = () => {

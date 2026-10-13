@@ -31,11 +31,11 @@ export interface ReportTemplatesPanelProps {
 }
 
 /**
- * Reports → Templates (#332): one card per printed report with a live
+ * Station → Report templates (#332, moved from Reports in #540): one card per printed report with a live
  * thumbnail of its layout, and a Customize drawer to change it. Paper size and
  * the letterhead logo apply to every report and save as soon as they change.
  * The letterhead content itself (name, address, GSTIN, logo) is edited in
- * Station Overview → Business & Branding.
+ * Station → Branding.
  */
 export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({ selectedStation }) => {
   const qc = useQueryClient();
@@ -105,7 +105,7 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({ sele
           onChange={(e) => savePage({ showLogo: e.target.checked })}
         />
         <span className="text-[12px] text-ink-faint">
-          Letterhead details are edited in Station Overview → Business &amp; Branding.
+          Letterhead details are edited in Station → Branding.
         </span>
       </div>
 

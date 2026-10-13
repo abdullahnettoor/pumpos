@@ -1,4 +1,4 @@
-import { REPORTS_ROLES } from '@pump/shared';
+import { REPORTS_ROLES, type Role } from '@pump/shared';
 import type { IconName } from '../pump-ds/icon/registry.js';
 import { CONCEPT_ICON } from '../pump-ds/icon/concepts.js';
 
@@ -42,7 +42,7 @@ export interface NavPage {
   path: RoutePath;
   icon: IconName;
   /** Roles that see the page. Omitted = every role. */
-  roles?: string[];
+  roles?: Role[];
 }
 
 /**

@@ -67,73 +67,11 @@ export interface AppShellProps {
 }
 
 /**
- * Map navigation item label/path to an IconName from the canonical registry.
+ * A nav item's icon. Pages carry theirs from `NAV_PAGES` (CONCEPT_ICON), and
+ * the few shell-only items (onboarding, design system) name one explicitly.
  */
-function resolveNavIcon(item: NavItem): IconName {
-  if (item.icon && item.icon in ICON_REGISTRY) {
-    return item.icon as IconName;
-  }
-  const normalized = item.label.trim().toLowerCase();
-  switch (normalized) {
-    case 'dashboard':
-      return 'dashboard';
-    case 'shifts':
-      return 'shifts';
-    case 'station':
-    case 'station overview':
-      return 'station';
-    case 'products catalog':
-      return 'products';
-    case 'storage tanks':
-      return 'tank';
-    case 'dispenser units':
-      return 'dispenser';
-    case 'nozzles mapping':
-      return 'fuel';
-    case 'shift templates':
-      return 'calendar';
-    case 'team roles':
-      return 'users';
-    case 'expenses':
-      return 'expenses';
-    case 'income':
-      return 'income';
-    case 'suppliers':
-      return 'supplier';
-    case 'purchases':
-      return 'purchases';
-    case 'customers':
-      return 'customers';
-    case 'inventory':
-      return 'inventory';
-    case 'reports':
-      return 'reports';
-    case 'fuel pricing':
-    case 'pricing':
-      return 'pricing';
-    case 'organization':
-      return 'organization';
-    case 'accounts':
-      return 'accounts';
-    case 'onboarding setup':
-      return 'onboarding';
-    case 'design system':
-      return 'design-system';
-    case 'audit logs':
-      return 'file-text';
-    case 'settings':
-      return 'settings';
-    case 'profile':
-      return 'user';
-    case 'terminals':
-    case 'pos terminals':
-      return 'terminal';
-    default:
-      if (normalized in ICON_REGISTRY) {
-        return normalized as IconName;
-      }
-      return 'fuel';
-  }
+function navIcon(item: NavItem): IconName {
+  return item.icon && item.icon in ICON_REGISTRY ? (item.icon as IconName) : 'fuel';
 }
 
 /** Below this app (shell) width the sidebar becomes a 60px icon rail on its own. */
@@ -402,7 +340,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                             isActive ? 'text-info-fg' : 'text-ink-muted',
                           )}
                         >
-                          <Icon name={resolveNavIcon(item)} size="md" />
+                          <Icon name={navIcon(item)} size="md" />
                         </span>
                         {!collapsed && <span className="truncate">{item.label}</span>}
                         {renderBadge(item.path, badges, collapsed)}

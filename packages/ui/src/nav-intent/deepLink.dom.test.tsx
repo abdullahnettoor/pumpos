@@ -112,7 +112,7 @@ const ShiftsScreen: React.FC = () => {
 };
 
 /**
- * Mirrors AccountsPanel (#540): the Dashboard "Cash Book ›" link and Office
+ * Mirrors AccountsPanel (#540): the Dashboard "Daily cash book ›" link and Office
  * Record pins now land on Accounts → Daily cash book (it moved from Reports).
  */
 const AccountsScreen: React.FC = () => {

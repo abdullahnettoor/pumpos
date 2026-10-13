@@ -320,10 +320,17 @@ const App: React.FC = () => {
   // Dynamic Navigation items based on onboarding status
   const navItems = navAssumesReady
     ? [...NAV_PAGES]
-    : [{ label: 'Onboarding Setup', path: '/onboarding', roles: ['Owner', 'Manager'] }];
+    : [
+        {
+          label: 'Onboarding Setup',
+          path: '/onboarding',
+          icon: 'onboarding',
+          roles: ['Owner', 'Manager'],
+        },
+      ];
 
   const navItemsWithDev = showDeveloperSurfaces
-    ? [...navItems, { label: 'Design System', path: '/design-system' }]
+    ? [...navItems, { label: 'Design System', path: '/design-system', icon: 'design-system' }]
     : navItems;
 
   const renderContent = () => {

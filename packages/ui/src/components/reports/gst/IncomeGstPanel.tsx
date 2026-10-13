@@ -18,7 +18,12 @@ import {
  * GST → Income: output GST collected on other income. Moved unchanged from the
  * old Income "GST on Income" tab into the one GST report (#540).
  */
-export const IncomeGstPanel: React.FC<{ selectedStation: any | null }> = ({ selectedStation }) => {
+export const IncomeGstPanel: React.FC<{
+  selectedStation: any | null;
+  /** Controlled period (shared across the GST views). Omitted = own state. */
+  range?: DateRange;
+  onRangeChange?: (range: DateRange) => void;
+}> = ({ selectedStation, range, onRangeChange }) => {
   const stationId = selectedStation?.id ?? null;
   const s = selectedStation?.settings || {};
   // Office records are dated by entry date: the plain station calendar date (ADR 0005).
@@ -26,7 +31,9 @@ export const IncomeGstPanel: React.FC<{ selectedStation: any | null }> = ({ sele
 
   // FI4 — output GST register. Read straight from the API (not the tiered cache):
   // it is a period report driven by its own date inputs, not the ledger range.
-  const [gstRange, setGstRange] = useState<DateRange>(() => computeRange('this-month', entryClock));
+  const [ownRange, setOwnRange] = useState<DateRange>(() => computeRange('this-month', entryClock));
+  const gstRange = range ?? ownRange;
+  const setGstRange = onRangeChange ?? setOwnRange;
   // Mounted only while this GST view is showing, so the query runs only then.
   const gstQ = useIncomeGstRegister(
     { stationId, from: gstRange.from, to: gstRange.to },

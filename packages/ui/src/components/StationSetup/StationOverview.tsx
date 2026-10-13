@@ -719,7 +719,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                       >
                         <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                           Report paper size and which sections print on each report are set in{' '}
-                          <strong>Reports → Templates</strong>.
+                          <strong>Station → Report templates</strong>.
                         </span>
                       </div>
 

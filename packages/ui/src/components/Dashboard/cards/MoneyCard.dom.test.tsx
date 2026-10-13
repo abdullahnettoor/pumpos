@@ -337,7 +337,7 @@ describe('TodayInOfficeCard (Today in the office)', () => {
       'Nothing recorded yet today.',
     );
     // The Cash Book link lives once, in the Money column header.
-    expect(screen.queryByRole('button', { name: 'Cash Book ›' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Daily cash book ›' })).toBeNull();
   });
 
   it('renders latest 3 records and entry count with link to Cash Book', () => {
@@ -405,11 +405,11 @@ describe('TodayInOfficeCard (Today in the office)', () => {
     // Money outflow uses a true minus, inflow a plus.
     expect(screen.getByTestId('office-records-list').textContent).toContain('−₹4,200');
     expect(screen.getByTestId('office-records-list').textContent).not.toContain('-₹');
-    expect(screen.queryByRole('button', { name: 'Cash Book ›' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Daily cash book ›' })).toBeNull();
     expect(onNavigate).not.toHaveBeenCalled();
   });
 
-  it('the Money column header carries the single Cash Book link', () => {
+  it('the Money column header carries the single Daily cash book link', () => {
     hooks.useDailyDssrPreview.mockReturnValue(ok(null));
     hooks.useInsightsSales.mockReturnValue(ok(null));
     hooks.useDailyCashBook.mockReturnValue(ok({ accounts: [] }));
@@ -417,7 +417,7 @@ describe('TodayInOfficeCard (Today in the office)', () => {
     hooks.usePayables.mockReturnValue(ok({ total: 0 }));
     const onNavigate = vi.fn();
     mount(<MoneyColumn />, 'Owner', onNavigate);
-    const links = screen.getAllByRole('button', { name: 'Cash Book ›' });
+    const links = screen.getAllByRole('button', { name: 'Daily cash book ›' });
     expect(links).toHaveLength(1);
     fireEvent.click(links[0]!);
     expect(onNavigate).toHaveBeenCalledWith('/accounts', { openAccountsTab: 'cash-book' });
