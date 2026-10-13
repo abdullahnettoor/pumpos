@@ -11,7 +11,7 @@ import {
   Path,
 } from '@react-pdf/renderer';
 import { MARK_VIEWBOX, MARK_PATH } from '../../pump-ds/brand/Brand.js';
-import { formatSignedMoney } from '../../utils/format.js';
+import { formatQuantity, formatSignedMoney } from '../../utils/format.js';
 
 // Embed Plus Jakarta Sans + Geist Mono (matches the app type; Mono is used
 // for all numeric/currency cells and MUST carry the rupee glyph ₹ — Noto Sans
@@ -61,13 +61,14 @@ export const C = {
 export const inr = (n: any) => formatSignedMoney(n);
 /** PDF money in whole rupees: `−₹1,200`. */
 export const inr0 = (n: any) => formatSignedMoney(n, { decimals: 0 });
-export const vol3 = (n: any) =>
-  `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} L`;
-export const vol1 = (n: any) =>
-  `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
+// The shared quantity format with the decimals these PDFs print (3 for meter and
+// dip readings, 1 for vol1). A missing figure prints 0, as these PDFs always
+// have, not the screen's `—`.
+const reading = (n: any) => Number(n) || 0;
+export const vol3 = (n: any) => formatQuantity(reading(n), 'L', { decimals: 3 });
+export const vol1 = (n: any) => formatQuantity(reading(n), 'L', { decimals: 1 });
 // Unit-aware variants (L for liquids, kg for CNG/Auto-LPG). Never sum across units.
-export const vol3u = (n: any, u?: string) =>
-  `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${u || 'L'}`;
+export const vol3u = (n: any, u?: string) => formatQuantity(reading(n), u || 'L', { decimals: 3 });
 export const unitTotals = (rows: any[], getter: (r: any) => number, dec = 3): string => {
   const m: Record<string, number> = {};
   for (const r of rows) {

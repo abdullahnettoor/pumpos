@@ -197,6 +197,7 @@ export {
   formatQuantity,
   formatCompactMoney,
 } from './utils/format.js';
+// signedMoneyParts / FigureSign / SignedFigure have no caller yet: the stacked #518 (PR #548) uses them for variance tones.
 export type { FigureSign, SignedFigure } from './utils/format.js';
 export { MONEY_TERMS } from './utils/moneyTerms.js';
 export type { MoneyTerm } from './utils/moneyTerms.js';

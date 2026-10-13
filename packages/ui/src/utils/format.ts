@@ -1,25 +1,39 @@
 import { unitLabel } from '@pump/shared';
 
+/** What a money figure reads when the value is present but not a finite number. */
+const NOT_A_FIGURE = '—';
+
 /**
  * Money & number formatting for Indian fuel retail — the single source of truth
  * so every amount renders consistently (₹ symbol, en-IN grouping, 2 decimals,
  * a negative as `−₹1,200.00`).
  * Replaces the many ad-hoc `x.toLocaleString('en-IN')` calls that dropped
  * decimals and produced mixed formats (₹5,000 vs ₹5,000.00 vs ₹5,000.5).
+ *
+ * `symbol: false` drops only the `₹` (a cell whose column header carries the
+ * currency): the sign rule is the same, `−1,200.00`, and an amount that rounds
+ * to zero reads `0.00`, never `-0.00`.
+ *
+ * A missing amount (`null`/`undefined`) reads as zero, the long-standing
+ * contract for optional totals. A value that is present but not a finite
+ * number (`NaN`, `Infinity`, `'abc'`) reads `—`, as `formatCompactMoney` and
+ * `formatQuantity` do: printing `₹0.00` for a broken figure would pass a bad
+ * number off as a real zero on a screen or a PDF.
  */
 export function formatMoney(
   value: number | string | null | undefined,
   opts: { decimals?: number; symbol?: boolean } = {},
 ): string {
   const n = Number(value ?? 0);
-  const safe = Number.isFinite(n) ? n : 0;
+  if (!Number.isFinite(n)) return NOT_A_FIGURE;
   const decimals = opts.decimals ?? 2;
-  const grouped = (x: number) =>
-    x.toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-  if (opts.symbol === false) return grouped(safe);
+  const sign = signOf(n, decimals);
+  const body = (sign === 'zero' ? 0 : Math.abs(n)).toLocaleString('en-IN', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
   // A negative reads `−₹1,200.00` (true minus before the symbol), never `₹-1,200.00`.
-  const sign = signOf(safe, decimals);
-  return `${sign === 'negative' ? MINUS : ''}₹${grouped(sign === 'zero' ? 0 : Math.abs(safe))}`;
+  return `${sign === 'negative' ? MINUS : ''}${opts.symbol === false ? '' : '₹'}${body}`;
 }
 
 /** ₹ amount with 2 decimals (the default money format). */
@@ -46,12 +60,9 @@ interface SignedMoneyOptions {
   decimals?: number;
   /** Prefix a positive amount with `+` (a variance, where the direction is the point). */
   plus?: boolean;
+  /** `false` drops the `₹` (a cell whose header carries the currency); the sign rule is unchanged. */
+  symbol?: boolean;
 }
-
-const finite = (value: number | string | null | undefined): number => {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) ? n : 0;
-};
 
 const signOf = (n: number, decimals: number): FigureSign => {
   const shown = Number(Math.abs(n).toFixed(decimals));
@@ -72,16 +83,21 @@ const withSign = (sign: FigureSign, magnitude: string, plus: boolean): string =>
  * `₹-1,200.00` or `-₹1,200.00`); an amount that rounds to zero reads unsigned
  * (`₹0.00`); `plus` adds `+` to a positive amount. Use `sign` to choose a tone
  * (e.g. a variance: negative = short, positive = excess) — what a sign means is
- * the caller's call, this only reports it.
+ * the caller's call, this only reports it. A non-finite value reads `—` with
+ * sign `'zero'` (see `formatMoney`).
  */
 export function signedMoneyParts(
   value: number | string | null | undefined,
   opts: SignedMoneyOptions = {},
 ): SignedFigure {
-  const n = finite(value);
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return { text: NOT_A_FIGURE, sign: 'zero', magnitude: NOT_A_FIGURE };
   const decimals = opts.decimals ?? 2;
   const sign = signOf(n, decimals);
-  const magnitude = formatMoney(sign === 'zero' ? 0 : Math.abs(n), { decimals });
+  const magnitude = formatMoney(sign === 'zero' ? 0 : Math.abs(n), {
+    decimals,
+    symbol: opts.symbol,
+  });
   return { text: withSign(sign, magnitude, opts.plus ?? false), sign, magnitude };
 }
 
@@ -94,6 +110,10 @@ export const formatSignedMoney = (
 /**
  * Quantity / volume formatting (e.g. liters). Grouped, no currency symbol.
  * Defaults to 2 decimals; pass 3 for precise nozzle/dip readings.
+ *
+ * @deprecated Use `formatQuantity` (unit-aware decimals, true minus, `—` for a
+ * missing value; `{ decimals: 3 }` for meter/dip readings). Callers migrate in
+ * their area tickets.
  */
 export function formatQty(
   value: number | string | null | undefined,
@@ -125,16 +145,19 @@ function quantityUnit(unit: string | null | undefined): { label: string; decimal
  * (`832.5 kg/m³`), counted units 0 (`12 Nos`). Any litre spelling reads `L`;
  * a blank unit reads as litres. Negative reads `−42.00 L` (true minus);
  * `plus` adds `+` to a positive (a variance); a missing amount is `fallback` (`—`).
+ * `decimals` overrides the unit's own places, for a reading that carries more
+ * precision than a quantity (a meter or dip reading: `12,345.678 L`).
  */
 export function formatQuantity(
   value: number | string | null | undefined,
   unit: string | null | undefined,
-  opts: { plus?: boolean; fallback?: string } = {},
+  opts: { plus?: boolean; fallback?: string; decimals?: number } = {},
 ): string {
   if (value == null || value === '') return opts.fallback ?? '—';
   const n = Number(value);
   if (!Number.isFinite(n)) return opts.fallback ?? '—';
-  const { label, decimals } = quantityUnit(unit);
+  const { label, decimals: unitDecimals } = quantityUnit(unit);
+  const decimals = opts.decimals ?? unitDecimals;
   const sign = signOf(n, decimals);
   const body = (sign === 'zero' ? 0 : Math.abs(n)).toLocaleString('en-IN', {
     minimumFractionDigits: decimals,
@@ -240,12 +263,14 @@ const COMPACT_STEPS = [
  * The shared compact money form, for tiles and dense cells: `₹38.5k`,
  * `₹2.87L`, `₹2.5Cr`; whole rupees below a thousand (`₹850`). Trailing zeros
  * are trimmed (`₹2L`), a figure that rounds up carries to the next unit
- * (`₹1L`, never `₹100k`), and a negative reads `−₹2.5L`. Missing is `—`.
+ * (`₹1L`, never `₹100k`), and a negative reads `−₹2.5L`. Crores keep Indian
+ * grouping however large (`₹1,00,000Cr`). Missing or non-finite is `—` (as
+ * `formatMoney` for a non-finite value).
  */
 export function formatCompactMoney(value: number | string | null | undefined): string {
-  if (value == null || value === '') return '—';
+  if (value == null || value === '') return NOT_A_FIGURE;
   const n = Number(value);
-  if (!Number.isFinite(n)) return '—';
+  if (!Number.isFinite(n)) return NOT_A_FIGURE;
   const a = Math.abs(n);
   let body = `₹${Math.round(a).toLocaleString('en-IN')}`;
   if (Math.round(a) >= 1e3) {
@@ -253,7 +278,7 @@ export function formatCompactMoney(value: number | string | null | undefined): s
       const v = Number((a / step.size).toFixed(step.decimals));
       const last = i === COMPACT_STEPS.length - 1;
       if (last || v < COMPACT_STEPS[i + 1].size / step.size) {
-        body = `₹${v}${step.suffix}`;
+        body = `₹${v.toLocaleString('en-IN', { maximumFractionDigits: step.decimals })}${step.suffix}`;
         break;
       }
     }
