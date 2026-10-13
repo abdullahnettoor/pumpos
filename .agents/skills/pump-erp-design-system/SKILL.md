@@ -65,6 +65,16 @@ If there is tension between beauty and speed, preserve speed.
 - Dense tables may use `12px` to `13px`
 - Compact button heights: `30px`, `36px`, `40px`
 
+## Money, Quantity And Naming
+
+Format through `@pump/ui` (`packages/ui/src/utils/format.ts`); never write a local money or quantity helper or a bare `toLocaleString`:
+
+- Money: `formatMoney` / `inr` (`₹1,200.00`)
+- Signed money: `formatSignedMoney` (`−₹1,200`, U+2212 before ₹); `signedMoneyParts` also returns the `sign` for a tone
+- Quantity: `formatQuantity(value, unit)` (L 2 decimals, KL 1, density 1, counted units 0)
+- Compact: `formatCompactMoney` (`₹38.5k`, `₹2.87L`, `₹2.5Cr`)
+- Words: `MONEY_TERMS` (Receivable / Payable; one party: Owes you / You owe; Advance)
+
 ## Color Defaults
 
 Use semantic tokens based on the design doc.

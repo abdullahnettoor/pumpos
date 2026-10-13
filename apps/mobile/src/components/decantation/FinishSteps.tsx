@@ -1,7 +1,7 @@
 import React from 'react';
-import { fmtLitres, fmtSignedLitres } from '../../lib/decantation/format.js';
+import { formatQuantity, formatVariance } from '@pump/ui';
 import { nowTime, type Visit } from '../../lib/decantation/useVisit.js';
-import { StatusBadge } from '../../ui/index.js';
+import { StatusBadge, badgeTone } from '../../ui/index.js';
 import { Check, NumberField, TimeField, Warn } from './fields.js';
 
 /** Finish step: when unloading ended and which chambers came out empty. */
@@ -40,7 +40,7 @@ export const AfterDipStep: React.FC<{ visit: Visit }> = ({ visit: v }) => (
         <div key={l.id ?? i} className="flex flex-col gap-2.5 rounded-xl border border-line p-3">
           <span className="text-[12.5px] font-bold text-text-high">{name}</span>
           <p className="num text-[12px] text-text-muted">
-            Before dip {fmtLitres(Number(l.beforeDip))}
+            Before dip {formatQuantity(Number(l.beforeDip), 'L')}
           </p>
           <Check
             checked={l.doAfterDip}
@@ -97,15 +97,14 @@ export const ReviewStep: React.FC<{ visit: Visit }> = ({ visit: v }) => {
               {productName(x.productId)} invoice
             </span>
             <span className="num block text-[12px] text-text-muted">
-              Invoice {fmtLitres(x.invoiceQty)} · received {fmtLitres(x.received)}
+              Invoice {formatQuantity(x.invoiceQty, 'L')} · received{' '}
+              {formatQuantity(x.received, 'L')}
             </span>
           </span>
           {x.variance == null ? (
-            <StatusBadge tone="info">Pending</StatusBadge>
+            <StatusBadge state="handover-pending" />
           ) : (
-            <StatusBadge tone={x.outOfTolerance ? 'bad' : 'good'} num>
-              {x.variance < 0 ? 'Short' : 'Excess'} {fmtSignedLitres(x.variance)}
-            </StatusBadge>
+            <StockVariance variance={x.variance} outOfTolerance={x.outOfTolerance} />
           )}
         </div>
       ))}
@@ -121,7 +120,7 @@ export const ReviewStep: React.FC<{ visit: Visit }> = ({ visit: v }) => {
             <StatusBadge tone="info">Pending measurement</StatusBadge>
           ) : (
             <span className="num text-[12.5px] font-semibold text-text-high">
-              +{fmtLitres(l.received)} received
+              +{formatQuantity(l.received, 'L')} received
             </span>
           )}
         </div>
@@ -135,5 +134,25 @@ export const ReviewStep: React.FC<{ visit: Visit }> = ({ visit: v }) => {
         </Warn>
       ))}
     </div>
+  );
+};
+
+/**
+ * A received-vs-invoice variance in the shared vocabulary (#518): Balanced,
+ * an amber surplus or a red shortage in litres. Tolerance is a separate flag,
+ * never the variance's colour.
+ */
+export const StockVariance: React.FC<{ variance: number; outOfTolerance?: boolean }> = ({
+  variance,
+  outOfTolerance,
+}) => {
+  const v = formatVariance(variance, 'stock');
+  return (
+    <span className="flex items-center gap-1.5">
+      <StatusBadge tone={badgeTone(v.tone)} num>
+        {v.state === 'balanced' ? v.text : `${v.label} ${v.text}`}
+      </StatusBadge>
+      {outOfTolerance && <StatusBadge tone="bad">Out of tolerance</StatusBadge>}
+    </span>
   );
 };

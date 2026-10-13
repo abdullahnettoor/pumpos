@@ -6,6 +6,8 @@ export type { QuickEntryType, QuickEntryState } from './quick-entry/store.js';
 export { publishNavIntent, clearNavIntent, useNavIntent } from './nav-intent/store.js';
 export type { NavIntent } from './nav-intent/store.js';
 export { useRoutePath } from './nav-intent/useRoutePath.js';
+export { ROUTES, LEGACY_ROUTES, resolveRoute, NAV_PAGES, NAV_GROUPS } from './nav-intent/routes.js';
+export type { RoutePath, NavPage } from './nav-intent/routes.js';
 export * from './components/Drawer.js';
 export { ErrorBoundary } from './components/ErrorBoundary.js';
 export { Login } from './components/Auth/Login.js';
@@ -187,7 +189,20 @@ export type { DensityCalculatorPopoverProps } from './components/primitives/Dens
 export { Banner } from './components/primitives/Banner.js';
 export type { BannerProps, BannerSeverity } from './components/primitives/Banner.js';
 export { useZodForm } from './forms/useZodForm.js';
-export { formatMoney, inr, formatQty } from './utils/format.js';
+export {
+  formatMoney,
+  inr,
+  formatQty,
+  MINUS,
+  formatSignedMoney,
+  signedMoneyParts,
+  formatQuantity,
+  formatCompactMoney,
+} from './utils/format.js';
+// signedMoneyParts / FigureSign / SignedFigure: the variance vocabulary (utils/variance.ts, #518) builds on them.
+export type { FigureSign, SignedFigure } from './utils/format.js';
+export { MONEY_TERMS } from './utils/moneyTerms.js';
+export type { MoneyTerm } from './utils/moneyTerms.js';
 export { initialsOf } from './utils/initials.js';
 export {
   collectionAccountTypes,
@@ -208,12 +223,25 @@ export * from './pump-ds/meter/index.js';
 export { STATUS_BAR_HEIGHT_PX } from './pump-ds/shell/index.js';
 export * from './pump-ds/button/index.js';
 // Shared with the mobile Control Room primitives (apps/mobile/src/ui).
-export { Chip, StatusChip } from './pump-ds/chip/index.js';
-export type { ChipProps, ChipTone, StatusChipProps } from './pump-ds/chip/index.js';
+export { Chip, StatusChip, VarianceChip } from './pump-ds/chip/index.js';
+export type {
+  ChipProps,
+  ChipTone,
+  StatusChipProps,
+  VarianceChipProps,
+} from './pump-ds/chip/index.js';
+export { formatVariance } from './utils/variance.js';
+export type { VarianceDisplay } from './utils/variance.js';
 export { SegmentedControl } from './pump-ds/segmented/index.js';
 export type { SegmentedControlProps, SegmentedControlOption } from './pump-ds/segmented/index.js';
 export { PageHeader } from './pump-ds/page-header/index.js';
 export type { PageHeaderProps } from './pump-ds/page-header/index.js';
+export { DataSection, isAccessRefusal } from './pump-ds/data-section/index.js';
+export type {
+  DataSectionProps,
+  DataSectionState,
+  SectionQuery,
+} from './pump-ds/data-section/index.js';
 
 // Post-sign-in boot: the branded wait screen and the parallel resolve behind it.
 export * from './boot/sessionBoot.js';

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Drawer } from '../Drawer.js';
 import { LedgerView } from '../ledger/LedgerView.js';
-import { Button, Icon } from '../../pump-ds/index.js';
+import { Button, Icon, StatusChip } from '../../pump-ds/index.js';
+import { partyState } from '@pump/shared';
 import { inr, formatDate, formatTime } from '../../utils/format.js';
 import { useSupplierLedger } from '../../query/hooks.js';
 import { SupplierPaymentDrawer } from './SupplierPaymentDrawer.js';
@@ -78,24 +79,9 @@ export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = (
                   >
                     {supplier.name}
                   </h3>
-                  <span
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      backgroundColor: supplier.isActive
-                        ? 'var(--state-success-bg)'
-                        : 'var(--state-danger-bg)',
-                      color: supplier.isActive
-                        ? 'var(--state-success-fg)'
-                        : 'var(--state-danger-fg)',
-                      padding: '2px 6px',
-                      borderRadius: 'var(--radius-chip)',
-                      display: 'inline-block',
-                      marginTop: '4px',
-                    }}
-                  >
-                    {supplier.isActive ? 'Active' : 'Suspended'}
-                  </span>
+                  <div style={{ marginTop: '4px' }}>
+                    <StatusChip status={partyState(supplier.isActive)} size="xs" />
+                  </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Owed Balance</div>

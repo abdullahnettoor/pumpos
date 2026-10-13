@@ -1,12 +1,12 @@
 import React from 'react';
 import type { ReceivablesAging } from '@pump/shared';
-import { compactRupees } from '../../lib/format.js';
+import { rupees } from '../../lib/format.js';
 import { agingSegments } from '../../lib/money/receivables.js';
 import { TONE_FILL } from '../../ui/tones.js';
 
 interface Props {
   aging: ReceivablesAging | null | undefined;
-  /** The stacked bar above the figures (the To collect hero); off inside the Customer card, which has its own bar. */
+  /** The stacked bar above the figures (the Receivable hero); off inside the Customer card, which has its own bar. */
   showBar?: boolean;
   /** A rule above the figures, to sit under another block of the same card. */
   divided?: boolean;
@@ -55,7 +55,7 @@ export const AgingSplit: React.FC<Props> = ({
                 s.tone === 'bad' && s.amount > 0 ? 'text-bad-fg' : 'text-text-high'
               }`}
             >
-              {compactRupees(s.amount)}
+              {rupees(s.amount)}
             </b>
             {s.label}
           </li>

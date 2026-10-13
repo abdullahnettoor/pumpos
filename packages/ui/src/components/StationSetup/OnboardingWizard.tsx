@@ -2095,7 +2095,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   margin: 0,
                 }}
               >
-                You can fine-tune fuels, pricing and infrastructure anytime from Station Overview.
+                You can fine-tune fuels, pricing and infrastructure anytime from Station.
               </p>
 
               <Button

@@ -1,8 +1,16 @@
 import { z } from 'zod';
 import {
+  canManageTankLevels,
+  TANK_LEVEL_SETTINGS_KEY,
+  tankLevelSettingsSchema,
+  tankLevelsChanged,
+  type Role,
+} from '@pump/shared';
+import {
   BusinessEvents,
   err,
   eventFromContext,
+  forbiddenError,
   notFoundError,
   ok,
   validationError,
@@ -85,6 +93,35 @@ const updateSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+/**
+ * Tank-level thresholds (#520) colour every tank on every screen, so changing
+ * them is narrower than editing the Station: `canManageTankLevels`. Enforced
+ * here so every caller is covered. A command with no tenant-user actor (a
+ * system job) is not a user acting.
+ */
+function mayChangeTankLevels(ctx: ExecutionContext): boolean {
+  const actor = ctx.actorSnapshot;
+  if (!actor || actor.kind !== 'tenant_user') return true;
+  return actor.role !== null && canManageTankLevels(actor.role as Role);
+}
+
+/** Refusal for a settings write that changes the tank-level thresholds; null when allowed. */
+function tankLevelsChangeError(
+  existing: Record<string, unknown>,
+  next: Record<string, unknown> | undefined,
+  ctx: ExecutionContext,
+) {
+  if (!next) return null;
+  const before = existing[TANK_LEVEL_SETTINGS_KEY];
+  const after = next[TANK_LEVEL_SETTINGS_KEY];
+  if (!tankLevelsChanged(before, after)) return null;
+  if (!mayChangeTankLevels(ctx))
+    return forbiddenError('Only an Owner or Manager can change tank levels');
+  if (after !== undefined && !tankLevelSettingsSchema.safeParse(after).success)
+    return validationError('Tank levels need 0 < critical < low ≤ 100');
+  return null;
+}
+
 export interface StationDeps {
   repository: StationRepository;
   events: EventPublisher;
@@ -146,6 +183,8 @@ export class UpdateStation implements UseCase<UpdateStationCommand, Station> {
     const existing = await this.deps.repository.findById(p.data.id);
     if (!existing || existing.organizationId !== ctx.organizationId)
       return err(notFoundError('Station', p.data.id));
+    const tankLevelsError = tankLevelsChangeError(existing.settings ?? {}, p.data.settings, ctx);
+    if (tankLevelsError) return err(tankLevelsError);
     const updated: Station = {
       ...existing,
       name: p.data.name ?? existing.name,

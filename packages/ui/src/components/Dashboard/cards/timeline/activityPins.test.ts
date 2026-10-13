@@ -18,11 +18,14 @@ describe('toTimelineEvent', () => {
     expect(e.target).toEqual({ path: '/inventory', intent: { focusInventoryTab: 'decantations' } });
     expect(e.tone).toBe('warning');
   });
-  it('opens the Cash Book for an Office Record', () => {
+  it('opens the Daily cash book (Accounts) for an Office Record', () => {
     expect(toTimelineEvent(item('EXPENSE_RECORDED')).target).toEqual({
-      path: '/reports',
-      intent: { openReportsTab: 'cash-book' },
+      path: '/accounts',
+      intent: { openAccountsTab: 'cash-book' },
     });
+  });
+  it('opens Suppliers for a purchase', () => {
+    expect(toTimelineEvent(item('PURCHASE_CREATED')).target).toEqual({ path: '/suppliers' });
   });
   it('falls back to a neutral pin with no target for unknown types', () => {
     const e = toTimelineEvent(item('SOMETHING_NEW', 'default'));

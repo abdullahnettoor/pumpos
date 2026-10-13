@@ -53,7 +53,7 @@ const buttonVariants = cva(
         ghost:
           'bg-transparent text-ink-default border border-transparent hover:bg-surface-alt active:bg-surface-alt',
         danger:
-          'bg-danger-fg text-on-brand border border-transparent hover:bg-[color-mix(in_oklab,var(--color-danger-fg)_88%,black)] active:bg-[color-mix(in_oklab,var(--color-danger-fg)_78%,black)]',
+          'bg-danger-fg text-on-danger border border-transparent hover:bg-[color-mix(in_oklab,var(--color-danger-fg)_88%,black)] active:bg-[color-mix(in_oklab,var(--color-danger-fg)_78%,black)]',
       },
       iconOnly: {
         true: 'px-0 aspect-square',

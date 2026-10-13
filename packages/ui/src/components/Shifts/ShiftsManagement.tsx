@@ -44,19 +44,8 @@ import type { CloseCashDrawer, ShiftStaffAssignment } from '@pump/shared';
 import type { DrawerRow } from './DrawerReconciliationTable.js';
 import type { CloseDropRow } from './CloseShiftWizard.js';
 import type { OpenShiftFormValues } from '@pump/shared';
-import {
-  FileText,
-  User,
-  Lock,
-  AlertTriangle,
-  Check,
-  Fuel,
-  Info,
-  Play,
-  History,
-  Clock3,
-  CalendarRange,
-} from 'lucide-react';
+import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play } from 'lucide-react';
+import { ConceptIcon } from '../../pump-ds/icon/index.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 import { refreshShiftStatus } from './refreshShiftStatus.js';
@@ -160,7 +149,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
    * BusinessDayTab reports the requested date as consumed on mount. Commit the
    * durable half — that we are on the business-day sub-tab — into local state
    * first: clearing the intent alone would drop the tab derivation and bounce
-   * the operator straight back to Active Shift.
+   * the operator straight back to Live shift.
    */
   const setRequestedBusinessDayDate = (date: string | null) => {
     setSelectedSubTab('business-day');
@@ -172,7 +161,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   /**
    * Mirror of `setRequestedBusinessDayDate`: commit the durable half (we are on
    * History) before clearing the intent, so dismissing the summary leaves the
-   * operator in History rather than bouncing back to Active Shift.
+   * operator in History rather than bouncing back to Live shift.
    */
   const clearRequestedHistoryShiftId = () => {
     setSelectedSubTab('history');
@@ -840,8 +829,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         tabs={[
           {
             id: 'today',
-            label: 'Active Shift',
-            icon: <Clock3 size={13} />,
+            label: 'Live shift',
+            icon: <ConceptIcon concept="live-shift" />,
             badge: activeShift ? (
               <span
                 style={{
@@ -859,8 +848,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               </span>
             ) : undefined,
           },
-          { id: 'business-day', label: 'Business Day', icon: <CalendarRange size={13} /> },
-          { id: 'history', label: 'History', icon: <History size={13} /> },
+          {
+            id: 'business-day',
+            label: 'Business days',
+            icon: <ConceptIcon concept="business-days" />,
+          },
+          { id: 'history', label: 'History', icon: <ConceptIcon concept="history" /> },
         ].filter((tab) => userRole !== 'Accountant' || tab.id !== 'today')}
       />
     </div>

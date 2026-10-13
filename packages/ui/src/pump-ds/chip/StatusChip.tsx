@@ -1,4 +1,5 @@
 import React, { forwardRef } from 'react';
+import { cn } from '../lib/cn.js';
 import { Chip, type ChipProps, type ChipSize, type ChipVariant } from './Chip.js';
 import { STATUS_MAP, type PumpStatus } from './status-map.js';
 
@@ -30,7 +31,7 @@ export interface StatusChipProps extends Omit<
 }
 
 export const StatusChip = forwardRef<HTMLSpanElement, StatusChipProps>(function StatusChip(
-  { status, label, showIcon = true, pulse, ...rest },
+  { status, label, showIcon = true, pulse, className, ...rest },
   ref,
 ) {
   const meta = STATUS_MAP[status];
@@ -44,6 +45,7 @@ export const StatusChip = forwardRef<HTMLSpanElement, StatusChipProps>(function 
       icon={showIcon ? <Icon /> : undefined}
       dot={!showIcon && effectivePulse}
       pulse={effectivePulse}
+      className={cn(meta.struck && 'line-through', className)}
       {...rest}
     >
       {label ?? meta.label}

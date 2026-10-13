@@ -46,10 +46,17 @@ describe('TankGauges grid', () => {
 
   it('shows low-stock state and waiting on decantation together', () => {
     const { getByText } = render(
-      <TankGauges tanks={[{ ...tank(1), level: 'red', pct: 8, waitingOnDecantation: true }]} />,
+      <TankGauges
+        tanks={[{ ...tank(1), level: 'critical', pct: 8, waitingOnDecantation: true }]}
+      />,
     );
     expect(getByText('8%')).toBeTruthy();
     expect(getByText('Waiting on decantation')).toBeTruthy();
+    expect(getByText('Critical')).toBeTruthy();
+  });
+
+  it('names the tone with the shared model words (desktop parity)', () => {
+    const { getByText } = render(<TankGauges tanks={[{ ...tank(1), level: 'low', pct: 30 }]} />);
     expect(getByText('Low')).toBeTruthy();
   });
 });

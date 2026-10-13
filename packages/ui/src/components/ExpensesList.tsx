@@ -29,9 +29,10 @@ import {
   SearchInput,
   Select,
   Icon,
+  ConceptIcon,
 } from '../pump-ds/index.js';
 import { buildExpenseColumns } from './expenses/columns.js';
-import { ExpenseAnalytics } from './expenses/ExpenseAnalytics.js';
+import { CategoryAnalytics } from './expenses/CategoryAnalytics.js';
 import { CategoryManagerDrawer } from './expenses/CategoryManagerDrawer.js';
 import { CASH_ACCOUNT_TYPES } from '../utils/ledgerLabels.js';
 import { useRunTask } from '../utils/runTask.js';
@@ -234,11 +235,11 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as TabType)}
             tabs={[
-              { id: 'ledger', label: 'Ledger', icon: <Icon name="receipt" size="xs" /> },
+              { id: 'ledger', label: 'Expenses', icon: <ConceptIcon concept="expenses" /> },
               {
                 id: 'analytics',
-                label: 'By Category',
-                icon: <Icon name="arrow-left-right" size="xs" />,
+                label: 'By category',
+                icon: <ConceptIcon concept="by-category" />,
               },
             ]}
           />
@@ -350,6 +351,8 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                   columns={ledgerColumns}
                   data={filteredExpenses}
                   error={expensesQ.error}
+                  title="expenses"
+                  onRetry={expensesQ.refetch}
                   emptyMessage="No matching expenses found."
                   getRowId={(r: any) => r.id}
                   initialSorting={[{ id: 'entryDate', desc: true }]}
@@ -359,7 +362,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
           </div>
         )}
 
-        {activeTab === 'analytics' && <ExpenseAnalytics selectedStation={selectedStation} />}
+        {activeTab === 'analytics' && <CategoryAnalytics selectedStation={selectedStation} />}
       </PageLayout>
 
       <Drawer isOpen={isDrawerOpen} onClose={closeDrawer} title="Log New Expense">

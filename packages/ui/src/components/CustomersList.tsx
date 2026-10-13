@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
+import { useNavIntent, clearNavIntent, getNavIntentState } from '../nav-intent/store.js';
 import { CloudTransactionService } from '../services/cloud.js';
 import { collectionPayload } from '../utils/officeRecordPayloads.js';
 import {
@@ -21,7 +21,16 @@ import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
 import { useToast } from './primitives/ToastProvider.js';
-import { Panel, Button, Chip, KpiStrip, KpiTile, EmptyState, Icon } from '../pump-ds/index.js';
+import {
+  Panel,
+  Button,
+  Chip,
+  KpiStrip,
+  KpiTile,
+  EmptyState,
+  Icon,
+  ConceptIcon,
+} from '../pump-ds/index.js';
 import { resolveBusinessDate, type CollectionEntryFormValues } from '@pump/shared';
 import {
   buildCustomerColumns,
@@ -59,7 +68,17 @@ export function summarizeCustomerBalances(customers: any[]) {
 }
 
 export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, userRole }) => {
-  const [selectedTab, setSelectedTab] = useState<TabType>('transactions');
+  const [selectedTab, setSelectedTab] = useState<TabType>('registry');
+  /**
+   * Drop a pending deep link without moving the operator. A focus intent
+   * derives the Customers tab, so that tab is committed to local state before
+   * the intent is cleared (the ShiftsManagement pattern); clearing alone would
+   * fall back to whichever tab was chosen before the link arrived.
+   */
+  const consumeIntent = () => {
+    if (getNavIntentState().intent?.focusCustomerId) setSelectedTab('registry');
+    clearNavIntent();
+  };
 
   const stationId = selectedStation?.id ?? null;
   const customersActiveQ = useCustomers(true);
@@ -207,12 +226,12 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
   const [customerDrawerOpen, setCustomerDrawerOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any | null>(null);
   const openCreateCustomer = () => {
-    clearNavIntent();
+    consumeIntent();
     setEditingCustomer(null);
     setCustomerDrawerOpen(true);
   };
   const openEditCustomer = (cust: any) => {
-    clearNavIntent();
+    consumeIntent();
     setEditingCustomer(cust);
     setCustomerDrawerOpen(true);
   };
@@ -277,7 +296,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
   };
 
   const openCollectionDrawer = (customerId?: string) => {
-    clearNavIntent();
+    consumeIntent();
     resetCollectionForm(customerId);
     setCollectionDrawerOpen(true);
   };
@@ -319,7 +338,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
   // derivation is safe here in a way it would not be for an entry drawer.
   const isCustomerDrawerOpen = intent?.open === 'new-customer' || customerDrawerOpen;
   const closeCustomerDrawer = () => {
-    clearNavIntent();
+    consumeIntent();
     setCustomerDrawerOpen(false);
   };
 
@@ -333,7 +352,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
    * while a focus intent is pending would otherwise do nothing on screen.
    */
   const showStatementFor = (id: string | null) => {
-    clearNavIntent();
+    consumeIntent();
     setStatementCustomerId(id);
   };
   const closeStatement = () => showStatementFor(null);
@@ -368,7 +387,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
 
   return (
     <PageLayout
-      title="Customer Fleet Accounts"
+      title="Customers"
       subtitle="Manage fleet customer profiles, credit limits, and record shift collections."
       actions={
         <>
@@ -412,10 +431,14 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
           activeId={activeTab}
           onChange={(id) => setActiveTab(id as TabType)}
           tabs={[
-            { id: 'transactions', label: 'Collections', icon: <Icon name="wallet" size="xs" /> },
-            { id: 'sales', label: 'Credit Sales', icon: <Icon name="card" size="xs" /> },
-            { id: 'registry', label: 'Customer Registry', icon: <Icon name="users" size="xs" /> },
-            { id: 'vehicles', label: 'Vehicles', icon: <Icon name="truck" size="xs" /> },
+            { id: 'registry', label: 'Customers', icon: <ConceptIcon concept="customers" /> },
+            { id: 'sales', label: 'Credit sales', icon: <ConceptIcon concept="credit-sales" /> },
+            {
+              id: 'transactions',
+              label: 'Collections',
+              icon: <ConceptIcon concept="collections" />,
+            },
+            { id: 'vehicles', label: 'Vehicles', icon: <ConceptIcon concept="vehicles" /> },
           ]}
         />
       }

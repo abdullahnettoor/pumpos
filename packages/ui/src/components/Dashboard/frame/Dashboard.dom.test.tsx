@@ -6,6 +6,7 @@ import type { Station } from '@pump/shared';
 import { stubContainerWidth } from '../testing/containerWidth.js';
 
 const hooks = vi.hoisted(() => ({
+  useTankLevelSettings: vi.fn(() => ({ criticalBelowPct: 25, lowBelowPct: 40 })),
   useBusinessDayStatus: vi.fn(),
   useDashboardSummary: vi.fn(),
   useDailyDssrPreview: vi.fn(),
@@ -27,7 +28,7 @@ const hooks = vi.hoisted(() => ({
 vi.mock('../../../query/hooks.js', () => hooks);
 
 import { Dashboard } from './Dashboard.js';
-import { DashboardCard } from './DashboardCard.js';
+import { DashboardCard, type CardQuery } from './DashboardCard.js';
 import { DashboardProvider, useCardEnabled } from './DashboardContext.js';
 
 const STATION = {
@@ -210,7 +211,7 @@ describe('open-days notice', () => {
 describe('DashboardCard', () => {
   const Probe: React.FC<{
     role: 'Owner' | 'Staff';
-    q: { isPending: boolean; isError: boolean; refetch: () => unknown };
+    q: CardQuery;
   }> = ({ role, q }) => (
     <DashboardProvider
       value={{
@@ -235,25 +236,62 @@ describe('DashboardCard', () => {
 
   it('renders a placeholder while pending, body when ready', () => {
     const { rerender } = render(
-      <Probe role="Owner" q={{ isPending: true, isError: false, refetch: vi.fn() }} />,
+      <Probe
+        role="Owner"
+        q={{ isPending: true, isError: false, fetchStatus: 'fetching', refetch: vi.fn() }}
+      />,
     );
     expect(screen.getByLabelText('Loading money')).toBeTruthy();
     expect(screen.queryByText('body')).toBeNull();
-    rerender(<Probe role="Owner" q={{ isPending: false, isError: false, refetch: vi.fn() }} />);
+    rerender(
+      <Probe
+        role="Owner"
+        q={{ isPending: false, isError: false, fetchStatus: 'idle', refetch: vi.fn() }}
+      />,
+    );
     expect(screen.getByText('body')).toBeTruthy();
   });
 
   it('shows error + Retry that refetches, with no page-level state', () => {
     const refetch = vi.fn();
-    render(<Probe role="Owner" q={{ isPending: false, isError: true, refetch }} />);
+    render(
+      <Probe role="Owner" q={{ isPending: false, isError: true, fetchStatus: 'idle', refetch }} />,
+    );
     expect(screen.getByText(/Couldn't load money/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(refetch).toHaveBeenCalled();
   });
 
   it('hidden role: renders nothing and enabled is false', () => {
-    render(<Probe role="Staff" q={{ isPending: true, isError: false, refetch: vi.fn() }} />);
+    render(
+      <Probe
+        role="Staff"
+        q={{ isPending: true, isError: false, fetchStatus: 'fetching', refetch: vi.fn() }}
+      />,
+    );
     expect(screen.getByTestId('en').textContent).toBe('false');
     expect(screen.queryByLabelText('Loading money')).toBeNull();
+  });
+});
+
+describe('per-card isolation', () => {
+  it("one card's failed request shows Retry on that card only; Retry refetches only it", () => {
+    const refetch = vi.fn();
+    hooks.useReceivables.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      refetch,
+    });
+    mount('Owner');
+    const errored = document.querySelectorAll('[data-state="error"]');
+    expect(errored).toHaveLength(1);
+    expect(errored[0]!.textContent).toMatch(/Couldn't load receivable \/ payable/);
+    expect(screen.getAllByRole('button', { name: 'Retry' })).toHaveLength(1);
+    // The rest of the board still renders.
+    expect(document.querySelectorAll('[data-state="ready"]').length).toBeGreaterThan(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(hooks.usePayables.mock.results[0]!.value.refetch).not.toHaveBeenCalled();
   });
 });

@@ -57,3 +57,15 @@ export function lowerAllowList(actual: Counts, allowed: Counts): Counts {
   }
   return out;
 }
+
+/**
+ * A fresh allow-list from the actual counts: every violation listed, so it
+ * may raise entries and add files. Only for a one-off rebaseline (e.g. after
+ * a wave of merged PRs moved code between files); a normal PR lowers entries
+ * with `lowerAllowList` and fixes anything new. Same sorting as
+ * `lowerAllowList`, zero entries dropped.
+ */
+export function baselineAllowList(actual: Counts): Counts {
+  // The actual counts as their own ceiling: every count is kept.
+  return lowerAllowList(actual, actual);
+}

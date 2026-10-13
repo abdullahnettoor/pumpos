@@ -12,6 +12,7 @@ import {
   useInventoryItems,
   useInventoryMovements,
   useInventoryVariances,
+  useTankLevelSettings,
   useInvalidateOperational,
 } from '../query/hooks.js';
 import {
@@ -26,11 +27,19 @@ import {
   DateText,
   Form,
   Icon,
+  ConceptIcon,
 } from '../pump-ds/index.js';
 import { DensityTab } from './inventory/density/index.js';
 import { DecantationsTab } from './inventory/decantation/DecantationsTab.js';
-import { canRecordDecantation, type Role } from '@pump/shared';
-import { tankPct, classifyTank, OVER_CAPACITY_EXPLANATION } from '../utils/stock.js';
+import { canRecordDecantation, variancePresentation, type Role } from '@pump/shared';
+import { VARIANCE_TONE_TEXT } from '../utils/variance.js';
+import {
+  tankPct,
+  classifyTank,
+  OVER_CAPACITY_EXPLANATION,
+  type StockHealth,
+} from '../utils/stock.js';
+import { formatQuantity } from '../utils/format.js';
 import { TankStatusChips } from './inventory/TankStatusChips.js';
 import {
   isAmbiguousMutationError,
@@ -42,6 +51,15 @@ import {
 
 const transactionService = new CloudTransactionService();
 
+/** Meter colour per stock level: the station's tank levels, not MeterRow's auto tone. */
+// TODO(#536): adopt TankGauge tones
+const METER_TONE: Record<StockHealth, 'danger' | 'warning' | 'brand' | 'info'> = {
+  critical: 'danger',
+  low: 'warning',
+  ok: 'brand',
+  over: 'info',
+};
+
 interface InventoryListProps {
   selectedStation: any | null;
   /** Gates the Decantations tab (Owner, Manager, Accountant) and the Owner review banner. */
@@ -49,9 +67,6 @@ interface InventoryListProps {
 }
 
 type TabType = 'tanks' | 'density' | 'items' | 'movements' | 'variances' | 'decantations';
-
-const fmtL = (n: number) =>
-  `${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
 
 const SearchBox: React.FC<{
   value: string;
@@ -215,12 +230,9 @@ const varianceColumns: ColumnDef<any, any>[] = [
     cell: ({ row }) => {
       const diff = Number(row.original.varianceQuantity);
       const unit = row.original.productUnit ?? 'L';
-      const color =
-        diff < 0
-          ? 'var(--state-danger-fg)'
-          : diff > 0
-            ? 'var(--state-info-fg)'
-            : 'var(--text-strong)';
+      // A surplus is amber, a shortage red (#518).
+      const { state, tone } = variancePresentation(diff, 'stock');
+      const color = state === 'balanced' ? 'var(--text-strong)' : VARIANCE_TONE_TEXT[tone];
       return (
         <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color }}>
           {diff > 0
@@ -235,11 +247,9 @@ const varianceColumns: ColumnDef<any, any>[] = [
     id: 'status',
     header: 'Status',
     cell: ({ row }) => {
-      const diff = Number(row.original.varianceQuantity);
-      const expected = Number(row.original.expectedQuantity);
-      const tol = 0.005 * (Math.abs(expected) || 1);
-      const status = Math.abs(diff) <= tol ? 'balanced' : diff < 0 ? 'shortage' : 'excess';
-      return <StatusChip status={status} size="xs" />;
+      // The one balanced rule (#518): no ±0.5% band around zero.
+      const { state } = variancePresentation(row.original.varianceQuantity, 'stock');
+      return <StatusChip status={state} size="xs" />;
     },
   },
   {
@@ -332,6 +342,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
   const itemsQ = useInventoryItems(stationId);
   const movementsQ = useInventoryMovements(stationId);
   const variancesQ = useInventoryVariances(stationId);
+  const tankLevels = useTankLevelSettings(stationId);
 
   // Deep-link focus (from a dashboard/bell stock alert): switch to the target
   // tab and highlight the offending tank card / merchandise row. Derived from
@@ -390,23 +401,24 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
         (/^(l|liters?|litres?)$/i.test(a[0]) ? 0 : 1) -
         (/^(l|liters?|litres?)$/i.test(b[0]) ? 0 : 1),
     );
-    const fmtV = (v: number) =>
-      Number(v).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     const tankCount = `${tanksData.length} ${tanksData.length === 1 ? 'tank' : 'tanks'}`;
-    const totalFuelValue = entries.length ? `${fmtV(entries[0][1])} ${entries[0][0]}` : fmtL(0);
-    const totalFuelHint = [...entries.slice(1).map(([u, v]) => `${fmtV(v)} ${u}`), tankCount].join(
-      ' · ',
+    const totalFuelValue = entries.length
+      ? formatQuantity(entries[0][1], entries[0][0])
+      : formatQuantity(0, 'L');
+    const totalFuelHint = [
+      ...entries.slice(1).map(([u, v]) => formatQuantity(v, u)),
+      tankCount,
+    ].join(' · ');
+    const levels = tanksData.map((t: any) =>
+      classifyTank(tankPct(t.currentVolume, t.capacity), tankLevels),
     );
-    const tankLevels = tanksData.map((t: any) =>
-      classifyTank(tankPct(t.currentVolume, t.capacity)),
-    );
-    const lowTanks = tankLevels.filter((level) => level === 'low' || level === 'critical').length;
-    const overTanks = tankLevels.filter((level) => level === 'over').length;
+    const lowTanks = levels.filter((level) => level === 'low' || level === 'critical').length;
+    const overTanks = levels.filter((level) => level === 'over').length;
     const oversold = items.filter((i: any) => Number(i.quantity) < 0).length;
     const outOfStock = items.filter((i: any) => Number(i.quantity) === 0).length;
     const variances = (variancesQ.data ?? []).length;
     return { totalFuelValue, totalFuelHint, lowTanks, overTanks, oversold, outOfStock, variances };
-  }, [tanksData, items, variancesQ.data]);
+  }, [tanksData, items, variancesQ.data, tankLevels]);
 
   const [movementSearch, setMovementSearch] = useState('');
   const [itemSearch, setItemSearch] = useState('');
@@ -494,7 +506,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
   return (
     <div className="animate-fade-in">
       <PageLayout
-        title="Inventory Management"
+        title="Inventory"
         subtitle="Monitor tank stock levels, audit physical dip variances, and inspect fuel movements."
         actions={
           <Button
@@ -513,24 +525,28 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as TabType)}
             tabs={[
-              { id: 'tanks', label: 'Tank Status', icon: <Icon name="tank" size="xs" /> },
-              { id: 'density', label: 'Density Register', icon: <Icon name="gauge" size="xs" /> },
-              { id: 'items', label: 'Merchandise Stock', icon: <Icon name="package" size="xs" /> },
-              {
-                id: 'movements',
-                label: 'Stock Movements',
-                icon: <Icon name="arrow-left-right" size="xs" />,
-              },
-              { id: 'variances', label: 'Reconciliations', icon: <Icon name="scale" size="xs" /> },
+              { id: 'tanks', label: 'Tanks', icon: <ConceptIcon concept="tanks" /> },
               ...(showDecantations
                 ? [
                     {
                       id: 'decantations',
                       label: 'Decantations',
-                      icon: <Icon name="truck" size="xs" />,
+                      icon: <ConceptIcon concept="decantations" />,
                     },
                   ]
                 : []),
+              { id: 'density', label: 'Density', icon: <ConceptIcon concept="density" /> },
+              {
+                id: 'items',
+                label: 'Product stock',
+                icon: <ConceptIcon concept="product-stock" />,
+              },
+              { id: 'movements', label: 'Movements', icon: <ConceptIcon concept="movements" /> },
+              {
+                id: 'variances',
+                label: 'Reconciliations',
+                icon: <ConceptIcon concept="reconciliations" />,
+              },
             ]}
           />
         }
@@ -572,7 +588,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
               valueTone={kpis.lowTanks > 0 ? 'warning' : undefined}
               label="Tanks Low / Critical"
               value={String(kpis.lowTanks)}
-              hint="below 35% capacity"
+              hint={`below ${tankLevels.lowBelowPct}% capacity`}
             />
             <KpiTile
               dot={kpis.overTanks > 0 ? 'info' : 'neutral'}
@@ -632,7 +648,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
                   const cap = Number(tank.capacity) || 0;
                   const vol = Number(tank.currentVolume) || 0;
                   const pct = tankPct(vol, cap);
-                  const level = classifyTank(pct);
+                  const level = classifyTank(pct, tankLevels);
                   const highlighted = highlightId === tank.id;
                   return (
                     <div
@@ -681,7 +697,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
                             {tank.productName} · {tank.productCode}
                           </span>
                         </div>
-                        <TankStatusChips tank={tank} />
+                        <TankStatusChips tank={tank} tankLevels={tankLevels} />
                       </div>
                       <div
                         style={{
@@ -718,7 +734,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
                         label=""
                         value={Math.min(vol, cap)}
                         max={cap || 1}
-                        tone={level === 'over' ? 'info' : 'auto'}
+                        tone={METER_TONE[level]}
                         valueLabel={`${pct.toFixed(0)}% capacity`}
                       />
                       {level === 'over' && (
@@ -768,7 +784,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
                     title={items.length === 0 ? 'No merchandise' : 'No matches'}
                     description={
                       items.length === 0
-                        ? 'Add non-fuel products in Station Overview → Products.'
+                        ? 'Add non-fuel products in Station → Products.'
                         : 'Try a different search.'
                     }
                   />

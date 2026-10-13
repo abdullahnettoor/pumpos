@@ -13,6 +13,7 @@
 import { formatShiftLabel, resolveEntryDate, type RangedPartyLedger } from '@pump/shared';
 import { accountTypeLabel } from '../../utils/ledgerLabels.js';
 import { ledgerQuantityLabel } from '../../utils/ledgerQuantity.js';
+import { MONEY_TERMS } from '../../utils/moneyTerms.js';
 import type { LedgerDocProps, LedgerDocRow } from './ledgerDoc.js';
 
 /** Which ledger the rows belong to: decides which type reduces the balance. */
@@ -240,7 +241,7 @@ export const PARTY_STATEMENT_WORDING: Record<
 };
 
 /** Shown beside a negative closing balance: the party is ahead, nobody is short. */
-export const ADVANCE_NOTE = 'Advance';
+export const ADVANCE_NOTE = MONEY_TERMS.advance;
 
 export interface PartyStatementInput {
   kind: PartyKind;

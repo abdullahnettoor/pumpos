@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import {
   Chip,
   StatusChip,
+  VarianceChip,
+  TopBarIconButton,
+  Icon,
   STATUS_MAP,
   Dot,
   Delta,
@@ -12,6 +15,7 @@ import {
   Panel,
   EmptyState,
   MeterRow,
+  TankGauge,
   BreakdownBar,
   Sparkline,
   type PumpStatus,
@@ -23,6 +27,8 @@ import {
   type ButtonVariant,
   type ButtonSize,
 } from '../pump-ds/index.js';
+import { DEFAULT_TANK_LEVEL_SETTINGS, deriveTankLevel } from '@pump/shared';
+import { TimelineNowPill } from './Dashboard/cards/timeline/TimelineStrip.js';
 import {
   Fuel,
   User,
@@ -39,6 +45,12 @@ import {
   Droplet,
   TrendingUp,
 } from 'lucide-react';
+
+const TANK_SAMPLES: ReadonlyArray<[string, number, number | null]> = [
+  ['Tank 1 · MS', 12400, 4.2],
+  ['Tank 2 · HSD', 6800, 1.1],
+  ['Tank 3 · XP95', 3100, null],
+];
 
 /**
  * pump-ds showcase — the real design system living surface. Each pump-ds
@@ -461,8 +473,26 @@ const STATUS_GROUPS: { label: string; statuses: PumpStatus[] }[] = [
     statuses: ['open', 'closed', 'locked', 'draft', 'active', 'inactive', 'archived'],
   },
   { label: 'sync', statuses: ['synced', 'syncing', 'pending', 'offline', 'sync-failed'] },
-  { label: 'financial', statuses: ['paid', 'partial', 'unpaid', 'overdue', 'settled', 'overpaid'] },
-  { label: 'variance', statuses: ['balanced', 'excess', 'shortage', 'variance'] },
+  {
+    label: 'financial',
+    statuses: [
+      'paid',
+      'partial',
+      'unpaid',
+      'overdue',
+      'over-limit',
+      'voided',
+      'settled',
+      'overpaid',
+    ],
+  },
+  {
+    label: 'variance',
+    statuses: ['balanced', 'surplus', 'short', 'variance'],
+  },
+  { label: 'handover', statuses: ['handover-pending', 'handover-due', 'handover-recorded'] },
+  { label: 'shift', statuses: ['shift-live', 'shift-past-end', 'shift-closed'] },
+  { label: 'day', statuses: ['day-open', 'day-draft', 'day-sealed', 'day-final'] },
 ];
 
 const StatusVocabulary: React.FC = () => (
@@ -638,27 +668,23 @@ const DashboardBlocks: React.FC = () => (
           }
         >
           <div className="space-y-3">
-            <MeterRow
-              label="Tank 1"
-              sublabel="XP-95"
-              value={7200}
-              max={9000}
-              valueLabel="7,200 / 9,000 L"
-            />
-            <MeterRow
-              label="Tank 2"
-              sublabel="HSD"
-              value={320}
-              max={9000}
-              valueLabel="320 / 9,000 L"
-            />
-            <MeterRow
-              label="Tank 3"
-              sublabel="MS-9"
-              value={1150}
-              max={9000}
-              valueLabel="1,150 / 9,000 L"
-            />
+            {(
+              [
+                ['Tank 1 · XP-95', 7200],
+                ['Tank 2 · HSD', 320],
+                ['Tank 3 · MS', 1150],
+              ] as const
+            ).map(([name, volume]) => (
+              <TankGauge
+                key={name}
+                name={name}
+                variant="bar"
+                level={deriveTankLevel(
+                  { capacity: 9000, currentVolume: volume },
+                  DEFAULT_TANK_LEVEL_SETTINGS,
+                )}
+              />
+            ))}
           </div>
         </Panel>
         <Panel
@@ -692,6 +718,40 @@ const DashboardBlocks: React.FC = () => (
         <MeterRow label="Healthy" value={7200} max={9000} valueLabel="80%" />
         <MeterRow label="Running low" value={1080} max={9000} valueLabel="12%" />
         <MeterRow label="Critical" value={270} max={9000} valueLabel="3%" />
+      </div>
+    </div>
+
+    {/* TankGauge (#520) */}
+    <div>
+      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+        TankGauge · tube + bar · station tank levels (default critical &lt;25% · low &lt;40%)
+      </div>
+      <div className="grid gap-4 rounded-card border border-border-soft bg-surface p-4 sm:grid-cols-2">
+        <div className="space-y-3">
+          {TANK_SAMPLES.map(([name, volume, cover]) => (
+            <TankGauge
+              key={name}
+              name={name}
+              level={deriveTankLevel(
+                { capacity: 20000, currentVolume: volume, daysOfCover: cover },
+                DEFAULT_TANK_LEVEL_SETTINGS,
+              )}
+            />
+          ))}
+        </div>
+        <div className="space-y-3">
+          {TANK_SAMPLES.map(([name, volume, cover]) => (
+            <TankGauge
+              key={name}
+              name={name}
+              variant="bar"
+              level={deriveTankLevel(
+                { capacity: 20000, currentVolume: volume, daysOfCover: cover },
+                DEFAULT_TANK_LEVEL_SETTINGS,
+              )}
+            />
+          ))}
+        </div>
       </div>
     </div>
 
@@ -840,6 +900,96 @@ export const PumpDsComponentsPanel: React.FC = () => (
       description="The reusable primitives behind the dashboard reframe: PageHeader, Panel, MeterRow (tank gauges), BreakdownBar (collections split), Sparkline (dependency-free trends), and EmptyState. All app-wide, not dashboard-only."
     >
       <DashboardBlocks />
+    </Group>
+  </div>
+);
+
+// ---------------- status vocabulary (#518) ----------------
+
+const SOLID_TONES = ['danger', 'warning', 'success', 'info', 'neutral'] as const;
+
+/** Every solid fill in the product, each with its paired `text-on-*`. */
+const SolidStatusRow: React.FC = () => (
+  <div>
+    <Row label="action" note="Button danger">
+      <Button variant="danger" size="sm" leftIcon={<Trash2 />}>
+        Void sale
+      </Button>
+    </Row>
+    <Row label="solid chips" note="text-on-{tone}">
+      {SOLID_TONES.map((t) => (
+        <Chip key={t} variant="solid" tone={t}>
+          {t[0].toUpperCase() + t.slice(1)}
+        </Chip>
+      ))}
+    </Row>
+    <Row label="count badge" note="TopBar bell">
+      <TopBarIconButton aria-label="Notifications (3)" badge={3}>
+        <Icon name="bell" size="md" />
+      </TopBarIconButton>
+      <TopBarIconButton aria-label="Notifications (12)" badge={12}>
+        <Icon name="bell" size="md" />
+      </TopBarIconButton>
+    </Row>
+    <Row label="now pill" note="Dashboard timeline">
+      <TimelineNowPill>2:45 pm</TimelineNowPill>
+    </Row>
+  </div>
+);
+
+const VarianceRow: React.FC = () => (
+  <div>
+    <Row label="cash" note="VarianceChip">
+      <VarianceChip amount={0} />
+      <VarianceChip amount={1200} />
+      <VarianceChip amount={-340.5} />
+      <VarianceChip amount={-1240.4} decimals={0} />
+    </Row>
+    <Row label="stock" note='kind="stock"'>
+      <VarianceChip amount={0} kind="stock" />
+      <VarianceChip amount={12.5} kind="stock" />
+      <VarianceChip amount={-3} kind="stock" />
+    </Row>
+  </div>
+);
+
+const VOCAB_ROWS: { label: string; statuses: PumpStatus[] }[] = [
+  { label: 'party', statuses: ['active', 'inactive'] },
+  { label: 'handover', statuses: ['handover-pending', 'handover-due', 'handover-recorded'] },
+  { label: 'shift', statuses: ['shift-live', 'shift-past-end', 'shift-closed'] },
+  { label: 'day', statuses: ['day-open', 'day-draft', 'day-sealed', 'day-final'] },
+  { label: 'money', statuses: ['overdue', 'over-limit', 'voided'] },
+];
+
+export const PumpDsStatusPanel: React.FC = () => (
+  <div>
+    <Group
+      title="Status vocabulary · solid fills"
+      description="Every solid status fill pairs with its own text-on token (#518): danger action, the five solid chip tones, the TopBar count badge and the timeline now pill. In dark mode the fills lighten and the text flips dark, so each pair stays at AA."
+    >
+      <SolidStatusRow />
+    </Group>
+
+    <Group
+      title="Status vocabulary · variance"
+      description="One rule for every variance: Balanced by isBalancedVariance (green), a surplus in amber with a plus, a shortage in red with a true minus. Cash in rupees, stock in litres."
+    >
+      <VarianceRow />
+    </Group>
+
+    <Group
+      title="Status vocabulary · states"
+      description="Party, handover, shift, day and money states take their word and tone from statusPresentation in @pump/shared, the same source mobile renders. One word, one colour."
+    >
+      <div>
+        {VOCAB_ROWS.map((g) => (
+          <Row key={g.label} label={g.label}>
+            {g.statuses.map((st) => (
+              <StatusChip key={st} status={st} />
+            ))}
+          </Row>
+        ))}
+      </div>
     </Group>
   </div>
 );

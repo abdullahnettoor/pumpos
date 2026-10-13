@@ -472,7 +472,7 @@ describe('Home: tiles', () => {
     expect(variance.getByText('Office count')).toBeTruthy();
     expect(variance.getByText('₹0').className).toContain('text-good');
     expect(variance.getByText('1 closed Shift')).toBeTruthy();
-    expect(within(tile('Gross margin')).getByText('₹21,720')).toBeTruthy();
+    expect(within(tile('Gross margin')).getByText('₹21.7k')).toBeTruthy();
     expect(within(tile('Credit sales')).getByText('4 slips')).toBeTruthy();
     expect(within(tile('Purchases')).getByText('1 purchase')).toBeTruthy();
     expect(within(tile('Purchases')).getByText('₹10.43L')).toBeTruthy();
@@ -568,16 +568,25 @@ describe('Home: attention', () => {
 });
 
 describe('Home: tanks, money, removed sections', () => {
-  it('colours tank gauges red below 25% and amber below 40%', () => {
+  it('colours tank gauges critical below 25% and low below 40% by default', () => {
     const { container } = renderHome();
     const level = (title: string) =>
       screen.getByText(title).closest('[data-level]')!.getAttribute('data-level');
     expect(level('MS')).toBe('ok'); // 62%
-    expect(level('HSD')).toBe('red'); // 18%
-    expect(level('XP95')).toBe('amber'); // 35%
+    expect(level('HSD')).toBe('critical'); // 18%
+    expect(level('XP95')).toBe('low'); // 35%
     expect(container.querySelectorAll('[data-level]')).toHaveLength(3);
     expect(screen.getByText('18%')).toBeTruthy();
     expect(screen.getByText('12.4 KL')).toBeTruthy();
+  });
+
+  it('colours tank gauges by the station tank levels (#520)', () => {
+    renderHome(station({ ...IST, tankLevels: { criticalBelowPct: 20, lowBelowPct: 70 } }));
+    const level = (title: string) =>
+      screen.getByText(title).closest('[data-level]')!.getAttribute('data-level');
+    expect(level('MS')).toBe('low'); // 62%
+    expect(level('HSD')).toBe('critical'); // 18%
+    expect(level('XP95')).toBe('low'); // 35%
   });
 
   it('shows days of cover on a gauge, and nothing for a tank without sales history', () => {
@@ -589,20 +598,22 @@ describe('Home: tanks, money, removed sections', () => {
     expect(within(gauge('XP95')).queryByText(/day/)).toBeNull();
   });
 
-  it('opens Money from To collect and To pay', () => {
+  it('opens Money from Receivable and Payable', () => {
     renderHome();
-    const collect = screen.getByText('To collect').closest('button')!;
+    const collect = screen.getByText('Receivable').closest('button')!;
     expect(within(collect).getByText('₹6.82L')).toBeTruthy();
     expect(within(collect).getByText('2 customers to collect')).toBeTruthy();
     fireEvent.click(collect);
     expect(nav.active).toBe('money');
-    expect(within(screen.getByText('To pay').closest('button')!).getByText('₹10.43L')).toBeTruthy();
+    expect(
+      within(screen.getByText('Payable').closest('button')!).getByText('₹10.43L'),
+    ).toBeTruthy();
     expect(nav.views.money?.view).toBe('collect');
   });
 
-  it('opens Money on its To pay segment from the To pay tile', () => {
+  it('opens Money on its Payable segment from the Payable tile', () => {
     renderHome();
-    fireEvent.click(screen.getByText('To pay').closest('button')!);
+    fireEvent.click(screen.getByText('Payable').closest('button')!);
     expect(nav.active).toBe('money');
     expect(nav.views.money?.view).toBe('pay');
   });

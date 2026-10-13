@@ -23,6 +23,8 @@
  * count). The test fails when a file gains violations, when a file not on the
  * list has any, and when a file has FEWER than its entry: lower the entry with
  * `npm run test:classes:update -w @pump/ui`, which only ever lowers entries.
+ * `npm run test:classes:baseline -w @pump/ui` rewrites the list from scratch
+ * (may raise entries): one-off rebaselines only, never in a normal PR.
  *
  * Run: `npm run test:classes -w @pump/ui`
  * Plain CSS classes defined in `index.css` are allowed; add marker classes
@@ -34,7 +36,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compile } from 'tailwindcss';
 import { describe, expect, it } from 'vitest';
-import { compareToAllowList, lowerAllowList, type Counts } from './class-guard/ratchet.js';
+import {
+  baselineAllowList,
+  compareToAllowList,
+  lowerAllowList,
+  type Counts,
+} from './class-guard/ratchet.js';
 import {
   RULES,
   cssDefinitions,
@@ -49,6 +56,8 @@ import {
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ALLOW_LIST = path.join(SRC, 'pump-ds/class-guard/allowlist.json');
 const UPDATE = process.env.CLASS_GUARD_UPDATE === '1';
+/** One-off rebaseline: rewrite the list from the actual counts (may raise). */
+const BASELINE = process.env.CLASS_GUARD_BASELINE === '1';
 const require_ = createRequire(import.meta.url);
 
 /** Folders that are not product UI: the guard itself and test helpers. */
@@ -141,8 +150,8 @@ describe('style check: packages/ui/src stays within the design system', () => {
     const tree = await scanTree();
     const actual = countsOf(tree);
     let allowed = readAllowList();
-    if (UPDATE) {
-      allowed = lowerAllowList(actual, allowed);
+    if (BASELINE || UPDATE) {
+      allowed = BASELINE ? baselineAllowList(actual) : lowerAllowList(actual, allowed);
       writeFileSync(ALLOW_LIST, `${JSON.stringify(allowed, null, 2)}\n`);
     }
     const problems = compareToAllowList(actual, allowed).map((p) =>
@@ -250,14 +259,30 @@ describe('style check rules', () => {
       expect(findFillTextMismatches(ok), ok).toEqual([]);
   });
 
-  // Uses a fake compiler that pretends the pairs exist. Against the real
-  // tailwind.css `text-on-danger` (and the other non-brand pairs) is still a
-  // dead class until #518 (PR #548) maps them; this only checks the pairing logic.
-  it('fill-text-pair: a correct pair passes and a wrong one is flagged (fake compiler, real pairs land in #518)', () => {
-    const ctx = fake(['bg-danger-fg', 'text-on-danger', 'bg-brand', 'text-on-brand']);
-    const fixture =
-      "<i className='bg-danger-fg text-on-danger' />; const B = 'bg-brand text-on-danger';";
-    const f = scanSource(fixture, 'x.tsx', ctx);
+  it('text-on-* utilities compile against the real tailwind.css', async () => {
+    const generates = await makeBuilder();
+    for (const token of [
+      'text-on-brand',
+      'text-on-danger',
+      'text-on-warning',
+      'text-on-success',
+      'text-on-info',
+      'text-on-neutral',
+    ])
+      expect(generates(token), token).toBe(true);
+  });
+
+  it('fill-text-pair: correct pairs pass and a wrong one is flagged (real compiler)', async () => {
+    const generates = await makeBuilder();
+    const fixture = [
+      "<i className='bg-danger-fg text-on-danger' />;",
+      "<i className='bg-warning-fg text-on-warning' />;",
+      "<i className='bg-success-fg text-on-success' />;",
+      "<i className='bg-info-fg text-on-info' />;",
+      "<i className='bg-ink-strong text-on-neutral' />;",
+      "const B = 'bg-brand text-on-danger';",
+    ].join('\n');
+    const f = scanSource(fixture, 'x.tsx', { generates });
     expect(f['dead-class']).toEqual([]);
     expect(f['fill-text-pair']).toEqual(['bg-brand + text-on-danger']);
   });
@@ -375,6 +400,24 @@ describe('style check ratchet', () => {
     expect(lowerAllowList({ 'dead-class': { 'a.tsx': 1, 'b.tsx': 1 } }, allowed)).toEqual({
       'dead-class': { 'a.tsx': 1, 'b.tsx': 1 },
     });
+  });
+
+  it('baseline rewrites from actual counts (raises and adds); update never raises', () => {
+    const actual: Counts = {
+      'dead-class': { 'a.tsx': 5, 'b.tsx': 0, 'new.tsx': 4 },
+      'raw-color': { 'c.tsx': 1 },
+    };
+    const fresh: Counts = {
+      'dead-class': { 'a.tsx': 5, 'new.tsx': 4 },
+      'raw-color': { 'c.tsx': 1 },
+    };
+    expect(baselineAllowList(actual)).toEqual(fresh);
+    expect(compareToAllowList(actual, baselineAllowList(actual))).toEqual([]);
+    const lowered = lowerAllowList(actual, allowed);
+    for (const [rule, byFile] of Object.entries(lowered))
+      for (const [file, n] of Object.entries(byFile))
+        expect(n).toBeLessThanOrEqual(allowed[rule as keyof Counts]![file]!);
+    expect(lowered).not.toEqual(fresh);
   });
 
   it('the committed allow-list is already lowered (sorted, no zero entries)', () => {

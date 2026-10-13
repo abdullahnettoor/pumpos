@@ -57,7 +57,7 @@ export const FundingAccountSelect: React.FC<FundingAccountSelectProps> = ({
       onChange={onChange}
       placeholder="Choose account…"
       searchPlaceholder="Search accounts…"
-      emptyMessage="No matching accounts. Add one in Finance → Accounts."
+      emptyMessage="No matching accounts. Add one in Accounts."
       disabled={disabled}
       invalid={invalid}
     />

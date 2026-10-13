@@ -5,11 +5,6 @@
     "components/Shifts/ShiftControlBar.tsx": 1,
     "components/Shifts/ShiftSummaryView.tsx": 1
   },
-  "fill-text-pair": {
-    "components/Dashboard/cards/timeline/TimelineStrip.tsx": 1,
-    "pump-ds/button/Button.tsx": 1,
-    "pump-ds/shell/TopBar.tsx": 2
-  },
   "raw-color": {
     "components/AppShell.tsx": 3,
     "components/Auth/AcceptInvite.tsx": 2,

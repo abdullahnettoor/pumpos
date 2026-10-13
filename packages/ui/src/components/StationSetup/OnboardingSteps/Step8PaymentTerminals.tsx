@@ -91,7 +91,7 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
             Add the card/UPI machines (POS devices) at this station. These are linked to dispensers
             when a shift is opened. Optional — you can run cash-only and add terminals later from
-            Station Setup.
+            Station → Payment terminals.
           </p>
         </div>
         <Button type="button" variant="primary" size="sm" onClick={addTerminal}>

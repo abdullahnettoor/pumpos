@@ -102,3 +102,12 @@ describe('Step2BusinessRules keeps schedule time controls inside their day card'
     expect(allTimeInputs.length).toBeGreaterThan(gridInputs.length);
   });
 });
+
+describe('Step2BusinessRules tank levels (#520)', () => {
+  it('shows the default tank-level thresholds', () => {
+    const { getByTestId } = renderStep(true);
+    expect(getByTestId('tank-level-defaults').textContent).toBe(
+      'Critical below 25% · low below 40% of capacity',
+    );
+  });
+});

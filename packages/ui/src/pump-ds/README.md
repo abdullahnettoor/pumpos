@@ -28,6 +28,34 @@ a time — never in place.
 5. **Naming maps to the domain, not the catalog.** `BusinessDayPill`, not
    `DatePill4`. `StatusChip`, not `Badge12`.
 
+6. **Never show an empty state for a failed query.** "No expenses yet" when
+   the request failed tells the operator something false. A region that
+   loads its own data goes in a `DataSection` (`data-section/`), given the
+   query results themselves:
+   - **loading** only while `isPending && fetchStatus !== 'idle'` — a skeleton.
+     A query paused offline (`fetchStatus: 'paused'`) is still loading, never
+     empty. Don't key on `isLoading`: it is false for a paused query.
+   - **not yet requested** (`isPending`, `fetchStatus: 'idle'` — disabled or
+     waiting on a dependency; TanStack v5 keeps it pending forever) renders
+     nothing, or the skeleton when `enabled` is passed `true`.
+   - **refused** (403 / `FORBIDDEN`, or `isAccessPolicyError`:
+     `CAPABILITY_NOT_ENTITLED`, `LIMIT_REACHED`, `SUBSCRIPTION_RESTRICTED`,
+     `ORGANIZATION_SUSPENDED`) shows the server's refusal message and **no
+     Retry** — retrying can't change the answer. Only when every failure is a
+     refusal.
+   - **failed** (any other failure, even mixed with refusals) shows "Couldn't
+     load <title> · Retry" (Retry refetches only the failed queries that can be
+     retried, never the refused ones).
+   - **empty** only after every query succeeded with nothing to show,
+     otherwise the content.
+
+   One section failing never blanks the page. `shape="card"` frames every
+   state in a Panel, `shape="cards"` frames only loading/error (for content
+   that is itself bordered cards), `shape="bare"` adds no frame for a
+   table/list region (`DataTable` does this itself; pass it `title`,
+   `error={q.error}` and `onRetry={q.refetch}`). Gate with `enabled`, and give
+   the queries the same flag so a hidden section sends no request.
+
 ## Style check
 
 `classGuard.test.ts` scans every source file in `packages/ui/src` (tests
@@ -69,6 +97,7 @@ Plain CSS classes defined in `index.css` are allowed.
 ```sh
 npm run test:classes -w @pump/ui          # run the check (CI runs it too)
 npm run test:classes:update -w @pump/ui   # lower the allow-list after a fix
+npm run test:classes:baseline -w @pump/ui # one-off full rebaseline (may raise)
 ```
 
 Today's violations are recorded in `class-guard/allowlist.json` as
@@ -80,6 +109,12 @@ commit the rewritten `allowlist.json`. The command only ever lowers entries and
 drops them at zero; it never raises or adds one, so a new violation has to be
 fixed, not listed. If two PRs conflict in `allowlist.json`, take either side and
 re-run the command on the merged branch.
+
+**Rebaselining (one-off only).** `npm run test:classes:baseline -w @pump/ui`
+rewrites `allowlist.json` from the current counts, so it can raise entries and
+add files. It exists for a deliberate one-off reset (as after the wave-1 merge
+in #517), reviewed file by file in its PR. Normal PRs never run it: they fix
+new violations and use the lower-only `test:classes:update`.
 
 ## Load order (apps must follow this)
 

@@ -11,7 +11,8 @@ import {
   Path,
 } from '@react-pdf/renderer';
 import { MARK_VIEWBOX, MARK_PATH } from '../../pump-ds/brand/Brand.js';
-import { formatMoney } from '../../utils/format.js';
+import { formatQuantity, formatSignedMoney } from '../../utils/format.js';
+import { formatVariance } from '../../utils/variance.js';
 
 // Embed Plus Jakarta Sans + Geist Mono (matches the app type; Mono is used
 // for all numeric/currency cells and MUST carry the rupee glyph ₹ — Noto Sans
@@ -35,7 +36,7 @@ export type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
 export { DEFAULT_SHIFT_SUMMARY_CONFIG, SHIFT_SUMMARY_SECTION_LABELS } from './reportConfig.js';
 export type { Letterhead } from './letterhead.js';
 export { letterheadFromStation } from './letterhead.js';
-import { shiftDisplayLabel } from '@pump/shared';
+import { shiftDisplayLabel, type StatusTone } from '@pump/shared';
 import type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
 import { DEFAULT_SHIFT_SUMMARY_CONFIG } from './reportConfig.js';
 import { legacyPurchases } from './legacyPurchases.js';
@@ -57,15 +58,31 @@ export const C = {
   white: '#FFFFFF',
 };
 
-export const inr = (n: any) => formatMoney(n);
-export const inr0 = (n: any) => `\u20b9${Number(n || 0).toLocaleString('en-IN')}`;
-export const vol3 = (n: any) =>
-  `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} L`;
-export const vol1 = (n: any) =>
-  `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
+/**
+ * Shared tones on paper (#518): balanced green, surplus amber, short red. Hex,
+ * since react-pdf has no CSS variables; exhaustive over `StatusTone`, so a new
+ * tone fails here at compile time.
+ */
+const PDF_TONE = {
+  success: C.success,
+  warning: C.amber,
+  danger: C.danger,
+  info: C.ink,
+  neutral: C.muted,
+} satisfies Record<StatusTone, string>;
+
+/** PDF money: paise kept, a negative signed `−₹1,200.00` (the app's one signed-money rule). */
+export const inr = (n: any) => formatSignedMoney(n);
+/** PDF money in whole rupees: `−₹1,200`. */
+export const inr0 = (n: any) => formatSignedMoney(n, { decimals: 0 });
+// The shared quantity format with the decimals these PDFs print (3 for meter and
+// dip readings, 1 for vol1). A missing figure prints 0, as these PDFs always
+// have, not the screen's `—`.
+const reading = (n: any) => Number(n) || 0;
+export const vol3 = (n: any) => formatQuantity(reading(n), 'L', { decimals: 3 });
+export const vol1 = (n: any) => formatQuantity(reading(n), 'L', { decimals: 1 });
 // Unit-aware variants (L for liquids, kg for CNG/Auto-LPG). Never sum across units.
-export const vol3u = (n: any, u?: string) =>
-  `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${u || 'L'}`;
+export const vol3u = (n: any, u?: string) => formatQuantity(reading(n), u || 'L', { decimals: 3 });
 export const unitTotals = (rows: any[], getter: (r: any) => number, dec = 3): string => {
   const m: Record<string, number> = {};
   for (const r of rows) {
@@ -759,16 +776,10 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
               fontSize: 10,
               fontFamily: 'Geist Mono',
               fontWeight: 700,
-              color: Math.abs(Number(d.cashVariance || 0)) > 100 ? C.danger : C.ink,
+              color: PDF_TONE[formatVariance(d.cashVariance, 'cash').tone],
             }}
           >
-            {Number(d.cashVariance || 0) > 0 ? '+' : ''}
-            {inr(d.cashVariance)}
-            {Number(d.cashVariance || 0) === 0
-              ? ' (Perfect Match)'
-              : Math.abs(Number(d.cashVariance || 0)) > 100
-                ? ' (Discrepancy)'
-                : ''}
+            {formatVariance(d.cashVariance, 'cash').text}
           </Text>
         </View>
       </View>

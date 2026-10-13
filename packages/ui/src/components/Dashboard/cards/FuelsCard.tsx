@@ -11,6 +11,7 @@ import {
   useDensityTodaySummary,
   useInventoryStatus,
   usePricing,
+  useTankLevelSettings,
 } from '../../../query/hooks.js';
 import { FuelBlock, type Part } from './fuels/FuelBlock.js';
 import {
@@ -22,6 +23,7 @@ import {
   type FuelTank,
   type InventoryTankRow,
 } from './fuels/fuelsModel.js';
+import { ROUTES } from '../../../nav-intent/routes.js';
 
 /**
  * Fuels column card: one block per fuel (price, density at 15 °C, tanks with
@@ -44,6 +46,7 @@ export const FuelsCard: React.FC = () => {
     [station.settings],
   );
   const canRecord = canRecordDensityFromDashboard(role);
+  const tankLevels = useTankLevelSettings(station.id);
 
   const fuels = pricingQ.data ?? [];
 
@@ -77,7 +80,11 @@ export const FuelsCard: React.FC = () => {
             : inventoryQ.data
               ? {
                   status: 'ready',
-                  value: deriveFuelTanks(inventoryQ.data as InventoryTankRow[], f.productId),
+                  value: deriveFuelTanks(
+                    inventoryQ.data as InventoryTankRow[],
+                    f.productId,
+                    tankLevels,
+                  ),
                 }
               : { status: 'loading' };
           return (
@@ -100,7 +107,7 @@ export const FuelsCard: React.FC = () => {
               canPlan={canPlanDecant}
               onRecord={() => onNavigate('/inventory', { focusInventoryTab: 'density' })}
               onDecant={() => onNavigate('/inventory', { focusInventoryTab: 'decantations' })}
-              onPlan={() => onNavigate('/purchases', { openNewPurchase: true })}
+              onPlan={() => onNavigate(ROUTES.suppliers, { openNewPurchase: true })}
             />
           );
         })}

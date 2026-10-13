@@ -127,8 +127,8 @@ describe('ReportsScreen', () => {
       },
     ];
     mount();
-    const row = screen.getByRole('button', { name: /^Fri 9 Oct, Live/ });
-    expect(row.getAttribute('aria-label')).toBe('Fri 9 Oct, Live, In progress, See Home');
+    const row = screen.getByRole('button', { name: /^Fri 9 Oct, Open/ });
+    expect(row.getAttribute('aria-label')).toBe('Fri 9 Oct, Open, In progress, See Home');
     expect(within(row).getByText('In progress')).toBeTruthy();
     expect(within(row).getByText('See Home')).toBeTruthy();
     expect(row.textContent).not.toContain('21,500');
@@ -144,7 +144,7 @@ describe('ReportsScreen', () => {
     it('opens Home for a Manager, as for an Owner', () => {
       liveOnly();
       mount(tabsForRole('Manager', false));
-      const row = screen.getByRole('button', { name: /^Fri 9 Oct, Live/ });
+      const row = screen.getByRole('button', { name: /^Fri 9 Oct, Open/ });
       expect(within(row).getByText('See Home')).toBeTruthy();
       fireEvent.click(row);
       expect(screen.getByTestId('tab').textContent).toBe('home');
@@ -153,7 +153,7 @@ describe('ReportsScreen', () => {
     it('opens Shifts for a dock that has Shifts but no Home', () => {
       liveOnly();
       mount(['shifts', 'reports', 'money', 'insights']);
-      const row = screen.getByRole('button', { name: /^Fri 9 Oct, Live/ });
+      const row = screen.getByRole('button', { name: /^Fri 9 Oct, Open/ });
       expect(within(row).getByText('See Shifts')).toBeTruthy();
       fireEvent.click(row);
       expect(screen.getByTestId('tab').textContent).toBe('shifts');
@@ -162,11 +162,21 @@ describe('ReportsScreen', () => {
     it('is not tappable for an Accountant (no Home or Shifts), and says the day is in progress', () => {
       liveOnly();
       mount(['reports', 'money']);
-      expect(screen.queryByRole('button', { name: /^Fri 9 Oct, Live/ })).toBeNull();
-      const row = screen.getByRole('group', { name: /^Fri 9 Oct, Live/ });
+      expect(screen.queryByRole('button', { name: /^Fri 9 Oct, Open/ })).toBeNull();
+      const row = screen.getByRole('group', { name: /^Fri 9 Oct, Open/ });
       expect(within(row).getByText('Day in progress')).toBeTruthy();
       expect(screen.getByTestId('tab').textContent).toBe('reports');
     });
+  });
+
+  it('compacts the tile figure only; a day row shows and speaks the exact amount', () => {
+    seed();
+    mount();
+    const tile = screen.getByText('Last 7 days').parentElement!;
+    expect(within(tile).getByText('₹31.96L')).toBeTruthy();
+    const row = screen.getByRole('button', { name: /^Wed 7 Oct, Draft/ });
+    expect(within(row).getByText('₹51,800')).toBeTruthy();
+    expect(row.getAttribute('aria-label')).not.toMatch(/₹[\d.]+(k|L|Cr)\b/);
   });
 
   it('gives each row a label that carries its figures, with the decoration hidden', () => {
@@ -189,7 +199,7 @@ describe('ReportsScreen', () => {
   it('routes Live to Home', () => {
     seed();
     mount();
-    fireEvent.click(screen.getByRole('button', { name: /^Fri 9 Oct, Live/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Fri 9 Oct, Open/ }));
     expect(screen.getByTestId('tab').textContent).toBe('home');
   });
 

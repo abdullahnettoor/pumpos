@@ -212,14 +212,14 @@ describe('HandoverDrawer', () => {
       renderWithProviders(<HandoverDrawer {...baseProps()} />);
       setReading(NOZZLE_A, '1050');
       setField('cashHandedOver', '4800');
-      expect(screen.getByText(/Shortage/)).toBeDefined();
+      expect(screen.getByText(/−₹200.00 short/)).toBeDefined();
     });
 
     it('reports a surplus when the attendant is over', () => {
       renderWithProviders(<HandoverDrawer {...baseProps()} />);
       setReading(NOZZLE_A, '1050');
       setField('cashHandedOver', '5200');
-      expect(screen.getByText(/Surplus/)).toBeDefined();
+      expect(screen.getByText(/\+₹200.00 surplus/)).toBeDefined();
     });
 
     it('treats sub-paise float dust as balanced rather than a shortage', () => {
@@ -496,7 +496,7 @@ describe('HandoverDrawer', () => {
       await waitFor(() => expect(screen.getByText(/Balanced/)).toBeDefined());
       fireEvent.click(removeButton());
       expect(input('cashDrops')).toBeNull();
-      await waitFor(() => expect(screen.getByText(/Shortage/)).toBeDefined());
+      await waitFor(() => expect(screen.getByText(/−₹1,000.00 short/)).toBeDefined());
       fireEvent.click(addButton()!);
       expect(input('cashDrops').value).toBe('');
     });

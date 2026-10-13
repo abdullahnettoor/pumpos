@@ -88,6 +88,19 @@ describe('Validation Schemas Tests', () => {
       if (!result.success) return;
       expect(result.data.settings?.report_config).toEqual(report_config);
     });
+
+    it('round-trips tank-level thresholds and rejects a critical at or above low (#520)', () => {
+      const tankLevels = { criticalBelowPct: 15, lowBelowPct: 35 };
+      const kept = stationSchema.partial().safeParse({ settings: { tankLevels } });
+      expect(kept.success).toBe(true);
+      if (kept.success) expect(kept.data.settings?.tankLevels).toEqual(tankLevels);
+
+      expect(
+        stationSchema.partial().safeParse({
+          settings: { tankLevels: { criticalBelowPct: 40, lowBelowPct: 30 } },
+        }).success,
+      ).toBe(false);
+    });
   });
 
   describe('nozzleReadingSchema', () => {

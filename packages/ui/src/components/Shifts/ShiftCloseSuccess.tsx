@@ -1,7 +1,8 @@
 import React from 'react';
 import { AlertTriangle, Check, Play, FileText } from 'lucide-react';
 import { Button } from '../../pump-ds/index.js';
-import { inr } from '../../utils/format.js';
+import { formatQuantity, inr } from '../../utils/format.js';
+import { formatVariance, VARIANCE_TONE_TEXT } from '../../utils/variance.js';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 
 export interface ShiftCloseResult {
@@ -56,6 +57,7 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
   const hasFailedDips = tankDips.some((dip) => dip.status === 'failed');
   const needsDipRetry = hasPendingDips || hasFailedDips;
   const isSavingDips = tankDips.some((dip) => dip.status === 'saving');
+  const cashVariance = formatVariance(result.variance, 'cash');
   return (
     <div
       className="animate-fade-in card card-comfortable"
@@ -151,15 +153,11 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
             justifyContent: 'space-between',
             padding: '12px 16px',
             fontWeight: 700,
-            color: result.variance === 0 ? 'var(--state-success-fg)' : 'var(--brand-danger)',
+            color: VARIANCE_TONE_TEXT[cashVariance.tone],
           }}
         >
           <span>Cash Variance</span>
-          <span style={{ fontFamily: 'var(--font-mono)' }}>
-            {result.variance > 0 ? '+' : ''}
-            {inr(result.variance)}
-            {result.variance === 0 ? ' (Perfect Match)' : ''}
-          </span>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>{cashVariance.text}</span>
         </div>
       </div>
 
@@ -234,21 +232,10 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
                 {dip.status === 'saved' &&
                   dip.expectedQuantity !== undefined &&
                   dip.varianceQuantity !== undefined && (
-                    <div
-                      style={{
-                        marginTop: 2,
-                        color:
-                          dip.varianceQuantity === 0
-                            ? 'var(--text-muted)'
-                            : 'var(--state-warning-fg)',
-                        fontFamily: 'var(--font-sans)',
-                        fontSize: 11,
-                      }}
-                    >
-                      Expected {dip.expectedQuantity.toFixed(1)} L · Variance{' '}
-                      {dip.varianceQuantity > 0 ? '+' : ''}
-                      {dip.varianceQuantity.toFixed(1)} L
-                    </div>
+                    <DipVarianceLine
+                      expected={dip.expectedQuantity}
+                      variance={dip.varianceQuantity}
+                    />
                   )}
               </div>
             </div>
@@ -331,3 +318,20 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
     </div>
   );
 };
+
+/** A saved Tank Dip's expected stock and variance, read by the shared rule. */
+function DipVarianceLine({ expected, variance }: { expected: number; variance: number }) {
+  const v = formatVariance(variance, 'stock');
+  return (
+    <div
+      style={{
+        marginTop: 2,
+        color: VARIANCE_TONE_TEXT[v.tone],
+        fontFamily: 'var(--font-sans)',
+        fontSize: 11,
+      }}
+    >
+      Expected {formatQuantity(expected, 'L')} · Variance {v.text}
+    </div>
+  );
+}

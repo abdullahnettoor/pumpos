@@ -3,6 +3,7 @@ import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const hooks = vi.hoisted(() => ({
+  useTankLevelSettings: vi.fn(() => ({ criticalBelowPct: 25, lowBelowPct: 40 })),
   useShiftStatus: vi.fn(),
   useInventoryStatus: vi.fn(),
   useInventoryItems: vi.fn(),

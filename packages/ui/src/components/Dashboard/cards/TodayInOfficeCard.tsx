@@ -9,7 +9,7 @@ import { DashboardCard } from '../frame/DashboardCard.js';
 /**
  * Money column card: Today in the office (#506).
  * Latest 3 Office Records of today's Entry Date as a table, with the entry count.
- * The Cash Book › link lives once, in the Money column header.
+ * The Daily cash book › link lives once, in the Money column header.
  * Fails independently from the other Money cards.
  */
 export const TodayInOfficeCard: React.FC = () => {

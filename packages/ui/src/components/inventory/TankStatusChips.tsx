@@ -1,5 +1,6 @@
 import React from 'react';
 import { Chip } from '../../pump-ds/index.js';
+import { TANK_TONE_LABEL, type TankLevelSettings } from '@pump/shared';
 import { classifyTank, tankPct } from '../../utils/stock.js';
 
 export interface TankStatusChipsProps {
@@ -8,13 +9,15 @@ export interface TankStatusChipsProps {
     currentVolume: number | string;
     waitingOnDecantation?: boolean;
   };
+  /** The station's tank levels (`useTankLevelSettings`). */
+  tankLevels: TankLevelSettings;
 }
 
 /** Keeps the normal stock state visible alongside a pending Decantation state. */
-export const TankStatusChips: React.FC<TankStatusChipsProps> = ({ tank }) => {
+export const TankStatusChips: React.FC<TankStatusChipsProps> = ({ tank, tankLevels }) => {
   const capacity = Number(tank.capacity) || 0;
   const volume = Number(tank.currentVolume) || 0;
-  const level = classifyTank(tankPct(volume, capacity));
+  const level = classifyTank(tankPct(volume, capacity), tankLevels);
   const tone =
     level === 'critical'
       ? 'danger'
@@ -24,13 +27,11 @@ export const TankStatusChips: React.FC<TankStatusChipsProps> = ({ tank }) => {
           ? 'info'
           : 'success';
   const label =
-    level === 'critical'
-      ? 'Critical'
-      : level === 'low'
-        ? 'Low'
-        : level === 'over'
-          ? 'Over capacity'
-          : 'OK';
+    level === 'critical' || level === 'low'
+      ? TANK_TONE_LABEL[level]
+      : level === 'over'
+        ? 'Over capacity'
+        : 'OK';
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '4px' }}>

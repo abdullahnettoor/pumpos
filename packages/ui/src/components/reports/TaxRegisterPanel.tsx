@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useSalesTaxRegister, useIncomeGstRegister } from '../../query/hooks.js';
+import { useSalesTaxRegister } from '../../query/hooks.js';
 import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr } from '../../utils/format.js';
@@ -9,6 +9,9 @@ import { LoadingSpinner } from '../LoadingSpinner.js';
 
 export interface TaxRegisterPanelProps {
   selectedStation: any | null;
+  /** Controlled period (shared across the GST views). Omitted = own state. */
+  range?: DateRange;
+  onRangeChange?: (range: DateRange) => void;
 }
 
 const th: React.CSSProperties = { padding: '8px 10px', fontWeight: 600 };
@@ -19,25 +22,30 @@ const tdR: React.CSSProperties = { ...td, textAlign: 'right', fontFamily: 'var(-
 /**
  * Output-tax register (Phase T5). The day's/period's tax **collected**, split by
  * the regime it belongs to:
- *  - **GST** on merchandise/lubes and on other income — creditable to the buyer.
+ *  - **GST** on merchandise/lubes — creditable to the buyer. Output GST on
+ *    other income is its own GST view (Income), so it is not repeated here.
  *  - **VAT** on fuel — outside GST, no input credit, so it is reported on its own
  *    line and never folded into the GST totals.
  * Every figure is read from the split frozen on the source row at capture, so a
  * later rate change can never restate a closed period.
  */
-export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({ selectedStation }) => {
+export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({
+  selectedStation,
+  range: rangeProp,
+  onRangeChange,
+}) => {
   const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
-  const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
+  const [ownRange, setOwnRange] = useState<DateRange>(() => computeRange('this-month', clock));
+  const range = rangeProp ?? ownRange;
+  const setRange = onRangeChange ?? setOwnRange;
   const stationId = selectedStation?.id ?? null;
 
   const salesQ = useSalesTaxRegister({ stationId, from: range.from, to: range.to });
-  const incomeQ = useIncomeGstRegister({ stationId, from: range.from, to: range.to });
 
   // Memoised so the totals below actually memoise: a bare `?? []` hands the
   // dependency list a new array on every render while the query is loading.
   const saleRows = useMemo(() => salesQ.data ?? [], [salesQ.data]);
-  const incomeRows = useMemo(() => incomeQ.data ?? [], [incomeQ.data]);
 
   const totals = useMemo(() => {
     const gst = { taxable: 0, cgst: 0, sgst: 0, igst: 0, cess: 0 };
@@ -54,22 +62,11 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({ selectedStat
         gst.cess += Number(r.cess || 0);
       }
     }
-    const incomeGst = incomeRows.reduce(
-      (acc, r) => ({
-        taxable: acc.taxable + Number(r.taxableAmount || 0),
-        cgst: acc.cgst + Number(r.cgst || 0),
-        sgst: acc.sgst + Number(r.sgst || 0),
-        igst: acc.igst + Number(r.igst || 0),
-        cess: acc.cess + Number(r.cess || 0),
-      }),
-      { taxable: 0, cgst: 0, sgst: 0, igst: 0, cess: 0 },
-    );
     const gstOutput = gst.cgst + gst.sgst + gst.igst + gst.cess;
-    const incomeOutput = incomeGst.cgst + incomeGst.sgst + incomeGst.igst + incomeGst.cess;
-    return { gst, vat, incomeGst, gstOutput, incomeOutput, totalGst: gstOutput + incomeOutput };
-  }, [saleRows, incomeRows]);
+    return { gst, vat, gstOutput };
+  }, [saleRows]);
 
-  const loading = salesQ.isLoading || incomeQ.isLoading;
+  const loading = salesQ.isLoading;
   const gstSaleRows = saleRows.filter((r: any) => r.taxCategory === 'GST');
   const vatSaleRows = saleRows.filter((r: any) => r.taxCategory === 'FUEL_VAT');
 
@@ -94,19 +91,9 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({ selectedStat
         <KpiTile
           dot="brand"
           valueTone="brand"
-          label="Output GST"
-          value={inr(totals.totalGst)}
-          hint="merchandise + income"
-        />
-        <KpiTile
-          label="— on Merchandise"
+          label="Output GST (merchandise)"
           value={inr(totals.gstOutput)}
           hint={`${gstSaleRows.length} lines`}
-        />
-        <KpiTile
-          label="— on Other Income"
-          value={inr(totals.incomeOutput)}
-          hint={`${incomeRows.length} entries`}
         />
         <KpiTile
           dot="warning"

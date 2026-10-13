@@ -100,6 +100,35 @@ describe('deriveStationAlerts', () => {
   });
 });
 
+describe('deriveStationAlerts — station tank levels (#520)', () => {
+  const tank = {
+    id: 't1',
+    name: 'Petrol Tank',
+    productName: 'Petrol',
+    capacity: 10_000,
+    currentVolume: 3_000,
+  };
+
+  it('uses the 25 / 40 defaults', () => {
+    expect(deriveStationAlerts([{ ...tank, currentVolume: 2_400 }])[0]?.title).toBe(
+      'Petrol Tank critically low',
+    );
+    expect(deriveStationAlerts([{ ...tank, currentVolume: 3_900 }])[0]?.title).toBe(
+      'Petrol Tank running low',
+    );
+    expect(deriveStationAlerts([{ ...tank, currentVolume: 4_000 }])).toEqual([]);
+  });
+
+  it('follows the station thresholds', () => {
+    const levels = { criticalBelowPct: 35, lowBelowPct: 50 };
+    expect(deriveStationAlerts([tank], [], null, null, levels)[0]?.title).toBe(
+      'Petrol Tank critically low',
+    );
+    const relaxed = { criticalBelowPct: 10, lowBelowPct: 20 };
+    expect(deriveStationAlerts([tank], [], null, null, relaxed)).toEqual([]);
+  });
+});
+
 describe('deriveStationAlerts — shift to-dos', () => {
   const TZ = 'Asia/Kolkata';
   // 2026-10-12 15:00 IST

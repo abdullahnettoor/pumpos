@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildBars,
   buildCarryBar,
+  closedVarianceText,
   deriveCarryOver,
   hourTicks,
   openingChips,
@@ -224,5 +225,21 @@ describe('carry-over', () => {
     );
     expect(closed).toMatchObject({ kind: 'closed', text: 'Shift 3 · from 13 Oct' });
     expect(closed.widthPct).toBeCloseTo((65 / 1440) * 100);
+  });
+});
+
+describe('closedVarianceText', () => {
+  it('shows nothing for a balanced shift, including a sub-paisa residue', () => {
+    expect(closedVarianceText(null)).toBeNull();
+    expect(closedVarianceText(0)).toBeNull();
+    expect(closedVarianceText(0.004)).toBeNull();
+    expect(closedVarianceText(-0.004)).toBeNull();
+  });
+  it('signs a real variance in whole rupees', () => {
+    expect(closedVarianceText(1200.4)).toBe('+₹1,200');
+    expect(closedVarianceText(-340.6)).toBe('−₹341');
+  });
+  it('keeps paise under ₹1 so a real variance never reads ₹0', () => {
+    expect(closedVarianceText(0.4)).toBe('+₹0.40');
   });
 });
