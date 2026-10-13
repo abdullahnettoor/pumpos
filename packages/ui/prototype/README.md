@@ -20,3 +20,6 @@ Everything still open before the spec, switchable from the bottom control bar (o
 - **Data sources**: `?src=1` labels each block with its endpoint and cache tier.
 - **Role**: `?role=owner|manager|accountant|staff`.
 - **Station switcher**: `?org=multi|single&assigned=one|many`. The breadcrumb is a dropdown only when the user can reach >1 station (Owner: org stations; others: assigned stations).
+
+## Navigation & Insights: `ia.prototype.html`
+New sidebar groups (Operate · Parties · Books · Insight · Setup) with every page's renamed tabs (#540), and representative pages: Customers (list first), Accounts › Daily cash book (moved from Reports), Reports with grouped sub-navigation and one GST report, Station › Rules (tank thresholds + decantation tolerances), and a first Insights page (#541). `?page=…&tab=n&rep=…&theme=dark`. Tabs marked • were moved or renamed.

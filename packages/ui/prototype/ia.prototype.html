@@ -1,0 +1,356 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway (branch prototype/dashboard-revamp). Navigation & page structure (#540) + Insights base (#541).
+  Click the sidebar, tabs and the Reports sub-navigation. ?page=customers|accounts|reports|insights|station … &theme=dark
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PumpOS desktop — Shell + Dashboard variants (prototype)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root { --font-sans: 'Plus Jakarta Sans', -apple-system, sans-serif; --font-mono: 'Geist Mono', ui-monospace, monospace; }
+  .light {
+    --canvas: #f6f7f4; --surface: #ffffff; --alt: #f1f3ef; --line: #d9ded6; --line2: #b9c1b7;
+    --hi: #18201a; --tx: #2b342d; --mu: #5e6a61; --fa: #7a857c;
+    --acc: #1f6a53; --on-acc: #fff; --acc-soft: #e6f2ec; --acc-tint: #f1f8f4;
+    --info: #2e5e88; --info-soft: #e8f0f7; --good: #1e7a56; --good-soft: #e6f3ec;
+    --warn: #a2690b; --warn-soft: #fbf3e2; --warn-line: #efdcae; --bad: #b8443a; --bad-soft: #fbebe8; --bad-line: #f1cdc8;
+    --side: #f1f3ef; --track: #f1f3ef; --shadow: none;
+    --hero: linear-gradient(120deg, #e6f2ec 0%, #f6faf7 70%);
+  }
+  .dark {
+    --canvas: #0b0f0d; --surface: #121815; --alt: #161d1a; --line: #1f2925; --line2: #2a3530;
+    --hi: #ffffff; --tx: #cfd8d2; --mu: #8a9a91; --fa: #5d6c64;
+    --acc: #2fd18d; --on-acc: #06110c; --acc-soft: #143326; --acc-tint: #0f1d17;
+    --info: #6cb6ff; --info-soft: #12263a; --good: #2fd18d; --good-soft: #10241b;
+    --warn: #f2b544; --warn-soft: #221a10; --warn-line: #3a2a19; --bad: #ff7a6b; --bad-soft: #241514; --bad-line: #42201d;
+    --side: #0e1311; --track: #1c2521; --shadow: none;
+    --hero: linear-gradient(120deg, #12251c 0%, #0f1714 70%);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: var(--font-sans); font-size: 14px; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+  .num { font-family: var(--font-mono); font-feature-settings: 'tnum'; letter-spacing: 0; }
+  .sec-t { font-size: 12px !important; font-weight: 600 !important; color: var(--mu) !important; text-transform: uppercase; letter-spacing: .05em; }
+  .app { height: 100vh; display: flex; flex-direction: column; background: var(--canvas); color: var(--tx); overflow: hidden; }
+  .row { display: flex; align-items: center; }
+  .hi { color: var(--hi); } .mu { color: var(--mu); } .fa { color: var(--fa); }
+  .good { color: var(--good) !important; } .bad { color: var(--bad) !important; } .warn { color: var(--warn) !important; } .info { color: var(--info) !important; }
+
+  /* ---------- shell pieces ---------- */
+  .topbar { height: 48px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; color: var(--hi); letter-spacing: -0.01em; }
+  .mark { width: 26px; height: 26px; border-radius: 7px; background: var(--acc); color: var(--on-acc); display: grid; place-items: center; }
+  .switch { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px 0 6px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); }
+  .switch .ab { width: 22px; height: 22px; border-radius: 6px; background: var(--acc-soft); color: var(--acc); font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+  .switch .t { font-weight: 700; color: var(--hi); font-size: 13px; } .switch .s { font-size: 12px; color: var(--mu); }
+  .daychip { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); font-size: 12px; color: var(--tx); }
+  .dot { width: 7px; height: 7px; border-radius: 9px; background: var(--good); flex-shrink: 0; }
+  .live { box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); }
+  .pill { font-family: var(--font-sans); font-size: 11px; font-weight: 500; height: 22px; line-height: 22px; display: inline-block; padding: 0 8px; border-radius: 99px; white-space: nowrap; }
+  .p-warn { background: var(--warn-soft); color: var(--warn); } .p-bad { background: var(--bad-soft); color: var(--bad); } .p-ok { background: var(--good-soft); color: var(--good); }
+  .p-mu { background: var(--alt); color: var(--mu); border: 1px solid var(--line); } .p-info { background: var(--info-soft); color: var(--info); }
+  .search { flex: 1; max-width: min(420px, 38vw); height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--canvas); display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--fa); font-size: 12.5px; }
+  .kbd { margin-left: auto; font-family: var(--font-mono); font-size: 10px; font-weight: 500; padding: 0 4px; height: 18px; line-height: 16px; border-radius: 4px; border: 1px solid var(--line2); border-bottom-width: 2px; color: var(--mu); background: var(--surface); }
+  .btn { height: 32px; padding: 0 12px; border-radius: 8px; font-weight: 600; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .btn.pri { background: var(--acc); color: var(--on-acc); } .btn.sec { border: 1px solid var(--line); background: var(--surface); color: var(--hi); }
+  .btn.ghost { color: var(--acc); padding: 0 6px; }
+  .ibtn { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: var(--mu); position: relative; }
+  .ibtn:hover { background: var(--alt); }
+  .badge { position: absolute; top: 4px; right: 4px; min-width: 15px; height: 15px; border-radius: 9px; background: var(--bad); color: #fff; font-size: 9.5px; font-weight: 700; display: grid; place-items: center; padding: 0 3px; border: 2px solid var(--surface); }
+  .av { width: 28px; height: 28px; border-radius: 99px; background: var(--acc-soft); color: var(--acc); font-weight: 700; font-size: 11px; display: grid; place-items: center; flex-shrink: 0; }
+  .statusbar { height: 26px; flex-shrink: 0; display: flex; align-items: center; gap: 16px; padding: 0 12px; border-top: 1px solid var(--line); background: var(--alt); font-size: 11.5px; color: var(--mu); }
+  .statusbar .sep { width: 1px; height: 12px; background: var(--line2); }
+  .body { flex: 1; display: flex; min-height: 0; }
+  .side { width: 220px; flex-shrink: 0; background: var(--side); border-right: 1px solid var(--line); padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+  .grp { font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--fa); padding: 14px 8px 6px; }
+  .grp:first-child { padding-top: 0; }
+  .nav { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 8px; color: var(--tx); font-weight: 500; font-size: 13px; width: 100%; }
+  .nav svg { color: var(--mu); }
+  .nav:hover { background: var(--surface); color: var(--hi); }
+  .nav.on { background: var(--info-soft); color: var(--info); font-weight: 600; }
+  .nav.on svg { color: var(--info); }
+  .nav .tail { margin-left: auto; display: flex; }
+  .nav .pill { height: 20px; line-height: 20px; font-size: 10px; padding: 0 6px; }
+  .side .search, .side .switch { flex: none; }
+  .switch .t { white-space: nowrap; }
+  .rail { width: 60px; flex-shrink: 0; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; }
+  .rail button { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; color: var(--mu); position: relative; }
+  .rail button.on { background: var(--acc); color: var(--on-acc); }
+  .rail .rd { width: 26px; height: 1px; background: var(--line2); margin: 6px 0; }
+  .main { flex: 1; overflow-y: auto; min-width: 0; }
+  .page { padding: 24px 24px 40px; max-width: 1360px; }
+
+  /* ---------- content kit ---------- */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+  .ch { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  .ch .t { font-weight: 600; color: var(--mu); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; } .ch .r { margin-left: auto; display: flex; gap: 8px; align-items: center; font-size: 11.5px; color: var(--mu); }
+  .lnk { color: var(--acc); font-weight: 600; font-size: 12px; }
+  .k { font-size: 11px; color: var(--mu); font-weight: 500; text-transform: uppercase; letter-spacing: .04em; } .s { font-size: 11px; color: var(--mu); }
+  .v { color: var(--hi); font-weight: 600; }
+  .ttl { font-size: 18px; font-weight: 600; color: var(--hi); letter-spacing: -0.01em; line-height: 1.25 !important; }
+  .grid { display: grid; grid-template-columns: repeat(12, minmax(0,1fr)); gap: 12px; }
+  .bar { height: 6px; border-radius: 9px; background: var(--track); overflow: hidden; } .bar i { display: block; height: 100%; border-radius: 9px; }
+  .stack { display: flex; gap: 2px; height: 8px; border-radius: 9px; overflow: hidden; }
+  .hatch { background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--acc) 38%, transparent) 0 4px, transparent 4px 8px); }
+  table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.t th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--fa); font-weight: 500; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--alt); }
+  table.t td { padding: 8px 16px; border-bottom: 1px solid var(--line); color: var(--tx); }
+  table.t tr:last-child td { border-bottom: 0; }
+  table.t .r { text-align: right; } table.t td.r { font-family: var(--font-mono); font-feature-settings: 'tnum'; }
+  table.t tr.sub td { background: var(--alt); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--fa); font-weight: 700; padding: 6px 14px; }
+  table.t tr.tot td { font-weight: 700; color: var(--hi); background: var(--alt); }
+  table.t tr:hover td { background: color-mix(in srgb, var(--acc) 4%, transparent); }
+  .sw { display: inline-block; width: 8px; height: 8px; border-radius: 3px; margin-right: 8px; vertical-align: 0; }
+  .alert { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .alert:last-child { border-bottom: 0; }
+  .alert .ai { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; flex-shrink: 0; }
+  .alert .t { font-weight: 600; color: var(--hi); font-size: 12.5px; } .alert .m { font-size: 11px; color: var(--mu); }
+  .alert .go { margin-left: auto; flex-shrink: 0; }
+  .tube { width: 22px; height: 86px; border-radius: 7px; background: var(--track); position: relative; overflow: hidden; flex-shrink: 0; }
+  .tube i { position: absolute; left: 0; right: 0; bottom: 0; }
+
+  /* notes + switcher (not part of the design) */
+  .notes { position: fixed; right: 16px; bottom: 74px; width: 330px; z-index: 900; background: #111; color: #d7d7d7; border-radius: 14px; padding: 14px 16px; font-size: 12.5px; line-height: 1.55; box-shadow: 0 14px 40px rgba(0,0,0,.35); }
+  .notes h2 { margin: 0 0 4px; font-size: 16px; color: #fff; } .notes b { color: #fff; } .notes ul { margin: 6px 0 0; padding-left: 16px; } .notes li { margin-bottom: 4px; }
+  .notes .x { position: absolute; top: 10px; right: 12px; color: #888; }
+  .switcher { position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%); z-index: 999; display: flex; align-items: center; gap: 4px; padding: 5px; border-radius: 999px; background: #111; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.35); font-size: 13px; }
+  .switcher button { width: 32px; height: 32px; border-radius: 99px; color: #fff; text-align: center; font-size: 15px; }
+  .switcher button:hover { background: #2a2a2a; }
+  .switcher .lbl { min-width: 220px; text-align: center; font-weight: 600; } .switcher .lbl span { opacity: .55; font-weight: 500; }
+  .switcher .sep { width: 1px; height: 20px; background: #333; }
+  /* --- confirmation round --- */
+  .app { container-type: inline-size; container-name: app; }
+  .main { container-type: inline-size; container-name: main; }
+  .board { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 12px; align-items: start; }
+  .rail2 { display: none; width: 60px; flex-shrink: 0; background: var(--side); border-right: 1px solid var(--line); flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; }
+  .rail2 button { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; color: var(--mu); }
+  .rail2 button.on { background: var(--info-soft); color: var(--info); }
+  .rail2 .rd { width: 26px; height: 1px; background: var(--line2); margin: 6px 0; }
+  @container app (max-width: 1200px) { .side { display: none; } .rail2 { display: flex; } .search .q { display: none; } }
+  @container main (max-width: 1120px) {
+    .board { grid-template-columns: 1fr 1fr; grid-template-areas: "f u" "m u"; }
+    .board > section:nth-child(1) { grid-area: f; } .board > section:nth-child(2) { grid-area: u; } .board > section:nth-child(3) { grid-area: m; }
+  }
+  @container main (max-width: 760px) { .board { grid-template-columns: 1fr; grid-template-areas: none; } .board > section { grid-area: auto !important; } .notice .s { font-size: 12px !important; } }
+  @container app (max-width: 900px) { .topbar .search { display: none; } }
+  .skel { background: linear-gradient(90deg, var(--alt) 0%, var(--surface) 50%, var(--alt) 100%) !important; background-size: 200% 100% !important; animation: sk 1.4s linear infinite; }
+  @keyframes sk { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+  .srcTag { margin: -4px 2px 8px; padding: 4px 8px; border-radius: 6px; border: 1px dashed var(--info); color: var(--info); background: var(--info-soft); font-family: var(--font-mono); font-size: 10.5px; line-height: 1.4; }
+  #ctl { position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%); z-index: 999; display: flex; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 999px; background: #111; color: #ddd; font: 600 12px var(--font-sans); box-shadow: 0 10px 30px rgba(0,0,0,.35); white-space: nowrap; }
+  #ctl label { display: flex; gap: 6px; align-items: center; }
+  #ctl select { background: #222; color: #fff; border: 1px solid #333; border-radius: 8px; padding: 4px 6px; font: inherit; }
+  #ctl button { color: #ddd; padding: 4px 8px; border-radius: 8px; } #ctl button.on { background: #2fd18d; color: #06110c; }
+
+  .tabs { display:flex; gap:2px; border-bottom:1px solid var(--line); margin-top:12px; }
+  .tab { padding:8px 12px; font-size:13px; font-weight:500; color:var(--mu); border-bottom:2px solid transparent; margin-bottom:-1px; display:flex; gap:4px; align-items:center; }
+  .tab.on { color:var(--hi); font-weight:600; border-color:var(--acc); }
+  .tab .mv { color:var(--info); font-size:16px; line-height:0; }
+  .tb { gap:10px; margin-top:12px; flex-wrap:wrap; }
+  .kpis { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; margin-top:12px; }
+  .kp { padding:12px 14px; } .kp + .kp { border-left:1px solid var(--line); }
+  .seg2 { display:inline-flex; gap:2px; padding:2px; border-radius:8px; background:var(--alt); border:1px solid var(--line); }
+  .seg2 button { padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600; color:var(--mu); }
+  .seg2 button.on { background:var(--surface); color:var(--hi); box-shadow:0 0 0 1px var(--line); }
+  .subnav { display:flex; flex-direction:column; gap:2px; border-right:1px solid var(--line); padding-right:10px; }
+  .subnav .grp:first-child { padding-top:0; }
+  #ctl { position:fixed; left:50%; bottom:34px; transform:translateX(-50%); z-index:999; display:flex; gap:10px; align-items:center; padding:6px 12px; border-radius:999px; background:#111; color:#ddd; font:600 12px var(--font-sans); box-shadow:0 10px 30px rgba(0,0,0,.35); }
+  #ctl button { color:#ddd; padding:4px 8px; border-radius:8px; }
+  #ctl .note { position:fixed; right:16px; bottom:80px; width:340px; background:#111; color:#d7d7d7; border-radius:14px; padding:12px 14px; font-weight:400; line-height:1.5; box-shadow:0 14px 40px rgba(0,0,0,.35); }
+  #ctl .note b { color:#fff; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="ctl"></div>
+<script>
+/* PROTOTYPE — navigation & page structure (#540) + Insights base (#541). Mock data. */
+const ic = (p, s = 16, w = 1.9) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const I = {
+  dash: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  pump: '<path d="M4 21V5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v16"/><path d="M3 21h11"/><path d="M7 8h3"/><path d="M13 10h3l3 3v5a1.5 1.5 0 0 1-3 0v-4h-3"/>',
+  box: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>', tag: '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/>', truck: '<path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
+  bank: '<path d="M3 10 12 4l9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/>', out: '<path d="M12 19V5M5 12l7-7 7 7"/>', inn: '<path d="M12 5v14M5 12l7 7 7-7"/>',
+  doc: '<path d="M6 2h8l5 5v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v5h5"/><path d="M8 13h8M8 17h5"/>', chart: '<path d="M3 3v18h18"/><path d="m7 15 4-5 4 3 5-7"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>', org: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h1M14 7h1M9 11h1M14 11h1M9 15h1M14 15h1"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>', plus: '<path d="M12 5v14M5 12h14"/>', down: '<path d="m6 9 6 6 6-6"/>',
+  drop: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>', panel: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>', exp: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>', cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+};
+const inr = (n, c) => { const a = Math.abs(n), s = n < 0 ? '−' : ''; if (c && a >= 1e5) return s + '₹' + (a / 1e5).toFixed(2).replace(/\.?0+$/, '') + 'L'; if (c && a >= 1e3) return s + '₹' + (a / 1e3).toFixed(1).replace(/\.0$/, '') + 'k'; return s + '₹' + a.toLocaleString('en-IN'); };
+const pct = (a, b) => { const p = (a - b) / b * 100; return `<span class="num ${p >= 0 ? 'good' : 'bad'}" style="font-size:11.5px;font-weight:500">${p >= 0 ? '▲' : '▼'} ${Math.abs(p).toFixed(1)}%</span>`; };
+const chip = (t, l) => `<span class="pill p-${t}">${l}</span>`;
+const S = { r: ['ok', 'ok'] };
+
+/* ---------- NAV (#540) ---------- */
+const NAV = [
+  ['Operate', [['dashboard', 'Dashboard', I.dash], ['shifts', 'Shifts', I.pump, 'dot'], ['inventory', 'Inventory', I.box, '1'], ['pricing', 'Pricing', I.tag]]],
+  ['Parties', [['customers', 'Customers', I.users, '4'], ['suppliers', 'Suppliers', I.truck]]],
+  ['Books', [['accounts', 'Accounts', I.bank], ['expenses', 'Expenses', I.out], ['income', 'Income', I.inn]]],
+  ['Insight', [['reports', 'Reports', I.doc, '2'], ['insights', 'Insights', I.chart, 'new']]],
+  ['Setup', [['station', 'Station', I.gear], ['organization', 'Organization', I.org]]],
+];
+const TABS = {
+  dashboard: [], shifts: ['Live shift', 'Business days', 'History'],
+  inventory: ['Tanks', 'Decantations', 'Density', 'Product stock', 'Movements', 'Reconciliations'], pricing: ['Fuels', 'Products'],
+  customers: ['Customers', 'Credit sales', 'Collections', 'Vehicles'], suppliers: ['Suppliers', 'Purchases', 'Payments'],
+  accounts: ['Accounts', 'Daily cash book', 'Transfers'], expenses: ['Expenses', 'By category'], income: ['Income', 'By category'],
+  reports: [], insights: [], station: ['General', 'Branding', 'Products', 'Tanks', 'Dispensers', 'Payment terminals', 'Shift templates', 'Rules', 'Report templates'],
+  organization: ['Stations', 'Team', 'Activity', 'Profile', 'Desktop app'],
+};
+const MOVED = { // where a moved thing came from (shown as a note chip on the tab)
+  'accounts:Daily cash book': 'moved from Reports', 'station:Report templates': 'moved from Reports', 'station:Rules': 'decantation + tank thresholds',
+  'suppliers:Suppliers': 'was Purchases page', 'income:By category': 'new; GST → Reports',
+};
+let O = { page: 'customers', tab: {}, rep: 'dssr', gst: 'Sales', range: 'This month', cmp: 'Previous period', theme: 'light', notes: true };
+
+const sidebar = () => `<aside class="side">${NAV.map(([g, items]) => `<div class="grp">${g}</div>${items.map(([k, n, p, b]) =>
+  `<button class="nav ${O.page === k ? 'on' : ''}" data-page="${k}">${ic(p, 16)}${n}${b ? `<span class="tail">${b === 'dot' ? '<span class="dot live"></span>' : b === 'new' ? '<span class="pill p-info">New</span>' : `<span class="pill p-${k === 'inventory' ? 'bad' : 'warn'}">${b}</span>`}</span>` : ''}</button>`).join('')}`).join('')}
+  <div style="margin-top:auto;padding-top:10px"><button class="nav">${ic(I.panel, 16)}Collapse</button></div></aside>`;
+const topbar = (label) => `<div class="topbar"><div class="brand"><span class="mark">${ic(I.drop, 15, 2.4)}</span></div>
+  <div class="row" style="gap:6px;font-size:13px"><button class="row hi" style="gap:6px;font-weight:700">Highway Fuels ${ic(I.down, 13, 2.4)}</button><span class="fa">/</span><span class="mu" style="font-weight:600">${label}</span></div>
+  <div style="flex:1;display:flex;justify-content:center"><div class="search" style="max-width:min(420px,38vw);width:100%">${ic(I.search, 15)}<span class="q">Jump to anything…</span><span class="kbd">⌘K</span></div></div>
+  <button class="btn pri">${ic(I.plus, 15, 2.4)} New ${ic(I.down, 13, 2.4)}</button><button class="ibtn">${ic(I.bell, 18)}<span class="badge">4</span></button><div class="av">AN</div></div>`;
+const statusbar = () => `<div class="statusbar"><span class="row" style="gap:6px"><span class="dot"></span>Synced</span><span class="sep"></span><span>Shift 20261009-2 open · 3h 12m</span><span class="sep"></span><span>Business day Fri 9 Oct · open</span><span style="margin-left:auto">PumpOS 1.14.0</span></div>`;
+
+/* ---------- Page Frame (#523) ---------- */
+const labelOf = (k) => NAV.flatMap(g => g[1]).find(x => x[0] === k)[1];
+const tabsBar = (k) => !TABS[k].length ? '' : `<div class="tabs">${TABS[k].map((t, i) => { const on = (O.tab[k] ?? 0) === i, mv = MOVED[k + ':' + t];
+  return `<button class="tab ${on ? 'on' : ''}" data-tab="${k}:${i}">${t}${mv ? `<span class="mv" title="${mv}">•</span>` : ''}</button>`; }).join('')}</div>`;
+const frame = (k, { subtitle = '', actions = '', toolbar = '' } = {}) => `<div class="row" style="gap:10px;align-items:flex-start">
+    <div><div class="ttl">${labelOf(k)}</div>${subtitle ? `<div class="s" style="font-size:13px">${subtitle}</div>` : ''}</div>
+    <div style="margin-left:auto;display:flex;gap:8px">${actions}</div></div>
+  ${tabsBar(k)}${toolbar ? `<div class="row tb">${toolbar}</div>` : ''}`;
+const secHead = (t, sub = '', link = '') => `<div class="row" style="margin:16px 2px 8px"><span class="sec-t">${t}</span>${sub ? `<span class="s" style="margin-left:8px">${sub}</span>` : ''}${link ? `<span class="lnk" style="margin-left:auto">${link}</span>` : ''}</div>`;
+const kpis = (items) => `<div class="card kpis">${items.map(([k, v, s, tone]) => `<div class="kp"><div class="k">${k}</div><div class="num v ${tone || ''}" style="font-size:20px;margin-top:3px">${v}</div><div class="s" style="margin-top:2px">${s || ''}</div></div>`).join('')}</div>`;
+/* Table (#524): typed column kinds — money/qty right + mono, totals row */
+const table = (cols, rows, total) => `<div class="card" style="overflow:hidden"><table class="t"><tr>${cols.map(([n, kind]) => `<th class="${['money', 'qty'].includes(kind) ? 'r' : ''}">${n}</th>`).join('')}</tr>
+  ${rows.map(r => `<tr>${r.map((c, i) => `<td class="${['money', 'qty'].includes(cols[i][1]) ? 'r' : ''}">${c}</td>`).join('')}</tr>`).join('')}
+  ${total ? `<tr class="tot">${total.map((c, i) => `<td class="${['money', 'qty'].includes(cols[i][1]) ? 'r' : ''}">${c}</td>`).join('')}</tr>` : ''}</table></div>`;
+const search = (ph) => `<div class="search" style="max-width:300px;height:32px;background:var(--surface)">${ic(I.search, 14)} ${ph}</div>`;
+const range = () => `<button class="daychip">${ic(I.cal, 14)} ${O.range} ${ic(I.down, 13, 2.4)}</button>`;
+const placeholder = (k, t) => `<div class="card" style="padding:28px;text-align:center;margin-top:12px"><div class="hi" style="font-weight:600">${t}</div><div class="s" style="margin-top:4px">Content unchanged in this pass: only the frame, sections, table and status vocabulary are applied (${k === 'dashboard' ? 'see <b>dashboard-confirm.prototype.html</b>' : 'area ticket'}).</div></div>`;
+
+/* ---------- Pages ---------- */
+function customers() {
+  const t = O.tab.customers ?? 0;
+  if (t !== 0) return frame('customers', { actions: `<button class="btn pri">${ic(I.plus, 14, 2.4)} Record collection</button>` }) + placeholder('customers', TABS.customers[t]);
+  const rows = [['KTC Logistics', 'Fleet', 200000, 214600, 18, ['bad:Over limit', 'warn:Overdue']], ['Malabar Travels', 'Fleet', 150000, 128900, 9, []], ['Govt. Hospital Kzd', 'Institution', 100000, 96200, 32, ['warn:Overdue']],
+    ['Sree Transports', 'Fleet', 200000, 84300, 4, []], ['Calicut Cabs', 'Fleet', 100000, 61400, 2, []], ['Old Town Taxi', 'Fleet', 50000, 0, null, ['mu:Inactive']]];
+  return frame('customers', { subtitle: '23 credit customers', actions: `<button class="btn sec">${ic(I.exp, 14)} Export</button><button class="btn pri">${ic(I.plus, 14, 2.4)} Add customer</button>`, toolbar: search('Search customers') + `<div class="seg2">${['All', 'Overdue', 'Over limit', 'Inactive'].map((x, i) => `<button class="${i ? '' : 'on'}">${x}</button>`).join('')}</div>` })
+    + kpis([['Receivable', inr(682400), '23 customers', 'warn'], ['Overdue', '4', '₹1.84L over 30 days', 'bad'], ['Over limit', '1', 'KTC Logistics', 'bad'], ['Credit this month', inr(341000, true), '87 slips']])
+    + secHead('Customers', 'sorted by receivable')
+    + table([['Customer', 'text'], ['Type', 'text'], ['Credit limit', 'money'], ['Receivable', 'money'], ['Oldest unpaid', 'qty'], ['Status', 'status']],
+      rows.map(([n, ty, lim, b, d, st]) => [`<b class="hi">${n}</b>`, `<span class="mu">${ty}</span>`, `<span class="num">${inr(lim)}</span>`, `<span class="num ${b > lim ? 'bad' : 'hi'}">${inr(b)}</span>`, `<span class="num ${d > 30 ? 'bad' : ''}">${d == null ? '—' : d + ' days'}</span>`, st.map(s => chip(...s.split(':'))).join(' ') || chip('ok', 'Active')]),
+      ['Total', '', '', `<span class="num">${inr(565400)}</span>`, '', '']);
+}
+function accounts() {
+  const t = O.tab.accounts ?? 0;
+  if (t === 1) return frame('accounts', { subtitle: 'Office records by Entry Date', toolbar: `<button class="daychip">${ic(I.cal, 14)} Fri 9 Oct</button>` })
+    + kpis([['Opening', inr(118200), 'Cash in hand'], ['In', inr(39700), '3 entries', 'good'], ['Out', inr(9620), '2 entries', 'bad'], ['Closing', inr(148300), 'Cash in hand']])
+    + secHead('Daily cash book', 'Statement module (#525)')
+    + table([['Time', 'text'], ['Particulars', 'text'], ['Debit', 'money'], ['Credit', 'money'], ['Balance', 'money']],
+      [['9:40 am', 'Opening balance', '', '', `<span class="num">${inr(118200)}</span>`], ['11:15 am', 'Collection · Calicut Cabs', `<span class="num good">${inr(13500)}</span>`, '', `<span class="num">${inr(131700)}</span>`],
+       ['1:05 pm', 'Expense · Generator diesel', '', `<span class="num bad">${inr(4200)}</span>`, `<span class="num">${inr(127500)}</span>`], ['3:30 pm', 'Expense · Tea & snacks', '', `<span class="num bad">${inr(620)}</span>`, `<span class="num">${inr(126880)}</span>`],
+       ['4:40 pm', 'Collection · Sree Transports', `<span class="num good">${inr(25000)}</span>`, '', `<span class="num">${inr(151880)}</span>`], ['5:02 pm', 'Income · Air pump', `<span class="num good">${inr(1200)}</span>`, '', `<span class="num">${inr(153080)}</span>`]],
+      ['Closing', '', `<span class="num">${inr(39700)}</span>`, `<span class="num">${inr(4820)}</span>`, `<span class="num">${inr(153080)}</span>`]);
+  if (t !== 0) return frame('accounts') + placeholder('accounts', TABS.accounts[t]);
+  return frame('accounts', { subtitle: 'Live balances', actions: `<button class="btn pri">${ic(I.plus, 14, 2.4)} Transfer</button>` })
+    + secHead('Funding accounts')
+    + table([['Account', 'text'], ['Type', 'status'], ['Balance', 'money'], ['Last entry', 'text']],
+      [['Cash in hand', chip('ok', 'Cash'), `<span class="num hi">${inr(148300)}</span>`, '5:02 pm today'], ['Safe', chip('mu', 'Cash'), `<span class="num hi">${inr(260000)}</span>`, '8 Oct'],
+       ['SBI current', chip('info', 'Bank'), `<span class="num hi">${inr(1842500)}</span>`, '6 Oct'], ['Pine Labs settlement', chip('info', 'Card / UPI'), `<span class="num hi">${inr(61300)}</span>`, 'today']],
+      ['Total', '', `<span class="num">${inr(2312100)}</span>`, '']);
+}
+const REP = [['Sales', [['dssr', 'DSSR'], ['att', 'Attendant handovers'], ['dec', 'Decantations']]], ['Finance', [['pnl', 'Profit & loss'], ['ledg', 'Ledgers'], ['inv', 'Invoices']]], ['Tax & registers', [['gst', 'GST'], ['expreg', 'Expense register']]]];
+function reports() {
+  const sub = `<aside class="subnav">${REP.map(([g, items]) => `<div class="grp" style="padding-left:10px">${g}</div>${items.map(([k, n]) => `<button class="nav ${O.rep === k ? 'on' : ''}" data-rep="${k}">${n}</button>`).join('')}`).join('')}</aside>`;
+  let body;
+  if (O.rep === 'gst') body = `<div class="row"><span class="sec-t">GST</span><span class="s" style="margin-left:8px">one report: sales, purchases (ITC) and income</span></div>
+    <div class="seg2" style="margin:10px 0">${['Sales', 'Purchases (ITC)', 'Income'].map(x => `<button class="${O.gst === x ? 'on' : ''}" data-gst="${x}">${x}</button>`).join('')}</div>
+    ${kpis([['Taxable value', inr(684200), 'Oct 2026'], ['CGST', inr(61578), '9%'], ['SGST', inr(61578), '9%'], ['IGST', '₹0', '']])}
+    ${secHead(O.gst + ' register')}${table([['Date', 'text'], ['Document', 'text'], ['Party', 'text'], ['Taxable', 'money'], ['Tax', 'money']],
+      [['9 Oct', 'INV-1042', 'KTC Logistics', `<span class="num">${inr(12400)}</span>`, `<span class="num">${inr(2232)}</span>`], ['8 Oct', 'INV-1041', 'Walk-in', `<span class="num">${inr(3480)}</span>`, `<span class="num">${inr(626)}</span>`], ['8 Oct', 'INV-1040', 'Malabar Travels', `<span class="num">${inr(8200)}</span>`, `<span class="num">${inr(1476)}</span>`]],
+      ['Total', '', '', `<span class="num">${inr(24080)}</span>`, `<span class="num">${inr(4334)}</span>`])}`;
+  else if (O.rep === 'dssr') body = `<div class="row"><span class="sec-t">DSSR</span><span class="s" style="margin-left:8px">daily station sales report</span></div>
+    ${kpis([['Sales this month', inr(4018000, true), 'sealed days', ''], ['Litres', '41,280 L', ''], ['Days waiting to close', '2', '7 & 8 Oct', 'warn']])}
+    ${secHead('October 2026')}${table([['Business day', 'text'], ['Status', 'status'], ['Sales', 'money'], ['Litres', 'qty'], ['Cash variance', 'money']],
+      [['Fri 9 Oct', chip('ok', 'Live'), '<span class="fa">at close</span>', '<span class="fa">—</span>', ''], ['Thu 8 Oct', chip('warn', 'Draft'), `<span class="num hi">${inr(465540)}</span>`, '<span class="num">4,752</span>', '<span class="num warn">+₹120</span>'],
+       ['Wed 7 Oct', chip('warn', 'Draft'), `<span class="num hi">${inr(518000)}</span>`, '<span class="num">5,210</span>', '<span class="num bad">−₹1,250</span>'], ['Tue 6 Oct', chip('mu', 'Sealed'), `<span class="num hi">${inr(470000)}</span>`, '<span class="num">4,860</span>', chip('ok', 'Balanced')],
+       ['Mon 5 Oct', chip('mu', 'Sealed'), `<span class="num hi">${inr(431000)}</span>`, '<span class="num">4,420</span>', '<span class="num bad">−₹80</span>']])}`;
+  else body = placeholder('reports', REP.flatMap(g => g[1]).find(x => x[0] === O.rep)[1]);
+  return frame('reports', { subtitle: 'Documents and registers for a period', actions: `<button class="btn sec">${ic(I.exp, 14)} Export</button>`, toolbar: range() })
+    + `<div style="display:grid;grid-template-columns:200px 1fr;gap:16px;margin-top:12px">${sub}<div style="min-width:0">${body}</div></div>`;
+}
+function station() {
+  const t = O.tab.station ?? 0;
+  if (TABS.station[t] !== 'Rules') return frame('station', { subtitle: 'Highway Fuels · Kozhikode' }) + placeholder('station', TABS.station[t]);
+  const field = (l, v, h) => `<div style="display:flex;flex-direction:column;gap:5px"><span class="k">${l}</span><div class="search" style="flex:none;max-width:none;height:34px;background:var(--surface);color:var(--hi)"><span class="num">${v}</span></div><span class="s">${h}</span></div>`;
+  const bar = `<div style="display:flex;height:10px;border-radius:9px;overflow:hidden;margin-top:8px"><div style="flex:25;background:var(--bad)"></div><div style="flex:15;background:var(--warn)"></div><div style="flex:60;background:var(--good)"></div></div>
+    <div class="row s" style="margin-top:5px"><span>0%</span><span style="margin-left:22%">25% critical</span><span style="margin-left:6%">40% low</span><span style="margin-left:auto">100%</span></div>`;
+  return frame('station', { subtitle: 'Highway Fuels · Kozhikode', actions: `<button class="btn pri">Save rules</button>` })
+    + secHead('Tank levels', 'colours on Dashboard, Inventory, alerts and mobile')
+    + `<div class="card" style="padding:16px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">${field('Critical below', '25 %', 'Red; raises a "critically low" alert')}${field('Low below', '40 %', 'Amber; raises a "running low" alert')}</div>${bar}</div>`
+    + secHead('Decantation', 'tolerances (moved here from the old Decantation tab)')
+    + `<div class="card" style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:16px">${field('Density tolerance', '± 3.0 kg/m³', 'Beyond this without a decantation → "Unexplained jump"')}${field('Settling time', '30 min', 'Before the after-dip')}</div>`;
+}
+function insights() {
+  const owner = true;
+  const cur = [402, 455, 431, 470, 518, 466, 442, 461, 498, 512, 476, 489, 503, 521], prev = [390, 410, 398, 433, 421, 409, 440, 428, 455, 437, 419, 444, 451, 460];
+  const W = 700, H = 170, lo = 360, hi = 540, X = i => 30 + i / 13 * (W - 40), Y = v => 10 + (1 - (v - lo) / (hi - lo)) * (H - 30);
+  const path = a => a.map((v, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1)).join(' ');
+  const trend = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none">${[400, 450, 500].map(v => `<line x1="30" x2="${W}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="24" y="${Y(v) + 4}" text-anchor="end" font-size="10" fill="var(--fa)" font-family="Geist Mono">₹${(v / 100).toFixed(1)}L</text>`).join('')}
+    <path d="${path(prev)}" fill="none" stroke="var(--fa)" stroke-width="1.6" stroke-dasharray="3 4"/><path d="${path(cur)} L${X(13)} ${H - 20} L${X(0)} ${H - 20} Z" fill="var(--acc)" opacity=".1"/><path d="${path(cur)}" fill="none" stroke="var(--acc)" stroke-width="2.4"/>
+    ${cur.map((v, i) => `<circle cx="${X(i)}" cy="${Y(v)}" r="2.6" fill="var(--acc)"/>`).join('')}${cur.map((v, i) => i % 2 ? '' : `<text x="${X(i)}" y="${H - 4}" text-anchor="middle" font-size="10" fill="var(--fa)" font-family="Geist Mono">${i + 1}</text>`).join('')}</svg>`;
+  const mix = [['Petrol · MS', 1980000, 1850000, 'var(--acc)'], ['Diesel · HSD', 1720000, 1690000, 'var(--info)'], ['Premium · XP95', 142000, 118000, 'var(--warn)'], ['Lubricants', 98000, 86000, 'var(--mu)'], ['Additives', 31000, 33000, 'var(--mu)'], ['Accessories', 22000, 19000, 'var(--mu)']];
+  const tot = mix.reduce((s, m) => s + m[1], 0), max = mix[0][1];
+  const dow = [['Mon', 452, 431], ['Tue', 468, 440], ['Wed', 471, 455], ['Thu', 459, 446], ['Fri', 502, 470], ['Sat', 531, 498], ['Sun', 412, 401]];
+  const block = (t, sub, inner, span = 1) => `<div style="grid-column:span ${span}">${secHead(t, sub)}<div class="card" style="padding:14px">${inner}</div></div>`;
+  return frame('insights', { subtitle: 'Analyse and compare · closed business days', actions: `<button class="btn sec">${ic(I.exp, 14)} Export</button>`,
+      toolbar: range() + `<span class="s">compared with</span><button class="daychip">${O.cmp} ${ic(I.down, 13, 2.4)}</button><button class="daychip">All products ${ic(I.down, 13, 2.4)}</button><span class="s" style="margin-left:auto">1–14 Oct vs 1–14 Sep</span>` })
+    + kpis([['Sales', inr(3993000, true), pct(3993000, 3796000) + ' vs prev', ''], ['Litres', '41,280 L', pct(41280, 39950)], ...(owner ? [['Gross margin', inr(178400, true), pct(178400, 171200), 'good']] : []), ['Cash variance', '−₹2,340', '6 short shifts', 'bad'], ['Stock loss', '−42 L', 'MS · 0.28%', 'bad'], ['Expense ratio', '1.8%', pct(1.8, 2.1).replace('good', 'bad').replace('▲', '▼')]])
+    + `<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:12px">
+      ${block('Sales trend', 'solid = this period · dashed = comparison', trend)}
+      ${block('Day of week', 'average sales per day', `<div style="display:flex;align-items:flex-end;gap:10px;height:150px">${dow.map(([d, a, b]) => `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end">
+        <div style="display:flex;gap:3px;align-items:flex-end;height:100%;width:100%"><div style="flex:1;height:${(b - 380) / 1.6}%;background:var(--line2);border-radius:4px 4px 1px 1px"></div><div style="flex:1;height:${(a - 380) / 1.6}%;background:${d === 'Sat' ? 'var(--acc)' : 'color-mix(in srgb, var(--acc) 55%, transparent)'};border-radius:4px 4px 1px 1px"></div></div>
+        <span class="s num" style="font-size:10.5px">${d}</span></div>`).join('')}</div><div class="s" style="margin-top:8px">Busiest: <b class="hi">Saturday ₹5.31L</b> · quietest: Sunday</div>`)}
+      ${block('Product & category mix', 'share of sales · change vs comparison', `<table class="t" style="margin:-6px 0">${mix.map(([n, v, p, c]) => `<tr><td style="padding-left:0"><span class="sw" style="background:${c}"></span>${n}</td>
+        <td style="width:40%"><div class="bar"><i style="width:${v / max * 100}%;background:${c}"></i></div></td><td class="r num">${(v / tot * 100).toFixed(1)}%</td><td class="r num hi">${inr(v, true)}</td><td class="r">${pct(v, p)}</td></tr>`).join('')}</table>`, 2)}
+      ${block('Variance & loss', 'by shift template and tank', `<table class="t" style="margin:-6px 0"><tr><td style="padding-left:0">Morning shift</td><td class="r num bad">−₹1,780</td><td class="r s">4 short</td></tr><tr><td style="padding-left:0">Evening shift</td><td class="r num warn">+₹220</td><td class="r s">1 over</td></tr><tr><td style="padding-left:0">Tank 1 · MS</td><td class="r num bad">−42 L</td><td class="r s">0.28% of sold</td></tr><tr><td style="padding-left:0">Tank 2 · HSD</td><td class="r num">+6 L</td><td class="r">${chip('ok', 'Within tolerance')}</td></tr></table>`)}
+      ${block('Credit & receivables', 'given vs collected', `<div class="row s"><span>Credit given</span><b class="num hi" style="margin-left:auto">${inr(682000)}</b></div><div class="bar" style="margin:6px 0 10px;height:8px"><i style="width:100%;background:var(--warn)"></i></div>
+        <div class="row s"><span>Collected</span><b class="num hi" style="margin-left:auto">${inr(596000)}</b></div><div class="bar" style="margin:6px 0 10px;height:8px"><i style="width:87%;background:var(--good)"></i></div><div class="s">Receivable grew <b class="warn num">₹86k</b> · 30+ days now <b class="bad num">₹1.84L</b></div>`)}
+    </div>`
+    + `<div class="s" style="margin-top:10px">Expenses by category, margin by product and the remaining blocks follow the same pattern.</div>`;
+}
+const RENDER = { customers, accounts, reports, station, insights };
+function page() { const k = O.page; return RENDER[k] ? RENDER[k]() : frame(k) + placeholder(k, (TABS[k][O.tab[k] ?? 0]) || labelOf(k)); }
+
+const NOTES = {
+  customers: '<b>Parties › Customers</b> opens on the customer list (was Collections). Receivable naming, Overdue / Over limit / Inactive chips, money right-aligned with a total row, toolbar filters.',
+  suppliers: '<b>Purchases → Suppliers</b>: tabs Suppliers · Purchases · Payments; GST / ITC moved to Reports › GST.',
+  accounts: '<b>Books › Accounts</b> gains <b>Daily cash book</b> (moved from Reports) and Transfers. Try the Daily cash book tab: one statement format (Debit · Credit · Balance).',
+  reports: '<b>Reports</b> uses grouped sub-navigation instead of 11 tabs. <b>GST</b> merges Purchases ITC, Income GST and the Tax register. Daily cash book → Accounts, Templates → Station.',
+  insights: '<b>Insights</b> (new, own milestone #541): compare period vs period, product/category, day of week. Base topics: sales, margin (Owner), variance & loss, credit, expenses.',
+  station: '<b>Station › Rules</b> holds tank thresholds (#520, per station) and decantation tolerances. Report templates moved here as a tab.',
+};
+function render() {
+  const k = O.page;
+  document.getElementById('root').innerHTML = `<div class="app ${O.theme}" style="height:100vh">${topbar(labelOf(k))}<div class="body">${sidebar()}<main class="main"><div class="page" style="max-width:none">${page()}</div></main></div>${statusbar()}</div>`;
+  document.querySelectorAll('[data-page]').forEach(b => b.onclick = () => { O.page = b.dataset.page; render(); });
+  document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { const [p, i] = b.dataset.tab.split(':'); O.tab[p] = +i; render(); });
+  document.querySelectorAll('[data-rep]').forEach(b => b.onclick = () => { O.rep = b.dataset.rep; render(); });
+  document.querySelectorAll('[data-gst]').forEach(b => b.onclick = () => { O.gst = b.dataset.gst; render(); });
+  document.getElementById('ctl').innerHTML = `<span>Navigation & structure prototype</span><button data-t="theme">◐ ${O.theme}</button><button data-t="notes">notes</button>${O.notes && NOTES[k] ? `<div class="note">${NOTES[k]} <span style="opacity:.6">Tabs with • were moved or renamed.</span></div>` : ''}`;
+  document.querySelector('[data-t=theme]').onclick = () => { O.theme = O.theme === 'light' ? 'dark' : 'light'; render(); };
+  document.querySelector('[data-t=notes]').onclick = () => { O.notes = !O.notes; render(); };
+  try { const u = new URL(location.href); u.searchParams.set('page', k); history.replaceState(null, '', u); } catch (e) {}
+}
+const P = new URLSearchParams(location.search);
+if (P.get('page')) O.page = P.get('page'); if (P.get('tab')) O.tab[O.page] = +P.get('tab'); if (P.get('rep')) O.rep = P.get('rep'); if (P.get('theme') === 'dark') O.theme = 'dark'; if (P.get('clean')) O.notes = false;
+render(); if (P.get('clean')) document.getElementById('ctl').style.display = 'none';
+</script>
+</body>
+</html>
