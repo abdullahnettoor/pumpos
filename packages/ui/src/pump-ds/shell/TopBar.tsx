@@ -156,7 +156,12 @@ function useContainerWidth<T extends HTMLElement>(): [React.RefObject<T>, number
   return [ref, width];
 }
 
-const IconBtn = forwardRef<
+/**
+ * The top-bar icon button (notifications, window chrome): a ghost square with
+ * an optional count badge, solid danger with its paired `text-on-danger`.
+ * Exported for the Design System showcase.
+ */
+export const IconBtn = forwardRef<
   HTMLButtonElement,
   // `aria-label` is required, not optional: this control never renders text, so
   // without one it reaches a screen reader as an anonymous "button".
