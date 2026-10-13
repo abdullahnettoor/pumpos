@@ -118,7 +118,7 @@ describe('deriveForecourt idle', () => {
       status: { activeShift: null },
       now: ist('06:20'),
     });
-    expect(m).toMatchObject({ kind: 'none', hint: 'Morning is scheduled from 6:00 am.' });
+    expect(m).toMatchObject({ kind: 'none', hint: 'Shift 1 is scheduled from 6:00 am.' });
   });
   it('day done when no window remains', () => {
     const m = deriveForecourt({

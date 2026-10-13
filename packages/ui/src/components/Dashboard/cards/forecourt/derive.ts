@@ -139,7 +139,7 @@ export function deriveForecourt(input: DeriveInput): ForecourtModel {
       return {
         kind: 'between',
         hint: next?.window
-          ? `${next.window.name} is scheduled from ${formatClockInZone(next.window.startAt, timeZone)}.`
+          ? `Shift ${next.sequence} is scheduled from ${formatClockInZone(next.window.startAt, timeZone)}.`
           : null,
         last,
       };
@@ -147,7 +147,7 @@ export function deriveForecourt(input: DeriveInput): ForecourtModel {
     const first = next?.firstTemplate;
     return {
       kind: 'none',
-      hint: first ? `${first.name} is scheduled from ${formatHHMM(first.startTime)}.` : null,
+      hint: first ? `Shift 1 is scheduled from ${formatHHMM(first.startTime)}.` : null,
       last,
     };
   }
