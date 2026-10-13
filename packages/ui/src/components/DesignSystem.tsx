@@ -51,6 +51,7 @@ import {
   PumpDsComponentsPanel,
   PumpDsMetricsPanel,
 } from './DesignSystemPumpDs.js';
+import { DataSectionShowcase } from './DesignSystemDataSection.js';
 import { DesignSystemShellProtoPanel } from './DesignSystemShellProto.js';
 import { useRunTask } from '../utils/runTask.js';
 
@@ -913,7 +914,7 @@ const ComponentsPanel: React.FC = () => {
 
       <Section
         title="Data table"
-        description="Dense sortable table (TanStack Table) with built-in loading / empty / error states. Click a header to sort. Use for all operational lists instead of hand-rolled tables."
+        description="Dense sortable table (TanStack Table) with built-in loading / empty / error / refusal states (see Data states). Click a header to sort. Use for all operational lists instead of hand-rolled tables."
       >
         <DataTable
           columns={DEMO_COLUMNS}
@@ -924,7 +925,7 @@ const ComponentsPanel: React.FC = () => {
 
       <Section
         title="Skeletons"
-        description="Shimmer placeholders for lazy / partial loading — render the page shell immediately and swap these in for cards or rows while their data loads, instead of blocking the whole screen."
+        description="Pulsing placeholders (pump-ds Skeleton; SkeletonGrid is deprecated) for lazy / partial loading — render the page shell immediately and swap these in for cards or rows while their data loads, instead of blocking the whole screen."
       >
         <SkeletonGrid count={3} />
       </Section>
@@ -1368,6 +1369,7 @@ const TABS = [
   { id: 'overlays', label: 'Overlays' },
   { id: 'feedback', label: 'Feedback' },
   { id: 'data', label: 'Data & Money' },
+  { id: 'data-states', label: 'Data states' },
   { id: 'shell-proto', label: 'Shell · proto' },
 ];
 
@@ -1402,6 +1404,14 @@ export const DesignSystem: React.FC = () => {
           <DataMoneyPanel />
           <PumpDsMetricsPanel />
         </>
+      )}
+      {active === 'data-states' && (
+        <Section
+          title="DataSection · states"
+          description="A region that loads its own data shows exactly one of these. Loading while a request is fetching or paused offline (a disabled query shows nothing); “Couldn't load … · Retry” for network/server faults; the server's message and no Retry for an access refusal (403 / access policy); the empty state only after success; otherwise the content. Fake queries — no network."
+        >
+          <DataSectionShowcase />
+        </Section>
       )}
       {active === 'shell-proto' && <DesignSystemShellProtoPanel />}
     </PageLayout>
