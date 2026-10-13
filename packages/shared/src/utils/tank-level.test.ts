@@ -4,7 +4,9 @@ import {
   deriveTankLevel,
   resolveTankLevelSettings,
   tankLevelSettingsSchema,
+  tankLevelsChanged,
   tankTone,
+  TANK_TONE_LABEL,
 } from './tank-level.js';
 
 describe('resolveTankLevelSettings', () => {
@@ -126,5 +128,39 @@ describe('deriveTankLevel', () => {
       deriveTankLevel({ capacity: 1000, currentVolume: 500, daysOfCover: 'soon' as never }, s)
         .daysOfCover,
     ).toBeNull();
+  });
+});
+
+describe('tankLevelsChanged', () => {
+  it('ignores key order (JSONB reorders keys on save)', () => {
+    expect(
+      tankLevelsChanged(
+        { lowBelowPct: 50, criticalBelowPct: 20 },
+        { criticalBelowPct: 20, lowBelowPct: 50 },
+      ),
+    ).toBe(false);
+  });
+
+  it('treats a missing value as the defaults on both sides', () => {
+    expect(tankLevelsChanged(undefined, { ...DEFAULT_TANK_LEVEL_SETTINGS })).toBe(false);
+    expect(tankLevelsChanged({ lowBelowPct: 40, criticalBelowPct: 25 }, undefined)).toBe(false);
+    expect(tankLevelsChanged({ criticalBelowPct: 25 }, { lowBelowPct: 40 })).toBe(false);
+  });
+
+  it('reports a changed threshold', () => {
+    expect(tankLevelsChanged(undefined, { criticalBelowPct: 20, lowBelowPct: 40 })).toBe(true);
+    expect(
+      tankLevelsChanged(
+        { criticalBelowPct: 20, lowBelowPct: 50 },
+        { criticalBelowPct: 20, lowBelowPct: 45 },
+      ),
+    ).toBe(true);
+    expect(tankLevelsChanged(undefined, { criticalBelowPct: '25', lowBelowPct: 40 })).toBe(true);
+  });
+});
+
+describe('TANK_TONE_LABEL', () => {
+  it('names critical and low the same everywhere', () => {
+    expect(TANK_TONE_LABEL).toEqual({ critical: 'Critical', low: 'Low' });
   });
 });

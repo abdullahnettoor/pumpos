@@ -103,6 +103,26 @@ describe('UpdateStation tank-level thresholds (#520)', () => {
     expect(repo.saved[0]?.settings.fuel_brand).toBe('IOCL');
   });
 
+  it('treats a re-save with JSONB-reordered keys as unchanged', async () => {
+    // Postgres JSONB returns keys in its own order; the client echoes them back.
+    const { repo, useCase } = harness({ tankLevels: { lowBelowPct: 35, criticalBelowPct: 15 } });
+    const result = await useCase.execute(
+      { id: 'st-1', settings: { tankLevels: { criticalBelowPct: 15, lowBelowPct: 35 } } },
+      ctx('Accountant'),
+    );
+    expect(result.success).toBe(true);
+    expect(repo.saved).toHaveLength(1);
+  });
+
+  it('treats explicit defaults over no thresholds as unchanged', async () => {
+    const { useCase } = harness();
+    const result = await useCase.execute(
+      { id: 'st-1', settings: { tankLevels: { lowBelowPct: 40, criticalBelowPct: 25 } } },
+      ctx('Staff'),
+    );
+    expect(result.success).toBe(true);
+  });
+
   it('refuses removing the thresholds without the right', async () => {
     const { useCase } = harness({ tankLevels: thresholds });
     const result = await useCase.execute({ id: 'st-1', settings: {} }, ctx('Staff'));

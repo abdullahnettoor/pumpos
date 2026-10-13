@@ -8,6 +8,7 @@ import {
   canManageTankLevels,
   DECANTATION_SETTINGS_KEY_SET,
   TANK_LEVEL_SETTINGS_KEY,
+  tankLevelsChanged,
   decantationSettingsSchema,
   DECANTATION_SETTINGS_KEYS,
   canManageStaff,
@@ -265,20 +266,31 @@ stationSetupRouter.put(
       );
     }
     // Tank-level thresholds (#520) colour every tank on every screen: Owner and
-    // Manager only. The UpdateStation use-case enforces the same rule (and only
-    // when the value actually changes); this answers early at the edge.
+    // Manager only, and — like the UpdateStation use-case — only an actual
+    // change is refused, so re-saving other settings that echo the stored
+    // thresholds back (keys reordered by JSONB) passes. Answers early at the edge.
     if (
-      body.settings &&
-      TANK_LEVEL_SETTINGS_KEY in (body.settings as Record<string, unknown>) &&
+      submittedSettings &&
+      TANK_LEVEL_SETTINGS_KEY in submittedSettings &&
       !canManageTankLevels(user.role)
     ) {
-      return c.json(
-        {
-          success: false,
-          error: { code: 'FORBIDDEN', message: 'Only an Owner or Manager can change tank levels' },
-        },
-        403,
-      );
+      const existing = await new DrizzleStationRepository(c.var.db).findById(stationId);
+      const stored =
+        existing && existing.organizationId === user.organizationId
+          ? existing.settings[TANK_LEVEL_SETTINGS_KEY]
+          : undefined;
+      if (tankLevelsChanged(stored, submittedSettings[TANK_LEVEL_SETTINGS_KEY])) {
+        return c.json(
+          {
+            success: false,
+            error: {
+              code: 'FORBIDDEN',
+              message: 'Only an Owner or Manager can change tank levels',
+            },
+          },
+          403,
+        );
+      }
     }
     const result = await runInTransaction(c.var.db, (tx, events) =>
       new UpdateStation({

@@ -3,6 +3,7 @@ import {
   canManageTankLevels,
   TANK_LEVEL_SETTINGS_KEY,
   tankLevelSettingsSchema,
+  tankLevelsChanged,
   type Role,
 } from '@pump/shared';
 import {
@@ -104,9 +105,6 @@ function mayChangeTankLevels(ctx: ExecutionContext): boolean {
   return actor.role !== null && canManageTankLevels(actor.role as Role);
 }
 
-const sameJson = (a: unknown, b: unknown): boolean =>
-  JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-
 /** Refusal for a settings write that changes the tank-level thresholds; null when allowed. */
 function tankLevelsChangeError(
   existing: Record<string, unknown>,
@@ -116,7 +114,7 @@ function tankLevelsChangeError(
   if (!next) return null;
   const before = existing[TANK_LEVEL_SETTINGS_KEY];
   const after = next[TANK_LEVEL_SETTINGS_KEY];
-  if (sameJson(before, after)) return null;
+  if (!tankLevelsChanged(before, after)) return null;
   if (!mayChangeTankLevels(ctx))
     return forbiddenError('Only an Owner or Manager can change tank levels');
   if (after !== undefined && !tankLevelSettingsSchema.safeParse(after).success)

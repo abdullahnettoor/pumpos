@@ -11,7 +11,7 @@ import { stationSetupRouter } from './station-setup.js';
 
 const STORED_CONFIG = { shiftSummary: ['header', 'meta'], paper: 'A4', showLogo: true };
 
-function fakeDb() {
+function fakeDb(stationSettings: Record<string, unknown> = { report_config: STORED_CONFIG }) {
   const writes: Array<Record<string, unknown>> = [];
   const accessReads: unknown[][] = [
     [
@@ -32,7 +32,7 @@ function fakeDb() {
     code: 'ST1',
     address: null,
     phone: null,
-    settings: { report_config: STORED_CONFIG },
+    settings: stationSettings,
     onboardingStatus: 'COMPLETED',
     isActive: true,
     createdAt: new Date('2026-01-01'),
@@ -77,8 +77,12 @@ function fakeDb() {
   return { db, writes };
 }
 
-function appAs(role: string, assignedStationIds = ['st-1']) {
-  const { db, writes } = fakeDb();
+function appAs(
+  role: string,
+  assignedStationIds = ['st-1'],
+  stationSettings?: Record<string, unknown>,
+) {
+  const { db, writes } = fakeDb(stationSettings);
   const app = new Hono<{ Variables: { db: any; user: any } }>();
   app.use('*', async (c, next) => {
     c.set('db', db);
@@ -204,6 +208,33 @@ describe('PUT /setup/stations/:id tank levels (#520)', () => {
 
     expect(response.status).toBe(403);
     expect(((await response.json()) as any).error.code).toBe('FORBIDDEN');
+    expect(savedSettings(writes)).toBeUndefined();
+  });
+
+  it('lets a re-save of other settings echo the stored thresholds in JSONB key order', async () => {
+    const stored = { tankLevels: { lowBelowPct: 35, criticalBelowPct: 15 } };
+    const { app, writes } = appAs('Manager', ['st-1'], stored);
+    const response = await put(app, {
+      name: 'Renamed',
+      settings: { shift_grace_minutes: 20, tankLevels: { criticalBelowPct: 15, lowBelowPct: 35 } },
+    });
+
+    expect(response.status).toBe(200);
+    expect(savedSettings(writes)?.shift_grace_minutes).toBe(20);
+  });
+
+  it('refuses an Accountant General Info save by write access, not by tank levels', async () => {
+    // Accountants are read-only on this route today, so the tank-level edge
+    // check never decides their request; the use-case covers a widened role.
+    const stored = { tankLevels: { lowBelowPct: 35, criticalBelowPct: 15 } };
+    const { app, writes } = appAs('Accountant', ['st-1'], stored);
+    const response = await put(app, {
+      name: 'Renamed',
+      settings: { tankLevels: { criticalBelowPct: 15, lowBelowPct: 35 } },
+    });
+
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as any).error.message).toMatch(/write permissions/);
     expect(savedSettings(writes)).toBeUndefined();
   });
 

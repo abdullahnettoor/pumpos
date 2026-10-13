@@ -53,7 +53,37 @@ export function resolveTankLevelSettings(stationSettings: unknown): TankLevelSet
   return parsed.success ? parsed.data : { ...DEFAULT_TANK_LEVEL_SETTINGS };
 }
 
+/** One threshold read raw from a settings value; the default when absent. */
+function rawThreshold(value: unknown, key: keyof TankLevelSettings): unknown {
+  const raw =
+    value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined;
+  return raw === undefined || raw === null ? DEFAULT_TANK_LEVEL_SETTINGS[key] : raw;
+}
+
+/**
+ * Whether a `settings.tankLevels` write changes the thresholds. Compares each
+ * threshold (missing → default on both sides), never the serialised object:
+ * Postgres JSONB reorders keys, so an unchanged re-save must not count.
+ */
+export function tankLevelsChanged(before: unknown, after: unknown): boolean {
+  return (['criticalBelowPct', 'lowBelowPct'] as const).some(
+    (key) => !Object.is(rawThreshold(before, key), rawThreshold(after, key)),
+  );
+}
+
 export type TankTone = 'critical' | 'low' | 'ok' | 'unknown';
+
+/** The word for a tone the colour alone carries (desktop + mobile); none for ok/unknown. */
+export const TANK_TONE_LABEL: Readonly<Partial<Record<TankTone, string>>> = Object.freeze({
+  critical: 'Critical',
+  low: 'Low',
+});
+
+/** Alert phrase after the tank name: "HSD critically low". */
+export const TANK_TONE_ALERT: Readonly<Record<'critical' | 'low', string>> = Object.freeze({
+  critical: 'critically low',
+  low: 'running low',
+});
 
 /** Classify a fill percent; null (no capacity) is unknown. Over capacity is ok. */
 export function tankTone(pct: number | null, settings: TankLevelSettings): TankTone {
