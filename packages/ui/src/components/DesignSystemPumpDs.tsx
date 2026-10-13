@@ -461,8 +461,26 @@ const STATUS_GROUPS: { label: string; statuses: PumpStatus[] }[] = [
     statuses: ['open', 'closed', 'locked', 'draft', 'active', 'inactive', 'archived'],
   },
   { label: 'sync', statuses: ['synced', 'syncing', 'pending', 'offline', 'sync-failed'] },
-  { label: 'financial', statuses: ['paid', 'partial', 'unpaid', 'overdue', 'settled', 'overpaid'] },
-  { label: 'variance', statuses: ['balanced', 'excess', 'shortage', 'variance'] },
+  {
+    label: 'financial',
+    statuses: [
+      'paid',
+      'partial',
+      'unpaid',
+      'overdue',
+      'over-limit',
+      'voided',
+      'settled',
+      'overpaid',
+    ],
+  },
+  {
+    label: 'variance',
+    statuses: ['balanced', 'surplus', 'short', 'excess', 'shortage', 'variance'],
+  },
+  { label: 'handover', statuses: ['handover-pending', 'handover-due', 'handover-recorded'] },
+  { label: 'shift', statuses: ['shift-live', 'shift-past-end', 'shift-closed'] },
+  { label: 'day', statuses: ['day-open', 'day-draft', 'day-sealed', 'day-final'] },
 ];
 
 const StatusVocabulary: React.FC = () => (

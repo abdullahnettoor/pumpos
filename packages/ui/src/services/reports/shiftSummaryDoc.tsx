@@ -12,6 +12,7 @@ import {
 } from '@react-pdf/renderer';
 import { MARK_VIEWBOX, MARK_PATH } from '../../pump-ds/brand/Brand.js';
 import { formatSignedMoney } from '../../utils/format.js';
+import { formatVariance } from '../../utils/variance.js';
 
 // Embed Plus Jakarta Sans + Geist Mono (matches the app type; Mono is used
 // for all numeric/currency cells and MUST carry the rupee glyph ₹ — Noto Sans
@@ -35,7 +36,7 @@ export type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
 export { DEFAULT_SHIFT_SUMMARY_CONFIG, SHIFT_SUMMARY_SECTION_LABELS } from './reportConfig.js';
 export type { Letterhead } from './letterhead.js';
 export { letterheadFromStation } from './letterhead.js';
-import { shiftDisplayLabel } from '@pump/shared';
+import { shiftDisplayLabel, type StatusTone } from '@pump/shared';
 import type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
 import { DEFAULT_SHIFT_SUMMARY_CONFIG } from './reportConfig.js';
 import { legacyPurchases } from './legacyPurchases.js';
@@ -55,6 +56,15 @@ export const C = {
   warnBg: '#F9F0DA',
   warnFg: '#8A6116',
   white: '#FFFFFF',
+};
+
+/** Variance tones on paper (#518): balanced green, surplus amber, short red. */
+const PDF_TONE: Record<StatusTone, string> = {
+  success: C.success,
+  warning: C.amber,
+  danger: C.danger,
+  info: C.ink,
+  neutral: C.muted,
 };
 
 /** PDF money: paise kept, a negative signed `−₹1,200.00` (the app's one signed-money rule). */
@@ -761,16 +771,10 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
               fontSize: 10,
               fontFamily: 'Geist Mono',
               fontWeight: 700,
-              color: Math.abs(Number(d.cashVariance || 0)) > 100 ? C.danger : C.ink,
+              color: PDF_TONE[formatVariance(d.cashVariance, 'cash').tone],
             }}
           >
-            {Number(d.cashVariance || 0) > 0 ? '+' : ''}
-            {inr(d.cashVariance)}
-            {Number(d.cashVariance || 0) === 0
-              ? ' (Perfect Match)'
-              : Math.abs(Number(d.cashVariance || 0)) > 100
-                ? ' (Discrepancy)'
-                : ''}
+            {formatVariance(d.cashVariance, 'cash').text}
           </Text>
         </View>
       </View>

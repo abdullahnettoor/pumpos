@@ -15,7 +15,7 @@ function declaredLabel(d: DrawerLine): string {
 }
 
 const DrawerBadge: React.FC<{ variance: number | null }> = ({ variance }) => {
-  if (variance === null) return <StatusBadge tone="warn">Pending</StatusBadge>;
+  if (variance === null) return <StatusBadge state="handover-pending" />;
   const badge = varianceBadge(variance);
   return (
     <StatusBadge tone={badge.tone} num>

@@ -271,7 +271,7 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
       />
       <span
         data-testid="timeline-now-label"
-        className="pointer-events-none absolute top-[56px] z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-brand-danger px-1.5 text-[9.5px] font-semibold leading-[14px] text-on-brand"
+        className="pointer-events-none absolute top-[56px] z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-brand-danger px-1.5 text-[9.5px] font-semibold leading-[14px] text-on-danger"
         style={{ left: `${Math.min(97, Math.max(3, nowPct))}%` }}
       >
         {clockLabel(now, timeZone)}

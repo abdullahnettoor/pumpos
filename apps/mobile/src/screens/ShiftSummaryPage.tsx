@@ -62,7 +62,7 @@ export const ShiftSummaryPage: React.FC<Props> = ({ station, shiftId, initial })
       subtitle={[row.businessDate ? businessDateLabel(String(row.businessDate)) : '', model.window]
         .filter(Boolean)
         .join(' · ')}
-      right={<StatusBadge tone="good">Closed</StatusBadge>}
+      right={<StatusBadge state="shift-closed" />}
       share={{ onPress: () => pdf('save') }}
       download={{ onPress: () => pdf('download'), label: 'Download PDF' }}
       onActionError={(message) => toast.error(message)}

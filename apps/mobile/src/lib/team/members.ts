@@ -2,7 +2,8 @@
  * Team members as the Team page shows them: who they are, where they work,
  * whether they are on the open shift. Pure; no React and no fetching.
  */
-import type { Role } from '@pump/shared';
+import { statusPresentation, type PartyStatusState, type Role } from '@pump/shared';
+import { badgeTone } from '../../ui/tones.js';
 
 /** One row of `GET /setup/users` (the server drops the auth id and sends `hasLogin`). */
 export interface TeamMember {
@@ -32,15 +33,21 @@ export interface MemberStatus {
   tone: MemberStatusTone;
 }
 
+/** Active / Inactive from the shared vocabulary (#518): Inactive is grey, never red. */
+const party = (state: PartyStatusState): MemberStatus => {
+  const p = statusPresentation(state);
+  return { label: p.label as MemberStatus['label'], tone: badgeTone(p.tone) as MemberStatusTone };
+};
+
 /**
  * The one status a row shows. Inactive wins (they cannot sign in at all), then
  * on shift, then a member with no login (a record only), else Active.
  */
 export function memberStatus(m: TeamMember, onShiftIds: ReadonlySet<string>): MemberStatus {
-  if (isInactive(m)) return { label: 'Inactive', tone: 'bad' };
+  if (isInactive(m)) return party('inactive');
   if (onShiftIds.has(m.id)) return { label: 'On shift', tone: 'good' };
   if (!m.hasLogin) return { label: 'No login', tone: 'muted' };
-  return { label: 'Active', tone: 'muted' };
+  return party('active');
 }
 
 /** Members still on the team: everyone not deactivated. */

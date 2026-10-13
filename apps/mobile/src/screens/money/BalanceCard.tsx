@@ -62,7 +62,7 @@ export const BalanceCard: React.FC<{
       value={inr(amount)}
       badge={
         s.state === 'over' ? (
-          <StatusBadge tone="bad">Over limit</StatusBadge>
+          <StatusBadge state="over-limit" />
         ) : s.state === 'near' ? (
           <StatusBadge tone="warn">Near limit</StatusBadge>
         ) : undefined

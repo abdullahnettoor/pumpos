@@ -1,8 +1,10 @@
 import React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../primitives/DataTable.js';
-import { formatMoney } from '../../utils/format.js';
-import { isBalancedVariance } from '@pump/shared';
+import { formatMoney, MINUS } from '../../utils/format.js';
+import { variancePresentation } from '@pump/shared';
+import { VARIANCE_TONE_TEXT as TONE_TEXT } from '../../utils/variance.js';
+import { StatusChip } from '../../pump-ds/chip/index.js';
 
 /** One Attendant's Drawer, as reconciled by the server (ADR 0005, #278). */
 export interface DrawerRow {
@@ -28,22 +30,18 @@ const money = (v: number | null) => (v == null ? '—' : formatMoney(v, { symbol
 const num: React.CSSProperties = { fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' };
 const Num: React.FC<{ v: number | null }> = ({ v }) => <span style={num}>{money(v)}</span>;
 
-const varianceWord = (v: number) =>
-  isBalancedVariance(v) ? 'balanced' : v > 0 ? 'surplus' : 'short';
-
-/** Signed variance, coloured by sign (#306). `label` adds surplus/short. */
+/**
+ * Signed variance in the shared vocabulary (#306, #518): "Balanced", a surplus
+ * `+1,200.00` in amber, a shortage `−340.00` in red. `label` adds the word
+ * (surplus / short). No ₹ symbol: the table caption states the currency.
+ */
 export const VarianceFigure: React.FC<{ value: number; label?: boolean }> = ({ value, label }) => {
-  const balanced = isBalancedVariance(value);
-  const color = balanced
-    ? 'var(--text-muted)'
-    : value < 0
-      ? 'var(--brand-danger)'
-      : 'var(--state-success-fg)';
+  const v = variancePresentation(value, 'cash');
+  const figure = formatMoney(Math.abs(value), { symbol: false });
   return (
-    <span style={{ ...num, color }}>
-      {value > 0 ? '+' : ''}
-      {formatMoney(value, { symbol: false })}
-      {label && ` ${varianceWord(value)}`}
+    <span style={{ ...num, color: TONE_TEXT[v.tone] }}>
+      {v.sign === 'zero' ? v.label : `${v.sign === 'negative' ? MINUS : '+'}${figure}`}
+      {label && v.sign !== 'zero' && ` ${v.label.toLowerCase()}`}
     </span>
   );
 };
@@ -83,13 +81,13 @@ const buildColumns = (
           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
             {row.original.duName ?? ''}
             {row.original.cashHandedOver === null && (
-              <span
-                className="badge badge-warning"
+              <StatusChip
+                status="handover-pending"
+                size="xs"
+                showIcon={false}
                 title="Not handed over"
                 style={{ marginLeft: row.original.duName ? 6 : 0 }}
-              >
-                Pending
-              </span>
+              />
             )}
           </div>
         </div>
@@ -146,9 +144,11 @@ const buildColumns = (
             ) : (
               <div style={{ lineHeight: 1.3 }}>
                 <VarianceFigure value={totalVariance} />
-                <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>
-                  {varianceWord(totalVariance)}
-                </div>
+                {variancePresentation(totalVariance, 'cash').sign !== 'zero' && (
+                  <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>
+                    {variancePresentation(totalVariance, 'cash').label.toLowerCase()}
+                  </div>
+                )}
               </div>
             )
         : undefined,

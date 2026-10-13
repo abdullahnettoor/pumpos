@@ -215,13 +215,7 @@ export const buildCustomerColumns = (
     {
       accessorKey: 'isActive',
       header: 'Status',
-      cell: ({ getValue }) => (
-        <StatusChip
-          status={getValue() ? 'active' : 'inactive'}
-          size="xs"
-          label={getValue() ? 'Active' : 'Suspended'}
-        />
-      ),
+      cell: ({ getValue }) => <StatusChip status={getValue() ? 'active' : 'inactive'} size="xs" />,
     },
     {
       id: 'actions',

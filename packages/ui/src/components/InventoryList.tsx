@@ -29,7 +29,8 @@ import {
 } from '../pump-ds/index.js';
 import { DensityTab } from './inventory/density/index.js';
 import { DecantationsTab } from './inventory/decantation/DecantationsTab.js';
-import { canRecordDecantation, type Role } from '@pump/shared';
+import { canRecordDecantation, variancePresentation, type Role } from '@pump/shared';
+import { VARIANCE_TONE_TEXT } from '../utils/variance.js';
 import { tankPct, classifyTank, OVER_CAPACITY_EXPLANATION } from '../utils/stock.js';
 import { formatQuantity } from '../utils/format.js';
 import { TankStatusChips } from './inventory/TankStatusChips.js';
@@ -213,12 +214,9 @@ const varianceColumns: ColumnDef<any, any>[] = [
     cell: ({ row }) => {
       const diff = Number(row.original.varianceQuantity);
       const unit = row.original.productUnit ?? 'L';
-      const color =
-        diff < 0
-          ? 'var(--state-danger-fg)'
-          : diff > 0
-            ? 'var(--state-info-fg)'
-            : 'var(--text-strong)';
+      // A surplus is amber, a shortage red (#518).
+      const { state, tone } = variancePresentation(diff, 'stock');
+      const color = state === 'balanced' ? 'var(--text-strong)' : VARIANCE_TONE_TEXT[tone];
       return (
         <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color }}>
           {diff > 0
@@ -233,11 +231,9 @@ const varianceColumns: ColumnDef<any, any>[] = [
     id: 'status',
     header: 'Status',
     cell: ({ row }) => {
-      const diff = Number(row.original.varianceQuantity);
-      const expected = Number(row.original.expectedQuantity);
-      const tol = 0.005 * (Math.abs(expected) || 1);
-      const status = Math.abs(diff) <= tol ? 'balanced' : diff < 0 ? 'shortage' : 'excess';
-      return <StatusChip status={status} size="xs" />;
+      // The one balanced rule (#518): no ±0.5% band around zero.
+      const { state } = variancePresentation(row.original.varianceQuantity, 'stock');
+      return <StatusChip status={state} size="xs" />;
     },
   },
   {

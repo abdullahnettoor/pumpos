@@ -81,9 +81,8 @@ describe('CloseShiftWizard', () => {
       renderWithProviders(
         <CloseShiftWizard {...baseProps({ expectedCash: 10000, closingCash: 9700 })} />,
       );
-      expect(varianceLine()?.getAttribute('data-state')).toBe('shortage');
-      expect(varianceLine()?.textContent).toContain('Cash Shortage');
-      expect(varianceLine()?.textContent).toContain('300');
+      expect(varianceLine()?.getAttribute('data-state')).toBe('short');
+      expect(varianceLine()?.textContent).toContain('\u2212₹300.00 short');
     });
 
     it('reports a surplus, with the sign shown, when counted cash is above expected', () => {
@@ -91,16 +90,15 @@ describe('CloseShiftWizard', () => {
         <CloseShiftWizard {...baseProps({ expectedCash: 10000, closingCash: 10250 })} />,
       );
       expect(varianceLine()?.getAttribute('data-state')).toBe('surplus');
-      expect(varianceLine()?.textContent).toContain('Cash Surplus');
-      expect(varianceLine()?.textContent).toContain('+');
+      expect(varianceLine()?.textContent).toContain('+₹250.00 surplus');
     });
 
-    it('reports a perfect match only on an exact reconciliation', () => {
+    it('reads Balanced only on an exact reconciliation', () => {
       renderWithProviders(
         <CloseShiftWizard {...baseProps({ expectedCash: 10000, closingCash: 10000 })} />,
       );
-      expect(varianceLine()?.getAttribute('data-state')).toBe('match');
-      expect(varianceLine()?.textContent).toContain('Perfect Match');
+      expect(varianceLine()?.getAttribute('data-state')).toBe('balanced');
+      expect(varianceLine()?.textContent).toContain('Balanced');
     });
 
     it('re-derives the variance when the expected figure changes under it', () => {
@@ -109,10 +107,10 @@ describe('CloseShiftWizard', () => {
       const { rerender } = renderWithProviders(
         <CloseShiftWizard {...baseProps({ expectedCash: 10000, closingCash: 10000 })} />,
       );
-      expect(varianceLine()?.getAttribute('data-state')).toBe('match');
+      expect(varianceLine()?.getAttribute('data-state')).toBe('balanced');
 
       rerender(<CloseShiftWizard {...baseProps({ expectedCash: 12000, closingCash: 10000 })} />);
-      expect(varianceLine()?.getAttribute('data-state')).toBe('shortage');
+      expect(varianceLine()?.getAttribute('data-state')).toBe('short');
       expect(varianceLine()?.textContent).toContain('2,000');
     });
   });
@@ -135,7 +133,7 @@ describe('CloseShiftWizard', () => {
       );
 
       expect(screen.getByText(/Close Shift · Evening/)).toBeDefined();
-      expect(varianceLine()?.getAttribute('data-state')).toBe('match');
+      expect(varianceLine()?.getAttribute('data-state')).toBe('balanced');
     });
 
     it('clears the counted denominations when the drawer closes', () => {
@@ -394,8 +392,9 @@ describe('CloseShiftWizard', () => {
           })}
         />,
       );
-      expect(screen.getAllByText(/balanced/).length).toBeGreaterThan(0);
-      expect(screen.queryByText(/short/)).toBeNull();
+      const row = screen.getByText('Ravi · DU-1').parentElement!;
+      expect(row.textContent).toContain('Balanced');
+      expect(row.textContent).not.toMatch(/short|surplus/);
     });
 
     it('flags an attendant who handed over short', () => {

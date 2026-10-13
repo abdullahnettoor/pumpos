@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertTriangle, Check, Play, FileText } from 'lucide-react';
 import { Button } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
+import { formatVariance, VARIANCE_TONE_TEXT } from '../../utils/variance.js';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 
 export interface ShiftCloseResult {
@@ -151,14 +152,12 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
             justifyContent: 'space-between',
             padding: '12px 16px',
             fontWeight: 700,
-            color: result.variance === 0 ? 'var(--state-success-fg)' : 'var(--brand-danger)',
+            color: VARIANCE_TONE_TEXT[formatVariance(result.variance, 'cash').tone],
           }}
         >
           <span>Cash Variance</span>
           <span style={{ fontFamily: 'var(--font-mono)' }}>
-            {result.variance > 0 ? '+' : ''}
-            {inr(result.variance)}
-            {result.variance === 0 ? ' (Perfect Match)' : ''}
+            {formatVariance(result.variance, 'cash').text}
           </span>
         </div>
       </div>

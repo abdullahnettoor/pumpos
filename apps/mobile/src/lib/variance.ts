@@ -3,11 +3,8 @@
  * and one wording, used by Shift rows, Drawer rows, the Handover recap and
  * Insights, so the same amount never reads two ways on two screens.
  */
-import { isBalancedVariance } from '@pump/shared';
-import { formatMoney } from '@pump/ui';
-import type { BadgeTone } from '../ui/StatusBadge.js';
-import type { Tone } from '../ui/tones.js';
-import { signedRupees } from './format.js';
+import { formatVariance } from '@pump/ui';
+import { badgeTone, type BadgeTone, type Tone } from '../ui/tones.js';
 
 /** A cash variance within this many rupees of zero is "on the nose" (rounds to ₹0). */
 export const VARIANCE_TOLERANCE = 0.5;
@@ -32,18 +29,20 @@ export interface VarianceBadgeView {
 }
 
 /**
- * The badge for one variance. Balanced by the same rule as the office's Drawer
- * reconciliation (`isBalancedVariance`), so attendant and office never disagree;
- * short is a problem, over is worth a look.
+ * The badge for one variance, from the shared vocabulary (`formatVariance`):
+ * balanced by the same rule as the office's Drawer reconciliation
+ * (`isBalancedVariance`), so attendant and office never disagree; short is a
+ * problem, over is worth a look.
  */
 export function varianceBadge(v: number): VarianceBadgeView {
-  if (isBalancedVariance(v)) return { tone: 'good', text: 'Balanced', balanced: true };
-  // Whole rupees, except under ₹1 where rounding would read "₹0" for a real variance.
-  const text =
-    Math.abs(v) < 1
-      ? `${v < 0 ? '−' : '+'}${formatMoney(Math.abs(v))}`
-      : signedRupees(v, { plus: true });
-  return { tone: v < 0 ? 'bad' : 'warn', text, balanced: false };
+  // The shared vocabulary (#518), in whole rupees except under ₹1 where
+  // rounding would read "₹0" for a real variance.
+  const f = formatVariance(v, 'cash', { decimals: 0 });
+  return {
+    tone: badgeTone(f.tone) as VarianceBadgeView['tone'],
+    text: f.text,
+    balanced: f.state === 'balanced',
+  };
 }
 
 export interface DrawerOff {

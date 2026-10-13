@@ -220,8 +220,15 @@ export * from './pump-ds/meter/index.js';
 export { STATUS_BAR_HEIGHT_PX } from './pump-ds/shell/index.js';
 export * from './pump-ds/button/index.js';
 // Shared with the mobile Control Room primitives (apps/mobile/src/ui).
-export { Chip, StatusChip } from './pump-ds/chip/index.js';
-export type { ChipProps, ChipTone, StatusChipProps } from './pump-ds/chip/index.js';
+export { Chip, StatusChip, VarianceChip } from './pump-ds/chip/index.js';
+export type {
+  ChipProps,
+  ChipTone,
+  StatusChipProps,
+  VarianceChipProps,
+} from './pump-ds/chip/index.js';
+export { formatVariance } from './utils/variance.js';
+export type { VarianceDisplay } from './utils/variance.js';
 export { SegmentedControl } from './pump-ds/segmented/index.js';
 export type { SegmentedControlProps, SegmentedControlOption } from './pump-ds/segmented/index.js';
 export { PageHeader } from './pump-ds/page-header/index.js';

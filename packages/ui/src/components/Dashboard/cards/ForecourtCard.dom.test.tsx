@@ -107,6 +107,23 @@ describe('ForecourtCard live', () => {
     expect(within(rows[5]).getByTestId('variance-badge').textContent).toBe('Balanced');
   });
 
+  it('variance chips: a surplus is amber, under half a paisa reads Balanced (#518)', () => {
+    vi.setSystemTime(Date.parse('2026-10-09T17:12:00+05:30'));
+    const shift = live(3, '2026-10-09T08:30:00.000Z');
+    shift.activeShift.handovers = [
+      { userId: 'u1', duId: 'd1', cashHandedOver: '900', varianceAmount: '0.004', cashDrops: '0' },
+      { userId: 'u2', duId: 'd2', cashHandedOver: '900', varianceAmount: '120', cashDrops: '0' },
+      { userId: 'u3', duId: 'd3', cashHandedOver: '900', varianceAmount: '-40', cashDrops: '0' },
+    ];
+    hooks.useShiftStatus.mockReturnValue(ok(shift));
+    mount('Owner');
+    const chips = screen.getAllByTestId('variance-badge');
+    const byText = (t: string) => chips.find((c) => c.textContent === t)!;
+    expect(byText('Balanced').className).toContain('text-success-fg');
+    expect(byText('+₹120.00').className).toContain('text-warning-fg');
+    expect(byText('\u2212₹40.00').className).toContain('text-danger-fg');
+  });
+
   it('past end: Handover due + overdue; 1-DU layout', () => {
     vi.setSystemTime(Date.parse('2026-10-09T22:20:00+05:30'));
     hooks.useShiftStatus.mockReturnValue(ok(live(2, '2026-10-09T08:30:00.000Z')));

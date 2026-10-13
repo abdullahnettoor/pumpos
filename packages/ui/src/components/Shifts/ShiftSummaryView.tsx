@@ -12,6 +12,7 @@ import { LegacyPurchasesTable } from './LegacyPurchasesTable.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { inr } from '../../utils/format.js';
+import { formatVariance, VARIANCE_TONE_TEXT } from '../../utils/variance.js';
 import { formatStationDateTime, shiftDisplayLabel } from '@pump/shared';
 import { DrawerReconciliationTable } from './DrawerReconciliationTable.js';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
@@ -1380,11 +1381,10 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             display: 'flex',
             justifyContent: 'space-between',
             padding: '12px 16px',
-            backgroundColor:
-              Math.abs(cashVariance) > 100 ? 'var(--state-danger-bg)' : 'var(--bg-surface-alt)',
+            backgroundColor: 'var(--bg-surface-alt)',
             fontWeight: 700,
             fontSize: '14px',
-            color: Math.abs(cashVariance) > 100 ? 'var(--state-danger-fg)' : 'var(--text-strong)',
+            color: 'var(--text-strong)',
           }}
         >
           {/* Pre-#287 snapshots keep their single Cash Variance line. */}
@@ -1392,15 +1392,10 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
           <span
             style={{
               fontFamily: 'var(--font-mono)',
+              color: VARIANCE_TONE_TEXT[formatVariance(cashVariance, 'cash').tone],
             }}
           >
-            {cashVariance > 0 ? '+' : ''}
-            {inr(cashVariance)}
-            {cashVariance === 0
-              ? ' (Perfect Match)'
-              : Math.abs(cashVariance) > 100
-                ? ` (Discrepancy)`
-                : ''}
+            {formatVariance(cashVariance, 'cash').text}
           </span>
         </div>
       </div>

@@ -13,7 +13,7 @@ function declarations(selector: RegExp): Record<string, string> {
   return out;
 }
 
-const _light = declarations(/:root(?:\s*,\s*:root\.light)?/);
+const light = declarations(/:root(?:\s*,\s*:root\.light)?/);
 const dark = declarations(/:root\.dark/);
 
 const REQUIRED_TOKENS = [
@@ -123,5 +123,39 @@ describe('dark tokens contrast ratios', () => {
     expect(contrast(dark['--state-warning-fg'], dark['--state-warning-bg'])).toBeGreaterThan(4.5);
     expect(contrast(dark['--state-danger-fg'], dark['--state-danger-bg'])).toBeGreaterThan(4.5);
     expect(contrast(dark['--state-info-fg'], dark['--state-info-bg'])).toBeGreaterThan(4.5);
+  });
+});
+
+/**
+ * Text on a solid tone fill (#518). Each `--text-on-*` is paired with the
+ * fills it sits on (the pump-ds class guard enforces the pairing), and must
+ * read at WCAG AA (>= 4.5:1) on every one of them, in light and in dark.
+ */
+const TEXT_ON_FILLS: Record<string, string[]> = {
+  '--text-on-brand': ['--brand-primary'],
+  '--text-on-danger': ['--state-danger-fg', '--brand-danger'],
+  '--text-on-warning': ['--state-warning-fg'],
+  '--text-on-success': ['--state-success-fg'],
+  '--text-on-info': ['--state-info-fg'],
+  '--text-on-neutral': ['--text-strong'],
+};
+
+describe.each([
+  ['light', light],
+  ['dark', dark],
+])('text on solid fills (%s)', (_theme, tokens) => {
+  it.each(Object.entries(TEXT_ON_FILLS))('%s reads >= 4.5:1 on its fills', (text, fills) => {
+    expect(tokens[text], text).toBeDefined();
+    for (const fill of fills) {
+      expect(contrast(tokens[text], tokens[fill]), `${text} on ${fill}`).toBeGreaterThanOrEqual(
+        4.5,
+      );
+    }
+  });
+});
+
+describe('light text-on tokens keep the existing look', () => {
+  it('stays white on every solid fill (no visible light-mode change)', () => {
+    for (const text of Object.keys(TEXT_ON_FILLS)) expect(light[text], text).toBe('#ffffff');
   });
 });
