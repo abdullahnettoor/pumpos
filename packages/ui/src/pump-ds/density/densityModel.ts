@@ -1,4 +1,8 @@
-import { shiftBusinessDate, type DensityTodayProductSummary } from '@pump/shared';
+import {
+  densityChangeExceedsTolerance,
+  shiftBusinessDate,
+  type DensityTodayProductSummary,
+} from '@pump/shared';
 import {
   formatClockInZone,
   formatDayMonth,
@@ -45,7 +49,8 @@ export type DensityFlag = (typeof DENSITY_FLAG)[keyof typeof DENSITY_FLAG];
 /**
  * Density state for one fuel on a business day. A change beyond the station
  * tolerance is a jump unless a Decantation reading landed that day (a new load
- * legitimately moves it).
+ * legitimately moves it). The tolerance rule is `densityChangeExceedsTolerance`,
+ * the same one the Recent readings and Register chips use.
  */
 export function deriveDensityState(
   product: DensityTodayProductSummary | undefined,
@@ -65,14 +70,12 @@ export function deriveDensityState(
     at: latest.recordedAt,
   };
   if (!earlier) return { kind: 'no-history', ...base };
-  const change: DensityChange = {
-    delta: Math.round((latest.density15 - (earlier.density15 as number)) * 10) / 10,
-    from: earlier.date,
-  };
+  const rawDelta = latest.density15 - (earlier.density15 as number);
+  const change: DensityChange = { delta: Math.round(rawDelta * 10) / 10, from: earlier.date };
   const explained = product.lastReadings.some(
     (reading) => reading.businessDate === businessDate && reading.kind === 'DECANTATION',
   );
-  if (Math.abs(change.delta) > toleranceKgM3 && !explained)
+  if (densityChangeExceedsTolerance(rawDelta, toleranceKgM3) && !explained)
     return { kind: 'jump', ...base, change };
   return { kind: 'recorded', ...base, change };
 }

@@ -93,7 +93,7 @@ describe('formatDensityReading', () => {
     ).toEqual({
       status: 'recorded',
       value: '741.2',
-      detail: '731.5 at 30 °C · 6:30 am',
+      detail: '731.5 at 30 °C · 6:30\u00a0am',
       change: '+0.6 vs yday',
       flag: null,
     });
@@ -104,7 +104,7 @@ describe('formatDensityReading', () => {
       timeZone: 'Pacific/Chatham',
       businessDate: BUSINESS_DATE,
     });
-    expect(display.detail).toBe('731.5 at 30 °C · 2:45 pm');
+    expect(display.detail).toBe('731.5 at 30 °C · 2:45\u00a0pm');
   });
 
   it('names an older comparison day', () => {
@@ -129,7 +129,7 @@ describe('formatDensityReading', () => {
       { ...recorded, observedDensity: null, tempC: null },
       { timeZone: 'Asia/Kolkata', businessDate: BUSINESS_DATE },
     );
-    expect(display.detail).toBe('6:30 am');
+    expect(display.detail).toBe('6:30\u00a0am');
   });
 
   it('first reading has no change', () => {
@@ -143,7 +143,7 @@ describe('formatDensityReading', () => {
       },
       { timeZone: 'Asia/Kolkata', businessDate: BUSINESS_DATE },
     );
-    expect(display.detail).toBe('745.0 at 28.5 °C · 6:30 am');
+    expect(display.detail).toBe('745.0 at 28.5 °C · 6:30\u00a0am');
     expect(display.change).toBe('first reading');
   });
 

@@ -113,6 +113,15 @@ export function toRecordDensityPayload(
 }
 
 /**
+ * Whether a density change is beyond tolerance, judged on the change as shown
+ * (1 decimal), so a `+3.0` never reads as a jump at tolerance 3. The one rule
+ * for every density jump check on the client.
+ */
+export function densityChangeExceedsTolerance(delta: number, tolerance: number): boolean {
+  return Math.abs(Math.round(delta * 10) / 10) > tolerance;
+}
+
+/**
  * Whether a register reading is an unexplained jump: the server flagged it, or
  * its delta exceeds tolerance and no Decantation explains it (kind DECANTATION).
  */
@@ -124,6 +133,7 @@ export function isUnexplainedDensityJump(r: {
 }): boolean {
   const flagged = Array.isArray(r.flags) && r.flags.some((f) => f === 'UNEXPLAINED_JUMP');
   const large =
-    r.delta != null && Math.abs(r.delta) > (r.tolerance ?? DEFAULT_DENSITY_TOLERANCE_KG_M3);
+    r.delta != null &&
+    densityChangeExceedsTolerance(r.delta, r.tolerance ?? DEFAULT_DENSITY_TOLERANCE_KG_M3);
   return flagged || (large && r.kind !== 'DECANTATION');
 }

@@ -91,7 +91,7 @@ describe('deriveForecourt idle', () => {
     });
     expect(m).toMatchObject({
       kind: 'between',
-      hint: 'Shift 2 is scheduled from 2:00 pm.',
+      hint: 'Shift 2 is scheduled from 2:00\u00a0pm.',
       last: { sales: 216120, litres: 2211, variance: -340 },
     });
   });

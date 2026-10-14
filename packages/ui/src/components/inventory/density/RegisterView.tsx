@@ -1,6 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { Chip, EmptyState, Panel } from '../../../pump-ds/index.js';
-import { formatClockInZone, formatDensity, formatTemperature } from '../../../utils/format.js';
+import {
+  formatClockInZone,
+  formatDayMonth,
+  formatDensity,
+  formatTemperature,
+} from '../../../utils/format.js';
 import { DeltaChip } from './DeltaChip.js';
 import { DENSITY_KIND_TONE } from './densityKind.js';
 import type { DensityReadingWithContext } from '@pump/shared';
@@ -107,7 +112,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
                     className={showDate ? 'border-t-2 border-border-soft' : undefined}
                   >
                     <td className={`${TD} ${showDate ? 'font-semibold' : ''}`}>
-                      {showDate ? reading.businessDate : ''}
+                      {showDate ? formatDayMonth(reading.businessDate) : ''}
                     </td>
                     <td className={`${TD} text-ink-muted`}>
                       {formatClockInZone(reading.recordedAt, timeZone)}

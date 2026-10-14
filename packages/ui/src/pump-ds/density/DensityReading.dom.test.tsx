@@ -32,7 +32,7 @@ describe('DensityReading', () => {
     expect(screen.getByText('746.0').className).toContain('font-mono');
     expect(screen.getByText('736.4 at 30 °C · 2:45 pm')).toBeTruthy();
     expect(screen.getByText('+0.6 vs yday').className).not.toContain('text-danger-fg');
-    expect(screen.getByRole('img', { name: 'Density, last 14 days' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Density, last 2 days with readings' })).toBeTruthy();
     expect(screen.queryByText('Unexplained jump')).toBeNull();
   });
 

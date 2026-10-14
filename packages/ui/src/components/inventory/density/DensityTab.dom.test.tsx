@@ -6,6 +6,7 @@ import { renderWithProviders, createTestQueryClient } from '../../../test/render
 import { DensityTab } from './DensityTab.js';
 import { queryKeys } from '../../../query/hooks.js';
 import { DensityReading, deriveDensityState } from '../../../pump-ds/index.js';
+import { FuelBlock } from '../../Dashboard/cards/fuels/FuelBlock.js';
 import type {
   DensityReadingWithContext,
   DensityTodaySummary,
@@ -277,14 +278,39 @@ describe('DensityTab · shared density reading (#521)', () => {
     const shown = card.querySelector('[data-state]') as HTMLElement;
 
     const product = MOCK_TODAY_SUMMARY.products[0];
+    const state = deriveDensityState(product, MOCK_TODAY_SUMMARY.businessDate, 3);
     const { container } = render(
       <DensityReading
-        state={deriveDensityState(product, MOCK_TODAY_SUMMARY.businessDate, 3)}
+        state={state}
         trend={product.trendValues}
         context={{ timeZone: 'Pacific/Chatham', businessDate: MOCK_TODAY_SUMMARY.businessDate }}
       />,
     );
+    const dashboard = render(
+      <FuelBlock
+        name="Motor Spirit"
+        code="MS"
+        price={0}
+        effectiveFrom={null}
+        density={{ status: 'ready', value: { state, trend: product.trendValues } }}
+        tanks={{ status: 'ready', value: [] }}
+        pendingDecant={null}
+        timeZone="Pacific/Chatham"
+        businessDate={MOCK_TODAY_SUMMARY.businessDate}
+        swatch=""
+        canRecord={false}
+        canDecant={false}
+        canPlan={false}
+        onRecord={() => {}}
+        onDecant={() => {}}
+        onPlan={() => {}}
+      />,
+    );
+    const onDashboard = dashboard
+      .getByTestId('fuel-MS')
+      .querySelector('[data-state]') as HTMLElement;
     expect(shown.outerHTML).toBe((container.firstElementChild as HTMLElement).outerHTML);
+    expect(shown.outerHTML).toBe(onDashboard.outerHTML);
     expect(within(card).getByText('745.0 at 28.5 °C · 8:15 pm')).toBeDefined();
     expect(within(card).getByText('+0.5 vs yday')).toBeDefined();
   });
@@ -324,6 +350,30 @@ describe('DensityTab · shared density reading (#521)', () => {
     fireEvent.click(screen.getByRole('radio', { name: /Register/i }));
     expect(screen.queryByText('Density Register Log')).toBeNull();
     expect(screen.queryByText(/\d:\d{2} (am|pm)/)).toBeNull();
+  });
+
+  it('judges a jump on the change as shown, the same rule as the reading', () => {
+    const qc = seedChatham();
+    qc.setQueryData(queryKeys.densityReadings(STATION_ID, '', '', '', '', 500), [
+      { ...MOCK_READING_MS, delta: 3.04 },
+    ]);
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+    fireEvent.click(screen.getByRole('radio', { name: /Register/i }));
+    expect(screen.getByText('+3.0')).toBeDefined();
+    expect(screen.queryByText(/Unexplained jump/)).toBeNull();
+  });
+
+  it('Today labels a recent reading change as since the previous reading', () => {
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: seedChatham() });
+    const card = screen.getByTestId('density-card-prod-ms');
+    expect(within(card).getByText('+0.5 vs prev')).toBeDefined();
+  });
+
+  it('Register dates read as day and month', () => {
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: seedChatham() });
+    fireEvent.click(screen.getByRole('radio', { name: /Register/i }));
+    expect(screen.getByText('11 Oct')).toBeDefined();
+    expect(screen.queryByText('2026-10-11')).toBeNull();
   });
 
   it('a Decantation beyond tolerance takes its routine tone, not the jump tone', () => {

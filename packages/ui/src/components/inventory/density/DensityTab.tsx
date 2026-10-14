@@ -23,6 +23,9 @@ export interface DensityTabProps {
   stationId: string;
 }
 
+/** Loading / unavailable line in place of a view. */
+const STATUS = 'p-8 text-center text-[13px] text-ink-muted';
+
 export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
   const [view, setView] = useState<'today' | 'register'>('today');
   const [isRecordOpen, setIsRecordOpen] = useState(false);
@@ -93,7 +96,7 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
   const mainView = () => {
     if (!stationSettings) {
       return (
-        <div style={{ padding: 32, textAlign: 'center', opacity: 0.6 }}>
+        <div className={STATUS}>
           {stationsQ.isError ? "Couldn't load station settings" : 'Loading station settings...'}
         </div>
       );
@@ -101,9 +104,7 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
     const { densitySpecBands, densityToleranceKgM3, timeZone } = stationSettings;
     if (view === 'register') {
       return readingsQ.isLoading ? (
-        <div style={{ padding: 32, textAlign: 'center', opacity: 0.6 }}>
-          Loading density register...
-        </div>
+        <div className={STATUS}>Loading density register...</div>
       ) : (
         <RegisterView
           readings={readingsQ.data ?? []}
@@ -114,18 +115,10 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
       );
     }
     if (todayQ.isLoading) {
-      return (
-        <div style={{ padding: 32, textAlign: 'center', opacity: 0.6 }}>
-          Loading density today summary...
-        </div>
-      );
+      return <div className={STATUS}>Loading density today summary...</div>;
     }
     if (!todayQ.data) {
-      return (
-        <div style={{ padding: 32, textAlign: 'center', opacity: 0.6 }}>
-          No summary data available
-        </div>
-      );
+      return <div className={STATUS}>No summary data available</div>;
     }
     return (
       <TodayView
@@ -142,17 +135,9 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="flex flex-col gap-4">
       {/* Header controls: Segmented switch (Today | Register) + Print Board + Record */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 10,
-        }}
-      >
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
         <SegmentedControl
           aria-label="Density view"
           options={[
@@ -163,7 +148,7 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
           onChange={(v) => setView(v)}
         />
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="flex items-center gap-2">
           <Button
             variant="secondary"
             size="sm"

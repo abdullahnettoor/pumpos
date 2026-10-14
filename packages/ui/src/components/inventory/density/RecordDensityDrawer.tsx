@@ -4,7 +4,6 @@ import { Button, Icon } from '../../../pump-ds/index.js';
 import { DensityCalculatorPopover } from '../../primitives/DensityCalculatorPopover.js';
 import {
   DEFAULT_DENSITY_METHOD,
-  DEFAULT_DENSITY_TOLERANCE_KG_M3,
   density15FromObserved,
   roundDensity,
   type DensityMethod,
@@ -21,8 +20,11 @@ export interface RecordDensityDrawerProps {
   nozzles?: Array<{ id: string; name: string; productId: string }>;
   presetProductId?: string;
   defaultMethod?: DensityMethod;
-  /** Jump tolerance (kg/m³) for the live delta chip; not used by the 15 °C solver. */
-  tolerance?: number;
+  /**
+   * The station's jump tolerance (kg/m³, `resolveDecantationSettings`) for the
+   * live delta chip; no default here. Not used by the 15 °C solver.
+   */
+  tolerance: number;
   defaultEntryMethod?: 'HYDROMETER' | 'DIRECT_15';
 }
 
@@ -36,7 +38,7 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
   nozzles = [],
   presetProductId,
   defaultMethod = DEFAULT_DENSITY_METHOD,
-  tolerance = DEFAULT_DENSITY_TOLERANCE_KG_M3,
+  tolerance,
   defaultEntryMethod = 'HYDROMETER',
 }) => {
   const [productId, setProductId] = useState<string>(presetProductId || products[0]?.id || '');

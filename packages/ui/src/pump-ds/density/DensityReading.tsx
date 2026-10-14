@@ -12,7 +12,7 @@ import {
  * DensityReading — one fuel's density (#521), identical on the Dashboard
  * Fuels card and the Inventory density tab: value at 15 °C (mono), observed
  * value at temperature and the time in the station timezone, change vs
- * yesterday, a 14-day sparkline (danger on a jump), and the "Unexplained
+ * yesterday, a sparkline of recent days (danger on a jump), and the "Unexplained
  * jump" / "Not recorded" chips.
  */
 export interface DensityReadingProps {
@@ -61,7 +61,7 @@ export const DensityReading: React.FC<DensityReadingProps> = ({
               width={60}
               height={20}
               tone={jump ? 'danger' : 'brand'}
-              aria-label="Density, last 14 days"
+              aria-label={`Density, last ${trend.length} days with readings`}
             />
           )}
           <div className="shrink-0 text-right">

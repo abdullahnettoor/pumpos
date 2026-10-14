@@ -144,6 +144,7 @@ export const TodayView: React.FC<TodayViewProps> = ({
                           kind={reading.kind}
                           flags={reading.flags}
                           tolerance={tolerance}
+                          baseline="vs prev"
                         />
                       </div>
                     </div>

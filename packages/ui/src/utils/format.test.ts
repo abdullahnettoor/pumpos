@@ -10,7 +10,17 @@ import {
   formatCompactMoney,
   formatDensity,
   formatTemperature,
+  formatClockInZone,
 } from './format.js';
+
+describe('formatClockInZone', () => {
+  it('keeps am/pm on the same line as the time (non-breaking space)', () => {
+    expect(formatClockInZone('2026-10-12T01:05:00Z', 'Asia/Kolkata')).toBe('6:35\u00a0am');
+    expect(formatClockInZone('2026-10-12T12:30:00Z', 'Asia/Kolkata', { compact: true })).toBe(
+      '6\u00a0pm',
+    );
+  });
+});
 
 describe('formatMoney', () => {
   it('formats INR with Indian grouping and exactly two decimal places', () => {

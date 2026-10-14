@@ -325,7 +325,10 @@ export function formatShortDay(iso: string): string {
   return `${part({ weekday: 'short' })} ${d} ${part({ month: 'short' })}`;
 }
 
-/** Clock time in a timezone, lowercase: `6:10 am` (`compact`: `6 am` on the hour). */
+/**
+ * Clock time in a timezone, lowercase: `6:10 am` (`compact`: `6 am` on the hour).
+ * The space before am/pm is non-breaking so the time never wraps apart.
+ */
 export function formatClockInZone(
   value: string | number | Date,
   timeZone?: string,
@@ -342,7 +345,7 @@ export function formatClockInZone(
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
   const min = get('minute');
   const mm = opts.compact && min === '00' ? '' : `:${min}`;
-  return `${get('hour')}${mm} ${get('dayPeriod').toLowerCase()}`;
+  return `${get('hour')}${mm}\u00a0${get('dayPeriod').toLowerCase()}`;
 }
 
 /** `HH:MM` (24h) as `2:00 pm`; empty when unparseable. */
