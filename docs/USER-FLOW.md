@@ -146,8 +146,8 @@ open shift.
 ## 7. Run the shift
 
 The active-shift workspace is the operator's home during the day. Quick
-actions on the shift control bar: **Add Expense (E)** · **Log Collection (C)**
-· **Merchandise Sale** · **Add Purchase (P)**. Transactions land in the
+actions on the shift control bar: **Record expense (E)** · **Record collection (C)**
+· **Merchandise Sale** · **Record purchase (P)**. Transactions land in the
 tabs: Petty Expenses · Fuel Deliveries (Purchases) · Credit Sales &
 Collections.
 
@@ -162,15 +162,22 @@ What happens during a typical shift, and where to record it:
   OMC fleet-card swipes: **Add OMC card sale**.
 - **Merchandise sale**: **Merchandise Sale** → product, quantity, payment
   mode. Stock decrements automatically.
-- **Customer collection** (customer pays down credit): **Log Collection** →
-  customer, amount, mode, entry date, the account it landed in (Cash in Hand
-  / Petty Cash for cash; a bank or clearing account for UPI/card, or pick the
-  payment terminal). It is office money: it never touches the drawer.
-- **Petty expense**: **Add Expense (E)** → category, amount, entry date,
-  paid-from account (e.g. Petty Cash). Office money: it never touches the
-  drawer. Cash taken out of a drawer for it is a cash drop.
-- **Fuel delivery mid-shift**: **Add Purchase (P)** → supplier, tank,
-  quantity, invoice; tick **Record payment now** if paid on the spot.
+- **Customer collection** (customer pays down credit): **Record collection (C)**
+  opens the **Record collection** drawer: entry date, customer (required: there is
+  no walk-in), method, amount, and the **Funding account** it landed in (Cash
+  in Hand / Petty Cash for cash; a bank for a transfer; for card/UPI either a
+  bank or the payment terminal, which posts to its clearing account). It is
+  office money: it never touches the drawer, and the drawer title never
+  names the shift ("Office record · not part of <shift>").
+- **Petty expense**: **Record expense (E)** opens the drawer: entry date,
+  category, amount, Funding account (e.g. Petty Cash). Office money: it never
+  touches the drawer. Cash taken out of a drawer for it is a cash drop.
+- **Fuel delivery mid-shift**: **Record purchase (P)** opens the drawer:
+  Fuel, invoice date, supplier, invoice lines (fuel stock moves only when the
+  tanker is decanted); tick **Also record a supplier payment now** if paid on
+  the spot, then pick the account and check the **Payment date** (the
+  invoice date until you change it). A product purchase opened here still
+  reads "Product purchase · Business Day <date>": it adds stock to the day.
 - **Attendant handover** (attendant ends duty or hands cash to the safe):
   handover dashboard → **Record Handover** → enter the DU's closing nozzle
   readings, count the whole pouch by denomination ("Count handover cash by
@@ -207,19 +214,43 @@ Shift** starts the following window; past shifts live under **History**.
 ## 9. Day-to-day finance (any time, not shift-bound)
 
 Office Records carry an **entry date** (today by default; past dates
-allowed, never future) and the **account** the money moved through. They
-never attach to a shift or business day. Purchases are the exception: they
-are stock events on the business day.
+allowed, never future) and the **Funding account** the money moved through.
+They never attach to a shift or business day. Product purchases are the
+exception: they are stock events on the Business Day. A fuel purchase is
+dated by its invoice; its stock comes from Decantation.
 
-- **Purchases**: Sidebar → **Suppliers** → **Purchases** tab → **Add Purchase** →
-  supplier, product lines, invoice; **Record payment now** or pay later via
-  **Record Payment**. Supplier statements: **Suppliers** tab → statement.
-  GST input credit is in **Reports → GST → Purchases (ITC)**.
-- **Expenses**: Sidebar → **Expenses** → **Log New Expense** → category
-  (manage via **Manage expense categories** → **New category**), amount,
-  entry date, paid-from account. Wrong entry? Void it with a reason — nothing is deleted.
+Every Office Record opens the same drawer, whether from its page, **+ New**,
+a customer or supplier statement (the party is then fixed) or the shift bar:
+one title per kind (**Record expense**, **Record income**, **Record
+collection**, **Record purchase**, **Record supplier payment**), the fields in
+the order date → who/what → amount → **Funding account** → reference, and a
+pinned footer with **Add another after saving**, **Cancel** and the record
+button (⌘/Ctrl+Enter). The strip above the footer previews the record: the
+balance it moves and a check chip (**Possible repeat**, **Goes negative**,
+**Advance**, or **No issues**); click it for the full preview. On a window
+1600px or wider the preview sits beside the form. Checks warn; they never
+block a save. If a save fails without an answer, saving again sends the same
+record, so it cannot be recorded twice. If you edit after such a failure and
+the save is refused, the first save may already be in: check the list, then
+undo your edit or close and start again.
+
+- **Purchases**: Sidebar → **Suppliers** → **Purchases** tab → **Record
+  purchase** → Fuel or Products (one invoice can't mix them; fuel is dated by
+  its invoice, products by their Business date), supplier, invoice lines.
+  Tick **Also record a supplier payment now** to save a Supplier payment with
+  it in one go: pick the account, the amount (the invoice total until you
+  change it) and the **Payment date**, the payment's Entry Date. It starts at
+  the purchase's date; for a product purchase on today's Business Day it is
+  today's calendar date, even before Day Start. Or pay later with **Record supplier payment** (on the page or
+  in **+ New**, which opens the drawer in place). Supplier statements:
+  **Suppliers** tab → statement. GST input credit is in **Reports → GST →
+  Purchases (ITC)**.
+- **Expenses**: Sidebar → **Expenses** → **Record expense** → entry date,
+  category, amount, Funding account. Owners, Managers and Accountants can add
+  a category from the picker (**+ New category…**) or manage them under
+  **Categories**. Wrong entry? Void it with a reason — nothing is deleted.
 - **Income** (non-fuel income like rent, commissions): Sidebar → **Income** →
-  **Record Income**. **By category** totals income per category; output GST
+  **Record income** (Staff can also start it from **+ New**). **By category** totals income per category; output GST
   on income is in **Reports → GST → Income** (Staff, who have no Reports,
   see it on the Income page's **GST** tab).
 - **Collections**: Sidebar → **Customers** → **Collections** tab → **Log

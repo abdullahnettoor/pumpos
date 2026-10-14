@@ -444,7 +444,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // it's open (preserves its draft — the user can resume via "Continue Close").
   const launchQuickEntry = (type: QuickEntryType) => {
     if (closeWizardOpen) setCloseWizardOpen(false);
-    openQuickEntry(type);
+    // Office Records opened here are still office records: the drawer says so
+    // ("not part of <shift>") rather than taking the shift's name as its title.
+    openQuickEntry(type, {
+      origin: 'shifts',
+      shiftName: data?.activeShift?.templateName ?? null,
+    });
   };
 
   const triggerExpenseDrawer = () => launchQuickEntry('expense');
@@ -453,15 +458,20 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const triggerMerchandiseSaleDrawer = () => launchQuickEntry('merchandise-sale');
 
   const quickEntryActions = [
-    { key: 'expense', label: 'Add Expense', onClick: triggerExpenseDrawer, hotkey: 'E' },
-    { key: 'collection', label: 'Log Collection', onClick: triggerCollectionDrawer, hotkey: 'C' },
+    { key: 'expense', label: 'Record expense', onClick: triggerExpenseDrawer, hotkey: 'E' },
+    {
+      key: 'collection',
+      label: 'Record collection',
+      onClick: triggerCollectionDrawer,
+      hotkey: 'C',
+    },
     {
       key: 'merchandise-sale',
       label: 'Merchandise Sale',
       onClick: triggerMerchandiseSaleDrawer,
       hotkey: 'M',
     },
-    { key: 'purchase', label: 'Add Purchase', onClick: triggerPurchaseDrawer, hotkey: 'P' },
+    { key: 'purchase', label: 'Record purchase', onClick: triggerPurchaseDrawer, hotkey: 'P' },
   ];
 
   // The shortcut triggers are re-created every render, so the listener reads

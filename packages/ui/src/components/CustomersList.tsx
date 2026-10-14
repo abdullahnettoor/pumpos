@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavIntent, clearNavIntent, getNavIntentState } from '../nav-intent/store.js';
 import { CloudTransactionService } from '../services/cloud.js';
-import { collectionPayload } from '../utils/officeRecordPayloads.js';
+import { openQuickEntry } from '../quick-entry/store.js';
 import {
   useCustomers,
   useShiftStatus,
@@ -13,8 +13,6 @@ import {
   useAllVehicles,
 } from '../query/hooks.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
-import { Drawer } from './Drawer.js';
-import { CollectionEntryForm } from './transactions/CollectionEntryForm.js';
 import { DataTable } from './primitives/DataTable.js';
 import { inr } from '../utils/format.js';
 import { Tabs } from '../pump-ds/tabs/index.js';
@@ -22,7 +20,7 @@ import { PageLayout } from './primitives/PageLayout.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
 import { useToast } from './primitives/ToastProvider.js';
 import { Panel, Button, Chip, KpiStrip, KpiTile, EmptyState, Icon } from '../pump-ds/index.js';
-import { resolveBusinessDate, type CollectionEntryFormValues } from '@pump/shared';
+import { resolveBusinessDate } from '@pump/shared';
 import {
   buildCustomerColumns,
   buildCollectionColumns,
@@ -266,50 +264,16 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
   // filled in one render late.
   const vehicleCustomerId = eligibleCustomers[0]?.id ?? '';
 
-  // --- Collection drawer ---
-  const [collectionDrawerOpen, setCollectionDrawerOpen] = useState(false);
-  const [collectionDefaults, setCollectionDefaults] = useState<Partial<CollectionEntryFormValues>>(
-    {},
-  );
-  const [collectionSubmitting, setCollectionSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-
-  const resetCollectionForm = (customerId?: string) => {
-    // A collection is an Office Record: the form defaults the entry date to today.
-    setCollectionDefaults({
-      customerId: customerId || customers[0]?.id || '',
-      amount: undefined as unknown as number,
-      paymentMethod: 'Cash',
-      notes: '',
-    });
-    setCollectionSubmitting(false);
-    setFormError(null);
-  };
-
-  const openCollectionDrawer = (customerId?: string) => {
-    consumeIntent();
-    resetCollectionForm(customerId);
-    setCollectionDrawerOpen(true);
-  };
-  const closeCollectionDrawer = () => {
-    setCollectionDrawerOpen(false);
-    resetCollectionForm();
-  };
-
-  const onAddCollection = async (values: CollectionEntryFormValues) => {
-    setFormError(null);
-    if (!stationId) return;
-    try {
-      setCollectionSubmitting(true);
-      await transactionService.recordCollection(collectionPayload(stationId, values));
-      closeCollectionDrawer();
-      toast.success('Collection recorded.');
-      await invalidateOperational(stationId);
-    } catch (err: any) {
-      setFormError(err.message || 'Failed to record entry');
-    } finally {
-      setCollectionSubmitting(false);
+  // A collection opens the shared Office Record drawer (#526); from a
+  // statement the customer is fixed.
+  const openCollectionDrawer = (customer?: any) => {
+    if (customer) {
+      // The statement stays open under the drawer.
+      openQuickEntry('collection', { origin: 'statement', party: customer });
+      return;
     }
+    consumeIntent();
+    openQuickEntry('collection', { origin: 'page' });
   };
 
   // --- deep-link intent (from global search / quick-create) ---
@@ -389,7 +353,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
               leftIcon={<Icon name="plus" size="sm" />}
               onClick={() => openCollectionDrawer()}
             >
-              Add Collection
+              Record collection
             </Button>
           )}
           {activeTab === 'registry' && (
@@ -804,34 +768,6 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
         onClose={closeCustomerDrawer}
       />
 
-      {/* Collections Drawer */}
-      <Drawer
-        isOpen={collectionDrawerOpen}
-        onClose={closeCollectionDrawer}
-        title="Log Customer Collection"
-      >
-        <CollectionEntryForm
-          stationId={selectedStation?.id}
-          timeZone={stationSettings.timezone}
-          defaultValues={collectionDefaults}
-          customers={customers}
-          submitting={collectionSubmitting}
-          error={formError}
-          onCancel={closeCollectionDrawer}
-          onSubmit={onAddCollection}
-          submitLabel={'Log Collection'}
-          submittingLabel="Recording..."
-          amountLabel="Amount (₹)"
-          amountPlaceholder="0.00"
-          notesLabel="Notes / Fleet Slip ID"
-          notesPlaceholder="Slip code, transaction ref..."
-          paymentMethodLabel="Entry Type / Payment Method"
-          usePaymentMethodButtons={true}
-          walkInOptionLabel="-- Walk-in / Cash Customer --"
-          customerOptionLabel={(cust) => `${cust.name} (${cust.customerType})`}
-        />
-      </Drawer>
-
       <StatementDrawer
         customer={statementCustomer}
         stationId={stationId}
@@ -840,10 +776,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
           closeStatement();
           openEditCustomer(c);
         }}
-        onRecordCollection={(c) => {
-          closeStatement();
-          openCollectionDrawer(c.id);
-        }}
+        onRecordCollection={(c) => openCollectionDrawer(c)}
       />
 
       <VehicleDrawer

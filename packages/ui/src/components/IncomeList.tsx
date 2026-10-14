@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo, useState, useEffect } from 'react';
-import type { ExpenseEntryFormValues } from '@pump/shared';
 import { canManageExpenseCategory, canViewReports, canVoidExpense } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
 import { PageLayout } from './primitives/PageLayout.js';
@@ -9,9 +8,7 @@ import type { DateRange } from './primitives/DateRangeField.js';
 import { inr } from '../utils/format.js';
 import { useToast } from './primitives/ToastProvider.js';
 import { useAsk } from './primitives/ConfirmDialog.js';
-import { Drawer } from './Drawer.js';
-import { ExpenseEntryForm } from './transactions/ExpenseEntryForm.js';
-import { incomePayload } from '../utils/officeRecordPayloads.js';
+import { openQuickEntry } from '../quick-entry/store.js';
 import { useIncome, useIncomeCategories, useInvalidateOperational } from '../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -29,8 +26,8 @@ import { IncomeGstPanel } from './reports/gst/IncomeGstPanel.js';
 import { ROUTES } from '../nav-intent/routes.js';
 import type { NavIntent } from '../nav-intent/store.js';
 import { Tabs, type TabItem } from '../pump-ds/tabs/index.js';
-import { buildIncomeColumns } from './income/columns.js';
-import { IncomeCategoryManagerDrawer } from './income/IncomeCategoryManagerDrawer.js';
+import { buildCategoryRecordColumns } from './categories/categoryRecordColumns.js';
+import { CategoryManagerDrawer } from './categories/CategoryManagerDrawer.js';
 import { CASH_ACCOUNT_TYPES } from '../utils/ledgerLabels.js';
 import { useRunTask } from '../utils/runTask.js';
 
@@ -60,10 +57,6 @@ export const IncomeList: React.FC<IncomeListProps> = ({
   const ask = useAsk();
 
   const s = selectedStation?.settings || {};
-  const clock = useMemo(
-    () => ({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at }),
-    [s.timezone, s.business_day_starts_at],
-  );
   // Office records are dated by entry date: the plain station calendar date (ADR 0005).
   const entryClock = useMemo(() => ({ timeZone: s.timezone }), [s.timezone]);
 
@@ -84,40 +77,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
 
-  // Drawers
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
-  const [formDefaults, setFormDefaults] = useState<Partial<ExpenseEntryFormValues>>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-
-  const openDrawer = () => {
-    setFormError(null);
-    setFormDefaults({
-      categoryId: categories[0]?.id ?? '',
-      amount: undefined as unknown as number,
-      description: '',
-    });
-    setIsDrawerOpen(true);
-  };
-  const closeDrawer = () => setIsDrawerOpen(false);
-
-  const handleAddIncome = async (values: ExpenseEntryFormValues) => {
-    try {
-      setSubmitting(true);
-      setFormError(null);
-      if (!stationId) return;
-      await transactionService.recordIncome(incomePayload(stationId, values));
-      closeDrawer();
-      toast.success('Income recorded.');
-      await invalidateOperational(stationId);
-    } catch (err: any) {
-      setFormError(err.message || 'Failed to record income');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const refetchCategories = () => qc.invalidateQueries({ queryKey: ['income-categories'] });
 
@@ -152,7 +112,8 @@ export const IncomeList: React.FC<IncomeListProps> = ({
 
   const ledgerColumns = useMemo(
     () =>
-      buildIncomeColumns(
+      buildCategoryRecordColumns(
+        'income',
         canVoid ? (row) => runTask(handleVoid(row), 'Could not void the income entry.') : undefined,
       ),
     [canVoid, handleVoid, runTask],
@@ -234,10 +195,9 @@ export const IncomeList: React.FC<IncomeListProps> = ({
               variant="primary"
               size="sm"
               leftIcon={<Icon name="plus" size="sm" />}
-              onClick={openDrawer}
-              disabled={categories.length === 0}
+              onClick={() => openQuickEntry('income', { origin: 'page' })}
             >
-              Add Income
+              Record income
             </Button>
           </div>
         }
@@ -355,7 +315,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({
                     title={income.length === 0 ? 'No income yet' : 'No matches'}
                     description={
                       income.length === 0
-                        ? 'Record your first income with “Add Income”.'
+                        ? 'Record your first income with “Record income”.'
                         : 'Adjust the range, search, or category filter.'
                     }
                   />
@@ -384,27 +344,8 @@ export const IncomeList: React.FC<IncomeListProps> = ({
         {activeTab === 'gst' && !reportsGst && <IncomeGstPanel selectedStation={selectedStation} />}
       </PageLayout>
 
-      <Drawer isOpen={isDrawerOpen} onClose={closeDrawer} title="Record Income">
-        <ExpenseEntryForm
-          categories={categories}
-          stationId={stationId}
-          timeZone={clock.timeZone}
-          defaultValues={formDefaults}
-          submitting={submitting}
-          error={formError}
-          submittingLabel="Recording..."
-          amountLabel="Amount (₹)"
-          categoryLabel="Income Category"
-          categoryEmptyMessage="No income categories yet — add one with “Categories”."
-          accountLabel="Received into"
-          descriptionPlaceholder="e.g. Tanker rental, scrap sale, commission"
-          onCancel={closeDrawer}
-          onSubmit={handleAddIncome}
-          submitLabel="Add Income"
-        />
-      </Drawer>
-
-      <IncomeCategoryManagerDrawer
+      <CategoryManagerDrawer
+        kind="income"
         isOpen={categoryManagerOpen}
         onClose={() => setCategoryManagerOpen(false)}
         categories={categories}

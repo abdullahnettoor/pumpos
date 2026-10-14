@@ -682,6 +682,72 @@ export const purchaseEntryFormSchemaFor = (isFuelProduct: (productId: string) =>
     if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['lines'], message });
   });
 
+/**
+ * "Also record a supplier payment now" on a purchase: a separate Supplier
+ * payment (an Office Record) with its own Entry Date and Funding Account.
+ * Checked only when ticked.
+ */
+export const purchasePayNowFormSchema = z.object({
+  enabled: z.boolean().default(false),
+  fundingAccountId: z.string().optional().default(''),
+  amount: z.union([z.string(), z.number()]).optional().default(''),
+  /** The payment's Entry Date: the station's calendar date, never after today. */
+  entryDate: z.string().optional().default(''),
+});
+export type PurchasePayNowFormValues = z.infer<typeof purchasePayNowFormSchema>;
+
+/**
+ * The desktop purchase form: the invoice, what was bought, and the optional
+ * pay-now Supplier payment. `today` is the station's Entry Date, the latest a
+ * payment can be dated.
+ */
+export const purchaseWithPayNowFormSchemaFor = (
+  isFuelProduct: (productId: string) => boolean,
+  today: string,
+) =>
+  purchaseEntryFormSchema
+    .extend({
+      purchaseType: z.enum(['FUEL', 'PRODUCTS']).default('FUEL'),
+      payment: purchasePayNowFormSchema.default({}),
+    })
+    .superRefine((data, ctx) => {
+      const message = mixedPurchaseError(data.lines, isFuelProduct);
+      if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['lines'], message });
+      const pay = data.payment;
+      if (!pay.enabled) return;
+      if (!pay.fundingAccountId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['payment', 'fundingAccountId'],
+          message: 'Choose the account',
+        });
+      }
+      const amount = officePaymentAmountField.safeParse(pay.amount === '' ? undefined : pay.amount);
+      if (!amount.success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['payment', 'amount'],
+          message: amount.error.issues[0]?.message ?? 'Amount is required',
+        });
+      }
+      if (!entryDateField.safeParse(pay.entryDate).success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['payment', 'entryDate'],
+          message: 'Choose the payment date',
+        });
+      } else if (today && pay.entryDate > today) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['payment', 'entryDate'],
+          message: 'A payment cannot be dated after today',
+        });
+      }
+    });
+export type PurchaseWithPayNowFormValues = z.infer<
+  ReturnType<typeof purchaseWithPayNowFormSchemaFor>
+>;
+
 export const merchandiseSaleLineFormSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
   quantity: z.coerce

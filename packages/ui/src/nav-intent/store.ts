@@ -36,7 +36,7 @@ export interface NavIntent {
    * so reviving one here would open an entry form with an empty target shift.
    * Route those through `openQuickEntry` instead.
    */
-  open?: 'customer-statement' | 'new-customer' | 'supplier-statement' | 'supplier-payment';
+  open?: 'customer-statement' | 'new-customer' | 'supplier-statement';
   /** Open a specific past business day's DSSR summary (Reports page). */
   openDssrDate?: string;
   /** Open a specific Business Day in the Shifts workspace. */

@@ -9,6 +9,7 @@ import {
 } from '../../test/renderWithProviders.js';
 import { queryKeys } from '../../query/hooks.js';
 import { PurchaseEntryForm, type PurchaseEntryFormProps } from './PurchaseEntryForm.js';
+import { OfficeRecordContext } from '../../office-records/context.js';
 
 /**
  * Purchases move stock and money, and the form does real work before it
@@ -32,11 +33,8 @@ const OIL = {
 };
 
 const baseProps = (over: Partial<PurchaseEntryFormProps> = {}): PurchaseEntryFormProps => ({
-  suppliers: [{ id: 's1', name: 'IOCL Depot', isActive: true }],
+  suppliers: [{ id: 's1', name: 'IOCL Depot' }],
   products: [PETROL, OIL],
-  tanks: [],
-  submitting: false,
-  onCancel: vi.fn(),
   onSubmit: vi.fn(),
   ...over,
 });
@@ -50,8 +48,7 @@ const inputUnder = (labelText: string | RegExp, index = 0): HTMLInputElement => 
 };
 
 const submitForm = () => {
-  const form = screen.getByRole('button', { name: 'Add Purchase' }).closest('form');
-  fireEvent.submit(form!);
+  fireEvent.submit(document.querySelector('form')!);
 };
 
 describe('PurchaseEntryForm', () => {
@@ -172,7 +169,6 @@ describe('PurchaseEntryForm', () => {
         <PurchaseEntryForm
           {...baseProps({
             onSubmit,
-            tanks: [{ id: 't1', name: 'Tank 1', productId: PETROL.id, capacity: 10000 }],
             defaultValues: {
               supplierId: 's1',
               lines: [{ productId: PETROL.id, quantity: 5000 } as never],
@@ -194,7 +190,6 @@ describe('PurchaseEntryForm', () => {
       renderWithProviders(
         <PurchaseEntryForm
           {...baseProps({
-            tanks: [{ id: 't1', name: 'Tank 1', productId: PETROL.id, capacity: 10000 }],
             defaultValues: {
               supplierId: 's1',
               lines: [{ productId: PETROL.id, quantity: 5000 } as never],
@@ -286,7 +281,7 @@ describe('PurchaseEntryForm', () => {
       lines: [{ productId: OIL.id, quantity: 10, unitPrice: 450 } as never],
     };
 
-    it('sends no payment when capture is disabled', async () => {
+    it('sends no payment unless "Also record a supplier payment now" is ticked', async () => {
       const onSubmit = vi.fn();
       renderWithProviders(
         <PurchaseEntryForm {...baseProps({ onSubmit, defaultValues: oilLine })} />,
@@ -301,7 +296,6 @@ describe('PurchaseEntryForm', () => {
     // Guards the effect that resets the form when `defaultValues` changes. A
     // "fix" that runs it only on mount would show the previous purchase's
     // quantities against the new supplier — invisible without this.
-    const tanks = [{ id: 't1', name: 'Tank 1', productId: PETROL.id, capacity: 10000 }];
 
     it('shows the new purchase, not the previous one', async () => {
       const { rerender } = renderWithProviders(
@@ -335,7 +329,6 @@ describe('PurchaseEntryForm', () => {
       const { rerender } = renderWithProviders(
         <PurchaseEntryForm
           {...baseProps({
-            tanks,
             defaultValues: {
               supplierId: 's1',
               lines: [{ productId: PETROL.id, quantity: 5000 } as never],
@@ -349,7 +342,6 @@ describe('PurchaseEntryForm', () => {
       rerender(
         <PurchaseEntryForm
           {...baseProps({
-            tanks,
             defaultValues: {
               supplierId: 's1',
               lines: [{ productId: PETROL.id, quantity: 3000 } as never],
@@ -372,7 +364,6 @@ describe('PurchaseEntryForm', () => {
         <PurchaseEntryForm
           {...baseProps({
             onSubmit,
-            tanks,
             defaultValues: {
               supplierId: 's1',
               lines: [{ productId: PETROL.id, quantity: 5000 } as never],
@@ -406,28 +397,33 @@ describe('PurchaseEntryForm', () => {
       queryClient.setQueryData(queryKeys.businessDayStatus('st-1', date), dayStatus(date, state));
       const onSubmit = vi.fn();
       renderWithProviders(
-        <PurchaseEntryForm
-          {...baseProps({
-            onSubmit,
+        <OfficeRecordContext.Provider
+          value={{
             stationId: 'st-1',
-            defaultValues: {
-              supplierId: 's1',
-              transactionDate: date,
-              lines: [{ productId: OIL.id, quantity: 1, unitPrice: 10 } as never],
-            },
-          })}
-        />,
+            balances: new Map(),
+            disabled: false,
+            today: '2026-03-15',
+            businessDate: '2026-03-15',
+          }}
+        >
+          <PurchaseEntryForm
+            {...baseProps({
+              onSubmit,
+              defaultValues: {
+                supplierId: 's1',
+                transactionDate: date,
+                lines: [{ productId: OIL.id, quantity: 1, unitPrice: 10 } as never],
+              },
+            })}
+          />
+        </OfficeRecordContext.Provider>,
         { queryClient },
       );
       return onSubmit;
     };
-    const submitButton = () =>
-      screen.getByRole('button', { name: 'Add Purchase' }) as HTMLButtonElement;
-
     it('warns and blocks submit when the chosen day is closed', async () => {
       const onSubmit = renderFor('2026-03-10', 'CLOSED');
       expect(await screen.findByText('2026-03-10 is closed.')).toBeTruthy();
-      expect(submitButton().disabled).toBe(true);
       submitForm();
       await new Promise((r) => setTimeout(r, 0));
       expect(onSubmit).not.toHaveBeenCalled();
@@ -439,7 +435,33 @@ describe('PurchaseEntryForm', () => {
     ])('shows no warning for %s', (_label, date) => {
       renderFor(date, 'OPEN');
       expect(screen.queryByText(/is closed\./)).toBeNull();
-      expect(submitButton().disabled).toBe(false);
+    });
+  });
+
+  describe('fuel or products', () => {
+    it('dates fuel by its invoice and products by their Business date', () => {
+      renderWithProviders(
+        <PurchaseEntryForm {...baseProps({ defaultValues: { supplierId: 's1' } })} />,
+      );
+      expect(screen.getByText('Invoice date')).toBeTruthy();
+      fireEvent.click(screen.getByRole('radio', { name: 'Products' }));
+      expect(screen.getByText('Business date')).toBeTruthy();
+    });
+
+    it('starts on Products when the invoice lines are products', () => {
+      renderWithProviders(
+        <PurchaseEntryForm
+          {...baseProps({
+            defaultValues: {
+              supplierId: 's1',
+              lines: [{ productId: OIL.id, quantity: 1, unitPrice: 10 } as never],
+            },
+          })}
+        />,
+      );
+      expect(screen.getByRole('radio', { name: 'Products' }).getAttribute('aria-checked')).toBe(
+        'true',
+      );
     });
   });
 });

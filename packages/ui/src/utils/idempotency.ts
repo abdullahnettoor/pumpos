@@ -13,3 +13,19 @@ export function keepsIdempotencyKey(error: unknown): boolean {
     e.code === 'CONFLICT' && error instanceof Error && /already in progress/i.test(error.message)
   );
 }
+
+/**
+ * The API refused this key because it was already used with a different body:
+ * an earlier send under it reached the server. After an unknown outcome and an
+ * edit, that earlier save may have landed, so the outcome is still unknown and
+ * the key must be kept (a fresh one could record the same thing twice).
+ */
+export function isIdempotencyKeyConflict(error: unknown): boolean {
+  const e = error && typeof error === 'object' ? (error as { status?: number; code?: string }) : {};
+  return (
+    e.status === 409 &&
+    e.code === 'CONFLICT' &&
+    error instanceof Error &&
+    /Idempotency-Key was already used/i.test(error.message)
+  );
+}

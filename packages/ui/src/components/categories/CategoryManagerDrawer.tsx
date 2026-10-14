@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { Drawer } from '../Drawer.js';
 import { Button, Chip, EmptyState, Input, Form, Icon } from '../../pump-ds/index.js';
-import { CloudTransactionService } from '../../services/cloud.js';
 import { useToast } from '../primitives/ToastProvider.js';
+import { CATEGORY_API as API, type CategoryRecordKind, type CategoryTax } from './categoryApi.js';
 
-const service = new CloudTransactionService();
+export type { CategoryRecordKind };
 
-export interface IncomeCategoryManagerDrawerProps {
+export interface CategoryManagerDrawerProps {
+  /** Expense categories, or income categories (which also carry GST + HSN/SAC). */
+  kind: CategoryRecordKind;
   isOpen: boolean;
   onClose: () => void;
   categories: any[];
@@ -15,13 +17,8 @@ export interface IncomeCategoryManagerDrawerProps {
   canManage: boolean;
 }
 
-/**
- * Manage income categories: add custom categories, rename them, and set an
- * optional GST rate + HSN/SAC on each (stored in `tax_config`, mirroring the
- * product tax shape). Seeded defaults are editable too — they only differ by a
- * "Default" tag. The tax config is captured now; GST-on-income reporting reads
- * it later (FI4).
- */
+type Tax = CategoryTax;
+
 const gstStr = (c: any) => {
   const t = c?.taxConfig;
   return t && t.gst_rate != null ? String(t.gst_rate) : '';
@@ -34,14 +31,58 @@ const hasTax = (c: any) => {
   const t = c?.taxConfig;
   return !!(t && (t.gst_rate != null || t.hsn_code));
 };
-const buildTax = (gst: string, hsn: string): { gst_rate: number; hsn_code: string } | null => {
+const buildTax = (gst: string, hsn: string): Tax => {
   const g = gst.trim();
   const h = hsn.trim();
   if (!g && !h) return null;
   return { gst_rate: g ? Number(g) : 0, hsn_code: h };
 };
 
-export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerProps> = ({
+const COPY = {
+  expense: { title: 'Manage expense categories', placeholder: 'e.g. Vehicle maintenance' },
+  income: { title: 'Manage income categories', placeholder: 'e.g. Tanker rental, commission' },
+} as const;
+
+/** GST % and HSN / SAC inputs of an income category. */
+const TaxInputs: React.FC<{
+  gst: string;
+  hsn: string;
+  onGst: (v: string) => void;
+  onHsn: (v: string) => void;
+}> = ({ gst, hsn, onGst, onHsn }) => (
+  <>
+    <div className="w-[110px]">
+      <Input
+        type="number"
+        min={0}
+        max={100}
+        step="0.01"
+        value={gst}
+        onChange={(e) => onGst(e.target.value)}
+        placeholder="GST %"
+        aria-label="GST rate %"
+      />
+    </div>
+    <div className="flex-1">
+      <Input
+        value={hsn}
+        onChange={(e) => onHsn(e.target.value)}
+        placeholder="HSN / SAC (optional)"
+        maxLength={20}
+        aria-label="HSN / SAC code"
+      />
+    </div>
+  </>
+);
+
+/**
+ * Manage the categories of expenses or income: add one and rename any (seeded
+ * defaults only differ by a "Default" tag). An income category also carries an
+ * optional GST rate and HSN/SAC (`tax_config`, the product tax shape).
+ * Archiving is deferred; see the API TODO.
+ */
+export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
+  kind,
   isOpen,
   onClose,
   categories,
@@ -49,6 +90,7 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
   canManage,
 }) => {
   const toast = useToast();
+  const taxed = kind === 'income';
   const [newName, setNewName] = useState('');
   const [newGst, setNewGst] = useState('');
   const [newHsn, setNewHsn] = useState('');
@@ -67,7 +109,7 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
     if (!name) return;
     try {
       setAdding(true);
-      await service.createIncomeCategory({ name, taxConfig: buildTax(newGst, newHsn) });
+      await API[kind].create(name, buildTax(newGst, newHsn));
       setNewName('');
       setNewGst('');
       setNewHsn('');
@@ -97,10 +139,10 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
     if (!name) return;
     try {
       setSavingId(id);
-      await service.updateIncomeCategory(id, { name, taxConfig: buildTax(editGst, editHsn) });
+      await API[kind].update(id, name, buildTax(editGst, editHsn));
       cancelEdit();
       await onChanged();
-      toast.success('Category saved.');
+      toast.success(taxed ? 'Category saved.' : 'Category renamed.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to save category');
     } finally {
@@ -108,77 +150,58 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
     }
   };
 
-  const rowStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 0',
-    borderBottom: '1px solid var(--border-soft)',
-  };
-
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} title="Manage income categories">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <Drawer isOpen={isOpen} onClose={onClose} title={COPY[kind].title}>
+      <div className="flex flex-col gap-4">
         {canManage && (
           <Form onSubmit={add}>
             <label className="field-label">New category</label>
-            <Input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="e.g. Tanker rental, commission"
-              maxLength={100}
-            />
-            <div style={{ display: 'flex', alignItems: 'stretch', gap: '8px', marginTop: '8px' }}>
-              <div style={{ width: '110px' }}>
+            <div className="flex items-stretch gap-2">
+              <div className="flex-1">
                 <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="0.01"
-                  value={newGst}
-                  onChange={(e) => setNewGst(e.target.value)}
-                  placeholder="GST %"
-                  aria-label="GST rate %"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder={COPY[kind].placeholder}
+                  maxLength={100}
                 />
               </div>
-              <div style={{ flex: 1 }}>
-                <Input
-                  value={newHsn}
-                  onChange={(e) => setNewHsn(e.target.value)}
-                  placeholder="HSN / SAC (optional)"
-                  maxLength={20}
-                  aria-label="HSN / SAC code"
-                />
-              </div>
-              <Button
-                type="submit"
-                variant="primary"
-                size="md"
-                leftIcon={<Icon name="plus" size="sm" />}
-                loading={adding}
-                disabled={!newName.trim()}
-              >
-                Add
-              </Button>
+              {!taxed && (
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="md"
+                  leftIcon={<Icon name="plus" size="sm" />}
+                  loading={adding}
+                  disabled={!newName.trim()}
+                >
+                  Add
+                </Button>
+              )}
             </div>
+            {taxed && (
+              <div className="mt-2 flex items-stretch gap-2">
+                <TaxInputs gst={newGst} hsn={newHsn} onGst={setNewGst} onHsn={setNewHsn} />
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="md"
+                  leftIcon={<Icon name="plus" size="sm" />}
+                  loading={adding}
+                  disabled={!newName.trim()}
+                >
+                  Add
+                </Button>
+              </div>
+            )}
           </Form>
         )}
 
         <div>
-          <div
-            style={{
-              fontSize: '11px',
-              color: 'var(--text-muted)',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '4px',
-            }}
-          >
+          <div className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
             Categories
           </div>
           {sorted.length === 0 ? (
-            <div style={{ padding: '8px 0' }}>
+            <div className="py-2">
               <EmptyState
                 compact
                 icon={<Icon name="tag" size="md" />}
@@ -188,39 +211,26 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
             </div>
           ) : (
             sorted.map((c) => (
-              <div key={c.id} style={rowStyle}>
+              <div key={c.id} className="flex items-center gap-2 border-b border-border-soft py-2">
                 {editingId === c.id ? (
                   <>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div className="flex flex-1 flex-col gap-1.5">
                       <Input
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
                         maxLength={100}
                         autoFocus
                       />
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <div style={{ width: '110px' }}>
-                          <Input
-                            type="number"
-                            min={0}
-                            max={100}
-                            step="0.01"
-                            value={editGst}
-                            onChange={(e) => setEditGst(e.target.value)}
-                            placeholder="GST %"
-                            aria-label="GST rate %"
+                      {taxed && (
+                        <div className="flex gap-2">
+                          <TaxInputs
+                            gst={editGst}
+                            hsn={editHsn}
+                            onGst={setEditGst}
+                            onHsn={setEditHsn}
                           />
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <Input
-                            value={editHsn}
-                            onChange={(e) => setEditHsn(e.target.value)}
-                            placeholder="HSN / SAC (optional)"
-                            maxLength={20}
-                            aria-label="HSN / SAC code"
-                          />
-                        </div>
-                      </div>
+                      )}
                     </div>
                     <Button
                       variant="primary"
@@ -243,16 +253,10 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
                   </>
                 ) : (
                   <>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <span
-                        style={{ fontSize: '13px', color: 'var(--text-strong)', fontWeight: 500 }}
-                      >
-                        {c.name}
-                      </span>
-                      {hasTax(c) && (
-                        <div
-                          style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}
-                        >
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[13px] font-medium text-ink-strong">{c.name}</span>
+                      {taxed && hasTax(c) && (
+                        <div className="mt-0.5 text-[12px] text-ink-muted">
                           GST {gstStr(c) || '0'}%{hsnStr(c) ? ` · HSN ${hsnStr(c)}` : ''}
                         </div>
                       )}
@@ -268,7 +272,7 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
                         size="sm"
                         iconOnly
                         leftIcon={<Icon name="pencil" size="xs" />}
-                        aria-label="Edit"
+                        aria-label={taxed ? 'Edit' : 'Rename'}
                         onClick={() => startEdit(c)}
                       />
                     )}

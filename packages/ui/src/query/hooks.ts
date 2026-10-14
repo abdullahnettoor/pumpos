@@ -1421,6 +1421,10 @@ export function useInvalidateOperational() {
       // balance: a purchase or supplier payment moves them and the statement.
       qc.invalidateQueries({ queryKey: ['payables'] }),
       qc.invalidateQueries({ queryKey: ['supplier-statement'] }),
+      // The statement drawers read the party ledgers: a record made over an open
+      // statement must show in it.
+      qc.invalidateQueries({ queryKey: ['supplier-ledger'] }),
+      qc.invalidateQueries({ queryKey: ['customer-ledger'] }),
       // Money layer: account balances, statements and the Cash & Bank register all
       // move with expenses / income / collections / payments.
       qc.invalidateQueries({ queryKey: ['financial-accounts'] }),

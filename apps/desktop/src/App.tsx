@@ -596,7 +596,7 @@ const App: React.FC = () => {
       checkingUpdates={updateState?.phase === 'checking' && updateState.manual}
     >
       {renderContent()}
-      <QuickEntryHost selectedStation={selectedStation} />
+      <QuickEntryHost selectedStation={selectedStation} userRole={userRole || 'Staff'} />
       <UpdateNotice updates={updates} />
     </AppShell>
   );

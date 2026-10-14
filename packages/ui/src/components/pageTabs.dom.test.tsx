@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithProviders } from '../test/renderWithProviders.js';
 import { publishNavIntent, __resetNavIntentForTests } from '../nav-intent/store.js';
+import { closeQuickEntry, useQuickEntry, type QuickEntryState } from '../quick-entry/store.js';
 import { CustomersList } from './CustomersList.js';
 import { PurchasesList } from './PurchasesList.js';
 import { AccountsPanel } from './finance/AccountsPanel.js';
@@ -176,11 +177,23 @@ describe('page tabs (#540)', () => {
     expect((await tabsOf('Customers')).selected).toContain('Customers');
   });
 
-  it('Suppliers: closing the new-purchase drawer stays on Purchases (review #545)', async () => {
+  it('Suppliers: the new-purchase deep link opens a fuel purchase and stays on Purchases (review #545)', async () => {
     act(() => publishNavIntent({ openNewPurchase: true }));
-    renderWithProviders(<PurchasesList selectedStation={station} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Close Drawer' }));
-    expect(screen.queryByRole('button', { name: 'Close Drawer' })).toBeNull();
+    const seen: QuickEntryState[] = [];
+    const Spy = () => {
+      seen.push(useQuickEntry());
+      return null;
+    };
+    renderWithProviders(
+      <>
+        <PurchasesList selectedStation={station} />
+        <Spy />
+      </>,
+    );
+    expect((await tabsOf('Suppliers')).selected).toContain('Purchases');
+    const last = seen[seen.length - 1];
+    expect(last).toMatchObject({ open: true, type: 'purchase', launch: { purchaseType: 'FUEL' } });
+    act(() => closeQuickEntry());
     expect((await tabsOf('Suppliers')).selected).toContain('Purchases');
   });
 
