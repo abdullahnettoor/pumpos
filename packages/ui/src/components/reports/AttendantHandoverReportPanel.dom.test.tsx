@@ -185,16 +185,13 @@ describe('AttendantHandoverReportPanel drawer', () => {
     const creditTable = screen.getByRole('table', { name: 'Fuel-on-credit chits' });
     const rows = within(creditTable)
       .getAllByRole('row')
-      .map((r) =>
-        within(r)
-          .queryAllByRole('cell')
-          .map((c) => c.textContent),
-      )
+      // Body cells, plus the total row's label (a row header).
+      .map((r) => Array.from(r.querySelectorAll('td, th[scope="row"]')).map((c) => c.textContent))
       .filter((cells) => cells.length > 0);
 
     // The quantity carries its unit, as the exported PDF has always printed
     // it — the drawer used to show a bare number (#244).
-    expect(rows[0]).toEqual(['Anand Transports', 'KL-07-AB-1234', 'Diesel', '20.000 L', '₹800.00']);
+    expect(rows[0]).toEqual(['Anand Transports', 'KL-07-AB-1234', 'Diesel', '20.00 L', '₹800.00']);
     // A chit that recorded no product or vehicle is still listed, still counted —
     // and an absent quantity is a dash, not a formatted zero.
     expect(rows[1]).toEqual(['Zenith Logistics', '—', '—', '—', '₹200.00']);
@@ -212,6 +209,19 @@ describe('AttendantHandoverReportPanel drawer', () => {
 
     // Composed order is preserved — N10 after N2, not lexicographic.
     expect(names).toEqual(['N2', 'N10']);
+  });
+
+  it('prints meter readings to 3 places in litres, as the export does', () => {
+    openDrawer();
+
+    const nozzleTable = screen.getByRole('table', { name: 'DU 1 nozzle readings' });
+    const first = within(within(nozzleTable).getAllByRole('row')[1]).getAllByRole('cell');
+    expect(first.slice(2).map((c) => c.textContent)).toEqual([
+      '100.000 L',
+      '200.000 L',
+      '100.000 L',
+      '2.000 L',
+    ]);
   });
 
   it('opens on the range figures an export would carry', () => {
@@ -260,11 +270,8 @@ describe('AttendantHandoverReportPanel drawer', () => {
     const creditTable = screen.getByRole('table', { name: 'Fuel-on-credit chits' });
     const rows = within(creditTable)
       .getAllByRole('row')
-      .map((r) =>
-        within(r)
-          .queryAllByRole('cell')
-          .map((c) => c.textContent),
-      )
+      // Body cells, plus the total row's label (a row header).
+      .map((r) => Array.from(r.querySelectorAll('td, th[scope="row"]')).map((c) => c.textContent))
       .filter((cells) => cells.length > 0);
 
     // One placeholder row carrying the money, then the total it sums to.

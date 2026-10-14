@@ -56,6 +56,24 @@ a time — never in place.
    `error={q.error}` and `onRetry={q.refetch}`). Gate with `enabled`, and give
    the queries the same flag so a hidden section sends no request.
 
+## Tables
+
+`table/` and `statement-table/` take one `TableColumn<T>[]`; the column's
+`kind` (`money`, `qty`, `date`, `text`, `status`) sets how it reads.
+
+- **Headers** are all the same: 10px, uppercase, weight 500, faint sans. A
+  money or qty header is right-aligned over its figures and nothing else.
+- **Money and qty cells** are right-aligned mono with tabular digits, at
+  regular weight. Only the total row is semibold, so it stands out from the
+  figures above it. Don't set `emphasis` on a column that has a total row.
+- **Dates** are sans with tabular digits.
+- **Quantities** take their unit's decimals (2 for litres). Only meter
+  readings take 3 (`decimals: 3`), and they set `total: false`.
+- **Total row.** Money adds up in paise. An empty cell adds nothing. A broken
+  figure (non-finite) makes the total `—`, never a sum that counted it as 0.
+  A qty column with mixed units totals `—`.
+- **Sorting** puts empty and broken values last in either direction.
+
 ## Style check
 
 `classGuard.test.ts` scans every source file in `packages/ui/src` (tests

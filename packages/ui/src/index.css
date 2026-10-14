@@ -107,46 +107,49 @@
   --status-bar-height: 26px;
 }
 
-:root.dark {
-  /* Colors (Calm Industrial Dark Theme — built, hidden #501) */
-  --bg-canvas: #0b0f0d;
-  --bg-surface: #121815;
-  --bg-surface-alt: #161d1a;
+@media not print {
+  /* Dark is a screen theme: paper is white, so print and PDF keep the light ink. */
+  :root.dark {
+    /* Colors (Calm Industrial Dark Theme — built, hidden #501) */
+    --bg-canvas: #0b0f0d;
+    --bg-surface: #121815;
+    --bg-surface-alt: #161d1a;
 
-  --border-soft: #1f2925;
-  --border-strong: #2a3530;
+    --border-soft: #1f2925;
+    --border-strong: #2a3530;
 
-  --text-strong: #ffffff;
-  --text-default: #cfd8d2;
-  --text-muted: #8a9a91;
-  --text-faint: #5d6c64;
+    --text-strong: #ffffff;
+    --text-default: #cfd8d2;
+    --text-muted: #8a9a91;
+    --text-faint: #5d6c64;
 
-  /* Brand/Accents */
-  --brand-primary: #2fd18d; /* Mint */
-  --text-on-brand: #06110c; /* High-contrast text placed on --brand-primary */
-  --brand-secondary: #6cb6ff;
-  --brand-warning: #f2b544;
-  --brand-danger: #ff7a6b;
+    /* Brand/Accents */
+    --brand-primary: #2fd18d; /* Mint */
+    --text-on-brand: #06110c; /* High-contrast text placed on --brand-primary */
+    --brand-secondary: #6cb6ff;
+    --brand-warning: #f2b544;
+    --brand-danger: #ff7a6b;
 
-  /* States */
-  --state-success-bg: #10241b;
-  --state-success-fg: #2fd18d;
+    /* States */
+    --state-success-bg: #10241b;
+    --state-success-fg: #2fd18d;
 
-  --state-warning-bg: #221a10;
-  --state-warning-fg: #f2b544;
+    --state-warning-bg: #221a10;
+    --state-warning-fg: #f2b544;
 
-  --state-danger-bg: #241514;
-  --state-danger-fg: #ff7a6b;
+    --state-danger-bg: #241514;
+    --state-danger-fg: #ff7a6b;
 
-  --state-info-bg: #12263a;
-  --state-info-fg: #6cb6ff;
+    --state-info-bg: #12263a;
+    --state-info-fg: #6cb6ff;
 
-  /* Text on solid tone fills: the light fills turn bright here, so near-black. */
-  --text-on-danger: #06110c;
-  --text-on-warning: #06110c;
-  --text-on-success: #06110c;
-  --text-on-info: #06110c;
-  --text-on-neutral: #06110c;
+    /* Text on solid tone fills: the light fills turn bright here, so near-black. */
+    --text-on-danger: #06110c;
+    --text-on-warning: #06110c;
+    --text-on-success: #06110c;
+    --text-on-info: #06110c;
+    --text-on-neutral: #06110c;
+  }
 }
 
 /* Base Resets */

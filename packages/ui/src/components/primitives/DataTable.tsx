@@ -5,10 +5,31 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type RowData,
   type SortingState,
 } from '@tanstack/react-table';
 import { useRunTask } from '../../utils/runTask.js';
 import { DataSection } from '../../pump-ds/data-section/index.js';
+import { cn } from '../../pump-ds/lib/cn.js';
+
+/** Header type for a column without meta; a kind-styled column's meta overrides it. */
+const HEADER_CLASS = 'text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-muted';
+
+declare module '@tanstack/react-table' {
+  /**
+   * Optional per-column presentation, set by the pump-ds `InteractiveTable`
+   * adapter from a column's kind (alignment, mono). A column without it
+   * renders as before.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData extends RowData, TValue> {
+    /** Body and total cells. */
+    className?: string;
+    /** Header cell, merged over the default header type; falls back to `className`. */
+    headerClassName?: string;
+    width?: string;
+  }
+}
 
 export interface DataTableProps<T> {
   columns: ColumnDef<T, any>[];
@@ -117,20 +138,26 @@ export function DataTable<T>({
                 {hg.headers.map((header) => {
                   const canSort = header.column.getCanSort();
                   const sorted = header.column.getIsSorted();
+                  const meta = header.column.columnDef.meta ?? {};
                   return (
                     <th
                       key={header.id}
+                      scope="col"
+                      className={cn(HEADER_CLASS, meta.headerClassName ?? meta.className)}
+                      aria-sort={
+                        sorted === 'asc'
+                          ? 'ascending'
+                          : sorted === 'desc'
+                            ? 'descending'
+                            : undefined
+                      }
                       onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
                       style={{
                         padding: cellPad,
-                        fontWeight: 600,
-                        fontSize: '11px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.04em',
-                        color: 'var(--text-muted)',
                         cursor: canSort ? 'pointer' : 'default',
                         whiteSpace: 'nowrap',
                         userSelect: 'none',
+                        width: meta.width,
                       }}
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
@@ -169,6 +196,7 @@ export function DataTable<T>({
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
+                      className={cell.column.columnDef.meta?.className}
                       style={{
                         padding: cellPad,
                         color: 'var(--text-default)',
@@ -185,19 +213,22 @@ export function DataTable<T>({
           {hasFooter && (
             <tfoot>
               {table.getFooterGroups().map((fg) => (
-                <tr key={fg.id} style={{ borderTop: '1px solid var(--border-strong)' }}>
+                <tr
+                  key={fg.id}
+                  className="border-t border-border-strong font-semibold text-ink-strong"
+                >
                   {fg.headers.map((header, i) => {
                     const Cell = i === 0 ? 'th' : 'td';
+                    const className = header.column.columnDef.meta?.className;
                     return (
                       <Cell
                         key={header.id}
                         scope={i === 0 ? 'row' : undefined}
-                        style={{
-                          padding: cellPad,
-                          fontWeight: 600,
-                          textAlign: 'left',
-                          color: 'var(--text-strong)',
-                        }}
+                        // A kind-styled column aligns its total like its cells.
+                        className={cn(
+                          dense ? 'px-1.5 py-1.5' : 'px-3 py-[9px]',
+                          className ?? 'text-left',
+                        )}
                       >
                         {header.isPlaceholder
                           ? null

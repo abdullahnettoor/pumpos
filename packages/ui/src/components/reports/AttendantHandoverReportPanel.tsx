@@ -11,12 +11,13 @@ import { useAttendantHandoverReport } from '../../query/hooks.js';
 import {
   creditChitRows,
   shiftShowsCreditBreakdown,
+  type CreditChitRow,
 } from '../../services/reports/attendantCreditLines.js';
 import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { Field, Select } from '../primitives/Field.js';
 import { Drawer } from '../Drawer.js';
-import { formatDateTime, formatQty, inr } from '../../utils/format.js';
+import { formatDateTime, inr } from '../../utils/format.js';
 import {
   KpiStrip,
   KpiTile,
@@ -26,6 +27,7 @@ import {
   Button,
   Chip,
   StatementTable,
+  type TableColumn,
 } from '../../pump-ds/index.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
@@ -65,6 +67,49 @@ const TONE_COLOR: Record<VarianceTone, string> = {
   neutral: 'var(--text-muted)',
 };
 
+/**
+ * A nozzle meter reading: litres to 3 places. Readings never add up: a total
+ * of opening and closing readings means nothing.
+ */
+const READING = { kind: 'qty', unit: 'L', decimals: 3, total: false } as const;
+
+type Nozzle = AttendantReportDispenser['nozzles'][number];
+type Terminal = AttendantReportDispenser['terminals'][number];
+
+// Meter readings to 3 places in litres, as the exported PDF prints them.
+const NOZZLE_COLUMNS: TableColumn<Nozzle>[] = [
+  { id: 'nozzle', header: 'Nozzle', kind: 'text', value: (n) => n.nozzleName },
+  { id: 'product', header: 'Product', kind: 'text', value: (n) => n.productName },
+  { ...READING, id: 'opening', header: 'Opening', value: (n) => n.openingReading },
+  { ...READING, id: 'closing', header: 'Closing', value: (n) => n.closingReading },
+  { ...READING, id: 'volume', header: 'Volume', emphasis: true, value: (n) => n.volumeSold },
+  { ...READING, id: 'testing', header: 'Testing', value: (n) => n.testingVolume },
+];
+
+const TERMINAL_COLUMNS: TableColumn<Terminal>[] = [
+  { id: 'terminal', header: 'Terminal', kind: 'text', value: (t) => t.terminalName },
+  { id: 'batch', header: 'Batch', kind: 'text', value: (t) => t.batchRef },
+  { id: 'card', header: 'Card', kind: 'money', value: (t) => t.cardAmount },
+  { id: 'upi', header: 'UPI', kind: 'money', value: (t) => t.upiAmount },
+];
+
+const CREDIT_COLUMNS: TableColumn<CreditChitRow>[] = [
+  { id: 'customer', header: 'Customer', kind: 'text', value: (r) => r.customerName },
+  { id: 'vehicle', header: 'Vehicle', kind: 'text', value: (r) => r.vehicle },
+  { id: 'product', header: 'Product', kind: 'text', value: (r) => r.product },
+  // A volume, not a meter reading: the unit's own decimals (2 for litres).
+  // Chits reconcile by amount; the quantity column is not totalled.
+  {
+    id: 'qty',
+    header: 'Qty',
+    kind: 'qty',
+    unit: (r) => r.unit,
+    total: false,
+    value: (r) => r.quantityValue,
+  },
+  { id: 'amount', header: 'Amount', kind: 'money', value: (r) => r.amount },
+];
+
 const DispenserDetail: React.FC<{ dispenser: AttendantReportDispenser }> = ({ dispenser }) => (
   <div className="mt-2">
     <div className="flex items-center justify-between gap-2">
@@ -78,19 +123,7 @@ const DispenserDetail: React.FC<{ dispenser: AttendantReportDispenser }> = ({ di
 
     <StatementTable
       label={`${dispenser.duName} nozzle readings`}
-      columns={[
-        { header: 'Nozzle', cell: (n) => n.nozzleName },
-        { header: 'Product', cell: (n) => n.productName ?? '—' },
-        { header: 'Opening', align: 'right', cell: (n) => formatQty(n.openingReading, 3) },
-        { header: 'Closing', align: 'right', cell: (n) => formatQty(n.closingReading, 3) },
-        {
-          header: 'Volume',
-          align: 'right',
-          strong: true,
-          cell: (n) => formatQty(n.volumeSold, 3),
-        },
-        { header: 'Testing', align: 'right', cell: (n) => formatQty(n.testingVolume, 3) },
-      ]}
+      columns={NOZZLE_COLUMNS}
       rows={dispenser.nozzles}
       rowKey={(n) => n.nozzleId}
     />
@@ -99,12 +132,7 @@ const DispenserDetail: React.FC<{ dispenser: AttendantReportDispenser }> = ({ di
       <StatementTable
         className="mt-1"
         label={`${dispenser.duName} payment terminals`}
-        columns={[
-          { header: 'Terminal', cell: (t) => t.terminalName },
-          { header: 'Batch', cell: (t) => t.batchRef || '—' },
-          { header: 'Card', align: 'right', cell: (t) => inr(t.cardAmount) },
-          { header: 'UPI', align: 'right', cell: (t) => inr(t.upiAmount) },
-        ]}
+        columns={TERMINAL_COLUMNS}
         rows={dispenser.terminals}
         rowKey={(t) => t.terminalId}
       />
@@ -138,16 +166,10 @@ const CreditBreakdown: React.FC<{ shift: AttendantReportShift }> = ({ shift }) =
       <div className="text-[11px] font-semibold text-ink-strong">Fuel-on-credit</div>
       <StatementTable
         label="Fuel-on-credit chits"
-        columns={[
-          { header: 'Customer', cell: (r) => r.customerName },
-          { header: 'Vehicle', cell: (r) => r.vehicle },
-          { header: 'Product', cell: (r) => r.product },
-          { header: 'Qty', align: 'right', cell: (r) => r.quantity },
-          { header: 'Amount', align: 'right', strong: true, cell: (r) => inr(r.amount) },
-        ]}
+        columns={CREDIT_COLUMNS}
         rows={rows}
         rowKey={(r) => r.key}
-        total={['Total', '', '', '', inr(shift.creditSales)]}
+        totalRow={{ values: { amount: shift.creditSales } }}
       />
     </div>
   );

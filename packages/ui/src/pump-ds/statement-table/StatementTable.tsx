@@ -1,35 +1,22 @@
-import React, { type ReactNode } from 'react';
+import React from 'react';
 import { cn } from '../lib/cn.js';
-
-/** A column of a StatementTable. */
-export interface StatementColumn<T> {
-  header: ReactNode;
-  /** Cell content for a row. Return a plain string for a plain cell. */
-  cell: (row: T) => ReactNode;
-  align?: 'left' | 'right';
-  /**
-   * Render the cells in mono so the digits line up. Defaults to on for a
-   * right-aligned column — that is what right-alignment is nearly always for —
-   * pass `false` for a right-aligned column of words.
-   */
-  mono?: boolean;
-  /** Emphasise the column (the figure the row is about). */
-  strong?: boolean;
-  /** Fraction of the table width; defaults to an equal share. */
-  width?: string;
-}
-
-type CellStyle = Pick<StatementColumn<unknown>, 'align' | 'mono' | 'strong'>;
+import {
+  columnClass,
+  headerClass,
+  kindClass,
+  renderCell,
+  totalCells,
+  type TableColumn,
+  type TotalRow,
+} from '../table/columns.js';
 
 export interface StatementTableProps<T> {
-  columns: StatementColumn<T>[];
+  /** The same column definitions `InteractiveTable` takes. */
+  columns: TableColumn<T>[];
   rows: T[];
   rowKey: (row: T, index: number) => string;
-  /**
-   * A closing row, cell by cell (same order as `columns`). Pass the figure the
-   * rows explain — never a second, re-derived one.
-   */
-  total?: ReactNode[];
+  /** A closing row; see `TotalRow`. Pass `values` for the figure the rows explain. */
+  totalRow?: TotalRow;
   /**
    * Accessible name for the table. A statement stacks several of these, and
    * "table" three times tells a screen-reader user nothing.
@@ -40,28 +27,23 @@ export interface StatementTableProps<T> {
   className?: string;
 }
 
-const cellClass = (col: CellStyle) =>
-  cn(
-    'px-2 py-1 align-top',
-    col.align === 'right' ? 'text-right' : 'text-left',
-    (col.mono ?? col.align === 'right') && 'font-mono tabular-nums',
-    col.strong && 'font-semibold',
-  );
+const CELL_PAD = 'px-2 py-1 align-top';
 
 /**
  * StatementTable — the compact, read-only table a report statement is made of.
  *
  * Statements are dense and printed as often as they are read, so this mirrors
  * the PDF's table: small type, right-aligned mono numerics, a quiet header rule
- * and an optional total row. It is deliberately not the sortable, filterable
- * `DataTable` — nothing here is interactive, and a sort control on a statement
- * invites an operator to reorder figures that are ordered for a reason.
+ * and an optional total row. No hover, no zebra, no sort: a sort control on a
+ * statement invites an operator to reorder figures that are ordered for a
+ * reason. Status prints as an outline chip (ink and a rule, no fill), so it
+ * survives a printer that drops backgrounds.
  */
 export function StatementTable<T>({
   columns,
   rows,
   rowKey,
-  total,
+  totalRow,
   label,
   emptyMessage,
   className,
@@ -71,6 +53,7 @@ export function StatementTable<T>({
       <div className="px-2 py-1.5 text-[11px] text-ink-faint">{emptyMessage}</div>
     ) : null;
   }
+  const totals = totalCells(columns, rows, totalRow);
 
   return (
     <table
@@ -78,13 +61,12 @@ export function StatementTable<T>({
       className={cn('w-full border-collapse text-[11px] text-ink-default', className)}
     >
       <thead>
-        <tr className="border-b border-border-soft text-[10px] uppercase tracking-[0.04em] text-ink-faint">
-          {columns.map((col, i) => (
+        <tr className="border-b border-border-soft">
+          {columns.map((col) => (
             <th
-              key={i}
+              key={col.id}
               scope="col"
-              // The header is words even above a mono column.
-              className={cn(cellClass({ align: col.align, mono: false }), 'font-medium')}
+              className={cn(CELL_PAD, headerClass(col))}
               style={col.width ? { width: col.width } : undefined}
             >
               {col.header}
@@ -94,23 +76,32 @@ export function StatementTable<T>({
       </thead>
       <tbody>
         {rows.map((row, rowIndex) => (
-          <tr key={rowKey(row, rowIndex)} className="border-b border-border-soft/60 last:border-0">
-            {columns.map((col, i) => (
-              <td key={i} className={cellClass(col)}>
-                {col.cell(row)}
+          <tr
+            key={rowKey(row, rowIndex)}
+            className="border-b border-border-soft/60 last:border-0 print:break-inside-avoid"
+          >
+            {columns.map((col) => (
+              <td key={col.id} className={cn(CELL_PAD, columnClass(col))}>
+                {renderCell(col, row, 'statement')}
               </td>
             ))}
           </tr>
         ))}
       </tbody>
-      {total && (
+      {totals && (
         <tfoot>
-          <tr className="border-t border-border-strong font-semibold text-ink-strong">
-            {columns.map((col, i) => (
-              <td key={i} className={cellClass(col)}>
-                {total[i]}
-              </td>
-            ))}
+          <tr className="border-t border-border-strong font-semibold text-ink-strong print:break-inside-avoid">
+            {columns.map((col, i) =>
+              i === 0 ? (
+                <th key={col.id} scope="row" className={cn(CELL_PAD, kindClass(col))}>
+                  {totals[i]}
+                </th>
+              ) : (
+                <td key={col.id} className={cn(CELL_PAD, kindClass(col))}>
+                  {totals[i]}
+                </td>
+              ),
+            )}
           </tr>
         </tfoot>
       )}

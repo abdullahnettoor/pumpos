@@ -17,6 +17,7 @@ import {
   KpiTile,
   Panel,
   StatementTable,
+  type TableColumn,
 } from '../../pump-ds/index.js';
 
 export interface DailyCashBookProps {
@@ -250,40 +251,62 @@ export const DailyCashBook: React.FC<DailyCashBookProps> = ({ selectedStation })
 const AccountDayEntries: React.FC<{
   account: DailyCashBookAccount;
   timeOf: (iso: string) => string;
-}> = ({ account, timeOf }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
-      <Chip tone="neutral" size="xs">
-        {accountTypeLabel(account.accountType)}
-      </Chip>
-      <span style={{ color: 'var(--text-muted)' }}>
-        Opening <strong style={{ fontFamily: 'var(--font-mono)' }}>{inr(account.opening)}</strong> →
-        Closing <strong style={{ fontFamily: 'var(--font-mono)' }}>{inr(account.closing)}</strong>
-      </span>
+}> = ({ account, timeOf }) => {
+  const columns = useMemo<TableColumn<DailyCashBookEntry>[]>(
+    () => [
+      {
+        id: 'time',
+        header: 'Time',
+        kind: 'date',
+        width: '14%',
+        value: (e) => e.createdAt,
+        cell: (e) => timeOf(e.createdAt),
+      },
+      {
+        id: 'source',
+        header: 'Source',
+        kind: 'text',
+        width: '22%',
+        value: (e) => ledgerSourceLabel(e.sourceType),
+      },
+      { id: 'notes', header: 'Notes', kind: 'text', value: (e) => e.notes },
+      {
+        id: 'in',
+        header: 'In',
+        kind: 'money',
+        width: '16%',
+        value: (e) => (e.direction === 'in' ? e.amount : null),
+      },
+      {
+        id: 'out',
+        header: 'Out',
+        kind: 'money',
+        width: '16%',
+        value: (e) => (e.direction === 'out' ? e.amount : null),
+      },
+    ],
+    [timeOf],
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+        <Chip tone="neutral" size="xs">
+          {accountTypeLabel(account.accountType)}
+        </Chip>
+        <span style={{ color: 'var(--text-muted)' }}>
+          Opening <strong style={{ fontFamily: 'var(--font-mono)' }}>{inr(account.opening)}</strong>{' '}
+          → Closing{' '}
+          <strong style={{ fontFamily: 'var(--font-mono)' }}>{inr(account.closing)}</strong>
+        </span>
+      </div>
+      <StatementTable<DailyCashBookEntry>
+        label={`${account.name} entries`}
+        rows={account.entries}
+        rowKey={(e) => e.id}
+        emptyMessage="No money moved through this account on this date."
+        columns={columns}
+        totalRow={{ values: { in: account.moneyIn, out: account.moneyOut } }}
+      />
     </div>
-    <StatementTable<DailyCashBookEntry>
-      label={`${account.name} entries`}
-      rows={account.entries}
-      rowKey={(e) => e.id}
-      emptyMessage="No money moved through this account on this date."
-      columns={[
-        { header: 'Time', cell: (e) => timeOf(e.createdAt), width: '14%', mono: true },
-        { header: 'Source', cell: (e) => ledgerSourceLabel(e.sourceType), width: '22%' },
-        { header: 'Notes', cell: (e) => e.notes || '—' },
-        {
-          header: 'In',
-          align: 'right',
-          width: '16%',
-          cell: (e) => (e.direction === 'in' ? inr(e.amount) : ''),
-        },
-        {
-          header: 'Out',
-          align: 'right',
-          width: '16%',
-          cell: (e) => (e.direction === 'out' ? inr(e.amount) : ''),
-        },
-      ]}
-      total={['Total', '', '', inr(account.moneyIn), inr(account.moneyOut)]}
-    />
-  </div>
-);
+  );
+};
