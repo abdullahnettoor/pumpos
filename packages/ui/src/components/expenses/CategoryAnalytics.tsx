@@ -1,16 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import { useExpenses, useIncome } from '../../query/hooks.js';
-import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
-import type { DateRange } from '../primitives/DateRangeField.js';
-import { formatMoney } from '../../utils/format.js';
+import { formatDateSpan, formatMoney } from '../../utils/format.js';
 import {
+  ControlBar,
   DataSection,
+  DateRangeMenu,
   EmptyState,
   Icon,
   InteractiveTable,
   KpiStrip,
   KpiTile,
   SectionHeader,
+  computeRange,
+  type DateRange,
   type IconName,
   type TableColumn,
 } from '../../pump-ds/index.js';
@@ -29,9 +31,6 @@ const COPY = {
     section: 'Spend by category',
     empty: 'No expenses',
     emptyRange: 'No expenses in this date range.',
-    tone: 'danger' as const,
-    amount: 'text-danger-fg',
-    bar: 'fill-danger-fg',
     icon: 'receipt' as IconName,
   },
   income: {
@@ -41,9 +40,6 @@ const COPY = {
     section: 'Income by category',
     empty: 'No income',
     emptyRange: 'No income in this date range.',
-    tone: 'success' as const,
-    amount: 'text-success-fg',
-    bar: 'fill-success-fg',
     icon: 'arrow-down' as IconName,
   },
 };
@@ -55,18 +51,51 @@ interface CategoryRow {
   share: number; // 0..100
 }
 
-/** The category's share of the total: a bar in the kind's tone, then the percent. */
-const ShareCell: React.FC<{ pct: number; fill: string }> = ({ pct, fill }) => (
+/**
+ * The category's share of the total: a brand bar, then the percent. Ordinary
+ * money is never red or green; colour is kept for problems.
+ */
+const ShareCell: React.FC<{ pct: number }> = ({ pct }) => (
   <span className="flex min-w-[140px] items-center gap-2">
     <svg className="h-1.5 flex-1 overflow-hidden rounded-full" aria-hidden="true">
       <rect width="100%" height="100%" className="fill-surface-alt" />
-      <rect width={`${pct}%`} height="100%" className={fill} />
+      <rect width={`${pct}%`} height="100%" className="fill-brand" />
     </svg>
     <span className="w-[34px] text-right font-mono text-[12px] text-ink-muted">
       {Math.round(pct)}%
     </span>
   </span>
 );
+
+/** One row per category: entries, total, share. Plain figures, a brand bar. */
+const COLUMNS: TableColumn<CategoryRow>[] = [
+  { id: 'name', header: 'Category', kind: 'text', emphasis: true, value: (r) => r.name },
+  {
+    id: 'count',
+    header: 'Entries',
+    kind: 'qty',
+    total: false,
+    value: (r) => r.count,
+    cell: (r) => <span className="text-ink-muted">{r.count}</span>,
+    width: '12%',
+  },
+  {
+    id: 'total',
+    header: 'Total',
+    kind: 'money',
+    value: (r) => r.total,
+    cell: (r) => <span className="text-ink-strong">{formatMoney(r.total)}</span>,
+    width: '20%',
+  },
+  {
+    id: 'share',
+    header: 'Share',
+    kind: 'text',
+    value: (r) => r.share,
+    cell: (r) => <ShareCell pct={r.share} />,
+    width: '32%',
+  },
+];
 
 /**
  * CategoryAnalytics — the "by category" view: expenses over an entry-date range
@@ -75,6 +104,9 @@ const ShareCell: React.FC<{ pct: number; fill: string }> = ({ pct, fill }) => (
  * tab); it answers "where is the money going". Shared by the Expenses screen
  * "By category" tab and the Reports "Expense register". The Income screen's
  * "By category" tab reads the same view with `kind="income"`. VOIDED excluded.
+ *
+ * Layout A (#567): one control bar with the range menu drives the tiles and
+ * the table below it, so every tile reads `In range`.
  */
 export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
   selectedStation,
@@ -85,6 +117,7 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
   // Office records are dated by entry date (station calendar date), not the sales day.
   const clock = useMemo(() => ({ timeZone }), [timeZone]);
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
+  const today = computeRange('today', clock).to;
 
   const expensesQ = useExpenses({ enabled: kind === 'expense' });
   const incomeQ = useIncome(
@@ -119,63 +152,39 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
     return rows.sort((a, b) => b.total - a.total);
   }, [active, total]);
 
-  const columns = useMemo<TableColumn<CategoryRow>[]>(
-    () => [
-      { id: 'name', header: 'Category', kind: 'text', emphasis: true, value: (r) => r.name },
-      {
-        id: 'count',
-        header: 'Entries',
-        kind: 'qty',
-        total: false,
-        value: (r) => r.count,
-        cell: (r) => <span className="text-ink-muted">{r.count}</span>,
-        width: '12%',
-      },
-      {
-        id: 'total',
-        header: 'Total',
-        kind: 'money',
-        value: (r) => r.total,
-        cell: (r) => <span className={copy.amount}>{formatMoney(r.total)}</span>,
-        width: '20%',
-      },
-      {
-        id: 'share',
-        header: 'Share',
-        kind: 'text',
-        value: (r) => r.share,
-        cell: (r) => <ShareCell pct={r.share} fill={copy.bar} />,
-        width: '32%',
-      },
-    ],
-    [copy],
-  );
-
   const largest = byCategory[0];
 
   return (
     <div className="flex flex-col gap-4">
-      <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
+      <ControlBar
+        range={
+          <DateRangeMenu
+            value={range}
+            onChange={setRange}
+            clock={clock}
+            aria-label={`${copy.section} period`}
+          />
+        }
+      />
 
       <DataSection title={`${kind} totals`} query={recordsQ} shape="cards" placeholderHeight={90}>
         <KpiStrip columns="auto">
           <KpiTile
-            dot={copy.tone}
-            valueTone={copy.tone}
             label={copy.total}
+            scope="in-range"
             value={formatMoney(total)}
-            hint={`${range.from} → ${range.to}`}
+            hint={formatDateSpan(range.from, range.to, { referenceDate: today })}
           />
-          <KpiTile dot="brand" label="Entries" value={String(active.length)} hint="in range" />
+          <KpiTile label="Entries" scope="in-range" value={String(active.length)} />
           <KpiTile
-            dot="neutral"
             label="Categories"
+            scope="in-range"
             value={String(byCategory.length)}
             hint={copy.withAmount}
           />
           <KpiTile
-            dot="warning"
-            label="Largest Category"
+            label="Largest category"
+            scope="in-range"
             value={formatMoney(largest?.total ?? 0)}
             hint={largest?.name ?? '—'}
           />
@@ -203,7 +212,7 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
         >
           <InteractiveTable
             bare
-            columns={columns}
+            columns={COLUMNS}
             rows={byCategory}
             rowKey={(r) => r.name}
             totalRow

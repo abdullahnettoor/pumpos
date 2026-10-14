@@ -15,6 +15,7 @@ import { openQuickEntry } from '../../quick-entry/store.js';
 import {
   Button,
   DataSection,
+  DateRangeMenu,
   EmptyState,
   Icon,
   InteractiveTable,
@@ -25,7 +26,10 @@ import {
   Select,
   Tabs,
   tabPanelProps,
+  computeRange,
+  type DateRange,
   type IconName,
+  type KpiScope,
   type TabItem,
   type TotalRow,
 } from '../../pump-ds/index.js';
@@ -33,7 +37,6 @@ import { formatMoney } from '../../utils/format.js';
 import { CASH_ACCOUNT_TYPES } from '../../utils/ledgerLabels.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { PageFrame } from '../page-frame/index.js';
-import { DateRangeField, computeRange, type DateRange } from '../primitives/DateRangeField.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import { useAsk } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
@@ -48,12 +51,6 @@ import {
 
 const transactionService = new CloudTransactionService();
 
-interface KpiCopy {
-  label: string;
-  dot: 'danger' | 'success' | 'warning' | 'info';
-  tone?: 'danger' | 'success';
-}
-
 /** Everything that differs between the Expenses and Income pages. */
 const COPY: Record<
   CategoryRecordKind,
@@ -66,7 +63,8 @@ const COPY: Record<
     ledger: string;
     record: string;
     icon: IconName;
-    kpis: [KpiCopy, KpiCopy, KpiCopy, KpiCopy];
+    /** Tile labels: today, this month, into/out of cash, the other accounts. */
+    kpis: [string, string, string, string];
     about: string;
     void: { title: string; confirm: string; done: string; failed: string; task: string };
   }
@@ -80,12 +78,7 @@ const COPY: Record<
     ledger: 'Expense ledger',
     record: 'Record expense',
     icon: 'receipt',
-    kpis: [
-      { label: 'Spent Today', dot: 'danger', tone: 'danger' },
-      { label: 'Spent This Month', dot: 'danger', tone: 'danger' },
-      { label: 'Cash in Hand / Petty', dot: 'warning' },
-      { label: 'From Bank / Owner', dot: 'info' },
-    ],
+    kpis: ['Spent today', 'Spent this month', 'Cash in hand / petty', 'From bank / owner'],
     about:
       'Expenses are office records: dated by entry date and paid from the chosen account. They never touch a shift drawer.',
     void: {
@@ -107,10 +100,10 @@ const COPY: Record<
     record: 'Record income',
     icon: 'cash',
     kpis: [
-      { label: 'Received Today', dot: 'success', tone: 'success' },
-      { label: 'Received This Month', dot: 'success', tone: 'success' },
-      { label: 'Into Cash in Hand / Petty', dot: 'warning' },
-      { label: 'Into Bank / Owner', dot: 'info' },
+      'Received today',
+      'Received this month',
+      'Into cash in hand / petty',
+      'Into bank / owner',
     ],
     about:
       'Income is an office record: dated by entry date and received into the chosen account. It never touches a shift drawer.',
@@ -157,9 +150,12 @@ export interface CategoryRecordPageProps {
 /**
  * The Expenses and Income pages (#529): one view with the kind as a
  * parameter, so the two read the same apart from it. Tabs: the ledger, then
- * By category, then any `extraViews`. The ledger's range, search and
- * category filter sit in the Page Frame toolbar; its totals and table each
- * load in their own Data Section.
+ * By category, then any `extraViews`.
+ *
+ * The ledger is layout B (#567): the fixed KPI tiles sit on top, each naming
+ * its period (Today, the month), and the range, search, category filter and
+ * info tip sit in the ledger's section header, directly above the table they
+ * filter. Totals and table each load in their own Data Section.
  */
 export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
   kind,
@@ -237,10 +233,12 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
     [canVoid, copy, handleVoid, kind, runTask],
   );
 
-  // KPIs: fixed windows (today / this month), independent of the table range filter.
+  // KPIs: fixed windows (today / this month), independent of the table range
+  // filter. Each tile's period chip says which window it reads.
   const kpis = useMemo(() => {
     const today = computeRange('today', entryClock);
     const month = computeRange('this-month', entryClock);
+    const monthScope: KpiScope = { month: month.from };
     const inWindow = (r: CategoryRecord, w: DateRange) =>
       !!r.entryDate && r.entryDate >= w.from && r.entryDate <= w.to;
     const active = records.filter((r) => !isVoided(r));
@@ -256,7 +254,8 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
         cashMonth,
         monthTotal - cashMonth,
       ],
-      hints: ['entry date', entries(monthRows.length), 'this month', 'this month'],
+      scopes: ['today', monthScope, monthScope, monthScope] as KpiScope[],
+      hints: ['by entry date', entries(monthRows.length), undefined, undefined],
     };
   }, [records, entryClock]);
 
@@ -334,42 +333,6 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
             tabs={tabs}
           />
         }
-        toolbar={
-          activeTab === 'ledger' ? (
-            <div className="flex w-full flex-wrap items-end gap-2.5">
-              <DateRangeField value={range} onChange={setRange} clock={entryClock} size="sm" />
-              <div className="flex-1" />
-              <div className="w-[220px]">
-                <SearchInput
-                  inputSize="sm"
-                  value={search}
-                  onChange={setSearch}
-                  placeholder="Search description / category…"
-                />
-              </div>
-              <div className="w-[190px]">
-                <Select
-                  inputSize="sm"
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  aria-label="Filter by category"
-                >
-                  <option value="">All categories</option>
-                  {categories.map((c: any) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <span className="flex h-7 items-center">
-                <InfoTip label={`About ${kind} anchoring`} placement="bottom">
-                  {copy.about}
-                </InfoTip>
-              </span>
-            </div>
-          ) : undefined
-        }
       >
         <div {...tabPanelProps(TABS_ID, activeTab)} className="flex flex-col gap-4">
           {activeTab === 'ledger' && (
@@ -381,12 +344,11 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
                 placeholderHeight={90}
               >
                 <KpiStrip columns="auto">
-                  {copy.kpis.map((k, i) => (
+                  {copy.kpis.map((label, i) => (
                     <KpiTile
-                      key={k.label}
-                      dot={k.dot}
-                      valueTone={k.tone}
-                      label={k.label}
+                      key={label}
+                      label={label}
+                      scope={kpis.scopes[i]}
                       value={formatMoney(kpis.values[i])}
                       hint={kpis.hints[i]}
                     />
@@ -398,6 +360,49 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
                 <SectionHeader
                   title={copy.ledger}
                   subtitle={recordsQ.data ? entries(rows.length) : undefined}
+                  controls={{
+                    range: (
+                      <DateRangeMenu
+                        value={range}
+                        onChange={setRange}
+                        clock={entryClock}
+                        align="end"
+                        aria-label={`${copy.ledger} period`}
+                      />
+                    ),
+                    search: (
+                      <div className="w-[220px]">
+                        <SearchInput
+                          inputSize="sm"
+                          value={search}
+                          onChange={setSearch}
+                          placeholder="Search description / category…"
+                        />
+                      </div>
+                    ),
+                    filters: (
+                      <div className="w-[170px]">
+                        <Select
+                          inputSize="sm"
+                          value={categoryFilter}
+                          onChange={(e) => setCategoryFilter(e.target.value)}
+                          aria-label="Filter by category"
+                        >
+                          <option value="">All categories</option>
+                          {categories.map((c: any) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+                    ),
+                    info: (
+                      <InfoTip label={`About ${kind} anchoring`} placement="bottom">
+                        {copy.about}
+                      </InfoTip>
+                    ),
+                  }}
                 />
                 <DataSection
                   title={copy.noun}

@@ -19,12 +19,6 @@ export interface CategoryRecord {
 
 export const isVoided = (r: CategoryRecord) => r.status === 'VOIDED';
 
-/** Money out reads in the danger tone, money in in the success tone. */
-export const AMOUNT_TONE: Record<CategoryRecordKind, string> = {
-  expense: 'text-danger-fg',
-  income: 'text-success-fg',
-};
-
 export const FALLBACK_CATEGORY: Record<CategoryRecordKind, string> = {
   expense: 'General',
   income: 'Other Income',
@@ -35,24 +29,36 @@ const VOID_LABEL: Record<CategoryRecordKind, string> = {
   income: 'Void income entry',
 };
 
+const sameWords = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * The Funding Account's type as a detail line, only when it says something the
+ * name does not ("SBI Current · Bank", never "Cash in Hand · Cash in Hand").
+ */
+export function accountTypeDetail(row: Pick<CategoryRecord, 'accountName' | 'accountType'>) {
+  if (!row.accountType) return null;
+  const type = accountTypeLabel(row.accountType);
+  return row.accountName && sameWords(type, row.accountName) ? null : type;
+}
+
 /** Funding Account the money moved through, with its type as secondary text. */
 const AccountCell: React.FC<{ row: CategoryRecord }> = ({ row }) => {
   if (!row.accountName) return <span className="text-ink-faint">—</span>;
+  const type = accountTypeDetail(row);
   return (
     <span className="inline-flex flex-col leading-tight">
       <span className="text-ink-strong">{row.accountName}</span>
-      {row.accountType && (
-        <span className="text-[12px] text-ink-muted">{accountTypeLabel(row.accountType)}</span>
-      )}
+      {type && <span className="text-[12px] text-ink-muted">{type}</span>}
     </span>
   );
 };
 
 /**
- * The amount in the kind's tone; a voided entry is struck and faint. The
- * status sits before the figure so every figure lines up on the right.
+ * The amount in plain text (ordinary money is never coloured); a voided entry
+ * is struck and faint. The status sits before the figure so every figure lines
+ * up on the right.
  */
-const AmountCell: React.FC<{ kind: CategoryRecordKind; row: CategoryRecord }> = ({ kind, row }) => {
+const AmountCell: React.FC<{ row: CategoryRecord }> = ({ row }) => {
   const voided = isVoided(row);
   return (
     <span className="inline-flex items-center justify-end gap-1.5">
@@ -60,7 +66,7 @@ const AmountCell: React.FC<{ kind: CategoryRecordKind; row: CategoryRecord }> = 
       {row.status === 'ADJUSTMENT' && (
         <StatusChip status="adjustment" size="xs" className="font-sans" />
       )}
-      <span className={voided ? 'text-ink-faint line-through' : AMOUNT_TONE[kind]}>
+      <span className={voided ? 'text-ink-faint line-through' : 'text-ink-strong'}>
         {formatMoney(row.amount)}
       </span>
     </span>
@@ -112,7 +118,7 @@ export function buildCategoryRecordColumns(
       header: 'Amount',
       kind: 'money',
       value: (r) => r.amount,
-      cell: (r) => <AmountCell kind={kind} row={r} />,
+      cell: (r) => <AmountCell row={r} />,
       width: '20%',
     },
   ];

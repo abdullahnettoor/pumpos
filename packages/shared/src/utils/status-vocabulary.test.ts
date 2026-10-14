@@ -33,7 +33,7 @@ describe('statusPresentation: one word and one tone per state', () => {
     ['overdue', 'Overdue', 'warning'],
     ['over-limit', 'Over limit', 'danger'],
     ['voided', 'Voided', 'neutral'],
-    ['adjustment', 'Adjustment', 'warning'],
+    ['adjustment', 'Adjustment', 'info'],
   ];
 
   it.each(cases)('%s reads "%s" in %s', (state, label, tone) => {

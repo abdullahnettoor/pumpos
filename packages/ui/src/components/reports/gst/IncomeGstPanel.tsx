@@ -1,17 +1,19 @@
 import React, { useMemo, useState } from 'react';
 import { useIncomeGstRegister } from '../../../query/hooks.js';
-import { DateRangeField, computeRange } from '../../primitives/DateRangeField.js';
-import type { DateRange } from '../../primitives/DateRangeField.js';
 import { formatMoney } from '../../../utils/format.js';
+import { InfoTip } from '../../primitives/InfoTip.js';
 import {
-  Button,
+  ControlBar,
   DataSection,
+  DateRangeMenu,
   EmptyState,
   Icon,
   InteractiveTable,
   KpiStrip,
   KpiTile,
   SectionHeader,
+  computeRange,
+  type DateRange,
   type TableColumn,
 } from '../../../pump-ds/index.js';
 
@@ -86,6 +88,9 @@ const COLUMNS: TableColumn<IncomeGstRow>[] = [
 /**
  * GST → Income: output GST collected on other income. Shown in Reports → GST
  * and, for Staff (no Reports), on the Income page's GST tab (#540, #529).
+ *
+ * Layout A (#567): one control bar drives the tiles and the register. A new
+ * range applies at once; there is no Apply step.
  */
 export const IncomeGstPanel: React.FC<{
   selectedStation: any | null;
@@ -126,37 +131,47 @@ export const IncomeGstPanel: React.FC<{
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="flex items-center gap-2 rounded-card border border-border-soft bg-info-bg px-3 py-2.5 text-[12px] text-info-fg">
-        <Icon name="info" size="xs" />
-        <span>
-          Output GST you collected on other income (rentals, commissions, advertising). The split is
-          frozen from the category&rsquo;s GST rate at the time each entry was recorded. Voided
-          entries are excluded.
-        </span>
-      </p>
-
-      <div className="flex flex-wrap items-end gap-2.5">
-        <DateRangeField value={gstRange} onChange={setGstRange} clock={entryClock} size="sm" />
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => void gstQ.refetch()}
-          loading={gstQ.isFetching}
-        >
-          Apply
-        </Button>
-      </div>
+      <ControlBar
+        range={
+          <DateRangeMenu
+            value={gstRange}
+            onChange={setGstRange}
+            clock={entryClock}
+            aria-label="GST period"
+          />
+        }
+        info={
+          <InfoTip label="About income GST" placement="bottom">
+            Output GST you collected on other income (rentals, commissions, advertising). The split
+            is frozen from the category&rsquo;s GST rate at the time each entry was recorded. Voided
+            entries are excluded.
+          </InfoTip>
+        }
+      />
 
       <DataSection title="GST totals" query={gstQ} shape="cards" placeholderHeight={90}>
         <KpiStrip columns="auto">
-          <KpiTile label="Taxable Value" value={formatMoney(totals.taxable)} hint="net of GST" />
-          <KpiTile label="CGST" value={formatMoney(totals.cgst)} />
-          <KpiTile label="SGST" value={formatMoney(totals.sgst)} />
-          <KpiTile label="IGST" value={formatMoney(totals.igst)} />
           <KpiTile
-            dot="brand"
-            valueTone="brand"
+            label="Taxable value"
+            scope="in-range"
+            value={formatMoney(totals.taxable)}
+            hint="net of GST"
+          />
+          <KpiTile
+            label="CGST + SGST"
+            scope="in-range"
+            value={formatMoney(totals.cgst + totals.sgst)}
+            hint="intra-state"
+          />
+          <KpiTile
+            label="IGST"
+            scope="in-range"
+            value={formatMoney(totals.igst)}
+            hint="inter-state"
+          />
+          <KpiTile
             label="Output GST"
+            scope="in-range"
             value={formatMoney(outputTotal)}
             hint={`${gstRows.length} ${gstRows.length === 1 ? 'entry' : 'entries'}`}
           />

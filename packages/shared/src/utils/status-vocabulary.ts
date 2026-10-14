@@ -76,7 +76,7 @@ const VOCABULARY: Record<PumpState, StatusPresentation> = {
   overdue: { label: 'Overdue', tone: 'warning' },
   'over-limit': { label: 'Over limit', tone: 'danger' },
   voided: { label: 'Voided', tone: 'neutral', struck: true },
-  adjustment: { label: 'Adjustment', tone: 'warning' },
+  adjustment: { label: 'Adjustment', tone: 'info' },
 };
 
 /** The canonical word and tone for a state. */

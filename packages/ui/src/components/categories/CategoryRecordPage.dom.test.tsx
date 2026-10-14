@@ -5,7 +5,8 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
-import { computeRange } from '../primitives/DateRangeField.js';
+import { computeRange } from '../../pump-ds/index.js';
+import { formatDateSpan } from '../../utils/format.js';
 import { ExpensesList } from '../ExpensesList.js';
 import { IncomeList } from '../IncomeList.js';
 
@@ -22,6 +23,11 @@ const station = {
 } as any;
 
 const today = computeRange('today', { timeZone: 'Asia/Kolkata' }).from;
+const month = computeRange('this-month', { timeZone: 'Asia/Kolkata' });
+const monthName = new Date(`${today}T00:00:00Z`).toLocaleDateString('en-IN', {
+  month: 'short',
+  timeZone: 'UTC',
+});
 
 const record = (id: string, amount: number, status = 'ACTIVE', categoryName = 'Electricity') => ({
   id,
@@ -227,6 +233,103 @@ describe('each data region loads on its own (#529)', () => {
   );
 });
 
+/** Elements in document order: true when `a` comes before `b`. */
+const before = (a: Element, b: Element) =>
+  !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+const RED_OR_GREEN = /\b(text|fill|bg)-(danger|success)-(fg|bg)\b/;
+
+describe('owner decisions for the pilot (#566)', () => {
+  it.each(['expense', 'income'] as const)(
+    '%s ledger is layout B: period-chipped tiles on top, controls in the ledger header',
+    async (kind) => {
+      stubApi({ [PAGES[kind].path]: { data: RECORDS } });
+      renderWithProviders(PAGES[kind].render());
+      await screen.findByRole('table');
+      const header = screen.getByTestId(`section-header-${kind}-ledger`);
+      const bar = within(header).getByTestId('control-bar');
+      expect(
+        within(bar).getByRole('button', { name: new RegExp(`ledger period`, 'i') }),
+      ).toBeTruthy();
+      expect(within(bar).getByRole('searchbox')).toBeTruthy();
+      expect(within(bar).getByRole('combobox', { name: 'Filter by category' })).toBeTruthy();
+      expect(within(bar).getByRole('button', { name: `About ${kind} anchoring` })).toBeTruthy();
+      // The Page Frame carries no toolbar of its own: one control bar per table.
+      expect(screen.getAllByTestId('control-bar')).toHaveLength(1);
+
+      const label = kind === 'expense' ? 'Spent today' : 'Received today';
+      const tile = screen.getByText(label).closest('div')!.parentElement!;
+      expect(before(tile, header)).toBe(true);
+      expect(within(tile).getByText('Today')).toBeTruthy();
+      const monthLabel = kind === 'expense' ? 'Spent this month' : 'Received this month';
+      expect(within(screen.getByText(monthLabel).parentElement!).getByText(monthName)).toBeTruthy();
+    },
+  );
+
+  it.each(['expense', 'income'] as const)(
+    '%s By category is layout A: one range bar above "In range" tiles and the table',
+    async (kind) => {
+      stubApi({ [PAGES[kind].path]: { data: RECORDS } });
+      renderWithProviders(PAGES[kind].render());
+      fireEvent.click(await screen.findByRole('tab', { name: /By category/ }));
+      const table = await screen.findByRole('table');
+      const bar = screen.getByTestId('control-bar');
+      expect(within(bar).getByRole('button', { name: /by category period/i })).toBeTruthy();
+      expect(before(bar, table)).toBe(true);
+      expect(screen.getAllByText('In range')).toHaveLength(4);
+      // The total names its dates as a span, never raw YYYY-MM-DD.
+      const span = formatDateSpan(month.from, month.to, { referenceDate: today });
+      const total = screen.getByText(kind === 'expense' ? 'Total expenses' : 'Total income');
+      expect(within(total.closest('div')!.parentElement!).getByText(span)).toBeTruthy();
+      expect(document.body.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    },
+  );
+
+  it.each(['expense', 'income'] as const)(
+    '%s: ordinary money is plain, never red or green',
+    async (kind) => {
+      stubApi({ [PAGES[kind].path]: { data: RECORDS } });
+      const { container } = renderWithProviders(PAGES[kind].render());
+      const table = await screen.findByRole('table');
+      expect(container.querySelector('[data-alert]')).toBeNull();
+      for (const el of table.querySelectorAll('[class]')) {
+        expect(el.getAttribute('class')).not.toMatch(RED_OR_GREEN);
+      }
+      fireEvent.click(screen.getByRole('tab', { name: /By category/ }));
+      const byCategory = await screen.findByRole('table');
+      expect(container.querySelector('[data-alert]')).toBeNull();
+      for (const el of byCategory.querySelectorAll('[class]')) {
+        expect(el.getAttribute('class')).not.toMatch(RED_OR_GREEN);
+      }
+    },
+  );
+
+  it('the Adjustment chip reads in the info tone, not amber', async () => {
+    stubApi({ [PAGES.expense.path]: { data: RECORDS } });
+    renderWithProviders(PAGES.expense.render());
+    const table = await screen.findByRole('table');
+    const chip = within(table).getByText('Adjustment').closest('span[class*="bg-"]')!;
+    expect(chip.getAttribute('class')).toMatch(/text-info-fg/);
+    expect(chip.getAttribute('class')).not.toMatch(/warning/);
+  });
+
+  it('the Funding account names its type only when it differs from the name', async () => {
+    stubApi({
+      [PAGES.expense.path]: {
+        data: [
+          record('a1', 100),
+          { ...record('a2', 200), accountName: 'SBI Current', accountType: 'BANK' },
+        ],
+      },
+    });
+    renderWithProviders(PAGES.expense.render());
+    const table = await screen.findByRole('table');
+    expect(within(table).getAllByText('Cash in Hand')).toHaveLength(1);
+    expect(within(table).getByText('SBI Current')).toBeTruthy();
+    expect(within(table).getByText('Bank')).toBeTruthy();
+  });
+});
+
 describe('Income › GST for Staff (#529)', () => {
   const renderStaff = () =>
     renderWithProviders(
@@ -254,6 +357,30 @@ describe('Income › GST for Staff (#529)', () => {
     const total = totalRow(table);
     expect(total.getByText('₹1,500.00')).toBeTruthy();
     expect(total.getByText('₹1,770.00')).toBeTruthy();
+  });
+
+  it('is layout A with no Apply button: a new range applies at once', async () => {
+    const fetchMock = stubApi({ '/transactions/income/gst-register': { data: GST_ROWS } });
+    renderStaff();
+    fireEvent.click(await screen.findByRole('tab', { name: /GST/ }));
+    const table = await screen.findByRole('table');
+    expect(screen.queryByRole('button', { name: 'Apply' })).toBeNull();
+    const bar = screen.getByTestId('control-bar');
+    expect(before(bar, table)).toBe(true);
+    expect(within(bar).getByRole('button', { name: 'About income GST' })).toBeTruthy();
+    expect(screen.getAllByText('In range')).toHaveLength(4);
+    // Output GST is plain, not a brand or success figure.
+    const output = screen.getByText('Output GST').closest('div')!.parentElement!;
+    expect(output.querySelector('.kpi-value')!.getAttribute('class')).toMatch(/text-ink-strong/);
+
+    const gstCalls = () =>
+      fetchMock.mock.calls
+        .map(([u]) => String(u))
+        .filter((u) => u.includes('/transactions/income/gst-register'));
+    fireEvent.click(within(bar).getByRole('button', { name: /GST period/ }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Last month/ }));
+    const last = computeRange('last-month', { timeZone: 'Asia/Kolkata' });
+    await waitFor(() => expect(gstCalls().some((u) => u.includes(`from=${last.from}`))).toBe(true));
   });
 
   it('a failed register offers Retry', async () => {
