@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { renderWithProviders, createTestQueryClient } from '../../../test/renderWithProviders.js';
 import { DensityTab } from './DensityTab.js';
 import { queryKeys } from '../../../query/hooks.js';
+import { DensityReading, deriveDensityState } from '../../../pump-ds/index.js';
 import type {
   DensityReadingWithContext,
   DensityTodaySummary,
@@ -163,7 +164,7 @@ describe('DensityTab (Variant D)', () => {
     expect(screen.getAllByText(/Recorded/i).length).toBeGreaterThanOrEqual(1);
 
     expect(screen.getByText(/High Speed Diesel \(HSD\)/i)).toBeDefined();
-    expect(screen.getByText(/Today missing/i)).toBeDefined();
+    expect(screen.getByText('Not recorded')).toBeDefined();
 
     // Spec band comes only from Station Settings (keyed by product id); none when unset
     expect(screen.getAllByText(/Spec:/i)).toHaveLength(1);
@@ -207,7 +208,7 @@ describe('DensityTab (Variant D)', () => {
     expect(screen.getByText(/Sunil Operator/i)).toBeDefined();
 
     // Check unexplained jump indication on HSD reading
-    expect(screen.getByText(/\+5\.20 · jump/i)).toBeDefined();
+    expect(screen.getByText('+5.2 · Unexplained jump')).toBeDefined();
 
     // Switch back to Today view
     const todayBtn = screen.getByRole('radio', { name: /Today/i });
@@ -257,5 +258,61 @@ describe('DensityTab (Variant D)', () => {
 
     expect(openSpy).toHaveBeenCalledWith('', '_blank', 'width=1100,height=780');
     openSpy.mockRestore();
+  });
+});
+
+/** Station in Chatham (UTC+13:45 in October) so its clock never matches the device's. */
+function seedChatham(settings: Record<string, unknown> = {}) {
+  const qc = seedQueryClient();
+  qc.setQueryData(queryKeys.stations(), [
+    { ...STATION, settings: { ...STATION.settings, timezone: 'Pacific/Chatham', ...settings } },
+  ]);
+  return qc;
+}
+
+describe('DensityTab · shared density reading (#521)', () => {
+  it('Today renders the same reading the Dashboard does', () => {
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: seedChatham() });
+    const card = screen.getByTestId('density-card-prod-ms');
+    const shown = card.querySelector('[data-state]') as HTMLElement;
+
+    const p = MOCK_TODAY_SUMMARY.products[0];
+    const { container } = render(
+      <DensityReading
+        state={deriveDensityState(p, MOCK_TODAY_SUMMARY.businessDate, 3)}
+        trend={p.trendValues}
+        timeZone="Pacific/Chatham"
+        businessDate={MOCK_TODAY_SUMMARY.businessDate}
+      />,
+    );
+    expect(shown.outerHTML).toBe((container.firstElementChild as HTMLElement).outerHTML);
+    expect(within(card).getByText('745.0 at 28.5 °C · 8:15 pm')).toBeDefined();
+    expect(within(card).getByText('+0.5 vs yday')).toBeDefined();
+  });
+
+  it('Today lists recent readings in the station timezone', () => {
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: seedChatham() });
+    const card = screen.getByTestId('density-card-prod-ms');
+    expect(within(card).getByText(/11 Oct 8:15 pm · MORNING/)).toBeDefined();
+  });
+
+  it('Register shows station time, 15 °C to one decimal and the jump word', () => {
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: seedChatham() });
+    fireEvent.click(screen.getByRole('radio', { name: /Register/i }));
+    expect(screen.getByText('8:15 pm')).toBeDefined();
+    expect(screen.getByText('9:45 pm')).toBeDefined();
+    expect(screen.getByText('753.8')).toBeDefined();
+    expect(screen.getByText('+5.2 · Unexplained jump')).toBeDefined();
+  });
+
+  it('judges a jump by the station tolerance only', () => {
+    const qc = seedChatham({ densityToleranceKgM3: 5 });
+    qc.setQueryData(queryKeys.densityReadings(STATION_ID, '', '', '', '', 500), [
+      { ...MOCK_READING_MS, delta: 4 },
+    ]);
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+    fireEvent.click(screen.getByRole('radio', { name: /Register/i }));
+    expect(screen.getByText('+4.0')).toBeDefined();
+    expect(screen.queryByText(/Unexplained jump/)).toBeNull();
   });
 });

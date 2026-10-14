@@ -1,13 +1,24 @@
 import React from 'react';
-import { Button, Chip, Icon, Panel, Sparkline } from '../../../pump-ds/index.js';
+import {
+  Button,
+  DensityReading,
+  Icon,
+  Panel,
+  deriveDensityState,
+  formatDensity,
+} from '../../../pump-ds/index.js';
+import { formatClockInZone, formatDayMonth } from '../../../utils/format.js';
 import { DeltaChip } from './DeltaChip.js';
-import type { DensityTodayProductSummary, DensityTodaySummary } from '@pump/shared';
+import type { DensityTodaySummary } from '@pump/shared';
 
 export interface TodayViewProps {
   summary: DensityTodaySummary;
   /** Station Settings spec bands, keyed by product id. */
   specBands?: Record<string, { minKgM3?: number; maxKgM3?: number }>;
-  tolerance?: number;
+  /** The station's jump tolerance (`resolveDecantationSettings`). */
+  tolerance: number;
+  /** The station's IANA timezone; times never use the device clock. */
+  timeZone: string | undefined;
   morningPromptProduct: string | null;
   onDismissMorningPrompt: () => void;
   onPrintBoard: () => void;
@@ -19,10 +30,13 @@ function formatBand(band: { minKgM3?: number; maxKgM3?: number }): string {
   return band.minKgM3 != null ? `≥ ${band.minKgM3}` : `≤ ${band.maxKgM3}`;
 }
 
+const BANNER = 'flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5 text-[13px]';
+
 export const TodayView: React.FC<TodayViewProps> = ({
   summary,
   specBands = {},
-  tolerance = 3,
+  tolerance,
+  timeZone,
   morningPromptProduct,
   onDismissMorningPrompt,
   onPrintBoard,
@@ -31,33 +45,24 @@ export const TodayView: React.FC<TodayViewProps> = ({
   const missingProducts = summary.missingProducts;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Morning save prompt banner */}
+    <div className="flex flex-col gap-4">
       {morningPromptProduct && (
         <div
           data-testid="morning-save-prompt"
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '12px 16px',
-            borderRadius: 8,
-            background: 'var(--color-brand-subtle, #eff6ff)',
-            border: '1px solid var(--color-brand-border, #bfdbfe)',
-          }}
+          className={`${BANNER} border-success-fg/30 bg-success-bg`}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Icon name="check-circle" size="md" />
+          <div className="flex items-center gap-2.5">
+            <Icon name="check-circle" size="md" className="text-success-fg" />
             <div>
-              <strong style={{ fontSize: 13, color: 'var(--color-brand-text, #1e3a8a)' }}>
+              <strong className="text-ink">
                 Morning density recorded for {morningPromptProduct}.
               </strong>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted, #4b5563)' }}>
+              <div className="text-[12px] text-ink-muted">
                 Statutory requirement: post updated 15 °C density on the daily display board.
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="flex items-center gap-2">
             <Button size="sm" variant="primary" onClick={onPrintBoard}>
               Print today's board
             </Button>
@@ -68,23 +73,14 @@ export const TodayView: React.FC<TodayViewProps> = ({
         </div>
       )}
 
-      {/* Missing check banner */}
       {missingProducts.length > 0 ? (
         <div
           data-testid="missing-density-banner"
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '10px 16px',
-            borderRadius: 8,
-            background: 'var(--color-warning-subtle, #fffbeb)',
-            border: '1px solid var(--color-warning-border, #fef3c7)',
-          }}
+          className={`${BANNER} border-warning-fg/30 bg-warning-bg`}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Icon name="alert-triangle" size="sm" />
-            <div style={{ fontSize: 13, color: 'var(--color-warning-text, #92400e)' }}>
+          <div className="flex items-center gap-2.5 text-ink">
+            <Icon name="alert-triangle" size="sm" className="text-warning-fg" />
+            <div>
               <strong>
                 Today's readings {summary.recordedCount}/{summary.totalProducts} products recorded.
               </strong>{' '}
@@ -100,182 +96,73 @@ export const TodayView: React.FC<TodayViewProps> = ({
           </Button>
         </div>
       ) : (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '10px 16px',
-            borderRadius: 8,
-            background: 'var(--color-success-subtle, #f0fdf4)',
-            border: '1px solid var(--color-success-border, #bbf7d0)',
-            fontSize: 13,
-            color: 'var(--color-success-text, #166534)',
-          }}
-        >
-          <Icon name="check-circle" size="sm" />
+        <div className={`${BANNER} justify-start border-success-fg/30 bg-success-bg text-ink`}>
+          <Icon name="check-circle" size="sm" className="text-success-fg" />
           <span>
             All {summary.totalProducts} fuel products have today's statutory density recorded.
           </span>
         </div>
       )}
 
-      {/* Grid of Product Cards */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-          gap: 16,
-        }}
-      >
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
         {summary.products.map((prod) => {
           const spec = specBands[prod.productId];
-          const latest = prod.latestToday || prod.lastReadings[0] || null;
-          const trendNumbers = prod.trendValues;
-
-          const isRecorded = prod.todayRecorded && prod.latestToday;
-          const recordedTime = prod.latestToday?.recordedAt
-            ? new Date(prod.latestToday.recordedAt).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })
-            : '';
+          const state = deriveDensityState(prod, summary.businessDate, tolerance);
+          const isRecorded = state.kind !== 'not-recorded';
 
           return (
             <Panel
               key={prod.productId}
+              data-testid={`density-card-${prod.productId}`}
               title={`${prod.productName} (${prod.productCode})`}
-              action={
-                isRecorded ? (
-                  <Chip size="sm" tone="success">
-                    Recorded {recordedTime}
-                  </Chip>
-                ) : (
-                  <Chip size="sm" tone="warning">
-                    Today missing
-                  </Chip>
-                )
-              }
             >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-end',
-                  marginBottom: 12,
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 11, color: 'var(--color-text-muted, #6b7280)' }}>
-                    {isRecorded ? "Today's density at 15 °C" : 'Last reading'}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 30,
-                      fontWeight: 700,
-                      fontVariantNumeric: 'tabular-nums',
-                      opacity: isRecorded ? 1 : 0.6,
-                      lineHeight: 1.1,
-                      marginTop: 2,
-                    }}
-                  >
-                    {latest ? latest.density15.toFixed(1) : '— — —'}
-                    <span style={{ fontSize: 13, fontWeight: 400, opacity: 0.6 }}> kg/m³</span>
-                  </div>
-                  {spec && (
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: 'var(--color-text-muted, #6b7280)',
-                        marginTop: 4,
-                      }}
-                    >
-                      Spec: {formatBand(spec)} kg/m³
-                    </div>
-                  )}
+              <DensityReading
+                state={state}
+                trend={prod.trendValues}
+                timeZone={timeZone}
+                businessDate={summary.businessDate}
+              />
+              {spec && (
+                <div className="mt-1 text-[11px] text-ink-muted">
+                  Spec: {formatBand(spec)} kg/m³
                 </div>
+              )}
 
-                {trendNumbers.length > 1 && (
-                  <div style={{ textAlign: 'right' }}>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        color: 'var(--color-text-muted, #9ca3af)',
-                        marginBottom: 2,
-                      }}
-                    >
-                      14-day trend
-                    </div>
-                    <Sparkline data={trendNumbers} width={110} height={34} tone="brand" fill />
-                  </div>
-                )}
-              </div>
-
-              {/* Recent readings list */}
-              <div
-                style={{
-                  borderTop: '1px solid var(--color-border, #f3f4f6)',
-                  paddingTop: 8,
-                  marginTop: 8,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: 'var(--color-text-muted, #6b7280)',
-                    marginBottom: 6,
-                  }}
-                >
-                  Recent Readings
+              <div className="mt-3 border-t border-border-soft pt-2">
+                <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+                  Recent readings
                 </div>
                 {prod.lastReadings.length === 0 ? (
-                  <div style={{ fontSize: 12, color: 'var(--color-text-muted, #9ca3af)' }}>
-                    No readings recorded yet
-                  </div>
+                  <div className="text-[12px] text-ink-muted">No readings recorded yet</div>
                 ) : (
-                  prod.lastReadings.slice(0, 4).map((r) => {
-                    const time = new Date(r.recordedAt).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    });
-                    const date = r.businessDate ? r.businessDate.slice(5) : '';
-                    return (
-                      <div
-                        key={r.id}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          fontSize: 12,
-                          padding: '4px 0',
-                          borderBottom: '1px dashed var(--color-border, #f3f4f6)',
-                        }}
-                      >
-                        <span style={{ color: 'var(--color-text-muted, #4b5563)' }}>
-                          {date} {time} · {r.kind}
-                          {r.tankName ? ` · ${r.tankName}` : ''}
-                          {r.nozzleName ? ` · ${r.nozzleName}` : ''}
+                  prod.lastReadings.slice(0, 4).map((r) => (
+                    <div
+                      key={r.id}
+                      className="flex items-center justify-between gap-2 border-b [--tw-border-style:dashed] border-border-soft py-1 text-[12px] last:border-b-0"
+                    >
+                      <span className="text-ink-muted">
+                        {formatDayMonth(r.businessDate)} {formatClockInZone(r.recordedAt, timeZone)}{' '}
+                        · {r.kind}
+                        {r.tankName ? ` · ${r.tankName}` : ''}
+                        {r.nozzleName ? ` · ${r.nozzleName}` : ''}
+                      </span>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span className="font-mono font-semibold tabular-nums text-ink">
+                          {formatDensity(r.density15)}
                         </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
-                            {r.density15.toFixed(1)}
-                          </strong>
-                          <DeltaChip
-                            delta={r.delta}
-                            kind={r.kind}
-                            flags={r.flags}
-                            tolerance={tolerance}
-                          />
-                        </div>
+                        <DeltaChip
+                          delta={r.delta}
+                          kind={r.kind}
+                          flags={r.flags}
+                          tolerance={tolerance}
+                        />
                       </div>
-                    );
-                  })
+                    </div>
+                  ))
                 )}
               </div>
 
-              {/* Bottom quick record button */}
-              <div style={{ marginTop: 14 }}>
+              <div className="mt-3.5">
                 <Button
                   size="sm"
                   variant={isRecorded ? 'secondary' : 'primary'}

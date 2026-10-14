@@ -1,10 +1,6 @@
-import { DAYS_OF_COVER_WINDOW, deriveTankLevel, shiftBusinessDate } from '@pump/shared';
-import type {
-  DecantationView,
-  DensityTodayProductSummary,
-  TankLevel,
-  TankLevelSettings,
-} from '@pump/shared';
+import { DAYS_OF_COVER_WINDOW, deriveTankLevel } from '@pump/shared';
+import type { DecantationView, TankLevel, TankLevelSettings } from '@pump/shared';
+import type { DensityState } from '../../../../pump-ds/index.js';
 
 /**
  * One tank in a fuel block: the shared tank-level model (#520) — tone from the
@@ -41,76 +37,6 @@ export function deriveFuelTanks(
 }
 
 export const coverFallback = `cover after ${DAYS_OF_COVER_WINDOW} days of sales`;
-
-export type DensityState =
-  | {
-      kind: 'recorded';
-      density: number;
-      tempC: number | null;
-      observedDensity: number | null;
-      at: string;
-      change: DensityChange | null;
-    }
-  | {
-      kind: 'jump';
-      density: number;
-      tempC: number | null;
-      observedDensity: number | null;
-      at: string;
-      change: DensityChange;
-    }
-  | { kind: 'not-recorded'; last: number | null }
-  | {
-      kind: 'no-history';
-      density: number;
-      tempC: number | null;
-      observedDensity: number | null;
-      at: string;
-    };
-
-export interface DensityChange {
-  delta: number;
-  /** Business date of the reading compared against. */
-  from: string;
-}
-
-/** Whether `from` is the day before `businessDate` (so it reads "vs yesterday"). */
-export const isYesterday = (from: string, businessDate: string) =>
-  from === shiftBusinessDate(businessDate, -1);
-
-/**
- * Density state for one fuel. A change beyond the station tolerance is a jump
- * unless a Decantation reading landed today (a new load legitimately moves it).
- */
-export function deriveDensityState(
-  p: DensityTodayProductSummary | undefined,
-  businessDate: string,
-  toleranceKgM3: number,
-): DensityState {
-  if (!p) return { kind: 'not-recorded', last: null };
-  const earlier = [...p.trend14d]
-    .reverse()
-    .find((t) => t.date < businessDate && t.density15 != null);
-  const r = p.latestToday;
-  if (!r) return { kind: 'not-recorded', last: earlier?.density15 ?? null };
-  const base = {
-    density: r.density15,
-    tempC: r.observedTempC ?? null,
-    observedDensity: r.observedDensity ?? null,
-    at: r.recordedAt,
-  };
-  if (!earlier) return { kind: 'no-history', ...base };
-  const change: DensityChange = {
-    delta: Math.round((r.density15 - (earlier.density15 as number)) * 10) / 10,
-    from: earlier.date,
-  };
-  const explained = p.lastReadings.some(
-    (x) => x.businessDate === businessDate && x.kind === 'DECANTATION',
-  );
-  if (Math.abs(change.delta) > toleranceKgM3 && !explained)
-    return { kind: 'jump', ...base, change };
-  return { kind: 'recorded', ...base, change };
-}
 
 /** A fuel card gets the red outline for a critical tank or a density jump. */
 export const needsAttention = (tanks: FuelTank[], density: DensityState | null) =>

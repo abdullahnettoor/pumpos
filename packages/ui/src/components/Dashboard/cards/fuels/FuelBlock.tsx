@@ -1,14 +1,22 @@
 import React from 'react';
-import { Button, Chip, Icon, Sparkline, TankGauge } from '../../../../pump-ds/index.js';
-import { formatBusinessDate, formatMoney } from '../../../../utils/format.js';
-import { formatClockInZone, formatDayMonth, formatQty } from '../../../../utils/format.js';
+import {
+  Button,
+  DensityReading,
+  Icon,
+  TankGauge,
+  type DensityState,
+} from '../../../../pump-ds/index.js';
+import {
+  formatClockInZone,
+  formatDayMonth,
+  formatMoney,
+  formatQty,
+} from '../../../../utils/format.js';
 import {
   coverFallback,
-  isYesterday,
   needsAttention,
   shouldPlanPurchase,
   type PendingDecant,
-  type DensityState,
   type FuelTank,
 } from './fuelsModel.js';
 
@@ -49,10 +57,6 @@ const Pulse: React.FC<{ h: number }> = ({ h }) => (
   <div className="animate-pulse rounded bg-surface-alt" style={{ height: h }} aria-hidden="true" />
 );
 
-const Label: React.FC<React.PropsWithChildren> = ({ children }) => (
-  <div className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">{children}</div>
-);
-
 const ROW = 'border-t [--tw-border-style:dashed] border-border-soft px-3 py-2';
 
 const DensityRow: React.FC<
@@ -71,70 +75,21 @@ const DensityRow: React.FC<
       </div>
     );
   const { state, trend } = density.value;
-  if (state.kind === 'not-recorded') {
-    return (
-      <div className={`${ROW} flex items-center justify-between gap-2`}>
-        <div>
-          <Label>Density at 15 °C</Label>
-          <div className="text-[12px] text-ink-muted">
-            {state.last != null ? `last ${state.last.toFixed(1)}` : 'no reading yet'}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Chip tone="warning" size="xs">
-            Not recorded
-          </Chip>
-          {canRecord && (
+  return (
+    <div className={ROW}>
+      <DensityReading
+        state={state}
+        trend={trend}
+        timeZone={timeZone}
+        businessDate={businessDate}
+        action={
+          canRecord && (
             <Button variant="ghost" size="xs" onClick={onRecord}>
               Record ›
             </Button>
-          )}
-        </div>
-      </div>
-    );
-  }
-  const change = state.kind === 'recorded' || state.kind === 'jump' ? state.change : null;
-  const observed = state.observedDensity;
-  return (
-    <div className={`${ROW} flex items-center justify-between gap-3`}>
-      <div className="min-w-0">
-        <Label>Density at 15 °C</Label>
-        <div className="text-[12px] text-ink-muted">
-          {observed != null && `${observed.toFixed(1)} `}
-          {state.tempC != null && `at ${state.tempC} °C · `}
-          {formatClockInZone(state.at, timeZone)}
-        </div>
-      </div>
-      {trend.length > 1 && (
-        <Sparkline
-          data={trend}
-          width={60}
-          height={20}
-          tone={state.kind === 'jump' ? 'danger' : 'brand'}
-          aria-label="Density, last 14 days"
-        />
-      )}
-      <div className="shrink-0 text-right">
-        <div className="font-mono text-[13px] font-semibold tabular-nums text-ink">
-          {state.density.toFixed(1)}
-        </div>
-        <div className="text-[11.5px] text-ink-muted">
-          {change ? (
-            <span className={state.kind === 'jump' ? 'text-danger-fg' : undefined}>
-              {`${change.delta > 0 ? '+' : ''}${change.delta.toFixed(1)} vs ${
-                isYesterday(change.from, businessDate) ? 'yday' : formatBusinessDate(change.from)
-              }`}
-            </span>
-          ) : (
-            'first reading'
-          )}
-        </div>
-        {state.kind === 'jump' && (
-          <Chip tone="danger" size="xs">
-            Unexplained jump
-          </Chip>
-        )}
-      </div>
+          )
+        }
+      />
     </div>
   );
 };

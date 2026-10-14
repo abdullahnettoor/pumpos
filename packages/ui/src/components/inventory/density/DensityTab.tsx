@@ -13,7 +13,11 @@ import { TodayView } from './TodayView.js';
 import { RegisterView } from './RegisterView.js';
 import { RecordDensityDrawer } from './RecordDensityDrawer.js';
 import { printDensityBoard } from './printDensityBoard.js';
-import { resolveDecantationSettings, type RecordDensityReadingPayload } from '@pump/shared';
+import {
+  businessDateSettings,
+  resolveDecantationSettings,
+  type RecordDensityReadingPayload,
+} from '@pump/shared';
 
 export interface DensityTabProps {
   stationId: string;
@@ -76,6 +80,8 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
   const settings = useMemo(() => resolveDecantationSettings(station?.settings), [station]);
   const specBands = settings.densitySpecBands;
   const tolerance = settings.densityToleranceKgM3;
+  // Reading times show in the station's timezone, never the device's.
+  const timeZone = station ? businessDateSettings(station.settings).timeZone : undefined;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -132,6 +138,7 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
             summary={todayQ.data}
             specBands={specBands}
             tolerance={tolerance}
+            timeZone={timeZone}
             morningPromptProduct={morningPromptProduct}
             onDismissMorningPrompt={() => setMorningPromptProduct(null)}
             onPrintBoard={handlePrintBoard}
@@ -151,6 +158,7 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
           readings={readingsQ.data ?? []}
           products={fuelProducts}
           tolerance={tolerance}
+          timeZone={timeZone}
         />
       )}
 
