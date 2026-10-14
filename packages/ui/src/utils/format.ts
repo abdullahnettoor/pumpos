@@ -377,8 +377,33 @@ export function formatDayMonth(value: string | number | Date, timeZone?: string)
 }
 
 /**
+ * The short month names, from a fixed table rather than a locale: ICU's en-IN
+ * and en-GB print "Sept" on some runtimes and "Sep" on others. Shared by date
+ * spans, KPI period chips and statements.
+ */
+export const SHORT_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
+
+/** `shortMonth(9)` → `Sep`. Months are 1–12; anything else prints as given. */
+export function shortMonth(month: number): string {
+  return SHORT_MONTHS[month - 1] ?? String(month);
+}
+
+/**
  * A date span for range controls and captions (#567): `14 Oct`, `1–14 Oct`,
- * `28 Sept – 4 Oct`, and with the years when they differ from each other or
+ * `28 Sep – 4 Oct`, and with the years when they differ from each other or
  * from `referenceDate`'s year (`28 Dec 2025 – 4 Jan 2026`). Business dates
  * (`YYYY-MM-DD`) only; never shows the raw ISO form unless the input is invalid.
  */
@@ -394,11 +419,7 @@ export function formatDateSpan(
   const a = parse(from);
   const b = parse(to);
   if (!a || !b) return `${from} – ${to}`;
-  const month = (p: { y: number; m: number }) =>
-    new Date(Date.UTC(p.y, p.m - 1, 1)).toLocaleDateString('en-IN', {
-      month: 'short',
-      timeZone: 'UTC',
-    });
+  const month = (p: { m: number }) => shortMonth(p.m);
   const refYear = opts.referenceDate ? parse(opts.referenceDate)?.y : undefined;
   const withYears = a.y !== b.y || (refYear != null && b.y !== refYear);
   const end = `${b.d} ${month(b)}${withYears ? ` ${b.y}` : ''}`;

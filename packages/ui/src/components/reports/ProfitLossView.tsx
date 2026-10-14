@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useDailyDssrPreview, useProfitLoss, useShiftStatus } from '../../query/hooks.js';
-import { computeRange } from '../primitives/DateRangeField.js';
-import type { DateRange } from '../primitives/DateRangeField.js';
+import { computeRange } from '../../pump-ds/date-range/index.js';
+import type { DateRange } from '../../pump-ds/date-range/index.js';
 import { inr } from '../../utils/format.js';
 import { resolveBusinessDate } from '@pump/shared';
 import {

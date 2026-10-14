@@ -13,7 +13,7 @@ import { formatKpiScope, type KpiScope } from './scope.js';
  * - `alert` is the only way a tile shows colour, and only for a problem
  *   (Overdue, Over limit, a negative net): a coloured left edge plus the value
  *   in that tone.
- * - An optional comparison line: `delta`, then `hint` ("vs Sept, same days").
+ * - An optional comparison line: `delta`, then `hint` ("vs Sep, same days").
  */
 
 const kpiTileVariants = cva('flex min-w-0 flex-col gap-1 bg-surface px-3.5 py-3', {
@@ -56,7 +56,7 @@ export interface KpiTileProps
     invert?: boolean;
     neutral?: boolean;
   };
-  /** Context after the delta ("vs Sept, same days", "3 entries"). */
+  /** Context after the delta ("vs Sep, same days", "3 entries"). */
   hint?: ReactNode;
 }
 
@@ -79,7 +79,7 @@ export const KpiTile = forwardRef<HTMLDivElement, KpiTileProps>(function KpiTile
       <div className="flex min-w-0 items-center gap-1.5 text-[12px] font-medium text-ink-muted">
         <span className="truncate">{label}</span>
         {scope && (
-          <span className="ml-auto shrink-0 whitespace-nowrap rounded-[5px] border border-border-soft bg-surface-alt px-1.5 text-[12px] leading-[18px] text-ink-muted">
+          <span className="ml-auto shrink-0 whitespace-nowrap rounded-sm border border-border-soft bg-surface-alt px-1.5 text-[12px] leading-normal text-ink-muted">
             {formatKpiScope(scope)}
           </span>
         )}

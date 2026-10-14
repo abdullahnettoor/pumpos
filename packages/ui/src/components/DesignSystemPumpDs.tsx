@@ -274,7 +274,7 @@ const KpiStripShowcase: React.FC = () => (
           scope={{ month: '2026-10' }}
           value="₹31,475.00"
           delta={{ value: '8%', direction: 'up', neutral: true }}
-          hint="vs Sept, same days"
+          hint="vs Sep, same days"
         />
         <KpiTile
           label="Overdue"

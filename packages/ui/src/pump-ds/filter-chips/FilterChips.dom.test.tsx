@@ -39,6 +39,8 @@ describe('FilterChips', () => {
       'Over limit1',
       'Paid up1',
     ]);
+    // The count is part of the name, set apart: "Overdue, 3", not "Overdue3".
+    expect(screen.getByRole('radio', { name: 'Overdue, 3' })).toBeTruthy();
     expect(screen.getByText('3').dataset.tone).toBe('warning');
     expect(screen.getByText('3').className).toContain('text-warning-fg');
     expect(screen.getByText('8').dataset.tone).toBe('neutral');

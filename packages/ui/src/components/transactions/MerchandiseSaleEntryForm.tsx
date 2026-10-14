@@ -334,6 +334,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
       <Field label="Payment Method">
         <SegmentedControl
           stretch
+          size="md"
           activeStyle="brand"
           options={[
             { value: 'Cash', label: 'Cash' },

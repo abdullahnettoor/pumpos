@@ -106,7 +106,7 @@ const ReportLayout: React.FC = () => {
           scope="in-range"
           value="₹87,57,000"
           delta={{ value: '6%', direction: 'up' }}
-          hint="vs Sept, same days"
+          hint="vs Sep, same days"
         />
         <KpiTile label="Gross margin" scope="in-range" value="₹6,63,600" hint="7.6% of revenue" />
         <KpiTile
@@ -114,14 +114,14 @@ const ReportLayout: React.FC = () => {
           scope="in-range"
           value="₹93,940"
           delta={{ value: '5%', direction: 'up', neutral: true }}
-          hint="vs Sept, same days"
+          hint="vs Sep, same days"
         />
         <KpiTile
           label="Net profit"
           scope="in-range"
           value="₹5,69,660"
           delta={{ value: '6%', direction: 'up' }}
-          hint="vs Sept, same days"
+          hint="vs Sep, same days"
         />
       </KpiStrip>
       <TablePlaceholder rows="Profit & loss lines for the range" />
@@ -346,7 +346,7 @@ const Pieces: React.FC = () => {
             scope="in-range"
             value="₹31,475.00"
             delta={{ value: '8%', direction: 'up', neutral: true }}
-            hint="vs Sept, same days"
+            hint="vs Sep, same days"
           />
           <KpiTile label="Collected" scope="today" value="₹25,000.00" hint="4 entries" />
           <KpiTile label="Overdue" scope="now" alert="warning" value="₹1,08,750.00" />

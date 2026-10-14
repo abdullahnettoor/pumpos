@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useFinanceMovements } from '../../query/hooks.js';
-import { computeRange } from '../primitives/DateRangeField.js';
-import type { DateRange } from '../primitives/DateRangeField.js';
+import { computeRange } from '../../pump-ds/date-range/index.js';
+import type { DateRange } from '../../pump-ds/date-range/index.js';
 import { StatementView, buildLedgerStatement, moneyEntries } from '../../statement/index.js';
 import { inr } from '../../utils/format.js';
 import { DataSection, KpiStrip, KpiTile, Panel, SegmentedControl } from '../../pump-ds/index.js';
@@ -66,7 +66,7 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
             from before the selected range; closing = opening + in − out.
           </>
         }
-        actions={
+        filters={
           <SegmentedControl
             options={[
               { value: 'Cash', label: 'Cash' },

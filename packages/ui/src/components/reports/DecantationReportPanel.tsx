@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import type { DecantationReport, DecantationReportVisit } from '@pump/shared';
 import { useDecantationReport } from '../../query/hooks.js';
-import { computeRange } from '../primitives/DateRangeField.js';
-import type { DateRange } from '../primitives/DateRangeField.js';
+import { computeRange } from '../../pump-ds/date-range/index.js';
+import type { DateRange } from '../../pump-ds/date-range/index.js';
 import { ExportMenu } from '../../pump-ds/index.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';

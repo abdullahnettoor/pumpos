@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useSalesTaxRegister } from '../../query/hooks.js';
-import { computeRange } from '../primitives/DateRangeField.js';
-import type { DateRange } from '../primitives/DateRangeField.js';
+import { computeRange } from '../../pump-ds/date-range/index.js';
+import type { DateRange } from '../../pump-ds/date-range/index.js';
 import { inr } from '../../utils/format.js';
 import { KpiStrip, KpiTile, Panel, EmptyState, DateText, Icon } from '../../pump-ds/index.js';
 import { ReportRangeBar } from './ReportRangeBar.js';

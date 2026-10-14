@@ -1,3 +1,5 @@
+import { shortMonth } from '../../utils/format.js';
+
 /**
  * The words of a KPI tile's period chip (#567). Every tile on a page with a
  * date filter names its period, so the reader can see which figures follow
@@ -17,8 +19,5 @@ export function formatKpiScope(scope: KpiScope): string {
   if (typeof scope === 'string') return WORDS[scope];
   const m = /^(\d{4})-(\d{2})/.exec(scope.month);
   if (!m) return scope.month;
-  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1)).toLocaleDateString('en-IN', {
-    month: 'short',
-    timeZone: 'UTC',
-  });
+  return shortMonth(Number(m[2]));
 }

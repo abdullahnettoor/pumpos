@@ -5,6 +5,7 @@ import type { ChipTone } from '../chip/Chip.js';
 
 export interface FilterChipOption<T extends string> {
   value: T;
+  /** A string label is read with its count ("Overdue, 3"). */
   label: ReactNode;
   /** Rows this filter would show. Shown before the operator clicks. */
   count?: number;
@@ -90,6 +91,12 @@ export function FilterChips<T extends string>({
             type="button"
             role="radio"
             aria-checked={checked}
+            // Screen readers hear "Overdue, 3", not "Overdue3".
+            aria-label={
+              opt.count != null && typeof opt.label === 'string'
+                ? `${opt.label}, ${opt.count}`
+                : undefined
+            }
             tabIndex={checked || (at < 0 && i === 0) ? 0 : -1}
             onClick={() => !checked && onChange(opt.value)}
             className={cn(

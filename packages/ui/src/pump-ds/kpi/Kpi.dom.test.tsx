@@ -25,6 +25,8 @@ describe('KpiTile', () => {
     expect(formatKpiScope('in-range')).toBe('In range');
     expect(formatKpiScope('now')).toBe('Now');
     expect(formatKpiScope({ month: '2026-10' })).toBe('Oct');
+    // One locale-free month table: never ICU's "Sept".
+    expect(formatKpiScope({ month: '2026-09-30' })).toBe('Sep');
   });
 
   it('has no colour without alert: the value is plain ink', () => {
@@ -58,13 +60,13 @@ describe('KpiTile', () => {
         scope="in-range"
         value="₹31,475.00"
         delta={{ value: '8%', direction: 'up', neutral: true }}
-        hint="vs Sept, same days"
+        hint="vs Sep, same days"
       />,
     );
     const delta = screen.getByText('8%').parentElement!;
     expect(delta.className).toContain('text-ink-muted');
     expect(delta.className).not.toContain('success');
-    expect(screen.getByText('vs Sept, same days')).toBeTruthy();
+    expect(screen.getByText('vs Sep, same days')).toBeTruthy();
   });
 });
 

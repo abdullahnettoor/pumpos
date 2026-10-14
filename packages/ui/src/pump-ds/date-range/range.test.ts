@@ -43,7 +43,7 @@ describe('formatDateSpan', () => {
   it('reads like a person writes a range, never as YYYY-MM-DD', () => {
     expect(formatDateSpan('2026-10-14', '2026-10-14')).toBe('14 Oct');
     expect(formatDateSpan('2026-10-01', '2026-10-14')).toBe('1–14 Oct');
-    expect(formatDateSpan('2026-09-28', '2026-10-04')).toMatch(/^28 Sept? – 4 Oct$/);
+    expect(formatDateSpan('2026-09-28', '2026-10-04')).toBe('28 Sep – 4 Oct');
   });
 
   it('adds years when the span crosses a year or is not in the reference year', () => {

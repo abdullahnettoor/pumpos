@@ -18,9 +18,7 @@ import {
 } from '../../statement/index.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { MONEY_TERMS } from '../../utils/moneyTerms.js';
-import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
 import { ReportNote } from './ReportNote.js';
-import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr, formatDate } from '../../utils/format.js';
 import { paperFromStation } from '../../services/reports/reportConfig.js';
 import { ledgerFileName } from '../../services/reports/ledgerFileName.js';
@@ -33,10 +31,10 @@ import {
   DataSection,
   EmptyState,
   Icon,
+  DateRangeMenu,
+  computeRange,
+  type DateRange,
 } from '../../pump-ds/index.js';
-
-/** Tone for the closing-balance KPI (kept local; the old KpiCard primitive is retired). */
-type BalanceTone = 'default' | 'success' | 'warning' | 'danger' | 'info';
 
 export interface UnifiedLedgerProps {
   selectedStation: any | null;
@@ -65,7 +63,7 @@ const fmtDate = (v: any) => formatDate(v, { compact: true });
 interface LedgerSource {
   /** Requires picking a specific entity (customer/supplier). */
   needsEntity: boolean;
-  /** Where the ledger rows come from when this type is committed. */
+  /** Where the ledger rows come from for this type. */
   moneyAccount?: 'Cash' | 'Bank' | 'Owner';
   /** The account kind: decides which column (Debit or Credit) raises the balance. */
   kind: StatementKind;
@@ -77,8 +75,8 @@ interface LedgerSource {
   caption: string;
   /** The API rows as statement entries. */
   entries: (rows: any[]) => LedgerStatementEntry[];
-  /** Tone of the closing-balance KPI given the net value. */
-  balanceTone: (net: number) => BalanceTone;
+  /** The closing balance is a problem below zero (cash or bank overdrawn). */
+  alertBelowZero: boolean;
 }
 
 /**
@@ -96,7 +94,7 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     emptyText: 'No transactions for this customer in the selected range.',
     caption:
       'Debit = credit sale / adjustment · Credit = collection. Closing balance = amount receivable.',
-    balanceTone: (net) => (net > 0 ? 'warning' : 'success'),
+    alertBelowZero: false,
     entries: (rows) => partyEntries(rows, 'customer'),
   },
   supplier: {
@@ -107,7 +105,7 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     kpiLowers: 'Payments',
     emptyText: 'No transactions for this supplier in the selected range.',
     caption: 'Credit = purchase / adjustment · Debit = payment. Closing balance = amount payable.',
-    balanceTone: (net) => (net > 0 ? 'warning' : 'success'),
+    alertBelowZero: false,
     entries: (rows) => partyEntries(rows, 'supplier'),
   },
   cash: {
@@ -120,7 +118,7 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     emptyText: 'No cash movements in the selected range.',
     caption:
       'Debit = received · Credit = paid out. Recorded cash receipts & payments only — fuel/drawer reconciliation lives in the DSSR. Opening balance is carried from before the range.',
-    balanceTone: (net) => (net < 0 ? 'danger' : 'default'),
+    alertBelowZero: true,
     entries: (rows) => moneyEntries(rows),
   },
   bank: {
@@ -133,7 +131,7 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     emptyText: 'No bank movements in the selected range.',
     caption:
       'Debit = received · Credit = paid out. Recorded bank/card/UPI receipts & payments. Opening balance is carried from before the range.',
-    balanceTone: (net) => (net < 0 ? 'danger' : 'default'),
+    alertBelowZero: true,
     entries: (rows) => moneyEntries(rows),
   },
   owner: {
@@ -146,7 +144,7 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     emptyText: 'No owner-funded movements in the selected range.',
     caption:
       'Credit = paid from the owner\u2019s pocket · Debit = repaid / drawn. Balance = net amount the business owes the owner.',
-    balanceTone: (net) => (net > 0 ? 'warning' : 'default'),
+    alertBelowZero: false,
     // Owner-funded outflow raises what the business owes the owner.
     entries: (rows) => moneyEntries(rows, { owner: true }),
   },
@@ -162,10 +160,10 @@ interface Committed {
 
 /**
  * Entity-aware Ledger (Phase L6). Pick an entity type (Customer, Supplier,
- * Cash, Bank, Owner), the specific entity + period, then Submit to fetch — the
- * data query only fires on submit, so browsing the form never hits the backend.
- * All types render through the Statement module (screen and PDF); new entities
- * plug in via the REGISTRY above.
+ * Cash, Bank, Owner), the specific entity and a period: the statement loads as
+ * soon as the choice is complete (#567), with no Apply step. Only the list and
+ * ledger the chosen type needs are fetched. All types render through the
+ * Statement module (screen and PDF); new entities plug in via the REGISTRY above.
  */
 export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation }) => {
   const s = selectedStation?.settings || {};
@@ -173,13 +171,9 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
   const dayStartsAt: string | undefined = s.business_day_starts_at;
   const clock = { timeZone, dayStartsAt };
 
-  // Draft form state (does NOT trigger any fetch).
   const [type, setType] = useState<EntityType>('customer');
   const [entityId, setEntityId] = useState('');
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
-
-  // Committed query — only set on submit.
-  const [committed, setCommitted] = useState<Committed | null>(null);
 
   const cfg = REGISTRY[type];
 
@@ -195,6 +189,16 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
       sublabel: e.currentBalance != null ? `Balance ${inr(e.currentBalance)}` : undefined,
     }));
   }, [type, customers, suppliers]);
+
+  // The ledger on screen: set once the choice is complete (an entity picked
+  // when the type needs one, and a station for the money accounts).
+  const needsEntity = cfg.needsEntity;
+  const committed = useMemo<Committed | null>(() => {
+    const complete = (needsEntity ? !!entityId : !!selectedStation) && !!range.from && !!range.to;
+    if (!complete) return null;
+    const label = needsEntity ? entityOptions.find((o) => o.value === entityId)?.label || '' : '';
+    return { type, entityId, entityLabel: label, from: range.from, to: range.to };
+  }, [needsEntity, entityId, selectedStation, range.from, range.to, entityOptions, type]);
 
   // Ledger data hooks — enabled ONLY when the committed type matches.
   const customerLedger = useCustomerLedger(
@@ -323,19 +327,6 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
     }
   };
 
-  const needsEntity = cfg.needsEntity;
-  const canSubmit =
-    (!needsEntity || !!entityId) &&
-    !!range.from &&
-    !!range.to &&
-    (!!selectedStation || needsEntity);
-
-  const submit = () => {
-    if (!canSubmit) return;
-    const label = needsEntity ? entityOptions.find((o) => o.value === entityId)?.label || '' : '';
-    setCommitted({ type, entityId, entityLabel: label, from: range.from, to: range.to });
-  };
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Query bar */}
@@ -367,11 +358,7 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
             </div>
           )}
 
-          <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
-
-          <Button variant="primary" size="sm" onClick={submit} disabled={!canSubmit}>
-            View Ledger
-          </Button>
+          <DateRangeMenu value={range} onChange={setRange} clock={clock} />
         </div>
         <ReportNote className="mt-1.5">{resolvedCfg.caption}</ReportNote>
       </Panel>
@@ -381,7 +368,7 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
           compact
           icon={<Icon name="ledger" size="md" />}
           title="Select a ledger"
-          description="Pick an entity and period, then View Ledger to load the statement."
+          description="Pick a customer or supplier to load the statement."
         />
       ) : (
         <>
@@ -425,7 +412,7 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
             <KpiTile label={resolvedCfg.kpiRaises} value={inr(totals.raises)} />
             <KpiTile label={resolvedCfg.kpiLowers} value={inr(totals.lowers)} />
             <KpiTile
-              alert={resolvedCfg.balanceTone(totals.net) === 'danger' ? 'danger' : undefined}
+              alert={resolvedCfg.alertBelowZero && totals.net < 0 ? 'danger' : undefined}
               label={resolvedCfg.balanceLabel}
               value={inr(totals.net)}
             />

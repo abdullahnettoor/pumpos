@@ -22,9 +22,9 @@ export type PageFrameProps = PageFrameTitle & {
   /** Under the title row: the page's pump-ds `Tabs`. */
   tabs?: ReactNode;
   /**
-   * Under the tabs: the page's standard toolbar. Put the page-level date
-   * range here (`ReportRangeBar`, or `DateRangeField` on its own), then a
-   * pump-ds `SearchInput`, then filters.
+   * Under the tabs: the page's standard toolbar, a pump-ds `ControlBar`:
+   * the page-level `DateRangeMenu` first (or `ReportRangeBar` on a report),
+   * then a `SearchInput`, then filters.
    */
   toolbar?: ReactNode;
   children: ReactNode;

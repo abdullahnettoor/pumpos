@@ -4,7 +4,7 @@ import { LoadingSpinner } from '../../LoadingSpinner.js';
 import { inr } from '../../../utils/format.js';
 import { Button, DateText, Icon } from '../../../pump-ds/index.js';
 import { resolveEntryDate } from '@pump/shared';
-import type { DateRange } from '../../primitives/DateRangeField.js';
+import type { DateRange } from '../../../pump-ds/date-range/index.js';
 
 /**
  * GST → Purchases (ITC): input credit on GST purchase lines. Moved unchanged

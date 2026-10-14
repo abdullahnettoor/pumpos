@@ -13,8 +13,8 @@ import {
   shiftShowsCreditBreakdown,
   type CreditChitRow,
 } from '../../services/reports/attendantCreditLines.js';
-import { computeRange } from '../primitives/DateRangeField.js';
-import type { DateRange } from '../primitives/DateRangeField.js';
+import { computeRange } from '../../pump-ds/date-range/index.js';
+import type { DateRange } from '../../pump-ds/date-range/index.js';
 import { Drawer } from '../Drawer.js';
 import { formatDateTime, inr } from '../../utils/format.js';
 import {
@@ -387,7 +387,7 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
         onChange={setRange}
         clock={clock}
         note="Closed shifts only. Sales components are listed separately — fuel expected is metered, not a grand total."
-        actions={
+        filters={
           <Select
             inputSize="sm"
             className="h-8 min-w-[180px]"

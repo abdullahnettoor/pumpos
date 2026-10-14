@@ -9,7 +9,7 @@ export interface ReportRangeBarProps {
   clock?: RangeClock;
   presets?: RangePreset[];
   /** Filters after the range: entity/account pickers, a Cash | Bank switch. */
-  actions?: React.ReactNode;
+  filters?: React.ReactNode;
   /** `ExportMenu` for the report, at the right end of the bar. */
   exportMenu?: React.ReactNode;
   /**
@@ -35,7 +35,7 @@ export const ReportRangeBar: React.FC<ReportRangeBarProps> = ({
   onChange,
   clock,
   presets,
-  actions,
+  filters,
   exportMenu,
   note,
 }) => (
@@ -50,7 +50,7 @@ export const ReportRangeBar: React.FC<ReportRangeBarProps> = ({
           aria-label="Report period"
         />
       }
-      filters={actions}
+      filters={filters}
       exportMenu={exportMenu}
     />
     {note && <ReportNote>{note}</ReportNote>}

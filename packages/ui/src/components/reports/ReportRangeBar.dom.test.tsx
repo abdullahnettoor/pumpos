@@ -21,12 +21,12 @@ describe('ReportRangeBar', () => {
         value={range}
         onChange={vi.fn()}
         note="Closed shifts only."
-        actions={<button type="button">Export</button>}
+        filters={<button type="button">Filter</button>}
       />,
     );
 
     const note = screen.getByText('Closed shifts only.');
-    const action = screen.getByRole('button', { name: 'Export' });
+    const action = screen.getByRole('button', { name: 'Filter' });
 
     // The row that holds the controls must not hold the prose — that is the
     // bug: a sentence in the row stretches it and misaligns the controls.
@@ -35,21 +35,21 @@ describe('ReportRangeBar', () => {
     expect(controlRow.nextElementSibling).toBe(note);
   });
 
-  it('puts the actions in the same row as the range picker', () => {
+  it('puts the filters in the same row as the range picker', () => {
     render(
       <ReportRangeBar
         value={range}
         onChange={vi.fn()}
         note="Closed shifts only."
-        actions={<button type="button">Export</button>}
+        filters={<button type="button">Filter</button>}
       />,
     );
 
-    const action = screen.getByRole('button', { name: 'Export' });
+    const action = screen.getByRole('button', { name: 'Filter' });
     const controlRow = screen.getByTestId('control-bar');
 
     // The range menu lives in that row too, so the two clusters are siblings
-    // and can align — rather than the actions being pushed into a cluster
+    // and can align — rather than the filters being pushed into a cluster
     // shared with the note, as they were.
     expect(controlRow.contains(action)).toBe(true);
     expect(controlRow.contains(screen.getByRole('button', { name: /^Report period/ }))).toBe(true);
