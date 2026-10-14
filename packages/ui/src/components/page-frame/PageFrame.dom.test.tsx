@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { PageFrame } from './PageFrame.js';
 import { NAV_PAGES, ROUTES } from '../../nav-intent/routes.js';
 import { Tabs } from '../../pump-ds/tabs/index.js';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const before = (a: Element, b: Element) =>
   Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
@@ -72,5 +75,18 @@ describe('PageFrame', () => {
     const { container } = render(<PageFrame route={ROUTES.dashboard}>content</PageFrame>);
     expect(container.querySelector('[data-page-frame-slot="tabs"]')).toBeNull();
     expect(container.querySelector('[data-page-frame-slot="toolbar"]')).toBeNull();
+  });
+
+  it('warns in dev when a route has no sidebar label and no title is given', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<PageFrame route={'/not-a-page' as never}>content</PageFrame>);
+    expect(error).toHaveBeenCalledWith(expect.stringMatching(/\/not-a-page.*title/));
+  });
+
+  it('takes a title for a page outside the sidebar, without a route', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<PageFrame title="Design system">content</PageFrame>);
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Design system');
+    expect(error).not.toHaveBeenCalled();
   });
 });
