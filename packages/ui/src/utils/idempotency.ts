@@ -1,4 +1,4 @@
-import { IDEMPOTENCY_KEY_REUSED } from '@pump/shared';
+import { IDEMPOTENCY_KEY_REUSED, isIdempotencyInProgress } from '@pump/shared';
 
 /**
  * When a write fails, must its next try carry the SAME Idempotency-Key?
@@ -11,9 +11,7 @@ import { IDEMPOTENCY_KEY_REUSED } from '@pump/shared';
 export function keepsIdempotencyKey(error: unknown): boolean {
   const e = error && typeof error === 'object' ? (error as { status?: number; code?: string }) : {};
   if (e.status === undefined || e.status >= 500) return true;
-  return (
-    e.code === 'CONFLICT' && error instanceof Error && /already in progress/i.test(error.message)
-  );
+  return isIdempotencyInProgress(error);
 }
 
 /**

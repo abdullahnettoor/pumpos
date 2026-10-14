@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { IDEMPOTENCY_IN_PROGRESS } from '@pump/shared';
 import { isIdempotencyKeyConflict, keepsIdempotencyKey } from './idempotency.js';
 
 const failure = (message: string, extra: { status?: number; code?: string }) =>
@@ -16,6 +17,21 @@ describe('keepsIdempotencyKey', () => {
         }),
       ),
     ).toBe(true);
+  });
+
+  it('reads the in-progress reason, not the message', () => {
+    expect(
+      keepsIdempotencyKey(
+        Object.assign(failure('Busy', { status: 409, code: 'CONFLICT' }), {
+          details: { reason: IDEMPOTENCY_IN_PROGRESS },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      keepsIdempotencyKey(
+        failure('This Idempotency-Key belongs to another user', { status: 409, code: 'CONFLICT' }),
+      ),
+    ).toBe(false);
   });
 
   it('replaces it once the answer is decided', () => {
