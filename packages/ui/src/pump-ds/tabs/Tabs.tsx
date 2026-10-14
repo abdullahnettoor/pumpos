@@ -2,10 +2,12 @@ import React, { useEffect, useRef, type KeyboardEvent } from 'react';
 import { cn } from '../lib/cn.js';
 import { ConceptIcon } from '../icon/ConceptIcon.js';
 import type { Concept } from '../icon/concepts.js';
-import { Chip } from '../chip/Chip.js';
+import type { ChipTone } from '../chip/Chip.js';
+import { StatusChip } from '../chip/StatusChip.js';
+import { STATUS_MAP, type PumpStatus } from '../chip/status-map.js';
 
-/** Tone of a tab's badge: the count pill's fill when active, a text chip's tone always. */
-export type TabTone = 'brand' | 'info' | 'success' | 'warning' | 'danger' | 'neutral';
+/** Fill of a tab's count pill when the tab is active. */
+export type TabTone = ChipTone;
 
 export interface TabItem {
   id: string;
@@ -16,14 +18,23 @@ export interface TabItem {
    * is no free icon prop: a new subject gets a concept in `CONCEPT_ICON`.
    */
   concept?: Concept;
-  /** A number renders as a count pill; text ("Open") as a status chip. */
-  badge?: number | string;
-  /** Count pill fill on the active tab (default `brand`); text chip tone (default `neutral`). */
+  /**
+   * A number renders as a count pill. A status key (`'open'`) renders as the
+   * canonical `StatusChip`, so the word and its colour match every other
+   * "Open". Anything else is a node rendered as given.
+   */
+  badge?: number | PumpStatus | React.ReactElement;
+  /** Count pill fill on the active tab (default `brand`). */
   tone?: TabTone;
   disabled?: boolean;
 }
 
 export interface TabsProps {
+  /**
+   * Links tabs to their panels: each tab gets `aria-controls` pointing at the
+   * panel spread with `tabPanelProps(id, tab.id)`. Without it, no tab claims a panel.
+   */
+  id?: string;
   tabs: TabItem[];
   activeId: string;
   onChange: (id: string) => void;
@@ -43,6 +54,35 @@ const COUNT_ACTIVE: Record<TabTone, string> = {
 
 const hasIcon = (tab: TabItem) => tab.concept != null;
 
+const tabId = (barId: string, id: string) => `${barId}-tab-${id}`;
+const panelId = (barId: string, id: string) => `${barId}-panel-${id}`;
+
+/** Props for the panel a tab controls; spread on the panel element. */
+export const tabPanelProps = (barId: string, id: string) => ({
+  role: 'tabpanel' as const,
+  id: panelId(barId, id),
+  'aria-labelledby': tabId(barId, id),
+});
+
+const isStatus = (badge: TabItem['badge']): badge is PumpStatus =>
+  typeof badge === 'string' && badge in STATUS_MAP;
+
+/** Index of the tab a navigation key moves to, or -1 for any other key. */
+const keyTarget = (key: string, at: number, last: number): number => {
+  switch (key) {
+    case 'ArrowRight':
+      return at >= last ? 0 : at + 1;
+    case 'ArrowLeft':
+      return at <= 0 ? last : at - 1;
+    case 'Home':
+      return 0;
+    case 'End':
+      return last;
+    default:
+      return -1;
+  }
+};
+
 /**
  * Page-level tab bar (#523), the look of the Dashboard baseline: 13px labels,
  * a 2px brand underline on the active tab, a 14px muted icon that turns brand
@@ -57,6 +97,7 @@ const hasIcon = (tab: TabItem) => tab.concept != null;
  * order.
  */
 export const Tabs: React.FC<TabsProps> = ({
+  id: barId,
   tabs,
   activeId,
   onChange,
@@ -78,22 +119,11 @@ export const Tabs: React.FC<TabsProps> = ({
   }, [ariaLabel, withIcons, tabs.length]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const last = enabled.length - 1;
-    const at = enabled.findIndex((t) => t.id === activeId);
-    const to =
-      event.key === 'ArrowRight'
-        ? at >= last
-          ? 0
-          : at + 1
-        : event.key === 'ArrowLeft'
-          ? at <= 0
-            ? last
-            : at - 1
-          : event.key === 'Home'
-            ? 0
-            : event.key === 'End'
-              ? last
-              : -1;
+    const to = keyTarget(
+      event.key,
+      enabled.findIndex((t) => t.id === activeId),
+      enabled.length - 1,
+    );
     if (to < 0) return;
     event.preventDefault();
     const target = enabled[to];
@@ -124,6 +154,8 @@ export const Tabs: React.FC<TabsProps> = ({
             }}
             type="button"
             role="tab"
+            id={barId ? tabId(barId, tab.id) : undefined}
+            aria-controls={barId ? panelId(barId, tab.id) : undefined}
             aria-selected={active}
             tabIndex={active ? 0 : -1}
             disabled={tab.disabled}
@@ -159,11 +191,11 @@ export const Tabs: React.FC<TabsProps> = ({
               >
                 {tab.badge}
               </span>
-            ) : tab.badge ? (
-              <Chip size="xs" tone={tab.tone ?? 'neutral'}>
-                {tab.badge}
-              </Chip>
-            ) : null}
+            ) : isStatus(tab.badge) ? (
+              <StatusChip size="xs" status={tab.badge} />
+            ) : (
+              (tab.badge ?? null)
+            )}
           </button>
         );
       })}

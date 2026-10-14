@@ -128,7 +128,7 @@ export { PageFrame } from './components/page-frame/index.js';
 export type { PageFrameProps } from './components/page-frame/index.js';
 export { DataTable } from './components/primitives/DataTable.js';
 export type { DataTableProps } from './components/primitives/DataTable.js';
-export { Tabs } from './pump-ds/tabs/index.js';
+export { Tabs, tabPanelProps } from './pump-ds/tabs/index.js';
 export type { TabsProps, TabItem, TabTone } from './pump-ds/tabs/index.js';
 export { ConfirmProvider, useConfirm } from './components/primitives/ConfirmDialog.js';
 export type { ConfirmOptions } from './components/primitives/ConfirmDialog.js';

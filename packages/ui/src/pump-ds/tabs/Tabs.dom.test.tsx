@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { Tabs, type TabItem } from './Tabs.js';
+import { Tabs, tabPanelProps, type TabItem } from './Tabs.js';
 
 afterEach(() => {
   cleanup();
@@ -134,20 +134,59 @@ describe('pump-ds Tabs', () => {
     expect(screen.getByRole('tab', { name: /Stations/ }).textContent).toBe('Stations3');
   });
 
-  it('shows a text badge as a status chip in the tab tone', () => {
+  it('shows a status badge as the canonical StatusChip, the same "Open" as everywhere', () => {
     render(
       <Tabs
         aria-label="Shift views"
         activeId="b"
         onChange={() => {}}
         tabs={[
-          { id: 'a', label: 'Live shift', concept: 'live-shift', badge: 'Open', tone: 'success' },
+          { id: 'a', label: 'Live shift', concept: 'live-shift', badge: 'open' },
           { id: 'b', label: 'History', concept: 'history' },
         ]}
       />,
     );
     const chip = screen.getByText('Open').closest('span[class*="rounded-chip"]');
     expect(chip?.className).toContain('text-success-fg');
-    expect(chip?.getAttribute('style')).toBeNull();
+    // StatusChip carries the status icon from STATUS_MAP (play-circle for open).
+    expect(chip?.querySelector('svg')?.getAttribute('class')).toContain('lucide-circle-play');
+  });
+
+  it('shows a node badge as given', () => {
+    render(
+      <Tabs
+        aria-label="Demo"
+        activeId="a"
+        onChange={() => {}}
+        tabs={[{ id: 'a', label: 'A', badge: <em data-testid="node-badge">new</em> }]}
+      />,
+    );
+    expect(screen.getByRole('tab', { name: /A/ }).contains(screen.getByTestId('node-badge'))).toBe(
+      true,
+    );
+  });
+
+  it('links each tab to its panel when the bar has an id', () => {
+    render(
+      <>
+        <Tabs
+          id="station"
+          aria-label="Station"
+          tabs={station}
+          activeId="general"
+          onChange={() => {}}
+        />
+        <div {...tabPanelProps('station', 'general')}>General settings</div>
+      </>,
+    );
+    const tab = screen.getByRole('tab', { name: 'General' });
+    const panel = screen.getByRole('tabpanel', { name: 'General' });
+    expect(tab.getAttribute('aria-controls')).toBe(panel.id);
+    expect(panel.textContent).toBe('General settings');
+  });
+
+  it('sets no aria-controls when the bar has no id (no dangling panel references)', () => {
+    render(<Controlled />);
+    expect(screen.getByRole('tab', { name: 'General' }).hasAttribute('aria-controls')).toBe(false);
   });
 });

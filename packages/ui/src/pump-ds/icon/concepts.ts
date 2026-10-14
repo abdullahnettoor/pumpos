@@ -9,8 +9,14 @@ import type { IconName } from './registry.js';
  * A page and the tab that lists its records are one concept, so they share a
  * key ("Expenses" in the sidebar, the Expenses tab, ⌘K "New expense").
  *
- * Picked for review (no obvious glyph): branding → palette, rules → sliders,
- * report templates → layout.
+ * Owner-confirmed picks (no obvious glyph): branding → palette, rules →
+ * sliders, report templates → layout.
+ *
+ * The map runs one way, concept → glyph. Some glyphs serve several concepts
+ * (truck: suppliers + decantations; wallet: collections + payments; clock:
+ * history + shift templates; pump: shifts + live shift; package: inventory +
+ * product stock + products; arrow-left-right: movements + transfers), so never
+ * look a concept up from its glyph.
  */
 export const CONCEPT_ICON = {
   // Sidebar pages

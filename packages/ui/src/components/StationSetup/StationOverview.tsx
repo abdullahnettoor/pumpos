@@ -17,14 +17,14 @@ import { ProductsCatalog } from './ProductsCatalog.js';
 import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
 import { ShiftTemplates } from './ShiftTemplates.js';
-import { Tabs, type TabItem } from '../../pump-ds/tabs/index.js';
+import { Tabs, tabPanelProps, type TabItem } from '../../pump-ds/tabs/index.js';
 import { PageFrame } from '../page-frame/index.js';
 import { ROUTES } from '../../nav-intent/routes.js';
 import { Field, TextInput, Select } from '../primitives/Field.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { Panel, Button, EmptyState, Chip, Form } from '../../pump-ds/index.js';
-import { Building2 } from 'lucide-react';
+import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
 import { TankLevelSettingsPanel } from './TankLevelSettingsPanel.js';
 import { useRunTask } from '../../utils/runTask.js';
@@ -265,6 +265,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
       tabs={
         selectedStation ? (
           <Tabs
+            id="station-setup"
             aria-label="Station setup"
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as any)}
@@ -306,7 +307,10 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
       }
     >
       {selectedStation ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div
+          {...tabPanelProps('station-setup', activeTab)}
+          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+        >
           {/* Report templates carry their own panels (moved from Reports, #540). */}
           {activeTab === 'report-templates' && canManageReportTemplates(userRole) && (
             <ReportTemplatesPanel selectedStation={selectedStation} />
@@ -1164,7 +1168,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
         </div>
       ) : (
         <EmptyState
-          icon={<Building2 />}
+          icon={<ConceptIcon concept="stations" />}
           title="No station selected"
           description="Please select or initialize a station location first."
         />

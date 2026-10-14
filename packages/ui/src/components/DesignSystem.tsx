@@ -773,7 +773,7 @@ const ComponentsPanel: React.FC = () => {
             onChange={setPlainTab}
             tabs={[
               { id: 'summary', label: 'Summary' },
-              { id: 'shifts', label: 'Shifts', badge: 'Open', tone: 'success' },
+              { id: 'shifts', label: 'Shifts', badge: 'open' },
               { id: 'audit', label: 'Audit log', badge: 2, tone: 'warning' },
             ]}
           />
