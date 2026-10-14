@@ -2,21 +2,90 @@ import React, { useMemo, useState } from 'react';
 import { useIncomeGstRegister } from '../../../query/hooks.js';
 import { DateRangeField, computeRange } from '../../primitives/DateRangeField.js';
 import type { DateRange } from '../../primitives/DateRangeField.js';
-import { LoadingSpinner } from '../../LoadingSpinner.js';
-import { inr } from '../../../utils/format.js';
+import { formatMoney } from '../../../utils/format.js';
 import {
-  Panel,
   Button,
+  DataSection,
+  EmptyState,
+  Icon,
+  InteractiveTable,
   KpiStrip,
   KpiTile,
-  EmptyState,
-  DateText,
-  Icon,
+  SectionHeader,
+  type TableColumn,
 } from '../../../pump-ds/index.js';
 
+interface IncomeGstRow {
+  id: string;
+  entryDate?: string | null;
+  categoryName?: string | null;
+  hsnCode?: string | null;
+  payer?: string | null;
+  description?: string | null;
+  gstRate?: number | string | null;
+  interState?: boolean;
+  taxableAmount?: number | string | null;
+  cgst?: number | string | null;
+  sgst?: number | string | null;
+  igst?: number | string | null;
+  cess?: number | string | null;
+  amount?: number | string | null;
+}
+
+const figure = (v: number | string | null | undefined) => Number(v || 0);
+
+const COLUMNS: TableColumn<IncomeGstRow>[] = [
+  { id: 'date', header: 'Date', kind: 'date', value: (r) => r.entryDate, width: '11%' },
+  {
+    id: 'category',
+    header: 'Category',
+    kind: 'text',
+    emphasis: true,
+    value: (r) => r.categoryName,
+    cell: (r) => (
+      <span className="flex flex-col leading-tight">
+        <span className="text-ink-strong">{r.categoryName}</span>
+        {r.hsnCode && (
+          <span className="font-mono text-[12px] font-normal text-ink-muted">
+            HSN/SAC {r.hsnCode}
+          </span>
+        )}
+      </span>
+    ),
+  },
+  {
+    id: 'payer',
+    header: 'Payer / Description',
+    kind: 'text',
+    value: (r) => r.payer || r.description,
+  },
+  {
+    id: 'rate',
+    header: 'Rate',
+    kind: 'text',
+    value: (r) => figure(r.gstRate),
+    cell: (r) => (
+      <span className="font-mono text-ink-muted">
+        {figure(r.gstRate)}%{r.interState ? ' · IGST' : ''}
+      </span>
+    ),
+  },
+  { id: 'taxable', header: 'Taxable', kind: 'money', value: (r) => figure(r.taxableAmount) },
+  { id: 'cgst', header: 'CGST', kind: 'money', value: (r) => figure(r.cgst) },
+  { id: 'sgst', header: 'SGST', kind: 'money', value: (r) => figure(r.sgst) },
+  { id: 'igst', header: 'IGST', kind: 'money', value: (r) => figure(r.igst) },
+  {
+    id: 'received',
+    header: 'Received',
+    kind: 'money',
+    value: (r) => figure(r.amount),
+    cell: (r) => <span className="text-ink-strong">{formatMoney(figure(r.amount))}</span>,
+  },
+];
+
 /**
- * GST → Income: output GST collected on other income. Moved unchanged from the
- * old Income "GST on Income" tab into the one GST report (#540).
+ * GST → Income: output GST collected on other income. Shown in Reports → GST
+ * and, for Staff (no Reports), on the Income page's GST tab (#540, #529).
  */
 export const IncomeGstPanel: React.FC<{
   selectedStation: any | null;
@@ -25,12 +94,10 @@ export const IncomeGstPanel: React.FC<{
   onRangeChange?: (range: DateRange) => void;
 }> = ({ selectedStation, range, onRangeChange }) => {
   const stationId = selectedStation?.id ?? null;
-  const s = selectedStation?.settings || {};
+  const timeZone = selectedStation?.settings?.timezone;
   // Office records are dated by entry date: the plain station calendar date (ADR 0005).
-  const entryClock = useMemo(() => ({ timeZone: s.timezone }), [s.timezone]);
+  const entryClock = useMemo(() => ({ timeZone }), [timeZone]);
 
-  // FI4 — output GST register. Read straight from the API (not the tiered cache):
-  // it is a period report driven by its own date inputs, not the ledger range.
   const [ownRange, setOwnRange] = useState<DateRange>(() => computeRange('this-month', entryClock));
   const gstRange = range ?? ownRange;
   const setGstRange = onRangeChange ?? setOwnRange;
@@ -39,286 +106,92 @@ export const IncomeGstPanel: React.FC<{
     { stationId, from: gstRange.from, to: gstRange.to },
     { enabled: !!stationId },
   );
-  const gstRows = useMemo(() => gstQ.data ?? [], [gstQ.data]);
-  const gstLoading = gstQ.isFetching;
-  const gstError = gstQ.error ? gstQ.error.message : null;
+  const gstRows = useMemo<IncomeGstRow[]>(() => gstQ.data ?? [], [gstQ.data]);
 
-  const gstTotals = useMemo(
+  const totals = useMemo(
     () =>
       gstRows.reduce(
         (acc, r) => ({
-          taxable: acc.taxable + Number(r.taxableAmount || 0),
-          cgst: acc.cgst + Number(r.cgst || 0),
-          sgst: acc.sgst + Number(r.sgst || 0),
-          igst: acc.igst + Number(r.igst || 0),
-          cess: acc.cess + Number(r.cess || 0),
-          gross: acc.gross + Number(r.amount || 0),
+          taxable: acc.taxable + figure(r.taxableAmount),
+          cgst: acc.cgst + figure(r.cgst),
+          sgst: acc.sgst + figure(r.sgst),
+          igst: acc.igst + figure(r.igst),
+          cess: acc.cess + figure(r.cess),
         }),
-        { taxable: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, gross: 0 },
+        { taxable: 0, cgst: 0, sgst: 0, igst: 0, cess: 0 },
       ),
     [gstRows],
   );
-  const gstOutputTotal = gstTotals.cgst + gstTotals.sgst + gstTotals.igst + gstTotals.cess;
+  const outputTotal = totals.cgst + totals.sgst + totals.igst + totals.cess;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div
-        style={{
-          backgroundColor: 'var(--state-info-bg)',
-          color: 'var(--state-info-fg)',
-          padding: '10px 12px',
-          borderRadius: 'var(--radius-card)',
-          fontSize: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          border: '1px solid var(--border-soft)',
-        }}
-      >
+    <div className="flex flex-col gap-4">
+      <p className="flex items-center gap-2 rounded-card border border-border-soft bg-info-bg px-3 py-2.5 text-[12px] text-info-fg">
         <Icon name="info" size="xs" />
         <span>
           Output GST you collected on other income (rentals, commissions, advertising). The split is
           frozen from the category&rsquo;s GST rate at the time each entry was recorded. Voided
           entries are excluded.
         </span>
-      </div>
+      </p>
 
-      <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+      <div className="flex flex-wrap items-end gap-2.5">
         <DateRangeField value={gstRange} onChange={setGstRange} clock={entryClock} size="sm" />
         <Button
           variant="secondary"
           size="sm"
           onClick={() => void gstQ.refetch()}
-          loading={gstLoading}
+          loading={gstQ.isFetching}
         >
           Apply
         </Button>
       </div>
 
-      <KpiStrip columns="auto">
-        <KpiTile label="Taxable value" value={inr(gstTotals.taxable)} hint="net of GST" />
-        <KpiTile label="CGST" value={inr(gstTotals.cgst)} />
-        <KpiTile label="SGST" value={inr(gstTotals.sgst)} />
-        <KpiTile label="IGST" value={inr(gstTotals.igst)} />
-        <KpiTile
-          label="Output GST"
-          value={inr(gstOutputTotal)}
-          hint={`${gstRows.length} ${gstRows.length === 1 ? 'entry' : 'entries'}`}
-        />
-      </KpiStrip>
+      <DataSection title="GST totals" query={gstQ} shape="cards" placeholderHeight={90}>
+        <KpiStrip columns="auto">
+          <KpiTile label="Taxable Value" value={formatMoney(totals.taxable)} hint="net of GST" />
+          <KpiTile label="CGST" value={formatMoney(totals.cgst)} />
+          <KpiTile label="SGST" value={formatMoney(totals.sgst)} />
+          <KpiTile label="IGST" value={formatMoney(totals.igst)} />
+          <KpiTile
+            dot="brand"
+            valueTone="brand"
+            label="Output GST"
+            value={formatMoney(outputTotal)}
+            hint={`${gstRows.length} ${gstRows.length === 1 ? 'entry' : 'entries'}`}
+          />
+        </KpiStrip>
+      </DataSection>
 
-      <Panel flush title="GST register">
-        {gstError ? (
-          <div
-            style={{
-              padding: '12px',
-              color: 'var(--state-danger-fg)',
-              backgroundColor: 'var(--state-danger-bg)',
-              fontSize: '12px',
-            }}
-          >
-            {gstError}
-          </div>
-        ) : gstLoading ? (
-          <div style={{ padding: '16px' }}>
-            <LoadingSpinner text="Loading GST register…" />
-          </div>
-        ) : gstRows.length === 0 ? (
-          <div style={{ padding: '12px' }}>
-            <EmptyState
-              compact
-              icon={<Icon name="percent" size="md" />}
-              title="No GST income in this period"
-              description="Income only appears here when its category carries a GST rate."
-            />
-          </div>
-        ) : (
-          <div style={{ overflow: 'auto' }}>
-            <table
-              style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                fontSize: '12px',
-                textAlign: 'left',
-              }}
-            >
-              <thead>
-                <tr
-                  style={{
-                    backgroundColor: 'var(--bg-surface-alt)',
-                    borderBottom: '1px solid var(--border-soft)',
-                    color: 'var(--text-muted)',
-                  }}
-                >
-                  <th style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    Date
-                  </th>
-                  <th style={{ padding: '8px 10px', fontWeight: 600 }}>Category</th>
-                  <th style={{ padding: '8px 10px', fontWeight: 600 }}>Payer / Description</th>
-                  <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>Rate</th>
-                  <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>
-                    Taxable
-                  </th>
-                  <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>CGST</th>
-                  <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>SGST</th>
-                  <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>IGST</th>
-                  <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>
-                    Received
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {gstRows.map((r) => (
-                  <tr key={r.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                    <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
-                      <DateText value={r.entryDate} variant="compact" tone="muted" />
-                    </td>
-                    <td
-                      style={{
-                        padding: '8px 10px',
-                        color: 'var(--text-strong)',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {r.categoryName}
-                      {r.hsnCode && (
-                        <div
-                          style={{
-                            fontSize: '10px',
-                            color: 'var(--text-muted)',
-                            fontFamily: 'var(--font-mono)',
-                            fontWeight: 400,
-                          }}
-                        >
-                          HSN/SAC {r.hsnCode}
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ padding: '8px 10px', color: 'var(--text-default)' }}>
-                      {r.payer || r.description || '—'}
-                    </td>
-                    <td
-                      style={{
-                        padding: '8px 10px',
-                        textAlign: 'right',
-                        fontFamily: 'var(--font-mono)',
-                        color: 'var(--text-muted)',
-                      }}
-                    >
-                      {Number(r.gstRate || 0)}%{r.interState ? ' · IGST' : ''}
-                    </td>
-                    <td
-                      style={{
-                        padding: '8px 10px',
-                        textAlign: 'right',
-                        fontFamily: 'var(--font-mono)',
-                      }}
-                    >
-                      {inr(Number(r.taxableAmount || 0))}
-                    </td>
-                    <td
-                      style={{
-                        padding: '8px 10px',
-                        textAlign: 'right',
-                        fontFamily: 'var(--font-mono)',
-                      }}
-                    >
-                      {inr(Number(r.cgst || 0))}
-                    </td>
-                    <td
-                      style={{
-                        padding: '8px 10px',
-                        textAlign: 'right',
-                        fontFamily: 'var(--font-mono)',
-                      }}
-                    >
-                      {inr(Number(r.sgst || 0))}
-                    </td>
-                    <td
-                      style={{
-                        padding: '8px 10px',
-                        textAlign: 'right',
-                        fontFamily: 'var(--font-mono)',
-                      }}
-                    >
-                      {inr(Number(r.igst || 0))}
-                    </td>
-                    <td
-                      style={{
-                        padding: '8px 10px',
-                        textAlign: 'right',
-                        fontFamily: 'var(--font-mono)',
-                        fontWeight: 700,
-                        color: 'var(--text-strong)',
-                      }}
-                    >
-                      {inr(Number(r.amount || 0))}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr
-                  style={{
-                    backgroundColor: 'var(--bg-surface-alt)',
-                    fontWeight: 700,
-                    color: 'var(--text-strong)',
-                  }}
-                >
-                  <td style={{ padding: '8px 10px' }} colSpan={4}>
-                    Total
-                  </td>
-                  <td
-                    style={{
-                      padding: '8px 10px',
-                      textAlign: 'right',
-                      fontFamily: 'var(--font-mono)',
-                    }}
-                  >
-                    {inr(gstTotals.taxable)}
-                  </td>
-                  <td
-                    style={{
-                      padding: '8px 10px',
-                      textAlign: 'right',
-                      fontFamily: 'var(--font-mono)',
-                    }}
-                  >
-                    {inr(gstTotals.cgst)}
-                  </td>
-                  <td
-                    style={{
-                      padding: '8px 10px',
-                      textAlign: 'right',
-                      fontFamily: 'var(--font-mono)',
-                    }}
-                  >
-                    {inr(gstTotals.sgst)}
-                  </td>
-                  <td
-                    style={{
-                      padding: '8px 10px',
-                      textAlign: 'right',
-                      fontFamily: 'var(--font-mono)',
-                    }}
-                  >
-                    {inr(gstTotals.igst)}
-                  </td>
-                  <td
-                    style={{
-                      padding: '8px 10px',
-                      textAlign: 'right',
-                      fontFamily: 'var(--font-mono)',
-                    }}
-                  >
-                    {inr(gstTotals.gross)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
-      </Panel>
+      <section className="flex flex-col gap-2">
+        <SectionHeader title="GST register" />
+        <DataSection
+          title="GST register"
+          query={gstQ}
+          placeholderHeight={160}
+          flush
+          isEmpty={gstRows.length === 0}
+          empty={
+            <div className="p-3">
+              <EmptyState
+                compact
+                icon={<Icon name="percent" size="md" />}
+                title="No GST income in this period"
+                description="Income only appears here when its category carries a GST rate."
+              />
+            </div>
+          }
+        >
+          <InteractiveTable
+            bare
+            columns={COLUMNS}
+            rows={gstRows}
+            rowKey={(r) => r.id}
+            totalRow
+            title="GST register"
+          />
+        </DataSection>
+      </section>
     </div>
   );
 };
