@@ -385,6 +385,8 @@ export class DrizzleFinancialAccountReader {
       direction: string;
       amount: string;
       sourceType: string;
+      /** Shared by the two legs of a transfer or deposit (Accounts › Transfers pairs them). */
+      transferId: string | null;
       notes: string | null;
       createdAt: string;
     }>;
@@ -436,6 +438,7 @@ export class DrizzleFinancialAccountReader {
         direction: schema.ledgerEntries.direction,
         amount: schema.ledgerEntries.amount,
         sourceType: schema.ledgerEntries.sourceType,
+        transferId: schema.ledgerEntries.transferId,
         notes: schema.ledgerEntries.notes,
         createdAt: schema.ledgerEntries.createdAt,
       })

@@ -57,7 +57,12 @@ export interface NavIntent {
   /** With `openReportsTab: 'gst'`: which GST view to show. */
   openGstView?: 'sales' | 'purchases' | 'income';
   /** Open a specific tab of the Accounts page (the Daily cash book lives there). */
-  openAccountsTab?: 'cash-book';
+  openAccountsTab?: 'cash-book' | 'transfers';
+  /**
+   * Open one Financial Account's statement on Accounts (#530). Reports › Cash &
+   * bank links each account row here.
+   */
+  openAccountId?: string;
   /** Open the Record Purchase drawer on arrival at Suppliers → Purchases. */
   openNewPurchase?: boolean;
   /** Open a specific tab on the Organization page. */

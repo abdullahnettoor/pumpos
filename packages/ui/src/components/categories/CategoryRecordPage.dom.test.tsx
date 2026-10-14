@@ -363,15 +363,17 @@ describe('owner decisions for the pilot (#566)', () => {
     expect(chip.getAttribute('class')).not.toMatch(/warning/);
   });
 
-  it('the Funding account names its type only when it differs from the name', async () => {
+  it('the Funding account hides its type only when the name is exactly the type (#530)', async () => {
     stubApi({
       [PAGES.expense.path]: {
         data: [
           record('a1', 100),
           { ...record('a2', 200), accountName: 'SBI Current', accountType: 'BANK' },
-          { ...record('a3', 300), accountName: 'Owner Account', accountType: 'OWNER' },
-          // "Owner" is only part of a word here, so the type still shows.
-          { ...record('a4', 400), accountName: 'Ownership Capital', accountType: 'OWNER' },
+          // The name contains the type, but is not the type: the type still shows.
+          { ...record('a3', 300), accountName: 'Bank of Baroda', accountType: 'BANK' },
+          { ...record('a4', 400), accountName: 'Owner Account', accountType: 'OWNER' },
+          // An exact match in another case still hides it.
+          { ...record('a5', 500), accountName: 'petty cash', accountType: 'PETTY_CASH' },
         ],
       },
     });
@@ -379,10 +381,15 @@ describe('owner decisions for the pilot (#566)', () => {
     const table = await screen.findByRole('table');
     expect(within(table).getAllByText('Cash in Hand')).toHaveLength(1);
     expect(within(table).getByText('SBI Current')).toBeTruthy();
-    expect(within(table).getByText('Bank')).toBeTruthy();
+    expect(within(table).getByText('Bank of Baroda')).toBeTruthy();
+    expect(within(table).getAllByText('Bank')).toHaveLength(2);
     expect(within(table).getByText('Owner Account')).toBeTruthy();
-    expect(within(table).getByText('Ownership Capital')).toBeTruthy();
-    expect(within(table).getAllByText('Owner')).toHaveLength(1);
+    expect(within(table).getByText('Owner')).toBeTruthy();
+    expect(within(table).queryByText('Petty Cash')).toBeNull();
+    // One display everywhere: the type is a neutral chip, never a status tone.
+    const chip = within(table).getByText('Owner').closest('span[class*="bg-"]')!;
+    expect(chip.getAttribute('class')).toMatch(/bg-surface-alt/);
+    expect(chip.getAttribute('class')).not.toMatch(/warning|danger|success|info/);
   });
 });
 

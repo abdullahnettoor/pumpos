@@ -1,993 +1,190 @@
 import React, { useMemo, useState } from 'react';
 import { resolveEntryDate } from '@pump/shared';
-import type { ColumnDef } from '@tanstack/react-table';
-import { PageLayout } from '../primitives/PageLayout.js';
-import { Drawer } from '../Drawer.js';
-import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
-import {
-  DataSection,
-  KpiStrip,
-  KpiTile,
-  Panel,
-  Button,
-  Chip,
-  StatusChip,
-  EmptyState,
-} from '../../pump-ds/index.js';
-import { DataTable } from '../primitives/DataTable.js';
-import { LoadingSpinner } from '../LoadingSpinner.js';
-import { StatementView, buildLedgerStatement, moneyEntries } from '../../statement/index.js';
-import type { MoneyMovement } from '../../statement/index.js';
-import { DateRangeField, computeRange, type DateRange } from '../primitives/DateRangeField.js';
-import { useToast } from '../primitives/ToastProvider.js';
-import { useFinancialAccounts, useAccountLedger, queryKeys } from '../../query/hooks.js';
-import { CloudFinanceService } from '../../services/cloud.js';
-import { ACCOUNT_TYPE_LABEL } from '../../utils/ledgerLabels.js';
-import { inr } from '../../utils/format.js';
-import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Wallet, ArrowLeft, ArrowLeftRight, Banknote } from 'lucide-react';
-import { Tabs } from '../../pump-ds/tabs/index.js';
-import { DailyCashBook } from '../reports/DailyCashBook.js';
+import { Button, Icon, Tabs, tabPanelProps, type TabItem } from '../../pump-ds/index.js';
+import { useFinancialAccounts } from '../../query/hooks.js';
+import { ROUTES } from '../../nav-intent/routes.js';
 import { useNavIntent, clearNavIntent } from '../../nav-intent/store.js';
+import { accountTypeDetail } from '../../utils/ledgerLabels.js';
+import { PageFrame } from '../page-frame/index.js';
+import { DailyCashBook } from '../reports/DailyCashBook.js';
+import { AccountDrawers, type AccountDrawer } from './AccountDrawers.js';
+import { AccountStatement } from './AccountStatement.js';
+import { AccountTypeChip } from './AccountTypeChip.js';
+import { AccountsList } from './AccountsList.js';
+import { TransfersView } from './TransfersView.js';
+import type { AccountRow } from './accountsModel.js';
 
-const financeSvc = new CloudFinanceService();
+type AccountsTab = 'accounts' | 'cash-book' | 'transfers';
 
-type AccountsTab = 'accounts' | 'cash-book';
-
-type AccountType = 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
-
-const TYPE_LABEL: Record<AccountType, string> = ACCOUNT_TYPE_LABEL;
-
-/** An account-ledger row's second line: an OMC card sale names its customer, vehicle and litres. */
-const accountEntryDetail = (e: MoneyMovement & Record<string, any>): string | null =>
-  e.sourceType === 'SALE_OMC'
-    ? [e.omcCustomerName, e.omcVehicle, e.omcQuantity ? `${e.omcQuantity} L` : null, e.omcNotes]
-        .filter(Boolean)
-        .join(' · ') ||
-      e.notes ||
-      'OMC card (no customer)'
-    : e.notes || null;
-
-const TYPE_TONE: Record<
-  AccountType,
-  'brand' | 'info' | 'success' | 'warning' | 'danger' | 'neutral'
-> = {
-  CASH_IN_HAND: 'success',
-  PETTY_CASH: 'neutral',
-  BANK: 'info',
-  MERCHANT_CLEARING: 'warning',
-  CMS: 'info',
-  OWNER: 'brand',
-};
+const TABS_ID = 'accounts';
+const TABS: TabItem[] = [
+  { id: 'accounts', label: 'Accounts', concept: 'accounts' },
+  { id: 'cash-book', label: 'Daily cash book', concept: 'daily-cash-book' },
+  { id: 'transfers', label: 'Transfers', concept: 'transfers' },
+];
 
 export interface AccountsPanelProps {
   selectedStation: any | null;
 }
 
-const accountColumns: ColumnDef<any, any>[] = [
-  {
-    accessorKey: 'name',
-    header: 'Account',
-    cell: ({ row }) => (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{row.original.name}</span>
-        {row.original.isActive === false && <StatusChip status="inactive" size="xs" />}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'accountType',
-    header: 'Type',
-    cell: ({ getValue }) => {
-      const t = getValue() as AccountType;
-      return (
-        <Chip tone={TYPE_TONE[t] ?? 'neutral'} size="xs">
-          {TYPE_LABEL[t] ?? t}
-        </Chip>
-      );
-    },
-  },
-  {
-    accessorKey: 'balance',
-    header: 'Balance',
-    cell: ({ getValue }) => (
-      <span
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontWeight: 600,
-          color: Number(getValue()) < 0 ? 'var(--brand-danger)' : 'var(--text-strong)',
-        }}
-      >
-        {inr(getValue())}
-      </span>
-    ),
-  },
-];
-
 /**
- * Money accounts (Phase F). Lists each account with its live balance and, on
- * selection, shows a per-account ledger/statement. New accounts can be created
- * (bank, petty cash, owner, clearing); system accounts also appear automatically
- * once money is posted to them.
+ * Accounts (#530): tabs Accounts · Daily cash book · Transfers on the Page
+ * Frame. Accounts is a balance list; a row opens that account's statement in
+ * place, with the tabs still one click away. `{ openAccountId }` opens a
+ * statement from another page, `{ openAccountsTab }` a tab.
  */
 export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation }) => {
-  const toast = useToast();
-  const qc = useQueryClient();
-  const stationId = selectedStation?.id ?? null;
-  const s = selectedStation?.settings || {};
-  const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
+  const stationId: string | null = selectedStation?.id ?? null;
+  const timeZone: string | undefined = selectedStation?.settings?.timezone;
   // Bank work is an Office Record: default to the Entry Date, never the sales day (ADR 0005).
-  const todayEntry = () => resolveEntryDate({ timeZone: s.timezone });
+  const today = resolveEntryDate({ timeZone });
 
-  const { data: accounts, isLoading } = useFinancialAccounts(stationId);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const accountsQ = useFinancialAccounts(stationId);
+  const accounts = useMemo<AccountRow[]>(() => accountsQ.data ?? [], [accountsQ.data]);
 
-  // Tabs: Accounts (live balances) · Daily cash book (moved from Reports, #540).
-  // The dashboard "Daily cash book ›" link and Office Record pins deep-link here.
+  // A deep link (Dashboard "Daily cash book ›", Reports › Cash & bank) is derived
+  // from the intent until the operator acts, then the page's own state takes over.
   const intent = useNavIntent();
-  const intentCashBook = intent?.openAccountsTab === 'cash-book';
-  const [selectedTab, setSelectedTab] = useState<AccountsTab>('accounts');
-  const activeTab: AccountsTab = intentCashBook ? 'cash-book' : selectedTab;
+  const [pickedTab, setPickedTab] = useState<AccountsTab>('accounts');
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const activeTab: AccountsTab = intent?.openAccountId
+    ? 'accounts'
+    : (intent?.openAccountsTab ?? pickedTab);
+  const selectedId = intent?.openAccountId ?? pickedId;
+  const selected =
+    activeTab === 'accounts' ? (accounts.find((a) => a.id === selectedId) ?? null) : null;
+
   const setActiveTab = (tab: AccountsTab) => {
     clearNavIntent();
-    setSelectedTab(tab);
+    setPickedId(null);
+    setPickedTab(tab);
   };
-  // One tab bar for the list and the per-account statement, so the Daily cash
-  // book stays one click away while a ledger is open.
-  const tabsToolbar = (
-    <Tabs
-      aria-label="Accounts"
-      activeId={activeTab}
-      onChange={(id) => setActiveTab(id as AccountsTab)}
-      tabs={[
-        { id: 'accounts', label: 'Accounts', concept: 'accounts' },
-        {
-          id: 'cash-book',
-          label: 'Daily cash book',
-          concept: 'daily-cash-book',
-        },
-      ]}
-    />
-  );
-  const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
+  const openAccount = (id: string | null) => {
+    clearNavIntent();
+    setPickedTab('accounts');
+    setPickedId(id);
+  };
 
-  // Overview totals for the list header (cash = cash-in-hand + petty cash).
-  const overview = useMemo(() => {
-    let cash = 0,
-      bank = 0,
-      clearing = 0,
-      net = 0;
-    for (const a of accounts || []) {
-      const b = Number(a.balance || 0);
-      net += b;
-      if (a.accountType === 'CASH_IN_HAND' || a.accountType === 'PETTY_CASH') cash += b;
-      else if (a.accountType === 'BANK') bank += b;
-      else if (a.accountType === 'MERCHANT_CLEARING') clearing += b;
-    }
-    return { cash, bank, clearing, net };
-  }, [accounts]);
+  // Each drawer mounts fresh per open (keyed), so its form starts from its defaults.
+  const [drawer, setDrawer] = useState<AccountDrawer | null>(null);
+  const [drawerKey, setDrawerKey] = useState(0);
+  const open = (d: AccountDrawer) => {
+    setDrawerKey((k) => k + 1);
+    setDrawer(d);
+  };
 
-  // Create drawer state
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [accountType, setAccountType] = useState<AccountType>('BANK');
-  const [name, setName] = useState('');
-  const [openingBalance, setOpeningBalance] = useState('');
-  const [openingDate, setOpeningDate] = useState('');
-  const [bankName, setBankName] = useState('');
-  const [accountNo, setAccountNo] = useState('');
-  const [ifsc, setIfsc] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Transfer drawer state
-  const [transferOpen, setTransferOpen] = useState(false);
-  const [fromAccountId, setFromAccountId] = useState('');
-  const [toAccountId, setToAccountId] = useState('');
-  const [transferAmount, setTransferAmount] = useState('');
-  const [transferDate, setTransferDate] = useState('');
-  const [transferNotes, setTransferNotes] = useState('');
-  const [transferError, setTransferError] = useState<string | null>(null);
-  const [transferSubmitting, setTransferSubmitting] = useState(false);
-
-  // Settlement drawer state (clearing → bank, net of MDR)
-  const [settleOpen, setSettleOpen] = useState(false);
-  const [settleBankId, setSettleBankId] = useState('');
-  const [settleGross, setSettleGross] = useState('');
-  const [settleFee, setSettleFee] = useState('');
-  const [settleDate, setSettleDate] = useState('');
-  const [settleNotes, setSettleNotes] = useState('');
-  const [settleError, setSettleError] = useState<string | null>(null);
-  const [settleSubmitting, setSettleSubmitting] = useState(false);
-
-  // Manual entry drawer (bank charge / interest / adjustment / opening balance)
-  const [entryOpen, setEntryOpen] = useState(false);
-  const [entryKind, setEntryKind] = useState<
-    'CHARGE' | 'INTEREST_PAID' | 'INTEREST_EARNED' | 'ADJ_IN' | 'ADJ_OUT' | 'OPENING'
-  >('CHARGE');
-  const [entryAmount, setEntryAmount] = useState('');
-  const [entryDate, setEntryDate] = useState('');
-  const [entryNotes, setEntryNotes] = useState('');
-  const [entryError, setEntryError] = useState<string | null>(null);
-  const [entrySubmitting, setEntrySubmitting] = useState(false);
-
-  const selected = useMemo(
-    () => (accounts || []).find((a: any) => a.id === selectedId) || null,
-    [accounts, selectedId],
-  );
-  const ledgerQ = useAccountLedger(selectedId, {
-    from: range.from,
-    to: range.to,
-  });
-  const ledger = ledgerQ.data;
-  // The selected account's statement (Statement module): money in = Debit, out = Credit.
-  const statement = useMemo(
-    () =>
-      buildLedgerStatement(moneyEntries(ledger?.entries || [], { detail: accountEntryDetail }), {
-        kind: 'account',
-        opening: ledger?.periodOpeningBalance ?? 0,
-      }),
-    [ledger],
+  const transferButton = (primary: boolean) => (
+    <Button
+      variant={primary ? 'primary' : 'secondary'}
+      size="sm"
+      leftIcon={<Icon name="arrow-left-right" size="sm" />}
+      onClick={() => open('transfer')}
+      disabled={accounts.length < 2}
+    >
+      {primary ? 'New transfer' : 'Transfer'}
+    </Button>
   );
 
-  const openSettle = () => {
-    const banks = (accounts || []).filter((a: any) => a.accountType === 'BANK');
-    setSettleBankId(banks[0]?.id ?? '');
-    setSettleGross(selected ? String(Number(selected.balance) || '') : '');
-    setSettleFee('');
-    setSettleDate(todayEntry());
-    setSettleNotes('');
-    setSettleError(null);
-    setSettleOpen(true);
-  };
+  // One primary button per view; the Daily cash book is a read view.
+  const actions = selected ? (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        leftIcon={<Icon name="arrow-left" size="sm" />}
+        onClick={() => openAccount(null)}
+      >
+        All accounts
+      </Button>
+      <Button
+        variant={selected.accountType === 'MERCHANT_CLEARING' ? 'secondary' : 'primary'}
+        size="sm"
+        leftIcon={<Icon name="plus" size="sm" />}
+        onClick={() => open('entry')}
+      >
+        Add entry
+      </Button>
+      {selected.accountType === 'MERCHANT_CLEARING' && (
+        <Button
+          variant="primary"
+          size="sm"
+          leftIcon={<Icon name="banknote" size="sm" />}
+          onClick={() => open('settle')}
+        >
+          Settle to bank
+        </Button>
+      )}
+    </>
+  ) : activeTab === 'accounts' ? (
+    <>
+      {transferButton(false)}
+      <Button
+        variant="primary"
+        size="sm"
+        leftIcon={<Icon name="plus" size="sm" />}
+        onClick={() => open('create')}
+      >
+        New account
+      </Button>
+    </>
+  ) : activeTab === 'transfers' ? (
+    transferButton(true)
+  ) : undefined;
 
-  const submitSettle = async () => {
-    if (!selected) return;
-    if (!settleBankId) {
-      setSettleError('Choose the bank the batch settles into.');
-      return;
-    }
-    if (!(Number(settleGross) > 0)) {
-      setSettleError('Enter the gross batch amount.');
-      return;
-    }
-    if (Number(settleFee || 0) > Number(settleGross)) {
-      setSettleError('Fee cannot exceed the gross amount.');
-      return;
-    }
-    setSettleSubmitting(true);
-    setSettleError(null);
-    try {
-      await financeSvc.recordSettlement({
-        clearingAccountId: selected.id,
-        bankAccountId: settleBankId,
-        grossAmount: Number(settleGross),
-        feeAmount: Number(settleFee) || 0,
-        date: settleDate || null,
-        notes: settleNotes || null,
-      });
-      setSettleOpen(false);
-      await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
-      await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
-      await qc.invalidateQueries({ queryKey: ['account-ledger'] });
-      await qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() });
-      toast.success('Settlement recorded.');
-    } catch (err: any) {
-      setSettleError(err.message || 'Failed to record settlement.');
-    } finally {
-      setSettleSubmitting(false);
-    }
-  };
+  const typeDetail = selected && accountTypeDetail(selected.name, selected.accountType);
 
-  const ENTRY_KIND: Record<
-    string,
-    {
-      direction: 'in' | 'out';
-      sourceType: 'BANK_CHARGE' | 'INTEREST' | 'ADJUSTMENT';
-      label: string;
-    }
-  > = {
-    CHARGE: { direction: 'out', sourceType: 'BANK_CHARGE', label: 'Bank charge / fee' },
-    INTEREST_PAID: { direction: 'out', sourceType: 'INTEREST', label: 'Interest paid' },
-    INTEREST_EARNED: { direction: 'in', sourceType: 'INTEREST', label: 'Interest earned' },
-    ADJ_IN: { direction: 'in', sourceType: 'ADJUSTMENT', label: 'Adjustment (add)' },
-    ADJ_OUT: { direction: 'out', sourceType: 'ADJUSTMENT', label: 'Adjustment (deduct)' },
-  };
-
-  const openEntry = () => {
-    setEntryKind('CHARGE');
-    setEntryAmount('');
-    setEntryDate(todayEntry());
-    setEntryNotes('');
-    setEntryError(null);
-    setEntryOpen(true);
-  };
-
-  // Switching to "Set opening balance" prefills the account's current opening figure/date.
-  const changeEntryKind = (kind: typeof entryKind) => {
-    setEntryKind(kind);
-    setEntryError(null);
-    if (kind === 'OPENING') {
-      setEntryAmount(selected ? String(Number(selected.openingBalance) || '') : '');
-      setEntryDate(selected?.openingDate || '');
-    }
-  };
-
-  const submitEntry = async () => {
-    if (!selected) return;
-
-    // Opening balance is a special entry: it rewrites the account's OPENING
-    // ledger entry (0 and negative allowed — negative = overdrawn OD account).
-    if (entryKind === 'OPENING') {
-      const opening = Number(entryAmount);
-      if (!Number.isFinite(opening)) {
-        setEntryError('Enter a valid opening balance (0 is allowed).');
-        return;
-      }
-      setEntrySubmitting(true);
-      setEntryError(null);
-      try {
-        await financeSvc.setOpeningBalance(selected.id, {
-          openingBalance: opening,
-          openingDate: entryDate || null,
-        });
-        setEntryOpen(false);
-        await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
-        await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
-        await qc.invalidateQueries({ queryKey: ['account-ledger'] });
-        await qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() });
-        toast.success('Opening balance updated.');
-      } catch (err: any) {
-        setEntryError(err.message || 'Failed to update opening balance.');
-      } finally {
-        setEntrySubmitting(false);
-      }
-      return;
-    }
-
-    if (!(Number(entryAmount) > 0)) {
-      setEntryError('Enter an amount greater than zero.');
-      return;
-    }
-    setEntrySubmitting(true);
-    setEntryError(null);
-    try {
-      const kind = ENTRY_KIND[entryKind];
-      await financeSvc.recordAdjustment(selected.id, {
-        direction: kind.direction,
-        amount: Number(entryAmount),
-        sourceType: kind.sourceType,
-        date: entryDate || null,
-        notes: entryNotes || kind.label,
-      });
-      setEntryOpen(false);
-      await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
-      await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
-      await qc.invalidateQueries({ queryKey: ['account-ledger'] });
-      await qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() });
-      toast.success('Entry recorded.');
-    } catch (err: any) {
-      setEntryError(err.message || 'Failed to record entry.');
-    } finally {
-      setEntrySubmitting(false);
-    }
-  };
-
-  const openCreate = () => {
-    setAccountType('BANK');
-    setName('');
-    setOpeningBalance('');
-    setOpeningDate('');
-    setBankName('');
-    setAccountNo('');
-    setIfsc('');
-    setError(null);
-    setDrawerOpen(true);
-  };
-
-  const openTransfer = () => {
-    const list = accounts || [];
-    setFromAccountId(list[0]?.id ?? '');
-    setToAccountId(list[1]?.id ?? '');
-    setTransferAmount('');
-    setTransferDate(todayEntry());
-    setTransferNotes('');
-    setTransferError(null);
-    setTransferOpen(true);
-  };
-
-  const submitTransfer = async () => {
-    if (!fromAccountId || !toAccountId) {
-      setTransferError('Choose both accounts.');
-      return;
-    }
-    if (fromAccountId === toAccountId) {
-      setTransferError('From and To must be different accounts.');
-      return;
-    }
-    if (!(Number(transferAmount) > 0)) {
-      setTransferError('Enter an amount greater than zero.');
-      return;
-    }
-    setTransferSubmitting(true);
-    setTransferError(null);
-    try {
-      await financeSvc.recordTransfer({
-        fromAccountId,
-        toAccountId,
-        amount: Number(transferAmount),
-        date: transferDate || null,
-        notes: transferNotes || null,
-      });
-      setTransferOpen(false);
-      await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
-      await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
-      await qc.invalidateQueries({ queryKey: ['account-ledger'] });
-      await qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() });
-      toast.success('Transfer recorded.');
-    } catch (err: any) {
-      setTransferError(err.message || 'Failed to record transfer.');
-    } finally {
-      setTransferSubmitting(false);
-    }
-  };
-
-  const submit = async () => {
-    if (!name.trim()) {
-      setError('Give the account a name.');
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      const metadata: Record<string, unknown> = {};
-      if (accountType === 'BANK') {
-        if (bankName.trim()) metadata.bankName = bankName.trim();
-        if (accountNo.trim()) metadata.accountNoMasked = accountNo.trim();
-        if (ifsc.trim()) metadata.ifsc = ifsc.trim();
-      }
-      await financeSvc.createAccount({
-        stationId,
-        accountType,
-        name: name.trim(),
-        openingBalance: Number(openingBalance) || 0,
-        openingDate: openingDate || null,
-        metadata: Object.keys(metadata).length ? metadata : null,
-      });
-      setDrawerOpen(false);
-      await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
-      await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
-      toast.success('Account created.');
-    } catch (err: any) {
-      setError(err.message || 'Failed to create account.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // ---- Per-account ledger view ----
-  if (selected && activeTab === 'accounts') {
-    const opening = statement.opening ?? 0;
-    const closing = statement.closing;
-
-    return (
-      <PageLayout
-        title={selected.name}
-        subtitle={`${TYPE_LABEL[selected.accountType as AccountType] ?? selected.accountType} · statement`}
-        toolbar={tabsToolbar}
-        actions={
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {selected.accountType === 'MERCHANT_CLEARING' && (
-              <Button variant="primary" size="sm" leftIcon={<Banknote />} onClick={openSettle}>
-                Settle to bank
-              </Button>
-            )}
-            <Button variant="secondary" size="sm" leftIcon={<Plus />} onClick={openEntry}>
-              Add entry
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<ArrowLeft />}
-              onClick={() => setSelectedId(null)}
-            >
-              All accounts
-            </Button>
-          </div>
+  return (
+    <>
+      <PageFrame
+        route={ROUTES.accounts}
+        title={selected ? selected.name : undefined}
+        subtitle={
+          selected ? (
+            <span className="inline-flex items-center gap-2">
+              {typeDetail && <AccountTypeChip type={selected.accountType} />}
+              Account statement
+            </span>
+          ) : (
+            'Cash, bank, petty cash and card/UPI clearing balances.'
+          )
+        }
+        actions={actions}
+        tabs={
+          <Tabs
+            id={TABS_ID}
+            aria-label="Accounts"
+            activeId={activeTab}
+            onChange={(id) => setActiveTab(id as AccountsTab)}
+            tabs={TABS}
+          />
         }
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
-          <KpiStrip columns="auto">
-            <KpiTile label="Opening" value={inr(opening)} />
-            <KpiTile label="Money in" value={inr(statement.totals.debit)} />
-            <KpiTile label="Money out" value={inr(statement.totals.credit)} />
-            <KpiTile
-              alert={closing < 0 ? 'danger' : undefined}
-              label="Closing"
-              value={inr(closing)}
+        <div {...tabPanelProps(TABS_ID, activeTab)}>
+          {activeTab === 'cash-book' ? (
+            <DailyCashBook selectedStation={selectedStation} />
+          ) : activeTab === 'transfers' ? (
+            <TransfersView selectedStation={selectedStation} />
+          ) : selected ? (
+            <AccountStatement
+              key={selected.id}
+              account={selected}
+              selectedStation={selectedStation}
             />
-          </KpiStrip>
-          <DataSection
-            title="account statement"
-            query={ledgerQ}
-            enabled
-            placeholderHeight={240}
-            shape="bare"
-          >
-            <StatementView
-              statement={statement}
-              label={`${selected.name} statement`}
-              emptyMessage="No movements in this period."
-            />
-          </DataSection>
-        </div>
-
-        <Drawer isOpen={settleOpen} onClose={() => setSettleOpen(false)} title="Settle to Bank">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {settleError && (
-              <div
-                style={{
-                  backgroundColor: 'var(--state-danger-bg)',
-                  color: 'var(--state-danger-fg)',
-                  padding: '10px 12px',
-                  borderRadius: 'var(--radius-input)',
-                  fontSize: '12px',
-                }}
-              >
-                {settleError}
-              </div>
-            )}
-            <Field label="Settle into (Bank)">
-              <Select
-                value={settleBankId}
-                onChange={(e) => setSettleBankId(e.target.value)}
-                disabled={settleSubmitting}
-              >
-                <option value="">— Select bank —</option>
-                {(accounts || [])
-                  .filter((a: any) => a.accountType === 'BANK')
-                  .map((a: any) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-              </Select>
-            </Field>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <Field label="Gross Batch (₹)">
-                <NumberInput
-                  placeholder="0"
-                  value={settleGross}
-                  onChange={(e) => setSettleGross(e.target.value)}
-                  disabled={settleSubmitting}
-                />
-              </Field>
-              <Field label="MDR / Fee (₹)">
-                <NumberInput
-                  placeholder="0"
-                  value={settleFee}
-                  onChange={(e) => setSettleFee(e.target.value)}
-                  disabled={settleSubmitting}
-                />
-              </Field>
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: '13px',
-                backgroundColor: 'var(--bg-surface-alt)',
-                border: '1px solid var(--border-soft)',
-                borderRadius: 'var(--radius-input)',
-                padding: '10px 12px',
-              }}
-            >
-              <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Net to bank</span>
-              <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
-                {inr(Math.max(0, (Number(settleGross) || 0) - (Number(settleFee) || 0)))}
-              </strong>
-            </div>
-            <Field label="Date">
-              <DateField
-                value={settleDate}
-                onChange={(e) => setSettleDate(e.target.value)}
-                disabled={settleSubmitting}
-              />
-            </Field>
-            <Field label="Notes">
-              <TextInput
-                placeholder="e.g. HDFC POS batch 05-Jul"
-                value={settleNotes}
-                onChange={(e) => setSettleNotes(e.target.value)}
-                disabled={settleSubmitting}
-              />
-            </Field>
-            <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-              Clearing drops by the gross; bank rises by the net; the fee is booked as a cost.
-            </span>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <Button
-                variant="primary"
-                size="md"
-                fullWidth
-                loading={settleSubmitting}
-                onClick={submitSettle}
-              >
-                Record Settlement
-              </Button>
-              <Button
-                variant="secondary"
-                size="md"
-                disabled={settleSubmitting}
-                onClick={() => setSettleOpen(false)}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </Drawer>
-
-        <Drawer isOpen={entryOpen} onClose={() => setEntryOpen(false)} title="Add Entry">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {entryError && (
-              <div
-                style={{
-                  backgroundColor: 'var(--state-danger-bg)',
-                  color: 'var(--state-danger-fg)',
-                  padding: '10px 12px',
-                  borderRadius: 'var(--radius-input)',
-                  fontSize: '12px',
-                }}
-              >
-                {entryError}
-              </div>
-            )}
-            <Field label="Type">
-              <Select
-                value={entryKind}
-                onChange={(e) => changeEntryKind(e.target.value as any)}
-                disabled={entrySubmitting}
-              >
-                <option value="CHARGE">Bank charge / fee (out)</option>
-                <option value="INTEREST_PAID">Interest paid — e.g. OD (out)</option>
-                <option value="INTEREST_EARNED">Interest earned (in)</option>
-                <option value="ADJ_IN">Adjustment — add (in)</option>
-                <option value="ADJ_OUT">Adjustment — deduct (out)</option>
-                <option value="OPENING">Set opening balance</option>
-              </Select>
-            </Field>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <Field label={entryKind === 'OPENING' ? 'Opening balance (₹)' : 'Amount (₹)'}>
-                <NumberInput
-                  placeholder="0"
-                  value={entryAmount}
-                  onChange={(e) => setEntryAmount(e.target.value)}
-                  disabled={entrySubmitting}
-                />
-              </Field>
-              <Field label={entryKind === 'OPENING' ? 'As of' : 'Date'}>
-                <DateField
-                  value={entryDate}
-                  onChange={(e) => setEntryDate(e.target.value)}
-                  disabled={entrySubmitting}
-                />
-              </Field>
-            </div>
-            {entryKind !== 'OPENING' && (
-              <Field label="Notes">
-                <TextInput
-                  placeholder="e.g. Quarterly account maintenance fee"
-                  value={entryNotes}
-                  onChange={(e) => setEntryNotes(e.target.value)}
-                  disabled={entrySubmitting}
-                />
-              </Field>
-            )}
-            <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-              {entryKind === 'OPENING'
-                ? 'Sets the balance the account started with (negative = overdrawn OD account). Rewrites the opening entry only — later movements are untouched.'
-                : 'Record bank-originated items (charges, fees, interest) so your book balance matches the statement.'}
-            </span>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <Button
-                variant="primary"
-                size="md"
-                fullWidth
-                loading={entrySubmitting}
-                onClick={submitEntry}
-              >
-                {entryKind === 'OPENING' ? 'Save Opening Balance' : 'Add Entry'}
-              </Button>
-              <Button
-                variant="secondary"
-                size="md"
-                disabled={entrySubmitting}
-                onClick={() => setEntryOpen(false)}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </Drawer>
-      </PageLayout>
-    );
-  }
-
-  // ---- Accounts list ----
-  return (
-    <PageLayout
-      title="Accounts"
-      subtitle="Cash, bank, petty cash and card/UPI clearing balances."
-      toolbar={tabsToolbar}
-      actions={
-        // Account actions only fit the Accounts tab; the cash book is a read view.
-        activeTab === 'accounts' ? (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<ArrowLeftRight />}
-              onClick={openTransfer}
-              disabled={(accounts || []).length < 2}
-            >
-              Transfer
-            </Button>
-            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openCreate}>
-              New Account
-            </Button>
-          </div>
-        ) : undefined
-      }
-    >
-      {activeTab === 'cash-book' ? (
-        <DailyCashBook selectedStation={selectedStation} />
-      ) : isLoading ? (
-        <LoadingSpinner />
-      ) : (accounts || []).length === 0 ? (
-        <EmptyState
-          icon={<Wallet />}
-          title="No accounts yet"
-          description="Create a bank / petty-cash / owner account, or record a collection or expense — system accounts (Cash in Hand, Bank) appear automatically."
-        />
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <KpiStrip columns="auto">
-            <KpiTile
-              alert={overview.cash < 0 ? 'danger' : undefined}
-              label="Cash"
-              value={inr(overview.cash)}
-              hint="in hand + petty"
-            />
-            <KpiTile
-              alert={overview.bank < 0 ? 'danger' : undefined}
-              label="Bank"
-              value={inr(overview.bank)}
-            />
-            <KpiTile
-              label="Card/UPI clearing"
-              value={inr(overview.clearing)}
-              hint="awaiting settlement"
-            />
-            <KpiTile
-              alert={overview.net < 0 ? 'danger' : undefined}
-              label="Net position"
-              value={inr(overview.net)}
-            />
-          </KpiStrip>
-
-          <Panel flush title="Accounts">
-            <DataTable
-              bare
-              columns={accountColumns}
-              data={accounts || []}
-              emptyMessage="No accounts."
-              getRowId={(r: any) => r.id}
-              onRowClick={(a: any) => {
-                setSelectedId(a.id);
-                setRange(computeRange('this-month', clock));
-              }}
-            />
-          </Panel>
-        </div>
-      )}
-
-      <Drawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} title="New Account">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {error && (
-            <div
-              style={{
-                backgroundColor: 'var(--state-danger-bg)',
-                color: 'var(--state-danger-fg)',
-                padding: '10px 12px',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '12px',
-              }}
-            >
-              {error}
-            </div>
+          ) : (
+            <AccountsList accounts={accounts} query={accountsQ} onOpen={(a) => openAccount(a.id)} />
           )}
-          <Field label="Type">
-            <Select
-              value={accountType}
-              onChange={(e) => setAccountType(e.target.value as AccountType)}
-              disabled={submitting}
-            >
-              <option value="BANK">Bank</option>
-              <option value="PETTY_CASH">Petty Cash</option>
-              <option value="CASH_IN_HAND">Cash in Hand</option>
-              <option value="MERCHANT_CLEARING">Card/UPI Clearing</option>
-              <option value="CMS">OMC Card Settlement (CMS)</option>
-              <option value="OWNER">Owner</option>
-            </Select>
-          </Field>
-          <Field label="Name">
-            <TextInput
-              placeholder={TYPE_LABEL[accountType]}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={submitting}
-            />
-          </Field>
-          {accountType === 'BANK' && (
-            <>
-              <Field label="Bank Name">
-                <TextInput
-                  placeholder="e.g. HDFC Bank"
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
-                  disabled={submitting}
-                />
-              </Field>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <Field label="Account No.">
-                  <TextInput
-                    placeholder="****1234"
-                    value={accountNo}
-                    onChange={(e) => setAccountNo(e.target.value)}
-                    disabled={submitting}
-                  />
-                </Field>
-                <Field label="IFSC">
-                  <TextInput
-                    placeholder="HDFC0000123"
-                    value={ifsc}
-                    onChange={(e) => setIfsc(e.target.value)}
-                    disabled={submitting}
-                  />
-                </Field>
-              </div>
-            </>
-          )}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Field label="Opening Balance (₹)">
-              <NumberInput
-                placeholder="0"
-                value={openingBalance}
-                onChange={(e) => setOpeningBalance(e.target.value)}
-                disabled={submitting}
-              />
-            </Field>
-            <Field label="As of">
-              <DateField
-                value={openingDate}
-                onChange={(e) => setOpeningDate(e.target.value)}
-                disabled={submitting}
-              />
-            </Field>
-          </div>
-          <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-            The opening balance seeds the ledger. You can set or correct it later from the account's
-            Add entry drawer.
-          </span>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Button variant="primary" size="md" fullWidth loading={submitting} onClick={submit}>
-              Create Account
-            </Button>
-            <Button
-              variant="secondary"
-              size="md"
-              disabled={submitting}
-              onClick={() => setDrawerOpen(false)}
-            >
-              Cancel
-            </Button>
-          </div>
         </div>
-      </Drawer>
+      </PageFrame>
 
-      <Drawer isOpen={transferOpen} onClose={() => setTransferOpen(false)} title="Transfer Money">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {transferError && (
-            <div
-              style={{
-                backgroundColor: 'var(--state-danger-bg)',
-                color: 'var(--state-danger-fg)',
-                padding: '10px 12px',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '12px',
-              }}
-            >
-              {transferError}
-            </div>
-          )}
-          <Field label="From">
-            <Select
-              value={fromAccountId}
-              onChange={(e) => setFromAccountId(e.target.value)}
-              disabled={transferSubmitting}
-            >
-              <option value="">— Select account —</option>
-              {(accounts || []).map((a: any) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} ({inr(a.balance)})
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="To">
-            <Select
-              value={toAccountId}
-              onChange={(e) => setToAccountId(e.target.value)}
-              disabled={transferSubmitting}
-            >
-              <option value="">— Select account —</option>
-              {(accounts || []).map((a: any) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} ({inr(a.balance)})
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Field label="Amount (₹)">
-              <NumberInput
-                placeholder="0"
-                value={transferAmount}
-                onChange={(e) => setTransferAmount(e.target.value)}
-                disabled={transferSubmitting}
-              />
-            </Field>
-            <Field label="Date">
-              <DateField
-                value={transferDate}
-                onChange={(e) => setTransferDate(e.target.value)}
-                disabled={transferSubmitting}
-              />
-            </Field>
-          </div>
-          <Field label="Notes">
-            <TextInput
-              placeholder="e.g. Daily banking / office float"
-              value={transferNotes}
-              onChange={(e) => setTransferNotes(e.target.value)}
-              disabled={transferSubmitting}
-            />
-          </Field>
-          <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-            Records a paired out/in entry on both accounts (e.g. drawer → bank deposit, or a
-            petty-cash float).
-          </span>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Button
-              variant="primary"
-              size="md"
-              fullWidth
-              loading={transferSubmitting}
-              onClick={submitTransfer}
-            >
-              Record Transfer
-            </Button>
-            <Button
-              variant="secondary"
-              size="md"
-              disabled={transferSubmitting}
-              onClick={() => setTransferOpen(false)}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </Drawer>
-    </PageLayout>
+      <AccountDrawers
+        key={drawerKey}
+        drawer={drawer}
+        onClose={() => setDrawer(null)}
+        stationId={stationId}
+        today={today}
+        accounts={accounts}
+        selected={selected}
+      />
+    </>
   );
 };

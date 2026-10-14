@@ -31,6 +31,21 @@ export const CASH_ACCOUNT_TYPES: LedgerAccountType[] = ['CASH_IN_HAND', 'PETTY_C
 export const accountTypeLabel = (t: string | null | undefined): string =>
   (t && ACCOUNT_TYPE_LABEL[t as LedgerAccountType]) || t || '—';
 
+/**
+ * The account's type as a detail beside its name, or `null` when the name is
+ * exactly the type ("Cash in Hand", "petty cash"): the detail would only repeat
+ * it. Any other name keeps its type, even one that contains it ("Bank of
+ * Baroda" · Bank, "Owner Account" · Owner) (#530).
+ */
+export function accountTypeDetail(
+  name: string | null | undefined,
+  type: string | null | undefined,
+): string | null {
+  if (!type) return null;
+  const label = accountTypeLabel(type);
+  return (name ?? '').trim().toLowerCase() === label.trim().toLowerCase() ? null : label;
+}
+
 export const accountTypeRank = (t: string | null | undefined): number => {
   const i = ACCOUNT_TYPE_ORDER.indexOf(t as LedgerAccountType);
   return i === -1 ? ACCOUNT_TYPE_ORDER.length : i;

@@ -55,6 +55,12 @@ export interface DataTableProps<T> {
   highlightRowId?: string | null;
   /** Tighter cell padding so wide tables fit without horizontal scroll. */
   dense?: boolean;
+  /**
+   * With `onRowClick`: names each row ("Cash in Hand entries") and makes it
+   * reachable by Tab and opened by Enter or Space. Opt-in, so tables without it
+   * keep their tab order.
+   */
+  rowLabel?: (row: T) => string;
 }
 
 /**
@@ -78,6 +84,7 @@ export function DataTable<T>({
   bare = false,
   highlightRowId,
   dense = false,
+  rowLabel,
 }: DataTableProps<T>) {
   const cellPad = dense ? '6px 6px' : '9px 12px';
   const runTask = useRunTask();
@@ -179,6 +186,20 @@ export function DataTable<T>({
                       ? () => runTask(onRowClick(row.original), 'Could not open that row.')
                       : undefined
                   }
+                  {...(onRowClick && rowLabel
+                    ? {
+                        tabIndex: 0,
+                        'aria-label': rowLabel(row.original),
+                        className:
+                          'focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand',
+                        onKeyDown: (e: React.KeyboardEvent<HTMLTableRowElement>) => {
+                          if (e.target !== e.currentTarget) return;
+                          if (e.key !== 'Enter' && e.key !== ' ') return;
+                          e.preventDefault();
+                          runTask(onRowClick(row.original), 'Could not open that row.');
+                        },
+                      }
+                    : {})}
                   ref={(el) => {
                     if (el && isHighlighted && scrolledToRef.current !== row.id) {
                       scrolledToRef.current = row.id;

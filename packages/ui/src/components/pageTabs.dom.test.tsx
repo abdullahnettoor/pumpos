@@ -80,7 +80,7 @@ const cases: [string, string, () => React.ReactElement, string[]][] = [
     'Accounts',
     'Accounts',
     () => <AccountsPanel selectedStation={station} />,
-    ['Accounts', 'Daily cash book'],
+    ['Accounts', 'Daily cash book', 'Transfers'],
   ],
   [
     'Expenses',
@@ -159,9 +159,9 @@ describe('page tabs (#540)', () => {
 
   it('Accounts: the Daily cash book shows no account actions', async () => {
     renderWithProviders(<AccountsPanel selectedStation={station} />);
-    expect(await screen.findByRole('button', { name: /New Account/ })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /New account/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: /Daily cash book/ }));
-    expect(screen.queryByRole('button', { name: /New Account/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /New account/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Transfer/ })).toBeNull();
   });
 

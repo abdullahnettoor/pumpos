@@ -1,7 +1,8 @@
 import React from 'react';
 import { Button, Icon, StatusChip, type TableColumn } from '../../pump-ds/index.js';
 import { formatMoney } from '../../utils/format.js';
-import { accountTypeLabel } from '../../utils/ledgerLabels.js';
+import { accountTypeDetail as accountTypeDetailFor } from '../../utils/ledgerLabels.js';
+import { AccountTypeChip } from '../finance/AccountTypeChip.js';
 import type { CategoryRecordKind } from './CategoryManagerDrawer.js';
 
 /** An Expense or Income entry as the ledger lists it. */
@@ -29,31 +30,22 @@ const VOID_LABEL: Record<CategoryRecordKind, string> = {
   income: 'Void income entry',
 };
 
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 /**
- * The Funding Account's type as a detail line, only when the name does not
- * already say it as a whole word: "SBI Current · Bank" and "Ownership Capital
- * · Owner", never "Cash in Hand · Cash in Hand" or "Owner Account · Owner".
+ * The Funding Account's type beside its name, unless the name is exactly the
+ * type: "SBI Current · Bank", "Bank of Baroda · Bank", "Owner Account · Owner",
+ * never "Cash in Hand · Cash in Hand" (#530).
  */
 export function accountTypeDetail(row: Pick<CategoryRecord, 'accountName' | 'accountType'>) {
-  if (!row.accountType) return null;
-  const type = accountTypeLabel(row.accountType);
-  const word = new RegExp(
-    `(^|[^\\p{L}\\p{N}])${escapeRegExp(type.trim())}($|[^\\p{L}\\p{N}])`,
-    'iu',
-  );
-  return word.test(row.accountName?.trim() ?? '') ? null : type;
+  return accountTypeDetailFor(row.accountName, row.accountType);
 }
 
-/** Funding Account the money moved through, with its type as secondary text. */
+/** Funding Account the money moved through, with its type chip (#530). */
 const AccountCell: React.FC<{ row: CategoryRecord }> = ({ row }) => {
   if (!row.accountName) return <span className="text-ink-faint">—</span>;
-  const type = accountTypeDetail(row);
   return (
-    <span className="inline-flex flex-col leading-tight">
+    <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
       <span className="text-ink-strong">{row.accountName}</span>
-      {type && <span className="text-[12px] text-ink-muted">{type}</span>}
+      {accountTypeDetail(row) && <AccountTypeChip type={row.accountType} />}
     </span>
   );
 };
