@@ -5,7 +5,7 @@ import { MoneyCard } from '../cards/MoneyCard.js';
 import { ReceivablesPayablesCard } from '../cards/ReceivablesPayablesCard.js';
 import { TodayInOfficeCard } from '../cards/TodayInOfficeCard.js';
 import { YourShiftCard } from '../cards/YourShiftCard.js';
-import { ColumnHeader } from '../frame/ColumnHeader.js';
+import { SectionHeader } from '../../../pump-ds/section-header/index.js';
 import { useDashboard } from '../frame/DashboardContext.js';
 import { formatClockInZone } from '../../../utils/format.js';
 import { ROUTES } from '../../../nav-intent/routes.js';
@@ -19,7 +19,7 @@ const YourShiftHeader: React.FC = () => {
   const subtitle = shift?.openedAt
     ? `${shift.shiftSequence ? `Shift ${shift.shiftSequence} · ` : ''}since ${formatClockInZone(shift.openedAt, timeZone)}`
     : 'no shift open';
-  return <ColumnHeader title="Your shift" subtitle={subtitle} />;
+  return <SectionHeader title="Your shift" subtitle={subtitle} />;
 };
 
 /** Third column: Money (Owner/Manager/Accountant) or Your shift (Staff, in Money's place) (#506). */
@@ -31,7 +31,7 @@ export const MoneyColumn: React.FC = () => {
     <>
       {showMoney && (
         <>
-          <ColumnHeader
+          <SectionHeader
             title="Money"
             subtitle="office records by entry date"
             action={{

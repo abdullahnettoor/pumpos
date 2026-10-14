@@ -1,6 +1,6 @@
 import React from 'react';
 
-export interface ColumnHeaderProps {
+export interface SectionHeaderProps {
   /** Section title, rendered 12px semibold uppercase muted (FORECOURT, FUELS, MONEY). */
   title: string;
   /** 12px muted context line next to the title ("Shift 2 · 6 DUs"). */
@@ -10,13 +10,15 @@ export interface ColumnHeaderProps {
 }
 
 /**
- * The section head above a board column, rendered once per column; the cards
- * below it have no header of their own (DashboardCard `card`/`plain`).
+ * The one in-page section heading (#523), promoted from the Dashboard's column
+ * header: a 12px uppercase muted title, an optional context line and an
+ * optional link on the right. On the Dashboard it heads each board column and
+ * the cards below carry no header of their own (DashboardCard `card`/`plain`).
  */
-export const ColumnHeader: React.FC<ColumnHeaderProps> = ({ title, subtitle, action }) => (
+export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, action }) => (
   <header
     className="flex items-baseline gap-2 px-0.5"
-    data-testid={`column-header-${title.toLowerCase().replace(/\s+/g, '-')}`}
+    data-testid={`section-header-${title.toLowerCase().replace(/\s+/g, '-')}`}
   >
     <h2 className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">{title}</h2>
     {subtitle != null && subtitle !== '' && (
