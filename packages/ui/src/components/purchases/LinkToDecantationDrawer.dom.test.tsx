@@ -5,7 +5,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
-import { DataTable } from '../primitives/DataTable.js';
+import { InteractiveTable } from '../../pump-ds/index.js';
 import { buildPurchaseColumns } from './columns.js';
 
 const linkDecantationPurchase = vi.fn();
@@ -65,9 +65,13 @@ describe('purchase row link action (#469)', () => {
     const onLink = vi.fn();
     const onRow = vi.fn();
     renderWithProviders(
-      <DataTable
+      <InteractiveTable
         columns={buildPurchaseColumns(onLink)}
-        data={[purchase, { ...purchase, id: 'p-2', awaitingDecantation: false }]}
+        rows={[
+          { ...purchase, amount: 100 },
+          { ...purchase, id: 'p-2', awaitingDecantation: false, amount: 100 },
+        ]}
+        rowKey={(r) => r.id}
         onRowClick={onRow}
       />,
     );

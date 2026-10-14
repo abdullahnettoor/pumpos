@@ -104,11 +104,13 @@ describe('Reports sub-navigation (#540)', () => {
     renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
     fireEvent.click(item('GST')!);
     fireEvent.click(screen.getByRole('radio', { name: 'Purchases (ITC)' }));
-    const firstDate = () => document.querySelector('input[type="date"]') as HTMLInputElement;
-    fireEvent.change(firstDate(), { target: { value: '2026-01-01' } });
+    const period = () => screen.getByRole('button', { name: /GST period/ });
+    fireEvent.click(period());
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Last month/ }));
     fireEvent.click(screen.getByRole('radio', { name: 'Income' }));
+    expect(period().textContent).toMatch(/^Last month/);
     fireEvent.click(screen.getByRole('radio', { name: 'Purchases (ITC)' }));
-    expect(firstDate().value).toBe('2026-01-01');
+    expect(period().textContent).toMatch(/^Last month/);
   });
 
   it('Ledgers holds the party ledger and cash & bank', () => {

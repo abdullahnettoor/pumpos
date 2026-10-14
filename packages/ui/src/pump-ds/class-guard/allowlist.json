@@ -41,7 +41,6 @@
     "components/Auth/Login.tsx": 1,
     "components/Organization/ActivityFeed.tsx": 1,
     "components/primitives/ToastProvider.tsx": 1,
-    "components/purchases/LinkToDecantationDrawer.tsx": 1,
     "components/reports/AttendantHandoverReportPanel.tsx": 2,
     "components/reports/decantation/DecantationSummary.tsx": 2,
     "components/reports/decantation/DecantationVisitDrawer.tsx": 13,

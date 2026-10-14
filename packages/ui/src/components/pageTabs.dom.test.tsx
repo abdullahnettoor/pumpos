@@ -74,7 +74,7 @@ const cases: [string, string, () => React.ReactElement, string[]][] = [
     'Suppliers',
     'Suppliers',
     () => <PurchasesList selectedStation={station} />,
-    ['Suppliers', 'Purchases'],
+    ['Suppliers', 'Purchases', 'Payments'],
   ],
   [
     'Accounts',
