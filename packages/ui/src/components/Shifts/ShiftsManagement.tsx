@@ -830,22 +830,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               id: 'today',
               label: 'Live shift',
               concept: 'live-shift',
-              badge: activeShift ? (
-                <span
-                  style={{
-                    fontSize: '10px',
-                    padding: '1px 6px',
-                    borderRadius: '8px',
-                    background: 'var(--state-success-bg)',
-                    color: 'var(--state-success-fg)',
-                    fontWeight: 600,
-                    letterSpacing: '0.04em',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  Open
-                </span>
-              ) : undefined,
+              badge: activeShift ? 'Open' : undefined,
+              tone: 'success',
             },
             {
               id: 'business-day',

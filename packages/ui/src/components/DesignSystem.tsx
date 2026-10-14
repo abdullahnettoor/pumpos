@@ -747,7 +747,7 @@ const ComponentsPanel: React.FC = () => {
 
       <Section
         title="Tabs"
-        description="pump-ds Tabs: page-level tab bars. Icon + label on every tab or none (a mixed bar logs a dev warning). Icons come from the concept map, 14px muted, brand on the active tab. ←/→, Home and End move between tabs. Segmented switches inside a section use SegmentedControl instead."
+        description="pump-ds Tabs: page-level tab bars. Icon + label on every tab or none (a mixed bar logs a dev warning). Icons come only from the concept map (a tab names its concept; there is no free icon prop), 14px muted, brand on the active tab. A number badge is a count pill; text is a status chip in the tab tone. ←/→, Home and End move between tabs. Segmented switches inside a section use SegmentedControl instead."
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <Tabs
@@ -773,8 +773,8 @@ const ComponentsPanel: React.FC = () => {
             onChange={setPlainTab}
             tabs={[
               { id: 'summary', label: 'Summary' },
-              { id: 'shifts', label: 'Shifts', badge: 2, tone: 'warning' },
-              { id: 'audit', label: 'Audit log' },
+              { id: 'shifts', label: 'Shifts', badge: 'Open', tone: 'success' },
+              { id: 'audit', label: 'Audit log', badge: 2, tone: 'warning' },
             ]}
           />
         </div>

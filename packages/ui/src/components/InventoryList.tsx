@@ -3,7 +3,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { DataTable } from './primitives/DataTable.js';
-import { Tabs } from '../pump-ds/tabs/index.js';
+import { Tabs, type TabItem } from '../pump-ds/tabs/index.js';
 import { Drawer } from './Drawer.js';
 import { Field, NumberInput, TextInput, Select } from './primitives/Field.js';
 import { CloudTransactionService } from '../services/cloud.js';
@@ -529,8 +529,8 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
                     {
                       id: 'decantations',
                       label: 'Decantations',
-                      concept: 'decantations' as const,
-                    },
+                      concept: 'decantations',
+                    } satisfies TabItem,
                   ]
                 : []),
               { id: 'density', label: 'Density', concept: 'density' },

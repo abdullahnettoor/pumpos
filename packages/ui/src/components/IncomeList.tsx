@@ -28,7 +28,7 @@ import { CategoryAnalytics } from './expenses/CategoryAnalytics.js';
 import { IncomeGstPanel } from './reports/gst/IncomeGstPanel.js';
 import { ROUTES } from '../nav-intent/routes.js';
 import type { NavIntent } from '../nav-intent/store.js';
-import { Tabs } from '../pump-ds/tabs/index.js';
+import { Tabs, type TabItem } from '../pump-ds/tabs/index.js';
 import { buildIncomeColumns } from './income/columns.js';
 import { IncomeCategoryManagerDrawer } from './income/IncomeCategoryManagerDrawer.js';
 import { CASH_ACCOUNT_TYPES } from '../utils/ledgerLabels.js';
@@ -253,7 +253,9 @@ export const IncomeList: React.FC<IncomeListProps> = ({
                 label: 'By category',
                 concept: 'by-category',
               },
-              ...(reportsGst ? [] : [{ id: 'gst', label: 'GST', concept: 'gst' as const }]),
+              ...(reportsGst
+                ? []
+                : [{ id: 'gst', label: 'GST', concept: 'gst' } satisfies TabItem]),
             ]}
           />
         }

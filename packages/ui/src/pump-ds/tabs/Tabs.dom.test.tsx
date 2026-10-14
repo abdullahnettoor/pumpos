@@ -74,19 +74,17 @@ describe('pump-ds Tabs', () => {
     expect(lucide('General')).toContain('size-3.5'); // 14px
   });
 
-  it('accepts an explicit icon node for a tab with no concept', () => {
+  it('takes icons only from a concept, never a free icon node', () => {
     render(
       <Tabs
         aria-label="Demo"
         activeId="a"
         onChange={() => {}}
-        tabs={[
-          { id: 'a', label: 'A', icon: <svg data-testid="a-icon" /> },
-          { id: 'b', label: 'B', concept: 'tanks' },
-        ]}
+        // @ts-expect-error a tab's icon comes from its concept (one icon per concept)
+        tabs={[{ id: 'a', label: 'A', icon: <svg data-testid="a-icon" /> }]}
       />,
     );
-    expect(screen.getByTestId('a-icon')).toBeTruthy();
+    expect(screen.queryByTestId('a-icon')).toBeNull();
   });
 
   it('rejects a bar that mixes tabs with and without icons (dev warning)', () => {
@@ -134,5 +132,22 @@ describe('pump-ds Tabs', () => {
       />,
     );
     expect(screen.getByRole('tab', { name: /Stations/ }).textContent).toBe('Stations3');
+  });
+
+  it('shows a text badge as a status chip in the tab tone', () => {
+    render(
+      <Tabs
+        aria-label="Shift views"
+        activeId="b"
+        onChange={() => {}}
+        tabs={[
+          { id: 'a', label: 'Live shift', concept: 'live-shift', badge: 'Open', tone: 'success' },
+          { id: 'b', label: 'History', concept: 'history' },
+        ]}
+      />,
+    );
+    const chip = screen.getByText('Open').closest('span[class*="rounded-chip"]');
+    expect(chip?.className).toContain('text-success-fg');
+    expect(chip?.getAttribute('style')).toBeNull();
   });
 });

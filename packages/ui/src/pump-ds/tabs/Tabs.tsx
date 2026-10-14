@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import React, { useEffect, useRef, type KeyboardEvent } from 'react';
 import { cn } from '../lib/cn.js';
 import { ConceptIcon } from '../icon/ConceptIcon.js';
 import type { Concept } from '../icon/concepts.js';
+import { Chip } from '../chip/Chip.js';
 
-/** Tone of a tab's count badge when the tab is active. */
+/** Tone of a tab's badge: the count pill's fill when active, a text chip's tone always. */
 export type TabTone = 'brand' | 'info' | 'success' | 'warning' | 'danger' | 'neutral';
 
 export interface TabItem {
@@ -11,14 +12,13 @@ export interface TabItem {
   label: string;
   /**
    * The tab's concept: its icon comes from `CONCEPT_ICON`, so "Tanks" shows
-   * the same glyph here as in the sidebar, the Reports list and ⌘K.
+   * the same glyph here as in the sidebar, the Reports list and ⌘K. There
+   * is no free icon prop: a new subject gets a concept in `CONCEPT_ICON`.
    */
   concept?: Concept;
-  /** An icon node, for a tab whose subject has no concept (demos, one-offs). */
-  icon?: ReactNode;
-  /** A number renders as a count pill; any other node renders as-is. */
-  badge?: ReactNode;
-  /** Fill of the count pill on the active tab. Default `brand`. */
+  /** A number renders as a count pill; text ("Open") as a status chip. */
+  badge?: number | string;
+  /** Count pill fill on the active tab (default `brand`); text chip tone (default `neutral`). */
   tone?: TabTone;
   disabled?: boolean;
 }
@@ -41,7 +41,7 @@ const COUNT_ACTIVE: Record<TabTone, string> = {
   neutral: 'bg-ink-strong text-on-neutral',
 };
 
-const hasIcon = (tab: TabItem) => tab.concept != null || tab.icon != null;
+const hasIcon = (tab: TabItem) => tab.concept != null;
 
 /**
  * Page-level tab bar (#523), the look of the Dashboard baseline: 13px labels,
@@ -146,7 +146,7 @@ export const Tabs: React.FC<TabsProps> = ({
                   active ? 'text-brand' : 'text-ink-faint',
                 )}
               >
-                {tab.concept ? <ConceptIcon concept={tab.concept} size="xs" /> : tab.icon}
+                {tab.concept && <ConceptIcon concept={tab.concept} size="xs" />}
               </span>
             )}
             <span data-tab-label="">{tab.label}</span>
@@ -159,9 +159,11 @@ export const Tabs: React.FC<TabsProps> = ({
               >
                 {tab.badge}
               </span>
-            ) : (
-              tab.badge
-            )}
+            ) : tab.badge ? (
+              <Chip size="xs" tone={tab.tone ?? 'neutral'}>
+                {tab.badge}
+              </Chip>
+            ) : null}
           </button>
         );
       })}

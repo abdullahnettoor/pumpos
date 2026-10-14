@@ -17,7 +17,7 @@ import { ProductsCatalog } from './ProductsCatalog.js';
 import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
 import { ShiftTemplates } from './ShiftTemplates.js';
-import { Tabs } from '../../pump-ds/tabs/index.js';
+import { Tabs, type TabItem } from '../../pump-ds/tabs/index.js';
 import { PageFrame } from '../page-frame/index.js';
 import { ROUTES } from '../../nav-intent/routes.js';
 import { Field, TextInput, Select } from '../primitives/Field.js';
@@ -289,15 +289,15 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                 concept: 'shift-templates',
               },
               ...(userRole === 'Owner' || userRole === 'Manager'
-                ? [{ id: 'rules', label: 'Rules', concept: 'rules' as const }]
+                ? [{ id: 'rules', label: 'Rules', concept: 'rules' } satisfies TabItem]
                 : []),
               ...(canManageReportTemplates(userRole)
                 ? [
                     {
                       id: 'report-templates',
                       label: 'Report templates',
-                      concept: 'report-templates' as const,
-                    },
+                      concept: 'report-templates',
+                    } satisfies TabItem,
                   ]
                 : []),
             ]}

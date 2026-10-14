@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Station, stationLimitMessage, reachableStations, showStationDropdown } from '@pump/shared';
 import { PageLayout } from '../primitives/PageLayout.js';
-import { Tabs } from '../../pump-ds/tabs/index.js';
+import { Tabs, type TabItem } from '../../pump-ds/tabs/index.js';
 import { Chip, Button } from '../../pump-ds/index.js';
 import { UserRolesAssignment } from '../StationSetup/UserRolesAssignment.js';
 import { OrgProfile } from './OrgProfile.js';
@@ -116,8 +116,8 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
                   {
                     id: 'desktop',
                     label: 'Desktop app',
-                    concept: 'desktop-app' as const,
-                  },
+                    concept: 'desktop-app',
+                  } satisfies TabItem,
                 ]
               : []),
           ]}
