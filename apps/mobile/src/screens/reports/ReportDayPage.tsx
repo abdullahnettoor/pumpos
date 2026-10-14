@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { generateDssrPdf, useBusinessDayList, useToast } from '@pump/ui';
-import type { BusinessDayListItem, Station } from '@pump/shared';
+import { DSR_LABEL, type BusinessDayListItem, type Station } from '@pump/shared';
 import { DayTiles } from '../../components/DayTiles.js';
 import { SalesByProduct } from '../../components/SalesByProduct.js';
 import { plural, rupees } from '../../lib/format.js';
@@ -97,7 +97,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
     if (status === 'LIVE')
       return (
         <div className="px-4 py-10 text-center text-sm text-text-muted">
-          <p>This day is still live, so it has no DSSR yet.</p>
+          <p>This day is still live, so it has no DSR yet.</p>
           {liveTab && (
             <button
               type="button"
@@ -109,18 +109,18 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
           )}
         </div>
       );
-    if (status === 'REPORT_MISSING') return <Note>No DSSR for this day.</Note>;
-    if (loading) return <Note>Loading DSSR…</Note>;
+    if (status === 'REPORT_MISSING') return <Note>No DSR for this day.</Note>;
+    if (loading) return <Note>Loading DSR…</Note>;
     if (error)
       return (
         <div role="alert" className="px-4 py-10 text-center text-sm text-bad-fg">
-          Couldn’t load this DSSR.{' '}
+          Couldn’t load this DSR.{' '}
           <button type="button" onClick={refetch} className="font-bold text-accent">
             Retry
           </button>
         </div>
       );
-    if (!model) return <Note>This DSSR is not available.</Note>;
+    if (!model) return <Note>This DSR is not available.</Note>;
 
     return (
       <>
@@ -177,7 +177,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
 
   return (
     <DetailPage
-      title={`DSSR · ${businessDateLabel(date)}`}
+      title={`${DSR_LABEL} · ${businessDateLabel(date)}`}
       subtitle={[model ? plural(shiftCount, 'Shift') : '', station.name]
         .filter(Boolean)
         .join(' · ')}

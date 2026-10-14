@@ -82,7 +82,7 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
       severity: 'warning',
       category: 'day',
       title: `${businessDateLabel(date)} not closed`,
-      meta: 'DSSR is a draft until the day is closed',
+      meta: 'DSR is a draft until the day is closed',
       action: { kind: 'day', businessDate: date },
     });
   }

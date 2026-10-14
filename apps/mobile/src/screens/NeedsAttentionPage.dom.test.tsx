@@ -14,7 +14,7 @@ import type { TabKey } from '../lib/tabKey.js';
 const feed = vi.hoisted(() => ({ alerts: [] as unknown[] }));
 vi.mock('../lib/alerts.js', () => ({ useMobileAlerts: () => feed.alerts }));
 vi.mock('./reports/ReportDayPage.js', () => ({
-  ReportDayPage: (p: { businessDate: string }) => <p>DSSR page {p.businessDate}</p>,
+  ReportDayPage: (p: { businessDate: string }) => <p>DSR page {p.businessDate}</p>,
 }));
 vi.mock('./ShiftSummaryPage.js', () => ({
   ShiftSummaryPage: (p: { shiftId: string }) => <p>Shift summary page {p.shiftId}</p>,
@@ -44,7 +44,7 @@ const day: MobileAlert = {
   severity: 'warning',
   category: 'day',
   title: 'Thu, 8 Oct not closed',
-  meta: 'DSSR is a draft until the day is closed',
+  meta: 'DSR is a draft until the day is closed',
   action: { kind: 'day', businessDate: '2026-10-08' },
 };
 const credit: MobileAlert = {
@@ -193,9 +193,9 @@ describe('Needs attention page', () => {
       fireEvent.click(screen.getByRole('button', { name: title }));
     };
 
-    it("a day alert opens that day's DSSR", () => {
+    it("a day alert opens that day's DSR", () => {
       tapAlert(/Thu, 8 Oct not closed/);
-      expect(screen.getByText('DSSR page 2026-10-08')).toBeTruthy();
+      expect(screen.getByText('DSR page 2026-10-08')).toBeTruthy();
     });
 
     it('a credit alert opens the Customer page', () => {

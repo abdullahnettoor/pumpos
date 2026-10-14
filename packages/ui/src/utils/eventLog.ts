@@ -37,7 +37,7 @@ const EVENT_LABELS: Record<string, string> = {
   NOZZLE_READING_RECORDED: 'Nozzle reading recorded',
   CASH_DECLARED: 'Cash declared',
   HANDOVER_RECORDED: 'Handover recorded',
-  DSSR_GENERATED: 'DSSR generated',
+  DSSR_GENERATED: 'DSR generated',
   FUEL_SALE_RECORDED: 'Fuel sale recorded',
   RETAIL_SALE_CREATED: 'Sale recorded',
   RETAIL_SALE_VOIDED: 'Sale voided',

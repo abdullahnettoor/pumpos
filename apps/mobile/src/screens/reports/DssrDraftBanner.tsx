@@ -13,7 +13,7 @@ export const DssrDraftBanner: React.FC = () => (
     <div className="min-w-0 flex-1">
       <p className="text-[12.5px] font-semibold text-text-high">Draft · day not closed</p>
       <p className="text-[11px] text-text-muted">
-        Numbers can change until the day is closed on desktop and the DSSR is sealed.
+        Numbers can change until the day is closed on desktop and the DSR is sealed.
       </p>
     </div>
   </div>

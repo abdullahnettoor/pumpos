@@ -134,17 +134,17 @@ describe('dayView', () => {
       note: 'No report until it closes',
     });
   });
-  it('shows a closed day without a DSSR snapshot honestly and does not open it', () => {
+  it('shows a closed day without a DSR snapshot honestly and does not open it', () => {
     const v = dayView(item({ status: 'REPORT_MISSING', totalSales: 0, shiftCount: 0 }), null);
     expect(v).toMatchObject({
       statusLabel: 'Report missing',
       tone: 'bad',
       headline: 'Closed',
-      note: 'No DSSR for this day',
+      note: 'No DSR for this day',
       bar: 'none',
       volume: '—',
       action: 'none',
-      label: 'Thu 8 Oct, Report missing, Closed, No DSSR for this day',
+      label: 'Thu 8 Oct, Report missing, Closed, No DSR for this day',
     });
   });
 });

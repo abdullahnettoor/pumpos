@@ -97,7 +97,7 @@ dssrRouter.post('/daily/generate', writePolicyGuard('POST /dssr/daily/generate')
     return c.json(
       {
         success: false,
-        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to generate DSSR' },
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to generate DSR' },
       },
       403,
     );
@@ -273,7 +273,7 @@ dssrRouter.get('/daily/preview', async (c) => {
           success: false,
           error: {
             code: 'CONFLICT',
-            message: 'Closed business day has no persisted DSSR snapshot',
+            message: 'Closed business day has no persisted DSR snapshot',
           },
         },
         409,

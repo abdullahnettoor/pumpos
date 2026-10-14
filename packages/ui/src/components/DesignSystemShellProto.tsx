@@ -180,7 +180,7 @@ export const DesignSystemShellProtoPanel: React.FC = () => {
         },
         {
           id: 'c-dssr',
-          label: 'Close business day · generate DSSR',
+          label: 'Close business day · generate DSR',
           icon: <FileText />,
           keywords: ['close', 'report', 'eod'],
           onSelect: () => note('⌘K: Close business day'),

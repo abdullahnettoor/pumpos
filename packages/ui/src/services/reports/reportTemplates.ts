@@ -15,6 +15,7 @@ import {
   resolveSections,
 } from './reportConfig.js';
 import { showLogoFromStation } from './letterhead.js';
+import { DSR_FULL_NAME, DSR_LABEL } from '@pump/shared';
 
 /** The key each report's section list is saved under in `report_config`. */
 export type ReportTemplateId = 'shiftSummary' | 'dssr' | 'attendantReport';
@@ -101,9 +102,9 @@ const SHIFT_SUMMARY: ReportTemplate = {
 
 const DSSR: ReportTemplate = {
   id: 'dssr',
-  name: 'Daily DSSR',
+  name: DSR_LABEL,
   when: 'Printed when a business day is closed',
-  docTitle: 'Daily Sales Summary Record',
+  docTitle: DSR_FULL_NAME,
   defaults: DEFAULT_DSSR_CONFIG.sections,
   labels: DSSR_SECTION_LABELS,
   descriptions: {

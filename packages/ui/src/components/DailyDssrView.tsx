@@ -4,7 +4,7 @@ import { Button } from '../pump-ds/index.js';
 import { formatDateTime, formatSignedMoney, inr } from '../utils/format.js';
 import { ReportNote } from './reports/ReportNote.js';
 import { useRunTask } from '../utils/runTask.js';
-import { readDssrOmcCard, shiftDisplayLabel } from '@pump/shared';
+import { DSR_FULL_NAME, DSR_LABEL, readDssrOmcCard, shiftDisplayLabel } from '@pump/shared';
 
 interface DailyDssrViewProps {
   dailyDssr: any;
@@ -98,9 +98,9 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
             variant="secondary"
             size="sm"
             leftIcon={<Printer />}
-            onClick={() => runTask(printOrSave('print'), 'Could not print the DSSR.')}
+            onClick={() => runTask(printOrSave('print'), `Could not print the ${DSR_LABEL}.`)}
           >
-            Print Daily DSSR
+            Print {DSR_LABEL}
           </Button>
         </div>
       </div>
@@ -115,7 +115,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
             letterSpacing: '0.05em',
           }}
         >
-          Daily Sales Summary Record
+          {DSR_FULL_NAME}
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px' }}>
           Business Date {dailyDssr.businessDate} • Generated {formatDateTime(generatedAt)}
@@ -557,7 +557,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
                 colSpan={6}
                 style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}
               >
-                No fuel sales in this daily DSSR.
+                No fuel sales in this daily DSR.
               </td>
             </tr>
           )}
@@ -708,7 +708,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
                 colSpan={6}
                 style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}
               >
-                No nozzle data in this daily DSSR.
+                No nozzle data in this daily DSR.
               </td>
             </tr>
           )}

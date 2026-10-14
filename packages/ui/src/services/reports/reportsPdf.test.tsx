@@ -6,6 +6,7 @@ import zlib from 'node:zlib';
 import { Font, pdf, Text } from '@react-pdf/renderer';
 import { ShiftSummaryDoc, LetterheadBand, C } from './shiftSummaryDoc.js';
 import { DssrDoc } from './dssrDoc.js';
+import { dsrFileName } from './generate.js';
 import { InvoiceDoc } from './invoiceDoc.js';
 import { LedgerDoc } from './ledgerDoc.js';
 import { AttendantReportDoc, dayPageTitle } from './attendantReportDoc.js';
@@ -234,7 +235,7 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     expect(newText).not.toContain('SUPPLIER FUEL INTAKES');
   });
 
-  it('generates real PDF buffer for DSSR Report with verified vector mark and showLogo=false', async () => {
+  it('generates real PDF buffer for DSR Report with verified vector mark and showLogo=false', async () => {
     const dssr = {
       businessDate: '2026-09-18',
       generatedAt: new Date().toISOString(),
@@ -256,7 +257,7 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     assertPdfContainsVectorMark(buffer);
   });
 
-  it('marks a draft DSSR as not closed, outside the configurable sections, and leaves a sealed one unmarked', () => {
+  it('marks a draft DSR as not closed, outside the configurable sections, and leaves a sealed one unmarked', () => {
     const texts = (node: any): string[] => {
       if (node == null || typeof node === 'boolean') return [];
       if (typeof node === 'string' || typeof node === 'number') return [String(node)];
@@ -275,7 +276,27 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     expect(sealed).not.toContain('DRAFT');
   });
 
-  it('prints OMC card sales in the DSSR sales summary only when the snapshot carries them', () => {
+  it('titles the DSR PDF "Daily Station Sales Report" and names the file DSR-<date> (#570)', () => {
+    const texts = (node: any): string[] => {
+      if (node == null || typeof node === 'boolean') return [];
+      if (typeof node === 'string' || typeof node === 'number') return [String(node)];
+      if (Array.isArray(node)) return node.flatMap(texts);
+      if (typeof node.type === 'function' && node.type !== Text) {
+        return texts((node.type as any)(node.props));
+      }
+      return texts(node.props?.children);
+    };
+    const config = { sections: ['header'] as any[], paper: 'A4' as const };
+    const text = texts((DssrDoc as any)({ dssr: { businessDate: '2026-10-08' }, config })).join(
+      ' ',
+    );
+    expect(text).toContain('DAILY STATION SALES REPORT');
+    expect(text).not.toMatch(/DSSR|SALES SUMMARY RECORD/);
+    expect(dsrFileName('2026-10-08', false)).toBe('DSR-2026-10-08');
+    expect(dsrFileName('2026-10-08', true)).toBe('DSR-2026-10-08-DRAFT');
+  });
+
+  it('prints OMC card sales in the DSR sales summary only when the snapshot carries them', () => {
     const texts = (node: any): string[] => {
       if (node == null || typeof node === 'boolean') return [];
       if (typeof node === 'string' || typeof node === 'number') return [String(node)];

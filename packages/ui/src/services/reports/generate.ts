@@ -8,7 +8,7 @@ import {
   resolveSections,
 } from './reportConfig.js';
 import { letterheadFromStation, showLogoFromStation } from './letterhead.js';
-import { formatShiftLabel, shiftDisplayLabel } from '@pump/shared';
+import { DSR_LABEL, formatShiftLabel, shiftDisplayLabel } from '@pump/shared';
 import type { AttendantReportEntry } from '@pump/shared';
 import type { AttendantReportSection } from './reportConfig.js';
 import { ledgerFileName } from './ledgerFileName.js';
@@ -54,7 +54,7 @@ export async function generateDssrPdf(
   };
   await outputReactPdf(
     React.createElement(doc.DssrDoc, { dssr, config }),
-    `Daily_DSSR_${dssr?.businessDate || ''}${dssr?.draft === true ? '_DRAFT' : ''}`,
+    dsrFileName(dssr?.businessDate, dssr?.draft === true),
     output,
   );
 }
@@ -159,4 +159,9 @@ export async function generateStatementPdf(
     ),
     output,
   );
+}
+
+/** `DSR-<date>` (`.pdf` is added on save); a draft day ends `-DRAFT` (#570). */
+export function dsrFileName(businessDate: string | undefined, draft: boolean): string {
+  return `${DSR_LABEL}-${businessDate || ''}${draft ? '-DRAFT' : ''}`;
 }
