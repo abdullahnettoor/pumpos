@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Drawer } from '../Drawer.js';
-import { LedgerView } from '../ledger/LedgerView.js';
-import { Button, Icon, StatusChip } from '../../pump-ds/index.js';
+import {
+  StatementView,
+  buildLedgerStatement,
+  partyEntries,
+  type StatementClock,
+} from '../../statement/index.js';
+import { Button, DataSection, Icon, StatusChip } from '../../pump-ds/index.js';
 import { partyState } from '@pump/shared';
-import { inr, formatDate, formatTime } from '../../utils/format.js';
+import { inr } from '../../utils/format.js';
 import { useSupplierLedger } from '../../query/hooks.js';
 import { openQuickEntry } from '../../quick-entry/store.js';
 
@@ -11,6 +16,8 @@ interface SupplierStatementDrawerProps {
   /** Selected supplier; null closes the drawer. */
   supplier: any | null;
   stationId: string | null;
+  /** The station clock: dates a row the server sent no date for. */
+  clock?: StatementClock;
   onClose: () => void;
   onEdit: (supplier: any) => void;
   onNewPurchase: (supplier: any) => void;
@@ -25,11 +32,23 @@ interface SupplierStatementDrawerProps {
 export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = ({
   supplier,
   stationId,
+  clock,
   onClose,
   onEdit,
   onNewPurchase,
 }) => {
   const ledgerQ = useSupplierLedger(supplier?.id);
+  // All-time ledger: no opening balance, the running balance starts at zero.
+  const timeZone = clock?.timeZone;
+  const dayStartsAt = clock?.dayStartsAt;
+  const statement = useMemo(
+    () =>
+      buildLedgerStatement(partyEntries(ledgerQ.data ?? [], 'supplier'), {
+        kind: 'supplier',
+        clock: { timeZone, dayStartsAt },
+      }),
+    [ledgerQ.data, timeZone, dayStartsAt],
+  );
   const owed = Number(supplier?.currentBalance || 0);
 
   return (
@@ -137,46 +156,24 @@ export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = (
               )}
             </div>
 
-            {/* Ledger */}
-            <div>
-              <h4
-                style={{
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: 'var(--text-strong)',
-                  marginBottom: '8px',
-                }}
+            {/* Ledger: the Statement module, oldest first, Debit · Credit · Balance */}
+            <section className="flex flex-col gap-2">
+              <h4 className="text-[13px] font-semibold text-ink-strong">Statement of Account</h4>
+              <DataSection
+                title="statement"
+                query={ledgerQ}
+                enabled
+                placeholderHeight={200}
+                shape="bare"
               >
-                Ledger Statements
-              </h4>
-              <LedgerView
-                entries={ledgerQ.data ?? []}
-                loading={ledgerQ.isLoading}
-                error={ledgerQ.error ? ledgerQ.error.message : null}
-                amountLabel="Amount"
-                balanceLabel="Owed Bal"
-                emptyText="No transaction ledger events found."
-                resolve={(tx: any) => {
-                  const type = tx.transactionType;
-                  const direction: 'debit' | 'credit' =
-                    type === 'Purchase' || type === 'Adjustment' || type === 'Opening Balance'
-                      ? 'debit'
-                      : 'credit';
-                  return {
-                    id: tx.id,
-                    date: tx.createdAt,
-                    dateLabel: formatDate(tx.businessDate ?? tx.createdAt, { compact: true }),
-                    subLabel: formatTime(tx.createdAt),
-                    type,
-                    typeColor:
-                      type === 'Purchase' ? 'var(--brand-warning)' : 'var(--state-success-fg)',
-                    notes: tx.notes,
-                    amount: Number(tx.amount),
-                    direction,
-                  };
-                }}
-              />
-            </div>
+                <StatementView
+                  statement={statement}
+                  scrollToEnd
+                  label={`${supplier.name} statement`}
+                  emptyMessage="No transactions recorded with this supplier yet."
+                />
+              </DataSection>
+            </section>
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '8px', flexWrap: 'wrap' }}>
               <Button

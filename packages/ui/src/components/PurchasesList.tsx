@@ -779,6 +779,10 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
       <SupplierStatementDrawer
         supplier={statementSupplier}
         stationId={stationId}
+        clock={{
+          timeZone: stationSettings.timezone,
+          dayStartsAt: stationSettings.business_day_starts_at,
+        }}
         onClose={closeStatement}
         onEdit={(sup) => {
           closeStatement();

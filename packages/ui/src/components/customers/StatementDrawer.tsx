@@ -1,14 +1,21 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Drawer } from '../Drawer.js';
-import { LedgerView } from '../ledger/LedgerView.js';
-import { Button, Icon } from '../../pump-ds/index.js';
-import { inr, formatDate, formatTime } from '../../utils/format.js';
+import {
+  StatementView,
+  buildLedgerStatement,
+  partyEntries,
+  type StatementClock,
+} from '../../statement/index.js';
+import { Button, DataSection, Icon } from '../../pump-ds/index.js';
+import { inr } from '../../utils/format.js';
 import { useCustomerLedger } from '../../query/hooks.js';
 
 interface StatementDrawerProps {
   /** Selected customer; null closes the drawer. */
   customer: any | null;
   stationId: string | null;
+  /** The station clock: dates a row the server sent no date for. */
+  clock?: StatementClock;
   onClose: () => void;
   /** Open the edit-profile drawer for this customer (container closes statement). */
   onEdit: (customer: any) => void;
@@ -24,11 +31,23 @@ interface StatementDrawerProps {
 export const StatementDrawer: React.FC<StatementDrawerProps> = ({
   customer,
   stationId,
+  clock,
   onClose,
   onEdit,
   onRecordCollection,
 }) => {
   const ledgerQ = useCustomerLedger(customer?.id);
+  // All-time ledger: no opening balance, the running balance starts at zero.
+  const timeZone = clock?.timeZone;
+  const dayStartsAt = clock?.dayStartsAt;
+  const statement = useMemo(
+    () =>
+      buildLedgerStatement(partyEntries(ledgerQ.data ?? [], 'customer'), {
+        kind: 'customer',
+        clock: { timeZone, dayStartsAt },
+      }),
+    [ledgerQ.data, timeZone, dayStartsAt],
+  );
 
   return (
     <>
@@ -218,54 +237,24 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({
               )}
             </div>
 
-            {/* Ledger */}
-            <div>
-              <h4
-                style={{
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: 'var(--text-strong)',
-                  marginBottom: '8px',
-                }}
+            {/* Ledger: the Statement module, oldest first, Debit · Credit · Balance */}
+            <section className="flex flex-col gap-2">
+              <h4 className="text-[13px] font-semibold text-ink-strong">Statement of Account</h4>
+              <DataSection
+                title="statement"
+                query={ledgerQ}
+                enabled
+                placeholderHeight={200}
+                shape="bare"
               >
-                Statement of Account
-              </h4>
-              <LedgerView
-                entries={ledgerQ.data ?? []}
-                loading={ledgerQ.isLoading}
-                error={ledgerQ.error ? ledgerQ.error.message : null}
-                amountLabel="Amount"
-                balanceLabel="Balance"
-                emptyText="No transaction history found for this account."
-                resolve={(tx: any) => {
-                  const type = tx.transactionType;
-                  const direction: 'debit' | 'credit' =
-                    type === 'Credit Sale' ||
-                    type === 'Adjustment' ||
-                    type === 'Prepaid Top-up' ||
-                    type === 'Opening Balance'
-                      ? 'debit'
-                      : 'credit';
-                  const typeColor =
-                    type === 'Credit Sale'
-                      ? 'var(--brand-warning)'
-                      : type === 'Prepaid Top-up'
-                        ? 'var(--state-success-fg)'
-                        : undefined;
-                  return {
-                    id: tx.id,
-                    date: tx.createdAt,
-                    dateLabel: formatDate(tx.businessDate ?? tx.createdAt, { compact: true }),
-                    subLabel: formatTime(tx.createdAt),
-                    type,
-                    typeColor,
-                    notes: tx.notes,
-                    amount: Number(tx.amount),
-                    direction,
-                  };
-                }}
-              />
-            </div>
+                <StatementView
+                  statement={statement}
+                  scrollToEnd
+                  label={`${customer.name} statement`}
+                  emptyMessage="No transaction history found for this account."
+                />
+              </DataSection>
+            </section>
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
               <Button

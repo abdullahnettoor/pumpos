@@ -771,6 +771,10 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
       <StatementDrawer
         customer={statementCustomer}
         stationId={stationId}
+        clock={{
+          timeZone: stationSettings.timezone,
+          dayStartsAt: stationSettings.business_day_starts_at,
+        }}
         onClose={closeStatement}
         onEdit={(c) => {
           closeStatement();

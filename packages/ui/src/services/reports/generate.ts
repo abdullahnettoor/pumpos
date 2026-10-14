@@ -13,7 +13,7 @@ import type { AttendantReportEntry } from '@pump/shared';
 import type { AttendantReportSection } from './reportConfig.js';
 import { ledgerFileName } from './ledgerFileName.js';
 import {
-  partyStatementDoc,
+  legacyPartyStatementDoc,
   statementFilePrefix,
   type PartyStatementInput,
 } from './partyStatement.js';
@@ -130,11 +130,11 @@ export async function generateAttendantReportPdf(
 }
 
 /**
- * Customer or Supplier statement PDF over one date range: the ranged ledger laid
- * out by `LedgerDoc` (the same document as the desktop Unified Ledger), with the
- * server's opening, running and closing balances printed as they are (see
- * `partyStatement.ts`). `output` 'save' = the platform saver (the mobile share
- * sheet), 'download' = always a browser download.
+ * The mobile app's Customer or Supplier statement PDF over one date range: the
+ * ranged ledger laid out by `LedgerDoc` in the mobile layout
+ * (`legacyPartyStatementDoc`), which matches the mobile on-screen statement
+ * until both move to the Statement module together. `output` 'save' = the
+ * platform saver (the mobile share sheet), 'download' = always a browser download.
  */
 export async function generateStatementPdf(
   station: { name?: string; settings?: unknown } | null,
@@ -144,7 +144,7 @@ export async function generateStatementPdf(
   const doc = await import('./ledgerDoc.js');
   await outputReactPdf(
     React.createElement(doc.LedgerDoc, {
-      ...partyStatementDoc(input),
+      ...legacyPartyStatementDoc(input),
       stationName: station?.name,
       letterhead: letterheadFromStation(station),
       paper: paperFromStation(station),

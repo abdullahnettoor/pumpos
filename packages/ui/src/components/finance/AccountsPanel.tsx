@@ -5,6 +5,7 @@ import { PageLayout } from '../primitives/PageLayout.js';
 import { Drawer } from '../Drawer.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
 import {
+  DataSection,
   KpiStrip,
   KpiTile,
   Panel,
@@ -15,12 +16,13 @@ import {
 } from '../../pump-ds/index.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
-import { LedgerView } from '../ledger/LedgerView.js';
+import { StatementView, buildLedgerStatement, moneyEntries } from '../../statement/index.js';
+import type { MoneyMovement } from '../../statement/index.js';
 import { DateRangeField, computeRange, type DateRange } from '../primitives/DateRangeField.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useFinancialAccounts, useAccountLedger, queryKeys } from '../../query/hooks.js';
 import { CloudFinanceService } from '../../services/cloud.js';
-import { ACCOUNT_TYPE_LABEL, LEDGER_SOURCE_LABEL } from '../../utils/ledgerLabels.js';
+import { ACCOUNT_TYPE_LABEL } from '../../utils/ledgerLabels.js';
 import { inr } from '../../utils/format.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Wallet, ArrowLeft, ArrowLeftRight, Banknote } from 'lucide-react';
@@ -35,6 +37,16 @@ type AccountsTab = 'accounts' | 'cash-book';
 type AccountType = 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
 
 const TYPE_LABEL: Record<AccountType, string> = ACCOUNT_TYPE_LABEL;
+
+/** An account-ledger row's second line: an OMC card sale names its customer, vehicle and litres. */
+const accountEntryDetail = (e: MoneyMovement & Record<string, any>): string | null =>
+  e.sourceType === 'SALE_OMC'
+    ? [e.omcCustomerName, e.omcVehicle, e.omcQuantity ? `${e.omcQuantity} L` : null, e.omcNotes]
+        .filter(Boolean)
+        .join(' · ') ||
+      e.notes ||
+      'OMC card (no customer)'
+    : e.notes || null;
 
 const TYPE_TONE: Record<
   AccountType,
@@ -202,10 +214,20 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
     () => (accounts || []).find((a: any) => a.id === selectedId) || null,
     [accounts, selectedId],
   );
-  const { data: ledger, isLoading: ledgerLoading } = useAccountLedger(selectedId, {
+  const ledgerQ = useAccountLedger(selectedId, {
     from: range.from,
     to: range.to,
   });
+  const ledger = ledgerQ.data;
+  // The selected account's statement (Statement module): money in = Debit, out = Credit.
+  const statement = useMemo(
+    () =>
+      buildLedgerStatement(moneyEntries(ledger?.entries || [], { detail: accountEntryDetail }), {
+        kind: 'account',
+        opening: ledger?.periodOpeningBalance ?? 0,
+      }),
+    [ledger],
+  );
 
   const openSettle = () => {
     const banks = (accounts || []).filter((a: any) => a.accountType === 'BANK');
@@ -444,13 +466,8 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
 
   // ---- Per-account ledger view ----
   if (selected && activeTab === 'accounts') {
-    const totals = { moneyIn: 0, moneyOut: 0 };
-    for (const e of ledger?.entries || []) {
-      if (e.direction === 'in') totals.moneyIn += Number(e.amount || 0);
-      else totals.moneyOut += Number(e.amount || 0);
-    }
-    const opening = Number(ledger?.periodOpeningBalance || 0);
-    const closing = opening + totals.moneyIn - totals.moneyOut;
+    const opening = statement.opening ?? 0;
+    const closing = statement.closing;
 
     return (
       <PageLayout
@@ -486,13 +503,13 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
               dot="success"
               valueTone="success"
               label="Money In"
-              value={inr(totals.moneyIn)}
+              value={inr(statement.totals.debit)}
             />
             <KpiTile
               dot="danger"
               valueTone="danger"
               label="Money Out"
-              value={inr(totals.moneyOut)}
+              value={inr(statement.totals.credit)}
             />
             <KpiTile
               dot={closing < 0 ? 'danger' : 'brand'}
@@ -501,36 +518,19 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
               value={inr(closing)}
             />
           </KpiStrip>
-          <LedgerView
-            entries={ledger?.entries || []}
-            openingBalance={opening}
-            loading={ledgerLoading}
-            debitLabel="In"
-            creditLabel="Out"
-            balanceLabel="Balance"
-            emptyText="No movements in this period."
-            resolve={(e: any) => ({
-              id: e.id,
-              date: e.entryDate,
-              dateLabel: e.entryDate,
-              type: LEDGER_SOURCE_LABEL[e.sourceType] ?? e.sourceType,
-              notes:
-                e.sourceType === 'SALE_OMC'
-                  ? [
-                      e.omcCustomerName,
-                      e.omcVehicle,
-                      e.omcQuantity ? `${e.omcQuantity} L` : null,
-                      e.omcNotes,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ') ||
-                    e.notes ||
-                    'OMC card (no customer)'
-                  : (e.notes ?? undefined),
-              amount: Number(e.amount || 0),
-              direction: e.direction === 'in' ? 'debit' : 'credit',
-            })}
-          />
+          <DataSection
+            title="account statement"
+            query={ledgerQ}
+            enabled
+            placeholderHeight={240}
+            shape="bare"
+          >
+            <StatementView
+              statement={statement}
+              label={`${selected.name} statement`}
+              emptyMessage="No movements in this period."
+            />
+          </DataSection>
         </div>
 
         <Drawer isOpen={settleOpen} onClose={() => setSettleOpen(false)} title="Settle to Bank">

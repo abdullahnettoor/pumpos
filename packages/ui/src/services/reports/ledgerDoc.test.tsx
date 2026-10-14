@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import React from 'react';
-import { LedgerDoc, type LedgerDocProps } from './ledgerDoc.js';
+import { LedgerDoc, generatedLabel, type LedgerDocProps } from './ledgerDoc.js';
 import { C } from './shiftSummaryDoc.js';
 
 /**
@@ -92,6 +92,11 @@ describe('LedgerDoc as the desktop Unified Ledger uses it', () => {
       '\u2022 Generated',
     );
   });
+
+  it('dates the generated line in the statement style, never "Sept"', () => {
+    const at = new Date(2026, 8, 30, 14, 5).toISOString();
+    expect(generatedLabel(at)).toMatch(/^30 Sep 2026, 02:05 pm$/i);
+  });
 });
 
 describe('LedgerDoc as a party statement', () => {
@@ -121,10 +126,10 @@ describe('LedgerDoc as a party statement', () => {
     const t = text(statement);
     expect(t).toContain('GSTIN 32AAACH1118R1Z5');
     expect(t).toContain('Phone 0495 1');
-    expect(t).toContain('OPENING BALANCE');
+    expect(t).toContain('Opening balance');
     expect(t).toContain('₹5,000.00');
     expect(t).toContain('Bank transfer · From HDFC Current');
-    expect(t).toContain('CLOSING BALANCE');
+    expect(t).toContain('Closing balance');
     expect(t).toContain('Advance');
   });
 
@@ -148,7 +153,7 @@ describe('LedgerDoc as a party statement', () => {
       closing: { note: 'Due from customer' },
     });
     expect(t).toContain('No transactions in this period.');
-    expect(t).toContain('OPENING BALANCE');
-    expect(t).toContain('CLOSING BALANCE');
+    expect(t).toContain('Opening balance');
+    expect(t).toContain('Closing balance');
   });
 });

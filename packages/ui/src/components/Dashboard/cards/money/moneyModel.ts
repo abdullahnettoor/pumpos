@@ -1,5 +1,5 @@
 import { num } from '@pump/shared';
-import type { DailyCashBook, DailyCashBookAccount } from '../../../../services/cloud.js';
+import type { DailyCashBook } from '../../../../services/cloud.js';
 
 /**
  * Cash in Hand for the headline tile: the Cash Book's Cash in Hand (Office)
@@ -101,45 +101,4 @@ export function buildTrendChart(data: TrendInput, W = 320, H = 70): TrendChart |
     prevLine,
     bestCircle: best >= 0 ? { cx: X(best).toFixed(1), cy: Y(trend[best].sales).toFixed(1) } : null,
   };
-}
-
-export interface OfficeEntry {
-  id: string;
-  direction: 'in' | 'out';
-  amount: number;
-  sourceType: string;
-  sourceId: string | null;
-  partyName?: string | null;
-  notes: string | null;
-  createdAt: string;
-  accountName: string;
-}
-
-/** Account-to-account moves post one ledger row to each account, sharing a source id. */
-const TRANSFER_SOURCES = new Set(['TRANSFER', 'DEPOSIT']);
-
-/**
- * Every Office Record of the Cash Book, newest first. A transfer or deposit
- * posts to two accounts; it is one record, kept once (its outgoing leg).
- */
-export function officeEntries(
-  accounts: readonly DailyCashBookAccount[] | null | undefined,
-): OfficeEntry[] {
-  const seen = new Set<string>();
-  const out: OfficeEntry[] = [];
-  const legs: OfficeEntry[] = [];
-  for (const a of accounts ?? []) {
-    for (const e of a.entries ?? []) legs.push({ ...e, accountName: a.name });
-  }
-  // Outgoing legs first so a transfer is represented by the account it left.
-  legs.sort((x, y) => Number(y.direction === 'out') - Number(x.direction === 'out'));
-  for (const e of legs) {
-    if (TRANSFER_SOURCES.has(e.sourceType) && e.sourceId) {
-      const key = `${e.sourceType}:${e.sourceId}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-    }
-    out.push(e);
-  }
-  return out.sort((a, b) => (b.createdAt < a.createdAt ? -1 : b.createdAt > a.createdAt ? 1 : 0));
 }

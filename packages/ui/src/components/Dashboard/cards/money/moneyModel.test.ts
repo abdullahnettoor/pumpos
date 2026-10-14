@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { DailyCashBook, DailyCashBookAccount } from '../../../../services/cloud.js';
-import { bestDayIndex, buildTrendChart, deriveCashInHand, officeEntries } from './moneyModel.js';
+import type { DailyCashBook } from '../../../../services/cloud.js';
+import { bestDayIndex, buildTrendChart, deriveCashInHand } from './moneyModel.js';
 
 describe('deriveCashInHand', () => {
   const book = {
@@ -78,31 +78,5 @@ describe('trend chart scale and previous series', () => {
       ],
     })!;
     expect(c.draftLine.match(/[ML]/g)).toHaveLength(2);
-  });
-});
-
-describe('officeEntries', () => {
-  const e = (id: string, direction: 'in' | 'out', sourceType: string, at: string) => ({
-    id,
-    direction,
-    amount: 10,
-    sourceType,
-    sourceId: sourceType === 'TRANSFER' ? 'tx1' : id,
-    notes: null,
-    createdAt: at,
-  });
-  it('keeps a transfer once and sorts newest first', () => {
-    const rows = officeEntries([
-      {
-        name: 'Cash',
-        entries: [
-          e('a', 'out', 'TRANSFER', '2026-10-12T10:00'),
-          e('c', 'in', 'COLLECTION', '2026-10-12T08:00'),
-        ],
-      },
-      { name: 'Safe', entries: [e('b', 'in', 'TRANSFER', '2026-10-12T10:00')] },
-    ] as unknown as DailyCashBookAccount[]);
-    expect(rows.map((r) => r.id)).toEqual(['a', 'c']);
-    expect(rows[0]!.accountName).toBe('Cash');
   });
 });

@@ -4,10 +4,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithProviders, createTestQueryClient } from '../../test/renderWithProviders.js';
 
-vi.mock('@pump/shared', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  resolveEntryDate: () => '2026-03-01',
-}));
+// "Today" is 1 Mar 2026; a dated instant still resolves on the real station clock.
+vi.mock('@pump/shared', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@pump/shared')>();
+  return {
+    ...actual,
+    resolveEntryDate: (o: Parameters<typeof actual.resolveEntryDate>[0] = {}) =>
+      o.now ? actual.resolveEntryDate(o) : '2026-03-01',
+  };
+});
 
 const { DailyCashBook } = await import('./DailyCashBook.js');
 const { queryKeys } = await import('../../query/hooks.js');
@@ -98,6 +103,130 @@ describe('DailyCashBook', () => {
     const table = screen.getByRole('table', { name: 'Cash in Hand entries' });
     expect(within(table).getByText('Shift cash')).toBeTruthy();
     expect(within(table).getByText('Expense')).toBeTruthy();
+  });
+
+  const cashEntries = [
+    {
+      id: 'e1',
+      direction: 'in',
+      amount: 700,
+      sourceType: 'SALE_CASH',
+      sourceId: 's1',
+      createdAt: '2026-03-01T10:00:00.000Z',
+    },
+    {
+      id: 'e2',
+      direction: 'out',
+      amount: 50,
+      sourceType: 'EXPENSE',
+      sourceId: 'x1',
+      createdAt: '2026-03-01T11:00:00.000Z',
+    },
+  ];
+
+  it('scrolls the drawer to the latest row and the closing line when it opens', () => {
+    const scrolled: Element[] = [];
+    const scrollIntoView = vi.fn(function (this: Element) {
+      scrolled.push(this);
+    });
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const qc = seed('2026-03-01', [
+      account({
+        id: 'c',
+        name: 'Cash in Hand',
+        accountType: 'CASH_IN_HAND',
+        opening: 100,
+        moneyIn: 700,
+        moneyOut: 50,
+        closing: 750,
+        entries: cashEntries,
+      }),
+    ]);
+    renderWithProviders(<DailyCashBook selectedStation={STATION} />, { queryClient: qc });
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('row', { name: 'Cash in Hand entries' }));
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'end' });
+    // What it scrolls to sits after the table, below the closing line.
+    const target = scrolled[0];
+    const table = screen.getByRole('table', { name: 'Cash in Hand entries' });
+    expect(table.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  });
+
+  it("prints the server's opening and closing when they add up, and says so when they don't", () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const qc = seed('2026-03-01', [
+      account({
+        id: 'c',
+        name: 'Cash in Hand',
+        accountType: 'CASH_IN_HAND',
+        opening: 100,
+        moneyIn: 700,
+        moneyOut: 50,
+        closing: 750,
+        entries: cashEntries,
+      }),
+      account({
+        id: 'b',
+        name: 'HDFC',
+        accountType: 'BANK',
+        opening: 100,
+        moneyIn: 700,
+        moneyOut: 50,
+        // Not opening + in − out: the entries are the truth the drawer shows.
+        closing: 999,
+        entries: cashEntries,
+      }),
+    ]);
+    renderWithProviders(<DailyCashBook selectedStation={STATION} />, { queryClient: qc });
+
+    fireEvent.click(screen.getByRole('row', { name: 'Cash in Hand entries' }));
+    let table = screen.getByRole('table', { name: 'Cash in Hand entries' });
+    expect(table.querySelector('tfoot')!.textContent).toContain('750.00');
+    expect(screen.queryByRole('note')).toBeNull();
+    cleanup();
+
+    renderWithProviders(<DailyCashBook selectedStation={STATION} />, { queryClient: qc });
+    fireEvent.click(screen.getByRole('row', { name: 'HDFC entries' }));
+    table = screen.getByRole('table', { name: 'HDFC entries' });
+    expect(table.querySelector('tfoot')!.textContent).toContain('750.00');
+    expect(table.querySelector('tfoot')!.textContent).not.toContain('999');
+    expect(screen.getByRole('note').textContent).toMatch(/don.t add up/);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("dates every row with the book's date; a back-dated record keeps its station-clock time", () => {
+    const qc = seed('2026-03-01', [
+      account({
+        id: 'c',
+        name: 'Cash in Hand',
+        accountType: 'CASH_IN_HAND',
+        moneyOut: 50,
+        closing: -50,
+        entries: [
+          {
+            id: 'e1',
+            direction: 'out',
+            amount: 50,
+            sourceType: 'EXPENSE',
+            sourceId: 'x1',
+            // Recorded on 3 Mar, back-dated into the 1 Mar book.
+            createdAt: '2026-03-03T10:00:00.000Z',
+          },
+        ],
+      }),
+    ]);
+    renderWithProviders(<DailyCashBook selectedStation={STATION} />, { queryClient: qc });
+
+    fireEvent.click(screen.getByRole('row', { name: 'Cash in Hand entries' }));
+    const table = screen.getByRole('table', { name: 'Cash in Hand entries' });
+    const row = within(table).getByText('Expense').closest('tr')!;
+    expect(row.textContent).toContain('01 Mar 2026');
+    expect(row.textContent).not.toContain('03 Mar');
+    // 10:00 UTC on the station clock (Asia/Kolkata).
+    expect(row.textContent).toMatch(/03:30\s*pm/i);
   });
 
   it('steps back a day and shows the empty state when no accounts exist', () => {
