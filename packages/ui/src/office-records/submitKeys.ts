@@ -12,9 +12,11 @@ import { isIdempotencyKeyConflict, keepsIdempotencyKey } from '../utils/idempote
  * (saved, or any other 4xx) renews it.
  *
  * An unsettled key also outlives the drawer, but a new drawer picks it up only
- * for the same record (same kind, station and body). Closing after a network
- * drop and entering the same slip again cannot record it twice, and entering
- * a different record is not refused as an edited retry.
+ * for the same record (same kind, station and body) as one sent under it that
+ * the server may hold. Closing after a network drop and entering the same slip
+ * again cannot record it twice, and entering a different record is not refused
+ * as an edited retry. A body the server refused under the key (a conflict) is
+ * not what it holds, so a new drawer entering that body gets a fresh key.
  */
 export interface SubmitKeySession {
   /** The key to send with this body. */
@@ -27,33 +29,50 @@ export interface SubmitKeySession {
 export const unknownOutcome = (error: unknown) =>
   keepsIdempotencyKey(error) || isIdempotencyKeyConflict(error);
 
+/** A key whose outcome is unsettled, and the bodies sent under it the server may hold. */
+interface HeldKey {
+  key: string;
+  held: string[];
+}
+
 export class OfficeSubmitKeys {
-  private readonly pending = new Map<string, { key: string; fingerprint: string }>();
+  private readonly pending = new Map<string, HeldKey>();
 
   constructor(private readonly newKey: () => string = createIdempotencyKey) {}
 
   session(scope: string): SubmitKeySession {
-    let current: { key: string; fingerprint: string } | null = null;
+    let current: HeldKey | null = null;
+    let sent = '';
     return {
       next: (fingerprint) => {
         if (!current) {
           const left = this.pending.get(scope);
-          current =
-            left && left.fingerprint === fingerprint ? left : { key: this.newKey(), fingerprint };
+          current = left?.held.includes(fingerprint) ? left : { key: this.newKey(), held: [] };
         }
-        current = { key: current.key, fingerprint };
+        sent = fingerprint;
         return current.key;
       },
       settle: (error) => {
         if (!current) return;
         if (error !== undefined && unknownOutcome(error)) {
-          this.pending.set(scope, current);
+          // Within this drawer the key is kept either way; only the bodies a
+          // new drawer may reuse it for change.
+          current.held = isIdempotencyKeyConflict(error)
+            ? current.held.filter((f) => f !== sent)
+            : [...current.held.filter((f) => f !== sent), sent];
+          if (current.held.length) this.pending.set(scope, current);
+          else this.forget(scope, current.key);
           return;
         }
-        this.pending.delete(scope);
+        this.forget(scope, current.key);
         current = null;
       },
     };
+  }
+
+  /** Drop the scope's unsettled key, unless another drawer has left a different one since. */
+  private forget(scope: string, key: string) {
+    if (this.pending.get(scope)?.key === key) this.pending.delete(scope);
   }
 }
 

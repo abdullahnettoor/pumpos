@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   advanceText,
   buildOfficeRecordPreview,
+  collectionHint,
   partPaymentText,
+  payNowDateFor,
   type OfficeRecordDraft,
 } from './preview.js';
 
@@ -193,5 +195,36 @@ describe('amount hints shared with the forms', () => {
     expect(partPaymentText(5000, 4000)).toBe('Part payment: ₹1,000.00 stays owed.');
     expect(partPaymentText(5000, 5000)).toBeNull();
     expect(partPaymentText(5000, null)).toBeNull();
+  });
+
+  it("shows a collection's due before and after it", () => {
+    expect(collectionHint(5000, 2000)).toBe('₹5,000.00 due → ₹3,000.00 after this.');
+    expect(collectionHint(5000, null)).toBe('₹5,000.00 due.');
+    expect(collectionHint(5000, 0)).toBe('₹5,000.00 due.');
+    expect(collectionHint(5000, 6000)).toBe(advanceText(5000, 6000));
+    expect(collectionHint(null, 2000)).toBeUndefined();
+  });
+});
+
+describe('payNowDateFor: the pay-now payment date before the operator picks one', () => {
+  // 23:00 UTC on 14 Oct is 04:30 on 15 Oct in Kolkata: before a 06:00 Day Start,
+  // so the Business Date is still the 14th while the calendar says the 15th.
+  const clock = { today: '2026-10-15', businessDate: '2026-10-14' };
+
+  it('is the purchase date for a fuel purchase (its invoice date)', () => {
+    expect(payNowDateFor('2026-10-14', 'FUEL', clock)).toBe('2026-10-14');
+    expect(payNowDateFor('2026-10-10', 'FUEL', clock)).toBe('2026-10-10');
+  });
+
+  it("is today's calendar date for a product purchase on the current Business Day", () => {
+    expect(payNowDateFor('2026-10-14', 'PRODUCTS', clock)).toBe('2026-10-15');
+  });
+
+  it('is the purchase date for a product purchase on an earlier Business Day', () => {
+    expect(payNowDateFor('2026-10-12', 'PRODUCTS', clock)).toBe('2026-10-12');
+  });
+
+  it('stays empty while the purchase has no date', () => {
+    expect(payNowDateFor('', 'PRODUCTS', { today: '2026-10-15', businessDate: '' })).toBe('');
   });
 });

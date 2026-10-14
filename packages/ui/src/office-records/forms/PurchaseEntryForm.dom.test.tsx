@@ -83,7 +83,16 @@ describe('PurchaseEntryForm', () => {
 
       // ₹4,72,500 for 5,000 L = ₹94.50/L
       fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '472500' } });
-      await waitFor(() => expect(screen.getByText(/Derived: ₹94\.5000/)).toBeDefined());
+      const rate = await screen.findByText(/^₹94\.5000\//);
+      // Words in sans, figures in mono.
+      expect(rate.className).toContain('font-mono');
+      const words = rate.parentElement!;
+      expect(words.className).not.toContain('font-mono');
+      expect(words.textContent).toMatch(/^Derived: ₹94\.5000\/\S+ · tax-incl\.$/);
+      const cost = screen.getByText('Cost:', { exact: false });
+      expect(cost.className).not.toContain('font-mono');
+      expect(cost.querySelector('.font-mono')?.textContent).toBe('₹4,72,500.00');
+      expect(words.closest('[class*="font-mono"]')).toBeNull();
 
       submitForm();
       await waitFor(() => expect(onSubmit).toHaveBeenCalled());
@@ -106,11 +115,11 @@ describe('PurchaseEntryForm', () => {
         />,
       );
       fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '472500' } });
-      await waitFor(() => expect(screen.getByText(/Derived: ₹94\.5000/)).toBeDefined());
+      await screen.findByText(/^₹94\.5000\//);
 
       // A short delivery: same invoice total, fewer litres, so a higher ₹/L.
       fireEvent.change(inputUnder(/^Quantity/), { target: { value: '4500' } });
-      await waitFor(() => expect(screen.getByText(/Derived: ₹105\.0000/)).toBeDefined());
+      await screen.findByText(/^₹105\.0000\//);
 
       submitForm();
       await waitFor(() => expect(onSubmit).toHaveBeenCalled());

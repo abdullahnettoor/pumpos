@@ -1,3 +1,5 @@
+import { IDEMPOTENCY_KEY_REUSED } from '@pump/shared';
+
 /**
  * When a write fails, must its next try carry the SAME Idempotency-Key?
  *
@@ -21,11 +23,6 @@ export function keepsIdempotencyKey(error: unknown): boolean {
  * the key must be kept (a fresh one could record the same thing twice).
  */
 export function isIdempotencyKeyConflict(error: unknown): boolean {
-  const e = error && typeof error === 'object' ? (error as { status?: number; code?: string }) : {};
-  return (
-    e.status === 409 &&
-    e.code === 'CONFLICT' &&
-    error instanceof Error &&
-    /Idempotency-Key was already used/i.test(error.message)
-  );
+  const e = error && typeof error === 'object' ? (error as { code?: string }) : {};
+  return e.code === IDEMPOTENCY_KEY_REUSED;
 }

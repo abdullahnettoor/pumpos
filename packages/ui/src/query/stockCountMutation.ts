@@ -1,4 +1,5 @@
 import type { RecordStockCountPayload } from '../services/cloud.js';
+import { IDEMPOTENCY_KEY_REUSED } from '@pump/shared';
 
 export interface StockCountRequestIdentity {
   fingerprint: string;
@@ -178,7 +179,12 @@ export async function applyPendingTankDips({
 }
 
 export function isAmbiguousMutationError(error: { code?: string } | null | undefined): boolean {
-  return error?.code === 'NETWORK' || error?.code === 'CONFLICT' || error?.code === 'BAD_RESPONSE';
+  return (
+    error?.code === 'NETWORK' ||
+    error?.code === 'CONFLICT' ||
+    error?.code === IDEMPOTENCY_KEY_REUSED ||
+    error?.code === 'BAD_RESPONSE'
+  );
 }
 
 export function createStockCountIdempotencyKey(): string {

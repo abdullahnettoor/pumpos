@@ -144,6 +144,11 @@ const chooseCategory = (id: string) =>
   fireEvent.change(screen.getByLabelText('Category'), { target: { value: id } });
 
 const network = () => Object.assign(new Error('offline'), { code: 'NETWORK' });
+const keyReused = () =>
+  Object.assign(new Error('This Idempotency-Key was already used with different request content'), {
+    status: 409,
+    code: 'IDEMPOTENCY_KEY_REUSED',
+  });
 
 let restoreConsole: () => void;
 beforeEach(() => {
@@ -267,7 +272,7 @@ describe('Office Record drawer: one entry definition per kind (#526)', () => {
     },
   );
 
-  it('offers Staff only the Office Records Staff may record: Expense, Income, Collection', async () => {
+  it('offers Staff only the Office Records Staff may record: Expense, Income, Collection, and no Customer', async () => {
     renderWithProviders(topBar('Staff'), { queryClient: seeded() });
     const menu = await openNewMenu();
     const items = within(menu)
@@ -276,6 +281,8 @@ describe('Office Record drawer: one entry definition per kind (#526)', () => {
     expect(items).toEqual(expect.arrayContaining(['Expense', 'Income', 'Collection']));
     expect(items).not.toContain('Purchase');
     expect(items).not.toContain('Supplier payment');
+    // Staff may not create customers (canCreateCustomer).
+    expect(items).not.toContain('Customer');
   });
 
   it.each(['expense', 'income', 'collection', 'supplier-payment'] as const)(
@@ -610,12 +617,7 @@ describe('supplier payment', () => {
   it('keeps the key when an edited retry is refused as a key conflict', async () => {
     recordSupplierPayment
       .mockRejectedValueOnce(network())
-      .mockRejectedValueOnce(
-        Object.assign(
-          new Error('This Idempotency-Key was already used with different request content'),
-          { status: 409, code: 'CONFLICT' },
-        ),
-      )
+      .mockRejectedValueOnce(keyReused())
       .mockResolvedValue({});
     host();
     open('supplier-payment', { origin: 'statement', party: SUPPLIERS[0] });
@@ -634,6 +636,36 @@ describe('supplier payment', () => {
     await waitFor(() => expect(recordSupplierPayment).toHaveBeenCalledTimes(3));
     const keys = recordSupplierPayment.mock.calls.map((c) => c[1].idempotencyKey);
     expect(new Set(keys).size).toBe(1);
+  });
+
+  it('saves the corrected record under a fresh key after closing a key conflict', async () => {
+    recordSupplierPayment
+      .mockRejectedValueOnce(network())
+      .mockRejectedValueOnce(keyReused())
+      .mockResolvedValue({});
+    host();
+    const start = () => {
+      open('supplier-payment', { origin: 'statement', party: SUPPLIERS[0] });
+      fireEvent.click(screen.getByRole('radio', { name: /HDFC Current/ }));
+    };
+    start();
+    await record('Record supplier payment');
+    await screen.findByText('Saving again sends the same record, so it cannot be recorded twice.');
+    setAmount('4000');
+    await record('Record supplier payment');
+    await screen.findByText(/Your earlier save may already be recorded/);
+
+    // Close and start again with the corrected record.
+    act(() => closeQuickEntry());
+    start();
+    setAmount('4000');
+    await record('Record supplier payment');
+    await waitFor(() => expect(recordSupplierPayment).toHaveBeenCalledTimes(3));
+    expect(screen.queryByText(/Your earlier save may already be recorded/)).toBeNull();
+    const keys = recordSupplierPayment.mock.calls.map((c) => c[1].idempotencyKey);
+    expect(keys[1]).toBe(keys[0]);
+    expect(keys[2]).not.toBe(keys[0]);
+    expect(recordSupplierPayment.mock.calls[2][0]).toMatchObject({ amount: 4000 });
   });
 });
 

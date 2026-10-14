@@ -177,6 +177,7 @@ describe('idempotency middleware', () => {
 
     expect(first.status).toBe(200);
     expect(changed.status).toBe(409);
+    expect(((await changed.json()) as any).error.code).toBe('IDEMPOTENCY_KEY_REUSED');
     expect(trueRetry.status).toBe(200);
     expect(await trueRetry.json()).toEqual({ success: true, data: 1 });
     expect(executions).toBe(1);

@@ -55,7 +55,7 @@ describe('what the key does after a failure', () => {
   });
   it('recognises an earlier attempt held under the key with other content', () => {
     const e = failure(
-      'CONFLICT',
+      'IDEMPOTENCY_KEY_REUSED',
       'This Idempotency-Key was already used with different request content',
       409,
     );
