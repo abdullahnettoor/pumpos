@@ -161,3 +161,9 @@ describe('light text-on tokens keep the existing look', () => {
     for (const text of Object.keys(TEXT_ON_FILLS)) expect(light[text], text).toBe('#ffffff');
   });
 });
+
+describe('print ink', () => {
+  it('dark tokens apply on screen only, so a printed statement is dark ink on paper', () => {
+    expect(css).toMatch(/@media not print\s*\{\s*(\/\*[\s\S]*?\*\/\s*)?:root\.dark\s*\{/);
+  });
+});
