@@ -53,6 +53,7 @@ import {
   PumpDsStatusPanel,
 } from './DesignSystemPumpDs.js';
 import { DataSectionShowcase } from './DesignSystemDataSection.js';
+import { TablesShowcase } from './DesignSystemTables.js';
 import { DesignSystemShellProtoPanel } from './DesignSystemShellProto.js';
 import { useRunTask } from '../utils/runTask.js';
 
@@ -1372,6 +1373,7 @@ const TABS = [
   { id: 'feedback', label: 'Feedback' },
   { id: 'data', label: 'Data & Money' },
   { id: 'data-states', label: 'Data states' },
+  { id: 'tables', label: 'Tables' },
   { id: 'shell-proto', label: 'Shell · proto' },
 ];
 
@@ -1414,6 +1416,14 @@ export const DesignSystem: React.FC = () => {
           description="A region that loads its own data shows exactly one of these. Loading while a request is fetching or paused offline (a disabled query shows nothing); “Couldn't load … · Retry” for network/server faults; the server's message and no Retry for an access refusal (403 / access policy); the empty state only after success; otherwise the content. Fake queries — no network."
         >
           <DataSectionShowcase />
+        </Section>
+      )}
+      {active === 'tables' && (
+        <Section
+          title="Table module"
+          description="One set of typed columns (money, qty, date, text, status), two adapters. Money and qty read right-aligned in mono, header and total included, through the shared formats; status reads the status vocabulary; money and qty add up in the total row. The interactive table sorts and opens a row; the statement is read-only, compact and prints in light ink."
+        >
+          <TablesShowcase />
         </Section>
       )}
       {active === 'shell-proto' && <DesignSystemShellProtoPanel />}
