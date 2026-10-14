@@ -1,0 +1,497 @@
+<!doctype html>
+<!--
+  PROTOTYPE, throwaway (branch prototype/page-controls). Never merge into dev.
+  Question (#529 pilot → wave 5): where do page controls and KPIs go, and does the KPI tile need a redesign?
+  Three page archetypes × four layouts, mixed with a range-control style and a KPI style:
+    ?page=expenses|customers|pnl|kit   (kit = the control vocabulary)
+    ?v=A|B|C|D                         A toolbar · B section bars · C summary line · D tiles as filters
+    ?range=fields|menu|presets         the date-range control
+    ?kpi=current|refined               today's KpiTile vs the proposed one
+    ?theme=light|dark
+  Keys: ←/→ layout (outside inputs). All data is mock and in memory.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PumpOS: page controls & KPIs (prototype)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root { --font-sans: 'Plus Jakarta Sans', -apple-system, sans-serif; --font-mono: 'Geist Mono', ui-monospace, monospace; }
+  .light { --canvas:#f6f7f4; --surface:#fff; --alt:#f1f3ef; --line:#d9ded6; --line2:#b9c1b7; --hi:#18201a; --tx:#2b342d; --mu:#5e6a61; --fa:#7a857c;
+    --acc:#1f6a53; --on-acc:#fff; --acc-soft:#e6f2ec; --acc-tint:#f1f8f4; --info:#2e5e88; --info-soft:#e8f0f7; --good:#1e7a56; --good-soft:#e6f3ec;
+    --warn:#a2690b; --warn-soft:#fbf3e2; --bad:#b8443a; --bad-soft:#fbebe8; --side:#f1f3ef; --pop:0 12px 32px rgba(0,0,0,.14); }
+  .dark { --canvas:#0b0f0d; --surface:#121815; --alt:#161d1a; --line:#1f2925; --line2:#2a3530; --hi:#fff; --tx:#cfd8d2; --mu:#8a9a91; --fa:#5d6c64;
+    --acc:#2fd18d; --on-acc:#06110c; --acc-soft:#143326; --acc-tint:#0f1d17; --info:#6cb6ff; --info-soft:#12263a; --good:#2fd18d; --good-soft:#10241b;
+    --warn:#f2b544; --warn-soft:#221a10; --bad:#ff7a6b; --bad-soft:#241514; --side:#0e1311; --pop:0 12px 32px rgba(0,0,0,.6); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: var(--font-sans); font-size: 14px; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+  input, select { font: inherit; color: var(--hi); }
+  .num { font-family: var(--font-mono); font-feature-settings: 'tnum'; }
+  .row { display: flex; align-items: center; } .hi { color: var(--hi); } .mu { color: var(--mu); } .fa { color: var(--fa); }
+  .good { color: var(--good); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  .app { height: 100vh; display: flex; flex-direction: column; background: var(--canvas); color: var(--tx); overflow: hidden; }
+  .topbar { height: 48px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .mark { width: 26px; height: 26px; border-radius: 7px; background: var(--acc); color: var(--on-acc); display: grid; place-items: center; }
+  .search-top { flex: 1; max-width: 420px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--canvas); display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--fa); font-size: 12.5px; margin: 0 auto; }
+  .body { flex: 1; display: flex; min-height: 0; }
+  .side { width: 220px; flex-shrink: 0; background: var(--side); border-right: 1px solid var(--line); padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; }
+  .grp { font-family: var(--font-mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--fa); padding: 14px 8px 6px; } .grp:first-child { padding-top: 0; }
+  .nav { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 8px; font-weight: 500; font-size: 13px; width: 100%; }
+  .nav svg { color: var(--mu); } .nav.on { background: var(--info-soft); color: var(--info); font-weight: 600; } .nav.on svg { color: var(--info); }
+  .main { flex: 1; overflow-y: auto; min-width: 0; } .page { padding: 24px 24px 140px; max-width: 1280px; }
+  .ttl { font-size: 18px; font-weight: 600; color: var(--hi); } .sub { font-size: 13px; color: var(--mu); margin-top: 2px; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-top: 12px; }
+  .tab { padding: 8px 12px; font-size: 13px; font-weight: 500; color: var(--mu); border-bottom: 2px solid transparent; margin-bottom: -1px; display: flex; gap: 6px; align-items: center; }
+  .tab svg { color: var(--fa); } .tab.on { color: var(--hi); font-weight: 600; border-color: var(--acc); } .tab.on svg { color: var(--acc); }
+  .stack { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
+
+  /* buttons */
+  .btn { height: 32px; padding: 0 12px; border-radius: 8px; font-weight: 600; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .btn.pri { background: var(--acc); color: var(--on-acc); } .btn.sec { border: 1px solid var(--line); background: var(--surface); color: var(--hi); }
+  .btn.ghost { color: var(--mu); } .btn.ghost:hover { background: var(--alt); color: var(--hi); }
+  .btn.icon { width: 32px; padding: 0; justify-content: center; border: 1px solid var(--line); background: var(--surface); color: var(--mu); }
+  .btn.sm { height: 28px; font-size: 12px; padding: 0 10px; }
+
+  /* inputs */
+  .in { height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 0 10px; font-size: 12.5px; outline: none; }
+  .in:focus { border-color: var(--acc); }
+  .lab { font-size: 12px; font-weight: 600; color: var(--mu); margin-bottom: 4px; display: block; }
+  .sbox { position: relative; } .sbox svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--fa); } .sbox .in { padding-left: 30px; width: 230px; }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--alt); border: 1px solid var(--line); height: 32px; align-items: center; }
+  .seg button { padding: 0 10px; height: 26px; border-radius: 6px; font-size: 12.5px; font-weight: 600; color: var(--mu); display: inline-flex; align-items: center; gap: 5px; }
+  .seg button.on { background: var(--surface); color: var(--hi); box-shadow: 0 0 0 1px var(--line); }
+  .chips { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+  .chip { height: 28px; padding: 0 10px; border-radius: 99px; border: 1px solid var(--line); font-size: 12.5px; font-weight: 500; color: var(--mu); display: inline-flex; align-items: center; gap: 6px; background: var(--surface); }
+  .chip .c { font-family: var(--font-mono); font-size: 12px; color: var(--fa); }
+  .chip.on { border-color: var(--acc); color: var(--acc); background: var(--acc-tint); } .chip.on .c { color: var(--acc); }
+  .chip.warn-c .c { color: var(--warn); } .chip.bad-c .c { color: var(--bad); }
+  .tip { width: 22px; height: 22px; border-radius: 99px; display: inline-grid; place-items: center; color: var(--fa); }
+  .tip:hover { background: var(--alt); color: var(--hi); }
+
+  /* range menu */
+  .rbtn { height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; position: relative; }
+  .rbtn b { color: var(--hi); font-weight: 600; } .rbtn .d { color: var(--mu); }
+  .pop { position: absolute; top: 38px; left: 0; z-index: 40; width: 300px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--pop); padding: 6px; }
+  .pop .pi { display: flex; width: 100%; padding: 7px 10px; border-radius: 7px; font-size: 13px; justify-content: space-between; }
+  .pop .pi:hover { background: var(--alt); } .pop .pi.on { color: var(--acc); font-weight: 600; } .pop .pi .d { color: var(--fa); font-size: 12px; }
+  .pop .cust { border-top: 1px solid var(--line); margin-top: 4px; padding: 10px 8px 6px; display: flex; gap: 8px; align-items: flex-end; }
+  .pop .cust .in { width: 120px; }
+
+  /* bars */
+  .bar { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+  .bar .sp { flex: 1; }
+  .shdr { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 32px; }
+  .shdr .t { font-size: 12px; font-weight: 600; color: var(--mu); text-transform: uppercase; letter-spacing: .05em; }
+  .shdr .m { font-size: 12px; color: var(--fa); } .shdr .sp { flex: 1; }
+  .summary { font-size: 13px; color: var(--mu); display: flex; gap: 14px; flex-wrap: wrap; align-items: baseline; }
+  .summary b { color: var(--hi); font-family: var(--font-mono); font-weight: 600; }
+  .summary .big { font-size: 18px; }
+
+  /* KPI current */
+  .ks { display: flex; flex-wrap: wrap; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .ks > * { flex: 1 1 180px; min-width: 180px; background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; text-align: left; }
+  .kc .l { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; color: var(--mu); display: flex; gap: 6px; align-items: center; }
+  .kc .l i { width: 6px; height: 6px; border-radius: 9px; display: inline-block; }
+  .kc .v { font-family: var(--font-mono); font-weight: 600; font-size: 20px; color: var(--hi); }
+  .kc .h { font-size: 11px; color: var(--mu); }
+  /* KPI refined */
+  .kr .l { font-size: 12px; font-weight: 500; color: var(--mu); display: flex; gap: 6px; align-items: center; }
+  .kr .scope { font-size: 11px; font-weight: 500; padding: 0 6px; height: 18px; line-height: 18px; border-radius: 5px; background: var(--alt); color: var(--fa); border: 1px solid var(--line); margin-left: auto; white-space: nowrap; }
+  .kr .v { font-family: var(--font-mono); font-weight: 600; font-size: 20px; color: var(--hi); letter-spacing: -.01em; }
+  .kr .h { font-size: 12px; color: var(--mu); display: flex; gap: 6px; align-items: center; }
+  .kr .dl { font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+  .kr.alert-warn { box-shadow: inset 3px 0 0 var(--warn); } .kr.alert-bad { box-shadow: inset 3px 0 0 var(--bad); }
+  .kr.alert-warn .v { color: var(--warn); } .kr.alert-bad .v { color: var(--bad); }
+  .ks .click { cursor: pointer; } .ks .click:hover { background: var(--acc-tint); }
+  .ks .sel { box-shadow: inset 0 -2px 0 var(--acc); background: var(--acc-tint); }
+
+  /* table */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.t th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--fa); font-weight: 500; padding: 9px 14px; border-bottom: 1px solid var(--line); }
+  table.t td { padding: 9px 14px; border-bottom: 1px solid var(--line); }
+  table.t .r { text-align: right; } table.t td.r { font-family: var(--font-mono); }
+  table.t tfoot td { border-top: 1px solid var(--line2); border-bottom: 0; font-weight: 600; color: var(--hi); }
+  table.t tr.void td { color: var(--fa); } table.t tr.void td.r { text-decoration: line-through; }
+  table.t tr.grp td { background: var(--alt); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--fa); font-weight: 600; padding: 6px 14px; }
+  table.t tr.hl td { background: var(--acc-tint); }
+  .pill { font-family: var(--font-sans); font-size: 12px; font-weight: 500; height: 22px; line-height: 22px; display: inline-block; padding: 0 8px; border-radius: 99px; white-space: nowrap; }
+  .p-mu { background: var(--alt); color: var(--mu); border: 1px solid var(--line); } .p-warn { background: var(--warn-soft); color: var(--warn); } .p-bad { background: var(--bad-soft); color: var(--bad); } .p-info { background: var(--info-soft); color: var(--info); }
+  .empty { padding: 28px; text-align: center; color: var(--mu); font-size: 13px; }
+
+  /* kit */
+  .kit { display: grid; grid-template-columns: 220px 1fr 1fr; gap: 0; }
+  .kit > div { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .kit .k { font-weight: 600; color: var(--hi); font-size: 13px; } .kit .w { font-size: 12.5px; color: var(--mu); line-height: 1.5; }
+  .kit .h { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--fa); font-weight: 600; background: var(--alt); }
+
+  /* prototype chrome */
+  #ctl { position: fixed; left: 16px; bottom: 30px; width: 380px; z-index: 999; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px 12px; border-radius: 14px; background: #111; color: #ddd; font: 600 12px var(--font-sans); box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+  #ctl label { display: flex; gap: 6px; align-items: center; }
+  #ctl select { background: #222; color: #fff; border: 1px solid #333; border-radius: 8px; padding: 4px 6px; font: inherit; }
+  #ctl button { color: #ddd; padding: 4px 8px; border-radius: 8px; } #ctl button:hover { background: #2a2a2a; } #ctl button.on { background: #2fd18d; color: #06110c; }
+  #ctl .vl { flex: 1; text-align: center; } #ctl .vl span { opacity: .55; font-weight: 500; }
+  #notes { position: fixed; left: 16px; bottom: 150px; width: 380px; max-height: calc(100vh - 210px); overflow-y: auto; z-index: 998; background: #111; color: #d7d7d7; border-radius: 14px; padding: 14px 16px; font: 400 12.5px/1.55 var(--font-sans); box-shadow: 0 14px 40px rgba(0,0,0,.35); }
+  #notes h2 { margin: 0 0 4px; font-size: 15px; color: #fff; } #notes b { color: #fff; } #notes ul { margin: 6px 0 0; padding-left: 16px; } #notes li { margin-bottom: 4px; }
+  #notes .h { margin-top: 10px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: #8a8a8a; font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="notes"></div>
+<div id="ctl"></div>
+<script>
+/* PROTOTYPE: page controls & KPIs. Mock data, in memory. */
+const ic = (p, s = 16, w = 1.9) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const G = {
+  dash: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  pump: '<path d="M4 21V5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v16"/><path d="M3 21h11"/><path d="M13 10h3l3 3v5a1.5 1.5 0 0 1-3 0v-4h-3"/>',
+  box: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>', tag: '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/>',
+  truck: '<path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
+  bank: '<path d="M3 10 12 4l9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/>', out: '<path d="M12 19V5M5 12l7-7 7 7"/>', inn: '<path d="M12 5v14M5 12l7 7 7-7"/>',
+  doc: '<path d="M6 2h8l5 5v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v5h5"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+  org: '<rect x="4" y="3" width="16" height="18" rx="2"/>', search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+  down: '<path d="m6 9 6 6 6-6"/>', cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  pie: '<path d="M21 12A9 9 0 1 1 12 3v9z"/>', wallet: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/>', card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
+  car: '<path d="M5 17h14M3 13l2-6h14l2 6v4H3z"/>', tagc: '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+  dl: '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>', print: '<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/>', x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  trend: '<path d="M3 17l6-6 4 4 8-8"/>', book: '<path d="M2 4h7a3 3 0 0 1 3 3v14a2 2 0 0 0-2-2H2z"/><path d="M22 4h-7a3 3 0 0 0-3 3v14a2 2 0 0 1 2-2h8z"/>',
+};
+const inr = (n, d = 2) => (n < 0 ? '−' : '') + '₹' + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d });
+const inr0 = (n) => inr(Math.round(n), 0);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const D = (iso) => new Date(iso + 'T00:00:00Z');
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const dm = (iso) => { const d = D(iso); return `${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
+const shift = (iso, n) => { const d = D(iso); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }; // mock dates only
+const days = (a, b) => Math.round((D(b) - D(a)) / 864e5) + 1;
+const span = (r) => { const a = D(r.from), b = D(r.to); const sameM = a.getUTCMonth() === b.getUTCMonth();
+  if (r.from === r.to) return dm(r.from); return sameM ? `${a.getUTCDate()}–${dm(r.to)}` : `${dm(r.from)} – ${dm(r.to)}`; };
+
+/* ---------- range ---------- */
+const TODAY = '2026-10-14';
+const PRESETS = [
+  ['today', 'Today', { from: TODAY, to: TODAY }], ['yesterday', 'Yesterday', { from: shift(TODAY, -1), to: shift(TODAY, -1) }],
+  ['last-7', 'Last 7 days', { from: shift(TODAY, -6), to: TODAY }], ['this-month', 'This month', { from: '2026-10-01', to: TODAY }],
+  ['last-month', 'Last month', { from: '2026-09-01', to: '2026-09-30' }], ['last-30', 'Last 30 days', { from: shift(TODAY, -29), to: TODAY }],
+];
+const presetOf = (id) => PRESETS.find((p) => p[0] === id);
+const prevRange = (r) => { if (O && O.preset === 'this-month') return { from: '2026-09-01', to: '2026-09-14' }; if (O && O.preset === 'last-month') return { from: '2026-08-01', to: '2026-08-31' }; const n = days(r.from, r.to); return { from: shift(r.from, -n), to: shift(r.from, -1) }; };
+const prevLabel = (r, id) => id === 'this-month' ? 'Sept, same days' : id === 'last-month' ? 'Aug' : id === 'today' ? 'yesterday' : 'previous ' + days(r.from, r.to) + ' days';
+
+/* ---------- expenses ---------- */
+const EXP = [
+  ['2026-10-14', 'Electricity', 'KSEB bill · September', 18450, 'Cash in hand', 'cash'],
+  ['2026-10-14', 'Staff welfare', 'Tea & snacks, night shift', 640, 'Petty cash', 'cash'],
+  ['2026-10-12', 'Repairs & maintenance', 'DU 2 nozzle hose replaced', 7200, 'SBI current', 'bank'],
+  ['2026-10-10', 'Stationery', 'Bill books, pens', 385, 'Petty cash', 'cash'],
+  ['2026-10-08', 'Repairs & maintenance', 'Canopy light repair', 2150, 'Cash in hand', 'cash', 'void'],
+  ['2026-10-05', 'Staff welfare', 'Uniform washing', 1200, 'Owner', 'owner', 'adj'],
+  ['2026-10-02', 'Electricity', 'Generator diesel', 3600, 'Cash in hand', 'cash'],
+  ['2026-09-28', 'Generator diesel', '20 L for genset', 1790, 'Cash in hand', 'cash'],
+  ['2026-09-22', 'Bank charges', 'SMS alerts, Q3', 354, 'HDFC current', 'bank'],
+  ['2026-09-12', 'Electricity', 'KSEB bill · August', 16900, 'HDFC current', 'bank'],
+  ['2026-09-06', 'Generator diesel', '25 L for genset', 2240, 'Cash in hand', 'cash'],
+  ['2026-09-09', 'Staff welfare', 'Onam sweets', 2400, 'Petty cash', 'cash'],
+  ['2026-09-03', 'Repairs & maintenance', 'Air compressor service', 5600, 'Cash in hand', 'cash'],
+].map(([date, cat, desc, amt, acct, grp, flag]) => ({ date, cat, desc, amt, acct, grp, flag }));
+const CATS = [...new Set(EXP.map((e) => e.cat))].sort();
+const live = (e) => e.flag !== 'void';
+const inR = (r) => (e) => e.date >= r.from && e.date <= r.to;
+const sum = (xs) => xs.reduce((a, e) => a + e.amt, 0);
+
+/* ---------- customers ---------- */
+const CUST = [
+  ['Sri Balaji Transports', 'Fleet', 200000, 184200, 0, '13 Oct'], ['RTC Depot 4', 'Fleet', 300000, 362000, 41, '28 Aug'],
+  ['Anand Logistics', 'Fleet', 100000, 28861, 0, '11 Oct'], ['Kaveri Travels', 'Retail', 50000, 12450, 12, '30 Sep'],
+  ['Malabar Cabs', 'Fleet', 150000, 96300, 19, '22 Sep'], ['KSRTC Feeder', 'Fleet', 250000, 0, 0, '09 Oct'],
+  ['Hotel Paramount', 'Retail', 25000, 6800, 0, '12 Oct'], ['Calicut Couriers', 'Fleet', 80000, 54100, 0, '10 Oct'],
+].map(([name, type, limit, due, overdue, last]) => ({ name, type, limit, due, overdue, last }));
+const COLLECTED_MONTH = 318400, COLLECTED_TODAY = 25000;
+
+/* ---------- P&L ---------- */
+const PNL = [ // per-day base figures for this month; scaled by range length
+  ['Revenue', 'Fuel sales', 612000], ['Revenue', 'Product sales', 9400], ['Revenue', 'Other income', 1300],
+  ['Cost', 'Fuel cost (COGS)', -566000], ['Cost', 'Product cost', -6900],
+  ['Expenses', 'Electricity', -1580], ['Expenses', 'Salaries', -4200], ['Expenses', 'Repairs & maintenance', -510], ['Expenses', 'Other expenses', -380],
+];
+
+/* ---------- state ---------- */
+const P = new URLSearchParams(location.search);
+const pick = (k, list, d) => list.includes(P.get(k)) ? P.get(k) : d;
+var O; O = {
+  page: pick('page', ['expenses', 'customers', 'pnl', 'kit'], 'expenses'), v: pick('v', ['A', 'B', 'C', 'D'], 'B'),
+  range: pick('range', ['fields', 'menu', 'presets'], 'menu'), kpi: pick('kpi', ['current', 'refined'], 'refined'),
+  theme: P.get('theme') === 'dark' ? 'dark' : 'light', notes: P.get('notes') !== '0',
+  preset: 'this-month', r: presetOf('this-month')[2], pop: false, q: '', cat: '', tile: '', chip: 'all', cmp: 'prev', export: false,
+};
+const setPreset = (id) => { O.preset = id; O.r = { ...presetOf(id)[2] }; O.pop = false; };
+
+/* ---------- controls ---------- */
+function rangeCtl() {
+  const label = O.preset === 'custom' ? 'Custom' : presetOf(O.preset)[1];
+  if (O.range === 'fields') {
+    return `<div><span class="lab">Period</span><select class="in" data-f="preset" style="width:150px">${PRESETS.map(([id, l]) => `<option value="${id}" ${O.preset === id ? 'selected' : ''}>${l}</option>`).join('')}<option value="custom" ${O.preset === 'custom' ? 'selected' : ''}>Custom</option></select></div>
+      <div><span class="lab">From</span><input class="in" type="date" value="${O.r.from}" data-f="from" style="width:140px"></div>
+      <div><span class="lab">To</span><input class="in" type="date" value="${O.r.to}" data-f="to" style="width:140px"></div>`;
+  }
+  if (O.range === 'presets') {
+    const quick = [['today', 'Today'], ['last-7', '7 days'], ['this-month', 'Month'], ['last-month', 'Last month']];
+    return `<div class="seg">${quick.map(([id, l]) => `<button data-act="preset:${id}" class="${O.preset === id ? 'on' : ''}">${l}</button>`).join('')}<button data-act="preset:custom" class="${O.preset === 'custom' ? 'on' : ''}">${ic(G.cal, 13)}Custom</button></div>
+      ${O.preset === 'custom' ? `<input class="in" type="date" value="${O.r.from}" data-f="from" style="width:140px"><input class="in" type="date" value="${O.r.to}" data-f="to" style="width:140px">` : `<span class="fa" style="font-size:12px;align-self:center">${span(O.r)}</span>`}`;
+  }
+  // menu: one control, popover with presets + custom
+  return `<div style="position:relative"><button class="rbtn" data-act="pop">${ic(G.cal, 14)}<b>${label}</b><span class="d">${span(O.r)}</span>${ic(G.down, 13, 2.2)}</button>
+    ${O.pop ? `<div class="pop">${PRESETS.map(([id, l, r]) => `<button class="pi ${O.preset === id ? 'on' : ''}" data-act="preset:${id}">${l}<span class="d">${span(r)}</span></button>`).join('')}
+      <div class="cust"><div><span class="lab">From</span><input class="in" type="date" value="${O.r.from}" data-f="from"></div><div><span class="lab">To</span><input class="in" type="date" value="${O.r.to}" data-f="to"></div></div></div>` : ''}</div>`;
+}
+const searchCtl = (ph) => `<div class="sbox">${ic(G.search, 14)}<input class="in" placeholder="${ph}" value="${esc(O.q)}" data-f="q"></div>`;
+const catCtl = () => `<select class="in" data-f="cat" style="width:190px"><option value="">All categories</option>${CATS.map((c) => `<option ${O.cat === c ? 'selected' : ''}>${c}</option>`).join('')}</select>`;
+const tipCtl = (t) => `<button class="tip" title="${esc(t)}">${ic(G.info, 15)}</button>`;
+const exportCtl = () => `<div style="position:relative"><button class="btn sec sm" data-act="export">${ic(G.dl, 14)}Export${ic(G.down, 12, 2.2)}</button>${O.export ? `<div class="pop" style="width:180px;left:auto;right:0"><button class="pi">PDF</button><button class="pi">Excel (CSV)</button><button class="pi">${ic(G.print, 14)} Print</button></div>` : ''}</div>`;
+
+/* ---------- KPI tiles ---------- */
+/* tile: { id, label, value, scope ('Today'|'In range'|'Now'|month), hint, delta:{text, good}, alert:'warn'|'bad', dot, legacyTone } */
+function kpiStrip(tiles, { clickable = false } = {}) {
+  return `<div class="ks">${tiles.map((t) => {
+    const cls = clickable && t.filter ? 'click' : ''; const sel = clickable && O.tile && O.tile === t.filter ? 'sel' : '';
+    const tag = clickable && t.filter ? 'button' : 'div', act = clickable && t.filter ? `data-act="tile:${t.filter}"` : '';
+    if (O.kpi === 'current') {
+      const tone = t.legacyTone ? `color:var(--${t.legacyTone})` : '';
+      return `<${tag} class="kc ${cls} ${sel}" ${act}><span class="l"><i style="background:var(--${t.dot || 'acc'})"></i>${esc(t.label)}</span><span class="v" style="${tone}">${t.value}</span><span class="h">${esc(t.legacyHint ?? t.hint ?? '')}</span></${tag}>`;
+    }
+    const delta = t.delta ? `<span class="dl ${t.delta.good === true ? 'good' : t.delta.good === false ? 'bad' : 'mu'}">${t.delta.text}</span>` : '';
+    return `<${tag} class="kr ${cls} ${sel} ${t.alert ? 'alert-' + t.alert : ''}" ${act}><span class="l">${esc(t.label)}${cls ? `<span class="fa" style="font-size:11px">${sel ? '· filtering' : '· filter ›'}</span>` : ''}${t.scope ? `<span class="scope">${t.scope}</span>` : ''}</span><span class="v">${t.value}</span><span class="h">${delta}${t.hint ? `<span>${t.hint}</span>` : ''}</span></${tag}>`;
+  }).join('')}</div>`;
+}
+const pct = (a, b) => b ? Math.round(((a - b) / b) * 100) : null;
+const deltaOf = (a, b, upIsGood) => { const p = pct(a, b); if (p == null) return null; return { text: `${p > 0 ? '↑' : p < 0 ? '↓' : ''}${Math.abs(p)}%`, good: p === 0 ? null : (p > 0) === upIsGood }; };
+
+/* ---------- shell ---------- */
+const NAV = [
+  ['Operate', [['dashboard', 'Dashboard', G.dash], ['shifts', 'Shifts', G.pump], ['inventory', 'Inventory', G.box], ['pricing', 'Pricing', G.tag]]],
+  ['Parties', [['customers', 'Customers', G.users], ['suppliers', 'Suppliers', G.truck]]],
+  ['Books', [['accounts', 'Accounts', G.bank], ['expenses', 'Expenses', G.out], ['income', 'Income', G.inn]]],
+  ['Insight', [['reports', 'Reports', G.doc]]], ['Setup', [['station', 'Station', G.gear], ['organization', 'Organization', G.org]]],
+];
+const navKey = () => ({ expenses: 'expenses', customers: 'customers', pnl: 'reports', kit: '' }[O.page]);
+const shell = (inner) => `<div class="app ${O.theme}"><div class="topbar"><span class="mark">${ic(G.pump, 15, 2.2)}</span><span class="hi" style="font-weight:700;font-size:13px">Highway Fuels</span>
+  <div class="search-top">${ic(G.search, 15)}Search customers, suppliers, products…</div><button class="btn pri">${ic(G.plus, 15, 2.4)} New</button></div>
+  <div class="body"><aside class="side">${NAV.map(([g, items]) => `<div class="grp">${g}</div>${items.map(([k, n, p]) => `<button class="nav ${navKey() === k ? 'on' : ''}" data-act="nav:${k}">${ic(p, 16)}${n}</button>`).join('')}`).join('')}</aside>
+  <main class="main"><div class="page">${inner}</div></main></div></div>`;
+const frame = (title, sub, actions, tabs) => `<div class="row" style="align-items:flex-start"><div><div class="ttl">${title}</div><div class="sub">${sub}</div></div><div class="row" style="margin-left:auto;gap:8px">${actions}</div></div>
+  ${tabs ? `<div class="tabs">${tabs.map(([t, g], i) => `<button class="tab ${i === 0 ? 'on' : ''}">${ic(g, 14)}${t}</button>`).join('')}</div>` : ''}`;
+const shdr = (t, meta, right) => `<div class="shdr"><span class="t">${t}</span>${meta ? `<span class="m">${meta}</span>` : ''}<span class="sp"></span>${right || ''}</div>`;
+
+/* ---------- Expenses ---------- */
+function expensesPage() {
+  const all = EXP.filter(inR(O.r));
+  const q = O.q.toLowerCase();
+  let rows = all.filter((e) => (!q || (e.cat + ' ' + e.desc + ' ' + e.acct).toLowerCase().includes(q)) && (!O.cat || e.cat === O.cat));
+  if (O.v === 'D' && O.tile) rows = rows.filter((e) => e.grp === O.tile);
+  const liveAll = all.filter(live), prev = EXP.filter(inR(prevRange(O.r))).filter(live);
+  const spent = sum(liveAll), pSpent = sum(prev), n = liveAll.length, dd = days(O.r.from, O.r.to);
+  const g = (k) => sum(liveAll.filter((e) => e.grp === k));
+  const month = EXP.filter(inR({ from: '2026-10-01', to: TODAY })).filter(live), today = month.filter((e) => e.date === TODAY);
+  const vs = prevLabel(O.r, O.preset);
+  const fixedTiles = [
+    { label: 'Spent today', scope: 'Today', value: inr(sum(today)), hint: `${today.length} entries`, legacyTone: 'bad', dot: 'bad', legacyHint: 'entry date' },
+    { label: 'Spent this month', scope: 'Oct', value: inr(sum(month)), hint: `${month.length} entries`, legacyTone: 'bad', dot: 'bad', legacyHint: `${month.length} entries` },
+    { label: 'Paid from cash', scope: 'Oct', value: inr(sum(month.filter((e) => e.grp === 'cash'))), hint: 'Cash in hand + petty', dot: 'warn', legacyHint: 'this month' },
+    { label: 'Paid from bank / owner', scope: 'Oct', value: inr(sum(month.filter((e) => e.grp !== 'cash'))), hint: 'Bank + owner', dot: 'info', legacyHint: 'this month' },
+  ];
+  const rangeTiles = [
+    { label: 'Spent', scope: 'In range', value: inr(spent), delta: deltaOf(spent, pSpent, false) && { ...deltaOf(spent, pSpent, false), good: null }, hint: `vs ${vs} · ${n} entries`, legacyTone: 'bad', dot: 'bad', legacyHint: `${n} entries`, filter: '' },
+    { label: 'From cash', scope: 'In range', value: inr(g('cash')), hint: 'Cash in hand + petty', dot: 'warn', filter: 'cash' },
+    { label: 'From bank', scope: 'In range', value: inr(g('bank')), hint: 'Bank accounts', dot: 'info', filter: 'bank' },
+    { label: 'From owner', scope: 'In range', value: inr(g('owner')), hint: 'Paid personally', dot: 'mu', filter: 'owner' },
+  ];
+  const actions = `<button class="btn sec">${ic(G.tagc, 14)}Categories</button><button class="btn pri">${ic(G.plus, 14, 2.4)}Record expense</button>`;
+  const tip = tipCtl('Expenses are office records, dated by entry date. Voided entries stay visible, struck through, and are left out of totals.');
+  const filters = `${searchCtl('Search description, category…')}${catCtl()}`;
+  const table = expTable(rows);
+  const meta = `${rows.length} entries${O.v === 'D' && O.tile ? ` · <button class="chip on" data-act="tile:${O.tile}" style="height:22px">${{ cash: 'From cash', bank: 'From bank', owner: 'From owner' }[O.tile]} ${ic(G.x, 11, 2.4)}</button>` : ''}`;
+  let body;
+  if (O.v === 'A') body = `<div class="bar">${rangeCtl()}${filters}<span class="sp"></span>${tip}</div>${kpiStrip(rangeTiles)}${shdr('Expense ledger', meta)}${table}`;
+  else if (O.v === 'B') body = `${kpiStrip(fixedTiles)}${shdr('Expense ledger', meta, `<div class="bar">${rangeCtl()}${filters}${tip}</div>`)}${table}`;
+  else if (O.v === 'C') body = `<div class="bar">${rangeCtl()}<div class="summary" style="align-self:center;margin-left:6px"><span><b class="big">${inr(spent)}</b> spent</span><span><b>${n}</b> entries</span><span>cash <b>${inr0(g('cash'))}</b></span><span>bank <b>${inr0(g('bank'))}</b></span><span>owner <b>${inr0(g('owner'))}</b></span>${pSpent ? `<span>${deltaOf(spent, pSpent, false).text} vs ${vs}</span>` : ''}</div></div>${shdr('Expense ledger', meta, `<div class="bar" style="align-items:center">${filters}${tip}</div>`)}${table}`;
+  else body = `<div class="bar">${rangeCtl()}${filters}<span class="sp"></span>${tip}</div>${kpiStrip(rangeTiles, { clickable: true })}${shdr('Expense ledger', meta)}${table}`;
+  return frame('Expenses', 'Money paid out by the office.', actions, [['Expenses', G.out], ['By category', G.pie]]) + `<div class="stack">${body}</div>`;
+}
+function expTable(rows) {
+  if (!rows.length) return `<div class="card empty">No expenses match. ${O.q || O.cat || O.tile ? '<button class="btn ghost sm" data-act="clear">Clear filters</button>' : ''}</div>`;
+  const hasVoid = rows.some((e) => !live(e));
+  return `<div class="card"><table class="t"><thead><tr><th>Entry date</th><th>Category</th><th>Description</th><th>Funding account</th><th class="r">Amount</th></tr></thead><tbody>
+    ${rows.map((e) => `<tr class="${live(e) ? '' : 'void'}"><td>${dm(e.date)}</td><td class="hi" style="font-weight:600">${e.cat}</td><td class="mu">${e.desc}</td><td>${e.acct}</td>
+      <td class="r">${e.flag === 'void' ? '<span class="pill p-mu" style="text-decoration:none;margin-right:8px">Voided</span>' : e.flag === 'adj' ? '<span class="pill p-info" style="margin-right:8px">Adjustment</span>' : ''}${inr(e.amt)}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td colspan="4">${hasVoid ? 'Total excl. voided' : 'Total'}</td><td class="r">${inr(sum(rows.filter(live)))}</td></tr></tfoot></table></div>`;
+}
+
+/* ---------- Customers ---------- */
+function customersPage() {
+  const q = O.q.toLowerCase();
+  const isOver = (c) => c.overdue > 0, isLimit = (c) => c.due > c.limit;
+  const counts = { all: CUST.length, overdue: CUST.filter(isOver).length, limit: CUST.filter(isLimit).length, paid: CUST.filter((c) => c.due === 0).length };
+  const f = O.v === 'D' ? O.tile || 'all' : O.chip;
+  const rows = CUST.filter((c) => (!q || c.name.toLowerCase().includes(q)) && (f === 'all' || (f === 'overdue' && isOver(c)) || (f === 'limit' && isLimit(c)) || (f === 'paid' && c.due === 0)));
+  const recv = CUST.reduce((a, c) => a + c.due, 0), od = CUST.filter(isOver).reduce((a, c) => a + c.due, 0);
+  const tiles = [
+    { label: 'Receivable', scope: 'Now', value: inr(recv), hint: `${CUST.filter((c) => c.due > 0).length} customers owe`, dot: 'acc', filter: '' },
+    { label: 'Overdue', scope: 'Now', value: inr(od), hint: `${counts.overdue} customers, oldest 41 days`, alert: 'warn', dot: 'warn', legacyTone: 'warn', filter: 'overdue' },
+    { label: 'Over credit limit', scope: 'Now', value: String(counts.limit), hint: 'RTC Depot 4 · ₹62,000 over', alert: 'bad', dot: 'bad', legacyTone: 'bad', filter: 'limit' },
+    { label: 'Collected', scope: 'Oct', value: inr(COLLECTED_MONTH), hint: `${inr0(COLLECTED_TODAY)} today`, dot: 'good', legacyTone: 'good' },
+  ];
+  const chips = `<div class="chips">${[['all', 'All'], ['overdue', 'Overdue', 'warn-c'], ['limit', 'Over limit', 'bad-c'], ['paid', 'Paid up']].map(([k, l, c]) => `<button class="chip ${c || ''} ${O.chip === k ? 'on' : ''}" data-act="chip:${k}">${l}<span class="c">${counts[k]}</span></button>`).join('')}</div>`;
+  const actions = `<button class="btn sec">${ic(G.plus, 14, 2.4)}New customer</button><button class="btn pri">${ic(G.wallet, 14)}Record collection</button>`;
+  const table = custTable(rows);
+  let body;
+  if (O.v === 'A') body = `<div class="bar">${searchCtl('Search customers…')}${chips}</div>${kpiStrip(tiles)}${shdr('Credit customers', `${rows.length} of ${CUST.length}`)}${table}`;
+  else if (O.v === 'B') body = `${kpiStrip(tiles)}${shdr('Credit customers', `${rows.length} of ${CUST.length}`, `<div class="bar" style="align-items:center">${chips}${searchCtl('Search customers…')}</div>`)}${table}`;
+  else if (O.v === 'C') body = `<div class="bar" style="align-items:center"><div class="summary"><span><b class="big">${inr0(recv)}</b> receivable</span><span class="warn"><b style="color:inherit">${inr0(od)}</b> overdue (${counts.overdue})</span><span class="bad"><b style="color:inherit">${counts.limit}</b> over limit</span><span><b>${inr0(COLLECTED_MONTH)}</b> collected in Oct</span></div><span class="sp"></span>${chips}${searchCtl('Search customers…')}</div>${shdr('Credit customers', `${rows.length} of ${CUST.length}`)}${table}`;
+  else body = `<div class="bar">${searchCtl('Search customers…')}</div>${kpiStrip(tiles, { clickable: true })}${shdr('Credit customers', `${rows.length} of ${CUST.length}${O.tile ? ` · <button class="chip on" data-act="tile:${O.tile}" style="height:22px">${O.tile === 'overdue' ? 'Overdue' : 'Over limit'} ${ic(G.x, 11, 2.4)}</button>` : ''}`)}${table}`;
+  return frame('Customers', 'Credit customers, their sales and collections.', actions, [['Customers', G.users], ['Credit sales', G.card], ['Collections', G.wallet], ['Vehicles', G.car]]) + `<div class="stack">${body}</div>`;
+}
+function custTable(rows) {
+  if (!rows.length) return `<div class="card empty">No customers match. <button class="btn ghost sm" data-act="clear">Clear filters</button></div>`;
+  return `<div class="card"><table class="t"><thead><tr><th>Customer</th><th>Type</th><th class="r">Credit limit</th><th class="r">Due</th><th>Status</th><th>Last collection</th></tr></thead><tbody>
+    ${rows.map((c) => `<tr><td class="hi" style="font-weight:600">${c.name}</td><td class="mu">${c.type}</td><td class="r mu">${inr0(c.limit)}</td><td class="r">${inr(c.due)}</td>
+      <td>${c.due > c.limit ? '<span class="pill p-bad">Over limit</span> ' : ''}${c.overdue ? `<span class="pill p-warn">${c.overdue} days overdue</span>` : c.due === 0 ? '<span class="pill p-mu">Paid up</span>' : ''}</td><td class="mu">${c.last}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td colspan="3">Total due</td><td class="r">${inr(rows.reduce((a, c) => a + c.due, 0))}</td><td colspan="2"></td></tr></tfoot></table></div>`;
+}
+
+/* ---------- Reports › Profit & loss ---------- */
+function pnlPage() {
+  const k = days(O.r.from, O.r.to) / 14;
+  const prevF = { prev: [0.94, 0.95], year: [0.88, 0.885], none: null }[O.cmp];
+  const lines = PNL.map(([grp, name, base]) => { const v = Math.round(base * k); const p = prevF ? Math.round(v * (base > 0 ? prevF[0] : prevF[1])) : null; return { grp, name, v, p }; });
+  const tot = (g, key = 'v') => lines.filter((l) => g.includes(l.grp)).reduce((a, l) => a + (l[key] ?? 0), 0);
+  const rev = tot(['Revenue']), gm = tot(['Revenue', 'Cost']), opx = -tot(['Expenses']), net = tot(['Revenue', 'Cost', 'Expenses']);
+  const pr = { rev: tot(['Revenue'], 'p'), gm: tot(['Revenue', 'Cost'], 'p'), opx: -tot(['Expenses'], 'p'), net: tot(['Revenue', 'Cost', 'Expenses'], 'p') };
+  const cmpLabel = { prev: prevLabel(O.r, O.preset), year: 'same days last year', none: '' }[O.cmp];
+  const d = (a, b, up) => (prevF ? deltaOf(a, b, up) : null);
+  const tiles = [
+    { label: 'Revenue', scope: 'In range', value: inr0(rev), delta: d(rev, pr.rev, true), hint: prevF ? `vs ${cmpLabel}` : '', dot: 'acc', filter: 'Revenue' },
+    { label: 'Gross margin', scope: 'In range', value: inr0(gm), delta: d(gm, pr.gm, true), hint: `${(gm / rev * 100).toFixed(1)}% of revenue`, dot: 'good', filter: 'Cost' },
+    { label: 'Operating expenses', scope: 'In range', value: inr0(opx), delta: d(opx, pr.opx, false), hint: prevF ? `vs ${cmpLabel}` : '', dot: 'warn', filter: 'Expenses' },
+    { label: 'Net profit', scope: 'In range', value: inr0(net), delta: d(net, pr.net, true), hint: prevF ? `vs ${cmpLabel}` : '', dot: 'acc', alert: net < 0 ? 'bad' : undefined, filter: 'Net' },
+  ];
+  const cmp = `<div class="seg">${[['prev', 'vs previous period'], ['year', 'vs last year'], ['none', 'No comparison']].map(([id, l]) => `<button data-act="cmp:${id}" class="${O.cmp === id ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  const table = pnlTable(lines, { rev, gm, net, pr }, prevF);
+  const actionsHdr = O.v === 'B' ? exportCtl() : '';
+  let body;
+  if (O.v === 'C') body = `<div class="bar">${rangeCtl()}${cmp}<span class="sp"></span>${exportCtl()}</div><div class="summary"><span>Revenue <b class="big">${inr0(rev)}</b></span><span>Gross margin <b>${inr0(gm)}</b> (${(gm / rev * 100).toFixed(1)}%)</span><span>Expenses <b>${inr0(opx)}</b></span><span>Net profit <b>${inr0(net)}</b>${prevF ? ` ${d(net, pr.net, true).text} vs ${cmpLabel}` : ''}</span></div>${table}`;
+  else body = `<div class="bar">${rangeCtl()}${cmp}<span class="sp"></span>${O.v === 'B' ? '' : exportCtl()}</div>${kpiStrip(tiles, { clickable: O.v === 'D' })}${table}`;
+  const subnav = `<div style="display:flex;gap:16px;margin-top:14px"><div style="width:190px;flex-shrink:0;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--line);padding-right:10px">
+    ${['DSSR', 'Attendant handovers', 'Decantations', 'Profit & loss', 'Ledgers', 'Cash & bank', 'GST'].map((t) => `<button class="nav ${t === 'Profit & loss' ? 'on' : ''}" style="padding:6px 10px">${t}</button>`).join('')}</div><div class="stack" style="flex:1;margin-top:0;min-width:0">${body}</div></div>`;
+  return frame('Reports', 'Daily sales, profit & loss, ledgers and tax registers.', actionsHdr, null) + subnav;
+}
+function pnlTable(lines, t, prevF) {
+  const row = (name, v, p, cls = '') => `<tr class="${cls}"><td>${name}</td><td class="r">${inr0(v)}</td>${prevF ? `<td class="r mu">${inr0(p)}</td><td class="r ${v - p >= 0 ? '' : 'mu'}">${v - p >= 0 ? '+' : '−'}${inr0(Math.abs(v - p)).slice(v - p >= 0 ? 0 : 0)}</td>` : ''}</tr>`;
+  const grp = (g) => lines.filter((l) => l.grp === g).map((l) => row(l.name, l.v, l.p, O.tile === g ? 'hl' : '')).join('');
+  const sub = (name, v, p, key) => `<tr class="${O.tile === key ? 'hl' : ''}" style="font-weight:600"><td class="hi">${name}</td><td class="r hi">${inr0(v)}</td>${prevF ? `<td class="r mu">${inr0(p)}</td><td class="r">${v - p >= 0 ? '+' : '−'}${inr0(Math.abs(v - p))}</td>` : ''}</tr>`;
+  const cols = prevF ? 4 : 2;
+  return `<div class="card"><table class="t"><thead><tr><th>Line</th><th class="r">This period</th>${prevF ? '<th class="r">Comparison</th><th class="r">Change</th>' : ''}</tr></thead><tbody>
+    <tr class="grp"><td colspan="${cols}">Revenue</td></tr>${grp('Revenue')}<tr class="grp"><td colspan="${cols}">Cost of sales</td></tr>${grp('Cost')}${sub('Gross margin', t.gm, t.pr.gm, 'Cost')}
+    <tr class="grp"><td colspan="${cols}">Operating expenses</td></tr>${grp('Expenses')}</tbody>
+    <tfoot><tr class="${O.tile === 'Net' ? 'hl' : ''}"><td>Net profit</td><td class="r">${inr0(t.net)}</td>${prevF ? `<td class="r mu">${inr0(t.pr.net)}</td><td class="r">${t.net - t.pr.net >= 0 ? '+' : '−'}${inr0(Math.abs(t.net - t.pr.net))}</td>` : ''}</tr></tfoot></table></div>`;
+}
+
+/* ---------- control vocabulary ---------- */
+function kitPage() {
+  const R = (name, ex, when, notWhen) => `<div class="k">${name}</div><div>${ex}</div><div class="w"><b class="hi">Use:</b> ${when}<br><b class="hi">Not for:</b> ${notWhen}</div>`;
+  const savedRange = O.range; O.range = 'menu'; const rng = rangeCtl(); O.range = savedRange;
+  return frame('Control vocabulary', 'What each control is for. One job each, so pages read the same.', '', null) + `<div class="card" style="margin-top:14px"><div class="kit">
+    <div class="h">Control</div><div class="h">Looks like</div><div class="h">When</div>
+    ${R('Primary button', `<button class="btn pri">${ic(G.plus, 14, 2.4)}Record expense</button>`, 'the one main action of the page, top right of the Page Frame. One per page.', 'filters, exports, secondary actions.')}
+    ${R('Secondary button', `<button class="btn sec">${ic(G.tagc, 14)}Categories</button>`, 'other page actions (manage, new party), left of the primary.', 'more than two per page; group the rest in a ⋯ menu.')}
+    ${R('Export menu', exportCtl(), 'PDF / CSV / print of the section below. Sits at the right end of the control bar.', 'the page header (it exports what the bar filters).')}
+    ${R('Tabs', `<div class="tabs" style="margin:0"><button class="tab on">${ic(G.out, 14)}Expenses</button><button class="tab">${ic(G.pie, 14)}By category</button></div>`, 'sections of a page (different data or questions). Page Frame tabs slot, icon + label.', 'a different view of the same rows.')}
+    ${R('Segmented', `<div class="seg"><button class="on">Cash</button><button>Bank</button></div>`, '2–4 ways to view or compare the same data (Cash | Bank, vs previous | vs last year).', 'filtering rows (use chips) or picking from 5+ options (use a select).')}
+    ${R('Filter chips', `<div class="chips"><button class="chip on">All<span class="c">8</span></button><button class="chip warn-c">Overdue<span class="c">3</span></button></div>`, 'quick status filters with counts on a list. Counts show before you click.', 'categories or long lists (use a select).')}
+    ${R('Select', catCtl(), 'one of 5+ values: category, account, product.', 'two or three choices (use segmented).')}
+    ${R('Search', searchCtl('Search…'), 'free text over the rows below. Always the first filter.', 'jumping to other pages (that is ⌘K).')}
+    ${R('Date range', rng, 'the period of what sits directly below it. Presets plus custom. Applies instantly.', 'a fixed-period KPI (label the tile\'s own period instead).')}
+    ${R('Info tip', tipCtl('Explains how the figures are worked out.'), 'how a figure is worked out; method notes. End of the control bar.', 'instructions the operator must read to act (put those in the UI).')}
+    ${R('KPI tile', `<div style="width:220px">${kpiStrip([{ label: 'Spent', scope: 'In range', value: '₹31,475.00', hint: '↑ 8% vs Sept' }])}</div>`, 'up to 4 headline figures, each with its period chip (Today · Oct · In range · Now).', 'repeating the table\'s total row, or decoration.')}
+  </div></div>`;
+}
+
+/* ---------- notes ---------- */
+const LAYOUT = {
+  A: ['A · Toolbar', 'One control bar under the tabs drives <b>everything</b> below it: tiles, table, totals. Tiles always follow the range. The simplest rule; it drops fixed "today" figures unless the range is Today.'],
+  B: ['B · Section bars', 'Fixed figures on top, each tile labelled with its own period (Today · Oct · Now). The controls sit in the <b>section header</b> of the table they filter. Matches "a control sits above what it controls".'],
+  C: ['C · Summary line', 'No tiles. The range control is followed by a one-line summary of the same range. Densest; the table\'s total row carries the main figure.'],
+  D: ['D · Tiles as filters', 'Like A, but tiles are buttons: clicking "From cash" or "Overdue" filters the table. Removes a separate filter control where the tiles already split the rows.'],
+};
+function renderNotes() {
+  const el = document.getElementById('notes');
+  if (!O.notes) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  if (O.page === 'kit') { el.innerHTML = `<h2>Control vocabulary</h2>One job per control. If a page needs a control that isn't here, that's a decision, not an improvisation.<div class="h">Proposed rules</div><ul><li>One primary action per page.</li><li>Filters apply instantly. No Apply buttons.</li><li>Order in a control bar: range · search · filters · (space) · export · info tip.</li><li>Tabs for sections, segmented for views of the same data, chips for row filters.</li></ul>`; return; }
+  const [t, d] = LAYOUT[O.v];
+  const page = { expenses: 'Expenses (a ledger: rows in a period)', customers: 'Customers (a list of balances, no period)', pnl: 'Reports › P&L (a report: everything follows the period)' }[O.page];
+  el.innerHTML = `<h2>${t}</h2>${d}<div class="h">This page</div>${page}
+    <div class="h">Range control: ${O.range}</div>${{ fields: 'Today\'s control: a period select plus two date fields, 3 controls wide.', menu: 'One button showing the preset and dates; presets and custom dates in a popover. Narrowest.', presets: 'Segmented presets; dates appear only for Custom. Fastest for the common periods.' }[O.range]}
+    <div class="h">KPI: ${O.kpi}</div>${O.kpi === 'current' ? 'Today\'s KpiTile: 11px uppercase label, coloured dot, values coloured (spend in red), no period on the tile.' : 'Proposed: 12px sentence-case label, a <b>period chip</b> on every tile (Today · Oct · In range · Now), neutral values, a comparison line, and colour only for a problem (amber/red edge).'}
+    <div class="h">Try</div><ul><li>Switch layouts A–D on each page (← →).</li><li>Change the range: which figures should move with it?</li><li>Customers: there's no period, so where do chips and search go?</li><li>Toggle KPI current ↔ refined.</li></ul>`;
+}
+function renderCtl() {
+  const sel = (id, opts, cur) => `<select data-ctl="${id}">${opts.map(([v, t]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+  document.getElementById('ctl').innerHTML = `<button data-ctl="prev">‹</button><span class="vl">${O.v} <span>${LAYOUT[O.v][0].split('· ')[1]}</span></span><button data-ctl="next">›</button>
+    <label>Page ${sel('page', [['expenses', 'Expenses'], ['customers', 'Customers'], ['pnl', 'Reports · P&L'], ['kit', 'Control vocabulary']], O.page)}</label>
+    <label>Range ${sel('range', [['menu', 'Menu'], ['presets', 'Presets'], ['fields', 'Fields (today)']], O.range)}</label>
+    <label>KPI ${sel('kpi', [['refined', 'Refined'], ['current', 'Current']], O.kpi)}</label>
+    <button data-ctl="theme">${O.theme === 'dark' ? 'Light' : 'Dark'}</button><button data-ctl="notes" class="${O.notes ? 'on' : ''}">Notes</button>`;
+}
+
+/* ---------- render + events ---------- */
+function render() {
+  const inner = { expenses: expensesPage, customers: customersPage, pnl: pnlPage, kit: kitPage }[O.page]();
+  document.getElementById('root').innerHTML = shell(inner);
+  document.body.className = O.theme;
+  renderNotes(); renderCtl();
+  history.replaceState(null, '', '?' + new URLSearchParams({ page: O.page, v: O.v, range: O.range, kpi: O.kpi, theme: O.theme }));
+}
+const cycle = (dir) => { const ks = ['A', 'B', 'C', 'D']; O.v = ks[(ks.indexOf(O.v) + dir + 4) % 4]; O.tile = ''; render(); };
+document.addEventListener('click', (ev) => {
+  const c = ev.target.closest('[data-ctl]');
+  if (c) { const k = c.dataset.ctl; if (k === 'prev') cycle(-1); if (k === 'next') cycle(1); if (k === 'theme') { O.theme = O.theme === 'dark' ? 'light' : 'dark'; render(); } if (k === 'notes') { O.notes = !O.notes; render(); } return; }
+  const t = ev.target.closest('[data-act]');
+  if (!t) { if (O.pop || O.export) { if (!ev.target.closest('.pop')) { O.pop = false; O.export = false; render(); } } return; }
+  const [a, arg] = t.dataset.act.split(/:(.*)/s);
+  if (a === 'pop') O.pop = !O.pop;
+  else if (a === 'export') O.export = !O.export;
+  else if (a === 'preset') { if (arg === 'custom') { O.preset = 'custom'; O.pop = O.range === 'menu'; } else setPreset(arg); }
+  else if (a === 'tile') O.tile = O.tile === arg ? '' : arg;
+  else if (a === 'chip') O.chip = arg;
+  else if (a === 'cmp') O.cmp = arg;
+  else if (a === 'clear') { O.q = ''; O.cat = ''; O.tile = ''; O.chip = 'all'; }
+  else if (a === 'nav') { const m = { expenses: 'expenses', customers: 'customers', reports: 'pnl' }[arg]; if (!m) return; O.page = m; O.tile = ''; O.q = ''; }
+  render();
+});
+document.addEventListener('change', (ev) => {
+  const c = ev.target.closest('[data-ctl]');
+  if (c) { O[c.dataset.ctl] = c.value; O.tile = ''; O.q = ''; O.cat = ''; O.chip = 'all'; render(); return; }
+  const f = ev.target.dataset.f;
+  if (f === 'preset') { if (ev.target.value === 'custom') O.preset = 'custom'; else setPreset(ev.target.value); render(); }
+  else if (f === 'from' || f === 'to') { O.r = { ...O.r, [f]: ev.target.value }; O.preset = 'custom'; if (O.r.from > O.r.to) O.r = { from: O.r.to, to: O.r.from }; render(); }
+  else if (f === 'cat') { O.cat = ev.target.value; render(); }
+});
+document.addEventListener('input', (ev) => {
+  if (ev.target.dataset.f !== 'q') return;
+  O.q = ev.target.value; const pos = ev.target.selectionStart; render();
+  const el = document.querySelector('[data-f="q"]'); if (el) { el.focus(); el.setSelectionRange(pos, pos); }
+});
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && (O.pop || O.export)) { O.pop = false; O.export = false; render(); return; }
+  if (ev.target.closest('input, select, textarea')) return;
+  if (ev.key === 'ArrowRight') cycle(1); if (ev.key === 'ArrowLeft') cycle(-1);
+});
+render();
+</script>
+</body>
+</html>
