@@ -19,6 +19,7 @@ import {
   Radio,
   ShieldCheck,
   Ban,
+  Scale,
   type LucideIcon,
 } from 'lucide-react';
 import { statusPresentation, type PumpState } from '@pump/shared';
@@ -126,6 +127,7 @@ export const STATUS_MAP: Record<PumpStatus, StatusMeta> = {
   overdue: vocab('overdue', AlertTriangle),
   'over-limit': vocab('over-limit', AlertCircle),
   voided: vocab('voided', Ban),
+  adjustment: vocab('adjustment', Scale),
   settled: { label: 'Settled', tone: 'success', icon: CheckCircle },
   overpaid: { label: 'Overpaid', tone: 'info', icon: TrendingUp },
 

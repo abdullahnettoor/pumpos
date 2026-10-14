@@ -20,7 +20,8 @@ export type ShiftStatusState = 'shift-live' | 'shift-past-end' | 'shift-closed';
 export type DayStatusState = 'day-open' | 'day-draft' | 'day-sealed' | 'day-final';
 /** A party (customer, supplier, member) or a setup record. */
 export type PartyStatusState = 'active' | 'inactive';
-export type MoneyStatusState = 'overdue' | 'over-limit' | 'voided';
+/** A money record's state; `adjustment` marks an entry posted to correct another. */
+export type MoneyStatusState = 'overdue' | 'over-limit' | 'voided' | 'adjustment';
 
 export type PumpState =
   | VarianceStatusState
@@ -75,6 +76,7 @@ const VOCABULARY: Record<PumpState, StatusPresentation> = {
   overdue: { label: 'Overdue', tone: 'warning' },
   'over-limit': { label: 'Over limit', tone: 'danger' },
   voided: { label: 'Voided', tone: 'neutral', struck: true },
+  adjustment: { label: 'Adjustment', tone: 'warning' },
 };
 
 /** The canonical word and tone for a state. */
