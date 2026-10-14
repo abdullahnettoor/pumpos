@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   canManageExpenseCategory,
   canManageFinancialAccounts,
@@ -10,7 +10,6 @@ import { Drawer } from '../components/Drawer.js';
 import { Banner } from '../components/primitives/Banner.js';
 import { Checkbox } from '../components/primitives/Toggle.js';
 import { useToast } from '../components/primitives/ToastProvider.js';
-import { PurchaseEntryForm } from '../components/transactions/PurchaseEntryForm.js';
 import { Button, ConceptIcon } from '../pump-ds/index.js';
 import {
   useCustomers,
@@ -23,18 +22,20 @@ import {
   useProducts,
   useSuppliers,
 } from '../query/hooks.js';
-import { keepsIdempotencyKey } from '../utils/idempotency.js';
+import { isIdempotencyKeyConflict, keepsIdempotencyKey } from '../utils/idempotency.js';
 import { useRunTask } from '../utils/runTask.js';
 import { OfficeRecordContext, type OfficeRecordContextValue } from './context.js';
-import type { FormDraft } from './draft.js';
+import { typedAmount, type FormDraft } from './draft.js';
 import type { PartyOption } from './fields/PartyField.js';
 import { CategoryRecordForm } from './forms/CategoryRecordForm.js';
 import { CollectionForm } from './forms/CollectionForm.js';
+import { PurchaseEntryForm } from './forms/PurchaseEntryForm.js';
 import { SupplierPaymentForm } from './forms/SupplierPaymentForm.js';
 import {
   OFFICE_RECORD_KINDS,
   PREVIEW_SIDE_QUERY,
   officeRecordContext,
+  officeRecordDating,
   officeRecordDrawerWidth,
   type OfficeRecordKind,
   type OfficeRecordLaunch,
@@ -81,22 +82,24 @@ export const OfficeRecordDrawer: React.FC<OfficeRecordDrawerProps> = ({
 
 type Carry = Record<string, unknown>;
 
+/** An edited retry after an unknown outcome: the first save may have landed. */
+const KEY_CONFLICT =
+  'Your earlier save may already be recorded. Check the list, then undo your edit or close and start again.';
+
 const SHORTCUT =
   typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘↵' : 'Ctrl↵';
-
-const num = (v: unknown): number | null => {
-  if (v === null || v === undefined || v === '') return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-};
 
 const toParty = (row: any): PartyOption => ({
   id: row.id,
   name: row.name,
-  balance: num(row.currentBalance),
+  balance: typedAmount(row.currentBalance),
 });
 
-/** What "Add another after saving" keeps: the date, account and method. */
+/**
+ * What "Add another after saving" keeps: the date, account and method; for a
+ * purchase also Fuel/Products and the pay-now account and Payment date. Never
+ * the amount, the lines or (unless locked) the party.
+ */
 function carryOver(submission: OfficeRecordSubmission): Carry {
   const v = submission.values as Record<string, unknown>;
   const keep = (...names: string[]) =>
@@ -104,8 +107,17 @@ function carryOver(submission: OfficeRecordSubmission): Carry {
   switch (submission.kind) {
     case 'collection':
       return keep('entryDate', 'fundingAccountId', 'paymentMethod');
-    case 'purchase':
-      return keep('transactionDate');
+    case 'purchase': {
+      const pay = submission.values.payment;
+      return {
+        ...keep('transactionDate', 'purchaseType'),
+        payment: {
+          enabled: pay.enabled,
+          fundingAccountId: pay.fundingAccountId,
+          entryDate: pay.entryDate,
+        },
+      };
+    }
     default:
       return keep('entryDate', 'fundingAccountId');
   }
@@ -147,7 +159,7 @@ const OfficeRecordSession: React.FC<
   const terminalsQ = usePaymentTerminals(stationId, { enabled: kind === 'collection' });
   const seesBalances = canManageFinancialAccounts(userRole);
   const balancesQ = useFinancialAccounts(stationId, { enabled: seesBalances });
-  const prior = usePriorRecords(kind);
+  const prior = usePriorRecords(kind, stationId);
 
   const categories = useMemo(
     () => (kind === 'income' ? incomeCatsQ.data : expenseCatsQ.data) ?? [],
@@ -159,7 +171,7 @@ const OfficeRecordSession: React.FC<
     const map = new Map<string, number>();
     if (!seesBalances) return map;
     for (const a of balancesQ.data ?? []) {
-      const b = num(a.balance);
+      const b = typedAmount(a.balance);
       if (b != null) map.set(a.id, b);
     }
     return map;
@@ -170,12 +182,17 @@ const OfficeRecordSession: React.FC<
   const [session] = useState(() => officeSubmitKeys.session(`${kind}:${stationId}`));
   const [draft, setDraft] = useState<FormDraft | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [failure, setFailure] = useState<{ message: string; unknown: boolean } | null>(null);
+  const [failure, setFailure] = useState<{
+    message: string;
+    unknown: boolean;
+    conflict?: boolean;
+  } | null>(null);
   const [addAnother, setAddAnother] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [round, setRound] = useState(0);
-  const [carry, setCarry] = useState<Carry>({});
-  const defaults = useMemo(() => ({ ...(launch?.defaults ?? {}), ...carry }), [launch, carry]);
+  // The launch defaults fill the first record; "Add another" starts from what it keeps.
+  const [carry, setCarry] = useState<Carry | null>(null);
+  const defaults = useMemo(() => carry ?? launch?.defaults ?? {}, [launch, carry]);
   const onDraftChange = useCallback((d: FormDraft) => setDraft(d), []);
 
   const save = async (submission: OfficeRecordSubmission) => {
@@ -187,10 +204,14 @@ const OfficeRecordSession: React.FC<
       await request.send(key);
     } catch (err: any) {
       session.settle(err);
-      setFailure({
-        message: err?.message || 'Check the details and try again.',
-        unknown: keepsIdempotencyKey(err),
-      });
+      setFailure(
+        isIdempotencyKeyConflict(err)
+          ? { message: KEY_CONFLICT, unknown: false, conflict: true }
+          : {
+              message: err?.message || 'Check the details and try again.',
+              unknown: keepsIdempotencyKey(err),
+            },
+      );
       setSubmitting(false);
       return;
     }
@@ -211,22 +232,18 @@ const OfficeRecordSession: React.FC<
     }
   };
 
-  const submit = useCallback(() => {
-    const form = document.getElementById(formId) as HTMLFormElement | null;
-    form?.requestSubmit();
-  }, [formId]);
-
-  // ⌘/Ctrl+Enter records from anywhere in the drawer.
+  // ⌘/Ctrl+Enter records from anywhere in the drawer, through the footer's submit button.
+  const submitRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
-        if (!submitting) submit();
+        if (!submitting) submitRef.current?.click();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [submit, submitting]);
+  }, [submitting]);
 
   // ---- preview ----
   const account = draft?.accountId
@@ -245,6 +262,7 @@ const OfficeRecordSession: React.FC<
       kind,
       date: draft?.date ?? '',
       today,
+      businessDate,
       amount: draft?.amount ?? null,
       what,
       matchId: (isCategory ? draft?.categoryId : party?.id) ?? null,
@@ -253,28 +271,18 @@ const OfficeRecordSession: React.FC<
         : null,
       party: party ? { id: party.id, name: party.name, balance: party.balance ?? null } : null,
       terminal: terminal ? terminal.label : null,
-      gstRate: kind === 'income' ? num(category?.taxConfig?.gst_rate) : null,
+      gstRate: kind === 'income' ? typedAmount(category?.taxConfig?.gst_rate) : null,
       purchase: draft?.purchase,
     },
     prior,
   );
-  const productPurchase = kind === 'purchase' && draft?.purchase?.type === 'PRODUCTS';
   const view: PreviewViewProps = {
     kind,
     preview,
     what,
     amount: draft?.amount ?? null,
     date: draft?.date ?? '',
-    dateLabel: productPurchase
-      ? 'Business date'
-      : kind === 'purchase'
-        ? 'Invoice date'
-        : 'Entry date',
-    footnote: productPurchase
-      ? "Shown in the Business Day's purchases and Product stock."
-      : kind === 'purchase'
-        ? 'Shown in the supplier statement and the ledger.'
-        : 'Shown in the Daily cash book and the ledger. Not in the DSSR (office record).',
+    ...officeRecordDating(kind, draft?.purchase?.type),
   };
 
   const ctx: OfficeRecordContextValue = {
@@ -336,7 +344,11 @@ const OfficeRecordSession: React.FC<
       <Banner
         severity="danger"
         title={
-          failure.unknown ? "Couldn't save. Check the connection and save again." : "Couldn't save."
+          failure.unknown
+            ? "Couldn't save. Check the connection and save again."
+            : failure.conflict
+              ? "Couldn't save the edited record."
+              : "Couldn't save."
         }
       >
         {failure.unknown
@@ -358,16 +370,17 @@ const OfficeRecordSession: React.FC<
         Cancel
       </Button>
       <Button
-        type="button"
+        ref={submitRef}
+        type="submit"
+        form={formId}
         variant="primary"
         size="md"
         loading={submitting}
         disabled={!!draft?.blocked}
-        onClick={submit}
         aria-keyshortcuts="Meta+Enter Control+Enter"
       >
         {def.title}
-        <kbd aria-hidden="true" className="font-mono text-[10px] font-medium opacity-70">
+        <kbd aria-hidden="true" className="font-mono text-[12px] font-medium opacity-70">
           {SHORTCUT}
         </kbd>
       </Button>

@@ -2,14 +2,16 @@ import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Field, Select, TextInput } from '../../components/primitives/Field.js';
 import { Button } from '../../pump-ds/index.js';
-import { CloudTransactionService } from '../../services/cloud.js';
+import {
+  CATEGORY_API,
+  type CategoryRecordKind as CategoryKind,
+} from '../../components/categories/categoryApi.js';
 import { queryKeys } from '../../query/hooks.js';
 import { useOfficeRecordContext } from '../context.js';
 
-const service = new CloudTransactionService();
 const NEW = '__new';
 
-export type CategoryKind = 'expense' | 'income';
+export type { CategoryKind };
 
 export interface CategoryFieldProps {
   kind: CategoryKind;
@@ -51,10 +53,7 @@ export const CategoryField: React.FC<CategoryFieldProps> = ({
     try {
       setSaving(true);
       setAddError(null);
-      const created =
-        kind === 'income'
-          ? await service.createIncomeCategory({ name })
-          : await service.createExpenseCategory({ name });
+      const created = await CATEGORY_API[kind].create(name);
       const key = kind === 'income' ? queryKeys.incomeCategories() : queryKeys.expenseCategories();
       qc.setQueryData<any[]>(key, (old) => [...(old ?? []), created]);
       void qc.invalidateQueries({ queryKey: key });

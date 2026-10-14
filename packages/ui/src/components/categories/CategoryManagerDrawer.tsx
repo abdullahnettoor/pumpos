@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { Drawer } from '../Drawer.js';
 import { Button, Chip, EmptyState, Input, Form, Icon } from '../../pump-ds/index.js';
-import { CloudTransactionService } from '../../services/cloud.js';
 import { useToast } from '../primitives/ToastProvider.js';
+import { CATEGORY_API as API, type CategoryRecordKind, type CategoryTax } from './categoryApi.js';
 
-const service = new CloudTransactionService();
-
-export type CategoryRecordKind = 'expense' | 'income';
+export type { CategoryRecordKind };
 
 export interface CategoryManagerDrawerProps {
   /** Expense categories, or income categories (which also carry GST + HSN/SAC). */
@@ -19,7 +17,7 @@ export interface CategoryManagerDrawerProps {
   canManage: boolean;
 }
 
-type Tax = { gst_rate: number; hsn_code: string } | null;
+type Tax = CategoryTax;
 
 const gstStr = (c: any) => {
   const t = c?.taxConfig;
@@ -40,18 +38,6 @@ const buildTax = (gst: string, hsn: string): Tax => {
   return { gst_rate: g ? Number(g) : 0, hsn_code: h };
 };
 
-const API = {
-  expense: {
-    create: (name: string) => service.createExpenseCategory({ name }),
-    update: (id: string, name: string) => service.updateExpenseCategory(id, { name }),
-  },
-  income: {
-    create: (name: string, taxConfig: Tax) => service.createIncomeCategory({ name, taxConfig }),
-    update: (id: string, name: string, taxConfig: Tax) =>
-      service.updateIncomeCategory(id, { name, taxConfig }),
-  },
-} as const;
-
 const COPY = {
   expense: { title: 'Manage expense categories', placeholder: 'e.g. Vehicle maintenance' },
   income: { title: 'Manage income categories', placeholder: 'e.g. Tanker rental, commission' },
@@ -65,7 +51,7 @@ const TaxInputs: React.FC<{
   onHsn: (v: string) => void;
 }> = ({ gst, hsn, onGst, onHsn }) => (
   <>
-    <div style={{ width: '110px' }}>
+    <div className="w-[110px]">
       <Input
         type="number"
         min={0}
@@ -77,7 +63,7 @@ const TaxInputs: React.FC<{
         aria-label="GST rate %"
       />
     </div>
-    <div style={{ flex: 1 }}>
+    <div className="flex-1">
       <Input
         value={hsn}
         onChange={(e) => onHsn(e.target.value)}
@@ -164,22 +150,14 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
     }
   };
 
-  const rowStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 0',
-    borderBottom: '1px solid var(--border-soft)',
-  };
-
   return (
     <Drawer isOpen={isOpen} onClose={onClose} title={COPY[kind].title}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div className="flex flex-col gap-4">
         {canManage && (
           <Form onSubmit={add}>
             <label className="field-label">New category</label>
-            <div style={{ display: 'flex', alignItems: 'stretch', gap: '8px' }}>
-              <div style={{ flex: 1 }}>
+            <div className="flex items-stretch gap-2">
+              <div className="flex-1">
                 <Input
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
@@ -201,7 +179,7 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
               )}
             </div>
             {taxed && (
-              <div style={{ display: 'flex', alignItems: 'stretch', gap: '8px', marginTop: '8px' }}>
+              <div className="mt-2 flex items-stretch gap-2">
                 <TaxInputs gst={newGst} hsn={newHsn} onGst={setNewGst} onHsn={setNewHsn} />
                 <Button
                   type="submit"
@@ -219,20 +197,11 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
         )}
 
         <div>
-          <div
-            style={{
-              fontSize: '11px',
-              color: 'var(--text-muted)',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '4px',
-            }}
-          >
+          <div className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
             Categories
           </div>
           {sorted.length === 0 ? (
-            <div style={{ padding: '8px 0' }}>
+            <div className="py-2">
               <EmptyState
                 compact
                 icon={<Icon name="tag" size="md" />}
@@ -242,10 +211,10 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
             </div>
           ) : (
             sorted.map((c) => (
-              <div key={c.id} style={rowStyle}>
+              <div key={c.id} className="flex items-center gap-2 border-b border-border-soft py-2">
                 {editingId === c.id ? (
                   <>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div className="flex flex-1 flex-col gap-1.5">
                       <Input
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
@@ -253,7 +222,7 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
                         autoFocus
                       />
                       {taxed && (
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div className="flex gap-2">
                           <TaxInputs
                             gst={editGst}
                             hsn={editHsn}
@@ -284,16 +253,10 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
                   </>
                 ) : (
                   <>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <span
-                        style={{ fontSize: '13px', color: 'var(--text-strong)', fontWeight: 500 }}
-                      >
-                        {c.name}
-                      </span>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[13px] font-medium text-ink-strong">{c.name}</span>
                       {taxed && hasTax(c) && (
-                        <div
-                          style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}
-                        >
+                        <div className="mt-0.5 text-[12px] text-ink-muted">
                           GST {gstStr(c) || '0'}%{hsnStr(c) ? ` · HSN ${hsnStr(c)}` : ''}
                         </div>
                       )}

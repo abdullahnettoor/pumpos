@@ -48,7 +48,7 @@ export const RecordDateField: React.FC<RecordDateFieldProps> = ({
       onClick={() => onChange(date)}
       aria-pressed={value === date}
       className={cn(
-        'rounded-chip border px-2 py-0.5 text-[11.5px] disabled:opacity-50',
+        'rounded-chip border px-2 py-0.5 text-[12px] disabled:opacity-50',
         value === date
           ? 'border-brand bg-brand/10 text-brand'
           : 'border-border-soft text-ink-muted hover:text-ink-strong',

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildOfficeRecordPreview, type OfficeRecordDraft } from './preview.js';
+import {
+  advanceText,
+  buildOfficeRecordPreview,
+  partPaymentText,
+  type OfficeRecordDraft,
+} from './preview.js';
 
 const TODAY = '2026-10-14';
 const HDFC = { id: 'hdfc', name: 'HDFC Current', balance: 10_000 };
@@ -125,5 +130,68 @@ describe('buildOfficeRecordPreview', () => {
       { date: TODAY, amount: 12_000, matchId: 'cat-electricity' },
     ]);
     expect(p.flag).toEqual({ label: '2 checks', tone: 'danger' });
+  });
+
+  it('says "Dated <date>, before today" for an earlier entry date', () => {
+    const p = buildOfficeRecordPreview(draft({ date: '2026-10-12' }), []);
+    expect(p.checks[0].text).toMatch(/^Dated .+, before today: /);
+    expect(p.checks[0].text).not.toMatch(/back-?dated/i);
+  });
+
+  describe('purchase dates', () => {
+    const purchase = (over: Partial<OfficeRecordDraft>, payDate?: string) =>
+      draft({
+        kind: 'purchase',
+        amount: 10_000,
+        what: 'BPCL',
+        account: HDFC,
+        party: null,
+        purchase: { type: 'FUEL', payNow: payDate ? 4000 : null, payDate, stockLines: [] },
+        ...over,
+      });
+
+    it('notes a fuel invoice dated before today', () => {
+      const p = buildOfficeRecordPreview(purchase({ date: '2026-10-10' }), []);
+      expect(p.checks.map((c) => c.code)).toContain('backdated');
+      expect(p.flag.label).toBe('No issues');
+    });
+
+    it("compares a product purchase with the current Business Day, not today's date", () => {
+      const before = { businessDate: '2026-10-13', today: TODAY };
+      const product = (date: string) =>
+        purchase({
+          ...before,
+          date,
+          purchase: { type: 'PRODUCTS', payNow: null, stockLines: [] },
+        });
+      expect(
+        buildOfficeRecordPreview(product('2026-10-13'), []).checks.map((c) => c.code),
+      ).not.toContain('backdated');
+      expect(
+        buildOfficeRecordPreview(product('2026-10-12'), []).checks.map((c) => c.code),
+      ).toContain('backdated');
+    });
+
+    it("dates the pay-now note by the payment's own date", () => {
+      const p = buildOfficeRecordPreview(purchase({}, '2026-10-11'), []);
+      const note = p.checks.find((c) => c.code === 'pay-now')!;
+      expect(note.text).toMatch(/Supplier payment of ₹4,000\.00, dated .+, before today/);
+    });
+  });
+});
+
+describe('amount hints shared with the forms', () => {
+  it('says how much of a collection becomes an advance', () => {
+    expect(advanceText(5000, 6000)).toBe(
+      'Collects more than is due: ₹1,000.00 becomes an advance.',
+    );
+    expect(advanceText(5000, 4000)).toBeNull();
+    expect(advanceText(null, 4000)).toBeNull();
+  });
+
+  it('says what stays owed after a part payment', () => {
+    expect(partPaymentText(5000, 4000)).toBe('Part payment: ₹1,000.00 stays owed.');
+    expect(partPaymentText(5000, 5000)).toBeNull();
+    expect(partPaymentText(5000, null)).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 import { createIdempotencyKey } from '../query/handoverMutation.js';
-import { keepsIdempotencyKey } from '../utils/idempotency.js';
+import { isIdempotencyKeyConflict, keepsIdempotencyKey } from '../utils/idempotency.js';
 
 /**
  * One Idempotency-Key per logical submit of an Office Record (#526).
@@ -7,8 +7,9 @@ import { keepsIdempotencyKey } from '../utils/idempotency.js';
  * Within one open drawer the key is kept while the outcome of a save is
  * unknown (a network drop, a 5xx), even if the operator edits before saving
  * again: the API answers the same key with the first result, or refuses an
- * edited retry, so the record cannot land twice. A decided answer (saved, or a
- * 4xx) renews it.
+ * edited retry, so the record cannot land twice. That refusal (a key conflict)
+ * leaves the outcome unknown too, so the key is still kept. A decided answer
+ * (saved, or any other 4xx) renews it.
  *
  * An unsettled key also outlives the drawer, but a new drawer picks it up only
  * for the same record (same kind, station and body). Closing after a network
@@ -21,6 +22,10 @@ export interface SubmitKeySession {
   /** Record the outcome of the last send: no error means it was saved. */
   settle(error?: unknown): void;
 }
+
+/** The save may or may not have landed: the next send must reuse the key. */
+export const unknownOutcome = (error: unknown) =>
+  keepsIdempotencyKey(error) || isIdempotencyKeyConflict(error);
 
 export class OfficeSubmitKeys {
   private readonly pending = new Map<string, { key: string; fingerprint: string }>();
@@ -41,7 +46,7 @@ export class OfficeSubmitKeys {
       },
       settle: (error) => {
         if (!current) return;
-        if (error !== undefined && keepsIdempotencyKey(error)) {
+        if (error !== undefined && unknownOutcome(error)) {
           this.pending.set(scope, current);
           return;
         }

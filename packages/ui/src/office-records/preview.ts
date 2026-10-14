@@ -23,6 +23,8 @@ export interface OfficeRecordDraft {
   date: string;
   /** Today's Entry Date at the station. */
   today: string;
+  /** The current Business Date (Day Start applied): a product purchase's "today". */
+  businessDate?: string;
   /** The amount; an invoice total for a purchase. */
   amount: number | null;
   /** What is recorded: the category, customer or supplier name. */
@@ -36,7 +38,16 @@ export interface OfficeRecordDraft {
   terminal?: string | null;
   /** GST % included in an income amount. */
   gstRate?: number | null;
-  purchase?: { type: 'FUEL' | 'PRODUCTS'; payNow: number | null; stockLines: string[] };
+  purchase?: PurchaseDraft;
+}
+
+export interface PurchaseDraft {
+  type: 'FUEL' | 'PRODUCTS';
+  /** The amount of the Supplier payment saved with it, if any. */
+  payNow: number | null;
+  /** That payment's Entry Date. */
+  payDate?: string;
+  stockLines: string[];
 }
 
 /** An earlier record of the same kind, for the repeat check. */
@@ -85,6 +96,22 @@ const OUTFLOW: Record<OfficeRecordKind, boolean> = {
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** A collection above what is due: the advance it leaves, or null. */
+export function advanceText(due: number | null, amount: number | null): string | null {
+  if (due == null || amount == null || !(amount > due)) return null;
+  return `Collects more than is due: ${inr(round2(amount - Math.max(due, 0)))} becomes an advance.`;
+}
+
+/** A payment below what is owed: what stays owed, or null. */
+export function partPaymentText(owed: number | null, amount: number | null): string | null {
+  if (owed == null || amount == null || !(amount > 0) || !(amount < owed)) return null;
+  return `Part payment: ${inr(round2(owed - amount))} stays owed.`;
+}
+
+/** ", before today" for a date earlier than the latest it could be (glossary: never "backdated"). */
+const before = (date: string, latest: string) =>
+  `Dated ${formatBusinessDate(date)}, before ${latest}`;
 
 export function buildOfficeRecordPreview(
   d: OfficeRecordDraft,
@@ -138,12 +165,9 @@ export function buildOfficeRecordPreview(
       moveParty('due', -amount);
       if (d.terminal) lines.push({ label: `${d.terminal} clearing`, amount });
       else moveAccount(amount);
-      if (d.party?.balance != null && amount > d.party.balance) {
-        checks.push({
-          code: 'advance',
-          tone: 'warning',
-          text: `Collects more than is due: ${inr(amount - Math.max(d.party.balance, 0))} becomes an advance.`,
-        });
+      {
+        const advance = advanceText(d.party?.balance ?? null, amount);
+        if (advance) checks.push({ code: 'advance', tone: 'warning', text: advance });
       }
       break;
     case 'supplier-payment':
@@ -166,10 +190,14 @@ export function buildOfficeRecordPreview(
         });
       }
       if (paid > 0) {
+        const payDate = d.purchase?.payDate;
         checks.push({
           code: 'pay-now',
           tone: 'info',
-          text: `Also saves a Supplier payment of ${inr(paid)}.`,
+          text:
+            payDate && payDate < d.today
+              ? `Also saves a Supplier payment of ${inr(paid)}, dated ${formatBusinessDate(payDate)}, before today.`
+              : `Also saves a Supplier payment of ${inr(paid)}.`,
         });
       }
       break;
@@ -196,13 +224,8 @@ export function buildOfficeRecordPreview(
       text: `${d.account.name} would go negative (${inr(round2(d.account.balance - outflow))}).`,
     });
   }
-  if (d.kind !== 'purchase' && d.date && d.date < d.today) {
-    checks.push({
-      code: 'backdated',
-      tone: 'info',
-      text: `Back-dated: shows in the Daily cash book for ${formatBusinessDate(d.date)}.`,
-    });
-  }
+  const backdated = backdatedText(d);
+  if (backdated) checks.push({ code: 'backdated', tone: 'info', text: backdated });
 
   const warnings = checks.filter((c) => c.tone !== 'info');
   const tone = warnings.some((c) => c.tone === 'danger') ? 'danger' : 'warning';
@@ -215,4 +238,19 @@ export function buildOfficeRecordPreview(
 
   const mainMove = main.account ?? moves[0] ?? null;
   return { moves, mainMove, lines, checks, flag };
+}
+
+/** The note for a record dated before the latest date it could carry. */
+function backdatedText(d: OfficeRecordDraft): string | null {
+  if (!d.date) return null;
+  if (d.kind === 'purchase' && d.purchase?.type === 'PRODUCTS') {
+    const day = d.businessDate || d.today;
+    return d.date < day
+      ? `${before(d.date, "today's Business Day")}: adds stock on that day.`
+      : null;
+  }
+  if (d.date >= d.today) return null;
+  return d.kind === 'purchase'
+    ? `${before(d.date, 'today')}: shows in the supplier statement for that date.`
+    : `${before(d.date, 'today')}: shows in the Daily cash book for ${formatBusinessDate(d.date)}.`;
 }

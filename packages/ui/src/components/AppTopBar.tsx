@@ -3,6 +3,7 @@ import { LogOut, TriangleAlert, Clock } from 'lucide-react';
 import {
   type OperatorRole,
   type Station,
+  canCreateCustomer,
   canViewReports,
   reachableStations,
   showStationDropdown,
@@ -10,6 +11,7 @@ import {
 import { preReadyQuickCreateIds, type PreReadyQuickCreateId } from './quickCreateActions.js';
 import type { NavIntent, NavItem } from './AppShell.js';
 import { openQuickEntry } from '../quick-entry/store.js';
+import { canRecordOfficeRecord, isOfficeRecordKind } from '../office-records/kinds.js';
 import { initialsOf } from '../utils/initials.js';
 import {
   TopBar,
@@ -191,16 +193,14 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         onSelect: () => onNavigate('/customers', { open: 'new-customer' }),
       },
     ];
-    return userRole === 'Staff'
-      ? items.filter(
-          (i) =>
-            i.id === 'expense' ||
-            i.id === 'income' ||
-            i.id === 'collection' ||
-            i.id === 'merchandise-sale' ||
-            i.id === 'credit',
-        )
-      : items;
+    // One rule per item: an Office Record by the role that may record it.
+    return items.filter((i) =>
+      isOfficeRecordKind(i.id)
+        ? canRecordOfficeRecord(i.id, userRole)
+        : i.id === 'customer'
+          ? canCreateCustomer(userRole)
+          : true,
+    );
   }, [onNavigate, userRole, stationReady]);
 
   // --- user menu ---

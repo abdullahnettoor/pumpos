@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canRecordOfficeRecord,
   officeRecordContext,
+  officeRecordDating,
   officeRecordDrawerWidth,
   OFFICE_RECORD_KINDS,
 } from './kinds.js';
@@ -41,6 +42,38 @@ describe('Office Record kinds', () => {
         date: '2026-10-14',
       }),
     ).toBe('Product purchase · Business Day 14 Oct 2026');
+  });
+
+  it('keeps the product-purchase line when opened from Shifts', () => {
+    expect(
+      officeRecordContext({
+        kind: 'purchase',
+        origin: 'shifts',
+        shiftName: 'Shift 1',
+        purchaseType: 'PRODUCTS',
+        date: '2026-10-14',
+      }),
+    ).toBe('Product purchase · Business Day 14 Oct 2026');
+    expect(
+      officeRecordContext({
+        kind: 'purchase',
+        origin: 'shifts',
+        shiftName: 'Shift 1',
+        purchaseType: 'FUEL',
+      }),
+    ).toBe('Office record · not part of Shift 1');
+  });
+
+  it('names the date and where the record shows, per kind', () => {
+    expect(officeRecordDating('expense')).toEqual({
+      dateLabel: 'Entry date',
+      footnote: 'Shown in the Daily cash book and the ledger. Not in the DSSR (office record).',
+    });
+    expect(officeRecordDating('purchase', 'FUEL').dateLabel).toBe('Invoice date');
+    expect(officeRecordDating('purchase', 'PRODUCTS')).toEqual({
+      dateLabel: 'Business date',
+      footnote: "Shown in the Business Day's purchases and Product stock.",
+    });
   });
 
   it('sizes the drawer for the kind and for the preview beside the form', () => {

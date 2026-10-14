@@ -2,6 +2,7 @@ import React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { inr } from '../../utils/format.js';
 import { Chip, DateText, Icon } from '../../pump-ds/index.js';
+import { cn } from '../../pump-ds/lib/cn.js';
 import { accountTypeLabel } from '../../utils/ledgerLabels.js';
 import { voidActionColumn } from '../finance/voidActionColumn.js';
 import type { CategoryRecordKind } from './CategoryManagerDrawer.js';
@@ -11,14 +12,12 @@ const dateCell = (row: any) => <DateText value={row.original.entryDate} />;
 /** Funding Account the money moved through, with its type as secondary text. */
 const accountCell = (row: any) => {
   const { accountName, accountType } = row.original;
-  if (!accountName) return <span style={{ color: 'var(--text-faint)' }}>—</span>;
+  if (!accountName) return <span className="text-ink-faint">—</span>;
   return (
-    <span style={{ display: 'inline-flex', flexDirection: 'column', lineHeight: 1.25 }}>
-      <span style={{ color: 'var(--text-strong)' }}>{accountName}</span>
+    <span className="inline-flex flex-col leading-tight">
+      <span className="text-ink-strong">{accountName}</span>
       {accountType && (
-        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-          {accountTypeLabel(accountType)}
-        </span>
+        <span className="text-[12px] text-ink-muted">{accountTypeLabel(accountType)}</span>
       )}
     </span>
   );
@@ -26,21 +25,19 @@ const accountCell = (row: any) => {
 
 /** Money out reads in the danger tone, money in in the success tone. */
 const AMOUNT_TONE: Record<CategoryRecordKind, string> = {
-  expense: 'var(--brand-danger)',
-  income: 'var(--state-success-fg)',
+  expense: 'text-danger-fg',
+  income: 'text-success-fg',
 };
 
 const amountCell = (kind: CategoryRecordKind, row: any, getValue: () => any) => {
   const voided = row.original.status === 'VOIDED';
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+    <span className="inline-flex items-center gap-1.5">
       <span
-        style={{
-          fontWeight: 700,
-          color: voided ? 'var(--text-faint)' : AMOUNT_TONE[kind],
-          fontFamily: 'var(--font-mono)',
-          textDecoration: voided ? 'line-through' : undefined,
-        }}
+        className={cn(
+          'font-mono font-bold tabular-nums',
+          voided ? 'text-ink-faint line-through' : AMOUNT_TONE[kind],
+        )}
       >
         {inr(getValue())}
       </span>
@@ -82,7 +79,7 @@ export function buildCategoryRecordColumns(
       accessorKey: 'categoryName',
       header: 'Category',
       cell: ({ getValue }) => (
-        <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
+        <span className="font-semibold text-ink-strong">
           {(getValue() as string) ?? FALLBACK_CATEGORY[kind]}
         </span>
       ),
@@ -91,7 +88,7 @@ export function buildCategoryRecordColumns(
       accessorKey: 'description',
       header: 'Description',
       cell: ({ getValue }) => (
-        <span style={{ color: 'var(--text-muted)' }}>{(getValue() as string) || '—'}</span>
+        <span className="text-ink-muted">{(getValue() as string) || '—'}</span>
       ),
     },
     {

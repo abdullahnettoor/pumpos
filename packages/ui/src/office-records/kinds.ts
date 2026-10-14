@@ -26,7 +26,25 @@ export interface OfficeRecordKindDef {
   saved: string;
   /** "Money goes out of" or "Money comes into" the Funding Account. */
   accountHint: string;
+  /** The preview's name for the record's date, and where the record shows. */
+  dating: OfficeRecordDating;
 }
+
+export interface OfficeRecordDating {
+  dateLabel: string;
+  footnote: string;
+}
+
+const OFFICE_DATING: OfficeRecordDating = {
+  dateLabel: 'Entry date',
+  footnote: 'Shown in the Daily cash book and the ledger. Not in the DSSR (office record).',
+};
+
+/** A product purchase is a forecourt stock event, not an Office Record (ADR 0007). */
+const PRODUCT_PURCHASE_DATING: OfficeRecordDating = {
+  dateLabel: 'Business date',
+  footnote: "Shown in the Business Day's purchases and Product stock.",
+};
 
 const OUT = 'Money goes out of';
 const IN = 'Money comes into';
@@ -38,6 +56,7 @@ export const OFFICE_RECORD_KINDS: Record<OfficeRecordKind, OfficeRecordKindDef> 
     concept: 'expenses',
     saved: 'Expense recorded.',
     accountHint: OUT,
+    dating: OFFICE_DATING,
   },
   income: {
     label: 'Income',
@@ -45,6 +64,7 @@ export const OFFICE_RECORD_KINDS: Record<OfficeRecordKind, OfficeRecordKindDef> 
     concept: 'income',
     saved: 'Income recorded.',
     accountHint: IN,
+    dating: OFFICE_DATING,
   },
   collection: {
     label: 'Collection',
@@ -52,6 +72,7 @@ export const OFFICE_RECORD_KINDS: Record<OfficeRecordKind, OfficeRecordKindDef> 
     concept: 'collections',
     saved: 'Collection recorded.',
     accountHint: IN,
+    dating: OFFICE_DATING,
   },
   purchase: {
     label: 'Purchase',
@@ -59,6 +80,10 @@ export const OFFICE_RECORD_KINDS: Record<OfficeRecordKind, OfficeRecordKindDef> 
     concept: 'purchases',
     saved: 'Purchase recorded.',
     accountHint: OUT,
+    dating: {
+      dateLabel: 'Invoice date',
+      footnote: 'Shown in the supplier statement and the ledger.',
+    },
   },
   'supplier-payment': {
     label: 'Supplier payment',
@@ -66,6 +91,7 @@ export const OFFICE_RECORD_KINDS: Record<OfficeRecordKind, OfficeRecordKindDef> 
     concept: 'payments',
     saved: 'Supplier payment recorded.',
     accountHint: OUT,
+    dating: OFFICE_DATING,
   },
 };
 
@@ -88,7 +114,23 @@ export function canRecordOfficeRecord(kind: OfficeRecordKind, role: Role): boole
   }
 }
 
-/** The line under the title: how the record is dated. */
+const isProductPurchase = (kind: OfficeRecordKind, purchaseType?: 'FUEL' | 'PRODUCTS') =>
+  kind === 'purchase' && purchaseType === 'PRODUCTS';
+
+/** How a record of this kind is dated, and where it shows. */
+export function officeRecordDating(
+  kind: OfficeRecordKind,
+  purchaseType?: 'FUEL' | 'PRODUCTS',
+): OfficeRecordDating {
+  return isProductPurchase(kind, purchaseType)
+    ? PRODUCT_PURCHASE_DATING
+    : OFFICE_RECORD_KINDS[kind].dating;
+}
+
+/**
+ * The line under the title: how the record is dated. A product purchase
+ * belongs to its Business Day from every entry point, Shifts included.
+ */
 export function officeRecordContext(opts: {
   kind: OfficeRecordKind;
   origin: OfficeRecordOrigin;
@@ -96,11 +138,11 @@ export function officeRecordContext(opts: {
   purchaseType?: 'FUEL' | 'PRODUCTS';
   date?: string;
 }): string {
-  if (opts.origin === 'shifts')
-    return `Office record · not part of ${opts.shiftName || 'the shift'}`;
-  if (opts.kind === 'purchase' && opts.purchaseType === 'PRODUCTS') {
+  if (isProductPurchase(opts.kind, opts.purchaseType)) {
     return `Product purchase · Business Day ${opts.date ? formatBusinessDate(opts.date) : ''}`.trim();
   }
+  if (opts.origin === 'shifts')
+    return `Office record · not part of ${opts.shiftName || 'the shift'}`;
   return 'Office record · dated by entry date';
 }
 

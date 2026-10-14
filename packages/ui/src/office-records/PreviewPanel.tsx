@@ -25,7 +25,7 @@ const CHECK_TONE = {
 const Move: React.FC<{ move: PreviewMove; compact?: boolean }> = ({ move, compact }) => {
   const fmt = (n: number) => (compact ? formatMoney(n, { decimals: 0 }) : inr(n));
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[11.5px] tabular-nums">
+    <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[12px] tabular-nums">
       <span className="text-ink-muted">{fmt(move.before)}</span>
       <Icon name="arrow-right" size="xs" />
       <span className={move.after < 0 ? 'text-danger-fg' : 'text-ink-strong'}>
@@ -48,7 +48,7 @@ const FlagChip: React.FC<{ flag: OfficeRecordPreview['flag'] }> = ({ flag }) => 
 const Card: React.FC<{ title?: string; children: React.ReactNode }> = ({ title, children }) => (
   <section className="mb-3 rounded-card border border-border-soft bg-surface px-3.5 py-3">
     {title && (
-      <h4 className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-ink-muted">
+      <h4 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
         {title}
       </h4>
     )}
@@ -144,7 +144,7 @@ export const PreviewCards: React.FC<PreviewViewProps> = ({
           </ul>
         )}
       </Card>
-      <p className="text-[11.5px] text-ink-faint">{footnote}</p>
+      <p className="text-[12px] text-ink-faint">{footnote}</p>
     </div>
   );
 };
@@ -175,11 +175,11 @@ export const PreviewStrip: React.FC<
           <span className="truncate font-semibold text-ink-strong">{what ?? def.label}</span>
           {move ? (
             <span className="flex min-w-0 items-center gap-1.5 text-ink-muted">
-              <span className="min-w-[4rem] truncate text-[11.5px]">{move.label}</span>
+              <span className="min-w-[4rem] truncate text-[12px]">{move.label}</span>
               <Move move={move} compact />
             </span>
           ) : (
-            <span className="truncate text-[11.5px] text-ink-faint">
+            <span className="truncate text-[12px] text-ink-faint">
               Choose the account to see its balance move
             </span>
           )}

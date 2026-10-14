@@ -458,15 +458,20 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const triggerMerchandiseSaleDrawer = () => launchQuickEntry('merchandise-sale');
 
   const quickEntryActions = [
-    { key: 'expense', label: 'Add Expense', onClick: triggerExpenseDrawer, hotkey: 'E' },
-    { key: 'collection', label: 'Log Collection', onClick: triggerCollectionDrawer, hotkey: 'C' },
+    { key: 'expense', label: 'Record expense', onClick: triggerExpenseDrawer, hotkey: 'E' },
+    {
+      key: 'collection',
+      label: 'Record collection',
+      onClick: triggerCollectionDrawer,
+      hotkey: 'C',
+    },
     {
       key: 'merchandise-sale',
       label: 'Merchandise Sale',
       onClick: triggerMerchandiseSaleDrawer,
       hotkey: 'M',
     },
-    { key: 'purchase', label: 'Add Purchase', onClick: triggerPurchaseDrawer, hotkey: 'P' },
+    { key: 'purchase', label: 'Record purchase', onClick: triggerPurchaseDrawer, hotkey: 'P' },
   ];
 
   // The shortcut triggers are re-created every render, so the listener reads

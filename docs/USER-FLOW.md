@@ -146,8 +146,8 @@ open shift.
 ## 7. Run the shift
 
 The active-shift workspace is the operator's home during the day. Quick
-actions on the shift control bar: **Add Expense (E)** · **Log Collection (C)**
-· **Merchandise Sale** · **Add Purchase (P)**. Transactions land in the
+actions on the shift control bar: **Record expense (E)** · **Record collection (C)**
+· **Merchandise Sale** · **Record purchase (P)**. Transactions land in the
 tabs: Petty Expenses · Fuel Deliveries (Purchases) · Credit Sales &
 Collections.
 
@@ -162,20 +162,22 @@ What happens during a typical shift, and where to record it:
   OMC fleet-card swipes: **Add OMC card sale**.
 - **Merchandise sale**: **Merchandise Sale** → product, quantity, payment
   mode. Stock decrements automatically.
-- **Customer collection** (customer pays down credit): **Log Collection** →
-  the **Record collection** drawer: entry date, customer (required: there is
+- **Customer collection** (customer pays down credit): **Record collection (C)**
+  opens the **Record collection** drawer: entry date, customer (required: there is
   no walk-in), method, amount, and the **Funding account** it landed in (Cash
   in Hand / Petty Cash for cash; a bank for a transfer; for card/UPI either a
   bank or the payment terminal, which posts to its clearing account). It is
   office money: it never touches the drawer, and the drawer title never
   names the shift ("Office record · not part of <shift>").
-- **Petty expense**: **Add Expense (E)** → **Record expense**: entry date,
+- **Petty expense**: **Record expense (E)** opens the drawer: entry date,
   category, amount, Funding account (e.g. Petty Cash). Office money: it never
   touches the drawer. Cash taken out of a drawer for it is a cash drop.
-- **Fuel delivery mid-shift**: **Add Purchase (P)** → **Record purchase**:
+- **Fuel delivery mid-shift**: **Record purchase (P)** opens the drawer:
   Fuel, invoice date, supplier, invoice lines (fuel stock moves only when the
   tanker is decanted); tick **Also record a supplier payment now** if paid on
-  the spot.
+  the spot, then pick the account and check the **Payment date** (the
+  invoice date until you change it). A product purchase opened here still
+  reads "Product purchase · Business Day <date>": it adds stock to the day.
 - **Attendant handover** (attendant ends duty or hands cash to the safe):
   handover dashboard → **Record Handover** → enter the DU's closing nozzle
   readings, count the whole pouch by denomination ("Count handover cash by
@@ -228,13 +230,18 @@ balance it moves and a check chip (**Possible repeat**, **Goes negative**,
 **Advance**, or **No issues**); click it for the full preview. On a window
 1600px or wider the preview sits beside the form. Checks warn; they never
 block a save. If a save fails without an answer, saving again sends the same
-record, so it cannot be recorded twice.
+record, so it cannot be recorded twice. If you edit after such a failure and
+the save is refused, the first save may already be in: check the list, then
+undo your edit or close and start again.
 
 - **Purchases**: Sidebar → **Suppliers** → **Purchases** tab → **Record
   purchase** → Fuel or Products (one invoice can't mix them; fuel is dated by
   its invoice, products by their Business date), supplier, invoice lines.
   Tick **Also record a supplier payment now** to save a Supplier payment with
-  it in one go, or pay later with **Record supplier payment** (on the page or
+  it in one go: pick the account, the amount (the invoice total until you
+  change it) and the **Payment date**, the payment's Entry Date. It starts at
+  the purchase's date; for a product purchase on today's Business Day it is
+  today's calendar date, even before Day Start. Or pay later with **Record supplier payment** (on the page or
   in **+ New**, which opens the drawer in place). Supplier statements:
   **Suppliers** tab → statement. GST input credit is in **Reports → GST →
   Purchases (ITC)**.

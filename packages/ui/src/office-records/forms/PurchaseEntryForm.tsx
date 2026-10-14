@@ -1,58 +1,53 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFieldArray } from 'react-hook-form';
 import {
-  purchaseEntryFormSchemaFor,
-  resolveBusinessDate,
-  resolveEntryDate,
+  purchaseWithPayNowFormSchemaFor,
   type PurchaseEntryFormValues,
+  type PurchaseWithPayNowFormValues,
 } from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { formatBusinessDate, inr } from '../../utils/format.js';
-import { Field, TextInput, NumberInput, MoneyInput } from '../primitives/Field.js';
-import { Combobox } from '../primitives/Combobox.js';
+import { Field, TextInput, NumberInput, MoneyInput } from '../../components/primitives/Field.js';
+import { Combobox } from '../../components/primitives/Combobox.js';
+import { Checkbox } from '../../components/primitives/Toggle.js';
+import { Banner } from '../../components/primitives/Banner.js';
 import { SUPPLIER_PAYMENT_ACCOUNT_TYPES } from '../../utils/fundingAccounts.js';
 import type { PurchasePayNow } from '../../utils/officeRecordPayloads.js';
-import { Checkbox } from '../primitives/Toggle.js';
 import { Button, Form, Icon, SegmentedControl } from '../../pump-ds/index.js';
-import { Banner } from '../primitives/Banner.js';
 import { useBusinessDayStatus } from '../../query/hooks.js';
-import { useOfficeRecordContext } from '../../office-records/context.js';
-import {
-  typedAmount,
-  useReportDraft,
-  type OfficeRecordFormProps,
-} from '../../office-records/draft.js';
-import { RecordDateField } from '../../office-records/fields/RecordDateField.js';
-import { FundingAccountField } from '../../office-records/fields/FundingAccountField.js';
-import { PartyField, type PartyOption } from '../../office-records/fields/PartyField.js';
-import { OFFICE_RECORD_KINDS } from '../../office-records/kinds.js';
+import { useOfficeRecordContext } from '../context.js';
+import { typedAmount, useReportDraft, type OfficeRecordFormProps } from '../draft.js';
+import { RecordDateField } from '../fields/RecordDateField.js';
+import { FundingAccountField } from '../fields/FundingAccountField.js';
+import { PartyField, type PartyOption } from '../fields/PartyField.js';
+import { OFFICE_RECORD_KINDS } from '../kinds.js';
+import { partPaymentText } from '../preview.js';
 
 export type { PurchasePayNow };
 
 /** One invoice is all fuel or all products, never both. */
 export type PurchaseType = 'FUEL' | 'PRODUCTS';
 
+/** The purchase form's values: the invoice plus what was bought and the pay-now payment. */
+export type PurchaseFormValues = PurchaseWithPayNowFormValues;
+
 export interface PurchaseEntryFormProps extends Partial<
-  Pick<OfficeRecordFormProps<PurchaseEntryFormValues>, 'formId' | 'onDraftChange'>
+  Pick<OfficeRecordFormProps<PurchaseFormValues>, 'formId' | 'onDraftChange'>
 > {
   suppliers: readonly PartyOption[];
   products: any[];
-  defaultValues?: Partial<PurchaseEntryFormValues>;
+  defaultValues?: Partial<PurchaseFormValues>;
   /** What the invoice is for, when the lines don't already say. Fuel by default. */
   defaultType?: PurchaseType;
   /** Opened from a supplier statement: the supplier is fixed. */
   lockedSupplier?: PartyOption | null;
   /** Inter-state supply (supplier state ≠ station state) → IGST instead of CGST+SGST. */
   interState?: boolean;
-  onSubmit: (values: PurchaseEntryFormValues, payment?: PurchasePayNow) => void | Promise<void>;
+  onSubmit: (values: PurchaseFormValues, payment?: PurchasePayNow) => void | Promise<void>;
 }
 
-const labelStyle: React.CSSProperties = {
-  fontSize: '12px',
-  color: 'var(--text-muted)',
-  fontWeight: 600,
-};
-const errorTextStyle: React.CSSProperties = { fontSize: '11px', color: 'var(--brand-danger)' };
+const LABEL = 'text-[12px] font-semibold text-ink-muted';
+const ERROR = 'text-[12px] text-danger-fg';
 
 const emptyLine = () => ({
   productId: '',
@@ -61,13 +56,30 @@ const emptyLine = () => ({
 });
 
 const isFuel = (p: any) => p?.productType === 'FUEL';
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * The pay-now Supplier payment's Entry Date, before the operator picks one:
+ * the purchase's date. A product purchase on the current Business Day is dated
+ * by its Business Date, which Day Start can hold on yesterday; its payment, an
+ * Office Record, takes today's calendar date instead (ADR 0005).
+ */
+export function payNowDateFor(
+  purchaseDate: string,
+  type: PurchaseType,
+  clock: { today: string; businessDate: string },
+): string {
+  if (type === 'PRODUCTS' && purchaseDate && purchaseDate === clock.businessDate)
+    return clock.today;
+  return purchaseDate;
+}
 
 /**
  * A supplier invoice. Fuel is an Office Record dated by its invoice (an Entry
  * Date) that moves no stock — fuel stock comes from Decantation (ADR 0007).
  * Products are dated by their Business Date and add stock. "Also record a
- * supplier payment now" adds a separate Supplier payment, saved in the same
- * request as the purchase.
+ * supplier payment now" adds a separate Supplier payment with its own Payment
+ * date, saved in the same request as the purchase.
  *
  * Remounted when the defaults change rather than reset by an effect, keeping
  * field-array ids stable for per-line amount inputs.
@@ -87,24 +99,25 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
   onDraftChange,
   onSubmit,
 }) => {
-  const ctx = useOfficeRecordContext();
-  const { stationId, disabled } = ctx;
-  const entryToday = ctx.today || resolveEntryDate();
-  const businessToday = ctx.businessDate || resolveBusinessDate();
-  const defaultDate = (t: PurchaseType) => (t === 'FUEL' ? entryToday : businessToday);
+  const { stationId, disabled, today, businessDate } = useOfficeRecordContext();
+  const clock = { today, businessDate };
+  const defaultDate = (t: PurchaseType) => (t === 'FUEL' ? today : businessDate);
 
-  // The fuel/product mix rule is part of the schema; it needs the catalogue.
+  // The fuel/product mix rule and the pay-now checks are part of the schema.
   const schema = useMemo(
-    () => purchaseEntryFormSchemaFor((id) => isFuel(products.find((p) => p.id === id))),
-    [products],
+    () => purchaseWithPayNowFormSchemaFor((id) => isFuel(products.find((p) => p.id === id)), today),
+    [products, today],
   );
 
   const initialType: PurchaseType = (() => {
+    if (defaultValues?.purchaseType) return defaultValues.purchaseType;
     const first = products.find((p) => p.id === defaultValues?.lines?.[0]?.productId);
     if (first) return isFuel(first) ? 'FUEL' : 'PRODUCTS';
     return defaultType ?? 'FUEL';
   })();
-  const [purchaseType, setPurchaseType] = useState<PurchaseType>(initialType);
+  const initialDate = defaultValues?.transactionDate || defaultDate(initialType);
+  const initialPayDate = payNowDateFor(initialDate, initialType, clock);
+  const carriedPayment = defaultValues?.payment;
 
   const {
     register,
@@ -114,33 +127,44 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
     setValue,
     getValues,
     formState: { errors },
-  } = useZodForm<PurchaseEntryFormValues>(schema, {
+  } = useZodForm<PurchaseFormValues>(schema, {
     defaultValues: {
-      transactionDate: defaultDate(initialType),
       supplierId: lockedSupplier?.id ?? '',
       invoiceNumber: '',
       notes: '',
       lines: [emptyLine()],
       ...defaultValues,
+      transactionDate: initialDate,
+      purchaseType: initialType,
+      payment: {
+        enabled: false,
+        fundingAccountId: '',
+        amount: '',
+        ...carriedPayment,
+        entryDate: carriedPayment?.entryDate || initialPayDate,
+      },
     },
   });
   const { fields, append, remove, replace } = useFieldArray({ control, name: 'lines' });
 
+  const purchaseType = watch('purchaseType');
   const purchaseDate = watch('transactionDate') || '';
   const supplierId = watch('supplierId') || '';
+  const payment = watch('payment');
+  const payNow = payment.enabled;
   // Fuel lines are entered as an invoice TOTAL (tax-inclusive); ₹/L is derived.
   // Keyed by field-array row id.
   const [lineTotals, setLineTotals] = useState<Record<string, string>>({});
-
-  // "Also record a supplier payment now": off by default.
-  const [payNow, setPayNow] = useState(false);
-  const [payAccountId, setPayAccountId] = useState('');
-  const [payAmount, setPayAmount] = useState('');
-  const [payError, setPayError] = useState<string | null>(null);
-  const onPayAccountChange = useCallback((v: string) => {
-    setPayAccountId(v);
-    if (v) setPayError(null);
-  }, []);
+  // The payment date follows the purchase date, and the amount paid the
+  // invoice total, until the operator changes them.
+  const [payDateEdited, setPayDateEdited] = useState(
+    !!carriedPayment?.entryDate && carriedPayment.entryDate !== initialPayDate,
+  );
+  const [payAmountEdited, setPayAmountEdited] = useState(false);
+  const onPayAccountChange = useCallback(
+    (v: string) => setValue('payment.fundingAccountId', v, { shouldValidate: !!v }),
+    [setValue],
+  );
 
   // React Hook Form mutates the watched array in place, so its identity is
   // stable even as the values change — which makes it useless as a dependency.
@@ -196,18 +220,32 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
   const grandTotal = taxableTotal + gstTotal + cessTotal;
 
   const visibleProducts = products.filter((p: any) => (isProducts ? !isFuel(p) : isFuel(p)));
-  const paid = payNow ? (typedAmount(payAmount) ?? grandTotal) : null;
+  const invoiceTotal = round2(grandTotal);
+  const paid = payNow ? typedAmount(payment.amount) : null;
+
+  const followedPayDate = payNowDateFor(purchaseDate, purchaseType, clock);
+  useEffect(() => {
+    if (!payDateEdited && getValues('payment.entryDate') !== followedPayDate)
+      setValue('payment.entryDate', followedPayDate);
+  }, [payDateEdited, followedPayDate, getValues, setValue]);
+
+  const followedPayAmount = invoiceTotal > 0 ? invoiceTotal.toFixed(2) : '';
+  useEffect(() => {
+    if (payNow && !payAmountEdited && getValues('payment.amount') !== followedPayAmount)
+      setValue('payment.amount', followedPayAmount);
+  }, [payNow, payAmountEdited, followedPayAmount, getValues, setValue]);
 
   useReportDraft(
     {
       date: purchaseDate,
-      amount: grandTotal > 0 ? Math.round(grandTotal * 100) / 100 : null,
+      amount: invoiceTotal > 0 ? invoiceTotal : null,
       partyId: supplierId || undefined,
-      accountId: payNow ? payAccountId || undefined : undefined,
+      accountId: payNow ? payment.fundingAccountId || undefined : undefined,
       blocked: !!closedDate,
       purchase: {
         type: purchaseType,
         payNow: paid,
+        payDate: payNow ? payment.entryDate : undefined,
         stockLines: isProducts
           ? watchedLines
               .filter((l) => l?.productId && Number(l.quantity) > 0)
@@ -229,10 +267,10 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
     // Keep a date the operator chose; move the default to the new type's.
     if (getValues('transactionDate') === defaultDate(purchaseType))
       setValue('transactionDate', defaultDate(next));
-    setPurchaseType(next);
+    setValue('purchaseType', next);
   };
 
-  const submit = (values: PurchaseEntryFormValues) => {
+  const submit = (values: PurchaseFormValues) => {
     const lines = values.lines.map((ln, i) => {
       const fieldId = fields[i]?.id;
       const fuel = isFuel(products.find((p) => p.id === ln.productId));
@@ -249,22 +287,15 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
       };
     });
     if (closedDate) return;
-    let payment: PurchasePayNow | undefined;
-    if (payNow) {
-      const amount = typedAmount(payAmount) ?? Math.round(grandTotal * 100) / 100;
-      if (!payAccountId) {
-        setPayError('Choose the account');
-        return;
-      }
-      if (amount > 0) {
-        payment = {
-          amount,
-          fundingAccountId: payAccountId,
-          entryDate: values.transactionDate || entryToday,
-        };
-      }
-    }
-    return onSubmit({ ...values, lines }, payment);
+    const pay = values.payment;
+    const payNowPayment: PurchasePayNow | undefined = pay.enabled
+      ? {
+          amount: Number(pay.amount),
+          fundingAccountId: pay.fundingAccountId,
+          entryDate: pay.entryDate,
+        }
+      : undefined;
+    return onSubmit({ ...values, lines }, payNowPayment);
   };
 
   const dateHint = isProducts
@@ -295,7 +326,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
           name="transactionDate"
           label={isProducts ? 'Business date' : 'Invoice date'}
           value={purchaseDate}
-          max={isProducts ? businessToday : entryToday}
+          max={(isProducts ? businessDate : today) || undefined}
           hint={dateHint}
           onChange={(v) => setValue('transactionDate', v)}
         />
@@ -324,7 +355,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
         {/* Line items */}
         <div className="mb-4 flex flex-col gap-2.5">
           <div className="flex items-center justify-between">
-            <span style={labelStyle}>Invoice lines</span>
+            <span className={LABEL}>Invoice lines</span>
             <Button
               type="button"
               variant="secondary"
@@ -356,7 +387,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
               >
                 <div className="flex items-start gap-2">
                   <div className="flex min-w-0 flex-[2] flex-col gap-1">
-                    <label style={labelStyle}>Product</label>
+                    <label className={LABEL}>Product</label>
                     <Combobox
                       options={visibleProducts.map((p: any) => ({
                         value: p.id,
@@ -372,7 +403,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
                       disabled={disabled}
                     />
                     {errors.lines?.[i]?.productId && (
-                      <span style={errorTextStyle}>{errors.lines[i]?.productId?.message}</span>
+                      <span className={ERROR}>{errors.lines[i]?.productId?.message}</span>
                     )}
                   </div>
                   {fields.length > 1 && (
@@ -398,18 +429,18 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="flex flex-col gap-1">
-                    <label style={labelStyle}>{`Quantity (${unitLabel})`}</label>
+                    <label className={LABEL}>{`Quantity (${unitLabel})`}</label>
                     <NumberInput
                       invalid={!!errors.lines?.[i]?.quantity}
                       {...register(`lines.${i}.quantity` as const)}
                     />
                     {errors.lines?.[i]?.quantity && (
-                      <span style={errorTextStyle}>{errors.lines[i]?.quantity?.message}</span>
+                      <span className={ERROR}>{errors.lines[i]?.quantity?.message}</span>
                     )}
                   </div>
                   {fuel ? (
                     <div className="flex flex-col gap-1">
-                      <label style={labelStyle}>Total Amount (₹)</label>
+                      <label className={LABEL}>Total Amount (₹)</label>
                       <NumberInput
                         value={fuelTotal}
                         onChange={(e) =>
@@ -417,24 +448,24 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
                         }
                       />
                       {errors.lines?.[i]?.unitPrice && !fuelTotal && (
-                        <span style={errorTextStyle}>Total is required</span>
+                        <span className={ERROR}>Total is required</span>
                       )}
                     </div>
                   ) : (
                     <div className="flex flex-col gap-1">
-                      <label style={labelStyle}>Rate (₹, pre-tax)</label>
+                      <label className={LABEL}>Rate (₹, pre-tax)</label>
                       <NumberInput
                         invalid={!!errors.lines?.[i]?.unitPrice}
                         {...register(`lines.${i}.unitPrice` as const)}
                       />
                       {errors.lines?.[i]?.unitPrice && (
-                        <span style={errorTextStyle}>{errors.lines[i]?.unitPrice?.message}</span>
+                        <span className={ERROR}>{errors.lines[i]?.unitPrice?.message}</span>
                       )}
                     </div>
                   )}
                 </div>
 
-                <div className="flex justify-between font-mono text-[11px] text-ink-muted">
+                <div className="flex justify-between font-mono text-[12px] text-ink-muted">
                   <span>
                     {fuel
                       ? qty > 0 && rate > 0
@@ -451,7 +482,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
 
                 {fuel && (
                   <div className="flex flex-col gap-1.5 border-t border-border-soft pt-2">
-                    <label style={labelStyle}>Invoice Density (kg/m³ @15 °C)</label>
+                    <label className={LABEL}>Invoice Density (kg/m³ @15 °C)</label>
                     <NumberInput
                       step="0.01"
                       placeholder="Optional"
@@ -463,32 +494,32 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
             );
           })}
           {(errors.lines?.root?.message ?? errors.lines?.message) && (
-            <span role="alert" style={errorTextStyle}>
+            <span role="alert" className={ERROR}>
               {errors.lines?.root?.message ?? errors.lines?.message}
             </span>
           )}
 
           {/* Invoice totals */}
-          <div className="flex flex-col gap-1 rounded-input border border-border-soft bg-surface-alt px-3 py-2.5 font-mono text-[12px]">
+          <div className="flex flex-col gap-1 rounded-input border border-border-soft bg-surface-alt px-3 py-2.5 text-[12px]">
             <div className="flex justify-between text-ink-muted">
               <span>Taxable</span>
-              <span>{inr(taxableTotal)}</span>
+              <span className="font-mono tabular-nums">{inr(taxableTotal)}</span>
             </div>
             {gstTotal > 0 && (
               <div className="flex justify-between text-ink-muted">
                 <span>{interState ? 'IGST' : 'CGST + SGST'}</span>
-                <span>{inr(gstTotal)}</span>
+                <span className="font-mono tabular-nums">{inr(gstTotal)}</span>
               </div>
             )}
             {cessTotal > 0 && (
               <div className="flex justify-between text-ink-muted">
                 <span>Cess</span>
-                <span>{inr(cessTotal)}</span>
+                <span className="font-mono tabular-nums">{inr(cessTotal)}</span>
               </div>
             )}
             <div className="mt-0.5 flex justify-between border-t border-border-soft pt-1 font-bold text-ink-strong">
               <span>Invoice total</span>
-              <span>{inr(grandTotal)}</span>
+              <span className="font-mono tabular-nums">{inr(grandTotal)}</span>
             </div>
           </div>
         </div>
@@ -496,41 +527,51 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
         <div className="mb-4 rounded-input border border-border-soft p-3">
           <Checkbox
             label="Also record a supplier payment now"
-            description={`Saved as its own Supplier payment, dated ${purchaseDate ? formatBusinessDate(purchaseDate) : 'the purchase date'}. Leave off to pay later from Suppliers.`}
+            description={`Saved as its own Supplier payment, dated ${payment.entryDate ? formatBusinessDate(payment.entryDate) : 'the payment date'}. Leave off to pay later from Suppliers.`}
             checked={payNow}
-            onChange={(e) => {
-              const on = e.target.checked;
-              setPayNow(on);
-              if (on && !payAmount && grandTotal > 0) setPayAmount(grandTotal.toFixed(2));
-            }}
+            onChange={(e) => setValue('payment.enabled', e.target.checked)}
           />
           {payNow && (
             <div className="mt-3">
               <FundingAccountField
                 name={`${formId ?? 'purchase'}-pay-account`}
-                value={payAccountId}
+                value={payment.fundingAccountId ?? ''}
                 onChange={onPayAccountChange}
                 types={SUPPLIER_PAYMENT_ACCOUNT_TYPES}
                 hint={OFFICE_RECORD_KINDS['supplier-payment'].accountHint}
-                error={payError ?? undefined}
+                error={errors.payment?.fundingAccountId?.message}
               />
               <Field
                 label="Amount paid"
                 required
-                style={{ marginBottom: 0 }}
-                hint={
-                  typedAmount(payAmount) != null && grandTotal > 0 && Number(payAmount) < grandTotal
-                    ? `Part payment: ${inr(grandTotal - Number(payAmount))} stays owed.`
-                    : undefined
-                }
+                error={errors.payment?.amount?.message}
+                hint={partPaymentText(invoiceTotal, paid) ?? undefined}
               >
                 <MoneyInput
                   aria-label="Amount paid"
                   step="0.01"
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(e.target.value)}
+                  invalid={!!errors.payment?.amount}
+                  value={String(payment.amount ?? '')}
+                  onChange={(e) => {
+                    setPayAmountEdited(true);
+                    setValue('payment.amount', e.target.value, {
+                      shouldValidate: !!errors.payment?.amount,
+                    });
+                  }}
                 />
               </Field>
+              <RecordDateField
+                name="payment.entryDate"
+                label="Payment date"
+                value={payment.entryDate ?? ''}
+                max={today || undefined}
+                hint="The Supplier payment's Entry Date: its day in the Daily cash book."
+                error={errors.payment?.entryDate?.message}
+                onChange={(v) => {
+                  setPayDateEdited(true);
+                  setValue('payment.entryDate', v, { shouldValidate: true });
+                }}
+              />
             </div>
           )}
         </div>

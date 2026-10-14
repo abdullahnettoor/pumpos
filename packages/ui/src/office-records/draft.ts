@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import type { PurchaseDraft } from './preview.js';
 
 /**
  * What a form tells the drawer while the operator types, for the live preview.
@@ -11,7 +12,7 @@ export interface FormDraft {
   partyId?: string;
   accountId?: string;
   terminalId?: string;
-  purchase?: { type: 'FUEL' | 'PRODUCTS'; payNow: number | null; stockLines: string[] };
+  purchase?: PurchaseDraft;
   /** The record can't be saved as it stands (a product purchase on a closed day). */
   blocked?: boolean;
 }

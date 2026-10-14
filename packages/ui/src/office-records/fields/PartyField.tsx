@@ -49,12 +49,10 @@ export const PartyField: React.FC<PartyFieldProps> = ({
         <span className="flex min-w-0 flex-col">
           <span className="truncate font-semibold text-ink-strong">{locked.name}</span>
           {locked.balance != null && (
-            <span className="text-[11.5px] text-ink-muted">
-              {balanceText(party, locked.balance)}
-            </span>
+            <span className="text-[12px] text-ink-muted">{balanceText(party, locked.balance)}</span>
           )}
         </span>
-        <span className="ml-auto flex items-center gap-1 text-[11px] text-ink-faint">
+        <span className="ml-auto flex items-center gap-1 text-[12px] text-ink-faint">
           <Icon name="lock" size="xs" />
           From statement
         </span>

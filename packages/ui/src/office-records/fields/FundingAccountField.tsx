@@ -88,7 +88,7 @@ export const FundingAccountField: React.FC<FundingAccountFieldProps> = ({
                 />
                 <span className="min-w-0 flex-1 truncate">{a.name}</span>
                 {accountTypeLabel(a.accountType).toLowerCase() !== a.name.toLowerCase() && (
-                  <span className="text-[11px] text-ink-faint">
+                  <span className="text-[12px] text-ink-faint">
                     {accountTypeLabel(a.accountType)}
                   </span>
                 )}

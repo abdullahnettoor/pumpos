@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { collectionEntryFormSchema, type CollectionEntryFormValues } from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
-import { Field, MoneyInput, Select, TextInput } from '../../components/primitives/Field.js';
+import { Field, Select, TextInput } from '../../components/primitives/Field.js';
 import { Form, SegmentedControl } from '../../pump-ds/index.js';
 import { usePaymentTerminals } from '../../query/hooks.js';
 import {
@@ -13,7 +13,9 @@ import {
 import { inr } from '../../utils/format.js';
 import { useOfficeRecordContext } from '../context.js';
 import { OFFICE_RECORD_KINDS } from '../kinds.js';
+import { advanceText } from '../preview.js';
 import { typedAmount, useReportDraft, type OfficeRecordFormProps } from '../draft.js';
+import { RecordAmountInput } from '../fields/RecordAmountField.js';
 import { RecordDateField } from '../fields/RecordDateField.js';
 import { FundingAccountField } from '../fields/FundingAccountField.js';
 import { PartyField, type PartyOption } from '../fields/PartyField.js';
@@ -101,11 +103,10 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
   const amountHint =
     due == null
       ? undefined
-      : amount != null && amount > due
-        ? `More than is due: ${inr(amount - Math.max(due, 0))} becomes an advance.`
-        : amount != null && amount > 0
+      : (advanceText(due, amount) ??
+        (amount != null && amount > 0
           ? `${inr(due)} due → ${inr(due - amount)} after this.`
-          : `${inr(due)} due.`;
+          : `${inr(due)} due.`));
 
   return (
     <Form
@@ -143,10 +144,8 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
           />
         </Field>
         <Field label="Amount" required error={errors.amount?.message} hint={amountHint}>
-          <MoneyInput
+          <RecordAmountInput
             aria-label="Amount"
-            placeholder="0.00"
-            step="0.01"
             invalid={!!errors.amount}
             {...register('amount')}
           />

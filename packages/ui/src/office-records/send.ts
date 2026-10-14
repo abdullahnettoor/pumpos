@@ -1,7 +1,7 @@
 import type {
   CollectionEntryFormValues,
   ExpenseEntryFormValues,
-  PurchaseEntryFormValues,
+  PurchaseWithPayNowFormValues,
   SupplierPaymentEntryFormValues,
 } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
@@ -23,7 +23,7 @@ export type OfficeRecordSubmission =
   | { kind: 'income'; values: ExpenseEntryFormValues }
   | { kind: 'collection'; values: CollectionEntryFormValues }
   | { kind: 'supplier-payment'; values: SupplierPaymentEntryFormValues }
-  | { kind: 'purchase'; values: PurchaseEntryFormValues; payment?: PurchasePayNow };
+  | { kind: 'purchase'; values: PurchaseWithPayNowFormValues; payment?: PurchasePayNow };
 
 export interface OfficeRecordRequest {
   kind: OfficeRecordKind;

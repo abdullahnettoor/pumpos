@@ -1,11 +1,12 @@
 import React, { useCallback } from 'react';
 import { expenseEntryFormSchema, type ExpenseEntryFormValues } from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
-import { Field, MoneyInput, TextInput } from '../../components/primitives/Field.js';
+import { Field, TextInput } from '../../components/primitives/Field.js';
 import { Form } from '../../pump-ds/index.js';
 import { useOfficeRecordContext } from '../context.js';
 import { OFFICE_RECORD_KINDS } from '../kinds.js';
 import { typedAmount, useReportDraft, type OfficeRecordFormProps } from '../draft.js';
+import { RecordAmountInput } from '../fields/RecordAmountField.js';
 import { RecordDateField } from '../fields/RecordDateField.js';
 import { CategoryField, type CategoryKind } from '../fields/CategoryField.js';
 import { FundingAccountField } from '../fields/FundingAccountField.js';
@@ -91,10 +92,8 @@ export const CategoryRecordForm: React.FC<CategoryRecordFormProps> = ({
           error={errors.categoryId?.message}
         />
         <Field label="Amount" required error={errors.amount?.message}>
-          <MoneyInput
+          <RecordAmountInput
             aria-label="Amount"
-            placeholder="0.00"
-            step="0.01"
             invalid={!!errors.amount}
             {...register('amount')}
           />

@@ -4,7 +4,7 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { resolveEntryDate } from '@pump/shared';
+import { resolveEntryDate, shiftBusinessDate } from '@pump/shared';
 import {
   createTestQueryClient,
   muteExpectedConsoleErrors,
@@ -18,22 +18,68 @@ const recordPurchase = vi.fn();
 const recordSupplierPayment = vi.fn();
 const createExpenseCategory = vi.fn();
 
-vi.mock('../services/cloud.js', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CloudTransactionService: class {
-    recordExpense = recordExpense;
-    recordIncome = recordIncome;
-    recordCollection = recordCollection;
-    recordPurchase = recordPurchase;
-    recordSupplierPayment = recordSupplierPayment;
-    createExpenseCategory = createExpenseCategory;
-  },
-}));
+vi.mock('../services/cloud.js', async (importOriginal) => {
+  const real = await importOriginal<Record<string, any>>();
+  const writes: Record<string, unknown> = {
+    recordExpense,
+    recordIncome,
+    recordCollection,
+    recordPurchase,
+    recordSupplierPayment,
+    createExpenseCategory,
+    // A refetch after adding a category must not drop the one just added.
+    getExpenseCategories: () => new Promise(() => {}),
+  };
+  // Every service answers its reads with an empty list (the tests seed what
+  // they need); the writes are the spies above.
+  const service = (own: Record<string, unknown>) =>
+    class {
+      constructor() {
+        return new Proxy(own, {
+          get: (target, name: string) =>
+            name in target ? target[name] : name === 'then' ? undefined : async () => [],
+        });
+      }
+    };
+  const mocked = Object.fromEntries(
+    Object.keys(real)
+      .filter((name) => /^Cloud\w*Service$/.test(name))
+      .map((name) => [name, service(name === 'CloudTransactionService' ? writes : {})]),
+  );
+  return { ...real, ...mocked };
+});
+
+// Radix's menu popup loops forever in jsdom, so the menus render open and
+// inline; AppTopBar's own items and their onSelect are what is under test.
+vi.mock('../pump-ds/menu/index.js', () => {
+  const Pass = ({ children }: { children?: React.ReactNode }) => <>{children}</>;
+  return {
+    Menu: Pass,
+    MenuTrigger: Pass,
+    MenuGroup: Pass,
+    MenuSeparator: () => null,
+    MenuLabel: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    MenuContent: ({ children }: { children?: React.ReactNode }) => (
+      <div role="menu">{children}</div>
+    ),
+    MenuItem: ({ children, onSelect }: { children?: React.ReactNode; onSelect?: () => void }) => (
+      <div role="menuitem" tabIndex={-1} onClick={() => onSelect?.()}>
+        {children}
+      </div>
+    ),
+  };
+});
 
 const { queryKeys } = await import('../query/hooks.js');
 const { QuickEntryHost } = await import('../quick-entry/QuickEntryHost.js');
 const { openQuickEntry, closeQuickEntry } = await import('../quick-entry/store.js');
 const { ExpensesList } = await import('../components/ExpensesList.js');
+const { IncomeList } = await import('../components/IncomeList.js');
+const { CustomersList } = await import('../components/CustomersList.js');
+const { PurchasesList } = await import('../components/PurchasesList.js');
+const { AppTopBar } = await import('../components/AppTopBar.js');
+const { OFFICE_RECORD_KINDS } = await import('./kinds.js');
+type OfficeRecordKind = import('./kinds.js').OfficeRecordKind;
 
 const STATION = { id: 'st-1', settings: { timezone: 'Asia/Kolkata' } };
 const TODAY = resolveEntryDate({ timeZone: 'Asia/Kolkata' });
@@ -77,8 +123,8 @@ const seeded = (over: { expenses?: any[] } = {}) => {
   return qc;
 };
 
-const host = (role: 'Owner' | 'Staff' = 'Owner', queryClient = seeded()) =>
-  renderWithProviders(<QuickEntryHost selectedStation={STATION} userRole={role} />, {
+const host = (role: 'Owner' | 'Staff' = 'Owner', queryClient = seeded(), station = STATION) =>
+  renderWithProviders(<QuickEntryHost selectedStation={station} userRole={role} />, {
     queryClient,
   });
 
@@ -119,30 +165,141 @@ afterEach(() => {
 });
 
 describe('Office Record drawer: one entry definition per kind (#526)', () => {
-  it('has the same title and fields from the page button and the New menu', async () => {
-    renderWithProviders(
-      <>
-        <ExpensesList selectedStation={STATION} userRole="Owner" />
-        <QuickEntryHost selectedStation={STATION} userRole="Owner" />
-      </>,
-      { queryClient: seeded() },
-    );
-    fireEvent.click(await screen.findByRole('button', { name: /Record expense/ }));
-    const fromPage = { title: title(), fields: fieldLabels() };
-    expect(fromPage.title).toBe('Record expense');
-    expect(screen.getByText('Office record · dated by entry date')).toBeTruthy();
-    act(() => closeQuickEntry());
+  type PageCase = [OfficeRecordKind, string, () => React.ReactElement, RegExp, string?];
+  const pages: PageCase[] = [
+    [
+      'expense',
+      'Expense',
+      () => <ExpensesList selectedStation={STATION} userRole="Owner" />,
+      /Record expense/,
+    ],
+    [
+      'income',
+      'Income',
+      () => <IncomeList selectedStation={STATION} userRole="Owner" />,
+      /Record income/,
+    ],
+    [
+      'collection',
+      'Collection',
+      () => <CustomersList selectedStation={STATION} userRole="Owner" />,
+      /Record collection/,
+      'Collections',
+    ],
+    [
+      'purchase',
+      'Purchase',
+      () => <PurchasesList selectedStation={STATION} />,
+      /Record purchase/,
+      'Purchases',
+    ],
+    [
+      'supplier-payment',
+      'Supplier payment',
+      () => <PurchasesList selectedStation={STATION} />,
+      /Record supplier payment/,
+    ],
+  ];
 
-    open('expense', { origin: 'new' });
-    expect(title()).toBe(fromPage.title);
-    expect(fieldLabels()).toEqual(fromPage.fields);
-    expect(fromPage.fields).toEqual([
+  const topBar = (role: 'Owner' | 'Staff') => (
+    <AppTopBar
+      selectedStation={{ ...STATION, name: 'Kochi' } as any}
+      navItems={[]}
+      userRole={role}
+      userName="Asha"
+      syncStatus="synced"
+      onNavigate={() => {}}
+      onLogout={() => {}}
+    />
+  );
+
+  /** The top bar's "New" menu: the one under its "Create" label. */
+  const openNewMenu = async () => {
+    expect(screen.getByRole('button', { name: 'New' })).toBeTruthy();
+    const menus = await screen.findAllByRole('menu');
+    const menu = menus.find((m) => within(m).queryByText('Create'));
+    if (!menu) throw new Error('no New menu');
+    return menu;
+  };
+
+  const shape = () => ({
+    title: title(),
+    fields: fieldLabels(),
+    submit: within(document.querySelector('.drawer-footer') as HTMLElement)
+      .getAllByRole('button')
+      .map((b) => b.getAttribute('type'))
+      .includes('submit'),
+    submitName: (document.querySelector('.drawer-footer button[type="submit"]') as HTMLElement)
+      ?.textContent,
+  });
+
+  it.each(pages)(
+    '%s: same title, fields and submit from its page and from the New menu',
+    async (kind, menuLabel, page, button, tab) => {
+      const { unmount } = renderWithProviders(
+        <>
+          {page()}
+          <QuickEntryHost selectedStation={STATION} userRole="Owner" />
+        </>,
+        { queryClient: seeded() },
+      );
+      if (tab) fireEvent.click(await screen.findByRole('tab', { name: new RegExp(tab) }));
+      fireEvent.click((await screen.findAllByRole('button', { name: button }))[0]);
+      const fromPage = shape();
+      expect(fromPage.title).toBe(OFFICE_RECORD_KINDS[kind].title);
+      expect(fromPage.fields.length).toBeGreaterThan(2);
+      act(() => closeQuickEntry());
+      unmount();
+
+      renderWithProviders(
+        <>
+          {topBar('Owner')}
+          <QuickEntryHost selectedStation={STATION} userRole="Owner" />
+        </>,
+        { queryClient: seeded() },
+      );
+      const menu = await openNewMenu();
+      await act(async () => {
+        fireEvent.click(within(menu).getByRole('menuitem', { name: menuLabel }));
+      });
+      await waitFor(() => expect(drawer()).toBeTruthy());
+      expect(shape()).toEqual(fromPage);
+    },
+  );
+
+  it('offers Staff only the Office Records Staff may record: Expense, Income, Collection', async () => {
+    renderWithProviders(topBar('Staff'), { queryClient: seeded() });
+    const menu = await openNewMenu();
+    const items = within(menu)
+      .getAllByRole('menuitem')
+      .map((i) => i.textContent);
+    expect(items).toEqual(expect.arrayContaining(['Expense', 'Income', 'Collection']));
+    expect(items).not.toContain('Purchase');
+    expect(items).not.toContain('Supplier payment');
+  });
+
+  it.each(['expense', 'income', 'collection', 'supplier-payment'] as const)(
+    '%s: the amount is the large figure beside its ₹, not a right-aligned input',
+    (kind) => {
+      host();
+      open(kind, { origin: 'new' });
+      const amount = screen.getByLabelText('Amount');
+      expect(amount.className).toContain('record-amount');
+      expect(amount.className).not.toContain('input-numeric');
+    },
+  );
+
+  it('lists the expense fields in the spine order', async () => {
+    host();
+    open('expense', { origin: 'page' });
+    expect(fieldLabels()).toEqual([
       'Entry date*',
       'Category*',
       'Amount*',
       'Funding account*',
       'Description',
     ]);
+    expect(screen.getByText('Office record · dated by entry date')).toBeTruthy();
   });
 
   it('keeps one title from Shifts, and says the record is not part of the shift', () => {
@@ -151,6 +308,13 @@ describe('Office Record drawer: one entry definition per kind (#526)', () => {
     expect(title()).toBe('Record collection');
     expect(screen.getByText('Office record · not part of Morning')).toBeTruthy();
     expect(screen.queryByText(/Morning ·/)).toBeNull();
+  });
+
+  it('a product purchase opened from Shifts reads as a Business Day purchase', () => {
+    host();
+    open('purchase', { origin: 'shifts', shiftName: 'Morning', purchaseType: 'PRODUCTS' });
+    expect(screen.getByText(/^Product purchase · Business Day /)).toBeTruthy();
+    expect(screen.queryByText(/not part of Morning/)).toBeNull();
   });
 
   it('puts Cancel, Record and "Add another after saving" in the pinned footer', () => {
@@ -243,7 +407,15 @@ describe('expense', () => {
     host(
       'Owner',
       seeded({
-        expenses: [{ entryDate: TODAY, amount: '4200', categoryId: 'cat-power', status: 'ACTIVE' }],
+        expenses: [
+          {
+            stationId: 'st-1',
+            entryDate: TODAY,
+            amount: '4200',
+            categoryId: 'cat-power',
+            status: 'ACTIVE',
+          },
+        ],
       }),
     );
     open('expense', { origin: 'new' });
@@ -256,6 +428,42 @@ describe('expense', () => {
     fireEvent.click(strip);
     expect(screen.getByText('Balances')).toBeTruthy();
     expect(screen.getByText(/Looks like a repeat/)).toBeTruthy();
+  });
+
+  it("ignores another station's records in the repeat check", () => {
+    host(
+      'Owner',
+      seeded({
+        expenses: [
+          {
+            stationId: 'st-2',
+            entryDate: TODAY,
+            amount: '4200',
+            categoryId: 'cat-power',
+            status: 'ACTIVE',
+          },
+        ],
+      }),
+    );
+    open('expense', { origin: 'new' });
+    chooseCategory('cat-power');
+    setAmount('4200');
+    expect(screen.queryByText('Possible repeat')).toBeNull();
+  });
+
+  it('re-checks for a repeat when the list loads after the drawer opened', () => {
+    const qc = seeded();
+    host('Owner', qc);
+    open('expense', { origin: 'new' });
+    chooseCategory('cat-power');
+    setAmount('4200');
+    expect(screen.queryByText('Possible repeat')).toBeNull();
+    act(() => {
+      qc.setQueryData(queryKeys.expenses(), [
+        { stationId: 'st-1', entryDate: TODAY, amount: '4200', categoryId: 'cat-power' },
+      ]);
+    });
+    expect(screen.getByText('Possible repeat')).toBeTruthy();
   });
 
   it('warns that Cash in Hand would go negative, without blocking the save', async () => {
@@ -398,6 +606,35 @@ describe('supplier payment', () => {
     expect(keys[1]).toBe(keys[0]); // outcome unknown: same key
     expect(keys[2]).not.toBe(keys[1]); // 403 decided: a fresh key
   });
+
+  it('keeps the key when an edited retry is refused as a key conflict', async () => {
+    recordSupplierPayment
+      .mockRejectedValueOnce(network())
+      .mockRejectedValueOnce(
+        Object.assign(
+          new Error('This Idempotency-Key was already used with different request content'),
+          { status: 409, code: 'CONFLICT' },
+        ),
+      )
+      .mockResolvedValue({});
+    host();
+    open('supplier-payment', { origin: 'statement', party: SUPPLIERS[0] });
+    fireEvent.click(screen.getByRole('radio', { name: /HDFC Current/ }));
+    await record('Record supplier payment');
+    await screen.findByText('Saving again sends the same record, so it cannot be recorded twice.');
+    setAmount('4000');
+    await record('Record supplier payment');
+    expect(
+      await screen.findByText(
+        'Your earlier save may already be recorded. Check the list, then undo your edit or close and start again.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/already used with different request content/)).toBeNull();
+    await record('Record supplier payment');
+    await waitFor(() => expect(recordSupplierPayment).toHaveBeenCalledTimes(3));
+    const keys = recordSupplierPayment.mock.calls.map((c) => c[1].idempotencyKey);
+    expect(new Set(keys).size).toBe(1);
+  });
 });
 
 describe('purchase', () => {
@@ -444,5 +681,136 @@ describe('purchase', () => {
     expect(opts.idempotencyKey).toEqual(expect.any(String));
     expect(recordSupplierPayment).not.toHaveBeenCalled();
     expect(await screen.findByText('Purchase and supplier payment recorded.')).toBeTruthy();
+  });
+
+  const payNow = () =>
+    fireEvent.click(screen.getByRole('checkbox', { name: /Also record a supplier payment now/ }));
+  const dateInput = (name: string) =>
+    document.querySelector(`[name="${name}"]`) as HTMLInputElement;
+  const paymentDate = () => screen.getByLabelText('Payment date') as HTMLInputElement;
+  const setQuantity = (value: string) =>
+    fireEvent.change(document.querySelector('[name="lines.0.quantity"]')!, { target: { value } });
+
+  it('gives the payment its own date, following the invoice date until edited', async () => {
+    host();
+    open('purchase', { origin: 'page', purchaseType: 'FUEL', defaults: { supplierId: 'sup-1' } });
+    payNow();
+    expect(paymentDate().value).toBe(TODAY);
+    expect(paymentDate().max).toBe(TODAY);
+    fireEvent.change(dateInput('transactionDate'), { target: { value: '2026-01-10' } });
+    expect(paymentDate().value).toBe('2026-01-10');
+    expect(screen.getByText(/Saved as its own Supplier payment, dated 10 Jan 2026/)).toBeTruthy();
+
+    fireEvent.change(paymentDate(), { target: { value: '2026-01-12' } });
+    fireEvent.change(dateInput('transactionDate'), { target: { value: '2026-01-09' } });
+    expect(paymentDate().value).toBe('2026-01-12');
+    expect(screen.getByText(/Saved as its own Supplier payment, dated 12 Jan 2026/)).toBeTruthy();
+  });
+
+  it('refuses a payment dated after today', async () => {
+    await productPurchase();
+    payNow();
+    fireEvent.click(screen.getByRole('radio', { name: /HDFC Current/ }));
+    fireEvent.change(paymentDate(), { target: { value: '2999-01-01' } });
+    await record('Record purchase');
+    await waitFor(() =>
+      expect(screen.getByText('A payment cannot be dated after today')).toBeTruthy(),
+    );
+    expect(recordPurchase).not.toHaveBeenCalled();
+  });
+
+  it('asks for the pay-now account inside the form', async () => {
+    await productPurchase();
+    payNow();
+    await record('Record purchase');
+    await waitFor(() => expect(screen.getByText('Choose the account')).toBeTruthy());
+    expect(recordPurchase).not.toHaveBeenCalled();
+  });
+
+  it('keeps the amount paid on the invoice total until the operator edits it', () => {
+    host();
+    open('purchase', {
+      origin: 'page',
+      defaults: {
+        supplierId: 'sup-1',
+        lines: [{ productId: OIL.id, quantity: 10, unitPrice: 450 }],
+      },
+    });
+    payNow();
+    const paid = () => (screen.getByLabelText('Amount paid') as HTMLInputElement).value;
+    expect(paid()).toBe('5310.00');
+    setQuantity('20'); // 20 × ₹450 + 18% = ₹10,620
+    expect(paid()).toBe('10620.00');
+    fireEvent.change(screen.getByLabelText('Amount paid'), { target: { value: '5000' } });
+    setQuantity('5');
+    expect(paid()).toBe('5000');
+  });
+
+  describe('before Day Start', () => {
+    // 04:30 in Kolkata on 15 Oct, Day Start 06:00: the Business Day is still 14 Oct.
+    const EARLY = {
+      id: 'st-1',
+      settings: { timezone: 'Asia/Kolkata', business_day_starts_at: '06:00' },
+    };
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-14T23:00:00Z'));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("dates a product purchase's payment today, not by the Business Day", async () => {
+      host('Owner', seeded(), EARLY);
+      open('purchase', {
+        origin: 'page',
+        purchaseType: 'PRODUCTS',
+        defaults: {
+          supplierId: 'sup-1',
+          lines: [{ productId: OIL.id, quantity: 10, unitPrice: 450 }],
+        },
+      });
+      expect(dateInput('transactionDate').value).toBe('2026-10-14');
+      payNow();
+      expect(paymentDate().value).toBe('2026-10-15');
+      fireEvent.click(screen.getByRole('radio', { name: /HDFC Current/ }));
+      await record('Record purchase');
+      await waitFor(() => expect(recordPurchase).toHaveBeenCalledTimes(1));
+      expect(recordPurchase.mock.calls[0][0]).toMatchObject({
+        transactionDate: '2026-10-14',
+        payment: { entryDate: '2026-10-15' },
+      });
+    });
+  });
+
+  it('"Add another" keeps the type, the pay-now account and the payment date', async () => {
+    host();
+    open('purchase', {
+      origin: 'page',
+      defaults: {
+        supplierId: 'sup-1',
+        lines: [{ productId: OIL.id, quantity: 10, unitPrice: 450 }],
+      },
+    });
+    payNow();
+    fireEvent.click(screen.getByRole('radio', { name: /HDFC Current/ }));
+    const earlier = shiftBusinessDate(TODAY, -1);
+    fireEvent.change(paymentDate(), { target: { value: earlier } });
+    fireEvent.click(screen.getByLabelText('Add another after saving'));
+    await record('Record purchase');
+    await waitFor(() => expect(recordPurchase).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.getByRole('radio', { name: 'Products' }).getAttribute('aria-checked')).toBe(
+        'true',
+      ),
+    );
+    expect(screen.getByText('Business date')).toBeTruthy();
+    expect((screen.getByRole('radio', { name: /HDFC Current/ }) as HTMLInputElement).checked).toBe(
+      true,
+    );
+    expect(paymentDate().value).toBe(earlier);
+    expect((document.querySelector('[name="lines.0.quantity"]') as HTMLInputElement).value).toBe(
+      '',
+    );
   });
 });
