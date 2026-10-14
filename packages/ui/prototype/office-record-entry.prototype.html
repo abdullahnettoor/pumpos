@@ -1,0 +1,786 @@
+<!doctype html>
+<!--
+  PROTOTYPE, throwaway (branch prototype/526-office-record-entry). Never merge into dev.
+  Question (#526): what does recording an Office Record look like, the same from every entry point?
+  Three variants of the entry drawer, on mock pages of the app shell:
+    A  Form drawer          one kind per drawer, stacked fields, pinned footer, "Save and add another"
+    B  Record desk          one wider drawer with a kind switch (from the New menu) and a log of what you saved
+    C  Preview drawer       form on the left, live "what this records" on the right: ledger effect, balances, checks
+  Open the file in a browser. Bottom bar or URL: ?v=A|B|C&kind=expense|income|collection|purchase|payment
+  &from=page|new|statement|shifts&role=owner|manager|accountant|staff&theme=light|dark
+  Keys: ←/→ variant (outside inputs), ⌘/Ctrl+Enter save, Esc close.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PumpOS: Office Record entry (prototype #526)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root { --font-sans: 'Plus Jakarta Sans', -apple-system, sans-serif; --font-mono: 'Geist Mono', ui-monospace, monospace; }
+  .light {
+    --canvas: #f6f7f4; --surface: #ffffff; --alt: #f1f3ef; --line: #d9ded6; --line2: #b9c1b7;
+    --hi: #18201a; --tx: #2b342d; --mu: #5e6a61; --fa: #7a857c;
+    --acc: #1f6a53; --on-acc: #fff; --acc-soft: #e6f2ec; --acc-tint: #f1f8f4;
+    --info: #2e5e88; --info-soft: #e8f0f7; --good: #1e7a56; --good-soft: #e6f3ec;
+    --warn: #a2690b; --warn-soft: #fbf3e2; --bad: #b8443a; --bad-soft: #fbebe8;
+    --side: #f1f3ef; --scrim: rgba(24, 32, 26, .28); --shadow: -12px 0 32px rgba(24, 32, 26, .10);
+  }
+  .dark {
+    --canvas: #0b0f0d; --surface: #121815; --alt: #161d1a; --line: #1f2925; --line2: #2a3530;
+    --hi: #ffffff; --tx: #cfd8d2; --mu: #8a9a91; --fa: #5d6c64;
+    --acc: #2fd18d; --on-acc: #06110c; --acc-soft: #143326; --acc-tint: #0f1d17;
+    --info: #6cb6ff; --info-soft: #12263a; --good: #2fd18d; --good-soft: #10241b;
+    --warn: #f2b544; --warn-soft: #221a10; --bad: #ff7a6b; --bad-soft: #241514;
+    --side: #0e1311; --scrim: rgba(0, 0, 0, .55); --shadow: -12px 0 32px rgba(0, 0, 0, .5);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: var(--font-sans); font-size: 14px; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+  input, select, textarea { font: inherit; color: var(--hi); }
+  .num { font-family: var(--font-mono); font-feature-settings: 'tnum'; }
+  .row { display: flex; align-items: center; }
+  .hi { color: var(--hi); } .mu { color: var(--mu); } .fa { color: var(--fa); }
+  .good { color: var(--good); } .bad { color: var(--bad); } .warn { color: var(--warn); } .info { color: var(--info); }
+  .app { height: 100vh; display: flex; flex-direction: column; background: var(--canvas); color: var(--tx); overflow: hidden; }
+
+  /* shell */
+  .topbar { height: 48px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--surface); border-bottom: 1px solid var(--line); position: relative; z-index: 20; }
+  .mark { width: 26px; height: 26px; border-radius: 7px; background: var(--acc); color: var(--on-acc); display: grid; place-items: center; }
+  .search { flex: 1; max-width: 420px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--canvas); display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--fa); font-size: 12.5px; }
+  .kbd { margin-left: auto; font-family: var(--font-mono); font-size: 10px; padding: 0 4px; height: 18px; line-height: 16px; border-radius: 4px; border: 1px solid var(--line2); border-bottom-width: 2px; color: var(--mu); background: var(--surface); }
+  .btn { height: 32px; padding: 0 12px; border-radius: 8px; font-weight: 600; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .btn.pri { background: var(--acc); color: var(--on-acc); } .btn.sec { border: 1px solid var(--line); background: var(--surface); color: var(--hi); }
+  .btn.ghost { color: var(--mu); } .btn.ghost:hover { color: var(--hi); background: var(--alt); }
+  .btn[disabled] { opacity: .5; cursor: not-allowed; }
+  .btn .k { font-family: var(--font-mono); font-size: 10px; opacity: .7; font-weight: 500; }
+  .av { width: 28px; height: 28px; border-radius: 99px; background: var(--acc-soft); color: var(--acc); font-weight: 700; font-size: 11px; display: grid; place-items: center; }
+  .statusbar { height: 26px; flex-shrink: 0; display: flex; align-items: center; gap: 16px; padding: 0 12px; border-top: 1px solid var(--line); background: var(--alt); font-size: 11.5px; color: var(--mu); }
+  .dot { width: 7px; height: 7px; border-radius: 9px; background: var(--good); display: inline-block; }
+  .body { flex: 1; display: flex; min-height: 0; }
+  .side { width: 220px; flex-shrink: 0; background: var(--side); border-right: 1px solid var(--line); padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+  .grp { font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--fa); padding: 14px 8px 6px; }
+  .grp:first-child { padding-top: 0; }
+  .nav { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 8px; font-weight: 500; font-size: 13px; width: 100%; }
+  .nav svg { color: var(--mu); } .nav.on { background: var(--info-soft); color: var(--info); font-weight: 600; } .nav.on svg { color: var(--info); }
+  .main { flex: 1; overflow-y: auto; min-width: 0; }
+  .page { padding: 24px 24px 120px; max-width: 1280px; }
+  .ttl { font-size: 18px; font-weight: 600; color: var(--hi); letter-spacing: -0.01em; }
+  .sub { font-size: 13px; color: var(--mu); margin-top: 2px; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-top: 12px; }
+  .tab { padding: 8px 12px; font-size: 13px; font-weight: 500; color: var(--mu); border-bottom: 2px solid transparent; margin-bottom: -1px; display: flex; gap: 6px; align-items: center; }
+  .tab svg { color: var(--fa); } .tab.on { color: var(--hi); font-weight: 600; border-color: var(--acc); } .tab.on svg { color: var(--acc); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+  .sh { font-size: 12px; font-weight: 600; color: var(--mu); text-transform: uppercase; letter-spacing: .05em; }
+  table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.t th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--fa); font-weight: 500; padding: 8px 14px; border-bottom: 1px solid var(--line); }
+  table.t td { padding: 9px 14px; border-bottom: 1px solid var(--line); }
+  table.t tr:last-child td { border-bottom: 0; }
+  table.t .r { text-align: right; } table.t td.r { font-family: var(--font-mono); font-feature-settings: 'tnum'; }
+  table.t tr.new td { background: var(--acc-tint); }
+  .pill { font-size: 11px; font-weight: 500; height: 22px; line-height: 22px; display: inline-block; padding: 0 8px; border-radius: 99px; white-space: nowrap; }
+  .p-ok { background: var(--good-soft); color: var(--good); } .p-warn { background: var(--warn-soft); color: var(--warn); }
+  .p-bad { background: var(--bad-soft); color: var(--bad); } .p-mu { background: var(--alt); color: var(--mu); border: 1px solid var(--line); } .p-info { background: var(--info-soft); color: var(--info); }
+
+  /* New menu */
+  .menu { position: absolute; top: 44px; right: 76px; width: 260px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.14); padding: 6px; z-index: 40; }
+  .menu .ml { font-size: 10px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .05em; color: var(--fa); padding: 8px 10px 4px; }
+  .menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border-radius: 7px; font-size: 13px; }
+  .menu button:hover { background: var(--alt); } .menu button svg { color: var(--mu); }
+  .menu button .x { margin-left: auto; font-size: 11px; color: var(--fa); }
+  .menu .sep { height: 1px; background: var(--line); margin: 4px 6px; }
+
+  /* drawer */
+  .scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 50; }
+  .drawer { position: fixed; top: 0; bottom: 0; right: 0; background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow); z-index: 60; display: flex; flex-direction: column; max-width: 96vw; }
+  .drawer.under { z-index: 55; right: 0; filter: saturate(.9); }
+  .dh { min-height: 56px; display: flex; align-items: center; gap: 10px; padding: 10px 20px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+  .dh .t { font-size: 15px; font-weight: 600; color: var(--hi); }
+  .dh .c { font-size: 11.5px; color: var(--mu); margin-top: 1px; }
+  .dh .x { margin-left: auto; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--mu); }
+  .dh .x:hover { background: var(--alt); }
+  .db { flex: 1; overflow-y: auto; padding: 18px 20px 24px; }
+  .df { flex-shrink: 0; border-top: 1px solid var(--line); padding: 12px 20px; display: flex; align-items: center; gap: 8px; background: var(--surface); }
+  .df .hint { font-size: 11.5px; color: var(--fa); }
+  .df .sp { flex: 1; }
+
+  /* fields */
+  .fld { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; min-width: 0; }
+  .fld > label, .lbl { font-size: 12px; font-weight: 600; color: var(--mu); }
+  .lbl .req { color: var(--bad); margin-left: 2px; }
+  .in { height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 0 10px; width: 100%; outline: none; }
+  .in:focus { border-color: var(--acc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 18%, transparent); }
+  textarea.in { height: 64px; padding: 8px 10px; resize: vertical; }
+  .in.err { border-color: var(--bad); }
+  .money { position: relative; } .money span { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--fa); font-family: var(--font-mono); }
+  .money .in { padding-left: 24px; font-family: var(--font-mono); font-feature-settings: 'tnum'; }
+  .money.big .in { height: 44px; font-size: 20px; font-weight: 600; } .money.big span { font-size: 18px; }
+  .fh { font-size: 11.5px; color: var(--fa); }
+  .fe { font-size: 11.5px; color: var(--bad); }
+  .quick { display: flex; gap: 6px; }
+  .quick button { font-size: 11.5px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--mu); }
+  .quick button.on { border-color: var(--acc); color: var(--acc); background: var(--acc-tint); }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--alt); border: 1px solid var(--line); }
+  .seg button { padding: 5px 12px; border-radius: 6px; font-size: 12.5px; font-weight: 600; color: var(--mu); display: inline-flex; gap: 6px; align-items: center; }
+  .seg button.on { background: var(--surface); color: var(--hi); box-shadow: 0 0 0 1px var(--line); }
+  .seg button[disabled] { opacity: .4; cursor: not-allowed; }
+  .acct { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .acct button { display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 13px; border-bottom: 1px solid var(--line); }
+  .acct button:last-child { border-bottom: 0; }
+  .acct button .rd { width: 14px; height: 14px; border-radius: 99px; border: 1.5px solid var(--line2); flex-shrink: 0; }
+  .acct button.on { background: var(--acc-tint); } .acct button.on .rd { border: 4px solid var(--acc); }
+  .acct button .bal { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--mu); }
+  .ctx { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--alt); border: 1px solid var(--line); font-size: 13px; margin-bottom: 16px; }
+  .ctx .lock { margin-left: auto; font-size: 11px; color: var(--fa); display: flex; gap: 4px; align-items: center; }
+  .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  .lines { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .lines table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .lines th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--fa); font-weight: 500; padding: 6px 8px; background: var(--alt); border-bottom: 1px solid var(--line); }
+  .lines th.r { text-align: right; }
+  .lines td { padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  .lines .in { height: 30px; font-size: 12.5px; padding: 0 8px; }
+  .lines .in.r { text-align: right; font-family: var(--font-mono); }
+  .lines .add { padding: 7px 10px; font-size: 12px; font-weight: 600; color: var(--acc); }
+  .tot { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; font-size: 12.5px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--alt); }
+  .tot .num { text-align: right; } .tot .b { font-weight: 600; color: var(--hi); }
+  .box { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 16px; }
+  .chk { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; color: var(--hi); cursor: pointer; }
+  .banner { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 8px; font-size: 12.5px; margin-bottom: 14px; }
+  .banner.bad { background: var(--bad-soft); color: var(--bad); border: 1px solid color-mix(in srgb, var(--bad) 30%, transparent); }
+  .banner.warn { background: var(--warn-soft); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }
+  .banner.info { background: var(--info-soft); color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent); }
+  .banner b { color: inherit; }
+
+  /* B: session log */
+  .log { margin-top: 6px; border-top: 1px dashed var(--line2); padding-top: 14px; }
+  .log .it { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 12.5px; border-bottom: 1px solid var(--line); }
+  .log .it:last-child { border-bottom: 0; }
+  .kindsw { display: flex; gap: 2px; flex-wrap: wrap; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--alt); }
+  .kindsw button { display: inline-flex; gap: 6px; align-items: center; padding: 6px 9px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--mu); border: 1px solid transparent; }
+  .kindsw button.on { background: var(--surface); color: var(--hi); border-color: var(--line); }
+  .kindsw button.on svg { color: var(--acc); }
+  .kindsw button[disabled] { opacity: .35; cursor: not-allowed; }
+
+  /* C: preview pane */
+  .split { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 360px; min-height: 0; }
+  .split .db { border-right: 1px solid var(--line); }
+  .pv { overflow-y: auto; padding: 18px 20px 24px; background: var(--alt); }
+  .pv .card { padding: 12px 14px; margin-bottom: 12px; }
+  .pv .eh { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .pv .ln { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 12.5px; }
+  .pv .ln .num { text-align: right; }
+  .pv .mv { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 12.5px; }
+  .pv .chkl { display: flex; gap: 8px; font-size: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .pv .chkl:first-of-type { border-top: 0; }
+
+  /* toast */
+  .toast { position: fixed; right: 20px; bottom: 40px; z-index: 80; background: var(--hi); color: var(--surface); padding: 10px 14px; border-radius: 10px; font-size: 13px; display: flex; gap: 12px; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+  .toast button { color: var(--acc-soft); font-weight: 600; }
+  .dark .toast { background: #e8efe9; color: #0b0f0d; } .dark .toast button { color: #1f6a53; }
+
+  /* prototype chrome (not part of the design) */
+  #ctl { position: fixed; left: 16px; bottom: 34px; width: 360px; z-index: 999; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px 12px; border-radius: 14px; background: #111; color: #ddd; font: 600 12px var(--font-sans); box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+  #ctl label { display: flex; gap: 6px; align-items: center; }
+  #ctl select { background: #222; color: #fff; border: 1px solid #333; border-radius: 8px; padding: 4px 6px; font: inherit; }
+  #ctl button { color: #ddd; padding: 4px 8px; border-radius: 8px; } #ctl button:hover { background: #2a2a2a; }
+  #ctl button.on { background: #2fd18d; color: #06110c; }
+  #ctl .vl { min-width: 0; flex: 1; text-align: center; } #ctl .vl span { opacity: .55; font-weight: 500; }
+  #notes { position: fixed; left: 16px; bottom: 150px; width: 360px; max-height: calc(100vh - 210px); overflow-y: auto; z-index: 998; background: #111; color: #d7d7d7; border-radius: 14px; padding: 14px 16px; font: 400 12.5px/1.55 var(--font-sans); box-shadow: 0 14px 40px rgba(0,0,0,.35); }
+  #notes h2 { margin: 0 0 4px; font-size: 15px; color: #fff; } #notes b { color: #fff; } #notes ul { margin: 6px 0 0; padding-left: 16px; } #notes li { margin-bottom: 4px; }
+  #notes pre { background: #1c1c1c; border-radius: 8px; padding: 8px 10px; font: 11px/1.45 var(--font-mono); color: #b9f5d8; white-space: pre-wrap; word-break: break-word; margin: 8px 0 0; }
+  #notes .h { margin-top: 10px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: #8a8a8a; font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="notes"></div>
+<div id="ctl"></div>
+<script>
+/* PROTOTYPE (#526). Mock data, in-memory only. Nothing here is production code. */
+const ic = (p, s = 16, w = 1.9) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const G = {
+  dash: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  pump: '<path d="M4 21V5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v16"/><path d="M3 21h11"/><path d="M7 8h3"/><path d="M13 10h3l3 3v5a1.5 1.5 0 0 1-3 0v-4h-3"/>',
+  box: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>', tag: '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/>',
+  truck: '<path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
+  bank: '<path d="M3 10 12 4l9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/>', out: '<path d="M12 19V5M5 12l7-7 7 7"/>', inn: '<path d="M12 5v14M5 12l7 7 7-7"/>',
+  doc: '<path d="M6 2h8l5 5v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v5h5"/><path d="M8 13h8M8 17h5"/>', chart: '<path d="M3 3v18h18"/><path d="m7 15 4-5 4 3 5-7"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+  org: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h1M14 7h1M9 11h1M14 11h1M9 15h1M14 15h1"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>', down: '<path d="m6 9 6 6 6-6"/>', x: '<path d="M18 6 6 18M6 6l12 12"/>', drop: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
+  wallet: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="16.5" cy="14.5" r="1.2"/>',
+  cart: '<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.5 12h12l2-8H6"/>',
+  card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>', bag: '<path d="M6 7h12l1 14H5z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/>',
+  pie: '<path d="M21 12A9 9 0 1 1 12 3v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>', book: '<path d="M2 4h7a3 3 0 0 1 3 3v14a2 2 0 0 0-2-2H2z"/><path d="M22 4h-7a3 3 0 0 0-3 3v14a2 2 0 0 1 2-2h8z"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>', check: '<path d="M20 6 9 17l-5-5"/>', alert: '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>', clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+  arrows: '<path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="m17 20 4-4-4-4"/><path d="M21 16H7"/>', car: '<path d="M5 17h14M6 17v2M18 17v2"/><path d="M3 13l2-6h14l2 6v4H3z"/>',
+  right: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+};
+
+/* ---------- mock station ---------- */
+const TODAY = '2026-10-14', YDAY = '2026-10-13';
+const ACCOUNTS = [
+  { id: 'cash', name: 'Cash in hand', type: 'CASH_IN_HAND', bal: 48250, methods: ['cash'] },
+  { id: 'petty', name: 'Petty cash', type: 'PETTY_CASH', bal: 3400, methods: ['cash'] },
+  { id: 'hdfc', name: 'HDFC current ••4512', type: 'BANK', bal: 682140, methods: ['bank', 'card', 'upi'] },
+  { id: 'sbi', name: 'SBI current ••0931', type: 'BANK', bal: 124500, methods: ['bank', 'card', 'upi'] },
+  { id: 'cms', name: 'BPCL CMS wallet', type: 'CMS', bal: 210000, methods: ['bank'], supplierOnly: true },
+  { id: 'owner', name: 'Owner (Abdullah)', type: 'OWNER', bal: null, methods: ['cash', 'bank'] },
+];
+const TERMINALS = [
+  { id: 't1', name: 'Pine Labs ••01', method: 'card' }, { id: 't2', name: 'Paytm QR', method: 'upi' },
+];
+const CATS = {
+  expense: ['Bank charges', 'Electricity', 'Generator diesel', 'Repairs & maintenance', 'Staff welfare', 'Stationery', 'Tea & snacks'],
+  income: [['Air & nitrogen', 0], ['Commission', 18], ['Scrap sale', 18], ['Tanker rental', 18]],
+};
+const CUSTOMERS = [
+  { id: 'c1', name: 'Sri Balaji Transports', due: 184200, limit: 200000 },
+  { id: 'c2', name: 'RTC Depot 4', due: 362000, limit: 300000, overdue: true },
+  { id: 'c3', name: 'Anand Logistics', due: 28861.27, limit: 100000 },
+  { id: 'c4', name: 'Kaveri Travels', due: 12450, limit: 50000 },
+];
+const SUPPLIERS = [
+  { id: 's1', name: 'BPCL Kochi Terminal', owed: 842000, gstin: '32AAACB2902M1ZT', fuel: true },
+  { id: 's2', name: 'Malabar Lubes (Castrol)', owed: 36400, gstin: '32ABKFM4471Q1Z2' },
+  { id: 's3', name: 'Kerala Electricals', owed: 0, gstin: '32AFRPK8120B1ZK' },
+];
+const PRODUCTS = {
+  fuel: [{ id: 'ms', name: 'Petrol (MS)', unit: 'L' }, { id: 'hsd', name: 'Diesel (HSD)', unit: 'L' }, { id: 'xp', name: 'Power Petrol (XP95)', unit: 'L' }],
+  products: [{ id: 'gtx', name: 'Castrol GTX 20W-50 1L', unit: 'pc', rate: 320, gst: 18 }, { id: 'cool', name: 'Coolant 1L', unit: 'pc', rate: 180, gst: 18 }, { id: 'grease', name: 'Grease 500g', unit: 'pc', rate: 145, gst: 18 }],
+};
+const STAFF = { owner: 'Abdullah', manager: 'Rajesh', accountant: 'Meera', staff: 'Sunil' };
+
+/* Records already on the pages (newest first). Electricity ₹4,200 today seeds the duplicate check. */
+let RECORDS = {
+  expense: [
+    { date: TODAY, time: '10:12 am', a: 'Electricity', b: 'KSEB bill Sep', amt: 4200, acct: 'HDFC current ••4512', by: 'Rajesh' },
+    { date: TODAY, time: '9:05 am', a: 'Tea & snacks', b: 'Morning shift', amt: 240, acct: 'Petty cash', by: 'Sunil' },
+    { date: YDAY, time: '6:40 pm', a: 'Generator diesel', b: '20 L for genset', amt: 1790, acct: 'Cash in hand', by: 'Rajesh' },
+  ],
+  income: [
+    { date: TODAY, time: '11:30 am', a: 'Tanker rental', b: 'KL-11 AB 4410, 2 days', amt: 9000, acct: 'HDFC current ••4512', by: 'Meera' },
+    { date: YDAY, time: '5:15 pm', a: 'Scrap sale', b: 'Empty barrels ×12', amt: 2360, acct: 'Cash in hand', by: 'Rajesh' },
+  ],
+  collection: [
+    { date: TODAY, time: '12:02 pm', a: 'Sri Balaji Transports', b: 'UPI · UTR 4410…92', amt: 25000, acct: 'SBI current ••0931', by: 'Meera' },
+    { date: YDAY, time: '4:50 pm', a: 'Kaveri Travels', b: 'Cash', amt: 6000, acct: 'Cash in hand', by: 'Rajesh' },
+  ],
+  purchase: [
+    { date: YDAY, time: '3:20 pm', a: 'BPCL Kochi Terminal', b: 'Fuel · INV 88123 · HSD 12 KL', amt: 1063440, acct: 'Unpaid', by: 'Meera' },
+    { date: '2026-10-11', time: '1:05 pm', a: 'Malabar Lubes (Castrol)', b: 'Products · INV ML-2207', amt: 36400, acct: 'Unpaid', by: 'Meera' },
+  ],
+  payment: [
+    { date: YDAY, time: '3:40 pm', a: 'BPCL Kochi Terminal', b: 'RTGS HDFCR5202610', amt: 1000000, acct: 'BPCL CMS wallet', by: 'Meera' },
+  ],
+};
+
+/* ---------- one entry definition per kind ---------- */
+const KINDS = {
+  expense: { label: 'Expense', title: 'Record expense', g: G.out, page: 'expenses', tab: 'Expenses', dir: 'out', roles: ['owner', 'manager', 'accountant', 'staff'], key: 'E' },
+  income: { label: 'Income', title: 'Record income', g: G.inn, page: 'income', tab: 'Income', dir: 'in', roles: ['owner', 'manager', 'accountant', 'staff'], key: 'I' },
+  collection: { label: 'Collection', title: 'Record collection', g: G.wallet, page: 'customers', tab: 'Collections', dir: 'in', roles: ['owner', 'manager', 'accountant', 'staff'], key: 'C' },
+  purchase: { label: 'Purchase', title: 'Record purchase', g: G.cart, page: 'suppliers', tab: 'Purchases', dir: 'payable', roles: ['owner', 'manager', 'accountant'], key: 'P' },
+  payment: { label: 'Supplier payment', title: 'Record supplier payment', g: G.wallet, page: 'suppliers', tab: 'Payments', dir: 'out', roles: ['owner', 'manager', 'accountant'], key: 'S' },
+};
+const KIND_ORDER = ['expense', 'income', 'collection', 'purchase', 'payment'];
+const canCat = (r) => r !== 'staff';
+
+const VARIANTS = {
+  A: { name: 'Form drawer', width: 460 },
+  B: { name: 'Record desk', width: 640 },
+  C: { name: 'Preview drawer', width: 900 },
+};
+
+/* ---------- formatting ---------- */
+const inr = (n, d = 2) => { if (n == null || isNaN(n)) return '—'; const s = n < 0 ? '−' : ''; return s + '₹' + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d }); };
+const dm = (iso) => { const d = new Date(iso + 'T00:00:00Z'); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }); };
+const wdm = (iso) => { const d = new Date(iso + 'T00:00:00Z'); return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }); };
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const num = (v) => { const n = Number(String(v ?? '').replace(/[,₹\s]/g, '')); return v === '' || v == null || !isFinite(n) ? null : n; };
+const newKey = () => 'idem_' + Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6);
+const acctById = (id) => ACCOUNTS.find((a) => a.id === id);
+const custById = (id) => CUSTOMERS.find((c) => c.id === id);
+const supById = (id) => SUPPLIERS.find((s) => s.id === id);
+
+/* ---------- state ---------- */
+const P = new URLSearchParams(location.search);
+let O = {
+  v: VARIANTS[P.get('v')] ? P.get('v') : 'A',
+  kind: KINDS[P.get('kind')] ? P.get('kind') : 'expense',
+  from: ['page', 'new', 'statement', 'shifts'].includes(P.get('from')) ? P.get('from') : 'page',
+  role: STAFF[P.get('role')] ? P.get('role') : 'manager',
+  theme: P.get('theme') === 'dark' ? 'dark' : 'light',
+  open: P.get('open') !== '0', menu: false, fail: false, notes: P.get('notes') !== '0', addAnother: false,
+};
+/* The drawer's form: one logical submit = one Idempotency-Key, kept across retries. */
+let F, session = [], toast = null, justSaved = null;
+function blank(kind) {
+  const party = O.from === 'statement' ? (kind === 'collection' ? 'c1' : kind === 'purchase' ? 's2' : kind === 'payment' ? 's1' : '') : '';
+  const f = { kind, date: TODAY, cat: '', party, amount: '', acct: '', method: 'cash', terminal: '', notes: '', payer: '', ref: '', ptype: 'products', invoice: '',
+    lines: [{ p: '', q: '', a: '' }], payNow: false, payAcct: '', payAmt: '', newCat: null, errors: {}, key: newKey(), attempt: 0, failed: false };
+  if (kind === 'payment' && party) f.amount = String(supById(party).owed);
+  if (kind === 'purchase' && party && supById(party).fuel) f.ptype = 'fuel';
+  return f;
+}
+F = blank(O.kind);
+
+/* ---------- fields: one definition per kind, rendered by every variant ---------- */
+const lbl = (t, req) => `<span class="lbl">${t}${req ? '<span class="req">*</span>' : ''}</span>`;
+const errOf = (k) => F.errors[k] ? `<div class="fe">${F.errors[k]}</div>` : '';
+const locked = () => O.from === 'statement' && ['collection', 'purchase', 'payment'].includes(F.kind);
+
+function fDate() {
+  let label = 'Entry date', hint = '';
+  if (F.kind === 'purchase' && F.ptype === 'products') { label = 'Business date'; hint = `Adds stock on this Business Day · ${wdm(F.date)} is open`; }
+  else if (F.kind === 'purchase') { label = 'Invoice date'; hint = 'A fuel purchase is dated by its invoice. Fuel stock comes from Decantation, not from here.'; }
+  else if (F.date !== TODAY) hint = `Lands in the Daily cash book for ${dm(F.date)}.`;
+  else hint = 'Office record: dated, not part of any shift.';
+  return `<div class="fld">${lbl(label, true)}
+    <div class="row" style="gap:8px"><input class="in ${F.errors.date ? 'err' : ''}" type="date" max="${TODAY}" value="${F.date}" data-f="date" style="width:170px">
+    <div class="quick"><button data-act="date:${TODAY}" class="${F.date === TODAY ? 'on' : ''}">Today</button><button data-act="date:${YDAY}" class="${F.date === YDAY ? 'on' : ''}">Yesterday</button></div></div>
+    ${errOf('date') || `<div class="fh">${hint}</div>`}</div>`;
+}
+function fCategory() {
+  const inc = F.kind === 'income';
+  const opts = inc ? CATS.income.map(([n, g]) => [n, `${n}${g ? ` · GST ${g}%` : ' · no GST'}`]) : CATS.expense.map((n) => [n, n]);
+  const add = canCat(O.role) ? '<option value="__new">+ New category…</option>' : '';
+  const adding = F.newCat !== null ? `<div class="row" style="gap:6px;margin-top:2px"><input class="in" placeholder="Category name" value="${esc(F.newCat)}" data-f="newCat" autofocus>
+      <button class="btn sec" data-act="addcat">Add</button><button class="btn ghost" data-act="nocat">Cancel</button></div>
+      <div class="fh">Added for every ${inc ? 'income' : 'expense'} at this station. Rename or set GST later in Categories.</div>` : '';
+  return `<div class="fld">${lbl('Category', true)}
+    <select class="in ${F.errors.cat ? 'err' : ''}" data-f="cat"><option value="">Choose a category</option>${opts.map(([v, t]) => `<option value="${esc(v)}" ${F.cat === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}${add}</select>
+    ${adding}${errOf('cat')}</div>`;
+}
+function partyCtx() {
+  if (F.kind === 'collection') { const c = custById(F.party); return `${ic(G.users, 16)}<div><div class="hi" style="font-weight:600">${c.name}</div><div class="fh">${inr(c.due)} due${c.overdue ? ' · <span class="bad">overdue</span>' : ''}</div></div>`; }
+  const s = supById(F.party); return `${ic(G.truck, 16)}<div><div class="hi" style="font-weight:600">${s.name}</div><div class="fh">${inr(s.owed)} owed · ${s.gstin}</div></div>`;
+}
+function fParty() {
+  if (locked()) return `<div class="ctx">${partyCtx()}<span class="lock">${ic(G.lock, 12)}from statement</span></div>`;
+  if (F.kind === 'collection') {
+    return `<div class="fld">${lbl('Customer', true)}<select class="in ${F.errors.party ? 'err' : ''}" data-f="party"><option value="">Choose a customer</option>
+      ${CUSTOMERS.map((c) => `<option value="${c.id}" ${F.party === c.id ? 'selected' : ''}>${c.name} · ${inr(c.due, 0)} due</option>`).join('')}</select>${errOf('party')}</div>`;
+  }
+  const list = F.kind === 'purchase' ? SUPPLIERS.filter((s) => (F.ptype === 'fuel') === !!s.fuel) : SUPPLIERS;
+  return `<div class="fld">${lbl('Supplier', true)}<select class="in ${F.errors.party ? 'err' : ''}" data-f="party"><option value="">Choose a supplier</option>
+    ${list.map((s) => `<option value="${s.id}" ${F.party === s.id ? 'selected' : ''}>${s.name}${F.kind === 'payment' ? ` · ${inr(s.owed, 0)} owed` : ''}</option>`).join('')}</select>${errOf('party')}</div>`;
+}
+function fMethod() {
+  return `<div class="fld">${lbl('Method', true)}<div class="seg">${['cash', 'card', 'upi', 'bank'].map((m) =>
+    `<button data-act="method:${m}" class="${F.method === m ? 'on' : ''}">${{ cash: 'Cash', card: 'Card', upi: 'UPI', bank: 'Bank transfer' }[m]}</button>`).join('')}</div></div>`;
+}
+function fAmount(big) {
+  let hint = '';
+  const a = num(F.amount);
+  if (F.kind === 'payment' && F.party) { const s = supById(F.party); hint = a != null && a < s.owed ? `Part payment: ${inr(s.owed - a)} stays owed.` : `${inr(s.owed)} owed.`; }
+  if (F.kind === 'collection' && F.party) { const c = custById(F.party); hint = `${inr(c.due)} due${a != null ? ` → ${inr(c.due - a)} after this` : ''}.`; if (a != null && a > c.due) hint = `<span class="warn">More than is due: ${inr(a - c.due)} becomes an advance.</span>`; }
+  if (F.kind === 'income' && F.cat) { const g = (CATS.income.find(([n]) => n === F.cat) || [])[1]; if (g && a) hint = `Includes GST ${g}%: ${inr(a - a / (1 + g / 100))}. The split is frozen when you save.`; }
+  return `<div class="fld">${lbl('Amount', true)}<div class="money ${big ? 'big' : ''}"><span>₹</span><input class="in ${F.errors.amount ? 'err' : ''}" inputmode="decimal" placeholder="0.00" value="${esc(F.amount)}" data-f="amount"></div>
+    ${errOf('amount') || (hint ? `<div class="fh">${hint}</div>` : '')}</div>`;
+}
+function acctOptions() {
+  if (F.kind === 'collection') return ACCOUNTS.filter((x) => x.methods.includes(F.method) && !x.supplierOnly && x.type !== 'OWNER');
+  if (F.kind === 'payment') return ACCOUNTS;
+  return ACCOUNTS.filter((x) => !x.supplierOnly);
+}
+function fTerminal() {
+  if (F.kind !== 'collection' || !['card', 'upi'].includes(F.method)) return '';
+  const ts = TERMINALS.filter((t) => t.method === F.method);
+  return `<div class="fld">${lbl('Payment terminal')}<select class="in" data-f="terminal"><option value="">None, straight to the bank</option>
+    ${ts.map((t) => `<option value="${t.id}" ${F.terminal === t.id ? 'selected' : ''}>${t.name}</option>`).join('')}</select>
+    ${F.terminal ? '<div class="fh">Posts to the terminal\'s clearing account; settles to the bank with the batch.</div>' : ''}</div>`;
+}
+function fAccount(style) {
+  if (F.kind === 'collection' && F.terminal) return '';
+  const dir = F.kind === 'collection' || F.kind === 'income' ? 'Money comes into' : 'Money goes out of';
+  const opts = acctOptions();
+  const ctl = style === 'select'
+    ? `<select class="in ${F.errors.acct ? 'err' : ''}" data-f="acct"><option value="">Choose an account</option>${opts.map((x) => `<option value="${x.id}" ${F.acct === x.id ? 'selected' : ''}>${x.name}${x.bal != null ? ' · ' + inr(x.bal, 0) : ''}</option>`).join('')}</select>`
+    : `<div class="acct" style="${F.errors.acct ? 'border-color:var(--bad)' : ''}">${opts.map((x) => `<button data-act="acct:${x.id}" class="${F.acct === x.id ? 'on' : ''}"><span class="rd"></span>${x.name}<span class="bal">${x.bal != null ? inr(x.bal, 0) : ''}</span></button>`).join('')}</div>`;
+  return `<div class="fld">${lbl('Funding account', true)}<div class="fh" style="margin-top:-4px">${dir}</div>${ctl}${errOf('acct')}</div>`;
+}
+function fNotes() {
+  const L = { expense: ['Description', 'e.g. KSEB bill for September'], income: ['Description', 'e.g. Tanker KL-11 AB 4410, 2 days'], collection: ['Reference', 'UTR, cheque no. or fleet slip'],
+    payment: ['Reference', 'Cheque no. or RTGS reference'], purchase: ['Notes', 'Anything the next reader should know'] }[F.kind];
+  return `<div class="fld">${lbl(L[0])}<input class="in" placeholder="${L[1]}" value="${esc(F.notes)}" data-f="notes"></div>`;
+}
+function fPayer() { return F.kind === 'income' ? `<div class="fld">${lbl('Received from')}<input class="in" placeholder="Optional: who paid" value="${esc(F.payer)}" data-f="payer"></div>` : ''; }
+
+/* purchase */
+function fPType() {
+  return `<div class="fld">${lbl('What was bought', true)}<div class="seg"><button data-act="ptype:fuel" class="${F.ptype === 'fuel' ? 'on' : ''}">${ic(G.drop, 13)}Fuel</button><button data-act="ptype:products" class="${F.ptype === 'products' ? 'on' : ''}">${ic(G.box, 13)}Products</button></div>
+    <div class="fh">${F.ptype === 'fuel' ? 'Records the payable only. Stock moves when the tanker is decanted.' : 'Adds stock to Product stock when saved.'} One invoice can't mix fuel and products.</div></div>`;
+}
+function purchaseTotals() {
+  const prod = F.ptype === 'products';
+  let taxable = 0, tax = 0, total = 0;
+  F.lines.forEach((l) => { const q = num(l.q) || 0, a = num(l.a) || 0; if (prod) { taxable += q * a; } else total += a; });
+  if (prod) { tax = taxable * 0.18; total = taxable + tax; }
+  return { taxable, tax, total };
+}
+function fLines() {
+  const prod = F.ptype === 'products', list = PRODUCTS[prod ? 'products' : 'fuel'];
+  const t = purchaseTotals();
+  return `<div class="fld">${lbl('Invoice lines', true)}<div class="lines ${F.errors.lines ? 'err' : ''}" style="${F.errors.lines ? 'border-color:var(--bad)' : ''}"><table>
+    <tr><th style="width:46%">Product</th><th class="r">${prod ? 'Qty' : 'Litres'}</th><th class="r">${prod ? 'Rate, pre-tax' : 'Amount incl. tax'}</th><th></th></tr>
+    ${F.lines.map((l, i) => `<tr><td><select class="in" data-line="${i}:p"><option value="">Choose</option>${list.map((p) => `<option value="${p.id}" ${l.p === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}</select></td>
+      <td><input class="in r" inputmode="decimal" placeholder="0" value="${esc(l.q)}" data-line="${i}:q"></td>
+      <td><input class="in r" inputmode="decimal" placeholder="0.00" value="${esc(l.a)}" data-line="${i}:a"></td>
+      <td style="width:28px">${F.lines.length > 1 ? `<button class="mu" data-act="rmline:${i}" title="Remove line">${ic(G.x, 14)}</button>` : ''}</td></tr>`).join('')}
+    </table><button class="add" data-act="addline">+ Add line</button>
+    <div class="tot">${prod ? `<span class="mu">Taxable</span><span class="num">${inr(t.taxable)}</span><span class="mu">GST 18% (CGST + SGST)</span><span class="num">${inr(t.tax)}</span>` : ''}
+      <span class="b">Invoice total</span><span class="num b">${inr(t.total)}</span></div></div>${errOf('lines')}</div>`;
+}
+function fInvoice() { return `<div class="fld">${lbl('Invoice no.')}<input class="in" placeholder="e.g. INV-10022" value="${esc(F.invoice)}" data-f="invoice"></div>`; }
+function fPayNow(style) {
+  const t = purchaseTotals();
+  const body = !F.payNow ? '' : `<div style="margin-top:12px">${(() => { const save = F.acct; F.acct = F.payAcct; const k = F.kind; F.kind = 'payment'; const h = fAccount(style).replace(/data-act="acct:/g, 'data-act="payacct:').replace(/data-f="acct"/g, 'data-f="payAcct"'); F.kind = k; F.acct = save; return h; })()}
+    <div class="fld" style="margin-bottom:0">${lbl('Amount paid', true)}<div class="money"><span>₹</span><input class="in" inputmode="decimal" value="${esc(F.payAmt || (t.total ? t.total.toFixed(2) : ''))}" data-f="payAmt"></div>
+    ${num(F.payAmt) != null && num(F.payAmt) < t.total ? `<div class="fh warn">Part payment: ${inr(t.total - num(F.payAmt))} stays owed.</div>` : ''}</div></div>`;
+  return `<div class="box"><label class="chk"><input type="checkbox" data-f="payNow" ${F.payNow ? 'checked' : ''}> Also record a supplier payment now</label>
+    <div class="fh" style="margin-top:4px;padding-left:22px">Saved as its own Supplier payment, dated ${dm(F.date)}. Leave off to pay later from Suppliers.</div>${body}</div>`;
+}
+
+/* The spine every kind follows: date → who/what → amount → account → reference. */
+function fieldsFor(style) {
+  const k = F.kind, big = style !== 'grid', acct = style === 'grid' ? 'select' : 'radios';
+  if (k === 'purchase') return fPType() + (style === 'grid' ? `<div class="g2">${fDate()}${fInvoice()}</div>` : fDate()) + fParty() + (style === 'grid' ? '' : fInvoice()) + fLines() + fPayNow(acct) + fNotes();
+  if (style === 'grid') {
+    const head = k === 'collection' ? fParty() + fMethod() : k === 'payment' ? fParty() : '';
+    return head + `<div class="g2">${fDate()}${fAmount(false)}${k === 'expense' || k === 'income' ? fCategory() : ''}${fTerminal() || ''}${fAccount('select')}</div>` + fPayer() + fNotes();
+  }
+  if (k === 'collection') return fDate() + fParty() + fMethod() + fAmount(big) + fTerminal() + fAccount(acct) + fNotes();
+  if (k === 'payment') return fDate() + fParty() + fAmount(big) + fAccount(acct) + fNotes();
+  return fDate() + fCategory() + fAmount(big) + fAccount(acct) + fPayer() + fNotes();
+}
+
+/* ---------- validation, payload, effect ---------- */
+function validate() {
+  const e = {}, k = F.kind;
+  if (!F.date) e.date = 'Choose the date.'; else if (F.date > TODAY) e.date = 'An office record can\'t be dated in the future.';
+  if ((k === 'expense' || k === 'income') && !F.cat) e.cat = 'Choose a category.';
+  if ((k === 'collection' || k === 'purchase' || k === 'payment') && !F.party) e.party = k === 'collection' ? 'Choose the customer who paid.' : 'Choose the supplier.';
+  if (k !== 'purchase') { const a = num(F.amount); if (a == null) e.amount = 'Enter the amount.'; else if (a <= 0) e.amount = 'The amount must be more than zero.'; else if (String(F.amount).split('.')[1]?.length > 2) e.amount = 'Two decimals at most.'; }
+  if (k !== 'purchase' && !(k === 'collection' && F.terminal) && !F.acct) e.acct = 'Choose the funding account.';
+  if (k === 'purchase') {
+    if (!F.lines.some((l) => l.p && num(l.q) > 0 && num(l.a) > 0) || F.lines.some((l) => (l.p || l.q || l.a) && !(l.p && num(l.q) > 0 && num(l.a) > 0))) e.lines = 'Each line needs a product, a quantity and an amount.';
+  }
+  return e;
+}
+function payload() {
+  const k = F.kind, t = k === 'purchase' ? purchaseTotals() : null;
+  const base = { entryDate: F.date, notes: F.notes || undefined };
+  const p = {
+    expense: () => ({ ...base, category: F.cat || null, amount: num(F.amount), fundingAccountId: F.acct || null }),
+    income: () => ({ ...base, category: F.cat || null, amount: num(F.amount), fundingAccountId: F.acct || null, payer: F.payer || undefined }),
+    collection: () => ({ ...base, customerId: F.party || null, method: F.method.toUpperCase(), amount: num(F.amount), terminalId: F.terminal || undefined, fundingAccountId: F.terminal ? undefined : F.acct || null }),
+    payment: () => ({ ...base, supplierId: F.party || null, amount: num(F.amount), fundingAccountId: F.acct || null }),
+    purchase: () => ({ [F.ptype === 'products' ? 'businessDate' : 'entryDate']: F.date, supplierId: F.party || null, kind: F.ptype.toUpperCase(), invoiceNo: F.invoice || undefined,
+      lines: F.lines.filter((l) => l.p).map((l) => ({ productId: l.p, qty: num(l.q), [F.ptype === 'products' ? 'rate' : 'amount']: num(l.a) })), total: +t.total.toFixed(2),
+      supplierPayment: F.payNow ? { fundingAccountId: F.payAcct || null, amount: num(F.payAmt) ?? +t.total.toFixed(2) } : undefined, notes: F.notes || undefined }),
+  }[k]();
+  return { endpoint: { expense: 'POST /transactions/expenses', income: 'POST /transactions/income', collection: 'POST /transactions/collections', purchase: 'POST /transactions/purchases', payment: 'POST /suppliers/:id/payments' }[k],
+    headers: { 'Idempotency-Key': F.key }, attempt: F.attempt, body: p };
+}
+function effect() {
+  const k = F.kind, a = num(F.amount) || 0, acc = acctById(F.acct), out = { moves: [], books: [], checks: [] };
+  const mv = (name, before, delta) => out.moves.push({ name, before, after: before == null ? null : before + delta, delta });
+  if (k === 'expense' || k === 'income') {
+    if (acc) mv(acc.name, acc.bal, k === 'expense' ? -a : a);
+    out.books.push([`${k === 'expense' ? 'Expense' : 'Income'}${F.cat ? ' · ' + F.cat : ''}`, a]);
+    if (k === 'income' && F.cat) { const g = (CATS.income.find(([n]) => n === F.cat) || [])[1]; if (g) { out.books.push([`of which GST ${g}% (output)`, a - a / (1 + g / 100)]); } }
+  }
+  if (k === 'collection') {
+    const c = custById(F.party); if (c) mv(`${c.name} (due)`, c.due, -a);
+    if (F.terminal) out.books.push([`${TERMINALS.find((t) => t.id === F.terminal).name} clearing`, a]); else if (acc) mv(acc.name, acc.bal, a);
+  }
+  if (k === 'payment') { const s = supById(F.party); if (s) mv(`${s.name} (owed)`, s.owed, -a); if (acc) mv(acc.name, acc.bal, -a); }
+  if (k === 'purchase') {
+    const t = purchaseTotals(), s = supById(F.party);
+    if (s) mv(`${s.name} (owed)`, s.owed, t.total);
+    if (F.ptype === 'products') F.lines.filter((l) => l.p && num(l.q)).forEach((l) => out.books.push([`Stock + ${num(l.q)} × ${PRODUCTS.products.find((p) => p.id === l.p).name}`, null]));
+    else out.checks.push(['info', 'No stock change. Fuel stock comes from Decantation (ADR 0007).']);
+    if (F.payNow) { const pa = acctById(F.payAcct), amt = num(F.payAmt) ?? t.total; if (s) out.moves[0].after -= amt; if (pa) mv(pa.name, pa.bal, -amt); out.checks.push(['info', `Also saves a Supplier payment of ${inr(amt)}.`]); }
+  }
+  // checks
+  const amount = k === 'purchase' ? purchaseTotals().total : a;
+  const dup = RECORDS[k].find((r) => r.date === F.date && Math.abs(r.amt - amount) < 0.005 && amount > 0 && (k === 'expense' || k === 'income' ? r.a === F.cat : true));
+  if (dup) out.checks.push(['warn', `Looks like a repeat: ${dup.a} ${inr(dup.amt)} was recorded at ${dup.time} by ${dup.by}.`]);
+  if (acc && acc.bal != null && (k === 'expense' || k === 'payment') && a > acc.bal) out.checks.push(['bad', `${acc.name} would go negative (${inr(acc.bal - a)}).`]);
+  if (F.date !== TODAY && k !== 'purchase') out.checks.push(['info', `Back-dated: shows in the Daily cash book for ${dm(F.date)}. No DSSR changes.`]);
+  if (k === 'collection' && F.party && a > custById(F.party).due) out.checks.push(['warn', 'Collects more than is due; the rest is an advance.']);
+  return out;
+}
+
+/* ---------- shell + host pages ---------- */
+const NAV = [
+  ['Operate', [['dashboard', 'Dashboard', G.dash], ['shifts', 'Shifts', G.pump], ['inventory', 'Inventory', G.box], ['pricing', 'Pricing', G.tag]]],
+  ['Parties', [['customers', 'Customers', G.users], ['suppliers', 'Suppliers', G.truck]]],
+  ['Books', [['accounts', 'Accounts', G.bank], ['expenses', 'Expenses', G.out], ['income', 'Income', G.inn]]],
+  ['Insight', [['reports', 'Reports', G.doc]]],
+  ['Setup', [['station', 'Station', G.gear], ['organization', 'Organization', G.org]]],
+];
+const hostPage = () => O.from === 'new' ? 'dashboard' : O.from === 'shifts' ? 'shifts' : O.from === 'statement' ? (F.kind === 'collection' ? 'customers' : 'suppliers') : KINDS[F.kind].page;
+const sidebar = (pg) => `<aside class="side">${NAV.map(([g, items]) => `<div class="grp">${g}</div>${items.map(([k, n, p]) =>
+  `<button class="nav ${pg === k ? 'on' : ''}">${ic(p, 16)}${n}</button>`).join('')}`).join('')}</aside>`;
+const visibleKinds = () => KIND_ORDER.filter((k) => KINDS[k].roles.includes(O.role));
+function newMenu() {
+  if (!O.menu) return '';
+  const item = (k) => `<button data-act="new:${k}">${ic(KINDS[k].g, 16)}${KINDS[k].label}</button>`;
+  const vk = visibleKinds();
+  return `<div class="menu"><div class="ml">Office records</div>${vk.map(item).join('')}
+    <div class="sep"></div><div class="ml">Forecourt</div>
+    <button data-act="noop">${ic(G.bag, 16)}Merchandise sale<span class="x">shift</span></button><button data-act="noop">${ic(G.card, 16)}Credit sale<span class="x">shift</span></button>
+    <div class="sep"></div><button data-act="noop">${ic(G.users, 16)}Customer</button></div>`;
+}
+const topbar = (pg) => `<div class="topbar"><span class="mark">${ic(G.drop, 15, 2.4)}</span>
+  <div class="row" style="gap:6px;font-size:13px"><span class="hi" style="font-weight:700">Highway Fuels</span><span class="fa">/</span><span class="mu" style="font-weight:600">${NAV.flatMap((g) => g[1]).find((x) => x[0] === pg)[1]}</span></div>
+  <div style="flex:1;display:flex;justify-content:center"><div class="search" style="width:100%">${ic(G.search, 15)}Search customers, suppliers, products…<span class="kbd">⌘K</span></div></div>
+  <button class="btn pri" data-act="menu">${ic(G.plus, 15, 2.4)} New</button><span class="mu">${ic(G.bell, 18)}</span><div class="av">${STAFF[O.role].slice(0, 2).toUpperCase()}</div>${newMenu()}</div>`;
+const statusbar = () => `<div class="statusbar"><span class="row" style="gap:6px"><span class="dot"></span>Synced</span><span>Wed 14 Oct · Shift 1 open since 6:00 am</span><span style="margin-left:auto">Signed in as ${STAFF[O.role]} (${O.role})</span></div>`;
+
+function recordTable(kind) {
+  const rows = RECORDS[kind];
+  const heads = { expense: ['Category', 'Description'], income: ['Category', 'Description'], collection: ['Customer', 'Method · reference'], purchase: ['Supplier', 'Invoice'], payment: ['Supplier', 'Reference'] }[kind];
+  return `<div class="card" style="margin-top:14px;overflow:hidden"><table class="t"><tr><th>Entry date</th><th>${heads[0]}</th><th>${heads[1]}</th><th>Funding account</th><th>By</th><th class="r">Amount</th></tr>
+    ${rows.map((r, i) => `<tr class="${justSaved === r ? 'new' : ''}"><td>${dm(r.date)} <span class="fa" style="font-size:11.5px">${r.time}</span></td><td class="hi">${esc(r.a)}</td><td class="mu">${esc(r.b)}</td><td>${esc(r.acct)}</td><td class="mu">${r.by}</td><td class="r">${inr(r.amt)}</td></tr>`).join('')}</table></div>`;
+}
+function pageHost(pg) {
+  const k = F.kind, K = KINDS[k];
+  if (pg === 'dashboard') return `<div class="ttl">Dashboard</div><div class="sub">Business day Wed 14 Oct · open since 6:00 am</div>
+    <div style="display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:12px;margin-top:16px">${['Forecourt', 'Fuels', 'Money'].map((t) => `<div><div class="sh" style="margin-bottom:8px">${t}</div><div class="card" style="height:280px;opacity:.6"></div></div>`).join('')}</div>`;
+  if (pg === 'shifts') return `<div class="row"><div><div class="ttl">Shifts</div><div class="sub">Shift 1 · open since 6:00 am · 3 attendants</div></div><div style="margin-left:auto" class="row" style="gap:8px">
+    ${['expense', 'collection', 'purchase'].filter((x) => KINDS[x].roles.includes(O.role)).map((x) => `<button class="btn sec" data-act="open:${x}">${KINDS[x].label} <span class="k">${KINDS[x].key}</span></button>`).join(' ')}</div></div>
+    <div class="tabs"><button class="tab on">${ic(G.pump, 14)}Live shift</button><button class="tab">${ic(G.cal, 14)}Business days</button><button class="tab">${ic(G.clock, 14)}History</button></div>
+    <div class="card" style="height:300px;margin-top:14px;opacity:.6"></div>`;
+  const tabs = { expenses: [['Expenses', G.out], ['By category', G.pie]], income: [['Income', G.inn], ['By category', G.pie]], customers: [['Customers', G.users], ['Credit sales', G.card], ['Collections', G.wallet], ['Vehicles', G.car]],
+    suppliers: [['Suppliers', G.truck], ['Purchases', G.cart], ['Payments', G.wallet]] }[pg];
+  const activeTab = O.from === 'statement' ? tabs[0][0] : K.tab;
+  const title = NAV.flatMap((g) => g[1]).find((x) => x[0] === pg)[1];
+  const can = K.roles.includes(O.role);
+  const actions = `${pg === 'expenses' || pg === 'income' ? `<button class="btn sec">Categories</button>` : ''}${can ? `<button class="btn pri" data-act="open:${k}">${ic(G.plus, 14, 2.4)}${K.title}</button>` : ''}`;
+  let content = recordTable(k);
+  if (O.from === 'statement') content = `<div class="card" style="margin-top:14px;height:320px;opacity:.6"></div>`;
+  return `<div class="row" style="align-items:flex-start"><div><div class="ttl">${title}</div><div class="sub">${{ expenses: 'Money paid out by the office.', income: 'Non-customer money in: rent, commission, scrap.', customers: 'Credit customers, their sales and collections.', suppliers: 'Suppliers, their invoices and what you paid them.' }[pg]}</div></div>
+    <div class="row" style="margin-left:auto;gap:8px">${actions}</div></div>
+    <div class="tabs">${tabs.map(([t, g]) => `<button class="tab ${t === activeTab ? 'on' : ''}">${ic(g, 14)}${t}</button>`).join('')}</div>${content}`;
+}
+
+/* statement drawer under the entry drawer (from = statement) */
+function statementUnder() {
+  if (O.from !== 'statement' || !['collection', 'purchase', 'payment'].includes(F.kind)) return '';
+  const isC = F.kind === 'collection', p = isC ? custById(F.party) || CUSTOMERS[0] : supById(F.party) || SUPPLIERS[0];
+  const rows = isC ? [['12 Oct', 'Credit sale · HSD 420 L', 37220.6, null], ['13 Oct', 'Collection · UPI', null, 25000], ['14 Oct', 'Credit sale · HSD 310 L', 27472.2, null]]
+    : [['11 Oct', 'Purchase · INV ML-2207', 36400, null], ['13 Oct', 'Purchase · INV 88123', 1063440, null], ['13 Oct', 'Payment · RTGS', null, 1000000]];
+  return `<div class="drawer under" style="width:620px;right:${O.open ? 40 : 0}px"><div class="dh"><div><div class="t">${p.name}</div><div class="c">Statement · 1 Oct to 14 Oct</div></div>
+    <div class="row" style="margin-left:auto;gap:8px"><button class="btn pri" data-act="open:${F.kind === 'collection' ? 'collection' : F.kind}">${ic(G.plus, 14, 2.4)}${KINDS[F.kind].title}</button></div></div>
+    <div class="db"><table class="t"><tr><th>Date</th><th>Entry</th><th class="r">Debit</th><th class="r">Credit</th></tr>${rows.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="r">${r[2] ? inr(r[2]) : ''}</td><td class="r">${r[3] ? inr(r[3]) : ''}</td></tr>`).join('')}</table></div></div>`;
+}
+
+/* ---------- the three variants ---------- */
+const headerCtx = () => {
+  const bits = [];
+  if (O.from === 'shifts') bits.push('Office record · not part of Shift 1');
+  else if (F.kind === 'purchase' && F.ptype === 'products') bits.push('Product purchase · Business Day Wed 14 Oct');
+  else bits.push('Office record · dated by entry date');
+  return bits.join(' · ');
+};
+const errBanner = () => F.failed ? `<div class="banner bad">${ic(G.alert, 16)}<div><b>Couldn't save. Check the connection and save again.</b><br>Saving again sends the same record (key ${F.key.slice(0, 10)}…), so it can't be recorded twice.</div></div>` : '';
+const saveLbl = () => F.failed ? 'Save again' : KINDS[F.kind].title;
+
+function variantA() {
+  const K = KINDS[F.kind], w = F.kind === 'purchase' ? 620 : 460;
+  return `<div class="drawer" style="width:${w}px"><div class="dh">${ic(K.g, 18)}<div><div class="t">${K.title}</div><div class="c">${headerCtx()}</div></div><button class="x" data-act="close">${ic(G.x, 16)}</button></div>
+    <div class="db">${errBanner()}${fieldsFor('stack')}</div>
+    <div class="df"><label class="chk" style="font-weight:500;font-size:12.5px;color:var(--mu)"><input type="checkbox" data-f="addAnother" ${O.addAnother ? 'checked' : ''}>Add another after saving</label><span class="sp"></span>
+      <button class="btn sec" data-act="close">Cancel</button><button class="btn pri" data-act="save">${saveLbl()} <span class="k">⌘↵</span></button></div></div>`;
+}
+function variantB() {
+  const K = KINDS[F.kind], fromNew = O.from === 'new';
+  const sw = fromNew ? `<div class="kindsw">${KIND_ORDER.map((k) => { const ok = KINDS[k].roles.includes(O.role); return `<button data-act="kind:${k}" class="${F.kind === k ? 'on' : ''}" ${ok ? '' : 'disabled title="Your role can\'t record this"'}>${ic(KINDS[k].g, 14)}${KINDS[k].label}</button>`; }).join('')}</div>` : '';
+  const log = session.length ? `<div class="log"><div class="sh" style="margin-bottom:4px">Saved from this drawer</div>${session.map((s) => `<div class="it"><span class="pill p-ok">${ic(G.check, 11, 2.6)} Saved</span><span class="hi">${KINDS[s.kind].label}</span><span class="mu" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.a)}${s.b ? ' · ' + esc(s.b) : ''}</span><span class="num hi">${inr(s.amt)}</span></div>`).join('')}</div>` : '';
+  return `<div class="drawer" style="width:${F.kind === 'purchase' ? 700 : VARIANTS.B.width}px"><div class="dh">${ic(K.g, 18)}<div><div class="t">${K.title}</div><div class="c">${headerCtx()}</div></div><button class="x" data-act="close">${ic(G.x, 16)}</button></div>
+    ${sw}<div class="db">${errBanner()}${fieldsFor('grid')}${log}</div>
+    <div class="df"><span class="hint">Stays open after saving. Date and account carry over.</span><span class="sp"></span><button class="btn sec" data-act="close">Done</button><button class="btn pri" data-act="save">${saveLbl()} <span class="k">⌘↵</span></button></div></div>`;
+}
+function previewPane() {
+  const e = effect(), K = KINDS[F.kind];
+  const amount = F.kind === 'purchase' ? purchaseTotals().total : num(F.amount);
+  const what = F.kind === 'collection' ? (custById(F.party)?.name || 'Customer?') : ['purchase', 'payment'].includes(F.kind) ? (supById(F.party)?.name || 'Supplier?') : (F.cat || 'Category?');
+  const mvRow = (m) => `<div class="ln"><span>${esc(m.name)}</span><span class="mv">${m.before == null ? '' : `<span class="mu">${inr(m.before, 0)}</span>${ic(G.right, 12)}<span class="${m.after < 0 ? 'bad' : 'hi'}">${inr(m.after, 0)}</span>`}</span></div>`;
+  const chk = e.checks.length ? e.checks.map(([t, s]) => `<div class="chkl ${t}">${ic(t === 'info' ? G.info : G.alert, 14)}<span>${s}</span></div>`).join('') : `<div class="chkl good">${ic(G.check, 14)}<span>Nothing unusual.</span></div>`;
+  return `<div class="pv"><div class="sh" style="margin-bottom:10px">What this records</div>
+    <div class="card"><div class="eh">${ic(K.g, 16)}<span class="hi" style="font-weight:600">${K.label}</span><span class="pill p-mu" style="margin-left:auto">${F.kind === 'purchase' && F.ptype === 'products' ? 'Business date' : 'Entry date'} ${dm(F.date)}</span></div>
+      <div class="row" style="justify-content:space-between"><span class="mu" style="font-size:13px">${esc(what)}</span><span class="num hi" style="font-size:20px;font-weight:600">${amount ? inr(amount) : '₹—'}</span></div></div>
+    <div class="card"><div class="sh" style="margin-bottom:8px;font-size:10.5px">Balances</div>${e.moves.length ? e.moves.map(mvRow).join('') : '<div class="fh">Choose the account and party to see balances move.</div>'}
+      ${e.books.length ? `<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px" class="ln">${e.books.map(([n, v]) => `<span class="mu">${esc(n)}</span><span class="num">${v == null ? '' : inr(v)}</span>`).join('')}</div>` : ''}</div>
+    <div class="card"><div class="sh" style="margin-bottom:4px;font-size:10.5px">Checks</div>${chk}</div>
+    <div class="fh">Shown in the ${F.kind === 'purchase' && F.ptype === 'products' ? 'Business Day\'s purchases and Product stock' : 'Daily cash book and the ledger'}. ${F.kind === 'purchase' ? '' : 'Not in the DSSR (office record).'}</div></div>`;
+}
+function variantC() {
+  const K = KINDS[F.kind];
+  return `<div class="drawer" style="width:${VARIANTS.C.width}px"><div class="dh">${ic(K.g, 18)}<div><div class="t">${K.title}</div><div class="c">${headerCtx()}</div></div><button class="x" data-act="close">${ic(G.x, 16)}</button></div>
+    <div class="split"><div class="db">${errBanner()}${fieldsFor('stack')}</div><div id="pv">${previewPane()}</div></div>
+    <div class="df"><span class="hint">Review the effect on the right before saving.</span><span class="sp"></span><button class="btn sec" data-act="close">Cancel</button><button class="btn pri" data-act="save">${saveLbl()} <span class="k">⌘↵</span></button></div></div>`;
+}
+
+/* ---------- notes + state (prototype chrome) ---------- */
+const NOTES = {
+  A: `<h2>A · Form drawer</h2>Today's drawer, cleaned up. One kind per drawer, the same title from every entry point, fields stacked, <b>Save and Cancel pinned in the footer</b>. Purchase opens wider for its lines.<ul>
+    <li>"Add another after saving" keeps the drawer open with date and account kept.</li><li>Funding account is a radio list with balances, filtered by method.</li><li>From a statement, the party is fixed and shown as a locked card.</li></ul>`,
+  B: `<h2>B · Record desk</h2>One drawer for batch entry, e.g. a day's slips at closing. <b>From the New menu</b> it has a kind switch; from a page the kind is fixed. Saving keeps it open and lists what you saved below.<ul>
+    <li>Switching kind keeps date, amount, account and notes.</li><li>Fields sit two per row, so short kinds fit without scrolling.</li><li>"Done" closes; nothing to cancel once saved.</li></ul>`,
+  C: `<h2>C · Preview drawer</h2>Accountant-first. The form on the left; on the right, <b>what this will record</b>: balances before → after, the ledger lines, and checks (repeat entry, account going negative, back-dated, advance).<ul>
+    <li>Try Expense · Electricity · ₹4,200 today: it flags a repeat.</li><li>Try a collection above what is due, or an expense above Cash in hand.</li><li>Widest drawer: 900px.</li></ul>`,
+};
+const DECIDE = `<div class="h">Decide (any variant)</div><ul>
+  <li><b>Title</b>: one per kind, "Record expense", with no shift prefix even from Shifts?</li>
+  <li><b>Label</b>: "Funding account" (glossary) instead of Paid from / Received into?</li>
+  <li><b>Collection</b>: customer required (no walk-in)?</li>
+  <li><b>Supplier payment</b> from New opens the drawer here, not a page jump?</li>
+  <li><b>Purchase + pay now</b>: saves a separate Supplier payment, opt-in?</li>
+  <li><b>New category</b> inside the picker (Owner/Manager/Accountant)?</li>
+  <li><b>Staff</b> sees Income in the New menu (today it's hidden)?</li></ul>`;
+function renderNotes() {
+  const el = document.getElementById('notes');
+  if (!O.notes) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const p = payload();
+  el.innerHTML = `${NOTES[O.v]}${DECIDE}<div class="h">State: what Save would send</div><pre>${esc(JSON.stringify({ title: KINDS[F.kind].title, openedFrom: O.from, ...p }, null, 1))}</pre>
+    <div class="fh" style="color:#8a8a8a;margin-top:6px">Same title, fields and body whether opened from the page, the New menu, a statement or Shifts. One key per logical submit; a retry reuses it.</div>`;
+}
+function renderCtl() {
+  const sel = (id, opts, cur) => `<select data-ctl="${id}">${opts.map(([v, t]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+  document.getElementById('ctl').innerHTML = `<button data-ctl="prev">‹</button><span class="vl">${O.v} <span>${VARIANTS[O.v].name}</span></span><button data-ctl="next">›</button>
+    <label>Kind ${sel('kind', KIND_ORDER.map((k) => [k, KINDS[k].label]), F.kind)}</label>
+    <label>From ${sel('from', [['page', 'Page button'], ['new', 'New menu'], ['statement', 'Statement'], ['shifts', 'Shifts hotkey']], O.from)}</label>
+    <label>Role ${sel('role', Object.keys(STAFF).map((r) => [r, r[0].toUpperCase() + r.slice(1)]), O.role)}</label>
+    <button data-ctl="fail" class="${O.fail ? 'on' : ''}" title="The next save fails as if offline">Fail next save</button>
+    <button data-ctl="theme">${O.theme === 'dark' ? 'Light' : 'Dark'}</button><button data-ctl="notes" class="${O.notes ? 'on' : ''}">Notes</button>
+    ${O.open ? '' : '<button data-ctl="reopen" class="on">Reopen</button>'}`;
+}
+
+/* ---------- render ---------- */
+function render() {
+  const pg = hostPage();
+  const drawer = !O.open ? '' : `<div class="scrim" data-act="close"></div>${{ A: variantA, B: variantB, C: variantC }[O.v]()}`;
+  document.getElementById('root').innerHTML = `<div class="app ${O.theme}">${topbar(pg)}<div class="body">${sidebar(pg)}<main class="main"><div class="page">${pageHost(pg)}</div></main></div>${statusbar()}
+    ${O.from === 'statement' && ['collection', 'purchase', 'payment'].includes(F.kind) ? `<div class="scrim" style="z-index:52"></div>${statementUnder()}` : ''}${drawer}
+    ${toast ? `<div class="toast">${ic(G.check, 15, 2.4)}<span>${toast}</span><button data-act="toastx">View</button></div>` : ''}</div>`;
+  document.body.className = O.theme;
+  renderNotes(); renderCtl();
+  const q = new URLSearchParams({ v: O.v, kind: F.kind, from: O.from, role: O.role, theme: O.theme });
+  history.replaceState(null, '', '?' + q.toString());
+}
+/* Light updates while typing: keep focus, refresh hints, preview and state. */
+function soft() {
+  const pv = document.getElementById('pv'); if (pv) pv.innerHTML = previewPane();
+  renderNotes();
+}
+
+/* ---------- actions ---------- */
+function openDrawer(kind, from) {
+  if (from) O.from = from;
+  if (!KINDS[kind].roles.includes(O.role)) return;
+  const keep = O.v === 'B' && O.open ? { date: F.date, amount: F.amount, acct: F.acct, notes: F.notes } : null;
+  F = blank(kind); if (keep) Object.assign(F, keep);
+  O.open = true; O.menu = false; session = O.v === 'B' && keep ? session : [];
+  render();
+}
+function save() {
+  F.errors = validate();
+  if (Object.keys(F.errors).length) { render(); return; }
+  if (O.fail) { O.fail = false; F.attempt += 1; F.failed = true; render(); return; }
+  F.attempt += 1;
+  const k = F.kind, amt = k === 'purchase' ? purchaseTotals().total : num(F.amount);
+  const acc = k === 'collection' && F.terminal ? TERMINALS.find((t) => t.id === F.terminal).name + ' clearing' : k === 'purchase' ? (F.payNow ? 'Paid · ' + (acctById(F.payAcct)?.name || '') : 'Unpaid') : acctById(F.acct)?.name;
+  const a = k === 'expense' || k === 'income' ? F.cat : k === 'collection' ? custById(F.party).name : supById(F.party).name;
+  const b = k === 'collection' ? `${{ cash: 'Cash', card: 'Card', upi: 'UPI', bank: 'Bank' }[F.method]}${F.notes ? ' · ' + F.notes : ''}` : k === 'purchase' ? `${F.ptype === 'fuel' ? 'Fuel' : 'Products'}${F.invoice ? ' · ' + F.invoice : ''}` : F.notes;
+  const rec = { date: F.date, time: 'just now', a, b, amt, acct: acc, by: STAFF[O.role] };
+  RECORDS[k].unshift(rec); justSaved = rec;
+  if (k === 'purchase' && F.payNow) RECORDS.payment.unshift({ date: F.date, time: 'just now', a, b: 'With purchase ' + (F.invoice || ''), amt: num(F.payAmt) ?? amt, acct: acctById(F.payAcct)?.name, by: STAFF[O.role] });
+  toast = `${KINDS[k].label} recorded · ${inr(amt)} · ${esc(a)}`;
+  clearTimeout(window.__t); window.__t = setTimeout(() => { toast = null; render(); }, 3200);
+  const stay = O.v === 'B' || (O.v === 'A' && O.addAnother);
+  if (stay) {
+    session.unshift({ kind: k, a, b, amt });
+    const keep = { date: F.date, acct: F.acct, method: F.method, party: locked() ? F.party : '' };
+    F = blank(k); Object.assign(F, keep);
+  } else { O.open = false; }
+  render();
+  if (stay) setTimeout(() => document.querySelector('.drawer:not(.under) [data-f="amount"], .drawer:not(.under) [data-f="cat"]')?.focus(), 0);
+}
+
+document.addEventListener('click', (ev) => {
+  const c = ev.target.closest('[data-ctl]');
+  if (c) {
+    const k = c.dataset.ctl;
+    if (k === 'prev' || k === 'next') { const ks = Object.keys(VARIANTS); O.v = ks[(ks.indexOf(O.v) + (k === 'next' ? 1 : -1) + ks.length) % ks.length]; session = []; render(); }
+    if (k === 'fail') { O.fail = !O.fail; render(); }
+    if (k === 'theme') { O.theme = O.theme === 'dark' ? 'light' : 'dark'; render(); }
+    if (k === 'notes') { O.notes = !O.notes; render(); }
+    if (k === 'reopen') openDrawer(F.kind);
+    return;
+  }
+  const t = ev.target.closest('[data-act]'); if (!t) { if (O.menu && !ev.target.closest('.menu')) { O.menu = false; render(); } return; }
+  const [act, arg] = t.dataset.act.split(/:(.*)/s);
+  if (act === 'menu') { O.menu = !O.menu; render(); }
+  else if (act === 'new') openDrawer(arg, 'new');
+  else if (act === 'open') openDrawer(arg);
+  else if (act === 'close') { O.open = false; render(); }
+  else if (act === 'save') save();
+  else if (act === 'date') { F.date = arg; delete F.errors.date; render(); }
+  else if (act === 'method') { F.method = arg; F.terminal = ''; F.acct = ''; render(); }
+  else if (act === 'acct') { F.acct = arg; delete F.errors.acct; render(); }
+  else if (act === 'payacct') { F.payAcct = arg; render(); }
+  else if (act === 'ptype') { F.ptype = arg; F.lines = [{ p: '', q: '', a: '' }]; if (!locked()) F.party = ''; render(); }
+  else if (act === 'addline') { F.lines.push({ p: '', q: '', a: '' }); render(); }
+  else if (act === 'rmline') { F.lines.splice(+arg, 1); render(); }
+  else if (act === 'kind') openDrawer(arg);
+  else if (act === 'addcat') { const n = (F.newCat || '').trim(); if (n) { if (F.kind === 'income') CATS.income.push([n, 0]); else CATS.expense.push(n); CATS.expense.sort(); F.cat = n; } F.newCat = null; render(); }
+  else if (act === 'nocat') { F.newCat = null; render(); }
+  else if (act === 'toastx') { toast = null; O.open = false; render(); }
+});
+document.addEventListener('change', (ev) => {
+  const c = ev.target.closest('[data-ctl]');
+  if (c) {
+    const k = c.dataset.ctl, v = c.value;
+    if (k === 'kind') { O.open = true; F = blank(v); session = []; if (!KINDS[v].roles.includes(O.role)) O.role = 'manager'; }
+    if (k === 'from') { O.from = v; O.open = true; F = blank(F.kind); session = []; }
+    if (k === 'role') { O.role = v; if (!KINDS[F.kind].roles.includes(v)) { F = blank('expense'); } }
+    render(); return;
+  }
+  const f = ev.target.dataset.f;
+  if (f === 'cat' && ev.target.value === '__new') { F.newCat = ''; render(); return; }
+  if (f === 'payNow') { F.payNow = ev.target.checked; render(); return; }
+  if (f === 'addAnother') { O.addAnother = ev.target.checked; return; }
+  if (['cat', 'party', 'acct', 'terminal', 'payAcct', 'date'].includes(f)) {
+    F[f] = ev.target.value; delete F.errors[f];
+    if (f === 'party' && F.kind === 'payment' && F.party && !F.amount) F.amount = String(supById(F.party).owed);
+    render(); return;
+  }
+  if (ev.target.dataset.line) { const [i, key] = ev.target.dataset.line.split(':'); F.lines[+i][key] = ev.target.value; if (key === 'p' && F.ptype === 'products' && !F.lines[+i].a) F.lines[+i].a = String(PRODUCTS.products.find((p) => p.id === ev.target.value)?.rate ?? ''); render(); }
+});
+document.addEventListener('input', (ev) => {
+  const f = ev.target.dataset.f;
+  if (['amount', 'notes', 'payer', 'invoice', 'newCat', 'payAmt'].includes(f)) { F[f] = ev.target.value; if (F.errors[f]) { delete F.errors[f]; } soft(); }
+  if (ev.target.dataset.line) { const [i, key] = ev.target.dataset.line.split(':'); F.lines[+i][key] = ev.target.value; soft(); }
+});
+/* Re-render on blur of amount so its hint (owed / due / GST) refreshes without stealing focus while typing. */
+document.addEventListener('focusout', (ev) => { if (['amount', 'payAmt'].includes(ev.target.dataset?.f) || ev.target.dataset?.line) setTimeout(() => { if (!document.activeElement || !document.activeElement.closest('.drawer')) render(); else { const id = document.activeElement; const sel = id.dataset.f ? `[data-f="${id.dataset.f}"]` : id.dataset.line ? `[data-line="${id.dataset.line}"]` : id.dataset.act ? `[data-act="${id.dataset.act}"]` : null; render(); if (sel) document.querySelector('.drawer:not(.under) ' + sel)?.focus(); } }, 0); });
+document.addEventListener('keydown', (ev) => {
+  const typing = ev.target.closest('input, textarea, select, [contenteditable]');
+  if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter' && O.open) { ev.preventDefault(); const a = document.activeElement; if (a?.dataset?.f) { F[a.dataset.f] = a.value; } save(); return; }
+  if (ev.key === 'Escape') { if (F.newCat !== null) { F.newCat = null; render(); } else if (O.menu) { O.menu = false; render(); } else if (O.open) { O.open = false; render(); } return; }
+  if (typing) return;
+  if (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') { const ks = Object.keys(VARIANTS); O.v = ks[(ks.indexOf(O.v) + (ev.key === 'ArrowRight' ? 1 : -1) + ks.length) % ks.length]; session = []; render(); }
+});
+render();
+</script>
+</body>
+</html>
