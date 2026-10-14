@@ -2,18 +2,19 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AppTopBar } from './AppTopBar.js';
 import { AppStatusBar } from './AppStatusBar.js';
 import { cn } from '../pump-ds/lib/cn.js';
-import { Icon } from '../pump-ds/icon/index.js';
+import { Icon, type IconName } from '../pump-ds/icon/index.js';
 import { Station, canViewReports, type OperatorRole, type Role } from '@pump/shared';
 import { useContainerWidth } from '../hooks/useContainerWidth.js';
 import { useStationBusinessDate } from '../hooks/useStationClock.js';
 import { useSidebarBadges, type SidebarBadges } from '../query/useSidebarBadges.js';
-import { NAV_GROUPS, ROUTES, navItemIcon } from '../nav-intent/routes.js';
+import { NAV_GROUPS, ROUTES } from '../nav-intent/routes.js';
 import type { UserMenuAction } from '../pump-ds/shell/index.js';
 
 export interface NavItem {
   label: string;
   path: string;
-  icon?: string;
+  /** Pages take theirs from `NAV_PAGES` (CONCEPT_ICON). */
+  icon: IconName;
   roles?: string[];
 }
 
@@ -332,7 +333,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                             isActive ? 'text-info-fg' : 'text-ink-muted',
                           )}
                         >
-                          <Icon name={navItemIcon(item.icon)} size="md" />
+                          <Icon name={item.icon} size="md" />
                         </span>
                         {!collapsed && <span className="truncate">{item.label}</span>}
                         {renderBadge(item.path, badges, collapsed)}

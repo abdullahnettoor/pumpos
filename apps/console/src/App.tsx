@@ -42,7 +42,7 @@ import {
   NAV_PAGES,
   ROUTES,
 } from '@pump/ui';
-import type { NavIntent } from '@pump/ui';
+import type { NavIntent, NavItem } from '@pump/ui';
 import { canOnboardStation, Station } from '@pump/shared';
 import { MobileBlock, useIsUnsupportedMobile } from './MobileBlock.js';
 
@@ -301,7 +301,7 @@ export const App: React.FC = () => {
       ? '/dashboard'
       : currentPath;
 
-  const navItems = navAssumesReady
+  const navItems: NavItem[] = navAssumesReady
     ? [...NAV_PAGES]
     : [
         { label: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
@@ -313,7 +313,7 @@ export const App: React.FC = () => {
         },
       ];
 
-  const navItemsWithDev = isLocalDev
+  const navItemsWithDev: NavItem[] = isLocalDev
     ? [...navItems, { label: 'Design System', path: '/design-system', icon: 'design-system' }]
     : navItems;
 

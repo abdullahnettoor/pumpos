@@ -8,7 +8,7 @@ import {
   showStationDropdown,
 } from '@pump/shared';
 import { preReadyQuickCreateIds, type PreReadyQuickCreateId } from './quickCreateActions.js';
-import type { NavIntent } from './AppShell.js';
+import type { NavIntent, NavItem } from './AppShell.js';
 import { openQuickEntry } from '../quick-entry/store.js';
 import { initialsOf } from '../utils/initials.js';
 import {
@@ -30,7 +30,7 @@ import { useStationAlerts } from '../query/useStationAlerts.js';
 import { inr } from '../utils/format.js';
 import { useRunTask } from '../utils/runTask.js';
 import { useDesktopTitleBar } from '../utils/desktopTitleBar.js';
-import { ROUTES, navItemIcon } from '../nav-intent/routes.js';
+import { ROUTES } from '../nav-intent/routes.js';
 
 /**
  * AppTopBar — the data container that wires the pure pump-ds `TopBar` +
@@ -49,7 +49,7 @@ import { ROUTES, navItemIcon } from '../nav-intent/routes.js';
 
 export interface AppTopBarProps {
   selectedStation: Station | null;
-  navItems: { label: string; path: string; icon?: string; roles?: string[] }[];
+  navItems: NavItem[];
   userRole: OperatorRole;
   userName: string;
   syncStatus: SyncStatus;
@@ -314,7 +314,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
           return {
             id: `sup-${s.id}`,
             label: s.name,
-            icon: <ConceptIcon concept="supplier-list" />,
+            icon: <ConceptIcon concept="suppliers" />,
             meta: bal > 0 ? `${inr(bal)} due` : '',
             keywords: [s.phone, s.metadata?.gstin, s.metadata?.tradeName].filter(Boolean),
             onSelect: () =>
@@ -348,7 +348,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         .map<CommandItem>((n) => ({
           id: `nav-${n.path}`,
           label: n.label,
-          icon: <Icon name={navItemIcon(n.icon)} />,
+          icon: <Icon name={n.icon} />,
           keywords: ['open', 'go'],
           onSelect: () => onNavigate(n.path),
         })),
