@@ -439,7 +439,7 @@ describe('adding a member', () => {
     create.mockRejectedValueOnce(Object.assign(new Error('Network error'), { code: 'NETWORK' }));
     create.mockRejectedValueOnce(
       refusal(
-        'CONFLICT',
+        'IDEMPOTENCY_KEY_REUSED',
         'This Idempotency-Key was already used with different request content',
         409,
       ),

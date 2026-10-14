@@ -103,10 +103,36 @@ export function advanceText(due: number | null, amount: number | null): string |
   return `Collects more than is due: ${inr(round2(amount - Math.max(due, 0)))} becomes an advance.`;
 }
 
+/** A collection's hint: what is due before and after it, or the advance it leaves. */
+export function collectionHint(due: number | null, amount: number | null): string | undefined {
+  if (due == null) return undefined;
+  const advance = advanceText(due, amount);
+  if (advance) return advance;
+  return amount != null && amount > 0
+    ? `${inr(due)} due → ${inr(round2(due - amount))} after this.`
+    : `${inr(due)} due.`;
+}
+
 /** A payment below what is owed: what stays owed, or null. */
 export function partPaymentText(owed: number | null, amount: number | null): string | null {
   if (owed == null || amount == null || !(amount > 0) || !(amount < owed)) return null;
   return `Part payment: ${inr(round2(owed - amount))} stays owed.`;
+}
+
+/**
+ * The pay-now Supplier payment's Entry Date, before the operator picks one:
+ * the purchase's date. A product purchase on the current Business Day is dated
+ * by its Business Date, which Day Start can hold on yesterday; its payment, an
+ * Office Record, takes today's calendar date instead (ADR 0005).
+ */
+export function payNowDateFor(
+  purchaseDate: string,
+  type: PurchaseDraft['type'],
+  clock: { today: string; businessDate: string },
+): string {
+  if (type === 'PRODUCTS' && purchaseDate && purchaseDate === clock.businessDate)
+    return clock.today;
+  return purchaseDate;
 }
 
 /** ", before today" for a date earlier than the latest it could be (glossary: never "backdated"). */

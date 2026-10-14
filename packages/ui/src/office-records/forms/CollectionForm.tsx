@@ -10,10 +10,9 @@ import {
   terminalsForMethod,
   type CollectionMethod,
 } from '../../utils/fundingAccounts.js';
-import { inr } from '../../utils/format.js';
 import { useOfficeRecordContext } from '../context.js';
 import { OFFICE_RECORD_KINDS } from '../kinds.js';
-import { advanceText } from '../preview.js';
+import { collectionHint } from '../preview.js';
 import { typedAmount, useReportDraft, type OfficeRecordFormProps } from '../draft.js';
 import { RecordAmountInput } from '../fields/RecordAmountField.js';
 import { RecordDateField } from '../fields/RecordDateField.js';
@@ -99,14 +98,7 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
     onDraftChange,
   );
 
-  const due = customer?.balance ?? null;
-  const amountHint =
-    due == null
-      ? undefined
-      : (advanceText(due, amount) ??
-        (amount != null && amount > 0
-          ? `${inr(due)} due → ${inr(due - amount)} after this.`
-          : `${inr(due)} due.`));
+  const amountHint = collectionHint(customer?.balance ?? null, amount);
 
   return (
     <Form
