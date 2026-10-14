@@ -48,6 +48,18 @@ describe('FilterChips', () => {
     expect(overLimit.querySelector('[data-tone]')!.className).toContain('text-danger-fg');
   });
 
+  it('keeps a zero count neutral: no problem, no colour', () => {
+    render(
+      <FilterChips
+        aria-label="Customer status"
+        options={[{ value: 'over-limit', label: 'Over limit', count: 0, status: 'over-limit' }]}
+        value="over-limit"
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByText('0').dataset.tone).toBe('neutral');
+  });
+
   it('selects one filter at a time, applied on click', () => {
     const onChange = vi.fn();
     render(<Harness onChange={onChange} />);

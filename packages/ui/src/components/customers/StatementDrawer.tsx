@@ -6,9 +6,17 @@ import {
   partyEntries,
   type StatementClock,
 } from '../../statement/index.js';
-import { Button, DataSection, Icon } from '../../pump-ds/index.js';
-import { inr } from '../../utils/format.js';
+import type { ReceivablesSummary } from '@pump/shared';
+import { Button, DataSection, Icon, StatusChip } from '../../pump-ds/index.js';
+import { formatMoney } from '../../utils/format.js';
 import { useCustomerLedger } from '../../query/hooks.js';
+import { CustomerTypeChip } from './columns.js';
+import {
+  creditLineOf,
+  receivablesByCustomer,
+  standingOf,
+  type CustomerStanding,
+} from './customerStanding.js';
 
 interface StatementDrawerProps {
   /** Selected customer; null closes the drawer. */
@@ -21,12 +29,13 @@ interface StatementDrawerProps {
   onEdit: (customer: any) => void;
   /** Open the collection drawer pre-filled for this customer. */
   onRecordCollection: (customer: any) => void;
+  /** The server's receivables summary, when the Role may read it: the figure and its age. */
+  receivables?: ReceivablesSummary;
 }
 
 /**
  * Customer account statement: summary card + full ledger + quick actions.
- * Fetches the ledger via `useCustomerLedger` (cached) and owns the nested
- * prepaid top-up drawer.
+ * Fetches the ledger via `useCustomerLedger` (cached).
  */
 export const StatementDrawer: React.FC<StatementDrawerProps> = ({
   customer,
@@ -35,6 +44,7 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({
   onClose,
   onEdit,
   onRecordCollection,
+  receivables,
 }) => {
   const ledgerQ = useCustomerLedger(customer?.id);
   // All-time ledger: no opening balance, the running balance starts at zero.
@@ -49,234 +59,144 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({
     [ledgerQ.data, timeZone, dayStartsAt],
   );
 
+  const standing = useMemo(
+    () => (customer ? standingOf(customer, receivablesByCustomer(receivables)) : null),
+    [customer, receivables],
+  );
+
   return (
-    <>
-      <Drawer
-        isOpen={customer !== null}
-        onClose={onClose}
-        title="Customer Account Statement"
-        widthVariant="wide"
-      >
-        {customer && (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '20px',
-              fontFamily: 'var(--font-sans)',
-            }}
-          >
-            {/* Customer Summary Card */}
-            <div
-              style={{
-                backgroundColor: 'var(--bg-surface-alt)',
-                border: '1px solid var(--border-soft)',
-                borderRadius: 'var(--radius-card)',
-                padding: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-              }}
+    <Drawer
+      isOpen={customer !== null}
+      onClose={onClose}
+      title="Customer account statement"
+      widthVariant="wide"
+    >
+      {customer && (
+        <div className="flex flex-col gap-5">
+          <SummaryCard customer={customer} standing={standing!} />
+
+          {/* Ledger: the Statement module, oldest first, Debit · Credit · Balance */}
+          <section className="flex flex-col gap-2">
+            <h4 className="text-[13px] font-semibold text-ink-strong">Statement of account</h4>
+            <DataSection
+              title="statement"
+              query={ledgerQ}
+              enabled
+              placeholderHeight={200}
+              shape="bare"
             >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                }}
-              >
-                <div>
-                  <h3
-                    style={{
-                      fontSize: '15px',
-                      fontWeight: 600,
-                      color: 'var(--text-strong)',
-                      margin: 0,
-                    }}
-                  >
-                    {customer.name}
-                  </h3>
-                  <span
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      backgroundColor:
-                        customer.customerType === 'Fleet'
-                          ? 'var(--state-info-bg)'
-                          : customer.customerType === 'Credit'
-                            ? 'var(--state-warning-bg)'
-                            : 'var(--bg-surface)',
-                      color:
-                        customer.customerType === 'Fleet'
-                          ? 'var(--state-info-fg)'
-                          : customer.customerType === 'Credit'
-                            ? 'var(--state-warning-fg)'
-                            : 'var(--text-strong)',
-                      padding: '2px 6px',
-                      borderRadius: 'var(--radius-chip)',
-                      display: 'inline-block',
-                      marginTop: '4px',
-                    }}
-                  >
-                    {customer.customerType}
-                  </span>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    Outstanding Balance
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '18px',
-                      fontWeight: 700,
-                      fontFamily: 'var(--font-mono)',
-                      color:
-                        customer.creditLimit > 0 && customer.currentBalance > customer.creditLimit
-                          ? 'var(--brand-danger)'
-                          : customer.currentBalance > 0
-                            ? 'var(--brand-warning)'
-                            : 'var(--state-success-fg)',
-                    }}
-                  >
-                    {inr(customer.currentBalance || 0)}
-                  </div>
-                </div>
-              </div>
+              <StatementView
+                statement={statement}
+                scrollToEnd
+                label={`${customer.name} statement`}
+                emptyMessage="No transaction history found for this account."
+              />
+            </DataSection>
+          </section>
 
-              <div
-                style={{
-                  borderTop: '1px solid var(--border-soft)',
-                  paddingTop: '10px',
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: '12px',
-                  fontSize: '12px',
-                }}
-              >
-                <div>
-                  <span style={{ color: 'var(--text-muted)', display: 'block' }}>Credit Limit</span>
-                  <strong style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
-                    {customer.creditLimit > 0 ? inr(customer.creditLimit) : 'N/A'}
-                  </strong>
-                </div>
-                {customer.creditLimit > 0 && (
-                  <div>
-                    <span style={{ color: 'var(--text-muted)', display: 'block' }}>
-                      Available Credit
-                    </span>
-                    <strong
-                      style={{
-                        color:
-                          customer.creditLimit - customer.currentBalance < 0
-                            ? 'var(--brand-danger)'
-                            : 'var(--text-strong)',
-                        fontFamily: 'var(--font-mono)',
-                      }}
-                    >
-                      {inr(
-                        Math.max(0, Number(customer.creditLimit) - Number(customer.currentBalance)),
-                      )}
-                    </strong>
-                  </div>
-                )}
-              </div>
-
-              {customer.isPrepaid && (
-                <div
-                  style={{
-                    borderTop: '1px solid var(--border-soft)',
-                    paddingTop: '10px',
-                    fontSize: '11px',
-                    color: 'var(--text-muted)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                  }}
-                >
-                  <Icon name="wallet" size="xs" /> OMC fleet card — fuel is settled to the OMC (CMS
-                  account), not billed to this customer.
-                </div>
-              )}
-
-              {(customer.metadata?.gstin ||
-                customer.metadata?.pan ||
-                customer.metadata?.billingAddress) && (
-                <div
-                  style={{
-                    borderTop: '1px solid var(--border-soft)',
-                    paddingTop: '10px',
-                    fontSize: '11px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px',
-                    color: 'var(--text-muted)',
-                  }}
-                >
-                  {customer.metadata?.gstin && (
-                    <div>
-                      <strong>GSTIN:</strong>{' '}
-                      <span style={{ fontFamily: 'var(--font-mono)' }}>
-                        {customer.metadata.gstin}
-                      </span>
-                    </div>
-                  )}
-                  {customer.metadata?.pan && (
-                    <div>
-                      <strong>PAN:</strong>{' '}
-                      <span style={{ fontFamily: 'var(--font-mono)' }}>
-                        {customer.metadata.pan}
-                      </span>
-                    </div>
-                  )}
-                  {customer.metadata?.billingAddress && (
-                    <div>
-                      <strong>Billing Address:</strong> {customer.metadata.billingAddress}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Ledger: the Statement module, oldest first, Debit · Credit · Balance */}
-            <section className="flex flex-col gap-2">
-              <h4 className="text-[13px] font-semibold text-ink-strong">Statement of Account</h4>
-              <DataSection
-                title="statement"
-                query={ledgerQ}
-                enabled
-                placeholderHeight={200}
-                shape="bare"
-              >
-                <StatementView
-                  statement={statement}
-                  scrollToEnd
-                  label={`${customer.name} statement`}
-                  emptyMessage="No transaction history found for this account."
-                />
-              </DataSection>
-            </section>
-
-            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-              <Button
-                variant="secondary"
-                size="sm"
-                leftIcon={<Icon name="edit" size="sm" />}
-                onClick={() => onEdit(customer)}
-              >
-                Edit profile
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                leftIcon={<Icon name="wallet" size="sm" />}
-                onClick={() => onRecordCollection(customer)}
-              >
-                Record collection
-              </Button>
-            </div>
+          <div className="mt-2 flex gap-2.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Icon name="edit" size="sm" />}
+              onClick={() => onEdit(customer)}
+            >
+              Edit profile
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Icon name="wallet" size="sm" />}
+              onClick={() => onRecordCollection(customer)}
+            >
+              Record collection
+            </Button>
           </div>
+        </div>
+      )}
+    </Drawer>
+  );
+};
+
+const Fact: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <div className="flex flex-col gap-0.5">
+    <dt className="text-ink-muted">{label}</dt>
+    <dd className="font-mono font-semibold text-ink-strong">{children}</dd>
+  </div>
+);
+
+/**
+ * Who the customer is and where they stand: "Owes you" (the receivable), or
+ * the advance held for them, as a plain figure. A problem shows as its
+ * status chip (Over limit, Overdue), never as a coloured figure.
+ */
+const SummaryCard: React.FC<{ customer: any; standing: CustomerStanding }> = ({
+  customer,
+  standing,
+}) => {
+  const limit = creditLineOf(customer);
+  const advance = standing.receivable <= 0 && standing.advance > 0;
+  const meta = customer.metadata ?? {};
+  return (
+    <section className="flex flex-col gap-3 rounded-card border border-border-soft bg-surface-alt p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col items-start gap-1.5">
+          <h3 className="text-[15px] font-semibold text-ink-strong">{customer.name}</h3>
+          <span className="flex flex-wrap items-center gap-1">
+            <CustomerTypeChip type={customer.customerType} />
+            {standing.overLimitBy > 0 && <StatusChip status="over-limit" size="xs" />}
+            {standing.overdueDays != null && (
+              <StatusChip status="overdue" size="xs" label={`Overdue ${standing.overdueDays}d`} />
+            )}
+            {customer.isActive === false && <StatusChip status="inactive" size="xs" />}
+          </span>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-[12px] text-ink-muted">{advance ? 'Advance held' : 'Owes you'}</div>
+          <div className="font-mono text-[18px] font-semibold text-ink-strong">
+            {formatMoney(advance ? standing.advance : standing.receivable)}
+          </div>
+        </div>
+      </div>
+
+      <dl className="grid grid-cols-2 gap-3 border-t border-border-soft pt-2.5 text-[12px]">
+        <Fact label="Credit limit">{limit > 0 ? formatMoney(limit) : 'None'}</Fact>
+        {limit > 0 && (
+          <Fact label="Available credit">
+            {formatMoney(Math.max(0, limit - standing.receivable))}
+          </Fact>
         )}
-      </Drawer>
-    </>
+      </dl>
+
+      {customer.isPrepaid && (
+        <p className="flex items-center gap-1.5 border-t border-border-soft pt-2.5 text-[12px] text-ink-muted">
+          <Icon name="wallet" size="xs" /> OMC fleet card: fuel is settled to the OMC (CMS account),
+          not billed to this customer.
+        </p>
+      )}
+
+      {(meta.gstin || meta.pan || meta.billingAddress) && (
+        <dl className="flex flex-col gap-1 border-t border-border-soft pt-2.5 text-[12px] text-ink-muted">
+          {meta.gstin && (
+            <div className="flex gap-1">
+              <dt className="font-semibold">GSTIN</dt>
+              <dd className="font-mono">{meta.gstin}</dd>
+            </div>
+          )}
+          {meta.pan && (
+            <div className="flex gap-1">
+              <dt className="font-semibold">PAN</dt>
+              <dd className="font-mono">{meta.pan}</dd>
+            </div>
+          )}
+          {meta.billingAddress && (
+            <div className="flex gap-1">
+              <dt className="font-semibold">Billing address</dt>
+              <dd>{meta.billingAddress}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+    </section>
   );
 };

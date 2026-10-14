@@ -9,7 +9,10 @@ export interface FilterChipOption<T extends string> {
   label: ReactNode;
   /** Rows this filter would show. Shown before the operator clicks. */
   count?: number;
-  /** The status the filter selects; the count takes its tone (Overdue amber, Over limit red). */
+  /**
+   * The status the filter selects; the count takes its tone (Overdue amber,
+   * Over limit red). A count of 0 stays neutral: no problem, no colour.
+   */
   status?: PumpStatus;
 }
 
@@ -81,7 +84,7 @@ export function FilterChips<T extends string>({
     >
       {options.map((opt, i) => {
         const checked = opt.value === value;
-        const tone = opt.status ? STATUS_MAP[opt.status].tone : 'neutral';
+        const tone = opt.status && opt.count !== 0 ? STATUS_MAP[opt.status].tone : 'neutral';
         return (
           <button
             key={opt.value}
