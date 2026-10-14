@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable, type DataTableProps } from '../../components/primitives/DataTable.js';
 import {
@@ -56,8 +56,10 @@ export function InteractiveTable<T>({
   totalRow,
   ...rest
 }: InteractiveTableProps<T>) {
-  const totals = rows && rows.length > 0 ? totalCells(columns, rows, totalRow) : null;
-  return (
-    <DataTable<T> {...rest} columns={toColumnDefs(columns, totals)} data={rows} getRowId={rowKey} />
-  );
+  // Callers memoise `columns` and `rows`; the defs follow them, not every render.
+  const columnDefs = useMemo(() => {
+    const totals = rows && rows.length > 0 ? totalCells(columns, rows, totalRow) : null;
+    return toColumnDefs(columns, totals);
+  }, [columns, rows, totalRow]);
+  return <DataTable<T> {...rest} columns={columnDefs} data={rows} getRowId={rowKey} />;
 }

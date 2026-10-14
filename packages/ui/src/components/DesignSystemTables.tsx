@@ -66,7 +66,7 @@ const DEMO_COLUMNS: TableColumn<Sale>[] = [
   { id: 'product', header: 'Product', kind: 'text', value: (r) => r.product },
   { id: 'litres', header: 'Volume', kind: 'qty', unit: 'L', value: (r) => r.litres },
   { id: 'rate', header: 'Rate', kind: 'money', total: false, value: (r) => r.rate },
-  { id: 'amount', header: 'Amount', kind: 'money', emphasis: true, value: (r) => r.amount },
+  { id: 'amount', header: 'Amount', kind: 'money', value: (r) => r.amount },
   { id: 'status', header: 'Status', kind: 'status', value: (r) => r.status },
 ];
 

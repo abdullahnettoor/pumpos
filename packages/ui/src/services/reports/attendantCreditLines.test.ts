@@ -83,7 +83,7 @@ describe('creditChitRows', () => {
 
   it('formats the quantity with its unit, which the drawer printed bare', () => {
     expect(creditChitRows(shift({ creditSaleLines: [chit({ quantity: 12.5 })] }))[0].quantity).toBe(
-      '12.500 L',
+      '12.50 L',
     );
   });
 
@@ -92,13 +92,13 @@ describe('creditChitRows', () => {
     // must never be read across units.
     expect(
       creditChitRows(shift({ creditSaleLines: [chit({ quantity: 8, unit: 'kg' })] }))[0].quantity,
-    ).toBe('8.000 kg');
+    ).toBe('8.00 kg');
   });
 
   it('falls back to litres when the chit records no unit', () => {
     expect(
       creditChitRows(shift({ creditSaleLines: [chit({ quantity: 8, unit: null })] }))[0].quantity,
-    ).toBe('8.000 L');
+    ).toBe('8.00 L');
   });
 
   it('keeps the quantity as a number with its unit, so a table can sort and total it', () => {
@@ -175,7 +175,7 @@ describe('creditChitRows', () => {
   describe('productWithQuantity', () => {
     it('joins the product and its quantity', () => {
       expect(creditChitRows(shift({ creditSaleLines: [chit()] }))[0].productWithQuantity).toBe(
-        'Petrol \u00b7 12.500 L',
+        'Petrol \u00b7 12.50 L',
       );
     });
 
@@ -199,7 +199,7 @@ describe('creditChitRows', () => {
       expect(
         creditChitRows(shift({ creditSaleLines: [chit({ productName: '\u2014' })] }))[0]
           .productWithQuantity,
-      ).toBe('\u2014 \u00b7 12.500 L');
+      ).toBe('\u2014 \u00b7 12.50 L');
     });
 
     it('is a dash on the placeholder row', () => {

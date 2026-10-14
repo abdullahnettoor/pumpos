@@ -61,12 +61,12 @@ export function StatementTable<T>({
       className={cn('w-full border-collapse text-[11px] text-ink-default', className)}
     >
       <thead>
-        <tr className="border-b border-border-soft text-[10px] uppercase tracking-[0.04em] text-ink-faint">
+        <tr className="border-b border-border-soft">
           {columns.map((col) => (
             <th
               key={col.id}
               scope="col"
-              className={cn(CELL_PAD, headerClass(col), 'font-medium')}
+              className={cn(CELL_PAD, headerClass(col))}
               style={col.width ? { width: col.width } : undefined}
             >
               {col.header}

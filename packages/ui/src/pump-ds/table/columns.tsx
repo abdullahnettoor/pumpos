@@ -13,7 +13,10 @@ interface ColumnBase<T> {
    * the alignment and font; `value` still drives sorting and the total.
    */
   cell?: (row: T) => ReactNode;
-  /** The figure the row is about, set in semibold. */
+  /**
+   * The figure the row is about, set in semibold. Not for a column with a
+   * total row: money cells are regular weight so the total stands out.
+   */
   emphasis?: boolean;
   /** Fraction of the table width (`'16%'`); defaults to an equal share. */
   width?: string;
@@ -79,26 +82,53 @@ type ColumnOf<K extends Kind, T> = Extract<TableColumn<T>, { kind: K }>;
 interface KindDef<K extends Kind> {
   /** Body and total cells. */
   className: string;
-  /** Header cell: numbers sit over their figures in mono; every other header is a word. */
-  headerClassName: string;
+  /** Header alignment: a number's header sits over its figures, in the same sans as every header. */
+  align: 'text-left' | 'text-right';
   /** The cell: the shared format, or the status vocabulary. */
   cell<T>(col: ColumnOf<K, T>, row: T, mode: TableMode): ReactNode;
   /** What the column sorts by; the raw value when absent. */
-  sortValue?<T>(col: ColumnOf<K, T>, row: T): number | null;
+  sortValue?<T>(col: ColumnOf<K, T>, row: T): number | undefined;
   /** The column's total, formatted; absent when the kind does not add up. */
   total?<T>(col: ColumnOf<K, T>, rows: T[], given: Amount): string;
 }
 
 const NUMERIC = 'text-right font-mono tabular-nums';
 
-const toNumber = (v: Amount): number | null => {
-  if (v == null || v === '') return null;
+/**
+ * Every header, in both adapters: 10px uppercase, weight 500, faint sans. A
+ * number's header changes only its alignment; mono sits in the body.
+ */
+const HEADER = 'text-[10px] font-medium uppercase tracking-[0.04em] text-ink-faint';
+
+const isEmpty = (v: unknown): boolean => v == null || v === '';
+
+/**
+ * What a figure sorts by. `undefined` for an empty or broken value, so
+ * TanStack's `sortUndefined: 'last'` keeps it below the figures either way.
+ */
+const toNumber = (v: Amount): number | undefined => {
+  if (isEmpty(v)) return undefined;
   const n = Number(v);
-  return Number.isFinite(n) ? n : null;
+  return Number.isFinite(n) ? n : undefined;
 };
 
-const sum = <T,>(col: { value: (row: T) => Amount }, rows: T[]): number =>
-  rows.reduce((acc, row) => acc + (toNumber(col.value(row)) ?? 0), 0);
+/**
+ * The column's sum. An empty cell adds nothing; a broken one (non-finite)
+ * makes the sum `NaN`, which the shared formats print as `—`: counting it as
+ * 0 would pass a bad figure off as a real total. `scale` sums in whole units
+ * of it (100 for paise), so the total is the sum of the figures shown.
+ */
+const sum = <T,>(col: { value: (row: T) => Amount }, rows: T[], scale?: number): number => {
+  let acc = 0;
+  for (const row of rows) {
+    const v = col.value(row);
+    if (isEmpty(v)) continue;
+    const n = Number(v);
+    if (!Number.isFinite(n)) return Number.NaN;
+    acc += scale ? Math.round(n * scale) : n;
+  }
+  return scale ? acc / scale : acc;
+};
 
 const unitOf = <T,>(col: QtyColumn<T>, row: T): string | null | undefined =>
   typeof col.unit === 'function' ? col.unit(row) : col.unit;
@@ -106,17 +136,17 @@ const unitOf = <T,>(col: QtyColumn<T>, row: T): string | null | undefined =>
 const KINDS: { [K in Kind]: KindDef<K> } = {
   money: {
     className: NUMERIC,
-    headerClassName: NUMERIC,
+    align: 'text-right',
     cell: (col, row) => {
       const v = col.value(row);
       return v == null || v === '' ? '' : formatMoney(v);
     },
     sortValue: (col, row) => toNumber(col.value(row)),
-    total: (col, rows, given) => formatMoney(given ?? sum(col, rows)),
+    total: (col, rows, given) => formatMoney(given ?? sum(col, rows, 100)),
   },
   qty: {
     className: NUMERIC,
-    headerClassName: NUMERIC,
+    align: 'text-right',
     cell: (col, row) =>
       formatQuantity(col.value(row), unitOf(col, row), { decimals: col.decimals }),
     sortValue: (col, row) => toNumber(col.value(row)),
@@ -132,18 +162,18 @@ const KINDS: { [K in Kind]: KindDef<K> } = {
   // Dates sit in the sans face with aligned digits, as the Dashboard prints its times.
   date: {
     className: 'text-left tabular-nums',
-    headerClassName: 'text-left',
+    align: 'text-left',
     cell: (col, row) => formatDate(col.value(row)),
     sortValue: (col, row) => {
       const v = col.value(row);
-      if (v == null || v === '') return null;
+      if (v == null || v === '') return undefined;
       const t = (v instanceof Date ? v : new Date(v)).getTime();
-      return Number.isNaN(t) ? null : t;
+      return Number.isNaN(t) ? undefined : t;
     },
   },
   text: {
     className: 'text-left',
-    headerClassName: 'text-left',
+    align: 'text-left',
     cell: (col, row) => {
       const v = col.value(row);
       return v == null || v === '' ? '—' : String(v);
@@ -151,7 +181,7 @@ const KINDS: { [K in Kind]: KindDef<K> } = {
   },
   status: {
     className: 'text-left',
-    headerClassName: 'text-left',
+    align: 'text-left',
     cell: (col, row, mode) =>
       mode === 'statement' ? (
         <StatusChip status={col.value(row)} size="xs" variant="outline" showIcon={false} />
@@ -168,15 +198,18 @@ const KINDS: { [K in Kind]: KindDef<K> } = {
  */
 const kindOf = <T,>(col: TableColumn<T>): KindDef<Kind> => KINDS[col.kind] as KindDef<Kind>;
 
-/** Whether the column adds up in a total row. */
-const contributes = <T,>(col: TableColumn<T>): boolean =>
-  (col.kind === 'money' || col.kind === 'qty') && col.total !== false;
+/**
+ * How the column adds up in a total row: its kind's total, unless the column
+ * opted out. Only the kinds with a `total` in `KINDS` add up.
+ */
+const totalOf = <T,>(col: TableColumn<T>): KindDef<Kind>['total'] =>
+  (col as { total?: boolean }).total === false ? undefined : kindOf(col).total;
 
 /** Alignment and font for a column's body and total cells. */
 export const kindClass = <T,>(col: TableColumn<T>): string => kindOf(col).className;
 
-/** Alignment and font for a column's header. */
-export const headerClass = <T,>(col: TableColumn<T>): string => kindOf(col).headerClassName;
+/** A column's header: the one header style, aligned with its column. */
+export const headerClass = <T,>(col: TableColumn<T>): string => cn(HEADER, kindOf(col).align);
 
 /** Cell classes shared by both adapters: kind alignment plus emphasis. */
 export const columnClass = <T,>(col: TableColumn<T>): string =>
@@ -189,11 +222,11 @@ export function renderCell<T>(col: TableColumn<T>, row: T, mode: TableMode): Rea
 }
 
 /** The value a column sorts by. */
-export function sortValue<T>(col: TableColumn<T>, row: T): string | number | null {
+export function sortValue<T>(col: TableColumn<T>, row: T): string | number | undefined {
   const def = kindOf(col);
   if (def.sortValue) return def.sortValue(col, row);
   const v = col.value(row);
-  if (v == null || v === '') return null;
+  if (isEmpty(v)) return undefined;
   return typeof v === 'number' ? v : String(v);
 }
 
@@ -210,8 +243,8 @@ export function totalCells<T>(
   if (!totalRow) return null;
   const { label = 'Total', values } = totalRow === true ? {} : totalRow;
   return columns.map((col, i) => {
-    const def = kindOf(col);
-    const figure = contributes(col) && def.total ? def.total(col, rows, values?.[col.id]) : '';
+    const total = totalOf(col);
+    const figure = total ? total(col, rows, values?.[col.id]) : '';
     if (i === 0 && !figure) return <span className="font-sans">{label}</span>;
     return figure;
   });

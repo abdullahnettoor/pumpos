@@ -191,7 +191,7 @@ describe('AttendantHandoverReportPanel drawer', () => {
 
     // The quantity carries its unit, as the exported PDF has always printed
     // it — the drawer used to show a bare number (#244).
-    expect(rows[0]).toEqual(['Anand Transports', 'KL-07-AB-1234', 'Diesel', '20.000 L', '₹800.00']);
+    expect(rows[0]).toEqual(['Anand Transports', 'KL-07-AB-1234', 'Diesel', '20.00 L', '₹800.00']);
     // A chit that recorded no product or vehicle is still listed, still counted —
     // and an absent quantity is a dash, not a formatted zero.
     expect(rows[1]).toEqual(['Zenith Logistics', '—', '—', '—', '₹200.00']);

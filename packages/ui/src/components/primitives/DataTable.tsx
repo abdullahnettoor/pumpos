@@ -10,6 +10,10 @@ import {
 } from '@tanstack/react-table';
 import { useRunTask } from '../../utils/runTask.js';
 import { DataSection } from '../../pump-ds/data-section/index.js';
+import { cn } from '../../pump-ds/lib/cn.js';
+
+/** Header type for a column without meta; a kind-styled column's meta overrides it. */
+const HEADER_CLASS = 'text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-muted';
 
 declare module '@tanstack/react-table' {
   /**
@@ -21,7 +25,7 @@ declare module '@tanstack/react-table' {
   interface ColumnMeta<TData extends RowData, TValue> {
     /** Body and total cells. */
     className?: string;
-    /** Header cell; falls back to `className`. */
+    /** Header cell, merged over the default header type; falls back to `className`. */
     headerClassName?: string;
     width?: string;
   }
@@ -139,7 +143,7 @@ export function DataTable<T>({
                     <th
                       key={header.id}
                       scope="col"
-                      className={meta.headerClassName ?? meta.className}
+                      className={cn(HEADER_CLASS, meta.headerClassName ?? meta.className)}
                       aria-sort={
                         sorted === 'asc'
                           ? 'ascending'
@@ -150,11 +154,6 @@ export function DataTable<T>({
                       onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
                       style={{
                         padding: cellPad,
-                        fontWeight: 600,
-                        fontSize: '11px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.04em',
-                        color: 'var(--text-muted)',
                         cursor: canSort ? 'pointer' : 'default',
                         whiteSpace: 'nowrap',
                         userSelect: 'none',
@@ -214,7 +213,10 @@ export function DataTable<T>({
           {hasFooter && (
             <tfoot>
               {table.getFooterGroups().map((fg) => (
-                <tr key={fg.id} style={{ borderTop: '1px solid var(--border-strong)' }}>
+                <tr
+                  key={fg.id}
+                  className="border-t border-border-strong font-semibold text-ink-strong"
+                >
                   {fg.headers.map((header, i) => {
                     const Cell = i === 0 ? 'th' : 'td';
                     const className = header.column.columnDef.meta?.className;
@@ -222,14 +224,11 @@ export function DataTable<T>({
                       <Cell
                         key={header.id}
                         scope={i === 0 ? 'row' : undefined}
-                        className={className}
-                        style={{
-                          padding: cellPad,
-                          fontWeight: 600,
-                          // A kind-styled column aligns its total like its cells.
-                          textAlign: className ? undefined : 'left',
-                          color: 'var(--text-strong)',
-                        }}
+                        // A kind-styled column aligns its total like its cells.
+                        className={cn(
+                          dense ? 'px-1.5 py-1.5' : 'px-3 py-[9px]',
+                          className ?? 'text-left',
+                        )}
                       >
                         {header.isPlaceholder
                           ? null

@@ -67,13 +67,34 @@ const adapters = {
 };
 
 describe.each(Object.entries(adapters))('%s table: shared column kinds', (_name, renderTable) => {
-  it('money and qty columns are right-aligned mono, header and body', () => {
+  it('money and qty cells are right-aligned mono; their headers are right-aligned only', () => {
     renderTable();
-    for (const name of ['Volume', 'Rate', 'Amount']) expect(isNumericCell(header(name))).toBe(true);
+    for (const name of ['Volume', 'Rate', 'Amount']) {
+      expect(header(name).className).toContain('text-right');
+      expect(header(name).className).not.toContain('font-mono');
+    }
     expect(isNumericCell(screen.getByText('₹1,14,700.00'))).toBe(true);
     expect(isNumericCell(screen.getByText('1,240.00 L'))).toBe(true);
     expect(header('Product').className).not.toContain('text-right');
-    expect(header('Date').className).not.toContain('font-mono');
+  });
+
+  it('every header reads the same: 10px uppercase, weight 500, faint sans', () => {
+    renderTable();
+    for (const name of ['Date', 'Product', 'Volume', 'Rate', 'Amount', 'Status']) {
+      const th = header(name);
+      for (const cls of ['text-[10px]', 'uppercase', 'font-medium', 'text-ink-faint']) {
+        expect(th.className.split(' ')).toContain(cls);
+      }
+      expect(th.className).not.toContain('font-semibold');
+      expect(th.getAttribute('style') ?? '').not.toMatch(/font-weight|font-size|color/);
+    }
+  });
+
+  it('a money body cell is regular weight; only the total row is semibold', () => {
+    renderTable();
+    expect(screen.getByText('₹1,14,700.00').className).not.toContain('font-semibold');
+    const foot = screen.getByRole('table').querySelector('tfoot tr') as HTMLElement;
+    expect(foot.className).toContain('font-semibold');
   });
 
   it('a date reads in the sans face, as the Dashboard prints its times', () => {
@@ -172,6 +193,40 @@ describe('total row', () => {
     expect(footerCells()).toEqual(['Total', '7.00 kg']);
   });
 
+  it('a total with a broken figure behind it prints —, not a sum that counted it as 0', () => {
+    const broken: TableColumn<{ a: number }>[] = [
+      { id: 'label', header: 'Item', kind: 'text', value: () => 'x' },
+      { id: 'a', header: 'Amount', kind: 'money', value: (r) => r.a },
+      { id: 'q', header: 'Qty', kind: 'qty', unit: 'L', value: (r) => r.a },
+    ];
+    render(
+      <StatementTable
+        columns={broken}
+        rows={[{ a: 50 }, { a: Number.NaN }]}
+        rowKey={(_r, i) => String(i)}
+        totalRow
+      />,
+    );
+    expect(footerCells()).toEqual(['Total', '—', '—']);
+  });
+
+  it('sums money in paise, so the total is the sum of the figures shown', () => {
+    const money: TableColumn<{ a: number }>[] = [
+      { id: 'label', header: 'Item', kind: 'text', value: () => 'x' },
+      { id: 'a', header: 'Amount', kind: 'money', value: (r) => r.a },
+    ];
+    render(
+      <StatementTable
+        columns={money}
+        rows={[{ a: 0.004 }, { a: 0.004 }, { a: 0.004 }]}
+        rowKey={(_r, i) => String(i)}
+        totalRow
+      />,
+    );
+    // Each row shows ₹0.00; a float sum (0.012) would print ₹0.01.
+    expect(footerCells()).toEqual(['Total', '₹0.00']);
+  });
+
   it('no total row unless asked', () => {
     render(<InteractiveTable columns={columns} rows={rows} rowKey={(r) => r.id} />);
     expect(screen.getByRole('table').querySelector('tfoot')).toBeNull();
@@ -193,6 +248,40 @@ describe('interactive adapter', () => {
       .slice(1)
       .map((r) => within(r).getAllByRole('cell')[4].textContent);
     expect(amounts).toEqual(['₹858.50', '₹9,000.00', '₹1,14,700.00']);
+  });
+
+  it('sorts an empty value last, whichever way the column sorts', () => {
+    type Entry = { id: string; amount: number | null };
+    const cols: TableColumn<Entry>[] = [
+      { id: 'id', header: 'Entry', kind: 'text', value: (r) => r.id },
+      { id: 'amount', header: 'Amount', kind: 'money', value: (r) => r.amount },
+      { id: 'note', header: 'Note', kind: 'text', value: (r) => (r.amount == null ? null : r.id) },
+    ];
+    render(
+      <InteractiveTable
+        columns={cols}
+        rows={[
+          { id: 'a', amount: 30 },
+          { id: 'b', amount: null },
+          { id: 'c', amount: -10 },
+        ]}
+        rowKey={(r) => r.id}
+      />,
+    );
+    const order = () =>
+      screen
+        .getAllByRole('row')
+        .slice(1)
+        .map((r) => within(r).getAllByRole('cell')[0].textContent);
+    // The sorted header gains an arrow, so match its start.
+    const sortBy = (name: string) =>
+      fireEvent.click(screen.getByRole('columnheader', { name: new RegExp(`^${name}`) }));
+    sortBy('Amount');
+    expect(order()).toEqual(['c', 'a', 'b']);
+    sortBy('Amount');
+    expect(order()).toEqual(['a', 'c', 'b']);
+    sortBy('Note');
+    expect(order()).toEqual(['a', 'c', 'b']);
   });
 
   it('opens a row on click', () => {

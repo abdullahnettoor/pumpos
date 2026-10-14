@@ -1,5 +1,5 @@
 import type { AttendantReportShift } from '@pump/shared';
-import { formatQty } from '../../utils/format.js';
+import { formatQuantity } from '../../utils/format.js';
 
 /**
  * Presentation of a Shift's fuel-on-credit chits, shared by the attendant
@@ -14,6 +14,7 @@ import { formatQty } from '../../utils/format.js';
  *    its section still summed to the Shift line; the drawer rendered nothing
  *    and quietly dropped that money out of the breakdown.
  *  - **How a quantity reads.** The PDF printed `12.500 L`, the drawer `12.500`.
+ *    Both now print `formatQuantity`'s `12.50 L`: a volume, not a meter reading.
  *  - **What stands in for a missing name.** "Unknown customer" and "—" were
  *    written out in both files.
  *
@@ -98,7 +99,9 @@ export function creditChitRows(shift: AttendantReportShift): CreditChitRow[] {
     // A chit that recorded no quantity is a dash, not a formatted zero. The
     // unit comes off the chit: 'L' for liquids, 'kg' for CNG / Auto-LPG.
     const unit = line.unit || 'L';
-    const quantity = line.quantity == null ? MISSING : formatQty(line.quantity, 3, unit);
+    // The one quantity format (#519): litres to 2 places. The table's Qty
+    // column formats `quantityValue` with the same call, so they cannot drift.
+    const quantity = formatQuantity(line.quantity, unit, { fallback: MISSING });
     return {
       key: line.transactionId,
       customerName: line.customerName || 'Unknown customer',
