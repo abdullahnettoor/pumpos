@@ -80,7 +80,7 @@ const VOCABULARY: Record<PumpState, StatusPresentation> = {
   'over-limit': { label: 'Over limit', tone: 'danger' },
   voided: { label: 'Voided', tone: 'neutral', struck: true },
   adjustment: { label: 'Adjustment', tone: 'info' },
-  'awaiting-decantation': { label: 'Awaiting decantation', tone: 'warning' },
+  'awaiting-decantation': { label: 'Awaiting decantation', tone: 'neutral' },
 };
 
 /** The canonical word and tone for a state. */
