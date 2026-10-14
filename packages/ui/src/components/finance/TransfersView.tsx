@@ -9,6 +9,7 @@ import {
   KpiStrip,
   KpiTile,
   SectionHeader,
+  StatusChip,
   computeRange,
   type DateRange,
   type KpiScope,
@@ -20,6 +21,7 @@ import { formatMoney } from '../../utils/format.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import {
   entries,
+  ORG_ACCOUNT,
   inWindow,
   pairTransfers,
   plural,
@@ -33,19 +35,22 @@ type KindFilter = 'all' | TransferKind;
 
 const KIND_LABEL: Record<TransferKind, string> = { deposit: 'Deposit', transfer: 'Transfer' };
 
-/** What a filtered total leaves out. */
-const TOTAL_LABEL: Record<KindFilter, string> = {
-  all: 'Total',
-  deposit: 'Total excl. transfers',
-  transfer: 'Total excl. deposits',
-};
+/** An account the move went through; a side whose leg is elsewhere reads `ORG_ACCOUNT`, faint. */
+const AccountName: React.FC<{ name: string }> = ({ name }) => (
+  <span className={name === ORG_ACCOUNT ? 'text-ink-muted' : 'text-ink-strong'}>{name}</span>
+);
 
-const AccountName: React.FC<{ name: string | null }> = ({ name }) =>
-  name ? (
-    <span className="text-ink-strong">{name}</span>
-  ) : (
-    <span className="text-ink-faint">—</span>
-  );
+/** The out leg's amount; legs that disagree carry a Variance chip (a problem, so red). */
+const AmountCell: React.FC<{ t: Transfer }> = ({ t }) => (
+  <span className="inline-flex items-center justify-end gap-1.5">
+    {t.mismatch && (
+      <span title="The two legs of this transfer moved different amounts.">
+        <StatusChip status="variance" size="md" className="font-sans" />
+      </span>
+    )}
+    <span>{formatMoney(t.amount)}</span>
+  </span>
+);
 
 const COLUMNS: TableColumn<Transfer>[] = [
   { id: 'entryDate', header: 'Entry date', kind: 'date', value: (t) => t.entryDate, width: '14%' },
@@ -73,7 +78,14 @@ const COLUMNS: TableColumn<Transfer>[] = [
     value: (t) => t.notes,
     cell: (t) => <span className="text-ink-muted">{t.notes || '—'}</span>,
   },
-  { id: 'amount', header: 'Amount', kind: 'money', value: (t) => t.amount, width: '16%' },
+  {
+    id: 'amount',
+    header: 'Amount',
+    kind: 'money',
+    value: (t) => t.amount,
+    cell: (t) => <AmountCell t={t} />,
+    width: '18%',
+  },
 ];
 
 export interface TransfersViewProps {
@@ -108,7 +120,11 @@ export const TransfersView: React.FC<TransfersViewProps> = ({ selectedStation })
     () => (kind === 'all' ? inRange : inRange.filter((t) => t.kind === kind)),
     [inRange, kind],
   );
-  const totalRow = useMemo<TotalRow>(() => ({ label: TOTAL_LABEL[kind] }), [kind]);
+  // A total only for a filtered list (owner rule): All has nothing to add up to.
+  const totalRow = useMemo<TotalRow | undefined>(
+    () => (kind === 'all' ? undefined : { label: `Total of ${rows.length} shown` }),
+    [kind, rows.length],
+  );
 
   const tiles = useMemo(() => {
     const monthRows = pairTransfers((monthQ.data?.movements ?? []) as MovementRow[]);

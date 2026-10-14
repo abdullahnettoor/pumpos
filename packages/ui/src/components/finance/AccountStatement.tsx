@@ -31,6 +31,8 @@ export interface AccountStatementProps {
   account: AccountRow;
   /** The station, for its clock. */
   selectedStation: { settings?: { timezone?: string } } | null;
+  /** Buttons that act on this account (Add entry, Settle to bank), in the statement's header. */
+  actions?: React.ReactNode;
 }
 
 /**
@@ -42,7 +44,11 @@ export interface AccountStatementProps {
  * bank, #531); to open it on Accounts instead, publish `{ openAccountId }`.
  * Key it by the account id so the period starts at this month for each one.
  */
-export const AccountStatement: React.FC<AccountStatementProps> = ({ account, selectedStation }) => {
+export const AccountStatement: React.FC<AccountStatementProps> = ({
+  account,
+  selectedStation,
+  actions,
+}) => {
   const timeZone = selectedStation?.settings?.timezone;
   // Ledger entries are dated by entry date: the plain station calendar date (ADR 0005).
   const entryClock = useMemo(() => ({ timeZone }), [timeZone]);
@@ -98,6 +104,7 @@ export const AccountStatement: React.FC<AccountStatementProps> = ({ account, sel
                 aria-label="Statement period"
               />
             ),
+            actions,
             info: (
               <InfoTip label="About the account statement" placement="bottom">
                 Money into the account is a debit, money out a credit, each dated by its entry date.

@@ -65,6 +65,11 @@ export interface AccountsListProps {
  */
 export const AccountsList: React.FC<AccountsListProps> = ({ accounts, query, onOpen }) => {
   const balances = useMemo(() => accountBalances(accounts), [accounts]);
+  // Owner (capital) accounts are not money the station runs on, so the total leaves them out.
+  const totalRow = useMemo(
+    () => ({ label: 'Total cash, bank & clearing', values: { balance: balances.working } }),
+    [balances.working],
+  );
   return (
     <div className="flex flex-col gap-4">
       <DataSection
@@ -95,6 +100,14 @@ export const AccountsList: React.FC<AccountsListProps> = ({ accounts, query, onO
             value={formatMoney(balances.clearing)}
             hint="awaiting settlement"
           />
+          {balances.hasCms && (
+            <KpiTile
+              label="CMS receivable"
+              scope="now"
+              value={formatMoney(balances.cms)}
+              hint="OMC card sales"
+            />
+          )}
         </KpiStrip>
       </DataSection>
 
@@ -138,7 +151,7 @@ export const AccountsList: React.FC<AccountsListProps> = ({ accounts, query, onO
             columns={COLUMNS}
             rows={accounts}
             rowKey={(a) => a.id}
-            totalRow={{ label: 'Total, all accounts' }}
+            totalRow={totalRow}
             title="accounts"
             onRowClick={onOpen}
             rowLabel={(a) => `${a.name} statement`}

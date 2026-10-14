@@ -2,7 +2,6 @@
  * The Accounts page's figures (#530): pure, so the tiles, the transfer list and
  * the statement tiles are tested without rendering.
  */
-import { CASH_ACCOUNT_TYPES } from '../../utils/ledgerLabels.js';
 
 /** A Financial Account as `GET /finance/accounts` lists it. */
 export interface AccountRow {
@@ -15,22 +14,35 @@ export interface AccountRow {
   isActive?: boolean;
 }
 
-/** Live balances by group, for the Accounts tiles. Cash = Cash in Hand + Petty Cash. */
+const isCash = (type: string) => type === 'CASH_IN_HAND' || type === 'PETTY_CASH';
+
+/**
+ * Live balances by group, for the Accounts tiles and total row. Cash = Cash in
+ * Hand + Petty Cash; `hasCms` says whether the station has a CMS account at all.
+ * `working` is everything but Owner (capital) accounts: the money the station
+ * runs on, which the list's total row shows.
+ */
 export function accountBalances(accounts: readonly AccountRow[]): {
   cash: number;
   bank: number;
   clearing: number;
+  cms: number;
+  hasCms: boolean;
+  working: number;
 } {
-  let cash = 0;
-  let bank = 0;
-  let clearing = 0;
+  const t = { cash: 0, bank: 0, clearing: 0, cms: 0, hasCms: false, working: 0 };
   for (const a of accounts) {
     const b = Number(a.balance || 0);
-    if (CASH_ACCOUNT_TYPES.includes(a.accountType as any)) cash += b;
-    else if (a.accountType === 'BANK') bank += b;
-    else if (a.accountType === 'MERCHANT_CLEARING') clearing += b;
+    if (a.accountType !== 'OWNER') t.working += b;
+    if (isCash(a.accountType)) t.cash += b;
+    else if (a.accountType === 'BANK') t.bank += b;
+    else if (a.accountType === 'MERCHANT_CLEARING') t.clearing += b;
+    else if (a.accountType === 'CMS') {
+      t.cms += b;
+      t.hasCms = true;
+    }
   }
-  return { cash, bank, clearing };
+  return t;
 }
 
 /** One leg of a station money movement (`GET /finance/movements`). */
@@ -55,15 +67,24 @@ export interface Transfer {
   id: string;
   entryDate: string;
   kind: TransferKind;
-  fromName: string | null;
+  fromName: string;
   fromType: string | null;
-  toName: string | null;
+  toName: string;
   toType: string | null;
   amount: number;
   /** The operator's note; `null` when it is only the generated "Transfer A → B". */
   notes: string | null;
   createdAt: string;
+  /** The two legs moved different amounts: the ledger needs a look. */
+  mismatch: boolean;
 }
+
+/**
+ * The name shown for a side whose leg is not in this station's movements. Both
+ * legs carry the station today, so this is a fallback: the partner is an
+ * account shared by the organization, not one of this station's.
+ */
+export const ORG_ACCOUNT = 'Org account';
 
 const TRANSFER_SOURCES: Record<string, TransferKind> = {
   DEPOSIT: 'deposit',
@@ -76,32 +97,42 @@ const generatedNote = (kind: TransferKind, from: string | null, to: string | nul
 
 /**
  * Pairs the two legs of every transfer and deposit (they share a
- * `transferId`), newest first. A leg whose partner is outside the list still
- * shows, with the missing side blank.
+ * `transferId`), newest first. The amount is the out leg's; `mismatch` flags
+ * legs that disagree. A leg whose partner is outside the list still shows, its
+ * other side named `ORG_ACCOUNT`.
  */
+type DraftTransfer = Omit<Transfer, 'fromName' | 'toName'> & {
+  fromName: string | null;
+  toName: string | null;
+  legs: number[];
+};
+
 export function pairTransfers(movements: readonly MovementRow[]): Transfer[] {
-  const byId = new Map<string, Transfer>();
+  const byId = new Map<string, DraftTransfer>();
   for (const m of movements) {
     const kind = TRANSFER_SOURCES[m.sourceType];
     if (!kind) continue;
     const key = m.transferId ?? m.id;
-    const t =
-      byId.get(key) ??
-      ({
-        id: key,
-        entryDate: m.entryDate,
-        kind,
-        fromName: null,
-        fromType: null,
-        toName: null,
-        toType: null,
-        amount: Number(m.amount),
-        notes: m.notes,
-        createdAt: m.createdAt,
-      } satisfies Transfer);
+    const t: DraftTransfer = byId.get(key) ?? {
+      id: key,
+      entryDate: m.entryDate,
+      kind,
+      fromName: null,
+      fromType: null,
+      toName: null,
+      toType: null,
+      amount: Number(m.amount),
+      notes: m.notes,
+      createdAt: m.createdAt,
+      mismatch: false,
+      legs: [],
+    };
+    t.legs.push(Number(m.amount));
     if (m.direction === 'out') {
       t.fromName = m.accountName;
       t.fromType = m.accountType;
+      // The amount is what left the source account.
+      t.amount = Number(m.amount);
     } else {
       t.toName = m.accountName;
       t.toType = m.accountType;
@@ -109,8 +140,11 @@ export function pairTransfers(movements: readonly MovementRow[]): Transfer[] {
     byId.set(key, t);
   }
   return [...byId.values()]
-    .map((t) => ({
+    .map(({ legs, ...t }) => ({
       ...t,
+      fromName: t.fromName ?? ORG_ACCOUNT,
+      toName: t.toName ?? ORG_ACCOUNT,
+      mismatch: legs.some((a) => Math.round(a * 100) !== Math.round(legs[0] * 100)),
       notes: t.notes && t.notes !== generatedNote(t.kind, t.fromName, t.toName) ? t.notes : null,
     }))
     .sort(

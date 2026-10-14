@@ -157,12 +157,12 @@ describe('page tabs (#540)', () => {
     expect((await tabsOf('Accounts')).selected).toContain('Daily cash book');
   });
 
-  it('Accounts: the Daily cash book shows no account actions', async () => {
+  it('Accounts: the same page actions on every tab (#530)', async () => {
     renderWithProviders(<AccountsPanel selectedStation={station} />);
     expect(await screen.findByRole('button', { name: /New account/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: /Daily cash book/ }));
-    expect(screen.queryByRole('button', { name: /New account/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Transfer/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /New account/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /New transfer/ })).toBeTruthy();
   });
 
   it('Suppliers: the new-purchase deep link opens on Purchases', async () => {

@@ -1,9 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { resolveEntryDate } from '@pump/shared';
-import { Button, Icon, Tabs, tabPanelProps, type TabItem } from '../../pump-ds/index.js';
+import {
+  Button,
+  EmptyState,
+  Icon,
+  Tabs,
+  tabPanelProps,
+  type TabItem,
+} from '../../pump-ds/index.js';
 import { useFinancialAccounts } from '../../query/hooks.js';
 import { ROUTES } from '../../nav-intent/routes.js';
-import { useNavIntent, clearNavIntent } from '../../nav-intent/store.js';
+import { useNavIntentEntry, clearNavIntent } from '../../nav-intent/store.js';
 import { accountTypeDetail } from '../../utils/ledgerLabels.js';
 import { PageFrame } from '../page-frame/index.js';
 import { DailyCashBook } from '../reports/DailyCashBook.js';
@@ -42,17 +49,28 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
   const accountsQ = useFinancialAccounts(stationId);
   const accounts = useMemo<AccountRow[]>(() => accountsQ.data ?? [], [accountsQ.data]);
 
-  // A deep link (Dashboard "Daily cash book ›", Reports › Cash & bank) is derived
-  // from the intent until the operator acts, then the page's own state takes over.
-  const intent = useNavIntent();
+  // A deep link (Dashboard "Daily cash book ›", Reports › Cash & bank) is copied
+  // into the page's own state as it arrives (during render, so the first paint
+  // is right), then cleared from the store, so leaving and coming back doesn't
+  // reopen it.
+  const { intent, token: intentToken } = useNavIntentEntry();
   const [pickedTab, setPickedTab] = useState<AccountsTab>('accounts');
   const [pickedId, setPickedId] = useState<string | null>(null);
-  const activeTab: AccountsTab = intent?.openAccountId
-    ? 'accounts'
-    : (intent?.openAccountsTab ?? pickedTab);
-  const selectedId = intent?.openAccountId ?? pickedId;
-  const selected =
-    activeTab === 'accounts' ? (accounts.find((a) => a.id === selectedId) ?? null) : null;
+  const [takenToken, setTakenToken] = useState<number | null>(null);
+  const forUs = !!(intent?.openAccountId || intent?.openAccountsTab);
+  if (forUs && takenToken !== intentToken) {
+    setTakenToken(intentToken);
+    setPickedTab(intent?.openAccountId ? 'accounts' : (intent?.openAccountsTab ?? 'accounts'));
+    setPickedId(intent?.openAccountId ?? null);
+  }
+  useEffect(() => {
+    if (forUs) clearNavIntent();
+  }, [forUs, intentToken]);
+  const activeTab = pickedTab;
+  const selectedId = activeTab === 'accounts' ? pickedId : null;
+  const selected = accounts.find((a) => a.id === selectedId) ?? null;
+  // An id that matches no account once the list has loaded (a stale link).
+  const notFound = !!selectedId && !selected && accountsQ.isSuccess;
 
   const setActiveTab = (tab: AccountsTab) => {
     clearNavIntent();
@@ -73,31 +91,34 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
     setDrawer(d);
   };
 
-  const transferButton = (primary: boolean) => (
-    <Button
-      variant={primary ? 'primary' : 'secondary'}
-      size="sm"
-      leftIcon={<Icon name="arrow-left-right" size="sm" />}
-      onClick={() => open('transfer')}
-      disabled={accounts.length < 2}
-    >
-      {primary ? 'New transfer' : 'Transfer'}
-    </Button>
-  );
-
-  // One primary button per view; the Daily cash book is a read view.
-  const actions = selected ? (
+  // The same page actions on every tab (#530 review); actions on one account
+  // sit in its statement's header.
+  const actions = (
     <>
       <Button
-        variant="ghost"
+        variant="secondary"
         size="sm"
-        leftIcon={<Icon name="arrow-left" size="sm" />}
-        onClick={() => openAccount(null)}
+        leftIcon={<Icon name="plus" size="sm" />}
+        onClick={() => open('create')}
       >
-        All accounts
+        New account
       </Button>
       <Button
-        variant={selected.accountType === 'MERCHANT_CLEARING' ? 'secondary' : 'primary'}
+        variant="primary"
+        size="sm"
+        leftIcon={<Icon name="arrow-left-right" size="sm" />}
+        onClick={() => open('transfer')}
+        disabled={accounts.length < 2}
+      >
+        New transfer
+      </Button>
+    </>
+  );
+
+  const statementActions = selected && (
+    <>
+      <Button
+        variant="secondary"
         size="sm"
         leftIcon={<Icon name="plus" size="sm" />}
         onClick={() => open('entry')}
@@ -106,7 +127,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
       </Button>
       {selected.accountType === 'MERCHANT_CLEARING' && (
         <Button
-          variant="primary"
+          variant="secondary"
           size="sm"
           leftIcon={<Icon name="banknote" size="sm" />}
           onClick={() => open('settle')}
@@ -115,21 +136,20 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
         </Button>
       )}
     </>
-  ) : activeTab === 'accounts' ? (
-    <>
-      {transferButton(false)}
+  );
+
+  const backButton = (
+    <div>
       <Button
-        variant="primary"
+        variant="ghost"
         size="sm"
-        leftIcon={<Icon name="plus" size="sm" />}
-        onClick={() => open('create')}
+        leftIcon={<Icon name="arrow-left" size="sm" />}
+        onClick={() => openAccount(null)}
       >
-        New account
+        All accounts
       </Button>
-    </>
-  ) : activeTab === 'transfers' ? (
-    transferButton(true)
-  ) : undefined;
+    </div>
+  );
 
   const typeDetail = selected && accountTypeDetail(selected.name, selected.accountType);
 
@@ -165,11 +185,24 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
           ) : activeTab === 'transfers' ? (
             <TransfersView selectedStation={selectedStation} />
           ) : selected ? (
-            <AccountStatement
-              key={selected.id}
-              account={selected}
-              selectedStation={selectedStation}
-            />
+            <div className="flex flex-col gap-3">
+              {backButton}
+              <AccountStatement
+                key={selected.id}
+                account={selected}
+                selectedStation={selectedStation}
+                actions={statementActions}
+              />
+            </div>
+          ) : notFound ? (
+            <div className="flex flex-col gap-3">
+              {backButton}
+              <EmptyState
+                icon={<Icon name="wallet" size="md" />}
+                title="Account not found"
+                description="It may have been removed, or it belongs to another station."
+              />
+            </div>
           ) : (
             <AccountsList accounts={accounts} query={accountsQ} onOpen={(a) => openAccount(a.id)} />
           )}

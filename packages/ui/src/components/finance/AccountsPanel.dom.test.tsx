@@ -9,7 +9,11 @@ import { computeRange } from '../../pump-ds/index.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { formatBusinessDate, shortMonth } from '../../utils/format.js';
-import { publishNavIntent, __resetNavIntentForTests } from '../../nav-intent/store.js';
+import {
+  getNavIntentState,
+  publishNavIntent,
+  __resetNavIntentForTests,
+} from '../../nav-intent/store.js';
 import { AccountsPanel } from './AccountsPanel.js';
 
 /**
@@ -162,10 +166,42 @@ describe('Accounts › Accounts, a balance list (#530)', () => {
     expect(
       within(screen.getByTestId('section-header-accounts')).getByTestId('control-bar'),
     ).toBeTruthy();
-    expect(primaryButtons().map((b) => b.textContent)).toEqual(['New account']);
-    // Total row says what it covers.
-    expect(table.querySelector('tfoot')!.textContent).toContain('Total, all accounts');
+    // Total row says what it covers, and leaves Owner (capital) accounts out.
+    expect(table.querySelector('tfoot')!.textContent).toContain('Total cash, bank & clearing');
     expect(table.querySelector('tfoot')!.textContent).toContain('₹6,100.00');
+  });
+
+  it('the same page actions on every tab: New account (secondary), New transfer (primary)', async () => {
+    render();
+    await screen.findByRole('table');
+    const actions = () =>
+      Array.from(document.querySelectorAll('header button')).map((b) => b.textContent);
+    for (const tab of ['Accounts', 'Daily cash book', 'Transfers']) {
+      fireEvent.click(screen.getByRole('tab', { name: new RegExp(tab) }));
+      expect(actions().slice(0, 2), tab).toEqual(['New account', 'New transfer']);
+      expect(
+        primaryButtons().map((b) => b.textContent),
+        tab,
+      ).toEqual(['New transfer']);
+    }
+  });
+
+  it('leaves Owner accounts out of the total, and adds a CMS tile only with a CMS account', async () => {
+    stubApi({
+      ...API,
+      '/finance/accounts': {
+        data: [
+          ...ACCOUNTS,
+          { id: 'own', name: 'Capital', accountType: 'OWNER', balance: '90000' },
+          { id: 'cms', name: 'IOCL CMS', accountType: 'CMS', balance: '400' },
+        ],
+      },
+    });
+    render();
+    const table = await screen.findByRole('table');
+    expect(table.querySelector('tfoot')!.textContent).toContain('₹6,500.00');
+    expect(tileLabels()).toBe(4);
+    expect(screen.getByText('CMS receivable')).toBeTruthy();
   });
 
   it('shows every account type as a neutral chip; only a negative balance reads red', async () => {
@@ -229,16 +265,42 @@ describe('Accounts › an account statement (#530)', () => {
     expect(screen.getByText('Now')).toBeTruthy();
     expect(screen.getByRole('button', { name: /Statement period/ })).toBeTruthy();
     expect(table.querySelector('tfoot')!.textContent).toContain('₹5,000.00');
-    expect(primaryButtons().map((b) => b.textContent)).toEqual(['Add entry']);
+    // Its own actions sit in the statement's header; the page keeps one primary.
+    const header = screen.getByTestId('section-header-statement');
+    expect(within(header).getByRole('button', { name: /Add entry/ })).toBeTruthy();
+    expect(within(header).queryByRole('button', { name: /Settle to bank/ })).toBeNull();
+    expect(primaryButtons().map((b) => b.textContent)).toEqual(['New transfer']);
     expect(document.body.textContent).not.toMatch(ISO_DATE);
   });
 
-  it('a clearing account has one primary button, Settle to bank', async () => {
+  it('picks the deep link up once: leaving and coming back shows the list', async () => {
+    act(() => publishNavIntent({ openAccountId: 'sbi' }));
+    const first = render();
+    await screen.findByRole('table', { name: 'SBI Current statement' });
+    await waitFor(() => expect(getNavIntentState().intent).toBeNull());
+    // Still on the statement after the intent is cleared.
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('SBI Current');
+    first.unmount();
+    render();
+    expect(await screen.findByRole('row', { name: 'SBI Current statement' })).toBeTruthy();
+  });
+
+  it('says "Account not found" for an id that matches no account', async () => {
+    act(() => publishNavIntent({ openAccountId: 'gone' }));
+    render();
+    expect(await screen.findByText('Account not found')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /All accounts/ }));
+    expect(await screen.findByRole('row', { name: 'SBI Current statement' })).toBeTruthy();
+  });
+
+  it('a clearing account adds Settle to bank to the statement header', async () => {
     stubApi({ ...API, '/finance/accounts/pos/ledger': { data: { ...LEDGER, entries: [] } } });
     act(() => publishNavIntent({ openAccountId: 'pos' }));
     render();
     await screen.findByText('Account statement');
-    expect(primaryButtons().map((b) => b.textContent)).toEqual(['Settle to bank']);
+    const header = await screen.findByTestId('section-header-statement');
+    expect(within(header).getByRole('button', { name: /Settle to bank/ })).toBeTruthy();
+    expect(within(header).getByRole('button', { name: /Add entry/ })).toBeTruthy();
   });
 
   it("the statement's own Retry when its ledger can't load", async () => {
@@ -255,17 +317,47 @@ describe('Accounts › Transfers (#530)', () => {
     act(() => publishNavIntent({ openAccountsTab: 'transfers' }));
     render();
     const table = await screen.findByRole('table');
-    expect(primaryButtons().map((b) => b.textContent)).toEqual(['New transfer']);
-    expect(within(table).getAllByRole('row')).toHaveLength(4); // header, 2 transfers, total
-    expect(table.querySelector('tfoot')!.textContent).toContain('₹2,200.00');
+    expect(within(table).getAllByRole('row')).toHaveLength(3); // header, 2 transfers
+    // No total for All: the owner rule is a total only when filtered.
+    expect(table.querySelector('tfoot')).toBeNull();
     expect(screen.getAllByText(monthName)).toHaveLength(2);
     expect(screen.getByText('Today')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('radio', { name: 'Deposits, 1' }));
-    expect(within(table).getAllByRole('row')).toHaveLength(3);
-    expect(table.querySelector('tfoot')!.textContent).toContain('Total excl. transfers');
+    expect(within(table).getAllByRole('row')).toHaveLength(3); // header, 1 deposit, total
+    expect(table.querySelector('tfoot')!.textContent).toContain('Total of 1 shown');
     expect(table.querySelector('tfoot')!.textContent).toContain('₹1,500.00');
     expect(document.body.textContent).not.toMatch(ISO_DATE);
+  });
+});
+
+describe('Accounts › Transfers, odd legs (#572 review)', () => {
+  it('names a missing side "Org account" and flags legs that disagree', async () => {
+    stubApi({
+      ...API,
+      '/finance/movements': {
+        data: {
+          openings: [],
+          movements: [
+            // Only this station's leg: its partner is an org-shared account.
+            leg('o1', 't9', 'sbi', 'out', 900, 'TRANSFER'),
+            // Two legs that moved different amounts.
+            leg('x1', 't8', 'cash', 'out', 400, 'TRANSFER'),
+            { ...leg('x2', 't8', 'bob', 'in', 390, 'TRANSFER') },
+          ],
+        },
+      },
+    });
+    act(() => publishNavIntent({ openAccountsTab: 'transfers' }));
+    render();
+    const table = await screen.findByRole('table');
+    const lone = within(table).getByText('Org account').closest('tr')!;
+    const cells = Array.from(lone.querySelectorAll('td')).map((td) => td.textContent);
+    // Entry date · Kind · From · To · Notes · Amount
+    expect(cells.slice(2, 4)).toEqual(['SBI Current', 'Org account']);
+    const odd = within(table).getByText('Variance').closest('tr')!;
+    expect(odd.textContent).toContain('₹400.00');
+    expect(within(table).getAllByText('Variance')).toHaveLength(1);
   });
 });
 

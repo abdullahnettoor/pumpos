@@ -30,6 +30,21 @@ describe('ControlBar', () => {
     expect(bar.className).toContain('flex-wrap');
   });
 
+  it('puts section actions in the end group, before export and info (#530)', () => {
+    render(
+      <ControlBar
+        info={<span>i</span>}
+        exportMenu={<span>Export</span>}
+        actions={<button type="button">Add entry</button>}
+        range={<span>Range</span>}
+      />,
+    );
+    const bar = screen.getByTestId('control-bar');
+    expect(slotsOf(bar)).toEqual(['range', 'actions', 'exportMenu', 'info']);
+    const end = screen.getByText('Export').closest('[data-slot]')!.parentElement!;
+    expect(end.contains(screen.getByRole('button', { name: 'Add entry' }))).toBe(true);
+  });
+
   it('leaves out empty slots', () => {
     render(<ControlBar range={<span>Range</span>} filters={null} />);
     expect(slotsOf(screen.getByTestId('control-bar'))).toEqual(['range']);

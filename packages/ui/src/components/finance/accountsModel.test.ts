@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { accountTypeDetail } from '../../utils/ledgerLabels.js';
 import {
+  ORG_ACCOUNT,
   accountBalances,
   accountFlows,
   pairTransfers,
@@ -47,7 +48,13 @@ describe('accountBalances', () => {
         { id: '6', name: 'CMS', accountType: 'CMS', balance: '999' },
         { id: '7', name: 'Owner', accountType: 'OWNER', balance: '999' },
       ]),
-    ).toEqual({ cash: 120.5, bank: 450, clearing: 30 });
+    ).toEqual({ cash: 120.5, bank: 450, clearing: 30, cms: 999, hasCms: true, working: 1599.5 });
+  });
+
+  it('has no CMS when the station has no CMS account', () => {
+    expect(
+      accountBalances([{ id: '1', name: 'Cash', accountType: 'CASH_IN_HAND', balance: '5' }]),
+    ).toMatchObject({ cms: 0, hasCms: false, working: 5 });
   });
 });
 
@@ -116,9 +123,25 @@ describe('pairTransfers', () => {
     expect(d.notes).toBeNull();
   });
 
-  it('keeps a leg whose partner is outside the list, with the other side blank', () => {
-    const [t] = pairTransfers([leg({ id: '1', direction: 'in', accountName: 'SBI' })]);
-    expect(t).toMatchObject({ fromName: null, toName: 'SBI' });
+  it('names the other side "Org account" when its leg is outside the station (an org-shared account)', () => {
+    const [into] = pairTransfers([leg({ id: '1', direction: 'in', accountName: 'SBI' })]);
+    expect(into).toMatchObject({ fromName: ORG_ACCOUNT, toName: 'SBI', mismatch: false });
+    const [out] = pairTransfers([leg({ id: '2', direction: 'out', accountName: 'SBI' })]);
+    expect(out).toMatchObject({ fromName: 'SBI', toName: ORG_ACCOUNT });
+    expect(ORG_ACCOUNT).toBe('Org account');
+  });
+
+  it('flags legs whose amounts differ, and reads the amount that left the source', () => {
+    const [t] = pairTransfers([
+      leg({ id: '1', direction: 'in', amount: '90', accountName: 'SBI' }),
+      leg({ id: '2', direction: 'out', amount: '100' }),
+    ]);
+    expect(t).toMatchObject({ amount: 100, mismatch: true });
+    const [ok] = pairTransfers([
+      leg({ id: '1', direction: 'in', amount: '100.00', accountName: 'SBI' }),
+      leg({ id: '2', direction: 'out', amount: '100' }),
+    ]);
+    expect(ok.mismatch).toBe(false);
   });
 });
 
