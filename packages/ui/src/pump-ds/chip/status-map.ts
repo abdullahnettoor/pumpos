@@ -128,6 +128,7 @@ export const STATUS_MAP: Record<PumpStatus, StatusMeta> = {
   'over-limit': vocab('over-limit', AlertCircle),
   voided: vocab('voided', Ban),
   adjustment: vocab('adjustment', Scale),
+  'awaiting-decantation': vocab('awaiting-decantation', Hourglass),
   settled: { label: 'Settled', tone: 'success', icon: CheckCircle },
   overpaid: { label: 'Overpaid', tone: 'info', icon: TrendingUp },
 

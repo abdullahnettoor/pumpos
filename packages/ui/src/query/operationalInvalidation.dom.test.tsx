@@ -69,6 +69,8 @@ describe('useInvalidateOperational', () => {
       // Payables move with every purchase and supplier payment, like a supplier's balance.
       'payables',
       'supplier-statement',
+      // The Suppliers → Payments tab lists every Supplier Payment.
+      'supplier-payments',
       // Insights part 2: closed-day Shift Summaries, Tank Dips, Credit Sales and
       // (by Entry Date) Collections all move with a write.
       'insights-attendant-variance',

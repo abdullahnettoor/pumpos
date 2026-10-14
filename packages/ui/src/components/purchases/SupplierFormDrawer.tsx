@@ -26,7 +26,7 @@ export const SupplierFormDrawer: React.FC<SupplierFormDrawerProps> = ({
   <Drawer
     isOpen={isOpen}
     onClose={onClose}
-    title={rest.editingSupplier ? 'Edit Supplier' : 'Register New Supplier'}
+    title={rest.editingSupplier ? 'Edit supplier' : 'Add supplier'}
   >
     {/*
      * `Drawer` renders nothing while closed, so the form below unmounts on close
@@ -105,23 +105,17 @@ const SupplierForm: React.FC<Omit<SupplierFormDrawerProps, 'isOpen'>> = ({
   };
 
   return (
-    <Form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <Form onSubmit={onSubmit} className="flex flex-col gap-4">
       {error && (
         <div
-          style={{
-            backgroundColor: 'var(--state-danger-bg)',
-            color: 'var(--state-danger-fg)',
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-            border: '1px solid var(--border-soft)',
-          }}
+          role="alert"
+          className="rounded-input border border-border-soft bg-danger-bg px-3 py-2 text-[12px] text-danger-fg"
         >
           {error}
         </div>
       )}
 
-      <Field label="Supplier Name" required>
+      <Field label="Supplier name" required>
         <TextInput
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -130,7 +124,7 @@ const SupplierForm: React.FC<Omit<SupplierFormDrawerProps, 'isOpen'>> = ({
         />
       </Field>
 
-      <Field label="Phone Number">
+      <Field label="Phone number">
         <TextInput
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
@@ -140,24 +134,15 @@ const SupplierForm: React.FC<Omit<SupplierFormDrawerProps, 'isOpen'>> = ({
       </Field>
 
       <div
-        style={{
-          borderTop: '1px solid var(--border-soft)',
-          paddingTop: '12px',
-          marginTop: '4px',
-        }}
+        role="group"
+        aria-labelledby="supplier-gst-heading"
+        className="flex flex-col border-t border-border-soft pt-3"
       >
-        <h4
-          style={{
-            fontSize: '12px',
-            fontWeight: 600,
-            color: 'var(--text-strong)',
-            margin: '0 0 12px',
-          }}
-        >
-          GST &amp; Tax Registration (Optional B2B)
+        <h4 id="supplier-gst-heading" className="mb-3 text-[12px] font-semibold text-ink-strong">
+          GST &amp; tax registration (optional, B2B)
         </h4>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+        <div className="grid grid-cols-2 gap-x-3">
           <Field label="GSTIN">
             <TextInput
               value={gstin}
@@ -176,52 +161,46 @@ const SupplierForm: React.FC<Omit<SupplierFormDrawerProps, 'isOpen'>> = ({
           </Field>
         </div>
 
-        <Field label="Trade Name">
+        <Field label="Trade name">
           <TextInput
             value={tradeName}
             onChange={(e) => setTradeName(e.target.value)}
             disabled={submitting}
-            placeholder="Business Trade Name"
+            placeholder="Business trade name"
           />
         </Field>
 
-        <Field label="Billing Address">
+        <Field label="Billing address">
           <Textarea
             rows={2}
             value={billingAddress}
             onChange={(e) => setBillingAddress(e.target.value)}
             disabled={submitting}
-            placeholder="Full Billing Address"
+            placeholder="Full billing address"
           />
         </Field>
       </div>
 
       {!editingSupplier && (
         <div
-          style={{
-            borderTop: '1px solid var(--border-soft)',
-            paddingTop: '12px',
-            marginTop: '4px',
-          }}
+          role="group"
+          aria-labelledby="supplier-opening-heading"
+          className="flex flex-col border-t border-border-soft pt-3"
         >
           <h4
-            style={{
-              fontSize: '12px',
-              fontWeight: 600,
-              color: 'var(--text-strong)',
-              margin: '0 0 4px',
-            }}
+            id="supplier-opening-heading"
+            className="mb-1 text-[12px] font-semibold text-ink-strong"
           >
-            Opening Balance (Optional)
+            Opening balance (optional)
           </h4>
-          <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 12px' }}>
+          <p className="mb-3 text-[12px] text-ink-muted">
             Amount already owed to this supplier before PumpOS. Recorded as an opening payable (not
             a purchase), so it counts toward their balance but stays out of purchases &amp; P&amp;L.{' '}
-            <strong>Enter carefully — it can’t be edited later</strong> (correct it with a ledger
-            adjustment instead).
+            <strong className="text-ink-default">Enter carefully: it can’t be edited later</strong>{' '}
+            (correct it with a ledger adjustment instead).
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
-            <Field label="Opening Due (₹)">
+          <div className="grid grid-cols-2 gap-x-3">
+            <Field label="Opening due (₹)">
               <TextInput
                 type="number"
                 min="0"
@@ -232,7 +211,7 @@ const SupplierForm: React.FC<Omit<SupplierFormDrawerProps, 'isOpen'>> = ({
                 disabled={submitting}
               />
             </Field>
-            <Field label="As of Date" hint="Defaults to today">
+            <Field label="As of date" hint="Defaults to today">
               <TextInput
                 type="date"
                 max={new Date().toLocaleDateString('en-CA')}
@@ -245,18 +224,16 @@ const SupplierForm: React.FC<Omit<SupplierFormDrawerProps, 'isOpen'>> = ({
         </div>
       )}
 
-      <div style={{ marginTop: '4px' }}>
-        <Checkbox
-          label="Supplier Active"
-          checked={isActive}
-          onChange={(e) => setIsActive(e.target.checked)}
-          disabled={submitting}
-        />
-      </div>
+      <Checkbox
+        label="Supplier active"
+        checked={isActive}
+        onChange={(e) => setIsActive(e.target.checked)}
+        disabled={submitting}
+      />
 
-      <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+      <div className="mt-2 flex gap-2.5">
         <Button type="submit" variant="primary" fullWidth loading={submitting}>
-          Save Supplier
+          Save supplier
         </Button>
         <Button type="button" variant="secondary" fullWidth disabled={submitting} onClick={onClose}>
           Cancel

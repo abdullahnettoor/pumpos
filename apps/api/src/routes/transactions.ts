@@ -2168,6 +2168,76 @@ transactionsRouter.get('/purchases/gst-register', async (c) => {
   return c.json({ success: true, data });
 });
 
+/**
+ * GET /transactions/supplier-payments?stationId=&from=&to= — the Supplier
+ * Payments, newest Entry Date first, each with its supplier and the Funding
+ * Account it came from. Backs the Suppliers → Payments tab (#528). Office
+ * Records (ADR 0005): dated by Entry Date, never a shift; `from`/`to` bound the
+ * Entry Date (inclusive). Read-only; open to the Roles that record them
+ * (`canRecordPurchase`), scoped to stations like the purchases list.
+ */
+transactionsRouter.get('/supplier-payments', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!canRecordPurchase(user.role))
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to view supplier payments' },
+      },
+      403,
+    );
+  const stationId = c.req.query('stationId');
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  if (
+    stationId &&
+    !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })
+  )
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
+  const t = schema.supplierTransactions;
+  const stationScope = stationId
+    ? eq(t.stationId, stationId)
+    : user.role === 'Owner'
+      ? undefined
+      : user.assignedStationIds.length
+        ? inArray(t.stationId, user.assignedStationIds)
+        : sql`false`;
+  const rows = await db
+    .select({
+      id: t.id,
+      stationId: t.stationId,
+      supplierId: t.supplierId,
+      entryDate: t.entryDate,
+      amount: t.amount,
+      notes: t.notes,
+      createdAt: t.createdAt,
+      supplierName: schema.suppliers.name,
+      accountName: schema.financialAccounts.name,
+      accountType: schema.financialAccounts.accountType,
+    })
+    .from(t)
+    .leftJoin(schema.suppliers, eq(schema.suppliers.id, t.supplierId))
+    .leftJoin(schema.financialAccounts, eq(schema.financialAccounts.id, t.fundingAccountId))
+    .where(
+      and(
+        eq(t.organizationId, user.organizationId),
+        eq(t.transactionType, 'Payment'),
+        stationScope,
+        from ? gte(t.entryDate, from) : undefined,
+        to ? lte(t.entryDate, to) : undefined,
+      ),
+    )
+    .orderBy(desc(t.entryDate), desc(t.createdAt));
+  return c.json({
+    success: true,
+    data: rows.map((r) => ({ ...r, supplierName: r.supplierName ?? 'Unknown Supplier' })),
+  });
+});
+
 transactionsRouter.get('/collections', async (c) => {
   const db = c.var.db;
   const user = c.var.user;

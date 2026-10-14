@@ -41,6 +41,7 @@ import type {
   FuelPrice,
   FundingAccount,
   ProfitLossReport,
+  SupplierPaymentRow,
 } from '../services/cloud.js';
 import type {
   AccessDocument,
@@ -126,6 +127,8 @@ export const queryKeys = {
   purchases: (stationId?: string) =>
     stationId ? (['purchases', stationId] as const) : (['purchases'] as const),
   purchaseItems: (purchaseId: string) => ['purchase-items', purchaseId] as const,
+  supplierPayments: (stationId: string, from = '', to = '') =>
+    ['supplier-payments', stationId, from, to] as const,
   decantations: (stationId: string, status = '') => ['decantations', stationId, status] as const,
   collections: () => ['collections'] as const,
   creditSales: () => ['credit-sales'] as const,
@@ -831,6 +834,29 @@ export function usePurchases(stationId = '', options?: Options<any[]>) {
   });
 }
 
+/**
+ * Supplier Payments of a station over an Entry Date range (Suppliers →
+ * Payments). Operational tier; the range is in the key, so a new range fetches
+ * at once and a tile reading the month shares the ledger's cache when they match.
+ */
+export function useSupplierPayments(
+  params: { stationId?: string | null; from?: string; to?: string },
+  options?: Options<SupplierPaymentRow[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.supplierPayments(params.stationId ?? '', params.from, params.to),
+    queryFn: () =>
+      txService.getSupplierPayments({
+        stationId: params.stationId!,
+        from: params.from,
+        to: params.to,
+      }),
+    enabled: !!params.stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 export function usePurchaseItems(purchaseId: string | null, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.purchaseItems(purchaseId ?? ''),
@@ -1408,6 +1434,7 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['expenses'] }),
       qc.invalidateQueries({ queryKey: ['income'] }),
       qc.invalidateQueries({ queryKey: ['purchases'] }),
+      qc.invalidateQueries({ queryKey: ['supplier-payments'] }),
       // Decantations and the Fuel Purchases they link to move together (#469).
       qc.invalidateQueries({ queryKey: ['decantations'] }),
       qc.invalidateQueries({ queryKey: ['linkable-purchases'] }),
