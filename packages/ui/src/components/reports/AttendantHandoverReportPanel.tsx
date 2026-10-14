@@ -79,17 +79,39 @@ const DispenserDetail: React.FC<{ dispenser: AttendantReportDispenser }> = ({ di
     <StatementTable
       label={`${dispenser.duName} nozzle readings`}
       columns={[
-        { header: 'Nozzle', cell: (n) => n.nozzleName },
-        { header: 'Product', cell: (n) => n.productName ?? '—' },
-        { header: 'Opening', align: 'right', cell: (n) => formatQty(n.openingReading, 3) },
-        { header: 'Closing', align: 'right', cell: (n) => formatQty(n.closingReading, 3) },
+        // Readings print bare to 3 places (the header carries the litres);
+        // moving them to formatQuantity is the reports area ticket's call.
+        { id: 'nozzle', header: 'Nozzle', kind: 'text', value: (n) => n.nozzleName },
+        { id: 'product', header: 'Product', kind: 'text', value: (n) => n.productName },
         {
+          id: 'opening',
+          header: 'Opening',
+          kind: 'qty',
+          value: (n) => n.openingReading,
+          cell: (n) => formatQty(n.openingReading, 3),
+        },
+        {
+          id: 'closing',
+          header: 'Closing',
+          kind: 'qty',
+          value: (n) => n.closingReading,
+          cell: (n) => formatQty(n.closingReading, 3),
+        },
+        {
+          id: 'volume',
           header: 'Volume',
-          align: 'right',
-          strong: true,
+          kind: 'qty',
+          emphasis: true,
+          value: (n) => n.volumeSold,
           cell: (n) => formatQty(n.volumeSold, 3),
         },
-        { header: 'Testing', align: 'right', cell: (n) => formatQty(n.testingVolume, 3) },
+        {
+          id: 'testing',
+          header: 'Testing',
+          kind: 'qty',
+          value: (n) => n.testingVolume,
+          cell: (n) => formatQty(n.testingVolume, 3),
+        },
       ]}
       rows={dispenser.nozzles}
       rowKey={(n) => n.nozzleId}
@@ -100,10 +122,10 @@ const DispenserDetail: React.FC<{ dispenser: AttendantReportDispenser }> = ({ di
         className="mt-1"
         label={`${dispenser.duName} payment terminals`}
         columns={[
-          { header: 'Terminal', cell: (t) => t.terminalName },
-          { header: 'Batch', cell: (t) => t.batchRef || '—' },
-          { header: 'Card', align: 'right', cell: (t) => inr(t.cardAmount) },
-          { header: 'UPI', align: 'right', cell: (t) => inr(t.upiAmount) },
+          { id: 'terminal', header: 'Terminal', kind: 'text', value: (t) => t.terminalName },
+          { id: 'batch', header: 'Batch', kind: 'text', value: (t) => t.batchRef },
+          { id: 'card', header: 'Card', kind: 'money', value: (t) => t.cardAmount },
+          { id: 'upi', header: 'UPI', kind: 'money', value: (t) => t.upiAmount },
         ]}
         rows={dispenser.terminals}
         rowKey={(t) => t.terminalId}
@@ -139,15 +161,29 @@ const CreditBreakdown: React.FC<{ shift: AttendantReportShift }> = ({ shift }) =
       <StatementTable
         label="Fuel-on-credit chits"
         columns={[
-          { header: 'Customer', cell: (r) => r.customerName },
-          { header: 'Vehicle', cell: (r) => r.vehicle },
-          { header: 'Product', cell: (r) => r.product },
-          { header: 'Qty', align: 'right', cell: (r) => r.quantity },
-          { header: 'Amount', align: 'right', strong: true, cell: (r) => inr(r.amount) },
+          { id: 'customer', header: 'Customer', kind: 'text', value: (r) => r.customerName },
+          { id: 'vehicle', header: 'Vehicle', kind: 'text', value: (r) => r.vehicle },
+          { id: 'product', header: 'Product', kind: 'text', value: (r) => r.product },
+          // Already a display string from attendantCreditLines (shared with the PDF).
+          {
+            id: 'qty',
+            header: 'Qty',
+            kind: 'qty',
+            total: false,
+            value: (r) => r.quantity,
+            cell: (r) => r.quantity,
+          },
+          {
+            id: 'amount',
+            header: 'Amount',
+            kind: 'money',
+            emphasis: true,
+            value: (r) => r.amount,
+          },
         ]}
         rows={rows}
         rowKey={(r) => r.key}
-        total={['Total', '', '', '', inr(shift.creditSales)]}
+        totalRow={{ values: { amount: shift.creditSales } }}
       />
     </div>
   );

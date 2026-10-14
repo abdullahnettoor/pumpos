@@ -185,11 +185,8 @@ describe('AttendantHandoverReportPanel drawer', () => {
     const creditTable = screen.getByRole('table', { name: 'Fuel-on-credit chits' });
     const rows = within(creditTable)
       .getAllByRole('row')
-      .map((r) =>
-        within(r)
-          .queryAllByRole('cell')
-          .map((c) => c.textContent),
-      )
+      // Body cells, plus the total row's label (a row header).
+      .map((r) => Array.from(r.querySelectorAll('td, th[scope="row"]')).map((c) => c.textContent))
       .filter((cells) => cells.length > 0);
 
     // The quantity carries its unit, as the exported PDF has always printed
@@ -260,11 +257,8 @@ describe('AttendantHandoverReportPanel drawer', () => {
     const creditTable = screen.getByRole('table', { name: 'Fuel-on-credit chits' });
     const rows = within(creditTable)
       .getAllByRole('row')
-      .map((r) =>
-        within(r)
-          .queryAllByRole('cell')
-          .map((c) => c.textContent),
-      )
+      // Body cells, plus the total row's label (a row header).
+      .map((r) => Array.from(r.querySelectorAll('td, th[scope="row"]')).map((c) => c.textContent))
       .filter((cells) => cells.length > 0);
 
     // One placeholder row carrying the money, then the total it sums to.

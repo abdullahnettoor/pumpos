@@ -267,23 +267,40 @@ const AccountDayEntries: React.FC<{
       rowKey={(e) => e.id}
       emptyMessage="No money moved through this account on this date."
       columns={[
-        { header: 'Time', cell: (e) => timeOf(e.createdAt), width: '14%', mono: true },
-        { header: 'Source', cell: (e) => ledgerSourceLabel(e.sourceType), width: '22%' },
-        { header: 'Notes', cell: (e) => e.notes || '—' },
         {
+          id: 'time',
+          header: 'Time',
+          kind: 'date',
+          width: '14%',
+          value: (e) => e.createdAt,
+          cell: (e) => timeOf(e.createdAt),
+        },
+        {
+          id: 'source',
+          header: 'Source',
+          kind: 'text',
+          width: '22%',
+          value: (e) => ledgerSourceLabel(e.sourceType),
+        },
+        { id: 'notes', header: 'Notes', kind: 'text', value: (e) => e.notes },
+        {
+          id: 'in',
           header: 'In',
-          align: 'right',
+          kind: 'money',
           width: '16%',
+          value: (e) => (e.direction === 'in' ? e.amount : null),
           cell: (e) => (e.direction === 'in' ? inr(e.amount) : ''),
         },
         {
+          id: 'out',
           header: 'Out',
-          align: 'right',
+          kind: 'money',
           width: '16%',
+          value: (e) => (e.direction === 'out' ? e.amount : null),
           cell: (e) => (e.direction === 'out' ? inr(e.amount) : ''),
         },
       ]}
-      total={['Total', '', '', inr(account.moneyIn), inr(account.moneyOut)]}
+      totalRow={{ values: { in: account.moneyIn, out: account.moneyOut } }}
     />
   </div>
 );
