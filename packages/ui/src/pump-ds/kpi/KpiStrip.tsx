@@ -1,4 +1,4 @@
-import React, { forwardRef, type HTMLAttributes } from 'react';
+import React, { Children, forwardRef, isValidElement, useEffect, type HTMLAttributes } from 'react';
 import { cn } from '../lib/cn.js';
 
 /**
@@ -13,7 +13,12 @@ import { cn } from '../lib/cn.js';
  * `columns` count when the surface needs a fixed grid (e.g. a 4-up
  * dashboard header). Container radius, border, and overflow-clip are baked
  * in so KpiTile can stay featureless.
+ *
+ * At most 4 tiles (#567): more logs a dev warning. A fifth figure belongs in
+ * the table, or the strip is repeating it.
  */
+
+export const MAX_KPI_TILES = 4;
 
 export interface KpiStripProps extends HTMLAttributes<HTMLDivElement> {
   /**
@@ -36,6 +41,15 @@ export const KpiStrip = forwardRef<HTMLDivElement, KpiStripProps>(function KpiSt
   { className, columns = 'auto', children, ...rest },
   ref,
 ) {
+  const tiles = Children.toArray(children).filter(isValidElement).length;
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production' || tiles <= MAX_KPI_TILES) return;
+    console.warn(
+      `[KpiStrip] ${tiles} tiles in one strip; the limit is ${MAX_KPI_TILES}. ` +
+        'Drop a tile or move the figure into the table.',
+    );
+  }, [tiles]);
+
   const modeClass =
     columns === 'auto'
       ? 'flex flex-wrap [&>*]:min-w-[180px] [&>*]:flex-[1_1_180px]'

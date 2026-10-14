@@ -115,10 +115,10 @@ export const DailyCashBook: React.FC<DailyCashBookProps> = ({ selectedStation })
 
       {hasCashAccounts && (
         <KpiStrip columns={4}>
-          <KpiTile dot="neutral" label="Cash opening" value={inr(cash.opening)} />
-          <KpiTile dot="success" valueTone="success" label="Cash in" value={inr(cash.moneyIn)} />
-          <KpiTile dot="danger" valueTone="danger" label="Cash out" value={inr(cash.moneyOut)} />
-          <KpiTile dot="brand" label="Cash closing" value={inr(cash.closing)} />
+          <KpiTile label="Cash opening" value={inr(cash.opening)} />
+          <KpiTile label="Cash in" value={inr(cash.moneyIn)} />
+          <KpiTile label="Cash out" value={inr(cash.moneyOut)} />
+          <KpiTile label="Cash closing" value={inr(cash.closing)} />
         </KpiStrip>
       )}
 

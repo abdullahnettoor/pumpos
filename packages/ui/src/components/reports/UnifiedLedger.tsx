@@ -91,7 +91,7 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     needsEntity: true,
     kind: 'customer',
     balanceLabel: MONEY_TERMS.receivable,
-    kpiRaises: 'Credit Sales',
+    kpiRaises: 'Credit sales',
     kpiLowers: 'Collections',
     emptyText: 'No transactions for this customer in the selected range.',
     caption:
@@ -116,7 +116,7 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     kind: 'account',
     balanceLabel: 'Balance',
     kpiRaises: 'Received',
-    kpiLowers: 'Paid Out',
+    kpiLowers: 'Paid out',
     emptyText: 'No cash movements in the selected range.',
     caption:
       'Debit = received · Credit = paid out. Recorded cash receipts & payments only — fuel/drawer reconciliation lives in the DSSR. Opening balance is carried from before the range.',
@@ -129,7 +129,7 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     kind: 'account',
     balanceLabel: 'Balance',
     kpiRaises: 'Received',
-    kpiLowers: 'Paid Out',
+    kpiLowers: 'Paid out',
     emptyText: 'No bank movements in the selected range.',
     caption:
       'Debit = received · Credit = paid out. Recorded bank/card/UPI receipts & payments. Opening balance is carried from before the range.',
@@ -141,7 +141,7 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     moneyAccount: 'Owner',
     kind: 'owner',
     balanceLabel: 'Owner Funding',
-    kpiRaises: 'Owner Funded',
+    kpiRaises: 'Owner funded',
     kpiLowers: 'Repaid / Drawn',
     emptyText: 'No owner-funded movements in the selected range.',
     caption:
@@ -422,19 +422,13 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
           </div>
 
           <KpiStrip columns="auto">
-            <KpiTile dot="neutral" label={resolvedCfg.kpiRaises} value={inr(totals.raises)} />
-            <KpiTile dot="neutral" label={resolvedCfg.kpiLowers} value={inr(totals.lowers)} />
-            {(() => {
-              const bt = resolvedCfg.balanceTone(totals.net);
-              return (
-                <KpiTile
-                  dot={bt === 'default' ? 'brand' : bt}
-                  valueTone={bt === 'default' ? undefined : bt}
-                  label={resolvedCfg.balanceLabel}
-                  value={inr(totals.net)}
-                />
-              );
-            })()}
+            <KpiTile label={resolvedCfg.kpiRaises} value={inr(totals.raises)} />
+            <KpiTile label={resolvedCfg.kpiLowers} value={inr(totals.lowers)} />
+            <KpiTile
+              alert={resolvedCfg.balanceTone(totals.net) === 'danger' ? 'danger' : undefined}
+              label={resolvedCfg.balanceLabel}
+              value={inr(totals.net)}
+            />
           </KpiStrip>
 
           <DataSection

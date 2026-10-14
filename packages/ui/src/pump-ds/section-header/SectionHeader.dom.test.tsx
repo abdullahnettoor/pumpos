@@ -45,3 +45,27 @@ describe('SectionHeader', () => {
     );
   });
 });
+
+describe('SectionHeader controls (#567)', () => {
+  it('renders a ControlBar at the right, after the title', () => {
+    render(
+      <SectionHeader
+        title="Expense ledger"
+        subtitle="7 entries"
+        controls={{
+          search: <input aria-label="Search" />,
+          range: <button type="button">Range</button>,
+        }}
+      />,
+    );
+    const header = screen.getByTestId('section-header-expense-ledger');
+    const bar = screen.getByTestId('control-bar');
+    expect(header.contains(bar)).toBe(true);
+    expect(header.lastElementChild).toBe(bar);
+    expect(bar.className).toContain('ml-auto');
+    // Fixed order regardless of prop order: range before search.
+    expect(
+      Array.from(bar.querySelectorAll('[data-slot]')).map((n) => n.getAttribute('data-slot')),
+    ).toEqual(['range', 'search']);
+  });
+});

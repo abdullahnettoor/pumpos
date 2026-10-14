@@ -193,12 +193,11 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
       />
 
       <KpiStrip columns="auto">
-        <KpiTile dot="brand" label="Merchandise Sales" value={inr(kpis.total)} />
-        <KpiTile dot="success" valueTone="success" label="Invoiced" value={String(kpis.invoiced)} />
+        <KpiTile label="Merchandise sales" value={inr(kpis.total)} />
+        <KpiTile label="Invoiced" value={String(kpis.invoiced)} />
         <KpiTile
-          dot={kpis.pending > 0 ? 'warning' : 'success'}
-          valueTone={kpis.pending > 0 ? 'warning' : undefined}
-          label="Not Invoiced"
+          alert={kpis.pending > 0 ? 'warning' : undefined}
+          label="Not invoiced"
           value={String(kpis.pending)}
         />
       </KpiStrip>

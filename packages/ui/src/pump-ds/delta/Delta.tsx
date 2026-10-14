@@ -72,6 +72,11 @@ export interface DeltaProps
    * (down still points down); only the tone flips.
    */
   invert?: boolean;
+  /**
+   * For figures where neither direction is good or bad (spend, volume): the
+   * arrow stays truthful and the tone stays neutral.
+   */
+  neutral?: boolean;
   /** Hide the leading arrow (rare — kept for cases where the sign is inside `value`). */
   showArrow?: boolean;
 }
@@ -105,13 +110,13 @@ const DashFlat = (
 );
 
 export const Delta = forwardRef<HTMLSpanElement, DeltaProps>(function Delta(
-  { className, size, value, direction, invert, showArrow = true, ...rest },
+  { className, size, value, direction, invert, neutral, showArrow = true, ...rest },
   ref,
 ) {
   const dir = direction ?? inferDirection(value);
   // Resolve tone from direction × invert.
   const tone =
-    dir === 'flat'
+    dir === 'flat' || neutral
       ? 'flat'
       : dir === 'up'
         ? invert

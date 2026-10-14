@@ -168,8 +168,6 @@ export { InfoTip } from './components/primitives/InfoTip.js';
 export type { InfoTipProps } from './components/primitives/InfoTip.js';
 export { Menu, Popover } from './components/primitives/Menu.js';
 export type { MenuProps, MenuItem, PopoverProps } from './components/primitives/Menu.js';
-export { Segmented } from './components/primitives/Segmented.js';
-export type { SegmentedProps, SegmentedOption } from './components/primitives/Segmented.js';
 export { Combobox } from './components/primitives/Combobox.js';
 export type {
   ComboboxProps,
@@ -200,6 +198,7 @@ export {
   formatDensity,
   formatTemperature,
   formatCompactMoney,
+  formatDateSpan,
 } from './utils/format.js';
 // signedMoneyParts / FigureSign / SignedFigure: the variance vocabulary (utils/variance.ts, #518) builds on them.
 export type { FigureSign, SignedFigure } from './utils/format.js';
@@ -240,6 +239,14 @@ export { PageHeader } from './pump-ds/page-header/index.js';
 export type { PageHeaderProps } from './pump-ds/page-header/index.js';
 export { SectionHeader } from './pump-ds/section-header/index.js';
 export type { SectionHeaderProps } from './pump-ds/section-header/index.js';
+export { DateRangeMenu } from './pump-ds/date-range/index.js';
+export type { DateRangeMenuProps } from './pump-ds/date-range/index.js';
+export { FilterChips } from './pump-ds/filter-chips/index.js';
+export type { FilterChipsProps, FilterChipOption } from './pump-ds/filter-chips/index.js';
+export { ExportMenu } from './pump-ds/export/index.js';
+export type { ExportMenuProps } from './pump-ds/export/index.js';
+export { ControlBar } from './pump-ds/control-bar/index.js';
+export type { ControlBarProps, ControlBarSlots } from './pump-ds/control-bar/index.js';
 export { DataSection, isAccessRefusal } from './pump-ds/data-section/index.js';
 export type {
   DataSectionProps,

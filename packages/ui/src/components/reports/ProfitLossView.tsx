@@ -107,34 +107,18 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
 
       {/* Headline KPIs (period total, or the single day) */}
       <KpiStrip columns="auto">
-        <KpiTile dot="brand" label="Revenue" value={inr(totals.revenue)} />
-        <KpiTile dot="warning" valueTone="warning" label="COGS" value={inr(totals.cogs)} />
+        <KpiTile label="Revenue" value={inr(totals.revenue)} />
+        <KpiTile label="COGS" value={inr(totals.cogs)} />
         <KpiTile
-          dot="success"
-          valueTone="success"
-          label="Gross Margin"
+          label="Gross margin"
           value={inr(totals.grossMargin)}
           hint={`${marginPct.toFixed(1)}% of revenue · by sales day`}
         />
+        <KpiTile label="Operating expenses" value={inr(totals.expenses)} hint="By entry date" />
+        {totals.otherIncome > 0 && <KpiTile label="Other income" value={inr(totals.otherIncome)} />}
         <KpiTile
-          dot="danger"
-          valueTone="danger"
-          label="Operating Expenses"
-          value={inr(totals.expenses)}
-          hint="By entry date"
-        />
-        {totals.otherIncome > 0 && (
-          <KpiTile
-            dot="success"
-            valueTone="success"
-            label="Other Income"
-            value={inr(totals.otherIncome)}
-          />
-        )}
-        <KpiTile
-          dot={totals.netProfit < 0 ? 'danger' : 'success'}
-          valueTone={totals.netProfit < 0 ? 'danger' : 'success'}
-          label="Net Profit"
+          alert={totals.netProfit < 0 ? 'danger' : undefined}
+          label="Net profit"
           value={inr(totals.netProfit)}
         />
       </KpiStrip>

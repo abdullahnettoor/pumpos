@@ -22,7 +22,6 @@ const COPY = {
     empty: 'No expenses',
     emptyRange: 'No expenses in this date range.',
     emptyTable: 'No expenses in this range.',
-    tone: 'danger' as const,
     color: 'var(--brand-danger)',
     icon: 'receipt' as const,
   },
@@ -34,7 +33,6 @@ const COPY = {
     empty: 'No income',
     emptyRange: 'No income in this date range.',
     emptyTable: 'No income in this range.',
-    tone: 'success' as const,
     color: 'var(--state-success-fg)',
     icon: 'arrow-down' as const,
   },
@@ -183,23 +181,11 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
       <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
 
       <KpiStrip columns="auto">
+        <KpiTile label={copy.total} value={inr(total)} hint={`${range.from} → ${range.to}`} />
+        <KpiTile label="Entries" value={String(active.length)} hint="in range" />
+        <KpiTile label="Categories" value={String(byCategory.length)} hint={copy.withAmount} />
         <KpiTile
-          dot={copy.tone}
-          valueTone={copy.tone}
-          label={copy.total}
-          value={inr(total)}
-          hint={`${range.from} → ${range.to}`}
-        />
-        <KpiTile dot="brand" label="Entries" value={String(active.length)} hint="in range" />
-        <KpiTile
-          dot="neutral"
-          label="Categories"
-          value={String(byCategory.length)}
-          hint={copy.withAmount}
-        />
-        <KpiTile
-          dot="warning"
-          label="Largest Category"
+          label="Largest category"
           value={byCategory[0] ? inr(byCategory[0].total) : inr(0)}
           hint={byCategory[0]?.name ?? '—'}
         />

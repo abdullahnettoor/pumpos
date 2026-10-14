@@ -11,26 +11,23 @@ export const DecantationSummary: React.FC<{ report: DecantationReport }> = ({ re
     <>
       <KpiStrip columns="auto">
         <KpiTile
-          dot="brand"
-          label="Tanker Visits"
+          label="Tanker visits"
           value={String(t.totalVisits)}
           hint={`${t.measuredVisits} measured · ${t.pendingVisits} pending`}
         />
         <KpiTile
-          dot="info"
-          label="Volume Received"
+          label="Volume received"
           value={litres(t.totalReceivedQty)}
           hint={`${formatQty(t.pendingReceivedQty, 2)} L not yet settled`}
         />
         <KpiTile
-          dot="neutral"
-          label="Settled Invoice Volume"
+          label="Settled invoice volume"
           value={litres(t.totalInvoiceQty)}
           hint={`${formatQty(t.pendingInvoiceQty, 2)} L pending · ${t.settlingInvoiceCount} settling`}
         />
         <KpiTile
-          dot={t.totalVarianceQty < 0 ? 'danger' : t.totalVarianceQty > 0 ? 'success' : 'neutral'}
-          label="Settled Invoice Variance"
+          alert={t.totalVarianceQty < 0 ? 'danger' : undefined}
+          label="Settled invoice variance"
           value={signedLitres(t.totalVarianceQty)}
           hint={
             t.totalVarianceQty < 0
@@ -41,8 +38,8 @@ export const DecantationSummary: React.FC<{ report: DecantationReport }> = ({ re
           }
         />
         <KpiTile
-          dot={t.transitDiscrepancies > 0 ? 'danger' : 'neutral'}
-          label="Transit Discrepancies"
+          alert={t.transitDiscrepancies > 0 ? 'danger' : undefined}
+          label="Transit discrepancies"
           value={String(t.transitDiscrepancies)}
           hint={`${t.totalChambersShort} short · ${t.totalChambersExcess} excess · ${t.totalSealsBroken} broken seals · ${t.totalChambersNotEmptied} unemptied`}
         />

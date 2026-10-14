@@ -223,32 +223,18 @@ export const IncomeList: React.FC<IncomeListProps> = ({
         {activeTab === 'ledger' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <KpiStrip columns="auto">
+              <KpiTile label="Received today" value={inr(kpis.todayTotal)} hint="entry date" />
               <KpiTile
-                dot="success"
-                valueTone="success"
-                label="Received Today"
-                value={inr(kpis.todayTotal)}
-                hint="entry date"
-              />
-              <KpiTile
-                dot="success"
-                valueTone="success"
-                label="Received This Month"
+                label="Received this month"
                 value={inr(kpis.monthTotal)}
                 hint={`${kpis.entriesMonth} ${kpis.entriesMonth === 1 ? 'entry' : 'entries'}`}
               />
               <KpiTile
-                dot="warning"
-                label="Into Cash in Hand / Petty"
+                label="Into cash in hand / petty"
                 value={inr(kpis.cashMonth)}
                 hint="this month"
               />
-              <KpiTile
-                dot="info"
-                label="Into Bank / Owner"
-                value={inr(kpis.otherMonth)}
-                hint="this month"
-              />
+              <KpiTile label="Into bank / owner" value={inr(kpis.otherMonth)} hint="this month" />
             </KpiStrip>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px' }}>

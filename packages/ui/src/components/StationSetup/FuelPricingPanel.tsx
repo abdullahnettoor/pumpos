@@ -314,7 +314,6 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
                 {currentPrices.map((cp) => (
                   <KpiTile
                     key={cp.productId}
-                    dot="brand"
                     label={`${cp.productName} · ${cp.productCode}`}
                     value={`${inr(cp.price)}/${(products || []).find((p: any) => p.id === cp.productId)?.unit || 'L'}`}
                     hint={
@@ -435,22 +434,10 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
         {activeTab === 'merchandise' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <KpiStrip columns="auto">
+              <KpiTile label="Products" value={String(merchKpis.total)} hint="non-fuel, active" />
+              <KpiTile label="Priced" value={String(merchKpis.priced)} hint="MRP set" />
               <KpiTile
-                dot="brand"
-                label="Products"
-                value={String(merchKpis.total)}
-                hint="non-fuel, active"
-              />
-              <KpiTile
-                dot="success"
-                valueTone="success"
-                label="Priced"
-                value={String(merchKpis.priced)}
-                hint="MRP set"
-              />
-              <KpiTile
-                dot={merchKpis.unpriced > 0 ? 'warning' : 'success'}
-                valueTone={merchKpis.unpriced > 0 ? 'warning' : undefined}
+                alert={merchKpis.unpriced > 0 ? 'warning' : undefined}
                 label="Unpriced"
                 value={String(merchKpis.unpriced)}
                 hint="no MRP"

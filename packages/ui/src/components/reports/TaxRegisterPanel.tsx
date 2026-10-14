@@ -89,18 +89,11 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({
 
       <KpiStrip columns="auto">
         <KpiTile
-          dot="brand"
-          valueTone="brand"
           label="Output GST (merchandise)"
           value={inr(totals.gstOutput)}
           hint={`${gstSaleRows.length} lines`}
         />
-        <KpiTile
-          dot="warning"
-          label="Output VAT (Fuel)"
-          value={inr(totals.vat.vat)}
-          hint="no input credit"
-        />
+        <KpiTile label="Output VAT (fuel)" value={inr(totals.vat.vat)} hint="no input credit" />
       </KpiStrip>
 
       {loading ? (

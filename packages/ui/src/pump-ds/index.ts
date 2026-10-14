@@ -37,3 +37,7 @@ export * from './boot/index.js';
 export * from './segmented/index.js';
 export * from './tabs/index.js';
 export * from './section-header/index.js';
+export * from './date-range/index.js';
+export * from './filter-chips/index.js';
+export * from './export/index.js';
+export * from './control-bar/index.js';

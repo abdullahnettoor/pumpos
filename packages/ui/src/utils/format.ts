@@ -375,3 +375,36 @@ export function formatDayMonth(value: string | number | Date, timeZone?: string)
     timeZone: dateOnly ? 'UTC' : timeZone,
   });
 }
+
+/**
+ * A date span for range controls and captions (#567): `14 Oct`, `1–14 Oct`,
+ * `28 Sept – 4 Oct`, and with the years when they differ from each other or
+ * from `referenceDate`'s year (`28 Dec 2025 – 4 Jan 2026`). Business dates
+ * (`YYYY-MM-DD`) only; never shows the raw ISO form unless the input is invalid.
+ */
+export function formatDateSpan(
+  from: string,
+  to: string,
+  opts: { referenceDate?: string } = {},
+): string {
+  const parse = (iso: string) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    return m ? { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) } : null;
+  };
+  const a = parse(from);
+  const b = parse(to);
+  if (!a || !b) return `${from} – ${to}`;
+  const month = (p: { y: number; m: number }) =>
+    new Date(Date.UTC(p.y, p.m - 1, 1)).toLocaleDateString('en-IN', {
+      month: 'short',
+      timeZone: 'UTC',
+    });
+  const refYear = opts.referenceDate ? parse(opts.referenceDate)?.y : undefined;
+  const withYears = a.y !== b.y || (refYear != null && b.y !== refYear);
+  const end = `${b.d} ${month(b)}${withYears ? ` ${b.y}` : ''}`;
+  if (a.y === b.y && a.m === b.m) {
+    return a.d === b.d ? end : `${a.d}–${end}`;
+  }
+  const start = `${a.d} ${month(a)}${a.y !== b.y ? ` ${a.y}` : ''}`;
+  return `${start} – ${end}`;
+}

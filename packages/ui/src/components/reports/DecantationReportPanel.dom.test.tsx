@@ -384,11 +384,11 @@ describe('DecantationReportPanel DOM tests', () => {
     );
 
     // KPI Strip
-    expect(screen.getByText('Tanker Visits')).toBeTruthy();
-    expect(screen.getByText('Volume Received')).toBeTruthy();
-    expect(screen.getByText('Settled Invoice Volume')).toBeTruthy();
-    expect(screen.getByText('Settled Invoice Variance')).toBeTruthy();
-    expect(screen.getByText('Transit Discrepancies')).toBeTruthy();
+    expect(screen.getByText('Tanker visits')).toBeTruthy();
+    expect(screen.getByText('Volume received')).toBeTruthy();
+    expect(screen.getByText('Settled invoice volume')).toBeTruthy();
+    expect(screen.getByText('Settled invoice variance')).toBeTruthy();
+    expect(screen.getByText('Transit discrepancies')).toBeTruthy();
 
     // Totals by Product
     expect(screen.getByText('Totals by Product')).toBeTruthy();

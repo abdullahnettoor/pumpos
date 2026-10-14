@@ -706,35 +706,28 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
           {/* Headline KPIs */}
           <KpiStrip columns="auto">
             <KpiTile
-              dot="brand"
-              label="Net Fuel Volume"
+              label="Net fuel volume"
               value={`${formatQty(fuel.totalNetVolume || 0, 1)} L`}
               hint={`${snap.shiftsIncluded || 0} closed shift${snap.shiftsIncluded === 1 ? '' : 's'}`}
             />
             <KpiTile
-              dot="info"
               label="Revenue"
               value={inr(pnl.revenue || 0)}
               hint={`Fuel ${inr(pnl.revenueFuel || 0)} · Merch ${inr(pnl.revenueMerch || 0)}`}
             />
             <KpiTile
-              dot="warning"
-              valueTone="warning"
-              label="Credit Issued"
+              label="Credit issued"
               value={inr(credit.total || 0)}
               hint={`Fleet ${inr(credit.fleetCredit || 0)}`}
             />
             <KpiTile
-              dot="danger"
-              valueTone="danger"
               label="Purchases"
               value={inr(purchases.total || 0)}
               hint="Stock inflow (business-day anchored)"
             />
             <KpiTile
-              dot={Number(pnl.grossMargin || 0) < 0 ? 'danger' : 'success'}
-              valueTone={Number(pnl.grossMargin || 0) < 0 ? 'danger' : 'success'}
-              label="Gross Margin"
+              alert={Number(pnl.grossMargin || 0) < 0 ? 'danger' : undefined}
+              label="Gross margin"
               value={inr(pnl.grossMargin || 0)}
               hint={`COGS ${inr(pnl.cogs || 0)}`}
             />
