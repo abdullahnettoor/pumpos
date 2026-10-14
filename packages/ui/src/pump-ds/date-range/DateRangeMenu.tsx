@@ -78,8 +78,11 @@ export interface DateRangeMenuProps {
  *
  * Custom dates apply only when complete and plausible (year 2000 or later, not
  * after the station's today), so a year being typed (`0002`, `0020`…) never
- * reaches `onChange`. A backwards range is put the right way round on blur or
- * Enter, not while typing.
+ * reaches `onChange`. A backwards range is put the right way round only when
+ * focus leaves the From/To pair, on Enter, or when the popover closes, so
+ * tabbing from From to To never commits a half-built range. Escape discards
+ * the typed dates. The popover sits at z-index 1050 (as Combobox), above
+ * drawers.
  */
 export function DateRangeMenu({
   value,
@@ -114,6 +117,74 @@ export function DateRangeMenu({
 
   const inside = (node: Node | null) => isInside(node, rootRef, popoverRef);
 
+  // What the custom fields show. A field may hold a date still being typed;
+  // only a complete, plausible date reaches `onChange`. Mirrored in a ref so a
+  // commit fired from a blur during the same event (Escape, Tab out) or from
+  // the document listener sees the latest draft.
+  const [draft, setDraftState] = useState<DateRange>(value);
+  const draftRef = useRef<DateRange>(value);
+  const setDraft = (d: DateRange) => {
+    draftRef.current = d;
+    setDraftState(d);
+  };
+  const valueRef = useRef(value);
+  // The last range sent, so a commit from both a blur and a close sends once.
+  const sentRef = useRef(value);
+  // A new value from outside (a preset, the parent) replaces the draft.
+  const [shown, setShown] = useState<DateRange>(value);
+  if (shown.from !== value.from || shown.to !== value.to) {
+    setShown(value);
+    setDraftState(value);
+  }
+  // Keyed on the dates, not the object, so a parent re-render passing an equal
+  // range never wipes a draft being typed.
+  const { from: valueFrom, to: valueTo } = value;
+  useLayoutEffect(() => {
+    const v = { from: valueFrom, to: valueTo };
+    valueRef.current = v;
+    draftRef.current = v;
+  }, [valueFrom, valueTo]);
+  const fromRef = useRef<HTMLInputElement>(null);
+  const toRef = useRef<HTMLInputElement>(null);
+
+  const plausible = (d: string) => ISO_DATE.test(d) && d >= MIN_DATE && d <= today;
+  const same = (a: DateRange, b: DateRange) => a.from === b.from && a.to === b.to;
+
+  const apply = (next: DateRange) => {
+    if (same(next, valueRef.current) || same(next, sentRef.current)) return;
+    sentRef.current = next;
+    setPicked('custom');
+    onChange(next);
+  };
+
+  const typeCustom = (patch: Partial<DateRange>) => {
+    const next = { ...draftRef.current, ...patch };
+    setDraft(next);
+    // Applied at once only when both ends are plausible and in order.
+    if (plausible(next.from) && plausible(next.to) && next.from <= next.to) apply(next);
+  };
+
+  // When focus leaves the From/To pair, on Enter, or when the popover closes:
+  // put a backwards range the right way round, and drop anything implausible
+  // back to the applied value.
+  const commitCustom = () => {
+    const d = draftRef.current;
+    if (!plausible(d.from) || !plausible(d.to)) {
+      setDraft(valueRef.current);
+      return;
+    }
+    const next = d.from <= d.to ? d : { from: d.to, to: d.from };
+    setDraft(next);
+    apply(next);
+  };
+  const commitRef = useRef(commitCustom);
+  useLayoutEffect(() => {
+    commitRef.current = commitCustom;
+  });
+
+  // Escape throws the typed dates away.
+  const discardCustom = () => setDraft(valueRef.current);
+
   // Fixed under the button (above it when there is no room below), lined up
   // with the button's start or end edge.
   const place = useCallback(() => {
@@ -144,7 +215,10 @@ export function DateRangeMenu({
     };
   }, [open, place]);
 
+  // Closing commits the custom draft (Escape discards it first; a preset
+  // replaces it).
   const close = (returnFocus: boolean) => {
+    commitCustom();
     setOpen(false);
     if (returnFocus) triggerRef.current?.focus();
   };
@@ -153,7 +227,9 @@ export function DateRangeMenu({
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent | MouseEvent) => {
-      if (!isInside(e.target as Node, rootRef, popoverRef)) setOpen(false);
+      if (isInside(e.target as Node, rootRef, popoverRef)) return;
+      commitRef.current();
+      setOpen(false);
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
@@ -169,13 +245,19 @@ export function DateRangeMenu({
     itemRefs.current[activeIndex]?.focus();
   }, [open, activeIndex]);
   const openMenu = () => {
+    // Each opening starts from the applied range.
+    setDraft(value);
+    sentRef.current = value;
     focusOnOpen.current = true;
     setOpen(true);
   };
 
   const choose = (p: RangePreset) => {
+    const range = rangeOf(p);
     setPicked(p);
-    onChange(rangeOf(p));
+    setDraft(range);
+    sentRef.current = range;
+    onChange(range);
     close(true);
   };
 
@@ -215,6 +297,7 @@ export function DateRangeMenu({
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
+      discardCustom();
       close(true);
       return;
     }
@@ -226,53 +309,16 @@ export function DateRangeMenu({
       itemRefs.current[activeIndex]?.focus();
     } else if ((e.shiftKey && inMenu) || (!e.shiftKey && target === toRef.current)) {
       e.preventDefault();
-      // Leaving To blurs it, which commits the custom range.
       close(true);
     }
   };
 
   const onPopoverBlur = (e: React.FocusEvent<HTMLDivElement>) => {
     const next = e.relatedTarget as Node | null;
-    if (next && !inside(next)) setOpen(false);
-  };
-
-  // What the custom fields show. A field may hold a date still being typed;
-  // only a complete, plausible date reaches `onChange`.
-  const [draft, setDraft] = useState<DateRange>(value);
-  // A new value from outside (a preset, the parent) replaces the draft.
-  const [shown, setShown] = useState<DateRange>(value);
-  if (shown.from !== value.from || shown.to !== value.to) {
-    setShown(value);
-    setDraft(value);
-  }
-  const fromRef = useRef<HTMLInputElement>(null);
-  const toRef = useRef<HTMLInputElement>(null);
-
-  const plausible = (d: string) => ISO_DATE.test(d) && d >= MIN_DATE && d <= today;
-
-  const apply = (next: DateRange) => {
-    if (next.from === value.from && next.to === value.to) return;
-    setPicked('custom');
-    onChange(next);
-  };
-
-  const typeCustom = (patch: Partial<DateRange>) => {
-    const next = { ...draft, ...patch };
-    setDraft(next);
-    // Applied at once only when both ends are plausible and in order.
-    if (plausible(next.from) && plausible(next.to) && next.from <= next.to) apply(next);
-  };
-
-  // On blur or Enter: put a backwards range the right way round, and drop
-  // anything implausible back to the applied value.
-  const commitCustom = () => {
-    if (!plausible(draft.from) || !plausible(draft.to)) {
-      setDraft(value);
-      return;
+    if (next && !inside(next)) {
+      commitCustom();
+      setOpen(false);
     }
-    const next = draft.from <= draft.to ? draft : { from: draft.to, to: draft.from };
-    setDraft(next);
-    apply(next);
   };
 
   const onFieldKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -280,6 +326,14 @@ export function DateRangeMenu({
       e.preventDefault();
       commitCustom();
     }
+  };
+
+  // Moving between From and To keeps building the range; leaving the pair
+  // (or closing the popover) commits it.
+  const onFieldBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const next = e.relatedTarget;
+    if (next != null && (next === fromRef.current || next === toRef.current)) return;
+    commitCustom();
   };
 
   return (
@@ -312,7 +366,7 @@ export function DateRangeMenu({
             ref={popoverRef}
             style={position}
             className={cn(
-              'z-50 w-[320px] rounded-card border border-border-soft bg-surface p-1.5',
+              'z-[1050] w-[320px] rounded-card border border-border-soft bg-surface p-1.5',
               'shadow-[0_8px_24px_rgba(24,32,26,0.12)]',
             )}
             onKeyDown={onPopoverKeyDown}
@@ -361,7 +415,7 @@ export function DateRangeMenu({
                   ref={fromRef}
                   value={draft.from}
                   onChange={(e) => typeCustom({ from: e.target.value })}
-                  onBlur={commitCustom}
+                  onBlur={onFieldBlur}
                   onKeyDown={onFieldKeyDown}
                 />
               </label>
@@ -374,7 +428,7 @@ export function DateRangeMenu({
                   ref={toRef}
                   value={draft.to}
                   onChange={(e) => typeCustom({ to: e.target.value })}
-                  onBlur={commitCustom}
+                  onBlur={onFieldBlur}
                   onKeyDown={onFieldKeyDown}
                 />
               </label>

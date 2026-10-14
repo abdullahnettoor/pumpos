@@ -142,6 +142,65 @@ describe('DateRangeMenu', () => {
     expect(onChange).toHaveBeenLastCalledWith({ from: '2026-10-01', to: '2026-10-05' });
   });
 
+  it('does not commit From while focus moves on to To', () => {
+    const onChange = vi.fn();
+    render(<Harness initial={{ from: '2026-09-01', to: '2026-09-30' }} onChange={onChange} />);
+    fireEvent.click(trigger());
+    const from = screen.getByLabelText<HTMLInputElement>('From');
+    const to = screen.getByLabelText<HTMLInputElement>('To');
+    fireEvent.change(from, { target: { value: '2026-10-10' } });
+    // Tab from From to To: the range is still being built.
+    fireEvent.blur(from, { relatedTarget: to });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(from.value).toBe('2026-10-10');
+    fireEvent.change(to, { target: { value: '2026-10-14' } });
+    fireEvent.blur(to, { relatedTarget: from });
+    expect(onChange.mock.calls).toEqual([[{ from: '2026-10-10', to: '2026-10-14' }]]);
+    expect(trigger().textContent).toBe('Custom10–14 Oct');
+  });
+
+  it('commits the draft when the popover closes on a click outside', () => {
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} />);
+    fireEvent.click(trigger());
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-09-20' } });
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'Outside' }));
+    expect(onChange.mock.calls).toEqual([[{ from: '2026-09-20', to: '2026-10-01' }]]);
+  });
+
+  it('discards the typed draft on Escape', () => {
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} />);
+    fireEvent.click(trigger());
+    const to = screen.getByLabelText<HTMLInputElement>('To');
+    to.focus();
+    fireEvent.change(to, { target: { value: '2026-09-20' } });
+    fireEvent.keyDown(to, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(trigger());
+    expect(onChange).not.toHaveBeenCalled();
+    expect(trigger().textContent).toBe('This month1–14 Oct');
+  });
+
+  it('starts each opening from the applied range, not a stale draft', () => {
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} />);
+    fireEvent.click(trigger());
+    const to = screen.getByLabelText<HTMLInputElement>('To');
+    fireEvent.change(to, { target: { value: '0202-10-12' } });
+    fireEvent.click(trigger());
+    fireEvent.click(trigger());
+    expect(screen.getByLabelText<HTMLInputElement>('To').value).toBe('2026-10-14');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('opens above drawers (z-index 1050, as Combobox)', () => {
+    render(<Harness />);
+    fireEvent.click(trigger());
+    expect(screen.getByTestId('date-range-popover').className).toContain('z-[1050]');
+  });
+
   it('rejects a date before 2000 or after the station today, and reverts it on blur', () => {
     const onChange = vi.fn();
     render(<Harness onChange={onChange} />);
