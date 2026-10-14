@@ -21,7 +21,7 @@ import { MONEY_TERMS } from '../../utils/moneyTerms.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import { PAYMENT_COLUMNS } from './columns.js';
 import { paymentFigures, suppliersCount, type QueryOf } from './supplierFigures.js';
-import { TileSection } from './TileSection.js';
+import { TileSection } from '../customers/TileSection.js';
 
 export interface PaymentsTabProps {
   stationId: string | null;

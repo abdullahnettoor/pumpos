@@ -24,7 +24,7 @@ import {
   type QueryOf,
   type SupplierFilter,
 } from './supplierFigures.js';
-import { TileSection } from './TileSection.js';
+import { TileSection } from '../customers/TileSection.js';
 
 export interface SuppliersTabProps {
   suppliersQ: QueryOf<SupplierRow[]>;

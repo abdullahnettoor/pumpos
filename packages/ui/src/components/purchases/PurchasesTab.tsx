@@ -31,7 +31,7 @@ import {
   type PurchaseClock,
   type QueryOf,
 } from './supplierFigures.js';
-import { TileSection } from './TileSection.js';
+import { TileSection } from '../customers/TileSection.js';
 
 export interface PurchasesTabProps {
   purchasesQ: QueryOf<PurchaseRow[]>;
