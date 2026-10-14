@@ -149,6 +149,22 @@ export function formatDecantationWarningSummary(warnings: DecantationDayCloseWar
   return entries.join('; ');
 }
 
+/** `GET /transactions/supplier-payments`: one Supplier Payment (an Office Record). */
+export interface SupplierPaymentRow {
+  id: string;
+  stationId: string;
+  supplierId: string;
+  supplierName: string;
+  /** Station-calendar Entry Date, `YYYY-MM-DD`. */
+  entryDate: string;
+  amount: string | number;
+  notes: string | null;
+  createdAt: string;
+  /** The Funding Account the money left; null if it is unknown. */
+  accountName: string | null;
+  accountType: string | null;
+}
+
 export interface RecordStockCountPayload {
   stationId: string;
   actualQuantity: number;
@@ -1219,6 +1235,12 @@ export class CloudTransactionService {
     if (stationId) qs.set('stationId', stationId);
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
     return request<any[]>(`/transactions/purchases${suffix}`);
+  }
+
+  /** Supplier Payments, newest Entry Date first (Suppliers → Payments, #528). */
+  async getSupplierPayments(stationId?: string): Promise<SupplierPaymentRow[]> {
+    const suffix = stationId ? `?${new URLSearchParams({ stationId }).toString()}` : '';
+    return request<SupplierPaymentRow[]>(`/transactions/supplier-payments${suffix}`);
   }
 
   async getPurchaseItems(purchaseId: string): Promise<any[]> {

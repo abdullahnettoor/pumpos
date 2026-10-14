@@ -41,6 +41,7 @@ import type {
   FuelPrice,
   FundingAccount,
   ProfitLossReport,
+  SupplierPaymentRow,
 } from '../services/cloud.js';
 import type {
   AccessDocument,
@@ -126,6 +127,7 @@ export const queryKeys = {
   purchases: (stationId?: string) =>
     stationId ? (['purchases', stationId] as const) : (['purchases'] as const),
   purchaseItems: (purchaseId: string) => ['purchase-items', purchaseId] as const,
+  supplierPayments: (stationId: string) => ['supplier-payments', stationId] as const,
   decantations: (stationId: string, status = '') => ['decantations', stationId, status] as const,
   collections: () => ['collections'] as const,
   creditSales: () => ['credit-sales'] as const,
@@ -831,6 +833,20 @@ export function usePurchases(stationId = '', options?: Options<any[]>) {
   });
 }
 
+/** Supplier Payments of a station (Suppliers → Payments). Operational tier. */
+export function useSupplierPayments(
+  stationId: string | null | undefined,
+  options?: Options<SupplierPaymentRow[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.supplierPayments(stationId ?? ''),
+    queryFn: () => txService.getSupplierPayments(stationId!),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 export function usePurchaseItems(purchaseId: string | null, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.purchaseItems(purchaseId ?? ''),
@@ -1408,6 +1424,7 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['expenses'] }),
       qc.invalidateQueries({ queryKey: ['income'] }),
       qc.invalidateQueries({ queryKey: ['purchases'] }),
+      qc.invalidateQueries({ queryKey: ['supplier-payments'] }),
       // Decantations and the Fuel Purchases they link to move together (#469).
       qc.invalidateQueries({ queryKey: ['decantations'] }),
       qc.invalidateQueries({ queryKey: ['linkable-purchases'] }),
