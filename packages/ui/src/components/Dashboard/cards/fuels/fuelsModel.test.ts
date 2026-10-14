@@ -1,70 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_TANK_LEVEL_SETTINGS, type DensityTodayProductSummary } from '@pump/shared';
+import { DEFAULT_TANK_LEVEL_SETTINGS } from '@pump/shared';
 import {
   fuelSwatch,
-  deriveDensityState,
   deriveFuelTanks,
   derivePendingDecant,
   shouldPlanPurchase,
 } from './fuelsModel.js';
-
-const D = '2026-10-12';
-const prod = (over: Partial<DensityTodayProductSummary>): DensityTodayProductSummary => ({
-  productId: 'p1',
-  productName: 'Petrol',
-  productCode: 'MS',
-  latestToday: null,
-  todayRecorded: false,
-  trend14d: [],
-  trendValues: [],
-  lastReadings: [],
-  ...over,
-});
-const reading = (density15: number, kind = 'MORNING', businessDate = D) =>
-  ({ density15, kind, businessDate, observedTempC: 30, recordedAt: '2026-10-12T01:00:00Z' }) as any;
-
-describe('deriveDensityState', () => {
-  const trend = [
-    { date: '2026-10-11', density15: 740 },
-    { date: D, density15: 741 },
-  ];
-  it('recorded with change vs yesterday', () => {
-    const s = deriveDensityState(prod({ latestToday: reading(741), trend14d: trend }), D, 3);
-    expect(s).toMatchObject({ kind: 'recorded', change: { delta: 1, from: '2026-10-11' } });
-  });
-  it('flags a jump beyond tolerance', () => {
-    const s = deriveDensityState(prod({ latestToday: reading(746), trend14d: trend }), D, 3);
-    expect(s.kind).toBe('jump');
-  });
-  it('a decantation today explains the change', () => {
-    const s = deriveDensityState(
-      prod({
-        latestToday: reading(746),
-        trend14d: trend,
-        lastReadings: [reading(746, 'DECANTATION')],
-      }),
-      D,
-      3,
-    );
-    expect(s.kind).toBe('recorded');
-  });
-  it('not recorded keeps the last value', () => {
-    const s = deriveDensityState(
-      prod({ trend14d: [{ date: '2026-10-10', density15: 739 }] }),
-      D,
-      3,
-    );
-    expect(s).toEqual({ kind: 'not-recorded', last: 739 });
-  });
-  it('first day has no history', () => {
-    const s = deriveDensityState(
-      prod({ latestToday: reading(741), trend14d: [{ date: D, density15: 741 }] }),
-      D,
-      3,
-    );
-    expect(s.kind).toBe('no-history');
-  });
-});
 
 describe('deriveFuelTanks', () => {
   it('filters by product, computes fill, cover', () => {

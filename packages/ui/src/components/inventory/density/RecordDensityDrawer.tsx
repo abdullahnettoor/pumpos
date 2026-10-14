@@ -4,7 +4,6 @@ import { Button, Icon } from '../../../pump-ds/index.js';
 import { DensityCalculatorPopover } from '../../primitives/DensityCalculatorPopover.js';
 import {
   DEFAULT_DENSITY_METHOD,
-  DEFAULT_DENSITY_TOLERANCE_KG_M3,
   density15FromObserved,
   roundDensity,
   type DensityMethod,
@@ -21,8 +20,11 @@ export interface RecordDensityDrawerProps {
   nozzles?: Array<{ id: string; name: string; productId: string }>;
   presetProductId?: string;
   defaultMethod?: DensityMethod;
-  /** Jump tolerance (kg/m³) for the live delta chip; not used by the 15 °C solver. */
-  tolerance?: number;
+  /**
+   * The station's jump tolerance (kg/m³, `resolveDecantationSettings`) for the
+   * live delta chip; no default here. Not used by the 15 °C solver.
+   */
+  tolerance: number;
   defaultEntryMethod?: 'HYDROMETER' | 'DIRECT_15';
 }
 
@@ -36,7 +38,7 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
   nozzles = [],
   presetProductId,
   defaultMethod = DEFAULT_DENSITY_METHOD,
-  tolerance = DEFAULT_DENSITY_TOLERANCE_KG_M3,
+  tolerance,
   defaultEntryMethod = 'HYDROMETER',
 }) => {
   const [productId, setProductId] = useState<string>(presetProductId || products[0]?.id || '');
@@ -180,13 +182,8 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
       >
         {error && (
           <div
-            style={{
-              padding: '8px 12px',
-              borderRadius: 6,
-              background: 'var(--color-danger-bg, #fef2f2)',
-              color: 'var(--color-danger-fg, #b91c1c)',
-              fontSize: 13,
-            }}
+            className="rounded-md bg-danger-bg px-3 py-2 text-[13px] text-danger-fg"
+            role="alert"
           >
             {error}
           </div>
@@ -268,17 +265,7 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
 
         {/* Hydrometer Entry Fields */}
         {entryMethod === 'HYDROMETER' ? (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-              padding: 12,
-              background: 'var(--color-bg-subtle, #f9fafb)',
-              borderRadius: 8,
-              border: '1px solid var(--color-border, #e5e7eb)',
-            }}
-          >
+          <div className="flex flex-col gap-3 rounded-lg border border-border-soft bg-surface-alt p-3">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 4 }}>
@@ -326,25 +313,15 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
 
             {/* Computed 15 °C banner */}
             <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '8px 12px',
-                borderRadius: 6,
-                background: calc15 ? 'var(--color-brand-subtle, #eff6ff)' : '#f3f4f6',
-                border: '1px solid var(--color-border, #e5e7eb)',
-              }}
+              className={`flex items-center justify-between rounded-md border border-border-soft px-3 py-2 ${
+                calc15 ? 'bg-info-bg' : 'bg-surface'
+              }`}
             >
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted, #4b5563)' }}>
-                Computed density at 15 °C:
-              </span>
+              <span className="text-[12px] text-ink-muted">Computed density at 15 °C:</span>
               <strong
-                style={{
-                  fontSize: 18,
-                  fontVariantNumeric: 'tabular-nums',
-                  color: calc15 ? 'var(--color-brand, #1e40af)' : '#9ca3af',
-                }}
+                className={`font-mono text-[18px] tabular-nums ${
+                  calc15 ? 'text-info-fg' : 'text-ink-faint'
+                }`}
               >
                 {calc15 != null ? `${calc15.toFixed(2)} kg/m³` : '— — —'}
               </strong>
@@ -368,7 +345,7 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
         )}
 
         {/* Optional sampled from */}
-        <div style={{ borderTop: '1px solid var(--color-border, #e5e7eb)', paddingTop: 12 }}>
+        <div className="border-t border-border-soft pt-3">
           <label style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 6 }}>
             Sampled From (Optional)
           </label>

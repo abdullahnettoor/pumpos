@@ -149,7 +149,7 @@ describe('TimelineCard', () => {
     );
     mount();
     const bar = screen.getByTestId('timeline-bar-closed');
-    expect(bar.textContent).toBe('Shift 1 · ₹2,16,120· −₹340Opened 6 am');
+    expect(bar.textContent).toBe('Shift 1 · ₹2,16,120· −₹340Opened 6\u00a0am');
     expect(bar.querySelector('.opacity-75')?.textContent).toContain('−₹340');
   });
 
@@ -165,7 +165,7 @@ describe('TimelineCard', () => {
     expect(labels).toContain('2p');
     expect(labels.length).toBeGreaterThanOrEqual(23);
     expect(screen.getByTestId('timeline-now').className).toContain('bg-brand-danger');
-    expect(screen.getByTestId('timeline-now-label').textContent).toMatch(/\d+(:\d{2})? (am|pm)/);
+    expect(screen.getByTestId('timeline-now-label').textContent).toMatch(/\d+(:\d{2})?\s(am|pm)/);
   });
 
   it('draws the bar on the template window and marks the real opening with a chip', () => {
@@ -177,10 +177,10 @@ describe('TimelineCard', () => {
     const bar = screen.getByTestId('timeline-bar-running');
     expect(parseFloat(bar.style.left)).toBe(0);
     expect(parseFloat(bar.style.width)).toBeCloseTo(33.33, 1);
-    expect(bar.title).toContain('Opened 6:40 am');
+    expect(bar.title).toContain('Opened 6:40\u00a0am');
     expect(screen.queryByTestId('timeline-window-label')).toBeNull();
     const chip = screen.getByTestId('timeline-opening-chip');
-    expect(chip.textContent).toBe('Opened 6:40 am · 40m late');
+    expect(chip.textContent).toBe('Opened 6:40\u00a0am · 40m late');
     expect(bar.contains(chip)).toBe(true); // inside the bar, no row of its own
   });
 
@@ -188,7 +188,7 @@ describe('TimelineCard', () => {
     vi.setSystemTime(new Date('2026-10-12T06:30:00Z')); // 12:00 IST, before 2 pm end
     const first = mount();
     const live = screen.getByTestId('timeline-bar-running');
-    expect(live.textContent).toBe('Shift 1 · liveOpened 6 am');
+    expect(live.textContent).toBe('Shift 1 · liveOpened 6\u00a0am');
     expect(live.className).not.toContain('border-brand-warning');
     first.unmount();
     vi.setSystemTime(NOW); // 3 pm, past the 2 pm scheduled end
@@ -264,7 +264,7 @@ describe('TimelineCard', () => {
     );
     mount();
     expect(screen.getByTestId('timeline-bar-ghost').textContent).toBe(
-      'Shift 2 · scheduled 2:00 pm, not opened yet',
+      'Shift 2 · scheduled 2:00\u00a0pm, not opened yet',
     );
   });
 
@@ -336,11 +336,11 @@ describe('TimelineCard', () => {
     fireEvent.mouseLeave(pins[0].parentElement!);
     // Each event shows its own station-time clock (03:10Z = 8:40 am IST).
     expect(screen.getAllByTestId('timeline-pin-time').map((n) => n.textContent)).toEqual([
-      '8:40 am',
-      '8:45 am',
-      '8:50 am',
-      '8:55 am',
-      '9 am',
+      '8:40\u00a0am',
+      '8:45\u00a0am',
+      '8:50\u00a0am',
+      '8:55\u00a0am',
+      '9\u00a0am',
     ]);
     fireEvent.click(screen.getByText('HANDOVER_RECORDED 2'));
     expect(onNavigate).toHaveBeenCalledWith('/shifts', undefined);
@@ -396,7 +396,9 @@ describe('TimelineCard', () => {
     );
     mount();
     fireEvent.click(screen.getByRole('button', { name: /collapse/i }));
-    expect(screen.getByTestId('timeline-summary').textContent).toContain('Shift 2 scheduled 2 pm');
+    expect(screen.getByTestId('timeline-summary').textContent).toContain(
+      'Shift 2 scheduled 2\u00a0pm',
+    );
   });
 
   it('shows a retry when the activity feed fails', () => {

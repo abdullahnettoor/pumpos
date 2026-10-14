@@ -1,78 +1,69 @@
 import React, { useMemo, useState } from 'react';
 import { Chip, EmptyState, Panel } from '../../../pump-ds/index.js';
+import {
+  formatClockInZone,
+  formatDayMonth,
+  formatDensity,
+  formatTemperature,
+} from '../../../utils/format.js';
 import { DeltaChip } from './DeltaChip.js';
+import { DENSITY_KIND_TONE } from './densityKind.js';
 import type { DensityReadingWithContext } from '@pump/shared';
 
 export interface RegisterViewProps {
   readings: DensityReadingWithContext[];
   products: Array<{ id: string; name: string; code: string }>;
-  tolerance?: number;
+  /** The station's jump tolerance (`resolveDecantationSettings`). */
+  tolerance: number;
+  /** The station's IANA timezone; times never use the device clock. */
+  timeZone: string;
 }
+
+const TH =
+  'border-b border-border-soft bg-surface-alt px-3 py-2 text-left text-[12px] font-semibold text-ink-muted';
+const TD = 'border-b border-border-soft px-3 py-2 text-[13px] text-ink';
+const NUM = `${TD} text-right font-mono tabular-nums`;
 
 export const RegisterView: React.FC<RegisterViewProps> = ({
   readings,
   products,
-  tolerance = 3,
+  tolerance,
+  timeZone,
 }) => {
   const [selectedProduct, setSelectedProduct] = useState<string>('');
   const [selectedKind, setSelectedKind] = useState<string>('');
 
   const filtered = useMemo(() => {
-    return readings.filter((r) => {
-      if (selectedProduct && r.productId !== selectedProduct) return false;
-      if (selectedKind && r.kind !== selectedKind) return false;
+    return readings.filter((reading) => {
+      if (selectedProduct && reading.productId !== selectedProduct) return false;
+      if (selectedKind && reading.kind !== selectedKind) return false;
       return true;
     });
   }, [readings, selectedProduct, selectedKind]);
-
-  const thStyle: React.CSSProperties = {
-    padding: '8px 12px',
-    textAlign: 'left',
-    fontSize: 12,
-    fontWeight: 600,
-    color: 'var(--color-text-muted, #4b5563)',
-    borderBottom: '1px solid var(--color-border, #e5e7eb)',
-    background: 'var(--color-bg-subtle, #f9fafb)',
-  };
-
-  const tdStyle: React.CSSProperties = {
-    padding: '8px 12px',
-    fontSize: 13,
-    color: 'var(--color-text, #111827)',
-    borderBottom: '1px solid var(--color-border, #f3f4f6)',
-  };
-
-  const numStyle: React.CSSProperties = {
-    ...tdStyle,
-    textAlign: 'right',
-    fontVariantNumeric: 'tabular-nums',
-  };
 
   return (
     <Panel
       flush
       title="Density Register Log"
       action={
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="flex items-center gap-2">
           <select
             value={selectedProduct}
             onChange={(e) => setSelectedProduct(e.target.value)}
-            className="input"
-            style={{ height: 30, fontSize: 12, minWidth: 130 }}
+            className="input h-[30px] min-w-[130px] text-[12px]"
             aria-label="Filter by product"
           >
             <option value="">All products</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.code})
+            {products.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.name} ({product.code})
               </option>
             ))}
           </select>
           <select
             value={selectedKind}
             onChange={(e) => setSelectedKind(e.target.value)}
-            className="input"
-            style={{ height: 30, fontSize: 12, minWidth: 120 }}
+            className="input h-[30px] min-w-[120px] text-[12px]"
             aria-label="Filter by kind"
           >
             <option value="">All routines</option>
@@ -84,100 +75,71 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
       }
     >
       {filtered.length === 0 ? (
-        <div style={{ padding: 32 }}>
+        <div className="p-8">
           <EmptyState
             title="No density readings"
             description="No density readings match the selected filters."
           />
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
             <thead>
               <tr>
-                <th style={thStyle}>Date</th>
-                <th style={thStyle}>Time</th>
-                <th style={thStyle}>Product</th>
-                <th style={thStyle}>Routine</th>
-                <th style={thStyle}>Sampled from</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>Hydrometer</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>Temp</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>At 15 °C</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>Δ previous</th>
-                <th style={thStyle}>Recorded by</th>
+                <th className={TH}>Date</th>
+                <th className={TH}>Time</th>
+                <th className={TH}>Product</th>
+                <th className={TH}>Routine</th>
+                <th className={TH}>Sampled from</th>
+                <th className={`${TH} text-right`}>Hydrometer</th>
+                <th className={`${TH} text-right`}>Temp</th>
+                <th className={`${TH} text-right`}>At 15 °C</th>
+                <th className={`${TH} text-right`}>Δ previous</th>
+                <th className={TH}>Recorded by</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r, index) => {
-                const showDate = r.businessDate !== filtered[index - 1]?.businessDate;
-
-                const time = new Date(r.recordedAt).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                });
-
+              {filtered.map((reading, index) => {
+                const showDate = reading.businessDate !== filtered[index - 1]?.businessDate;
                 const sampledLabel =
-                  r.tankName || r.nozzleName || (r.sampledFrom ? r.sampledFrom : '—');
-
-                const kindTone =
-                  r.kind === 'DECANTATION' ? 'info' : r.kind === 'MORNING' ? 'brand' : 'neutral';
+                  reading.tankName ||
+                  reading.nozzleName ||
+                  (reading.sampledFrom ? reading.sampledFrom : '—');
 
                 return (
                   <tr
-                    key={r.id}
-                    style={
-                      showDate ? { borderTop: '2px solid var(--color-border, #e5e7eb)' } : undefined
-                    }
+                    key={reading.id}
+                    className={showDate ? 'border-t-2 border-border-soft' : undefined}
                   >
-                    <td style={{ ...tdStyle, fontWeight: showDate ? 600 : 400 }}>
-                      {showDate ? r.businessDate : ''}
+                    <td className={`${TD} ${showDate ? 'font-semibold' : ''}`}>
+                      {showDate ? formatDayMonth(reading.businessDate) : ''}
                     </td>
-                    <td style={{ ...tdStyle, color: 'var(--color-text-muted, #6b7280)' }}>
-                      {time}
+                    <td className={`${TD} text-ink-muted`}>
+                      {formatClockInZone(reading.recordedAt, timeZone)}
                     </td>
-                    <td style={tdStyle}>
-                      <strong>{r.productName || r.productId}</strong>{' '}
-                      <span style={{ opacity: 0.6 }}>· {r.productCode}</span>
+                    <td className={TD}>
+                      <strong>{reading.productName || reading.productId}</strong>{' '}
+                      <span className="text-ink-muted">· {reading.productCode}</span>
                     </td>
-                    <td style={tdStyle}>
-                      <Chip size="sm" tone={kindTone}>
-                        {r.kind}
+                    <td className={TD}>
+                      <Chip size="sm" tone={DENSITY_KIND_TONE[reading.kind]}>
+                        {reading.kind}
                       </Chip>
                     </td>
-                    <td style={{ ...tdStyle, color: 'var(--color-text-muted, #4b5563)' }}>
-                      {sampledLabel}
-                    </td>
-                    <td style={numStyle}>
-                      {r.observedDensity != null ? r.observedDensity.toFixed(1) : '—'}
-                    </td>
-                    <td style={numStyle}>
-                      {r.observedTempC != null ? `${r.observedTempC.toFixed(1)} °C` : '—'}
-                    </td>
-                    <td
-                      style={{
-                        ...numStyle,
-                        fontWeight: 700,
-                        color: 'var(--color-text, #111827)',
-                      }}
-                    >
-                      {r.density15.toFixed(2)}
-                    </td>
-                    <td style={numStyle}>
+                    <td className={`${TD} text-ink-muted`}>{sampledLabel}</td>
+                    <td className={NUM}>{formatDensity(reading.observedDensity)}</td>
+                    <td className={NUM}>{formatTemperature(reading.observedTempC)}</td>
+                    <td className={`${NUM} font-semibold`}>{formatDensity(reading.density15)}</td>
+                    <td className={`${TD} text-right`}>
                       <DeltaChip
-                        delta={r.delta}
-                        kind={r.kind}
-                        flags={r.flags}
+                        delta={reading.delta}
+                        kind={reading.kind}
+                        flags={reading.flags}
                         tolerance={tolerance}
                       />
                     </td>
-                    <td
-                      style={{
-                        ...tdStyle,
-                        color: 'var(--color-text-muted, #6b7280)',
-                        fontSize: 12,
-                      }}
-                    >
-                      {r.recordedByName || r.recordedBy || '—'}
+                    <td className={`${TD} text-[12px] text-ink-muted`}>
+                      {reading.recordedByName || reading.recordedBy || '—'}
                     </td>
                   </tr>
                 );

@@ -13,11 +13,18 @@ import { TodayView } from './TodayView.js';
 import { RegisterView } from './RegisterView.js';
 import { RecordDensityDrawer } from './RecordDensityDrawer.js';
 import { printDensityBoard } from './printDensityBoard.js';
-import { resolveDecantationSettings, type RecordDensityReadingPayload } from '@pump/shared';
+import {
+  businessDateSettings,
+  resolveDecantationSettings,
+  type RecordDensityReadingPayload,
+} from '@pump/shared';
 
 export interface DensityTabProps {
   stationId: string;
 }
+
+/** Loading / unavailable line in place of a view. */
+const STATUS = 'p-8 text-center text-[13px] text-ink-muted';
 
 export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
   const [view, setView] = useState<'today' | 'register'>('today');
@@ -72,23 +79,65 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
     }
   };
 
-  // Station Settings (#464) are the only source of spec bands, tolerance, method and entry default.
-  const settings = useMemo(() => resolveDecantationSettings(station?.settings), [station]);
-  const specBands = settings.densitySpecBands;
-  const tolerance = settings.densityToleranceKgM3;
+  // Station Settings (#464) are the only source of spec bands, tolerance, method and entry
+  // default, and reading times use the station's timezone. Until the station loads there is
+  // neither, so nothing that depends on them renders (no device clock, no default tolerance).
+  const stationSettings = useMemo(
+    () =>
+      station
+        ? {
+            ...resolveDecantationSettings(station.settings),
+            timeZone: businessDateSettings(station.settings).timeZone,
+          }
+        : null,
+    [station],
+  );
+
+  const mainView = () => {
+    if (!stationSettings) {
+      return (
+        <div className={STATUS}>
+          {stationsQ.isError ? "Couldn't load station settings" : 'Loading station settings...'}
+        </div>
+      );
+    }
+    const { densitySpecBands, densityToleranceKgM3, timeZone } = stationSettings;
+    if (view === 'register') {
+      return readingsQ.isLoading ? (
+        <div className={STATUS}>Loading density register...</div>
+      ) : (
+        <RegisterView
+          readings={readingsQ.data ?? []}
+          products={fuelProducts}
+          tolerance={densityToleranceKgM3}
+          timeZone={timeZone}
+        />
+      );
+    }
+    if (todayQ.isLoading) {
+      return <div className={STATUS}>Loading density today summary...</div>;
+    }
+    if (!todayQ.data) {
+      return <div className={STATUS}>No summary data available</div>;
+    }
+    return (
+      <TodayView
+        summary={todayQ.data}
+        specBands={densitySpecBands}
+        tolerance={densityToleranceKgM3}
+        timeZone={timeZone}
+        morningPromptProduct={morningPromptProduct}
+        onDismissMorningPrompt={() => setMorningPromptProduct(null)}
+        onPrintBoard={handlePrintBoard}
+        onRecord={handleOpenRecord}
+      />
+    );
+  };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="flex flex-col gap-4">
       {/* Header controls: Segmented switch (Today | Register) + Print Board + Record */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 10,
-        }}
-      >
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
         <SegmentedControl
           aria-label="Density view"
           options={[
@@ -99,7 +148,7 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
           onChange={(v) => setView(v)}
         />
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="flex items-center gap-2">
           <Button
             variant="secondary"
             size="sm"
@@ -114,6 +163,7 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
             variant="primary"
             size="sm"
             onClick={() => handleOpenRecord()}
+            disabled={!stationSettings}
             leftIcon={<Icon name="plus" size="sm" />}
           >
             Record density
@@ -121,56 +171,27 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
         </div>
       </div>
 
-      {/* Main View */}
-      {view === 'today' ? (
-        todayQ.isLoading ? (
-          <div style={{ padding: 32, textAlign: 'center', opacity: 0.6 }}>
-            Loading density today summary...
-          </div>
-        ) : todayQ.data ? (
-          <TodayView
-            summary={todayQ.data}
-            specBands={specBands}
-            tolerance={tolerance}
-            morningPromptProduct={morningPromptProduct}
-            onDismissMorningPrompt={() => setMorningPromptProduct(null)}
-            onPrintBoard={handlePrintBoard}
-            onRecord={handleOpenRecord}
-          />
-        ) : (
-          <div style={{ padding: 32, textAlign: 'center', opacity: 0.6 }}>
-            No summary data available
-          </div>
-        )
-      ) : readingsQ.isLoading ? (
-        <div style={{ padding: 32, textAlign: 'center', opacity: 0.6 }}>
-          Loading density register...
-        </div>
-      ) : (
-        <RegisterView
-          readings={readingsQ.data ?? []}
+      {mainView()}
+
+      {/* Record Density Drawer: needs the station's tolerance and defaults */}
+      {stationSettings && (
+        <RecordDensityDrawer
+          isOpen={isRecordOpen}
+          onClose={() => {
+            setIsRecordOpen(false);
+            setPresetProductId(undefined);
+          }}
+          onSave={handleSaveDensity}
+          stationId={stationId}
           products={fuelProducts}
-          tolerance={tolerance}
+          tanks={fuelTanks}
+          nozzles={fuelNozzles}
+          presetProductId={presetProductId}
+          tolerance={stationSettings.densityToleranceKgM3}
+          defaultMethod={stationSettings.densityMethod}
+          defaultEntryMethod={stationSettings.densityEntryMethod}
         />
       )}
-
-      {/* Record Density Drawer */}
-      <RecordDensityDrawer
-        isOpen={isRecordOpen}
-        onClose={() => {
-          setIsRecordOpen(false);
-          setPresetProductId(undefined);
-        }}
-        onSave={handleSaveDensity}
-        stationId={stationId}
-        products={fuelProducts}
-        tanks={fuelTanks}
-        nozzles={fuelNozzles}
-        presetProductId={presetProductId}
-        tolerance={tolerance}
-        defaultMethod={settings.densityMethod}
-        defaultEntryMethod={settings.densityEntryMethod}
-      />
     </div>
   );
 };

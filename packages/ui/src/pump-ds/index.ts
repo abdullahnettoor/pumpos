@@ -26,6 +26,7 @@ export * from './input/index.js';
 export * from './date/index.js';
 export * from './meter/index.js';
 export * from './tank-gauge/index.js';
+export * from './density/index.js';
 export * from './breakdown/index.js';
 export * from './table/index.js';
 export * from './statement-table/index.js';

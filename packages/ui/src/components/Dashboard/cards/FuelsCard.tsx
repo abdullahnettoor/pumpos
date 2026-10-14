@@ -14,12 +14,11 @@ import {
   useTankLevelSettings,
 } from '../../../query/hooks.js';
 import { FuelBlock, type Part } from './fuels/FuelBlock.js';
+import { deriveDensityState, type DensityState } from '../../../pump-ds/index.js';
 import {
-  deriveDensityState,
   derivePendingDecant,
   deriveFuelTanks,
   fuelSwatch,
-  type DensityState,
   type FuelTank,
   type InventoryTankRow,
 } from './fuels/fuelsModel.js';

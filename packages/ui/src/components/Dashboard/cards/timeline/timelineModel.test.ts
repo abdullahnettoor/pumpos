@@ -63,19 +63,19 @@ describe('openingChips', () => {
   const chip = (m: number) => openingChips([shift(m)], tl, 'Asia/Kolkata')[0];
 
   it('is success within the tolerance', () => {
-    expect(chip(12)).toMatchObject({ tone: 'success', text: 'Opened 6:12 am' });
+    expect(chip(12)).toMatchObject({ tone: 'success', text: 'Opened 6:12\u00a0am' });
     expect(chip(-15).tone).toBe('success');
   });
   it('is warning when late', () => {
-    expect(chip(40)).toMatchObject({ tone: 'warning', text: 'Opened 6:40 am · 40m late' });
+    expect(chip(40)).toMatchObject({ tone: 'warning', text: 'Opened 6:40\u00a0am · 40m late' });
   });
   it('has a short text without "Opened " for narrow bars', () => {
-    expect(chip(12).shortText).toBe('6:12 am');
-    expect(chip(40).shortText).toBe('6:40 am · 40m late');
-    expect(chip(-20).shortText).toBe('5:40 am · 20m early');
+    expect(chip(12).shortText).toBe('6:12\u00a0am');
+    expect(chip(40).shortText).toBe('6:40\u00a0am · 40m late');
+    expect(chip(-20).shortText).toBe('5:40\u00a0am · 20m early');
   });
   it('is info when early', () => {
-    expect(chip(-20)).toMatchObject({ tone: 'info', text: 'Opened 5:40 am · 20m early' });
+    expect(chip(-20)).toMatchObject({ tone: 'info', text: 'Opened 5:40\u00a0am · 20m early' });
   });
 });
 
@@ -97,7 +97,7 @@ describe('buildBars', () => {
     const [bar] = buildBars([base], full, tl.dayStartAt + 10 * 60 * MIN, 'Asia/Kolkata');
     expect(bar.leftPct).toBe(0);
     expect(bar.widthPct).toBeCloseTo(33.33, 1);
-    expect(bar.times).toBe('Opened 5:49 am · closed 1:54 pm');
+    expect(bar.times).toBe('Opened 5:49\u00a0am · closed 1:54\u00a0pm');
   });
 
   it('falls back to the real times when the shift has no known window', () => {
