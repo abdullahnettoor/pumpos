@@ -289,7 +289,6 @@ const AccountDayEntries: React.FC<{
           kind: 'money',
           width: '16%',
           value: (e) => (e.direction === 'in' ? e.amount : null),
-          cell: (e) => (e.direction === 'in' ? inr(e.amount) : ''),
         },
         {
           id: 'out',
@@ -297,7 +296,6 @@ const AccountDayEntries: React.FC<{
           kind: 'money',
           width: '16%',
           value: (e) => (e.direction === 'out' ? e.amount : null),
-          cell: (e) => (e.direction === 'out' ? inr(e.amount) : ''),
         },
       ]}
       totalRow={{ values: { in: account.moneyIn, out: account.moneyOut } }}

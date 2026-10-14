@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ColumnDef, SortingState } from '@tanstack/react-table';
+import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable, type DataTableProps } from '../../components/primitives/DataTable.js';
 import {
   columnClass,
@@ -21,8 +21,6 @@ export interface InteractiveTableProps<T> extends Omit<
   rowKey: (row: T, index: number) => string;
   /** A closing row; see `TotalRow`. */
   totalRow?: TotalRow;
-  /** Sort on first render: a column id, ascending unless `desc`. */
-  initialSort?: { id: string; desc?: boolean };
 }
 
 function toColumnDefs<T>(
@@ -38,8 +36,8 @@ function toColumnDefs<T>(
     sortDescFirst: false,
     sortUndefined: 'last',
     meta: {
-      className: columnClass(col as TableColumn<unknown>),
-      headerClassName: headerClass(col as TableColumn<unknown>),
+      className: columnClass(col),
+      headerClassName: headerClass(col),
       width: col.width,
     },
   }));
@@ -56,21 +54,10 @@ export function InteractiveTable<T>({
   rows,
   rowKey,
   totalRow,
-  initialSort,
   ...rest
 }: InteractiveTableProps<T>) {
   const totals = rows && rows.length > 0 ? totalCells(columns, rows, totalRow) : null;
-  const defs = toColumnDefs(columns, totals);
-  const initialSorting: SortingState | undefined = initialSort
-    ? [{ id: initialSort.id, desc: !!initialSort.desc }]
-    : undefined;
   return (
-    <DataTable<T>
-      {...rest}
-      columns={defs}
-      data={rows}
-      getRowId={rowKey}
-      initialSorting={initialSorting}
-    />
+    <DataTable<T> {...rest} columns={toColumnDefs(columns, totals)} data={rows} getRowId={rowKey} />
   );
 }

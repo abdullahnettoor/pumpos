@@ -27,7 +27,7 @@ export interface StatementTableProps<T> {
   className?: string;
 }
 
-const PAD = 'px-2 py-1 align-top';
+const CELL_PAD = 'px-2 py-1 align-top';
 
 /**
  * StatementTable — the compact, read-only table a report statement is made of.
@@ -54,7 +54,6 @@ export function StatementTable<T>({
     ) : null;
   }
   const totals = totalCells(columns, rows, totalRow);
-  const cls = (col: TableColumn<T>) => columnClass(col as TableColumn<unknown>);
 
   return (
     <table
@@ -67,7 +66,7 @@ export function StatementTable<T>({
             <th
               key={col.id}
               scope="col"
-              className={cn(PAD, headerClass(col), 'font-medium')}
+              className={cn(CELL_PAD, headerClass(col), 'font-medium')}
               style={col.width ? { width: col.width } : undefined}
             >
               {col.header}
@@ -82,7 +81,7 @@ export function StatementTable<T>({
             className="border-b border-border-soft/60 last:border-0 print:break-inside-avoid"
           >
             {columns.map((col) => (
-              <td key={col.id} className={cn(PAD, cls(col))}>
+              <td key={col.id} className={cn(CELL_PAD, columnClass(col))}>
                 {renderCell(col, row, 'statement')}
               </td>
             ))}
@@ -94,11 +93,11 @@ export function StatementTable<T>({
           <tr className="border-t border-border-strong font-semibold text-ink-strong print:break-inside-avoid">
             {columns.map((col, i) =>
               i === 0 ? (
-                <th key={col.id} scope="row" className={cn(PAD, kindClass(col))}>
+                <th key={col.id} scope="row" className={cn(CELL_PAD, kindClass(col))}>
                   {totals[i]}
                 </th>
               ) : (
-                <td key={col.id} className={cn(PAD, kindClass(col))}>
+                <td key={col.id} className={cn(CELL_PAD, kindClass(col))}>
                   {totals[i]}
                 </td>
               ),

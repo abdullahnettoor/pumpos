@@ -211,6 +211,19 @@ describe('AttendantHandoverReportPanel drawer', () => {
     expect(names).toEqual(['N2', 'N10']);
   });
 
+  it('prints meter readings to 3 places in litres, as the export does', () => {
+    openDrawer();
+
+    const nozzleTable = screen.getByRole('table', { name: 'DU 1 nozzle readings' });
+    const first = within(within(nozzleTable).getAllByRole('row')[1]).getAllByRole('cell');
+    expect(first.slice(2).map((c) => c.textContent)).toEqual([
+      '100.000 L',
+      '200.000 L',
+      '100.000 L',
+      '2.000 L',
+    ]);
+  });
+
   it('opens on the range figures an export would carry', () => {
     openDrawer();
 

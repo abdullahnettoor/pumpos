@@ -76,6 +76,13 @@ describe.each(Object.entries(adapters))('%s table: shared column kinds', (_name,
     expect(header('Date').className).not.toContain('font-mono');
   });
 
+  it('a date reads in the sans face, as the Dashboard prints its times', () => {
+    renderTable();
+    const date = screen.getByText('09 Jul 2026');
+    expect(date.className).toContain('text-left');
+    expect(date.className).not.toContain('font-mono');
+  });
+
   it('formats with the shared money, quantity and date formats', () => {
     renderTable();
     expect(screen.getByText('₹92.50')).toBeTruthy();
@@ -125,6 +132,44 @@ describe('total row', () => {
       />,
     );
     expect(footerCells()).toEqual(['Total', '—']);
+  });
+
+  it('a passed figure on a mixed-unit qty column still totals —', () => {
+    const mixed: TableColumn<{ q: number; u: string }>[] = [
+      { id: 'label', header: 'Item', kind: 'text', value: () => 'x' },
+      { id: 'q', header: 'Qty', kind: 'qty', unit: (r) => r.u, value: (r) => r.q },
+    ];
+    render(
+      <StatementTable
+        columns={mixed}
+        rows={[
+          { q: 2, u: 'L' },
+          { q: 3, u: 'Nos' },
+        ]}
+        rowKey={(_r, i) => String(i)}
+        totalRow={{ values: { q: 5 } }}
+      />,
+    );
+    expect(footerCells()).toEqual(['Total', '—']);
+  });
+
+  it('a passed figure takes the unit every row shares', () => {
+    const perRow: TableColumn<{ q: number; u: string }>[] = [
+      { id: 'label', header: 'Item', kind: 'text', value: () => 'x' },
+      { id: 'q', header: 'Qty', kind: 'qty', unit: (r) => r.u, value: (r) => r.q },
+    ];
+    render(
+      <StatementTable
+        columns={perRow}
+        rows={[
+          { q: 2, u: 'kg' },
+          { q: 3, u: 'kg' },
+        ]}
+        rowKey={(_r, i) => String(i)}
+        totalRow={{ values: { q: 7 } }}
+      />,
+    );
+    expect(footerCells()).toEqual(['Total', '7.00 kg']);
   });
 
   it('no total row unless asked', () => {
@@ -177,6 +222,38 @@ describe('interactive adapter', () => {
     );
     expect(screen.getByRole('alert').textContent).toMatch(/Couldn't load sales/);
     expect(screen.queryByText('No sales.')).toBeNull();
+  });
+});
+
+describe('money cells', () => {
+  it('a money cell with no value is blank, not ₹0.00', () => {
+    type Entry = { id: string; dir: 'in' | 'out'; amount: number };
+    const money: TableColumn<Entry>[] = [
+      { id: 'id', header: 'Entry', kind: 'text', value: (r) => r.id },
+      {
+        id: 'in',
+        header: 'In',
+        kind: 'money',
+        value: (r) => (r.dir === 'in' ? r.amount : null),
+      },
+    ];
+    render(
+      <StatementTable
+        columns={money}
+        rows={[
+          { id: 'a', dir: 'in', amount: 50 },
+          { id: 'b', dir: 'out', amount: 20 },
+        ]}
+        rowKey={(r) => r.id}
+        totalRow
+      />,
+    );
+    const cells = screen
+      .getAllByRole('row')
+      .slice(1, 3)
+      .map((r) => within(r).getAllByRole('cell')[1].textContent);
+    expect(cells).toEqual(['₹50.00', '']);
+    expect(footerCells()).toEqual(['Total', '₹50.00']);
   });
 });
 

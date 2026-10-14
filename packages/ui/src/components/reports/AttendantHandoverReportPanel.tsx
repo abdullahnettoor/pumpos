@@ -16,7 +16,7 @@ import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { Field, Select } from '../primitives/Field.js';
 import { Drawer } from '../Drawer.js';
-import { formatDateTime, formatQty, inr } from '../../utils/format.js';
+import { formatDateTime, inr } from '../../utils/format.js';
 import {
   KpiStrip,
   KpiTile,
@@ -65,6 +65,9 @@ const TONE_COLOR: Record<VarianceTone, string> = {
   neutral: 'var(--text-muted)',
 };
 
+/** A nozzle meter reading: litres to 3 places. */
+const READING = { kind: 'qty', unit: 'L', decimals: 3 } as const;
+
 const DispenserDetail: React.FC<{ dispenser: AttendantReportDispenser }> = ({ dispenser }) => (
   <div className="mt-2">
     <div className="flex items-center justify-between gap-2">
@@ -79,39 +82,19 @@ const DispenserDetail: React.FC<{ dispenser: AttendantReportDispenser }> = ({ di
     <StatementTable
       label={`${dispenser.duName} nozzle readings`}
       columns={[
-        // Readings print bare to 3 places (the header carries the litres);
-        // moving them to formatQuantity is the reports area ticket's call.
+        // Meter readings to 3 places in litres, as the exported PDF prints them.
         { id: 'nozzle', header: 'Nozzle', kind: 'text', value: (n) => n.nozzleName },
         { id: 'product', header: 'Product', kind: 'text', value: (n) => n.productName },
+        { ...READING, id: 'opening', header: 'Opening', value: (n) => n.openingReading },
+        { ...READING, id: 'closing', header: 'Closing', value: (n) => n.closingReading },
         {
-          id: 'opening',
-          header: 'Opening',
-          kind: 'qty',
-          value: (n) => n.openingReading,
-          cell: (n) => formatQty(n.openingReading, 3),
-        },
-        {
-          id: 'closing',
-          header: 'Closing',
-          kind: 'qty',
-          value: (n) => n.closingReading,
-          cell: (n) => formatQty(n.closingReading, 3),
-        },
-        {
+          ...READING,
           id: 'volume',
           header: 'Volume',
-          kind: 'qty',
           emphasis: true,
           value: (n) => n.volumeSold,
-          cell: (n) => formatQty(n.volumeSold, 3),
         },
-        {
-          id: 'testing',
-          header: 'Testing',
-          kind: 'qty',
-          value: (n) => n.testingVolume,
-          cell: (n) => formatQty(n.testingVolume, 3),
-        },
+        { ...READING, id: 'testing', header: 'Testing', value: (n) => n.testingVolume },
       ]}
       rows={dispenser.nozzles}
       rowKey={(n) => n.nozzleId}
@@ -164,14 +147,15 @@ const CreditBreakdown: React.FC<{ shift: AttendantReportShift }> = ({ shift }) =
           { id: 'customer', header: 'Customer', kind: 'text', value: (r) => r.customerName },
           { id: 'vehicle', header: 'Vehicle', kind: 'text', value: (r) => r.vehicle },
           { id: 'product', header: 'Product', kind: 'text', value: (r) => r.product },
-          // Already a display string from attendantCreditLines (shared with the PDF).
+          // Chits reconcile by amount; the quantity column is not totalled.
           {
             id: 'qty',
             header: 'Qty',
             kind: 'qty',
+            unit: (r) => r.unit,
+            decimals: 3,
             total: false,
-            value: (r) => r.quantity,
-            cell: (r) => r.quantity,
+            value: (r) => r.quantityValue,
           },
           {
             id: 'amount',

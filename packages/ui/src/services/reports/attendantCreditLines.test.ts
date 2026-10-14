@@ -101,6 +101,15 @@ describe('creditChitRows', () => {
     ).toBe('8.000 L');
   });
 
+  it('keeps the quantity as a number with its unit, so a table can sort and total it', () => {
+    const [row] = creditChitRows(shift({ creditSaleLines: [chit({ quantity: 8, unit: 'kg' })] }));
+    expect(row).toMatchObject({ quantityValue: 8, unit: 'kg' });
+    const [bare] = creditChitRows(
+      shift({ creditSaleLines: [chit({ quantity: null, unit: null })] }),
+    );
+    expect(bare).toMatchObject({ quantityValue: null, unit: 'L' });
+  });
+
   it('dashes a chit that recorded no quantity rather than printing a formatted zero', () => {
     expect(creditChitRows(shift({ creditSaleLines: [chit({ quantity: null })] }))[0].quantity).toBe(
       '—',

@@ -5,26 +5,27 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type RowData,
   type SortingState,
 } from '@tanstack/react-table';
 import { useRunTask } from '../../utils/runTask.js';
 import { DataSection } from '../../pump-ds/data-section/index.js';
 
-/**
- * Optional per-column presentation, set by the pump-ds `InteractiveTable`
- * adapter from a column's kind (alignment, mono). A column without it renders
- * as before.
- */
-export interface DataTableColumnMeta {
-  /** Body and total cells. */
-  className?: string;
-  /** Header cell; falls back to `className`. */
-  headerClassName?: string;
-  width?: string;
+declare module '@tanstack/react-table' {
+  /**
+   * Optional per-column presentation, set by the pump-ds `InteractiveTable`
+   * adapter from a column's kind (alignment, mono). A column without it
+   * renders as before.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData extends RowData, TValue> {
+    /** Body and total cells. */
+    className?: string;
+    /** Header cell; falls back to `className`. */
+    headerClassName?: string;
+    width?: string;
+  }
 }
-
-const metaOf = (columnDef: { meta?: unknown }): DataTableColumnMeta =>
-  (columnDef.meta as DataTableColumnMeta | undefined) ?? {};
 
 export interface DataTableProps<T> {
   columns: ColumnDef<T, any>[];
@@ -133,7 +134,7 @@ export function DataTable<T>({
                 {hg.headers.map((header) => {
                   const canSort = header.column.getCanSort();
                   const sorted = header.column.getIsSorted();
-                  const meta = metaOf(header.column.columnDef);
+                  const meta = header.column.columnDef.meta ?? {};
                   return (
                     <th
                       key={header.id}
@@ -196,7 +197,7 @@ export function DataTable<T>({
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className={metaOf(cell.column.columnDef).className}
+                      className={cell.column.columnDef.meta?.className}
                       style={{
                         padding: cellPad,
                         color: 'var(--text-default)',
@@ -216,7 +217,7 @@ export function DataTable<T>({
                 <tr key={fg.id} style={{ borderTop: '1px solid var(--border-strong)' }}>
                   {fg.headers.map((header, i) => {
                     const Cell = i === 0 ? 'th' : 'td';
-                    const { className } = metaOf(header.column.columnDef);
+                    const className = header.column.columnDef.meta?.className;
                     return (
                       <Cell
                         key={header.id}

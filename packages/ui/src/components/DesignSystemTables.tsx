@@ -17,7 +17,7 @@ type Sale = {
   status: 'paid' | 'partial' | 'unpaid' | 'overdue';
 };
 
-export const TABLE_DEMO_ROWS: Sale[] = [
+const DEMO_ROWS: Sale[] = [
   {
     id: 's1',
     date: '2026-10-12',
@@ -60,7 +60,7 @@ export const TABLE_DEMO_ROWS: Sale[] = [
   },
 ];
 
-export const TABLE_DEMO_COLUMNS: TableColumn<Sale>[] = [
+const DEMO_COLUMNS: TableColumn<Sale>[] = [
   { id: 'date', header: 'Date', kind: 'date', value: (r) => r.date },
   { id: 'customer', header: 'Customer', kind: 'text', value: (r) => r.customer },
   { id: 'product', header: 'Product', kind: 'text', value: (r) => r.product },
@@ -70,21 +70,21 @@ export const TABLE_DEMO_COLUMNS: TableColumn<Sale>[] = [
   { id: 'status', header: 'Status', kind: 'status', value: (r) => r.status },
 ];
 
-export const InteractiveTableDemo: React.FC = () => (
+const InteractiveTableDemo: React.FC = () => (
   <InteractiveTable
-    columns={TABLE_DEMO_COLUMNS}
-    rows={TABLE_DEMO_ROWS}
+    columns={DEMO_COLUMNS}
+    rows={DEMO_ROWS}
     rowKey={(r) => r.id}
     onRowClick={() => undefined}
     totalRow
   />
 );
 
-export const StatementTableDemo: React.FC = () => (
+const StatementTableDemo: React.FC = () => (
   <StatementTable
     label="Credit sales"
-    columns={TABLE_DEMO_COLUMNS}
-    rows={TABLE_DEMO_ROWS}
+    columns={DEMO_COLUMNS}
+    rows={DEMO_ROWS}
     rowKey={(r) => r.id}
     totalRow
   />
