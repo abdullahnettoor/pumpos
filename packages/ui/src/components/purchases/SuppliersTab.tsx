@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import type { UseQueryResult } from '@tanstack/react-query';
+import type { PayablesSummary } from '@pump/shared';
 import {
   DataSection,
   EmptyState,
@@ -13,26 +13,22 @@ import {
   type FilterChipOption,
   type TotalRow,
 } from '../../pump-ds/index.js';
-import type { SupplierPaymentRow } from '../../services/cloud.js';
 import { formatMoney } from '../../utils/format.js';
 import { MONEY_TERMS } from '../../utils/moneyTerms.js';
 import { InfoTip } from '../primitives/InfoTip.js';
-import { buildSupplierColumns, type PurchaseRow, type SupplierRow } from './columns.js';
+import { buildSupplierColumns, type SupplierRow } from './columns.js';
 import {
   SUPPLIER_FILTERS,
-  balanceFigures,
-  countOf,
-  paymentFigures,
-  purchaseFigures,
-  type PurchaseClock,
+  advanceFigures,
+  suppliersCount,
+  type QueryOf,
   type SupplierFilter,
 } from './supplierFigures.js';
+import { TileSection } from './TileSection.js';
 
 export interface SuppliersTabProps {
-  suppliersQ: UseQueryResult<SupplierRow[]>;
-  purchasesQ: UseQueryResult<PurchaseRow[]>;
-  paymentsQ: UseQueryResult<SupplierPaymentRow[]>;
-  clock: PurchaseClock;
+  suppliersQ: QueryOf<SupplierRow[]>;
+  payablesQ: QueryOf<PayablesSummary>;
   onOpenStatement: (s: SupplierRow) => void;
   onEdit: (s: SupplierRow) => void;
 }
@@ -50,33 +46,24 @@ const matches = (s: SupplierRow, q: string) =>
   );
 
 /**
- * Suppliers → Suppliers: a balance list (layout B, #567). Four fixed tiles on
- * top: what you owe now, this month's purchases and payments, and advances
- * paid. The search and the row filters sit in the list's own header. The
- * balance column is net: an advance counts against what you owe.
+ * Suppliers → Suppliers: a balance list (layout B, #567). Tiles on top, each
+ * in its own Data Section: Payable, this month's Purchased and Paid from the
+ * server's payables summary, and advances paid from the list. The search and
+ * the row filters sit in the list's own header. Unfiltered, the Payable tile
+ * carries the total, so the list has no total row; a filtered list totals the
+ * rows shown.
  */
 export const SuppliersTab: React.FC<SuppliersTabProps> = ({
   suppliersQ,
-  purchasesQ,
-  paymentsQ,
-  clock,
+  payablesQ,
   onOpenStatement,
   onEdit,
 }) => {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<SupplierFilter>('all');
   const suppliers = useMemo(() => suppliersQ.data ?? [], [suppliersQ.data]);
-
-  const balances = useMemo(() => balanceFigures(suppliers), [suppliers]);
-  const purchased = useMemo(
-    () => purchaseFigures(purchasesQ.data ?? [], clock),
-    [purchasesQ.data, clock],
-  );
-  const paid = useMemo(
-    () => paymentFigures(paymentsQ.data ?? [], clock.entryToday),
-    [paymentsQ.data, clock.entryToday],
-  );
-  const month = { month: clock.entryToday };
+  const summary = payablesQ.data;
+  const advance = useMemo(() => advanceFigures(suppliers), [suppliers]);
 
   const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -95,64 +82,69 @@ export const SuppliersTab: React.FC<SuppliersTabProps> = ({
   );
 
   const rows = useMemo(() => searched.filter(SUPPLIER_FILTERS[filter]), [searched, filter]);
+  const filtered = filter !== 'all' || !!search.trim();
   const columns = useMemo(
     () => buildSupplierColumns(onOpenStatement, onEdit),
     [onOpenStatement, onEdit],
   );
-  // The balance column is net; say so when an advance is in the sum.
-  const totalRow = useMemo<TotalRow>(
-    () => ({
-      label: rows.some((s) => Number(s.currentBalance || 0) < 0)
-        ? 'Total, net of advances'
-        : 'Total',
-    }),
-    [rows],
-  );
+  // The balance column is net: say so when an advance is in the sum.
+  const totalRow = useMemo<TotalRow | undefined>(() => {
+    if (!filtered) return undefined;
+    const advances = rows.some((s) => Number(s.currentBalance || 0) < 0);
+    return { label: `Total of ${rows.length} shown${advances ? ', net of advances' : ''}` };
+  }, [filtered, rows]);
 
   return (
     <>
-      <DataSection
-        title="supplier totals"
-        query={[suppliersQ, purchasesQ, paymentsQ]}
-        shape="cards"
-        placeholderHeight={90}
-      >
-        <KpiStrip columns="auto">
-          <KpiTile
-            label={MONEY_TERMS.payable}
-            scope="now"
-            value={formatMoney(balances.payable)}
-            hint={`to ${countOf(balances.payableCount, 'supplier')}`}
-          />
-          <KpiTile
-            label="Purchased"
-            scope={month}
-            value={formatMoney(purchased.month)}
-            hint={countOf(purchased.monthCount, 'invoice')}
-          />
-          <KpiTile
-            label="Paid"
-            scope={month}
-            value={formatMoney(paid.month)}
-            hint={countOf(paid.monthCount, 'payment')}
-          />
+      <KpiStrip columns="auto">
+        <TileSection title="payable" query={payablesQ}>
+          {summary && (
+            <KpiTile
+              label={MONEY_TERMS.payable}
+              scope="now"
+              value={formatMoney(summary.total)}
+              hint={`to ${suppliersCount(summary.supplierCount)}`}
+            />
+          )}
+        </TileSection>
+        <TileSection title="purchased this month" query={payablesQ}>
+          {summary && (
+            <KpiTile
+              label="Purchased"
+              scope={{ month: summary.month.purchasedMonth }}
+              value={formatMoney(summary.month.purchased)}
+            />
+          )}
+        </TileSection>
+        <TileSection title="paid this month" query={payablesQ}>
+          {summary && (
+            <KpiTile
+              label="Paid"
+              scope={{ month: summary.month.paidMonth }}
+              value={formatMoney(summary.month.paid)}
+            />
+          )}
+        </TileSection>
+        <TileSection title="advances" query={suppliersQ}>
           <KpiTile
             label="Advance paid"
             scope="now"
-            value={formatMoney(balances.advance)}
-            hint={
-              balances.advanceCount
-                ? `to ${countOf(balances.advanceCount, 'supplier')}`
-                : 'no supplier paid ahead'
-            }
+            value={formatMoney(advance.total)}
+            hint={advance.count ? `to ${suppliersCount(advance.count)}` : 'no supplier paid ahead'}
           />
-        </KpiStrip>
-      </DataSection>
+        </TileSection>
+      </KpiStrip>
 
       <section className="flex flex-col gap-2">
         <SectionHeader
           title="Suppliers"
-          subtitle={suppliersQ.data ? countOf(rows.length, 'supplier') : undefined}
+          subtitle={
+            suppliersQ.data
+              ? filtered
+                ? `${rows.length} of ${suppliers.length}`
+                : suppliersCount(suppliers.length)
+              : undefined
+          }
           controls={{
             search: (
               <div className="w-[220px]">
@@ -164,7 +156,7 @@ export const SuppliersTab: React.FC<SuppliersTabProps> = ({
                 />
               </div>
             ),
-            filters: (
+            filters: suppliersQ.data && (
               <FilterChips
                 aria-label="Supplier balance"
                 options={options}
@@ -175,8 +167,8 @@ export const SuppliersTab: React.FC<SuppliersTabProps> = ({
             info: (
               <InfoTip label="About supplier balances" placement="bottom">
                 A supplier&rsquo;s balance is every purchase less every payment. Payable is what you
-                owe; Advance is money paid ahead of purchases. Open a supplier for the full
-                statement.
+                owe active suppliers now; Advance is money paid ahead of purchases. Open a supplier
+                for the full statement.
               </InfoTip>
             ),
           }}

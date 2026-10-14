@@ -1,90 +1,86 @@
+import { computeRange, type DateRange, type SectionQuery } from '../../pump-ds/index.js';
 import type { SupplierPaymentRow } from '../../services/cloud.js';
 import { CASH_ACCOUNT_TYPES } from '../../utils/ledgerLabels.js';
+import { countOf, inWindow, sumAmounts, type EntryClock } from '../../utils/ledgerWindow.js';
 import { balanceOf, purchaseDate, type PurchaseRow, type SupplierRow } from './columns.js';
 
 /**
- * The Suppliers page's headline figures, worked out from the lists the page
- * already reads (suppliers, purchases, supplier payments). Pure, so the tiles
- * are tested without a screen.
+ * The few Suppliers-page figures the server's payables summary does not carry
+ * (#528): advances paid, today's purchases and the payments' account split.
+ * Payable, Purchased and Paid for the month come from `/reports/payables`.
+ * Pure, so the tiles are tested without a screen.
  */
 
-/** The station's "today" for each kind of purchase. */
+/** A query result as the Suppliers tabs read it: the Data Section's slice plus its data. */
+export interface QueryOf<T> extends SectionQuery {
+  data?: T;
+}
+
+export const suppliersCount = (n: number) => countOf(n, 'supplier', 'suppliers');
+
+/** The station's "today" for each anchor a purchase can carry. */
 export interface PurchaseClock {
-  /** Station calendar date: the anchor of an Office Record (a Fuel Purchase). */
+  /** Station calendar date: a Fuel Purchase (an Office Record, no business day). */
   entryToday: string;
-  /** Business date: the anchor of a Product Purchase sealed with its day. */
+  /** Business date: a Product Purchase sealed with its day. */
   businessToday: string;
 }
 
-const amountOf = (r: { amount: number | string | null | undefined }) => Number(r.amount || 0);
-const sum = <T extends { amount: number | string | null | undefined }>(rows: readonly T[]) =>
-  rows.reduce((s, r) => s + amountOf(r), 0);
-
 /**
- * Purchases today and this month. A purchase dated by Entry Date compares with
- * the calendar today; one dated by its Business Day with the business today,
- * so each lands in the day the operator recorded it in.
+ * Whether a purchase falls on today, by its own anchor, as the payables report
+ * counts the month: a purchase on a business day by the business today, a Fuel
+ * Purchase by the calendar today.
  */
-export function purchaseFigures(purchases: readonly PurchaseRow[], clock: PurchaseClock) {
-  let today = 0;
-  let todayCount = 0;
-  let month = 0;
-  let monthCount = 0;
-  for (const p of purchases) {
-    const date = purchaseDate(p) ?? '';
-    const anchor = p.entryDate ? clock.entryToday : clock.businessToday;
-    if (date === anchor) {
-      today += amountOf(p);
-      todayCount += 1;
-    }
-    if (date.startsWith(anchor.slice(0, 7))) {
-      month += amountOf(p);
-      monthCount += 1;
-    }
-  }
-  return { today, todayCount, month, monthCount };
+export const isPurchasedToday = (p: PurchaseRow, clock: PurchaseClock) =>
+  purchaseDate(p) === (p.businessDayId != null ? clock.businessToday : clock.entryToday);
+
+/** Today's purchases: total and invoice count. */
+export function purchasedToday(purchases: readonly PurchaseRow[], clock: PurchaseClock) {
+  const rows = purchases.filter((p) => isPurchasedToday(p, clock));
+  return { total: sumAmounts(rows), count: rows.length };
 }
 
-/** Supplier Payments today and this month, and this month's split by account. */
-export function paymentFigures(payments: readonly SupplierPaymentRow[], entryToday: string) {
-  const monthPrefix = entryToday.slice(0, 7);
-  const todayRows = payments.filter((p) => p.entryDate === entryToday);
-  const monthRows = payments.filter((p) => p.entryDate?.startsWith(monthPrefix));
-  const cashMonth = sum(
-    monthRows.filter((p) => CASH_ACCOUNT_TYPES.includes(p.accountType as never)),
-  );
-  const month = sum(monthRows);
-  return {
-    today: sum(todayRows),
-    todayCount: todayRows.length,
-    month,
-    monthCount: monthRows.length,
-    cashMonth,
-    otherMonth: month - cashMonth,
-  };
-}
+/** Purchases dated inside a range. An undated purchase falls in no range. */
+export const purchasesIn = (purchases: readonly PurchaseRow[], range: DateRange) =>
+  purchases.filter((p) => inWindow(purchaseDate(p), range));
 
-/**
- * What is owed across suppliers (Payable: Σ positive balances) and what has
- * been paid ahead (Σ advances, as a positive amount). Their difference is the
- * list's net total.
- */
-export function balanceFigures(suppliers: readonly SupplierRow[]) {
-  let payable = 0;
-  let payableCount = 0;
-  let advance = 0;
-  let advanceCount = 0;
+/** Money paid ahead to suppliers (Σ negative balances, as a positive amount). */
+export function advanceFigures(suppliers: readonly SupplierRow[]) {
+  let total = 0;
+  let count = 0;
   for (const s of suppliers) {
     const b = balanceOf(s);
-    if (b > 0) {
-      payable += b;
-      payableCount += 1;
-    } else if (b < 0) {
-      advance -= b;
-      advanceCount += 1;
+    if (b < 0) {
+      total -= b;
+      count += 1;
     }
   }
-  return { payable, payableCount, advance, advanceCount };
+  return { total, count };
+}
+
+const CASH = new Set<string>(CASH_ACCOUNT_TYPES);
+
+/**
+ * The month's Supplier Payments (by Entry Date): total, the cash / other split,
+ * the suppliers paid, and today's share. Read from the month's payments query.
+ */
+export function paymentFigures(payments: readonly SupplierPaymentRow[], clock: EntryClock) {
+  const today = computeRange('today', clock);
+  const month = computeRange('this-month', clock);
+  const monthRows = payments.filter((p) => inWindow(p.entryDate, month));
+  const todayRows = monthRows.filter((p) => inWindow(p.entryDate, today));
+  const cash = sumAmounts(monthRows.filter((p) => CASH.has(p.accountType ?? '')));
+  const total = sumAmounts(monthRows);
+  return {
+    monthFrom: month.from,
+    month: total,
+    monthCount: monthRows.length,
+    cash,
+    other: Math.round((total - cash) * 100) / 100,
+    suppliers: new Set(monthRows.map((p) => p.supplierId)).size,
+    today: sumAmounts(todayRows),
+    todayCount: todayRows.length,
+  };
 }
 
 /** The balance list's row filters. */
@@ -96,6 +92,3 @@ export const SUPPLIER_FILTERS: Record<SupplierFilter, (s: SupplierRow) => boolea
   advance: (s) => balanceOf(s) < 0,
   inactive: (s) => !s.isActive,
 };
-
-/** "1 supplier", "3 invoices". */
-export const countOf = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;

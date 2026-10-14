@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import type { UseQueryResult } from '@tanstack/react-query';
+import type { PayablesSummary } from '@pump/shared';
 import {
   DataSection,
   DateRangeMenu,
@@ -12,9 +12,9 @@ import {
   SectionHeader,
   computeRange,
   type DateRange,
-  type RangeClock,
 } from '../../pump-ds/index.js';
 import { formatMoney } from '../../utils/format.js';
+import { countOf, type EntryClock } from '../../utils/ledgerWindow.js';
 import { MONEY_TERMS } from '../../utils/moneyTerms.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import {
@@ -23,19 +23,27 @@ import {
   purchaseDate,
   type PurchaseLinkRow,
   type PurchaseRow,
-  type SupplierRow,
 } from './columns.js';
-import { balanceFigures, countOf, purchaseFigures, type PurchaseClock } from './supplierFigures.js';
+import {
+  purchasedToday,
+  purchasesIn,
+  suppliersCount,
+  type PurchaseClock,
+  type QueryOf,
+} from './supplierFigures.js';
+import { TileSection } from './TileSection.js';
 
 export interface PurchasesTabProps {
-  purchasesQ: UseQueryResult<PurchaseRow[]>;
-  suppliersQ: UseQueryResult<SupplierRow[]>;
+  purchasesQ: QueryOf<PurchaseRow[]>;
+  payablesQ: QueryOf<PayablesSummary>;
   clock: PurchaseClock;
   /** The station calendar clock the range menu resolves with. */
-  entryClock: RangeClock;
+  entryClock: EntryClock;
   onOpen: (purchase: PurchaseRow) => void;
   onLinkToDecantation: (purchase: PurchaseLinkRow) => void;
 }
+
+const invoices = (n: number) => countOf(n, 'invoice', 'invoices');
 
 const matches = (p: PurchaseRow, q: string) =>
   [p.supplierName, p.invoiceNumber, p.documentNumber, p.notes, p.itemsSummary].some((v) =>
@@ -43,13 +51,15 @@ const matches = (p: PurchaseRow, q: string) =>
   );
 
 /**
- * Suppliers → Purchases: a ledger (layout B, #567). The fixed tiles name their
- * period; the range, search and info tip sit in the ledger's header, directly
- * above the table they filter. Newest first; a row opens the invoice.
+ * Suppliers → Purchases: a ledger (layout B, #567). Fixed tiles on top, each
+ * in its own Data Section and none repeating the ledger's total: today's
+ * purchases, what you owe now, and the fuel purchases still to link. The range,
+ * search and info tip sit in the ledger's header. Newest first; a row opens the
+ * invoice.
  */
 export const PurchasesTab: React.FC<PurchasesTabProps> = ({
   purchasesQ,
-  suppliersQ,
+  payablesQ,
   clock,
   entryClock,
   onOpen,
@@ -58,65 +68,55 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', entryClock));
   const [search, setSearch] = useState('');
   const purchases = useMemo(() => purchasesQ.data ?? [], [purchasesQ.data]);
+  const summary = payablesQ.data;
 
-  const figures = useMemo(() => purchaseFigures(purchases, clock), [purchases, clock]);
-  const payable = useMemo(() => balanceFigures(suppliersQ.data ?? []), [suppliersQ.data]);
+  const today = useMemo(() => purchasedToday(purchases, clock), [purchases, clock]);
   const awaiting = useMemo(() => purchases.filter(isAwaitingDecantation).length, [purchases]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return purchases
-      .filter((p) => {
-        if (q && !matches(p, q)) return false;
-        const d = purchaseDate(p);
-        return !(d && (d < range.from || d > range.to));
-      })
+    return purchasesIn(purchases, range)
+      .filter((p) => !q || matches(p, q))
       .sort((a, b) => (purchaseDate(b) ?? '').localeCompare(purchaseDate(a) ?? ''));
-  }, [purchases, search, range.from, range.to]);
+  }, [purchases, search, range]);
 
   const columns = useMemo(() => buildPurchaseColumns(onLinkToDecantation), [onLinkToDecantation]);
 
   return (
     <>
-      <DataSection
-        title="purchase totals"
-        query={[purchasesQ, suppliersQ]}
-        shape="cards"
-        placeholderHeight={90}
-      >
-        <KpiStrip columns="auto">
+      <KpiStrip columns="auto">
+        <TileSection title="purchased today" query={purchasesQ}>
           <KpiTile
             label="Purchased today"
             scope="today"
-            value={formatMoney(figures.today)}
-            hint={countOf(figures.todayCount, 'invoice')}
+            value={formatMoney(today.total)}
+            hint={invoices(today.count)}
           />
-          <KpiTile
-            label="Purchased this month"
-            scope={{ month: clock.entryToday }}
-            value={formatMoney(figures.month)}
-            hint={countOf(figures.monthCount, 'invoice')}
-          />
-          <KpiTile
-            label={MONEY_TERMS.payable}
-            scope="now"
-            value={formatMoney(payable.payable)}
-            hint={`to ${countOf(payable.payableCount, 'supplier')}`}
-          />
+        </TileSection>
+        <TileSection title="payable" query={payablesQ}>
+          {summary && (
+            <KpiTile
+              label={MONEY_TERMS.payable}
+              scope="now"
+              value={formatMoney(summary.total)}
+              hint={`to ${suppliersCount(summary.supplierCount)}`}
+            />
+          )}
+        </TileSection>
+        <TileSection title="awaiting decantation" query={purchasesQ}>
           <KpiTile
             label="Awaiting decantation"
             scope="now"
             value={String(awaiting)}
-            alert={awaiting > 0 ? 'warning' : undefined}
             hint={awaiting > 0 ? 'fuel purchases to link' : 'every fuel purchase linked'}
           />
-        </KpiStrip>
-      </DataSection>
+        </TileSection>
+      </KpiStrip>
 
       <section className="flex flex-col gap-2">
         <SectionHeader
           title="Purchases"
-          subtitle={purchasesQ.data ? countOf(rows.length, 'invoice') : undefined}
+          subtitle={purchasesQ.data ? invoices(rows.length) : undefined}
           controls={{
             range: (
               <DateRangeMenu

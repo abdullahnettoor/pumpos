@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { resolveBusinessDate, resolveEntryDate } from '@pump/shared';
 import { useNavIntent, clearNavIntent, type NavIntent } from '../nav-intent/store.js';
 import { ROUTES } from '../nav-intent/routes.js';
-import { usePurchases, useSupplierPayments, useSuppliers } from '../query/hooks.js';
+import { usePayables, usePurchases, useSuppliers } from '../query/hooks.js';
 import { openQuickEntry } from '../quick-entry/store.js';
 import { Button, Icon, Tabs, tabPanelProps, type TabItem } from '../pump-ds/index.js';
 import { PageFrame } from './page-frame/index.js';
@@ -69,7 +69,9 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
   const stationId = selectedStation?.id ?? null;
   const purchasesQ = usePurchases(stationId ?? '');
   const suppliersQ = useSuppliers(false);
-  const paymentsQ = useSupplierPayments(stationId);
+  // Payable and the month's purchased / paid: the server's payables summary,
+  // the same figures the Dashboard and the mobile Money tab show.
+  const payablesQ = usePayables(stationId);
   const allSuppliers = useMemo<SupplierRow[]>(() => suppliersQ.data ?? [], [suppliersQ.data]);
 
   // Office records are dated by entry date (station calendar); a Product
@@ -135,17 +137,6 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
     );
   }
 
-  const recordPayment = (primary: boolean) => (
-    <Button
-      variant={primary ? 'primary' : 'secondary'}
-      size="sm"
-      leftIcon={<Icon name="wallet" size="sm" />}
-      onClick={openPaymentDrawer}
-    >
-      Record supplier payment
-    </Button>
-  );
-
   return (
     <>
       <PageFrame
@@ -153,47 +144,41 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
         subtitle="Supplier accounts, purchases and the payments that settle them."
         actions={
           <>
-            {activeTab === 'registry' && (
-              <>
-                {recordPayment(false)}
-                <Button
-                  variant="primary"
-                  size="sm"
-                  leftIcon={<Icon name="plus" size="sm" />}
-                  onClick={openCreateSupplier}
-                >
-                  Add supplier
-                </Button>
-              </>
+            {onNavigate && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  onNavigate(ROUTES.reports, { openReportsTab: 'gst', openGstView: 'purchases' })
+                }
+              >
+                GST (ITC) in Reports ›
+              </Button>
             )}
-            {activeTab === 'transactions' && (
-              <>
-                {onNavigate && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      onNavigate(ROUTES.reports, {
-                        openReportsTab: 'gst',
-                        openGstView: 'purchases',
-                      })
-                    }
-                  >
-                    GST (ITC) in Reports ›
-                  </Button>
-                )}
-                {recordPayment(false)}
-                <Button
-                  variant="primary"
-                  size="sm"
-                  leftIcon={<Icon name="plus" size="sm" />}
-                  onClick={() => openPurchaseDrawer()}
-                >
-                  Record purchase
-                </Button>
-              </>
-            )}
-            {activeTab === 'payments' && recordPayment(true)}
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Icon name="plus" size="sm" />}
+              onClick={openCreateSupplier}
+            >
+              Add supplier
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Icon name="wallet" size="sm" />}
+              onClick={openPaymentDrawer}
+            >
+              Record supplier payment
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Icon name="cart" size="sm" />}
+              onClick={() => openPurchaseDrawer()}
+            >
+              Record purchase
+            </Button>
           </>
         }
         tabs={
@@ -210,9 +195,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
           {activeTab === 'registry' && (
             <SuppliersTab
               suppliersQ={suppliersQ}
-              purchasesQ={purchasesQ}
-              paymentsQ={paymentsQ}
-              clock={clock}
+              payablesQ={payablesQ}
               onOpenStatement={openStatement}
               onEdit={openEditSupplier}
             />
@@ -220,7 +203,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
           {activeTab === 'transactions' && (
             <PurchasesTab
               purchasesQ={purchasesQ}
-              suppliersQ={suppliersQ}
+              payablesQ={payablesQ}
               clock={clock}
               entryClock={entryClock}
               onOpen={openPurchase}
@@ -228,7 +211,12 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
             />
           )}
           {activeTab === 'payments' && (
-            <PaymentsTab paymentsQ={paymentsQ} entryToday={entryToday} entryClock={entryClock} />
+            <PaymentsTab
+              stationId={stationId}
+              payablesQ={payablesQ}
+              entryClock={entryClock}
+              onOpenSupplier={(id) => showStatementFor(id)}
+            />
           )}
         </div>
       </PageFrame>

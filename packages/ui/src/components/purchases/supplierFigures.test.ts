@@ -1,26 +1,59 @@
 import { describe, expect, it } from 'vitest';
-import { balanceFigures, paymentFigures, purchaseFigures } from './supplierFigures.js';
+import { computeRange } from '../../pump-ds/index.js';
+import type { SupplierPaymentRow } from '../../services/cloud.js';
+import { advanceFigures, paymentFigures, purchasedToday, purchasesIn } from './supplierFigures.js';
+
+const clock = { timeZone: 'Asia/Kolkata' };
+const today = computeRange('today', clock).from;
+const lastMonth = computeRange('last-month', clock).from;
 
 describe('supplier figures (#528)', () => {
-  it('dates an Office Record purchase by the calendar today, a day-sealed one by the business today', () => {
+  it('counts today by each purchase’s own anchor, as the payables report counts the month', () => {
     // 05:00 on the 14th, before a 06:00 Day Start: the business date is still the 13th.
-    const clock = { entryToday: '2026-10-14', businessToday: '2026-10-13' };
-    const f = purchaseFigures(
+    const anchors = { entryToday: '2026-10-14', businessToday: '2026-10-13' };
+    const f = purchasedToday(
       [
+        // A Fuel Purchase: an Office Record, no business day, dated by entry date.
         { id: 'fuel', entryDate: '2026-10-14', amount: '100' },
-        { id: 'lube', entryDate: null, businessDate: '2026-10-13', amount: '40' },
-        { id: 'sep', entryDate: '2026-09-30', amount: '5' },
+        // A Product Purchase on the 13th's business day, entered on the 14th.
+        {
+          id: 'lube',
+          businessDayId: 'bd',
+          businessDate: '2026-10-13',
+          entryDate: '2026-10-14',
+          amount: '40',
+        },
+        { id: 'old', businessDayId: 'bd0', businessDate: '2026-10-12', amount: '5' },
       ],
-      clock,
+      anchors,
     );
-    expect(f).toEqual({ today: 140, todayCount: 2, month: 140, monthCount: 2 });
+    expect(f).toEqual({ total: 140, count: 2 });
   });
 
-  it('splits this month’s payments into cash and the other accounts', () => {
-    const row = (id: string, entryDate: string, amount: number, accountType: string) => ({
+  it('dates a purchase by its business date first (the GST register’s rule); an undated one is in no range', () => {
+    const range = { from: '2026-10-13', to: '2026-10-13' };
+    const rows = purchasesIn(
+      [
+        { id: 'a', businessDate: '2026-10-13', entryDate: '2026-10-14', amount: 1 },
+        { id: 'b', entryDate: '2026-10-14', amount: 1 },
+        { id: 'c', amount: 1 },
+      ],
+      range,
+    );
+    expect(rows.map((r) => r.id)).toEqual(['a']);
+  });
+
+  it('splits the month’s payments into cash and the other accounts, and counts the suppliers paid', () => {
+    const row = (
+      id: string,
+      entryDate: string,
+      amount: number,
+      accountType: string,
+      supplierId = 's1',
+    ): SupplierPaymentRow => ({
       id,
       stationId: 'st',
-      supplierId: 's',
+      supplierId,
       supplierName: 'S',
       entryDate,
       amount,
@@ -31,25 +64,31 @@ describe('supplier figures (#528)', () => {
     });
     const f = paymentFigures(
       [
-        row('a', '2026-10-14', 50, 'CASH_IN_HAND'),
-        row('b', '2026-10-02', 30, 'PETTY_CASH'),
-        row('c', '2026-10-03', 200, 'BANK'),
-        row('d', '2026-09-30', 999, 'BANK'),
+        row('a', today, 50, 'CASH_IN_HAND'),
+        row('b', today, 30.1, 'PETTY_CASH', 's2'),
+        row('c', today, 200.2, 'BANK', 's2'),
+        row('d', lastMonth, 999, 'BANK', 's3'),
       ],
-      '2026-10-14',
+      clock,
     );
-    expect(f).toMatchObject({ today: 50, todayCount: 1, month: 280, monthCount: 3 });
-    expect(f.cashMonth).toBe(80);
-    expect(f.otherMonth).toBe(200);
+    expect(f).toMatchObject({
+      month: 280.3,
+      monthCount: 3,
+      cash: 80.1,
+      other: 200.2,
+      suppliers: 2,
+      today: 280.3,
+      todayCount: 3,
+    });
   });
 
-  it('keeps what you owe apart from advances paid', () => {
+  it('adds up advances paid as a positive amount', () => {
     expect(
-      balanceFigures([
+      advanceFigures([
         { id: 'a', name: 'A', isActive: true, currentBalance: '1000' },
         { id: 'b', name: 'B', isActive: true, currentBalance: '-250' },
         { id: 'c', name: 'C', isActive: false, currentBalance: '0' },
       ]),
-    ).toEqual({ payable: 1000, payableCount: 1, advance: 250, advanceCount: 1 });
+    ).toEqual({ total: 250, count: 1 });
   });
 });

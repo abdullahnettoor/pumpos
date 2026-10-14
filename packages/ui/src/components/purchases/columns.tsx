@@ -48,9 +48,13 @@ export interface SupplierRow {
   metadata?: { gstin?: string | null; tradeName?: string | null; pan?: string | null } | null;
 }
 
-/** The date a purchase is listed under: its Entry Date, else its Business Date. */
+/**
+ * The date a purchase is listed under, as the GST register reads it
+ * (`COALESCE(business_date, entry_date)`): its Business Date when it sits on a
+ * business day, else its Entry Date (a Fuel Purchase, ADR 0007).
+ */
 export const purchaseDate = (p: Pick<PurchaseRow, 'entryDate' | 'businessDate'>) =>
-  p.entryDate ?? p.businessDate ?? null;
+  p.businessDate ?? p.entryDate ?? null;
 
 /** A Fuel Purchase whose fuel no Decantation has taken in yet (#469). */
 export const isAwaitingDecantation = (

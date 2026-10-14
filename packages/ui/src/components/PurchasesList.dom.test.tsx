@@ -101,10 +101,24 @@ function stubApi(answers: Record<string, Answer>) {
   return fetchMock;
 }
 
+/** The server's payables summary: deliberately not the sum of the lists above. */
+const PAYABLES = {
+  total: 1234.5,
+  supplierCount: 1,
+  month: {
+    purchased: 4321,
+    paid: 987,
+    purchasedMonth: today.slice(0, 7),
+    paidMonth: today.slice(0, 7),
+  },
+  suppliers: [],
+};
+
 const DATA: Record<string, Answer> = {
   '/transactions/suppliers': { data: SUPPLIERS },
   '/transactions/purchases': { data: PURCHASES },
   '/transactions/supplier-payments': { data: PAYMENTS },
+  '/reports/payables': { data: PAYABLES },
 };
 
 /** The KPI tile whose label reads `label` (the word may also head a column or a chip). */
@@ -143,7 +157,7 @@ describe('Suppliers page (#528)', () => {
     ]);
   });
 
-  it('the supplier list is layout B: four period-chipped tiles, then the list header and its controls', async () => {
+  it('the supplier list is layout B: server tiles with period chips, then the list header and its controls', async () => {
     renderWithProviders(<PurchasesList selectedStation={station} />);
     const table = await screen.findByRole('table');
     const header = screen.getByTestId('section-header-suppliers');
@@ -153,12 +167,14 @@ describe('Suppliers page (#528)', () => {
     expect(within(bar).getByRole('button', { name: 'About supplier balances' })).toBeTruthy();
     expect(screen.getAllByTestId('control-bar')).toHaveLength(1);
 
+    // Payable, Purchased and Paid are the server's figures, never sums of the lists.
     const chips: [string, string, string][] = [
-      ['Payable', 'Now', '₹1,000.00'],
-      ['Purchased', monthName, '₹700.00'],
-      ['Paid', monthName, '₹600.00'],
+      ['Payable', 'Now', '₹1,234.50'],
+      ['Purchased', monthName, '₹4,321.00'],
+      ['Paid', monthName, '₹987.00'],
       ['Advance paid', 'Now', '₹250.00'],
     ];
+    await screen.findByText('₹1,234.50');
     for (const [label, chip, value] of chips) {
       const tile = tileOf(label);
       expect(before(tile, header)).toBe(true);
@@ -166,12 +182,11 @@ describe('Suppliers page (#528)', () => {
       expect(within(tile).getByText(value)).toBeTruthy();
       expect(tile.getAttribute('data-alert')).toBeNull();
     }
-    // The balance column is net; the total row says so.
-    expect(totalRow(table).getByText('Total, net of advances')).toBeTruthy();
-    expect(totalRow(table).getByText('₹750.00')).toBeTruthy();
+    // Unfiltered, the Payable tile carries the total: no total row.
+    expect(table.querySelector('tfoot')).toBeNull();
   });
 
-  it('filters rows at once with counted chips; Inactive is grey', async () => {
+  it('filters rows at once with counted chips; a filtered list totals the rows shown', async () => {
     renderWithProviders(<PurchasesList selectedStation={station} />);
     const table = await screen.findByRole('table');
     const group = screen.getByRole('radiogroup', { name: 'Supplier balance' });
@@ -183,7 +198,25 @@ describe('Suppliers page (#528)', () => {
     fireEvent.click(inactive);
     expect(within(table).queryByText('IOCL Depot')).toBeNull();
     expect(within(table).getByText('Old Lubes')).toBeTruthy();
-    expect(totalRow(table).getByText('Total')).toBeTruthy();
+    expect(totalRow(table).getByText('Total of 1 shown')).toBeTruthy();
+
+    fireEvent.click(within(group).getByRole('radio', { name: 'All, 3' }));
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Terminal' } });
+    expect(totalRow(table).getByText('Total of 1 shown, net of advances')).toBeTruthy();
+    expect(screen.getByTestId('section-header-suppliers').textContent).toContain('1 of 3');
+  });
+
+  it('every tab carries the same actions: Add supplier, Record supplier payment, Record purchase (primary)', async () => {
+    renderWithProviders(<PurchasesList selectedStation={station} />);
+    for (const tab of [/Suppliers/, /Purchases/, /Payments/]) {
+      fireEvent.click(await screen.findByRole('tab', { name: tab }));
+      const add = screen.getByRole('button', { name: 'Add supplier' });
+      const pay = screen.getByRole('button', { name: 'Record supplier payment' });
+      const buy = screen.getByRole('button', { name: 'Record purchase' });
+      expect(add.className).not.toContain('bg-brand');
+      expect(pay.className).not.toContain('bg-brand');
+      expect(buy.className).toContain('bg-brand');
+    }
   });
 
   it('the statement says "You owe", and an advance reads "Advance paid", never a negative', async () => {
@@ -207,22 +240,28 @@ describe('Suppliers page (#528)', () => {
     expect(within(header).getByRole('button', { name: /Purchases period/ })).toBeTruthy();
     expect(within(table).getByText('INV-NEW')).toBeTruthy();
     expect(within(table).queryByText('INV-OLD')).toBeNull();
-    expect(within(table).getByText('Awaiting decantation')).toBeTruthy();
+    const chip = within(table).getByText('Awaiting decantation');
+    expect(chip.closest('[class*="bg-"]')?.className).not.toMatch(/warning|danger/);
+    // A count of purchases to link is a state, not a problem: no alert.
     const awaiting = tileOf('Awaiting decantation');
-    expect(awaiting.getAttribute('data-alert')).toBe('warning');
+    expect(awaiting.getAttribute('data-alert')).toBeNull();
+    expect(within(awaiting).getByText('1')).toBeTruthy();
+    expect(within(tileOf('Purchased today')).getByText('₹700.00')).toBeTruthy();
+    expect(within(tileOf('Payable')).getByText('₹1,234.50')).toBeTruthy();
     expect(totalRow(table).getByText('₹700.00')).toBeTruthy();
 
     fireEvent.click(within(header).getByRole('button', { name: /Purchases period/ }));
     fireEvent.click(await screen.findByRole('menuitemradio', { name: /Last month/ }));
     await waitFor(() => expect(within(table).getByText('INV-OLD')).toBeTruthy());
     expect(within(table).queryByText('INV-NEW')).toBeNull();
-    // The month tile keeps reading this month.
-    expect(within(tileOf('Purchased this month')).getByText('₹700.00')).toBeTruthy();
+    // The today tile keeps reading today.
+    expect(within(tileOf('Purchased today')).getByText('₹700.00')).toBeTruthy();
     expect(table.innerHTML).not.toMatch(RED_OR_GREEN);
     expect(document.body.textContent).not.toMatch(ISO_DATE);
   });
 
-  it('Payments lists Supplier Payments with their Funding Account and a total', async () => {
+  it('Payments reads its range from the server; one Paid tile with its split; a row opens the statement', async () => {
+    const fetchMock = stubApi(DATA);
     renderWithProviders(<PurchasesList selectedStation={station} />);
     fireEvent.click(await screen.findByRole('tab', { name: /Payments/ }));
     const table = await screen.findByRole('table');
@@ -230,11 +269,36 @@ describe('Suppliers page (#528)', () => {
     expect(within(table).getByText('SBI Current')).toBeTruthy();
     expect(within(table).getByText('Bank')).toBeTruthy();
     expect(totalRow(table).getByText('₹600.00')).toBeTruthy();
-    expect(within(tileOf('From cash in hand / petty')).getByText('₹50.00')).toBeTruthy();
-    expect(within(tileOf('From bank / owner')).getByText('₹550.00')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Record supplier payment/ }).className).toContain(
-      'bg-brand',
+
+    const paid = tileOf('Paid');
+    expect(within(paid).getByText('₹600.00')).toBeTruthy();
+    expect(within(paid).getByText('₹50.00 cash · ₹550.00 bank / owner')).toBeTruthy();
+    expect(within(tileOf('Suppliers paid')).getByText('2')).toBeTruthy();
+    expect(within(tileOf('Paid today')).getByText('₹600.00')).toBeTruthy();
+    expect(screen.queryByText('From cash in hand / petty')).toBeNull();
+
+    const month = computeRange('this-month', clock);
+    const paymentUrls = () =>
+      fetchMock.mock.calls.map(([u]) => String(u)).filter((u) => u.includes('supplier-payments'));
+    expect(paymentUrls().some((u) => u.includes(`from=${month.from}`))).toBe(true);
+    const header = screen.getByTestId('section-header-supplier-payments');
+    fireEvent.click(within(header).getByRole('button', { name: /Supplier payments period/ }));
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: /Last month/ }));
+    const last = computeRange('last-month', clock);
+    await waitFor(() =>
+      expect(paymentUrls().some((u) => u.includes(`from=${last.from}&to=${last.to}`))).toBe(true),
     );
+
+    fireEvent.click(await within(await screen.findByRole('table')).findByText('NEFT'));
+    expect((await screen.findByTestId('supplier-balance')).textContent).toBe('Advance paid₹250.00');
+  });
+
+  it('a failed payments call hides only the tiles that read it', async () => {
+    stubApi({ ...DATA, '/transactions/supplier-payments': 'fail' });
+    renderWithProviders(<PurchasesList selectedStation={station} />);
+    fireEvent.click(await screen.findByRole('tab', { name: /Payments/ }));
+    expect(await screen.findByText("Couldn't load paid this month", { exact: false })).toBeTruthy();
+    expect(await screen.findByText('₹1,234.50')).toBeTruthy();
   });
 
   it('a failed load shows "Couldn\'t load … · Retry" in each section, never a page error', async () => {
@@ -242,7 +306,7 @@ describe('Suppliers page (#528)', () => {
     renderWithProviders(<PurchasesList selectedStation={station} />);
     const alerts = await screen.findAllByRole('alert');
     expect(alerts.map((a) => a.textContent?.replace(/ ·.*/, ''))).toEqual([
-      "Couldn't load supplier totals",
+      "Couldn't load advances",
       "Couldn't load suppliers",
     ]);
     expect(screen.queryByText(/^Error:/)).toBeNull();

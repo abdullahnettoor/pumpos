@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import type { UseQueryResult } from '@tanstack/react-query';
+import type { PayablesSummary } from '@pump/shared';
 import {
   DataSection,
   DateRangeMenu,
@@ -12,20 +12,26 @@ import {
   SectionHeader,
   computeRange,
   type DateRange,
-  type RangeClock,
 } from '../../pump-ds/index.js';
+import { useSupplierPayments } from '../../query/hooks.js';
 import type { SupplierPaymentRow } from '../../services/cloud.js';
 import { formatMoney } from '../../utils/format.js';
+import { countOf, type EntryClock } from '../../utils/ledgerWindow.js';
+import { MONEY_TERMS } from '../../utils/moneyTerms.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import { PAYMENT_COLUMNS } from './columns.js';
-import { countOf, paymentFigures } from './supplierFigures.js';
+import { paymentFigures, suppliersCount, type QueryOf } from './supplierFigures.js';
+import { TileSection } from './TileSection.js';
 
 export interface PaymentsTabProps {
-  paymentsQ: UseQueryResult<SupplierPaymentRow[]>;
-  /** The station calendar date: Supplier Payments are dated by Entry Date. */
-  entryToday: string;
-  entryClock: RangeClock;
+  stationId: string | null;
+  payablesQ: QueryOf<PayablesSummary>;
+  entryClock: EntryClock;
+  /** A row opens its supplier's statement. */
+  onOpenSupplier: (supplierId: string) => void;
 }
+
+const payments = (n: number) => countOf(n, 'payment', 'payments');
 
 const matches = (p: SupplierPaymentRow, q: string) =>
   [p.supplierName, p.notes, p.accountName].some((v) => v?.toLowerCase().includes(q));
@@ -33,59 +39,82 @@ const matches = (p: SupplierPaymentRow, q: string) =>
 /**
  * Suppliers → Payments: the Supplier Payments ledger (layout B, #567). Office
  * Records (ADR 0005): each carries its Entry Date and the Funding Account it
- * was paid from, never a shift. Fixed tiles on top, the range, search and info
- * tip in the ledger's header.
+ * was paid from, never a shift. One Paid tile carries the month with its cash /
+ * other split; the others add what the total does not say: today, how many
+ * suppliers were paid, and what is still owed. The range, search and info tip
+ * sit in the ledger's header; a row opens the supplier's statement.
  */
-export const PaymentsTab: React.FC<PaymentsTabProps> = ({ paymentsQ, entryToday, entryClock }) => {
+export const PaymentsTab: React.FC<PaymentsTabProps> = ({
+  stationId,
+  payablesQ,
+  entryClock,
+  onOpenSupplier,
+}) => {
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', entryClock));
   const [search, setSearch] = useState('');
-  const payments = useMemo(() => paymentsQ.data ?? [], [paymentsQ.data]);
-  const figures = useMemo(() => paymentFigures(payments, entryToday), [payments, entryToday]);
-  const month = { month: entryToday };
+  // The ledger reads its range from the server; the tiles read this month. While
+  // the range is this month the two share one cached request.
+  const paymentsQ = useSupplierPayments({ stationId, ...range });
+  const thisMonth = useMemo(() => computeRange('this-month', entryClock), [entryClock]);
+  const monthQ = useSupplierPayments({ stationId, ...thisMonth });
+  const all = useMemo(() => paymentsQ.data ?? [], [paymentsQ.data]);
+  const figures = useMemo(
+    () => paymentFigures(monthQ.data ?? [], entryClock),
+    [monthQ.data, entryClock],
+  );
+  const month = { month: figures.monthFrom };
+  const summary = payablesQ.data;
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return payments
-      .filter((p) => {
-        if (q && !matches(p, q)) return false;
-        return !(p.entryDate && (p.entryDate < range.from || p.entryDate > range.to));
-      })
+    return all
+      .filter((p) => !q || matches(p, q))
       .sort((a, b) => (b.entryDate ?? '').localeCompare(a.entryDate ?? ''));
-  }, [payments, search, range.from, range.to]);
+  }, [all, search]);
 
   return (
     <>
-      <DataSection title="payment totals" query={paymentsQ} shape="cards" placeholderHeight={90}>
-        <KpiStrip columns="auto">
+      <KpiStrip columns="auto">
+        <TileSection title="paid this month" query={monthQ}>
+          <KpiTile
+            label="Paid"
+            scope={month}
+            value={formatMoney(figures.month)}
+            hint={`${formatMoney(figures.cash)} cash · ${formatMoney(figures.other)} bank / owner`}
+          />
+        </TileSection>
+        <TileSection title="paid today" query={monthQ}>
           <KpiTile
             label="Paid today"
             scope="today"
             value={formatMoney(figures.today)}
-            hint="by entry date"
+            hint={payments(figures.todayCount)}
           />
+        </TileSection>
+        <TileSection title="suppliers paid" query={monthQ}>
           <KpiTile
-            label="Paid this month"
+            label="Suppliers paid"
             scope={month}
-            value={formatMoney(figures.month)}
-            hint={countOf(figures.monthCount, 'payment')}
+            value={String(figures.suppliers)}
+            hint={payments(figures.monthCount)}
           />
-          <KpiTile
-            label="From cash in hand / petty"
-            scope={month}
-            value={formatMoney(figures.cashMonth)}
-          />
-          <KpiTile
-            label="From bank / owner"
-            scope={month}
-            value={formatMoney(figures.otherMonth)}
-          />
-        </KpiStrip>
-      </DataSection>
+        </TileSection>
+        <TileSection title="payable" query={payablesQ}>
+          {summary && (
+            <KpiTile
+              label={MONEY_TERMS.payable}
+              scope="now"
+              value={formatMoney(summary.total)}
+              hint={`still owed to ${suppliersCount(summary.supplierCount)}`}
+            />
+          )}
+        </TileSection>
+      </KpiStrip>
 
       <section className="flex flex-col gap-2">
         <SectionHeader
           title="Supplier payments"
-          subtitle={paymentsQ.data ? countOf(rows.length, 'payment') : undefined}
+          subtitle={paymentsQ.data ? payments(rows.length) : undefined}
           controls={{
             range: (
               <DateRangeMenu
@@ -110,6 +139,7 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({ paymentsQ, entryToday,
               <InfoTip label="About supplier payments" placement="bottom">
                 Supplier payments are office records: dated by entry date and paid from the chosen
                 account. They never touch a shift drawer. Each lowers what you owe that supplier.
+                Open a row for the supplier&rsquo;s statement.
               </InfoTip>
             ),
           }}
@@ -125,11 +155,13 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({ paymentsQ, entryToday,
               <EmptyState
                 compact
                 icon={<Icon name="wallet" size="md" />}
-                title={payments.length === 0 ? 'No supplier payments yet' : 'No matching payments'}
+                title={
+                  search.trim() ? 'No matching payments' : 'No supplier payments in this range'
+                }
                 description={
-                  payments.length === 0
-                    ? 'Record one with “Record supplier payment”.'
-                    : 'Adjust the range or the search.'
+                  search.trim()
+                    ? 'Adjust the range or the search.'
+                    : 'Record one with “Record supplier payment”, or pick another range.'
                 }
               />
             </div>
@@ -142,6 +174,7 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({ paymentsQ, entryToday,
             rowKey={(p) => p.id}
             totalRow
             title="supplier payments"
+            onRowClick={(p) => onOpenSupplier(p.supplierId)}
           />
         </DataSection>
       </section>

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { usePurchaseGstRegister } from '../../../query/hooks.js';
 import { formatMoney } from '../../../utils/format.js';
+import { countOf } from '../../../utils/ledgerWindow.js';
 import { InfoTip } from '../../primitives/InfoTip.js';
 import {
   ControlBar,
@@ -143,7 +144,17 @@ export const PurchaseGstPanel: React.FC<{
     [gstRows],
   );
   const itcTotal = totals.cgst + totals.sgst + totals.igst + totals.cess;
-  const lines = `${gstRows.length} ${gstRows.length === 1 ? 'line' : 'lines'}`;
+  // The register's total row already carries each column. The tiles say what it
+  // does not: the credit in one figure with its split, and how many invoices
+  // and suppliers it comes from.
+  const invoiceCount = new Set(gstRows.map((r) => r.invoiceNumber || r.documentNumber || r.id))
+    .size;
+  const supplierCount = new Set(gstRows.map((r) => r.supplierGstin || r.supplierName)).size;
+  const split = [
+    `${formatMoney(totals.cgst + totals.sgst)} CGST + SGST`,
+    `${formatMoney(totals.igst)} IGST`,
+    ...(totals.cess > 0 ? [`${formatMoney(totals.cess)} cess`] : []),
+  ].join(' · ');
 
   return (
     <div className="flex flex-col gap-4">
@@ -167,28 +178,22 @@ export const PurchaseGstPanel: React.FC<{
       <DataSection title="GST totals" query={gstQ} shape="cards" placeholderHeight={90}>
         <KpiStrip columns="auto">
           <KpiTile
-            label="Taxable value"
-            scope="in-range"
-            value={formatMoney(totals.taxable)}
-            hint="net of GST"
-          />
-          <KpiTile
-            label="CGST + SGST"
-            scope="in-range"
-            value={formatMoney(totals.cgst + totals.sgst)}
-            hint="intra-state"
-          />
-          <KpiTile
-            label="IGST"
-            scope="in-range"
-            value={formatMoney(totals.igst)}
-            hint="inter-state"
-          />
-          <KpiTile
             label="Input credit (ITC)"
             scope="in-range"
             value={formatMoney(itcTotal)}
-            hint={totals.cess > 0 ? `${lines}, incl. ${formatMoney(totals.cess)} cess` : lines}
+            hint={split}
+          />
+          <KpiTile
+            label="Invoices"
+            scope="in-range"
+            value={String(invoiceCount)}
+            hint={countOf(gstRows.length, 'line', 'lines')}
+          />
+          <KpiTile
+            label="Suppliers"
+            scope="in-range"
+            value={String(supplierCount)}
+            hint="with GST purchases"
           />
         </KpiStrip>
       </DataSection>
