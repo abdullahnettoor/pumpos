@@ -2,11 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { resolveEntryDate } from '@pump/shared';
 import { useDailyCashBook } from '../../query/hooks.js';
-import type { DailyCashBookAccount, DailyCashBookEntry } from '../../services/cloud.js';
+import type { DailyCashBookAccount } from '../../services/cloud.js';
 import { DateField } from '../primitives/Field.js';
 import { Drawer } from '../Drawer.js';
 import { inr } from '../../utils/format.js';
-import { accountTypeLabel, ledgerSourceLabel } from '../../utils/ledgerLabels.js';
+import { accountTypeLabel } from '../../utils/ledgerLabels.js';
+import { StatementView, buildStatement, moneyEntries } from '../../statement/index.js';
 import { addDays, cashAccountTotals, sortCashBookAccounts } from '../../utils/cashBook.js';
 import {
   Button,
@@ -16,8 +17,6 @@ import {
   KpiStrip,
   KpiTile,
   Panel,
-  StatementTable,
-  type TableColumn,
 } from '../../pump-ds/index.js';
 
 export interface DailyCashBookProps {
@@ -248,65 +247,34 @@ export const DailyCashBook: React.FC<DailyCashBookProps> = ({ selectedStation })
   );
 };
 
+/**
+ * One account's entries for the date, as a statement (Statement module):
+ * opening, each entry as a Debit (in) or Credit (out) with its running
+ * balance, and the closing. The time and the party or note sit under the source.
+ */
 const AccountDayEntries: React.FC<{
   account: DailyCashBookAccount;
   timeOf: (iso: string) => string;
 }> = ({ account, timeOf }) => {
-  const columns = useMemo<TableColumn<DailyCashBookEntry>[]>(
-    () => [
-      {
-        id: 'time',
-        header: 'Time',
-        kind: 'date',
-        width: '14%',
-        value: (e) => e.createdAt,
-        cell: (e) => timeOf(e.createdAt),
-      },
-      {
-        id: 'source',
-        header: 'Source',
-        kind: 'text',
-        width: '22%',
-        value: (e) => ledgerSourceLabel(e.sourceType),
-      },
-      { id: 'notes', header: 'Notes', kind: 'text', value: (e) => e.notes },
-      {
-        id: 'in',
-        header: 'In',
-        kind: 'money',
-        width: '16%',
-        value: (e) => (e.direction === 'in' ? e.amount : null),
-      },
-      {
-        id: 'out',
-        header: 'Out',
-        kind: 'money',
-        width: '16%',
-        value: (e) => (e.direction === 'out' ? e.amount : null),
-      },
-    ],
-    [timeOf],
+  const statement = useMemo(
+    () =>
+      buildStatement(
+        moneyEntries(account.entries, {
+          detail: (e) =>
+            [e.createdAt && timeOf(e.createdAt), e.partyName, e.notes].filter(Boolean).join(' · '),
+        }),
+        { kind: 'account', opening: account.opening },
+      ),
+    [account, timeOf],
   );
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2 text-xs">
         <Chip tone="neutral" size="xs">
           {accountTypeLabel(account.accountType)}
         </Chip>
-        <span style={{ color: 'var(--text-muted)' }}>
-          Opening <strong style={{ fontFamily: 'var(--font-mono)' }}>{inr(account.opening)}</strong>{' '}
-          → Closing{' '}
-          <strong style={{ fontFamily: 'var(--font-mono)' }}>{inr(account.closing)}</strong>
-        </span>
       </div>
-      <StatementTable<DailyCashBookEntry>
-        label={`${account.name} entries`}
-        rows={account.entries}
-        rowKey={(e) => e.id}
-        emptyMessage="No money moved through this account on this date."
-        columns={columns}
-        totalRow={{ values: { in: account.moneyIn, out: account.moneyOut } }}
-      />
+      <StatementView statement={statement} label={`${account.name} entries`} />
     </div>
   );
 };

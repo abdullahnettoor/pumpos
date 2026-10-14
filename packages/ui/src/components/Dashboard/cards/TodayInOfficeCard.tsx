@@ -1,14 +1,14 @@
 import React, { useMemo } from 'react';
-import { officeEntries } from './money/moneyModel.js';
-import { formatMoney } from '../../../utils/format.js';
-import { ledgerSourceLabel } from '../../../utils/ledgerLabels.js';
+import { formatSignedMoney } from '../../../utils/format.js';
+import { officeRecords, sourceLabel } from '../../../statement/index.js';
 import { useDailyCashBook } from '../../../query/hooks.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
 
 /**
  * Money column card: Today in the office (#506).
- * Latest 3 Office Records of today's Entry Date as a table, with the entry count.
+ * Latest 3 Office Records of today's Entry Date, with the entry count. Rows and
+ * their words come from the Statement module (`officeRecords`, `sourceLabel`).
  * The Daily cash book › link lives once, in the Money column header.
  * Fails independently from the other Money cards.
  */
@@ -18,7 +18,7 @@ export const TodayInOfficeCard: React.FC = () => {
 
   const cashBookQ = useDailyCashBook(station.id, entryDate, { enabled });
 
-  const allEntries = useMemo(() => officeEntries(cashBookQ.data?.accounts), [cashBookQ.data]);
+  const allEntries = useMemo(() => officeRecords(cashBookQ.data?.accounts), [cashBookQ.data]);
 
   const top3 = allEntries.slice(0, 3);
   const count = allEntries.length;
@@ -48,25 +48,22 @@ export const TodayInOfficeCard: React.FC = () => {
           data-testid="office-records-list"
         >
           {top3.map((entry) => {
-            const label = ledgerSourceLabel(entry.sourceType);
-            const detail = entry.partyName || entry.notes || entry.accountName;
-            const isIncome = entry.direction === 'in';
+            const isIncome = entry.amount >= 0;
             return (
               <li
                 key={entry.id}
                 className="flex items-center justify-between py-1.5 first:pt-0 last:pb-0"
               >
                 <span className="truncate pr-2 text-ink">
-                  <span className="font-medium">{label}</span>
-                  {detail && <span className="text-ink-muted"> · {detail}</span>}
+                  <span className="font-medium">{sourceLabel(entry.source)}</span>
+                  {entry.detail && <span className="text-ink-muted"> · {entry.detail}</span>}
                 </span>
                 <span
                   className={`font-mono font-medium shrink-0 ${
                     isIncome ? 'text-success-fg' : 'text-danger-fg'
                   }`}
                 >
-                  {isIncome ? '+' : '−'}
-                  {formatMoney(entry.amount, { decimals: 0 })}
+                  {formatSignedMoney(entry.amount, { decimals: 0, plus: true })}
                 </span>
               </li>
             );

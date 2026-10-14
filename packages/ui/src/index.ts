@@ -105,12 +105,7 @@ export type {
 export { fileSlug, ledgerFileName } from './services/reports/ledgerFileName.js';
 export { ledgerQuantityLabel, unitLabel } from './utils/ledgerQuantity.js';
 export type { LedgerQuantity } from './utils/ledgerQuantity.js';
-export { LedgerView, computeLedgerRows } from './components/ledger/LedgerView.js';
-export type {
-  LedgerResolved,
-  LedgerComputed,
-  LedgerViewProps,
-} from './components/ledger/LedgerView.js';
+export * from './statement/index.js';
 export { DesignSystem } from './components/DesignSystem.js';
 
 // Data layer (TanStack Query) + shared primitives

@@ -68,8 +68,8 @@ describe('partyStatementDoc', () => {
       partyAccount: true,
       opening: 5000,
       totals: { debit: 8500, credit: 4000, balance: 9500 },
-      debitLabel: 'Sales',
-      creditLabel: 'Received',
+      debitLabel: 'Debit',
+      creditLabel: 'Credit',
       generatedAt: '2026-10-10T08:30:00.000Z',
     });
   });
@@ -77,18 +77,18 @@ describe('partyStatementDoc', () => {
   it('puts a sale in the debit column and a collection in the credit column, oldest first', () => {
     expect(build(customerLedger).rows).toEqual([
       {
-        dateLabel: '7 Oct 2026',
+        dateLabel: '07 Oct 2026',
         particulars: 'Credit Sale',
         detail: 'Shift 20261007-1 · 120 L Diesel · KL-11-AB-4521',
         debit: 8500,
-        credit: 0,
+        credit: null,
         balance: 13500,
       },
       {
         dateLabel: '18 Oct 2026',
         particulars: 'Payment received',
         detail: 'UPI · Ref COL-000042',
-        debit: 0,
+        debit: null,
         credit: 4000,
         balance: 9500,
       },
@@ -122,7 +122,7 @@ describe('partyStatementDoc', () => {
     expect(d.totals.debit).toBe(0.3);
   });
 
-  it('treats a supplier Payment as the credit; a negative balance is an advance', () => {
+  it('a payable: a Purchase is the credit, a supplier Payment the debit; a negative balance is an advance', () => {
     const d = build(
       {
         periodOpeningBalance: '1000.00',
@@ -143,8 +143,8 @@ describe('partyStatementDoc', () => {
     );
     expect(d.title).toBe('SUPPLIER STATEMENT');
     expect(d.rows.map((r) => [r.particulars, r.debit, r.credit, r.balance])).toEqual([
-      ['Purchase · HSD', 2000, 0, 3000],
-      ['Payment made', 0, 3500, -500],
+      ['Purchase · HSD', null, 2000, 3000],
+      ['Payment made', 3500, null, -500],
     ]);
     expect(d.totals.balance).toBe(-500);
     expect(d.closing).toEqual({ note: 'Advance' });
@@ -176,8 +176,8 @@ describe('partyStatementDoc', () => {
       ],
     });
     expect(d.rows.map((r) => [r.debit, r.credit])).toEqual([
-      [0, 50],
-      [20, 0],
+      [null, 50],
+      [20, null],
     ]);
     expect(d.totals).toMatchObject({ debit: 20, credit: 50 });
   });

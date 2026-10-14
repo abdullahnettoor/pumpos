@@ -19,8 +19,9 @@ export interface LedgerDocRow {
   particulars: string;
   /** A muted second line under the particulars (a statement row's shift, vehicle, reference). */
   detail?: string;
-  debit: number;
-  credit: number;
+  /** `null` or `0` prints a blank cell (the side the row did not move). */
+  debit: number | null;
+  credit: number | null;
   balance: number;
 }
 
@@ -57,10 +58,62 @@ export interface LedgerDocProps {
 }
 
 /**
+ * The statement table of a `LedgerDoc`, cell by cell: the columns, the opening
+ * line, the rows and the closing (or total) line. Exported so a test can read
+ * what the PDF prints next to what the screen prints (`statement/parity`).
+ */
+export function ledgerDocTable({
+  debitLabel,
+  creditLabel,
+  balanceLabel,
+  rows,
+  totals,
+  opening,
+  closing,
+}: Pick<
+  LedgerDocProps,
+  'debitLabel' | 'creditLabel' | 'balanceLabel' | 'rows' | 'totals' | 'opening' | 'closing'
+>): { cols: Col[]; cellRows: Cell[][]; totalRow: Cell[]; leadRow: Cell[] | undefined } {
+  const cols: Col[] = [
+    { header: 'Date', flex: 1.3, strong: true },
+    { header: 'Particulars', flex: 2.8 },
+    { header: debitLabel, flex: 1.4, align: 'right', mono: true },
+    { header: creditLabel, flex: 1.4, align: 'right', mono: true },
+    { header: balanceLabel, flex: 1.5, align: 'right', mono: true, strong: true },
+  ];
+  const side = (v: number | null) => (v ? inr(v) : '');
+  const cellRows: Cell[][] = rows.map((r) => [
+    { text: r.dateLabel },
+    { text: r.particulars, detail: r.detail },
+    { text: side(r.debit) },
+    { text: side(r.credit) },
+    { text: inr(r.balance) },
+  ]);
+  const totalRow: Cell[] = [
+    closing ? { text: 'Closing balance', detail: closing.note } : { text: 'Total' },
+    { text: '' },
+    { text: inr(totals.debit) },
+    { text: inr(totals.credit) },
+    { text: inr(totals.balance), color: C.ink },
+  ];
+  const leadRow: Cell[] | undefined =
+    opening === undefined
+      ? undefined
+      : [
+          { text: '' },
+          { text: 'Opening balance' },
+          { text: '' },
+          { text: '' },
+          { text: inr(opening), color: C.ink },
+        ];
+  return { cols, cellRows, totalRow, leadRow };
+}
+
+/**
  * Vector PDF statement for any ledger entity (customer, supplier, cash, bank,
  * owner) — reuses the shared Phase-R react-pdf kit (letterhead, KPI tiles,
- * generic two-column-style table). Rows arrive already resolved + balanced by
- * `computeLedgerRows` so the PDF matches the on-screen `<LedgerView>` exactly.
+ * generic two-column-style table). Rows arrive from the Statement module
+ * (`statement/pdf.ts`), the same lines the screen's `StatementView` prints.
  *
  * The optional `partyLines`, `partyAccount`, `opening`, `closing` and per-row
  * `detail` turn it into one customer's or supplier's account statement (the
@@ -86,39 +139,17 @@ export const LedgerDoc: React.FC<LedgerDocProps> = ({
   opening,
   closing,
 }) => {
-  const cols: Col[] = [
-    { header: 'Date', flex: 1.3, strong: true },
-    { header: 'Particulars', flex: 2.8 },
-    { header: debitLabel, flex: 1.4, align: 'right', mono: true },
-    { header: creditLabel, flex: 1.4, align: 'right', mono: true },
-    { header: balanceLabel, flex: 1.5, align: 'right', mono: true, strong: true },
-  ];
+  const { cols, cellRows, totalRow, leadRow } = ledgerDocTable({
+    debitLabel,
+    creditLabel,
+    balanceLabel,
+    rows,
+    totals,
+    opening,
+    closing,
+  });
   // `inr` / `inr0` sign a negative as `−₹1,200.00` (the shared signed-money rule).
   const kpiMoney = partyAccount ? inr : inr0;
-  const cellRows: Cell[][] = rows.map((r) => [
-    { text: r.dateLabel },
-    { text: r.particulars, detail: r.detail },
-    { text: r.debit ? inr(r.debit) : '' },
-    { text: r.credit ? inr(r.credit) : '', color: r.credit ? C.success : undefined },
-    { text: inr(r.balance) },
-  ]);
-  const totalRow: Cell[] = [
-    closing ? { text: 'CLOSING BALANCE', detail: closing.note } : { text: 'TOTALS' },
-    { text: '' },
-    { text: inr(totals.debit) },
-    { text: inr(totals.credit), color: C.success },
-    { text: inr(totals.balance), color: C.ink },
-  ];
-  const leadRow: Cell[] | undefined =
-    opening === undefined
-      ? undefined
-      : [
-          { text: 'OPENING BALANCE' },
-          { text: '' },
-          { text: '' },
-          { text: '' },
-          { text: inr(opening), color: C.ink },
-        ];
   // A negative balance is a shortfall on the desktop ledger, an advance on a party's account.
   const balanceTone = totals.balance < 0 && !partyAccount ? C.danger : C.ink;
 
