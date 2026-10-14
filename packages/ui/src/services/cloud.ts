@@ -1237,10 +1237,16 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/purchases${suffix}`);
   }
 
-  /** Supplier Payments, newest Entry Date first (Suppliers → Payments, #528). */
-  async getSupplierPayments(stationId?: string): Promise<SupplierPaymentRow[]> {
-    const suffix = stationId ? `?${new URLSearchParams({ stationId }).toString()}` : '';
-    return request<SupplierPaymentRow[]>(`/transactions/supplier-payments${suffix}`);
+  /** Supplier Payments, newest Entry Date first; `from`/`to` bound the Entry Date (#528). */
+  async getSupplierPayments(params: {
+    stationId: string;
+    from?: string;
+    to?: string;
+  }): Promise<SupplierPaymentRow[]> {
+    const qs = new URLSearchParams({ stationId: params.stationId });
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    return request<SupplierPaymentRow[]>(`/transactions/supplier-payments?${qs.toString()}`);
   }
 
   async getPurchaseItems(purchaseId: string): Promise<any[]> {

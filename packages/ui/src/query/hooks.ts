@@ -127,7 +127,8 @@ export const queryKeys = {
   purchases: (stationId?: string) =>
     stationId ? (['purchases', stationId] as const) : (['purchases'] as const),
   purchaseItems: (purchaseId: string) => ['purchase-items', purchaseId] as const,
-  supplierPayments: (stationId: string) => ['supplier-payments', stationId] as const,
+  supplierPayments: (stationId: string, from = '', to = '') =>
+    ['supplier-payments', stationId, from, to] as const,
   decantations: (stationId: string, status = '') => ['decantations', stationId, status] as const,
   collections: () => ['collections'] as const,
   creditSales: () => ['credit-sales'] as const,
@@ -833,15 +834,24 @@ export function usePurchases(stationId = '', options?: Options<any[]>) {
   });
 }
 
-/** Supplier Payments of a station (Suppliers → Payments). Operational tier. */
+/**
+ * Supplier Payments of a station over an Entry Date range (Suppliers →
+ * Payments). Operational tier; the range is in the key, so a new range fetches
+ * at once and a tile reading the month shares the ledger's cache when they match.
+ */
 export function useSupplierPayments(
-  stationId: string | null | undefined,
+  params: { stationId?: string | null; from?: string; to?: string },
   options?: Options<SupplierPaymentRow[]>,
 ) {
   return useQuery({
-    queryKey: queryKeys.supplierPayments(stationId ?? ''),
-    queryFn: () => txService.getSupplierPayments(stationId!),
-    enabled: !!stationId,
+    queryKey: queryKeys.supplierPayments(params.stationId ?? '', params.from, params.to),
+    queryFn: () =>
+      txService.getSupplierPayments({
+        stationId: params.stationId!,
+        from: params.from,
+        to: params.to,
+      }),
+    enabled: !!params.stationId,
     ...TIER.operational,
     ...options,
   });

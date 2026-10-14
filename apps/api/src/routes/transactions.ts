@@ -2169,15 +2169,27 @@ transactionsRouter.get('/purchases/gst-register', async (c) => {
 });
 
 /**
- * GET /transactions/supplier-payments?stationId= — the Supplier Payments, newest
- * Entry Date first, each with its supplier and the Funding Account it came from.
- * Backs the Suppliers → Payments tab (#528). Office Records (ADR 0005): dated by
- * Entry Date, never a shift. Read-only; scoped like the purchases list.
+ * GET /transactions/supplier-payments?stationId=&from=&to= — the Supplier
+ * Payments, newest Entry Date first, each with its supplier and the Funding
+ * Account it came from. Backs the Suppliers → Payments tab (#528). Office
+ * Records (ADR 0005): dated by Entry Date, never a shift; `from`/`to` bound the
+ * Entry Date (inclusive). Read-only; open to the Roles that record them
+ * (`canRecordPurchase`), scoped to stations like the purchases list.
  */
 transactionsRouter.get('/supplier-payments', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  if (!canRecordPurchase(user.role))
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to view supplier payments' },
+      },
+      403,
+    );
   const stationId = c.req.query('stationId');
+  const from = c.req.query('from');
+  const to = c.req.query('to');
   if (
     stationId &&
     !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })
@@ -2215,6 +2227,8 @@ transactionsRouter.get('/supplier-payments', async (c) => {
         eq(t.organizationId, user.organizationId),
         eq(t.transactionType, 'Payment'),
         stationScope,
+        from ? gte(t.entryDate, from) : undefined,
+        to ? lte(t.entryDate, to) : undefined,
       ),
     )
     .orderBy(desc(t.entryDate), desc(t.createdAt));
