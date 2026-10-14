@@ -55,7 +55,7 @@ const CUSTOMERS = [
     name: 'Calicut Couriers',
     customerType: 'Credit',
     creditLimit: 0,
-    currentBalance: 0,
+    currentBalance: 54100,
     isActive: false,
   },
 ];
@@ -156,7 +156,7 @@ describe('Customers list (#527)', () => {
     expect(within(tile('Collected')).getByText('₹1,200.00')).toBeTruthy();
   });
 
-  it('filters with chips that carry counts, and totals the server receivables', async () => {
+  it('filters with chips that carry counts; a total row only when filtered', async () => {
     stubApi(API);
     renderWithProviders(<CustomersList selectedStation={station} userRole="Owner" />);
     const chips = await screen.findByRole('radiogroup', { name: 'Show customers' });
@@ -165,12 +165,11 @@ describe('Customers list (#527)', () => {
     );
     expect(within(chips).getByRole('radio', { name: 'All, 4' })).toBeTruthy();
     expect(within(chips).getByRole('radio', { name: 'Over limit, 1' })).toBeTruthy();
-    expect(within(chips).getByRole('radio', { name: 'Paid up, 2' })).toBeTruthy();
+    expect(within(chips).getByRole('radio', { name: 'Paid up, 1' })).toBeTruthy();
 
     const table = screen.getByRole('table');
-    // An advance is not a receivable: the total says so.
-    expect(within(table).getByText('Total excl. advances')).toBeTruthy();
-    expect(within(table).getAllByText('₹3,92,000.00').length).toBeGreaterThan(0);
+    // Unfiltered, the Receivable tile carries the total.
+    expect(within(table).queryByText(/^Total/)).toBeNull();
     expect(within(table).getByText('₹2,500.00 advance')).toBeTruthy();
     expect(within(table).getByText('Over limit')).toBeTruthy();
     expect(within(table).getByText('Overdue 47d')).toBeTruthy();
@@ -179,17 +178,37 @@ describe('Customers list (#527)', () => {
     fireEvent.click(within(chips).getByRole('radio', { name: 'Overdue, 1' }));
     expect(within(table).queryByText('Sri Balaji')).toBeNull();
     expect(within(table).getByText('RTC Depot')).toBeTruthy();
-    expect(within(table).getByText('Total')).toBeTruthy();
+    expect(within(table).getByText('Total of 1 shown')).toBeTruthy();
+
+    // An advance is not a receivable: the total says it leaves it out.
+    fireEvent.click(within(chips).getByRole('radio', { name: 'Paid up, 1' }));
+    expect(within(table).getByText('Total of 1 shown, excl. advances')).toBeTruthy();
   });
 
-  it('a failed receivables request shows Retry only on the tiles; the list still reads', async () => {
+  it('an inactive customer who still owes shows their balance, not ₹0', async () => {
+    // The summary lists active customers only; the row falls back to the stored balance.
+    stubApi(API);
+    renderWithProviders(<CustomersList selectedStation={station} userRole="Owner" />);
+    const table = await screen.findByRole('table');
+    await waitFor(() => expect(within(table).getByText('Overdue 47d')).toBeTruthy());
+    const row = within(table).getByText('Calicut Couriers').closest('tr') as HTMLElement;
+    expect(within(row).getByText('₹54,100.00')).toBeTruthy();
+    expect(within(row).queryByText('Paid up')).toBeNull();
+  });
+
+  it('a failed receivables request puts only the receivable tiles behind Retry', async () => {
     stubApi({ ...API, '/reports/receivables': 'fail' });
     renderWithProviders(<CustomersList selectedStation={station} userRole="Owner" />);
-    expect(await screen.findByText(/Couldn't load customer totals/)).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: 'Retry' })).toHaveLength(1);
+    expect(await screen.findByText(/Couldn't load receivable/)).toBeTruthy();
+    expect(screen.getByText(/Couldn't load overdue/)).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Retry' })).toHaveLength(2);
+    // Over credit limit (on stored balances) and Collected still read.
+    await waitFor(() => expect(within(tile('Collected')).getByText('₹1,200.00')).toBeTruthy());
+    expect(within(tile('Over credit limit')).getByText('1')).toBeTruthy();
     const table = await screen.findByRole('table');
     expect(within(table).getByText('RTC Depot')).toBeTruthy();
     // No summary, no total: the list never adds up stored balances.
+    fireEvent.click(screen.getByRole('radio', { name: /Over limit/ }));
     expect(within(table).queryByText(/^Total/)).toBeNull();
   });
 
@@ -227,6 +246,20 @@ describe('Customer statement (#527)', () => {
 });
 
 describe('Collections ledger (#527)', () => {
+  it('filters by method with chips that carry counts', async () => {
+    stubApi(API);
+    renderWithProviders(<CustomersList selectedStation={station} userRole="Owner" />);
+    fireEvent.click(await screen.findByRole('tab', { name: /Collections/ }));
+    const chips = await screen.findByRole('radiogroup', { name: 'Filter by method' });
+    expect(
+      within(chips)
+        .getAllByRole('radio')
+        .map((r) => r.getAttribute('aria-label')),
+    ).toEqual(['All, 1', 'Cash, 0', 'Card, 0', 'UPI, 1', 'Bank, 0']);
+    fireEvent.click(within(chips).getByRole('radio', { name: 'Cash, 0' }));
+    expect(screen.getByText('No matching collections')).toBeTruthy();
+  });
+
   it('opens on this month by entry date with a total row', async () => {
     stubApi(API);
     renderWithProviders(<CustomersList selectedStation={station} userRole="Owner" />);

@@ -3,15 +3,19 @@ import {
   type CustomerReceivable,
   type ReceivablesSummary,
 } from '@pump/shared';
+import type { PumpStatus } from '../../pump-ds/index.js';
+import { countOverdueCustomers } from '../../query/useStationAlerts.js';
 
 /**
- * Where each customer stands, for the Customers list (#527). The receivable,
- * its age and the totals come from the server's receivables summary
- * (`GET /reports/receivables`); the list never adds up `currentBalance`.
+ * Where each customer stands, for the Customers list (#527). The tiles read
+ * the server's receivables summary (`GET /reports/receivables`); the list never
+ * adds up `currentBalance` for them.
  *
- * Without a summary (a Role that may not read receivables, or a failed
- * request) the list still reads: a row falls back to its own stored balance,
- * nothing is called overdue, and there is no total.
+ * A row reads the summary's figure for its customer. The summary lists only
+ * active customers, and at most `RECEIVABLES_CUSTOMER_LIMIT` of them, so a
+ * customer it leaves out (inactive, past the cap, or no summary at all: a Role
+ * that may not read receivables, or a failed request) falls back to its own
+ * stored balance. Only the summary can say a receivable is overdue.
  */
 
 /** A customer row as the API lists it. */
@@ -26,11 +30,16 @@ export interface CustomerRow {
   settlementCycle?: string | null;
   fleetCode?: string | null;
   phone?: string | null;
-  metadata?: { tradeName?: string | null; gstin?: string | null } | null;
+  metadata?: {
+    tradeName?: string | null;
+    gstin?: string | null;
+    pan?: string | null;
+    billingAddress?: string | null;
+  } | null;
 }
 
 export interface CustomerStanding {
-  /** What they owe now (≥ 0). The server's figure when the summary is loaded. */
+  /** What they owe now (≥ 0): the summary's figure, else the stored balance. */
   receivable: number;
   /** Money held for them (a negative stored balance), ≥ 0. */
   advance: number;
@@ -43,9 +52,8 @@ export interface CustomerStanding {
   eodDue: boolean;
 }
 
-/** A receivable is overdue once its oldest unpaid debit is past the mid aging edge (30 days). */
-export const isOverdue = (r: Pick<CustomerReceivable, 'oldestUnpaidDays'> | undefined) =>
-  (r?.oldestUnpaidDays ?? 0) > RECEIVABLES_AGING_EDGES.midMaxDays;
+/** Days after which a receivable is overdue: the mid aging edge (30). */
+export const OVERDUE_AFTER_DAYS = RECEIVABLES_AGING_EDGES.midMaxDays;
 
 const num = (v: unknown) => {
   const n = Number(v ?? 0);
@@ -61,17 +69,22 @@ export function standingOf(
 ): CustomerStanding {
   const stored = num(c.currentBalance);
   const server = byCustomer?.get(c.id);
-  const receivable = byCustomer ? (server?.balance ?? 0) : Math.max(0, stored);
+  const receivable = server ? server.balance : Math.max(0, stored);
+  const days = server?.oldestUnpaidDays ?? null;
   const limit = creditLineOf(c);
   return {
     receivable,
     advance: Math.max(0, -stored),
-    overdueDays: isOverdue(server) ? (server?.oldestUnpaidDays ?? null) : null,
+    overdueDays: days != null && days > OVERDUE_AFTER_DAYS ? days : null,
     overLimitBy: limit > 0 && receivable > limit ? receivable - limit : 0,
     paidUp: receivable <= 0,
     eodDue: c.settlementCycle === 'EOD' && receivable > 0,
   };
 }
+
+/** The summary's rows by customer, or `null` without a summary. */
+export const receivablesByCustomer = (summary: ReceivablesSummary | undefined) =>
+  summary ? new Map(summary.customers.map((r) => [r.customerId, r])) : null;
 
 export type CustomerFilter = 'all' | 'overdue' | 'over-limit' | 'paid-up' | 'eod-due';
 
@@ -88,10 +101,27 @@ export interface StandingRow {
   standing: CustomerStanding;
 }
 
+/**
+ * The status chips of a row, problems first: Over limit, Overdue, then
+ * Inactive. The Status column renders and sorts by this one list.
+ */
+export function standingStatuses({
+  customer,
+  standing,
+}: StandingRow): { status: PumpStatus; label?: string }[] {
+  return [
+    ...(standing.overLimitBy > 0 ? [{ status: 'over-limit' as const }] : []),
+    ...(standing.overdueDays != null
+      ? [{ status: 'overdue' as const, label: `Overdue ${standing.overdueDays}d` }]
+      : []),
+    ...(customer.isActive === false ? [{ status: 'inactive' as const }] : []),
+  ];
+}
+
 export interface CustomerStandings {
   rows: StandingRow[];
   counts: Record<CustomerFilter, number>;
-  /** Whether the figures come from the server summary (overdue and totals need it). */
+  /** Whether a summary was read (only it can say overdue). */
   fromServer: boolean;
 }
 
@@ -99,7 +129,7 @@ export function buildStandings(
   customers: readonly CustomerRow[],
   summary: ReceivablesSummary | undefined,
 ): CustomerStandings {
-  const byCustomer = summary ? new Map(summary.customers.map((r) => [r.customerId, r])) : null;
+  const byCustomer = receivablesByCustomer(summary);
   const rows = customers.map((customer) => ({
     customer,
     standing: standingOf(customer, byCustomer),
@@ -129,38 +159,39 @@ export function filterStandings(
   });
 }
 
-/** The receivable KPIs, read off the server summary. */
+/** The receivable tiles, read off the server summary. */
 export interface ReceivableKpis {
   total: number;
   owing: number;
-  /** The 30+ days bucket: the overdue part of the receivable. */
+  /** The open debits older than the edge: the overdue part of the receivable. */
   overdue: number;
   overdueCustomers: number;
   oldestOverdueDays: number | null;
-  overLimit: number;
-  /** The customer furthest over their limit. */
-  worstOverLimit: { name: string; by: number } | null;
 }
 
-export function receivableKpis(
-  summary: ReceivablesSummary,
-  standings: CustomerStandings,
-): ReceivableKpis {
-  const overdueDays = standings.rows
-    .map((r) => r.standing.overdueDays)
-    .filter((d): d is number => d != null);
-  const over = standings.rows
-    .filter((r) => r.standing.overLimitBy > 0)
-    .sort((a, b) => b.standing.overLimitBy - a.standing.overLimitBy);
+export function receivableKpis(summary: ReceivablesSummary): ReceivableKpis {
+  const days = summary.customers
+    .map((r) => r.oldestUnpaidDays ?? 0)
+    .filter((d) => d > OVERDUE_AFTER_DAYS);
   return {
     total: summary.total,
     owing: summary.customerCount,
     overdue: summary.aging.d30plus,
-    overdueCustomers: summary.customers.filter(isOverdue).length,
-    oldestOverdueDays: overdueDays.length ? Math.max(...overdueDays) : null,
-    overLimit: over.length,
-    worstOverLimit: over[0]
-      ? { name: over[0].customer.name, by: over[0].standing.overLimitBy }
-      : null,
+    overdueCustomers: countOverdueCustomers(summary.customers),
+    oldestOverdueDays: days.length ? Math.max(...days) : null,
+  };
+}
+
+/** Customers over their credit line, and the one furthest over. Reads the rows (credit limits are not in the summary). */
+export function overLimitKpi(standings: CustomerStandings): {
+  count: number;
+  worst: { name: string; by: number } | null;
+} {
+  const over = standings.rows
+    .filter((r) => r.standing.overLimitBy > 0)
+    .sort((a, b) => b.standing.overLimitBy - a.standing.overLimitBy);
+  return {
+    count: over.length,
+    worst: over[0] ? { name: over[0].customer.name, by: over[0].standing.overLimitBy } : null,
   };
 }

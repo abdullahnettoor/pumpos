@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button, Chip, Icon, StatusChip, type TableColumn } from '../../pump-ds/index.js';
 import { formatMoney } from '../../utils/format.js';
-import { creditLineOf, type StandingRow } from './customerStanding.js';
+import { creditLineOf, standingStatuses, type StandingRow } from './customerStanding.js';
 
 /**
  * Column builders for the Customers screen tables (Table module, #524). Pure
@@ -43,14 +43,14 @@ const Stacked: React.FC<{ children: React.ReactNode; details: (string | null | u
   </span>
 );
 
-/** How much of the credit line is used: over the line is red, near it (75%+) amber. */
+/** How much of the credit line is used: brand, amber from 90% used, red over the line. */
 const CreditLineCell: React.FC<{ row: StandingRow }> = ({ row }) => {
   const limit = creditLineOf(row.customer);
   if (limit <= 0) return <Faint />;
   const used = row.standing.receivable;
   const pct = Math.min(100, (used / limit) * 100);
   const fill =
-    used > limit ? 'fill-danger-fg' : used >= limit * 0.75 ? 'fill-warning-fg' : 'fill-brand';
+    used > limit ? 'fill-danger-fg' : used >= limit * 0.9 ? 'fill-warning-fg' : 'fill-brand';
   return (
     <span className="inline-flex w-[112px] flex-col items-end gap-1">
       <span>{formatMoney(limit)}</span>
@@ -69,18 +69,18 @@ const CreditLineCell: React.FC<{ row: StandingRow }> = ({ row }) => {
   );
 };
 
-/** Problems first (Over limit, Overdue), then Inactive; a settled account reads "Paid up". */
+/** The row's status chips (`standingStatuses`); a settled account reads "Paid up". */
 const StandingCell: React.FC<{ row: StandingRow }> = ({ row }) => {
-  const { standing: s, customer: c } = row;
-  const chips = [
-    s.overLimitBy > 0 && <StatusChip key="limit" status="over-limit" size="xs" />,
-    s.overdueDays != null && (
-      <StatusChip key="overdue" status="overdue" size="xs" label={`Overdue ${s.overdueDays}d`} />
-    ),
-    c.isActive === false && <StatusChip key="inactive" status="inactive" size="xs" />,
-  ].filter(Boolean);
-  if (chips.length) return <span className="inline-flex flex-wrap gap-1">{chips}</span>;
-  return s.paidUp ? <span className="text-ink-muted">Paid up</span> : null;
+  const chips = standingStatuses(row);
+  if (chips.length)
+    return (
+      <span className="inline-flex flex-wrap gap-1">
+        {chips.map((c) => (
+          <StatusChip key={c.status} status={c.status} label={c.label} size="xs" />
+        ))}
+      </span>
+    );
+  return row.standing.paidUp ? <span className="text-ink-muted">Paid up</span> : null;
 };
 
 export const buildCustomerColumns = (
@@ -98,13 +98,14 @@ export const buildCustomerColumns = (
       <Stacked
         details={[c.metadata?.tradeName, c.metadata?.gstin ? `GSTIN ${c.metadata.gstin}` : null]}
       >
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={() => openStatement(c)}
-          className="text-left font-semibold text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          className="h-auto justify-start whitespace-normal border-0 px-0 text-left text-[13px] text-brand hover:bg-transparent hover:underline active:bg-transparent"
         >
           {c.name}
-        </button>
+        </Button>
       </Stacked>
     ),
   },
@@ -183,14 +184,10 @@ export const buildCustomerColumns = (
     id: 'status',
     header: 'Status',
     kind: 'text',
-    value: (r) =>
-      r.standing.overLimitBy > 0
-        ? 'Over limit'
-        : r.standing.overdueDays != null
-          ? 'Overdue'
-          : r.customer.isActive === false
-            ? 'Inactive'
-            : null,
+    value: (r) => {
+      const first = standingStatuses(r)[0];
+      return first ? (first.label ?? first.status) : r.standing.paidUp ? 'Paid up' : null;
+    },
     cell: (r) => <StandingCell row={r} />,
   },
   {
@@ -218,7 +215,6 @@ export const buildCustomerColumns = (
 export interface CollectionRow {
   id: string;
   entryDate?: string | null;
-  createdAt?: string | null;
   customerId?: string | null;
   customerName?: string | null;
   paymentMethod?: string | null;
@@ -232,7 +228,7 @@ export const buildCollectionColumns = (): TableColumn<CollectionRow>[] => [
     id: 'entryDate',
     header: 'Entry date',
     kind: 'date',
-    value: (r) => r.entryDate ?? r.createdAt,
+    value: (r) => r.entryDate,
     width: '13%',
   },
   {
@@ -277,7 +273,6 @@ export const buildCollectionColumns = (): TableColumn<CollectionRow>[] => [
 export interface CreditSaleRow {
   id: string;
   businessDate?: string | null;
-  createdAt?: string | null;
   customerId?: string | null;
   customerName?: string | null;
   productName?: string | null;
@@ -293,7 +288,7 @@ export const buildCreditSaleColumns = (): TableColumn<CreditSaleRow>[] => [
     id: 'businessDate',
     header: 'Business date',
     kind: 'date',
-    value: (r) => r.businessDate ?? r.createdAt,
+    value: (r) => r.businessDate,
     width: '13%',
   },
   {

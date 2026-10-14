@@ -11,7 +11,12 @@ import { Button, DataSection, Icon, StatusChip } from '../../pump-ds/index.js';
 import { formatMoney } from '../../utils/format.js';
 import { useCustomerLedger } from '../../query/hooks.js';
 import { CustomerTypeChip } from './columns.js';
-import { creditLineOf, standingOf, type CustomerStanding } from './customerStanding.js';
+import {
+  creditLineOf,
+  receivablesByCustomer,
+  standingOf,
+  type CustomerStanding,
+} from './customerStanding.js';
 
 interface StatementDrawerProps {
   /** Selected customer; null closes the drawer. */
@@ -30,8 +35,7 @@ interface StatementDrawerProps {
 
 /**
  * Customer account statement: summary card + full ledger + quick actions.
- * Fetches the ledger via `useCustomerLedger` (cached) and owns the nested
- * prepaid top-up drawer.
+ * Fetches the ledger via `useCustomerLedger` (cached).
  */
 export const StatementDrawer: React.FC<StatementDrawerProps> = ({
   customer,
@@ -56,69 +60,61 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({
   );
 
   const standing = useMemo(
-    () =>
-      customer
-        ? standingOf(
-            customer,
-            receivables ? new Map(receivables.customers.map((r) => [r.customerId, r])) : null,
-          )
-        : null,
+    () => (customer ? standingOf(customer, receivablesByCustomer(receivables)) : null),
     [customer, receivables],
   );
 
   return (
-    <>
-      <Drawer
-        isOpen={customer !== null}
-        onClose={onClose}
-        title="Customer Account Statement"
-        widthVariant="wide"
-      >
-        {customer && (
-          <div className="flex flex-col gap-5">
-            <SummaryCard customer={customer} standing={standing!} />
+    <Drawer
+      isOpen={customer !== null}
+      onClose={onClose}
+      title="Customer account statement"
+      widthVariant="wide"
+    >
+      {customer && (
+        <div className="flex flex-col gap-5">
+          <SummaryCard customer={customer} standing={standing!} />
 
-            {/* Ledger: the Statement module, oldest first, Debit · Credit · Balance */}
-            <section className="flex flex-col gap-2">
-              <h4 className="text-[13px] font-semibold text-ink-strong">Statement of Account</h4>
-              <DataSection
-                title="statement"
-                query={ledgerQ}
-                enabled
-                placeholderHeight={200}
-                shape="bare"
-              >
-                <StatementView
-                  statement={statement}
-                  scrollToEnd
-                  label={`${customer.name} statement`}
-                  emptyMessage="No transaction history found for this account."
-                />
-              </DataSection>
-            </section>
+          {/* Ledger: the Statement module, oldest first, Debit · Credit · Balance */}
+          <section className="flex flex-col gap-2">
+            <h4 className="text-[13px] font-semibold text-ink-strong">Statement of account</h4>
+            <DataSection
+              title="statement"
+              query={ledgerQ}
+              enabled
+              placeholderHeight={200}
+              shape="bare"
+            >
+              <StatementView
+                statement={statement}
+                scrollToEnd
+                label={`${customer.name} statement`}
+                emptyMessage="No transaction history found for this account."
+              />
+            </DataSection>
+          </section>
 
-            <div className="mt-2 flex gap-2.5">
-              <Button
-                variant="secondary"
-                size="sm"
-                leftIcon={<Icon name="edit" size="sm" />}
-                onClick={() => onEdit(customer)}
-              >
-                Edit profile
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                leftIcon={<Icon name="wallet" size="sm" />}
-                onClick={() => onRecordCollection(customer)}
-              >
-                Record collection
-              </Button>
-            </div>
+          <div className="mt-2 flex gap-2.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Icon name="edit" size="sm" />}
+              onClick={() => onEdit(customer)}
+            >
+              Edit profile
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Icon name="wallet" size="sm" />}
+              onClick={() => onRecordCollection(customer)}
+            >
+              Record collection
+            </Button>
           </div>
-        )}
-      </Drawer>
-    </>
+        </div>
+      )}
+    </Drawer>
   );
 };
 

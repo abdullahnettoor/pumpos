@@ -13,16 +13,13 @@ import {
   computeRange,
   type DateRange,
   type RangeClock,
-  type SectionQuery,
 } from '../../pump-ds/index.js';
 import { formatMoney } from '../../utils/format.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import { buildCreditSaleColumns, type CreditSaleRow } from './columns.js';
-import { countOf, inWindow, sumAmounts } from './ledgerWindow.js';
-
-interface QueryOf<T> extends SectionQuery {
-  data?: T;
-}
+import { countOf, inWindow } from '../../utils/ledgerWindow.js';
+import { creditSaleFigures, type QueryOf } from './ledgerKpis.js';
+import { TileSection } from './TileSection.js';
 
 export interface CreditSalesTabProps {
   creditSalesQ: QueryOf<CreditSaleRow[]>;
@@ -49,20 +46,7 @@ export const CreditSalesTab: React.FC<CreditSalesTabProps> = ({
   const all = useMemo(() => creditSalesQ.data ?? [], [creditSalesQ.data]);
   const columns = useMemo(() => buildCreditSaleColumns(), []);
 
-  const kpis = useMemo(() => {
-    const today = computeRange('today', clock);
-    const month = computeRange('this-month', clock);
-    const todayRows = all.filter((s) => inWindow(s.businessDate, today));
-    const monthRows = all.filter((s) => inWindow(s.businessDate, month));
-    return {
-      today: sumAmounts(todayRows),
-      todayCount: todayRows.length,
-      month: sumAmounts(monthRows),
-      monthCount: monthRows.length,
-      monthFrom: month.from,
-      customers: new Set(monthRows.map((s) => s.customerId).filter(Boolean)).size,
-    };
-  }, [all, clock]);
+  const kpis = useMemo(() => creditSaleFigures(all, clock), [all, clock]);
 
   // Newest first, as the server sends them.
   const rows = useMemo(() => {
@@ -80,40 +64,43 @@ export const CreditSalesTab: React.FC<CreditSalesTabProps> = ({
 
   return (
     <div className="flex flex-col gap-4">
-      <DataSection
-        title="credit totals"
-        query={[creditSalesQ, ...(receivablesQ ? [receivablesQ] : [])]}
-        shape="cards"
-        placeholderHeight={90}
-      >
-        <KpiStrip columns="auto">
+      <KpiStrip columns="auto">
+        <TileSection title="credit issued today" query={creditSalesQ}>
           <KpiTile
             label="Credit issued today"
             scope="today"
             value={formatMoney(kpis.today)}
             hint={sales(kpis.todayCount)}
           />
+        </TileSection>
+        <TileSection title="credit this month" query={creditSalesQ}>
           <KpiTile
             label="Credit this month"
             scope={{ month: kpis.monthFrom }}
             value={formatMoney(kpis.month)}
             hint={sales(kpis.monthCount)}
           />
+        </TileSection>
+        <TileSection title="customers on credit" query={creditSalesQ}>
           <KpiTile
             label="Customers on credit"
             scope={{ month: kpis.monthFrom }}
-            value={String(kpis.customers)}
+            value={String(kpis.monthCustomers)}
           />
-          {summary && (
-            <KpiTile
-              label="Receivable"
-              scope="now"
-              value={formatMoney(summary.total)}
-              hint={`${countOf(summary.customerCount, 'customer', 'customers')} owe`}
-            />
-          )}
-        </KpiStrip>
-      </DataSection>
+        </TileSection>
+        {receivablesQ && (
+          <TileSection title="receivable" query={receivablesQ}>
+            {summary && (
+              <KpiTile
+                label="Receivable"
+                scope="now"
+                value={formatMoney(summary.total)}
+                hint={`${countOf(summary.customerCount, 'customer', 'customers')} owe`}
+              />
+            )}
+          </TileSection>
+        )}
+      </KpiStrip>
 
       <section className="flex flex-col gap-2">
         <SectionHeader

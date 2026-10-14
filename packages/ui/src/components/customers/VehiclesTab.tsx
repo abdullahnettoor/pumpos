@@ -9,18 +9,20 @@ import {
   type SectionQuery,
 } from '../../pump-ds/index.js';
 import { buildVehicleColumns, type VehicleRow } from './columns.js';
-import { countOf } from './ledgerWindow.js';
+import { countOf } from '../../utils/ledgerWindow.js';
 
 export interface VehiclesTabProps {
   vehiclesQ: SectionQuery & { data?: VehicleRow[] };
   onEdit: (v: VehicleRow) => void;
   onDelete: (v: VehicleRow) => void;
+  /** Register a vehicle; absent while no Credit or Fleet customer can own one. */
+  onAdd?: () => void;
 }
 
 const vehicles = (n: number) => countOf(n, 'vehicle', 'vehicles');
 
 /** Customers › Vehicles: the registered vehicles, searchable from the section header. */
-export const VehiclesTab: React.FC<VehiclesTabProps> = ({ vehiclesQ, onEdit, onDelete }) => {
+export const VehiclesTab: React.FC<VehiclesTabProps> = ({ vehiclesQ, onEdit, onDelete, onAdd }) => {
   const [search, setSearch] = useState('');
   const all = useMemo(() => vehiclesQ.data ?? [], [vehiclesQ.data]);
   const columns = useMemo(() => buildVehicleColumns(onEdit, onDelete), [onEdit, onDelete]);
@@ -38,6 +40,7 @@ export const VehiclesTab: React.FC<VehiclesTabProps> = ({ vehiclesQ, onEdit, onD
     <section className="flex flex-col gap-2">
       <SectionHeader
         title="Vehicles"
+        action={onAdd && { label: 'Add vehicle', onClick: onAdd }}
         subtitle={
           vehiclesQ.data
             ? search.trim()

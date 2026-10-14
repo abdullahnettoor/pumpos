@@ -3,8 +3,10 @@ import type { ReceivablesSummary } from '@pump/shared';
 import {
   buildStandings,
   filterStandings,
+  overLimitKpi,
   receivableKpis,
   standingOf,
+  standingStatuses,
   type CustomerRow,
 } from './customerStanding.js';
 
@@ -58,9 +60,38 @@ const list = [
 ];
 
 describe('customer standing (#527)', () => {
-  it('reads the receivable from the server summary, never the stored balance', () => {
+  it('reads the summary figure for a customer it lists, over the stored balance', () => {
     const { rows } = buildStandings(list, summary);
     expect(rows.map((r) => r.standing.receivable)).toEqual([362000, 30000, 20000, 0, 0]);
+  });
+
+  it('an inactive customer who owes (left out of the summary) keeps their stored balance', () => {
+    const inactive = customer({
+      id: 'gone',
+      isActive: false,
+      creditLimit: 10000,
+      currentBalance: 54100,
+      settlementCycle: 'EOD',
+    });
+    const { rows, counts } = buildStandings([...list, inactive], summary);
+    const s = rows[rows.length - 1].standing;
+    expect(s).toMatchObject({ receivable: 54100, paidUp: false, eodDue: true, overLimitBy: 44100 });
+    // Only the summary can call a debt overdue.
+    expect(s.overdueDays).toBeNull();
+    expect(counts['paid-up']).toBe(2);
+    expect(standingStatuses(rows[rows.length - 1]).map((c) => c.status)).toEqual([
+      'over-limit',
+      'inactive',
+    ]);
+  });
+
+  it('a customer past the summary cap keeps their stored balance', () => {
+    // The summary stops at RECEIVABLES_CUSTOMER_LIMIT rows, largest first:
+    // a small debtor past the cap is not "Paid up".
+    const capped: ReceivablesSummary = { ...summary, customers: summary.customers.slice(0, 1) };
+    const { rows } = buildStandings(list, capped);
+    const sbt = rows.find((r) => r.customer.id === 'sbt')!.standing;
+    expect(sbt).toMatchObject({ receivable: 30000, paidUp: false });
   });
 
   it('is overdue only past 30 days, and over limit only above a credit line', () => {
@@ -104,15 +135,27 @@ describe('customer standing (#527)', () => {
   });
 
   it('takes the receivable tiles from the summary', () => {
-    const kpis = receivableKpis(summary, buildStandings(list, summary));
-    expect(kpis).toEqual({
+    expect(receivableKpis(summary)).toEqual({
       total: 412000,
       owing: 3,
       overdue: 362000,
       overdueCustomers: 1,
       oldestOverdueDays: 47,
-      overLimit: 1,
-      worstOverLimit: { name: 'rtc', by: 62000 },
     });
+  });
+
+  it('counts the customers over their line, the furthest first', () => {
+    expect(overLimitKpi(buildStandings(list, summary))).toEqual({
+      count: 1,
+      worst: { name: 'rtc', by: 62000 },
+    });
+  });
+
+  it('orders the status chips problems first', () => {
+    const { rows } = buildStandings(list, summary);
+    expect(standingStatuses(rows[0])).toEqual([
+      { status: 'over-limit' },
+      { status: 'overdue', label: 'Overdue 47d' },
+    ]);
   });
 });

@@ -1,4 +1,9 @@
-import type { DateRange, RangeClock } from '../../pump-ds/index.js';
+import type { DateRange, RangeClock } from '../pump-ds/date-range/index.js';
+
+/**
+ * Small helpers the ledger pages share (Expenses, Income, Customers): the
+ * date window a row falls in, an amount total, and a counted noun.
+ */
 
 /**
  * The station clock an Office Record is dated by: its timezone only, no Day
@@ -17,4 +22,5 @@ export const sumAmounts = (rows: readonly { amount: number | string }[]): number
     return acc + (Number.isFinite(n) ? Math.round(n * 100) : 0);
   }, 0) / 100;
 
+/** "1 entry", "3 entries". */
 export const countOf = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;

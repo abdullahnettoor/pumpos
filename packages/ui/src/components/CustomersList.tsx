@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { canManageFinancialAccounts } from '@pump/shared';
+import { canManageFinancialAccounts, type Role } from '@pump/shared';
 import { useNavIntent, clearNavIntent, getNavIntentState } from '../nav-intent/store.js';
 import { ROUTES } from '../nav-intent/routes.js';
 import { CloudTransactionService } from '../services/cloud.js';
@@ -61,7 +61,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
 
   const stationId = selectedStation?.id ?? null;
   // Receivables are read by the Roles that see money (the API refuses Staff).
-  const canReadReceivables = canManageFinancialAccounts((userRole ?? 'Staff') as any);
+  const canReadReceivables = canManageFinancialAccounts((userRole ?? 'Staff') as Role);
   const customersAllQ = useCustomers(false);
   const productsQ = useProducts();
   const collectionsQ = useCollections();
@@ -212,37 +212,22 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
         subtitle="Credit customers, their sales and collections."
         actions={
           <>
-            {activeTab === 'transactions' && (
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<Icon name="plus" size="sm" />}
-                onClick={() => openCollectionDrawer()}
-              >
-                Record collection
-              </Button>
-            )}
-            {activeTab === 'registry' && (
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<Icon name="plus" size="sm" />}
-                onClick={openCreateCustomer}
-              >
-                Add customer
-              </Button>
-            )}
-            {activeTab === 'vehicles' && (
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<Icon name="plus" size="sm" />}
-                disabled={eligibleCustomers.length === 0}
-                onClick={openCreateVehicle}
-              >
-                Add vehicle
-              </Button>
-            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Icon name="plus" size="sm" />}
+              onClick={openCreateCustomer}
+            >
+              New customer
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Icon name="wallet" size="sm" />}
+              onClick={() => openCollectionDrawer()}
+            >
+              Record collection
+            </Button>
           </>
         }
         tabs={
@@ -286,6 +271,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
               vehiclesQ={vehiclesQ}
               onEdit={openEditVehicle}
               onDelete={(v) => runTask(onDeleteVehicle(v), 'Could not delete the vehicle.')}
+              onAdd={eligibleCustomers.length > 0 ? openCreateVehicle : undefined}
             />
           )}
         </div>

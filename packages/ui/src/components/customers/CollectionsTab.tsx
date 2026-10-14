@@ -4,25 +4,23 @@ import {
   DataSection,
   DateRangeMenu,
   EmptyState,
+  FilterChips,
   Icon,
   InteractiveTable,
   KpiStrip,
   KpiTile,
   SearchInput,
   SectionHeader,
-  Select,
   computeRange,
   type DateRange,
-  type SectionQuery,
+  type FilterChipOption,
 } from '../../pump-ds/index.js';
 import { formatMoney } from '../../utils/format.js';
+import { countOf, inWindow, type EntryClock } from '../../utils/ledgerWindow.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import { buildCollectionColumns, methodLabel, type CollectionRow } from './columns.js';
-import { countOf, inWindow, sumAmounts, type EntryClock } from './ledgerWindow.js';
-
-interface QueryOf<T> extends SectionQuery {
-  data?: T;
-}
+import { collectionFigures, countByMethod, type QueryOf } from './ledgerKpis.js';
+import { TileSection } from './TileSection.js';
 
 export interface CollectionsTabProps {
   collectionsQ: QueryOf<CollectionRow[]>;
@@ -47,69 +45,70 @@ export const CollectionsTab: React.FC<CollectionsTabProps> = ({
 }) => {
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', entryClock));
   const [search, setSearch] = useState('');
-  const [method, setMethod] = useState('');
+  const [method, setMethod] = useState('all');
   const all = useMemo(() => collectionsQ.data ?? [], [collectionsQ.data]);
   const columns = useMemo(() => buildCollectionColumns(), []);
 
-  const kpis = useMemo(() => {
-    const today = computeRange('today', entryClock);
-    const month = computeRange('this-month', entryClock);
-    const todayRows = all.filter((c) => inWindow(c.entryDate, today));
-    const monthRows = all.filter((c) => inWindow(c.entryDate, month));
-    return {
-      today: sumAmounts(todayRows),
-      todayCount: todayRows.length,
-      month: sumAmounts(monthRows),
-      monthCount: monthRows.length,
-      monthFrom: month.from,
-      payers: new Set(todayRows.map((c) => c.customerId).filter(Boolean)).size,
-    };
-  }, [all, entryClock]);
+  const kpis = useMemo(() => collectionFigures(all, entryClock), [all, entryClock]);
 
-  const rows = useMemo(() => {
+  // Range and search first; the method chips count what each would show.
+  const inView = useMemo(() => {
     const q = search.trim().toLowerCase();
     return all.filter((c) => {
-      if (method && c.paymentMethod !== method) return false;
       if (!inWindow(c.entryDate, range)) return false;
       if (!q) return true;
       return [c.customerName, c.notes].some((v) => (v ?? '').toLowerCase().includes(q));
     });
-  }, [all, method, range, search]);
+  }, [all, range, search]);
+  const rows = useMemo(
+    () => (method === 'all' ? inView : inView.filter((c) => c.paymentMethod === method)),
+    [inView, method],
+  );
+  const methodOptions = useMemo<FilterChipOption<string>[]>(() => {
+    const counts = countByMethod(inView);
+    return [
+      { value: 'all', label: 'All', count: inView.length },
+      ...METHODS.map((m) => ({ value: m, label: methodLabel(m), count: counts[m] ?? 0 })),
+    ];
+  }, [inView]);
 
   const summary = receivablesQ?.data;
 
   return (
     <div className="flex flex-col gap-4">
-      <DataSection
-        title="collection totals"
-        query={[collectionsQ, ...(receivablesQ ? [receivablesQ] : [])]}
-        shape="cards"
-        placeholderHeight={90}
-      >
-        <KpiStrip columns="auto">
+      <KpiStrip columns="auto">
+        <TileSection title="collected today" query={collectionsQ}>
           <KpiTile
             label="Collected today"
             scope="today"
             value={formatMoney(kpis.today)}
             hint={entries(kpis.todayCount)}
           />
+        </TileSection>
+        <TileSection title="collected this month" query={collectionsQ}>
           <KpiTile
             label="Collected this month"
             scope={{ month: kpis.monthFrom }}
             value={formatMoney(kpis.month)}
             hint={entries(kpis.monthCount)}
           />
-          <KpiTile label="Customers paid today" scope="today" value={String(kpis.payers)} />
-          {summary && (
-            <KpiTile
-              label="Receivable"
-              scope="now"
-              value={formatMoney(summary.total)}
-              hint={`${countOf(summary.customerCount, 'customer', 'customers')} owe`}
-            />
-          )}
-        </KpiStrip>
-      </DataSection>
+        </TileSection>
+        <TileSection title="customers paid" query={collectionsQ}>
+          <KpiTile label="Customers paid today" scope="today" value={String(kpis.todayCustomers)} />
+        </TileSection>
+        {receivablesQ && (
+          <TileSection title="receivable" query={receivablesQ}>
+            {summary && (
+              <KpiTile
+                label="Receivable"
+                scope="now"
+                value={formatMoney(summary.total)}
+                hint={`${countOf(summary.customerCount, 'customer', 'customers')} owe`}
+              />
+            )}
+          </TileSection>
+        )}
+      </KpiStrip>
 
       <section className="flex flex-col gap-2">
         <SectionHeader
@@ -135,22 +134,13 @@ export const CollectionsTab: React.FC<CollectionsTabProps> = ({
                 />
               </div>
             ),
-            filters: (
-              <div className="w-[140px]">
-                <Select
-                  inputSize="sm"
-                  value={method}
-                  onChange={(e) => setMethod(e.target.value)}
-                  aria-label="Filter by method"
-                >
-                  <option value="">All methods</option>
-                  {METHODS.map((m) => (
-                    <option key={m} value={m}>
-                      {methodLabel(m)}
-                    </option>
-                  ))}
-                </Select>
-              </div>
+            filters: collectionsQ.data && (
+              <FilterChips
+                aria-label="Filter by method"
+                options={methodOptions}
+                value={method}
+                onChange={setMethod}
+              />
             ),
             info: (
               <InfoTip label="Where do collections post?" placement="bottom">
