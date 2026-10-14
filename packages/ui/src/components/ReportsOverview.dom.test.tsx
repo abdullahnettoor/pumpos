@@ -47,7 +47,7 @@ describe('Reports sub-navigation (#540)', () => {
     expect(navText()).toBe(
       [
         'Sales',
-        'DSSR',
+        'DSR',
         'Attendant handovers',
         'Decantations',
         'Finance',
@@ -61,9 +61,9 @@ describe('Reports sub-navigation (#540)', () => {
     );
   });
 
-  it('opens on the DSSR', () => {
+  it('opens on the DSR', () => {
     renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
-    expect(item('DSSR')!.getAttribute('aria-current')).toBe('page');
+    expect(item('DSR')!.getAttribute('aria-current')).toBe('page');
   });
 
   it('no longer lists the Daily cash book, Templates or Cash & bank', () => {
@@ -96,7 +96,7 @@ describe('Reports sub-navigation (#540)', () => {
     renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
     fireEvent.click(screen.getByRole('radio', { name: 'Income' }));
     expect(item('GST')!.getAttribute('aria-current')).toBe('page');
-    expect(item('DSSR')!.getAttribute('aria-current')).toBeNull();
+    expect(item('DSR')!.getAttribute('aria-current')).toBeNull();
     expect(screen.getByRole('radio', { name: 'Income' }).getAttribute('aria-checked')).toBe('true');
   });
 
@@ -122,19 +122,19 @@ describe('Reports sub-navigation (#540)', () => {
   });
 });
 
-describe('Reports → DSSR deep link (review #545)', () => {
+describe('Reports → DSR deep link (review #545)', () => {
   const deferred = () => {
     let reject!: (e: unknown) => void;
     const promise = new Promise((_, rej) => (reject = rej));
     return { promise, reject };
   };
 
-  it('switching report while the day loads does not snap back to the DSSR', async () => {
+  it('switching report while the day loads does not snap back to the DSR', async () => {
     const load = deferred();
     preview.fn = () => load.promise;
     act(() => publishNavIntent({ openDssrDate: '2026-10-01' }));
     renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
-    expect(item('DSSR')!.getAttribute('aria-current')).toBe('page');
+    expect(item('DSR')!.getAttribute('aria-current')).toBe('page');
 
     fireEvent.click(item('Ledgers')!);
     await act(async () => {
@@ -143,10 +143,10 @@ describe('Reports → DSSR deep link (review #545)', () => {
     });
 
     expect(item('Ledgers')!.getAttribute('aria-current')).toBe('page');
-    expect(item('DSSR')!.getAttribute('aria-current')).toBeNull();
+    expect(item('DSR')!.getAttribute('aria-current')).toBeNull();
   });
 
-  it('a deep link left alone settles on the DSSR and releases the intent', async () => {
+  it('a deep link left alone settles on the DSR and releases the intent', async () => {
     const load = deferred();
     preview.fn = () => load.promise;
     act(() => publishNavIntent({ openDssrDate: '2026-10-01' }));
@@ -155,7 +155,7 @@ describe('Reports → DSSR deep link (review #545)', () => {
       load.reject(new Error('no snapshot'));
       await load.promise.catch(() => {});
     });
-    expect(item('DSSR')!.getAttribute('aria-current')).toBe('page');
+    expect(item('DSR')!.getAttribute('aria-current')).toBe('page');
     fireEvent.click(item('Ledgers')!);
     expect(item('Ledgers')!.getAttribute('aria-current')).toBe('page');
   });
@@ -173,7 +173,7 @@ describe('Reports → Decantations (#473)', () => {
   });
 });
 
-describe('Reports → Daily DSSR KPI strip (#516)', () => {
+describe('Reports → Daily DSR KPI strip (#516)', () => {
   /** Closed days as `composeDssr` freezes them. */
   const day = (businessDate: string, snapshotData: Record<string, unknown>) => ({
     id: businessDate,

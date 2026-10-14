@@ -15,7 +15,7 @@ import {
   type Col,
   type Cell,
 } from './shiftSummaryDoc.js';
-import { readDssrOmcCard, shiftDisplayLabel } from '@pump/shared';
+import { DSR_FULL_NAME, DSR_LABEL, readDssrOmcCard, shiftDisplayLabel } from '@pump/shared';
 import type { DssrSection, DssrReportConfig } from './reportConfig.js';
 import { DEFAULT_DSSR_CONFIG } from './reportConfig.js';
 
@@ -37,7 +37,7 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
   header: (d, cfg) => (
     <View key="header">
       <LetterheadBand
-        title="DAILY SALES SUMMARY RECORD"
+        title={DSR_FULL_NAME.toUpperCase()}
         stationName={cfg.stationName}
         letterhead={cfg.letterhead}
         showLogo={cfg.showLogo}
@@ -378,13 +378,13 @@ const DraftBanner = () => (
   >
     <Text style={{ fontSize: 9, fontWeight: 700, color: C.warnFg }}>{DSSR_DRAFT_MARK}</Text>
     <Text style={{ fontSize: 7.5, color: C.warnFg, marginTop: 2 }}>
-      Figures can still change until the Business Day is closed and the DSSR is sealed.
+      Figures can still change until the Business Day is closed and the {DSR_LABEL} is sealed.
     </Text>
   </View>
 );
 
 /**
- * Daily Sales Summary Record (DSSR) as a branded, mono-numeric react-pdf
+ * Daily Station Sales Report (DSR; internal name `dssr`) as a branded, mono-numeric react-pdf
  * document. Reuses the shift-summary primitive kit (fonts, table, KPIs) so both
  * reports stay visually identical. Reads the immutable DSSR snapshot.
  */

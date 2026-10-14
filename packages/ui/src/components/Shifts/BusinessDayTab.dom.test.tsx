@@ -269,7 +269,7 @@ describe('BusinessDayTab', () => {
       await waitFor(() => expect(closeDayButton()).not.toBeNull());
       fireEvent.click(closeDayButton()!);
       await waitFor(() =>
-        expect(screen.getByText(new RegExp(`immutable DSSR snapshot for ${TODAY}`))).toBeDefined(),
+        expect(screen.getByText(new RegExp(`immutable DSR snapshot for ${TODAY}`))).toBeDefined(),
       );
     });
 

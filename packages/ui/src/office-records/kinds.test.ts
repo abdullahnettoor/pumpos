@@ -67,7 +67,7 @@ describe('Office Record kinds', () => {
   it('names the date and where the record shows, per kind', () => {
     expect(officeRecordDating('expense')).toEqual({
       dateLabel: 'Entry date',
-      footnote: 'Shown in the Daily cash book and the ledger. Not in the DSSR (office record).',
+      footnote: 'Shown in the Daily cash book and the ledger. Not in the DSR (office record).',
     });
     expect(officeRecordDating('purchase', 'FUEL').dateLabel).toBe('Invoice date');
     expect(officeRecordDating('purchase', 'PRODUCTS')).toEqual({

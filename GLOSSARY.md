@@ -408,7 +408,7 @@ _Avoid_: wallet (standalone), fuel-card account
 
 **OMC Card Sale**:
 Fuel dispensed against an Oil Marketing Company card; settles into the OMC
-Wallet — never Drawer cash, never a station receivable. It appears in the DSSR
+Wallet — never Drawer cash, never a station receivable. It appears in the DSR
 and in the Shift Summary payment split as "OMC card", so the split adds up to
 total sales.
 _Avoid_: fuel-card sale
@@ -462,8 +462,8 @@ on the server; shown as "2.6 days" / "0.9 day".
 _Avoid_: runway, stock days
 
 Days of Cover counts only Nozzle Reading movements (`reference_type = 'reading'`);
-the DSSR tank movement's sold litres count every `Sale` stock movement. Days of
-Cover uses the Station's 7 most recent closed Business Days; the DSSR uses all
+the DSR tank movement's sold litres count every `Sale` stock movement. Days of
+Cover uses the Station's 7 most recent closed Business Days; the DSR uses all
 movements through its specific Business Date and only that day's movements for
 received, sold and adjusted totals.
 
@@ -500,15 +500,18 @@ _Avoid_: observed density (in UI), sample density
 **Shift Summary**:
 Immutable snapshot created when a Shift closes: that shift's nozzle and drawer
 reconciliation plus totals.
-_Avoid_: shift report, closing report, DSSR
+_Avoid_: shift report, closing report, DSR, DSSR
 
-**DSSR Snapshot** (Daily Station Sales Report):
+**DSR Snapshot** (Daily Station Sales Report):
 Immutable snapshot created when a Business Day closes: a sales-only report
 composing the day's closed Shift Summaries (fuel, product and credit sales,
 their card/UPI split, stock). Office Records are not in it; see Daily Cash
 Book (ADR 0005). A snapshot exists if and only if its Business Day is closed;
-an open day's DSSR is a preview, computed on demand and never persisted.
-_Avoid_: Shift Summary, daily report, day summary
+an open day's DSR is a preview, computed on demand and never persisted.
+Code and stored names stay `dssr` (the `dssr_snapshots` table, the
+`DSSR_GENERATED` event, the `/dssr/...` routes, the `dssr` report-template
+settings key); only the name users see is "DSR".
+_Avoid_: DSSR, Shift Summary, daily report, day summary
 
 **Attendant Handover Report**:
 A read-only, date-range report composing one Attendant's Handovers across
@@ -526,7 +529,7 @@ _Avoid_: refresh, recompute
 **Business Day Status**:
 Where a Business Day stands in the day list: _Live_ (open, the Current Business
 Date, figures still moving), _Draft_ (a Past Open Business Day: ended, not yet
-closed, so its DSSR is a preview), _Sealed_ (closed, with its immutable DSSR
+closed, so its DSR is a preview), _Sealed_ (closed, with its immutable DSR
 Snapshot) or _Report Missing_ (closed but no snapshot exists; shown with no
 figures, never as Sealed).
 _Avoid_: day state

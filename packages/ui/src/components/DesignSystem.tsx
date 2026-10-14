@@ -626,7 +626,7 @@ const InputsPanel: React.FC = () => {
               label="Tax-inclusive pricing"
               description="Fuel is recorded inclusive of GST."
             />
-            <Checkbox label="Send daily DSSR email" />
+            <Checkbox label="Send daily DSR email" />
             <Checkbox disabled label="Locked option (disabled)" />
             <div
               style={{
@@ -962,7 +962,7 @@ const FeedbackPanel: React.FC = () => {
             </button>
             <button
               className="btn btn-ghost btn-sm"
-              onClick={() => toast.success('DSSR compiled for 01 Jul', { title: 'Report ready' })}
+              onClick={() => toast.success('DSR compiled for 01 Jul', { title: 'Report ready' })}
             >
               With title
             </button>
@@ -1037,7 +1037,7 @@ const FeedbackPanel: React.FC = () => {
               Working from local cache — changes will sync when you reconnect.
             </Banner>
             <Banner severity="success" dismissible>
-              DSSR compiled for 01 Jul. This banner is dismissible.
+              DSR compiled for 01 Jul. This banner is dismissible.
             </Banner>
           </div>
         </Card>

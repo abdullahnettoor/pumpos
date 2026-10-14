@@ -120,16 +120,11 @@ const VehicleForm: React.FC<Omit<VehicleDrawerProps, 'isOpen'>> = ({
   };
 
   return (
-    <Form onSubmit={onSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+    <Form onSubmit={onSave} className="flex flex-col gap-3.5">
       {error && (
         <div
-          style={{
-            backgroundColor: 'var(--state-danger-bg)',
-            color: 'var(--state-danger-fg)',
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-          }}
+          role="alert"
+          className="rounded-input bg-danger-bg px-3 py-2 text-[12px] text-danger-fg"
         >
           {error}
         </div>
@@ -185,7 +180,7 @@ const VehicleForm: React.FC<Omit<VehicleDrawerProps, 'isOpen'>> = ({
         </Select>
       </Field>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div className="flex items-center gap-2">
         <Checkbox
           label="Vehicle Active"
           checked={form.isActive}
@@ -194,7 +189,7 @@ const VehicleForm: React.FC<Omit<VehicleDrawerProps, 'isOpen'>> = ({
         />
       </div>
 
-      <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+      <div className="mt-2 flex gap-2.5">
         <Button type="submit" variant="primary" fullWidth loading={submitting}>
           Save Vehicle
         </Button>

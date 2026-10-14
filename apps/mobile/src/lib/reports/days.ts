@@ -127,7 +127,7 @@ export function dayView(day: BusinessDayListItem, liveTab: LiveTab | null): DayV
     bar = 'hatched';
   } else if (day.status === 'REPORT_MISSING') {
     headline = 'Closed';
-    note = 'No DSSR for this day';
+    note = 'No DSR for this day';
     bar = 'none';
   } else {
     headline = rupees(day.totalSales);
