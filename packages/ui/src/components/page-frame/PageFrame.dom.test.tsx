@@ -25,11 +25,11 @@ describe('PageFrame', () => {
 
   it('takes an explicit title over the nav label', () => {
     render(
-      <PageFrame route={ROUTES.reports} title="DSSR · 9 Oct">
+      <PageFrame route={ROUTES.reports} title="DSR · 9 Oct">
         content
       </PageFrame>,
     );
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('DSSR · 9 Oct');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('DSR · 9 Oct');
   });
 
   it('places title, actions, tabs, toolbar and content in a fixed order', () => {

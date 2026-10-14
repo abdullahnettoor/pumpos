@@ -44,8 +44,8 @@ Captured on the preview console against a freshly onboarded station ("Hilltop Fu
 
 ## Business day & reporting
 
-- Shifts → Business Day → **Close business day** → confirm **Close day** → seals immutable DSSR `[45–47]`
-- Reports → DSSR → Recent DSSRs → DSSR detail (P&L, fuel by product, dip variance) `[48–49]`
+- Shifts → Business Day → **Close business day** → confirm **Close day** → seals immutable DSR `[45–47]`
+- Reports → DSR → Recent DSRs → DSR detail (P&L, fuel by product, dip variance) `[48–49]`
 
 ## Everything else
 
@@ -62,7 +62,7 @@ Navigation map only; steps are in `docs/USER-FLOW.md` §13.
   Accountant) · **Money** (Owner, Manager, Accountant) · **Insights** (Owner, Manager). Accountant or Staff assigned to a pump: also Home, with only their handover card.
 - Home header: station name or **avatar** → **Account sheet** (station switcher, Team, organization,
   Sign out); **bell** → **Needs attention** (stock, day close, credit, cash variance, handover).
-- Shifts → live shift / history row → **Shift Summary**. Reports → day row → **DSSR** (Share, Download PDF).
+- Shifts → live shift / history row → **Shift Summary**. Reports → day row → **DSR** (Share, Download PDF).
 - Money → To collect / To pay → customer or supplier page → **Statement** (range filter, PDF),
   **Record payment** (customer or supplier), credit limit (Owner, Manager).
 - **Attendant**: handover-only app (no dock), **Save handover**, Sign out in the account sheet.

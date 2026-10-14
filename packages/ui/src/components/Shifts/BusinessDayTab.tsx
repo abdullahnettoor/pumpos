@@ -384,14 +384,14 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
         : '';
     const ok = await confirm({
       title: 'Close this business day?',
-      message: `This generates the immutable DSSR snapshot for ${businessDate} and seals sales and stock. Late financial entries remain available and are flagged separately.${decantationNote}${eodNote}`,
+      message: `This generates the immutable DSR snapshot for ${businessDate} and seals sales and stock. Late financial entries remain available and are flagged separately.${decantationNote}${eodNote}`,
       confirmLabel: 'Close day',
     });
     if (!ok) return;
     try {
       setClosing(true);
       await shiftService.closeBusinessDay(snap.businessDayId, stationId);
-      toast.success('Business day closed · DSSR generated.');
+      toast.success('Business day closed · DSR generated.');
       await Promise.all([
         invalidateOperational(stationId),
         // The day's DSSR snapshot only exists once the close succeeds, so both
@@ -474,7 +474,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
               title={
                 hasOpenShift
                   ? 'Close the active shift before closing the business day'
-                  : 'Generate the DSSR snapshot and lock this day'
+                  : 'Generate the DSR snapshot and lock this day'
               }
               onClick={handleCloseDay}
             >
@@ -578,7 +578,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
                 </button>
               );
             })}
-            {/* Days beyond the window live in the Reports page's Daily DSSR
+            {/* Days beyond the window live in the Reports page's Daily DSR
                 list, which already reads them. Gated on the role that may open
                 that page — routing anyone else there lands them on a page
                 their own nav does not list. */}
@@ -780,7 +780,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
               <span>
                 {Number(report.lateEntryCount)} financial{' '}
                 {Number(report.lateEntryCount) === 1 ? 'entry was' : 'entries were'} recorded after
-                this day closed. The DSSR snapshot is unchanged.
+                this day closed. The DSR snapshot is unchanged.
               </span>
             </div>
           )}

@@ -44,7 +44,7 @@ important domain rule (ADR 0005):
   and no shift or business day, and live in the ledger. The test is "is this
   paying for fuel or products right now?", not "which machine was used?"
 
-Office Records (entry date + Funding Account), the sales-only DSSR, the
+Office Records (entry date + Funding Account), the sales-only DSR, the
 Daily Cash Book and the per-Attendant Drawer are implemented.
 
 Operational flow:
@@ -58,7 +58,7 @@ Operations
  ↓
 Shift Summary       ← immutable snapshot, created on SHIFT close
  ↓
-DSSR                ← immutable snapshot, created on BUSINESS-DAY close
+DSR                ← immutable snapshot, created on BUSINESS-DAY close
  ↓
 Reports
 ```
@@ -246,13 +246,13 @@ See `GLOSSARY.md` ("Sale", "Fuel Sale", "Product Sale") for the shared language.
 
 ---
 
-## Shift Summary & DSSR
+## Shift Summary & DSR
 
 There are **two** immutable report snapshots:
 
 - **Shift Summary** — created when a **shift is closed** (`shift_summaries`).
   Holds that shift's nozzle reconciliation, drawer reconciliation, and totals.
-- **DSSR** (Daily Station Sales Report) — created when a **business day is
+- **DSR** (Daily Station Sales Report) — created when a **business day is
   closed** / generated on demand (`dssr_snapshots`). Sales-only: composes the
   day's closed-shift summaries plus the day's sales, credit sales, purchases
   and stock. Office Records (collections, expenses, income, supplier
@@ -569,7 +569,7 @@ Tiers (see `packages/ui/src/query/hooks.ts` → `TIER`):
 ```text
 static       (stations, tanks, dispensers, nozzles, terminals, templates, users)  → 24h, persisted
 semi         (products, customers, suppliers, expense categories)                 → 10m, persisted
-operational  (shift status, sales, collections, inventory, DSSR)                  → 15s, not persisted
+operational  (shift status, sales, collections, inventory, DSR)                  → 15s, not persisted
 ```
 
 Mandatory rules:

@@ -99,8 +99,8 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
         note={
           <>
             {isSingleDay ? 'Single day' : 'Period total'} · Gross margin is by sales day (from the
-            DSSR, each day at its own weighted-average cost; live today). Expenses and other income
-            are by entry date. Days without a generated DSSR add no margin.
+            DSR, each day at its own weighted-average cost; live today). Expenses and other income
+            are by entry date. Days without a generated DSR add no margin.
           </>
         }
       />
@@ -196,7 +196,7 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
         <Panel flush>
           <EmptyState
             title="No profit data for this period"
-            description="Generate the DSSR for closed days to include their margin. Expenses and income appear by entry date."
+            description="Generate the DSR for closed days to include their margin. Expenses and income appear by entry date."
           />
         </Panel>
       ) : isSingleDay && single ? (

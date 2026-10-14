@@ -5,6 +5,7 @@ import { CloudShiftService } from '../services/cloud.js';
 import { useDailyDssrRange } from '../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { DailyDssrView } from './DailyDssrView.js';
+import { DSR_LABEL } from '@pump/shared';
 import { PageFrame } from './page-frame/index.js';
 import { ROUTES } from '../nav-intent/routes.js';
 import { DataTable } from './primitives/DataTable.js';
@@ -225,7 +226,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
       await qc.invalidateQueries({ queryKey: ['dssr-range'] });
       setActiveDailyDssr(result);
     } catch (err: any) {
-      setGenerateError(err.message || 'Failed to generate daily DSSR');
+      setGenerateError(err.message || 'Failed to generate daily DSR');
     } finally {
       setGeneratingDailyDssr(false);
     }
@@ -235,7 +236,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
     {
       heading: 'Sales',
       items: [
-        { id: 'daily-dssr', label: 'DSSR', concept: 'dssr' },
+        { id: 'daily-dssr', label: DSR_LABEL, concept: 'dssr' },
         ...(showAttendantReport
           ? [
               {
@@ -309,11 +310,11 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
       <div className="grid grid-cols-[200px_minmax(0,1fr)] gap-4">
         <ReportsNav groups={navGroups} activeId={activeTab} onChange={setActiveTab} />
         <div className="min-w-0">
-          {/* Daily DSSR Tab */}
+          {/* Daily DSR Tab */}
           {activeTab === 'daily-dssr' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <KpiStrip columns="auto">
-                <KpiTile label="Generated DSSRs" value={String(kpis.count)} hint="last 30 days" />
+                <KpiTile label="Generated DSRs" value={String(kpis.count)} hint="last 30 days" />
                 <KpiTile label="Net volume sold" value={kpis.volumeLabel} hint="period" />
                 {/* Cash received for sales by shift Drawers. Collections are Office
                     Records (ADR 0005) and live in the Daily Cash Book. */}
@@ -347,7 +348,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
                     disabled={!selectedDate}
                     onClick={handleGenerateDailyDssr}
                   >
-                    Generate DSSR
+                    Generate DSR
                   </Button>
                 </div>
                 {generateError && (
@@ -366,7 +367,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
                 )}
               </Panel>
 
-              <Panel flush title="Recent DSSRs">
+              <Panel flush title="Recent DSRs">
                 {dssrQ.isLoading ? (
                   <div style={{ padding: '16px' }}>
                     <EmptyState
@@ -381,7 +382,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
                     <EmptyState
                       compact
                       icon={<Zap />}
-                      title="No daily DSSR reports"
+                      title="No daily DSR reports"
                       description="Generate a daily snapshot above to get started."
                     />
                   </div>
@@ -393,7 +394,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
                     error={dssrQ.error}
                     title="daily reports"
                     onRetry={dssrQ.refetch}
-                    emptyMessage="No daily DSSR reports."
+                    emptyMessage="No daily DSR reports."
                     getRowId={(r: any) => r.id}
                     onRowClick={(r: any) => setActiveDailyDssr(r)}
                     initialSorting={[{ id: 'businessDate', desc: true }]}

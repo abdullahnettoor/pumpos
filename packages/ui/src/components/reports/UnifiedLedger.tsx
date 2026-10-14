@@ -117,7 +117,7 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     kpiLowers: 'Paid out',
     emptyText: 'No cash movements in the selected range.',
     caption:
-      'Debit = received · Credit = paid out. Recorded cash receipts & payments only — fuel/drawer reconciliation lives in the DSSR. Opening balance is carried from before the range.',
+      'Debit = received · Credit = paid out. Recorded cash receipts & payments only — fuel/drawer reconciliation lives in the DSR. Opening balance is carried from before the range.',
     alertBelowZero: true,
     entries: (rows) => moneyEntries(rows),
   },
