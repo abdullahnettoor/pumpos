@@ -218,7 +218,7 @@ describe('Income GST by role (review #545: #540 keeps role filtering unchanged)'
     expect(t.labels).toEqual(['Income', 'By category', 'GST']);
     expect(screen.queryByRole('button', { name: /GST in Reports/ })).toBeNull();
     fireEvent.click(screen.getByRole('tab', { name: /GST/ }));
-    expect(await screen.findByText(/Output GST you collected on other income/)).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'About income GST' })).toBeTruthy();
   });
 
   it.each(['Owner', 'Manager', 'Accountant'] as const)(

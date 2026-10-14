@@ -86,7 +86,7 @@ export const InfoTip: React.FC<InfoTipProps> = ({ children, label, placement = '
             letterSpacing: 'normal',
             backgroundColor: 'var(--text-strong)',
             color: 'var(--bg-surface)',
-            fontSize: '11px',
+            fontSize: '12px',
             fontWeight: 400,
             lineHeight: 1.45,
             padding: '8px 10px',

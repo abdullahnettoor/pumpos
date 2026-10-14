@@ -1,61 +1,25 @@
 import React from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
-import { inr } from '../../utils/format.js';
-import { Chip, DateText, Icon } from '../../pump-ds/index.js';
-import { cn } from '../../pump-ds/lib/cn.js';
+import { Button, Icon, StatusChip, type TableColumn } from '../../pump-ds/index.js';
+import { formatMoney } from '../../utils/format.js';
 import { accountTypeLabel } from '../../utils/ledgerLabels.js';
-import { voidActionColumn } from '../finance/voidActionColumn.js';
 import type { CategoryRecordKind } from './CategoryManagerDrawer.js';
 
-const dateCell = (row: any) => <DateText value={row.original.entryDate} />;
+/** An Expense or Income entry as the ledger lists it. */
+export interface CategoryRecord {
+  id: string;
+  entryDate?: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  description?: string | null;
+  accountName?: string | null;
+  accountType?: string | null;
+  amount: number | string;
+  status?: string | null;
+}
 
-/** Funding Account the money moved through, with its type as secondary text. */
-const accountCell = (row: any) => {
-  const { accountName, accountType } = row.original;
-  if (!accountName) return <span className="text-ink-faint">—</span>;
-  return (
-    <span className="inline-flex flex-col leading-tight">
-      <span className="text-ink-strong">{accountName}</span>
-      {accountType && (
-        <span className="text-[12px] text-ink-muted">{accountTypeLabel(accountType)}</span>
-      )}
-    </span>
-  );
-};
+export const isVoided = (r: CategoryRecord) => r.status === 'VOIDED';
 
-/** Money out reads in the danger tone, money in in the success tone. */
-const AMOUNT_TONE: Record<CategoryRecordKind, string> = {
-  expense: 'text-danger-fg',
-  income: 'text-success-fg',
-};
-
-const amountCell = (kind: CategoryRecordKind, row: any, getValue: () => any) => {
-  const voided = row.original.status === 'VOIDED';
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span
-        className={cn(
-          'font-mono font-bold tabular-nums',
-          voided ? 'text-ink-faint line-through' : AMOUNT_TONE[kind],
-        )}
-      >
-        {inr(getValue())}
-      </span>
-      {voided && (
-        <Chip tone="neutral" size="xs">
-          Voided
-        </Chip>
-      )}
-      {row.original.status === 'ADJUSTMENT' && (
-        <Chip tone="warning" size="xs">
-          Adjustment
-        </Chip>
-      )}
-    </span>
-  );
-};
-
-const FALLBACK_CATEGORY: Record<CategoryRecordKind, string> = {
+export const FALLBACK_CATEGORY: Record<CategoryRecordKind, string> = {
   expense: 'General',
   income: 'Other Income',
 };
@@ -65,44 +29,128 @@ const VOID_LABEL: Record<CategoryRecordKind, string> = {
   income: 'Void income entry',
 };
 
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
- * The ledger columns Expenses and Income share: entry date, category,
- * description, Funding Account, amount. Pass `onVoid` for roles that may void.
+ * The Funding Account's type as a detail line, only when the name does not
+ * already say it as a whole word: "SBI Current · Bank" and "Ownership Capital
+ * · Owner", never "Cash in Hand · Cash in Hand" or "Owner Account · Owner".
+ */
+export function accountTypeDetail(row: Pick<CategoryRecord, 'accountName' | 'accountType'>) {
+  if (!row.accountType) return null;
+  const type = accountTypeLabel(row.accountType);
+  const word = new RegExp(
+    `(^|[^\\p{L}\\p{N}])${escapeRegExp(type.trim())}($|[^\\p{L}\\p{N}])`,
+    'iu',
+  );
+  return word.test(row.accountName?.trim() ?? '') ? null : type;
+}
+
+/** Funding Account the money moved through, with its type as secondary text. */
+const AccountCell: React.FC<{ row: CategoryRecord }> = ({ row }) => {
+  if (!row.accountName) return <span className="text-ink-faint">—</span>;
+  const type = accountTypeDetail(row);
+  return (
+    <span className="inline-flex flex-col leading-tight">
+      <span className="text-ink-strong">{row.accountName}</span>
+      {type && <span className="text-[12px] text-ink-muted">{type}</span>}
+    </span>
+  );
+};
+
+/**
+ * The amount in plain text (ordinary money is never coloured); a voided entry
+ * is struck and faint. The status sits before the figure so every figure lines
+ * up on the right.
+ */
+const AmountCell: React.FC<{ row: CategoryRecord }> = ({ row }) => {
+  const voided = isVoided(row);
+  return (
+    <span className="inline-flex items-center justify-end gap-1.5">
+      {voided && <StatusChip status="voided" size="xs" className="font-sans" />}
+      {row.status === 'ADJUSTMENT' && (
+        <StatusChip status="adjustment" size="xs" className="font-sans" />
+      )}
+      <span className={voided ? 'text-ink-faint line-through' : 'text-ink-strong'}>
+        {formatMoney(row.amount)}
+      </span>
+    </span>
+  );
+};
+
+/**
+ * The ledger columns Expenses and Income share (Table module): entry date,
+ * category, description, Funding Account, amount. Pass `onVoid` for roles
+ * that may void; a voided row has nothing left to void.
  */
 export function buildCategoryRecordColumns(
   kind: CategoryRecordKind,
-  onVoid?: (row: any) => void,
-): ColumnDef<any, any>[] {
-  const columns: ColumnDef<any, any>[] = [
-    { accessorKey: 'entryDate', header: 'Entry Date', cell: ({ row }) => dateCell(row) },
+  onVoid?: (row: CategoryRecord) => void,
+): TableColumn<CategoryRecord>[] {
+  const columns: TableColumn<CategoryRecord>[] = [
     {
-      accessorKey: 'categoryName',
+      id: 'entryDate',
+      header: 'Entry date',
+      kind: 'date',
+      value: (r) => r.entryDate,
+      width: '15%',
+    },
+    {
+      id: 'category',
       header: 'Category',
-      cell: ({ getValue }) => (
-        <span className="font-semibold text-ink-strong">
-          {(getValue() as string) ?? FALLBACK_CATEGORY[kind]}
-        </span>
-      ),
+      kind: 'text',
+      emphasis: true,
+      value: (r) => r.categoryName ?? FALLBACK_CATEGORY[kind],
+      width: '18%',
     },
     {
-      accessorKey: 'description',
+      id: 'description',
       header: 'Description',
-      cell: ({ getValue }) => (
-        <span className="text-ink-muted">{(getValue() as string) || '—'}</span>
-      ),
+      kind: 'text',
+      value: (r) => r.description,
+      cell: (r) => <span className="text-ink-muted">{r.description || '—'}</span>,
     },
     {
-      accessorKey: 'accountName',
+      id: 'account',
       header: 'Funding account',
-      cell: ({ row }) => accountCell(row),
+      kind: 'text',
+      value: (r) => r.accountName,
+      cell: (r) => <AccountCell row={r} />,
+      width: '16%',
     },
     {
-      accessorKey: 'amount',
+      id: 'amount',
       header: 'Amount',
-      cell: ({ row, getValue }) => amountCell(kind, row, getValue),
+      kind: 'money',
+      value: (r) => r.amount,
+      cell: (r) => <AmountCell row={r} />,
+      width: '20%',
     },
   ];
-  return onVoid
-    ? [...columns, voidActionColumn(onVoid, VOID_LABEL[kind], <Icon name="ban" size="xs" />)]
-    : columns;
+  if (!onVoid) return columns;
+  return [
+    ...columns,
+    {
+      id: 'actions',
+      header: '',
+      kind: 'text',
+      value: () => null,
+      width: '6%',
+      cell: (r) =>
+        isVoided(r) ? (
+          <span className="text-ink-faint">—</span>
+        ) : (
+          <Button
+            variant="ghost"
+            size="xs"
+            iconOnly
+            title={VOID_LABEL[kind]}
+            aria-label={VOID_LABEL[kind]}
+            onClick={() => onVoid(r)}
+          >
+            <Icon name="ban" size="xs" />
+          </Button>
+        ),
+    },
+  ];
 }

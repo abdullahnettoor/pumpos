@@ -1,11 +1,22 @@
 import React, { useMemo, useState } from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
 import { useExpenses, useIncome } from '../../query/hooks.js';
-import { DataTable } from '../primitives/DataTable.js';
-import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
-import type { DateRange } from '../primitives/DateRangeField.js';
-import { inr } from '../../utils/format.js';
-import { KpiStrip, KpiTile, Panel, EmptyState, Icon } from '../../pump-ds/index.js';
+import { formatMoney } from '../../utils/format.js';
+import { FALLBACK_CATEGORY } from '../categories/categoryRecordColumns.js';
+import {
+  ControlBar,
+  DataSection,
+  DateRangeMenu,
+  EmptyState,
+  Icon,
+  InteractiveTable,
+  KpiStrip,
+  KpiTile,
+  SectionHeader,
+  computeRange,
+  type DateRange,
+  type IconName,
+  type TableColumn,
+} from '../../pump-ds/index.js';
 
 export interface CategoryAnalyticsProps {
   selectedStation: any | null;
@@ -15,28 +26,28 @@ export interface CategoryAnalyticsProps {
 
 const COPY = {
   expense: {
-    total: 'Total expenses',
+    noun: 'expenses',
     withAmount: 'with spend',
-    panel: 'Spend by category',
-    loading: 'Fetching expenses.',
+    section: 'Spend by category',
     empty: 'No expenses',
     emptyRange: 'No expenses in this date range.',
-    emptyTable: 'No expenses in this range.',
-    color: 'var(--brand-danger)',
-    icon: 'receipt' as const,
+    icon: 'receipt' as IconName,
   },
   income: {
-    total: 'Total income',
+    noun: 'income',
     withAmount: 'with income',
-    panel: 'Income by category',
-    loading: 'Fetching income.',
+    section: 'Income by category',
     empty: 'No income',
     emptyRange: 'No income in this date range.',
-    emptyTable: 'No income in this range.',
-    color: 'var(--state-success-fg)',
-    icon: 'arrow-down' as const,
+    icon: 'arrow-down' as IconName,
   },
 };
+
+/** Calendar days from `from` to `to`, both counted (`YYYY-MM-DD`). */
+function daysInRange({ from, to }: DateRange): number {
+  const day = (d: string) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10));
+  return Math.max(1, Math.round((day(to) - day(from)) / 86_400_000) + 1);
+}
 
 interface CategoryRow {
   name: string;
@@ -46,21 +57,72 @@ interface CategoryRow {
 }
 
 /**
+ * The category's share of the total: a brand bar, then the percent. Ordinary
+ * money is never red or green; colour is kept for problems.
+ */
+const ShareCell: React.FC<{ pct: number }> = ({ pct }) => (
+  <span className="flex min-w-[140px] items-center gap-2">
+    <svg className="h-1.5 flex-1 overflow-hidden rounded-full" aria-hidden="true">
+      <rect width="100%" height="100%" className="fill-surface-alt" />
+      <rect width={`${pct}%`} height="100%" className="fill-brand" />
+    </svg>
+    <span className="w-[34px] text-right font-mono text-[12px] text-ink-muted">
+      {Math.round(pct)}%
+    </span>
+  </span>
+);
+
+/** One row per category: entries, total, share. Plain figures, a brand bar. */
+const COLUMNS: TableColumn<CategoryRow>[] = [
+  { id: 'name', header: 'Category', kind: 'text', emphasis: true, value: (r) => r.name },
+  {
+    id: 'count',
+    header: 'Entries',
+    kind: 'qty',
+    total: false,
+    value: (r) => r.count,
+    cell: (r) => <span className="text-ink-muted">{r.count}</span>,
+    width: '12%',
+  },
+  {
+    id: 'total',
+    header: 'Total',
+    kind: 'money',
+    value: (r) => r.total,
+    cell: (r) => <span className="text-ink-strong">{formatMoney(r.total)}</span>,
+    width: '20%',
+  },
+  {
+    id: 'share',
+    header: 'Share',
+    kind: 'text',
+    value: (r) => r.share,
+    cell: (r) => <ShareCell pct={r.share} />,
+    width: '32%',
+  },
+];
+
+/**
  * CategoryAnalytics — the "by category" view: expenses over an entry-date range
  * AGGREGATED per category (one row each: entries, total, share of spend). This
  * is deliberately NOT the per-entry ledger (that lives in the Expenses → Expenses
  * tab); it answers "where is the money going". Shared by the Expenses screen
  * "By category" tab and the Reports "Expense register". The Income screen's
  * "By category" tab reads the same view with `kind="income"`. VOIDED excluded.
+ *
+ * Layout A (#567): one control bar with the range menu drives the tiles and
+ * the table below it, so every tile reads `In range`. A tile never repeats the
+ * table's total (the total row carries it), so the first tile is the average
+ * per day over the range.
  */
 export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
   selectedStation,
   kind = 'expense',
 }) => {
   const copy = COPY[kind];
-  const s = selectedStation?.settings || {};
+  const timeZone = selectedStation?.settings?.timezone;
   // Office records are dated by entry date (station calendar date), not the sales day.
-  const clock = { timeZone: s.timezone };
+  const clock = useMemo(() => ({ timeZone }), [timeZone]);
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
 
   const expensesQ = useExpenses({ enabled: kind === 'expense' });
@@ -68,16 +130,16 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
     { stationId: selectedStation?.id ?? undefined },
     { enabled: kind === 'income' },
   );
-  const { data: expenses, isLoading } = kind === 'income' ? incomeQ : expensesQ;
+  const recordsQ = kind === 'income' ? incomeQ : expensesQ;
 
   const active = useMemo(
     () =>
-      (expenses || []).filter((e: any) => {
+      (recordsQ.data || []).filter((e: any) => {
         if (e.status === 'VOIDED') return false;
         const d = e.entryDate;
         return d && d >= range.from && d <= range.to;
       }),
-    [expenses, range.from, range.to],
+    [recordsQ.data, range.from, range.to],
   );
 
   const total = active.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
@@ -85,7 +147,7 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
   const byCategory = useMemo<CategoryRow[]>(() => {
     const m = new Map<string, CategoryRow>();
     for (const e of active) {
-      const name = e.categoryName || 'General';
+      const name = e.categoryName || FALLBACK_CATEGORY[kind];
       const c = m.get(name) || { name, total: 0, count: 0, share: 0 };
       c.total += Number(e.amount || 0);
       c.count += 1;
@@ -94,133 +156,77 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
     const rows = [...m.values()];
     for (const r of rows) r.share = total > 0 ? (r.total / total) * 100 : 0;
     return rows.sort((a, b) => b.total - a.total);
-  }, [active, total]);
+  }, [active, total, kind]);
 
-  const columns = useMemo<ColumnDef<CategoryRow, any>[]>(
-    () => [
-      {
-        accessorKey: 'name',
-        header: 'Category',
-        cell: ({ getValue }) => (
-          <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
-            {getValue() as string}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'count',
-        header: 'Entries',
-        cell: ({ getValue }) => (
-          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-            {getValue() as number}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'total',
-        header: 'Total',
-        cell: ({ getValue }) => (
-          <span
-            style={{
-              fontWeight: 700,
-              fontFamily: 'var(--font-mono)',
-              color: copy.color,
-            }}
-          >
-            {inr(getValue())}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'share',
-        header: 'Share',
-        cell: ({ getValue }) => {
-          const pct = getValue() as number;
-          return (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '140px' }}>
-              <span
-                style={{
-                  flex: 1,
-                  height: '6px',
-                  background: 'var(--bg-surface-alt)',
-                  borderRadius: '3px',
-                  overflow: 'hidden',
-                }}
-              >
-                <span
-                  style={{
-                    display: 'block',
-                    width: `${pct}%`,
-                    height: '100%',
-                    background: copy.color,
-                    borderRadius: '3px',
-                  }}
-                />
-              </span>
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '12px',
-                  color: 'var(--text-muted)',
-                  width: '34px',
-                  textAlign: 'right',
-                }}
-              >
-                {pct.toFixed(0)}%
-              </span>
-            </span>
-          );
-        },
-      },
-    ],
-    [copy.color],
-  );
+  const days = daysInRange(range);
+  const largest = byCategory[0];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
-
-      <KpiStrip columns="auto">
-        <KpiTile label={copy.total} value={inr(total)} hint={`${range.from} → ${range.to}`} />
-        <KpiTile label="Entries" value={String(active.length)} hint="in range" />
-        <KpiTile label="Categories" value={String(byCategory.length)} hint={copy.withAmount} />
-        <KpiTile
-          label="Largest category"
-          value={byCategory[0] ? inr(byCategory[0].total) : inr(0)}
-          hint={byCategory[0]?.name ?? '—'}
-        />
-      </KpiStrip>
-
-      <Panel flush title={copy.panel}>
-        {isLoading ? (
-          <div style={{ padding: '16px' }}>
-            <EmptyState
-              compact
-              icon={<Icon name={copy.icon} size="md" />}
-              title="Loading…"
-              description={copy.loading}
-            />
-          </div>
-        ) : byCategory.length === 0 ? (
-          <div style={{ padding: '12px' }}>
-            <EmptyState
-              compact
-              icon={<Icon name={copy.icon} size="md" />}
-              title={copy.empty}
-              description={copy.emptyRange}
-            />
-          </div>
-        ) : (
-          <DataTable
-            bare
-            columns={columns}
-            data={byCategory}
-            emptyMessage={copy.emptyTable}
-            getRowId={(r) => r.name}
-            initialSorting={[{ id: 'total', desc: true }]}
+    <div className="flex flex-col gap-4">
+      <ControlBar
+        range={
+          <DateRangeMenu
+            value={range}
+            onChange={setRange}
+            clock={clock}
+            aria-label={`${copy.section} period`}
           />
-        )}
-      </Panel>
+        }
+      />
+
+      <DataSection title={`${kind} totals`} query={recordsQ} shape="cards" placeholderHeight={90}>
+        <KpiStrip columns="auto">
+          <KpiTile
+            label="Average per day"
+            scope="in-range"
+            value={formatMoney(total / days)}
+            hint={`over ${days} ${days === 1 ? 'day' : 'days'}`}
+          />
+          <KpiTile label="Entries" scope="in-range" value={String(active.length)} />
+          <KpiTile
+            label="Categories"
+            scope="in-range"
+            value={String(byCategory.length)}
+            hint={copy.withAmount}
+          />
+          <KpiTile
+            label="Largest category"
+            scope="in-range"
+            value={formatMoney(largest?.total ?? 0)}
+            hint={largest?.name ?? '—'}
+          />
+        </KpiStrip>
+      </DataSection>
+
+      <section className="flex flex-col gap-2">
+        <SectionHeader title={copy.section} />
+        <DataSection
+          title={copy.noun}
+          query={recordsQ}
+          placeholderHeight={200}
+          flush
+          isEmpty={byCategory.length === 0}
+          empty={
+            <div className="p-3">
+              <EmptyState
+                compact
+                icon={<Icon name={copy.icon} size="md" />}
+                title={copy.empty}
+                description={copy.emptyRange}
+              />
+            </div>
+          }
+        >
+          <InteractiveTable
+            bare
+            columns={COLUMNS}
+            rows={byCategory}
+            rowKey={(r) => r.name}
+            totalRow
+            title={copy.noun}
+          />
+        </DataSection>
+      </section>
     </div>
   );
 };
