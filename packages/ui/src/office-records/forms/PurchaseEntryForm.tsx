@@ -506,23 +506,23 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
           <div className="flex flex-col gap-1 rounded-input border border-border-soft bg-surface-alt px-3 py-2.5 text-[12px]">
             <div className="flex justify-between text-ink-muted">
               <span>Taxable</span>
-              <span className="font-mono tabular-nums">{inr(taxableTotal)}</span>
+              <span className={FIGURE}>{inr(taxableTotal)}</span>
             </div>
             {gstTotal > 0 && (
               <div className="flex justify-between text-ink-muted">
                 <span>{interState ? 'IGST' : 'CGST + SGST'}</span>
-                <span className="font-mono tabular-nums">{inr(gstTotal)}</span>
+                <span className={FIGURE}>{inr(gstTotal)}</span>
               </div>
             )}
             {cessTotal > 0 && (
               <div className="flex justify-between text-ink-muted">
                 <span>Cess</span>
-                <span className="font-mono tabular-nums">{inr(cessTotal)}</span>
+                <span className={FIGURE}>{inr(cessTotal)}</span>
               </div>
             )}
             <div className="mt-0.5 flex justify-between border-t border-border-soft pt-1 font-bold text-ink-strong">
               <span>Invoice total</span>
-              <span className="font-mono tabular-nums">{inr(grandTotal)}</span>
+              <span className={FIGURE}>{inr(grandTotal)}</span>
             </div>
           </div>
         </div>
