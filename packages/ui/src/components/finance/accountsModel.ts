@@ -1,3 +1,8 @@
+import type { DateRange } from '../../pump-ds/index.js';
+import { countOf, inWindow, sumAmounts } from '../../utils/ledgerWindow.js';
+
+export { inWindow };
+
 /**
  * The Accounts page's figures (#530): pure, so the tiles, the transfer list and
  * the statement tiles are tested without rendering.
@@ -152,22 +157,12 @@ export function pairTransfers(movements: readonly MovementRow[]): Transfer[] {
     );
 }
 
-export const sumTransfers = (rows: readonly Transfer[]) =>
-  rows.reduce((sum, t) => sum + t.amount, 0);
-
-/** A date window, both ends `YYYY-MM-DD` and included. */
-export interface Window {
-  from: string;
-  to: string;
-}
-
-export const inWindow = (date: string | null | undefined, w: Window) =>
-  !!date && date >= w.from && date <= w.to;
+export const sumTransfers = (rows: readonly Transfer[]) => sumAmounts(rows);
 
 /** Money into and out of one account over a window, and how many entries moved it. */
 export function accountFlows(
   entries: readonly { entryDate?: string | null; direction: string; amount: string | number }[],
-  w: Window,
+  w: DateRange,
 ): { moneyIn: number; moneyOut: number; count: number } {
   let moneyIn = 0;
   let moneyOut = 0;
@@ -181,6 +176,7 @@ export function accountFlows(
   return { moneyIn, moneyOut, count };
 }
 
-export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+/** "1 deposit", "3 deposits" (shared `countOf`). */
+export const plural = (n: number, one: string, many = `${one}s`) => countOf(n, one, many);
 
-export const entries = (n: number) => plural(n, 'entry', 'entries');
+export const entries = (n: number) => countOf(n, 'entry', 'entries');
