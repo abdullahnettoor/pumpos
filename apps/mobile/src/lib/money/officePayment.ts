@@ -7,6 +7,7 @@
  */
 import {
   IDEMPOTENCY_KEY_REUSED,
+  isIdempotencyInProgress,
   isValidBusinessDate,
   resolveEntryDate,
   type AccessMode,
@@ -70,12 +71,7 @@ const codeOf = (e: unknown): string | undefined =>
  * key is replaced.
  */
 export function keepsIdempotencyKey(error: unknown): boolean {
-  if (reusesIdempotencyKey(error)) return true;
-  return (
-    codeOf(error) === 'CONFLICT' &&
-    error instanceof Error &&
-    /already in progress/i.test(error.message)
-  );
+  return reusesIdempotencyKey(error) || isIdempotencyInProgress(error);
 }
 
 /**

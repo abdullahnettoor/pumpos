@@ -1,4 +1,4 @@
-import { IDEMPOTENCY_KEY_REUSED } from '@pump/shared';
+import { IDEMPOTENCY_KEY_REUSED, isIdempotencyInProgress } from '@pump/shared';
 
 /**
  * What the team sheets say when a write is refused or fails, and whether the
@@ -34,8 +34,8 @@ const VERB: Record<TeamAction, string> = {
 export function isOutcomeUnknown(error: unknown): boolean {
   const status = statusOf(error);
   if (status === undefined || status >= 500) return true;
-  // 409 "already in progress": the first attempt is still running.
-  return status === 409 && /in progress/i.test(error instanceof Error ? error.message : '');
+  // The first attempt under this key is still running.
+  return isIdempotencyInProgress(error);
 }
 
 /** Same key, different body: the earlier attempt reached the server (see `idempotency.ts`). */

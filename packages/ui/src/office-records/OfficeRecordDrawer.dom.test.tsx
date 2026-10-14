@@ -206,7 +206,7 @@ describe('Office Record drawer: one entry definition per kind (#526)', () => {
     ],
   ];
 
-  const topBar = (role: 'Owner' | 'Staff') => (
+  const topBar = (role: 'Owner' | 'Manager' | 'Staff') => (
     <AppTopBar
       selectedStation={{ ...STATION, name: 'Kochi' } as any}
       navItems={[]}
@@ -283,6 +283,15 @@ describe('Office Record drawer: one entry definition per kind (#526)', () => {
     expect(items).not.toContain('Supplier payment');
     // Staff may not create customers (canCreateCustomer).
     expect(items).not.toContain('Customer');
+  });
+
+  it.each(['Owner', 'Manager'] as const)('offers %s Customer in the New menu', async (role) => {
+    renderWithProviders(topBar(role), { queryClient: seeded() });
+    const menu = await openNewMenu();
+    const items = within(menu)
+      .getAllByRole('menuitem')
+      .map((i) => i.textContent);
+    expect(items).toContain('Customer');
   });
 
   it.each(['expense', 'income', 'collection', 'supplier-payment'] as const)(

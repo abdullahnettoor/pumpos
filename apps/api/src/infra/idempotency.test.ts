@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
+import { IDEMPOTENCY_IN_PROGRESS } from '@pump/shared';
 import {
   createIdempotencyMiddleware,
   type IdempotencyRecord,
@@ -180,6 +181,44 @@ describe('idempotency middleware', () => {
     expect(((await changed.json()) as any).error.code).toBe('IDEMPOTENCY_KEY_REUSED');
     expect(trueRetry.status).toBe(200);
     expect(await trueRetry.json()).toEqual({ success: true, data: 1 });
+    expect(executions).toBe(1);
+  });
+
+  it('marks a duplicate of a request still running as in progress, keeping the released shape', async () => {
+    const store = new MemoryStore();
+    const app = appFor(store);
+    let finish!: () => void;
+    const running = new Promise<void>((resolve) => (finish = resolve));
+    let executions = 0;
+    app.post('/command', async (c) => {
+      executions++;
+      await running;
+      return c.json({ success: true, data: executions });
+    });
+
+    const first = app.request('/command', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'key-1' },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const duplicate = await app.request('/command', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'key-1' },
+    });
+    finish();
+
+    expect(duplicate.status).toBe(409);
+    // Released clients read code CONFLICT (stock count) and this message; the
+    // dedicated code rides in details.
+    expect(await duplicate.json()).toEqual({
+      success: false,
+      error: {
+        code: 'CONFLICT',
+        message: 'A request with this Idempotency-Key is already in progress',
+        details: { reason: IDEMPOTENCY_IN_PROGRESS },
+      },
+    });
+    expect((await first).status).toBe(200);
     expect(executions).toBe(1);
   });
 });
