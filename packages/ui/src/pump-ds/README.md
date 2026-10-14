@@ -56,6 +56,66 @@ a time — never in place.
    `error={q.error}` and `onRetry={q.refetch}`). Gate with `enabled`, and give
    the queries the same flag so a hidden section sends no request.
 
+## Style check
+
+`classGuard.test.ts` scans every source file in `packages/ui/src` (tests
+excluded) and counts, per file:
+
+| Rule             | Flags                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| `dead-class`     | Tailwind classes that generate no CSS (`bg-line`, `text-accent`)                     |
+| `undefined-var`  | `var(--x)` where `--x` is defined nowhere                                            |
+| `raw-color`      | hex / `rgb(a)` / `hsl(a)` in **any** string literal (see below)                      |
+| `palette-class`  | Tailwind's default palette (`text-gray-500`, `bg-blue-600`, `text-white`)            |
+| `fill-text-pair` | a solid fill with the wrong `text-on-*` (`bg-danger-fg text-on-brand`, `hover:` too) |
+
+**What counts as a class string.** `className` / `class` values and every
+argument of `cn()`, `clsx()`, `twMerge()`, `cva()`, `cx()`. Any other string
+(a class map like `TONE = { warn: '…' }`, a `labelClassName="…"` prop) counts
+when every token is class-shaped (no capitals or trailing punctuation outside
+`[…]`) and at least one token has a utility prefix: a colour utility
+(`bg-`, `text-`, `border-`, …), a palette class, or a Tailwind variant
+(`hover:`, `md:`, `data-[…]:`). Whether the tokens compile does not matter, so
+a map of dead tokens is still checked. Copy (`'Shift closed: text-only'`) and
+storage keys (`'pumpos:pending-stock-count'`) are not class strings.
+
+**Raw colours.** A hex, `rgb()`/`rgba()` or `hsl()`/`hsla()` in any string
+literal in a `.ts`/`.tsx` source counts: classes, style props, constants
+(`const C = { a: '#fff' }`), ternaries (`ok ? '#123' : '#456'`), SVG
+attributes. Not counted: `url(#id)` references, and a hex inside copy (the
+string has capitals outside the hex, as in `'Order #123'`). PDF documents
+(`@react-pdf/renderer`, `pdfmake`) may use hex: they have no CSS variables.
+
+**Fill/text pairs across strings.** A `className` / `cn()` value is expanded
+into every class string it can produce: ternary branches inside a template
+combined with its static parts, all args of one `cn()` call, and local `const`
+strings and object maps it names. `${ok ? 'bg-brand' : 'bg-danger-fg'} text-on-brand`
+and `cn(base, 'text-on-brand')` are both checked.
+
+Plain CSS classes defined in `index.css` are allowed.
+
+```sh
+npm run test:classes -w @pump/ui          # run the check (CI runs it too)
+npm run test:classes:update -w @pump/ui   # lower the allow-list after a fix
+npm run test:classes:baseline -w @pump/ui # one-off full rebaseline (may raise)
+```
+
+Today's violations are recorded in `class-guard/allowlist.json` as
+`rule → file → count`. The check fails when a file gains a violation, when a
+file not on the list has one, and when a file has **fewer** than its entry.
+
+**Lowering an entry.** After fixing violations, run `test:classes:update` and
+commit the rewritten `allowlist.json`. The command only ever lowers entries and
+drops them at zero; it never raises or adds one, so a new violation has to be
+fixed, not listed. If two PRs conflict in `allowlist.json`, take either side and
+re-run the command on the merged branch.
+
+**Rebaselining (one-off only).** `npm run test:classes:baseline -w @pump/ui`
+rewrites `allowlist.json` from the current counts, so it can raise entries and
+add files. It exists for a deliberate one-off reset (as after the wave-1 merge
+in #517), reviewed file by file in its PR. Normal PRs never run it: they fix
+new violations and use the lower-only `test:classes:update`.
+
 ## Load order (apps must follow this)
 
 ```ts

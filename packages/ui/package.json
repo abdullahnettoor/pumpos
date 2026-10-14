@@ -9,7 +9,9 @@
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "test": "vitest run",
-    "test:classes": "vitest run src/pump-ds/classGuard.test.ts"
+    "test:classes": "vitest run src/pump-ds/classGuard.test.ts",
+    "test:classes:update": "CLASS_GUARD_UPDATE=1 vitest run src/pump-ds/classGuard.test.ts",
+    "test:classes:baseline": "CLASS_GUARD_BASELINE=1 vitest run src/pump-ds/classGuard.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

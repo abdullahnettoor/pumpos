@@ -40,8 +40,16 @@ jobs:
       - name: Typecheck
         run: npx tsc -b
 
+      # Style-check ratchet over packages/ui/src (#517): dead classes, undefined
+      # CSS variables, raw colours, default-palette classes and mismatched
+      # fill/text pairs. A file may not gain violations, and a fixed one must
+      # lower its entry in class-guard/allowlist.json. Its own step so a failure
+      # is named; the Test step below excludes it so it does not run twice.
+      - name: Style check (packages/ui)
+        run: npm run test:classes -w @pump/ui
+
       - name: Test
-        run: npm run test --workspaces --if-present
+        run: npm run test --workspaces --if-present -- --exclude '**/classGuard.test.ts'
 
       # `scripts/` is not a workspace, so the line above skips it. These are the
       # lint-ratchet guards; an untested guard that quietly stops working puts
