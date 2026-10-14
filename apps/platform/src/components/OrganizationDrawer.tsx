@@ -59,8 +59,6 @@ export const OrganizationDrawer: React.FC<OrganizationDrawerProps> = ({ target, 
         </div>
 
         <Tabs
-          variant="underline"
-          size="sm"
           activeId={tab}
           onChange={setTab}
           aria-label="Organization administration"

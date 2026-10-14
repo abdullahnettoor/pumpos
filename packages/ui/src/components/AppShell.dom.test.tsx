@@ -42,12 +42,12 @@ afterEach(() => {
 });
 
 const mockNavItems: NavItem[] = [
-  { label: 'Dashboard', path: '/dashboard' },
-  { label: 'Shifts', path: '/shifts' },
-  { label: 'Station', path: '/setup/station' },
-  { label: 'Expenses', path: '/expenses' },
-  { label: 'Pricing', path: '/pricing' },
-  { label: 'Customers', path: '/customers' },
+  { label: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
+  { label: 'Shifts', path: '/shifts', icon: 'shifts' },
+  { label: 'Station', path: '/setup/station', icon: 'station' },
+  { label: 'Expenses', path: '/expenses', icon: 'expenses' },
+  { label: 'Pricing', path: '/pricing', icon: 'pricing' },
+  { label: 'Customers', path: '/customers', icon: 'customers' },
   { label: 'Custom Nav', path: '/custom', icon: 'zap' },
 ];
 

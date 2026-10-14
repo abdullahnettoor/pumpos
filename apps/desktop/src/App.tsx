@@ -40,6 +40,7 @@ import {
   useRoutePath,
   NAV_PAGES,
   ROUTES,
+  type NavItem,
 } from '@pump/ui';
 import { Station } from '@pump/shared';
 import { environmentTag, showDeveloperSurfaces } from './buildEnv.js';
@@ -318,7 +319,7 @@ const App: React.FC = () => {
   const navAssumesReady = isStationReady || stationsLoading;
 
   // Dynamic Navigation items based on onboarding status
-  const navItems = navAssumesReady
+  const navItems: NavItem[] = navAssumesReady
     ? [...NAV_PAGES]
     : [
         {
@@ -329,7 +330,7 @@ const App: React.FC = () => {
         },
       ];
 
-  const navItemsWithDev = showDeveloperSurfaces
+  const navItemsWithDev: NavItem[] = showDeveloperSurfaces
     ? [...navItems, { label: 'Design System', path: '/design-system', icon: 'design-system' }]
     : navItems;
 

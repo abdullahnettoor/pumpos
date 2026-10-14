@@ -56,9 +56,9 @@ async function tabsOf(label: string) {
   const list = await screen.findByRole('tablist', { name: label });
   const tabs = within(list).getAllByRole('tab');
   return {
-    labels: tabs.map((t) => t.querySelector('.pump-tab__label')?.textContent),
+    labels: tabs.map((t) => t.querySelector('[data-tab-label]')?.textContent),
     selected: tabs.find((t) => t.getAttribute('aria-selected') === 'true')?.textContent,
-    allHaveIcons: tabs.every((t) => t.querySelector('.pump-tab__icon svg')),
+    allHaveIcons: tabs.every((t) => t.querySelector('[data-tab-icon] svg')),
   };
 }
 
@@ -223,4 +223,47 @@ describe('Income GST by role (review #545: #540 keeps role filtering unchanged)'
       });
     },
   );
+});
+
+/**
+ * Same concept → same glyph (review #559): actions and empty states about a
+ * concept draw its `CONCEPT_ICON`, not a hand-picked lucide icon.
+ */
+describe('concept icons outside tabs (#523)', () => {
+  const glyph = (el: Element | null) => el?.querySelector('svg')?.getAttribute('class') ?? '';
+
+  it('Organization setup prompt: Onboard station draws stations, Invite your team draws team', async () => {
+    renderWithProviders(
+      <OrganizationOverview
+        stations={[]}
+        selectedStation={null}
+        onStationChange={() => {}}
+        onNavigate={() => {}}
+      />,
+    );
+    const [onboard] = await screen.findAllByRole('button', { name: /Onboard station/i });
+    expect(glyph(onboard)).toContain('lucide-map-pin');
+    expect(glyph(screen.getByRole('button', { name: /Invite your team/i }))).toMatch(
+      /lucide-users(?!-)/,
+    );
+  });
+
+  it('Station with no station selected: the empty state draws stations', async () => {
+    renderWithProviders(
+      <StationOverview selectedStation={null} userRole="Owner" onStationSelected={() => {}} />,
+    );
+    const title = await screen.findByText('No station selected');
+    expect(glyph(title.closest('[class*="flex-col"]'))).toContain('lucide-map-pin');
+  });
+});
+
+describe('tab panels (#523)', () => {
+  it('Station: the active tab controls the panel below it', async () => {
+    renderWithProviders(
+      <StationOverview selectedStation={station} userRole="Owner" onStationSelected={() => {}} />,
+    );
+    const tab = await screen.findByRole('tab', { name: 'General' });
+    const panel = screen.getByRole('tabpanel', { name: 'General' });
+    expect(tab.getAttribute('aria-controls')).toBe(panel.id);
+  });
 });

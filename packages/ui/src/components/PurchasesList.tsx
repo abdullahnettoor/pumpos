@@ -14,19 +14,10 @@ import { Drawer } from './Drawer.js';
 import { PurchaseEntryForm, type PurchasePayNow } from './transactions/PurchaseEntryForm.js';
 import { DataTable } from './primitives/DataTable.js';
 import { inr } from '../utils/format.js';
-import { Tabs } from './primitives/Tabs.js';
+import { Tabs } from '../pump-ds/tabs/index.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { useToast } from './primitives/ToastProvider.js';
-import {
-  Panel,
-  Button,
-  KpiStrip,
-  KpiTile,
-  EmptyState,
-  DateText,
-  Icon,
-  ConceptIcon,
-} from '../pump-ds/index.js';
+import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText, Icon } from '../pump-ds/index.js';
 import {
   mixedPurchaseError,
   resolveBusinessDate,
@@ -370,7 +361,6 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
       }
       toolbar={
         <Tabs
-          variant="underline"
           aria-label="Suppliers"
           activeId={activeTab}
           onChange={(id) => setActiveTab(id as TabType)}
@@ -378,9 +368,9 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
             {
               id: 'registry',
               label: 'Suppliers',
-              icon: <ConceptIcon concept="supplier-list" />,
+              concept: 'suppliers',
             },
-            { id: 'transactions', label: 'Purchases', icon: <ConceptIcon concept="purchases" /> },
+            { id: 'transactions', label: 'Purchases', concept: 'purchases' },
           ]}
         />
       }

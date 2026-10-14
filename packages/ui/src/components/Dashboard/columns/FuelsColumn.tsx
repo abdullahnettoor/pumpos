@@ -2,7 +2,7 @@ import React from 'react';
 import { canViewInventoryNav, resolveDecantationSettings } from '@pump/shared';
 import { useDensityTodaySummary } from '../../../query/hooks.js';
 import { FuelsCard } from '../cards/FuelsCard.js';
-import { ColumnHeader } from '../frame/ColumnHeader.js';
+import { SectionHeader } from '../../../pump-ds/section-header/index.js';
 import { useDashboard } from '../frame/DashboardContext.js';
 
 /** Middle column: Fuels (price, density, tanks, decantation). */
@@ -19,7 +19,7 @@ export const FuelsColumn: React.FC = () => {
     : `Density changes over ±${tolerance.toFixed(1)} kg/m³ without a decantation are flagged.`;
   return (
     <>
-      <ColumnHeader
+      <SectionHeader
         title="Fuels"
         subtitle="price · density · stock"
         action={

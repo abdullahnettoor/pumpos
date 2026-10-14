@@ -82,8 +82,8 @@ export const NAV_PAGES: readonly NavPage[] = [
     icon: CONCEPT_ICON.accounts,
     roles: ['Owner', 'Manager', 'Accountant'],
   },
-  { label: 'Expenses', path: ROUTES.expenses, icon: CONCEPT_ICON['expenses-page'] },
-  { label: 'Income', path: ROUTES.income, icon: CONCEPT_ICON['income-page'] },
+  { label: 'Expenses', path: ROUTES.expenses, icon: CONCEPT_ICON.expenses },
+  { label: 'Income', path: ROUTES.income, icon: CONCEPT_ICON.income },
   {
     label: 'Reports',
     path: ROUTES.reports,
@@ -103,6 +103,11 @@ export const NAV_PAGES: readonly NavPage[] = [
     roles: ['Owner'],
   },
 ];
+
+/** A page's title: its sidebar label (#523). Undefined off the sidebar. */
+export function pageTitle(path: RoutePath): string | undefined {
+  return NAV_PAGES.find((p) => p.path === path)?.label;
+}
 
 /**
  * Sidebar groups. Items are matched by path; order within a group follows

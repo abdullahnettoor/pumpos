@@ -6,8 +6,17 @@ import type { IconName } from './registry.js';
  * palette. "Tanks" in Inventory and "Tanks" in Station are the same concept, so
  * they read the same entry here.
  *
- * Picked for review (no obvious glyph): branding → palette, rules → sliders,
- * report templates → layout.
+ * A page and the tab that lists its records are one concept, so they share a
+ * key ("Expenses" in the sidebar, the Expenses tab, ⌘K "New expense").
+ *
+ * Owner-confirmed picks (no obvious glyph): branding → palette, rules →
+ * sliders, report templates → layout.
+ *
+ * The map runs one way, concept → glyph. Some glyphs serve several concepts
+ * (truck: suppliers + decantations; wallet: collections + payments; clock:
+ * history + shift templates; pump: shifts + live shift; package: inventory +
+ * product stock + products; arrow-left-right: movements + transfers), so never
+ * look a concept up from its glyph.
  */
 export const CONCEPT_ICON = {
   // Sidebar pages
@@ -16,8 +25,8 @@ export const CONCEPT_ICON = {
   inventory: 'package',
   pricing: 'tag',
   suppliers: 'truck',
-  'expenses-page': 'arrow-up',
-  'income-page': 'arrow-down',
+  expenses: 'arrow-up',
+  income: 'arrow-down',
   reports: 'file-text',
   insights: 'chart',
   station: 'settings',
@@ -46,8 +55,10 @@ export const CONCEPT_ICON = {
   collections: 'wallet',
   vehicles: 'car',
 
+  // Sales (quick entry)
+  'product-sales': 'shopping-bag',
+
   // Suppliers
-  'supplier-list': 'building',
   purchases: 'cart',
   payments: 'wallet',
 
@@ -57,8 +68,6 @@ export const CONCEPT_ICON = {
   transfers: 'arrow-left-right',
 
   // Expenses / Income
-  expenses: 'receipt',
-  income: 'arrow-down',
   'by-category': 'pie',
 
   // Station

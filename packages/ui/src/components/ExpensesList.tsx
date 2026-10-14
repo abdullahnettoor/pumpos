@@ -4,7 +4,7 @@ import { canManageExpenseCategory, canVoidExpense } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { DataTable } from './primitives/DataTable.js';
-import { Tabs } from './primitives/Tabs.js';
+import { Tabs } from '../pump-ds/tabs/index.js';
 import { DateRangeField, computeRange } from './primitives/DateRangeField.js';
 import type { DateRange } from './primitives/DateRangeField.js';
 import { inr } from '../utils/format.js';
@@ -29,7 +29,6 @@ import {
   SearchInput,
   Select,
   Icon,
-  ConceptIcon,
 } from '../pump-ds/index.js';
 import { buildExpenseColumns } from './expenses/columns.js';
 import { CategoryAnalytics } from './expenses/CategoryAnalytics.js';
@@ -230,16 +229,15 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
         }
         toolbar={
           <Tabs
-            variant="underline"
             aria-label="Expense views"
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as TabType)}
             tabs={[
-              { id: 'ledger', label: 'Expenses', icon: <ConceptIcon concept="expenses" /> },
+              { id: 'ledger', label: 'Expenses', concept: 'expenses' },
               {
                 id: 'analytics',
                 label: 'By category',
-                icon: <ConceptIcon concept="by-category" />,
+                concept: 'by-category',
               },
             ]}
           />

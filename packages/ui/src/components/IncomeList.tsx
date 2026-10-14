@@ -23,13 +23,12 @@ import {
   SearchInput,
   Select,
   Icon,
-  ConceptIcon,
 } from '../pump-ds/index.js';
 import { CategoryAnalytics } from './expenses/CategoryAnalytics.js';
 import { IncomeGstPanel } from './reports/gst/IncomeGstPanel.js';
 import { ROUTES } from '../nav-intent/routes.js';
 import type { NavIntent } from '../nav-intent/store.js';
-import { Tabs } from './primitives/Tabs.js';
+import { Tabs, type TabItem } from '../pump-ds/tabs/index.js';
 import { buildIncomeColumns } from './income/columns.js';
 import { IncomeCategoryManagerDrawer } from './income/IncomeCategoryManagerDrawer.js';
 import { CASH_ACCOUNT_TYPES } from '../utils/ledgerLabels.js';
@@ -244,20 +243,19 @@ export const IncomeList: React.FC<IncomeListProps> = ({
         }
         toolbar={
           <Tabs
-            variant="underline"
             aria-label="Income"
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as IncomeTab)}
             tabs={[
-              { id: 'ledger', label: 'Income', icon: <ConceptIcon concept="income" /> },
+              { id: 'ledger', label: 'Income', concept: 'income' },
               {
                 id: 'analytics',
                 label: 'By category',
-                icon: <ConceptIcon concept="by-category" />,
+                concept: 'by-category',
               },
               ...(reportsGst
                 ? []
-                : [{ id: 'gst', label: 'GST', icon: <ConceptIcon concept="gst" /> }]),
+                : [{ id: 'gst', label: 'GST', concept: 'gst' } satisfies TabItem]),
             ]}
           />
         }

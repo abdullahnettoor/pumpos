@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Station, stationLimitMessage, reachableStations, showStationDropdown } from '@pump/shared';
 import { PageLayout } from '../primitives/PageLayout.js';
-import { Tabs } from '../primitives/Tabs.js';
-import { Chip, Button, ConceptIcon } from '../../pump-ds/index.js';
+import { Tabs, type TabItem } from '../../pump-ds/tabs/index.js';
+import { Chip, Button } from '../../pump-ds/index.js';
+import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
 import { UserRolesAssignment } from '../StationSetup/UserRolesAssignment.js';
 import { OrgProfile } from './OrgProfile.js';
 import { ActivityFeed } from './ActivityFeed.js';
-import { Check, Fuel, Users, Plus } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import { DesktopAppPanel } from '../Desktop/DesktopAppPanel.js';
 import { isDesktopApp } from '../../utils/platform.js';
 import { useAccess } from '../../query/hooks.js';
@@ -98,7 +99,6 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
       subtitle="Manage your stations and team across the organization."
       toolbar={
         <Tabs
-          variant="underline"
           aria-label="Organization"
           activeId={tab}
           onChange={(id) => setTab(id as OrgTab)}
@@ -106,19 +106,19 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
             {
               id: 'stations',
               label: 'Stations',
-              icon: <ConceptIcon concept="stations" />,
+              concept: 'stations',
               badge: stations.length,
             },
-            { id: 'team', label: 'Team', icon: <ConceptIcon concept="team" /> },
-            { id: 'activity', label: 'Activity', icon: <ConceptIcon concept="activity" /> },
-            { id: 'profile', label: 'Profile', icon: <ConceptIcon concept="profile" /> },
+            { id: 'team', label: 'Team', concept: 'team' },
+            { id: 'activity', label: 'Activity', concept: 'activity' },
+            { id: 'profile', label: 'Profile', concept: 'profile' },
             ...(showDesktopTab
               ? [
                   {
                     id: 'desktop',
                     label: 'Desktop app',
-                    icon: <ConceptIcon concept="desktop-app" />,
-                  },
+                    concept: 'desktop-app',
+                  } satisfies TabItem,
                 ]
               : []),
           ]}
@@ -152,7 +152,7 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
                 <Button
                   variant="primary"
                   size="sm"
-                  leftIcon={<Fuel size={14} />}
+                  leftIcon={<ConceptIcon concept="stations" />}
                   disabled={capacityReached}
                   title={capacityMessage}
                   onClick={() => onNavigate('/onboarding')}
@@ -162,7 +162,7 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
                 <Button
                   variant="secondary"
                   size="sm"
-                  leftIcon={<Users size={14} />}
+                  leftIcon={<ConceptIcon concept="team" />}
                   onClick={() => setTab('team')}
                 >
                   Invite your team

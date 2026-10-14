@@ -1,22 +1,5 @@
 import React, { useMemo } from 'react';
-import {
-  Receipt,
-  Wallet,
-  ShoppingCart,
-  ShoppingBag,
-  CreditCard,
-  Users,
-  Truck,
-  Package,
-  FileText,
-  Banknote,
-  ArrowUpRight,
-  LogOut,
-  TriangleAlert,
-  Clock,
-  LayoutDashboard,
-  Fuel,
-} from 'lucide-react';
+import { LogOut, TriangleAlert, Clock } from 'lucide-react';
 import {
   type OperatorRole,
   type Station,
@@ -25,7 +8,7 @@ import {
   showStationDropdown,
 } from '@pump/shared';
 import { preReadyQuickCreateIds, type PreReadyQuickCreateId } from './quickCreateActions.js';
-import type { NavIntent } from './AppShell.js';
+import type { NavIntent, NavItem } from './AppShell.js';
 import { openQuickEntry } from '../quick-entry/store.js';
 import { initialsOf } from '../utils/initials.js';
 import {
@@ -39,6 +22,8 @@ import {
   type UserMenuAction,
   type SyncStatus,
   PumpOSLockup,
+  ConceptIcon,
+  Icon,
 } from '../pump-ds/index.js';
 import { useCustomers, useSuppliers, useProducts } from '../query/hooks.js';
 import { useStationAlerts } from '../query/useStationAlerts.js';
@@ -64,7 +49,7 @@ import { ROUTES } from '../nav-intent/routes.js';
 
 export interface AppTopBarProps {
   selectedStation: Station | null;
-  navItems: { label: string; path: string; roles?: string[] }[];
+  navItems: NavItem[];
   userRole: OperatorRole;
   userName: string;
   syncStatus: SyncStatus;
@@ -144,13 +129,13 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         'onboard-station': {
           id: 'onboard-station',
           label: 'Onboard station',
-          icon: <Fuel />,
+          icon: <ConceptIcon concept="stations" />,
           onSelect: () => onNavigate('/onboarding'),
         },
         'team-member': {
           id: 'team-member',
           label: 'Team member',
-          icon: <Users />,
+          icon: <ConceptIcon concept="team" />,
           onSelect: () => onNavigate('/organization'),
         },
       };
@@ -160,49 +145,49 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
       {
         id: 'expense',
         label: 'Expense',
-        icon: <Receipt />,
+        icon: <ConceptIcon concept="expenses" />,
         onSelect: () => openQuickEntry('expense'),
       },
       {
         id: 'income',
         label: 'Income',
-        icon: <Banknote />,
+        icon: <ConceptIcon concept="income" />,
         onSelect: () => openQuickEntry('income'),
       },
       {
         id: 'collection',
         label: 'Collection',
-        icon: <Wallet />,
+        icon: <ConceptIcon concept="collections" />,
         onSelect: () => openQuickEntry('collection'),
       },
       {
         id: 'merchandise-sale',
         label: 'Merchandise sale',
-        icon: <ShoppingBag />,
+        icon: <ConceptIcon concept="product-sales" />,
         onSelect: () => openQuickEntry('merchandise-sale'),
       },
       {
         id: 'purchase',
         label: 'Purchase',
-        icon: <ShoppingCart />,
+        icon: <ConceptIcon concept="purchases" />,
         onSelect: () => openQuickEntry('purchase'),
       },
       {
         id: 'supplier-payment',
         label: 'Supplier payment',
-        icon: <Wallet />,
+        icon: <ConceptIcon concept="payments" />,
         onSelect: () => onNavigate(ROUTES.suppliers, { open: 'supplier-payment' }),
       },
       {
         id: 'credit',
         label: 'Credit sale',
-        icon: <CreditCard />,
+        icon: <ConceptIcon concept="credit-sales" />,
         onSelect: () => onNavigate('/shifts'),
       },
       {
         id: 'customer',
         label: 'Customer',
-        icon: <Users />,
+        icon: <ConceptIcon concept="customers" />,
         onSelect: () => onNavigate('/customers', { open: 'new-customer' }),
       },
     ];
@@ -304,7 +289,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
           return {
             id: `cust-${c.id}`,
             label: c.name,
-            icon: <Users />,
+            icon: <ConceptIcon concept="customers" />,
             meta,
             keywords: [c.phone, c.fleetCode, c.metadata?.gstin, c.metadata?.tradeName].filter(
               Boolean,
@@ -329,7 +314,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
           return {
             id: `sup-${s.id}`,
             label: s.name,
-            icon: <Truck />,
+            icon: <ConceptIcon concept="suppliers" />,
             meta: bal > 0 ? `${inr(bal)} due` : '',
             keywords: [s.phone, s.metadata?.gstin, s.metadata?.tradeName].filter(Boolean),
             onSelect: () =>
@@ -347,7 +332,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         items: rows.map<CommandItem>((p) => ({
           id: `prod-${p.id}`,
           label: p.name,
-          icon: <Package />,
+          icon: <ConceptIcon concept="products" />,
           meta: p.productType ?? '',
           keywords: [p.hsnCode, p.productType].filter(Boolean),
           onSelect: () => onNavigate('/pricing'),
@@ -363,7 +348,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         .map<CommandItem>((n) => ({
           id: `nav-${n.path}`,
           label: n.label,
-          icon: n.label === 'Dashboard' ? <LayoutDashboard /> : <ArrowUpRight />,
+          icon: <Icon name={n.icon} />,
           keywords: ['open', 'go'],
           onSelect: () => onNavigate(n.path),
         })),

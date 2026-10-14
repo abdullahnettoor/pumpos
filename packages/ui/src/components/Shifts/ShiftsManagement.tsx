@@ -17,7 +17,7 @@ import { BusinessDayTab } from './BusinessDayTab.js';
 import { seedStaffAssignments } from './seedStaffAssignments.js';
 import { buildOpenShiftAssignments } from './openShiftAssignments.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
-import { Tabs } from '../primitives/Tabs.js';
+import { Tabs, type TabItem } from '../../pump-ds/tabs/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
@@ -45,7 +45,6 @@ import type { DrawerRow } from './DrawerReconciliationTable.js';
 import type { CloseDropRow } from './CloseShiftWizard.js';
 import type { OpenShiftFormValues } from '@pump/shared';
 import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play } from 'lucide-react';
-import { ConceptIcon } from '../../pump-ds/icon/index.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 import { refreshShiftStatus } from './refreshShiftStatus.js';
@@ -821,40 +820,26 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     // underline baseline is never masked by the backdrop at rest.
     <div style={{ position: 'relative', zIndex: 25 }}>
       <Tabs
-        variant="underline"
         aria-label="Shift views"
         className="no-print"
         activeId={shiftSubTab}
         onChange={(id) => setShiftSubTab(id as 'today' | 'business-day' | 'history')}
-        tabs={[
-          {
-            id: 'today',
-            label: 'Live shift',
-            icon: <ConceptIcon concept="live-shift" />,
-            badge: activeShift ? (
-              <span
-                style={{
-                  fontSize: '10px',
-                  padding: '1px 6px',
-                  borderRadius: '8px',
-                  background: 'var(--state-success-bg)',
-                  color: 'var(--state-success-fg)',
-                  fontWeight: 600,
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                Open
-              </span>
-            ) : undefined,
-          },
-          {
-            id: 'business-day',
-            label: 'Business days',
-            icon: <ConceptIcon concept="business-days" />,
-          },
-          { id: 'history', label: 'History', icon: <ConceptIcon concept="history" /> },
-        ].filter((tab) => userRole !== 'Accountant' || tab.id !== 'today')}
+        tabs={(
+          [
+            {
+              id: 'today',
+              label: 'Live shift',
+              concept: 'live-shift',
+              badge: activeShift ? 'open' : undefined,
+            },
+            {
+              id: 'business-day',
+              label: 'Business days',
+              concept: 'business-days',
+            },
+            { id: 'history', label: 'History', concept: 'history' },
+          ] satisfies TabItem[]
+        ).filter((tab) => userRole !== 'Accountant' || tab.id !== 'today')}
       />
     </div>
   );

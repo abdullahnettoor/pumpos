@@ -26,7 +26,7 @@ export interface DashboardCardProps {
   flush?: boolean;
   /**
    * `card` (default): headerless, ONE bordered surface; the column's
-   * `ColumnHeader` carries the section title. `plain`: no frame when ready,
+   * `SectionHeader` carries the section title. `plain`: no frame when ready,
    * for cards whose content is itself one or more bordered cards (Forecourt
    * blocks, one card per fuel); loading/error keep a bordered footprint.
    */

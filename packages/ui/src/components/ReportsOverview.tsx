@@ -5,14 +5,15 @@ import { CloudShiftService } from '../services/cloud.js';
 import { useDailyDssrRange } from '../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { DailyDssrView } from './DailyDssrView.js';
-import { PageLayout } from './primitives/PageLayout.js';
+import { PageFrame } from './page-frame/index.js';
+import { ROUTES } from '../nav-intent/routes.js';
 import { DataTable } from './primitives/DataTable.js';
 import { DateField } from './primitives/Field.js';
 import { ExpenseRegister } from './reports/ExpenseRegister.js';
 import { LedgersReport } from './reports/LedgersReport.js';
 import { InvoicesPanel } from './reports/InvoicesPanel.js';
 import { GstReport } from './reports/gst/GstReport.js';
-import { ReportsNav, type ReportsNavGroup } from './reports/ReportsNav.js';
+import { ReportsNav, type ReportsNavGroup, type ReportsNavItem } from './reports/ReportsNav.js';
 import { ProfitLossView } from './reports/ProfitLossView.js';
 import { AttendantHandoverReportPanel } from './reports/AttendantHandoverReportPanel.js';
 import { DecantationReportPanel } from './reports/DecantationReportPanel.js';
@@ -238,19 +239,19 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
         ...(showAttendantReport
           ? [
               {
-                id: 'attendant-handovers' as const,
+                id: 'attendant-handovers',
                 label: 'Attendant handovers',
-                concept: 'attendant-handovers' as const,
-              },
+                concept: 'attendant-handovers',
+              } satisfies ReportsNavItem<ReportsTab>,
             ]
           : []),
         ...(canViewReports(userRole)
           ? [
               {
-                id: 'decantations' as const,
+                id: 'decantations',
                 label: 'Decantations',
-                concept: 'decantations' as const,
-              },
+                concept: 'decantations',
+              } satisfies ReportsNavItem<ReportsTab>,
             ]
           : []),
       ],
@@ -259,7 +260,13 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
       heading: 'Finance',
       items: [
         ...(userRole === 'Owner'
-          ? [{ id: 'pnl' as const, label: 'Profit & loss', concept: 'profit-loss' as const }]
+          ? [
+              {
+                id: 'pnl',
+                label: 'Profit & loss',
+                concept: 'profit-loss',
+              } satisfies ReportsNavItem<ReportsTab>,
+            ]
           : []),
         { id: 'ledger', label: 'Ledgers', concept: 'ledgers' },
         { id: 'invoices', label: 'Invoices', concept: 'invoices' },
@@ -295,8 +302,8 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
   }
 
   return (
-    <PageLayout
-      title="Reports"
+    <PageFrame
+      route={ROUTES.reports}
       subtitle="Daily sales summaries, profit & loss, ledgers, and tax registers."
     >
       <div className="grid grid-cols-[200px_minmax(0,1fr)] gap-4">
@@ -443,6 +450,6 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
           )}
         </div>
       </div>
-    </PageLayout>
+    </PageFrame>
   );
 };

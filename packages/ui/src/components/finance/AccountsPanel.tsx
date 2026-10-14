@@ -24,8 +24,7 @@ import { ACCOUNT_TYPE_LABEL, LEDGER_SOURCE_LABEL } from '../../utils/ledgerLabel
 import { inr } from '../../utils/format.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Wallet, ArrowLeft, ArrowLeftRight, Banknote } from 'lucide-react';
-import { Tabs } from '../primitives/Tabs.js';
-import { ConceptIcon } from '../../pump-ds/icon/index.js';
+import { Tabs } from '../../pump-ds/tabs/index.js';
 import { DailyCashBook } from '../reports/DailyCashBook.js';
 import { useNavIntent, clearNavIntent } from '../../nav-intent/store.js';
 
@@ -125,16 +124,15 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
   // book stays one click away while a ledger is open.
   const tabsToolbar = (
     <Tabs
-      variant="underline"
       aria-label="Accounts"
       activeId={activeTab}
       onChange={(id) => setActiveTab(id as AccountsTab)}
       tabs={[
-        { id: 'accounts', label: 'Accounts', icon: <ConceptIcon concept="accounts" /> },
+        { id: 'accounts', label: 'Accounts', concept: 'accounts' },
         {
           id: 'cash-book',
           label: 'Daily cash book',
-          icon: <ConceptIcon concept="daily-cash-book" />,
+          concept: 'daily-cash-book',
         },
       ]}
     />

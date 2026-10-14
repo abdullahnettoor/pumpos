@@ -124,10 +124,12 @@ export { useStationAlerts } from './query/useStationAlerts.js';
 export type { StationAlert, AlertSeverity } from './query/useStationAlerts.js';
 export { PageLayout } from './components/primitives/PageLayout.js';
 export type { PageLayoutProps } from './components/primitives/PageLayout.js';
+export { PageFrame } from './components/page-frame/index.js';
+export type { PageFrameProps } from './components/page-frame/index.js';
 export { DataTable } from './components/primitives/DataTable.js';
 export type { DataTableProps } from './components/primitives/DataTable.js';
-export { Tabs } from './components/primitives/Tabs.js';
-export type { TabsProps, TabItem } from './components/primitives/Tabs.js';
+export { Tabs, tabPanelProps } from './pump-ds/tabs/index.js';
+export type { TabsProps, TabItem, TabTone } from './pump-ds/tabs/index.js';
 export { ConfirmProvider, useConfirm } from './components/primitives/ConfirmDialog.js';
 export type { ConfirmOptions } from './components/primitives/ConfirmDialog.js';
 export { ToastProvider, useToast } from './components/primitives/ToastProvider.js';
@@ -236,6 +238,8 @@ export { SegmentedControl } from './pump-ds/segmented/index.js';
 export type { SegmentedControlProps, SegmentedControlOption } from './pump-ds/segmented/index.js';
 export { PageHeader } from './pump-ds/page-header/index.js';
 export type { PageHeaderProps } from './pump-ds/page-header/index.js';
+export { SectionHeader } from './pump-ds/section-header/index.js';
+export type { SectionHeaderProps } from './pump-ds/section-header/index.js';
 export { DataSection, isAccessRefusal } from './pump-ds/data-section/index.js';
 export type {
   DataSectionProps,

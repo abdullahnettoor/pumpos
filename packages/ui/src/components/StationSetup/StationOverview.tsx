@@ -17,16 +17,17 @@ import { ProductsCatalog } from './ProductsCatalog.js';
 import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
 import { ShiftTemplates } from './ShiftTemplates.js';
-import { Tabs } from '../primitives/Tabs.js';
+import { Tabs, tabPanelProps, type TabItem } from '../../pump-ds/tabs/index.js';
+import { PageFrame } from '../page-frame/index.js';
+import { ROUTES } from '../../nav-intent/routes.js';
 import { Field, TextInput, Select } from '../primitives/Field.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
-import { PageHeader, Panel, Button, EmptyState, Chip, Form } from '../../pump-ds/index.js';
-import { Building2 } from 'lucide-react';
+import { Panel, Button, EmptyState, Chip, Form } from '../../pump-ds/index.js';
+import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
 import { TankLevelSettingsPanel } from './TankLevelSettingsPanel.js';
 import { useRunTask } from '../../utils/runTask.js';
-import { ConceptIcon } from '../../pump-ds/icon/index.js';
 import { ReportTemplatesPanel } from '../reports/templates/ReportTemplatesPanel.js';
 
 const stationService = new CloudStationService();
@@ -258,58 +259,58 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
   }
 
   return (
-    <div
-      style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}
-      className="animate-fade-in"
-    >
-      <PageHeader
-        title="Station"
-        subtitle="Review and modify station components, products, tanks, nozzles, and settings."
-      />
-
-      {selectedStation ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Tabs bar */}
+    <PageFrame
+      route={ROUTES.station}
+      subtitle="Review and modify station components, products, tanks, nozzles, and settings."
+      tabs={
+        selectedStation ? (
           <Tabs
-            variant="underline"
+            id="station-setup"
             aria-label="Station setup"
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as any)}
             tabs={[
-              { id: 'general', label: 'General', icon: <ConceptIcon concept="general" /> },
-              { id: 'business', label: 'Branding', icon: <ConceptIcon concept="branding" /> },
-              { id: 'products', label: 'Products', icon: <ConceptIcon concept="products" /> },
-              { id: 'tanks', label: 'Tanks', icon: <ConceptIcon concept="tanks" /> },
+              { id: 'general', label: 'General', concept: 'general' },
+              { id: 'business', label: 'Branding', concept: 'branding' },
+              { id: 'products', label: 'Products', concept: 'products' },
+              { id: 'tanks', label: 'Tanks', concept: 'tanks' },
               {
                 id: 'dispensers',
                 label: 'Dispensers',
-                icon: <ConceptIcon concept="dispensers" />,
+                concept: 'dispensers',
               },
               {
                 id: 'terminals',
                 label: 'Payment terminals',
-                icon: <ConceptIcon concept="payment-terminals" />,
+                concept: 'payment-terminals',
               },
               {
                 id: 'shifts',
                 label: 'Shift templates',
-                icon: <ConceptIcon concept="shift-templates" />,
+                concept: 'shift-templates',
               },
               ...(userRole === 'Owner' || userRole === 'Manager'
-                ? [{ id: 'rules', label: 'Rules', icon: <ConceptIcon concept="rules" /> }]
+                ? [{ id: 'rules', label: 'Rules', concept: 'rules' } satisfies TabItem]
                 : []),
               ...(canManageReportTemplates(userRole)
                 ? [
                     {
                       id: 'report-templates',
                       label: 'Report templates',
-                      icon: <ConceptIcon concept="report-templates" />,
-                    },
+                      concept: 'report-templates',
+                    } satisfies TabItem,
                   ]
                 : []),
             ]}
           />
-
+        ) : undefined
+      }
+    >
+      {selectedStation ? (
+        <div
+          {...tabPanelProps('station-setup', activeTab)}
+          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+        >
           {/* Report templates carry their own panels (moved from Reports, #540). */}
           {activeTab === 'report-templates' && canManageReportTemplates(userRole) && (
             <ReportTemplatesPanel selectedStation={selectedStation} />
@@ -1167,11 +1168,11 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
         </div>
       ) : (
         <EmptyState
-          icon={<Building2 />}
+          icon={<ConceptIcon concept="stations" />}
           title="No station selected"
           description="Please select or initialize a station location first."
         />
       )}
-    </div>
+    </PageFrame>
   );
 };

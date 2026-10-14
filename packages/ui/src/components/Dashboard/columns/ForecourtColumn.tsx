@@ -3,7 +3,7 @@ import { shiftWorkspaceAction } from '@pump/shared';
 import { ForecourtCard } from '../cards/ForecourtCard.js';
 import { liveSubtitle } from '../cards/forecourt/derive.js';
 import { useForecourtModel } from '../cards/forecourt/useForecourtModel.js';
-import { ColumnHeader } from '../frame/ColumnHeader.js';
+import { SectionHeader } from '../../../pump-ds/section-header/index.js';
 import { useDashboard } from '../frame/DashboardContext.js';
 
 /** Left column: Forecourt. Its section header lives here, not in the card. */
@@ -21,7 +21,7 @@ export const ForecourtColumn: React.FC = () => {
           : undefined;
   return (
     <>
-      <ColumnHeader
+      <SectionHeader
         title="Forecourt"
         subtitle={subtitle}
         action={
