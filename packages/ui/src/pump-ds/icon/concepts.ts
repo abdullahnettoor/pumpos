@@ -46,6 +46,9 @@ export const CONCEPT_ICON = {
   collections: 'wallet',
   vehicles: 'car',
 
+  // Sales (quick entry)
+  'product-sales': 'shopping-bag',
+
   // Suppliers
   'supplier-list': 'building',
   purchases: 'cart',

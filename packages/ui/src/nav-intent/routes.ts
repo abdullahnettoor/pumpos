@@ -1,5 +1,5 @@
 import { REPORTS_ROLES, type Role } from '@pump/shared';
-import type { IconName } from '../pump-ds/icon/registry.js';
+import { ICON_REGISTRY, type IconName } from '../pump-ds/icon/registry.js';
 import { CONCEPT_ICON } from '../pump-ds/icon/concepts.js';
 
 /**
@@ -103,6 +103,15 @@ export const NAV_PAGES: readonly NavPage[] = [
     roles: ['Owner'],
   },
 ];
+
+/**
+ * A nav item's icon: pages carry theirs from `NAV_PAGES` (CONCEPT_ICON), and
+ * the few shell-only items (onboarding, design system) name one explicitly.
+ * The sidebar and the command palette both draw it.
+ */
+export function navItemIcon(icon: string | undefined): IconName {
+  return icon && icon in ICON_REGISTRY ? (icon as IconName) : 'fuel';
+}
 
 /** A page's title: its sidebar label (#523). */
 export function pageTitle(path: RoutePath): string {

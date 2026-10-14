@@ -2,12 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AppTopBar } from './AppTopBar.js';
 import { AppStatusBar } from './AppStatusBar.js';
 import { cn } from '../pump-ds/lib/cn.js';
-import { Icon, type IconName, ICON_REGISTRY } from '../pump-ds/icon/index.js';
+import { Icon } from '../pump-ds/icon/index.js';
 import { Station, canViewReports, type OperatorRole, type Role } from '@pump/shared';
 import { useContainerWidth } from '../hooks/useContainerWidth.js';
 import { useStationBusinessDate } from '../hooks/useStationClock.js';
 import { useSidebarBadges, type SidebarBadges } from '../query/useSidebarBadges.js';
-import { NAV_GROUPS, ROUTES } from '../nav-intent/routes.js';
+import { NAV_GROUPS, ROUTES, navItemIcon } from '../nav-intent/routes.js';
 import type { UserMenuAction } from '../pump-ds/shell/index.js';
 
 export interface NavItem {
@@ -64,14 +64,6 @@ export interface AppShellProps {
   onCheckUpdates?: () => void;
   /** A manual check is running: the version reads "Checking…". */
   checkingUpdates?: boolean;
-}
-
-/**
- * A nav item's icon. Pages carry theirs from `NAV_PAGES` (CONCEPT_ICON), and
- * the few shell-only items (onboarding, design system) name one explicitly.
- */
-function navIcon(item: NavItem): IconName {
-  return item.icon && item.icon in ICON_REGISTRY ? (item.icon as IconName) : 'fuel';
 }
 
 /** Below this app (shell) width the sidebar becomes a 60px icon rail on its own. */
@@ -309,7 +301,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           }}
         >
           {/* Navigation links — grouped, collapsible-friendly */}
-          <nav className="flex-1 overflow-y-auto px-2 py-3">
+          <nav aria-label="Main" className="flex-1 overflow-y-auto px-2 py-3">
             {groupedNav.map((group, gi) => (
               <div key={group.heading || `grp-${gi}`} className={gi > 0 ? 'mt-4' : ''}>
                 {!collapsed && group.heading && (
@@ -340,7 +332,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                             isActive ? 'text-info-fg' : 'text-ink-muted',
                           )}
                         >
-                          <Icon name={navIcon(item)} size="md" />
+                          <Icon name={navItemIcon(item.icon)} size="md" />
                         </span>
                         {!collapsed && <span className="truncate">{item.label}</span>}
                         {renderBadge(item.path, badges, collapsed)}

@@ -1,6 +1,5 @@
 {
   "dead-class": {
-    "components/primitives/Tabs.tsx": 1,
     "components/reports/decantation/DecantationVisitsTable.tsx": 1,
     "components/Shifts/ShiftControlBar.tsx": 1,
     "components/Shifts/ShiftSummaryView.tsx": 1
