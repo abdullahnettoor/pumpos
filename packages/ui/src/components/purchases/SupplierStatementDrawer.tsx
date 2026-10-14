@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Drawer } from '../Drawer.js';
 import { LedgerView } from '../ledger/LedgerView.js';
 import { Button, Icon, StatusChip } from '../../pump-ds/index.js';
 import { partyState } from '@pump/shared';
 import { inr, formatDate, formatTime } from '../../utils/format.js';
 import { useSupplierLedger } from '../../query/hooks.js';
-import { SupplierPaymentDrawer } from './SupplierPaymentDrawer.js';
+import { openQuickEntry } from '../../quick-entry/store.js';
 
 interface SupplierStatementDrawerProps {
   /** Selected supplier; null closes the drawer. */
@@ -19,7 +19,8 @@ interface SupplierStatementDrawerProps {
 /**
  * Supplier account statement: summary + full ledger + quick actions
  * (Edit · Record payment · New purchase). Fetches the ledger via
- * `useSupplierLedger` (cached) and owns the nested payment drawer.
+ * `useSupplierLedger` (cached). Record payment opens the shared Office Record
+ * drawer over the statement, with this supplier fixed.
  */
 export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = ({
   supplier,
@@ -29,7 +30,6 @@ export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = (
   onNewPurchase,
 }) => {
   const ledgerQ = useSupplierLedger(supplier?.id);
-  const [payOpen, setPayOpen] = useState(false);
   const owed = Number(supplier?.currentBalance || 0);
 
   return (
@@ -191,7 +191,9 @@ export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = (
                 variant="secondary"
                 size="sm"
                 leftIcon={<Icon name="wallet" size="sm" />}
-                onClick={() => setPayOpen(true)}
+                onClick={() =>
+                  openQuickEntry('supplier-payment', { origin: 'statement', party: supplier })
+                }
               >
                 Record payment
               </Button>
@@ -207,14 +209,6 @@ export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = (
           </div>
         )}
       </Drawer>
-
-      <SupplierPaymentDrawer
-        isOpen={payOpen}
-        supplier={supplier}
-        stationId={stationId}
-        onClose={() => setPayOpen(false)}
-        onDone={() => ledgerQ.refetch()}
-      />
     </>
   );
 };

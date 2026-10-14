@@ -1,57 +1,43 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { mixedPurchaseError, resolveBusinessDate } from '@pump/shared';
-import type {
-  ExpenseEntryFormValues,
-  CollectionEntryFormValues,
-  PurchaseEntryFormValues,
-  MerchandiseSaleEntryFormValues,
-} from '@pump/shared';
+import type { MerchandiseSaleEntryFormValues, Role } from '@pump/shared';
 import { Drawer } from '../components/Drawer.js';
-import { ExpenseEntryForm } from '../components/transactions/ExpenseEntryForm.js';
-import { CollectionEntryForm } from '../components/transactions/CollectionEntryForm.js';
-import {
-  PurchaseEntryForm,
-  type PurchasePayNow,
-} from '../components/transactions/PurchaseEntryForm.js';
-import { collectionPayload, expensePayload, incomePayload } from '../utils/officeRecordPayloads.js';
 import { MerchandiseSaleEntryForm } from '../components/transactions/MerchandiseSaleEntryForm.js';
 import { useToast } from '../components/primitives/ToastProvider.js';
 import { useRunTask } from '../utils/runTask.js';
 import {
   CloudTransactionService,
   CloudProductService,
-  CloudTankService,
   CloudUserAssignmentService,
 } from '../services/cloud.js';
 import { useShiftStatus, useInvalidateOperational, queryKeys, TIER } from '../query/hooks.js';
-import { useQuickEntry, closeQuickEntry, type QuickEntryType } from './store.js';
+import { OfficeRecordDrawer } from '../office-records/OfficeRecordDrawer.js';
+import { isOfficeRecordKind } from '../office-records/kinds.js';
+import { useQuickEntry, closeQuickEntry } from './store.js';
 
 const txService = new CloudTransactionService();
 const productService = new CloudProductService();
-const tankService = new CloudTankService();
 const userService = new CloudUserAssignmentService();
 
 interface QuickEntryHostProps {
   selectedStation: any | null;
+  /** The signed-in role: decides balances and "+ New category…". */
+  userRole?: Role;
 }
 
-const TITLE: Record<QuickEntryType, string> = {
-  expense: 'Add Expense',
-  income: 'Add Income',
-  collection: 'Log Collection',
-  purchase: 'Add Purchase',
-  'merchandise-sale': 'Merchandise Sale',
-};
-
 /**
- * QuickEntryHost — one drawer mounted at the app shell that renders the shared
- * entry forms on demand (driven by the global quick-entry store). Opens IN
- * PLACE from anywhere (command palette, shift bar) with no route change. Shift
- * is auto-filled when open; merchandise sale requires an open shift and blocks
- * with a warning otherwise (per-entry gating).
+ * QuickEntryHost — mounted once at the app shell, it renders the entry drawer
+ * the global quick-entry store asks for, IN PLACE with no route change.
+ *
+ * Office Records (expense, income, collection, purchase, supplier payment) all
+ * open `OfficeRecordDrawer`: the same title, fields and submit from a page, the
+ * New menu, a statement or Shifts (#526). A merchandise sale is a forecourt
+ * sale: it needs an open shift and blocks with a warning otherwise.
  */
-export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation }) => {
+export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({
+  selectedStation,
+  userRole = 'Staff',
+}) => {
   const qe = useQuickEntry();
   const qc = useQueryClient();
   const toast = useToast();
@@ -59,22 +45,15 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
   const invalidateOperational = useInvalidateOperational();
 
   const stationId = selectedStation?.id ?? null;
-  const settings = (selectedStation?.settings ?? {}) as {
-    timezone?: string;
-    business_day_starts_at?: string;
-  };
-  const clock = { timeZone: settings.timezone, dayStartsAt: settings.business_day_starts_at };
+  const isSale = qe.open && qe.type === 'merchandise-sale';
 
   // Lite mode: only the open shift's identity is needed for attribution.
-  const statusQ = useShiftStatus(stationId, { lite: true, enabled: !!stationId });
+  const statusQ = useShiftStatus(stationId, { lite: true, enabled: !!stationId && isSale });
   const activeShift = statusQ.data?.activeShift ?? null;
   const activeShiftId: string | undefined = activeShift?.id;
 
-  const [categories, setCategories] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
-  const [tanks, setTanks] = useState<any[]>([]);
   const [sellers, setSellers] = useState<{ userId: string; userName: string }[]>([]);
   const [stock, setStock] = useState<Record<string, number>>({});
 
@@ -82,95 +61,48 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load the lookups a given entry type needs (cached; runs on each open).
+  // Load the lookups a merchandise sale needs (cached; runs on each open).
   useEffect(() => {
-    if (!qe.open || !qe.type || !stationId) return;
+    if (!isSale || !stationId) return;
     let cancelled = false;
-    const type = qe.type;
     runTask(
       (async () => {
         try {
           setLoading(true);
           setError(null);
-          if (type === 'expense') {
-            const cats = await qc.ensureQueryData({
-              queryKey: queryKeys.expenseCategories(),
-              queryFn: () => txService.getExpenseCategories(),
+          const [prods, custs, items] = await Promise.all([
+            qc.ensureQueryData({
+              queryKey: queryKeys.products(),
+              queryFn: () => productService.listProducts(),
               staleTime: TIER.semi.staleTime,
-            });
-            if (!cancelled) setCategories(cats || []);
-          } else if (type === 'income') {
-            const cats = await qc.ensureQueryData({
-              queryKey: queryKeys.incomeCategories(),
-              queryFn: () => txService.getIncomeCategories(),
-              staleTime: TIER.semi.staleTime,
-            });
-            if (!cancelled) setCategories(cats || []);
-          } else if (type === 'collection') {
-            const custs = await qc.ensureQueryData({
+            }),
+            qc.ensureQueryData({
               queryKey: queryKeys.customers(true),
               queryFn: () => txService.getCustomers(true),
               staleTime: TIER.semi.staleTime,
-            });
-            if (!cancelled) setCustomers(custs || []);
-          } else if (type === 'purchase') {
-            const [sups, prods, tks] = await Promise.all([
-              qc.ensureQueryData({
-                queryKey: queryKeys.suppliers(true),
-                queryFn: () => txService.getSuppliers(true),
-                staleTime: TIER.semi.staleTime,
-              }),
-              qc.ensureQueryData({
-                queryKey: queryKeys.products(),
-                queryFn: () => productService.listProducts(),
-                staleTime: TIER.semi.staleTime,
-              }),
-              qc.ensureQueryData({
-                queryKey: queryKeys.tanks(stationId),
-                queryFn: () => tankService.listTanks(stationId),
-                staleTime: TIER.static.staleTime,
-              }),
-            ]);
-            if (!cancelled) {
-              setSuppliers(sups || []);
-              setProducts(prods || []);
-              setTanks(tks || []);
-            }
-          } else if (type === 'merchandise-sale') {
-            const [prods, custs, items] = await Promise.all([
-              qc.ensureQueryData({
-                queryKey: queryKeys.products(),
-                queryFn: () => productService.listProducts(),
-                staleTime: TIER.semi.staleTime,
-              }),
-              qc.ensureQueryData({
-                queryKey: queryKeys.customers(true),
-                queryFn: () => txService.getCustomers(true),
-                staleTime: TIER.semi.staleTime,
-              }),
-              txService.getInventoryItems(stationId).catch(() => []),
-            ]);
-            const users = await qc
-              .ensureQueryData({
-                queryKey: queryKeys.users(),
-                queryFn: () => userService.listUsers(),
-                staleTime: TIER.static.staleTime,
-              })
-              .catch(() => []);
-            if (cancelled) return;
-            setProducts((prods || []).filter((p: any) => p.productType !== 'FUEL'));
-            setCustomers(custs || []);
-            const stockMap: Record<string, number> = {};
-            (items || []).forEach((i: any) => {
-              stockMap[i.productId] = Number(i.quantity);
-            });
-            setStock(stockMap);
-            setSellers(
-              (users || [])
-                .filter((u: any) => (u.status ? u.status === 'ACTIVE' : true))
-                .map((u: any) => ({ userId: u.id, userName: u.fullName || u.email || 'User' })),
-            );
-          }
+            }),
+            txService.getInventoryItems(stationId).catch(() => []),
+          ]);
+          const users = await qc
+            .ensureQueryData({
+              queryKey: queryKeys.users(),
+              queryFn: () => userService.listUsers(),
+              staleTime: TIER.static.staleTime,
+            })
+            .catch(() => []);
+          if (cancelled) return;
+          setProducts((prods || []).filter((p: any) => p.productType !== 'FUEL'));
+          setCustomers(custs || []);
+          const stockMap: Record<string, number> = {};
+          (items || []).forEach((i: any) => {
+            stockMap[i.productId] = Number(i.quantity);
+          });
+          setStock(stockMap);
+          setSellers(
+            (users || [])
+              .filter((u: any) => (u.status ? u.status === 'ACTIVE' : true))
+              .map((u: any) => ({ userId: u.id, userName: u.fullName || u.email || 'User' })),
+          );
         } catch (err: any) {
           if (!cancelled) setError(err.message || 'Failed to load form data');
         } finally {
@@ -183,121 +115,17 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
       cancelled = true;
     };
     // `qc` and `runTask` are both referentially stable (useQueryClient, and a
-    // memoised toast context), so listing them costs nothing and the loader no
-    // longer re-runs on an identity change it cannot see.
-  }, [qe.token, qe.open, qe.type, stationId, qc, runTask]);
+    // memoised toast context), so listing them costs nothing.
+  }, [qe.token, isSale, stationId, qc, runTask]);
 
-  const businessDate = useMemo(
-    () => resolveBusinessDate({ timeZone: clock.timeZone, dayStartsAt: clock.dayStartsAt }),
-    [clock.timeZone, clock.dayStartsAt],
-  );
   const shiftOptions = activeShift
     ? [{ id: activeShift.id, label: `${activeShift.templateName} (Open)` }]
     : [];
-  const extra = (qe.defaults ?? {}) as Record<string, any>;
 
   const close = () => {
     setError(null);
     setSubmitting(false);
     closeQuickEntry();
-  };
-  // Tell the operator and close first, then wait for the caches: the promise is
-  // a "caches have settled" signal, so awaiting it keeps the screens behind the
-  // sheet honest without delaying the confirmation.
-  const done = async (msg: string) => {
-    toast.success(msg);
-    close();
-    await invalidateOperational(stationId);
-  };
-
-  // Expenses, income and collections are Office Records (ADR 0005): station +
-  // entry date + funding account. They never attach to the open shift.
-  const handleExpense = async (values: ExpenseEntryFormValues) => {
-    if (!stationId) return;
-    try {
-      setSubmitting(true);
-      setError(null);
-      await txService.recordExpense(expensePayload(stationId, values));
-      await done('Expense recorded.');
-    } catch (err: any) {
-      setError(err.message || 'Failed to record expense');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleIncome = async (values: ExpenseEntryFormValues) => {
-    if (!stationId) return;
-    try {
-      setSubmitting(true);
-      setError(null);
-      await txService.recordIncome(incomePayload(stationId, values));
-      await done('Income recorded.');
-    } catch (err: any) {
-      setError(err.message || 'Failed to record income');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleCollection = async (values: CollectionEntryFormValues) => {
-    if (!stationId) return;
-    try {
-      setSubmitting(true);
-      setError(null);
-      await txService.recordCollection(collectionPayload(stationId, values));
-      await done('Collection recorded.');
-    } catch (err: any) {
-      setError(err.message || 'Failed to record collection');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handlePurchase = async (values: PurchaseEntryFormValues, payment?: PurchasePayNow) => {
-    if (!values.supplierId || values.lines.length === 0) {
-      setError('Select a supplier and at least one line.');
-      return;
-    }
-    const mixed = mixedPurchaseError(
-      values.lines,
-      (id) => products.find((product) => product.id === id)?.productType === 'FUEL',
-    );
-    if (mixed) {
-      setError(mixed);
-      return;
-    }
-    try {
-      setSubmitting(true);
-      setError(null);
-      const lines = values.lines.map((l) => ({
-        productId: l.productId,
-        quantity: Number(l.quantity),
-        unitPrice: Number(l.unitPrice),
-        invoiceDensity: l.invoiceDensity === '' ? undefined : l.invoiceDensity,
-        tankAllocations:
-          l.tankAllocations && l.tankAllocations.length > 0 ? l.tankAllocations : undefined,
-      }));
-      const pay = payment && payment.amount > 0 ? payment : undefined;
-      const base = {
-        supplierId: values.supplierId,
-        invoiceNumber: values.invoiceNumber || undefined,
-        notes: values.notes || undefined,
-        lines,
-        payment: pay,
-      };
-      // Purchase dates use station-local time; fuel records use Entry Date.
-      await txService.recordPurchase({
-        stationId: stationId ?? undefined,
-        transactionDate: values.transactionDate || undefined,
-        ...base,
-      });
-      await done(pay ? 'Purchase recorded with payment.' : 'Purchase recorded.');
-    } catch (err: any) {
-      setError(err.message || 'Failed to record purchase');
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   const handleMerchandise = async (values: MerchandiseSaleEntryFormValues) => {
@@ -341,7 +169,12 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
           : undefined,
         saveAsCustomer: useBuyer ? !!values.saveAsCustomer : undefined,
       });
-      await done('Sale recorded.');
+      toast.success('Sale recorded.');
+      close();
+      runTask(
+        invalidateOperational(stationId),
+        'Sale recorded, but the screen could not be refreshed.',
+      );
     } catch (err: any) {
       setError(err.message || 'Failed to record merchandise sale');
     } finally {
@@ -350,18 +183,28 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
   };
 
   if (!qe.open || !qe.type) return null;
-  const type = qe.type;
-  // Only shift-anchored entries name the shift; a purchase never does (#308).
-  const title =
-    activeShift && type !== 'purchase'
-      ? `${activeShift.templateName} · ${TITLE[type]}`
-      : TITLE[type];
+
+  if (isOfficeRecordKind(qe.type)) {
+    return (
+      <OfficeRecordDrawer
+        kind={qe.type}
+        openToken={qe.token}
+        station={selectedStation}
+        userRole={userRole}
+        launch={qe.launch}
+        onClose={closeQuickEntry}
+      />
+    );
+  }
+
+  // A merchandise sale is shift-anchored, so its title names the shift.
+  const title = activeShift ? `${activeShift.templateName} · Merchandise Sale` : 'Merchandise Sale';
 
   return (
     <Drawer isOpen={qe.open} onClose={close} title={title}>
       {loading ? (
         <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading…</div>
-      ) : type === 'merchandise-sale' && !activeShiftId ? (
+      ) : !activeShiftId ? (
         <div
           style={{
             backgroundColor: 'var(--state-warning-bg)',
@@ -374,90 +217,6 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
         >
           A shift must be open to record a merchandise sale. Open a shift, then try again.
         </div>
-      ) : type === 'expense' ? (
-        <ExpenseEntryForm
-          categories={categories}
-          stationId={stationId}
-          timeZone={clock.timeZone}
-          defaultValues={{
-            categoryId: categories[0]?.id ?? '',
-            ...extra,
-          }}
-          submitting={submitting}
-          error={error}
-          amountLabel="Amount (₹)"
-          onCancel={close}
-          onSubmit={handleExpense}
-          submitLabel="Add Expense"
-        />
-      ) : type === 'income' ? (
-        <ExpenseEntryForm
-          categories={categories}
-          stationId={stationId}
-          timeZone={clock.timeZone}
-          defaultValues={{
-            categoryId: categories[0]?.id ?? '',
-            ...extra,
-          }}
-          submitting={submitting}
-          error={error}
-          amountLabel="Amount (₹)"
-          categoryLabel="Income Category"
-          categoryEmptyMessage="No income categories yet — defaults will be created automatically."
-          accountLabel="Received into"
-          onCancel={close}
-          onSubmit={handleIncome}
-          submitLabel="Add Income"
-        />
-      ) : type === 'collection' ? (
-        <CollectionEntryForm
-          customers={customers}
-          stationId={stationId}
-          timeZone={clock.timeZone}
-          requireCustomer
-          defaultValues={{
-            customerId: '',
-            paymentMethod: 'Cash',
-            ...extra,
-          }}
-          submitting={submitting}
-          error={error}
-          amountLabel="Amount (₹)"
-          notesLabel="Notes / Fleet Slip ID"
-          paymentMethodLabel="Payment Method"
-          usePaymentMethodButtons
-          customerOptionLabel={(cust) => `${cust.name} (${cust.customerType})`}
-          onCancel={close}
-          onSubmit={handleCollection}
-          submitLabel="Log Collection"
-        />
-      ) : type === 'purchase' ? (
-        <PurchaseEntryForm
-          dateLabel="Purchase Date"
-          suppliers={suppliers}
-          products={products}
-          tanks={tanks}
-          stationId={stationId}
-          timeZone={clock.timeZone}
-          enablePayment
-          defaultValues={{
-            supplierId: suppliers[0]?.id ?? '',
-            transactionDate: businessDate,
-            lines: [
-              {
-                productId: products[0]?.id ?? '',
-                quantity: undefined as unknown as number,
-                unitPrice: undefined as unknown as number,
-              },
-            ],
-            ...extra,
-          }}
-          submitting={submitting}
-          error={error}
-          onCancel={close}
-          onSubmit={handlePurchase}
-          submitLabel="Add Purchase"
-        />
       ) : (
         <MerchandiseSaleEntryForm
           shiftOptions={shiftOptions}
@@ -478,7 +237,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
                   : undefined) as unknown as number,
               },
             ],
-            ...extra,
+            ...((qe.launch?.defaults ?? {}) as Record<string, any>),
           }}
           submitting={submitting}
           error={error}

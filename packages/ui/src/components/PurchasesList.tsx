@@ -1,35 +1,21 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CloudTransactionService } from '../services/cloud.js';
 import { useNavIntent, clearNavIntent, type NavIntent } from '../nav-intent/store.js';
 import { ROUTES } from '../nav-intent/routes.js';
-import {
-  usePurchases,
-  useSuppliers,
-  useProducts,
-  useTanks,
-  useInvalidateOperational,
-} from '../query/hooks.js';
+import { usePurchases, useSuppliers, useProducts } from '../query/hooks.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
-import { PurchaseEntryForm, type PurchasePayNow } from './transactions/PurchaseEntryForm.js';
+import { openQuickEntry } from '../quick-entry/store.js';
 import { DataTable } from './primitives/DataTable.js';
 import { inr } from '../utils/format.js';
 import { Tabs } from '../pump-ds/tabs/index.js';
 import { PageLayout } from './primitives/PageLayout.js';
-import { useToast } from './primitives/ToastProvider.js';
 import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText, Icon } from '../pump-ds/index.js';
-import {
-  mixedPurchaseError,
-  resolveBusinessDate,
-  resolveEntryDate,
-  type PurchaseEntryFormValues,
-} from '@pump/shared';
+import { resolveBusinessDate, resolveEntryDate } from '@pump/shared';
 import { buildPurchaseColumns, buildSupplierColumns } from './purchases/columns.js';
 import { LinkToDecantationDrawer } from './purchases/LinkToDecantationDrawer.js';
 import { SupplierFormDrawer } from './purchases/SupplierFormDrawer.js';
 import { SupplierStatementDrawer } from './purchases/SupplierStatementDrawer.js';
-import { SupplierPaymentDrawer } from './purchases/SupplierPaymentDrawer.js';
-import { useRunTask } from '../utils/runTask.js';
 
 const transactionService = new CloudTransactionService();
 
@@ -61,8 +47,8 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
   /**
    * Drop the deep link without moving the operator: the tab it derived is
    * committed to local state first, as ShiftsManagement does. Clearing alone
-   * falls back to `selectedTab`, so closing the "Plan purchase ›" drawer would
-   * jump to the Suppliers tab.
+   * falls back to `selectedTab`, so closing a deep-linked statement would jump
+   * to another tab.
    */
   const consumeIntent = () => {
     setSelectedTab(activeTab);
@@ -74,16 +60,9 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
   const suppliersActiveQ = useSuppliers(true);
   const suppliersAllQ = useSuppliers(false);
   const productsQ = useProducts();
-  const tanksQ = useTanks(stationId);
-  const invalidateOperational = useInvalidateOperational();
-  const toast = useToast();
-  const runTask = useRunTask();
 
   const purchases = useMemo(() => purchasesQ.data ?? [], [purchasesQ.data]);
-  const suppliers = suppliersActiveQ.data ?? [];
   const allSuppliers = useMemo(() => suppliersAllQ.data ?? [], [suppliersAllQ.data]);
-  const products = productsQ.data ?? [];
-  const tanks = tanksQ.data ?? [];
 
   const loading = purchasesQ.isLoading || suppliersActiveQ.isLoading || productsQ.isLoading;
   const error = purchasesQ.error || suppliersActiveQ.error;
@@ -131,12 +110,6 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
     );
   }, [purchases, purchaseSearch]);
 
-  const [purchaseDefaults, setPurchaseDefaults] = useState<Partial<PurchaseEntryFormValues>>({});
-
-  // Purchase Form States
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-
   // Purchase detail drawer (line items + tax breakdown)
   const [detailPurchase, setDetailPurchase] = useState<any | null>(null);
   const [detailItems, setDetailItems] = useState<any[]>([]);
@@ -156,64 +129,39 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
     }
   };
 
-  const buildPurchaseDefaults = (supplierId?: string): Partial<PurchaseEntryFormValues> => ({
-    // Fuel Purchases use station-timezone calendar Entry Date, never Day Start.
-    transactionDate: resolveEntryDate({ timeZone: stationSettings.timezone }),
-    supplierId: supplierId || suppliers[0]?.id || '',
-    invoiceNumber: '',
-    notes: '',
-    lines: [
-      {
-        productId: products[0]?.id ?? '',
-        quantity: undefined as unknown as number,
-        unitPrice: undefined as unknown as number,
-      },
-    ],
-  });
+  // Recording opens the shared Office Record drawer (#526) in place.
+  const openPurchaseDrawer = (supplier?: any) =>
+    openQuickEntry(
+      'purchase',
+      supplier ? { origin: 'statement', party: supplier } : { origin: 'page' },
+    );
+  const openPaymentDrawer = () => openQuickEntry('supplier-payment', { origin: 'page' });
 
-  const resetPurchaseForm = (supplierId?: string) => {
-    setFormError(null);
-    setPurchaseDefaults(buildPurchaseDefaults(supplierId));
-  };
-
-  const openPurchaseDrawer = (supplierId?: string) => {
-    resetPurchaseForm(supplierId);
-    setIsPurchaseDrawerOpen(true);
-  };
-
-  // Deep link (dashboard "Plan purchase ›"): the drawer is derived open from the
-  // intent once suppliers and products have loaded, like the payment drawer.
-  const newPurchaseRequested =
-    intent?.openNewPurchase === true && !suppliersActiveQ.isLoading && !productsQ.isLoading;
-
-  const closePurchaseDrawer = () => {
-    consumeIntent();
-    setIsPurchaseDrawerOpen(false);
-    resetPurchaseForm();
-  };
+  // Deep link (dashboard "Plan purchase ›"): land on Purchases with a fuel
+  // purchase open. The intent keeps the tab until the operator moves on; the
+  // ref opens the drawer once per intent.
+  const openedFor = useRef<NavIntent | null>(null);
+  useEffect(() => {
+    if (!intent?.openNewPurchase || openedFor.current === intent) return;
+    openedFor.current = intent;
+    openQuickEntry('purchase', { origin: 'page', purchaseType: 'FUEL' });
+  }, [intent]);
 
   // Supplier form + statement drawers
-  const [isPurchaseDrawerOpen, setIsPurchaseDrawerOpen] = useState(false);
   const [linkingPurchase, setLinkingPurchase] = useState<any | null>(null);
   const purchaseColumns = buildPurchaseColumns(setLinkingPurchase);
   const [isSupplierDrawerOpen, setIsSupplierDrawerOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<any | null>(null);
   const [statementSupplierId, setStatementSupplierId] = useState<string | null>(null);
-  const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
   const statementSupplier = focusSupplierId
     ? (allSuppliers.find((x: any) => x.id === focusSupplierId) ?? null)
     : (allSuppliers.find((x: any) => x.id === statementSupplierId) ?? null);
-  const isPaymentDrawerOpen = intent?.open === 'supplier-payment' || paymentDrawerOpen;
   /** See CustomersList: a setter competing with a derived intent must clear it. */
   const showStatementFor = (id: string | null) => {
     consumeIntent();
     setStatementSupplierId(id);
   };
   const closeStatement = () => showStatementFor(null);
-  const closePaymentDrawer = () => {
-    consumeIntent();
-    setPaymentDrawerOpen(false);
-  };
   const openCreateSupplier = () => {
     setEditingSupplier(null);
     setIsSupplierDrawerOpen(true);
@@ -221,55 +169,6 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
   const openEditSupplier = (sup: any) => {
     setEditingSupplier(sup);
     setIsSupplierDrawerOpen(true);
-  };
-
-  // Note: there is no pre-seeding effect here. Every path that opens the
-  // purchase drawer calls `resetPurchaseForm` first, which rebuilds the defaults
-  // from whatever the queries hold at that moment — so seeding them in advance
-  // was duplicated work that could only ever be more stale than the reset.
-
-  const handleAddPurchase = async (values: PurchaseEntryFormValues, payment?: PurchasePayNow) => {
-    setFormError(null);
-    if (!values.supplierId || values.lines.length === 0) return;
-    const mixed = mixedPurchaseError(
-      values.lines,
-      (id) => products.find((product) => product.id === id)?.productType === 'FUEL',
-    );
-    if (mixed) {
-      setFormError(mixed);
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      await transactionService.recordPurchase({
-        stationId: stationId ?? undefined,
-        transactionDate: values.transactionDate || undefined,
-        supplierId: values.supplierId,
-        invoiceNumber: values.invoiceNumber || undefined,
-        notes: values.notes || undefined,
-        lines: values.lines.map((l) => ({
-          productId: l.productId,
-          quantity: Number(l.quantity),
-          unitPrice: Number(l.unitPrice),
-          invoiceDensity: l.invoiceDensity === '' ? undefined : l.invoiceDensity,
-        })),
-        payment: payment && payment.amount > 0 ? payment : undefined,
-      });
-
-      closePurchaseDrawer();
-      toast.success(
-        payment && payment.amount > 0 ? 'Purchase recorded with payment.' : 'Purchase recorded.',
-      );
-      runTask(
-        invalidateOperational(stationId),
-        'Purchase recorded, but the screen could not be refreshed.',
-      );
-    } catch (err: any) {
-      setFormError(err.message || 'Failed to record supplier purchase');
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   if (!selectedStation) {
@@ -323,9 +222,9 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
                 variant="secondary"
                 size="sm"
                 leftIcon={<Icon name="wallet" size="sm" />}
-                onClick={() => setPaymentDrawerOpen(true)}
+                onClick={openPaymentDrawer}
               >
-                Record Payment
+                Record supplier payment
               </Button>
               <Button
                 variant="primary"
@@ -333,7 +232,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
                 leftIcon={<Icon name="plus" size="sm" />}
                 onClick={() => openPurchaseDrawer()}
               >
-                Add Purchase
+                Record purchase
               </Button>
             </>
           )}
@@ -343,9 +242,9 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
                 variant="secondary"
                 size="sm"
                 leftIcon={<Icon name="wallet" size="sm" />}
-                onClick={() => setPaymentDrawerOpen(true)}
+                onClick={openPaymentDrawer}
               >
-                Record Payment
+                Record supplier payment
               </Button>
               <Button
                 variant="primary"
@@ -497,37 +396,6 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
         purchase={linkingPurchase}
         onClose={() => setLinkingPurchase(null)}
       />
-
-      {/* Purchase Entry Drawer */}
-      <Drawer
-        isOpen={isPurchaseDrawerOpen || newPurchaseRequested}
-        onClose={closePurchaseDrawer}
-        title="Record Purchase"
-      >
-        <PurchaseEntryForm
-          dateLabel="Purchase Date"
-          defaultValues={
-            !isPurchaseDrawerOpen && newPurchaseRequested
-              ? buildPurchaseDefaults()
-              : purchaseDefaults
-          }
-          suppliers={suppliers}
-          products={products}
-          tanks={tanks}
-          stationId={stationId}
-          timeZone={stationSettings.timezone}
-          enablePayment
-          submitting={submitting}
-          error={formError}
-          onCancel={closePurchaseDrawer}
-          onSubmit={handleAddPurchase}
-          submitLabel="Record Purchase"
-          submittingLabel="Recording..."
-          invoiceLabel="Invoice Number / Reference"
-          invoicePlaceholder="e.g. INV-10022"
-          notesPlaceholder="e.g. invoice ref / delivery note"
-        />
-      </Drawer>
 
       {/* Purchase Detail Drawer */}
       <Drawer
@@ -916,19 +784,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
           closeStatement();
           openEditSupplier(sup);
         }}
-        onNewPurchase={(sup) => {
-          closeStatement();
-          openPurchaseDrawer(sup.id);
-        }}
-      />
-
-      <SupplierPaymentDrawer
-        timeZone={stationSettings.timezone}
-        isOpen={isPaymentDrawerOpen}
-        suppliers={allSuppliers}
-        stationId={stationId}
-        onClose={closePaymentDrawer}
-        onDone={() => invalidateOperational(stationId)}
+        onNewPurchase={(sup) => openPurchaseDrawer(sup)}
       />
     </PageLayout>
   );

@@ -444,7 +444,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // it's open (preserves its draft — the user can resume via "Continue Close").
   const launchQuickEntry = (type: QuickEntryType) => {
     if (closeWizardOpen) setCloseWizardOpen(false);
-    openQuickEntry(type);
+    // Office Records opened here are still office records: the drawer says so
+    // ("not part of <shift>") rather than taking the shift's name as its title.
+    openQuickEntry(type, {
+      origin: 'shifts',
+      shiftName: data?.activeShift?.templateName ?? null,
+    });
   };
 
   const triggerExpenseDrawer = () => launchQuickEntry('expense');

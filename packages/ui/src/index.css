@@ -1031,6 +1031,34 @@ select:disabled {
   color: var(--text-strong);
 }
 
+.drawer-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.drawer-heading-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.drawer-heading-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.drawer-subtitle {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .drawer-close-btn {
   background: none;
   border: none;
@@ -1052,6 +1080,14 @@ select:disabled {
   flex: 1;
   overflow-y: auto;
   padding: var(--space-6);
+}
+
+.drawer-body--flush {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .drawer-footer {

@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import type { ExpenseEntryFormValues } from '@pump/shared';
 import { canManageExpenseCategory, canVoidExpense } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
 import { PageLayout } from './primitives/PageLayout.js';
@@ -10,15 +9,8 @@ import type { DateRange } from './primitives/DateRangeField.js';
 import { inr } from '../utils/format.js';
 import { useToast } from './primitives/ToastProvider.js';
 import { useAsk } from './primitives/ConfirmDialog.js';
-import { Drawer } from './Drawer.js';
-import { ExpenseEntryForm } from './transactions/ExpenseEntryForm.js';
-import { expensePayload } from '../utils/officeRecordPayloads.js';
-import {
-  useExpenses,
-  useShiftStatus,
-  useExpenseCategories,
-  useInvalidateOperational,
-} from '../query/hooks.js';
+import { useExpenses, useExpenseCategories, useInvalidateOperational } from '../query/hooks.js';
+import { openQuickEntry } from '../quick-entry/store.js';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Panel,
@@ -30,9 +22,9 @@ import {
   Select,
   Icon,
 } from '../pump-ds/index.js';
-import { buildExpenseColumns } from './expenses/columns.js';
+import { buildCategoryRecordColumns } from './categories/categoryRecordColumns.js';
 import { CategoryAnalytics } from './expenses/CategoryAnalytics.js';
-import { CategoryManagerDrawer } from './expenses/CategoryManagerDrawer.js';
+import { CategoryManagerDrawer } from './categories/CategoryManagerDrawer.js';
 import { CASH_ACCOUNT_TYPES } from '../utils/ledgerLabels.js';
 import { useRunTask } from '../utils/runTask.js';
 
@@ -53,7 +45,6 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
 }) => {
   const stationId = selectedStation?.id ?? null;
   const expensesQ = useExpenses();
-  const statusQ = useShiftStatus(stationId, { lite: true });
   const categoriesQ = useExpenseCategories();
   const invalidateOperational = useInvalidateOperational();
   const qc = useQueryClient();
@@ -62,17 +53,11 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
   const ask = useAsk();
 
   const s = selectedStation?.settings || {};
-  const clock = useMemo(
-    () => ({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at }),
-    [s.timezone, s.business_day_starts_at],
-  );
   // Office records are dated by entry date: the plain station calendar date (ADR 0005).
   const entryClock = useMemo(() => ({ timeZone: s.timezone }), [s.timezone]);
 
   const expenses = useMemo(() => expensesQ.data ?? [], [expensesQ.data]);
   const categories = categoriesQ.data ?? [];
-  const activeShift = statusQ.data?.activeShift ?? null;
-  const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
   const canManageCategories = canManageExpenseCategory((userRole as any) ?? 'Staff');
   const canVoid = canVoidExpense((userRole as any) ?? 'Staff');
 
@@ -81,40 +66,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
 
-  // Drawers
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
-  const [formDefaults, setFormDefaults] = useState<Partial<ExpenseEntryFormValues>>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-
-  const openDrawer = () => {
-    setFormError(null);
-    setFormDefaults({
-      categoryId: categories[0]?.id ?? '',
-      amount: undefined as unknown as number,
-      description: '',
-    });
-    setIsDrawerOpen(true);
-  };
-  const closeDrawer = () => setIsDrawerOpen(false);
-
-  const handleAddExpense = async (values: ExpenseEntryFormValues) => {
-    try {
-      setSubmitting(true);
-      setFormError(null);
-      if (!stationId) return;
-      await transactionService.recordExpense(expensePayload(stationId, values));
-      closeDrawer();
-      toast.success('Expense recorded.');
-      await invalidateOperational(stationId);
-    } catch (err: any) {
-      setFormError(err.message || 'Failed to record expense');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const refetchCategories = () => qc.invalidateQueries({ queryKey: ['expense-categories'] });
 
@@ -149,7 +101,8 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
 
   const ledgerColumns = useMemo(
     () =>
-      buildExpenseColumns(
+      buildCategoryRecordColumns(
+        'expense',
         canVoid ? (row) => runTask(handleVoid(row), 'Could not void the expense.') : undefined,
       ),
     [canVoid, handleVoid, runTask],
@@ -220,10 +173,9 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
               variant="primary"
               size="sm"
               leftIcon={<Icon name="plus" size="sm" />}
-              onClick={openDrawer}
-              disabled={categories.length === 0}
+              onClick={() => openQuickEntry('expense', { origin: 'page' })}
             >
-              Add Expense
+              Record expense
             </Button>
           </div>
         }
@@ -338,7 +290,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                     title={expenses.length === 0 ? 'No expenses yet' : 'No matches'}
                     description={
                       expenses.length === 0
-                        ? 'Record your first expense with “Add Expense”.'
+                        ? 'Record your first expense with “Record expense”.'
                         : 'Adjust the range, search, or category filter.'
                     }
                   />
@@ -363,24 +315,8 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
         {activeTab === 'analytics' && <CategoryAnalytics selectedStation={selectedStation} />}
       </PageLayout>
 
-      <Drawer isOpen={isDrawerOpen} onClose={closeDrawer} title="Log New Expense">
-        <ExpenseEntryForm
-          categories={categories}
-          stationId={stationId}
-          timeZone={clock.timeZone}
-          defaultValues={formDefaults}
-          submitting={submitting}
-          error={formError}
-          submittingLabel="Recording..."
-          amountLabel="Amount (₹)"
-          descriptionPlaceholder="e.g. Bank charges, owner drawings, office supplies"
-          onCancel={closeDrawer}
-          onSubmit={handleAddExpense}
-          submitLabel="Add Expense"
-        />
-      </Drawer>
-
       <CategoryManagerDrawer
+        kind="expense"
         isOpen={categoryManagerOpen}
         onClose={() => setCategoryManagerOpen(false)}
         categories={categories}

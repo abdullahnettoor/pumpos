@@ -1281,18 +1281,25 @@ export class CloudTransactionService {
   }
 
   /** Office Record (ADR 0005): entry date + funding account, no shift. */
-  async recordExpense(payload: {
-    stationId: string;
-    entryDate?: string;
-    fundingAccountId: string;
-    categoryId: string;
-    amount: number;
-    description?: string;
-  }): Promise<any> {
-    return request<any>('/transactions/expenses', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async recordExpense(
+    payload: {
+      stationId: string;
+      entryDate?: string;
+      fundingAccountId: string;
+      categoryId: string;
+      amount: number;
+      description?: string;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/transactions/expenses',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async voidExpense(id: string, reason?: string): Promise<any> {
@@ -1312,20 +1319,27 @@ export class CloudTransactionService {
   }
 
   /** Office Record: `fundingAccountId` is required unless `terminalId` is given. */
-  async recordIncome(payload: {
-    stationId: string;
-    entryDate?: string;
-    fundingAccountId?: string;
-    terminalId?: string;
-    categoryId: string;
-    amount: number;
-    payer?: string;
-    description?: string;
-  }): Promise<any> {
-    return request<any>('/transactions/income', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async recordIncome(
+    payload: {
+      stationId: string;
+      entryDate?: string;
+      fundingAccountId?: string;
+      terminalId?: string;
+      categoryId: string;
+      amount: number;
+      payer?: string;
+      description?: string;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/transactions/income',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async voidIncome(id: string, reason?: string): Promise<any> {
@@ -1335,27 +1349,34 @@ export class CloudTransactionService {
     });
   }
 
-  async recordPurchase(payload: {
-    shiftId?: string;
-    stationId?: string;
-    transactionDate?: string;
-    supplierId: string;
-    invoiceNumber?: string;
-    notes?: string;
-    lines: {
-      productId: string;
-      quantity: number;
-      unitPrice: number;
-      invoiceDensity?: number | string | null;
-      tankAllocations?: { tankId: string; quantity: number }[];
-    }[];
-    /** Optional immediate payment recorded atomically with the purchase. */
-    payment?: { amount: number; fundingAccountId?: string; entryDate?: string; notes?: string };
-  }): Promise<any> {
-    return request<any>('/transactions/purchases', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async recordPurchase(
+    payload: {
+      shiftId?: string;
+      stationId?: string;
+      transactionDate?: string;
+      supplierId: string;
+      invoiceNumber?: string;
+      notes?: string;
+      lines: {
+        productId: string;
+        quantity: number;
+        unitPrice: number;
+        invoiceDensity?: number | string | null;
+        tankAllocations?: { tankId: string; quantity: number }[];
+      }[];
+      /** Optional immediate payment recorded atomically with the purchase. */
+      payment?: { amount: number; fundingAccountId?: string; entryDate?: string; notes?: string };
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/transactions/purchases',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   /**

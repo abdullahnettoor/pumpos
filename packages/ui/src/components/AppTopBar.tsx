@@ -146,19 +146,19 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         id: 'expense',
         label: 'Expense',
         icon: <ConceptIcon concept="expenses" />,
-        onSelect: () => openQuickEntry('expense'),
+        onSelect: () => openQuickEntry('expense', { origin: 'new' }),
       },
       {
         id: 'income',
         label: 'Income',
         icon: <ConceptIcon concept="income" />,
-        onSelect: () => openQuickEntry('income'),
+        onSelect: () => openQuickEntry('income', { origin: 'new' }),
       },
       {
         id: 'collection',
         label: 'Collection',
         icon: <ConceptIcon concept="collections" />,
-        onSelect: () => openQuickEntry('collection'),
+        onSelect: () => openQuickEntry('collection', { origin: 'new' }),
       },
       {
         id: 'merchandise-sale',
@@ -170,13 +170,13 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         id: 'purchase',
         label: 'Purchase',
         icon: <ConceptIcon concept="purchases" />,
-        onSelect: () => openQuickEntry('purchase'),
+        onSelect: () => openQuickEntry('purchase', { origin: 'new' }),
       },
       {
         id: 'supplier-payment',
         label: 'Supplier payment',
         icon: <ConceptIcon concept="payments" />,
-        onSelect: () => onNavigate(ROUTES.suppliers, { open: 'supplier-payment' }),
+        onSelect: () => openQuickEntry('supplier-payment', { origin: 'new' }),
       },
       {
         id: 'credit',
@@ -195,6 +195,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
       ? items.filter(
           (i) =>
             i.id === 'expense' ||
+            i.id === 'income' ||
             i.id === 'collection' ||
             i.id === 'merchandise-sale' ||
             i.id === 'credit',

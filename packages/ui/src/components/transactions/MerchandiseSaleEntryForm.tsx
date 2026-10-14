@@ -2,13 +2,17 @@ import React from 'react';
 import { useFieldArray } from 'react-hook-form';
 import { merchandiseSaleEntryFormSchema, type MerchandiseSaleEntryFormValues } from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
-import type { ShiftOption } from './ExpenseEntryForm.js';
 import { Field, TextInput, NumberInput, Select } from '../primitives/Field.js';
 import { Segmented } from '../primitives/Segmented.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { Checkbox } from '../primitives/Toggle.js';
 import { Button, Form, Icon } from '../../pump-ds/index.js';
 import { inr, formatQty } from '../../utils/format.js';
+
+export interface ShiftOption {
+  id: string;
+  label: string;
+}
 
 export interface MerchandiseSaleEntryFormProps {
   shiftOptions: ShiftOption[];
