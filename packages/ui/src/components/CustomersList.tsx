@@ -17,20 +17,11 @@ import { Drawer } from './Drawer.js';
 import { CollectionEntryForm } from './transactions/CollectionEntryForm.js';
 import { DataTable } from './primitives/DataTable.js';
 import { inr } from '../utils/format.js';
-import { Tabs } from './primitives/Tabs.js';
+import { Tabs } from '../pump-ds/tabs/index.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
 import { useToast } from './primitives/ToastProvider.js';
-import {
-  Panel,
-  Button,
-  Chip,
-  KpiStrip,
-  KpiTile,
-  EmptyState,
-  Icon,
-  ConceptIcon,
-} from '../pump-ds/index.js';
+import { Panel, Button, Chip, KpiStrip, KpiTile, EmptyState, Icon } from '../pump-ds/index.js';
 import { resolveBusinessDate, type CollectionEntryFormValues } from '@pump/shared';
 import {
   buildCustomerColumns,
@@ -426,19 +417,18 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
       }
       toolbar={
         <Tabs
-          variant="underline"
           aria-label="Customers"
           activeId={activeTab}
           onChange={(id) => setActiveTab(id as TabType)}
           tabs={[
-            { id: 'registry', label: 'Customers', icon: <ConceptIcon concept="customers" /> },
-            { id: 'sales', label: 'Credit sales', icon: <ConceptIcon concept="credit-sales" /> },
+            { id: 'registry', label: 'Customers', concept: 'customers' },
+            { id: 'sales', label: 'Credit sales', concept: 'credit-sales' },
             {
               id: 'transactions',
               label: 'Collections',
-              icon: <ConceptIcon concept="collections" />,
+              concept: 'collections',
             },
-            { id: 'vehicles', label: 'Vehicles', icon: <ConceptIcon concept="vehicles" /> },
+            { id: 'vehicles', label: 'Vehicles', concept: 'vehicles' },
           ]}
         />
       }

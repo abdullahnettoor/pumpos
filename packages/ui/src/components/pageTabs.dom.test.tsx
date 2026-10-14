@@ -56,9 +56,9 @@ async function tabsOf(label: string) {
   const list = await screen.findByRole('tablist', { name: label });
   const tabs = within(list).getAllByRole('tab');
   return {
-    labels: tabs.map((t) => t.querySelector('.pump-tab__label')?.textContent),
+    labels: tabs.map((t) => t.querySelector('[data-tab-label]')?.textContent),
     selected: tabs.find((t) => t.getAttribute('aria-selected') === 'true')?.textContent,
-    allHaveIcons: tabs.every((t) => t.querySelector('.pump-tab__icon svg')),
+    allHaveIcons: tabs.every((t) => t.querySelector('[data-tab-icon] svg')),
   };
 }
 

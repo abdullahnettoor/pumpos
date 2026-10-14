@@ -33,3 +33,4 @@ export * from './icon/index.js';
 export * from './brand/index.js';
 export * from './boot/index.js';
 export * from './segmented/index.js';
+export * from './tabs/index.js';

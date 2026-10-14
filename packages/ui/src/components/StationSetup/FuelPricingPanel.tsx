@@ -4,7 +4,7 @@ import { CloudPricingService, CloudProductService } from '../../services/cloud.j
 import { Station } from '@pump/shared';
 import { useToast } from '../primitives/ToastProvider.js';
 import { PageLayout } from '../primitives/PageLayout.js';
-import { Tabs } from '../primitives/Tabs.js';
+import { Tabs } from '../../pump-ds/tabs/index.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { Drawer } from '../Drawer.js';
 import { Field, NumberInput, Select } from '../primitives/Field.js';
@@ -23,7 +23,6 @@ import {
 } from '../../pump-ds/index.js';
 import { Fuel, Package, Search } from 'lucide-react';
 import { useRunTask } from '../../utils/runTask.js';
-import { ConceptIcon } from '../../pump-ds/icon/index.js';
 
 const pricingService = new CloudPricingService();
 const productService = new CloudProductService();
@@ -294,16 +293,15 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
         subtitle="Set fuel rates and merchandise MRP across your product catalogue."
         toolbar={
           <Tabs
-            variant="underline"
             aria-label="Pricing views"
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as TabType)}
             tabs={[
-              { id: 'fuels', label: 'Fuels', icon: <ConceptIcon concept="fuels" /> },
+              { id: 'fuels', label: 'Fuels', concept: 'fuels' },
               {
                 id: 'merchandise',
                 label: 'Products',
-                icon: <ConceptIcon concept="products" />,
+                concept: 'products',
               },
             ]}
           />

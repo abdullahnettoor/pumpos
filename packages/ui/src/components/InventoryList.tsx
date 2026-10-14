@@ -3,7 +3,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { DataTable } from './primitives/DataTable.js';
-import { Tabs } from './primitives/Tabs.js';
+import { Tabs } from '../pump-ds/tabs/index.js';
 import { Drawer } from './Drawer.js';
 import { Field, NumberInput, TextInput, Select } from './primitives/Field.js';
 import { CloudTransactionService } from '../services/cloud.js';
@@ -27,7 +27,6 @@ import {
   DateText,
   Form,
   Icon,
-  ConceptIcon,
 } from '../pump-ds/index.js';
 import { DensityTab } from './inventory/density/index.js';
 import { DecantationsTab } from './inventory/decantation/DecantationsTab.js';
@@ -520,32 +519,31 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
         }
         toolbar={
           <Tabs
-            variant="underline"
             aria-label="Inventory views"
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as TabType)}
             tabs={[
-              { id: 'tanks', label: 'Tanks', icon: <ConceptIcon concept="tanks" /> },
+              { id: 'tanks', label: 'Tanks', concept: 'tanks' },
               ...(showDecantations
                 ? [
                     {
                       id: 'decantations',
                       label: 'Decantations',
-                      icon: <ConceptIcon concept="decantations" />,
+                      concept: 'decantations' as const,
                     },
                   ]
                 : []),
-              { id: 'density', label: 'Density', icon: <ConceptIcon concept="density" /> },
+              { id: 'density', label: 'Density', concept: 'density' },
               {
                 id: 'items',
                 label: 'Product stock',
-                icon: <ConceptIcon concept="product-stock" />,
+                concept: 'product-stock',
               },
-              { id: 'movements', label: 'Movements', icon: <ConceptIcon concept="movements" /> },
+              { id: 'movements', label: 'Movements', concept: 'movements' },
               {
                 id: 'variances',
                 label: 'Reconciliations',
-                icon: <ConceptIcon concept="reconciliations" />,
+                concept: 'reconciliations',
               },
             ]}
           />

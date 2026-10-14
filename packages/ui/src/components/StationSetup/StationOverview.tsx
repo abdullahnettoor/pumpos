@@ -17,7 +17,7 @@ import { ProductsCatalog } from './ProductsCatalog.js';
 import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
 import { ShiftTemplates } from './ShiftTemplates.js';
-import { Tabs } from '../primitives/Tabs.js';
+import { Tabs } from '../../pump-ds/tabs/index.js';
 import { Field, TextInput, Select } from '../primitives/Field.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
@@ -26,7 +26,6 @@ import { Building2 } from 'lucide-react';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
 import { TankLevelSettingsPanel } from './TankLevelSettingsPanel.js';
 import { useRunTask } from '../../utils/runTask.js';
-import { ConceptIcon } from '../../pump-ds/icon/index.js';
 import { ReportTemplatesPanel } from '../reports/templates/ReportTemplatesPanel.js';
 
 const stationService = new CloudStationService();
@@ -271,39 +270,38 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Tabs bar */}
           <Tabs
-            variant="underline"
             aria-label="Station setup"
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as any)}
             tabs={[
-              { id: 'general', label: 'General', icon: <ConceptIcon concept="general" /> },
-              { id: 'business', label: 'Branding', icon: <ConceptIcon concept="branding" /> },
-              { id: 'products', label: 'Products', icon: <ConceptIcon concept="products" /> },
-              { id: 'tanks', label: 'Tanks', icon: <ConceptIcon concept="tanks" /> },
+              { id: 'general', label: 'General', concept: 'general' },
+              { id: 'business', label: 'Branding', concept: 'branding' },
+              { id: 'products', label: 'Products', concept: 'products' },
+              { id: 'tanks', label: 'Tanks', concept: 'tanks' },
               {
                 id: 'dispensers',
                 label: 'Dispensers',
-                icon: <ConceptIcon concept="dispensers" />,
+                concept: 'dispensers',
               },
               {
                 id: 'terminals',
                 label: 'Payment terminals',
-                icon: <ConceptIcon concept="payment-terminals" />,
+                concept: 'payment-terminals',
               },
               {
                 id: 'shifts',
                 label: 'Shift templates',
-                icon: <ConceptIcon concept="shift-templates" />,
+                concept: 'shift-templates',
               },
               ...(userRole === 'Owner' || userRole === 'Manager'
-                ? [{ id: 'rules', label: 'Rules', icon: <ConceptIcon concept="rules" /> }]
+                ? [{ id: 'rules', label: 'Rules', concept: 'rules' as const }]
                 : []),
               ...(canManageReportTemplates(userRole)
                 ? [
                     {
                       id: 'report-templates',
                       label: 'Report templates',
-                      icon: <ConceptIcon concept="report-templates" />,
+                      concept: 'report-templates' as const,
                     },
                   ]
                 : []),
