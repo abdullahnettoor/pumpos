@@ -187,7 +187,7 @@ describe('Reports → Daily DSSR KPI strip (#516)', () => {
     ],
   });
   const tile = (label: string) =>
-    // The KPI strip comes before the table, which repeats "Net Volume Sold" as a header.
+    // The KPI tile reads "Net volume sold"; the table header below it is "Net Volume Sold".
     (screen.getAllByText(label)[0].parentElement as HTMLElement).parentElement as HTMLElement;
 
   it('shows the net volume and cash sales of the closed days in range', () => {
@@ -196,7 +196,7 @@ describe('Reports → Daily DSSR KPI strip (#516)', () => {
       day('2026-10-10', { shiftsIncluded: 2, fuel: fuel(1000, 900), cashSales: 64275.5 }),
     ];
     renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
-    expect(tile('Net Volume Sold').textContent).toContain('4,080 L');
+    expect(tile('Net volume sold').textContent).toContain('4,080 L');
     expect(tile('Cash sales').textContent).toContain('1,35,550.50');
     expect(screen.queryByText('Cash Collected')).toBeNull();
   });
@@ -204,7 +204,7 @@ describe('Reports → Daily DSSR KPI strip (#516)', () => {
   it('still reads volume from a snapshot frozen before the net roll-up and cash sales', () => {
     range.data = [day('2026-09-01', { totalVolumeSold: 500 })];
     renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
-    expect(tile('Net Volume Sold').textContent).toContain('500 L');
+    expect(tile('Net volume sold').textContent).toContain('500 L');
     expect(tile('Cash sales').textContent).toContain('—');
   });
 

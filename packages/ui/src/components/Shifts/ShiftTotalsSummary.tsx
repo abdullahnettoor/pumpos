@@ -42,29 +42,22 @@ export const ShiftTotalsSummary: React.FC<ShiftTotalsSummaryProps> = ({
       </div>
       <KpiStrip columns="auto">
         <KpiTile
-          dot="danger"
-          valueTone="danger"
-          label="Petty Expenses"
+          label="Petty expenses"
           value={inr(shiftTotals.cashExpenses)}
           hint={`${shiftTotals.expenseCount} ${shiftTotals.expenseCount === 1 ? 'item' : 'items'}`}
         />
         <KpiTile
-          dot="success"
-          valueTone="success"
-          label="Cash Handed Over"
+          label="Cash handed over"
           value={inr(cashCollections)}
           hint={`${handoverCount} ${handoverCount === 1 ? 'handover' : 'handovers'}`}
         />
         <KpiTile
-          dot="info"
-          label="Card & UPI Handover"
+          label="Card & UPI handover"
           value={inr(cardCollections + upiCollections)}
           hint={`Card ${inr(cardCollections)} · UPI ${inr(upiCollections)}`}
         />
         <KpiTile
-          dot="warning"
-          valueTone="warning"
-          label="Credit Fleet Chits"
+          label="Credit fleet chits"
           value={inr(creditSales)}
           hint={`Logged ${inr(shiftTotals.creditSales)}`}
         />

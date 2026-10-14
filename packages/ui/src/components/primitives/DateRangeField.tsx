@@ -1,39 +1,16 @@
 import React from 'react';
-import { resolveBusinessDate, shiftBusinessDate } from '@pump/shared';
+import {
+  computeRange,
+  matchPreset,
+  PRESET_LABEL,
+  type DateRange,
+  type RangeClock,
+  type RangePreset,
+} from '../../pump-ds/date-range/range.js';
 import { Select, Input } from '../../pump-ds/index.js';
 
-export type RangePreset =
-  | 'today'
-  | 'yesterday'
-  | 'last-7'
-  | 'this-week'
-  | 'this-month'
-  | 'last-30'
-  | 'this-year'
-  | 'custom';
-
-export interface DateRange {
-  from: string;
-  to: string;
-}
-
-export interface RangeClock {
-  /** IANA timezone, e.g. 'Asia/Kolkata'. */
-  timeZone?: string;
-  /** Business-day start time 'HH:MM' (a fuel day often runs 06:00→06:00). */
-  dayStartsAt?: string;
-}
-
-const PRESET_LABEL: Record<RangePreset, string> = {
-  today: 'Today',
-  yesterday: 'Yesterday',
-  'last-7': 'Last 7 days',
-  'this-week': 'This week',
-  'this-month': 'This month',
-  'last-30': 'Last 30 days',
-  'this-year': 'This year',
-  custom: 'Custom',
-};
+export { computeRange };
+export type { DateRange, RangeClock, RangePreset };
 
 const DEFAULT_PRESETS: RangePreset[] = [
   'today',
@@ -44,39 +21,6 @@ const DEFAULT_PRESETS: RangePreset[] = [
   'last-30',
   'this-year',
 ];
-
-/**
- * Compute a concrete `{ from, to }` for a preset, anchored to the station's
- * *business* today (timezone + day-start aware). Exported so a parent can seed
- * its initial range state, e.g. `useState(computeRange('this-month', clock))`.
- */
-export function computeRange(preset: RangePreset, clock?: RangeClock): DateRange {
-  const today = resolveBusinessDate({ timeZone: clock?.timeZone, dayStartsAt: clock?.dayStartsAt });
-  const anchor = new Date(`${today}T00:00:00Z`);
-  const minus = (n: number) => shiftBusinessDate(today, -n);
-  switch (preset) {
-    case 'today':
-      return { from: today, to: today };
-    case 'yesterday':
-      return { from: minus(1), to: minus(1) };
-    case 'last-7':
-      return { from: minus(6), to: today };
-    case 'last-30':
-      return { from: minus(29), to: today };
-    case 'this-week': {
-      // Week starts Monday.
-      const dow = (anchor.getUTCDay() + 6) % 7;
-      return { from: minus(dow), to: today };
-    }
-    case 'this-month':
-      return { from: `${today.slice(0, 8)}01`, to: today };
-    case 'this-year':
-      return { from: `${today.slice(0, 4)}-01-01`, to: today };
-    case 'custom':
-    default:
-      return { from: today, to: today };
-  }
-}
 
 export interface DateRangeFieldProps {
   value: DateRange;
@@ -107,11 +51,7 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
   size = 'md',
 }) => {
   // Derive the active preset from the current value (else 'custom').
-  const active: RangePreset =
-    presets.find((p) => {
-      const r = computeRange(p, clock);
-      return r.from === value.from && r.to === value.to;
-    }) ?? 'custom';
+  const active = matchPreset(value, presets, clock);
 
   return (
     <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>

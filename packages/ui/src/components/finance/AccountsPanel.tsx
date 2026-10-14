@@ -498,22 +498,11 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
           <KpiStrip columns="auto">
-            <KpiTile dot="brand" label="Opening" value={inr(opening)} />
+            <KpiTile label="Opening" value={inr(opening)} />
+            <KpiTile label="Money in" value={inr(statement.totals.debit)} />
+            <KpiTile label="Money out" value={inr(statement.totals.credit)} />
             <KpiTile
-              dot="success"
-              valueTone="success"
-              label="Money In"
-              value={inr(statement.totals.debit)}
-            />
-            <KpiTile
-              dot="danger"
-              valueTone="danger"
-              label="Money Out"
-              value={inr(statement.totals.credit)}
-            />
-            <KpiTile
-              dot={closing < 0 ? 'danger' : 'brand'}
-              valueTone={closing < 0 ? 'danger' : undefined}
+              alert={closing < 0 ? 'danger' : undefined}
               label="Closing"
               value={inr(closing)}
             />
@@ -764,28 +753,24 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <KpiStrip columns="auto">
             <KpiTile
-              dot={overview.cash < 0 ? 'danger' : 'success'}
-              valueTone={overview.cash < 0 ? 'danger' : undefined}
+              alert={overview.cash < 0 ? 'danger' : undefined}
               label="Cash"
               value={inr(overview.cash)}
               hint="in hand + petty"
             />
             <KpiTile
-              dot={overview.bank < 0 ? 'danger' : 'info'}
-              valueTone={overview.bank < 0 ? 'danger' : undefined}
+              alert={overview.bank < 0 ? 'danger' : undefined}
               label="Bank"
               value={inr(overview.bank)}
             />
             <KpiTile
-              dot="warning"
-              label="Card/UPI Clearing"
+              label="Card/UPI clearing"
               value={inr(overview.clearing)}
               hint="awaiting settlement"
             />
             <KpiTile
-              dot={overview.net < 0 ? 'danger' : 'brand'}
-              valueTone={overview.net < 0 ? 'danger' : undefined}
-              label="Net Position"
+              alert={overview.net < 0 ? 'danger' : undefined}
+              label="Net position"
               value={inr(overview.net)}
             />
           </KpiStrip>

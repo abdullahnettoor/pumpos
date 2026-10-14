@@ -280,20 +280,17 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <KpiStrip columns={4}>
               <KpiTile
-                dot="brand"
-                label="Purchased Today"
+                label="Purchased today"
                 value={inr(purchaseKpis.today)}
                 hint={`${purchaseKpis.todayCount} ${purchaseKpis.todayCount === 1 ? 'invoice' : 'invoices'}`}
               />
-              <KpiTile dot="info" label="Purchased This Month" value={inr(purchaseKpis.month)} />
+              <KpiTile label="Purchased this month" value={inr(purchaseKpis.month)} />
               <KpiTile
-                dot="warning"
-                valueTone="warning"
-                label="Total Payables"
+                label="Total payables"
                 value={inr(purchaseKpis.payables)}
                 hint="Supplier dues"
               />
-              <KpiTile dot="neutral" label="Suppliers" value={String(allSuppliers.length)} />
+              <KpiTile label="Suppliers" value={String(allSuppliers.length)} />
             </KpiStrip>
 
             <Panel

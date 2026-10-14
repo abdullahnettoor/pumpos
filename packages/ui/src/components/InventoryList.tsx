@@ -576,41 +576,34 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
           )}
           <KpiStrip columns="auto">
             <KpiTile
-              dot="brand"
-              label="Total Fuel Stock"
+              label="Total fuel stock"
               value={kpis.totalFuelValue}
               hint={kpis.totalFuelHint}
             />
             <KpiTile
-              dot={kpis.lowTanks > 0 ? 'warning' : 'success'}
-              valueTone={kpis.lowTanks > 0 ? 'warning' : undefined}
-              label="Tanks Low / Critical"
+              alert={kpis.lowTanks > 0 ? 'warning' : undefined}
+              label="Tanks low / critical"
               value={String(kpis.lowTanks)}
               hint={`below ${tankLevels.lowBelowPct}% capacity`}
             />
             <KpiTile
-              dot={kpis.overTanks > 0 ? 'info' : 'neutral'}
-              valueTone={kpis.overTanks > 0 ? 'info' : undefined}
-              label="Book Stock Over Capacity"
+              label="Book stock over capacity"
               value={String(kpis.overTanks)}
               hint="may reconcile at shift close"
             />
             <KpiTile
-              dot={kpis.outOfStock > 0 ? 'warning' : 'success'}
-              valueTone={kpis.outOfStock > 0 ? 'warning' : undefined}
-              label="Out of Stock"
+              alert={kpis.outOfStock > 0 ? 'warning' : undefined}
+              label="Out of stock"
               value={String(kpis.outOfStock)}
               hint="zero on-hand"
             />
             <KpiTile
-              dot={kpis.oversold > 0 ? 'danger' : 'success'}
-              valueTone={kpis.oversold > 0 ? 'danger' : undefined}
-              label="Oversold Items"
+              alert={kpis.oversold > 0 ? 'danger' : undefined}
+              label="Oversold items"
               value={String(kpis.oversold)}
               hint="negative on-hand"
             />
             <KpiTile
-              dot="neutral"
               label="Reconciliations"
               value={String(kpis.variances)}
               hint="variances logged"

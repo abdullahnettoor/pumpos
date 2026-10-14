@@ -5,8 +5,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { DataTable } from '../primitives/DataTable.js';
-import { computeRange } from '../primitives/DateRangeField.js';
-import type { DateRange } from '../primitives/DateRangeField.js';
+import { computeRange } from '../../pump-ds/date-range/index.js';
+import type { DateRange } from '../../pump-ds/date-range/index.js';
 import { paperFromStation } from '../../services/reports/reportConfig.js';
 import { letterheadFromStation } from '../../services/reports/letterhead.js';
 import { inr } from '../../utils/format.js';
@@ -193,12 +193,11 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
       />
 
       <KpiStrip columns="auto">
-        <KpiTile dot="brand" label="Merchandise Sales" value={inr(kpis.total)} />
-        <KpiTile dot="success" valueTone="success" label="Invoiced" value={String(kpis.invoiced)} />
+        <KpiTile label="Merchandise sales" value={inr(kpis.total)} />
+        <KpiTile label="Invoiced" value={String(kpis.invoiced)} />
         <KpiTile
-          dot={kpis.pending > 0 ? 'warning' : 'success'}
-          valueTone={kpis.pending > 0 ? 'warning' : undefined}
-          label="Not Invoiced"
+          alert={kpis.pending > 0 ? 'warning' : undefined}
+          label="Not invoiced"
           value={String(kpis.pending)}
         />
       </KpiStrip>

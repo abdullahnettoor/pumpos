@@ -313,22 +313,11 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
           {activeTab === 'daily-dssr' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <KpiStrip columns="auto">
-                <KpiTile
-                  dot="brand"
-                  label="Generated DSSRs"
-                  value={String(kpis.count)}
-                  hint="last 30 days"
-                />
-                <KpiTile
-                  dot="info"
-                  label="Net Volume Sold"
-                  value={kpis.volumeLabel}
-                  hint="period"
-                />
+                <KpiTile label="Generated DSSRs" value={String(kpis.count)} hint="last 30 days" />
+                <KpiTile label="Net volume sold" value={kpis.volumeLabel} hint="period" />
                 {/* Cash received for sales by shift Drawers. Collections are Office
                     Records (ADR 0005) and live in the Daily Cash Book. */}
                 <KpiTile
-                  dot="success"
                   label="Cash sales"
                   value={kpis.cashSales == null ? '—' : inr(kpis.cashSales)}
                   hint={

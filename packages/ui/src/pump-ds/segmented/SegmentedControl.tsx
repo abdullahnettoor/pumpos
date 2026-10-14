@@ -13,6 +13,8 @@ export interface SegmentedControlProps<T extends string> {
   disabled?: boolean;
   /** Fill the row: segments share the width equally (a full-width mobile toggle). */
   stretch?: boolean;
+  /** `sm` (default) is 32px, for toolbars; `md` is 36px, to line up with form inputs. */
+  size?: 'sm' | 'md';
   /** Fill the selected segment with the brand colour instead of raising it (default `raised`). */
   activeStyle?: 'raised' | 'brand';
   /** `vertical` stacks the segments as full-width rows (a short list of choices, e.g. date presets). */
@@ -44,6 +46,7 @@ export function SegmentedControl<T extends string>({
   onChange,
   disabled,
   stretch,
+  size = 'sm',
   activeStyle = 'raised',
   orientation = 'horizontal',
   activation = 'automatic',
@@ -53,6 +56,7 @@ export function SegmentedControl<T extends string>({
   const buttons = useRef<Array<HTMLButtonElement | null>>([]);
   const vertical = orientation === 'vertical';
   const at = options.findIndex((o) => o.value === value);
+  const height = size === 'md' ? 'h-9' : 'h-8';
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (disabled) return;
@@ -93,8 +97,8 @@ export function SegmentedControl<T extends string>({
         vertical
           ? 'flex w-full flex-col gap-0.5'
           : stretch
-            ? 'grid h-8 w-full items-stretch gap-0.5'
-            : 'inline-flex h-8 items-center gap-0.5',
+            ? cn('grid w-full items-stretch gap-0.5', height)
+            : cn('inline-flex items-center gap-0.5', height),
         'rounded-button border border-border-soft bg-surface-alt p-0.5',
         disabled && 'opacity-60',
         className,

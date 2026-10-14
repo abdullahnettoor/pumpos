@@ -96,13 +96,11 @@ export const IncomeGstPanel: React.FC<{
       </div>
 
       <KpiStrip columns="auto">
-        <KpiTile label="Taxable Value" value={inr(gstTotals.taxable)} hint="net of GST" />
+        <KpiTile label="Taxable value" value={inr(gstTotals.taxable)} hint="net of GST" />
         <KpiTile label="CGST" value={inr(gstTotals.cgst)} />
         <KpiTile label="SGST" value={inr(gstTotals.sgst)} />
         <KpiTile label="IGST" value={inr(gstTotals.igst)} />
         <KpiTile
-          dot="brand"
-          valueTone="brand"
           label="Output GST"
           value={inr(gstOutputTotal)}
           hint={`${gstRows.length} ${gstRows.length === 1 ? 'entry' : 'entries'}`}

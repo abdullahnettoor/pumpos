@@ -258,84 +258,77 @@ const DeltaMatrix: React.FC = () => (
 const KpiStripShowcase: React.FC = () => (
   <div className="space-y-6 py-2">
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
-        five-metric operator dashboard header (auto-fit; wraps cleanly on narrow widths)
+      <div className="mb-2.5 text-[12px] font-medium text-ink-muted">
+        Up to 4 tiles, each with its period chip. Plain figures; colour only through alert.
       </div>
       <KpiStrip>
         <KpiTile
-          dot="brand"
-          label="Sales today"
+          label="Sales"
+          scope="today"
           value="₹4,82,350.00"
           delta={{ value: '12.4%', direction: 'up' }}
-          hint="vs yest."
+          hint="vs yesterday"
         />
         <KpiTile
-          dot="success"
-          label="Cash in drawer"
-          value="₹1,84,260.00"
-          delta={{ value: 'matched', direction: 'flat' }}
+          label="Spent"
+          scope={{ month: '2026-10' }}
+          value="₹31,475.00"
+          delta={{ value: '8%', direction: 'up', neutral: true }}
+          hint="vs Sep, same days"
         />
         <KpiTile
-          dot="warning"
-          label="Variance"
-          value="−₹1,240"
-          valueTone="warning"
-          hint="2 tanks over 0.5%"
+          label="Overdue"
+          scope="now"
+          alert="warning"
+          value="₹1,08,750.00"
+          hint="3 customers, oldest 41 days"
         />
         <KpiTile
-          dot="info"
-          label="Outstanding"
-          value="₹21,48,930.00"
-          delta={{ value: '3.1%', direction: 'down', invert: true }}
-          hint="7d"
+          label="Over credit limit"
+          scope="now"
+          alert="danger"
+          value="1"
+          hint="RTC Depot 4 · ₹62,000 over"
         />
-        <KpiTile dot="neutral" label="Pending sync" value="4" hint="retry in 12s" />
       </KpiStrip>
     </div>
 
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
-        fixed 4-column grid (drawer / detail panel header)
+      <div className="mb-2.5 text-[12px] font-medium text-ink-muted">
+        Fixed 4-column grid, small (drawer or detail header)
       </div>
       <KpiStrip columns={4}>
+        <KpiTile size="sm" label="Volume sold" scope="in-range" value="3,210.75 L" />
+        <KpiTile size="sm" label="Cash collected" scope="in-range" value="₹1,84,260.00" />
+        <KpiTile size="sm" label="UPI collected" scope="in-range" value="₹92,140.00" />
         <KpiTile
           size="sm"
-          dot="brand"
-          label="Volume sold"
-          value="3,210.75"
-          delta={{ value: '4.8%', direction: 'up' }}
+          label="Card declined"
+          scope="in-range"
+          value="2"
+          hint="₹8,420 to retry"
         />
-        <KpiTile size="sm" dot="success" label="Cash collected" value="₹1,84,260" />
-        <KpiTile
-          size="sm"
-          dot="info"
-          label="UPI collected"
-          value="₹92,140"
-          delta={{ value: '18.2%', direction: 'up' }}
-        />
-        <KpiTile size="sm" dot="warning" label="Card declined" value="2" hint="₹8,420 retry" />
       </KpiStrip>
     </div>
 
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
-        one prominent tile (page header / drawer opener)
+      <div className="mb-2.5 text-[12px] font-medium text-ink-muted">
+        Large (page header or drawer opener)
       </div>
       <KpiStrip columns={2}>
         <KpiTile
           size="lg"
-          dot="brand"
-          label="Business day · 09 Jul"
+          label="Net profit"
+          scope="in-range"
           value="₹18,42,000.00"
           delta={{ value: '8.6%', direction: 'up' }}
-          hint="vs 30-day avg"
+          hint="vs previous 14 days"
         />
         <KpiTile
           size="lg"
-          dot="danger"
-          label="Overdue receivables"
-          value="₹23,26,920"
-          valueTone="danger"
+          label="Receivable"
+          scope="now"
+          value="₹23,26,920.00"
           delta={{ value: '2.4%', direction: 'up', invert: true }}
           hint="12 accounts"
         />

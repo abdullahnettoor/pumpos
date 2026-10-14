@@ -404,26 +404,14 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
             {/* KPI strip — today & month collections at a glance */}
             <KpiStrip columns={4}>
               <KpiTile
-                dot="brand"
-                label="Collected Today"
+                label="Collected today"
                 value={inr(collectionKpis.today)}
                 hint={`${collectionKpis.todayCount} ${collectionKpis.todayCount === 1 ? 'entry' : 'entries'}`}
               />
+              <KpiTile label="Collected this month" value={inr(collectionKpis.month)} />
+              <KpiTile label="Customers paid today" value={String(collectionKpis.todayCustomers)} />
               <KpiTile
-                dot="success"
-                valueTone="success"
-                label="Collected This Month"
-                value={inr(collectionKpis.month)}
-              />
-              <KpiTile
-                dot="info"
-                label="Customers Paid Today"
-                value={String(collectionKpis.todayCustomers)}
-              />
-              <KpiTile
-                dot="warning"
-                valueTone="warning"
-                label="Total Receivables"
+                label="Total receivables"
                 value={inr(customerBalances.receivables)}
                 hint={`${inr(customerBalances.advances)} customer advances`}
               />
@@ -538,18 +526,14 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <KpiStrip columns={4}>
               <KpiTile
-                dot="warning"
-                valueTone="warning"
-                label="Credit Issued Today"
+                label="Credit issued today"
                 value={inr(salesKpis.today)}
                 hint={`${salesKpis.todayCount} ${salesKpis.todayCount === 1 ? 'sale' : 'sales'}`}
               />
-              <KpiTile dot="brand" label="Credit This Month" value={inr(salesKpis.month)} />
-              <KpiTile dot="info" label="Customers on Credit" value={String(salesKpis.customers)} />
+              <KpiTile label="Credit this month" value={inr(salesKpis.month)} />
+              <KpiTile label="Customers on credit" value={String(salesKpis.customers)} />
               <KpiTile
-                dot="warning"
-                valueTone="warning"
-                label="Total Receivables"
+                label="Total receivables"
                 value={inr(customerBalances.receivables)}
                 hint={`${inr(customerBalances.advances)} customer advances`}
               />

@@ -13,9 +13,8 @@ import {
   shiftShowsCreditBreakdown,
   type CreditChitRow,
 } from '../../services/reports/attendantCreditLines.js';
-import { computeRange } from '../primitives/DateRangeField.js';
-import type { DateRange } from '../primitives/DateRangeField.js';
-import { Field, Select } from '../primitives/Field.js';
+import { computeRange } from '../../pump-ds/date-range/index.js';
+import type { DateRange } from '../../pump-ds/date-range/index.js';
 import { Drawer } from '../Drawer.js';
 import { formatDateTime, inr } from '../../utils/format.js';
 import {
@@ -27,6 +26,7 @@ import {
   Button,
   Chip,
   StatementTable,
+  Select,
   type TableColumn,
 } from '../../pump-ds/index.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
@@ -269,11 +269,7 @@ const AttendantDetailDrawer: React.FC<{
               size="sm"
               label="Net variance"
               value={inr(attendant.totals.varianceAmount)}
-              valueTone={
-                attendant.totals.varianceAmount === 0
-                  ? undefined
-                  : varianceTone(attendant.totals.varianceAmount)
-              }
+              alert={attendant.totals.varianceAmount < 0 ? 'danger' : undefined}
             />
           </KpiStrip>
 
@@ -391,37 +387,33 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
         onChange={setRange}
         clock={clock}
         note="Closed shifts only. Sales components are listed separately — fuel expected is metered, not a grand total."
-        actions={
-          <div style={{ minWidth: 180 }}>
-            <Field label="Attendant">
-              <Select
-                value={attendantId}
-                onChange={(e) => setAttendantId(e.target.value)}
-                aria-label="Filter by attendant"
-              >
-                <option value="">All attendants</option>
-                {allAttendants.map((a) => (
-                  <option key={a.attendantId} value={a.attendantId}>
-                    {a.attendantName}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </div>
+        filters={
+          <Select
+            inputSize="sm"
+            className="h-8 min-w-[180px]"
+            value={attendantId}
+            onChange={(e) => setAttendantId(e.target.value)}
+            aria-label="Filter by attendant"
+          >
+            <option value="">All attendants</option>
+            {allAttendants.map((a) => (
+              <option key={a.attendantId} value={a.attendantId}>
+                {a.attendantName}
+              </option>
+            ))}
+          </Select>
         }
       />
 
       <KpiStrip columns="auto">
         <KpiTile
-          dot="brand"
-          valueTone="brand"
           label="Attendants"
           value={String(attendants.length)}
           hint={`${totals.shifts} shifts`}
         />
         <KpiTile label="Cash handed over" value={inr(totals.cash)} />
         <KpiTile
-          dot={totals.variance < 0 ? 'danger' : undefined}
+          alert={totals.variance < 0 ? 'danger' : undefined}
           label="Net variance"
           value={inr(totals.variance)}
           hint={totals.variance < 0 ? 'shortage' : totals.variance > 0 ? 'excess' : 'balanced'}

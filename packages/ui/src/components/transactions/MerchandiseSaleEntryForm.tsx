@@ -3,10 +3,9 @@ import { useFieldArray } from 'react-hook-form';
 import { merchandiseSaleEntryFormSchema, type MerchandiseSaleEntryFormValues } from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { Field, TextInput, NumberInput, Select } from '../primitives/Field.js';
-import { Segmented } from '../primitives/Segmented.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { Checkbox } from '../primitives/Toggle.js';
-import { Button, Form, Icon } from '../../pump-ds/index.js';
+import { Button, Form, Icon, SegmentedControl } from '../../pump-ds/index.js';
 import { inr, formatQty } from '../../utils/format.js';
 
 export interface ShiftOption {
@@ -333,7 +332,10 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
       )}
 
       <Field label="Payment Method">
-        <Segmented
+        <SegmentedControl
+          stretch
+          size="md"
+          activeStyle="brand"
           options={[
             { value: 'Cash', label: 'Cash' },
             { value: 'Card', label: 'Card' },

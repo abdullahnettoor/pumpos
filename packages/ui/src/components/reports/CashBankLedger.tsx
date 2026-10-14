@@ -1,11 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { useFinanceMovements } from '../../query/hooks.js';
-import { computeRange } from '../primitives/DateRangeField.js';
-import type { DateRange } from '../primitives/DateRangeField.js';
-import { Segmented } from '../primitives/Segmented.js';
+import { computeRange } from '../../pump-ds/date-range/index.js';
+import type { DateRange } from '../../pump-ds/date-range/index.js';
 import { StatementView, buildLedgerStatement, moneyEntries } from '../../statement/index.js';
 import { inr } from '../../utils/format.js';
-import { DataSection, KpiStrip, KpiTile, Panel } from '../../pump-ds/index.js';
+import { DataSection, KpiStrip, KpiTile, Panel, SegmentedControl } from '../../pump-ds/index.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
 
 export interface CashBankLedgerProps {
@@ -67,44 +66,30 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
             from before the selected range; closing = opening + in − out.
           </>
         }
-        actions={
-          <div className="min-w-[200px]">
-            <Segmented
-              options={[
-                { value: 'Cash', label: 'Cash' },
-                { value: 'Bank', label: 'Bank' },
-              ]}
-              value={account}
-              onChange={(v) => setAccount(v)}
-              aria-label="Account"
-            />
-          </div>
+        filters={
+          <SegmentedControl
+            options={[
+              { value: 'Cash', label: 'Cash' },
+              { value: 'Bank', label: 'Bank' },
+            ]}
+            value={account}
+            onChange={(v) => setAccount(v)}
+            aria-label="Account"
+          />
         }
       />
 
       <KpiStrip columns="auto">
         <KpiTile
-          dot={opening < 0 ? 'danger' : 'brand'}
-          valueTone={opening < 0 ? 'danger' : undefined}
-          label="Opening Balance"
+          alert={opening < 0 ? 'danger' : undefined}
+          label="Opening balance"
           value={inr(opening)}
         />
+        <KpiTile label="Money in" value={inr(statement.totals.debit)} />
+        <KpiTile label="Money out" value={inr(statement.totals.credit)} />
         <KpiTile
-          dot="success"
-          valueTone="success"
-          label="Money In"
-          value={inr(statement.totals.debit)}
-        />
-        <KpiTile
-          dot="danger"
-          valueTone="danger"
-          label="Money Out"
-          value={inr(statement.totals.credit)}
-        />
-        <KpiTile
-          dot={statement.closing < 0 ? 'danger' : 'brand'}
-          valueTone={statement.closing < 0 ? 'danger' : undefined}
-          label="Closing Balance"
+          alert={statement.closing < 0 ? 'danger' : undefined}
+          label="Closing balance"
           value={inr(statement.closing)}
         />
       </KpiStrip>

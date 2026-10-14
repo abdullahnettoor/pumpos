@@ -3,7 +3,7 @@ import { SegmentedControl } from '../../../pump-ds/index.js';
 import { TaxRegisterPanel } from '../TaxRegisterPanel.js';
 import { PurchaseGstPanel } from './PurchaseGstPanel.js';
 import { IncomeGstPanel } from './IncomeGstPanel.js';
-import { computeRange, type DateRange } from '../../primitives/DateRangeField.js';
+import { computeRange, type DateRange } from '../../../pump-ds/date-range/index.js';
 
 export type GstView = 'sales' | 'purchases' | 'income';
 

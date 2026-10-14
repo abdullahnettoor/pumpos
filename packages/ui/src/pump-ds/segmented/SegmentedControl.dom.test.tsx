@@ -30,6 +30,27 @@ describe('SegmentedControl', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('is 32px by default and 36px at size md, to sit beside form inputs', () => {
+    const { unmount } = render(
+      <SegmentedControl aria-label="Paper" options={options} value="A4" onChange={() => {}} />,
+    );
+    expect(screen.getByRole('radiogroup').className).toContain('h-8');
+    unmount();
+    render(
+      <SegmentedControl
+        aria-label="Paper"
+        size="md"
+        stretch
+        options={options}
+        value="A4"
+        onChange={() => {}}
+      />,
+    );
+    const group = screen.getByRole('radiogroup').className;
+    expect(group).toContain('h-9');
+    expect(group).not.toContain('h-8');
+  });
+
   it('stretch gives every segment an equal share of the row', () => {
     render(
       <SegmentedControl

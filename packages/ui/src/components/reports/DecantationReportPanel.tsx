@@ -1,10 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Printer } from 'lucide-react';
 import type { DecantationReport, DecantationReportVisit } from '@pump/shared';
 import { useDecantationReport } from '../../query/hooks.js';
-import { computeRange } from '../primitives/DateRangeField.js';
-import type { DateRange } from '../primitives/DateRangeField.js';
-import { Button } from '../../pump-ds/index.js';
+import { computeRange } from '../../pump-ds/date-range/index.js';
+import type { DateRange } from '../../pump-ds/date-range/index.js';
+import { ExportMenu } from '../../pump-ds/index.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 
@@ -70,16 +69,8 @@ export const DecantationReportPanel: React.FC<DecantationReportPanelProps> = ({
         value={range}
         onChange={setRange}
         clock={clock}
-        actions={
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={<Printer size={13} />}
-            onClick={handlePrint}
-            disabled={!report || report.visits.length === 0}
-          >
-            Print
-          </Button>
+        exportMenu={
+          <ExportMenu onPrint={handlePrint} disabled={!report || report.visits.length === 0} />
         }
         note="Decantation Report: rows per tanker visit with tank line dips, invoice reconciliation and chamber integrity. Distinguishes transit loss (chamber shortages, broken seals, unemptied compartments) from station underground decantation loss."
       />

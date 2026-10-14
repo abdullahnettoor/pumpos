@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { PageLayout } from './primitives/PageLayout.js';
 import { Tabs } from '../pump-ds/tabs/index.js';
-import { KpiStrip, KpiTile } from '../pump-ds/index.js';
+import { KpiStrip, KpiTile, SegmentedControl } from '../pump-ds/index.js';
 import { DataTable } from './primitives/DataTable.js';
 import { SkeletonGrid } from './primitives/Skeleton.js';
 import { useToast } from './primitives/ToastProvider.js';
@@ -17,7 +17,6 @@ import {
   DateField,
 } from './primitives/Field.js';
 import { Checkbox, Switch } from './primitives/Toggle.js';
-import { Segmented } from './primitives/Segmented.js';
 import { Combobox } from './primitives/Combobox.js';
 import { Tooltip } from './primitives/Tooltip.js';
 import { Menu, Popover } from './primitives/Menu.js';
@@ -42,6 +41,7 @@ import {
 } from './DesignSystemPumpDs.js';
 import { DataSectionShowcase } from './DesignSystemDataSection.js';
 import { TablesShowcase } from './DesignSystemTables.js';
+import { PageControlsShowcase } from './DesignSystemPageControls.js';
 import { DesignSystemShellProtoPanel } from './DesignSystemShellProto.js';
 import { useRunTask } from '../utils/runTask.js';
 
@@ -587,11 +587,13 @@ const InputsPanel: React.FC = () => {
 
       <Section
         title="Segmented control"
-        description="A compact button group for a small fixed set of options (payment method, filters, view toggles). Replaces the hand-rolled inline button grids. Controlled; wire into RHF with a Controller."
+        description="pump-ds SegmentedControl: 2–4 views of the same data, or a short fixed choice in a form (payment method). Filtering rows uses FilterChips; 5+ options use a select. Controlled; wire into RHF with a Controller."
       >
         <Card style={{ maxWidth: 460 }}>
           <Field label={`Payment method — ${method}`}>
-            <Segmented
+            <SegmentedControl
+              stretch
+              activeStyle="brand"
               options={[
                 { value: 'Cash', label: 'Cash' },
                 { value: 'Card', label: 'Card' },
@@ -725,24 +727,13 @@ const ComponentsPanel: React.FC = () => {
 
       <Section
         title="KPI strip"
-        description="Metric tiles in a gap-as-divider strip. Values use the mono font; the status dot and valueTone carry meaning."
+        description="Metric tiles in a gap-as-divider strip. Plain mono values; a tile is coloured only through alert, for a problem. See Page controls for period chips and layouts."
       >
         <KpiStrip columns="auto">
-          <KpiTile dot="success" valueTone="success" label="Total Sales" value={inr(482350.5)} />
-          <KpiTile
-            dot="danger"
-            valueTone="danger"
-            label="Cash Variance"
-            value={inr(-320)}
-            hint="Short by ₹320"
-          />
-          <KpiTile dot="warning" valueTone="warning" label="Credit Given" value={inr(15400)} />
-          <KpiTile
-            dot="info"
-            label="Volume Sold"
-            value={formatQty(3210.75)}
-            hint="Petrol + Diesel"
-          />
+          <KpiTile label="Total sales" value={inr(482350.5)} />
+          <KpiTile label="Cash variance" alert="danger" value={inr(-320)} hint="Short by ₹320" />
+          <KpiTile label="Credit given" value={inr(15400)} />
+          <KpiTile label="Volume sold" value={formatQty(3210.75)} hint="Petrol + Diesel" />
         </KpiStrip>
       </Section>
 
@@ -1241,6 +1232,7 @@ const TABS = [
   { id: 'data', label: 'Data & Money' },
   { id: 'data-states', label: 'Data states' },
   { id: 'tables', label: 'Tables' },
+  { id: 'page-controls', label: 'Page controls' },
   { id: 'shell-proto', label: 'Shell · proto' },
 ];
 
@@ -1293,6 +1285,7 @@ export const DesignSystem: React.FC = () => {
           <TablesShowcase />
         </Section>
       )}
+      {active === 'page-controls' && <PageControlsShowcase />}
       {active === 'shell-proto' && <DesignSystemShellProtoPanel />}
     </PageLayout>
   );

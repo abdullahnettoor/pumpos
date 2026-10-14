@@ -198,32 +198,14 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
         {activeTab === 'ledger' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <KpiStrip columns="auto">
+              <KpiTile label="Spent today" value={inr(kpis.spentToday)} hint="entry date" />
               <KpiTile
-                dot="danger"
-                valueTone="danger"
-                label="Spent Today"
-                value={inr(kpis.spentToday)}
-                hint="entry date"
-              />
-              <KpiTile
-                dot="danger"
-                valueTone="danger"
-                label="Spent This Month"
+                label="Spent this month"
                 value={inr(kpis.spentMonth)}
                 hint={`${kpis.entriesMonth} ${kpis.entriesMonth === 1 ? 'entry' : 'entries'}`}
               />
-              <KpiTile
-                dot="warning"
-                label="Cash in Hand / Petty"
-                value={inr(kpis.cashMonth)}
-                hint="this month"
-              />
-              <KpiTile
-                dot="info"
-                label="From Bank / Owner"
-                value={inr(kpis.otherMonth)}
-                hint="this month"
-              />
+              <KpiTile label="Cash in hand / petty" value={inr(kpis.cashMonth)} hint="this month" />
+              <KpiTile label="From bank / owner" value={inr(kpis.otherMonth)} hint="this month" />
             </KpiStrip>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px' }}>

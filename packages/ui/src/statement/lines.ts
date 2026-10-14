@@ -1,3 +1,4 @@
+import { SHORT_MONTHS } from '../utils/format.js';
 import { rowDetail, type LedgerStatement } from './model.js';
 
 /**
@@ -34,18 +35,16 @@ export interface StatementLine {
   opening?: true;
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
 /**
  * A statement's date as every view prints it, the PDF's period header
  * included: `07 Oct 2026`. Read from the `YYYY-MM-DD` parts, never through a
- * locale (en-IN / en-GB print "Sept") or a time zone (a calendar date has none).
+ * locale (`SHORT_MONTHS`: en-IN / en-GB print "Sept") or a time zone (a calendar date has none).
  * Anything else prints as given; nothing prints blank.
  */
 export function statementDate(date: string | null | undefined): string {
   if (!date) return '';
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  const month = m ? MONTHS[Number(m[2]) - 1] : undefined;
+  const month = m ? SHORT_MONTHS[Number(m[2]) - 1] : undefined;
   return m && month ? `${m[3]} ${month} ${m[1]}` : date;
 }
 

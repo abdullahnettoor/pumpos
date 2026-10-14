@@ -1,15 +1,17 @@
 import React from 'react';
-import { DateRangeField } from '../primitives/DateRangeField.js';
+import { ControlBar, DateRangeMenu } from '../../pump-ds/index.js';
 import { ReportNote } from './ReportNote.js';
-import type { DateRange, RangeClock, RangePreset } from '../primitives/DateRangeField.js';
+import type { DateRange, RangeClock, RangePreset } from '../../pump-ds/date-range/index.js';
 
 export interface ReportRangeBarProps {
   value: DateRange;
   onChange: (range: DateRange) => void;
   clock?: RangeClock;
   presets?: RangePreset[];
-  /** Right-aligned controls (export buttons, entity/account pickers). */
-  actions?: React.ReactNode;
+  /** Filters after the range: entity/account pickers, a Cash | Bank switch. */
+  filters?: React.ReactNode;
+  /** `ExportMenu` for the report, at the right end of the bar. */
+  exportMenu?: React.ReactNode;
   /**
    * Methodology caption for the tab. Rendered as a caption line *below* the
    * control row — prose in the row stretches the bar and knocks the controls
@@ -19,10 +21,10 @@ export interface ReportRangeBarProps {
 }
 
 /**
- * ReportRangeBar — the shared header for every Reports sub-tab: one aligned
- * control row (a compact `DateRangeField` on the left, entity pickers and
- * export buttons on the right), with the tab's methodology note as a caption
- * beneath it.
+ * ReportRangeBar — the shared header for every Reports sub-tab (layout A,
+ * #567): one `ControlBar` driving everything below it, the `DateRangeMenu`
+ * first, the tab's filters after it and the export at the right end, with the
+ * tab's methodology note as a caption beneath.
  *
  * Keeps the range picker + export/toggle pattern identical across Attendant
  * Handovers, Profit & Loss, Ledger, Cash & Bank, Invoices and the Tax Register
@@ -33,28 +35,24 @@ export const ReportRangeBar: React.FC<ReportRangeBarProps> = ({
   onChange,
   clock,
   presets,
-  actions,
+  filters,
+  exportMenu,
   note,
 }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-    <div
-      style={{
-        display: 'flex',
-        gap: '12px',
-        alignItems: 'flex-end',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-      }}
-    >
-      <DateRangeField value={value} onChange={onChange} clock={clock} presets={presets} size="sm" />
-      {/* Controls only — at narrow widths these wrap under the range picker
-          and stay bottom-aligned with it. */}
-      {actions && (
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
-          {actions}
-        </div>
-      )}
-    </div>
+  <div className="flex flex-col gap-1.5">
+    <ControlBar
+      range={
+        <DateRangeMenu
+          value={value}
+          onChange={onChange}
+          clock={clock}
+          presets={presets}
+          aria-label="Report period"
+        />
+      }
+      filters={filters}
+      exportMenu={exportMenu}
+    />
     {note && <ReportNote>{note}</ReportNote>}
   </div>
 );
