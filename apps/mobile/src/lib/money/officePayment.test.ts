@@ -84,7 +84,7 @@ describe('idempotency keys', () => {
     expect(
       isEarlierAttemptReceived(
         err(
-          'CONFLICT',
+          'IDEMPOTENCY_KEY_REUSED',
           'This Idempotency-Key was already used with different request content',
           409,
         ),
@@ -100,6 +100,11 @@ describe('idempotency keys', () => {
     expect(
       isEarlierAttemptReceived(
         err('CONFLICT', 'This Idempotency-Key belongs to another user', 409),
+      ),
+    ).toBe(false);
+    expect(
+      isEarlierAttemptReceived(
+        err('CONFLICT', 'This Idempotency-Key was already used for another request', 409),
       ),
     ).toBe(false);
     expect(

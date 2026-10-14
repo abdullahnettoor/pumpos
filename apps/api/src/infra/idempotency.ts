@@ -1,6 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 import { and, eq } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
+import { IDEMPOTENCY_KEY_REUSED } from '@pump/shared';
 
 export interface IdempotencyRecord {
   id: string;
@@ -162,7 +163,7 @@ export function createIdempotencyMiddleware(
             {
               success: false,
               error: {
-                code: 'CONFLICT',
+                code: IDEMPOTENCY_KEY_REUSED,
                 message: 'This Idempotency-Key was already used with different request content',
               },
             },

@@ -21,6 +21,7 @@ export * from './utils/shift-label.js';
 export * from './utils/product-category.js';
 export * from './utils/onboarding-tax.js';
 export * from './constants/payment.js';
+export * from './constants/idempotency.js';
 export * from './utils/shift-close-cash.js';
 export * from './constants/demo.js';
 export * from './utils/desktop-downloads.js';

@@ -189,6 +189,7 @@ describe('Stock Count mutation identity', () => {
   it('distinguishes ambiguous transport outcomes from definitive rejections', () => {
     expect(isAmbiguousMutationError({ code: 'NETWORK' })).toBe(true);
     expect(isAmbiguousMutationError({ code: 'CONFLICT' })).toBe(true);
+    expect(isAmbiguousMutationError({ code: 'IDEMPOTENCY_KEY_REUSED' })).toBe(true);
     expect(isAmbiguousMutationError({ code: 'BAD_RESPONSE' })).toBe(true);
     expect(isAmbiguousMutationError({ code: 'VALIDATION_ERROR' })).toBe(false);
   });

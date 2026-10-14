@@ -411,7 +411,7 @@ describe('saving', () => {
     typeAmount('4500');
     record.mockRejectedValueOnce(
       refusal(
-        'CONFLICT',
+        'IDEMPOTENCY_KEY_REUSED',
         'This Idempotency-Key was already used with different request content',
         409,
       ),

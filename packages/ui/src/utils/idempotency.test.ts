@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { keepsIdempotencyKey } from './idempotency.js';
+import { isIdempotencyKeyConflict, keepsIdempotencyKey } from './idempotency.js';
 
 const failure = (message: string, extra: { status?: number; code?: string }) =>
   Object.assign(new Error(message), extra);
@@ -24,7 +24,27 @@ describe('keepsIdempotencyKey', () => {
       false,
     );
     expect(
-      keepsIdempotencyKey(failure('different request content', { status: 409, code: 'CONFLICT' })),
+      keepsIdempotencyKey(
+        failure('different request content', { status: 409, code: 'IDEMPOTENCY_KEY_REUSED' }),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('isIdempotencyKeyConflict', () => {
+  it('reads the dedicated code, not the message', () => {
+    expect(
+      isIdempotencyKeyConflict(
+        failure('anything', { status: 409, code: 'IDEMPOTENCY_KEY_REUSED' }),
+      ),
+    ).toBe(true);
+    expect(
+      isIdempotencyKeyConflict(
+        failure('This Idempotency-Key was already used with different request content', {
+          status: 409,
+          code: 'CONFLICT',
+        }),
+      ),
     ).toBe(false);
   });
 });

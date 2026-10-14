@@ -1,3 +1,5 @@
+import { IDEMPOTENCY_KEY_REUSED } from '@pump/shared';
+
 /**
  * What the team sheets say when a write is refused or fails, and whether the
  * Idempotency-Key survives it. Pure.
@@ -38,10 +40,7 @@ export function isOutcomeUnknown(error: unknown): boolean {
 
 /** Same key, different body: the earlier attempt reached the server (see `idempotency.ts`). */
 export function isEarlierAttemptReceived(error: unknown): boolean {
-  return (
-    codeOf(error) === 'CONFLICT' &&
-    /different request content/i.test(error instanceof Error ? error.message : '')
-  );
+  return codeOf(error) === IDEMPOTENCY_KEY_REUSED;
 }
 
 export function teamFailure(error: unknown, action: TeamAction): TeamFailure {

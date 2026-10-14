@@ -21,7 +21,7 @@ import { RecordDateField } from '../fields/RecordDateField.js';
 import { FundingAccountField } from '../fields/FundingAccountField.js';
 import { PartyField, type PartyOption } from '../fields/PartyField.js';
 import { OFFICE_RECORD_KINDS } from '../kinds.js';
-import { partPaymentText } from '../preview.js';
+import { partPaymentText, payNowDateFor } from '../preview.js';
 
 export type { PurchasePayNow };
 
@@ -48,6 +48,7 @@ export interface PurchaseEntryFormProps extends Partial<
 
 const LABEL = 'text-[12px] font-semibold text-ink-muted';
 const ERROR = 'text-[12px] text-danger-fg';
+const FIGURE = 'font-mono tabular-nums';
 
 const emptyLine = () => ({
   productId: '',
@@ -57,22 +58,6 @@ const emptyLine = () => ({
 
 const isFuel = (p: any) => p?.productType === 'FUEL';
 const round2 = (n: number) => Math.round(n * 100) / 100;
-
-/**
- * The pay-now Supplier payment's Entry Date, before the operator picks one:
- * the purchase's date. A product purchase on the current Business Day is dated
- * by its Business Date, which Day Start can hold on yesterday; its payment, an
- * Office Record, takes today's calendar date instead (ADR 0005).
- */
-export function payNowDateFor(
-  purchaseDate: string,
-  type: PurchaseType,
-  clock: { today: string; businessDate: string },
-): string {
-  if (type === 'PRODUCTS' && purchaseDate && purchaseDate === clock.businessDate)
-    return clock.today;
-  return purchaseDate;
-}
 
 /**
  * A supplier invoice. Fuel is an Office Record dated by its invoice (an Entry
@@ -465,19 +450,37 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
                   )}
                 </div>
 
-                <div className="flex justify-between font-mono text-[12px] text-ink-muted">
+                {/* Words in sans, figures in mono. */}
+                <div className="flex justify-between text-[12px] text-ink-muted">
                   <span>
-                    {fuel
-                      ? qty > 0 && rate > 0
-                        ? `Derived: ₹${rate.toFixed(4)}/${unitLabel} · tax-incl.`
-                        : 'Enter qty + total'
-                      : isGst
-                        ? `GST ${gstRate}%${cessRate ? ` + cess ${cessRate}%` : ''}`
-                        : product
-                          ? 'No tax'
-                          : ''}
+                    {fuel ? (
+                      qty > 0 && rate > 0 ? (
+                        <>
+                          Derived:{' '}
+                          <span className={FIGURE}>{`₹${rate.toFixed(4)}/${unitLabel}`}</span> ·
+                          tax-incl.
+                        </>
+                      ) : (
+                        'Enter qty + total'
+                      )
+                    ) : isGst ? (
+                      <>
+                        GST <span className={FIGURE}>{`${gstRate}%`}</span>
+                        {cessRate ? (
+                          <>
+                            {' '}
+                            + cess <span className={FIGURE}>{`${cessRate}%`}</span>
+                          </>
+                        ) : null}
+                      </>
+                    ) : product ? (
+                      'No tax'
+                    ) : null}
                   </span>
-                  <span>{fuel ? `Cost: ${inr(taxable)}` : `Taxable: ${inr(taxable)}`}</span>
+                  <span>
+                    {fuel ? 'Cost: ' : 'Taxable: '}
+                    <span className={FIGURE}>{inr(taxable)}</span>
+                  </span>
                 </div>
 
                 {fuel && (
