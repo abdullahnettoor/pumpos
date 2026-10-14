@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
 import { computeRange } from '../../pump-ds/index.js';
-import { formatDateSpan } from '../../utils/format.js';
+import { shortMonth } from '../../utils/format.js';
 import { ExpensesList } from '../ExpensesList.js';
 import { IncomeList } from '../IncomeList.js';
 
@@ -23,11 +23,7 @@ const station = {
 } as any;
 
 const today = computeRange('today', { timeZone: 'Asia/Kolkata' }).from;
-const month = computeRange('this-month', { timeZone: 'Asia/Kolkata' });
-const monthName = new Date(`${today}T00:00:00Z`).toLocaleDateString('en-IN', {
-  month: 'short',
-  timeZone: 'UTC',
-});
+const monthName = shortMonth(Number(today.slice(5, 7)));
 
 const record = (id: string, amount: number, status = 'ACTIVE', categoryName = 'Electricity') => ({
   id,
@@ -277,11 +273,65 @@ describe('owner decisions for the pilot (#566)', () => {
       expect(within(bar).getByRole('button', { name: /by category period/i })).toBeTruthy();
       expect(before(bar, table)).toBe(true);
       expect(screen.getAllByText('In range')).toHaveLength(4);
-      // The total names its dates as a span, never raw YYYY-MM-DD.
-      const span = formatDateSpan(month.from, month.to, { referenceDate: today });
-      const total = screen.getByText(kind === 'expense' ? 'Total expenses' : 'Total income');
-      expect(within(total.closest('div')!.parentElement!).getByText(span)).toBeTruthy();
+      // A tile never repeats the table's total: the total row carries it.
+      expect(screen.queryByText(kind === 'expense' ? 'Total expenses' : 'Total income')).toBeNull();
       expect(document.body.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    },
+  );
+
+  it.each(['expense', 'income'] as const)(
+    '%s By category: Average per day is the total over the days in range',
+    async (kind) => {
+      stubApi({ [PAGES[kind].path]: { data: RECORDS } });
+      renderWithProviders(PAGES[kind].render());
+      fireEvent.click(await screen.findByRole('tab', { name: /By category/ }));
+      await screen.findByRole('table');
+      const tile = () => screen.getByText('Average per day').closest('div')!.parentElement!;
+      const pick = (preset: RegExp) => {
+        fireEvent.click(screen.getByRole('button', { name: /by category period/i }));
+        fireEvent.click(screen.getByRole('menuitemradio', { name: preset }));
+      };
+
+      pick(/^Today/);
+      expect(within(tile()).getByText('₹1,300.00')).toBeTruthy();
+      expect(within(tile()).getByText('over 1 day')).toBeTruthy();
+
+      // Every entry is today's: ₹1,300 spread over 7 days.
+      pick(/^Last 7 days/);
+      expect(within(tile()).getByText('₹185.71')).toBeTruthy();
+      expect(within(tile()).getByText('over 7 days')).toBeTruthy();
+    },
+  );
+
+  it.each([
+    ['expense', 'General'],
+    ['income', 'Other Income'],
+  ] as const)('%s By category names an uncategorised entry %s', async (kind, fallback) => {
+    stubApi({
+      [PAGES[kind].path]: { data: [{ ...record('u1', 75), categoryName: null }] },
+    });
+    renderWithProviders(PAGES[kind].render());
+    fireEvent.click(await screen.findByRole('tab', { name: /By category/ }));
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText(fallback)).toBeTruthy();
+  });
+
+  it.each(['expense', 'income'] as const)(
+    '%s ledger: a new range leaves the Today and month tiles as they were',
+    async (kind) => {
+      stubApi({ [PAGES[kind].path]: { data: RECORDS } });
+      const { container } = renderWithProviders(PAGES[kind].render());
+      const table = await screen.findByRole('table');
+      expect(totalRow(table).getByText('₹1,300.00')).toBeTruthy();
+      const tiles = () => [...container.querySelectorAll('.kpi-value')].map((el) => el.textContent);
+      const seen = tiles();
+      expect(seen[0]).toBe('₹1,300.00');
+
+      fireEvent.click(screen.getByRole('button', { name: /ledger period/i }));
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /Last month/ }));
+      // The ledger follows the range (nothing last month); the tiles do not.
+      await waitFor(() => expect(screen.queryByRole('table')).toBeNull());
+      expect(tiles()).toEqual(seen);
     },
   );
 
@@ -320,6 +370,8 @@ describe('owner decisions for the pilot (#566)', () => {
           record('a1', 100),
           { ...record('a2', 200), accountName: 'SBI Current', accountType: 'BANK' },
           { ...record('a3', 300), accountName: 'Owner Account', accountType: 'OWNER' },
+          // "Owner" is only part of a word here, so the type still shows.
+          { ...record('a4', 400), accountName: 'Ownership Capital', accountType: 'OWNER' },
         ],
       },
     });
@@ -329,7 +381,8 @@ describe('owner decisions for the pilot (#566)', () => {
     expect(within(table).getByText('SBI Current')).toBeTruthy();
     expect(within(table).getByText('Bank')).toBeTruthy();
     expect(within(table).getByText('Owner Account')).toBeTruthy();
-    expect(within(table).queryByText('Owner')).toBeNull();
+    expect(within(table).getByText('Ownership Capital')).toBeTruthy();
+    expect(within(table).getAllByText('Owner')).toHaveLength(1);
   });
 });
 

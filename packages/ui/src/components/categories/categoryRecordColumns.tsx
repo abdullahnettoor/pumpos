@@ -29,16 +29,21 @@ const VOID_LABEL: Record<CategoryRecordKind, string> = {
   income: 'Void income entry',
 };
 
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
- * The Funding Account's type as a detail line, only when it says something the
- * name does not: "SBI Current · Bank", never "Cash in Hand · Cash in Hand" or
- * "Owner Account · Owner".
+ * The Funding Account's type as a detail line, only when the name does not
+ * already say it as a whole word: "SBI Current · Bank" and "Ownership Capital
+ * · Owner", never "Cash in Hand · Cash in Hand" or "Owner Account · Owner".
  */
 export function accountTypeDetail(row: Pick<CategoryRecord, 'accountName' | 'accountType'>) {
   if (!row.accountType) return null;
   const type = accountTypeLabel(row.accountType);
-  const name = row.accountName?.trim().toLowerCase() ?? '';
-  return name.includes(type.trim().toLowerCase()) ? null : type;
+  const word = new RegExp(
+    `(^|[^\\p{L}\\p{N}])${escapeRegExp(type.trim())}($|[^\\p{L}\\p{N}])`,
+    'iu',
+  );
+  return word.test(row.accountName?.trim() ?? '') ? null : type;
 }
 
 /** Funding Account the money moved through, with its type as secondary text. */

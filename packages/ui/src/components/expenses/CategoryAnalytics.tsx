@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useExpenses, useIncome } from '../../query/hooks.js';
-import { formatDateSpan, formatMoney } from '../../utils/format.js';
+import { formatMoney } from '../../utils/format.js';
+import { FALLBACK_CATEGORY } from '../categories/categoryRecordColumns.js';
 import {
   ControlBar,
   DataSection,
@@ -26,7 +27,6 @@ export interface CategoryAnalyticsProps {
 const COPY = {
   expense: {
     noun: 'expenses',
-    total: 'Total expenses',
     withAmount: 'with spend',
     section: 'Spend by category',
     empty: 'No expenses',
@@ -35,7 +35,6 @@ const COPY = {
   },
   income: {
     noun: 'income',
-    total: 'Total income',
     withAmount: 'with income',
     section: 'Income by category',
     empty: 'No income',
@@ -43,6 +42,12 @@ const COPY = {
     icon: 'arrow-down' as IconName,
   },
 };
+
+/** Calendar days from `from` to `to`, both counted (`YYYY-MM-DD`). */
+function daysInRange({ from, to }: DateRange): number {
+  const day = (d: string) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10));
+  return Math.max(1, Math.round((day(to) - day(from)) / 86_400_000) + 1);
+}
 
 interface CategoryRow {
   name: string;
@@ -106,7 +111,9 @@ const COLUMNS: TableColumn<CategoryRow>[] = [
  * "By category" tab reads the same view with `kind="income"`. VOIDED excluded.
  *
  * Layout A (#567): one control bar with the range menu drives the tiles and
- * the table below it, so every tile reads `In range`.
+ * the table below it, so every tile reads `In range`. A tile never repeats the
+ * table's total (the total row carries it), so the first tile is the average
+ * per day over the range.
  */
 export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
   selectedStation,
@@ -117,7 +124,6 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
   // Office records are dated by entry date (station calendar date), not the sales day.
   const clock = useMemo(() => ({ timeZone }), [timeZone]);
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
-  const today = computeRange('today', clock).to;
 
   const expensesQ = useExpenses({ enabled: kind === 'expense' });
   const incomeQ = useIncome(
@@ -141,7 +147,7 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
   const byCategory = useMemo<CategoryRow[]>(() => {
     const m = new Map<string, CategoryRow>();
     for (const e of active) {
-      const name = e.categoryName || 'General';
+      const name = e.categoryName || FALLBACK_CATEGORY[kind];
       const c = m.get(name) || { name, total: 0, count: 0, share: 0 };
       c.total += Number(e.amount || 0);
       c.count += 1;
@@ -150,8 +156,9 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
     const rows = [...m.values()];
     for (const r of rows) r.share = total > 0 ? (r.total / total) * 100 : 0;
     return rows.sort((a, b) => b.total - a.total);
-  }, [active, total]);
+  }, [active, total, kind]);
 
+  const days = daysInRange(range);
   const largest = byCategory[0];
 
   return (
@@ -170,10 +177,10 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
       <DataSection title={`${kind} totals`} query={recordsQ} shape="cards" placeholderHeight={90}>
         <KpiStrip columns="auto">
           <KpiTile
-            label={copy.total}
+            label="Average per day"
             scope="in-range"
-            value={formatMoney(total)}
-            hint={formatDateSpan(range.from, range.to, { referenceDate: today })}
+            value={formatMoney(total / days)}
+            hint={`over ${days} ${days === 1 ? 'day' : 'days'}`}
           />
           <KpiTile label="Entries" scope="in-range" value={String(active.length)} />
           <KpiTile
