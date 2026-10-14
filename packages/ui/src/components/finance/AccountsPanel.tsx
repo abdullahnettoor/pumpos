@@ -16,7 +16,7 @@ import {
 } from '../../pump-ds/index.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
-import { StatementView, buildStatement, moneyEntries } from '../../statement/index.js';
+import { StatementView, buildLedgerStatement, moneyEntries } from '../../statement/index.js';
 import type { MoneyMovement } from '../../statement/index.js';
 import { DateRangeField, computeRange, type DateRange } from '../primitives/DateRangeField.js';
 import { useToast } from '../primitives/ToastProvider.js';
@@ -219,6 +219,15 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
     to: range.to,
   });
   const ledger = ledgerQ.data;
+  // The selected account's statement (Statement module): money in = Debit, out = Credit.
+  const statement = useMemo(
+    () =>
+      buildLedgerStatement(moneyEntries(ledger?.entries || [], { detail: accountEntryDetail }), {
+        kind: 'account',
+        opening: ledger?.periodOpeningBalance ?? 0,
+      }),
+    [ledger],
+  );
 
   const openSettle = () => {
     const banks = (accounts || []).filter((a: any) => a.accountType === 'BANK');
@@ -457,11 +466,6 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
 
   // ---- Per-account ledger view ----
   if (selected && activeTab === 'accounts') {
-    // The account's statement (Statement module): money in = Debit, out = Credit.
-    const statement = buildStatement(
-      moneyEntries(ledger?.entries || [], { detail: accountEntryDetail }),
-      { kind: 'account', opening: ledger?.periodOpeningBalance ?? 0 },
-    );
     const opening = statement.opening ?? 0;
     const closing = statement.closing;
 

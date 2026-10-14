@@ -3,22 +3,26 @@
  * bank, owner, a Daily Cash Book account) and its two views, the screen
  * (`StatementView`) and the PDF (`statementDocProps` → `LedgerDoc`).
  *
- * Adapter (`adapters.ts`) → `buildStatement` (`model.ts`) → `statementLines`
+ * Adapter (`adapters.ts`) → `buildLedgerStatement` (`model.ts`) → `statementLines`
  * (`lines.ts`) → `StatementView` | `statementDocProps`.
+ *
+ * The model is `LedgerStatement` (built by `buildLedgerStatement` from
+ * `LedgerStatementEntry` rows): the mobile app keeps its own `Statement` in
+ * `apps/mobile/src/lib/money/statement.ts` until its screen and PDF move here together.
  */
 export {
   NORMAL_SIDE,
-  buildStatement,
+  buildLedgerStatement,
   placeDate,
   rowDetail,
-  type BuildStatementOptions,
+  type BuildLedgerStatementOptions,
   type DateBasis,
   type Side,
-  type Statement,
+  type LedgerStatement,
   type StatementClock,
-  type StatementEntry,
+  type LedgerStatementEntry,
   type StatementKind,
-  type StatementRow,
+  type LedgerStatementRow,
 } from './model.js';
 export { SOURCE_LABEL, sourceLabel } from './sources.js';
 export {
@@ -40,8 +44,9 @@ export {
   STATEMENT_HEADERS,
   closingFigures,
   lineDate,
+  statementDate,
   statementLines,
   type StatementLine,
 } from './lines.js';
 export { statementDocProps, type StatementDocProps } from './pdf.js';
-export { StatementView, type StatementViewProps } from './StatementView.js';
+export { NOT_RECONCILED_NOTE, StatementView, type StatementViewProps } from './StatementView.js';

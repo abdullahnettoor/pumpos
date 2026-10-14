@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { moneyEntries, officeRecords, partyDateBasis, partyEntries } from './adapters.js';
-import { buildStatement } from './model.js';
+import { buildLedgerStatement } from './model.js';
 import type { DailyCashBookAccount } from '../services/cloud.js';
 
 describe('partyEntries', () => {
@@ -61,7 +61,7 @@ describe('moneyEntries', () => {
   });
 
   it('an owner-funded payment raises what the business owes the owner (a Credit)', () => {
-    const s = buildStatement(
+    const s = buildLedgerStatement(
       moneyEntries(
         [{ id: 'o', direction: 'out', amount: 500, source: 'Expense', date: '2026-10-01' }],
         {

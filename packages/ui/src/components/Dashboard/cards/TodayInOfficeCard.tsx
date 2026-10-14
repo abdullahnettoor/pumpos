@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { formatSignedMoney } from '../../../utils/format.js';
+import { signedMoneyParts } from '../../../utils/format.js';
 import { officeRecords, sourceLabel } from '../../../statement/index.js';
 import { useDailyCashBook } from '../../../query/hooks.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
@@ -48,7 +48,14 @@ export const TodayInOfficeCard: React.FC = () => {
           data-testid="office-records-list"
         >
           {top3.map((entry) => {
-            const isIncome = entry.amount >= 0;
+            // Signed and toned by the figure as shown: a zero entry is a plain ₹0.
+            const figure = signedMoneyParts(entry.amount, { decimals: 0, plus: true });
+            const tone =
+              figure.sign === 'positive'
+                ? 'text-success-fg'
+                : figure.sign === 'negative'
+                  ? 'text-danger-fg'
+                  : 'text-ink-muted';
             return (
               <li
                 key={entry.id}
@@ -58,13 +65,7 @@ export const TodayInOfficeCard: React.FC = () => {
                   <span className="font-medium">{sourceLabel(entry.source)}</span>
                   {entry.detail && <span className="text-ink-muted"> · {entry.detail}</span>}
                 </span>
-                <span
-                  className={`font-mono font-medium shrink-0 ${
-                    isIncome ? 'text-success-fg' : 'text-danger-fg'
-                  }`}
-                >
-                  {formatSignedMoney(entry.amount, { decimals: 0, plus: true })}
-                </span>
+                <span className={`font-mono font-medium shrink-0 ${tone}`}>{figure.text}</span>
               </li>
             );
           })}

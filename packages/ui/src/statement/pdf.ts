@@ -1,5 +1,5 @@
 import type { LedgerDocProps, LedgerDocRow } from '../services/reports/ledgerDoc.js';
-import type { Statement } from './model.js';
+import type { LedgerStatement } from './model.js';
 import { STATEMENT_HEADERS, closingFigures, lineDate, statementLines } from './lines.js';
 
 /** The part of `LedgerDoc`'s props a statement decides. */
@@ -15,7 +15,7 @@ export type StatementDocProps = Pick<
  *
  * @param closingNote what the closing balance means ("Due from customer").
  */
-export function statementDocProps(s: Statement, closingNote?: string): StatementDocProps {
+export function statementDocProps(s: LedgerStatement, closingNote?: string): StatementDocProps {
   const rows = statementLines(s)
     .filter((l) => !l.opening)
     .map((l): LedgerDocRow => ({

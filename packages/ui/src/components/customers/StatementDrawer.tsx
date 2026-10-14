@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Drawer } from '../Drawer.js';
-import { StatementView, buildStatement, partyEntries } from '../../statement/index.js';
+import { StatementView, buildLedgerStatement, partyEntries } from '../../statement/index.js';
 import { Button, DataSection, Icon } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
 import { useCustomerLedger } from '../../query/hooks.js';
@@ -31,7 +31,7 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({
   const ledgerQ = useCustomerLedger(customer?.id);
   // All-time ledger: no opening balance, the running balance starts at zero.
   const statement = useMemo(
-    () => buildStatement(partyEntries(ledgerQ.data ?? [], 'customer'), { kind: 'customer' }),
+    () => buildLedgerStatement(partyEntries(ledgerQ.data ?? [], 'customer'), { kind: 'customer' }),
     [ledgerQ.data],
   );
 
@@ -235,6 +235,7 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({
               >
                 <StatementView
                   statement={statement}
+                  scrollToEnd
                   label={`${customer.name} statement`}
                   emptyMessage="No transaction history found for this account."
                 />

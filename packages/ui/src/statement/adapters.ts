@@ -1,11 +1,11 @@
 import { formatShiftLabel } from '@pump/shared';
 import { ledgerQuantityLabel } from '../utils/ledgerQuantity.js';
 import { accountTypeLabel } from '../utils/ledgerLabels.js';
-import type { DateBasis, StatementEntry } from './model.js';
+import type { DateBasis, LedgerStatementEntry } from './model.js';
 import { sourceLabel } from './sources.js';
 
 /**
- * Adapters: each ledger the API serves, turned into `StatementEntry` rows. A
+ * Adapters: each ledger the API serves, turned into `LedgerStatementEntry` rows. A
  * new ledger plugs in here; the statement, its screen and its PDF do not change.
  */
 
@@ -156,7 +156,7 @@ export function describeLedgerRow(
  * line as the detail, a Collection's reference on its own, the signed amount
  * and the server's running balance when it sent one.
  */
-export function partyEntries(rows: readonly LedgerRow[], kind: PartyKind): StatementEntry[] {
+export function partyEntries(rows: readonly LedgerRow[], kind: PartyKind): LedgerStatementEntry[] {
   return rows.map((r, i) => {
     const reference = kind === 'customer' ? clean(r.reference) : null;
     const { label, meta, detail } = describeLedgerRow({ ...r, reference: null }, kind);
@@ -223,7 +223,7 @@ const defaultDetail = (m: MoneyMovement) =>
 export function moneyEntries(
   movements: readonly MoneyMovement[],
   { owner = false, detail = defaultDetail }: MoneyEntryOptions = {},
-): StatementEntry[] {
+): LedgerStatementEntry[] {
   return movements.map((m) => {
     const amount = Number(m.amount ?? 0) || 0;
     const raises = owner ? m.direction === 'out' : m.direction === 'in';
@@ -258,7 +258,7 @@ interface CashBookAccountLike {
  */
 export function officeRecords(
   accounts: readonly CashBookAccountLike[] | null | undefined,
-): StatementEntry[] {
+): LedgerStatementEntry[] {
   const legs: MoneyMovement[] = [];
   for (const a of accounts ?? []) {
     for (const e of a.entries ?? []) legs.push({ ...e, accountName: a.name });

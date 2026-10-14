@@ -100,6 +100,98 @@ describe('DailyCashBook', () => {
     expect(within(table).getByText('Expense')).toBeTruthy();
   });
 
+  const cashEntries = [
+    {
+      id: 'e1',
+      direction: 'in',
+      amount: 700,
+      sourceType: 'SALE_CASH',
+      sourceId: 's1',
+      createdAt: '2026-03-01T10:00:00.000Z',
+    },
+    {
+      id: 'e2',
+      direction: 'out',
+      amount: 50,
+      sourceType: 'EXPENSE',
+      sourceId: 'x1',
+      createdAt: '2026-03-01T11:00:00.000Z',
+    },
+  ];
+
+  it('scrolls the drawer to the latest row and the closing line when it opens', () => {
+    const scrolled: Element[] = [];
+    const scrollIntoView = vi.fn(function (this: Element) {
+      scrolled.push(this);
+    });
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const qc = seed('2026-03-01', [
+      account({
+        id: 'c',
+        name: 'Cash in Hand',
+        accountType: 'CASH_IN_HAND',
+        opening: 100,
+        moneyIn: 700,
+        moneyOut: 50,
+        closing: 750,
+        entries: cashEntries,
+      }),
+    ]);
+    renderWithProviders(<DailyCashBook selectedStation={STATION} />, { queryClient: qc });
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('row', { name: 'Cash in Hand entries' }));
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'end' });
+    // What it scrolls to sits after the table, below the closing line.
+    const target = scrolled[0];
+    const table = screen.getByRole('table', { name: 'Cash in Hand entries' });
+    expect(table.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  });
+
+  it("prints the server's opening and closing when they add up, and says so when they don't", () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const qc = seed('2026-03-01', [
+      account({
+        id: 'c',
+        name: 'Cash in Hand',
+        accountType: 'CASH_IN_HAND',
+        opening: 100,
+        moneyIn: 700,
+        moneyOut: 50,
+        closing: 750,
+        entries: cashEntries,
+      }),
+      account({
+        id: 'b',
+        name: 'HDFC',
+        accountType: 'BANK',
+        opening: 100,
+        moneyIn: 700,
+        moneyOut: 50,
+        // Not opening + in − out: the entries are the truth the drawer shows.
+        closing: 999,
+        entries: cashEntries,
+      }),
+    ]);
+    renderWithProviders(<DailyCashBook selectedStation={STATION} />, { queryClient: qc });
+
+    fireEvent.click(screen.getByRole('row', { name: 'Cash in Hand entries' }));
+    let table = screen.getByRole('table', { name: 'Cash in Hand entries' });
+    expect(table.querySelector('tfoot')!.textContent).toContain('750.00');
+    expect(screen.queryByRole('note')).toBeNull();
+    cleanup();
+
+    renderWithProviders(<DailyCashBook selectedStation={STATION} />, { queryClient: qc });
+    fireEvent.click(screen.getByRole('row', { name: 'HDFC entries' }));
+    table = screen.getByRole('table', { name: 'HDFC entries' });
+    expect(table.querySelector('tfoot')!.textContent).toContain('750.00');
+    expect(table.querySelector('tfoot')!.textContent).not.toContain('999');
+    expect(screen.getByRole('note').textContent).toMatch(/don.t add up/);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it('steps back a day and shows the empty state when no accounts exist', () => {
     const qc = seed('2026-03-01', []);
     qc.setQueryData(queryKeys.dailyCashBook('st-1', '2026-02-28'), {

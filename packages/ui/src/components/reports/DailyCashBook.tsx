@@ -7,7 +7,7 @@ import { DateField } from '../primitives/Field.js';
 import { Drawer } from '../Drawer.js';
 import { inr } from '../../utils/format.js';
 import { accountTypeLabel } from '../../utils/ledgerLabels.js';
-import { StatementView, buildStatement, moneyEntries } from '../../statement/index.js';
+import { StatementView, buildLedgerStatement, moneyEntries } from '../../statement/index.js';
 import { addDays, cashAccountTotals, sortCashBookAccounts } from '../../utils/cashBook.js';
 import {
   Button,
@@ -258,12 +258,18 @@ const AccountDayEntries: React.FC<{
 }> = ({ account, timeOf }) => {
   const statement = useMemo(
     () =>
-      buildStatement(
+      buildLedgerStatement(
         moneyEntries(account.entries, {
           detail: (e) =>
             [e.createdAt && timeOf(e.createdAt), e.partyName, e.notes].filter(Boolean).join(' · '),
         }),
-        { kind: 'account', opening: account.opening },
+        // The server's opening, money in / out and closing, checked against the entries.
+        {
+          kind: 'account',
+          opening: account.opening,
+          closing: account.closing,
+          totals: { debit: account.moneyIn, credit: account.moneyOut },
+        },
       ),
     [account, timeOf],
   );
@@ -274,7 +280,7 @@ const AccountDayEntries: React.FC<{
           {accountTypeLabel(account.accountType)}
         </Chip>
       </div>
-      <StatementView statement={statement} label={`${account.name} entries`} />
+      <StatementView statement={statement} label={`${account.name} entries`} scrollToEnd />
     </div>
   );
 };

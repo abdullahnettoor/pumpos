@@ -1,5 +1,4 @@
-import { formatDate } from '../utils/format.js';
-import { rowDetail, type Statement } from './model.js';
+import { rowDetail, type LedgerStatement } from './model.js';
 
 /**
  * What both views print: the column headers, the lines (an opening line when
@@ -35,11 +34,26 @@ export interface StatementLine {
   opening?: true;
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * A statement's date as every view prints it, the PDF's period header
+ * included: `07 Oct 2026`. Read from the `YYYY-MM-DD` parts, never through a
+ * locale (en-IN / en-GB print "Sept") or a time zone (a calendar date has none).
+ * Anything else prints as given; nothing prints blank.
+ */
+export function statementDate(date: string | null | undefined): string {
+  if (!date) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const month = m ? MONTHS[Number(m[2]) - 1] : undefined;
+  return m && month ? `${m[3]} ${month} ${m[1]}` : date;
+}
+
 /** A line's date as both views print it: `09 Oct 2026`, blank when undated. */
-export const lineDate = (date: string): string => (date ? formatDate(date) : '');
+export const lineDate = (date: string): string => statementDate(date);
 
 /** The lines of a statement, top to bottom. */
-export function statementLines(s: Statement): StatementLine[] {
+export function statementLines(s: LedgerStatement): StatementLine[] {
   const rows = s.rows.map((r): StatementLine => ({
     id: r.id,
     date: r.date,
@@ -66,7 +80,7 @@ export function statementLines(s: Statement): StatementLine[] {
 }
 
 /** The closing line's figures: the column totals and the closing balance. */
-export const closingFigures = (s: Statement) => ({
+export const closingFigures = (s: LedgerStatement) => ({
   debit: s.totals.debit,
   credit: s.totals.credit,
   balance: s.closing,

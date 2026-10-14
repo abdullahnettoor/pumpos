@@ -409,6 +409,36 @@ describe('TodayInOfficeCard (Today in the office)', () => {
     expect(onNavigate).not.toHaveBeenCalled();
   });
 
+  it('prints a zero entry as a plain, untoned ₹0', () => {
+    hooks.useDailyCashBook.mockReturnValue(
+      ok({
+        accounts: [
+          {
+            id: 'acc-1',
+            name: 'Cash in Hand',
+            accountType: 'CASH_IN_HAND',
+            entries: [
+              {
+                id: 'z',
+                direction: 'in',
+                amount: 0,
+                sourceType: 'ADJUSTMENT',
+                notes: 'Recount',
+                createdAt: '2026-10-12T09:00:00Z',
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    mount(<TodayInOfficeCard />);
+    const list = screen.getByTestId('office-records-list').textContent ?? '';
+    expect(list).toContain('₹0');
+    expect(list).not.toContain('+₹0');
+    // Neither money in (green) nor money out (red).
+    expect(screen.getByText('₹0').className).toContain('text-ink-muted');
+  });
+
   it('the Money column header carries the single Daily cash book link', () => {
     hooks.useDailyDssrPreview.mockReturnValue(ok(null));
     hooks.useInsightsSales.mockReturnValue(ok(null));

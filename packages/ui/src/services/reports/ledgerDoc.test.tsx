@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import React from 'react';
-import { LedgerDoc, type LedgerDocProps } from './ledgerDoc.js';
+import { LedgerDoc, generatedLabel, type LedgerDocProps } from './ledgerDoc.js';
 import { C } from './shiftSummaryDoc.js';
 
 /**
@@ -91,6 +91,11 @@ describe('LedgerDoc as the desktop Unified Ledger uses it', () => {
     expect(line({ ...desktopProps, generatedAt: '2026-10-10T08:30:00Z' })).toContain(
       '\u2022 Generated',
     );
+  });
+
+  it('dates the generated line in the statement style, never "Sept"', () => {
+    const at = new Date(2026, 8, 30, 14, 5).toISOString();
+    expect(generatedLabel(at)).toMatch(/^30 Sep 2026, 02:05 pm$/i);
   });
 });
 

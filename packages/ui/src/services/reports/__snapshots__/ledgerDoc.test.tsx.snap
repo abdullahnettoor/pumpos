@@ -614,7 +614,7 @@ exports[`LedgerDoc as the desktop Unified Ledger uses it > lays out exactly the 
           {
             "children": [
               {
-                "children": "Total",
+                "children": "Closing balance",
                 "props": {
                   "style": [
                     {

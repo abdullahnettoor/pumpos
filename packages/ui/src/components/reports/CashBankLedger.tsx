@@ -3,7 +3,7 @@ import { useFinanceMovements } from '../../query/hooks.js';
 import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { Segmented } from '../primitives/Segmented.js';
-import { StatementView, buildStatement, moneyEntries } from '../../statement/index.js';
+import { StatementView, buildLedgerStatement, moneyEntries } from '../../statement/index.js';
 import { inr } from '../../utils/format.js';
 import { DataSection, KpiStrip, KpiTile, Panel } from '../../pump-ds/index.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
@@ -45,7 +45,7 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
       .filter((o: any) => GROUP[o.accountType] === account)
       .reduce((acc: number, o: any) => acc + Number(o.opening || 0), 0);
     const movements = (data?.movements || []).filter((m: any) => GROUP[m.accountType] === account);
-    return buildStatement(
+    return buildLedgerStatement(
       moneyEntries(movements, {
         detail: (m) => [m.accountName, m.notes].filter(Boolean).join(' · '),
       }),
@@ -109,20 +109,20 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
         />
       </KpiStrip>
 
-      <DataSection
-        title={`${account.toLowerCase()} ledger`}
-        query={ledgerQ}
-        placeholderHeight={240}
-        shape="bare"
-      >
-        <Panel title={`${account} ledger`}>
+      <Panel title={`${account} ledger`}>
+        <DataSection
+          title={`${account.toLowerCase()} ledger`}
+          query={ledgerQ}
+          placeholderHeight={240}
+          shape="bare"
+        >
           <StatementView
             statement={statement}
             label={`${account} ledger`}
             emptyMessage={`No ${account.toLowerCase()} movements in this range.`}
           />
-        </Panel>
-      </DataSection>
+        </DataSection>
+      </Panel>
     </div>
   );
 };

@@ -91,6 +91,8 @@ export {
   describeLedgerRow,
   fullDayLabel,
   monthLabel,
+  legacyPartyStatementDoc,
+  partyLedgerStatement,
   partyStatementDoc,
   statementFilePrefix,
   supplierStatementParty,
@@ -98,6 +100,7 @@ export {
 export type {
   LedgerRow,
   PartyKind,
+  PartyStatementDoc,
   PartyStatementInput,
   StatementCustomer,
   StatementSupplier,

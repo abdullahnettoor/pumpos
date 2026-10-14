@@ -1,5 +1,7 @@
 import React from 'react';
 import { Document, Page, View, Text } from '@react-pdf/renderer';
+import { statementDate } from '../../statement/lines.js';
+import { formatTime } from '../../utils/format.js';
 import {
   C,
   s,
@@ -8,7 +10,6 @@ import {
   LetterheadBand,
   inr,
   inr0,
-  fmtDateTime,
   type Col,
   type Cell,
   type Letterhead,
@@ -58,6 +59,19 @@ export interface LedgerDocProps {
 }
 
 /**
+ * When the PDF was made, in the statement's one date style plus the time:
+ * `14 Oct 2026, 02:00 pm` (on this device's clock).
+ */
+export function generatedLabel(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return '';
+  const day = [at.getFullYear(), at.getMonth() + 1, at.getDate()]
+    .map((n) => String(n).padStart(2, '0'))
+    .join('-');
+  return `${statementDate(day)}, ${formatTime(at)}`;
+}
+
+/**
  * The statement table of a `LedgerDoc`, cell by cell: the columns, the opening
  * line, the rows and the closing (or total) line. Exported so a test can read
  * what the PDF prints next to what the screen prints (`statement/parity`).
@@ -90,7 +104,7 @@ export function ledgerDocTable({
     { text: inr(r.balance) },
   ]);
   const totalRow: Cell[] = [
-    closing ? { text: 'Closing balance', detail: closing.note } : { text: 'Total' },
+    { text: 'Closing balance', detail: closing?.note },
     { text: '' },
     { text: inr(totals.debit) },
     { text: inr(totals.credit) },
@@ -164,7 +178,7 @@ export const LedgerDoc: React.FC<LedgerDocProps> = ({
         />
         <Text style={s.sub}>
           {entityName} {'\u2022'} {periodLabel}
-          {generatedAt ? ` \u2022 Generated ${fmtDateTime(generatedAt)}` : ''}
+          {generatedAt ? ` \u2022 Generated ${generatedLabel(generatedAt)}` : ''}
         </Text>
         {(partyLines ?? []).map((line, i) => (
           <Text key={i} style={[s.sub, { marginTop: 2 }]}>

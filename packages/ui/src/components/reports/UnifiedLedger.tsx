@@ -8,11 +8,12 @@ import {
 } from '../../query/hooks.js';
 import {
   StatementView,
-  buildStatement,
+  buildLedgerStatement,
   moneyEntries,
   partyEntries,
+  statementDate,
   statementDocProps,
-  type StatementEntry,
+  type LedgerStatementEntry,
   type StatementKind,
 } from '../../statement/index.js';
 import { Combobox } from '../primitives/Combobox.js';
@@ -23,6 +24,7 @@ import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr, formatDate } from '../../utils/format.js';
 import { paperFromStation } from '../../services/reports/reportConfig.js';
 import { ledgerFileName } from '../../services/reports/ledgerFileName.js';
+import { closingNote } from '../../services/reports/partyStatement.js';
 import {
   KpiStrip,
   KpiTile,
@@ -74,7 +76,7 @@ interface LedgerSource {
   emptyText: string;
   caption: string;
   /** The API rows as statement entries. */
-  entries: (rows: any[]) => StatementEntry[];
+  entries: (rows: any[]) => LedgerStatementEntry[];
   /** Tone of the closing-balance KPI given the net value. */
   balanceTone: (net: number) => BalanceTone;
 }
@@ -271,7 +273,7 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
 
   const statement = useMemo(
     () =>
-      buildStatement(resolvedCfg.entries(entries), {
+      buildLedgerStatement(resolvedCfg.entries(entries), {
         kind: resolvedCfg.kind,
         opening: openingBalance,
         clock: { timeZone, dayStartsAt },
@@ -295,14 +297,18 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
         import('../../services/reports/ledgerDoc.js'),
         import('../../services/reports/letterhead.js'),
       ]);
+      const party =
+        committed.type === 'customer' || committed.type === 'supplier' ? committed.type : null;
       const entityName =
         committed.entityLabel || labelForType(committed.type) || TYPE_LABEL[committed.type];
       const element = React.createElement(LedgerDoc, {
         title: `${TYPE_LABEL[committed.type].toUpperCase()} LEDGER`,
         entityName,
-        periodLabel: `${fmtDate(committed.from)} — ${fmtDate(committed.to)}`,
-        // The same lines the screen prints (Statement module).
-        ...statementDocProps(statement),
+        periodLabel: `${statementDate(committed.from)} — ${statementDate(committed.to)}`,
+        // The same lines the screen prints (Statement module). A party's balance
+        // below zero is an advance, worded as on the party statement, not a shortfall.
+        ...statementDocProps(statement, party ? closingNote(party, statement.closing) : undefined),
+        partyAccount: !!party,
         stationName: selectedStation?.name,
         letterhead: letterheadFromStation(selectedStation),
         generatedAt: new Date().toISOString(),

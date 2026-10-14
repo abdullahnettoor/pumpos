@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { RangedPartyLedger } from '@pump/shared';
 import {
   customerStatementParty,
   dateOf,
+  legacyPartyStatementDoc,
   partyStatementDoc,
   statementFilePrefix,
   supplierStatementParty,
@@ -48,15 +49,20 @@ const customerLedger: RangedPartyLedger = {
   ],
 };
 
+const input = (ledger: RangedPartyLedger, kind: PartyKind) => ({
+  kind,
+  party: { name: 'Acme Transport', lines: ['Fleet · FL-001'] },
+  range: { from: '2026-10-01', to: '2026-10-31' },
+  periodLabel: 'October 2026',
+  ledger,
+  generatedAt: new Date('2026-10-10T08:30:00.000Z'),
+});
+
 const build = (ledger: RangedPartyLedger, kind: PartyKind = 'customer') =>
-  partyStatementDoc({
-    kind,
-    party: { name: 'Acme Transport', lines: ['Fleet · FL-001'] },
-    range: { from: '2026-10-01', to: '2026-10-31' },
-    periodLabel: 'October 2026',
-    ledger,
-    generatedAt: new Date('2026-10-10T08:30:00.000Z'),
-  });
+  partyStatementDoc(input(ledger, kind));
+
+const buildLegacy = (ledger: RangedPartyLedger, kind: PartyKind = 'customer') =>
+  legacyPartyStatementDoc(input(ledger, kind));
 
 describe('partyStatementDoc', () => {
   it('carries the party, the range label and the server opening balance', () => {
@@ -95,13 +101,18 @@ describe('partyStatementDoc', () => {
     ]);
   });
 
-  it("prints each row's running balance as the server computed it", () => {
-    // Deliberately not what a client sum would give: the PDF must not recompute it.
+  it("never prints server balances the entries don't add up to", () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const odd: RangedPartyLedger = {
       ...customerLedger,
+      closingBalance: '777.00',
       entries: customerLedger.entries.map((e) => ({ ...e, runningBalance: '777.00' })),
     };
-    expect(build(odd).rows.map((r) => r.balance)).toEqual([777, 777]);
+    const d = build(odd);
+    expect(d.rows.map((r) => r.balance)).toEqual([13500, 9500]);
+    expect(d.totals.balance).toBe(9500);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('opening + debits - credits reconciles to the closing balance', () => {
@@ -151,18 +162,31 @@ describe('partyStatementDoc', () => {
   });
 
   it('names an advance the same way for a customer who has paid ahead', () => {
-    const d = build({ ...customerLedger, closingBalance: '-1200.00' });
+    const d = build({
+      periodOpeningBalance: '0.00',
+      closingBalance: '-1200.00',
+      hasEarlier: false,
+      entries: [entry('a', 'Collection', '1200.00', '2026-10-05', '-1200.00')],
+    });
     expect(d.closing).toEqual({ note: 'Advance' });
   });
 
   it('names what a positive balance means for each kind, and a zero one', () => {
     expect(build(customerLedger).closing).toEqual({ note: 'Due from customer' });
-    expect(build({ ...customerLedger, closingBalance: '9500.00' }, 'supplier').closing).toEqual({
-      note: 'Payable to supplier',
-    });
-    expect(build({ ...customerLedger, closingBalance: '0.00' }).closing).toEqual({
-      note: 'Settled',
-    });
+    const owed: RangedPartyLedger = {
+      periodOpeningBalance: '0.00',
+      closingBalance: '900.00',
+      hasEarlier: false,
+      entries: [entry('a', 'Purchase', '900.00', '2026-10-05', '900.00')],
+    };
+    expect(build(owed, 'supplier').closing).toEqual({ note: 'Payable to supplier' });
+    const settled: RangedPartyLedger = {
+      periodOpeningBalance: '0.00',
+      closingBalance: '0.00',
+      hasEarlier: false,
+      entries: [],
+    };
+    expect(build(settled).closing).toEqual({ note: 'Settled' });
   });
 
   it('sends a negative Adjustment to the credit column and a positive one to the debit', () => {
@@ -184,6 +208,145 @@ describe('partyStatementDoc', () => {
 
   it('is an opening balance carried to closing when nothing happened in the range', () => {
     const d = build({
+      periodOpeningBalance: '1200.00',
+      closingBalance: '1200.00',
+      hasEarlier: true,
+      entries: [],
+    });
+    expect(d.rows).toEqual([]);
+    expect(d.totals).toEqual({ debit: 0, credit: 0, balance: 1200 });
+    expect(d.opening).toBe(1200);
+  });
+});
+
+describe('legacyPartyStatementDoc: the mobile PDF, unchanged until the mobile statement moves', () => {
+  it('carries the party, the range label and the server opening balance', () => {
+    expect(buildLegacy(customerLedger)).toMatchObject({
+      title: 'CUSTOMER STATEMENT',
+      entityName: 'Acme Transport',
+      periodLabel: 'October 2026',
+      partyLines: ['Fleet · FL-001'],
+      partyAccount: true,
+      opening: 5000,
+      totals: { debit: 8500, credit: 4000, balance: 9500 },
+      debitLabel: 'Sales',
+      creditLabel: 'Received',
+      generatedAt: '2026-10-10T08:30:00.000Z',
+    });
+  });
+
+  it('puts a sale in the debit column and a collection in the credit column, oldest first', () => {
+    expect(buildLegacy(customerLedger).rows).toEqual([
+      {
+        dateLabel: '7 Oct 2026',
+        particulars: 'Credit Sale',
+        detail: 'Shift 20261007-1 · 120 L Diesel · KL-11-AB-4521',
+        debit: 8500,
+        credit: 0,
+        balance: 13500,
+      },
+      {
+        dateLabel: '18 Oct 2026',
+        particulars: 'Payment received',
+        detail: 'UPI · Ref COL-000042',
+        debit: 0,
+        credit: 4000,
+        balance: 9500,
+      },
+    ]);
+  });
+
+  it("prints each row's running balance as the server computed it", () => {
+    // Deliberately not what a client sum would give: the PDF must not recompute it.
+    const odd: RangedPartyLedger = {
+      ...customerLedger,
+      entries: customerLedger.entries.map((e) => ({ ...e, runningBalance: '777.00' })),
+    };
+    expect(buildLegacy(odd).rows.map((r) => r.balance)).toEqual([777, 777]);
+  });
+
+  it('opening + debits - credits reconciles to the closing balance', () => {
+    const d = buildLegacy(customerLedger);
+    expect(d.opening! + d.totals.debit - d.totals.credit).toBe(d.totals.balance);
+  });
+
+  it('adds paise exactly (no float drift in the totals)', () => {
+    const d = buildLegacy({
+      periodOpeningBalance: '0.00',
+      closingBalance: '0.30',
+      hasEarlier: false,
+      entries: [
+        entry('a', 'Credit Sale', '0.10', '2026-10-01', '0.10'),
+        entry('b', 'Credit Sale', '0.20', '2026-10-02', '0.30'),
+      ],
+    });
+    expect(d.totals.debit).toBe(0.3);
+  });
+
+  it('treats a supplier Payment as the credit; a negative balance is an advance', () => {
+    const d = buildLegacy(
+      {
+        periodOpeningBalance: '1000.00',
+        closingBalance: '-500.00',
+        hasEarlier: false,
+        entries: [
+          entry('p', 'Purchase', '2000.00', '2026-10-03', '3000.00', {
+            invoiceNumber: 'INV-77',
+            productName: 'HSD',
+          }),
+          entry('q', 'Payment', '3500.00', '2026-10-09', '-500.00', {
+            method: 'BANK',
+            fundingAccountName: 'HDFC Current',
+          }),
+        ],
+      },
+      'supplier',
+    );
+    expect(d.title).toBe('SUPPLIER STATEMENT');
+    expect(d.rows.map((r) => [r.particulars, r.debit, r.credit, r.balance])).toEqual([
+      ['Purchase · HSD', 2000, 0, 3000],
+      ['Payment made', 0, 3500, -500],
+    ]);
+    expect(d.totals.balance).toBe(-500);
+    expect(d.closing).toEqual({ note: 'Advance' });
+  });
+
+  it('names an advance the same way for a customer who has paid ahead', () => {
+    const d = buildLegacy({ ...customerLedger, closingBalance: '-1200.00' });
+    expect(d.closing).toEqual({ note: 'Advance' });
+  });
+
+  it('names what a positive balance means for each kind, and a zero one', () => {
+    expect(buildLegacy(customerLedger).closing).toEqual({ note: 'Due from customer' });
+    expect(
+      buildLegacy({ ...customerLedger, closingBalance: '9500.00' }, 'supplier').closing,
+    ).toEqual({
+      note: 'Payable to supplier',
+    });
+    expect(buildLegacy({ ...customerLedger, closingBalance: '0.00' }).closing).toEqual({
+      note: 'Settled',
+    });
+  });
+
+  it('sends a negative Adjustment to the credit column and a positive one to the debit', () => {
+    const d = buildLegacy({
+      periodOpeningBalance: '100.00',
+      closingBalance: '70.00',
+      hasEarlier: false,
+      entries: [
+        entry('x', 'Adjustment', '-50.00', '2026-10-02', '50.00', { notes: 'Rounding' }),
+        entry('y', 'Adjustment', '20.00', '2026-10-03', '70.00'),
+      ],
+    });
+    expect(d.rows.map((r) => [r.debit, r.credit])).toEqual([
+      [0, 50],
+      [20, 0],
+    ]);
+    expect(d.totals).toMatchObject({ debit: 20, credit: 50 });
+  });
+
+  it('is an opening balance carried to closing when nothing happened in the range', () => {
+    const d = buildLegacy({
       periodOpeningBalance: '1200.00',
       closingBalance: '1200.00',
       hasEarlier: true,
@@ -260,8 +423,22 @@ describe('dateOf', () => {
       '2026-10-06',
     );
     // 20:00 UTC on the 9th is 01:30 on the 10th in Asia/Kolkata: not the UTC slice.
-    expect(dateOf({ createdAt: '2026-10-09T20:00:00Z' }, 'Asia/Kolkata')).toBe('2026-10-10');
-    expect(dateOf({ createdAt: '2026-10-09T20:00:00Z' }, 'UTC')).toBe('2026-10-09');
+    expect(dateOf({ createdAt: '2026-10-09T20:00:00Z' }, { timeZone: 'Asia/Kolkata' })).toBe(
+      '2026-10-10',
+    );
+    expect(dateOf({ createdAt: '2026-10-09T20:00:00Z' }, { timeZone: 'UTC' })).toBe('2026-10-09');
+  });
+
+  it("places an undated row by its own basis: a sale's Business Date, a Collection's Entry Date", () => {
+    // 01:30 IST on the 10th, before a 06:00 Day Start.
+    const clock = { timeZone: 'Asia/Kolkata', dayStartsAt: '06:00' };
+    const at = '2026-10-09T20:00:00Z';
+    expect(dateOf({ transactionType: 'Credit Sale', createdAt: at }, clock)).toBe('2026-10-09');
+    expect(dateOf({ transactionType: 'Collection', createdAt: at }, clock)).toBe('2026-10-10');
+    // Every supplier row is an office record (Entry Date).
+    expect(
+      dateOf({ transactionType: 'Purchase', createdAt: at }, { ...clock, kind: 'supplier' }),
+    ).toBe('2026-10-10');
   });
 
   it('is empty for a row with no date at all', () => {

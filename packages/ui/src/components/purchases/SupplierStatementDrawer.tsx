@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Drawer } from '../Drawer.js';
-import { StatementView, buildStatement, partyEntries } from '../../statement/index.js';
+import { StatementView, buildLedgerStatement, partyEntries } from '../../statement/index.js';
 import { Button, DataSection, Icon, StatusChip } from '../../pump-ds/index.js';
 import { partyState } from '@pump/shared';
 import { inr } from '../../utils/format.js';
@@ -32,7 +32,7 @@ export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = (
   const ledgerQ = useSupplierLedger(supplier?.id);
   // All-time ledger: no opening balance, the running balance starts at zero.
   const statement = useMemo(
-    () => buildStatement(partyEntries(ledgerQ.data ?? [], 'supplier'), { kind: 'supplier' }),
+    () => buildLedgerStatement(partyEntries(ledgerQ.data ?? [], 'supplier'), { kind: 'supplier' }),
     [ledgerQ.data],
   );
   const owed = Number(supplier?.currentBalance || 0);
@@ -154,6 +154,7 @@ export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = (
               >
                 <StatementView
                   statement={statement}
+                  scrollToEnd
                   label={`${supplier.name} statement`}
                   emptyMessage="No transactions recorded with this supplier yet."
                 />

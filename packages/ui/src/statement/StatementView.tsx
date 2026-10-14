@@ -1,9 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { StatementTable } from '../pump-ds/statement-table/StatementTable.js';
 import type { TableColumn } from '../pump-ds/table/columns.js';
 import { cn } from '../pump-ds/lib/cn.js';
 import { formatMoney } from '../utils/format.js';
-import type { Statement } from './model.js';
+import type { LedgerStatement } from './model.js';
 import {
   CLOSING_LABEL,
   NO_ROWS_IN_PERIOD,
@@ -15,13 +15,23 @@ import {
 } from './lines.js';
 
 export interface StatementViewProps {
-  statement: Statement;
+  statement: LedgerStatement;
   /** Accessible name of the table ("Acme Transport statement"). */
   label: string;
   /** Shown when an all-time statement has no rows at all. */
   emptyMessage?: string;
+  /**
+   * Scroll the latest row and the closing line into view when the statement
+   * shows or grows: an all-time statement is oldest first, so its news is at
+   * the bottom. For the statement drawers.
+   */
+  scrollToEnd?: boolean;
   className?: string;
 }
+
+/** Shown above a statement whose entries don't add up to the server's balances. */
+export const NOT_RECONCILED_NOTE =
+  "These entries don't add up to the balance on record, so the balances shown are worked out from the entries.";
 
 /** A blank cell for a side the line did not move, as the PDF prints it. */
 const money = (v: number | null): string => (v ? formatMoney(v) : '');
@@ -82,15 +92,26 @@ export const StatementView: React.FC<StatementViewProps> = ({
   statement,
   label,
   emptyMessage = 'No transactions yet.',
+  scrollToEnd = false,
   className,
 }) => {
   const lines = useMemo(() => statementLines(statement), [statement]);
-  const noRows = statement.rows.length === 0;
+  const end = useRef<HTMLDivElement>(null);
+  const rowCount = statement.rows.length;
+  useEffect(() => {
+    if (scrollToEnd && rowCount > 0) end.current?.scrollIntoView?.({ block: 'end' });
+  }, [scrollToEnd, rowCount]);
+  const noRows = rowCount === 0;
   if (noRows && statement.opening === null) {
     return <p className="px-2 py-1.5 text-xs text-ink-muted">{emptyMessage}</p>;
   }
   return (
     <div className={cn('flex flex-col gap-1', className)}>
+      {!statement.reconciled && (
+        <p role="note" className="rounded-input bg-warning-bg px-3 py-2 text-xs text-warning-fg">
+          {NOT_RECONCILED_NOTE}
+        </p>
+      )}
       <StatementTable<StatementLine>
         label={label}
         className="text-xs"
@@ -100,6 +121,7 @@ export const StatementView: React.FC<StatementViewProps> = ({
         totalRow={{ label: CLOSING_LABEL, values: closingFigures(statement) }}
       />
       {noRows && <p className="px-2 text-xs text-ink-muted">{NO_ROWS_IN_PERIOD}</p>}
+      <div ref={end} aria-hidden="true" />
     </div>
   );
 };
