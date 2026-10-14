@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Chip, EmptyState, Panel, formatDensity, formatTempC } from '../../../pump-ds/index.js';
-import { formatClockInZone } from '../../../utils/format.js';
+import { Chip, EmptyState, Panel } from '../../../pump-ds/index.js';
+import { formatClockInZone, formatDensity, formatTemperature } from '../../../utils/format.js';
 import { DeltaChip } from './DeltaChip.js';
+import { DENSITY_KIND_TONE } from './densityKind.js';
 import type { DensityReadingWithContext } from '@pump/shared';
 
 export interface RegisterViewProps {
@@ -10,7 +11,7 @@ export interface RegisterViewProps {
   /** The station's jump tolerance (`resolveDecantationSettings`). */
   tolerance: number;
   /** The station's IANA timezone; times never use the device clock. */
-  timeZone: string | undefined;
+  timeZone: string;
 }
 
 const TH =
@@ -28,9 +29,9 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
   const [selectedKind, setSelectedKind] = useState<string>('');
 
   const filtered = useMemo(() => {
-    return readings.filter((r) => {
-      if (selectedProduct && r.productId !== selectedProduct) return false;
-      if (selectedKind && r.kind !== selectedKind) return false;
+    return readings.filter((reading) => {
+      if (selectedProduct && reading.productId !== selectedProduct) return false;
+      if (selectedKind && reading.kind !== selectedKind) return false;
       return true;
     });
   }, [readings, selectedProduct, selectedKind]);
@@ -48,9 +49,9 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
             aria-label="Filter by product"
           >
             <option value="">All products</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.code})
+            {products.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.name} ({product.code})
               </option>
             ))}
           </select>
@@ -93,48 +94,47 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r, index) => {
-                const showDate = r.businessDate !== filtered[index - 1]?.businessDate;
+              {filtered.map((reading, index) => {
+                const showDate = reading.businessDate !== filtered[index - 1]?.businessDate;
                 const sampledLabel =
-                  r.tankName || r.nozzleName || (r.sampledFrom ? r.sampledFrom : '—');
-                const kindTone =
-                  r.kind === 'DECANTATION' ? 'info' : r.kind === 'MORNING' ? 'brand' : 'neutral';
+                  reading.tankName ||
+                  reading.nozzleName ||
+                  (reading.sampledFrom ? reading.sampledFrom : '—');
 
                 return (
-                  <tr key={r.id} className={showDate ? 'border-t-2 border-border-soft' : undefined}>
+                  <tr
+                    key={reading.id}
+                    className={showDate ? 'border-t-2 border-border-soft' : undefined}
+                  >
                     <td className={`${TD} ${showDate ? 'font-semibold' : ''}`}>
-                      {showDate ? r.businessDate : ''}
+                      {showDate ? reading.businessDate : ''}
                     </td>
                     <td className={`${TD} text-ink-muted`}>
-                      {formatClockInZone(r.recordedAt, timeZone)}
+                      {formatClockInZone(reading.recordedAt, timeZone)}
                     </td>
                     <td className={TD}>
-                      <strong>{r.productName || r.productId}</strong>{' '}
-                      <span className="text-ink-muted">· {r.productCode}</span>
+                      <strong>{reading.productName || reading.productId}</strong>{' '}
+                      <span className="text-ink-muted">· {reading.productCode}</span>
                     </td>
                     <td className={TD}>
-                      <Chip size="sm" tone={kindTone}>
-                        {r.kind}
+                      <Chip size="sm" tone={DENSITY_KIND_TONE[reading.kind]}>
+                        {reading.kind}
                       </Chip>
                     </td>
                     <td className={`${TD} text-ink-muted`}>{sampledLabel}</td>
-                    <td className={NUM}>
-                      {r.observedDensity != null ? formatDensity(r.observedDensity) : '—'}
-                    </td>
-                    <td className={NUM}>
-                      {r.observedTempC != null ? formatTempC(r.observedTempC) : '—'}
-                    </td>
-                    <td className={`${NUM} font-semibold`}>{formatDensity(r.density15)}</td>
+                    <td className={NUM}>{formatDensity(reading.observedDensity)}</td>
+                    <td className={NUM}>{formatTemperature(reading.observedTempC)}</td>
+                    <td className={`${NUM} font-semibold`}>{formatDensity(reading.density15)}</td>
                     <td className={`${TD} text-right`}>
                       <DeltaChip
-                        delta={r.delta}
-                        kind={r.kind}
-                        flags={r.flags}
+                        delta={reading.delta}
+                        kind={reading.kind}
+                        flags={reading.flags}
                         tolerance={tolerance}
                       />
                     </td>
                     <td className={`${TD} text-[12px] text-ink-muted`}>
-                      {r.recordedByName || r.recordedBy || '—'}
+                      {reading.recordedByName || reading.recordedBy || '—'}
                     </td>
                   </tr>
                 );

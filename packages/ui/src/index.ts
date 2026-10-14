@@ -197,6 +197,8 @@ export {
   formatSignedMoney,
   signedMoneyParts,
   formatQuantity,
+  formatDensity,
+  formatTemperature,
   formatCompactMoney,
 } from './utils/format.js';
 // signedMoneyParts / FigureSign / SignedFigure: the variance vocabulary (utils/variance.ts, #518) builds on them.

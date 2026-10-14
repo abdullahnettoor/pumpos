@@ -157,13 +157,36 @@ export function formatQuantity(
   const n = Number(value);
   if (!Number.isFinite(n)) return opts.fallback ?? '—';
   const { label, decimals: unitDecimals } = quantityUnit(unit);
-  const decimals = opts.decimals ?? unitDecimals;
+  return `${signedFigure(n, opts.decimals ?? unitDecimals, opts.plus ?? false)} ${label}`;
+}
+
+/** A grouped figure with a true minus (and `+` when `plus`); rounds-to-zero reads unsigned. */
+function signedFigure(n: number, decimals: number, plus: boolean): string {
   const sign = signOf(n, decimals);
   const body = (sign === 'zero' ? 0 : Math.abs(n)).toLocaleString('en-IN', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
-  return `${withSign(sign, body, opts.plus ?? false)} ${label}`;
+  return withSign(sign, body, plus);
+}
+
+/**
+ * A density figure in kg/m³ without its unit, where the label or column names
+ * it: 1 decimal like `formatQuantity` (`741.2`). `plus` signs a change (`+0.6`,
+ * `−5.3`; one that rounds to zero reads `0.0`). A missing reading is `—`.
+ */
+export function formatDensity(
+  value: number | null | undefined,
+  opts: { plus?: boolean } = {},
+): string {
+  if (value == null || !Number.isFinite(value)) return NOT_A_FIGURE;
+  return signedFigure(value, quantityUnit('kg/m³').decimals, opts.plus ?? false);
+}
+
+/** Temperature with at most one decimal: `30 °C`, `28.5 °C`. A missing reading is `—`. */
+export function formatTemperature(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return NOT_A_FIGURE;
+  return `${signedFigure(value, Number.isInteger(Math.round(value * 10) / 10) ? 0 : 1, false)} °C`;
 }
 
 /**

@@ -7,7 +7,7 @@ import type { DensityState } from './densityModel.js';
 
 afterEach(cleanup);
 
-const D = '2026-10-12';
+const BUSINESS_DATE = '2026-10-12';
 const jump: DensityState = {
   kind: 'jump',
   density: 746,
@@ -23,8 +23,7 @@ describe('DensityReading', () => {
       <DensityReading
         state={{ ...jump, kind: 'recorded', change: { delta: 0.6, from: '2026-10-11' } }}
         trend={[740, 741]}
-        timeZone="Pacific/Chatham"
-        businessDate={D}
+        context={{ timeZone: 'Pacific/Chatham', businessDate: BUSINESS_DATE }}
       />,
     );
     const root = container.firstElementChild as HTMLElement;
@@ -39,7 +38,11 @@ describe('DensityReading', () => {
 
   it('marks an unexplained jump in danger, sparkline included', () => {
     const { container } = render(
-      <DensityReading state={jump} trend={[740, 746]} timeZone="Asia/Kolkata" businessDate={D} />,
+      <DensityReading
+        state={jump}
+        trend={[740, 746]}
+        context={{ timeZone: 'Asia/Kolkata', businessDate: BUSINESS_DATE }}
+      />,
     );
     expect(screen.getByText('Unexplained jump')).toBeTruthy();
     expect(screen.getByText('+5.2 vs yday').className).toContain('text-danger-fg');
@@ -52,7 +55,7 @@ describe('DensityReading', () => {
       <DensityReading
         state={{ kind: 'not-recorded', last: 739 }}
         trend={[739]}
-        businessDate={D}
+        context={{ timeZone: 'Asia/Kolkata', businessDate: BUSINESS_DATE }}
         action={<button type="button">Record ›</button>}
       />,
     );

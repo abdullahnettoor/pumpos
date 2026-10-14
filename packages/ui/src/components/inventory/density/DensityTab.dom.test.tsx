@@ -276,13 +276,12 @@ describe('DensityTab · shared density reading (#521)', () => {
     const card = screen.getByTestId('density-card-prod-ms');
     const shown = card.querySelector('[data-state]') as HTMLElement;
 
-    const p = MOCK_TODAY_SUMMARY.products[0];
+    const product = MOCK_TODAY_SUMMARY.products[0];
     const { container } = render(
       <DensityReading
-        state={deriveDensityState(p, MOCK_TODAY_SUMMARY.businessDate, 3)}
-        trend={p.trendValues}
-        timeZone="Pacific/Chatham"
-        businessDate={MOCK_TODAY_SUMMARY.businessDate}
+        state={deriveDensityState(product, MOCK_TODAY_SUMMARY.businessDate, 3)}
+        trend={product.trendValues}
+        context={{ timeZone: 'Pacific/Chatham', businessDate: MOCK_TODAY_SUMMARY.businessDate }}
       />,
     );
     expect(shown.outerHTML).toBe((container.firstElementChild as HTMLElement).outerHTML);
@@ -314,5 +313,28 @@ describe('DensityTab · shared density reading (#521)', () => {
     fireEvent.click(screen.getByRole('radio', { name: /Register/i }));
     expect(screen.getByText('+4.0')).toBeDefined();
     expect(screen.queryByText(/Unexplained jump/)).toBeNull();
+  });
+
+  it('shows no readings or times until the station (timezone, tolerance) loads', () => {
+    const qc = seedChatham();
+    qc.removeQueries({ queryKey: queryKeys.stations() });
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+    expect(screen.queryByTestId('density-card-prod-ms')).toBeNull();
+    expect(screen.queryByText(/am|pm/)).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: /Register/i }));
+    expect(screen.queryByText('Density Register Log')).toBeNull();
+    expect(screen.queryByText(/\d:\d{2} (am|pm)/)).toBeNull();
+  });
+
+  it('a Decantation beyond tolerance takes its routine tone, not the jump tone', () => {
+    const qc = seedChatham();
+    qc.setQueryData(queryKeys.densityReadings(STATION_ID, '', '', '', '', 500), [
+      { ...MOCK_READING_MS, kind: 'DECANTATION', delta: 6 },
+    ]);
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+    fireEvent.click(screen.getByRole('radio', { name: /Register/i }));
+    const chipOf = (text: string) => screen.getByText(text).parentElement as HTMLElement;
+    expect(chipOf('DECANTATION').className).toContain('bg-info-bg text-info-fg');
+    expect(chipOf('+6.0').className).toContain('bg-info-bg text-info-fg');
   });
 });

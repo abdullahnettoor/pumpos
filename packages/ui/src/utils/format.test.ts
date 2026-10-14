@@ -8,6 +8,8 @@ import {
   signedMoneyParts,
   formatQuantity,
   formatCompactMoney,
+  formatDensity,
+  formatTemperature,
 } from './format.js';
 
 describe('formatMoney', () => {
@@ -161,6 +163,35 @@ describe('formatQuantity', () => {
   it('returns a dash for a missing amount', () => {
     expect(formatQuantity(null, 'L')).toBe('—');
     expect(formatQuantity(undefined, 'L', { fallback: '' })).toBe('');
+  });
+});
+
+describe('formatDensity', () => {
+  it('shows a density figure to 1 decimal without the unit', () => {
+    expect(formatDensity(741.24)).toBe('741.2');
+    expect(formatDensity(745)).toBe('745.0');
+  });
+
+  it('signs a change with a plus or a true minus, and zero unsigned', () => {
+    expect(formatDensity(0.64, { plus: true })).toBe('+0.6');
+    expect(formatDensity(-5.25, { plus: true })).toBe('\u22125.3');
+    expect(formatDensity(0, { plus: true })).toBe('0.0');
+    expect(formatDensity(-0.04, { plus: true })).toBe('0.0');
+  });
+
+  it('returns a dash for a missing reading', () => {
+    expect(formatDensity(null)).toBe('—');
+  });
+});
+
+describe('formatTemperature', () => {
+  it('shows degrees Celsius with at most one decimal', () => {
+    expect(formatTemperature(30)).toBe('30 °C');
+    expect(formatTemperature(28.54)).toBe('28.5 °C');
+  });
+
+  it('returns a dash for a missing reading', () => {
+    expect(formatTemperature(null)).toBe('—');
   });
 });
 

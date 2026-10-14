@@ -312,13 +312,13 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
             {/* Computed 15 °C banner */}
             <div
               className={`flex items-center justify-between rounded-md border border-border-soft px-3 py-2 ${
-                calc15 ? 'bg-brand/10' : 'bg-surface'
+                calc15 ? 'bg-info-bg' : 'bg-surface'
               }`}
             >
               <span className="text-[12px] text-ink-muted">Computed density at 15 °C:</span>
               <strong
                 className={`font-mono text-[18px] tabular-nums ${
-                  calc15 ? 'text-brand' : 'text-ink-faint'
+                  calc15 ? 'text-info-fg' : 'text-ink-faint'
                 }`}
               >
                 {calc15 != null ? `${calc15.toFixed(2)} kg/m³` : '— — —'}

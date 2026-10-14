@@ -76,12 +76,70 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
     }
   };
 
-  // Station Settings (#464) are the only source of spec bands, tolerance, method and entry default.
-  const settings = useMemo(() => resolveDecantationSettings(station?.settings), [station]);
-  const specBands = settings.densitySpecBands;
-  const tolerance = settings.densityToleranceKgM3;
-  // Reading times show in the station's timezone, never the device's.
-  const timeZone = station ? businessDateSettings(station.settings).timeZone : undefined;
+  // Station Settings (#464) are the only source of spec bands, tolerance, method and entry
+  // default, and reading times use the station's timezone. Until the station loads there is
+  // neither, so nothing that depends on them renders (no device clock, no default tolerance).
+  const stationSettings = useMemo(
+    () =>
+      station
+        ? {
+            ...resolveDecantationSettings(station.settings),
+            timeZone: businessDateSettings(station.settings).timeZone,
+          }
+        : null,
+    [station],
+  );
+
+  const mainView = () => {
+    if (!stationSettings) {
+      return (
+        <div style={{ padding: 32, textAlign: 'center', opacity: 0.6 }}>
+          {stationsQ.isError ? "Couldn't load station settings" : 'Loading station settings...'}
+        </div>
+      );
+    }
+    const { densitySpecBands, densityToleranceKgM3, timeZone } = stationSettings;
+    if (view === 'register') {
+      return readingsQ.isLoading ? (
+        <div style={{ padding: 32, textAlign: 'center', opacity: 0.6 }}>
+          Loading density register...
+        </div>
+      ) : (
+        <RegisterView
+          readings={readingsQ.data ?? []}
+          products={fuelProducts}
+          tolerance={densityToleranceKgM3}
+          timeZone={timeZone}
+        />
+      );
+    }
+    if (todayQ.isLoading) {
+      return (
+        <div style={{ padding: 32, textAlign: 'center', opacity: 0.6 }}>
+          Loading density today summary...
+        </div>
+      );
+    }
+    if (!todayQ.data) {
+      return (
+        <div style={{ padding: 32, textAlign: 'center', opacity: 0.6 }}>
+          No summary data available
+        </div>
+      );
+    }
+    return (
+      <TodayView
+        summary={todayQ.data}
+        specBands={densitySpecBands}
+        tolerance={densityToleranceKgM3}
+        timeZone={timeZone}
+        morningPromptProduct={morningPromptProduct}
+        onDismissMorningPrompt={() => setMorningPromptProduct(null)}
+        onPrintBoard={handlePrintBoard}
+        onRecord={handleOpenRecord}
+      />
+    );
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -120,6 +178,7 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
             variant="primary"
             size="sm"
             onClick={() => handleOpenRecord()}
+            disabled={!stationSettings}
             leftIcon={<Icon name="plus" size="sm" />}
           >
             Record density
@@ -127,58 +186,27 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
         </div>
       </div>
 
-      {/* Main View */}
-      {view === 'today' ? (
-        todayQ.isLoading ? (
-          <div style={{ padding: 32, textAlign: 'center', opacity: 0.6 }}>
-            Loading density today summary...
-          </div>
-        ) : todayQ.data ? (
-          <TodayView
-            summary={todayQ.data}
-            specBands={specBands}
-            tolerance={tolerance}
-            timeZone={timeZone}
-            morningPromptProduct={morningPromptProduct}
-            onDismissMorningPrompt={() => setMorningPromptProduct(null)}
-            onPrintBoard={handlePrintBoard}
-            onRecord={handleOpenRecord}
-          />
-        ) : (
-          <div style={{ padding: 32, textAlign: 'center', opacity: 0.6 }}>
-            No summary data available
-          </div>
-        )
-      ) : readingsQ.isLoading ? (
-        <div style={{ padding: 32, textAlign: 'center', opacity: 0.6 }}>
-          Loading density register...
-        </div>
-      ) : (
-        <RegisterView
-          readings={readingsQ.data ?? []}
+      {mainView()}
+
+      {/* Record Density Drawer: needs the station's tolerance and defaults */}
+      {stationSettings && (
+        <RecordDensityDrawer
+          isOpen={isRecordOpen}
+          onClose={() => {
+            setIsRecordOpen(false);
+            setPresetProductId(undefined);
+          }}
+          onSave={handleSaveDensity}
+          stationId={stationId}
           products={fuelProducts}
-          tolerance={tolerance}
-          timeZone={timeZone}
+          tanks={fuelTanks}
+          nozzles={fuelNozzles}
+          presetProductId={presetProductId}
+          tolerance={stationSettings.densityToleranceKgM3}
+          defaultMethod={stationSettings.densityMethod}
+          defaultEntryMethod={stationSettings.densityEntryMethod}
         />
       )}
-
-      {/* Record Density Drawer */}
-      <RecordDensityDrawer
-        isOpen={isRecordOpen}
-        onClose={() => {
-          setIsRecordOpen(false);
-          setPresetProductId(undefined);
-        }}
-        onSave={handleSaveDensity}
-        stationId={stationId}
-        products={fuelProducts}
-        tanks={fuelTanks}
-        nozzles={fuelNozzles}
-        presetProductId={presetProductId}
-        tolerance={tolerance}
-        defaultMethod={settings.densityMethod}
-        defaultEntryMethod={settings.densityEntryMethod}
-      />
     </div>
   );
 };

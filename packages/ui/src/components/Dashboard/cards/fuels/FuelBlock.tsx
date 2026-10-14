@@ -32,7 +32,8 @@ export interface FuelBlockProps {
   density: Part<{ state: DensityState; trend: number[] }>;
   tanks: Part<FuelTank[]>;
   pendingDecant: PendingDecant | null;
-  timeZone: string | undefined;
+  /** The station's IANA timezone; never the device's. */
+  timeZone: string;
   businessDate: string;
   /** Header swatch class (`fuelSwatch`). */
   swatch: string;
@@ -80,8 +81,7 @@ const DensityRow: React.FC<
       <DensityReading
         state={state}
         trend={trend}
-        timeZone={timeZone}
-        businessDate={businessDate}
+        context={{ timeZone, businessDate }}
         action={
           canRecord && (
             <Button variant="ghost" size="xs" onClick={onRecord}>
