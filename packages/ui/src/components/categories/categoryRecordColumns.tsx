@@ -29,16 +29,16 @@ const VOID_LABEL: Record<CategoryRecordKind, string> = {
   income: 'Void income entry',
 };
 
-const sameWords = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-
 /**
  * The Funding Account's type as a detail line, only when it says something the
- * name does not ("SBI Current · Bank", never "Cash in Hand · Cash in Hand").
+ * name does not: "SBI Current · Bank", never "Cash in Hand · Cash in Hand" or
+ * "Owner Account · Owner".
  */
 export function accountTypeDetail(row: Pick<CategoryRecord, 'accountName' | 'accountType'>) {
   if (!row.accountType) return null;
   const type = accountTypeLabel(row.accountType);
-  return row.accountName && sameWords(type, row.accountName) ? null : type;
+  const name = row.accountName?.trim().toLowerCase() ?? '';
+  return name.includes(type.trim().toLowerCase()) ? null : type;
 }
 
 /** Funding Account the money moved through, with its type as secondary text. */

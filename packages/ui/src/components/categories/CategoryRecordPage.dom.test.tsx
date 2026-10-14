@@ -319,6 +319,7 @@ describe('owner decisions for the pilot (#566)', () => {
         data: [
           record('a1', 100),
           { ...record('a2', 200), accountName: 'SBI Current', accountType: 'BANK' },
+          { ...record('a3', 300), accountName: 'Owner Account', accountType: 'OWNER' },
         ],
       },
     });
@@ -327,6 +328,8 @@ describe('owner decisions for the pilot (#566)', () => {
     expect(within(table).getAllByText('Cash in Hand')).toHaveLength(1);
     expect(within(table).getByText('SBI Current')).toBeTruthy();
     expect(within(table).getByText('Bank')).toBeTruthy();
+    expect(within(table).getByText('Owner Account')).toBeTruthy();
+    expect(within(table).queryByText('Owner')).toBeNull();
   });
 });
 
