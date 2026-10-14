@@ -17,6 +17,12 @@ import { isIdempotencyKeyConflict, keepsIdempotencyKey } from '../utils/idempote
  * again cannot record it twice, and entering a different record is not refused
  * as an edited retry. A body the server refused under the key (a conflict) is
  * not what it holds, so a new drawer entering that body gets a fresh key.
+ *
+ * Every unsettled key in a scope is kept, not just the latest (#564): another
+ * record left unanswered after this one, or a second drawer of the same kind
+ * open at once, must not make this record's key forgettable. A key is let go
+ * only when its own drawer gets a decided answer, or when no body the server
+ * may hold is left under it.
  */
 export interface SubmitKeySession {
   /** The key to send with this body. */
@@ -29,6 +35,15 @@ export interface SubmitKeySession {
 export const unknownOutcome = (error: unknown) =>
   keepsIdempotencyKey(error) || isIdempotencyKeyConflict(error);
 
+/**
+ * A soft bound on the unsettled keys kept per scope, so a long session of
+ * dropped saves cannot grow the store without end. Past it the oldest is let go:
+ * re-entering that record would get a fresh key. Reaching it takes this many
+ * unanswered saves of one kind at one station in one app session, by which time
+ * the operator is reading the list again, not re-entering old slips.
+ */
+export const MAX_HELD_KEYS_PER_SCOPE = 20;
+
 /** A key whose outcome is unsettled, and the bodies sent under it the server may hold. */
 interface HeldKey {
   key: string;
@@ -36,7 +51,8 @@ interface HeldKey {
 }
 
 export class OfficeSubmitKeys {
-  private readonly pending = new Map<string, HeldKey>();
+  /** Per scope, every unsettled key, oldest first. */
+  private readonly pending = new Map<string, HeldKey[]>();
 
   constructor(private readonly newKey: () => string = createIdempotencyKey) {}
 
@@ -45,10 +61,7 @@ export class OfficeSubmitKeys {
     let sent = '';
     return {
       next: (fingerprint) => {
-        if (!current) {
-          const left = this.pending.get(scope);
-          current = left?.held.includes(fingerprint) ? left : { key: this.newKey(), held: [] };
-        }
+        current ??= this.heldFor(scope, fingerprint) ?? { key: this.newKey(), held: [] };
         sent = fingerprint;
         return current.key;
       },
@@ -60,19 +73,34 @@ export class OfficeSubmitKeys {
           current.held = isIdempotencyKeyConflict(error)
             ? current.held.filter((f) => f !== sent)
             : [...current.held.filter((f) => f !== sent), sent];
-          if (current.held.length) this.pending.set(scope, current);
-          else this.forget(scope, current.key);
+          if (current.held.length) this.hold(scope, current);
+          else this.release(scope, current);
           return;
         }
-        this.forget(scope, current.key);
+        this.release(scope, current);
         current = null;
       },
     };
   }
 
-  /** Drop the scope's unsettled key, unless another drawer has left a different one since. */
-  private forget(scope: string, key: string) {
-    if (this.pending.get(scope)?.key === key) this.pending.delete(scope);
+  /** The oldest unsettled key in the scope the server may hold this body under. */
+  private heldFor(scope: string, fingerprint: string): HeldKey | undefined {
+    return this.pending.get(scope)?.find((entry) => entry.held.includes(fingerprint));
+  }
+
+  private hold(scope: string, entry: HeldKey) {
+    const list = this.pending.get(scope) ?? [];
+    if (list.includes(entry)) return;
+    list.push(entry);
+    if (list.length > MAX_HELD_KEYS_PER_SCOPE) list.shift();
+    this.pending.set(scope, list);
+  }
+
+  /** Let go of this key only; other drawers' keys in the scope stay. */
+  private release(scope: string, entry: HeldKey) {
+    const list = this.pending.get(scope)?.filter((e) => e !== entry);
+    if (list?.length) this.pending.set(scope, list);
+    else this.pending.delete(scope);
   }
 }
 
