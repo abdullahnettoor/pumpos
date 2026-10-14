@@ -8,6 +8,12 @@ export interface ControlBarSlots {
   search?: ReactNode;
   /** Row filters: `FilterChips`, a select for 5+ options, `SegmentedControl` for 2–4 views. */
   filters?: ReactNode;
+  /**
+   * Buttons that act on what sits below the bar (Add entry on one account's
+   * statement), before the export menu and info tip. Page-wide actions stay in
+   * the Page Frame.
+   */
+  actions?: ReactNode;
   /** `ExportMenu`, at the right end. */
   exportMenu?: ReactNode;
   /** `InfoTip` explaining how the figures are worked out, last. */
@@ -19,11 +25,11 @@ export interface ControlBarProps extends ControlBarSlots {
 }
 
 const ORDER = ['range', 'search', 'filters'] as const;
-const END = ['exportMenu', 'info'] as const;
+const END = ['actions', 'exportMenu', 'info'] as const;
 
 /**
  * ControlBar (#567): one row of page controls in a fixed order, range ·
- * search · filters · (space) · export · info tip, so every page reads the
+ * search · filters · (space) · actions · export · info tip, so every page reads the
  * same. Pages pass slots, not a layout. The row wraps cleanly on narrow
  * screens (1366px with the sidebar open): the end group stays together.
  *

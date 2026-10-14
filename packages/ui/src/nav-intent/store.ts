@@ -57,7 +57,12 @@ export interface NavIntent {
   /** With `openReportsTab: 'gst'`: which GST view to show. */
   openGstView?: 'sales' | 'purchases' | 'income';
   /** Open a specific tab of the Accounts page (the Daily cash book lives there). */
-  openAccountsTab?: 'cash-book';
+  openAccountsTab?: 'cash-book' | 'transfers';
+  /**
+   * Open one Financial Account's statement on Accounts (#530). Reports › Cash &
+   * bank links each account row here.
+   */
+  openAccountId?: string;
   /** Open the Record Purchase drawer on arrival at Suppliers → Purchases. */
   openNewPurchase?: boolean;
   /** Open a specific tab on the Organization page. */
@@ -110,7 +115,12 @@ export function subscribeToNavIntent(listener: () => void) {
 /** Current store state. Prefer `useNavIntent()` in components. */
 export const getNavIntentState = () => state;
 
-/** The pending intent plus its token, for the rare consumer that must run an effect. */
+/**
+ * The pending intent plus its token. For a consumer that takes the intent once
+ * (Accounts): copy it into its own state during render, guarded by the token
+ * (`if (token !== taken)`), then clear it in an effect. Or for one that must
+ * run an effect on arrival.
+ */
 export function useNavIntentEntry(): NavIntentState {
   return useSyncExternalStore(subscribeToNavIntent, getNavIntentState, getNavIntentState);
 }

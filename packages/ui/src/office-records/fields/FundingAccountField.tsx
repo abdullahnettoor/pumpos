@@ -6,7 +6,8 @@ import {
   filterFundingAccounts,
   reconcileFundingSelection,
 } from '../../utils/fundingAccounts.js';
-import { accountTypeLabel } from '../../utils/ledgerLabels.js';
+import { accountTypeDetail } from '../../utils/ledgerLabels.js';
+import { AccountTypeChip } from '../../components/finance/AccountTypeChip.js';
 import { formatMoney } from '../../utils/format.js';
 import { Field } from '../../components/primitives/Field.js';
 import { cn } from '../../pump-ds/lib/cn.js';
@@ -87,10 +88,8 @@ export const FundingAccountField: React.FC<FundingAccountFieldProps> = ({
                   className="accent-brand"
                 />
                 <span className="min-w-0 flex-1 truncate">{a.name}</span>
-                {accountTypeLabel(a.accountType).toLowerCase() !== a.name.toLowerCase() && (
-                  <span className="text-[12px] text-ink-faint">
-                    {accountTypeLabel(a.accountType)}
-                  </span>
+                {accountTypeDetail(a.name, a.accountType) && (
+                  <AccountTypeChip type={a.accountType} />
                 )}
                 {balance != null && (
                   <span className="w-28 text-right font-mono text-[12px] tabular-nums text-ink-muted">

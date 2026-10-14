@@ -50,7 +50,7 @@ export function StatementTable<T>({
 }: StatementTableProps<T>) {
   if (rows.length === 0) {
     return emptyMessage ? (
-      <div className="px-2 py-1.5 text-[11px] text-ink-faint">{emptyMessage}</div>
+      <div className="px-2 py-1.5 text-[12px] text-ink-faint">{emptyMessage}</div>
     ) : null;
   }
   const totals = totalCells(columns, rows, totalRow);

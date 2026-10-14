@@ -222,6 +222,8 @@ export const queryKeys = {
   /** Daily Cash Book (ADR 0005) — live per-account opening/in/out/closing for a date. */
   dailyCashBook: (stationId: string, date: string) => ['daily-cash-book', stationId, date] as const,
   dailyCashBookPrefix: () => ['daily-cash-book'] as const,
+  /** Every `financeMovements` range: what a money write invalidates. */
+  financeMovementsPrefix: () => ['finance-movements'] as const,
 } as const;
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -1456,7 +1458,7 @@ export function useInvalidateOperational() {
       // move with expenses / income / collections / payments.
       qc.invalidateQueries({ queryKey: ['financial-accounts'] }),
       qc.invalidateQueries({ queryKey: ['account-ledger'] }),
-      qc.invalidateQueries({ queryKey: ['finance-movements'] }),
+      qc.invalidateQueries({ queryKey: queryKeys.financeMovementsPrefix() }),
       qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() }),
       qc.invalidateQueries({ queryKey: queryKeys.profitLossAll() }),
       qc.invalidateQueries({ queryKey: ['money-movements'] }),
