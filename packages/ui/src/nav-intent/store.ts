@@ -115,7 +115,12 @@ export function subscribeToNavIntent(listener: () => void) {
 /** Current store state. Prefer `useNavIntent()` in components. */
 export const getNavIntentState = () => state;
 
-/** The pending intent plus its token, for the rare consumer that must run an effect. */
+/**
+ * The pending intent plus its token. For a consumer that takes the intent once
+ * (Accounts): copy it into its own state during render, guarded by the token
+ * (`if (token !== taken)`), then clear it in an effect. Or for one that must
+ * run an effect on arrival.
+ */
 export function useNavIntentEntry(): NavIntentState {
   return useSyncExternalStore(subscribeToNavIntent, getNavIntentState, getNavIntentState);
 }

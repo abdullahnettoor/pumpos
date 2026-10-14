@@ -101,7 +101,7 @@ const MONEY_KEYS = [
   queryKeys.fundingAccountsAll(),
   ['account-ledger'],
   queryKeys.dailyCashBookPrefix(),
-  ['finance-movements'],
+  queryKeys.financeMovementsPrefix(),
 ];
 
 async function renderPage(intent?: Parameters<typeof publishNavIntent>[0]) {

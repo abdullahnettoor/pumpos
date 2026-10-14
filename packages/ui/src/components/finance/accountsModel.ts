@@ -82,6 +82,8 @@ export interface Transfer {
   createdAt: string;
   /** The two legs moved different amounts: the ledger needs a look. */
   mismatch: boolean;
+  /** What reached the destination (the in leg); equals `amount` unless `mismatch`. */
+  inAmount: number;
 }
 
 /**
@@ -130,6 +132,7 @@ export function pairTransfers(movements: readonly MovementRow[]): Transfer[] {
       notes: m.notes,
       createdAt: m.createdAt,
       mismatch: false,
+      inAmount: Number(m.amount),
       legs: [],
     };
     t.legs.push(Number(m.amount));
@@ -141,6 +144,7 @@ export function pairTransfers(movements: readonly MovementRow[]): Transfer[] {
     } else {
       t.toName = m.accountName;
       t.toType = m.accountType;
+      t.inAmount = Number(m.amount);
     }
     byId.set(key, t);
   }

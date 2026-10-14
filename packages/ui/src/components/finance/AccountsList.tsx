@@ -65,9 +65,10 @@ export interface AccountsListProps {
  */
 export const AccountsList: React.FC<AccountsListProps> = ({ accounts, query, onOpen }) => {
   const balances = useMemo(() => accountBalances(accounts), [accounts]);
-  // Owner (capital) accounts are not money the station runs on, so the total leaves them out.
+  // Owner (capital) accounts are not money the station runs on, so the total
+  // leaves them out (and says so); every other account, CMS included, adds in.
   const totalRow = useMemo(
-    () => ({ label: 'Total cash, bank & clearing', values: { balance: balances.working } }),
+    () => ({ label: 'Total excl. owner accounts', values: { balance: balances.working } }),
     [balances.working],
   );
   return (

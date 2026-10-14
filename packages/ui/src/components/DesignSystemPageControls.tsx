@@ -361,7 +361,7 @@ export const PageControlsShowcase: React.FC = () => (
   <div>
     <Block
       title="Layout A · reports"
-      note="One ControlBar under the tabs drives everything below it, tiles included (In range). Order: range · search · filters · (space) · export · info tip."
+      note="One ControlBar under the tabs drives everything below it, tiles included (In range). Order: range · search · filters · (space) · actions · export · info tip. The actions slot holds buttons that act only on what sits below the bar (Add entry on one account's statement); page actions stay in the Page Frame."
     >
       <ReportLayout />
     </Block>

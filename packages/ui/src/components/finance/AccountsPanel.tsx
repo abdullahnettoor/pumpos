@@ -49,10 +49,11 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
   const accountsQ = useFinancialAccounts(stationId);
   const accounts = useMemo<AccountRow[]>(() => accountsQ.data ?? [], [accountsQ.data]);
 
-  // A deep link (Dashboard "Daily cash book ›", Reports › Cash & bank) is copied
-  // into the page's own state as it arrives (during render, so the first paint
-  // is right), then cleared from the store, so leaving and coming back doesn't
-  // reopen it.
+  // A deep link (Dashboard "Daily cash book ›", Reports › Cash & bank) is taken
+  // once per publish: the intent's token guards a copy into the page's own tab /
+  // account state, made during render so the first paint is right. An effect
+  // then clears the intent from the store, so leaving and coming back shows the
+  // list, and the operator's own picks are never overridden by a stale link.
   const { intent, token: intentToken } = useNavIntentEntry();
   const [pickedTab, setPickedTab] = useState<AccountsTab>('accounts');
   const [pickedId, setPickedId] = useState<string | null>(null);

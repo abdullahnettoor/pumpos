@@ -136,7 +136,7 @@ describe('pairTransfers', () => {
       leg({ id: '1', direction: 'in', amount: '90', accountName: 'SBI' }),
       leg({ id: '2', direction: 'out', amount: '100' }),
     ]);
-    expect(t).toMatchObject({ amount: 100, mismatch: true });
+    expect(t).toMatchObject({ amount: 100, inAmount: 90, mismatch: true });
     const [ok] = pairTransfers([
       leg({ id: '1', direction: 'in', amount: '100.00', accountName: 'SBI' }),
       leg({ id: '2', direction: 'out', amount: '100' }),

@@ -40,12 +40,20 @@ const AccountName: React.FC<{ name: string }> = ({ name }) => (
   <span className={name === ORG_ACCOUNT ? 'text-ink-muted' : 'text-ink-strong'}>{name}</span>
 );
 
-/** The out leg's amount; legs that disagree carry a Variance chip (a problem, so red). */
+/**
+ * The out leg's amount; legs that disagree carry a Variance chip (a problem, so
+ * red) with an info tip that says what is wrong and what each leg moved.
+ */
 const AmountCell: React.FC<{ t: Transfer }> = ({ t }) => (
   <span className="inline-flex items-center justify-end gap-1.5">
     {t.mismatch && (
-      <span title="The two legs of this transfer moved different amounts.">
+      <span className="inline-flex items-center gap-1">
         <StatusChip status="variance" size="md" className="font-sans" />
+        <InfoTip label="About this variance" placement="bottom">
+          The two legs of this transfer moved different amounts: {formatMoney(t.amount)} left{' '}
+          {t.fromName}, {formatMoney(t.inAmount)} reached {t.toName}. Check both accounts&apos;
+          statements.
+        </InfoTip>
       </span>
     )}
     <span>{formatMoney(t.amount)}</span>

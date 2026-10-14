@@ -24,7 +24,7 @@ async function invalidateMoney(qc: QueryClient, stationId: string | null) {
   await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
   await qc.invalidateQueries({ queryKey: ['account-ledger'] });
   await qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() });
-  await qc.invalidateQueries({ queryKey: ['finance-movements'] });
+  await qc.invalidateQueries({ queryKey: queryKeys.financeMovementsPrefix() });
 }
 
 const FormError: React.FC<{ children: ReactNode }> = ({ children }) => (
