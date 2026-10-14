@@ -30,7 +30,7 @@ vi.mock('@pump/ui', async (importOriginal) => {
   };
 });
 vi.mock('./reports/ReportDayPage.js', () => ({
-  ReportDayPage: ({ businessDate }: { businessDate: string }) => <p>DSSR for {businessDate}</p>,
+  ReportDayPage: ({ businessDate }: { businessDate: string }) => <p>DSR for {businessDate}</p>,
 }));
 
 vi.mock('./decantation/DecantationsListPage.js', () => ({
@@ -203,22 +203,22 @@ describe('ReportsScreen', () => {
     expect(screen.getByTestId('tab').textContent).toBe('home');
   });
 
-  it('opens the DSSR for a Draft day', () => {
+  it('opens the DSR for a Draft day', () => {
     seed();
     mount();
     fireEvent.click(screen.getByRole('button', { name: /^Thu 8 Oct, Draft/ }));
-    expect(screen.getByText('DSSR for 2026-10-08')).toBeTruthy();
+    expect(screen.getByText('DSR for 2026-10-08')).toBeTruthy();
     expect(screen.getByTestId('tab').textContent).toBe('reports');
   });
 
-  it('opens the DSSR for a Sealed day', () => {
+  it('opens the DSR for a Sealed day', () => {
     seed();
     mount();
     fireEvent.click(screen.getByRole('button', { name: /^Tue 6 Oct, Sealed/ }));
-    expect(screen.getByText('DSSR for 2026-10-06')).toBeTruthy();
+    expect(screen.getByText('DSR for 2026-10-06')).toBeTruthy();
   });
 
-  it('shows a closed day without a DSSR snapshot as Report missing and does not open it', () => {
+  it('shows a closed day without a DSR snapshot as Report missing and does not open it', () => {
     seed();
     feed.pages = [
       {
@@ -230,10 +230,10 @@ describe('ReportsScreen', () => {
     expect(screen.queryByText('Sealed')).toBeNull();
     const row = screen.getByRole('group', { name: /^Mon 5 Oct, Report missing/ });
     expect(within(row).getByText('Report missing')).toBeTruthy();
-    expect(within(row).getByText('No DSSR for this day')).toBeTruthy();
+    expect(within(row).getByText('No DSR for this day')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Mon 5 Oct/ })).toBeNull();
     fireEvent.click(row);
-    expect(screen.queryByText(/^DSSR for \d/)).toBeNull();
+    expect(screen.queryByText(/^DSR for \d/)).toBeNull();
     expect(screen.getByTestId('tab').textContent).toBe('reports');
   });
 

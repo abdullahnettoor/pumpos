@@ -12,7 +12,7 @@ web
 
 **Primary — Station operators and Attendants (console and mobile).** Frontline staff running shifts at Indian fuel retail stations. They work under time pressure at shift change, entering nozzle readings, handovers, cash counts, expenses, and credit sales. The console runs on desktop; Attendants also have a mobile workflow. Connectivity is online-primary with a product target of graceful degradation during transient outages; durable local write queuing is still planned work.
 
-**Secondary — Station managers and accountants (console + desktop).** Review Shift Summaries and DSSR (Daily Station Sales Report), reconcile variances, manage products/customers/suppliers, handle Office Records, and run station setup.
+**Secondary — Station managers and accountants (console + desktop).** Review Shift Summaries and DSR (Daily Station Sales Report), reconcile variances, manage products/customers/suppliers, handle Office Records, and run station setup.
 
 **Tertiary — Owners (console and supported mobile views).** Review performance, exceptions, outstanding balances, and reports for the Stations their Organization can access. Read-oriented, decision-focused.
 
@@ -25,7 +25,7 @@ PumpOS is the operating system for fuel retail. It replaces the spreadsheet + Ta
 Success looks like:
 
 - An operator can open a shift, work through it, and close it with drawer reconciliation in under a minute of ceremony.
-- A manager can trust the DSSR the day after — and the year after — because snapshots are immutable and every number traces back to an auditable event.
+- A manager can trust the DSR the day after — and the year after — because snapshots are immutable and every number traces back to an auditable event.
 - An owner sees today's numbers across the Stations available to their Organization without waiting for a manual update.
 - During transient connectivity loss, the product reports connection/sync state honestly; the durable queue-and-replay behavior is a stated resilience target, not a claim of complete offline operation.
 
@@ -60,12 +60,12 @@ Refuse these on sight:
 ## Design Principles
 
 1. **Business-day + shift are the anchors, not the chrome.** Active shift status, station, sync state, and drawer context are always visible in the shell. Every screen orients relative to the current shift.
-2. **One primary action per screen.** Open shift. Enter expense. Close shift. Generate DSSR. Secondary actions never outweigh the primary.
+2. **One primary action per screen.** Open shift. Enter expense. Close shift. Generate DSR. Secondary actions never outweigh the primary.
 3. **Status before decoration.** Open / closed / synced / pending / offline / variance / overdue — these states are first-class citizens in headers, rows, drawers, and summaries. Decoration is what's left when status is handled.
 4. **Dense, not busy.** Compact controls, tight tables, disciplined 4px-grid spacing, short labels. Density is a feature for professionals; the enemy is _cramped_, not _dense_.
 5. **List → Drawer → Edit.** Right-side contextual drawers, not modal stacks. The user never loses their place in the underlying list.
 6. **Keyboard-friendly by default.** Strong tab order, visible focus, predictable form flow. This is an operator tool, not a browsing product.
-7. **Snapshots don't lie.** Shift Summary and DSSR, once generated, are immutable. The UI communicates that promise (locked states, "generated on" timestamps, no in-place edits on closed periods).
+7. **Snapshots don't lie.** Shift Summary and DSR, once generated, are immutable. The UI communicates that promise (locked states, "generated on" timestamps, no in-place edits on closed periods).
 
 ## Accessibility & Inclusion
 

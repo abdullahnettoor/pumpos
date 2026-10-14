@@ -52,7 +52,7 @@ export class GenerateDssr implements UseCase<GenerateDssrCommand, DssrSnapshot> 
       return err(notFoundError('BusinessDay', p.data.businessDayId));
     if (businessDay.status !== 'CLOSED') {
       return err(
-        invariantViolation('DSSR snapshots can only be generated for closed Business Days', {
+        invariantViolation('DSR snapshots can only be generated for closed Business Days', {
           businessDayId: businessDay.id,
           status: businessDay.status,
         }),

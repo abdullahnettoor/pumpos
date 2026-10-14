@@ -278,11 +278,11 @@ Sidebar → **Inventory**:
   enter actual, and the system records expected vs actual variance with a
   reason.
 
-## 11. Close the business day → DSSR
+## 11. Close the business day → DSR
 
 When all of a date's shifts are closed: **Shifts** → **Business days** tab →
 **Close day** → confirm "Close this business day?". This generates the
-immutable **DSSR** (Daily Station Sales Report) — a sales-only report of all
+immutable **DSR** (Daily Station Sales Report) — a sales-only report of all
 shift summaries plus the day's sales, credit sales, purchases and stock — and
 seals the day. Office money (collections, expenses, income, supplier
 payments) is in **Accounts → Daily cash book**, dated by entry date.
@@ -290,13 +290,13 @@ payments) is in **Accounts → Daily cash book**, dated by entry date.
 Days close independently: you can close Monday on Friday; an unclosed past
 day never blocks today.
 
-Done when: toast "Business day closed · DSSR generated."
+Done when: toast "Business day closed · DSR generated."
 
 ## 12. Reports
 
 Sidebar → **Reports**, grouped in a list beside the report:
 
-- **Sales**: **DSSR** (generate/view snapshots) · **Attendant handovers** ·
+- **Sales**: **DSR** (generate/view snapshots) · **Attendant handovers** ·
   **Decantations**
 - **Finance**: **Profit & loss** (Owner) · **Ledgers** (Party · Cash & bank) ·
   **Invoices**
@@ -314,13 +314,13 @@ on your Role.
 
 **Bottom dock.** Five tabs, shown only when your Role may open them:
 
-| Tab      | What it holds                                                                                                                                                                                        | Who                        |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| Home     | Today at a glance: sales, the live shift, tank levels, money position, **Needs attention**                                                                                                           | Owner, Manager             |
-| Shifts   | The live shift and shift history; tap a shift for its **Shift Summary**                                                                                                                              | Owner, Manager             |
-| Reports  | Business days (Live, Draft, Sealed, Report missing) with weekly figures; a Draft or Sealed day opens its **DSSR** (Share, Download PDF), a Live day opens **Home**, and Report missing does not open | Owner, Manager, Accountant |
-| Money    | **To collect** (customers) and **To pay** (suppliers); tap a Customer or Supplier for its balance, aging, **Statement**, **Record payment**, credit limit                                            | Owner, Manager, Accountant |
-| Insights | Sales trend, product mix, shift performance; attendant variance, stock loss and credit health when the plan includes them                                                                            | Owner, Manager             |
+| Tab      | What it holds                                                                                                                                                                                       | Who                        |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| Home     | Today at a glance: sales, the live shift, tank levels, money position, **Needs attention**                                                                                                          | Owner, Manager             |
+| Shifts   | The live shift and shift history; tap a shift for its **Shift Summary**                                                                                                                             | Owner, Manager             |
+| Reports  | Business days (Live, Draft, Sealed, Report missing) with weekly figures; a Draft or Sealed day opens its **DSR** (Share, Download PDF), a Live day opens **Home**, and Report missing does not open | Owner, Manager, Accountant |
+| Money    | **To collect** (customers) and **To pay** (suppliers); tap a Customer or Supplier for its balance, aging, **Statement**, **Record payment**, credit limit                                           | Owner, Manager, Accountant |
+| Insights | Sales trend, product mix, shift performance; attendant variance, stock loss and credit health when the plan includes them                                                                           | Owner, Manager             |
 
 A Manager has the same five tabs as the Owner. An Accountant gets Reports and
 Money. Staff have no tabs unless they are assigned a dispenser unit on the open
@@ -375,6 +375,6 @@ Done when: the right tabs appear for the Role, the bell count matches the
 14:10  Open Evening shift      → Open next Shift
   ⋮      (repeat per shift)
 22:05  Close last shift
-22:10  Close business day      → DSSR generated
+22:10  Close business day      → DSR generated
 22:15  Settle to Bank / Transfer Money (bank the day's cash)
 ```

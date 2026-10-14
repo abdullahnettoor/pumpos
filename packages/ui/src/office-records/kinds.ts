@@ -37,7 +37,7 @@ export interface OfficeRecordDating {
 
 const OFFICE_DATING: OfficeRecordDating = {
   dateLabel: 'Entry date',
-  footnote: 'Shown in the Daily cash book and the ledger. Not in the DSSR (office record).',
+  footnote: 'Shown in the Daily cash book and the ledger. Not in the DSR (office record).',
 };
 
 /** A product purchase is a forecourt stock event, not an Office Record (ADR 0007). */

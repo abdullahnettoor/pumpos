@@ -24,6 +24,7 @@ export * from './constants/payment.js';
 export * from './constants/idempotency.js';
 export * from './utils/shift-close-cash.js';
 export * from './constants/demo.js';
+export * from './constants/report-names.js';
 export * from './utils/desktop-downloads.js';
 export * from './utils/drawer-reconciliation.js';
 export * from './utils/days-of-cover.js';
