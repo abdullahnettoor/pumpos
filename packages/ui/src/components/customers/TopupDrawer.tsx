@@ -81,16 +81,11 @@ const TopupForm: React.FC<Omit<TopupDrawerProps, 'isOpen'>> = ({
   };
 
   return (
-    <Form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <Form onSubmit={onSubmit} className="flex flex-col gap-3">
       {error && (
         <div
-          style={{
-            backgroundColor: 'var(--state-danger-bg)',
-            color: 'var(--state-danger-fg)',
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-          }}
+          role="alert"
+          className="rounded-input bg-danger-bg px-3 py-2 text-[12px] text-danger-fg"
         >
           {error}
         </div>
@@ -129,7 +124,7 @@ const TopupForm: React.FC<Omit<TopupDrawerProps, 'isOpen'>> = ({
         />
       </Field>
 
-      <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+      <div className="mt-2 flex gap-2.5">
         <Button type="submit" variant="primary" fullWidth loading={submitting} disabled={!amount}>
           Record Top-Up
         </Button>

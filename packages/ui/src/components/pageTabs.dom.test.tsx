@@ -203,7 +203,7 @@ describe('page tabs (#540)', () => {
     act(() => publishNavIntent({ focusCustomerId: 'c1', open: 'customer-statement' }));
     expect((await tabsOf('Customers')).selected).toContain('Customers');
     // An action that drops the intent commits its derived tab first.
-    fireEvent.click(screen.getByRole('button', { name: /Add Customer/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Add customer/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Close Drawer' }));
     expect((await tabsOf('Customers')).selected).toContain('Customers');
   });

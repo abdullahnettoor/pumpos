@@ -161,20 +161,11 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
       onClose={onClose}
       title={editingCustomer ? 'Edit Customer Profile' : 'Register New Customer'}
     >
-      <Form
-        onSubmit={handleSubmit(onSubmit)}
-        style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-      >
+      <Form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
         {drawerError && (
           <div
-            style={{
-              backgroundColor: 'var(--state-danger-bg)',
-              color: 'var(--state-danger-fg)',
-              padding: '8px 12px',
-              borderRadius: 'var(--radius-input)',
-              fontSize: '12px',
-              border: '1px solid var(--border-soft)',
-            }}
+            role="alert"
+            className="rounded-input bg-danger-bg px-3 py-2 text-[12px] text-danger-fg"
           >
             {drawerError}
           </div>
@@ -260,30 +251,17 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
         )}
 
         {!editingCustomer && (custType === 'Credit' || custType === 'Fleet') && !isPrepaid && (
-          <div
-            style={{
-              borderTop: '1px solid var(--border-soft)',
-              paddingTop: '12px',
-              marginTop: '4px',
-            }}
-          >
-            <h4
-              style={{
-                fontSize: '12px',
-                fontWeight: 600,
-                color: 'var(--text-strong)',
-                margin: '0 0 4px',
-              }}
-            >
+          <div className="mt-1 border-t border-border-soft pt-3">
+            <h4 className="mb-1 text-[12px] font-semibold text-ink-strong">
               Opening Balance (Optional)
             </h4>
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 12px' }}>
+            <p className="mb-3 text-[12px] text-ink-muted">
               Amount this customer already owed before PumpOS. Recorded as an opening receivable
               (not a sale), so it counts toward their balance but stays out of sales &amp; P&amp;L.{' '}
               <strong>Enter carefully — it can’t be edited later</strong> (correct it with a ledger
               adjustment instead).
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+            <div className="grid grid-cols-2 gap-x-3">
               <Field label="Opening Due (₹)">
                 <TextInput
                   type="number"
@@ -308,25 +286,12 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
           </div>
         )}
 
-        <div
-          style={{
-            borderTop: '1px solid var(--border-soft)',
-            paddingTop: '12px',
-            marginTop: '4px',
-          }}
-        >
-          <h4
-            style={{
-              fontSize: '12px',
-              fontWeight: 600,
-              color: 'var(--text-strong)',
-              margin: '0 0 12px',
-            }}
-          >
+        <div className="mt-1 border-t border-border-soft pt-3">
+          <h4 className="mb-3 text-[12px] font-semibold text-ink-strong">
             GST &amp; Tax Registration (Optional B2B)
           </h4>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+          <div className="grid grid-cols-2 gap-x-3">
             <Field label="GSTIN" error={errors.metadata?.gstin?.message}>
               <TextInput
                 placeholder="15-digit GSTIN"
@@ -377,7 +342,7 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
           </Field>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
+        <div className="mt-1 flex flex-col gap-2.5">
           <Checkbox
             label="Account Active (Clear for operational logging)"
             {...register('isActive')}
@@ -385,7 +350,7 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
           />
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+        <div className="mt-2 flex gap-2.5">
           <Button type="submit" variant="primary" fullWidth loading={isSubmitting}>
             Save Customer
           </Button>
