@@ -34,6 +34,7 @@ describe('statusPresentation: one word and one tone per state', () => {
     ['over-limit', 'Over limit', 'danger'],
     ['voided', 'Voided', 'neutral'],
     ['adjustment', 'Adjustment', 'info'],
+    ['awaiting-decantation', 'Awaiting decantation', 'warning'],
   ];
 
   it.each(cases)('%s reads "%s" in %s', (state, label, tone) => {

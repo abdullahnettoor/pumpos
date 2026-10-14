@@ -476,6 +476,7 @@ const STATUS_GROUPS: { label: string; statuses: PumpStatus[] }[] = [
       'over-limit',
       'voided',
       'adjustment',
+      'awaiting-decantation',
       'settled',
       'overpaid',
     ],
@@ -953,6 +954,7 @@ const VOCAB_ROWS: { label: string; statuses: PumpStatus[] }[] = [
   { label: 'shift', statuses: ['shift-live', 'shift-past-end', 'shift-closed'] },
   { label: 'day', statuses: ['day-open', 'day-draft', 'day-sealed', 'day-final'] },
   { label: 'money', statuses: ['overdue', 'over-limit', 'voided', 'adjustment'] },
+  { label: 'purchase', statuses: ['awaiting-decantation'] },
 ];
 
 export const PumpDsStatusPanel: React.FC = () => (

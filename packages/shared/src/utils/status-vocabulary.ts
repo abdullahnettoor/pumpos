@@ -22,6 +22,8 @@ export type DayStatusState = 'day-open' | 'day-draft' | 'day-sealed' | 'day-fina
 export type PartyStatusState = 'active' | 'inactive';
 /** A money record's state; `adjustment` marks an entry posted to correct another. */
 export type MoneyStatusState = 'overdue' | 'over-limit' | 'voided' | 'adjustment';
+/** A Fuel Purchase whose fuel has not yet been linked to a Decantation (ADR 0007). */
+export type PurchaseStatusState = 'awaiting-decantation';
 
 export type PumpState =
   | VarianceStatusState
@@ -29,7 +31,8 @@ export type PumpState =
   | ShiftStatusState
   | DayStatusState
   | PartyStatusState
-  | MoneyStatusState;
+  | MoneyStatusState
+  | PurchaseStatusState;
 
 export interface StatusPresentation {
   label: string;
@@ -77,6 +80,7 @@ const VOCABULARY: Record<PumpState, StatusPresentation> = {
   'over-limit': { label: 'Over limit', tone: 'danger' },
   voided: { label: 'Voided', tone: 'neutral', struck: true },
   adjustment: { label: 'Adjustment', tone: 'info' },
+  'awaiting-decantation': { label: 'Awaiting decantation', tone: 'warning' },
 };
 
 /** The canonical word and tone for a state. */
