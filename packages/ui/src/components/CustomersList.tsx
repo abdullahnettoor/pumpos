@@ -1,35 +1,29 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { canManageFinancialAccounts, type Role } from '@pump/shared';
 import { useNavIntent, clearNavIntent, getNavIntentState } from '../nav-intent/store.js';
+import { ROUTES } from '../nav-intent/routes.js';
 import { CloudTransactionService } from '../services/cloud.js';
 import { openQuickEntry } from '../quick-entry/store.js';
 import {
   useCustomers,
-  useShiftStatus,
   useProducts,
-  useInvalidateOperational,
   useCollections,
   useCreditSales,
   useAllVehicles,
+  useReceivables,
 } from '../query/hooks.js';
-import { LoadingSpinner } from './LoadingSpinner.js';
-import { DataTable } from './primitives/DataTable.js';
-import { inr } from '../utils/format.js';
-import { Tabs } from '../pump-ds/tabs/index.js';
-import { PageLayout } from './primitives/PageLayout.js';
+import { Button, Icon, Tabs, tabPanelProps } from '../pump-ds/index.js';
+import { PageFrame } from './page-frame/index.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
 import { useToast } from './primitives/ToastProvider.js';
-import { Panel, Button, Chip, KpiStrip, KpiTile, EmptyState, Icon } from '../pump-ds/index.js';
-import { resolveBusinessDate } from '@pump/shared';
-import {
-  buildCustomerColumns,
-  buildCollectionColumns,
-  buildCreditSaleColumns,
-  buildVehicleColumns,
-} from './customers/columns.js';
 import { CustomerFormDrawer } from './customers/CustomerFormDrawer.js';
 import { VehicleDrawer } from './customers/VehicleDrawer.js';
 import { StatementDrawer } from './customers/StatementDrawer.js';
+import { CustomerListTab } from './customers/CustomerListTab.js';
+import { CreditSalesTab } from './customers/CreditSalesTab.js';
+import { CollectionsTab } from './customers/CollectionsTab.js';
+import { VehiclesTab } from './customers/VehiclesTab.js';
 import { useRunTask } from '../utils/runTask.js';
 
 const transactionService = new CloudTransactionService();
@@ -44,18 +38,14 @@ interface CustomersListProps {
 
 type TabType = 'transactions' | 'sales' | 'registry' | 'vehicles';
 
-export function summarizeCustomerBalances(customers: any[]) {
-  return customers.reduce(
-    (totals, customer) => {
-      const balance = Number(customer.currentBalance || 0);
-      if (balance > 0) totals.receivables += balance;
-      if (balance < 0) totals.advances += Math.abs(balance);
-      return totals;
-    },
-    { receivables: 0, advances: 0 },
-  );
-}
+const TABS_ID = 'customers';
 
+/**
+ * The Customers page (#527): Page Frame, tabs Customers · Credit sales ·
+ * Collections · Vehicles. The list is a balance list and the two money tabs
+ * are ledgers (layout B); each tab loads in its own Data Sections, so one
+ * failed request shows Retry only where it is needed.
+ */
 export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, userRole }) => {
   const [selectedTab, setSelectedTab] = useState<TabType>('registry');
   /**
@@ -70,146 +60,41 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
   };
 
   const stationId = selectedStation?.id ?? null;
-  const customersActiveQ = useCustomers(true);
+  // Receivables are read by the Roles that see money (the API refuses Staff).
+  const canReadReceivables = canManageFinancialAccounts((userRole ?? 'Staff') as Role);
   const customersAllQ = useCustomers(false);
-  const statusQ = useShiftStatus(stationId, { lite: true });
   const productsQ = useProducts();
   const collectionsQ = useCollections();
   const creditSalesQ = useCreditSales();
   const vehiclesQ = useAllVehicles(false);
-  const invalidateOperational = useInvalidateOperational();
+  const receivablesQ = useReceivables(stationId, {
+    enabled: !!stationId && canReadReceivables,
+  });
+  // The tabs read receivables only when the Role may (`null` otherwise), and
+  // only a well-formed summary.
+  const summary = Array.isArray(receivablesQ.data?.customers) ? receivablesQ.data : undefined;
+  const receivables = canReadReceivables ? { ...receivablesQ, data: summary } : null;
   const qc = useQueryClient();
   const confirm = useConfirm();
   const toast = useToast();
   const runTask = useRunTask();
 
-  const customers = customersActiveQ.data ?? [];
-  const customerBalances = summarizeCustomerBalances(customers);
   const allCustomers = useMemo(() => customersAllQ.data ?? [], [customersAllQ.data]);
-  const allCollections = useMemo(() => collectionsQ.data ?? [], [collectionsQ.data]);
-  const anyPrepaid = allCustomers.some((c: any) => c.isPrepaid);
   const fuelProducts = (productsQ.data ?? []).filter(
     (p: any) => p.productType === 'FUEL' && p.isActive,
   );
 
-  // Business date (station-timezone aware) used to bucket "today" collections.
+  // Station clock. Credit sales sit on a Business Day (Day Start applies);
+  // collections are office records dated by the plain calendar date (ADR 0005).
   const stationSettings: any = selectedStation?.settings || {};
-  const todayIso = resolveBusinessDate({
-    timeZone: stationSettings.timezone,
-    dayStartsAt: stationSettings.business_day_starts_at,
-  });
-  const monthPrefix = todayIso.slice(0, 7);
-
-  // Collections ledger filters
-  const [collectionSearch, setCollectionSearch] = useState('');
-  const [collectionMethod, setCollectionMethod] = useState<string>('all');
-
-  const collectionKpis = useMemo(() => {
-    let today = 0,
-      month = 0,
-      todayCount = 0;
-    const todayCustomers = new Set<string>();
-    for (const c of allCollections) {
-      const amt = Number(c.amount || 0);
-      const bd: string = c.businessDate || '';
-      if (bd === todayIso) {
-        today += amt;
-        todayCount += 1;
-        if (c.customerId) todayCustomers.add(c.customerId);
-      }
-      if (bd.startsWith(monthPrefix)) month += amt;
-    }
-    return { today, month, todayCount, todayCustomers: todayCustomers.size };
-  }, [allCollections, todayIso, monthPrefix]);
-
-  const filteredCollections = useMemo(() => {
-    const q = collectionSearch.trim().toLowerCase();
-    return allCollections.filter((c: any) => {
-      if (collectionMethod !== 'all' && c.paymentMethod !== collectionMethod) return false;
-      if (
-        q &&
-        !(
-          (c.customerName || '').toLowerCase().includes(q) ||
-          (c.notes || '').toLowerCase().includes(q)
-        )
-      )
-        return false;
-      return true;
-    });
-  }, [allCollections, collectionSearch, collectionMethod]);
-
-  // Credit-sales ledger
-  const allCreditSales = useMemo(() => creditSalesQ.data ?? [], [creditSalesQ.data]);
-  const [salesSearch, setSalesSearch] = useState('');
-  const salesKpis = useMemo(() => {
-    let today = 0,
-      month = 0,
-      todayCount = 0;
-    const custs = new Set<string>();
-    for (const s of allCreditSales) {
-      const amt = Number(s.amount || 0);
-      const bd: string = s.businessDate || '';
-      if (bd === todayIso) {
-        today += amt;
-        todayCount += 1;
-      }
-      if (bd.startsWith(monthPrefix)) month += amt;
-      if (s.customerId) custs.add(s.customerId);
-    }
-    return { today, month, todayCount, customers: custs.size };
-  }, [allCreditSales, todayIso, monthPrefix]);
-  const filteredCreditSales = useMemo(() => {
-    const q = salesSearch.trim().toLowerCase();
-    if (!q) return allCreditSales;
-    return allCreditSales.filter(
-      (s: any) =>
-        (s.customerName || '').toLowerCase().includes(q) ||
-        (s.vehicleReg || '').toLowerCase().includes(q) ||
-        (s.productName || '').toLowerCase().includes(q) ||
-        (s.notes || '').toLowerCase().includes(q),
-    );
-  }, [allCreditSales, salesSearch]);
-
-  const loading = customersActiveQ.isLoading || statusQ.isLoading;
-  const error = customersActiveQ.error || statusQ.error;
+  const timeZone: string | undefined = stationSettings.timezone;
+  const dayStartsAt: string | undefined = stationSettings.business_day_starts_at;
+  const clock = useMemo(() => ({ timeZone, dayStartsAt }), [timeZone, dayStartsAt]);
+  const entryClock = useMemo(() => ({ timeZone }), [timeZone]);
 
   const eligibleCustomers = allCustomers.filter(
     (c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet',
   );
-
-  // --- Registry (list + EOD-due filter) ---
-  const [registryEodOnly, setRegistryEodOnly] = useState(false);
-  const eodDueCount = useMemo(
-    () =>
-      allCustomers.filter(
-        (c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0,
-      ).length,
-    [allCustomers],
-  );
-  const registryCustomers = useMemo(
-    () =>
-      registryEodOnly
-        ? allCustomers.filter(
-            (c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0,
-          )
-        : allCustomers,
-    [allCustomers, registryEodOnly],
-  );
-
-  // --- Vehicles (list + filter) ---
-  const allVehicles = useMemo(() => vehiclesQ.data ?? [], [vehiclesQ.data]);
-  const loadingVehicles = vehiclesQ.isLoading;
-  const [vehicleSearch, setVehicleSearch] = useState('');
-  const filteredVehicles = useMemo(() => {
-    const q = vehicleSearch.trim().toLowerCase();
-    if (!q) return allVehicles;
-    return allVehicles.filter(
-      (v: any) =>
-        (v.registrationNumber || '').toLowerCase().includes(q) ||
-        (v.customerName || '').toLowerCase().includes(q) ||
-        (v.vehicleType || '').toLowerCase().includes(q),
-    );
-  }, [allVehicles, vehicleSearch]);
 
   // --- Customer form drawer ---
   const [customerDrawerOpen, setCustomerDrawerOpen] = useState(false);
@@ -314,435 +199,83 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
 
   if (!selectedStation) {
     return (
-      <div style={{ color: 'var(--text-muted)', padding: '24px', fontFamily: 'var(--font-sans)' }}>
+      <p className="p-6 text-[13px] text-ink-muted">
         Please select a station to view customer accounts.
-      </div>
-    );
-  }
-
-  if (loading) {
-    return <LoadingSpinner text="Loading customer registries..." />;
-  }
-
-  if (error) {
-    return (
-      <div
-        style={{
-          padding: '24px',
-          backgroundColor: 'var(--state-danger-bg)',
-          color: 'var(--state-danger-fg)',
-          borderRadius: 'var(--radius-card)',
-          fontFamily: 'var(--font-sans)',
-        }}
-      >
-        <strong>Error:</strong> {error.message || 'Failed to load customers data'}
-      </div>
+      </p>
     );
   }
 
   return (
-    <PageLayout
-      title="Customers"
-      subtitle="Manage fleet customer profiles, credit limits, and record shift collections."
-      actions={
-        <>
-          {activeTab === 'transactions' && (
+    <>
+      <PageFrame
+        route={ROUTES.customers}
+        subtitle="Credit customers, their sales and collections."
+        actions={
+          <>
             <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<Icon name="plus" size="sm" />}
-              onClick={() => openCollectionDrawer()}
-            >
-              Record collection
-            </Button>
-          )}
-          {activeTab === 'registry' && (
-            <Button
-              variant="primary"
+              variant="secondary"
               size="sm"
               leftIcon={<Icon name="plus" size="sm" />}
               onClick={openCreateCustomer}
             >
-              Add Customer
+              New customer
             </Button>
-          )}
-          {activeTab === 'vehicles' && (
             <Button
               variant="primary"
               size="sm"
-              leftIcon={<Icon name="plus" size="sm" />}
-              disabled={eligibleCustomers.length === 0}
-              onClick={openCreateVehicle}
+              leftIcon={<Icon name="wallet" size="sm" />}
+              onClick={() => openCollectionDrawer()}
             >
-              Add Vehicle
+              Record collection
             </Button>
-          )}
-        </>
-      }
-      toolbar={
-        <Tabs
-          aria-label="Customers"
-          activeId={activeTab}
-          onChange={(id) => setActiveTab(id as TabType)}
-          tabs={[
-            { id: 'registry', label: 'Customers', concept: 'customers' },
-            { id: 'sales', label: 'Credit sales', concept: 'credit-sales' },
-            {
-              id: 'transactions',
-              label: 'Collections',
-              concept: 'collections',
-            },
-            { id: 'vehicles', label: 'Vehicles', concept: 'vehicles' },
-          ]}
-        />
-      }
-    >
-      {/* Tab Contents */}
-      <div>
-        {activeTab === 'transactions' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* KPI strip — today & month collections at a glance */}
-            <KpiStrip columns={4}>
-              <KpiTile
-                label="Collected today"
-                value={inr(collectionKpis.today)}
-                hint={`${collectionKpis.todayCount} ${collectionKpis.todayCount === 1 ? 'entry' : 'entries'}`}
-              />
-              <KpiTile label="Collected this month" value={inr(collectionKpis.month)} />
-              <KpiTile label="Customers paid today" value={String(collectionKpis.todayCustomers)} />
-              <KpiTile
-                label="Total receivables"
-                value={inr(customerBalances.receivables)}
-                hint={`${inr(customerBalances.advances)} customer advances`}
-              />
-            </KpiStrip>
-
-            {/* Collections ledger */}
-            <Panel
-              flush
-              title="Collections"
-              action={
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ position: 'relative' }}>
-                    <Icon
-                      name="search"
-                      size="xs"
-                      style={{
-                        position: 'absolute',
-                        left: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        color: 'var(--text-muted)',
-                      }}
-                    />
-                    <input
-                      value={collectionSearch}
-                      onChange={(e) => setCollectionSearch(e.target.value)}
-                      placeholder="Search customer / note…"
-                      style={{
-                        height: '28px',
-                        padding: '0 8px 0 26px',
-                        width: '200px',
-                        borderRadius: 'var(--radius-input)',
-                        border: '1px solid var(--border-strong)',
-                        fontSize: '12px',
-                        background: 'var(--bg-surface)',
-                      }}
-                    />
-                  </div>
-                  <select
-                    value={collectionMethod}
-                    onChange={(e) => setCollectionMethod(e.target.value)}
-                    style={{
-                      height: '28px',
-                      padding: '0 6px',
-                      borderRadius: 'var(--radius-input)',
-                      border: '1px solid var(--border-strong)',
-                      fontSize: '12px',
-                      background: 'var(--bg-surface)',
-                    }}
-                  >
-                    <option value="all">All methods</option>
-                    <option value="Cash">Cash</option>
-                    <option value="Card">Card</option>
-                    <option value="UPI">UPI</option>
-                    <option value="BankTransfer">Bank</option>
-                  </select>
-                  <button
-                    type="button"
-                    aria-label="Where do collections post?"
-                    title="Collections are office entries: they post to the account you choose on the entry date, not to a shift."
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      height: '28px',
-                      width: '22px',
-                      marginLeft: '2px',
-                      border: 'none',
-                      background: 'transparent',
-                      color: 'var(--text-faint)',
-                      cursor: 'help',
-                    }}
-                  >
-                    <Icon name="help" size="xs" />
-                  </button>
-                </div>
-              }
-            >
-              {collectionsQ.isLoading ? (
-                <div style={{ padding: '16px' }}>
-                  <LoadingSpinner text="Loading collections…" />
-                </div>
-              ) : filteredCollections.length === 0 ? (
-                <div style={{ padding: '12px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Icon name="wallet" size="md" />}
-                    title={
-                      allCollections.length === 0 ? 'No collections yet' : 'No matching collections'
-                    }
-                    description={
-                      allCollections.length === 0
-                        ? 'Record a collection to see it here.'
-                        : 'Try clearing the search or method filter.'
-                    }
-                  />
-                </div>
-              ) : (
-                <DataTable
-                  bare
-                  columns={buildCollectionColumns()}
-                  data={filteredCollections}
-                  emptyMessage="No collections."
-                  getRowId={(r: any) => r.id}
-                />
-              )}
-            </Panel>
-          </div>
-        )}
-
-        {activeTab === 'sales' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <KpiStrip columns={4}>
-              <KpiTile
-                label="Credit issued today"
-                value={inr(salesKpis.today)}
-                hint={`${salesKpis.todayCount} ${salesKpis.todayCount === 1 ? 'sale' : 'sales'}`}
-              />
-              <KpiTile label="Credit this month" value={inr(salesKpis.month)} />
-              <KpiTile label="Customers on credit" value={String(salesKpis.customers)} />
-              <KpiTile
-                label="Total receivables"
-                value={inr(customerBalances.receivables)}
-                hint={`${inr(customerBalances.advances)} customer advances`}
-              />
-            </KpiStrip>
-
-            <Panel
-              flush
-              title="Credit sales"
-              action={
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ position: 'relative' }}>
-                    <Icon
-                      name="search"
-                      size="xs"
-                      style={{
-                        position: 'absolute',
-                        left: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        color: 'var(--text-muted)',
-                      }}
-                    />
-                    <input
-                      value={salesSearch}
-                      onChange={(e) => setSalesSearch(e.target.value)}
-                      placeholder="Search customer / vehicle / product…"
-                      style={{
-                        height: '28px',
-                        padding: '0 8px 0 26px',
-                        width: '260px',
-                        borderRadius: 'var(--radius-input)',
-                        border: '1px solid var(--border-strong)',
-                        fontSize: '12px',
-                        background: 'var(--bg-surface)',
-                      }}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    aria-label="About credit sales"
-                    title="Credit sales are receivables — fuel-on-credit and merchandise on credit. They never touch the drawer; record them from the shift handover."
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      height: '28px',
-                      width: '22px',
-                      marginLeft: '2px',
-                      border: 'none',
-                      background: 'transparent',
-                      color: 'var(--text-faint)',
-                      cursor: 'help',
-                    }}
-                  >
-                    <Icon name="help" size="xs" />
-                  </button>
-                </div>
-              }
-            >
-              {creditSalesQ.isLoading ? (
-                <div style={{ padding: '16px' }}>
-                  <LoadingSpinner text="Loading credit sales…" />
-                </div>
-              ) : filteredCreditSales.length === 0 ? (
-                <div style={{ padding: '12px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Icon name="card" size="md" />}
-                    title={
-                      allCreditSales.length === 0
-                        ? 'No credit sales yet'
-                        : 'No matching credit sales'
-                    }
-                    description={
-                      allCreditSales.length === 0
-                        ? 'Fuel-on-credit and merchandise-on-credit sales appear here.'
-                        : 'Try a different search term.'
-                    }
-                  />
-                </div>
-              ) : (
-                <DataTable
-                  bare
-                  columns={buildCreditSaleColumns()}
-                  data={filteredCreditSales}
-                  emptyMessage="No credit sales."
-                  getRowId={(r: any) => r.id}
-                />
-              )}
-            </Panel>
-          </div>
-        )}
-
-        {activeTab === 'registry' && (
-          <Panel
-            flush
-            title="Customer registry"
-            action={
-              eodDueCount > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setRegistryEodOnly((v) => !v)}
-                  title="Show only end-of-day customers with an outstanding balance"
-                  aria-pressed={registryEodOnly}
-                  style={{
-                    border: 'none',
-                    background: 'transparent',
-                    padding: 0,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Chip tone={registryEodOnly ? 'danger' : 'neutral'} size="xs">
-                    EOD due · {eodDueCount}
-                    {registryEodOnly && <Icon name="x" size="xs" aria-hidden />}
-                  </Chip>
-                </button>
-              ) : undefined
-            }
-          >
-            <DataTable
-              bare
-              columns={buildCustomerColumns(
-                (c: any) => showStatementFor(c.id),
-                openEditCustomer,
-                anyPrepaid,
-              )}
-              data={registryCustomers}
-              emptyMessage={
-                registryEodOnly
-                  ? 'No EOD customers with outstanding dues.'
-                  : 'No customers registered.'
-              }
-              getRowId={(r: any) => r.id}
+          </>
+        }
+        tabs={
+          <Tabs
+            id={TABS_ID}
+            aria-label="Customers"
+            activeId={activeTab}
+            onChange={(id) => setActiveTab(id as TabType)}
+            tabs={[
+              { id: 'registry', label: 'Customers', concept: 'customers' },
+              { id: 'sales', label: 'Credit sales', concept: 'credit-sales' },
+              { id: 'transactions', label: 'Collections', concept: 'collections' },
+              { id: 'vehicles', label: 'Vehicles', concept: 'vehicles' },
+            ]}
+          />
+        }
+      >
+        <div {...tabPanelProps(TABS_ID, activeTab)}>
+          {activeTab === 'registry' && (
+            <CustomerListTab
+              customersQ={customersAllQ}
+              receivablesQ={receivables}
+              collectionsQ={collectionsQ}
+              entryClock={entryClock}
+              onOpenStatement={(c) => showStatementFor(c.id)}
+              onEdit={openEditCustomer}
             />
-          </Panel>
-        )}
-
-        {activeTab === 'vehicles' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {loadingVehicles ? (
-              <LoadingSpinner text="Loading vehicles..." />
-            ) : (
-              <Panel
-                flush
-                title="Vehicles"
-                action={
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ position: 'relative' }}>
-                      <Icon
-                        name="search"
-                        size="xs"
-                        style={{
-                          position: 'absolute',
-                          left: '8px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          color: 'var(--text-muted)',
-                        }}
-                      />
-                      <input
-                        value={vehicleSearch}
-                        onChange={(e) => setVehicleSearch(e.target.value)}
-                        placeholder="Search registration / customer…"
-                        style={{
-                          height: '28px',
-                          padding: '0 8px 0 26px',
-                          width: '240px',
-                          borderRadius: 'var(--radius-input)',
-                          border: '1px solid var(--border-strong)',
-                          fontSize: '12px',
-                          background: 'var(--bg-surface)',
-                        }}
-                      />
-                    </div>
-                    <Chip tone="neutral" size="xs">
-                      {filteredVehicles.length}
-                    </Chip>
-                  </div>
-                }
-              >
-                {filteredVehicles.length === 0 ? (
-                  <div style={{ padding: '12px' }}>
-                    <EmptyState
-                      compact
-                      icon={<Icon name="truck" size="md" />}
-                      title={allVehicles.length === 0 ? 'No vehicles' : 'No matching vehicles'}
-                      description={
-                        allVehicles.length === 0
-                          ? 'Register a vehicle against a Credit or Fleet customer to see it here.'
-                          : 'Try a different search term.'
-                      }
-                    />
-                  </div>
-                ) : (
-                  <DataTable
-                    bare
-                    columns={buildVehicleColumns(openEditVehicle, (v) =>
-                      runTask(onDeleteVehicle(v), 'Could not delete the vehicle.'),
-                    )}
-                    data={filteredVehicles}
-                    emptyMessage="No vehicles registered."
-                    getRowId={(r: any) => r.id}
-                  />
-                )}
-              </Panel>
-            )}
-          </div>
-        )}
-      </div>
+          )}
+          {activeTab === 'sales' && (
+            <CreditSalesTab creditSalesQ={creditSalesQ} receivablesQ={receivables} clock={clock} />
+          )}
+          {activeTab === 'transactions' && (
+            <CollectionsTab
+              collectionsQ={collectionsQ}
+              receivablesQ={receivables}
+              entryClock={entryClock}
+            />
+          )}
+          {activeTab === 'vehicles' && (
+            <VehiclesTab
+              vehiclesQ={vehiclesQ}
+              onEdit={openEditVehicle}
+              onDelete={(v) => runTask(onDeleteVehicle(v), 'Could not delete the vehicle.')}
+              onAdd={eligibleCustomers.length > 0 ? openCreateVehicle : undefined}
+            />
+          )}
+        </div>
+      </PageFrame>
 
       <CustomerFormDrawer
         isOpen={isCustomerDrawerOpen}
@@ -755,10 +288,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
       <StatementDrawer
         customer={statementCustomer}
         stationId={stationId}
-        clock={{
-          timeZone: stationSettings.timezone,
-          dayStartsAt: stationSettings.business_day_starts_at,
-        }}
+        clock={clock}
+        receivables={summary}
         onClose={closeStatement}
         onEdit={(c) => {
           closeStatement();
@@ -775,6 +306,6 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
         fuelProducts={fuelProducts}
         onClose={() => setIsVehicleDrawerOpen(false)}
       />
-    </PageLayout>
+    </>
   );
 };

@@ -35,6 +35,7 @@ import {
 } from '../../pump-ds/index.js';
 import { formatMoney } from '../../utils/format.js';
 import { CASH_ACCOUNT_TYPES } from '../../utils/ledgerLabels.js';
+import { countOf, inWindow, sumAmounts } from '../../utils/ledgerWindow.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { PageFrame } from '../page-frame/index.js';
 import { InfoTip } from '../primitives/InfoTip.js';
@@ -128,9 +129,7 @@ const CATEGORY_KEY = {
 } as const;
 
 const TABS_ID = 'category-records';
-const entries = (n: number) => `${n} ${n === 1 ? 'entry' : 'entries'}`;
-const sumAmounts = (rows: CategoryRecord[]) =>
-  rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+const entries = (n: number) => countOf(n, 'entry', 'entries');
 
 /** A view after By category that only one kind has (Income › GST for Staff). */
 export interface ExtraView {
@@ -239,17 +238,15 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
     const today = computeRange('today', entryClock);
     const month = computeRange('this-month', entryClock);
     const monthScope: KpiScope = { month: month.from };
-    const inWindow = (r: CategoryRecord, w: DateRange) =>
-      !!r.entryDate && r.entryDate >= w.from && r.entryDate <= w.to;
     const active = records.filter((r) => !isVoided(r));
-    const monthRows = active.filter((r) => inWindow(r, month));
+    const monthRows = active.filter((r) => inWindow(r.entryDate, month));
     const monthTotal = sumAmounts(monthRows);
     const cashMonth = sumAmounts(
       monthRows.filter((r) => CASH_ACCOUNT_TYPES.includes(r.accountType as any)),
     );
     return {
       values: [
-        sumAmounts(active.filter((r) => inWindow(r, today))),
+        sumAmounts(active.filter((r) => inWindow(r.entryDate, today))),
         monthTotal,
         cashMonth,
         monthTotal - cashMonth,
