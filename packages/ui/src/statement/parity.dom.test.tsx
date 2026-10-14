@@ -177,13 +177,37 @@ describe('a statement prints the same on screen and in the PDF', () => {
   });
 
   it("server balances that don't add up: both views print the worked-out ones, the screen says so", () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const off = partyLedgerStatement({ ...supplierLedger, closingBalance: '999.00' }, 'supplier');
-    warn.mockRestore();
     expect(off.reconciled).toBe(false);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const screenView = screenOf(off);
+    warn.mockRestore();
     expect(screenView.closing.at(-1)).toBe('−₹500.00');
     expect(pdfOf(off).closing.at(-1)).toBe('−₹500.00');
     expect(screen.getByRole('note').textContent).toBe(NOT_RECONCILED_NOTE);
+  });
+
+  it("logs a statement that doesn't add up once, even under StrictMode", () => {
+    const off = partyLedgerStatement({ ...supplierLedger, closingBalance: '999.00' }, 'supplier');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { rerender } = render(
+      <React.StrictMode>
+        <StatementView statement={off} label="Statement" />
+      </React.StrictMode>,
+    );
+    rerender(
+      <React.StrictMode>
+        <StatementView statement={off} label="Statement" />
+      </React.StrictMode>,
+    );
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
+  });
+
+  it('builds a statement without logging: the view does that', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    partyLedgerStatement({ ...supplierLedger, closingBalance: '999.00' }, 'supplier');
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

@@ -1,6 +1,11 @@
 import React, { useMemo } from 'react';
 import { Drawer } from '../Drawer.js';
-import { StatementView, buildLedgerStatement, partyEntries } from '../../statement/index.js';
+import {
+  StatementView,
+  buildLedgerStatement,
+  partyEntries,
+  type StatementClock,
+} from '../../statement/index.js';
 import { Button, DataSection, Icon } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
 import { useCustomerLedger } from '../../query/hooks.js';
@@ -9,6 +14,8 @@ interface StatementDrawerProps {
   /** Selected customer; null closes the drawer. */
   customer: any | null;
   stationId: string | null;
+  /** The station clock: dates a row the server sent no date for. */
+  clock?: StatementClock;
   onClose: () => void;
   /** Open the edit-profile drawer for this customer (container closes statement). */
   onEdit: (customer: any) => void;
@@ -24,15 +31,22 @@ interface StatementDrawerProps {
 export const StatementDrawer: React.FC<StatementDrawerProps> = ({
   customer,
   stationId,
+  clock,
   onClose,
   onEdit,
   onRecordCollection,
 }) => {
   const ledgerQ = useCustomerLedger(customer?.id);
   // All-time ledger: no opening balance, the running balance starts at zero.
+  const timeZone = clock?.timeZone;
+  const dayStartsAt = clock?.dayStartsAt;
   const statement = useMemo(
-    () => buildLedgerStatement(partyEntries(ledgerQ.data ?? [], 'customer'), { kind: 'customer' }),
-    [ledgerQ.data],
+    () =>
+      buildLedgerStatement(partyEntries(ledgerQ.data ?? [], 'customer'), {
+        kind: 'customer',
+        clock: { timeZone, dayStartsAt },
+      }),
+    [ledgerQ.data, timeZone, dayStartsAt],
   );
 
   return (

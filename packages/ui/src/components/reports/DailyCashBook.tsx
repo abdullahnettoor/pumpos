@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { resolveEntryDate } from '@pump/shared';
 import { useDailyCashBook } from '../../query/hooks.js';
@@ -61,12 +61,15 @@ export const DailyCashBook: React.FC<DailyCashBookProps> = ({ selectedStation })
   );
   const openAccount = accounts.find((a) => a.id === openAccountId) ?? null;
 
-  const timeOf = (iso: string) =>
-    new Date(iso).toLocaleTimeString('en-IN', {
-      timeZone: timeZone || 'Asia/Kolkata',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  const timeOf = useCallback(
+    (iso: string) =>
+      new Date(iso).toLocaleTimeString('en-IN', {
+        timeZone: timeZone || 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    [timeZone],
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -240,7 +243,12 @@ export const DailyCashBook: React.FC<DailyCashBookProps> = ({ selectedStation })
         title={openAccount ? `${openAccount.name} · ${date}` : 'Entries'}
       >
         {openAccount && (
-          <AccountDayEntries account={openAccount} timeOf={timeOf} key={openAccount.id} />
+          <AccountDayEntries
+            account={openAccount}
+            date={date}
+            timeOf={timeOf}
+            key={openAccount.id}
+          />
         )}
       </Drawer>
     </div>
@@ -251,18 +259,28 @@ export const DailyCashBook: React.FC<DailyCashBookProps> = ({ selectedStation })
  * One account's entries for the date, as a statement (Statement module):
  * opening, each entry as a Debit (in) or Credit (out) with its running
  * balance, and the closing. The time and the party or note sit under the source.
+ *
+ * Every entry belongs to the book's date (its Entry Date), so each row carries
+ * it: a back-dated record recorded days later still sits in this book.
  */
 const AccountDayEntries: React.FC<{
   account: DailyCashBookAccount;
+  /** The book's Entry Date, `YYYY-MM-DD`. */
+  date: string;
   timeOf: (iso: string) => string;
-}> = ({ account, timeOf }) => {
+}> = ({ account, date, timeOf }) => {
   const statement = useMemo(
     () =>
       buildLedgerStatement(
-        moneyEntries(account.entries, {
-          detail: (e) =>
-            [e.createdAt && timeOf(e.createdAt), e.partyName, e.notes].filter(Boolean).join(' · '),
-        }),
+        moneyEntries(
+          account.entries.map((e) => ({ ...e, entryDate: date })),
+          {
+            detail: (e) =>
+              [e.createdAt && timeOf(e.createdAt), e.partyName, e.notes]
+                .filter(Boolean)
+                .join(' · '),
+          },
+        ),
         // The server's opening, money in / out and closing, checked against the entries.
         {
           kind: 'account',
@@ -271,7 +289,7 @@ const AccountDayEntries: React.FC<{
           totals: { debit: account.moneyIn, credit: account.moneyOut },
         },
       ),
-    [account, timeOf],
+    [account, date, timeOf],
   );
   return (
     <div className="flex flex-col gap-3">

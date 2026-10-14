@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { RangedPartyLedger } from '@pump/shared';
 import {
   customerStatementParty,
@@ -102,7 +102,6 @@ describe('partyStatementDoc', () => {
   });
 
   it("never prints server balances the entries don't add up to", () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const odd: RangedPartyLedger = {
       ...customerLedger,
       closingBalance: '777.00',
@@ -111,8 +110,6 @@ describe('partyStatementDoc', () => {
     const d = build(odd);
     expect(d.rows.map((r) => r.balance)).toEqual([13500, 9500]);
     expect(d.totals.balance).toBe(9500);
-    expect(warn).toHaveBeenCalled();
-    warn.mockRestore();
   });
 
   it('opening + debits - credits reconciles to the closing balance', () => {

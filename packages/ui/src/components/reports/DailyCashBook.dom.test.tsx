@@ -4,10 +4,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithProviders, createTestQueryClient } from '../../test/renderWithProviders.js';
 
-vi.mock('@pump/shared', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  resolveEntryDate: () => '2026-03-01',
-}));
+// "Today" is 1 Mar 2026; a dated instant still resolves on the real station clock.
+vi.mock('@pump/shared', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@pump/shared')>();
+  return {
+    ...actual,
+    resolveEntryDate: (o: Parameters<typeof actual.resolveEntryDate>[0] = {}) =>
+      o.now ? actual.resolveEntryDate(o) : '2026-03-01',
+  };
+});
 
 const { DailyCashBook } = await import('./DailyCashBook.js');
 const { queryKeys } = await import('../../query/hooks.js');
@@ -190,6 +195,38 @@ describe('DailyCashBook', () => {
     expect(screen.getByRole('note').textContent).toMatch(/don.t add up/);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it("dates every row with the book's date; a back-dated record keeps its station-clock time", () => {
+    const qc = seed('2026-03-01', [
+      account({
+        id: 'c',
+        name: 'Cash in Hand',
+        accountType: 'CASH_IN_HAND',
+        moneyOut: 50,
+        closing: -50,
+        entries: [
+          {
+            id: 'e1',
+            direction: 'out',
+            amount: 50,
+            sourceType: 'EXPENSE',
+            sourceId: 'x1',
+            // Recorded on 3 Mar, back-dated into the 1 Mar book.
+            createdAt: '2026-03-03T10:00:00.000Z',
+          },
+        ],
+      }),
+    ]);
+    renderWithProviders(<DailyCashBook selectedStation={STATION} />, { queryClient: qc });
+
+    fireEvent.click(screen.getByRole('row', { name: 'Cash in Hand entries' }));
+    const table = screen.getByRole('table', { name: 'Cash in Hand entries' });
+    const row = within(table).getByText('Expense').closest('tr')!;
+    expect(row.textContent).toContain('01 Mar 2026');
+    expect(row.textContent).not.toContain('03 Mar');
+    // 10:00 UTC on the station clock (Asia/Kolkata).
+    expect(row.textContent).toMatch(/03:30\s*pm/i);
   });
 
   it('steps back a day and shows the empty state when no accounts exist', () => {

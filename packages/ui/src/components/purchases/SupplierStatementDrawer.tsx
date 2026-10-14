@@ -1,6 +1,11 @@
 import React, { useMemo } from 'react';
 import { Drawer } from '../Drawer.js';
-import { StatementView, buildLedgerStatement, partyEntries } from '../../statement/index.js';
+import {
+  StatementView,
+  buildLedgerStatement,
+  partyEntries,
+  type StatementClock,
+} from '../../statement/index.js';
 import { Button, DataSection, Icon, StatusChip } from '../../pump-ds/index.js';
 import { partyState } from '@pump/shared';
 import { inr } from '../../utils/format.js';
@@ -11,6 +16,8 @@ interface SupplierStatementDrawerProps {
   /** Selected supplier; null closes the drawer. */
   supplier: any | null;
   stationId: string | null;
+  /** The station clock: dates a row the server sent no date for. */
+  clock?: StatementClock;
   onClose: () => void;
   onEdit: (supplier: any) => void;
   onNewPurchase: (supplier: any) => void;
@@ -25,15 +32,22 @@ interface SupplierStatementDrawerProps {
 export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = ({
   supplier,
   stationId,
+  clock,
   onClose,
   onEdit,
   onNewPurchase,
 }) => {
   const ledgerQ = useSupplierLedger(supplier?.id);
   // All-time ledger: no opening balance, the running balance starts at zero.
+  const timeZone = clock?.timeZone;
+  const dayStartsAt = clock?.dayStartsAt;
   const statement = useMemo(
-    () => buildLedgerStatement(partyEntries(ledgerQ.data ?? [], 'supplier'), { kind: 'supplier' }),
-    [ledgerQ.data],
+    () =>
+      buildLedgerStatement(partyEntries(ledgerQ.data ?? [], 'supplier'), {
+        kind: 'supplier',
+        clock: { timeZone, dayStartsAt },
+      }),
+    [ledgerQ.data, timeZone, dayStartsAt],
   );
   const owed = Number(supplier?.currentBalance || 0);
 

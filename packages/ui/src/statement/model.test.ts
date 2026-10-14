@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { buildLedgerStatement, placeDate, type LedgerStatementEntry } from './model.js';
 import { sourceLabel } from './sources.js';
 
@@ -64,7 +64,6 @@ describe('buildLedgerStatement: running balance', () => {
   });
 
   it("works the balances out from the entries, and says so, when the server's don't add up", () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const s = buildLedgerStatement(
       [
         entry({ id: 'a', amount: 100, balance: '777.00' }),
@@ -76,12 +75,9 @@ describe('buildLedgerStatement: running balance', () => {
     expect(s.rows.map((r) => r.balance)).toEqual([100, 200]);
     expect(s.closing).toBe(200);
     expect(s.reconciled).toBe(false);
-    expect(warn).toHaveBeenCalledOnce();
-    warn.mockRestore();
   });
 
   it("checks the server's closing even when the rows carry no balance", () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const s = buildLedgerStatement([entry({ id: 'a', amount: 100 })], {
       kind: 'account',
       opening: 50,
@@ -89,11 +85,9 @@ describe('buildLedgerStatement: running balance', () => {
     });
     expect(s.closing).toBe(150);
     expect(s.reconciled).toBe(false);
-    warn.mockRestore();
   });
 
   it("checks the server's money in / out against the column totals", () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const entries = [entry({ id: 'a', amount: 300 }), entry({ id: 'b', amount: -120 })];
     const ok = buildLedgerStatement(entries, {
       kind: 'account',
@@ -109,7 +103,6 @@ describe('buildLedgerStatement: running balance', () => {
       totals: { debit: 300, credit: 100 },
     });
     expect(off.reconciled).toBe(false);
-    warn.mockRestore();
   });
 
   it('computes every balance itself when a row lacks the server figure', () => {

@@ -33,6 +33,28 @@ export interface StatementViewProps {
 export const NOT_RECONCILED_NOTE =
   "These entries don't add up to the balance on record, so the balances shown are worked out from the entries.";
 
+/**
+ * Logs a statement that doesn't reconcile, once per statement shown: an
+ * effect, not the build (StrictMode renders twice), and guarded by a ref so
+ * StrictMode's re-run of the effect doesn't log it again.
+ */
+function useWarnOnce(statement: LedgerStatement, label: string): void {
+  const warned = useRef<string | null>(null);
+  const key = statement.reconciled
+    ? null
+    : [statement.kind, label, statement.opening, statement.closing, statement.rows.length].join(
+        '|',
+      );
+  useEffect(() => {
+    if (key === null || warned.current === key) return;
+    warned.current = key;
+    console.warn(
+      `[statement] ${label}: the entries don't add up to the server's balances; showing balances worked out from the entries.`,
+      { kind: statement.kind, opening: statement.opening, closing: statement.closing },
+    );
+  }, [key, label, statement]);
+}
+
 /** A blank cell for a side the line did not move, as the PDF prints it. */
 const money = (v: number | null): string => (v ? formatMoney(v) : '');
 
@@ -101,6 +123,7 @@ export const StatementView: React.FC<StatementViewProps> = ({
   useEffect(() => {
     if (scrollToEnd && rowCount > 0) end.current?.scrollIntoView?.({ block: 'end' });
   }, [scrollToEnd, rowCount]);
+  useWarnOnce(statement, label);
   const noRows = rowCount === 0;
   if (noRows && statement.opening === null) {
     return <p className="px-2 py-1.5 text-xs text-ink-muted">{emptyMessage}</p>;

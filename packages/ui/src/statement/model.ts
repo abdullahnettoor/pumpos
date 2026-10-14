@@ -166,7 +166,7 @@ function reconciles(
  * each signed amount. The server's figures (each row's balance, the closing,
  * the column totals) are checked against them. When they agree the statement
  * prints them; when they don't, it prints its own, marks itself
- * `reconciled: false` (the screen says so) and logs a warning. It never prints
+ * `reconciled: false` (the screen says so, and logs it once). It never prints
  * a closing the rows don't add up to.
  *
  * An all-time statement (no `opening`) whose first entry is an imported
@@ -225,12 +225,6 @@ export function buildLedgerStatement(
     { debit, credit },
     { closing, totals: givenTotals },
   );
-  if (!reconciled) {
-    console.warn(
-      `[statement] ${kind}: the entries don't add up to the server's balances; showing balances worked out from the entries.`,
-      { opening: start / 100, closing: running / 100, serverClosing: closing ?? null },
-    );
-  }
   return {
     kind,
     normal,
