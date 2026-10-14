@@ -368,7 +368,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
             {
               id: 'registry',
               label: 'Suppliers',
-              concept: 'supplier-list',
+              concept: 'suppliers',
             },
             { id: 'transactions', label: 'Purchases', concept: 'purchases' },
           ]}

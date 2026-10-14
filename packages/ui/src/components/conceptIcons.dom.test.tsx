@@ -152,6 +152,43 @@ describe('concept → icon map (#523)', () => {
     expect(tabGlyph(concept)).toBe(expected);
   });
 
+  /** The glyph a page shows in the sidebar. */
+  const sidebarGlyph = (label: string) =>
+    glyph(
+      within(screen.getByRole('navigation', { name: 'Main' }))
+        .getAllByRole('button')
+        .find((b) => b.textContent?.startsWith(label)),
+    );
+
+  it.each([
+    ['New expense', 'Expenses'],
+    ['New income', 'Income'],
+    ['New customer', 'Customers'],
+  ] as const)('palette “%s” shows the sidebar glyph of %s', (label, page) => {
+    renderShell();
+    const expected = sidebarGlyph(page);
+    const palette = openPalette();
+    const option = within(palette)
+      .getAllByRole('option')
+      .find((o) => o.textContent === label);
+    expect(expected).toBeDefined();
+    expect(glyph(option)).toBe(expected);
+  });
+
+  it.each([
+    ['Expenses', 'expenses'],
+    ['Income', 'income'],
+    ['Customers', 'customers'],
+    ['Suppliers', 'suppliers'],
+    ['Accounts', 'accounts'],
+  ] as const)('the %s tab inside its page shows the sidebar glyph', (page, concept) => {
+    renderShell();
+    const expected = sidebarGlyph(page);
+    cleanup();
+    expect(expected).toBeDefined();
+    expect(tabGlyph(concept)).toBe(expected);
+  });
+
   it('a Reports sub-navigation item shows the same glyph as the tab of that concept', () => {
     const concepts: Concept[] = ['decantations', 'gst', 'ledgers', 'dssr'];
     render(
