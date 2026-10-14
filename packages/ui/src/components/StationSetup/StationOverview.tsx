@@ -18,10 +18,12 @@ import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
 import { ShiftTemplates } from './ShiftTemplates.js';
 import { Tabs } from '../../pump-ds/tabs/index.js';
+import { PageFrame } from '../page-frame/index.js';
+import { ROUTES } from '../../nav-intent/routes.js';
 import { Field, TextInput, Select } from '../primitives/Field.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
-import { PageHeader, Panel, Button, EmptyState, Chip, Form } from '../../pump-ds/index.js';
+import { Panel, Button, EmptyState, Chip, Form } from '../../pump-ds/index.js';
 import { Building2 } from 'lucide-react';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
 import { TankLevelSettingsPanel } from './TankLevelSettingsPanel.js';
@@ -257,18 +259,11 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
   }
 
   return (
-    <div
-      style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}
-      className="animate-fade-in"
-    >
-      <PageHeader
-        title="Station"
-        subtitle="Review and modify station components, products, tanks, nozzles, and settings."
-      />
-
-      {selectedStation ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Tabs bar */}
+    <PageFrame
+      route={ROUTES.station}
+      subtitle="Review and modify station components, products, tanks, nozzles, and settings."
+      tabs={
+        selectedStation ? (
           <Tabs
             aria-label="Station setup"
             activeId={activeTab}
@@ -307,7 +302,11 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                 : []),
             ]}
           />
-
+        ) : undefined
+      }
+    >
+      {selectedStation ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Report templates carry their own panels (moved from Reports, #540). */}
           {activeTab === 'report-templates' && canManageReportTemplates(userRole) && (
             <ReportTemplatesPanel selectedStation={selectedStation} />
@@ -1170,6 +1169,6 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
           description="Please select or initialize a station location first."
         />
       )}
-    </div>
+    </PageFrame>
   );
 };

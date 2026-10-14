@@ -104,6 +104,11 @@ export const NAV_PAGES: readonly NavPage[] = [
   },
 ];
 
+/** A page's title: its sidebar label (#523). */
+export function pageTitle(path: RoutePath): string {
+  return NAV_PAGES.find((p) => p.path === path)?.label ?? '';
+}
+
 /**
  * Sidebar groups. Items are matched by path; order within a group follows
  * `paths`. Anything unmatched falls into a trailing group.

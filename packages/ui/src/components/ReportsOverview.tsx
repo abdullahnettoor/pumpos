@@ -5,7 +5,8 @@ import { CloudShiftService } from '../services/cloud.js';
 import { useDailyDssrRange } from '../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { DailyDssrView } from './DailyDssrView.js';
-import { PageLayout } from './primitives/PageLayout.js';
+import { PageFrame } from './page-frame/index.js';
+import { ROUTES } from '../nav-intent/routes.js';
 import { DataTable } from './primitives/DataTable.js';
 import { DateField } from './primitives/Field.js';
 import { ExpenseRegister } from './reports/ExpenseRegister.js';
@@ -295,8 +296,8 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
   }
 
   return (
-    <PageLayout
-      title="Reports"
+    <PageFrame
+      route={ROUTES.reports}
       subtitle="Daily sales summaries, profit & loss, ledgers, and tax registers."
     >
       <div className="grid grid-cols-[200px_minmax(0,1fr)] gap-4">
@@ -443,6 +444,6 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
           )}
         </div>
       </div>
-    </PageLayout>
+    </PageFrame>
   );
 };

@@ -124,6 +124,8 @@ export { useStationAlerts } from './query/useStationAlerts.js';
 export type { StationAlert, AlertSeverity } from './query/useStationAlerts.js';
 export { PageLayout } from './components/primitives/PageLayout.js';
 export type { PageLayoutProps } from './components/primitives/PageLayout.js';
+export { PageFrame } from './components/page-frame/index.js';
+export type { PageFrameProps } from './components/page-frame/index.js';
 export { DataTable } from './components/primitives/DataTable.js';
 export type { DataTableProps } from './components/primitives/DataTable.js';
 export { Tabs } from './pump-ds/tabs/index.js';
