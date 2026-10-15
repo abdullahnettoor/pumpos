@@ -55,6 +55,24 @@ export function formatCalendarDate(iso: string, opts: { year?: DisplayYear } = {
 }
 
 /**
+ * A range of calendar dates (`YYYY-MM-DD`) in the same style, sharing what
+ * both ends share: `1–15 Oct 2026`, `28 Sep – 15 Oct 2026`,
+ * `28 Dec 2025 – 3 Jan 2026`, or one day as `5 Oct 2026`. Returns the inputs
+ * joined unchanged when either isn't a date.
+ */
+export function formatCalendarRange(from: string, to: string): string {
+  const a = CALENDAR_DATE.exec(from);
+  const b = CALENDAR_DATE.exec(to);
+  if (!a || !b) return `${from} – ${to}`;
+  if (from === to) return formatCalendarDate(from);
+  const [ay, am, ad] = [Number(a[1]), Number(a[2]), Number(a[3])];
+  const [by, bm] = [Number(b[1]), Number(b[2])];
+  if (ay === by && am === bm) return `${ad}–${formatCalendarDate(to)}`;
+  if (ay === by) return `${formatCalendarDate(from, { year: 'none' })} – ${formatCalendarDate(to)}`;
+  return `${formatCalendarDate(from)} – ${formatCalendarDate(to)}`;
+}
+
+/**
  * The calendar day of an instant on a clock: `timeZone`, or this device's
  * zone when omitted. Null for an invalid date.
  */

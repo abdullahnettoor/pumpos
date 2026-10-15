@@ -1,3 +1,4 @@
+import { formatCalendarRange } from '@pump/shared';
 import { formatDayMonth, shortMonth } from '../../utils/format.js';
 
 /**
@@ -6,7 +7,9 @@ import { formatDayMonth, shortMonth } from '../../utils/format.js';
  * - `today`: the station's business day.
  * - `{ month }`: a calendar month, shown as its short name (`Oct`). Pass any
  *   business date in the month (`YYYY-MM-DD`) or the month (`YYYY-MM`).
- * - `in-range`: follows the page's date range.
+ * - `{ range }`: an explicit date range, shown as `1–15 Oct 2026` (#604: never
+ *   a vague word). Leave it off a strip that sits under its range
+ *   control: the control already names the period.
  * - `now`: a balance at this moment. A balance has no period, so it is never
  *   labelled (#604).
  * - `this-shift`: the open Shift so far (#533).
@@ -17,11 +20,15 @@ import { formatDayMonth, shortMonth } from '../../utils/format.js';
  * shows its own chip only when the tiles of one strip cover different periods.
  */
 export type KpiScope =
-  'today' | 'in-range' | 'now' | 'this-shift' | { month: string } | { day: string };
+  | 'today'
+  | 'now'
+  | 'this-shift'
+  | { month: string }
+  | { day: string }
+  | { range: { from: string; to: string } };
 
 const WORDS = {
   today: 'Today',
-  'in-range': 'In range',
   now: 'Now',
   'this-shift': 'This shift',
 } as const;
@@ -29,6 +36,7 @@ const WORDS = {
 export function formatKpiScope(scope: KpiScope): string {
   if (typeof scope === 'string') return WORDS[scope];
   if ('day' in scope) return formatDayMonth(scope.day);
+  if ('range' in scope) return formatCalendarRange(scope.range.from, scope.range.to);
   const m = /^(\d{4})-(\d{2})/.exec(scope.month);
   if (!m) return scope.month;
   return shortMonth(Number(m[2]));
@@ -42,6 +50,7 @@ export function formatKpiScope(scope: KpiScope): string {
 function scopeKey(scope: KpiScope): string {
   if (typeof scope === 'string') return scope;
   if ('day' in scope) return `day:${scope.day.slice(0, 10)}`;
+  if ('range' in scope) return `range:${scope.range.from}:${scope.range.to}`;
   return `month:${scope.month.slice(0, 7)}`;
 }
 

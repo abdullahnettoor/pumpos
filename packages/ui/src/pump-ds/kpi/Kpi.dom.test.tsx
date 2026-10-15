@@ -22,7 +22,9 @@ describe('KpiTile', () => {
 
   it('formats every period through the shared words', () => {
     expect(formatKpiScope('today')).toBe('Today');
-    expect(formatKpiScope('in-range')).toBe('In range');
+    expect(formatKpiScope({ range: { from: '2026-10-01', to: '2026-10-15' } })).toBe(
+      '1–15 Oct 2026',
+    );
     expect(formatKpiScope('now')).toBe('Now');
     expect(formatKpiScope('this-shift')).toBe('This shift');
     expect(formatKpiScope({ day: '2026-10-14' })).toBe('14 Oct');
@@ -90,7 +92,7 @@ describe('KpiTile', () => {
     render(
       <KpiTile
         label="Spent"
-        scope="in-range"
+        scope={{ range: { from: '2026-10-01', to: '2026-10-15' } }}
         value="₹31,475.00"
         delta={{ value: '8%', direction: 'up', neutral: true }}
         hint="vs Sep, same days"

@@ -84,8 +84,10 @@ Build pages from these; the full catalog with props is in
 - **KPI tiles** (`KpiTile` with `scope`, `KpiStrip`, `TileSection`): at most 4,
   plain figures, colour only through `alert`, never repeating a table total
   (Reports excepted). Periods (#604): no label on a balance (`scope="now"`); a
-  period every tile shares is named once on the strip (`KpiStrip scope`); a tile
-  gets its own chip only when the strip mixes periods.
+  period every tile shares is named once on the strip (`KpiStrip scope`), but not
+  under a range control, which names it already; a tile gets its own chip only
+  when the strip mixes periods. Never the words "In range": state the range
+  (`1–15 Oct 2026`, `formatCalendarRange`).
 - **In-page edit forms** (Station details, Organization profile, station rules):
   no standing Save; `UnsavedChangesBar` ("Unsaved changes · Discard · Save",
   Save primary) shows only while the form is dirty, one per tab; React Hook Form +

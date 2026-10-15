@@ -46,7 +46,7 @@ export interface KpiTileProps
   /** The figure, pre-formatted (`inr(…)`, `formatQuantity(…)`). */
   value: ReactNode;
   /**
-   * The period the figure covers: Today · a month (Oct) · In range · This
+   * The period the figure covers: Today · a month (Oct) · a range (1–15 Oct 2026) · This
    * shift · `now` for a balance (never shown). The chip is dropped when the
    * strip's `scope` names the same period.
    */

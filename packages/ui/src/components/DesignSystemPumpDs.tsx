@@ -316,7 +316,7 @@ const KpiStripShowcase: React.FC = () => (
         <KpiTile
           size="lg"
           label="Net profit"
-          scope="in-range"
+          scope={{ range: { from: '2026-10-01', to: '2026-10-14' } }}
           value="₹18,42,000.00"
           delta={{ value: '8.6%', direction: 'up' }}
           hint="vs previous 14 days"
