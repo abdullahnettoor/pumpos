@@ -4,7 +4,7 @@ import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { RangedPartyLedger } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
-import { usePartyStatement } from './hooks.js';
+import { usePartyStatement, type StatementParty } from './hooks.js';
 
 /**
  * "Earlier months" widens the range, which changes the query key. The rows of
@@ -51,6 +51,10 @@ const kinds: Array<{
   { kind: 'supplier', method: 'getSupplierLedgerRange', type: 'Purchase', p1: 's-1', p2: 's-2' },
 ];
 
+/** A supplier's statement is read at one Station (#575); a customer's names none. */
+const partyOf = (kind: 'customer' | 'supplier', id: string, stationId = 'st-1'): StatementParty =>
+  kind === 'customer' ? { kind, id } : { kind, id, stationId };
+
 describe.each(kinds)('usePartyStatement ($kind)', ({ kind, method, type, p1, p2 }) => {
   // Both ranged-ledger readers share one shape: (partyId, range) => ledger.
   const spy = () =>
@@ -69,7 +73,8 @@ describe.each(kinds)('usePartyStatement ($kind)', ({ kind, method, type, p1, p2 
     );
     const { wrapper } = setup();
     const { result, rerender } = renderHook(
-      ({ from }: { from: string }) => usePartyStatement(kind, p1, { from, to: '2026-10-31' }),
+      ({ from }: { from: string }) =>
+        usePartyStatement(partyOf(kind, p1), { from, to: '2026-10-31' }),
       { wrapper, initialProps: { from: '2026-05-01' } },
     );
     await waitFor(() => expect(result.current.data?.entries[0].id).toBe('six-months'));
@@ -91,7 +96,7 @@ describe.each(kinds)('usePartyStatement ($kind)', ({ kind, method, type, p1, p2 
     const { wrapper } = setup();
     const { result, rerender } = renderHook(
       ({ id }: { id: string }) =>
-        usePartyStatement(kind, id, { from: '2026-05-01', to: '2026-10-31' }),
+        usePartyStatement(partyOf(kind, id), { from: '2026-05-01', to: '2026-10-31' }),
       { wrapper, initialProps: { id: p1 } },
     );
     await waitFor(() => expect(result.current.data?.entries[0].id).toBe(`${p1}-row`));
@@ -108,7 +113,8 @@ describe.each(kinds)('usePartyStatement ($kind)', ({ kind, method, type, p1, p2 
     );
     const { wrapper } = setup();
     const { result, rerender } = renderHook(
-      ({ from, to }: { from: string; to: string }) => usePartyStatement(kind, p1, { from, to }),
+      ({ from, to }: { from: string; to: string }) =>
+        usePartyStatement(partyOf(kind, p1), { from, to }),
       { wrapper, initialProps: { from: '2026-10-01', to: '2026-10-31' } },
     );
     await waitFor(() => expect(result.current.data?.entries[0].id).toBe('this-month'));
@@ -117,5 +123,47 @@ describe.each(kinds)('usePartyStatement ($kind)', ({ kind, method, type, p1, p2 
     rerender({ from: '2026-09-01', to: '2026-09-30' });
     expect(result.current.data).toBeUndefined();
     expect(result.current.isLoading).toBe(true);
+  });
+});
+
+describe("usePartyStatement (a supplier's Station)", () => {
+  it("reads the statement at the Station, and never shows another Station's rows", async () => {
+    const calls: Array<string | undefined> = [];
+    vi.spyOn(CloudTransactionService.prototype, 'getSupplierLedgerRange').mockImplementation(
+      async (_id, _range, stationId) => {
+        calls.push(stationId);
+        return stationId === 'st-1'
+          ? ledger('highway-row', 'Purchase')
+          : new Promise<RangedPartyLedger>(() => {});
+      },
+    );
+    const { wrapper } = setup();
+    const { result, rerender } = renderHook(
+      ({ stationId }: { stationId: string }) =>
+        usePartyStatement(
+          { kind: 'supplier', id: 's-1', stationId },
+          { from: '2026-10-01', to: '2026-10-31' },
+        ),
+      { wrapper, initialProps: { stationId: 'st-1' } },
+    );
+    await waitFor(() => expect(result.current.data?.entries[0].id).toBe('highway-row'));
+    rerender({ stationId: 'st-2' });
+    expect(result.current.data).toBeUndefined();
+    expect(calls).toEqual(['st-1', 'st-2']);
+  });
+
+  it('waits for a Station before reading', () => {
+    const read = vi.spyOn(CloudTransactionService.prototype, 'getSupplierLedgerRange');
+    const { wrapper } = setup();
+    const { result } = renderHook(
+      () =>
+        usePartyStatement(
+          { kind: 'supplier', id: 's-1', stationId: null },
+          { from: '2026-10-01', to: '2026-10-31' },
+        ),
+      { wrapper },
+    );
+    expect(result.current.fetchStatus).toBe('idle');
+    expect(read).not.toHaveBeenCalled();
   });
 });

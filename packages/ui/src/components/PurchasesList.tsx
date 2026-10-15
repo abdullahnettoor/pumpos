@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { resolveBusinessDate, resolveEntryDate } from '@pump/shared';
 import { useNavIntent, clearNavIntent, type NavIntent } from '../nav-intent/store.js';
 import { ROUTES } from '../nav-intent/routes.js';
-import { usePayables, usePurchases, useSuppliers } from '../query/hooks.js';
+import { usePayables, usePurchases, useStationSuppliers } from '../query/hooks.js';
 import { openQuickEntry } from '../quick-entry/store.js';
 import { Button, Icon, Tabs, tabPanelProps, type TabItem } from '../pump-ds/index.js';
 import { PageFrame } from './page-frame/index.js';
@@ -32,8 +32,9 @@ const TABS: TabItem[] = [
 ];
 
 /**
- * The Suppliers page (#528, #540): Suppliers · Purchases · Payments. The
- * supplier list is a balance list and the other two are ledgers, all layout B
+ * The Suppliers page (#528, #540): Suppliers · Purchases · Payments, all for
+ * the selected Station (#575). The supplier list is a balance list and the
+ * other two are ledgers, all layout B
  * (#567): fixed tiles on top, each table's controls in its own header. Every
  * region loads in its own Data Section, so one failing request never blanks
  * the page. Recording opens the shared Office Record drawer (#526).
@@ -68,9 +69,11 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
 
   const stationId = selectedStation?.id ?? null;
   const purchasesQ = usePurchases(stationId ?? '');
-  const suppliersQ = useSuppliers(false);
-  // Payable and the month's purchased / paid: the server's payables summary,
-  // the same figures the Dashboard and the mobile Money tab show.
+  // Supplier figures are per Station (#575): each pump has its own account with
+  // its OMC. The list (this Station's and shared suppliers, balanced on its own
+  // ledger) and the payables summary read the same ledger, so the tiles agree
+  // with the rows below them, and with the Dashboard and the mobile Money tab.
+  const suppliersQ = useStationSuppliers(stationId, false);
   const payablesQ = usePayables(stationId);
   const allSuppliers = useMemo<SupplierRow[]>(() => suppliersQ.data ?? [], [suppliersQ.data]);
 
