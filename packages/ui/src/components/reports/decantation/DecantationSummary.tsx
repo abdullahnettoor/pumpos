@@ -1,5 +1,9 @@
 import React from 'react';
-import type { DecantationReportProductTotal, DecantationReportTotals } from '@pump/shared';
+import {
+  variancePresentation,
+  type DecantationReportProductTotal,
+  type DecantationReportTotals,
+} from '@pump/shared';
 import {
   InteractiveTable,
   KpiStrip,
@@ -8,10 +12,16 @@ import {
   type TableColumn,
 } from '../../../pump-ds/index.js';
 import { formatQuantity } from '../../../utils/format.js';
+import { formatStockVariance } from '../../../utils/variance.js';
 import { litres } from './vocabulary.js';
 
-const varianceWord = (v: number): string =>
-  v < 0 ? 'station decantation loss' : v > 0 ? 'station decantation excess' : 'exact match';
+/** Balanced by the shared quantity rule (#556), else the variance's sign. */
+const VARIANCE_WORD = {
+  short: 'station decantation loss',
+  surplus: 'station decantation excess',
+  balanced: 'exact match',
+} as const;
+const varianceWord = (v: number): string => VARIANCE_WORD[variancePresentation(v, 'stock').state];
 
 /**
  * The report's four headline figures, all server-composed and all following
@@ -33,9 +43,11 @@ export const DecantationSummary: React.FC<{ totals: DecantationReportTotals }> =
       hint={`${litres(t.pendingInvoiceQty)} pending · ${t.settlingInvoiceCount} settling`}
     />
     <KpiTile
-      alert={t.totalVarianceQty < 0 ? 'danger' : undefined}
+      alert={
+        variancePresentation(t.totalVarianceQty, 'stock').state === 'short' ? 'danger' : undefined
+      }
       label="Settled invoice variance"
-      value={formatQuantity(t.totalVarianceQty, 'L', { plus: true })}
+      value={formatStockVariance(t.totalVarianceQty, 'L')}
       hint={varianceWord(t.totalVarianceQty)}
     />
     <KpiTile

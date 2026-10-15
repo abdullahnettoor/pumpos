@@ -395,7 +395,7 @@ describe('GetDecantationReport UseCase', () => {
   });
 });
 
-function splitSource(opts: { settled: boolean }): DecantationReportSource {
+function splitSource(opts: { settled: boolean; variance?: number }): DecantationReportSource {
   const settledAt = opts.settled ? '2026-03-06T12:00:00Z' : null;
   const mk = (n: number, qty: number) => ({
     id: `dec-${n}`,
@@ -444,7 +444,7 @@ function splitSource(opts: { settled: boolean }): DecantationReportSource {
     productId: 'prod-ms',
     receivedQty: opts.settled ? qty : null,
     invoiceQty: opts.settled ? 10000 : null,
-    varianceQty: opts.settled ? -100 : null,
+    varianceQty: opts.settled ? (opts.variance ?? -100) : null,
     varianceComputedAt: settledAt,
     invoiceNumber: 'INV-1',
     purchaseDocumentNumber: 'PUR-1',
@@ -527,6 +527,23 @@ describe('split invoices, settling and like-for-like totals (#473 review)', () =
     });
     expect(r.totals.transitDiscrepancies).toBe(3);
   });
+
+  it.each([
+    [0.0004, 'EXACT', 'Exact', 0, 0],
+    [-0.0004, 'EXACT', 'Exact', 0, 0],
+    [-0.001, 'SHORT', 'Short', 0.001, 0],
+    [0.001, 'EXCESS', 'Excess', 0, 0.001],
+  ])(
+    'reads a settled variance of %s by the shared quantity rule (#556)',
+    (variance, type, label, short, excess) => {
+      const r = composeDecantationReport(splitSource({ settled: true, variance }), q, GEN);
+      expect(r.invoices[0]).toMatchObject({ varianceType: type, statusLabel: label });
+      expect(r.productTotals[0]).toMatchObject({
+        shortVarianceQty: short,
+        excessVarianceQty: excess,
+      });
+    },
+  );
 });
 
 describe('weightedInvoiceDensity', () => {

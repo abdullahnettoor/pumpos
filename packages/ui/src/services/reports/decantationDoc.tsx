@@ -5,7 +5,8 @@ import type {
   DecantationReportProductTotal,
   DecantationReportVisit,
 } from '@pump/shared';
-import { formatDate, formatDateTime, formatQuantity } from '../../utils/format.js';
+import { formatDate, formatDateTime } from '../../utils/format.js';
+import { formatStockVariance } from '../../utils/variance.js';
 import { linkState, litres, transitText } from '../../components/reports/decantation/vocabulary.js';
 import {
   C,
@@ -27,7 +28,7 @@ export interface DecantationReportDocProps {
   paper?: 'A4' | 'LETTER';
 }
 
-const signedLitres = (v: number) => formatQuantity(v, 'L', { plus: true });
+const signedLitres = (v: number) => formatStockVariance(v, 'L');
 
 /** The products a visit unloaded, by code: `MS · HSD`. */
 const visitProducts = (v: DecantationReportVisit): string =>
@@ -39,7 +40,7 @@ const visitProducts = (v: DecantationReportVisit): string =>
  */
 function visitVariance(v: DecantationReportVisit): Cell {
   if (v.totalVarianceQty != null) {
-    return { text: signedLitres(v.totalVarianceQty), color: varColor(v.totalVarianceQty) };
+    return { text: signedLitres(v.totalVarianceQty), color: varColor(v.totalVarianceQty, 'stock') };
   }
   const waiting = v.invoiceLinks.map(linkState).find(Boolean);
   return { text: waiting?.label ?? '—', color: C.muted };
@@ -92,7 +93,7 @@ export function decantationVisitTable(report: DecantationReport): {
     { text: '' },
     { text: litres(t.totalInvoiceQty) },
     { text: litres(t.totalReceivedQty) },
-    { text: signedLitres(t.totalVarianceQty), color: varColor(t.totalVarianceQty) },
+    { text: signedLitres(t.totalVarianceQty), color: varColor(t.totalVarianceQty, 'stock') },
     {
       text: `${t.transitDiscrepancies} ${t.transitDiscrepancies === 1 ? 'discrepancy' : 'discrepancies'}`,
       color: t.transitDiscrepancies > 0 ? C.danger : C.ink,
@@ -113,7 +114,7 @@ const productRow = (p: DecantationReportProductTotal): Cell[] => [
   { text: p.productName, detail: p.productCode },
   { text: litres(p.settledReceivedQty) },
   { text: litres(p.totalInvoiceQty) },
-  { text: signedLitres(p.totalVarianceQty), color: varColor(p.totalVarianceQty) },
+  { text: signedLitres(p.totalVarianceQty), color: varColor(p.totalVarianceQty, 'stock') },
   { text: p.pendingReceivedQty > 0 ? litres(p.pendingReceivedQty) : '—' },
 ];
 
@@ -159,7 +160,7 @@ export const DecantationReportDoc: React.FC<DecantationReportDocProps> = ({
           <Kpi
             l="Settled invoice variance"
             v={signedLitres(t.totalVarianceQty)}
-            c={t.totalVarianceQty < 0 ? C.danger : C.ink}
+            c={varColor(t.totalVarianceQty, 'stock') === C.danger ? C.danger : C.ink}
           />
           <Kpi
             l="Transit discrepancies"

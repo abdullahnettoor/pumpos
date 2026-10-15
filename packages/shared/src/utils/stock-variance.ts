@@ -1,4 +1,20 @@
 /**
+ * Quantities (litres, kg, counted items) are recorded to 3 decimals, so a
+ * quantity variance smaller than half that step (half a millilitre) is float
+ * noise and reads as balanced. The quantity twin of `VARIANCE_EPSILON` (money,
+ * half a paisa).
+ */
+export const QUANTITY_EPSILON = 0.0005;
+
+/**
+ * True when a quantity variance is zero to the recorded step (3 decimals). The
+ * one balanced rule for stock: a stock count, a DSSR stock line and a
+ * Decantation's received − invoiced all read balanced by it, on the server
+ * and on screen. Money uses `isBalancedVariance`.
+ */
+export const isBalancedQuantity = (q: number) => Math.abs(q) < QUANTITY_EPSILON;
+
+/**
  * A tank's dip variance (actual dip - book) counts as within tolerance up to
  * this share of the litres it sold. Loss and gain are judged alike by size: an
  * unexplained gain points at a missed Purchase or a bad dip as much as a loss
@@ -18,13 +34,14 @@ export const STOCK_VARIANCE_TOLERANCE_PCT = 0.5;
 /**
  * Whether a tank's dip variance (signed, dip - book) is inside tolerance.
  * Judged on the SIZE of the variance against litres sold, so a tank that sold
- * nothing (or whose sales are unknown, `null`) is within tolerance only with no
- * variance at all.
+ * nothing (or whose sales are unknown, `null`) is within tolerance only with a
+ * balanced variance (`isBalancedQuantity`).
  */
 export function isStockVarianceWithinTolerance(
   varianceLitres: number,
   soldLitres: number | null,
 ): boolean {
+  if (isBalancedQuantity(varianceLitres)) return true;
   const allowed = (Math.max(soldLitres ?? 0, 0) * STOCK_VARIANCE_TOLERANCE_PCT) / 100;
   return Math.abs(varianceLitres) <= allowed + 1e-9;
 }

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { dssrDayStatus, readDssrDay } from './dssrModel.js';
 import {
+  dssrCellTone,
   FUEL_PRODUCT_COLUMNS,
+  FUEL_STOCK_COLUMNS,
   shiftColumns,
   ATTENDANT_COLUMNS,
   attendantTotalNotes,
@@ -51,17 +53,35 @@ describe('readDssrDay', () => {
     ]);
   });
 
-  it('reads stock variance through the shared vocabulary', () => {
+  it('reads stock variance through the shared vocabulary and quantity rule', () => {
     const day = readDssrDay({
       snapshotData: {
         fuelStockVariance: [
           { tankName: 'T1', varianceQuantity: -2 },
           { tankName: 'T2', varianceQuantity: 3 },
-          { tankName: 'T3', varianceQuantity: 0.001 },
+          { tankName: 'T3', varianceQuantity: 0.0004 },
+          // 1 ml is a recorded step, not noise (#556).
+          { tankName: 'T4', varianceQuantity: 0.001 },
+        ],
+      },
+    });
+    expect(day.fuelStock.map((r) => r.status)).toEqual(['short', 'surplus', 'balanced', 'surplus']);
+  });
+
+  it("keeps a snapshot's frozen stock status, never re-derived under a newer rule (#556)", () => {
+    const day = readDssrDay({
+      snapshotData: {
+        fuelStockVariance: [
+          { tankName: 'T1', varianceQuantity: -2, status: 'Loss' },
+          { tankName: 'T2', varianceQuantity: 0.0004, status: 'Gain' },
+          { tankName: 'T3', varianceQuantity: 0, status: 'OK' },
         ],
       },
     });
     expect(day.fuelStock.map((r) => r.status)).toEqual(['short', 'surplus', 'balanced']);
+    // The figure is tinted by the same frozen status (screen and PDF).
+    const variance = FUEL_STOCK_COLUMNS.find((c) => c.id === 'variance')!;
+    expect(day.fuelStock.map((r) => dssrCellTone(variance, r))).toEqual(['short', 'surplus', null]);
   });
 
   it('never adds volumes across units: the note under the total says so', () => {

@@ -8,12 +8,16 @@
  * `warning` worth a look, `danger` needs action, `neutral` information only.
  */
 import { isBalancedVariance } from './shift-close-cash.js';
+import { isBalancedQuantity } from './stock-variance.js';
 import type { DuStatus } from './handover-status.js';
 import { TANK_TONE_LABEL, type TankLevel } from './tank-level.js';
 
 export type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
-/** A variance read as a state: zero by `isBalancedVariance`, else its sign. */
+/**
+ * A variance read as a state: zero by the balanced rule of its kind
+ * (`isBalancedVariance` for cash, `isBalancedQuantity` for stock), else its sign.
+ */
 export type VarianceStatusState = 'balanced' | 'surplus' | 'short';
 export type HandoverStatusState = 'handover-pending' | 'handover-due' | 'handover-recorded';
 export type ShiftStatusState = 'shift-live' | 'shift-past-end' | 'shift-closed';
@@ -187,7 +191,8 @@ export const tankStates = (
 /**
  * A Decantation's received − invoiced quantity for one product, read against
  * the station's quantity tolerance (a percent of the invoice,
- * `resolveDecantationSettings().quantityTolerance`). Zero matches; a
+ * `resolveDecantationSettings().quantityTolerance`). Zero (by
+ * `isBalancedQuantity`) matches; a
  * difference within tolerance is neutral (transit loss, temperature); beyond
  * it a shortage is Short (red) and an excess Surplus (amber), the variance words.
  */
@@ -198,7 +203,7 @@ export function decantationVarianceState(
   invoiceQty: number | null | undefined,
   tolerancePct: number,
 ): DecantationVarianceState {
-  if (varianceQty === 0) return 'tanker-matches';
+  if (isBalancedQuantity(varianceQty)) return 'tanker-matches';
   const limit = (Math.abs(Number(invoiceQty) || 0) * tolerancePct) / 100;
   if (Math.abs(varianceQty) <= limit) return 'within-tolerance';
   return varianceQty < 0 ? 'short' : 'surplus';
@@ -215,22 +220,21 @@ export interface VariancePresentation extends StatusPresentation {
 }
 
 /**
- * How a variance (counted − expected) reads. Balanced by `isBalancedVariance`
- * (the only balanced rule; no `=== 0`, no percentage band); a surplus is amber,
- * a shortage red. `kind` is the unit the caller formats the figure in (see
- * `formatVariance` in `@pump/ui`); it does not change the rule.
+ * How a variance (counted − expected) reads. Balanced by the shared rule of its
+ * kind: cash by `isBalancedVariance` (half a paisa), stock by
+ * `isBalancedQuantity` (half a millilitre, the recorded step), the same rules
+ * the server uses (#556); no `=== 0`, no percentage band. A surplus is amber,
+ * a shortage red. `kind` is also the unit the caller formats the figure in
+ * (see `formatVariance` in `@pump/ui`).
  */
 export function variancePresentation(
   amount: number | string | null | undefined,
-  _kind: VarianceKind,
+  kind: VarianceKind,
 ): VariancePresentation {
   const n = Number(amount ?? 0);
   const v = Number.isFinite(n) ? n : 0;
-  const state: VarianceStatusState = isBalancedVariance(v)
-    ? 'balanced'
-    : v > 0
-      ? 'surplus'
-      : 'short';
+  const balanced = kind === 'stock' ? isBalancedQuantity(v) : isBalancedVariance(v);
+  const state: VarianceStatusState = balanced ? 'balanced' : v > 0 ? 'surplus' : 'short';
   const sign = state === 'balanced' ? 'zero' : state === 'surplus' ? 'positive' : 'negative';
   return { state, sign, label: VOCABULARY[state].label, tone: VARIANCE_TONE[state] };
 }

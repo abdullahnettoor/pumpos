@@ -1,12 +1,8 @@
 import React from 'react';
-import { DSR_LABEL, variancePresentation, type VarianceKind } from '@pump/shared';
+import { DSR_LABEL, variancePresentation } from '@pump/shared';
 import type { TableColumn, TotalRow } from '../../../pump-ds/index.js';
-import {
-  formatDateTime,
-  formatMoney,
-  formatQuantity,
-  signedMoneyParts,
-} from '../../../utils/format.js';
+import { formatDateTime, formatMoney, signedMoneyParts } from '../../../utils/format.js';
+import { formatStockVariance } from '../../../utils/variance.js';
 import type {
   AttendantRow,
   DssrDay,
@@ -87,17 +83,13 @@ const VARIANCE_TEXT: Record<string, string | undefined> = {
 };
 
 const signedMoney = (amount: number): string => signedMoneyParts(amount, { plus: true }).text;
-const signedQty = (amount: number, unit: string): string =>
-  formatQuantity(amount, unit, { plus: true });
 
-const VarianceFigure: React.FC<{ amount: number; kind: VarianceKind; children: string }> = ({
-  amount,
-  kind,
-  children,
-}) => <span className={VARIANCE_TEXT[variancePresentation(amount, kind).state]}>{children}</span>;
+const VarianceFigure: React.FC<{ state: string; children: string }> = ({ state, children }) => (
+  <span className={VARIANCE_TEXT[state]}>{children}</span>
+);
 
 const SignedMoney: React.FC<{ amount: number }> = ({ amount }) => (
-  <VarianceFigure amount={amount} kind="cash">
+  <VarianceFigure state={variancePresentation(amount, 'cash').state}>
     {signedMoney(amount)}
   </VarianceFigure>
 );
@@ -113,6 +105,9 @@ const VARIANCE_COLUMNS = new Set(['variance', 'attendantVariance', 'officeVarian
 export function dssrCellTone<T>(col: TableColumn<T>, row: T): 'short' | 'surplus' | null {
   let state: string | null = null;
   if (col.kind === 'status') state = col.value(row);
+  // A stock line's figure takes its Status, frozen with the snapshot (#556).
+  else if (col === (STOCK_VARIANCE as TableColumn<unknown>))
+    state = (row as StockVarianceRow).status;
   else if (VARIANCE_COLUMNS.has(col.id)) {
     const v = col.value(row);
     state = v == null || v === '' ? null : variancePresentation(v as number, 'cash').state;
@@ -199,11 +194,9 @@ const STOCK_VARIANCE: TableColumn<StockVarianceRow> = {
   kind: 'qty',
   unit: (r) => r.unit,
   value: (r) => r.variance,
-  text: (r) => signedQty(r.variance, r.unit),
+  text: (r) => formatStockVariance(r.variance, r.unit),
   cell: (r) => (
-    <VarianceFigure amount={r.variance} kind="stock">
-      {signedQty(r.variance, r.unit)}
-    </VarianceFigure>
+    <VarianceFigure state={r.status}>{formatStockVariance(r.variance, r.unit)}</VarianceFigure>
   ),
 };
 

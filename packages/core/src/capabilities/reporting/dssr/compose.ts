@@ -1,4 +1,10 @@
-import { drawerKey, isTwoLevelVarianceSnapshot, round2, type ProductType } from '@pump/shared';
+import {
+  drawerKey,
+  isBalancedQuantity,
+  isTwoLevelVarianceSnapshot,
+  round2,
+  type ProductType,
+} from '@pump/shared';
 import type { DssrSourceData } from './ports.js';
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
@@ -204,7 +210,13 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
         v.productId && source.products[v.productId]
           ? Number(source.products[v.productId].costBasis || 0)
           : 0,
-      status: v.varianceQuantity < 0 ? 'Loss' : v.varianceQuantity > 0 ? 'Gain' : 'OK',
+      // Balanced by the shared quantity rule (#556), frozen with the snapshot:
+      // an earlier snapshot keeps the status it was composed with.
+      status: isBalancedQuantity(v.varianceQuantity)
+        ? 'OK'
+        : v.varianceQuantity < 0
+          ? 'Loss'
+          : 'Gain',
       // The tank's litres over the day (#395), additive: snapshots frozen before it lack the key.
       ...(m
         ? {

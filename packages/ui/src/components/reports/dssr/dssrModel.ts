@@ -118,6 +118,17 @@ const num = (v: unknown): number => {
 const list = (v: unknown): any[] => (Array.isArray(v) ? v : []);
 const optionalNum = (v: unknown): number | null => (v == null ? null : num(v));
 
+/**
+ * A stock line's status as the snapshot froze it (`composeDssr`): a DSSR is
+ * never re-read under a newer balanced rule (#556). Only a row without one
+ * falls back to the shared rule on its frozen variance.
+ */
+const FROZEN_STOCK_STATUS: Record<string, StockVarianceRow['status']> = {
+  OK: 'balanced',
+  Gain: 'surplus',
+  Loss: 'short',
+};
+
 const stockRows = (rows: any[], withProduct: boolean, fallbackUnit: string): StockVarianceRow[] =>
   rows.map((v, i) => {
     const variance = num(v.varianceQuantity);
@@ -129,8 +140,8 @@ const stockRows = (rows: any[], withProduct: boolean, fallbackUnit: string): Sto
       book: num(v.expectedQuantity),
       actual: num(v.actualQuantity),
       variance,
-      // One balanced rule and one word set for every variance (#518).
-      status: variancePresentation(variance, 'stock').state,
+      // One word set for every variance (#518), the status frozen with the day.
+      status: FROZEN_STOCK_STATUS[v.status] ?? variancePresentation(variance, 'stock').state,
     };
   });
 

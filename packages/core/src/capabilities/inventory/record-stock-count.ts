@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { resolveBusinessDate } from '@pump/shared';
+import { isBalancedQuantity, resolveBusinessDate } from '@pump/shared';
 import {
   BusinessEvents,
   err,
@@ -214,7 +214,12 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
       ? await this.deps.movements.currentQuantityForTank(cmd.tankId as string)
       : await this.deps.movements.currentQuantityForProduct(ctx.organizationId, productId);
     const actual = cmd.actualQuantity;
-    const varianceQuantity = actual - expected;
+    // One balanced rule for quantities (#556): a variance under half the
+    // recorded step (3 decimals) is float noise. It is stored as 0 and posts no
+    // Variance movement, so the stock_variance row and the ledger agree.
+    const rawVariance = actual - expected;
+    const balanced = isBalancedQuantity(rawVariance);
+    const varianceQuantity = balanced ? 0 : rawVariance;
 
     const now = ctx.clock.now().toISOString();
     const variance: StockVariance = {
@@ -235,7 +240,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     };
     await this.deps.variances.save(variance);
 
-    if (varianceQuantity !== 0 && !openShiftAtRecording) {
+    if (!balanced && !openShiftAtRecording) {
       const movement: StockMovement = {
         id: ctx.ids.newId(),
         shiftId: cmd.shiftId ?? null,
@@ -273,7 +278,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
         },
       }),
     ];
-    if (varianceQuantity !== 0) {
+    if (!balanced) {
       events.push(
         relatedEventFromContext(ctx, {
           eventType: BusinessEvents.VARIANCE_RECORDED,

@@ -3,6 +3,7 @@ import {
   DEFAULT_DENSITY_METHOD,
   DEFAULT_DENSITY_TOLERANCE_KG_M3,
   density15FromObserved,
+  densityChangeExceedsTolerance,
   resolveBusinessDate,
   roundDensity,
   type DensityMethod,
@@ -136,8 +137,9 @@ export class RecordDensityReading implements UseCase<RecordDensityReadingCommand
 
     if (prev) {
       deltaVsPrevious = roundDensity(density15Val - prev.density15, 2);
-      const absDelta = Math.abs(deltaVsPrevious);
-      if (absDelta > tolerance) {
+      // The client's jump rule (#556): judged on the change as shown (1 dp), so
+      // a +3.04 at tolerance 3 reads "+3.0" and is not a jump on either side.
+      if (densityChangeExceedsTolerance(deltaVsPrevious, tolerance)) {
         const wasDecantation = prev.kind === 'DECANTATION';
         let hasInterveningDecantation = wasDecantation;
         if (!hasInterveningDecantation) {

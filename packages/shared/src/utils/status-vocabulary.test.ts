@@ -102,6 +102,9 @@ describe('state mappers', () => {
     expect(decantationVarianceState(-61, 12000, 0.5)).toBe('short');
     expect(decantationVarianceState(61, 12000, 0.5)).toBe('surplus');
     expect(decantationVarianceState(-1, null, 0.5)).toBe('short'); // no invoice: no allowance
+    // Balanced by isBalancedQuantity, not exact zero (#556).
+    expect(decantationVarianceState(0.0004, null, 0.5)).toBe('tanker-matches');
+    expect(decantationVarianceState(-0.001, null, 0.5)).toBe('short');
   });
 
   it('names a party from its active flag', () => {
@@ -138,10 +141,18 @@ describe('variancePresentation: the one balanced rule', () => {
     });
   });
 
-  it('treats under half a paisa (or half a centilitre) as balanced, either way', () => {
+  it('treats cash under half a paisa as balanced, either way', () => {
     expect(variancePresentation(0.004, 'cash').state).toBe('balanced');
     expect(variancePresentation(-0.004, 'cash').state).toBe('balanced');
-    expect(variancePresentation(0.004, 'stock').state).toBe('balanced');
+  });
+
+  it('treats stock under half a millilitre as balanced, and the recorded step as off (#556)', () => {
+    expect(variancePresentation(0.0004, 'stock').state).toBe('balanced');
+    expect(variancePresentation(-0.0004, 'stock').state).toBe('balanced');
+    expect(variancePresentation(0.1 + 0.2 - 0.3, 'stock').state).toBe('balanced');
+    // 4 ml is a recorded variance (3 decimals), not cash rounding noise.
+    expect(variancePresentation(0.004, 'stock').state).toBe('surplus');
+    expect(variancePresentation(-0.001, 'stock').state).toBe('short');
   });
 
   it('is off from half a paisa: no tolerance band around zero', () => {

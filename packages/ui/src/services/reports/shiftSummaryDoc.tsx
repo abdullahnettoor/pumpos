@@ -36,7 +36,7 @@ export type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
 export { DEFAULT_SHIFT_SUMMARY_CONFIG, SHIFT_SUMMARY_SECTION_LABELS } from './reportConfig.js';
 export type { Letterhead } from './letterhead.js';
 export { letterheadFromStation } from './letterhead.js';
-import type { StatusTone } from '@pump/shared';
+import { variancePresentation, type StatusTone, type VarianceKind } from '@pump/shared';
 import type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
 import { DEFAULT_SHIFT_SUMMARY_CONFIG } from './reportConfig.js';
 import type { Letterhead } from './letterhead.js';
@@ -392,7 +392,14 @@ export const Kpi = ({ l, v, c = C.ink }: { l: string; v: string; c?: string }) =
   </View>
 );
 
-export const varColor = (v: number) => (v < 0 ? C.danger : v > 0 ? C.amber : C.success);
+/**
+ * A variance's ink by the shared balanced rule of its kind (#556): balanced
+ * green, a shortage red, a surplus amber. Cash by default; litres pass `stock`.
+ */
+export const varColor = (v: number, kind: VarianceKind = 'cash') => {
+  const { state } = variancePresentation(v, kind);
+  return state === 'short' ? C.danger : state === 'surplus' ? C.amber : C.success;
+};
 
 /**
  * Branded report header: green band with legal/station name + a doc title, the
