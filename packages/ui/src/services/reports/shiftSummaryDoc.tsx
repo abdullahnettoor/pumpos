@@ -247,6 +247,11 @@ export const s = StyleSheet.create({
 export type Col = {
   header: string;
   flex: number;
+  /**
+   * The share is the column's whole width (`flexBasis: 0`), whatever its
+   * text, so a total row whose label spans columns lines up with the rows.
+   */
+  fixed?: boolean;
   align?: 'right';
   mono?: boolean;
   strong?: boolean;
@@ -258,19 +263,26 @@ export type Cell = {
   detail?: string;
 };
 
+/** A cell's horizontal padding (`s.cell`), each side. */
+const CELL_PAD = 6;
+
+/** A cell's width: its share of the row, fixed or grown from its text. */
+const width = (c: Col) =>
+  c.fixed ? { flexGrow: c.flex, flexShrink: 1, flexBasis: 0 } : { flex: c.flex };
+
 /** One cell of a table row: its text, and the detail line under it when there is one. */
 const cellView = (cell: Cell, c: Col, base: any, tone?: string, key?: number) => {
   const align = c.align === 'right' ? { textAlign: 'right' as const } : {};
   const color = tone ? { color: tone } : {};
   if (!cell.detail) {
     return (
-      <Text key={key} style={[base, { flex: c.flex }, align, color]}>
+      <Text key={key} style={[base, width(c), align, color]}>
         {cell.text}
       </Text>
     );
   }
   return (
-    <View key={key} style={{ flex: c.flex, paddingVertical: 4, paddingHorizontal: 6 }}>
+    <View key={key} style={[width(c), { paddingVertical: 4, paddingHorizontal: 6 }]}>
       <Text style={[base, { paddingVertical: 0, paddingHorizontal: 0 }, align, color]}>
         {cell.text}
       </Text>
@@ -291,7 +303,11 @@ const labelSpan = (row: Cell[]): number => {
 
 /** The columns with the first `span` merged into one, left-aligned, for a label. */
 const spanColumns = (columns: Col[], span: number): Col[] => [
-  { header: '', flex: columns.slice(0, span).reduce((a, c) => a + c.flex, 0) },
+  {
+    header: '',
+    flex: columns.slice(0, span).reduce((a, c) => a + c.flex, 0),
+    fixed: columns[0].fixed,
+  },
   ...columns.slice(span),
 ];
 
@@ -324,10 +340,7 @@ export const TableView = ({
   <View>
     <View style={[s.tr, s.thRow]} {...(keepHeader && { wrap: false, minPresenceAhead: 20 })}>
       {columns.map((c, i) => (
-        <Text
-          key={i}
-          style={[s.th, { flex: c.flex }, c.align === 'right' ? { textAlign: 'right' } : {}]}
-        >
+        <Text key={i} style={[s.th, width(c), c.align === 'right' ? { textAlign: 'right' } : {}]}>
           {c.header}
         </Text>
       ))}
@@ -362,7 +375,12 @@ export const TableView = ({
             cellView(
               cell,
               cols[ci],
-              ci === 0 && span > 1 ? s.cellStrong : cols[ci].mono ? s.cellMonoStrong : s.cellStrong,
+              ci === 0 && span > 1
+                ? // The spanned cells' padding too, so the figures after it line up.
+                  { ...s.cellStrong, paddingRight: CELL_PAD + 2 * CELL_PAD * (span - 1) }
+                : cols[ci].mono
+                  ? s.cellMonoStrong
+                  : s.cellStrong,
               cell.color ?? C.ink,
               ci,
             ),
@@ -633,6 +651,17 @@ const builders: Record<ShiftSummarySection, (ctx: Ctx) => React.ReactNode> = {
         <PdfScreenTable
           columns={drawerColumns()}
           rows={rows}
+          // Eight columns: room for a lakh-sized total (₹1,40,000.00) in each figure.
+          flex={{
+            drawer: 1.1,
+            status: 1,
+            openingFloat: 1.15,
+            cashSales: 1.15,
+            drops: 1.15,
+            expected: 1.15,
+            declared: 1.15,
+            variance: 1.15,
+          }}
           totalRow={totalRow}
           empty=""
           tone={varianceInk((r: CloseDrawerRow) => r.variance)}

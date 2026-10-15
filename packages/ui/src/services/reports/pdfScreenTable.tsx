@@ -64,7 +64,11 @@ export function PdfScreenTable<T>({
     );
   }
   const t = pdfTable(columns, rows, totalRow, tone);
-  const cols = t.columns.map((c, i) => ({ ...c, flex: flex?.[columns[i].id] ?? c.flex }));
+  const cols = t.columns.map((c, i) => ({
+    ...c,
+    flex: flex?.[columns[i].id] ?? c.flex,
+    fixed: true,
+  }));
   const total = t.total?.map((cell, i) => {
     const ink = totalTone?.(columns[i]);
     return ink ? { ...cell, color: ink } : cell;
