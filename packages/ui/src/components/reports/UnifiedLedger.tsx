@@ -11,6 +11,7 @@ import {
   buildLedgerStatement,
   moneyEntries,
   partyEntries,
+  placeDate,
   statementDate,
   statementDocProps,
   type LedgerStatementEntry,
@@ -18,53 +19,51 @@ import {
 } from '../../statement/index.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { MONEY_TERMS } from '../../utils/moneyTerms.js';
-import { ReportNote } from './ReportNote.js';
-import { inr, formatDate } from '../../utils/format.js';
+import { InfoTip } from '../primitives/InfoTip.js';
+import { ReportRangeBar } from './ReportRangeBar.js';
+import { useRunTask } from '../../utils/runTask.js';
+import { formatDateSpan, formatMoney } from '../../utils/format.js';
 import { paperFromStation } from '../../services/reports/reportConfig.js';
 import { ledgerFileName } from '../../services/reports/ledgerFileName.js';
 import { closingNote } from '../../services/reports/partyStatement.js';
 import {
   KpiStrip,
   KpiTile,
-  Panel,
-  Button,
   DataSection,
   EmptyState,
+  Button,
+  ExportMenu,
   Icon,
-  DateRangeMenu,
+  SectionHeader,
   computeRange,
   type DateRange,
 } from '../../pump-ds/index.js';
 
 export interface UnifiedLedgerProps {
   selectedStation: any | null;
+  /** Switches Ledgers to the Cash & bank summary, where every cash and bank account sits. */
+  onOpenCashBank?: () => void;
 }
 
-type EntityType = 'customer' | 'supplier' | 'cash' | 'bank' | 'owner';
+type EntityType = 'customer' | 'supplier' | 'owner';
 
 const TYPE_OPTIONS = [
   { value: 'customer', label: 'Customer' },
   { value: 'supplier', label: 'Supplier' },
-  { value: 'cash', label: 'Cash' },
-  { value: 'bank', label: 'Bank' },
   { value: 'owner', label: 'Owner' },
 ];
 
 const TYPE_LABEL: Record<EntityType, string> = {
   customer: 'Customer',
   supplier: 'Supplier',
-  cash: 'Cash',
-  bank: 'Bank',
   owner: 'Owner',
 };
-
-const fmtDate = (v: any) => formatDate(v, { compact: true });
 
 interface LedgerSource {
   /** Requires picking a specific entity (customer/supplier). */
   needsEntity: boolean;
   /** Where the ledger rows come from for this type. */
-  moneyAccount?: 'Cash' | 'Bank' | 'Owner';
+  moneyAccount?: 'Owner';
   /** The account kind: decides which column (Debit or Credit) raises the balance. */
   kind: StatementKind;
   balanceLabel: string;
@@ -108,39 +107,13 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     alertBelowZero: false,
     entries: (rows) => partyEntries(rows, 'supplier'),
   },
-  cash: {
-    needsEntity: false,
-    moneyAccount: 'Cash',
-    kind: 'account',
-    balanceLabel: 'Balance',
-    kpiRaises: 'Received',
-    kpiLowers: 'Paid out',
-    emptyText: 'No cash movements in the selected range.',
-    caption:
-      'Debit = received · Credit = paid out. Recorded cash receipts & payments only — fuel/drawer reconciliation lives in the DSR. Opening balance is carried from before the range.',
-    alertBelowZero: true,
-    entries: (rows) => moneyEntries(rows),
-  },
-  bank: {
-    needsEntity: false,
-    moneyAccount: 'Bank',
-    kind: 'account',
-    balanceLabel: 'Balance',
-    kpiRaises: 'Received',
-    kpiLowers: 'Paid out',
-    emptyText: 'No bank movements in the selected range.',
-    caption:
-      'Debit = received · Credit = paid out. Recorded bank/card/UPI receipts & payments. Opening balance is carried from before the range.',
-    alertBelowZero: true,
-    entries: (rows) => moneyEntries(rows),
-  },
   owner: {
     needsEntity: false,
     moneyAccount: 'Owner',
     kind: 'owner',
-    balanceLabel: 'Owner Funding',
+    balanceLabel: 'Owner funding',
     kpiRaises: 'Owner funded',
-    kpiLowers: 'Repaid / Drawn',
+    kpiLowers: 'Repaid / drawn',
     emptyText: 'No owner-funded movements in the selected range.',
     caption:
       'Credit = paid from the owner\u2019s pocket · Debit = repaid / drawn. Balance = net amount the business owes the owner.',
@@ -160,12 +133,19 @@ interface Committed {
 
 /**
  * Entity-aware Ledger (Phase L6). Pick an entity type (Customer, Supplier,
- * Cash, Bank, Owner), the specific entity and a period: the statement loads as
+ * Owner), the specific entity and a period: the statement loads as
  * soon as the choice is complete (#567), with no Apply step. Only the list and
  * ledger the chosen type needs are fetched. All types render through the
  * Statement module (screen and PDF); new entities plug in via the REGISTRY above.
+ *
+ * Cash and bank are not here (owner decision, #531): a merged Cash or Bank
+ * statement matches no passbook. Ledgers › Cash & bank summarises every
+ * account, and each account's statement is on Accounts.
  */
-export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation }) => {
+export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({
+  selectedStation,
+  onOpenCashBank,
+}) => {
   const s = selectedStation?.settings || {};
   const timeZone: string | undefined = s.timezone;
   const dayStartsAt: string | undefined = s.business_day_starts_at;
@@ -186,7 +166,7 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
     return (list || []).map((e: any) => ({
       value: e.id,
       label: e.name,
-      sublabel: e.currentBalance != null ? `Balance ${inr(e.currentBalance)}` : undefined,
+      sublabel: e.currentBalance != null ? `Balance ${formatMoney(e.currentBalance)}` : undefined,
     }));
   }, [type, customers, suppliers]);
 
@@ -235,34 +215,44 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
     // (from/to + periodOpeningBalance) — see the matching TODO on the
     // /customers/:id/ledger and /suppliers/:id/ledger endpoints — and delete
     // partyOpening + clampByDate.
+    //
+    // A row's date is the one the statement prints it under: its business day
+    // or entry date on the station clock (ADR 0005), never the UTC slice of
+    // `businessDate`, which put an evening IST row on the wrong day (#568).
+    const dateOf = (tx: any) => {
+      const [entry] = toEntries([tx]);
+      return entry ? placeDate(entry, { timeZone, dayStartsAt }) : '';
+    };
     const partyOpening = (all: any[]) =>
       toEntries(
-        (all || []).filter((tx) => (tx.businessDate || '').slice(0, 10) < committed.from),
+        (all || []).filter((tx) => {
+          const d = dateOf(tx);
+          return !!d && d < committed.from;
+        }),
       ).reduce((acc, e) => acc + e.amount, 0);
     if (committed.type === 'customer') {
       return {
-        entries: clampByDate(customerLedger.data || [], committed.from, committed.to),
+        entries: clampByDate(customerLedger.data || [], committed, dateOf),
         openingBalance: partyOpening(customerLedger.data || []),
         loading: customerLedger.isLoading,
       };
     }
     if (committed.type === 'supplier') {
       return {
-        entries: clampByDate(supplierLedger.data || [], committed.from, committed.to),
+        entries: clampByDate(supplierLedger.data || [], committed, dateOf),
         openingBalance: partyOpening(supplierLedger.data || []),
         loading: supplierLedger.isLoading,
       };
     }
     const account = REGISTRY[committed.type].moneyAccount;
-    // Money openings come from the backend as raw signed net (in − out). Cash/Bank
-    // balances rise with money in, so that is the opening; the Owner balance rises
-    // with money out (owner-funded), so its opening is negated.
+    // Money openings come from the backend as raw signed net (in − out). The
+    // Owner balance rises with money out (owner-funded), so its opening is negated.
     const rawOpening = Number(
       (money.data?.openings || []).find((o: any) => o.account === account)?.opening ?? 0,
     );
     return {
       entries: (money.data?.movements || []).filter((m: any) => m.account === account),
-      openingBalance: committed.type === 'owner' ? -rawOpening : rawOpening,
+      openingBalance: -rawOpening,
       loading: money.isLoading,
     };
   }, [
@@ -273,7 +263,16 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
     supplierLedger.isLoading,
     money.data,
     money.isLoading,
+    timeZone,
+    dayStartsAt,
   ]);
+
+  const ledgerQuery =
+    committed?.type === 'customer'
+      ? customerLedger
+      : committed?.type === 'supplier'
+        ? supplierLedger
+        : money;
 
   const statement = useMemo(
     () =>
@@ -291,6 +290,7 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
     net: statement.closing,
   };
 
+  const runTask = useRunTask();
   const [downloading, setDownloading] = useState(false);
   const downloadPdf = async () => {
     if (!committed || statement.rows.length === 0) return;
@@ -327,116 +327,116 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
     }
   };
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* Query bar */}
-      <Panel>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div style={{ minWidth: 180 }}>
-            <label className="field-label">Ledger</label>
-            <Combobox
-              options={TYPE_OPTIONS}
-              value={type}
-              onChange={(v) => {
-                setType(v as EntityType);
-                setEntityId('');
-              }}
-              placeholder="Select ledger…"
-            />
-          </div>
+  const heading = committed ? committed.entityLabel || labelForType(committed.type) : '';
 
-          {needsEntity && (
-            <div style={{ minWidth: 240, flex: 1, maxWidth: 320 }}>
-              <label className="field-label">{type === 'customer' ? 'Customer' : 'Supplier'}</label>
+  return (
+    <div className="flex flex-col gap-4">
+      <ReportRangeBar
+        value={range}
+        onChange={setRange}
+        clock={clock}
+        filters={
+          <>
+            <div className="w-[160px]">
               <Combobox
-                options={entityOptions}
-                value={entityId}
-                onChange={setEntityId}
-                placeholder={`Select ${type}…`}
-                emptyMessage={`No ${type}s found`}
+                options={TYPE_OPTIONS}
+                value={type}
+                onChange={(v) => {
+                  setType(v as EntityType);
+                  setEntityId('');
+                }}
+                placeholder="Select ledger…"
               />
             </div>
-          )}
-
-          <DateRangeMenu value={range} onChange={setRange} clock={clock} />
-        </div>
-        <ReportNote className="mt-1.5">{resolvedCfg.caption}</ReportNote>
-      </Panel>
+            {needsEntity && (
+              <div className="w-[260px]">
+                <Combobox
+                  options={entityOptions}
+                  value={entityId}
+                  onChange={setEntityId}
+                  placeholder={`Select ${type}…`}
+                  emptyMessage={`No ${type}s found`}
+                />
+              </div>
+            )}
+          </>
+        }
+        exportMenu={
+          <ExportMenu
+            onPdf={() => runTask(downloadPdf(), 'Could not export the ledger.')}
+            disabled={!committed || loading || downloading || statement.rows.length === 0}
+          />
+        }
+        info={
+          <InfoTip label="About this ledger" placement="bottom">
+            {resolvedCfg.caption}
+          </InfoTip>
+        }
+      />
 
       {!committed ? (
         <EmptyState
           compact
           icon={<Icon name="ledger" size="md" />}
           title="Select a ledger"
-          description="Pick a customer or supplier to load the statement."
+          description="Pick a customer or supplier to load the statement. Cash and bank accounts are in Cash & bank, and each account's statement is on Accounts."
+          action={
+            onOpenCashBank && (
+              <Button variant="secondary" size="sm" onClick={onOpenCashBank}>
+                Open Cash &amp; bank
+              </Button>
+            )
+          }
         />
       ) : (
         <>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              flexWrap: 'wrap',
-              justifyContent: 'space-between',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
-              <h3
-                style={{
-                  fontSize: '15px',
-                  fontWeight: 600,
-                  color: 'var(--text-strong)',
-                  margin: 0,
-                }}
-              >
-                {committed.entityLabel || labelForType(committed.type)}
-              </h3>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                {fmtDate(committed.from)} — {fmtDate(committed.to)}
-              </span>
-            </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<Icon name="download" size="sm" />}
-              onClick={downloadPdf}
-              loading={downloading}
-              disabled={loading || statement.rows.length === 0}
-            >
-              Download PDF
-            </Button>
-          </div>
-
-          <KpiStrip columns="auto">
-            <KpiTile label={resolvedCfg.kpiRaises} value={inr(totals.raises)} />
-            <KpiTile label={resolvedCfg.kpiLowers} value={inr(totals.lowers)} />
-            <KpiTile
-              alert={resolvedCfg.alertBelowZero && totals.net < 0 ? 'danger' : undefined}
-              label={resolvedCfg.balanceLabel}
-              value={inr(totals.net)}
-            />
-          </KpiStrip>
-
           <DataSection
-            title="ledger"
-            query={
-              committed.type === 'customer'
-                ? customerLedger
-                : committed.type === 'supplier'
-                  ? supplierLedger
-                  : money
-            }
+            title={`${heading} totals`}
+            query={ledgerQuery}
             enabled
-            placeholderHeight={240}
-            shape="bare"
+            shape="cards"
+            placeholderHeight={90}
           >
-            <StatementView
-              statement={statement}
-              label={`${committed.entityLabel || labelForType(committed.type)} statement`}
-              emptyMessage={resolvedCfg.emptyText}
-            />
+            <KpiStrip columns="auto">
+              <KpiTile
+                label={resolvedCfg.kpiRaises}
+                scope="in-range"
+                value={formatMoney(totals.raises)}
+              />
+              <KpiTile
+                label={resolvedCfg.kpiLowers}
+                scope="in-range"
+                value={formatMoney(totals.lowers)}
+              />
+              <KpiTile
+                alert={resolvedCfg.alertBelowZero && totals.net < 0 ? 'danger' : undefined}
+                label={resolvedCfg.balanceLabel}
+                scope="in-range"
+                value={formatMoney(totals.net)}
+                hint="at the end of the range"
+              />
+            </KpiStrip>
           </DataSection>
+
+          <section className="flex flex-col gap-2">
+            <SectionHeader
+              title={heading}
+              subtitle={formatDateSpan(committed.from, committed.to)}
+            />
+            <DataSection
+              title="ledger"
+              query={ledgerQuery}
+              enabled
+              placeholderHeight={240}
+              shape="bare"
+            >
+              <StatementView
+                statement={statement}
+                label={`${heading} statement`}
+                emptyMessage={resolvedCfg.emptyText}
+              />
+            </DataSection>
+          </section>
         </>
       )}
     </div>
@@ -444,20 +444,21 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
 };
 
 function labelForType(t: EntityType): string {
-  return t === 'cash'
-    ? 'Cash Ledger'
-    : t === 'bank'
-      ? 'Bank Ledger'
-      : t === 'owner'
-        ? 'Owner Ledger'
-        : '';
+  return t === 'owner' ? 'Owner ledger' : '';
 }
 
-// Clamp party-ledger rows (which come for all-time) to the committed date range.
-function clampByDate(list: any[], from: string, to: string): any[] {
+/**
+ * Clamp party-ledger rows (which come for all-time) to the committed range, by
+ * the date each row is printed under. A row with no date stays in.
+ */
+function clampByDate(
+  list: any[],
+  range: { from: string; to: string },
+  dateOf: (tx: any) => string,
+): any[] {
   return list.filter((tx) => {
-    const d = (tx.businessDate || '').slice(0, 10);
+    const d = dateOf(tx);
     if (!d) return true;
-    return d >= from && d <= to;
+    return d >= range.from && d <= range.to;
   });
 }

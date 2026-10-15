@@ -1,24 +1,25 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
-import { useSales, useInvoices, queryKeys } from '../../query/hooks.js';
+import { useSales, queryKeys } from '../../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useToast } from '../primitives/ToastProvider.js';
-import { DataTable } from '../primitives/DataTable.js';
 import { computeRange } from '../../pump-ds/date-range/index.js';
 import type { DateRange } from '../../pump-ds/date-range/index.js';
 import { paperFromStation } from '../../services/reports/reportConfig.js';
 import { letterheadFromStation } from '../../services/reports/letterhead.js';
-import { inr } from '../../utils/format.js';
+import { formatMoney } from '../../utils/format.js';
 import {
+  Button,
+  DataSection,
+  EmptyState,
+  Icon,
+  InteractiveTable,
   KpiStrip,
   KpiTile,
-  Panel,
-  Button,
-  EmptyState,
-  DateText,
-  Icon,
+  SectionHeader,
+  type TableColumn,
 } from '../../pump-ds/index.js';
+import { InfoTip } from '../primitives/InfoTip.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
 
 const txService = new CloudTransactionService();
@@ -42,16 +43,19 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const canIssue = userRole !== 'Staff';
-  const {
-    data: sales,
-    isLoading,
-    error,
-    refetch,
-  } = useSales({ stationId: selectedStation?.id, from: range.from, to: range.to });
+  const salesQ = useSales({ stationId: selectedStation?.id, from: range.from, to: range.to });
+  const sales = salesQ.data;
 
   // Memoised so `kpis` below actually memoises: a bare `|| []` hands the
   // dependency list a new array on every render while the query is loading.
-  const rows = useMemo(() => sales || [], [sales]);
+  // Newest business date first (stable, so a day keeps the server's order).
+  const rows = useMemo(
+    () =>
+      [...(sales || [])].sort((a, b) =>
+        String(b.businessDate ?? '').localeCompare(String(a.businessDate ?? '')),
+      ),
+    [sales],
+  );
   const kpis = useMemo(() => {
     let total = 0;
     let invoiced = 0;
@@ -104,137 +108,131 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
     [exportInvoice, qc, range.from, range.to, selectedStation, toast],
   );
 
-  const columns = useMemo<ColumnDef<any, any>[]>(
+  const columns = useMemo<TableColumn<any>[]>(
     () => [
+      { id: 'date', header: 'Date', kind: 'date', value: (r) => r.businessDate, width: '13%' },
       {
-        accessorKey: 'businessDate',
-        header: 'Date',
-        cell: ({ getValue }) => <DateText value={getValue() as string} tone="muted" />,
-      },
-      {
-        accessorKey: 'customerName',
+        id: 'customer',
         header: 'Customer',
-        cell: ({ getValue }) =>
-          getValue() ? (
-            <span style={{ color: 'var(--text-strong)' }}>{getValue() as string}</span>
+        kind: 'text',
+        value: (r) => r.customerName,
+        cell: (r) =>
+          r.customerName ? (
+            <span className="text-ink-strong">{r.customerName}</span>
           ) : (
-            <span style={{ color: 'var(--text-faint)' }}>Walk-in</span>
+            <span className="text-ink-faint">Walk-in</span>
           ),
       },
       {
         id: 'sale',
         header: 'Sale',
-        cell: ({ row }) => (
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            {row.original.documentNumber || row.original.saleType}
-          </span>
-        ),
+        kind: 'text',
+        value: (r) => r.documentNumber || r.saleType,
+        cell: (r) => <span className="text-ink-muted">{r.documentNumber || r.saleType}</span>,
       },
+      { id: 'amount', header: 'Amount', kind: 'money', value: (r) => r.totalAmount },
       {
-        accessorKey: 'totalAmount',
-        header: 'Amount',
-        cell: ({ getValue }) => (
-          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
-            {inr(getValue())}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'invoiceNumber',
+        id: 'invoice',
         header: 'Invoice',
-        cell: ({ getValue }) => (
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '12px',
-              color: getValue() ? 'var(--state-success-fg)' : 'var(--text-faint)',
-            }}
-          >
-            {(getValue() as string) || '—'}
-          </span>
-        ),
+        kind: 'text',
+        value: (r) => r.invoiceNumber,
+        cell: (r) =>
+          r.invoiceNumber ? (
+            <span className="font-mono text-ink-default">{r.invoiceNumber}</span>
+          ) : (
+            <span className="text-ink-faint">—</span>
+          ),
       },
       {
         id: 'action',
         header: '',
-        cell: ({ row }) => {
-          const r = row.original;
-          return (
-            <Button
-              variant="secondary"
-              size="xs"
-              leftIcon={
-                r.invoiceNumber ? (
-                  <Icon name="download" size="xs" />
-                ) : (
-                  <Icon name="file-text" size="xs" />
-                )
-              }
-              loading={busyId === r.id}
-              disabled={busyId === r.id || (!canIssue && !r.invoiceNumber)}
-              onClick={() => handleInvoice(r.id)}
-            >
-              {r.invoiceNumber ? 'PDF' : 'Issue'}
-            </Button>
-          );
-        },
+        kind: 'text',
+        value: () => null,
+        width: '10%',
+        cell: (r) => (
+          <Button
+            variant="secondary"
+            size="xs"
+            leftIcon={
+              r.invoiceNumber ? (
+                <Icon name="download" size="xs" />
+              ) : (
+                <Icon name="file-text" size="xs" />
+              )
+            }
+            loading={busyId === r.id}
+            disabled={busyId === r.id || (!canIssue && !r.invoiceNumber)}
+            onClick={() => handleInvoice(r.id)}
+          >
+            {r.invoiceNumber ? 'PDF' : 'Issue'}
+          </Button>
+        ),
       },
     ],
     [busyId, canIssue, handleInvoice],
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div className="flex flex-col gap-4">
       <ReportRangeBar
         value={range}
         onChange={setRange}
         clock={clock}
-        note="Non-fuel sales only — fuel is VAT (outside GST). Issuing assigns a gapless GST invoice number and downloads the PDF."
+        info={
+          <InfoTip label="About invoices" placement="bottom">
+            Non-fuel sales only — fuel is VAT (outside GST). Issuing assigns a gapless GST invoice
+            number and downloads the PDF.
+          </InfoTip>
+        }
       />
 
-      <KpiStrip columns="auto">
-        <KpiTile label="Merchandise sales" value={inr(kpis.total)} />
-        <KpiTile label="Invoiced" value={String(kpis.invoiced)} />
-        <KpiTile
-          alert={kpis.pending > 0 ? 'warning' : undefined}
-          label="Not invoiced"
-          value={String(kpis.pending)}
-        />
-      </KpiStrip>
+      <DataSection title="Invoice totals" query={salesQ} shape="cards" placeholderHeight={90}>
+        <KpiStrip columns="auto">
+          <KpiTile
+            label="Merchandise sales"
+            scope="in-range"
+            value={formatMoney(kpis.total)}
+            hint={`${rows.length} ${rows.length === 1 ? 'sale' : 'sales'}`}
+          />
+          <KpiTile label="Invoiced" scope="in-range" value={String(kpis.invoiced)} />
+          <KpiTile
+            alert={kpis.pending > 0 ? 'warning' : undefined}
+            label="Not invoiced"
+            scope="in-range"
+            value={String(kpis.pending)}
+          />
+        </KpiStrip>
+      </DataSection>
 
-      <Panel flush title="Merchandise invoices">
-        {isLoading ? (
-          <div style={{ padding: '16px' }}>
-            <EmptyState
-              compact
-              icon={<Icon name="file-text" size="md" />}
-              title="Loading…"
-              description="Fetching merchandise sales."
-            />
-          </div>
-        ) : rows.length === 0 ? (
-          <div style={{ padding: '12px' }}>
-            <EmptyState
-              compact
-              icon={<Icon name="file-text" size="md" />}
-              title="No merchandise sales"
-              description="No merchandise sales in this date range."
-            />
-          </div>
-        ) : (
-          <DataTable
+      <section className="flex flex-col gap-2">
+        <SectionHeader title="Merchandise invoices" />
+        <DataSection
+          title="Merchandise invoices"
+          query={salesQ}
+          placeholderHeight={200}
+          flush
+          isEmpty={rows.length === 0}
+          empty={
+            <div className="p-3">
+              <EmptyState
+                compact
+                icon={<Icon name="file-text" size="md" />}
+                title="No merchandise sales"
+                description="No merchandise sales in this date range."
+              />
+            </div>
+          }
+        >
+          <InteractiveTable
             bare
             columns={columns}
-            data={rows}
-            error={error}
-            title="invoices"
-            onRetry={refetch}
-            emptyMessage="No merchandise sales in this range."
-            getRowId={(r: any) => r.id}
-            initialSorting={[{ id: 'businessDate', desc: true }]}
+            rows={rows}
+            rowKey={(r: any) => r.id}
+            totalRow
+            title="Merchandise invoices"
           />
-        )}
-      </Panel>
+        </DataSection>
+      </section>
     </div>
   );
 };

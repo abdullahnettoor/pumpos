@@ -182,6 +182,18 @@ export interface AccountWithBalance extends FinancialAccount {
   balance: string;
 }
 
+/** One account's opening for `GET /finance/movements` (#531). */
+export interface StationAccountOpening {
+  accountId: string;
+  accountType: string;
+  accountName: string;
+  /** Organization-shared (no station): Reports › Cash & bank leaves these out. */
+  shared: boolean;
+  isActive: boolean;
+  /** Σ(in − out) of this station's entries before `from`; `'0'` with no `from`. */
+  opening: string;
+}
+
 /**
  * Read model for money accounts. Balances are derived purely from ledger_entries
  * (the opening balance is itself an OPENING entry when non-zero), so
@@ -366,10 +378,15 @@ export class DrizzleFinancialAccountReader {
     return { account: toAccount(accRows[0]), periodOpeningBalance, entries };
   }
 
-  /** Station-wide ledger movements in [from,to], joined with account type/name,
-   *  plus per-account-type opening balances (Σ signed in−out for entries dated
-   *  before `from`). Backs the repriced Cash & Bank report so its running
-   *  balance carries the historical opening instead of starting at zero. */
+  /**
+   * Station-wide ledger movements in [from,to], joined with account type/name,
+   * plus one opening per account (Σ signed in−out of this station's entries
+   * dated before `from`; 0 for every account when `from` is absent, i.e. all
+   * time). Backs Reports › Cash & bank, a per-account summary (#531): Opening ·
+   * In · Out · Closing for each account, so every account is listed — the
+   * station's own and the organization-shared ones (`shared`), active or not —
+   * even one that did not move in the range.
+   */
   async stationMovements(
     organizationId: string,
     stationId: string,
@@ -390,7 +407,7 @@ export class DrizzleFinancialAccountReader {
       notes: string | null;
       createdAt: string;
     }>;
-    openings: Array<{ accountType: string; opening: string }>;
+    openings: StationAccountOpening[];
   }> {
     const conds = [
       eq(schema.ledgerEntries.organizationId, organizationId),
@@ -399,34 +416,46 @@ export class DrizzleFinancialAccountReader {
     if (from) conds.push(gte(schema.ledgerEntries.entryDate, from));
     if (to) conds.push(lte(schema.ledgerEntries.entryDate, to));
 
-    // Per-account-type opening balance = Σ(in − out) for entries strictly before
-    // the range start. One grouped aggregate; index-supported by
+    // One opening per account = Σ(in − out) of this station's entries strictly
+    // before the range start; with no `from` nothing precedes the range, so
+    // every opening is 0. One grouped aggregate over the station's accounts
+    // (and the organization-shared ones), the entries index-supported by
     // ledger_entries_org_station_date_idx (org, station, entry_date).
-    let openings: Array<{ accountType: string; opening: string }> = [];
-    if (from) {
-      const openRows = await this.db
-        .select({
-          accountType: schema.financialAccounts.accountType,
-          opening: sql<string>`COALESCE(SUM(CASE WHEN ${schema.ledgerEntries.direction} = 'in' THEN ${schema.ledgerEntries.amount} ELSE -${schema.ledgerEntries.amount} END), 0)`,
-        })
-        .from(schema.ledgerEntries)
-        .innerJoin(
-          schema.financialAccounts,
-          eq(schema.financialAccounts.id, schema.ledgerEntries.accountId),
+    const before = from
+      ? and(
+          eq(schema.ledgerEntries.accountId, schema.financialAccounts.id),
+          eq(schema.ledgerEntries.organizationId, organizationId),
+          eq(schema.ledgerEntries.stationId, stationId),
+          sql`${schema.ledgerEntries.entryDate} < ${from}`,
         )
-        .where(
-          and(
-            eq(schema.ledgerEntries.organizationId, organizationId),
-            eq(schema.ledgerEntries.stationId, stationId),
-            sql`${schema.ledgerEntries.entryDate} < ${from}`,
-          ),
-        )
-        .groupBy(schema.financialAccounts.accountType);
-      openings = openRows.map((r) => ({
-        accountType: r.accountType,
-        opening: String(r.opening ?? '0'),
-      }));
-    }
+      : sql`false`;
+    const openRows = await this.db
+      .select({
+        accountId: schema.financialAccounts.id,
+        accountType: schema.financialAccounts.accountType,
+        accountName: schema.financialAccounts.name,
+        accountStationId: schema.financialAccounts.stationId,
+        isActive: schema.financialAccounts.isActive,
+        opening: sql<string>`COALESCE(SUM(CASE WHEN ${schema.ledgerEntries.direction} = 'in' THEN ${schema.ledgerEntries.amount} ELSE -${schema.ledgerEntries.amount} END), 0)`,
+      })
+      .from(schema.financialAccounts)
+      .leftJoin(schema.ledgerEntries, before)
+      .where(
+        and(
+          eq(schema.financialAccounts.organizationId, organizationId),
+          sql`(${schema.financialAccounts.stationId} = ${stationId} OR ${schema.financialAccounts.stationId} IS NULL)`,
+        ),
+      )
+      .groupBy(schema.financialAccounts.id)
+      .orderBy(asc(schema.financialAccounts.accountType), asc(schema.financialAccounts.name));
+    const openings: StationAccountOpening[] = openRows.map((r) => ({
+      accountId: r.accountId,
+      accountType: r.accountType,
+      accountName: r.accountName,
+      shared: r.accountStationId == null,
+      isActive: r.isActive,
+      opening: String(r.opening ?? '0'),
+    }));
 
     const rows = await this.db
       .select({

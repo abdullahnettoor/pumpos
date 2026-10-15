@@ -144,7 +144,13 @@ let currentReport: AttendantHandoverReport = report;
 
 vi.mock('../../query/hooks.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  useAttendantHandoverReport: () => ({ data: currentReport, isLoading: false, error: null }),
+  useAttendantHandoverReport: () => ({
+    data: currentReport,
+    isPending: false,
+    isError: false,
+    fetchStatus: 'idle',
+    error: null,
+  }),
 }));
 
 // The capability gate is a separate axis, covered by its own tests; here the
@@ -173,8 +179,10 @@ describe('AttendantHandoverReportPanel drawer', () => {
   it('groups the shifts under the business day they belong to', () => {
     openDrawer();
 
-    const dates = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
-    expect(dates).toEqual(['2026-03-01', '2026-03-02']);
+    // Day headings are section headers, read as dates rather than raw ISO.
+    const drawer = within(document.querySelector('.drawer-container') as HTMLElement);
+    const dates = drawer.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(dates).toEqual(['01 Mar 2026', '02 Mar 2026']);
     expect(screen.getByText('Morning')).toBeTruthy();
     expect(screen.getByText('Night')).toBeTruthy();
   });
@@ -239,6 +247,12 @@ describe('AttendantHandoverReportPanel drawer', () => {
     expect(kpi('Cash handed over')).toContain(inr(totals.cashHandedOver));
     expect(kpi('Card + UPI')).toContain(inr(totals.cardHandedOver + totals.upiHandedOver));
     expect(kpi('Net variance')).toContain(inr(totals.varianceAmount));
+    // Four tiles at most: the shift count rides on the cash tile's hint.
+    expect(kpi('Cash handed over')).toContain('over 2 shifts');
+    expect(drawer.queryByText('Shifts')).toBeNull();
+    expect(
+      drawer.getByText('Net variance').closest('[data-alert]')?.getAttribute('data-alert'),
+    ).toBe('danger');
   });
 
   /**
@@ -277,5 +291,49 @@ describe('AttendantHandoverReportPanel drawer', () => {
     // One placeholder row carrying the money, then the total it sums to.
     expect(rows[0]).toEqual(['—', '—', '—', '—', '₹900.00']);
     expect(rows[1]).toEqual(['Total', '', '', '', '₹900.00']);
+  });
+});
+
+describe('AttendantHandoverReportPanel list', () => {
+  afterEach(() => {
+    cleanup();
+    currentReport = report;
+  });
+
+  const renderPanel = () =>
+    renderWithProviders(
+      <AttendantHandoverReportPanel selectedStation={{ id: 'st-1', name: 'Apex Station' }} />,
+    );
+
+  it('lists attendants in a table whose total says it leaves variance out', () => {
+    renderPanel();
+
+    const table = screen.getByRole('table');
+    const total = within(table).getByRole('rowheader');
+    expect(total.textContent).toBe('Total excl. variance');
+    // The variance reads in the shared vocabulary, not a hand-coloured figure.
+    const chip = table.querySelector('[data-variance]');
+    expect(chip?.getAttribute('data-variance')).toBe('short');
+    expect(chip?.textContent).toBe(inr(-50));
+  });
+
+  it('opens the statement from the keyboard', () => {
+    renderPanel();
+
+    const row = screen.getByRole('row', { name: 'Ravi handovers' });
+    fireEvent.keyDown(row, { key: 'Enter' });
+    expect(document.querySelector('.drawer-container')).not.toBeNull();
+  });
+
+  it('keeps the tiles to the range, flags the shortage, and shows no raw ISO dates', () => {
+    renderPanel();
+
+    const tiles = Array.from(document.querySelectorAll('.kpi-value')).map((v) => v.parentElement!);
+    expect(tiles.length).toBeLessThanOrEqual(4);
+    for (const tile of tiles) expect(tile.textContent).toContain('In range');
+    const net = screen.getByText('Net variance').closest('[data-alert]');
+    expect(net?.getAttribute('data-alert')).toBe('danger');
+    expect(net?.textContent).toContain('1 short');
+    expect(document.body.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 });

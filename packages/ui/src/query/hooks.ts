@@ -5,6 +5,7 @@ import {
   useInfiniteQuery,
   useMutation,
   useQueries,
+  type QueryClient,
   type UseQueryOptions,
 } from '@tanstack/react-query';
 import {
@@ -161,9 +162,13 @@ export const queryKeys = {
   inventoryItems: (stationId: string) => ['inventory-items', stationId] as const,
   inventoryMovements: (stationId: string) => ['inventory-movements', stationId] as const,
   inventoryVariances: (stationId: string) => ['inventory-variances', stationId] as const,
+  /** Every stored DSR (`dssr`): what a new DSR invalidates. */
+  dssrPrefix: () => ['dssr'] as const,
   dssr: (stationId: string, date: string) => ['dssr', stationId, date] as const,
   dssrPreview: (stationId: string, date: string) => ['dssr-preview', stationId, date] as const,
   businessDayList: (stationId: string) => ['business-day-list', stationId] as const,
+  /** Every `dssrRange` window: what a new DSR invalidates. */
+  dssrRangePrefix: () => ['dssr-range'] as const,
   dssrRange: (stationId: string, from: string, to: string) =>
     ['dssr-range', stationId, from, to] as const,
   attendantHandoverReport: (stationId: string, from: string, to: string) =>
@@ -244,6 +249,35 @@ export const TIER = {
   semi: { staleTime: 10 * 60_000, gcTime: 60 * 60_000, refetchOnWindowFocus: false } as const,
   operational: { staleTime: 15_000, gcTime: 5 * 60_000, refetchOnWindowFocus: true } as const,
 };
+
+/**
+ * After a DSR is generated (from the DSR screen or Reports): the day holds the
+ * write's own answer, and everything that shows a day's DSR state refreshes in
+ * the background — other days' previews, the stored DSRs (`dssr`, read by
+ * Shifts › Business Day), the DSR lists (`dssr-range`) and the business-day
+ * list. Synchronous on purpose (pump-data-caching rule 6): the caller shows the
+ * response at once and never waits on a refetch.
+ *
+ * @param generated the write's response; omit to refresh the day too.
+ */
+export function invalidateAfterDssrGenerate(
+  qc: QueryClient,
+  stationId: string,
+  date: string,
+  generated?: unknown,
+): void {
+  const dayKey = queryKeys.dssrPreview(stationId, date);
+  const keyOf = JSON.stringify(dayKey);
+  if (generated !== undefined) qc.setQueryData(dayKey, generated);
+  void qc.invalidateQueries({
+    queryKey: queryKeys.dssrPreviewPrefix(stationId),
+    // The day just generated already holds the write's answer.
+    predicate: (q) => generated === undefined || JSON.stringify(q.queryKey) !== keyOf,
+  });
+  void qc.invalidateQueries({ queryKey: queryKeys.dssrPrefix() });
+  void qc.invalidateQueries({ queryKey: queryKeys.dssrRangePrefix() });
+  void qc.invalidateQueries({ queryKey: queryKeys.businessDayList(stationId) });
+}
 
 /** The key of one party's statement window: `[prefix, partyId, from, to]`. */
 export type StatementKey =
@@ -1133,6 +1167,17 @@ export function useDailyDssr(
   });
 }
 
+/**
+ * One day's DSR read (the stored snapshot for a closed day, live figures for an
+ * open one), as query options: the hook reads it, and a deep link fetches it
+ * through the same key (`qc.fetchQuery(dailyDssrPreviewQuery(…))`).
+ */
+export const dailyDssrPreviewQuery = (stationId: string, date: string) => ({
+  queryKey: queryKeys.dssrPreview(stationId, date),
+  queryFn: () => shiftService.getDailyDssrPreview(stationId, date),
+  ...TIER.operational,
+});
+
 // Live (non-persisted) DSSR/P&L for the open day — recomputed on demand.
 export function useDailyDssrPreview(
   stationId: string | null | undefined,
@@ -1140,10 +1185,8 @@ export function useDailyDssrPreview(
   options?: Options<any>,
 ) {
   return useQuery({
-    queryKey: queryKeys.dssrPreview(stationId ?? '', date),
-    queryFn: () => shiftService.getDailyDssrPreview(stationId!, date),
+    ...dailyDssrPreviewQuery(stationId ?? '', date),
     enabled: !!stationId && !!date,
-    ...TIER.operational,
     ...options,
   });
 }

@@ -1,6 +1,5 @@
 {
   "dead-class": {
-    "components/reports/decantation/DecantationVisitsTable.tsx": 1,
     "components/Shifts/ShiftControlBar.tsx": 1,
     "components/Shifts/ShiftSummaryView.tsx": 1
   },
@@ -39,12 +38,6 @@
     "components/Auth/Login.tsx": 1,
     "components/Organization/ActivityFeed.tsx": 1,
     "components/primitives/ToastProvider.tsx": 1,
-    "components/reports/AttendantHandoverReportPanel.tsx": 2,
-    "components/reports/decantation/DecantationSummary.tsx": 2,
-    "components/reports/decantation/DecantationVisitDrawer.tsx": 13,
-    "components/reports/decantation/DecantationVisitsTable.tsx": 2,
-    "components/reports/decantation/styles.ts": 1,
-    "components/reports/ProfitLossView.tsx": 3,
     "components/Shifts/ShiftSummaryView.tsx": 1,
     "components/StationSetup/WebOnboardingNotice.tsx": 2
   }

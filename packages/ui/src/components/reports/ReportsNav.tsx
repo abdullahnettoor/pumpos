@@ -33,7 +33,7 @@ export function ReportsNav<T extends string>({
         .filter((g) => g.items.length > 0)
         .map((group, gi) => (
           <div key={group.heading} className={gi > 0 ? 'mt-4' : ''}>
-            <div className="px-2.5 pb-1.5 font-mono text-[10px] font-medium uppercase tracking-wider text-ink-faint">
+            <div className="px-2.5 pb-1.5 font-mono text-[12px] font-medium uppercase tracking-wider text-ink-faint">
               {group.heading}
             </div>
             <div className="flex flex-col gap-0.5">

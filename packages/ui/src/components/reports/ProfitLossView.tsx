@@ -1,28 +1,123 @@
 import React, { useMemo, useState } from 'react';
-import { useDailyDssrPreview, useProfitLoss, useShiftStatus } from '../../query/hooks.js';
+import {
+  useDailyDssrPreview,
+  useProducts,
+  useProfitLoss,
+  useShiftStatus,
+} from '../../query/hooks.js';
 import { computeRange } from '../../pump-ds/date-range/index.js';
 import type { DateRange } from '../../pump-ds/date-range/index.js';
-import { inr } from '../../utils/format.js';
+import { MINUS, formatDate, formatMoney, formatTime } from '../../utils/format.js';
 import { resolveBusinessDate } from '@pump/shared';
+import type {
+  ProfitLossDay,
+  ProfitLossProductMargin,
+  ProfitLossReport,
+} from '../../services/cloud.js';
 import {
+  Chip,
+  DataSection,
+  EmptyState,
+  Icon,
+  InteractiveTable,
   KpiStrip,
   KpiTile,
   Panel,
-  Chip,
-  DateText,
-  EmptyState,
+  SectionHeader,
   Sparkline,
+  StatusChip,
+  type TableColumn,
 } from '../../pump-ds/index.js';
+import { cn } from '../../pump-ds/lib/cn.js';
+import { InfoTip } from '../primitives/InfoTip.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
+import { productUnits } from './totals/productUnits.js';
 
 export interface ProfitLossViewProps {
   selectedStation: any | null;
 }
 
 /**
+ * A percentage to one decimal with the true minus (`12.5%`, `−3.0%`).
+ * utils/format.ts has no percent format yet; this is the one P&L needs.
+ */
+const PERCENT = new Intl.NumberFormat('en-IN', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+const formatPercent = (n: number): string =>
+  `${n < 0 && Math.abs(n) >= 0.05 ? MINUS : ''}${PERCENT.format(Math.abs(n))}%`;
+
+const EMPTY_TOTALS: ProfitLossReport['totals'] = {
+  revenueFuel: 0,
+  revenueMerch: 0,
+  revenue: 0,
+  cogsFuel: 0,
+  cogsMerch: 0,
+  cogs: 0,
+  grossMargin: 0,
+  expenses: 0,
+  otherIncome: 0,
+  netProfit: 0,
+  marginPct: 0,
+};
+
+/** Money in plain ink; red only when the figure is a loss. */
+const LossAware: React.FC<{ value: number }> = ({ value }) => (
+  <span className={value < 0 ? 'text-danger-fg' : undefined}>{formatMoney(value)}</span>
+);
+
+const DAY_COLUMNS: TableColumn<ProfitLossDay>[] = [
+  {
+    id: 'date',
+    header: 'Date',
+    kind: 'date',
+    value: (d) => d.date,
+    width: '18%',
+    cell: (d) => (
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+        {formatDate(d.date)}
+        {d.live && <StatusChip status="shift-live" size="md" />}
+      </span>
+    ),
+  },
+  { id: 'revenue', header: 'Revenue', kind: 'money', value: (d) => d.revenue },
+  { id: 'cogs', header: 'COGS', kind: 'money', value: (d) => d.cogs },
+  {
+    id: 'grossMargin',
+    header: 'Gross margin',
+    kind: 'money',
+    value: (d) => d.grossMargin,
+    cell: (d) => <LossAware value={d.grossMargin} />,
+  },
+  { id: 'expenses', header: 'Expenses', kind: 'money', value: (d) => d.expenses },
+  { id: 'otherIncome', header: 'Other income', kind: 'money', value: (d) => d.otherIncome },
+  {
+    id: 'netProfit',
+    header: 'Net profit',
+    kind: 'money',
+    value: (d) => d.netProfit,
+    cell: (d) => <LossAware value={d.netProfit} />,
+  },
+];
+
+/** One line of the single-day statement. A deduction carries a negative value. */
+interface StatementLine {
+  label: string;
+  value: number;
+  /** A subtotal line (total revenue, gross margin). */
+  subtotal?: boolean;
+  /** Red when negative (a margin), never otherwise. */
+  lossAware?: boolean;
+  hint?: string;
+}
+
+/**
  * Period Profit & Loss. Every figure is composed server-side
  * (GET /dssr/profit-loss): gross margin by sales day, expenses and other
  * income by entry date (ADR 0005). This view only renders.
+ *
+ * Layout A (#531): the range bar drives the tiles, the trend and both tables.
  */
 export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation }) => {
   const s = selectedStation?.settings || {};
@@ -36,11 +131,8 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
   const isSingleDay = range.from === range.to;
   const todayInRange = todayBiz >= range.from && todayBiz <= range.to;
 
-  const { data: report, isLoading: loading } = useProfitLoss(
-    selectedStation?.id,
-    range.from,
-    range.to,
-  );
+  const plQ = useProfitLoss(selectedStation?.id, range.from, range.to);
+  const report = plQ.data;
   // Live-day context only: how many shifts today's provisional figure includes.
   const { data: preview } = useDailyDssrPreview(selectedStation?.id, todayBiz, {
     enabled: !!selectedStation?.id && todayInRange,
@@ -49,407 +141,298 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
     lite: true,
     enabled: !!selectedStation?.id && todayInRange,
   });
+  // Product units for the margin table's quantities (the P&L carries none).
+  const { data: products } = useProducts();
   const hasOpenShift = !!shiftStatus?.activeShift;
   const closedShiftsToday = Number(preview?.snapshotData?.shiftsIncluded || 0);
-  const liveAsOf = preview?.generatedAt
-    ? new Date(preview.generatedAt).toLocaleTimeString('en-IN')
-    : null;
+  const liveAsOf = preview?.generatedAt ? formatTime(preview.generatedAt) : null;
 
-  const pl = useMemo(() => ({ days: report?.days ?? [] }), [report]);
-  const totals = report?.totals ?? {
-    revenueFuel: 0,
-    revenueMerch: 0,
-    revenue: 0,
-    cogsFuel: 0,
-    cogsMerch: 0,
-    cogs: 0,
-    grossMargin: 0,
-    expenses: 0,
-    otherIncome: 0,
-    netProfit: 0,
-    marginPct: 0,
-  };
-  const salesByDate = useMemo(() => new Map(pl.days.map((d) => [d.date, d])), [pl.days]);
-  const marginPct = totals.marginPct;
-  const single = isSingleDay ? (pl.days[0] ?? { ...totals, date: range.from, live: false }) : null;
-  const productMargins = report?.byProduct ?? [];
+  const days = useMemo(() => report?.days ?? [], [report]);
+  const totals = useMemo(() => report?.totals ?? EMPTY_TOTALS, [report]);
+  const single = isSingleDay ? (days[0] ?? null) : null;
+  const productMargins = useMemo(() => report?.byProduct ?? [], [report]);
 
   // Chronological (oldest→newest) net-profit series for the trend sparkline.
-  const trend = useMemo(() => [...pl.days].reverse().map((d) => d.netProfit), [pl.days]);
+  const trend = useMemo(() => [...days].reverse().map((d) => d.netProfit), [days]);
 
-  const rowStyle: React.CSSProperties = {
-    display: 'flex',
-    justifyContent: 'space-between',
-    padding: '11px 16px',
-    borderBottom: '1px solid var(--border-soft)',
-  };
-  const cell: React.CSSProperties = {
-    padding: '8px 12px',
-    fontSize: '13px',
-    textAlign: 'right',
-    fontFamily: 'var(--font-mono)',
-  };
+  const dayTotals = useMemo(
+    () => ({
+      label: 'Total',
+      // The server's period totals: the figure the rows explain.
+      values: {
+        revenue: totals.revenue,
+        cogs: totals.cogs,
+        grossMargin: totals.grossMargin,
+        expenses: totals.expenses,
+        otherIncome: totals.otherIncome,
+        netProfit: totals.netProfit,
+      },
+    }),
+    [totals],
+  );
+
+  const productColumns = useMemo<TableColumn<ProfitLossProductMargin>[]>(() => {
+    const unitOf = productUnits(products);
+    return [
+      {
+        id: 'product',
+        header: 'Product',
+        kind: 'text',
+        value: (p) => p.name,
+        cell: (p) => (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-ink-strong">{p.name}</span>
+            {/* A kind is a fact about the product, not a state: neutral. */}
+            <Chip tone="neutral" size="md">
+              {p.kind === 'fuel' ? 'Fuel' : 'Merch'}
+            </Chip>
+          </span>
+        ),
+      },
+      {
+        id: 'quantity',
+        header: 'Qty',
+        kind: 'qty',
+        value: (p) => p.quantity,
+        unit: unitOf,
+      },
+      { id: 'revenue', header: 'Revenue', kind: 'money', value: (p) => p.revenue },
+      { id: 'cogs', header: 'COGS', kind: 'money', value: (p) => p.cogs },
+      {
+        id: 'margin',
+        header: 'Margin',
+        kind: 'money',
+        value: (p) => p.margin,
+        cell: (p) => <LossAware value={p.margin} />,
+      },
+      {
+        id: 'marginPct',
+        header: 'Margin %',
+        kind: 'text',
+        value: (p) => p.marginPct,
+        cell: (p) => (
+          <span
+            className={cn(
+              'font-mono tabular-nums',
+              p.marginPct < 0 ? 'text-danger-fg' : 'text-ink-muted',
+            )}
+          >
+            {formatPercent(p.marginPct)}
+          </span>
+        ),
+      },
+    ];
+  }, [products]);
+
+  const statementLines: StatementLine[] = single
+    ? [
+        { label: 'Fuel revenue', value: single.revenueFuel },
+        { label: 'Merchandise revenue', value: single.revenueMerch },
+        { label: 'Total revenue', value: single.revenue, subtotal: true },
+        { label: 'Fuel COGS', value: -single.cogsFuel },
+        { label: 'Merchandise COGS', value: -single.cogsMerch },
+        {
+          label: 'Gross margin',
+          value: single.grossMargin,
+          subtotal: true,
+          lossAware: true,
+          hint: 'by sales day',
+        },
+        { label: 'Operating expenses', value: -single.expenses, hint: 'by entry date' },
+        ...(single.otherIncome > 0
+          ? [{ label: 'Other income', value: single.otherIncome, hint: 'by entry date' }]
+          : []),
+      ]
+    : [];
+
+  const noDays = (
+    <div className="p-3">
+      <EmptyState
+        compact
+        icon={<Icon name="trending-up" size="md" />}
+        title="No profit data for this period"
+        description="Generate the DSR for closed days to include their margin. Expenses and income appear by entry date."
+      />
+    </div>
+  );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div className="flex flex-col gap-4">
       <ReportRangeBar
         value={range}
         onChange={setRange}
         clock={clock}
-        note={
-          <>
-            {isSingleDay ? 'Single day' : 'Period total'} · Gross margin is by sales day (from the
-            DSR, each day at its own weighted-average cost; live today). Expenses and other income
-            are by entry date. Days without a generated DSR add no margin.
-          </>
+        info={
+          <InfoTip label="About profit and loss" placement="bottom">
+            Gross margin is by sales day, from each day's DSR at its own weighted-average cost (live
+            for today). Expenses and other income are by entry date. Days without a generated DSR
+            add no margin.
+          </InfoTip>
         }
       />
 
-      {/* Headline KPIs (period total, or the single day) */}
-      <KpiStrip columns="auto">
-        <KpiTile label="Revenue" value={inr(totals.revenue)} />
-        <KpiTile label="COGS" value={inr(totals.cogs)} />
-        <KpiTile
-          label="Gross margin"
-          value={inr(totals.grossMargin)}
-          hint={`${marginPct.toFixed(1)}% of revenue · by sales day`}
-        />
-        <KpiTile label="Operating expenses" value={inr(totals.expenses)} hint="By entry date" />
-        {totals.otherIncome > 0 && <KpiTile label="Other income" value={inr(totals.otherIncome)} />}
-        <KpiTile
-          alert={totals.netProfit < 0 ? 'danger' : undefined}
-          label="Net profit"
-          value={inr(totals.netProfit)}
-        />
-      </KpiStrip>
-
-      {/* Net-profit trend across the period (FB3). */}
-      {!isSingleDay && trend.length > 1 && (
-        <Panel
-          title="Net profit trend"
-          action={
-            <Chip tone={totals.netProfit < 0 ? 'danger' : 'success'} variant="soft">
-              {inr(totals.netProfit)}
-            </Chip>
-          }
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <Sparkline
-              data={trend}
-              tone={totals.netProfit < 0 ? 'danger' : 'success'}
-              fill
-              height={64}
-              className="w-full"
-              aria-label="Daily net profit trend"
-            />
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: '11px',
-                color: 'var(--text-faint)',
-              }}
-            >
-              <span>{pl.days[pl.days.length - 1]?.date}</span>
-              <span>{trend.length} days · net profit / day</span>
-              <span>{pl.days[0]?.date}</span>
-            </div>
-          </div>
-        </Panel>
-      )}
-
-      {/* Live "as-of" context (Option 1): explain what the open day includes so
-          fuel reading 0/partial before shift close is never mistaken for a bug. */}
+      {/* Live "as-of" context: explain what the open day includes so fuel
+          reading 0/partial before shift close is never mistaken for a bug. */}
       {todayInRange && (
         <div
-          style={{
-            display: 'flex',
-            gap: '8px',
-            alignItems: 'flex-start',
-            padding: '10px 12px',
-            backgroundColor: 'var(--state-warning-bg)',
-            color: 'var(--state-warning-fg)',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-            border: '1px solid var(--border-soft)',
-          }}
+          role="note"
+          className="flex items-start gap-2 rounded-input border border-border-soft bg-surface-alt px-3 py-2.5 text-[12px] leading-[1.45] text-ink-default"
         >
-          <span style={{ fontWeight: 700 }}>Live</span>
-          <span>
-            Today ({todayBiz}) is provisional{liveAsOf ? `, as of ${liveAsOf}` : ''}. It includes{' '}
-            <strong>
+          <StatusChip status="shift-live" size="md" />
+          <p className="m-0 pt-0.5">
+            Today ({formatDate(todayBiz)}) is provisional{liveAsOf ? `, as of ${liveAsOf}` : ''}. It
+            includes{' '}
+            <strong className="font-semibold text-ink-strong">
               {closedShiftsToday} closed shift{closedShiftsToday === 1 ? '' : 's'}
             </strong>{' '}
             plus live merchandise.
             {hasOpenShift
               ? " Fuel from the currently open shift isn't counted until it closes (nozzle readings are taken at close)."
               : ' Fuel for a shift is counted once that shift closes.'}
-          </span>
+          </p>
         </div>
       )}
 
-      {loading ? (
-        <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-          Loading…
-        </div>
-      ) : pl.days.length === 0 ? (
-        <Panel flush>
-          <EmptyState
-            title="No profit data for this period"
-            description="Generate the DSR for closed days to include their margin. Expenses and income appear by entry date."
+      <DataSection title="Profit and loss totals" query={plQ} shape="cards" placeholderHeight={90}>
+        <KpiStrip columns="auto">
+          <KpiTile label="Revenue" scope="in-range" value={formatMoney(totals.revenue)} />
+          <KpiTile
+            label="Gross margin"
+            scope="in-range"
+            value={formatMoney(totals.grossMargin)}
+            hint={`${formatPercent(totals.marginPct)} of revenue`}
           />
-        </Panel>
-      ) : isSingleDay && single ? (
-        // --- Single-day P&L statement ---
-        <Panel
-          flush
-          title={
-            <>
-              Profit &amp; Loss — <DateText value={single.date} />
-            </>
-          }
-          action={
-            <Chip tone={single.live ? 'warning' : 'success'} variant="soft">
-              {single.live ? 'LIVE · not finalized' : 'FINAL'}
-            </Chip>
-          }
-        >
-          {(
-            [
-              { label: 'Revenue — Fuel', value: inr(single.revenueFuel) },
-              { label: 'Revenue — Merchandise', value: inr(single.revenueMerch) },
-              { label: 'Total Revenue', value: inr(single.revenue), strong: true },
-              {
-                label: 'COGS — Fuel',
-                value: `(${inr(single.cogsFuel)})`,
-                color: 'var(--brand-warning)',
-              },
-              {
-                label: 'COGS — Merchandise',
-                value: `(${inr(single.cogsMerch)})`,
-                color: 'var(--brand-warning)',
-              },
-              {
-                label: 'Gross Margin (by sales day)',
-                value: inr(single.grossMargin),
-                strong: true,
-              },
-              {
-                label: 'Operating Expenses (by entry date)',
-                value: `(${inr(single.expenses)})`,
-                color: 'var(--brand-warning)',
-              },
-              ...(single.otherIncome > 0
-                ? [
-                    {
-                      label: 'Other Income (by entry date)',
-                      value: inr(single.otherIncome),
-                      color: 'var(--brand-success)',
-                    },
-                  ]
-                : []),
-            ] as Array<{ label: string; value: string; color?: string; strong?: boolean }>
-          ).map((r, i) => (
-            <div
-              key={i}
-              style={{
-                ...rowStyle,
-                backgroundColor: r.strong ? 'var(--bg-surface-alt)' : 'transparent',
-              }}
-            >
-              <span style={{ fontWeight: r.strong ? 700 : 400 }}>{r.label}</span>
-              <span
-                style={{
-                  fontWeight: r.strong ? 700 : 600,
-                  fontFamily: 'var(--font-mono)',
-                  color: r.color || 'var(--text-default)',
-                }}
-              >
-                {r.value}
-              </span>
+          <KpiTile
+            label="Operating expenses"
+            scope="in-range"
+            value={formatMoney(totals.expenses)}
+            hint={
+              totals.otherIncome > 0
+                ? `Other income ${formatMoney(totals.otherIncome)}`
+                : 'by entry date'
+            }
+          />
+          <KpiTile
+            label="Net profit"
+            scope="in-range"
+            alert={totals.netProfit < 0 ? 'danger' : undefined}
+            value={formatMoney(totals.netProfit)}
+          />
+        </KpiStrip>
+      </DataSection>
+
+      {/* Net-profit trend across the period (FB3). Only drawn once the report
+          is in, so it shares the totals' loading and error state. */}
+      {!isSingleDay && trend.length > 1 && (
+        <section className="flex flex-col gap-2">
+          <SectionHeader title="Net profit trend" subtitle={`${trend.length} days`} />
+          <Panel>
+            <div className="flex flex-col gap-1.5">
+              <Sparkline
+                data={trend}
+                tone={totals.netProfit < 0 ? 'danger' : 'brand'}
+                fill
+                height={64}
+                className="w-full"
+                aria-label="Daily net profit trend"
+              />
+              <div className="flex justify-between text-[12px] text-ink-faint">
+                <span>{formatDate(days[days.length - 1]?.date)}</span>
+                <span>Net profit per day</span>
+                <span>{formatDate(days[0]?.date)}</span>
+              </div>
             </div>
-          ))}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '13px 16px',
-              backgroundColor: 'var(--bg-surface-alt)',
-            }}
-          >
-            <span style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-              Net Profit
-            </span>
-            <span
-              style={{
-                fontWeight: 700,
-                fontFamily: 'var(--font-mono)',
-                fontSize: '15px',
-                color: single.netProfit < 0 ? 'var(--state-danger-fg)' : 'var(--state-success-fg)',
-              }}
-            >
-              {inr(single.netProfit)}
-            </span>
-          </div>
-        </Panel>
-      ) : (
-        // --- Period breakdown: per-day table ---
-        <Panel flush title="Daily breakdown">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <thead>
-              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', textAlign: 'left' }}>
-                {[
-                  'Date',
-                  'Revenue',
-                  'COGS',
-                  'Gross Margin',
-                  'Expenses',
-                  'Income',
-                  'Net Profit',
-                ].map((h, i) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: '8px 12px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      color: 'var(--text-muted)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                      textAlign: i === 0 ? 'left' : 'right',
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {pl.days.map((d) => (
-                <tr key={d.date} style={{ borderTop: '1px solid var(--border-soft)' }}>
-                  <td
-                    style={{
-                      padding: '8px 12px',
-                      whiteSpace: 'nowrap',
-                      color: 'var(--text-strong)',
-                    }}
-                  >
-                    <DateText value={d.date} />{' '}
-                    {d.live && (
-                      <Chip tone="warning" variant="soft" size="sm">
-                        LIVE
-                      </Chip>
-                    )}
-                  </td>
-                  <td style={cell}>{inr(salesByDate.get(d.date)?.revenue ?? 0)}</td>
-                  <td style={{ ...cell, color: 'var(--brand-warning)' }}>
-                    {inr(salesByDate.get(d.date)?.cogs ?? 0)}
-                  </td>
-                  <td style={cell}>{inr(d.grossMargin)}</td>
-                  <td style={{ ...cell, color: 'var(--brand-warning)' }}>{inr(d.expenses)}</td>
-                  <td style={{ ...cell, color: 'var(--brand-success)' }}>{inr(d.otherIncome)}</td>
-                  <td
-                    style={{
-                      ...cell,
-                      fontWeight: 700,
-                      color: d.netProfit < 0 ? 'var(--state-danger-fg)' : 'var(--state-success-fg)',
-                    }}
-                  >
-                    {inr(d.netProfit)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr
-                style={{
-                  backgroundColor: 'var(--bg-surface-alt)',
-                  borderTop: '1px solid var(--border-strong)',
-                }}
-              >
-                <td style={{ padding: '10px 12px', fontWeight: 700 }}>
-                  Total ({pl.days.length} day{pl.days.length === 1 ? '' : 's'})
-                </td>
-                <td style={{ ...cell, fontWeight: 700 }}>{inr(totals.revenue)}</td>
-                <td style={{ ...cell, fontWeight: 700, color: 'var(--brand-warning)' }}>
-                  {inr(totals.cogs)}
-                </td>
-                <td style={{ ...cell, fontWeight: 700 }}>{inr(totals.grossMargin)}</td>
-                <td style={{ ...cell, fontWeight: 700, color: 'var(--brand-warning)' }}>
-                  {inr(totals.expenses)}
-                </td>
-                <td style={{ ...cell, fontWeight: 700, color: 'var(--brand-success)' }}>
-                  {inr(totals.otherIncome)}
-                </td>
-                <td
-                  style={{
-                    ...cell,
-                    fontWeight: 700,
-                    color:
-                      totals.netProfit < 0 ? 'var(--state-danger-fg)' : 'var(--state-success-fg)',
-                  }}
-                >
-                  {inr(totals.netProfit)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </Panel>
+          </Panel>
+        </section>
       )}
 
-      {/* Per-product margin (FB3) — which products actually make money. */}
-      {productMargins.length > 0 && (
-        <Panel flush title="Margin by product">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <thead>
-              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', textAlign: 'left' }}>
-                {['Product', 'Qty', 'Revenue', 'COGS', 'Margin', 'Margin %'].map((h, i) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: '8px 12px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      color: 'var(--text-muted)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                      textAlign: i === 0 ? 'left' : 'right',
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {productMargins.map((p) => (
-                <tr key={p.productId} style={{ borderTop: '1px solid var(--border-soft)' }}>
-                  <td style={{ padding: '8px 12px', color: 'var(--text-strong)' }}>
-                    {p.name}{' '}
-                    <Chip tone={p.kind === 'fuel' ? 'brand' : 'neutral'} variant="soft" size="sm">
-                      {p.kind === 'fuel' ? 'Fuel' : 'Merch'}
-                    </Chip>
-                  </td>
-                  <td style={cell}>
-                    {p.quantity.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                  </td>
-                  <td style={cell}>{inr(p.revenue)}</td>
-                  <td style={{ ...cell, color: 'var(--brand-warning)' }}>{inr(p.cogs)}</td>
-                  <td
-                    style={{
-                      ...cell,
-                      fontWeight: 700,
-                      color: p.margin < 0 ? 'var(--state-danger-fg)' : 'var(--state-success-fg)',
-                    }}
-                  >
-                    {inr(p.margin)}
-                  </td>
-                  <td style={{ ...cell, color: 'var(--text-muted)' }}>{p.marginPct.toFixed(1)}%</td>
-                </tr>
+      {isSingleDay ? (
+        <section className="flex flex-col gap-2">
+          <SectionHeader
+            title="Statement"
+            subtitle={
+              single ? (
+                <StatusChip status={single.live ? 'shift-live' : 'day-final'} size="md" />
+              ) : undefined
+            }
+          />
+          <DataSection
+            title="Profit and loss statement"
+            query={plQ}
+            placeholderHeight={240}
+            flush
+            isEmpty={!single}
+            empty={noDays}
+          >
+            <dl className="m-0 divide-y divide-border-soft text-[13px]">
+              {statementLines.map((line) => (
+                <div
+                  key={line.label}
+                  className={cn(
+                    'flex items-baseline justify-between gap-4 px-4 py-2.5',
+                    line.subtotal && 'bg-surface-alt font-semibold text-ink-strong',
+                  )}
+                >
+                  <dt className="flex items-baseline gap-1.5">
+                    {line.label}
+                    {line.hint && (
+                      <span className="text-[12px] font-normal text-ink-faint">{line.hint}</span>
+                    )}
+                  </dt>
+                  <dd className="m-0 font-mono tabular-nums">
+                    {line.lossAware ? <LossAware value={line.value} /> : formatMoney(line.value)}
+                  </dd>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </Panel>
+              {single && (
+                <div className="flex items-baseline justify-between gap-4 bg-surface-alt px-4 py-3 font-semibold text-ink-strong">
+                  <dt>Net profit</dt>
+                  <dd className="m-0 font-mono text-[15px] tabular-nums">
+                    <LossAware value={single.netProfit} />
+                  </dd>
+                </div>
+              )}
+            </dl>
+          </DataSection>
+        </section>
+      ) : (
+        <section className="flex flex-col gap-2">
+          <SectionHeader title="Daily breakdown" />
+          <DataSection
+            title="Daily breakdown"
+            query={plQ}
+            placeholderHeight={200}
+            flush
+            isEmpty={days.length === 0}
+            empty={noDays}
+          >
+            <InteractiveTable
+              bare
+              columns={DAY_COLUMNS}
+              rows={days}
+              rowKey={(d) => d.date}
+              totalRow={dayTotals}
+              title="Daily breakdown"
+            />
+          </DataSection>
+        </section>
+      )}
+
+      {/* Per-product margin (FB3): which products actually make money. */}
+      {(plQ.isLoading || plQ.isError || productMargins.length > 0) && (
+        <section className="flex flex-col gap-2">
+          <SectionHeader title="Margin by product" />
+          <DataSection title="Margin by product" query={plQ} placeholderHeight={160} flush>
+            <InteractiveTable
+              bare
+              columns={productColumns}
+              rows={productMargins}
+              rowKey={(p) => p.productId}
+              totalRow
+              title="Margin by product"
+            />
+          </DataSection>
+        </section>
       )}
     </div>
   );

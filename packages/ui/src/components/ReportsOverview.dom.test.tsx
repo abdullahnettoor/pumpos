@@ -4,7 +4,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { publishNavIntent, __resetNavIntentForTests } from '../nav-intent/store.js';
-import { renderWithProviders } from '../test/renderWithProviders.js';
+import { QueryObserver } from '@tanstack/react-query';
+import { createTestQueryClient, renderWithProviders } from '../test/renderWithProviders.js';
+import { queryKeys } from '../query/hooks.js';
 
 const range = vi.hoisted(() => ({ data: [] as unknown[] }));
 vi.mock('../query/hooks.js', async (importOriginal) => ({
@@ -20,9 +22,22 @@ vi.mock('../services/cloud.js', async (importOriginal) => {
     getDailyDssrPreview(stationId: string, date: string) {
       return preview.fn(stationId, date) as any;
     }
+    generateDailyDssr(...args: unknown[]) {
+      gen.calls.push(args);
+      if (gen.result) return Promise.resolve(gen.result);
+      return Promise.reject(Object.assign(new Error('offline'), { code: 'NETWORK' }));
+    }
   }
   return { ...mod, CloudShiftService };
 });
+const view = vi.hoisted(() => ({ opened: null as unknown }));
+vi.mock('./DailyDssrView.js', () => ({
+  DailyDssrView: ({ dailyDssr }: { dailyDssr: unknown }) => {
+    view.opened = dailyDssr;
+    return <div data-testid="dsr-screen" />;
+  },
+}));
+const gen = vi.hoisted(() => ({ calls: [] as unknown[][], result: null as unknown }));
 vi.mock('../access/CapabilityGate.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   useCapability: () => ({ status: 'enabled' }),
@@ -161,6 +176,71 @@ describe('Reports → DSR deep link (review #545)', () => {
   });
 });
 
+describe('Reports → DSR missing report and Generate (review #579)', () => {
+  it('a deep link to a closed day with no report opens the DSR screen on Report missing', async () => {
+    preview.fn = () =>
+      Promise.reject(Object.assign(new Error('no snapshot'), { code: 'CONFLICT' }));
+    act(() => publishNavIntent({ openDssrDate: '2026-10-01' }));
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
+    expect(await screen.findByTestId('dsr-screen')).toBeTruthy();
+    expect(view.opened).toEqual({ businessDate: '2026-10-01', snapshotData: null });
+  });
+
+  it('Generate sends one Idempotency-Key, kept when the outcome is unknown', async () => {
+    gen.calls = [];
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
+    const button = screen.getByRole('button', { name: /Generate DSR/ });
+    await act(async () => fireEvent.click(button));
+    await act(async () => fireEvent.click(button));
+    expect(gen.calls).toHaveLength(2);
+    const key = (c: unknown[]) => (c[2] as { idempotencyKey: string }).idempotencyKey;
+    expect(key(gen.calls[0])).toBeTruthy();
+    expect(key(gen.calls[1])).toBe(key(gen.calls[0]));
+  });
+
+  it('a generated DSR opens from the response while every DSR view refreshes in the background', async () => {
+    gen.calls = [];
+    gen.result = { businessDate: '2026-10-14', snapshotData: { shiftsIncluded: 2 } };
+    const qc = createTestQueryClient();
+    const dayKey = queryKeys.dssr('st-1', '2026-10-14');
+    const dayListKey = queryKeys.businessDayList('st-1');
+    qc.setQueryData(dayListKey, []);
+    // Shifts › Business Day is watching that day; its refetch never answers.
+    const watcher = new QueryObserver(qc, {
+      queryKey: dayKey,
+      queryFn: () => new Promise(() => {}),
+      initialData: { stale: true },
+      staleTime: Infinity,
+    });
+    const stop = watcher.subscribe(() => {});
+    try {
+      renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />, {
+        queryClient: qc,
+      });
+      fireEvent.change(screen.getByLabelText('Business date to generate'), {
+        target: { value: '2026-10-14' },
+      });
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: /Generate DSR/ })));
+      // Generate settled and opened the response while the refetch is still out.
+      expect(await screen.findByTestId('dsr-screen')).toBeTruthy();
+      expect(view.opened).toBe(gen.result);
+      expect(qc.getQueryState(dayKey)?.fetchStatus).toBe('fetching');
+      expect(qc.getQueryState(dayKey)?.isInvalidated).toBe(true);
+      expect(qc.getQueryState(dayListKey)?.isInvalidated).toBe(true);
+      // The day just written holds the write's answer.
+      expect(qc.getQueryData(queryKeys.dssrPreview('st-1', '2026-10-14'))).toBe(gen.result);
+    } finally {
+      stop();
+      gen.result = null;
+    }
+  });
+
+  it('shows Generate only to Roles the API lets generate', () => {
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Staff" />);
+    expect(screen.queryByRole('button', { name: /Generate DSR/ })).toBeNull();
+  });
+});
+
 describe('Reports → Decantations (#473)', () => {
   it.each(['Owner', 'Manager', 'Accountant'] as const)('is shown to %s', (role) => {
     renderWithProviders(<ReportsOverview selectedStation={station} userRole={role} />);
@@ -217,7 +297,8 @@ describe('Reports → Daily DSR KPI strip (#516)', () => {
     ];
     renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
     expect(screen.getByRole('columnheader', { name: /Cash sales/ })).toBeTruthy();
-    const rows = screen.getAllByRole('row').slice(1);
+    // Body rows only: the total row closes the table.
+    const rows = Array.from(document.querySelectorAll('tbody tr')) as HTMLElement[];
     const cashCell = (r: HTMLElement) => {
       const headers = screen.getAllByRole('columnheader');
       const i = headers.findIndex((h) => /Cash sales/.test(h.textContent ?? ''));
