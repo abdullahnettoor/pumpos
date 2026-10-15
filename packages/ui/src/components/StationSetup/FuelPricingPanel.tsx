@@ -1,142 +1,336 @@
-import React, { useCallback, useState, useMemo } from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
-import { CloudPricingService, CloudProductService } from '../../services/cloud.js';
-import { Station } from '@pump/shared';
-import { useToast } from '../primitives/ToastProvider.js';
-import { PageLayout } from '../primitives/PageLayout.js';
-import { Tabs } from '../../pump-ds/tabs/index.js';
-import { DataTable } from '../primitives/DataTable.js';
-import { Drawer } from '../Drawer.js';
-import { Field, NumberInput, Select } from '../primitives/Field.js';
-import { queryKeys, useProducts, usePricing, usePricingHistory } from '../../query/hooks.js';
+import React, { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { inr, formatDate } from '../../utils/format.js';
+import { CloudPricingService, CloudProductService } from '../../services/cloud.js';
+import type { Station } from '@pump/shared';
+import { useToast } from '../primitives/ToastProvider.js';
+import { PageFrame } from '../page-frame/index.js';
+import { ROUTES } from '../../nav-intent/routes.js';
+import { Tabs, tabPanelProps } from '../../pump-ds/tabs/index.js';
+import { Drawer } from '../Drawer.js';
+import { Field, MoneyInput, Select, TextInput } from '../primitives/Field.js';
+import { queryKeys, useProducts, usePricing, usePricingHistory } from '../../query/hooks.js';
+import { formatDateTime, formatMoney } from '../../utils/format.js';
 import {
-  Panel,
   Button,
-  KpiStrip,
-  KpiTile,
-  EmptyState,
   Chip,
-  DateText,
+  DataSection,
+  EmptyState,
+  FilterChips,
   Form,
+  InteractiveTable,
+  SearchInput,
+  SectionHeader,
+  type TableColumn,
 } from '../../pump-ds/index.js';
-import { Fuel, Package, Search } from 'lucide-react';
+import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
 import { useRunTask } from '../../utils/runTask.js';
+import { countOf } from '../../utils/ledgerWindow.js';
+import {
+  buildFuelPriceRows,
+  type CurrentFuelPrice,
+  type FuelPriceHistoryEntry,
+  type FuelPriceRow,
+} from './fuelPriceRows.js';
+import { useKeyedSave } from './useKeyedSave.js';
 
 const pricingService = new CloudPricingService();
 const productService = new CloudProductService();
 
 type TabType = 'fuels' | 'merchandise';
+type MerchFilter = 'all' | 'unpriced';
 
 interface FuelPricingPanelProps {
   selectedStation: Station | null;
 }
 
-const SearchBox: React.FC<{
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}> = ({ value, onChange, placeholder }) => (
-  <div style={{ position: 'relative' }}>
-    <Search
-      size={13}
-      style={{
-        position: 'absolute',
-        left: '8px',
-        top: '50%',
-        transform: 'translateY(-50%)',
-        color: 'var(--text-muted)',
-      }}
-    />
-    <input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      style={{
-        height: '28px',
-        padding: '0 8px 0 26px',
-        width: '220px',
-        borderRadius: 'var(--radius-input)',
-        border: '1px solid var(--border-strong)',
-        fontSize: '12px',
-        background: 'var(--bg-surface)',
-      }}
-    />
-  </div>
-);
+interface MerchRow {
+  id: string;
+  name: string;
+  code?: string | null;
+  brand?: string | null;
+  category?: string | null;
+  unit?: string | null;
+  sellingPrice?: number | string | null;
+  productType?: string;
+  isActive?: boolean;
+}
 
-const fuelHistoryColumns: ColumnDef<any, any>[] = [
-  {
-    accessorKey: 'productName',
-    header: 'Fuel',
-    cell: ({ getValue }) => (
-      <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{getValue() as string}</span>
-    ),
-  },
-  {
-    accessorKey: 'price',
-    header: 'Rate',
-    cell: ({ getValue }) => (
-      <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(getValue())}</span>
-    ),
-  },
-  {
-    accessorKey: 'effectiveFrom',
-    header: 'Effective from',
-    cell: ({ getValue }) => (
-      <DateText value={getValue() as string} variant="datetime" tone="muted" />
-    ),
-  },
-];
+interface HistoryRow extends FuelPriceHistoryEntry {
+  productName: string;
+}
+
+const isPriced = (p: MerchRow) => p.sellingPrice != null && Number(p.sellingPrice) > 0;
+
+/** "Now" in the operator's local time, as a `datetime-local` value. */
+const localNowInput = () => {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+};
 
 export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStation }) => {
+  const [activeTab, setActiveTab] = useState<TabType>('fuels');
+
+  if (!selectedStation) {
+    return (
+      <PageFrame route={ROUTES.pricing}>
+        <EmptyState
+          icon={<ConceptIcon concept="stations" />}
+          title="No station selected"
+          description="Select a station to manage pricing."
+        />
+      </PageFrame>
+    );
+  }
+
+  return (
+    <PageFrame
+      route={ROUTES.pricing}
+      subtitle="Fuel rates and product MRP for this station."
+      tabs={
+        <Tabs
+          id="pricing"
+          aria-label="Pricing views"
+          activeId={activeTab}
+          onChange={(id) => setActiveTab(id as TabType)}
+          tabs={[
+            { id: 'fuels', label: 'Fuels', concept: 'fuels' },
+            { id: 'merchandise', label: 'Products', concept: 'products' },
+          ]}
+        />
+      }
+    >
+      <div {...tabPanelProps('pricing', activeTab)} className="flex flex-col gap-6">
+        {activeTab === 'fuels' ? <FuelsTab stationId={selectedStation.id} /> : <ProductsTab />}
+      </div>
+    </PageFrame>
+  );
+};
+
+// ---- Fuels: one row per fuel (owner decision, #537) ----
+
+const FuelsTab: React.FC<{ stationId: string }> = ({ stationId }) => {
+  const pricingQ = usePricing(stationId);
+  const historyQ = usePricingHistory(stationId);
+  const productsQ = useProducts();
+  const [changing, setChanging] = useState<FuelPriceRow | null>(null);
+
+  const rows = useMemo(() => {
+    const products: { id: string; unit?: string | null }[] = productsQ.data ?? [];
+    const units = new Map(products.map((p) => [p.id, p.unit]));
+    const current: CurrentFuelPrice[] = pricingQ.data ?? [];
+    const entries: FuelPriceHistoryEntry[] = historyQ.data ?? [];
+    return buildFuelPriceRows(current, entries, (id) => units.get(id));
+  }, [pricingQ.data, historyQ.data, productsQ.data]);
+
+  const history = useMemo(() => ((historyQ.data ?? []) as HistoryRow[]).slice(), [historyQ.data]);
+
+  const columns = useMemo<TableColumn<FuelPriceRow>[]>(
+    () => [
+      {
+        id: 'product',
+        header: 'Product',
+        kind: 'text',
+        value: (r) => r.productName,
+        cell: (r) => (
+          <span className="inline-flex flex-col leading-tight">
+            <span className="font-medium text-ink-strong">{r.productName}</span>
+            {r.productCode && (
+              <span className="mt-0.5 text-[12px] text-ink-muted">{r.productCode}</span>
+            )}
+          </span>
+        ),
+      },
+      {
+        id: 'price',
+        header: 'Current price',
+        kind: 'money',
+        total: false,
+        emphasis: true,
+        value: (r) => r.price,
+        cell: (r) =>
+          r.price == null ? (
+            <span className="text-ink-faint">Not set</span>
+          ) : (
+            `${formatMoney(r.price)}/${r.unit}`
+          ),
+      },
+      {
+        id: 'effectiveFrom',
+        header: 'Effective from',
+        kind: 'text',
+        value: (r) => (r.effectiveFrom ? formatDateTime(r.effectiveFrom) : null),
+      },
+      {
+        id: 'lastChange',
+        header: 'Last change',
+        kind: 'text',
+        sortable: false,
+        value: (r) =>
+          r.lastChange
+            ? `${formatMoney(r.lastChange.from)} → ${formatMoney(r.lastChange.to)}`
+            : null,
+        cell: (r) =>
+          r.lastChange ? (
+            <span className="font-mono tabular-nums">
+              {formatMoney(r.lastChange.from)} → {formatMoney(r.lastChange.to)}
+            </span>
+          ) : (
+            <span className="text-ink-faint">—</span>
+          ),
+      },
+      {
+        id: 'action',
+        header: '',
+        kind: 'text',
+        sortable: false,
+        width: '140px',
+        value: () => null,
+        cell: (r) => (
+          <span className="flex justify-end">
+            <Button variant="secondary" size="xs" onClick={() => setChanging(r)}>
+              Change price
+            </Button>
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const historyColumns = useMemo<TableColumn<HistoryRow>[]>(
+    () => [
+      { id: 'fuel', header: 'Fuel', kind: 'text', value: (r) => r.productName },
+      { id: 'rate', header: 'Rate', kind: 'money', total: false, value: (r) => r.price },
+      {
+        id: 'effectiveFrom',
+        header: 'Effective from',
+        kind: 'text',
+        value: (r) => formatDateTime(r.effectiveFrom),
+      },
+    ],
+    [],
+  );
+
+  return (
+    <>
+      <section className="flex flex-col gap-2">
+        <SectionHeader
+          title="Fuel prices"
+          subtitle={pricingQ.data ? countOf(rows.length, 'fuel', 'fuels') : undefined}
+        />
+        <DataSection
+          title="fuel prices"
+          query={[pricingQ, historyQ]}
+          placeholderHeight={160}
+          flush
+          isEmpty={rows.length === 0}
+          empty={
+            <div className="p-3">
+              <EmptyState
+                compact
+                icon={<ConceptIcon concept="fuels" />}
+                title="No fuel products"
+                description="Add fuel products in Station › Products first."
+              />
+            </div>
+          }
+        >
+          <InteractiveTable
+            bare
+            title="fuel prices"
+            columns={columns}
+            rows={rows}
+            rowKey={(r) => r.productId}
+          />
+        </DataSection>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <SectionHeader
+          title="Price history"
+          subtitle={historyQ.data ? countOf(history.length, 'change', 'changes') : undefined}
+        />
+        <DataSection
+          title="price history"
+          query={historyQ}
+          placeholderHeight={200}
+          flush
+          isEmpty={history.length === 0}
+          empty={
+            <div className="p-3">
+              <EmptyState
+                compact
+                icon={<ConceptIcon concept="pricing" />}
+                title="No price changes yet"
+                description="Every fuel price change is listed here."
+              />
+            </div>
+          }
+        >
+          <InteractiveTable
+            bare
+            title="price history"
+            columns={historyColumns}
+            rows={history}
+            rowKey={(r) => r.id}
+          />
+        </DataSection>
+      </section>
+
+      {changing && (
+        <ChangePriceDrawer
+          stationId={stationId}
+          fuels={rows}
+          initial={changing}
+          onClose={() => setChanging(null)}
+        />
+      )}
+    </>
+  );
+};
+
+/** The existing fuel-rate flow and validation, in a drawer. */
+const ChangePriceDrawer: React.FC<{
+  stationId: string;
+  fuels: FuelPriceRow[];
+  initial: FuelPriceRow;
+  onClose: () => void;
+}> = ({ stationId, fuels, initial, onClose }) => {
   const toast = useToast();
   const runTask = useRunTask();
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<TabType>('fuels');
-
-  // ---- Fuel pricing (time-effective, history-tracked) ----
-  // Shared hooks rather than a loader copying both lists into local state.
-  const pricingQ = usePricing(selectedStation?.id);
-  const historyQ = usePricingHistory(selectedStation?.id);
-  const currentPrices: any[] = (pricingQ.data as any[]) ?? [];
-  const history: any[] = (historyQ.data as any[]) ?? [];
-  const refreshPricing = () =>
-    Promise.all([
-      qc.invalidateQueries({ queryKey: queryKeys.pricing(selectedStation?.id ?? '') }),
-      qc.invalidateQueries({ queryKey: queryKeys.pricingHistory(selectedStation?.id ?? '') }),
-    ]);
-  const loading = pricingQ.isPending || historyQ.isPending;
-  const [submitting, setSubmitting] = useState(false);
-  const [selectedProductIdRaw, setSelectedProductId] = useState('');
-
-  // The loader used to seed this once prices arrived. Derived instead: the
-  // operator's pick wins, otherwise the first priced product.
-  const selectedProductId = selectedProductIdRaw || currentPrices[0]?.productId || '';
+  const save = useKeyedSave(`pricing:${stationId}`);
+  const [productId, setProductId] = useState(initial.productId);
   const [price, setPrice] = useState('');
-  // "Now", in the operator's local time, computed once on mount. A render-time
-  // derivation would recompute on every pass and fight their edits.
-  const [effectiveFrom, setEffectiveFrom] = useState(() => {
-    const localNow = new Date();
-    localNow.setMinutes(localNow.getMinutes() - localNow.getTimezoneOffset());
-    return localNow.toISOString().slice(0, 16);
-  });
+  // Computed once on open, so a re-render never fights the operator's edit.
+  const [effectiveFrom, setEffectiveFrom] = useState(localNowInput);
+  const [submitting, setSubmitting] = useState(false);
+  const fuel = fuels.find((f) => f.productId === productId) ?? initial;
 
-  const handleRecordPricing = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedStation || !selectedProductId || !price || submitting) return;
+    if (!productId || !price || submitting) return;
+    const payload = {
+      stationId,
+      productId,
+      price: parseFloat(price),
+      effectiveFrom: new Date(effectiveFrom).toISOString(),
+    };
     try {
       setSubmitting(true);
-      await pricingService.recordPricing({
-        stationId: selectedStation.id,
-        productId: selectedProductId,
-        price: parseFloat(price),
-        effectiveFrom: new Date(effectiveFrom).toISOString(),
-      });
-      setPrice('');
-      runTask(refreshPricing(), 'Saved, but fuel pricing could not be refreshed.');
+      await save(payload, (idempotencyKey) =>
+        pricingService.recordPricing(payload, { idempotencyKey }),
+      );
       toast.success('Fuel rate updated.');
+      onClose();
+      runTask(
+        Promise.all([
+          qc.invalidateQueries({ queryKey: queryKeys.pricing(stationId) }),
+          qc.invalidateQueries({ queryKey: queryKeys.pricingHistory(stationId) }),
+        ]),
+        'Saved, but fuel pricing could not be refreshed.',
+      );
     } catch (err: any) {
       toast.error(err.message || 'Failed to record new price');
     } finally {
@@ -144,389 +338,287 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
     }
   };
 
-  // ---- Merchandise pricing (single MRP per product) ----
-  const { data: products, isLoading: productsLoading } = useProducts();
-  const merchandise = useMemo(
-    () => (products || []).filter((p: any) => p.productType !== 'FUEL' && p.isActive !== false),
-    [products],
+  return (
+    <Drawer
+      isOpen
+      onClose={onClose}
+      title="Change price"
+      subtitle={
+        fuel.price == null
+          ? `${fuel.productName} · no price yet`
+          : `${fuel.productName} · now ${formatMoney(fuel.price)}/${fuel.unit}`
+      }
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" size="md" disabled={submitting} onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="change-price-form"
+            variant="primary"
+            size="md"
+            loading={submitting}
+            disabled={!productId || !price}
+          >
+            Apply new rate
+          </Button>
+        </div>
+      }
+    >
+      <Form id="change-price-form" onSubmit={submit} className="flex flex-col gap-3">
+        <Field label="Fuel product" required>
+          <Select value={productId} onChange={(e) => setProductId(e.target.value)} required>
+            {fuels.map((f) => (
+              <option key={f.productId} value={f.productId}>
+                {f.productName}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label={`Rate / ${fuel.unit} (₹)`} required>
+          <MoneyInput
+            step="0.01"
+            placeholder="e.g. 96.43"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            required
+            autoFocus
+          />
+        </Field>
+        <Field label="Effective from" required>
+          <TextInput
+            type="datetime-local"
+            value={effectiveFrom}
+            onChange={(e) => setEffectiveFrom(e.target.value)}
+            required
+          />
+        </Field>
+      </Form>
+    </Drawer>
   );
-  const [merchSearch, setMerchSearch] = useState('');
-  const filteredMerch = useMemo(() => {
-    const q = merchSearch.trim().toLowerCase();
-    if (!q) return merchandise;
+};
+
+// ---- Products: MRP per product ----
+
+const ProductsTab: React.FC = () => {
+  const productsQ = useProducts();
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<MerchFilter>('all');
+  const [editing, setEditing] = useState<MerchRow | null>(null);
+
+  const merchandise = useMemo(
+    () =>
+      ((productsQ.data ?? []) as MerchRow[]).filter(
+        (p) => p.productType !== 'FUEL' && p.isActive !== false,
+      ),
+    [productsQ.data],
+  );
+  const unpricedCount = useMemo(
+    () => merchandise.filter((p) => !isPriced(p)).length,
+    [merchandise],
+  );
+
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return merchandise.filter(
-      (p: any) =>
-        (p.name || '').toLowerCase().includes(q) ||
-        (p.code || '').toLowerCase().includes(q) ||
-        (p.brand || '').toLowerCase().includes(q) ||
-        (p.category || '').toLowerCase().includes(q),
+      (p) =>
+        (filter === 'all' || !isPriced(p)) &&
+        (!q ||
+          [p.name, p.code, p.brand, p.category].some((s) => (s ?? '').toLowerCase().includes(q))),
     );
-  }, [merchandise, merchSearch]);
+  }, [merchandise, search, filter]);
 
-  const merchKpis = useMemo(() => {
-    const priced = merchandise.filter(
-      (p: any) => p.sellingPrice != null && Number(p.sellingPrice) > 0,
-    ).length;
-    return { total: merchandise.length, priced, unpriced: merchandise.length - priced };
-  }, [merchandise]);
-
-  const [priceProd, setPriceProd] = useState<any | null>(null);
-  const [mrpValue, setMrpValue] = useState('');
-  const [savingMrp, setSavingMrp] = useState(false);
-
-  // Stable so the column definitions below keep memoising with an honest
-  // dependency list; the setters it closes over are stable already.
-  const openMrp = useCallback((p: any) => {
-    setPriceProd(p);
-    setMrpValue(p.sellingPrice != null ? String(p.sellingPrice) : '');
-  }, []);
-  const saveMrp = async () => {
-    if (!priceProd) return;
-    try {
-      setSavingMrp(true);
-      await productService.updateProduct(priceProd.id, {
-        sellingPrice: mrpValue === '' ? null : Number(mrpValue),
-      });
-      await qc.invalidateQueries({ queryKey: ['products'] });
-      setPriceProd(null);
-      toast.success('Price updated.');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update price');
-    } finally {
-      setSavingMrp(false);
-    }
-  };
-
-  const merchColumns = useMemo<ColumnDef<any, any>[]>(
+  const columns = useMemo<TableColumn<MerchRow>[]>(
     () => [
       {
-        accessorKey: 'name',
+        id: 'name',
         header: 'Product',
-        cell: ({ row }) => (
-          <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
-            {row.original.name}
-            {row.original.brand ? (
-              <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
-                {' '}
-                · {row.original.brand}
-              </span>
-            ) : null}
+        kind: 'text',
+        value: (r) => r.name,
+        cell: (r) => (
+          <span className="inline-flex flex-col leading-tight">
+            <span className="font-medium text-ink-strong">{r.name}</span>
+            {r.brand && <span className="mt-0.5 text-[12px] text-ink-muted">{r.brand}</span>}
           </span>
         ),
       },
       {
-        accessorKey: 'code',
+        id: 'code',
         header: 'Code',
-        cell: ({ getValue }) => (
-          <span
-            style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-muted)' }}
-          >
-            {(getValue() as string) || '—'}
-          </span>
-        ),
+        kind: 'text',
+        value: (r) => r.code,
+        cell: (r) => <span className="font-mono text-ink-muted">{r.code || '—'}</span>,
       },
+      { id: 'category', header: 'Category', kind: 'text', value: (r) => r.category },
+      { id: 'unit', header: 'Unit', kind: 'text', value: (r) => r.unit },
       {
-        accessorKey: 'category',
-        header: 'Category',
-        cell: ({ getValue }) => (
-          <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-            {(getValue() as string) || '—'}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'unit',
-        header: 'Unit',
-        cell: ({ getValue }) => (
-          <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-            {(getValue() as string) || '—'}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'sellingPrice',
+        id: 'mrp',
         header: 'MRP',
-        cell: ({ getValue }) => {
-          const v = getValue();
-          return v != null && Number(v) > 0 ? (
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontWeight: 700,
-                color: 'var(--text-strong)',
-              }}
-            >
-              {inr(v)}
-            </span>
+        kind: 'money',
+        total: false,
+        value: (r) => (isPriced(r) ? r.sellingPrice : null),
+        cell: (r) =>
+          isPriced(r) ? (
+            formatMoney(r.sellingPrice)
           ) : (
             <Chip tone="warning" size="xs">
               Not set
             </Chip>
-          );
-        },
+          ),
       },
       {
         id: 'action',
         header: '',
-        cell: ({ row }) => (
-          <Button variant="secondary" size="xs" onClick={() => openMrp(row.original)}>
-            {row.original.sellingPrice != null ? 'Edit price' : 'Set price'}
-          </Button>
+        kind: 'text',
+        sortable: false,
+        width: '120px',
+        value: () => null,
+        cell: (r) => (
+          <span className="flex justify-end">
+            <Button variant="secondary" size="xs" onClick={() => setEditing(r)}>
+              {r.sellingPrice != null ? 'Edit price' : 'Set price'}
+            </Button>
+          </span>
         ),
       },
     ],
-    [openMrp],
+    [],
   );
 
-  if (!selectedStation) {
-    return (
-      <div style={{ color: 'var(--text-muted)', padding: '24px' }}>
-        Please select a station to manage pricing.
-      </div>
-    );
-  }
+  const filtered = filter !== 'all' || search.trim() !== '';
 
   return (
-    <div className="animate-fade-in">
-      <PageLayout
-        title="Pricing"
-        subtitle="Set fuel rates and merchandise MRP across your product catalogue."
-        toolbar={
-          <Tabs
-            aria-label="Pricing views"
-            activeId={activeTab}
-            onChange={(id) => setActiveTab(id as TabType)}
-            tabs={[
-              { id: 'fuels', label: 'Fuels', concept: 'fuels' },
-              {
-                id: 'merchandise',
-                label: 'Products',
-                concept: 'products',
-              },
-            ]}
-          />
+    <section className="flex flex-col gap-2">
+      <SectionHeader
+        title="Product prices"
+        subtitle={
+          productsQ.data
+            ? filtered
+              ? `${rows.length} of ${merchandise.length}`
+              : countOf(merchandise.length, 'product', 'products')
+            : undefined
+        }
+        controls={{
+          search: (
+            <div className="w-[240px]">
+              <SearchInput
+                inputSize="sm"
+                value={search}
+                onChange={setSearch}
+                placeholder="Search product / code / brand…"
+              />
+            </div>
+          ),
+          filters: (
+            <FilterChips
+              aria-label="Product price filter"
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: 'all', label: 'All', count: merchandise.length },
+                { value: 'unpriced', label: 'No MRP', count: unpricedCount, status: 'unpaid' },
+              ]}
+            />
+          ),
+        }}
+      />
+      <DataSection
+        title="product prices"
+        query={productsQ}
+        placeholderHeight={240}
+        flush
+        isEmpty={rows.length === 0}
+        empty={
+          <div className="p-3">
+            <EmptyState
+              compact
+              icon={<ConceptIcon concept="products" />}
+              title={merchandise.length === 0 ? 'No products' : 'No matching products'}
+              description={
+                merchandise.length === 0
+                  ? 'Add non-fuel products in Station › Products.'
+                  : 'Try a different search or filter.'
+              }
+            />
+          </div>
         }
       >
-        {activeTab === 'fuels' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {!loading && currentPrices.length > 0 && (
-              <KpiStrip columns="auto">
-                {currentPrices.map((cp) => (
-                  <KpiTile
-                    key={cp.productId}
-                    label={`${cp.productName} · ${cp.productCode}`}
-                    value={`${inr(cp.price)}/${(products || []).find((p: any) => p.id === cp.productId)?.unit || 'L'}`}
-                    hint={
-                      cp.effectiveFrom
-                        ? `since ${formatDate(cp.effectiveFrom, { compact: true })}`
-                        : undefined
-                    }
-                  />
-                ))}
-              </KpiStrip>
-            )}
-            <Panel title="Record a fuel rate">
-              {currentPrices.length === 0 ? (
-                <div style={{ padding: '4px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Fuel />}
-                    title="No fuel products"
-                    description="Configure fuel products in Station → Products first."
-                  />
-                </div>
-              ) : (
-                <Form
-                  onSubmit={handleRecordPricing}
-                  style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
-                >
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1.4fr 1fr 1.2fr',
-                      gap: '12px',
-                      alignItems: 'flex-end',
-                    }}
-                  >
-                    <Field label="Fuel product" required>
-                      <Select
-                        value={selectedProductId}
-                        onChange={(e) => setSelectedProductId(e.target.value)}
-                        required
-                      >
-                        {currentPrices.map((cp) => (
-                          <option key={cp.productId} value={cp.productId}>
-                            {cp.productName}
-                          </option>
-                        ))}
-                      </Select>
-                    </Field>
-                    <Field
-                      label={`Rate / ${(products || []).find((p: any) => p.id === selectedProductId)?.unit || 'L'} (₹)`}
-                      required
-                    >
-                      <NumberInput
-                        step="0.01"
-                        placeholder="e.g. 96.43"
-                        value={price}
-                        onChange={(e) => setPrice(e.target.value)}
-                        required
-                      />
-                    </Field>
-                    <Field label="Effective from" required>
-                      <input
-                        type="datetime-local"
-                        className="input"
-                        value={effectiveFrom}
-                        onChange={(e) => setEffectiveFrom(e.target.value)}
-                        required
-                      />
-                    </Field>
-                  </div>
-                  <div>
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      size="md"
-                      loading={submitting}
-                      disabled={!selectedProductId || !price}
-                    >
-                      Apply New Rate
-                    </Button>
-                  </div>
-                </Form>
-              )}
-            </Panel>
+        <InteractiveTable
+          bare
+          title="product prices"
+          columns={columns}
+          rows={rows}
+          rowKey={(r) => r.id}
+        />
+      </DataSection>
+      {editing && <MrpDrawer product={editing} onClose={() => setEditing(null)} />}
+    </section>
+  );
+};
 
-            <Panel flush title="Price history">
-              {loading ? (
-                <div style={{ padding: '16px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Fuel />}
-                    title="Loading…"
-                    description="Fetching price history."
-                  />
-                </div>
-              ) : history.length === 0 ? (
-                <div style={{ padding: '12px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Fuel />}
-                    title="No changes logged"
-                    description="Fuel rate changes will appear here."
-                  />
-                </div>
-              ) : (
-                <DataTable
-                  bare
-                  columns={fuelHistoryColumns}
-                  data={history}
-                  getRowId={(r: any) => r.id}
-                  emptyMessage="No price changes."
-                  initialSorting={[{ id: 'effectiveFrom', desc: true }]}
-                />
-              )}
-            </Panel>
-          </div>
-        )}
+const MrpDrawer: React.FC<{ product: MerchRow; onClose: () => void }> = ({ product, onClose }) => {
+  const toast = useToast();
+  const runTask = useRunTask();
+  const qc = useQueryClient();
+  const save = useKeyedSave(`product-price:${product.id}`);
+  const [value, setValue] = useState(
+    product.sellingPrice != null ? String(product.sellingPrice) : '',
+  );
+  const [saving, setSaving] = useState(false);
 
-        {activeTab === 'merchandise' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <KpiStrip columns="auto">
-              <KpiTile label="Products" value={String(merchKpis.total)} hint="non-fuel, active" />
-              <KpiTile label="Priced" value={String(merchKpis.priced)} hint="MRP set" />
-              <KpiTile
-                alert={merchKpis.unpriced > 0 ? 'warning' : undefined}
-                label="Unpriced"
-                value={String(merchKpis.unpriced)}
-                hint="no MRP"
-              />
-            </KpiStrip>
+  const submit = async () => {
+    const body = { sellingPrice: value === '' ? null : Number(value) };
+    try {
+      setSaving(true);
+      await save({ id: product.id, ...body }, (idempotencyKey) =>
+        productService.updateProduct(product.id, body, { idempotencyKey }),
+      );
+      toast.success('Price updated.');
+      onClose();
+      runTask(
+        qc.invalidateQueries({ queryKey: queryKeys.products() }),
+        'Saved, but products could not be refreshed.',
+      );
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update price');
+    } finally {
+      setSaving(false);
+    }
+  };
 
-            <Panel
-              flush
-              title="Merchandise catalogue"
-              action={
-                <SearchBox
-                  value={merchSearch}
-                  onChange={setMerchSearch}
-                  placeholder="Search product / code / brand…"
-                />
-              }
-            >
-              {productsLoading ? (
-                <div style={{ padding: '16px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Package />}
-                    title="Loading…"
-                    description="Fetching products."
-                  />
-                </div>
-              ) : filteredMerch.length === 0 ? (
-                <div style={{ padding: '12px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Package />}
-                    title={merchandise.length === 0 ? 'No merchandise' : 'No matches'}
-                    description={
-                      merchandise.length === 0
-                        ? 'Add non-fuel products in Station → Products.'
-                        : 'Try a different search.'
-                    }
-                  />
-                </div>
-              ) : (
-                <DataTable
-                  bare
-                  columns={merchColumns}
-                  data={filteredMerch}
-                  getRowId={(r: any) => r.id}
-                  emptyMessage="No merchandise."
-                  initialSorting={[{ id: 'name', desc: false }]}
-                />
-              )}
-            </Panel>
-          </div>
-        )}
-      </PageLayout>
-
-      <Drawer
-        isOpen={!!priceProd}
-        onClose={() => setPriceProd(null)}
-        title={priceProd ? `Set price — ${priceProd.name}` : 'Set price'}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            The MRP (selling price) prefills this product on merchandise sales. Leave blank to clear
-            it.
-          </div>
-          <Field label="MRP (₹)">
-            <NumberInput
-              step="0.01"
-              min="0"
-              placeholder="e.g. 250"
-              value={mrpValue}
-              onChange={(e) => setMrpValue(e.target.value)}
-              autoFocus
-            />
-          </Field>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-            <Button variant="primary" size="md" fullWidth loading={savingMrp} onClick={saveMrp}>
-              Save Price
-            </Button>
-            <Button
-              variant="secondary"
-              size="md"
-              disabled={savingMrp}
-              onClick={() => setPriceProd(null)}
-            >
-              Cancel
-            </Button>
-          </div>
+  return (
+    <Drawer
+      isOpen
+      onClose={onClose}
+      title="Set price"
+      subtitle={product.name}
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" size="md" disabled={saving} onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" size="md" loading={saving} onClick={submit}>
+            Save price
+          </Button>
         </div>
-      </Drawer>
-    </div>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <p className="text-[12px] text-ink-muted">
+          The MRP prefills this product on product sales. Leave it blank to clear it.
+        </p>
+        <Field label="MRP (₹)">
+          <MoneyInput
+            step="0.01"
+            min="0"
+            placeholder="e.g. 250"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            autoFocus
+          />
+        </Field>
+      </div>
+    </Drawer>
   );
 };
