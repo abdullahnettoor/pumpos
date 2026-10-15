@@ -188,6 +188,19 @@ describe('DecantationsTab', () => {
     );
   });
 
+  it('says "within tolerance" on screen, not only on hover, and keeps the figure', () => {
+    decantations = decantations.map((d) =>
+      d.id === 'b'
+        ? { ...d, links: d.links!.map((l) => ({ ...l, receivedQty: 5995, varianceQty: -5 })) }
+        : d,
+    );
+    open();
+    const rowB = screen.getByText('KL-07-B').closest('tr')!;
+    expect(within(rowB).getByText('HSD · −5.00 L')).toBeTruthy();
+    expect(within(rowB).getByText('within tolerance')).toBeTruthy();
+    expect(rowB.querySelector('[title="Within tolerance"]')).toBeNull();
+  });
+
   it('filters to flagged visits', () => {
     open();
     fireEvent.click(screen.getByRole('radio', { name: /Flagged/ }));

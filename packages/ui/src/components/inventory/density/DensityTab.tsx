@@ -30,6 +30,7 @@ import { RecordDensityDrawer } from './RecordDensityDrawer.js';
 import { printDensityBoard } from './printDensityBoard.js';
 import {
   businessDateSettings,
+  resolveBusinessDate,
   resolveDecantationSettings,
   type RecordDensityReadingPayload,
 } from '@pump/shared';
@@ -90,7 +91,12 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
 
   const handleSaveDensity = async (payload: RecordDensityReadingPayload) => {
     const session = (keys.current ??= officeSubmitKeys.session(`density:${stationId}`));
-    const idempotencyKey = session.next(JSON.stringify(payload));
+    // The fingerprint (not the body) carries the station's business date at the
+    // start of the save: an unanswered save keeps its key for the same reading
+    // that day only, so tomorrow's identical reading is a new request.
+    const clock = businessDateSettings(station?.settings);
+    const businessDate = resolveBusinessDate({ ...clock, now: new Date() });
+    const idempotencyKey = session.next(JSON.stringify({ businessDate, payload }));
     try {
       await recordDensity.mutateAsync({ payload, idempotencyKey });
       session.settle();

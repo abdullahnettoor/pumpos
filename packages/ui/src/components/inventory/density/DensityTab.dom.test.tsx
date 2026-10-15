@@ -550,3 +550,63 @@ describe('DensityTab · one Idempotency-Key per save', () => {
     expect(keysSent()[2]).not.toBe(first);
   });
 });
+
+describe('DensityTab · key fingerprint carries the business date', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a same-day retry of an unanswered save reuses its key; the same reading next day does not', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // Midday in Chatham (UTC+13:45) on 11 Oct; the next save is 24 h later.
+    vi.setSystemTime(new Date('2026-10-10T23:00:00Z'));
+    const qc = seedChatham();
+    // Every save is dropped: its outcome stays unknown.
+    const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') throw new TypeError('Failed to fetch');
+      const data = String(url).includes('/setup/stations')
+        ? qc.getQueryData(queryKeys.stations())
+        : [];
+      return new Response(JSON.stringify({ success: true, data }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+
+    const keysSent = () =>
+      fetchMock.mock.calls
+        .filter(([, init]) => init?.method === 'POST')
+        .map(([, init]) => new Headers(init?.headers).get('Idempotency-Key'));
+    /** Open the drawer, enter the same reading, save (dropped), then close it. */
+    const saveOnce = async (expected: number) => {
+      fireEvent.click(screen.getByRole('button', { name: /Record density/i }));
+      fireEvent.change(screen.getByLabelText(/Observed hydrometer/), { target: { value: '745' } });
+      fireEvent.change(screen.getByLabelText(/Observed temperature/), {
+        target: { value: '28.5' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /Save reading/i }));
+      await waitFor(() => expect(keysSent().length).toBe(expected));
+      await waitFor(() =>
+        expect(
+          (screen.getByRole('button', { name: /Save reading/i }) as HTMLButtonElement).disabled,
+        ).toBe(false),
+      );
+      fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: /Save reading/i })).toBeNull(),
+      );
+    };
+
+    await saveOnce(1);
+    await saveOnce(2); // same day, new drawer, same reading
+    vi.setSystemTime(new Date('2026-10-11T23:00:00Z')); // the next business day
+    await saveOnce(3);
+
+    const [first, sameDay, nextDay] = keysSent();
+    expect(first).toBeTruthy();
+    expect(sameDay).toBe(first);
+    expect(nextDay).not.toBe(first);
+  });
+});

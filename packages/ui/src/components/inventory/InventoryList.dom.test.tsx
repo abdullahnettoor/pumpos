@@ -18,7 +18,7 @@ const station = {
   id: 'st-1',
   name: 'Highway Fuels',
   settings: { timezone: 'Asia/Kolkata', business_day_starts_at: '06:00' },
-} as any;
+};
 
 const clock = { timeZone: 'Asia/Kolkata', dayStartsAt: '06:00' };
 const today = computeRange('today', clock).from;
@@ -325,8 +325,9 @@ describe('Inventory page (#536)', () => {
         // After the save every refetch hangs: the drawer must not wait on it.
         if (saved) return new Promise<Response>(() => {});
         const path = Object.keys(DATA).find((p) => url.includes(p));
-        const answer = path ? DATA[path] : { data: [] };
-        return new Response(JSON.stringify({ success: true, data: (answer as any).data }), {
+        const answer: Answer | undefined = path ? DATA[path] : undefined;
+        const data = answer && answer !== 'fail' ? answer.data : [];
+        return new Response(JSON.stringify({ success: true, data }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });

@@ -77,10 +77,29 @@ const FILTERS: Record<
 const varianceLabel = (v: DecantationRow['variances'][number]): string => {
   const label = statusPresentation(v.state).label;
   if (v.state === 'tanker-matches') return `${v.productName} · ${label}`;
-  // The neutral tone and the tip say "within tolerance"; the chip keeps the figure.
+  // The figure only: the words sit on a line of their own (`VarianceChip`).
   if (v.state === 'within-tolerance')
     return `${v.productName} · ${formatQuantity(v.qty, 'L', { plus: true })}`;
   return `${v.productName} · ${label} ${formatQuantity(Math.abs(v.qty), 'L')}`;
+};
+
+/**
+ * A difference within tolerance keeps its figure in the chip and says so on a
+ * visible line under it (never hover-only); the other states' chip says it all.
+ */
+const VarianceChip: React.FC<{ variance: DecantationRow['variances'][number] }> = ({
+  variance: v,
+}) => {
+  const chip = <StatusChip status={v.state} size="md" label={varianceLabel(v)} />;
+  if (v.state !== 'within-tolerance') return chip;
+  return (
+    <span className="inline-flex flex-col items-start gap-0.5">
+      {chip}
+      <span className="text-[12px] text-ink-muted">
+        {statusPresentation(v.state).label.toLowerCase()}
+      </span>
+    </span>
+  );
 };
 
 const dateOf = (r: DecantationRow) => r.decantation.businessDate ?? r.decantation.createdAt;
@@ -247,13 +266,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
           ) : (
             <Stack>
               {r.variances.map((v) => (
-                <StatusChip
-                  key={v.productName}
-                  status={v.state}
-                  size="md"
-                  label={varianceLabel(v)}
-                  title={statusPresentation(v.state).label}
-                />
+                <VarianceChip key={v.productName} variance={v} />
               ))}
             </Stack>
           ),
@@ -378,7 +391,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
                   once every tank line is measured. The total adds invoice and received only for
                   products that have both, so pending and unlinked lines are left out of both
                   columns. A visit still open shows whatever the range. Excess or short within the
-                  station&rsquo;s tolerance reads grey; flags sit under the status.
+                  station&rsquo;s tolerance reads grey and says so; flags sit under the status.
                 </InfoTip>
               ),
             }}
