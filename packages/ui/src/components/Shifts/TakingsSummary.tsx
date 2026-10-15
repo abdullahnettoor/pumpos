@@ -29,7 +29,11 @@ const Line: React.FC<{ label: string; value: number | null; strong?: boolean }> 
           : 'font-mono tabular-nums text-ink-default'
       }
     >
-      {value == null ? <StatusChip status="saving" size="sm" /> : formatMoney(value)}
+      {value == null ? (
+        <StatusChip status="saving" size="sm" className="font-sans" />
+      ) : (
+        formatMoney(value)
+      )}
     </dd>
   </div>
 );
