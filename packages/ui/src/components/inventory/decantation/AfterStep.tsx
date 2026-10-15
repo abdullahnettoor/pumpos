@@ -1,15 +1,16 @@
 import React from 'react';
-import { Chip } from '../../../pump-ds/index.js';
+import { StatusChip } from '../../../pump-ds/index.js';
+import { cn } from '../../../pump-ds/lib/cn.js';
 import { Field, NumberInput, TextInput } from '../../primitives/Field.js';
-import { KV, LINE_COLORS, LineTag, Notice } from './StepSection.js';
+import { KV, LineTag, Notice } from './StepSection.js';
 import { formatQuantity } from '../../../utils/format.js';
-import { grid, lineLabel, SummaryCard, type StepProps } from './stepShared.js';
+import { GRID, lineBorder, lineLabel, SummaryCard, type StepProps } from './stepShared.js';
 
 export const AfterStep: React.FC<StepProps> = ({ form, values, tanks, flags, review }) => {
   const { register, formState } = form;
   return (
     <>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+      <div className="mb-2.5 text-[12px] text-ink-muted">
         Optional. Skip a tank to leave it pending: the next Tank Dip measures it.
       </div>
       {values.lines.map((l, i) => {
@@ -19,19 +20,13 @@ export const AfterStep: React.FC<StepProps> = ({ form, values, tanks, flags, rev
         const received = review.lines[i]?.received;
         const errs = formState.errors.lines?.[i];
         return (
-          <div
-            key={i}
-            style={{
-              borderLeft: `3px solid ${LINE_COLORS[i % LINE_COLORS.length]}`,
-              padding: '4px 0 2px 12px',
-              marginBottom: 12,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 6 }}>
+          <div key={i} className={cn('mb-3 border-l-[3px] pb-0.5 pl-3 pt-1', lineBorder(i))}>
+            <div className="mb-1.5 flex items-center gap-4">
               <LineTag i={i} label={lineLabel(tanks, l.tankId, i)} />
-              <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
+              <label className="flex items-center gap-1.5 text-[12px]">
                 <input
                   type="checkbox"
+                  className="accent-brand"
                   aria-label={`Measure line ${i + 1} now`}
                   {...register(`lines.${i}.doAfterDip`)}
                 />
@@ -39,7 +34,7 @@ export const AfterStep: React.FC<StepProps> = ({ form, values, tanks, flags, rev
               </label>
             </div>
             {l.doAfterDip ? (
-              <div style={grid('1fr 1fr 1fr 1fr')}>
+              <div className={GRID[4]}>
                 <Field label="After dip (L)" error={errs?.afterDip?.message}>
                   <NumberInput
                     aria-label={`After dip, line ${i + 1}`}
@@ -60,15 +55,17 @@ export const AfterStep: React.FC<StepProps> = ({ form, values, tanks, flags, rev
                   />
                 </Field>
                 <Field label="Received">
-                  <div style={{ paddingTop: 8, fontWeight: 600 }}>
+                  <div className="pt-2 font-semibold tabular-nums">
                     {formatQuantity(received, 'L')}
                   </div>
                 </Field>
               </div>
             ) : (
-              <Chip size="sm" tone="info">
-                Pending measurement: next Tank Dip
-              </Chip>
+              <StatusChip
+                status="pending-measurement"
+                size="sm"
+                label="Pending measurement: next Tank Dip"
+              />
             )}
             {early && <Notice tone="warning">{early.message}. It will be flagged.</Notice>}
           </div>
@@ -81,8 +78,8 @@ export const AfterStep: React.FC<StepProps> = ({ form, values, tanks, flags, rev
 export const AfterSummary: React.FC<StepProps> = ({ values, tanks, review }) => (
   <SummaryCard>
     {values.lines.map((l, i) => (
-      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ width: 140 }}>
+      <div key={i} className="flex items-center gap-3">
+        <span className="w-[140px] shrink-0">
           <LineTag i={i} label={lineLabel(tanks, l.tankId, i)} />
         </span>
         {l.doAfterDip ? (
@@ -94,9 +91,11 @@ export const AfterSummary: React.FC<StepProps> = ({ values, tanks, review }) => 
             ]}
           />
         ) : (
-          <Chip size="sm" tone="info">
-            Pending measurement: next Tank Dip
-          </Chip>
+          <StatusChip
+            status="pending-measurement"
+            size="sm"
+            label="Pending measurement: next Tank Dip"
+          />
         )}
       </div>
     ))}

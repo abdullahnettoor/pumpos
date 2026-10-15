@@ -21,11 +21,27 @@ export interface StepProps {
   review: ReturnType<typeof reviewDecantation>;
 }
 
-export const grid = (cols: string): React.CSSProperties => ({
-  display: 'grid',
-  gridTemplateColumns: cols,
-  gap: 10,
-});
+/** Equal-width field grids of the step bodies. */
+export const GRID = {
+  2: 'grid grid-cols-2 gap-2.5',
+  3: 'grid grid-cols-3 gap-2.5',
+  4: 'grid grid-cols-4 gap-2.5',
+} as const;
+
+/**
+ * Identity colours of the tank lines (dot + left rule), cycled by line index.
+ * Neutral/brand/info only: red and amber mean a problem, never a line.
+ */
+const LINE_SWATCH = ['bg-info-fg', 'bg-brand', 'bg-ink-default', 'bg-ink-faint'] as const;
+const LINE_BORDER = [
+  'border-l-info-fg',
+  'border-l-brand',
+  'border-l-ink-default',
+  'border-l-ink-faint',
+] as const;
+
+export const lineSwatch = (i: number) => LINE_SWATCH[i % LINE_SWATCH.length];
+export const lineBorder = (i: number) => LINE_BORDER[i % LINE_BORDER.length];
 
 export const tankOf = (tanks: TankOption[], id: string) => tanks.find((t) => t.id === id);
 export const lineLabel = (tanks: TankOption[], tankId: string, i: number) => {
@@ -35,5 +51,5 @@ export const lineLabel = (tanks: TankOption[], tankId: string, i: number) => {
 
 /** Vertical stack used by every collapsed step summary. */
 export const SummaryCard: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{children}</div>
+  <div className="flex flex-col gap-1.5">{children}</div>
 );

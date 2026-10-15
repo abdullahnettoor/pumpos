@@ -1,12 +1,12 @@
 import React from 'react';
 import type { LinkablePurchase } from '@pump/shared';
-import { Chip } from '../../../pump-ds/index.js';
+import { Chip, StatusChip } from '../../../pump-ds/index.js';
 import { Field, TextInput } from '../../primitives/Field.js';
 import { PurchaseCards } from './PurchaseCards.js';
 import { UnlinkButton } from './UnlinkButton.js';
 import { KV } from './StepSection.js';
-import { formatQuantity } from '../../../utils/format.js';
-import { grid, tankOf, SummaryCard, type StepProps } from './stepShared.js';
+import { formatDensity, formatQuantity } from '../../../utils/format.js';
+import { GRID, tankOf, SummaryCard, type StepProps } from './stepShared.js';
 
 export const InvoicesStep: React.FC<
   StepProps & {
@@ -21,7 +21,7 @@ export const InvoicesStep: React.FC<
   const { register, formState, setValue } = form;
   return (
     <>
-      <div style={grid('1fr 1fr')}>
+      <div className={GRID[2]}>
         <Field label="Tanker no." required error={formState.errors.tankerNumber?.message}>
           <TextInput
             aria-label="Tanker no."
@@ -34,24 +34,15 @@ export const InvoicesStep: React.FC<
           <TextInput aria-label="Driver" {...register('driverName')} />
         </Field>
       </div>
-      <div style={{ fontSize: 12, fontWeight: 600, margin: '2px 0 6px' }}>
+      <div className="mb-1.5 mt-0.5 text-[12px] font-semibold">
         Fuel Purchases on this tanker{' '}
-        <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>
+        <span className="font-normal text-ink-muted">
           · one per product · optional, can link later
         </span>
       </div>
       {fuelProducts.map((p) => (
-        <div key={p.id} style={{ marginBottom: 10 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              fontSize: 11,
-              color: 'var(--text-muted)',
-              marginBottom: 4,
-            }}
-          >
+        <div key={p.id} className="mb-2.5">
+          <div className="mb-1 flex items-center gap-2 text-[12px] text-ink-muted">
             <span>{p.name}</span>
             {onUnlink && savedLinks[p.id] && values.links[p.id] === savedLinks[p.id] && (
               <UnlinkButton label={p.name} busy={unlinkBusy} onConfirm={() => onUnlink(p.id)} />
@@ -90,19 +81,24 @@ export const InvoicesSummary: React.FC<
           ['Driver', values.driverName || '—'],
         ]}
       />
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      <div className="flex flex-wrap gap-1.5">
         {picked.map(({ productId, purchase }) => (
           <Chip key={productId} size="sm" tone="neutral">
             {tanks.find((t) => t.productId === productId)?.productName} ·{' '}
             {purchase?.invoiceNumber || purchase?.documentNumber || 'linked'}
             {purchase ? ` · ${formatQuantity(purchase.invoiceQty, 'L')}` : ''}
-            {purchase?.invoiceDensity != null ? ` · ${purchase.invoiceDensity} kg/m³` : ''}
+            {purchase?.invoiceDensity != null
+              ? ` · ${formatDensity(purchase.invoiceDensity)} kg/m³`
+              : ''}
           </Chip>
         ))}
         {unlinked.map((p) => (
-          <Chip key={p} size="sm" tone="warning">
-            {tanks.find((t) => t.productId === p)?.productName}: purchase not linked
-          </Chip>
+          <StatusChip
+            key={p}
+            status="purchase-not-linked"
+            size="sm"
+            label={`${tanks.find((t) => t.productId === p)?.productName}: purchase not linked`}
+          />
         ))}
       </div>
     </SummaryCard>
