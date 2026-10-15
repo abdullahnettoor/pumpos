@@ -8,13 +8,12 @@ import { AccountTypeChip } from '../finance/AccountTypeChip.js';
 import { formatBusinessDate, formatMoney } from '../../utils/format.js';
 import { accountTypeDetail } from '../../utils/ledgerLabels.js';
 import { StatementView, buildLedgerStatement, moneyEntries } from '../../statement/index.js';
-import { addDays, cashAccountTotals, sortCashBookAccounts } from '../../utils/cashBook.js';
+import { cashAccountTotals, sortCashBookAccounts } from '../../utils/cashBook.js';
+import { DayPicker } from './DayPicker.js';
 import {
-  Button,
   DataSection,
   EmptyState,
   Icon,
-  Input,
   InteractiveTable,
   SectionHeader,
   type TableColumn,
@@ -141,42 +140,7 @@ export const DailyCashBook: React.FC<DailyCashBookProps> = ({ selectedStation })
         subtitle={formatBusinessDate(date)}
         controls={{
           range: (
-            <>
-              <Button
-                variant="secondary"
-                size="sm"
-                leftIcon={<Icon name="chevron-left" size="sm" />}
-                aria-label="Previous day"
-                onClick={() => setDate((d) => addDays(d, -1))}
-              >
-                Prev
-              </Button>
-              <div className="w-[150px]">
-                <Input
-                  type="date"
-                  inputSize="sm"
-                  aria-label="Cash book date"
-                  value={date}
-                  max={today}
-                  onChange={(e) => e.target.value && setDate(e.target.value)}
-                />
-              </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                rightIcon={<Icon name="chevron-right" size="sm" />}
-                aria-label="Next day"
-                disabled={date >= today}
-                onClick={() => setDate((d) => (d >= today ? d : addDays(d, 1)))}
-              >
-                Next
-              </Button>
-              {date !== today && (
-                <Button variant="ghost" size="sm" onClick={() => setDate(today)}>
-                  Today
-                </Button>
-              )}
-            </>
+            <DayPicker value={date} onChange={setDate} max={today} aria-label="Cash book date" />
           ),
           info: (
             <InfoTip label="About the daily cash book" placement="bottom">

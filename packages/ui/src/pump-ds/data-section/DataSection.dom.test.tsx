@@ -67,6 +67,15 @@ describe('DataSection', () => {
     expect(screen.queryByLabelText('Loading sales')).toBeNull();
   });
 
+  it('error: an acronym in the title keeps its capitals (#532)', () => {
+    render(
+      <DataSection title="The DSR" query={q({ isError: true })} placeholderHeight={80}>
+        <span>body</span>
+      </DataSection>,
+    );
+    expect(screen.getByRole('alert').textContent).toMatch(/^Couldn't load the DSR ·/);
+  });
+
   it('error without a refetch: message only, no Retry', () => {
     render(
       <DataSection

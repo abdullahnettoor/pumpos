@@ -60,6 +60,13 @@ export interface DataSectionProps extends Omit<HTMLAttributes<HTMLDivElement>, '
   children: ReactNode;
 }
 
+/**
+ * The title as it reads mid-sentence ("Couldn't load <label>"): lower case,
+ * except an acronym (DSR, GST, ITC), which keeps its capitals.
+ */
+const sentenceLabel = (title: string): string =>
+  title.replace(/[A-Za-z]+/g, (word) => (/^[A-Z]{2,}$/.test(word) ? word : word.toLowerCase()));
+
 const asList = (q: DataSectionProps['query']): SectionQuery[] =>
   q === undefined ? [] : Array.isArray(q) ? q : [q];
 
@@ -118,7 +125,7 @@ export const DataSection: React.FC<DataSectionProps> = ({
             ? 'empty'
             : 'ready';
 
-  const label = title.toLowerCase();
+  const label = sentenceLabel(title);
   const ready = state === 'ready' || state === 'empty';
   const framed = shape === 'card' || (shape === 'cards' && !ready);
 

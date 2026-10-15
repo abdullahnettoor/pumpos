@@ -226,7 +226,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
       await qc.invalidateQueries({ queryKey: ['dssr-range'] });
       setActiveDailyDssr(result);
     } catch (err: any) {
-      setGenerateError(err.message || 'Failed to generate daily DSR');
+      setGenerateError(err.message || 'Failed to generate the DSR');
     } finally {
       setGeneratingDailyDssr(false);
     }
@@ -382,7 +382,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
                     <EmptyState
                       compact
                       icon={<Zap />}
-                      title="No daily DSR reports"
+                      title="No DSRs yet"
                       description="Generate a daily snapshot above to get started."
                     />
                   </div>
@@ -394,7 +394,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
                     error={dssrQ.error}
                     title="daily reports"
                     onRetry={dssrQ.refetch}
-                    emptyMessage="No daily DSR reports."
+                    emptyMessage="No DSRs yet."
                     getRowId={(r: any) => r.id}
                     onRowClick={(r: any) => setActiveDailyDssr(r)}
                     initialSorting={[{ id: 'businessDate', desc: true }]}
