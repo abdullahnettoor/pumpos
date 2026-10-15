@@ -79,14 +79,24 @@ describe('DispensersList — taking a pump out of service', () => {
     render();
     fireEvent.click(card('Pump One').getByRole('button', { name: /maintenance/i }));
     await waitFor(() =>
-      expect(updateDispenser).toHaveBeenCalledWith('du-1', { status: 'MAINTENANCE' }),
+      expect(updateDispenser).toHaveBeenCalledWith(
+        'du-1',
+        { status: 'MAINTENANCE' },
+        { idempotencyKey: expect.any(String) },
+      ),
     );
   });
 
   it('sends ACTIVE for a pump being returned', async () => {
     render();
     fireEvent.click(card('Pump Two').getByRole('button', { name: /return to service/i }));
-    await waitFor(() => expect(updateDispenser).toHaveBeenCalledWith('du-2', { status: 'ACTIVE' }));
+    await waitFor(() =>
+      expect(updateDispenser).toHaveBeenCalledWith(
+        'du-2',
+        { status: 'ACTIVE' },
+        { idempotencyKey: expect.any(String) },
+      ),
+    );
   });
 
   it('sends only the status, so a rename cannot ride along with it', async () => {
@@ -153,5 +163,23 @@ describe('DispensersList — taking a pump out of service', () => {
       await waitFor(() => expect(screen.getByText(/is out of service\./i)).toBeDefined());
       expect(screen.queryByText(/Could not change the dispenser status/i)).toBeNull();
     });
+  });
+});
+
+describe('DispensersList — the Station page Add menu', () => {
+  afterEach(cleanup);
+
+  it('opens the add drawer once per request and reports it handled', () => {
+    const onCreateHandled = vi.fn();
+    renderWithProviders(
+      <DispensersList stationId="st-1" createRequest={1} onCreateHandled={onCreateHandled} />,
+    );
+    expect(screen.getByText('Add Dispenser Island')).toBeDefined();
+    expect(onCreateHandled).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the drawer closed without a request', () => {
+    renderWithProviders(<DispensersList stationId="st-1" />);
+    expect(screen.queryByText('Add Dispenser Island')).toBeNull();
   });
 });

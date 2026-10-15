@@ -18,6 +18,8 @@ import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { queryKeys, useShiftTemplates } from '../../query/hooks.js';
 import { countOf } from '../../utils/ledgerWindow.js';
+import { useKeyedSaves } from './useKeyedSaves.js';
+import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
 
 const templateService = new CloudShiftTemplateService();
 
@@ -48,9 +50,21 @@ const columns: TableColumn<ShiftTemplate>[] = [
   },
 ];
 
-export const ShiftTemplates: React.FC = () => {
+const DEFAULT_SHIFTS = [
+  { name: 'Morning Shift', startTime: '06:00', endTime: '14:00', isActive: true },
+  { name: 'Evening Shift', startTime: '14:00', endTime: '22:00', isActive: true },
+  { name: 'Night Shift', startTime: '22:00', endTime: '06:00', isActive: true },
+];
+
+export type ShiftTemplatesProps = CreateRequestProps;
+
+export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
+  createRequest,
+  onCreateHandled,
+}) => {
   const toast = useToast();
   const runTask = useRunTask();
+  const { save, renew } = useKeyedSaves();
   const qc = useQueryClient();
   const templatesQ = useShiftTemplates();
   const templates: ShiftTemplate[] = templatesQ.data ?? [];
@@ -67,12 +81,10 @@ export const ShiftTemplates: React.FC = () => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await templateService.createTemplate({
-        name,
-        startTime,
-        endTime,
-        isActive: true,
-      });
+      const body = { name, startTime, endTime, isActive: true };
+      await save('setup:shift-template:create', body, (idempotencyKey) =>
+        templateService.createTemplate(body, { idempotencyKey }),
+      );
       setIsFormOpen(false);
       runTask(loadTemplates(), 'Saved, but the template list could not be refreshed.');
       toast.success('Shift template created.');
@@ -84,24 +96,12 @@ export const ShiftTemplates: React.FC = () => {
   const prefillDefaultShifts = async () => {
     try {
       setPrefilling(true);
-      await templateService.createTemplate({
-        name: 'Morning Shift',
-        startTime: '06:00',
-        endTime: '14:00',
-        isActive: true,
-      });
-      await templateService.createTemplate({
-        name: 'Evening Shift',
-        startTime: '14:00',
-        endTime: '22:00',
-        isActive: true,
-      });
-      await templateService.createTemplate({
-        name: 'Night Shift',
-        startTime: '22:00',
-        endTime: '06:00',
-        isActive: true,
-      });
+      // One request per shift, each under its own scope so the keys differ.
+      for (const [idx, body] of DEFAULT_SHIFTS.entries()) {
+        await save(`setup:shift-template:create:prefill-${idx}`, body, (idempotencyKey) =>
+          templateService.createTemplate(body, { idempotencyKey }),
+        );
+      }
       runTask(loadTemplates(), 'Saved, but the template list could not be refreshed.');
       toast.success('Default shifts created.');
     } catch (err: any) {
@@ -130,15 +130,17 @@ export const ShiftTemplates: React.FC = () => {
 
   const openCreate = () => {
     resetForm();
+    renew();
     setIsFormOpen(true);
   };
+  // The Station page's Add ▾ menu opens this drawer.
+  useCreateRequest(createRequest, openCreate, onCreateHandled);
 
   return (
     <section className="flex flex-col gap-2">
       <SectionHeader
         title="Shift schedules"
         subtitle={templatesQ.data ? countOf(templates.length, 'shift', 'shifts') : undefined}
-        action={isFormOpen ? undefined : { label: 'Add shift', onClick: openCreate }}
       />
       <p className="px-0.5 text-[12px] text-ink-muted">
         Configure standard timing templates for station operators.
@@ -158,7 +160,7 @@ export const ShiftTemplates: React.FC = () => {
               description="Create standard 8-hour operational shifts with a single click: Morning (06:00 - 14:00), Evening (14:00 - 22:00), and Night (22:00 - 06:00)."
               action={
                 <Button
-                  variant="primary"
+                  variant="secondary"
                   size="sm"
                   disabled={prefilling}
                   onClick={() =>

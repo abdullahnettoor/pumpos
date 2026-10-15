@@ -7,6 +7,8 @@ import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useInvalidateOperational } from '../../query/hooks.js';
+import { useKeyedSaves } from './useKeyedSaves.js';
+import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
 import {
   Button,
   Chip,
@@ -25,7 +27,7 @@ import { formatQuantity } from '../../utils/format.js';
 const dispenserService = new CloudDispenserService();
 const nozzleService = new CloudNozzleService();
 
-export interface DispensersListProps {
+export interface DispensersListProps extends CreateRequestProps {
   stationId: string;
 }
 
@@ -36,10 +38,15 @@ interface NozzleInput {
   currentReading: number;
 }
 
-export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => {
+export const DispensersList: React.FC<DispensersListProps> = ({
+  stationId,
+  createRequest,
+  onCreateHandled,
+}) => {
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
+  const { save, renew } = useKeyedSaves();
   const invalidateOperational = useInvalidateOperational();
   // Shared hooks rather than a loader copying four lists into local state.
   const dispensersQ = useDispensers(stationId);
@@ -163,7 +170,10 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     const next = du.status === 'ACTIVE' ? 'MAINTENANCE' : 'ACTIVE';
     try {
       setStatusBusyId(du.id);
-      await dispenserService.updateDispenser(du.id, { status: next });
+      const body = { status: next };
+      await save(`setup:dispenser:update:${du.id}`, body, (idempotencyKey) =>
+        dispenserService.updateDispenser(du.id, body, { idempotencyKey }),
+      );
       toast.success(
         next === 'MAINTENANCE' ? `${du.name} is out of service.` : `${du.name} is back in service.`,
       );
@@ -190,26 +200,30 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     try {
       setSubmitting(true);
       // Create Dispenser
-      const createdDU = await dispenserService.createDispenser({
-        stationId,
-        name,
-        code: code.toUpperCase(),
-        status: 'ACTIVE',
-      });
+      const duBody = { stationId, name, code: code.toUpperCase(), status: 'ACTIVE' };
+      const createdDU = await save(
+        `setup:dispenser:create:${stationId}`,
+        duBody,
+        (idempotencyKey) => dispenserService.createDispenser(duBody, { idempotencyKey }),
+      );
 
-      // Sequential nozzle creations for SQLite resilience
-      for (const nozzleInput of nozzlesList) {
+      // Sequential nozzle creations for SQLite resilience. Each nozzle is its
+      // own request, so its own scope: a key is never shared between rows.
+      for (const [idx, nozzleInput] of nozzlesList.entries()) {
         if (!nozzleInput.tankId || !nozzleInput.productId) {
           throw new Error('Please make sure all nozzles have a valid tank and product selected.');
         }
-        await nozzleService.createNozzle({
+        const nozzleBody = {
           stationId,
           duId: createdDU.id,
           tankId: nozzleInput.tankId,
           productId: nozzleInput.productId,
           name: nozzleInput.name,
           currentReading: nozzleInput.currentReading,
-        });
+        };
+        await save(`setup:nozzle:create:${createdDU.id}:${idx}`, nozzleBody, (idempotencyKey) =>
+          nozzleService.createNozzle(nozzleBody, { idempotencyKey }),
+        );
       }
 
       setIsFormOpen(false);
@@ -253,6 +267,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     }
 
     setNozzlesList(recommendedNozzles);
+    renew();
     setIsFormOpen(true);
   };
 
@@ -299,6 +314,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     }
 
     setNozzlesList(recommendedNozzles);
+    renew();
     setIsFormOpen(true);
   };
 
@@ -307,23 +323,20 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     setIsFormOpen(false);
   };
 
+  const openCreate = () => {
+    resetForm();
+    renew();
+    setIsFormOpen(true);
+  };
+  // The Station page's Add ▾ menu opens this drawer.
+  useCreateRequest(createRequest, openCreate, onCreateHandled);
+
   return (
     <section className="flex flex-col gap-2">
       <SectionHeader
         title="Dispenser units"
         subtitle={
           dispensersQ.data ? countOf(dispensers.length, 'dispenser', 'dispensers') : undefined
-        }
-        action={
-          isFormOpen
-            ? undefined
-            : {
-                label: 'Add dispenser',
-                onClick: () => {
-                  resetForm();
-                  setIsFormOpen(true);
-                },
-              }
         }
       />
 
@@ -376,11 +389,11 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                   {/* Maintenance is a warning, not a fault: the pump is
                       expected back. Only INACTIVE is retired. */}
                   {du.status === 'MAINTENANCE' ? (
-                    <Chip tone="warning" size="xs">
+                    <Chip tone="warning" size="md">
                       Maintenance
                     </Chip>
                   ) : (
-                    <StatusChip status={du.status === 'ACTIVE' ? 'active' : 'inactive'} />
+                    <StatusChip status={du.status === 'ACTIVE' ? 'active' : 'inactive'} size="md" />
                   )}
                 </div>
 

@@ -19,17 +19,24 @@ import { countOf } from '../../utils/ledgerWindow.js';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
+import { useKeyedSaves } from './useKeyedSaves.js';
+import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
 
 const tankService = new CloudTankService();
 
-export interface TanksGridProps {
+export interface TanksGridProps extends CreateRequestProps {
   stationId: string;
 }
 
-export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
+export const TanksGrid: React.FC<TanksGridProps> = ({
+  stationId,
+  createRequest,
+  onCreateHandled,
+}) => {
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
+  const { save, renew } = useKeyedSaves();
   // Shared hooks instead of a loader copying into local state behind an effect.
   const tanksQ = useTanks(stationId);
   const productsQ = useProducts();
@@ -65,12 +72,10 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       return;
     }
     try {
-      await tankService.createTank({
-        stationId,
-        name,
-        productId,
-        capacity,
-      });
+      const body = { stationId, name, productId, capacity };
+      await save(`setup:tank:create:${stationId}`, body, (idempotencyKey) =>
+        tankService.createTank(body, { idempotencyKey }),
+      );
       setIsFormOpen(false);
       resetForm();
       runTask(refreshTanks(), 'Saved, but the tank list could not be refreshed.');
@@ -102,12 +107,12 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
           ? `Petrol Tank ${sameProductTanksCount + 1}`
           : `Diesel Tank ${sameProductTanksCount + 1}`;
 
-      await tankService.createTank({
-        stationId,
-        name: tankName,
-        productId: fuel.id,
-        capacity: cap,
-      });
+      const body = { stationId, name: tankName, productId: fuel.id, capacity: cap };
+      // Its own scope per fuel, so a Petrol quick add left unanswered never
+      // lends its key to a Diesel one.
+      await save(`setup:tank:create:${stationId}:quick-${fuelCode}`, body, (idempotencyKey) =>
+        tankService.createTank(body, { idempotencyKey }),
+      );
 
       runTask(refreshTanks(), 'Saved, but the tank list could not be refreshed.');
       toast.success('Tank created.');
@@ -130,6 +135,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
     setName(fuelCode === 'MS' ? 'Petrol Tank 1' : 'Diesel Tank 1');
     setCapacity(fuelCode === 'MS' ? 15000 : 20000);
     setProductId(fuel.id);
+    renew();
     setIsFormOpen(true);
   };
 
@@ -149,7 +155,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       kind: 'text',
       value: (t) => productOf(t)?.name ?? 'Unknown',
       cell: (t) => (
-        <Chip tone="neutral" size="xs">
+        <Chip tone="neutral" size="md">
           {productOf(t)?.name || 'Unknown'}
         </Chip>
       ),
@@ -168,6 +174,14 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
     resetForm();
     setIsFormOpen(false);
   };
+
+  const openCreate = () => {
+    resetForm();
+    renew();
+    setIsFormOpen(true);
+  };
+  // The Station page's Add ▾ menu opens this drawer.
+  useCreateRequest(createRequest, openCreate, onCreateHandled);
 
   const quickAdd = (code: 'MS' | 'HSD', label: string, value: string, set: (v: string) => void) =>
     fuelProducts.some((p) => p.code === code) && (
@@ -197,17 +211,6 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       <SectionHeader
         title="Storage tanks"
         subtitle={tanksQ.data ? countOf(tanks.length, 'tank', 'tanks') : undefined}
-        action={
-          isFormOpen
-            ? undefined
-            : {
-                label: 'Add tank',
-                onClick: () => {
-                  resetForm();
-                  setIsFormOpen(true);
-                },
-              }
-        }
       />
 
       {fuelProducts.length > 0 && (

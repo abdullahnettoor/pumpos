@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudProductService } from '../../services/cloud.js';
-import { queryKeys, TIER, useProducts } from '../../query/hooks.js';
+import { queryKeys, useProducts } from '../../query/hooks.js';
 import { Product, PRODUCT_UNITS } from '@pump/shared';
 import {
   Button,
@@ -24,6 +24,8 @@ import { Checkbox } from '../primitives/Toggle.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useRunTask } from '../../utils/runTask.js';
+import { useKeyedSaves } from './useKeyedSaves.js';
+import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
 
 const productService = new CloudProductService();
 
@@ -74,7 +76,7 @@ const buildProductColumns = (
     kind: 'text',
     value: (p) => p.productType,
     cell: (p) => (
-      <Chip tone="neutral" size="xs">
+      <Chip tone="neutral" size="md">
         {p.productType}
       </Chip>
     ),
@@ -108,12 +110,24 @@ const buildProductColumns = (
   },
 ];
 
-export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
+export interface ProductsCatalogProps extends CreateRequestProps {
+  selectedStation?: any | null;
+  /** A fresh number per "Import CSV" pick in the Station page's Add ▾ menu. */
+  importRequest?: number;
+  onImportHandled?: () => void;
+}
+
+export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
   selectedStation,
+  createRequest,
+  onCreateHandled,
+  importRequest,
+  onImportHandled,
 }) => {
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
+  const { save, renew } = useKeyedSaves();
   const confirm = useConfirm();
   // Read through the shared hook instead of copying the list into local state
   // behind an effect — that pattern was the source of this file's
@@ -158,29 +172,19 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
 
   const handleQuickAdd = async (type: 'MS' | 'HSD') => {
     try {
-      if (type === 'MS') {
-        await productService.createProduct({
-          name: 'Petrol (MS)',
-          code: 'MS',
-          productType: 'FUEL',
-          stockTracked: true,
-          taxCategory: 'FUEL_VAT',
-          unit: 'L',
-          taxConfig: { vat_rate: 0, hsn_code: '2710' },
-          isActive: true,
-        });
-      } else {
-        await productService.createProduct({
-          name: 'Diesel (HSD)',
-          code: 'HSD',
-          productType: 'FUEL',
-          stockTracked: true,
-          taxCategory: 'FUEL_VAT',
-          unit: 'L',
-          taxConfig: { vat_rate: 0, hsn_code: '2710' },
-          isActive: true,
-        });
-      }
+      const body = {
+        name: type === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)',
+        code: type,
+        productType: 'FUEL',
+        stockTracked: true,
+        taxCategory: 'FUEL_VAT',
+        unit: 'L',
+        taxConfig: { vat_rate: 0, hsn_code: '2710' },
+        isActive: true,
+      };
+      await save(`setup:product:create:quick-${type}`, body, (idempotencyKey) =>
+        productService.createProduct(body, { idempotencyKey }),
+      );
       runTask(refreshProducts(), 'Saved, but the product list could not be refreshed.');
       toast.success('Standard product added.');
     } catch (err: any) {
@@ -230,7 +234,10 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
       };
 
       if (editingProduct) {
-        await productService.updateProduct(editingProduct.id, payload);
+        const id = editingProduct.id;
+        await save(`setup:product:update:${id}`, payload, (idempotencyKey) =>
+          productService.updateProduct(id, payload, { idempotencyKey }),
+        );
       } else {
         // Opening cost basis is only seeded at creation; thereafter it is
         // maintained as a rolling weighted-average from purchases (FB1).
@@ -241,7 +248,11 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
           payload.openingStock = Number(openingStock);
           payload.stationId = selectedStation?.id ?? undefined;
         }
-        await productService.createProduct(payload);
+        await save(
+          `setup:product:create:${selectedStation?.id ?? 'org'}`,
+          payload,
+          (idempotencyKey) => productService.createProduct(payload, { idempotencyKey }),
+        );
       }
 
       resetForm();
@@ -287,6 +298,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
     setPriceInclusive(tc.price_inclusive !== false);
     setVatRate(tc.vat_rate != null ? Number(tc.vat_rate) : 0);
     setIsCodeEdited(true);
+    renew();
     setIsFormOpen(true);
   };
 
@@ -301,7 +313,9 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
     )
       return;
     try {
-      await productService.archiveProduct(id);
+      await save(`setup:product:archive:${id}`, { isActive: false }, (idempotencyKey) =>
+        productService.archiveProduct(id, { idempotencyKey }),
+      );
       runTask(refreshProducts(), 'Saved, but the product list could not be refreshed.');
       toast.success('Product archived.');
     } catch (err: any) {
@@ -328,6 +342,15 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
     setVatRate(0);
     setIsCodeEdited(false);
   };
+
+  const openCreate = () => {
+    resetForm();
+    renew();
+    setIsFormOpen(true);
+  };
+  // The Station page's Add ▾ menu opens the add drawer or the CSV import.
+  useCreateRequest(createRequest, openCreate, onCreateHandled);
+  useCreateRequest(importRequest, () => setIsImportOpen(true), onImportHandled);
 
   const hasMS = products.some((p) => p.code === 'MS');
   const hasHSD = products.some((p) => p.code === 'HSD');
@@ -360,7 +383,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
             {!hasMS && (
               <Button
                 type="button"
-                variant="primary"
+                variant="secondary"
                 size="xs"
                 leftIcon={<Icon name="plus" size="xs" />}
                 onClick={() => runTask(handleQuickAdd('MS'), 'Could not add the product.')}
@@ -371,7 +394,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
             {!hasHSD && (
               <Button
                 type="button"
-                variant="primary"
+                variant="secondary"
                 size="xs"
                 leftIcon={<Icon name="plus" size="xs" />}
                 onClick={() => runTask(handleQuickAdd('HSD'), 'Could not add the product.')}
@@ -419,24 +442,6 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
               <option value="SERVICE">SERVICE</option>
               <option value="OTHER">OTHER</option>
             </Select>
-          ),
-          actions: isFormOpen ? undefined : (
-            <>
-              <Button variant="secondary" size="sm" onClick={() => setIsImportOpen(true)}>
-                Import CSV
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<Icon name="plus" size="sm" />}
-                onClick={() => {
-                  resetForm();
-                  setIsFormOpen(true);
-                }}
-              >
-                Add product
-              </Button>
-            </>
           ),
         }}
       />
@@ -683,7 +688,9 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
         onClose={() => setIsImportOpen(false)}
         existingProducts={products}
         selectedStation={selectedStation}
-        onImported={() => refreshProducts()}
+        onImported={() =>
+          runTask(refreshProducts(), 'Imported, but the product list could not be refreshed.')
+        }
       />
     </section>
   );

@@ -3,6 +3,7 @@ import { Drawer } from '../Drawer.js';
 import { Button, Chip, Icon, InteractiveTable, type TableColumn } from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
+import { useKeyedSaves } from './useKeyedSaves.js';
 import { CloudProductService } from '../../services/cloud.js';
 import type { Product } from '@pump/shared';
 import { PRODUCT_UNITS } from '@pump/shared';
@@ -167,7 +168,7 @@ const PREVIEW_COLUMNS: TableColumn<ParsedRow>[] = [
     value: (r) => r.raw.productType,
     cell: (r) =>
       r.raw.productType ? (
-        <Chip tone="neutral" size="xs">
+        <Chip tone="neutral" size="md">
           {r.raw.productType}
         </Chip>
       ) : (
@@ -201,7 +202,12 @@ interface ProductImportDrawerProps {
   onClose: () => void;
   existingProducts: Product[];
   selectedStation?: any | null;
-  onImported: () => void | Promise<unknown>;
+  /**
+   * Called once the import has landed. Synchronous on purpose: refresh the
+   * list in the background, so a failed refresh is never read as a failed
+   * import.
+   */
+  onImported: () => void;
 }
 
 /** Split a single CSV line, honoring double-quoted fields (with "" escapes). */
@@ -240,6 +246,7 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
 }) => {
   const toast = useToast();
   const runTask = useRunTask();
+  const { save, renew } = useKeyedSaves();
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState('');
   const [rows, setRows] = useState<ParsedRow[]>([]);
@@ -265,10 +272,13 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
     setRows([]);
     setResult(null);
     if (fileRef.current) fileRef.current.value = '';
+    renew();
   };
 
   const handleFile = async (file: File) => {
     setResult(null);
+    // A new file is a new import, never a retry of the last one.
+    renew();
     const text = await file.text();
     setFileName(file.name);
     const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
@@ -398,22 +408,31 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
       toast.error('No valid rows to import.');
       return;
     }
+    const stationId = selectedStation?.id;
+    let res: Awaited<ReturnType<typeof productService.importProducts>>;
     try {
       setImporting(true);
-      const res = await productService.importProducts(payloads, selectedStation?.id);
-      setResult({ createdCount: res.createdCount, failed: res.failed });
-      if (res.createdCount > 0)
-        toast.success(`Imported ${res.createdCount} product${res.createdCount === 1 ? '' : 's'}.`);
-      if (res.failed.length > 0)
-        toast.error(
-          `${res.failed.length} row${res.failed.length === 1 ? '' : 's'} failed — see details.`,
-        );
-      await onImported();
+      res = await save(
+        `setup:product:import:${stationId ?? 'org'}`,
+        { products: payloads, stationId },
+        (idempotencyKey) => productService.importProducts(payloads, stationId, { idempotencyKey }),
+      );
     } catch (err: any) {
       toast.error(err.message || 'Import failed');
+      return;
     } finally {
       setImporting(false);
     }
+    // Reported outside the try: the import has landed, so nothing after this
+    // point may surface as "Import failed".
+    setResult({ createdCount: res.createdCount, failed: res.failed });
+    if (res.createdCount > 0)
+      toast.success(`Imported ${res.createdCount} product${res.createdCount === 1 ? '' : 's'}.`);
+    if (res.failed.length > 0)
+      toast.error(
+        `${res.failed.length} row${res.failed.length === 1 ? '' : 's'} failed — see details.`,
+      );
+    onImported();
   };
 
   return (

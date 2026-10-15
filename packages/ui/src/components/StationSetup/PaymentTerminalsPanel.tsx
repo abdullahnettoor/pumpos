@@ -20,11 +20,13 @@ import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys, useFinancialAccounts, usePaymentTerminals } from '../../query/hooks.js';
+import { useKeyedSaves } from './useKeyedSaves.js';
+import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
 
 const terminalService = new CloudPaymentTerminalService();
 const financeSvc = new CloudFinanceService();
 
-export interface PaymentTerminalsPanelProps {
+export interface PaymentTerminalsPanelProps extends CreateRequestProps {
   stationId: string;
 }
 
@@ -98,9 +100,14 @@ const buildTerminalColumns = (
   },
 ];
 
-export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ stationId }) => {
+export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({
+  stationId,
+  createRequest,
+  onCreateHandled,
+}) => {
   const toast = useToast();
   const runTask = useRunTask();
+  const { save, renew } = useKeyedSaves();
   // Shared hooks rather than a loader copying into state behind an effect.
   const qc = useQueryClient();
   const terminalsQ = usePaymentTerminals(stationId);
@@ -119,8 +126,8 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
   const [supportsUpi, setSupportsUpi] = useState(true);
   const [clearingAccountId, setClearingAccountId] = useState('');
   // Clearing accounts are a filtered view of the station's financial accounts,
-  // so derive rather than store. A failure here is non-fatal: the picker falls
-  // back to "Auto (by provider)".
+  // so derive rather than store. Both the list and the picker read them, so a
+  // failed load shows Retry on the section rather than an empty picker.
   const clearingAccounts: any[] = ((accountsQ.data as any[]) ?? []).filter(
     (a: any) => a.accountType === 'MERCHANT_CLEARING',
   );
@@ -143,6 +150,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
   const openCreate = () => {
     resetForm();
     setLabel(`PoS ${terminals.length + 1}`);
+    renew();
     setIsFormOpen(true);
   };
 
@@ -154,6 +162,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
     setSupportsCard(t.supportsCard);
     setSupportsUpi(t.supportsUpi);
     setClearingAccountId((t as any).clearingAccountId || '');
+    renew();
     setIsFormOpen(true);
   };
 
@@ -171,9 +180,15 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
         clearingAccountId: clearingAccountId || null,
       };
       if (editingId) {
-        await terminalService.updateTerminal(editingId, payload);
+        const id = editingId;
+        await save(`setup:terminal:update:${id}`, payload, (idempotencyKey) =>
+          terminalService.updateTerminal(id, payload, { idempotencyKey }),
+        );
       } else {
-        await terminalService.createTerminal({ stationId, ...payload });
+        const body = { stationId, ...payload };
+        await save(`setup:terminal:create:${stationId}`, body, (idempotencyKey) =>
+          terminalService.createTerminal(body, { idempotencyKey }),
+        );
       }
       setIsFormOpen(false);
       resetForm();
@@ -188,7 +203,11 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
 
   const toggleActive = async (t: PaymentTerminal) => {
     try {
-      await terminalService.updateTerminal(t.id, { isActive: !t.isActive });
+      const body = { isActive: !t.isActive };
+      // Its own scope: an edit left unanswered must not lend its key here.
+      await save(`setup:terminal:deactivate:${t.id}`, body, (idempotencyKey) =>
+        terminalService.updateTerminal(t.id, body, { idempotencyKey }),
+      );
       runTask(refreshTerminals(), 'Saved, but the terminal list could not be refreshed.');
       toast.success(t.isActive ? 'Terminal disabled.' : 'Terminal enabled.');
     } catch (err: any) {
@@ -196,12 +215,14 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
     }
   };
 
+  // The Station page's Add ▾ menu opens this drawer.
+  useCreateRequest(createRequest, openCreate, onCreateHandled);
+
   return (
     <section className="flex flex-col gap-2">
       <SectionHeader
         title="Payment terminals (PoS)"
         subtitle={terminalsQ.data ? countOf(terminals.length, 'terminal', 'terminals') : undefined}
-        action={isFormOpen ? undefined : { label: 'Add terminal', onClick: openCreate }}
       />
       <p className="px-0.5 text-[12px] text-ink-muted">
         Card / UPI machines for this station. Add as many as needed; link them to dispensers when
@@ -209,7 +230,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
       </p>
       <DataSection
         title="payment terminals"
-        query={terminalsQ}
+        query={[terminalsQ, accountsQ]}
         placeholderHeight={160}
         flush
         isEmpty={terminals.length === 0}
