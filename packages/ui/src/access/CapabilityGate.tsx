@@ -3,6 +3,8 @@ import { Lock } from 'lucide-react';
 import { capabilityState, type CapabilityState } from '@pump/shared';
 import { useAccess } from '../query/hooks.js';
 import { Banner } from '../components/primitives/Banner.js';
+import { lockedFeatureState } from './lockedFeatureState.js';
+import { LockedFeature, type LockedFeatureInfo } from './LockedFeature.js';
 
 /**
  * Client-side Product Capability gates.
@@ -64,30 +66,50 @@ export const CapabilityUnavailable: React.FC<CapabilityUnavailableProps> = ({ st
 
 export interface CapabilityRouteProps {
   capability: string;
+  /**
+   * The feature's name and one line on what it does, for the locked-feature
+   * screen. A Role told nothing about the capability has no title from the
+   * server, so the page supplies its own.
+   */
+  feature?: LockedFeatureInfo;
   children: React.ReactNode;
 }
 
 /**
- * Whole-route gate for a bookmarked or deep-linked page. An unavailable
- * capability renders a clear, self-explanatory state — never a generic
- * permission error, and never a blank screen.
- *
- * A Role that is not told about the capability still gets the neutral
- * unavailable copy: it must not leak that a commercial upgrade exists.
+ * Whole-route gate for a bookmarked or deep-linked page. A locked capability
+ * renders the locked-feature screen (#605) — never a generic permission error,
+ * and never a blank screen once access is known:
+ *  - Owners and Managers see the plan and "Contact us";
+ *  - every other Role sees whom to ask, and nothing commercial.
  */
-export const CapabilityRoute: React.FC<CapabilityRouteProps> = ({ capability, children }) => {
-  const state = useCapability(capability);
+export const CapabilityRoute: React.FC<CapabilityRouteProps> = ({
+  capability,
+  feature,
+  children,
+}) => {
+  const accessQ = useAccess();
+  const state = lockedFeatureState(accessQ.data, capability);
   if (state.status === 'enabled') return <>{children}</>;
-
+  // Cold start: nothing until the document says what to show.
+  if (accessQ.isPending) return null;
+  if (state.status === 'upgrade') {
+    return (
+      <LockedFeature
+        variant="upgrade"
+        title={state.title}
+        description={feature?.description ?? state.message}
+        plan={state.plan}
+      />
+    );
+  }
+  if (state.status === 'ask' && feature) {
+    return <LockedFeature variant="ask" {...feature} />;
+  }
   return (
-    <div style={{ padding: '24px', maxWidth: '640px' }}>
-      {state.status === 'upgrade' ? (
-        <CapabilityUnavailable state={state} />
-      ) : (
-        <Banner severity="info" title="Not available" icon={<Lock size={15} />}>
-          This page is not available for your Organization.
-        </Banner>
-      )}
+    <div className="max-w-[640px] p-6">
+      <Banner severity="info" title="Not available" icon={<Lock size={15} />}>
+        This page is not available for your Organization.
+      </Banner>
     </div>
   );
 };

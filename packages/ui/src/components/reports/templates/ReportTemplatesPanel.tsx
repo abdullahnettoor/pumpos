@@ -27,7 +27,7 @@ import {
   type ReportTemplate,
   type ReportTemplateId,
 } from '../../../services/reports/reportTemplates.js';
-import { ReportPaperPreview } from './ReportPaperPreview.js';
+import { ReportDocPreview } from './ReportDocPreview.js';
 import { ReportTemplateDrawer } from './ReportTemplateDrawer.js';
 
 const stationService = new CloudStationService();
@@ -38,7 +38,7 @@ export interface ReportTemplatesPanelProps {
 
 /**
  * Station → Report templates (#332, moved from Reports in #540): one card per printed report with a live
- * thumbnail of its layout, and a Customize drawer to change it. Paper size and
+ * thumbnail of the real document (#605), and a Customize drawer to change it. Paper size and
  * the letterhead logo apply to every report and save as soon as they change.
  * The letterhead content itself (name, address, GSTIN, logo) is edited in
  * Station → Branding. Page settings and the template cards each sit under
@@ -191,7 +191,7 @@ const TemplateCard: React.FC<{
     <Panel data-testid={`template-card-${template.id}`}>
       {/* Panel wraps children in its own body, so the spacing lives here. */}
       <div className="flex flex-col gap-4">
-        <ReportPaperPreview
+        <ReportDocPreview
           template={template}
           sections={sections}
           station={station}

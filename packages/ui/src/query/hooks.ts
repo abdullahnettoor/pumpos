@@ -206,6 +206,9 @@ export const queryKeys = {
   organization: () => ['organization'] as const,
   access: () => ['access'] as const,
   desktopDownloads: () => ['desktop-downloads'] as const,
+  /** An on-screen PDF preview (#605), drawn in the browser: never persisted. */
+  pdfPreview: (kind: string, fingerprint: string, width: number, maxPages: number) =>
+    ['pdf-preview', kind, fingerprint, width, maxPages] as const,
   activityGroups: (stationId: string, type: string, limit: number) =>
     ['activity-groups', stationId, type, limit] as const,
   activityGroup: (groupId: string) => ['activity-group', groupId] as const,

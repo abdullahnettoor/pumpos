@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildFuelPriceRows,
+  priceChange,
   sortNewestFirst,
   stationDateTimeInput,
   stationInputToIso,
@@ -35,7 +36,7 @@ describe('buildFuelPriceRows', () => {
         unit: 'L',
         price: 102.5,
         effectiveFrom: '2026-10-10T00:30:00Z',
-        lastChange: { from: 101, to: 102.5 },
+        lastChange: { from: 101, to: 102.5, difference: 1.5 },
       },
     ]);
   });
@@ -53,6 +54,16 @@ describe('buildFuelPriceRows', () => {
       ['kg', 80, null],
       ['L', null, null],
     ]);
+  });
+});
+
+describe('priceChange (#605)', () => {
+  it('is old → new with the signed difference, in whole paise', () => {
+    expect(priceChange('101.80', '102.50')).toEqual({ from: 101.8, to: 102.5, difference: 0.7 });
+    expect(priceChange(94.6, 94.12)).toEqual({ from: 94.6, to: 94.12, difference: -0.48 });
+    // 0.1 + 0.2 is not 0.3 in floating point; paise are.
+    expect(priceChange(0.1, 0.3).difference).toBe(0.2);
+    expect(priceChange(100, 100).difference).toBe(0);
   });
 });
 
@@ -90,7 +101,7 @@ describe('price ties', () => {
     for (const history of [tied, [...tied].reverse()]) {
       const [row] = buildFuelPriceRows(current, history, () => 'L');
       expect(row!.price).toBe(104);
-      expect(row!.lastChange).toEqual({ from: 100, to: 104 });
+      expect(row!.lastChange).toEqual({ from: 100, to: 104, difference: 4 });
     }
   });
 });

@@ -41,3 +41,35 @@ export function letterheadFromStation(station: any): Letterhead | undefined {
     showLogo: showLogoFromStation(station),
   };
 }
+
+/** The Organization profile's details (`organizations.metadata`), as the form holds them. */
+export interface OrganizationLetterheadInput {
+  name?: string | null;
+  metadata?: {
+    legalName?: string | null;
+    gstin?: string | null;
+    stateCode?: string | null;
+    address?: string | null;
+    phone?: string | null;
+    email?: string | null;
+  } | null;
+}
+
+/**
+ * Map the Organization profile to a Letterhead (#605), for its preview in the
+ * printed letterhead band: the legal name (else the organization name), GSTIN,
+ * address and contact (phone · email). Blank fields print nothing.
+ */
+export function letterheadFromOrganization(org: OrganizationLetterheadInput): Letterhead {
+  const m = org.metadata ?? {};
+  const text = (v: string | null | undefined) => v?.trim() || undefined;
+  const contact = [text(m.phone), text(m.email)].filter(Boolean).join(' · ');
+  return {
+    legalName: text(m.legalName) || text(org.name),
+    gstin: text(m.gstin)?.toUpperCase(),
+    stateCode: text(m.stateCode),
+    addressLine: text(m.address),
+    contact: contact || undefined,
+    showLogo: false,
+  };
+}

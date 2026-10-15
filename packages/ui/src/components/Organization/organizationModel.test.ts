@@ -10,8 +10,9 @@ import {
   memberCounts,
   memberState,
   memberStations,
-  stationCapacity,
   stationCounts,
+  stationFacts,
+  stationPlanLine,
 } from './organizationModel.js';
 import { UNLIMITED_LIMIT } from '@pump/shared';
 
@@ -50,45 +51,72 @@ describe('station rows', () => {
   });
 });
 
-describe('stationCapacity', () => {
-  it('is shown only with the plan', () => {
+describe('stationPlanLine (#605)', () => {
+  const plan = (used: number, value: number, reached = used >= value) => ({
+    plan: 'CORE',
+    limits: { station_count: { used, value, reached } },
+  });
+
+  it('is one line, only with the plan and only when the plan allows more than one station', () => {
+    expect(stationPlanLine(plan(2, 3))).toBe('2 of 3 stations on your plan');
+    expect(stationPlanLine(plan(1, 1))).toBeNull();
     expect(
-      stationCapacity({ limits: { station_count: { used: 1, value: 1, reached: true } } }),
+      stationPlanLine({ limits: { station_count: { used: 1, value: 3, reached: false } } }),
     ).toBeNull();
-    expect(stationCapacity(undefined)).toBeNull();
+    expect(stationPlanLine(undefined)).toBeNull();
   });
 
-  it('says what is left, or that the limit is reached', () => {
-    expect(
-      stationCapacity({
-        plan: 'CORE',
-        limits: { station_count: { used: 3, value: 5, reached: false } },
-      }),
-    ).toEqual({
-      used: 3,
-      value: 5,
-      reached: false,
-      unlimited: false,
-      label: '3 of 5',
-      hint: '2 more on this plan',
-    });
-    expect(
-      stationCapacity({
-        plan: 'CORE',
-        limits: { station_count: { used: 1, value: 1, reached: true } },
-      })?.hint,
-    ).toBe('This plan includes one Station. Contact PumpOS to add another.');
+  it('says what to do at the limit', () => {
+    expect(stationPlanLine(plan(3, 3))).toBe(
+      '3 of 3 stations on your plan · Contact PumpOS to add another',
+    );
   });
 
-  // #603: "1 of 1000000 · 999999 more" must never show.
-  it('reads the unlimited sentinel as no limit', () => {
-    const c = stationCapacity({
-      plan: 'CORE',
-      limits: { station_count: { used: 1, value: UNLIMITED_LIMIT, reached: false } },
+  // #603: the unlimited sentinel is never a number on screen.
+  it('shows nothing for the unlimited sentinel', () => {
+    expect(stationPlanLine(plan(1, UNLIMITED_LIMIT, false))).toBeNull();
+  });
+});
+
+describe('stationFacts (#605)', () => {
+  const settings = { timezone: 'Asia/Kolkata', business_day_starts_at: '05:30' };
+  const value = (facts: ReturnType<typeof stationFacts>, label: string) =>
+    facts.find((f) => f.label === label)?.value;
+
+  it('counts the active tanks and dispensers, and reads the day on the station clock', () => {
+    const facts = stationFacts({
+      settings,
+      tanks: [{}, { isActive: true }, { isActive: false }],
+      dispensers: [{}, {}],
+      openShift: { templateName: 'Morning', openedAt: '2026-10-15T00:30:00.000Z' },
     });
-    expect(c).toMatchObject({ unlimited: true, reached: false, label: '1' });
-    expect(c?.hint).toBe('No station limit on this plan');
-    expect(`${c?.label} ${c?.hint}`).not.toMatch(/\d{4,}/);
+    expect(facts.map((f) => f.label)).toEqual([
+      'Tanks',
+      'Dispensers',
+      'Timezone',
+      'Day start',
+      'Open shift',
+    ]);
+    expect(value(facts, 'Tanks')).toBe('2');
+    expect(value(facts, 'Dispensers')).toBe('2');
+    expect(value(facts, 'Timezone')).toBe('Asia/Kolkata');
+    expect(value(facts, 'Day start')).toBe('5:30 am');
+    expect(value(facts, 'Open shift')).toBe('Morning, since 6:00\u00a0am');
+  });
+
+  it('reads None without an open shift, and null while a list loads', () => {
+    const facts = stationFacts({ settings, openShift: null });
+    expect(value(facts, 'Open shift')).toBe('None');
+    expect(value(facts, 'Tanks')).toBeNull();
+    expect(value(facts, 'Dispensers')).toBeNull();
+    expect(value(stationFacts({ settings }), 'Open shift')).toBeNull();
+  });
+
+  it('falls back to the default timezone and day start', () => {
+    const facts = stationFacts({ settings: null, tanks: [], dispensers: [], openShift: null });
+    expect(value(facts, 'Timezone')).toBe('Asia/Kolkata');
+    expect(value(facts, 'Day start')).toBe('6:00 am');
+    expect(value(facts, 'Tanks')).toBe('0');
   });
 });
 

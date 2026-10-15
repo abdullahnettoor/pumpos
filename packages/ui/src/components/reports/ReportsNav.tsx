@@ -1,11 +1,13 @@
 import React from 'react';
 import { cn } from '../../pump-ds/lib/cn.js';
-import { ConceptIcon, type Concept } from '../../pump-ds/icon/index.js';
+import { ConceptIcon, Icon, type Concept } from '../../pump-ds/icon/index.js';
 
 export interface ReportsNavItem<T extends string> {
   id: T;
   label: string;
   concept: Concept;
+  /** A gated report the Organization does not have: a lock in place of its icon (#605). */
+  locked?: boolean;
 }
 
 export interface ReportsNavGroup<T extends string> {
@@ -58,7 +60,11 @@ export function ReportsNav<T extends string>({
                         active ? 'text-info-fg' : 'text-ink-muted',
                       )}
                     >
-                      <ConceptIcon concept={item.concept} size="sm" />
+                      {item.locked ? (
+                        <Icon name="lock" size="sm" aria-label="Locked" />
+                      ) : (
+                        <ConceptIcon concept={item.concept} size="sm" />
+                      )}
                     </span>
                     <span className="truncate">{item.label}</span>
                   </button>

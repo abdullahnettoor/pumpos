@@ -9,7 +9,7 @@ import {
   type Role,
   type StationStatusState,
 } from '@pump/shared';
-import { formatShortDay } from '../../utils/format.js';
+import { formatClockInZone, formatHHMM, formatShortDay } from '../../utils/format.js';
 
 /**
  * The Organization page's figures and words (#538), as pure functions so the
@@ -25,7 +25,11 @@ export interface StationLike {
   address?: string | null;
   phone?: string | null;
   onboardingStatus?: string | null;
-  settings?: { fuel_brand?: string | null } | null;
+  settings?: {
+    fuel_brand?: string | null;
+    timezone?: string | null;
+    business_day_starts_at?: string | null;
+  } | null;
 }
 
 export type StationFilter = 'all' | 'ready' | 'setup';
@@ -61,58 +65,80 @@ export const filterStations = (rows: readonly StationRow[], filter: StationFilte
     ? [...rows]
     : rows.filter((r) => (filter === 'ready') === (r.state === 'station-ready'));
 
-/**
- * Station usage against the plan's Limit, from the Access Document. Shown only
- * to a Role the server sent the plan to; the API enforces the Limit whatever is
- * rendered.
- */
-export interface StationCapacity {
-  used: number;
-  value: number;
-  reached: boolean;
-  /** The Limit is the "no limit" sentinel (a demo Organization). */
-  unlimited: boolean;
-  /** The tile figure: `1 of 3`, or just `1` when there is no limit. */
-  label: string;
-  /**
-   * "2 more on this plan", "No station limit on this plan", or at the Limit
-   * what to do (`stationLimitMessage`).
-   */
-  hint: string;
-}
+type AccessLike =
+  | {
+      plan?: string | null;
+      limits?: { station_count?: { used: number; value: number; reached: boolean } };
+    }
+  | null
+  | undefined;
 
-export function stationCapacity(
-  access:
-    | {
-        plan?: string | null;
-        limits?: { station_count?: { used: number; value: number; reached: boolean } };
-      }
-    | null
-    | undefined,
-): StationCapacity | null {
+/**
+ * Plan usage as the one line in the Stations header (#605, owner 15 Oct):
+ * "2 of 3 stations on your plan". Only for a Role the server sent the plan to,
+ * and only when the plan allows more than one Station: a one-station plan
+ * shows nothing, and the "no limit" sentinel is never a number on screen
+ * (#603). The API enforces the Limit whatever is rendered.
+ */
+export function stationPlanLine(access: AccessLike): string | null {
   const limit = access?.limits?.station_count;
   if (!access?.plan || !limit) return null;
-  // The sentinel is never a number on screen (#603): "1 of 1000000" read as a
-  // plan of a million Stations.
-  if (isUnlimitedLimit(limit.value)) {
-    return {
-      used: limit.used,
-      value: limit.value,
-      reached: false,
-      unlimited: true,
-      label: String(limit.used),
-      hint: 'No station limit on this plan',
-    };
-  }
-  const left = Math.max(0, limit.value - limit.used);
-  return {
-    used: limit.used,
-    value: limit.value,
-    reached: limit.reached,
-    unlimited: false,
-    label: `${limit.used} of ${limit.value}`,
-    hint: limit.reached ? stationLimitMessage(limit.value) : `${left} more on this plan`,
-  };
+  if (isUnlimitedLimit(limit.value) || limit.value <= 1) return null;
+  const line = `${limit.used} of ${limit.value} stations on your plan`;
+  return limit.reached ? `${line} · Contact PumpOS to add another` : line;
+}
+
+// --- Station cards (#605) ----------------------------------------------------
+
+/** What a station card reads: the cached setup lists and the lite shift status. */
+export interface StationFactsInput {
+  settings?: { timezone?: string | null; business_day_starts_at?: string | null } | null;
+  tanks?: readonly { isActive?: boolean | null }[];
+  dispensers?: readonly { isActive?: boolean | null }[];
+  /** `/shifts/status?lite=true`: the open shift, or null. */
+  openShift?: { templateName?: string | null; openedAt?: string | null } | null;
+}
+
+export interface StationFact {
+  label: string;
+  /** `null` while its list is loading. */
+  value: string | null;
+}
+
+const activeCount = (rows: readonly { isActive?: boolean | null }[] | undefined) =>
+  rows ? rows.filter((r) => r.isActive !== false).length : null;
+
+/**
+ * A station card's key facts: tanks, dispensers, timezone, day start and the
+ * open shift. Counts are the active ones; a list still loading reads `null`.
+ * The shift's opening time reads on the station's clock.
+ */
+export function stationFacts(input: StationFactsInput): StationFact[] {
+  const { timeZone } = businessDateSettings(input.settings);
+  const dayStart = input.settings?.business_day_starts_at || '06:00';
+  const shift = input.openShift;
+  const tanks = activeCount(input.tanks);
+  const dispensers = activeCount(input.dispensers);
+  return [
+    { label: 'Tanks', value: tanks == null ? null : String(tanks) },
+    { label: 'Dispensers', value: dispensers == null ? null : String(dispensers) },
+    { label: 'Timezone', value: timeZone },
+    { label: 'Day start', value: formatHHMM(dayStart) || dayStart },
+    {
+      label: 'Open shift',
+      value:
+        shift === undefined
+          ? null
+          : shift === null
+            ? 'None'
+            : [
+                shift.templateName || 'Shift',
+                shift.openedAt ? `since ${formatClockInZone(shift.openedAt, timeZone)}` : '',
+              ]
+                .filter(Boolean)
+                .join(', '),
+    },
+  ];
 }
 
 /**
@@ -121,7 +147,7 @@ export function stationCapacity(
  * disabled, then it is refused only at the Limit. The API enforces the Limit
  * whatever is rendered.
  */
-export function onboardGate(access: Parameters<typeof stationCapacity>[0]): {
+export function onboardGate(access: AccessLike): {
   disabled: boolean;
   title?: string;
 } {

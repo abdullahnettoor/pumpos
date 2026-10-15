@@ -139,7 +139,13 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
               onStationChange={(station) => guardLeave(() => onStationChange(station))}
               onOnboard={onboard}
               onboardGate={gate}
-              onConfigure={() => onNavigate(ROUTES.station)}
+              onConfigure={(station) =>
+                guardLeave(() => {
+                  // Station configures the current station: switch to this one first.
+                  if (station.id !== selectedStation?.id) onStationChange(station);
+                  onNavigate(ROUTES.station);
+                })
+              }
               onInviteTeam={() => setTab('team')}
             />
           )}

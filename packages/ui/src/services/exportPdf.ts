@@ -83,8 +83,11 @@ export function setPdfPrinter(fn: PdfPrinter) {
 
 const pdfName = (filename: string) => (filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
 
-/** Render a @react-pdf/renderer document element to PDF bytes. */
-async function renderPdf(element: any): Promise<Uint8Array> {
+/**
+ * Render a @react-pdf/renderer document element to PDF bytes. The on-screen
+ * previews (#605) draw these same bytes, so a preview is the printed page.
+ */
+export async function renderPdf(element: any): Promise<Uint8Array> {
   const { pdf } = await import('@react-pdf/renderer');
   const blob: Blob = await pdf(element).toBlob();
   return new Uint8Array(await blob.arrayBuffer());

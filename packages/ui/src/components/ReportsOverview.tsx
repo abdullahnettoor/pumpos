@@ -16,7 +16,12 @@ import { ReportsNav, type ReportsNavGroup, type ReportsNavItem } from './reports
 import { ProfitLossView } from './reports/ProfitLossView.js';
 import { AttendantHandoverReportPanel } from './reports/AttendantHandoverReportPanel.js';
 import { DecantationReportPanel } from './reports/DecantationReportPanel.js';
-import { useCapability } from '../access/CapabilityGate.js';
+import { useAccess } from '../query/hooks.js';
+import {
+  lockedFeatureLocked,
+  lockedFeatureState,
+  lockedFeatureVisible,
+} from '../access/lockedFeatureState.js';
 import {
   ATTENDANT_REPORT_CAPABILITY,
   canViewAttendantReport,
@@ -65,16 +70,17 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
 
   const [selectedTab, setSelectedTab] = useState<ReportsTab>('daily-dssr');
   // One decision drives both the tab and its panel, so they cannot disagree.
-  const attendantReport = useCapability(ATTENDANT_REPORT_CAPABILITY);
+  const { data: access } = useAccess();
+  const attendantReport = lockedFeatureState(access, ATTENDANT_REPORT_CAPABILITY);
   /*
    * Two axes, as the server checks them. The Role must allow it, or the tab
-   * would 403 on click. The capability may be `upgrade` rather than `enabled`:
-   * a Role that may be told about it still sees the tab, and the panel renders
-   * the explanatory unavailable state instead of silence. `hidden` — access
-   * unknown, or not this user's concern — shows nothing at all.
+   * would 403 on click. A locked report still shows, with a lock (#605): the
+   * panel renders the locked-feature screen — the plan and Contact us for an
+   * Owner or Manager, whom to ask for anyone else. `hidden` (access unknown)
+   * shows nothing at all.
    */
   const showAttendantReport =
-    canViewAttendantReport(userRole) && attendantReport.status !== 'hidden';
+    canViewAttendantReport(userRole) && lockedFeatureVisible(attendantReport);
   const { intent, token: intentToken } = useNavIntentEntry();
   const activeTab: ReportsTab = intent?.openDssrDate
     ? 'daily-dssr'
@@ -184,6 +190,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
                 id: 'attendant-handovers',
                 label: 'Attendant handovers',
                 concept: 'attendant-handovers',
+                locked: lockedFeatureLocked(attendantReport),
               } satisfies ReportsNavItem<ReportsTab>,
             ]
           : []),

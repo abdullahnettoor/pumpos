@@ -1,4 +1,5 @@
 import { localToInstant } from '@pump/shared';
+import { toPaise } from '../../utils/ledgerWindow.js';
 
 /**
  * Pricing › Fuels (#537): one row per fuel, built from the current prices and
@@ -31,8 +32,20 @@ export interface FuelPriceRow {
   /** `null` while no price has been recorded. */
   price: number | null;
   effectiveFrom: string | null;
-  /** The change into the current price; `null` when there was only one price. */
-  lastChange: { from: number; to: number } | null;
+  /**
+   * The change into the current price; `null` when there was only one price.
+   * `difference` is `to − from`, worked in whole paise.
+   */
+  lastChange: { from: number; to: number; difference: number } | null;
+}
+
+/** One price change, old → new, with the difference in whole paise. */
+export function priceChange(from: number | string, to: number | string) {
+  return {
+    from: Number(from),
+    to: Number(to),
+    difference: (toPaise(to) - toPaise(from)) / 100,
+  };
 }
 
 const time = (iso: string | null | undefined): number => (iso ? new Date(iso).getTime() : 0);
@@ -71,8 +84,7 @@ export function buildFuelPriceRows(
       unit: unitOf(cp.productId) || 'L',
       price: cp.effectiveFrom != null ? Number(cp.price) : null,
       effectiveFrom: cp.effectiveFrom,
-      lastChange:
-        latest && previous ? { from: Number(previous.price), to: Number(latest.price) } : null,
+      lastChange: latest && previous ? priceChange(previous.price, latest.price) : null,
     };
   });
 }

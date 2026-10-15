@@ -186,4 +186,51 @@ describe('CapabilityRoute (a bookmarked gated page)', () => {
     expect(screen.getByText('This page is not available for your Organization.')).toBeTruthy();
     expect(screen.queryByText(/Contact PumpOS/i)).toBeNull();
   });
+
+  it('shows Owners the locked-feature screen: the feature, the plan and Contact us (#605)', () => {
+    renderWithAccess(
+      <CapabilityRoute
+        capability="exports.tally"
+        feature={{ title: 'Tally export', description: 'Send the day to Tally.' }}
+      >
+        <h1>Tally export page</h1>
+      </CapabilityRoute>,
+      documentFor('Owner'),
+    );
+
+    const locked = screen.getByRole('region', { name: 'Tally export is locked' });
+    expect(locked.textContent).toMatch('Send the day to Tally.');
+    expect(locked.textContent).toMatch('Not included in your Core plan.');
+    expect(screen.getByRole('button', { name: 'Contact us' })).toBeTruthy();
+  });
+
+  it.each<Role>(['Accountant', 'Staff', 'Attendant'])(
+    'shows %s whom to ask, with no plan and no Contact us (#605)',
+    (role) => {
+      renderWithAccess(
+        <CapabilityRoute
+          capability="exports.tally"
+          feature={{ title: 'Tally export', description: 'Send the day to Tally.' }}
+        >
+          <h1>Tally export page</h1>
+        </CapabilityRoute>,
+        { ...documentFor(role), plan: undefined },
+      );
+
+      const locked = screen.getByRole('region', { name: 'Tally export is locked' });
+      expect(locked.textContent).toMatch('Ask your Owner or Manager to enable it.');
+      expect(locked.textContent).not.toMatch(/plan|Contact/i);
+      expect(screen.queryByRole('button', { name: 'Contact us' })).toBeNull();
+    },
+  );
+
+  it('waits for the Access Document before saying anything', () => {
+    const { container } = renderWithAccess(
+      <CapabilityRoute capability="exports.tally">
+        <h1>Tally export page</h1>
+      </CapabilityRoute>,
+      undefined,
+    );
+    expect(container.textContent).toBe('');
+  });
 });
