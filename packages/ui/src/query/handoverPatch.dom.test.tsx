@@ -31,7 +31,7 @@ const { nozzleGroups } = await import('../components/Shifts/liveShiftModel.js');
 const { NozzleReadingsTable } = await import('../components/Shifts/NozzleReadingsTable.js');
 const { TakingsSummary } = await import('../components/Shifts/TakingsSummary.js');
 const { liveShiftFigures } = await import('../components/Shifts/liveShiftModel.js');
-const { shiftMoneyConfirming, useHandoverWrites } =
+const { useShiftMoneyState, useHandoverWrites } =
   await import('../components/Shifts/handoverWrites.js');
 
 const Board: React.FC = () => {
@@ -39,6 +39,7 @@ const Board: React.FC = () => {
   const mutation = useRecordHandoverMutation();
   const shift = statusQ.data?.activeShift;
   const writes = useHandoverWrites(shift?.id ?? null);
+  const money = useShiftMoneyState(writes, 'station-1', statusQ);
   if (!shift) return null;
   const now = Date.parse('2026-10-15T09:00:00Z');
   const figures = liveShiftFigures({
@@ -82,7 +83,8 @@ const Board: React.FC = () => {
         recorded={figures.drawers.recorded}
         expected={figures.drawers.expected}
         pending={figures.pending}
-        confirming={shiftMoneyConfirming(writes, 'station-1', statusQ)}
+        money={money}
+        onRetryMoney={() => void statusQ.refetch()}
       />
     </>
   );
@@ -125,6 +127,35 @@ describe('handover save → shift board (#606)', () => {
     expect(within(raviHeader()).queryByText('Saving…')).toBeNull();
     // The refetch has not answered: the takings still wait for it.
     expect(within(takings()).getAllByText('Saving…')).toHaveLength(2);
+  });
+
+  it('a failed refetch keeps the totals unconfirmed with an inline Retry; Retry confirms them', async () => {
+    const restore = muteExpectedConsoleErrors([/offline/]);
+    try {
+      recordHandover.mockResolvedValue(ravisHandover);
+      getShiftStatus.mockRejectedValueOnce(new Error('offline'));
+      seededBoard();
+
+      screen.getByRole('button', { name: 'Save' }).click();
+
+      const note = await screen.findByTestId('unconfirmed-totals');
+      expect(note.textContent).toContain("Couldn't confirm the drawer totals");
+      const takings = () => screen.getByText('Cash sales').closest('dl') as HTMLElement;
+      // Never the old cash sales while unconfirmed.
+      expect(within(takings()).getAllByText('Saving…')).toHaveLength(2);
+
+      // Retry: the server now answers with the Drawer recorded.
+      const confirmed = cachedStatus();
+      confirmed.activeShift.reconciliation.cashSales = 22864;
+      getShiftStatus.mockResolvedValueOnce(confirmed);
+      within(note).getByRole('button', { name: 'Retry' }).click();
+
+      await waitFor(() => expect(screen.queryByTestId('unconfirmed-totals')).toBeNull());
+      expect(within(takings()).queryByText('Saving…')).toBeNull();
+      expect(takings().textContent).toContain('22,864.00');
+    } finally {
+      restore();
+    }
   });
 
   it('turns the Drawer Recorded with its variance while the refetch never answers', async () => {

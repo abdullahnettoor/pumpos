@@ -23,7 +23,8 @@ import {
 } from './CloseShiftSteps.js';
 import type { CloseDraft, CloseDrawerRow, CloseDrawerTotal } from './closeShiftModel.js';
 import type { NozzleGroup, StaffAssignmentInput } from './liveShiftModel.js';
-import type { HandoverWrites } from './handoverWrites.js';
+import type { HandoverWrites, ShiftMoneyState } from './handoverWrites.js';
+import { UnconfirmedTotalsNote } from './UnconfirmedTotalsNote.js';
 
 export type CloseStep = Exclude<ShiftCloseStep, 'done'>;
 
@@ -82,10 +83,12 @@ export interface CloseShiftPageProps {
   /** Handovers still saving or failed, by Drawer key (#606). */
   handoverWrites?: HandoverWrites;
   /**
-   * A Handover's figures await the server (#606): the expected office cash is
-   * not in its answer, so it reads "Saving…" and the shift cannot close yet.
+   * Where the shift's money stands after a Handover (#606). Until it is
+   * confirmed, every figure built on the shift totals reads "Saving…" and the
+   * shift cannot close; if the refetch failed, an inline Retry says so.
    */
-  confirming?: boolean;
+  money?: ShiftMoneyState;
+  onRetryMoney?: () => void;
 }
 
 /**
@@ -111,8 +114,10 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
     readingErrors,
     isClosing,
     onConfirmClose,
-    confirming = false,
+    money = 'confirmed',
+    onRetryMoney,
   } = props;
+  const confirming = money !== 'confirmed';
   const save = useKeyedSave(`shift:close:${shift.id}`);
   // The cash count is a form: an amount it refuses never reaches the draft,
   // and the page does not move on from it until it is fixed.
@@ -217,6 +222,7 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
                 draft={draft}
                 onDraftChange={props.onDraftChange}
                 onValidityChange={setCashValid}
+                pending={confirming}
               />
             )}
             {step === 'confirm' && (
@@ -229,10 +235,16 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
                 warnings={warnings}
                 confirmWarningsChecked={confirmWarningsChecked}
                 onConfirmWarningsChange={props.onConfirmWarningsChange}
+                pending={confirming}
               />
             )}
           </div>
 
+          {money === 'unconfirmed' && (
+            <div className="mb-2">
+              <UnconfirmedTotalsNote onRetry={onRetryMoney} />
+            </div>
+          )}
           <footer
             aria-label="Close shift"
             className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-card border border-border-soft bg-surface px-4 py-3 shadow-sm"

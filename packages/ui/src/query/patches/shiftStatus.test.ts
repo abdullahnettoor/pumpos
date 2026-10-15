@@ -90,6 +90,25 @@ describe('withAcceptedHandover', () => {
     });
   });
 
+  it('drops an older answer that lands after a newer save of the same Drawer', () => {
+    const newer = withAcceptedHandover(cachedStatus(), ravisHandover);
+    const older: RecordHandoverResult = {
+      ...ravisHandover,
+      handover: {
+        ...ravisHandover.handover,
+        cashHandedOver: '9000.00',
+        varianceAmount: '-1750.00',
+        createdAt: '2026-10-15T09:05:00.000Z',
+      },
+      nozzleReadings: [{ ...ravisHandover.nozzleReadings[0], closingReading: 1080 }],
+    };
+    expect(withAcceptedHandover(newer, older)).toBe(newer);
+    // The same answer replayed still applies (equal stamp): idempotent.
+    expect(withAcceptedHandover(newer, ravisHandover).activeShift.handovers).toEqual(
+      newer.activeShift.handovers,
+    );
+  });
+
   it('leaves the payload alone when the handover is for another shift', () => {
     const before = cachedStatus();
     const other = { ...ravisHandover, handover: { ...ravisHandover.handover, shiftId: 'shift-0' } };

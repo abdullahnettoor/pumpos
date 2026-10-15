@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { latestWrites, type MutationSnapshot } from './pendingWrites.js';
+import { latestOf, latestWrites, type MutationSnapshot } from './pendingWrites.js';
 
 type V = { drawer: string; shiftId: string };
 const snap = (
@@ -39,5 +39,21 @@ describe('latestWrites', () => {
       byDrawer,
     );
     expect(out.size).toBe(0);
+  });
+});
+
+describe('latestOf', () => {
+  it('picks the later of two writes on one row', () => {
+    const failed = {
+      state: 'failed' as const,
+      variables: {},
+      error: new Error('x'),
+      submittedAt: 1,
+    };
+    const saving = { state: 'saving' as const, variables: {}, error: null, submittedAt: 2 };
+    expect(latestOf(failed, saving)).toBe(saving);
+    expect(latestOf(saving, failed)).toBe(saving);
+    expect(latestOf(undefined, failed)).toBe(failed);
+    expect(latestOf(undefined, undefined)).toBeUndefined();
   });
 });

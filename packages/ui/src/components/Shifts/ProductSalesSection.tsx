@@ -17,7 +17,7 @@ import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { mutationKeys, useDeleteHandoverProductSale } from '../../query/hooks.js';
-import { useWriteStates, type WriteEntry } from '../../query/pendingWrites.js';
+import { latestOf, useWriteStates, type WriteEntry } from '../../query/pendingWrites.js';
 import { countOf } from '../../utils/ledgerWindow.js';
 import { formatMoney } from '../../utils/format.js';
 import type { ProductSales, ProductSalesRow } from './liveShiftModel.js';
@@ -29,7 +29,14 @@ import {
 } from './HandoverProductSaleDrawer.js';
 
 /** A row with its Handover Product Sale write still saving or refused, if any. */
-type Row = ProductSalesRow & { write?: WriteEntry<unknown> };
+type Row = ProductSalesRow & {
+  /** The latest Handover sale save or removal on this row. */
+  handoverWrite?: WriteEntry<unknown>;
+  /** The latest Billed Sale save by this seller. */
+  billedWrite?: WriteEntry<unknown>;
+  /** The latest of the two: what the row says went wrong. */
+  write?: WriteEntry<unknown>;
+};
 
 export interface ProductSalesSectionProps {
   shiftId: string;
@@ -47,19 +54,28 @@ const saleWriteKey = (
   shiftId: string,
 ): string | null => (v.shiftId === shiftId ? (v.payload.attendantId ?? null) : null);
 
+/** A Billed Sale save, by seller ('unassigned' for none), on this shift. */
+const billedWriteKey = (
+  v: { payload: { shiftId: string; attendantId?: string | null } },
+  shiftId: string,
+): string | null => (v.payload.shiftId === shiftId ? v.payload.attendantId || UNASSIGNED : null);
+const UNASSIGNED = 'unassigned';
+
 /** A Handover Product Sale removal, by sale, on this shift. */
 const removeWriteKey = (v: { saleId: string; shiftId?: string }, shiftId: string): string | null =>
   v.shiftId === shiftId ? v.saleId : null;
 
 /** "Saving…" in place of a figure the server has not confirmed (#606), else the figure. */
-const moneyOrSaving = (r: { write?: WriteEntry<unknown> }, value: number | null) =>
-  r.write?.state === 'saving' ? (
+const moneyOrSaving = (saving: boolean, value: number | null) =>
+  saving ? (
     <StatusChip status="saving" size="sm" className="font-sans" />
   ) : value == null ? (
     ''
   ) : (
     formatMoney(value)
   );
+
+const saving = (w: WriteEntry<unknown> | undefined) => w?.state === 'saving';
 
 /**
  * Live shift → Product sales (#533): one row per employee (every attendant on a
@@ -87,15 +103,20 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
     removeWriteKey,
     shiftId,
   );
+  const billedWrites = useWriteStates(mutationKeys.productSale(), billedWriteKey, shiftId);
   const rows = useMemo(
     () =>
-      sales.rows.map((r) => ({
-        ...r,
-        write:
-          (r.attendantId ? saleWrites.get(r.attendantId) : undefined) ??
-          (r.handoverSale ? removeWrites.get(r.handoverSale.id) : undefined),
-      })),
-    [sales.rows, saleWrites, removeWrites],
+      sales.rows.map((r) => {
+        // Save and removal both act on the Handover sale: the later one wins,
+        // so a refused edit never hides a removal sent after it.
+        const handoverWrite = latestOf(
+          r.attendantId ? saleWrites.get(r.attendantId) : undefined,
+          r.handoverSale ? removeWrites.get(r.handoverSale.id) : undefined,
+        );
+        const billedWrite = billedWrites.get(r.attendantId ?? UNASSIGNED);
+        return { ...r, handoverWrite, billedWrite, write: latestOf(handoverWrite, billedWrite) };
+      }),
+    [sales.rows, saleWrites, removeWrites, billedWrites],
   );
   const [drawer, setDrawer] = useState<{
     open: boolean;
@@ -152,13 +173,20 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
         );
       },
     },
-    { id: 'billed', header: 'Billed sales', kind: 'money', value: (r) => r.billed, width: '18%' },
+    {
+      id: 'billed',
+      header: 'Billed sales',
+      kind: 'money',
+      value: (r) => r.billed,
+      cell: (r) => moneyOrSaving(saving(r.billedWrite), r.billed),
+      width: '18%',
+    },
     {
       id: 'handover',
       header: 'Handover sale',
       kind: 'money',
       value: (r) => (r.handoverSale ? r.handover : null),
-      cell: (r) => moneyOrSaving(r, r.handoverSale ? r.handover : null),
+      cell: (r) => moneyOrSaving(saving(r.handoverWrite), r.handoverSale ? r.handover : null),
       width: '18%',
     },
     {
@@ -166,7 +194,7 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
       header: 'Total',
       kind: 'money',
       value: (r) => r.total,
-      cell: (r) => moneyOrSaving(r, r.total),
+      cell: (r) => moneyOrSaving(saving(r.handoverWrite) || saving(r.billedWrite), r.total),
       width: '18%',
     },
     {

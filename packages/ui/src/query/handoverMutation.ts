@@ -104,7 +104,10 @@ export function handoverInvalidationKeys(stationId: string): readonly (readonly 
 }
 
 export interface HandoverInvalidationClient {
-  invalidateQueries(filters: { queryKey: readonly unknown[] }): Promise<unknown>;
+  invalidateQueries(
+    filters: { queryKey: readonly unknown[] },
+    options?: { throwOnError?: boolean },
+  ): Promise<unknown>;
 }
 
 /**
@@ -115,9 +118,11 @@ export async function refreshAfterHandover(
   queryClient: HandoverInvalidationClient,
   stationId: string,
 ): Promise<void> {
+  // throwOnError: a refetch that fails rejects here, so the caller's runner
+  // sees it (#606 review); without it React Query swallows the failure.
   await Promise.all(
     handoverInvalidationKeys(stationId).map((queryKey) =>
-      queryClient.invalidateQueries({ queryKey }),
+      queryClient.invalidateQueries({ queryKey }, { throwOnError: true }),
     ),
   );
 }

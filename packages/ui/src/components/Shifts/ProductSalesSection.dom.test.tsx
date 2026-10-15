@@ -35,7 +35,7 @@ vi.mock('../../services/cloud.js', async (importOriginal) => {
 
 const { ProductSalesSection } = await import('./ProductSalesSection.js');
 const { productSales } = await import('./liveShiftModel.js');
-const { queryKeys } = await import('../../query/hooks.js');
+const { mutationKeys, queryKeys } = await import('../../query/hooks.js');
 
 const handoverSales = [
   {
@@ -226,5 +226,46 @@ describe('ProductSalesSection', () => {
     } finally {
       restore();
     }
+  });
+
+  it('a removal sent after a refused edit shows Saving…, not the old refusal (#606 review)', async () => {
+    let answer!: (v: unknown) => void;
+    removeSale.mockReturnValue(new Promise((r) => (answer = r)));
+    const view = mount();
+    // An earlier edit of Ravi's sale was refused.
+    await view.queryClient
+      .getMutationCache()
+      .build(view.queryClient, {
+        mutationKey: mutationKeys.handoverProductSale(),
+        mutationFn: () => Promise.reject(new Error('Insufficient stock')),
+      })
+      .execute({ shiftId: 'sh-1', payload: { attendantId: 'u1' } })
+      .catch(() => undefined);
+    const ravi = () => screen.getByText('Ravi').closest('tr') as HTMLElement;
+    await waitFor(() => expect(within(ravi()).getByRole('alert')).toBeDefined());
+
+    fireEvent.click(screen.getByRole('button', { name: "Remove Ravi's handover product sale" }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => expect(within(ravi()).getAllByText('Saving…')).toHaveLength(2));
+    expect(within(ravi()).queryByRole('alert')).toBeNull();
+    answer({ id: 'm1' });
+  });
+
+  it('a Billed Sale in flight reads Saving… on its seller’s row (#606 review)', async () => {
+    const view = mount();
+    void view.queryClient
+      .getMutationCache()
+      .build(view.queryClient, {
+        mutationKey: mutationKeys.productSale(),
+        mutationFn: () => new Promise(() => {}),
+      })
+      .execute({ payload: { shiftId: 'sh-1', attendantId: 'u2' } });
+
+    const suresh = () => screen.getByText('Suresh').closest('tr') as HTMLElement;
+    // Billed sales and the total wait; the Handover sale column is untouched.
+    await waitFor(() => expect(within(suresh()).getAllByText('Saving…')).toHaveLength(2));
+    const ravi = screen.getByText('Ravi').closest('tr') as HTMLElement;
+    expect(within(ravi).queryByText('Saving…')).toBeNull();
   });
 });

@@ -17,6 +17,18 @@ export interface WriteEntry<V> {
   state: 'saving' | 'failed';
   variables: V;
   error: Error | null;
+  /** When it was sent: across two kinds of write on one row, the later one wins. */
+  submittedAt: number;
+}
+
+/** The later of two writes on the same row (either may be absent). */
+export function latestOf(
+  a: WriteEntry<unknown> | undefined,
+  b: WriteEntry<unknown> | undefined,
+): WriteEntry<unknown> | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  return b.submittedAt >= a.submittedAt ? b : a;
 }
 
 /** A mutation as `useMutationState` selects it. */
@@ -46,10 +58,9 @@ export function latestWrites<V>(
   }
   const out = new Map<string, WriteEntry<V>>();
   for (const [id, s] of latest) {
-    if (s.status === 'pending')
-      out.set(id, { state: 'saving', variables: s.variables!, error: null });
-    else if (s.status === 'error')
-      out.set(id, { state: 'failed', variables: s.variables!, error: s.error });
+    const base = { variables: s.variables!, submittedAt: s.submittedAt };
+    if (s.status === 'pending') out.set(id, { ...base, state: 'saving', error: null });
+    else if (s.status === 'error') out.set(id, { ...base, state: 'failed', error: s.error });
   }
   return out;
 }
