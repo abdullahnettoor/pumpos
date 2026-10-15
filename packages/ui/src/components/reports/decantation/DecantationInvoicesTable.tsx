@@ -1,80 +1,87 @@
 import React from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
 import type { DecantationReportInvoice } from '@pump/shared';
-import { Chip, Panel } from '../../../pump-ds/index.js';
-import { DataTable } from '../../primitives/DataTable.js';
-import { litres, signedLitres, varianceColor } from './styles.js';
+import {
+  InteractiveTable,
+  StatusChip,
+  VarianceChip,
+  type TableColumn,
+} from '../../../pump-ds/index.js';
+import { invoiceState } from './vocabulary.js';
 
-const columns: ColumnDef<DecantationReportInvoice, any>[] = [
+const COLUMNS: TableColumn<DecantationReportInvoice>[] = [
   {
-    header: 'Invoice',
     id: 'invoice',
-    cell: ({ row }) => row.original.invoiceNumber || row.original.purchaseDocumentNumber || '—',
+    header: 'Invoice',
+    kind: 'text',
+    emphasis: true,
+    value: (i) => i.invoiceNumber || i.purchaseDocumentNumber,
   },
-  { header: 'Supplier', id: 'supplier', cell: ({ row }) => row.original.supplierName ?? '—' },
+  { id: 'supplier', header: 'Supplier', kind: 'text', value: (i) => i.supplierName },
   {
-    header: 'Product',
     id: 'product',
-    cell: ({ row }) => `${row.original.productName} (${row.original.productCode})`,
-  },
-  { header: 'Invoice Qty', id: 'invoiceQty', cell: ({ row }) => litres(row.original.invoiceQty) },
-  {
-    header: 'Received (all visits)',
-    id: 'received',
-    cell: ({ row }) => litres(row.original.receivedQty),
-  },
-  {
-    header: 'Variance',
-    id: 'variance',
-    cell: ({ row }) => (
-      <span style={{ fontWeight: 600, color: varianceColor(row.original.varianceQty) }}>
-        {signedLitres(row.original.varianceQty)}
+    header: 'Product',
+    kind: 'text',
+    value: (i) => i.productName,
+    cell: (i) => (
+      <span className="flex flex-col leading-tight">
+        <span className="text-ink-strong">{i.productName}</span>
+        <span className="text-[12px] text-ink-muted">{i.productCode}</span>
       </span>
     ),
   },
+  { id: 'invoiceQty', header: 'Invoice qty', kind: 'qty', unit: 'L', value: (i) => i.invoiceQty },
   {
-    header: 'Status',
-    id: 'status',
-    cell: ({ row }) => {
-      const i = row.original;
-      const tone =
-        i.status === 'SETTLING'
-          ? 'warning'
-          : i.varianceType === 'SHORT'
-            ? 'danger'
-            : i.varianceType === 'EXCESS'
-              ? 'success'
-              : 'neutral';
-      return (
-        <Chip size="xs" tone={tone} variant="soft">
-          {i.statusLabel}
-        </Chip>
+    id: 'received',
+    header: 'Received (all visits)',
+    kind: 'qty',
+    unit: 'L',
+    value: (i) => i.receivedQty,
+  },
+  {
+    id: 'variance',
+    header: 'Variance',
+    kind: 'qty',
+    unit: 'L',
+    value: (i) => i.varianceQty,
+    cell: (i) => {
+      const waiting = invoiceState(i);
+      if (waiting) return <StatusChip status={waiting.status} label={waiting.label} size="md" />;
+      return i.varianceQty == null ? (
+        '—'
+      ) : (
+        <VarianceChip amount={i.varianceQty} kind="stock" size="md" />
       );
     },
   },
   {
-    header: 'Visits',
     id: 'visits',
-    cell: ({ row }) => row.original.visits.map((v) => v.documentNumber).join(', '),
+    header: 'Visits',
+    kind: 'text',
+    value: (i) => i.visits.map((v) => v.documentNumber).join(', '),
+    cell: (i) => (
+      <span className="font-mono text-[12px] text-ink-muted">
+        {i.visits.map((v) => v.documentNumber).join(', ')}
+      </span>
+    ),
   },
 ];
 
-/** One row per invoice (purchase + product), however many visits it is split across. */
+/**
+ * One row per invoice (purchase + product), however many visits it is split
+ * across. No total row: a settling invoice has no received figure yet, so a
+ * column sum would mix settled and unsettled invoices; the settled totals are
+ * the tiles above.
+ */
 export const DecantationInvoicesTable: React.FC<{ invoices: DecantationReportInvoice[] }> = ({
   invoices,
-}) => {
-  if (invoices.length === 0) return null;
-  return (
-    <Panel flush title={`Invoices (${invoices.length})`}>
-      <div data-testid="decantation-invoices-table">
-        <DataTable
-          bare
-          dense
-          columns={columns}
-          data={invoices}
-          getRowId={(r) => `${r.purchaseId}:${r.productId}`}
-        />
-      </div>
-    </Panel>
-  );
-};
+}) => (
+  <div data-testid="decantation-invoices-table">
+    <InteractiveTable
+      bare
+      columns={COLUMNS}
+      rows={invoices}
+      rowKey={(i) => `${i.purchaseId}:${i.productId}`}
+      title="invoices"
+    />
+  </div>
+);
