@@ -1,17 +1,19 @@
 import React, { type ReactNode } from 'react';
-import { DataSection, type SectionQuery } from '../../pump-ds/index.js';
+import { DataSection, type SectionQuery } from '../data-section/index.js';
+
+export interface TileSectionProps {
+  /** Names the figure in "Couldn't load <title>". */
+  title: string;
+  query: SectionQuery | SectionQuery[];
+  children: ReactNode;
+}
 
 /**
  * One KPI tile in its own Data Section, inside a `KpiStrip`: the tile waits
  * only on the queries it reads, so one failed request puts only its own tiles
  * behind Retry. Loading and error fill the tile's cell on the tile surface.
  */
-export const TileSection: React.FC<{
-  /** Names the figure in "Couldn't load <title>". */
-  title: string;
-  query: SectionQuery | SectionQuery[];
-  children: ReactNode;
-}> = ({ title, query, children }) => (
+export const TileSection: React.FC<TileSectionProps> = ({ title, query, children }) => (
   <DataSection
     title={title}
     query={query}

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   useCustomers,
-  useSuppliers,
+  useStationSuppliers,
   useCustomerLedger,
   useSupplierLedger,
   useMoneyMovements,
@@ -158,8 +158,13 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({
   const cfg = REGISTRY[type];
 
   // Picker options — only load the list the current type needs.
-  const { data: customers } = useCustomers(true, { enabled: type === 'customer' } as any);
-  const { data: suppliers } = useSuppliers(true, { enabled: type === 'supplier' } as any);
+  const stationId: string | undefined = selectedStation?.id;
+  const { data: customers } = useCustomers(true, { enabled: type === 'customer' });
+  // A supplier's ledger is per Station (#575): each pump has its own account with
+  // its OMC, so the picker lists this Station's suppliers and balances.
+  const { data: suppliers } = useStationSuppliers(stationId, true, {
+    enabled: type === 'supplier',
+  });
 
   const entityOptions = useMemo(() => {
     const list = type === 'customer' ? customers : type === 'supplier' ? suppliers : [];
@@ -185,6 +190,7 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({
     committed?.type === 'customer' ? committed.entityId : undefined,
   );
   const supplierLedger = useSupplierLedger(
+    stationId,
     committed?.type === 'supplier' ? committed.entityId : undefined,
   );
   const isMoneyCommitted = !!committed && REGISTRY[committed.type].moneyAccount != null;

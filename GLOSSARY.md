@@ -291,12 +291,17 @@ Supplier Payment.
 _Avoid_: procurement, inward
 
 **Payables**:
-What the Organization owes its suppliers (Σ Purchases − Σ Supplier Payments). A
-Supplier Payment or a credit Adjustment pays the oldest unpaid amount first; an
-**unpaid Purchase** is a Purchase not yet fully paid that way, and its Business
-Date is how long it has waited. An Opening Balance takes its turn in that order
-but is not "an unpaid Purchase". Organization-wide, like the Supplier balance. An
-overpayment is an advance (a negative Supplier balance), not a negative payable.
+What a Station owes its suppliers (Σ Purchases − Σ Supplier Payments on that
+Station's supplier ledger). A Supplier Payment or a credit Adjustment pays the
+oldest unpaid amount first; an **unpaid Purchase** is a Purchase not yet fully
+paid that way, and its Business Date is how long it has waited. An Opening
+Balance takes its turn in that order but is not "an unpaid Purchase". Per
+Station, like the Supplier balance a Station shows (#575): each pump has its own
+account with its OMC (dealer code, invoices, statement), and two pumps of one
+owner may buy from different OMCs. A supplier shared by two Stations shows each
+only its own share; a payment covering both is recorded as one Supplier Payment
+at each. An overpayment is an advance (a negative Supplier balance), not a
+negative payable.
 "This month": Purchases by their Business Date, Supplier Payments by their Entry
 Date.
 _Avoid_: dues, overdue (suppliers have no payment terms, so no due date exists)

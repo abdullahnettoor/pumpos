@@ -39,8 +39,8 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /shifts/shift-summaries': 'org-scoped-query',
   'GET /shifts/shift-summaries/:shiftId': 'org-scoped-query',
 
-  'GET /transactions/suppliers': 'not-station-scoped',
-  'GET /transactions/suppliers/:id/ledger': 'org-scoped-query',
+  'GET /transactions/suppliers': 'refuses-foreign-station',
+  'GET /transactions/suppliers/:id/ledger': 'refuses-foreign-station',
   'GET /transactions/customers': 'not-station-scoped',
   'GET /transactions/customers/:id/ledger': 'org-scoped-query',
   'GET /transactions/customers/:id/vehicles': 'org-scoped-query',

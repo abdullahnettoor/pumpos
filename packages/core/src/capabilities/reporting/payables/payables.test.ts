@@ -180,6 +180,7 @@ describe('GetPayables', () => {
     expect(res.success).toBe(true);
     expect(reader.summaryQuery).toEqual({
       organizationId: 'org-1',
+      stationId: 'station-1',
       purchasedFrom: '2026-10-01',
       purchasedTo: '2026-10-31',
       fuelPurchaseFrom: '2026-11-01',
@@ -201,7 +202,7 @@ describe('GetPayables', () => {
 });
 
 describe('GetSupplierPayable', () => {
-  it('reads under the caller organization with the supplier and the month windows', async () => {
+  it('reads the station ledger under the caller organization with the supplier and the month windows', async () => {
     const reader = new Reader();
     const res = await new GetSupplierPayable(reader).execute(
       { stationId: 'station-1', supplierId: 's-1' },
@@ -210,6 +211,7 @@ describe('GetSupplierPayable', () => {
     expect(res.success).toBe(true);
     expect(reader.supplierQuery).toEqual({
       organizationId: 'org-1',
+      stationId: 'station-1',
       supplierId: 's-1',
       purchasedFrom: '2026-10-01',
       purchasedTo: '2026-10-31',

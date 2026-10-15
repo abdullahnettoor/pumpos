@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import type { PayablesSummary } from '@pump/shared';
 import {
+  computeRange,
   DataSection,
   DateRangeMenu,
   EmptyState,
@@ -10,7 +11,7 @@ import {
   KpiTile,
   SearchInput,
   SectionHeader,
-  computeRange,
+  TileSection,
   type DateRange,
 } from '../../pump-ds/index.js';
 import { useSupplierPayments } from '../../query/hooks.js';
@@ -20,8 +21,7 @@ import { countOf, type EntryClock } from '../../utils/ledgerWindow.js';
 import { MONEY_TERMS } from '../../utils/moneyTerms.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import { PAYMENT_COLUMNS } from './columns.js';
-import { paymentFigures, suppliersCount, type QueryOf } from './supplierFigures.js';
-import { TileSection } from '../customers/TileSection.js';
+import { paidToday, paymentFigures, suppliersCount, type QueryOf } from './supplierFigures.js';
 
 export interface PaymentsTabProps {
   stationId: string | null;
@@ -52,15 +52,24 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({
 }) => {
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', entryClock));
   const [search, setSearch] = useState('');
-  // The ledger reads its range from the server; the tiles read this month. While
-  // the range is this month the two share one cached request.
+  // The ledger reads its range from the server. Paid and Suppliers paid read
+  // this month's payments, Paid today reads today's and Payable the payables
+  // summary: three requests, so a failed month request never blanks Paid today
+  // or Payable. A range equal to the month or today shares that cached request
+  // with the ledger.
   const paymentsQ = useSupplierPayments({ stationId, ...range });
   const thisMonth = useMemo(() => computeRange('this-month', entryClock), [entryClock]);
+  const today = useMemo(() => computeRange('today', entryClock), [entryClock]);
   const monthQ = useSupplierPayments({ stationId, ...thisMonth });
+  const todayQ = useSupplierPayments({ stationId, ...today });
   const all = useMemo(() => paymentsQ.data ?? [], [paymentsQ.data]);
   const figures = useMemo(
     () => paymentFigures(monthQ.data ?? [], entryClock),
     [monthQ.data, entryClock],
+  );
+  const todayFigures = useMemo(
+    () => paidToday(todayQ.data ?? [], entryClock),
+    [todayQ.data, entryClock],
   );
   const month = { month: figures.monthFrom };
   const summary = payablesQ.data;
@@ -83,12 +92,12 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({
             hint={`${formatMoney(figures.cash)} cash · ${formatMoney(figures.other)} bank / owner`}
           />
         </TileSection>
-        <TileSection title="paid today" query={monthQ}>
+        <TileSection title="paid today" query={todayQ}>
           <KpiTile
             label="Paid today"
             scope="today"
-            value={formatMoney(figures.today)}
-            hint={payments(figures.todayCount)}
+            value={formatMoney(todayFigures.amount)}
+            hint={payments(todayFigures.count)}
           />
         </TileSection>
         <TileSection title="suppliers paid" query={monthQ}>

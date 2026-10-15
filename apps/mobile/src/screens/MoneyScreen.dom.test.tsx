@@ -25,7 +25,14 @@ const openings: Record<string, string> = {};
 /** Whether a customer has any entry before the window; unset = whenever the opening balance is not 0. */
 const earlier: Record<string, boolean> = {};
 const statementCalls: Array<{ id: string; from: string; to: string }> = [];
-const supplierStatementCalls: Array<{ id: string; from: string; to: string }> = [];
+const supplierStatementCalls: Array<{
+  id: string;
+  stationId: string | null | undefined;
+  from: string;
+  to: string;
+}> = [];
+/** The Station each supplier-list read named (#575). */
+const supplierListStations: Array<string | null | undefined> = [];
 /** The payables summary for the list and per supplier; `undefined` = not (yet) available. */
 const payables: { list: any; bySupplier: Record<string, any>; failed: boolean } = {
   list: undefined,
@@ -39,9 +46,16 @@ vi.mock('@pump/ui', async (importOriginal) => {
     ...actual,
     useAccess: () => ({ data: undefined }),
     useCustomers: () => ({ data: customers, isLoading: false }),
-    useSuppliers: () => ({ data: suppliers, isLoading: false }),
-    useSupplierStatement: (id: string, range: { from: string; to: string }) => {
-      supplierStatementCalls.push({ id, ...range });
+    useStationSuppliers: (stationId: string | null | undefined) => {
+      supplierListStations.push(stationId);
+      return { data: suppliers, isLoading: false };
+    },
+    useSupplierStatement: (
+      stationId: string | null | undefined,
+      id: string,
+      range: { from: string; to: string },
+    ) => {
+      supplierStatementCalls.push({ id, stationId, ...range });
       return {
         data: ledgerState.isLoading
           ? undefined
@@ -178,6 +192,7 @@ beforeEach(() => {
   receivables.failed = false;
   statementCalls.length = 0;
   supplierStatementCalls.length = 0;
+  supplierListStations.length = 0;
   payables.list = undefined;
   payables.bySupplier = {};
   payables.failed = false;
@@ -416,6 +431,13 @@ describe('Payable', () => {
     expect(screen.getByText('HPCL Kozhikode Depot')).toBeTruthy();
     expect(screen.queryByText('Square Deal')).toBeNull();
     expect(document.body.textContent).not.toMatch(/\bdue\b|overdue|since \d/i);
+  });
+
+  it("reads the selected Station's suppliers, balanced on its own ledger (#575)", () => {
+    mount({ station: STATION });
+    toPay();
+    expect(supplierListStations.length).toBeGreaterThan(0);
+    expect(supplierListStations.every((id) => id === 'st-1')).toBe(true);
   });
 
   it('searches suppliers, and clears the search when switching lists', () => {
@@ -1317,8 +1339,10 @@ describe('Supplier page', () => {
       openings['Ledger Lal'] = '-1500';
       supplierLedgers['Ledger Lal'] = [{ ...PURCHASE, amount: '500' }];
       openSupplier('Ledger');
+      // The statement is the Station's own ledger with the supplier (#575).
       expect(supplierStatementCalls.at(-1)).toEqual({
         id: 'Ledger Lal',
+        stationId: 'st-1',
         from: '2026-10-01',
         to: '2026-10-09',
       });

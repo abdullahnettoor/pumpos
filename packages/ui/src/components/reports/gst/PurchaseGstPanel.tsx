@@ -3,6 +3,7 @@ import { usePurchaseGstRegister } from '../../../query/hooks.js';
 import { formatMoney } from '../../../utils/format.js';
 import { countOf } from '../../../utils/ledgerWindow.js';
 import { InfoTip } from '../../primitives/InfoTip.js';
+import { itcInvoiceCount, type ItcLine } from './purchaseGstFigures.js';
 import {
   ControlBar,
   DataSection,
@@ -18,7 +19,7 @@ import {
   type TableColumn,
 } from '../../../pump-ds/index.js';
 
-interface PurchaseGstRow {
+interface PurchaseGstRow extends ItcLine {
   id: string;
   entryDate?: string | null;
   businessDate?: string | null;
@@ -147,8 +148,7 @@ export const PurchaseGstPanel: React.FC<{
   // The register's total row already carries each column. The tiles say what it
   // does not: the credit in one figure with its split, and how many invoices
   // and suppliers it comes from.
-  const invoiceCount = new Set(gstRows.map((r) => r.invoiceNumber || r.documentNumber || r.id))
-    .size;
+  const invoiceCount = itcInvoiceCount(gstRows);
   const supplierCount = new Set(gstRows.map((r) => r.supplierGstin || r.supplierName)).size;
   const split = [
     `${formatMoney(totals.cgst + totals.sgst)} CGST + SGST`,

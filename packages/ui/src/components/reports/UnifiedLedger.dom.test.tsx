@@ -23,11 +23,18 @@ const money = vi.fn((_params: { stationId?: string; from?: string; to?: string }
 }));
 
 const supplierRows = vi.hoisted(() => ({ rows: [] as unknown[] }));
+const stationSuppliers = vi.fn((_stationId?: string | null) => ({
+  ...idle,
+  data: [{ id: 's1', name: 'IOCL Depot' }],
+}));
+const supplierLedger = vi.fn((_stationId?: string | null, id?: string) =>
+  id ? { ...idle, data: supplierRows.rows } : idle,
+);
 vi.mock('../../query/hooks.js', () => ({
   useCustomers: () => ({ ...idle, data: [] }),
-  useSuppliers: () => ({ ...idle, data: [{ id: 's1', name: 'IOCL Depot' }] }),
+  useStationSuppliers: (stationId?: string | null) => stationSuppliers(stationId),
   useCustomerLedger: () => idle,
-  useSupplierLedger: (id?: string) => (id ? { ...idle, data: supplierRows.rows } : idle),
+  useSupplierLedger: (stationId?: string | null, id?: string) => supplierLedger(stationId, id),
   useMoneyMovements: (p: { stationId?: string; from?: string; to?: string }) => money(p),
 }));
 
@@ -45,6 +52,8 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   money.mockClear();
+  stationSuppliers.mockClear();
+  supplierLedger.mockClear();
 });
 
 describe('UnifiedLedger', () => {
@@ -106,6 +115,9 @@ describe('UnifiedLedger', () => {
       fireEvent.click(screen.getByRole('button', { name: /Select supplier/ }));
       fireEvent.mouseDown(screen.getByRole('option', { name: /IOCL Depot/ }));
       const statement = screen.getByRole('table', { name: 'IOCL Depot statement' });
+      // The picker and the ledger are this Station's (#575).
+      expect(stationSuppliers).toHaveBeenCalledWith('st-1');
+      expect(supplierLedger).toHaveBeenLastCalledWith('st-1', 's1');
       expect(statement.textContent).toContain('1 Oct');
       expect(statement.textContent).not.toContain('30 Sep');
       // The payment is in the range; the opening carries only the 30 Sep purchase.

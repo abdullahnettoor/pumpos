@@ -89,6 +89,7 @@ const nextCreatedAt = () => new Date((tick += 1000));
 
 const listQuery = (over: Partial<PayablesQuery> = {}): PayablesQuery => ({
   organizationId: ORG,
+  stationId: STATION,
   purchasedFrom: MONTH.from,
   purchasedTo: MONTH.to,
   fuelPurchaseFrom: MONTH.from,
@@ -456,17 +457,17 @@ describe.skipIf(!CONNECTION)('Payables reader against real Postgres', () => {
       });
     });
 
-    it('is the same balance the suppliers list and the statement show: debits minus credits, across stations', async () => {
+    it("is the same balance the Station's statement shows: its own debits minus its own credits", async () => {
       const s = await supplier('Across stations');
       await purchase(s, '2026-10-01', 500, { station: STATION });
       await purchase(s, '2026-10-02', 300, { station: SIBLING });
       await pay(s, '2026-10-03', 200, { station: SIBLING });
-      expect((await row(s))?.balance).toBe(600);
-      const statement = await new DrizzleSupplierLedgerReader(db).statement(ORG, s, {
-        from: '2026-01-01',
-        to: '9999-12-31',
-      });
-      expect(Number(statement.closingBalance)).toBe(600);
+      const all = { from: '2026-01-01', to: '9999-12-31' };
+      const statements = new DrizzleSupplierLedgerReader(db);
+      expect((await row(s))?.balance).toBe(500);
+      expect(Number((await statements.statement(ORG, s, all, STATION)).closingBalance)).toBe(500);
+      expect((await row(s, listQuery({ stationId: SIBLING })))?.balance).toBe(100);
+      expect(Number((await statements.statement(ORG, s, all, SIBLING)).closingBalance)).toBe(100);
     });
 
     it('orders same-day Purchases by creation time', async () => {
@@ -498,7 +499,9 @@ describe.skipIf(!CONNECTION)('Payables reader against real Postgres', () => {
         station: OTHER_STATION,
         account: OTHER_BANK_ACCOUNT,
       });
-      const summary = await reader.summary(listQuery({ organizationId: org }));
+      const summary = await reader.summary(
+        listQuery({ organizationId: org, stationId: OTHER_STATION }),
+      );
       expect(summary.supplierCount).toBe(2);
       expect(summary.total).toBe(950);
       expect(summary.suppliers.map((x) => x.supplierId)).toEqual([b, a]);
@@ -512,6 +515,119 @@ describe.skipIf(!CONNECTION)('Payables reader against real Postgres', () => {
       expect(await row(s)).toBeUndefined();
       const one = await reader.supplier(supplierQuery(s));
       expect(one?.payable.balance).toBe(70);
+    });
+  });
+
+  describe('per Station (#575)', () => {
+    /** A month no other test writes to, so this block's month figures are its own. */
+    const MARCH = {
+      purchasedFrom: '2027-03-01',
+      purchasedTo: '2027-03-31',
+      fuelPurchaseFrom: '2027-03-01',
+      fuelPurchaseTo: '2027-03-31',
+      paidFrom: '2027-03-01',
+      paidTo: '2027-03-31',
+    };
+    const highway = (over: Partial<PayablesQuery> = {}) => listQuery({ ...MARCH, ...over });
+    const city = (over: Partial<PayablesQuery> = {}) =>
+      listQuery({ ...MARCH, stationId: SIBLING, ...over });
+    const ids = (summary: { suppliers: Array<{ supplierId: string }> }) =>
+      summary.suppliers.map((x) => x.supplierId);
+
+    it('shows each Station only its own OMC when two pumps buy from different OMCs', async () => {
+      const bpcl = await supplier('BPCL Kochi');
+      const iocl = await supplier('IOCL Ernakulam');
+      await purchase(bpcl, '2027-03-02', 1000, { station: STATION });
+      await purchase(iocl, '2027-03-03', 700, { station: SIBLING });
+      await pay(iocl, '2027-03-04', 200, { station: SIBLING });
+
+      const atHighway = await reader.summary(highway());
+      const atCity = await reader.summary(city());
+      expect(ids(atHighway)).toContain(bpcl);
+      expect(ids(atHighway)).not.toContain(iocl);
+      expect(ids(atCity)).toContain(iocl);
+      expect(ids(atCity)).not.toContain(bpcl);
+      expect(atCity.suppliers.find((x) => x.supplierId === iocl)?.balance).toBe(500);
+      // This month's flow is the Station's own.
+      expect(atHighway.month).toEqual({ purchased: 1000, paid: 0 });
+      expect(atCity.month).toEqual({ purchased: 700, paid: 200 });
+
+      // Read on its own, the other Station's OMC owes this Station nothing.
+      const ioclAtHighway = await reader.supplier({ ...highway(), supplierId: iocl });
+      expect(ioclAtHighway).toMatchObject({
+        payable: { balance: 0, unpaidCount: 0, oldestUnpaidDate: null },
+        lastPayment: null,
+        month: { purchased: 0, paid: 0, purchaseCount: 0 },
+      });
+    });
+
+    it("shows each Station only its own share of a shared supplier, settled on that Station's ledger", async () => {
+      const lube = await supplier('Shared lube distributor');
+      await purchase(lube, '2027-03-05', 400, {
+        station: STATION,
+        lines: [{ product: LUBE, quantity: 80, value: 400 }],
+      });
+      await purchase(lube, '2027-03-06', 300, {
+        station: SIBLING,
+        lines: [{ product: LUBE, quantity: 60, value: 300 }],
+      });
+      // The City pump pays its own invoice: it never settles the Highway one.
+      await pay(lube, '2027-03-07', 300, { station: SIBLING });
+
+      expect(await row(lube, highway())).toEqual({
+        supplierId: lube,
+        balance: 400,
+        unpaidCount: 1,
+        oldestUnpaidDate: '2027-03-05',
+      });
+      expect(await row(lube, city())).toBeUndefined();
+
+      const atHighway = await reader.supplier({ ...highway(), supplierId: lube });
+      expect(atHighway?.lastPayment).toBeNull();
+      expect(atHighway?.month).toEqual({ purchased: 400, paid: 0, purchaseCount: 1, quantity: 0 });
+      expect(atHighway?.purchasesByProduct).toEqual([
+        { productId: LUBE, name: 'Oil 1L', unit: 'Nos', quantity: 80, value: 400 },
+      ]);
+      const atCity = await reader.supplier({ ...city(), supplierId: lube });
+      expect(atCity?.payable.balance).toBe(0);
+      expect(atCity?.lastPayment?.amount).toBe(300);
+      expect(atCity?.month).toMatchObject({ purchased: 300, paid: 300, purchaseCount: 1 });
+
+      const march = { from: '2027-03-01', to: '2027-03-31' };
+      const statements = new DrizzleSupplierLedgerReader(db);
+      const highwayStatement = await statements.statement(ORG, lube, march, STATION);
+      expect(highwayStatement.entries.map((e) => e.amount)).toEqual(['400.00']);
+      expect(highwayStatement.closingBalance).toBe('400.00');
+      const cityStatement = await statements.statement(ORG, lube, march, SIBLING);
+      expect(cityStatement.entries.map((e) => e.transactionType)).toEqual(['Purchase', 'Payment']);
+      expect(cityStatement.closingBalance).toBe('0.00');
+    });
+
+    it('carries an Opening Balance on the Station it was recorded at only', async () => {
+      const s = await supplier('Opening at City');
+      await ledger(s, '2027-02-01', 250, { type: 'Opening Balance', station: SIBLING });
+      expect(await row(s, highway())).toBeUndefined();
+      expect(await row(s, city())).toMatchObject({ balance: 250, unpaidCount: 0 });
+      const statement = await new DrizzleSupplierLedgerReader(db).statement(
+        ORG,
+        s,
+        { from: '2027-03-01', to: '2027-03-31' },
+        SIBLING,
+      );
+      expect(statement).toMatchObject({ periodOpeningBalance: '250.00', hasEarlier: true });
+    });
+
+    it("never reads another organization's Station, nor this organization's Station under another", async () => {
+      const mine = await supplier('Mine at Highway');
+      await purchase(mine, '2027-03-08', 900, { station: STATION });
+      const foreignReadsMine = await reader.summary(highway({ organizationId: OTHER_ORG }));
+      expect(foreignReadsMine).toMatchObject({ total: 0, supplierCount: 0, suppliers: [] });
+      expect(foreignReadsMine.month).toEqual({ purchased: 0, paid: 0 });
+      const mineReadsForeign = await reader.summary(highway({ stationId: OTHER_STATION }));
+      expect(mineReadsForeign).toMatchObject({ total: 0, supplierCount: 0, suppliers: [] });
+      expect(
+        await reader.supplier({ ...highway({ organizationId: OTHER_ORG }), supplierId: mine }),
+      ).toBeNull();
     });
   });
 
@@ -835,7 +951,9 @@ describe.skipIf(!CONNECTION)('Payables reader against real Postgres', () => {
           amount: String(100 + i),
         })),
       );
-      const summary = await reader.summary(listQuery({ organizationId: BIG_ORG }));
+      const summary = await reader.summary(
+        listQuery({ organizationId: BIG_ORG, stationId: BIG_STATION }),
+      );
       expect(summary.supplierCount).toBe(total);
       expect(summary.suppliers).toHaveLength(PAYABLES_SUPPLIER_LIMIT);
       // Largest first, so the 25 smallest balances fall off the list, not the total.

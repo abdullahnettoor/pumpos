@@ -1087,8 +1087,15 @@ export class CloudTransactionService {
     });
   }
 
-  async getSuppliers(activeOnly: boolean = true): Promise<any> {
-    return request<any>(`/transactions/suppliers?activeOnly=${activeOnly}`);
+  /**
+   * The supplier list with each `currentBalance`. With a `stationId`, that
+   * Station's list balanced on its own ledger (#575); without, the
+   * Organization's (pickers).
+   */
+  async getSuppliers(activeOnly: boolean = true, stationId?: string): Promise<any> {
+    const query = new URLSearchParams({ activeOnly: String(activeOnly) });
+    if (stationId) query.set('stationId', stationId);
+    return request<any>(`/transactions/suppliers?${query.toString()}`);
   }
 
   async createSupplier(payload: {
@@ -1608,19 +1615,27 @@ export class CloudTransactionService {
     );
   }
 
-  /** The supplier's statement for a date range: opening balance, enriched rows, closing balance. */
+  /**
+   * The supplier's statement at one Station for a date range: opening balance,
+   * enriched rows, closing balance (#575: each pump has its own account).
+   */
   async getSupplierLedgerRange(
     supplierId: string,
     range: { from: string; to: string },
+    stationId: string,
   ): Promise<RangedPartyLedger> {
-    const query = new URLSearchParams(range);
+    const query = new URLSearchParams({ ...range, stationId });
     return request<RangedPartyLedger>(
       `/transactions/suppliers/${encodeURIComponent(supplierId)}/ledger?${query.toString()}`,
     );
   }
 
-  async getSupplierLedger(supplierId: string): Promise<any[]> {
-    return request<any[]>(`/transactions/suppliers/${supplierId}/ledger`);
+  /** The supplier's all-time ledger rows at one Station (#575). */
+  async getSupplierLedger(supplierId: string, stationId: string): Promise<any[]> {
+    const query = new URLSearchParams({ stationId });
+    return request<any[]>(
+      `/transactions/suppliers/${encodeURIComponent(supplierId)}/ledger?${query.toString()}`,
+    );
   }
 
   /** Issue (or fetch existing) GST tax invoice for a sale. Idempotent. */
