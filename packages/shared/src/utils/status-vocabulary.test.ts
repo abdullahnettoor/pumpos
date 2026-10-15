@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   handoverState,
   partyState,
+  tankStates,
+  decantationVarianceState,
   statusPresentation,
   variancePresentation,
   type PumpState,
@@ -35,6 +37,22 @@ describe('statusPresentation: one word and one tone per state', () => {
     ['voided', 'Voided', 'neutral'],
     ['adjustment', 'Adjustment', 'info'],
     ['awaiting-decantation', 'Awaiting decantation', 'neutral'],
+    // Tank (#536): the tank level's words
+    ['tank-critical', 'Critical', 'danger'],
+    ['tank-low', 'Low', 'warning'],
+    ['tank-over-capacity', 'Over capacity', 'info'],
+    ['tank-waiting-decantation', 'Waiting on decantation', 'warning'],
+    // Product stock
+    ['out-of-stock', 'Out of stock', 'warning'],
+    ['oversold', 'Oversold', 'danger'],
+    // Decantation
+    ['decantation-draft', 'Saved as draft', 'neutral'],
+    ['tanker-matches', 'Matches', 'success'],
+    ['within-tolerance', 'Within tolerance', 'neutral'],
+    ['pending-measurement', 'Pending measurement', 'neutral'],
+    ['measured', 'Measured', 'success'],
+    ['discarded', 'Discarded', 'neutral'],
+    ['purchase-not-linked', 'Purchase not linked', 'warning'],
   ];
 
   it.each(cases)('%s reads "%s" in %s', (state, label, tone) => {
@@ -56,6 +74,26 @@ describe('state mappers', () => {
     expect(handoverState('pending')).toBe('handover-pending');
     expect(handoverState('due')).toBe('handover-due');
     expect(handoverState('recorded')).toBe('handover-recorded');
+  });
+
+  it('names a tank: its level, then over capacity, then a pending Decantation', () => {
+    const base = { overCapacity: false, waitingOnDecantation: false };
+    expect(tankStates({ ...base, tone: 'ok' })).toEqual([]);
+    expect(tankStates({ ...base, tone: 'unknown' })).toEqual([]);
+    expect(tankStates({ ...base, tone: 'low' })).toEqual(['tank-low']);
+    expect(
+      tankStates({ tone: 'critical', overCapacity: false, waitingOnDecantation: true }),
+    ).toEqual(['tank-critical', 'tank-waiting-decantation']);
+    expect(tankStates({ ...base, tone: 'ok', overCapacity: true })).toEqual(['tank-over-capacity']);
+  });
+
+  it('reads a decantation variance against the station tolerance (% of invoice)', () => {
+    expect(decantationVarianceState(0, 12000, 0.5)).toBe('tanker-matches');
+    expect(decantationVarianceState(-60, 12000, 0.5)).toBe('within-tolerance'); // limit 60 L
+    expect(decantationVarianceState(60, 12000, 0.5)).toBe('within-tolerance');
+    expect(decantationVarianceState(-61, 12000, 0.5)).toBe('short');
+    expect(decantationVarianceState(61, 12000, 0.5)).toBe('surplus');
+    expect(decantationVarianceState(-1, null, 0.5)).toBe('short'); // no invoice: no allowance
   });
 
   it('names a party from its active flag', () => {

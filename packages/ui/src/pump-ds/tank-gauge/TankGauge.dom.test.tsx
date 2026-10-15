@@ -63,6 +63,20 @@ describe('TankGauge', () => {
     expect(screen.queryByText('Waiting on decantation')).toBeNull();
   });
 
+  it('keeps the Dashboard size by default and grows the tube at lg (#536)', () => {
+    const { container, rerender } = render(<TankGauge name="Tank 1" level={level(4_000)} />);
+    const root = () => container.firstElementChild as HTMLElement;
+    expect(root().dataset.size).toBe('md');
+    expect(screen.getByRole('meter').className).toContain('h-[30px]');
+    rerender(<TankGauge name="Tank 1" level={level(4_000)} size="lg" />);
+    expect(root().dataset.size).toBe('lg');
+    expect(screen.getByRole('meter').className).toContain('h-[64px]');
+    // Same tone and words at either size.
+    expect(root().dataset.tone).toBe('critical');
+    expect(screen.getByText('20%').className).toContain('text-danger-fg');
+    expect(screen.getByText('Critical')).toBeTruthy();
+  });
+
   it('shows a dash for a tank with no capacity', () => {
     render(
       <TankGauge

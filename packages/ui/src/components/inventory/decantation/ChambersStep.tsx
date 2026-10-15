@@ -1,37 +1,215 @@
-import React from 'react';
-import { useFieldArray } from 'react-hook-form';
-import { Button, Chip, Icon } from '../../../pump-ds/index.js';
+import React, { useMemo } from 'react';
+import { useFieldArray, useWatch, type UseFormReturn } from 'react-hook-form';
+import { Button, Chip, Icon, InteractiveTable, type TableColumn } from '../../../pump-ds/index.js';
+import { cn } from '../../../pump-ds/lib/cn.js';
 import { NumberInput, Select } from '../../primitives/Field.js';
-import { LINE_COLORS, Notice } from './StepSection.js';
-import { emptyChamber } from './decantationForm.js';
+import { Notice } from './StepSection.js';
+import { emptyChamber, type DecantationFormValues } from './decantationForm.js';
 import { formatQuantity } from '../../../utils/format.js';
-import { lineLabel, type StepProps } from './stepShared.js';
+import { lineLabel, lineSwatch, type StepProps, type TankOption } from './stepShared.js';
 
-const MARKS: { value: 'OK' | 'SHORT' | 'EXCESS'; label: string; tone: string }[] = [
-  { value: 'OK', label: 'OK', tone: 'success' },
-  { value: 'SHORT', label: 'Short', tone: 'danger' },
-  { value: 'EXCESS', label: 'Excess', tone: 'info' },
+type Mark = 'OK' | 'SHORT' | 'EXCESS';
+
+const MARKS: { value: Mark; label: string }[] = [
+  { value: 'OK', label: 'OK' },
+  { value: 'SHORT', label: 'Short' },
+  { value: 'EXCESS', label: 'Excess' },
 ];
 
+/** A pressed mark toggle: Short is a problem (red), Excess informational, OK success. */
+const MARK_ON: Record<Mark, string> = {
+  OK: 'border-success-fg bg-success-bg text-success-fg hover:bg-success-bg active:bg-success-bg',
+  SHORT: 'border-danger-fg bg-danger-bg text-danger-fg hover:bg-danger-bg active:bg-danger-bg',
+  EXCESS: 'border-info-fg bg-info-bg text-info-fg hover:bg-info-bg active:bg-info-bg',
+};
+
+const CHECKBOX = 'accent-brand';
+
+type Form = UseFormReturn<DecantationFormValues>;
+interface ChamberRow {
+  id: string;
+  index: number;
+}
+
+/** "Into" cell: line dot + tank select. Watches its own field so the grid stays mounted. */
+const IntoCell: React.FC<{ form: Form; tanks: TankOption[]; i: number }> = ({ form, tanks, i }) => {
+  const lineIndex = useWatch({ control: form.control, name: `chambers.${i}.lineIndex` });
+  const lines = useWatch({ control: form.control, name: 'lines' }) ?? [];
+  return (
+    <div className="flex items-center gap-1.5">
+      <span
+        aria-hidden="true"
+        className={cn(
+          'size-2 shrink-0 rounded-full',
+          lineIndex == null ? 'bg-border-strong' : lineSwatch(lineIndex),
+        )}
+      />
+      <Select
+        aria-label={`Chamber ${i + 1} into tank`}
+        {...form.register(`chambers.${i}.lineIndex`, {
+          setValueAs: (x) => (x === '' || x == null ? null : Number(x)),
+        })}
+      >
+        <option value="">Not assigned</option>
+        {lines.map((l, j) => (
+          <option key={j} value={j}>
+            {lineLabel(tanks, l.tankId, j)}
+          </option>
+        ))}
+      </Select>
+    </div>
+  );
+};
+
+/** Dip mark toggles: OK / Short / Excess; pressing the pressed one clears it. */
+const MarkCell: React.FC<{ form: Form; i: number }> = ({ form, i }) => {
+  const mark = useWatch({ control: form.control, name: `chambers.${i}.mark` });
+  return (
+    <div className="flex gap-1">
+      {MARKS.map((m) => {
+        const on = mark === m.value;
+        return (
+          <Button
+            key={m.value}
+            variant="secondary"
+            size="xs"
+            aria-pressed={on}
+            aria-label={`Chamber ${i + 1} ${m.label}`}
+            className={cn(on ? MARK_ON[m.value] : 'font-normal')}
+            onClick={() =>
+              form.setValue(`chambers.${i}.mark`, on ? '' : m.value, { shouldDirty: true })
+            }
+          >
+            {m.label}
+          </Button>
+        );
+      })}
+    </div>
+  );
+};
+
 export const ChambersStep: React.FC<StepProps> = ({ form, values, tanks, flags }) => {
-  const { register, setValue, control } = form;
+  const { register, control } = form;
   const { fields, append, remove } = useFieldArray({ control, name: 'chambers' });
-  const cell: React.CSSProperties = { padding: '4px 6px', fontSize: 12, verticalAlign: 'middle' };
   const short = flags.flags.find((f) => f.code === 'TANKER_SHORT');
+  const rows = useMemo<ChamberRow[]>(
+    () => fields.map((f, index) => ({ id: f.id, index })),
+    [fields],
+  );
+  // Stable across keystrokes: the table builds a cell component per definition, so
+  // rebuilding the columns would remount (and blur) the inputs on every change.
+  const columns = useMemo<TableColumn<ChamberRow>[]>(
+    () => [
+      {
+        id: 'no',
+        header: '#',
+        kind: 'text',
+        sortable: false,
+        width: '32px',
+        value: (r) => r.index + 1,
+      },
+      {
+        id: 'qty',
+        header: 'Qty (L)',
+        kind: 'text',
+        sortable: false,
+        width: '90px',
+        value: () => null,
+        cell: ({ index: i }) => (
+          <NumberInput
+            aria-label={`Chamber ${i + 1} quantity`}
+            {...register(`chambers.${i}.capacity`)}
+          />
+        ),
+      },
+      {
+        id: 'into',
+        header: 'Into',
+        kind: 'text',
+        sortable: false,
+        width: '150px',
+        value: () => null,
+        cell: ({ index: i }) => <IntoCell form={form} tanks={tanks} i={i} />,
+      },
+      {
+        id: 'seal',
+        header: 'Seal OK',
+        kind: 'text',
+        sortable: false,
+        value: () => null,
+        cell: ({ index: i }) => (
+          <input
+            type="checkbox"
+            className={CHECKBOX}
+            aria-label={`Chamber ${i + 1} seal OK`}
+            {...register(`chambers.${i}.sealOk`)}
+          />
+        ),
+      },
+      {
+        id: 'mark',
+        header: 'Dip mark',
+        kind: 'text',
+        sortable: false,
+        value: () => null,
+        cell: ({ index: i }) => <MarkCell form={form} i={i} />,
+      },
+      {
+        id: 'dip',
+        header: 'Dip (mm)',
+        kind: 'text',
+        sortable: false,
+        width: '80px',
+        value: () => null,
+        cell: ({ index: i }) => (
+          <NumberInput
+            placeholder="—"
+            aria-label={`Chamber ${i + 1} dip mm`}
+            {...register(`chambers.${i}.dipMm`)}
+          />
+        ),
+      },
+      {
+        id: 'emptied',
+        header: 'Emptied',
+        kind: 'text',
+        sortable: false,
+        value: () => null,
+        cell: ({ index: i }) => (
+          <input
+            type="checkbox"
+            className={CHECKBOX}
+            aria-label={`Chamber ${i + 1} emptied`}
+            {...register(`chambers.${i}.emptied`)}
+          />
+        ),
+      },
+      {
+        id: 'remove',
+        header: '',
+        kind: 'text',
+        sortable: false,
+        value: () => null,
+        cell: ({ index: i }) => (
+          <Button
+            variant="ghost"
+            size="xs"
+            aria-label={`Remove chamber ${i + 1}`}
+            onClick={() => remove(i)}
+          >
+            <Icon name="x" size="xs" />
+          </Button>
+        ),
+      },
+    ],
+    [form, register, remove, tanks],
+  );
   return (
     <>
-      <label
-        style={{
-          display: 'flex',
-          gap: 8,
-          alignItems: 'flex-start',
-          fontSize: 13,
-          marginBottom: 12,
-        }}
-      >
+      <label className="mb-3 flex items-start gap-2 text-[13px]">
         <input
           type="checkbox"
-          style={{ marginTop: 3 }}
+          className={cn(CHECKBOX, 'mt-[3px]')}
           {...register('checkChambers', {
             onChange: (e) => {
               // First time on: start with one chamber so the table is not empty.
@@ -42,136 +220,24 @@ export const ChambersStep: React.FC<StepProps> = ({ form, values, tanks, flags }
         />
         <span>
           Check tanker chambers
-          <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)' }}>
+          <span className="block text-[12px] text-ink-muted">
             Optional: seal, dip mark and which tank each chamber goes into
           </span>
         </span>
       </label>
       {values.checkChambers && (
         <>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 6 }}>
-            <thead>
-              <tr style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>
-                <th style={cell}>#</th>
-                <th style={cell}>Qty (L)</th>
-                <th style={cell}>Into</th>
-                <th style={cell}>Seal OK</th>
-                <th style={cell}>Dip mark</th>
-                <th style={cell}>Dip (mm)</th>
-                <th style={cell}>Emptied</th>
-                <th style={cell} />
-              </tr>
-            </thead>
-            <tbody>
-              {fields.map((field, i) => {
-                const c = values.chambers[i];
-                return (
-                  <tr key={field.id} style={{ borderTop: '1px solid var(--border-soft)' }}>
-                    <td style={cell}>{i + 1}</td>
-                    <td style={{ ...cell, width: 90 }}>
-                      <NumberInput
-                        aria-label={`Chamber ${i + 1} quantity`}
-                        {...register(`chambers.${i}.capacity`)}
-                      />
-                    </td>
-                    <td style={{ ...cell, width: 150 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span
-                          aria-hidden="true"
-                          style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: 4,
-                            flexShrink: 0,
-                            background:
-                              c?.lineIndex == null
-                                ? 'var(--border-strong, #cbd5e1)'
-                                : LINE_COLORS[c.lineIndex % LINE_COLORS.length],
-                          }}
-                        />
-                        <Select
-                          aria-label={`Chamber ${i + 1} into tank`}
-                          {...register(`chambers.${i}.lineIndex`, {
-                            setValueAs: (x) => (x === '' || x == null ? null : Number(x)),
-                          })}
-                        >
-                          <option value="">Not assigned</option>
-                          {values.lines.map((l, j) => (
-                            <option key={j} value={j}>
-                              {lineLabel(tanks, l.tankId, j)}
-                            </option>
-                          ))}
-                        </Select>
-                      </div>
-                    </td>
-                    <td style={cell}>
-                      <input
-                        type="checkbox"
-                        aria-label={`Chamber ${i + 1} seal OK`}
-                        {...register(`chambers.${i}.sealOk`)}
-                      />
-                    </td>
-                    <td style={cell}>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        {MARKS.map((m) => {
-                          const on = c?.mark === m.value;
-                          return (
-                            <button
-                              key={m.value}
-                              type="button"
-                              aria-pressed={on}
-                              aria-label={`Chamber ${i + 1} ${m.label}`}
-                              onClick={() =>
-                                setValue(`chambers.${i}.mark`, on ? '' : m.value, {
-                                  shouldDirty: true,
-                                })
-                              }
-                              style={{
-                                fontSize: 11,
-                                padding: '2px 8px',
-                                borderRadius: 4,
-                                cursor: 'pointer',
-                                border: '1px solid var(--border-strong)',
-                                background: on ? `var(--state-${m.tone}-bg)` : 'transparent',
-                                color: on ? `var(--state-${m.tone}-fg)` : 'var(--text-default)',
-                                fontWeight: on ? 600 : 400,
-                              }}
-                            >
-                              {m.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </td>
-                    <td style={{ ...cell, width: 80 }}>
-                      <NumberInput
-                        placeholder="—"
-                        aria-label={`Chamber ${i + 1} dip mm`}
-                        {...register(`chambers.${i}.dipMm`)}
-                      />
-                    </td>
-                    <td style={cell}>
-                      <input
-                        type="checkbox"
-                        aria-label={`Chamber ${i + 1} emptied`}
-                        {...register(`chambers.${i}.emptied`)}
-                      />
-                    </td>
-                    <td style={cell}>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        aria-label={`Remove chamber ${i + 1}`}
-                        onClick={() => remove(i)}
-                      >
-                        <Icon name="x" size="xs" />
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="mb-1.5">
+            <InteractiveTable<ChamberRow>
+              columns={columns}
+              rows={rows}
+              rowKey={(r) => r.id}
+              bare
+              dense
+              title="chambers"
+              emptyMessage="No chambers yet."
+            />
+          </div>
           <Button
             variant="outline"
             size="xs"
@@ -198,13 +264,13 @@ export const ChambersStep: React.FC<StepProps> = ({ form, values, tanks, flags }
 
 export const ChambersSummary: React.FC<StepProps> = ({ values, tanks }) =>
   !values.checkChambers ? (
-    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Chambers not checked</span>
+    <span className="text-[12px] text-ink-muted">Chambers not checked</span>
   ) : (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+    <div className="flex flex-wrap gap-1.5">
       {values.chambers.map((c, i) => (
         <Chip
           key={i}
-          size="sm"
+          size="md"
           tone={
             c.mark === 'SHORT' || !c.sealOk
               ? 'danger'

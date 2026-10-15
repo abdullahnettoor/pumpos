@@ -1,12 +1,13 @@
 import React from 'react';
 import { useFieldArray } from 'react-hook-form';
 import { Button, Chip, Icon } from '../../../pump-ds/index.js';
+import { cn } from '../../../pump-ds/lib/cn.js';
 import { Field, NumberInput, Select } from '../../primitives/Field.js';
 import { DensityCalculatorPopover } from '../../primitives/DensityCalculatorPopover.js';
-import { KV, LINE_COLORS, LineTag, Notice } from './StepSection.js';
+import { KV, LineTag, Notice } from './StepSection.js';
 import { chambersAfterLineRemoved, emptyLine } from './decantationForm.js';
-import { formatQuantity } from '../../../utils/format.js';
-import { grid, lineLabel, tankOf, SummaryCard, type StepProps } from './stepShared.js';
+import { formatDensity, formatQuantity } from '../../../utils/format.js';
+import { GRID, lineBorder, lineLabel, tankOf, SummaryCard, type StepProps } from './stepShared.js';
 
 export const TanksStep: React.FC<
   StepProps & { invoiceDensityByProduct: Record<string, number | null | undefined> }
@@ -22,7 +23,7 @@ export const TanksStep: React.FC<
   };
   return (
     <>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+      <div className="mb-2.5 text-[12px] text-ink-muted">
         One line per tank this tanker unloads into. Invoice density comes from the linked Fuel
         Purchase of the line&apos;s product.
       </div>
@@ -37,20 +38,9 @@ export const TanksStep: React.FC<
         return (
           <div
             key={field.id}
-            style={{
-              borderLeft: `3px solid ${LINE_COLORS[i % LINE_COLORS.length]}`,
-              padding: '8px 0 2px 12px',
-              marginBottom: 14,
-            }}
+            className={cn('mb-3.5 border-l-[3px] pb-0.5 pl-3 pt-2', lineBorder(i))}
           >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: 8,
-              }}
-            >
+            <div className="mb-2 flex items-center justify-between">
               <LineTag i={i} label={`Tank line ${i + 1}`} />
               {fields.length > 1 && (
                 <Button
@@ -64,7 +54,7 @@ export const TanksStep: React.FC<
                 </Button>
               )}
             </div>
-            <div style={grid('1fr 1fr 1fr')}>
+            <div className={GRID[3]}>
               <Field label="Tank" required error={errs?.tankId?.message}>
                 <Select
                   aria-label={`Tank, line ${i + 1}`}
@@ -98,9 +88,11 @@ export const TanksStep: React.FC<
               <Field
                 label="RO density (kg/m³ @15 °C)"
                 error={errs?.roDensity?.message}
-                hint={invoiceDensity != null ? `Invoice ${invoiceDensity}` : undefined}
+                hint={
+                  invoiceDensity != null ? `Invoice ${formatDensity(invoiceDensity)}` : undefined
+                }
               >
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <div className="flex items-center gap-1.5">
                   <NumberInput
                     aria-label={`RO density, line ${i + 1}`}
                     invalid={!!errs?.roDensity}
@@ -155,19 +147,19 @@ export const TanksSummary: React.FC<
         (x) => x.code === 'DENSITY_OUT_OF_TOLERANCE' && x.tankLineId === String(i),
       );
       return (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ width: 140 }}>
+        <div key={i} className="flex items-center gap-3">
+          <span className="w-[140px] shrink-0">
             <LineTag i={i} label={lineLabel(tanks, l.tankId, i)} />
           </span>
           <KV
             items={[
               ['Before', l.beforeDip ? formatQuantity(Number(l.beforeDip), 'L') : '—'],
-              ['RO density', l.roDensity || '—'],
+              ['RO density', l.roDensity ? formatDensity(Number(l.roDensity)) : '—'],
               ...(f
                 ? ([
                     [
                       'Density',
-                      <Chip key="d" size="sm" tone="danger">
+                      <Chip key="d" size="md" tone="danger">
                         Out of tolerance
                       </Chip>,
                     ],

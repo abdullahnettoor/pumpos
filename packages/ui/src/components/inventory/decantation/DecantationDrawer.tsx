@@ -249,7 +249,7 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
   const stepProps: StepProps = { form, values, tanks, settings, flags, review };
   const cont = (i: number) =>
     i < NEXT_LABEL.length ? (
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+      <div className="mt-2 flex justify-end">
         <Button size="sm" onClick={() => next(i)}>
           {NEXT_LABEL[i]}
         </Button>
@@ -295,17 +295,17 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
   };
 
   const footer = (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%' }}>
-      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+    <div className="flex w-full items-center gap-2">
+      <span className="text-[12px] text-ink-muted">
         {values.lines?.length ?? 0} tank{(values.lines?.length ?? 0) === 1 ? '' : 's'} · one tanker
         visit
       </span>
       {flagged && (
-        <Chip size="sm" tone="danger">
+        <Chip size="md" tone="danger">
           {flags.flags.length} flag{flags.flags.length === 1 ? '' : 's'}
         </Chip>
       )}
-      <span style={{ flex: 1 }} />
+      <span className="flex-1" />
       {decantation?.status === 'DRAFT' && (
         <DiscardDraftButton
           busy={submitting || discard.isPending}
@@ -342,14 +342,7 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
       {error && (
         <div
           role="alert"
-          style={{
-            backgroundColor: 'var(--state-danger-bg)',
-            color: 'var(--state-danger-fg)',
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: 12,
-            marginBottom: 10,
-          }}
+          className="mb-2.5 rounded-input bg-danger-bg px-3 py-2 text-[12px] text-danger-fg"
         >
           {error}
         </div>
@@ -357,14 +350,7 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
       {sealed && (
         <div
           role="note"
-          style={{
-            backgroundColor: 'var(--state-warning-bg)',
-            color: 'var(--state-warning-fg)',
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: 12,
-            marginBottom: 10,
-          }}
+          className="mb-2.5 rounded-input bg-warning-bg px-3 py-2 text-[12px] text-warning-fg"
         >
           This business day is closed. Only the after dip can still be added; the rest of the record
           is sealed.

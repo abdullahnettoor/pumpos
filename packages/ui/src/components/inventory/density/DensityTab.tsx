@@ -1,5 +1,15 @@
-import React, { useMemo, useState } from 'react';
-import { Button, Icon, SegmentedControl } from '../../../pump-ds/index.js';
+import React, { useMemo, useRef, useState } from 'react';
+import {
+  Button,
+  DataSection,
+  EmptyState,
+  Icon,
+  SectionHeader,
+  SegmentedControl,
+} from '../../../pump-ds/index.js';
+import { formatDayMonth } from '../../../utils/format.js';
+import { countOf } from '../../../utils/ledgerWindow.js';
+import { officeSubmitKeys, type SubmitKeySession } from '../../../office-records/submitKeys.js';
 import {
   useDensityReadings,
   useDensityTodaySummary,
@@ -10,11 +20,17 @@ import {
   useTanks,
 } from '../../../query/hooks.js';
 import { TodayView } from './TodayView.js';
-import { RegisterView } from './RegisterView.js';
+import { RegisterFilters, RegisterView } from './RegisterView.js';
+import {
+  ALL_DENSITY_READINGS,
+  filterDensityReadings,
+  type DensityRegisterFilter,
+} from './densityKind.js';
 import { RecordDensityDrawer } from './RecordDensityDrawer.js';
 import { printDensityBoard } from './printDensityBoard.js';
 import {
   businessDateSettings,
+  resolveBusinessDate,
   resolveDecantationSettings,
   type RecordDensityReadingPayload,
 } from '@pump/shared';
@@ -23,14 +39,14 @@ export interface DensityTabProps {
   stationId: string;
 }
 
-/** Loading / unavailable line in place of a view. */
-const STATUS = 'p-8 text-center text-[13px] text-ink-muted';
+const readingCount = (n: number) => countOf(n, 'reading', 'readings');
 
 export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
   const [view, setView] = useState<'today' | 'register'>('today');
   const [isRecordOpen, setIsRecordOpen] = useState(false);
   const [presetProductId, setPresetProductId] = useState<string | undefined>(undefined);
   const [morningPromptProduct, setMorningPromptProduct] = useState<string | null>(null);
+  const [registerFilter, setRegisterFilter] = useState<DensityRegisterFilter>(ALL_DENSITY_READINGS);
 
   const recordDensity = useRecordDensityReading(stationId);
 
@@ -47,6 +63,12 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
     return (productsQ.data ?? []).filter((p) => p.productType === 'FUEL' && p.isActive);
   }, [productsQ.data]);
 
+  const registerRows = useMemo(
+    () => filterDensityReadings(readingsQ.data ?? [], registerFilter),
+    [readingsQ.data, registerFilter],
+  );
+  const isFiltered = registerFilter.productId !== '' || registerFilter.kind !== '';
+
   const fuelTanks = useMemo(() => {
     const fuelIds = new Set(fuelProducts.map((p) => p.id));
     return (tanksQ.data ?? []).filter((t) => fuelIds.has(t.productId));
@@ -57,13 +79,31 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
     return (nozzlesQ.data ?? []).filter((n) => fuelIds.has(n.productId));
   }, [nozzlesQ.data, fuelProducts]);
 
+  // One Idempotency-Key per logical save, through the shared key store: kept
+  // while a save's outcome is unknown (drop, 5xx), renewed after a decided
+  // answer, so a retry cannot record the same reading twice.
+  const keys = useRef<SubmitKeySession | null>(null);
   const handleOpenRecord = (prodId?: string) => {
+    keys.current = officeSubmitKeys.session(`density:${stationId}`);
     setPresetProductId(prodId);
     setIsRecordOpen(true);
   };
 
   const handleSaveDensity = async (payload: RecordDensityReadingPayload) => {
-    await recordDensity.mutateAsync({ payload });
+    const session = (keys.current ??= officeSubmitKeys.session(`density:${stationId}`));
+    // The fingerprint (not the body) carries the station's business date at the
+    // start of the save: an unanswered save keeps its key for the same reading
+    // that day only, so tomorrow's identical reading is a new request.
+    const clock = businessDateSettings(station?.settings);
+    const businessDate = resolveBusinessDate({ ...clock, now: new Date() });
+    const idempotencyKey = session.next(JSON.stringify({ businessDate, payload }));
+    try {
+      await recordDensity.mutateAsync({ payload, idempotencyKey });
+      session.settle();
+    } catch (err) {
+      session.settle(err);
+      throw err;
+    }
 
     if (payload.kind === 'MORNING') {
       const prod = fuelProducts.find((p) => p.id === payload.productId);
@@ -93,85 +133,143 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
     [station],
   );
 
-  const mainView = () => {
-    if (!stationSettings) {
-      return (
-        <div className={STATUS}>
-          {stationsQ.isError ? "Couldn't load station settings" : 'Loading station settings...'}
-        </div>
-      );
-    }
-    const { densitySpecBands, densityToleranceKgM3, timeZone } = stationSettings;
-    if (view === 'register') {
-      return readingsQ.isLoading ? (
-        <div className={STATUS}>Loading density register...</div>
-      ) : (
-        <RegisterView
-          readings={readingsQ.data ?? []}
-          products={fuelProducts}
-          tolerance={densityToleranceKgM3}
-          timeZone={timeZone}
+  const todayView = (
+    <DataSection
+      title="today's density"
+      query={[stationsQ, todayQ]}
+      placeholderHeight={320}
+      shape="cards"
+      isEmpty={!stationSettings || !todayQ.data}
+      empty={
+        <EmptyState
+          compact
+          icon={<Icon name="droplet" size="md" />}
+          title={stationSettings ? 'No density summary for today' : 'Station settings unavailable'}
+          description={
+            stationSettings
+              ? 'Record a reading to start today’s density board.'
+              : 'Density needs the station’s timezone and tolerance from Station Settings.'
+          }
         />
-      );
-    }
-    if (todayQ.isLoading) {
-      return <div className={STATUS}>Loading density today summary...</div>;
-    }
-    if (!todayQ.data) {
-      return <div className={STATUS}>No summary data available</div>;
-    }
-    return (
-      <TodayView
-        summary={todayQ.data}
-        specBands={densitySpecBands}
-        tolerance={densityToleranceKgM3}
-        timeZone={timeZone}
-        morningPromptProduct={morningPromptProduct}
-        onDismissMorningPrompt={() => setMorningPromptProduct(null)}
-        onPrintBoard={handlePrintBoard}
-        onRecord={handleOpenRecord}
-      />
-    );
-  };
+      }
+    >
+      {stationSettings && todayQ.data && (
+        <TodayView
+          summary={todayQ.data}
+          specBands={stationSettings.densitySpecBands}
+          tolerance={stationSettings.densityToleranceKgM3}
+          timeZone={stationSettings.timeZone}
+          morningPromptProduct={morningPromptProduct}
+          onDismissMorningPrompt={() => setMorningPromptProduct(null)}
+          onPrintBoard={handlePrintBoard}
+          onRecord={handleOpenRecord}
+        />
+      )}
+    </DataSection>
+  );
+
+  const registerView = (
+    <DataSection
+      title="density register"
+      query={[stationsQ, readingsQ]}
+      placeholderHeight={320}
+      flush
+      isEmpty={!stationSettings || registerRows.length === 0}
+      empty={
+        <div className="p-3">
+          <EmptyState
+            compact
+            icon={<Icon name="droplet" size="md" />}
+            title={
+              !stationSettings
+                ? 'Station settings unavailable'
+                : isFiltered
+                  ? 'No matching readings'
+                  : 'No density readings yet'
+            }
+            description={
+              !stationSettings
+                ? 'Density needs the station’s timezone and tolerance from Station Settings.'
+                : isFiltered
+                  ? 'Change the product or routine filter.'
+                  : 'Record a reading to see it here.'
+            }
+          />
+        </div>
+      }
+    >
+      {stationSettings && (
+        <RegisterView
+          readings={registerRows}
+          tolerance={stationSettings.densityToleranceKgM3}
+          timeZone={stationSettings.timeZone}
+        />
+      )}
+    </DataSection>
+  );
+
+  const subtitle =
+    view === 'register'
+      ? readingsQ.data
+        ? readingCount(registerRows.length)
+        : undefined
+      : todayQ.data
+        ? formatDayMonth(todayQ.data.businessDate)
+        : undefined;
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Header controls: Segmented switch (Today | Register) + Print Board + Record */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <SegmentedControl
-          aria-label="Density view"
-          options={[
-            { value: 'today', label: 'Today' },
-            { value: 'register', label: 'Register' },
-          ]}
-          value={view}
-          onChange={(v) => setView(v)}
-        />
+    <section className="flex flex-col gap-2">
+      <SectionHeader
+        title={view === 'register' ? 'Density register' : "Today's density"}
+        subtitle={subtitle}
+        controls={{
+          filters: (
+            <>
+              <SegmentedControl
+                aria-label="Density view"
+                options={[
+                  { value: 'today', label: 'Today' },
+                  { value: 'register', label: 'Register' },
+                ]}
+                value={view}
+                onChange={(v) => setView(v)}
+              />
+              {view === 'register' && (
+                <RegisterFilters
+                  products={fuelProducts}
+                  readings={readingsQ.data ?? []}
+                  value={registerFilter}
+                  onChange={setRegisterFilter}
+                />
+              )}
+            </>
+          ),
+          actions: (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handlePrintBoard}
+                disabled={!todayQ.data}
+                leftIcon={<Icon name="printer" size="sm" />}
+              >
+                Print board
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleOpenRecord()}
+                disabled={!stationSettings}
+                leftIcon={<Icon name="plus" size="sm" />}
+              >
+                Record density
+              </Button>
+            </div>
+          ),
+        }}
+      />
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handlePrintBoard}
-            disabled={!todayQ.data}
-            leftIcon={<Icon name="printer" size="sm" />}
-          >
-            Print board
-          </Button>
-
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => handleOpenRecord()}
-            disabled={!stationSettings}
-            leftIcon={<Icon name="plus" size="sm" />}
-          >
-            Record density
-          </Button>
-        </div>
-      </div>
-
-      {mainView()}
+      {view === 'register' ? registerView : todayView}
 
       {/* Record Density Drawer: needs the station's tolerance and defaults */}
       {stationSettings && (
@@ -192,6 +290,6 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
           defaultEntryMethod={stationSettings.densityEntryMethod}
         />
       )}
-    </div>
+    </section>
   );
 };

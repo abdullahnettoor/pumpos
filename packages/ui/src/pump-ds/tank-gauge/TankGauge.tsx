@@ -15,12 +15,16 @@ import { stockOfCapacity } from './stockOfCapacity.js';
  */
 
 export type TankGaugeVariant = 'tube' | 'bar';
+/** `md` is the Dashboard row; `lg` the Inventory tank list (#536), tube only. */
+export type TankGaugeSize = 'md' | 'lg';
 
 export interface TankGaugeProps {
   /** Tank name (or product code). */
   name: ReactNode;
   level: TankLevel;
   variant?: TankGaugeVariant;
+  /** Tube size; `md` (the default) everywhere but a page that is about the tanks. */
+  size?: TankGaugeSize;
   /** Product unit; litres (the default) read as KL. */
   unit?: string | null;
   /** Shown where days of cover goes when the tank has no sales history. */
@@ -60,30 +64,53 @@ const Cover: React.FC<{ days: number | null; fallback?: ReactNode }> = ({ days, 
 
 const Status: React.FC<{ level: TankLevel }> = ({ level }) => (
   <>
-    {level.overCapacity && <div className="text-[11.5px] text-info-fg">Over capacity</div>}
+    {level.overCapacity && <div className="text-[12px] text-info-fg">Over capacity</div>}
     {level.waitingOnDecantation && (
-      <div className="text-[11.5px] font-semibold text-warning-fg">Waiting on decantation</div>
+      <div className="text-[12px] font-semibold text-warning-fg">Waiting on decantation</div>
     )}
   </>
 );
+
+/** The tube's per-size classes; `md` is the original Dashboard row, unchanged. */
+const TUBE = {
+  md: {
+    gap: 'gap-3',
+    tube: 'h-[30px] w-3 rounded-sm',
+    name: 'text-[12.5px]',
+    pct: 'text-[13px]',
+    stock: 'text-[12px]',
+    side: 'shrink-0',
+  },
+  lg: {
+    gap: 'gap-4',
+    tube: 'h-[64px] w-5 rounded',
+    name: 'text-[14px]',
+    pct: 'text-[18px] leading-tight',
+    stock: 'whitespace-nowrap text-[13px]',
+    // A long cover fallback wraps under the % instead of squeezing the stock.
+    side: 'max-w-[45%] shrink-0',
+  },
+} as const satisfies Record<TankGaugeSize, Record<string, string>>;
 
 export const TankGauge: React.FC<TankGaugeProps> = ({
   name,
   level,
   variant = 'tube',
+  size = 'md',
   unit,
   coverFallback,
   showStatus = true,
   className,
 }) => {
+  const t = TUBE[variant === 'tube' ? size : 'md'];
   const pct = (
-    <span className={cn('font-mono text-[13px] font-semibold tabular-nums', TONE_TEXT[level.tone])}>
+    <span className={cn('font-mono font-semibold tabular-nums', t.pct, TONE_TEXT[level.tone])}>
       {level.pct === null ? '—' : `${level.pct}%`}
     </span>
   );
   const word = TANK_TONE_LABEL[level.tone];
   const stock = (
-    <span className="font-mono text-[12px] text-ink-muted">
+    <span className={cn('font-mono text-ink-muted', t.stock)}>
       {stockOfCapacity(level.stock, level.capacity, unit)}
     </span>
   );
@@ -123,9 +150,16 @@ export const TankGauge: React.FC<TankGaugeProps> = ({
   }
 
   return (
-    <div className={cn('flex items-center gap-3', className)} data-tone={level.tone}>
+    <div
+      className={cn('flex items-center', t.gap, className)}
+      data-tone={level.tone}
+      data-size={size}
+    >
       <span
-        className="relative h-[30px] w-3 shrink-0 overflow-hidden rounded-sm border border-border-strong bg-surface-alt"
+        className={cn(
+          'relative shrink-0 overflow-hidden border border-border-strong bg-surface-alt',
+          t.tube,
+        )}
         {...meter}
       >
         <span
@@ -134,11 +168,11 @@ export const TankGauge: React.FC<TankGaugeProps> = ({
         />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[12.5px] font-semibold text-ink">{name}</div>
+        <div className={cn('truncate font-semibold text-ink', t.name)}>{name}</div>
         {stock}
         {showStatus && <Status level={level} />}
       </div>
-      <div className="shrink-0 text-right">
+      <div className={cn('text-right', t.side)}>
         <div>
           {pct}
           {word && <span className="sr-only"> {word}</span>}

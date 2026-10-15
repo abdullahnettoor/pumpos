@@ -20,6 +20,9 @@ import {
   ShieldCheck,
   Ban,
   Scale,
+  Truck,
+  Unlink,
+  CircleSlash,
   type LucideIcon,
 } from 'lucide-react';
 import { statusPresentation, type PumpState } from '@pump/shared';
@@ -157,4 +160,23 @@ export const STATUS_MAP: Record<PumpStatus, StatusMeta> = {
   'day-draft': vocab('day-draft', Pencil),
   'day-sealed': vocab('day-sealed', Lock),
   'day-final': vocab('day-final', ShieldCheck),
+
+  // Tank (#536)
+  'tank-critical': vocab('tank-critical', AlertTriangle),
+  'tank-low': vocab('tank-low', AlertCircle),
+  'tank-over-capacity': vocab('tank-over-capacity', TrendingUp),
+  'tank-waiting-decantation': vocab('tank-waiting-decantation', Truck),
+
+  // Product stock (#536)
+  'out-of-stock': vocab('out-of-stock', CircleSlash),
+  oversold: vocab('oversold', AlertCircle),
+
+  // Decantation (#536)
+  'decantation-draft': vocab('decantation-draft', Pencil),
+  'pending-measurement': vocab('pending-measurement', Hourglass),
+  measured: vocab('measured', CheckCircle),
+  discarded: vocab('discarded', Ban),
+  'purchase-not-linked': vocab('purchase-not-linked', Unlink),
+  'tanker-matches': vocab('tanker-matches', Check),
+  'within-tolerance': vocab('within-tolerance', Minus),
 };

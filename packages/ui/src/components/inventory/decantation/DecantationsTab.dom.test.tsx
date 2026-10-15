@@ -3,7 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
-import type { DecantationView } from '@pump/shared';
+import { resolveBusinessDate, type DecantationView } from '@pump/shared';
 import { renderWithProviders } from '../../../test/renderWithProviders.js';
 
 const tanks = [
@@ -52,7 +52,13 @@ const visit = (over: Partial<DecantationView>): DecantationView => ({
 let decantations: DecantationView[] = [];
 vi.mock('../../../query/hooks.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  useDecantations: () => ({ data: decantations, isLoading: false, error: null }),
+  useDecantations: () => ({
+    data: decantations,
+    isPending: false,
+    isError: false,
+    fetchStatus: 'idle',
+    error: null,
+  }),
   useInventoryStatus: () => ({ data: tanks }),
   useLinkablePurchases: () => [],
   useInvalidateOperational: () => async () => {},
@@ -102,6 +108,8 @@ beforeEach(() => {
       documentNumber: 'DEC-B',
       tankerNumber: 'KL-07-B',
       status: 'MEASURED',
+      // Inside the ledger's default range (this month) whatever day the test runs.
+      businessDate: resolveBusinessDate({}),
       flags: [{ code: 'TANKER_SHORT', chamberNo: 1, message: 'Tanker short: chamber 1 short' }],
       lines: [line({ id: 'b1', receivedQty: 5900, roDensity: 835, status: 'MEASURED' })],
       links: [
@@ -134,8 +142,14 @@ describe('DecantationsTab', () => {
     expect(within(rowA).getByText('Pending measurement')).toBeTruthy();
     expect(within(rowA).getByText('12,000.00 L')).toBeTruthy();
     // MS purchase is not linked; HSD is.
-    expect(within(rowA).getByText(/Purchase not linked/)).toBeTruthy();
-    expect(screen.getAllByRole('row').length).toBe(3); // header + 2 visits
+    expect(within(rowA).getByText(/Not linked · MS/)).toBeTruthy();
+    // header + 2 visits + the total row
+    expect(screen.getAllByRole('row').length).toBe(4);
+    // Only the measured visit adds up: invoice 6,000 vs received 5,900, not the pending 12,000.
+    // Visit A: HSD still pending, MS has no purchase; both left out and named.
+    const total = screen.getByText('Total excl. pending and unlinked').closest('tr')!;
+    expect(within(total).getByText('6,000.00 L')).toBeTruthy();
+    expect(within(total).getByText('5,900.00 L')).toBeTruthy();
   });
 
   it('shows Short with the quantity, density status and the flag on a measured visit', () => {
@@ -156,6 +170,37 @@ describe('DecantationsTab', () => {
     expect(screen.queryByText(/flagged Decantation need/)).toBeNull();
   });
 
+  it('keeps an open visit whatever the range; a measured one follows it (#536)', () => {
+    decantations = decantations.map((d) => ({ ...d, businessDate: '2020-01-05' }));
+    open();
+    expect(screen.getByText('KL-07-A')).toBeTruthy(); // pending: still open work
+    expect(screen.queryByText('KL-07-B')).toBeNull(); // measured, outside this month
+  });
+
+  it('reads statuses from the shared vocabulary, with a filter-chip count for each', () => {
+    open();
+    expect(screen.getByRole('radio', { name: 'All, 2' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Flagged, 1' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Not linked, 1' })).toBeTruthy();
+    // Neutral: a state, not a problem (owner decision).
+    expect(screen.getByText('Pending measurement').parentElement!.className).toContain(
+      'bg-surface-alt',
+    );
+  });
+
+  it('says "within tolerance" on screen, not only on hover, and keeps the figure', () => {
+    decantations = decantations.map((d) =>
+      d.id === 'b'
+        ? { ...d, links: d.links!.map((l) => ({ ...l, receivedQty: 5995, varianceQty: -5 })) }
+        : d,
+    );
+    open();
+    const rowB = screen.getByText('KL-07-B').closest('tr')!;
+    expect(within(rowB).getByText('HSD · −5.00 L')).toBeTruthy();
+    expect(within(rowB).getByText('within tolerance')).toBeTruthy();
+    expect(rowB.querySelector('[title="Within tolerance"]')).toBeNull();
+  });
+
   it('filters to flagged visits', () => {
     open();
     fireEvent.click(screen.getByRole('radio', { name: /Flagged/ }));
@@ -165,7 +210,7 @@ describe('DecantationsTab', () => {
 
   it('opens the drawer for a new visit and for a pending row, and links later from the row', () => {
     open();
-    fireEvent.click(screen.getByRole('button', { name: /New Decantation/ }));
+    fireEvent.click(screen.getByRole('button', { name: /New decantation/ }));
     expect(screen.getByTestId('drawer').textContent).toBe('new');
     cleanup();
     open();

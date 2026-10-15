@@ -113,6 +113,22 @@ describe('DecantationDrawer stepper', () => {
     fireEvent.click(screen.getByLabelText(/Check tanker chambers/));
     expect(screen.queryByRole('button', { name: /Add chamber/ })).toBeNull();
   });
+
+  it('keeps chamber inputs mounted while editing and toggles a dip mark', () => {
+    open();
+    fireEvent.click(header('Tanker chambers'));
+    fireEvent.click(screen.getByLabelText(/Check tanker chambers/));
+    const qty = screen.getByLabelText('Chamber 1 quantity') as HTMLInputElement;
+    type('Chamber 1 quantity', '5000');
+    click('Chamber 1 Short');
+    // Same node: the grid did not remount (an operator typing would lose focus).
+    expect(screen.getByLabelText('Chamber 1 quantity')).toBe(qty);
+    expect(qty.value).toBe('5000');
+    const short = screen.getByRole('button', { name: 'Chamber 1 Short' });
+    expect(short.getAttribute('aria-pressed')).toBe('true');
+    click('Chamber 1 Short');
+    expect(short.getAttribute('aria-pressed')).toBe('false');
+  });
 });
 
 describe('DecantationDrawer save', () => {
