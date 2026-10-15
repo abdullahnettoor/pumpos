@@ -809,6 +809,10 @@ export class CloudShiftService {
     return request<any>(`/shifts/shift-summaries/${encodeURIComponent(shiftId)}`);
   }
 
+  /**
+   * Generate (or regenerate) a day's DSR. Pass an `idempotencyKey` so a retry
+   * after a dropped response is answered with the first result (#532).
+   */
   async generateDailyDssr(
     stationId: string,
     businessDate: string,

@@ -41,6 +41,8 @@ import {
   useRoutePath,
   NAV_PAGES,
   ROUTES,
+  navTarget,
+  pageRoute,
 } from '@pump/ui';
 import type { NavIntent, NavItem } from '@pump/ui';
 import { canOnboardStation, Station } from '@pump/shared';
@@ -102,8 +104,10 @@ export const App: React.FC = () => {
   // destination can derive from it instead of reacting to it in an effect.
   const navigate = useCallback(
     (path: string, intent?: NavIntent) => {
-      setCurrentPath(path);
-      publishNavIntent(intent);
+      // `{ openAccountId }` is an address of its own: `/accounts/<id>` (#576).
+      const target = navTarget(path, intent);
+      setCurrentPath(target.path);
+      publishNavIntent(target.intent);
     },
     [setCurrentPath],
   );
@@ -491,7 +495,8 @@ export const App: React.FC = () => {
       );
     }
 
-    switch (currentPath) {
+    // A detail route (`/accounts/<id>`) renders its page.
+    switch (pageRoute(currentPath)) {
       case '/onboarding':
         return (
           <OnboardingWizard
@@ -545,7 +550,13 @@ export const App: React.FC = () => {
       case '/pricing':
         return <FuelPricingPanel selectedStation={selectedStation} />;
       case '/accounts':
-        return <AccountsPanel selectedStation={selectedStation} />;
+        return (
+          <AccountsPanel
+            selectedStation={selectedStation}
+            route={currentPath}
+            onNavigate={setCurrentPath}
+          />
+        );
       case '/customers':
         return <CustomersList selectedStation={selectedStation} />;
       case '/reports':

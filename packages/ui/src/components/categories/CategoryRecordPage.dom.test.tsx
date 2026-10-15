@@ -452,8 +452,8 @@ describe('Income › GST for Staff (#529)', () => {
     fireEvent.click(await screen.findByRole('tab', { name: /GST/ }));
     const alerts = await screen.findAllByRole('alert');
     expect(alerts.map((a) => a.textContent?.replace(/ ·.*/, ''))).toEqual([
-      "Couldn't load gst totals",
-      "Couldn't load gst register",
+      "Couldn't load GST totals",
+      "Couldn't load GST register",
     ]);
     for (const alert of alerts) {
       expect(within(alert).getByRole('button', { name: 'Retry' })).toBeTruthy();

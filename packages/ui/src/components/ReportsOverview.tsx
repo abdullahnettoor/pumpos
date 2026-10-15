@@ -236,6 +236,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
         <DailyDssrView
           dailyDssr={activeDailyDssr}
           station={selectedStation}
+          userRole={userRole}
           onBack={() => setActiveDailyDssr(null)}
         />
       </div>

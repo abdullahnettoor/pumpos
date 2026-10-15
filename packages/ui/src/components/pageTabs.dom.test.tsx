@@ -9,7 +9,7 @@ import { publishNavIntent, __resetNavIntentForTests } from '../nav-intent/store.
 import { closeQuickEntry, useQuickEntry, type QuickEntryState } from '../quick-entry/store.js';
 import { CustomersList } from './CustomersList.js';
 import { PurchasesList } from './PurchasesList.js';
-import { AccountsPanel } from './finance/AccountsPanel.js';
+import { AccountsRoute } from '../test/AccountsRoute.js';
 import { ExpensesList } from './ExpensesList.js';
 import { IncomeList } from './IncomeList.js';
 import { InventoryList } from './InventoryList.js';
@@ -79,7 +79,7 @@ const cases: [string, string, () => React.ReactElement, string[]][] = [
   [
     'Accounts',
     'Accounts',
-    () => <AccountsPanel selectedStation={station} />,
+    () => <AccountsRoute selectedStation={station} />,
     ['Accounts', 'Daily cash book', 'Transfers'],
   ],
   [
@@ -153,12 +153,12 @@ describe('page tabs (#540)', () => {
 
   it('Accounts: the Cash Book deep link opens the Daily cash book', async () => {
     act(() => publishNavIntent({ openAccountsTab: 'cash-book' }));
-    renderWithProviders(<AccountsPanel selectedStation={station} />);
+    renderWithProviders(<AccountsRoute selectedStation={station} />);
     expect((await tabsOf('Accounts')).selected).toContain('Daily cash book');
   });
 
   it('Accounts: the same page actions on every tab (#530)', async () => {
-    renderWithProviders(<AccountsPanel selectedStation={station} />);
+    renderWithProviders(<AccountsRoute selectedStation={station} />);
     expect(await screen.findByRole('button', { name: /New account/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: /Daily cash book/ }));
     expect(screen.getByRole('button', { name: /New account/ })).toBeTruthy();
