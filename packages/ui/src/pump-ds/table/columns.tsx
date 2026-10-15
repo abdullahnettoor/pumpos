@@ -189,9 +189,9 @@ const KINDS: { [K in Kind]: KindDef<K> } = {
     align: 'text-left',
     cell: (col, row, mode) =>
       mode === 'statement' ? (
-        <StatusChip status={col.value(row)} size="xs" variant="outline" showIcon={false} />
+        <StatusChip status={col.value(row)} size="md" variant="outline" showIcon={false} />
       ) : (
-        <StatusChip status={col.value(row)} size="xs" />
+        <StatusChip status={col.value(row)} size="md" />
       ),
   },
 };
