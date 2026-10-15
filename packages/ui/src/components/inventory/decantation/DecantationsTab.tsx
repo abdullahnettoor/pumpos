@@ -26,6 +26,7 @@ import { DecantationDrawer } from './DecantationDrawer.js';
 import { LinkPurchaseDrawer } from './LinkPurchaseDrawer.js';
 import { decantationTotal, toDecantationRow, type DecantationRow } from './decantationRows.js';
 import { formatDensity, formatQuantity, formatDate } from '../../../utils/format.js';
+import { formatStockVariance } from '../../../utils/variance.js';
 import { countOf, inWindow } from '../../../utils/ledgerWindow.js';
 
 type Filter = 'all' | 'flagged' | 'pending' | 'unlinked';
@@ -79,8 +80,8 @@ const varianceLabel = (v: DecantationRow['variances'][number]): string => {
   if (v.state === 'tanker-matches') return `${v.productName} · ${label}`;
   // The figure only: the words sit on a line of their own (`VarianceChip`).
   if (v.state === 'within-tolerance')
-    return `${v.productName} · ${formatQuantity(v.qty, 'L', { plus: true })}`;
-  return `${v.productName} · ${label} ${formatQuantity(Math.abs(v.qty), 'L')}`;
+    return `${v.productName} · ${formatStockVariance(v.qty, 'L')}`;
+  return `${v.productName} · ${label} ${formatStockVariance(Math.abs(v.qty), 'L', { plus: false })}`;
 };
 
 /**

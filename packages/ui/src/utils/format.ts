@@ -144,6 +144,10 @@ function quantityUnit(unit: string | null | undefined): { label: string; decimal
   return { label, decimals: 0 };
 }
 
+/** How many decimals a quantity in `unit` shows (`formatQuantity`'s default). */
+export const quantityDecimals = (unit: string | null | undefined): number =>
+  quantityUnit(unit).decimals;
+
 /**
  * A quantity with its unit, Indian grouping and the unit's own decimals — the
  * one quantity format for screens and PDFs:

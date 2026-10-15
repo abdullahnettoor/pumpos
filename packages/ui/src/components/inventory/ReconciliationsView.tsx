@@ -15,7 +15,7 @@ import {
   type TableColumn,
   type TotalRow,
 } from '../../pump-ds/index.js';
-import { formatQuantity } from '../../utils/format.js';
+import { formatStockVariance } from '../../utils/variance.js';
 import { countOf } from '../../utils/ledgerWindow.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import {
@@ -88,7 +88,7 @@ const COLUMNS: TableColumn<VarianceRow>[] = [
     unit: (r) => r.productUnit,
     cell: (r) => (
       <span className={VARIANCE_TEXT[stateOf(r)]}>
-        {formatQuantity(r.varianceQuantity, r.productUnit, { plus: true })}
+        {formatStockVariance(r.varianceQuantity, r.productUnit)}
       </span>
     ),
     width: '13%',

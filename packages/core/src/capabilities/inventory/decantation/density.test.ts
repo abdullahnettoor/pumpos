@@ -223,6 +223,58 @@ describe('RecordDensityReading', () => {
     ]);
   });
 
+  it.each([
+    [743.04, false],
+    [736.96, false],
+    [743.06, true],
+    [736.94, true],
+    // ±3.05 ties: the magnitude rounds to 3.1 either way.
+    [743.05, true],
+    [736.95, true],
+  ])(
+    'judges a jump on the change as shown, like the client (#556): %s after 740 at tolerance 3 → %s',
+    async (density15, jump) => {
+      const repo = new InMemoryDensityRepo();
+      repo.readings.push({
+        id: 'prev-reading',
+        organizationId: 'org-1',
+        stationId: 'st-1',
+        businessDate: '2026-10-10',
+        productId: 'prod-ms',
+        kind: 'MORNING',
+        sampledFrom: null,
+        tankId: null,
+        nozzleId: null,
+        entryMethod: 'DIRECT_15',
+        observedDensity: null,
+        observedTempC: null,
+        density15: 740.0,
+        decantationTankLineId: null,
+        flags: [],
+        recordedBy: 'usr-1',
+        recordedAt: '2026-10-10T06:30:00.000Z',
+      });
+      const res = await new RecordDensityReading({
+        densityReadings: repo,
+        events: { publish: vi.fn().mockResolvedValue(undefined) },
+        settings: { densityToleranceKgM3: 3.0 },
+      }).execute(
+        {
+          stationId: 'st-1',
+          productId: 'prod-ms',
+          kind: 'MORNING',
+          entryMethod: 'DIRECT_15',
+          density15,
+          recordedAt: '2026-10-11T06:30:00.000Z',
+        },
+        baseCtx,
+      );
+      expect(res.success).toBe(true);
+      if (!res.success) return;
+      expect(res.data.flags.includes('UNEXPLAINED_JUMP')).toBe(jump);
+    },
+  );
+
   it('does NOT flag UNEXPLAINED_JUMP if prior reading was a DECANTATION', async () => {
     const repo = new InMemoryDensityRepo();
     repo.readings.push({
