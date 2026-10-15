@@ -11,7 +11,11 @@ import {
 } from '@pump/shared';
 import { CloudStationService } from '../../services/cloud.js';
 import { Drawer } from '../Drawer.js';
-import { Button, Chip, Icon } from '../../pump-ds/index.js';
+import { Button, Chip, EmptyState, Icon, SectionHeader } from '../../pump-ds/index.js';
+import { cn } from '../../pump-ds/lib/cn.js';
+import { PageFrame } from '../page-frame/PageFrame.js';
+import { Field, NumberInput, Select, TextInput } from '../primitives/Field.js';
+import { STEP_PANEL } from './OnboardingSteps/stepLayout.js';
 import { Check } from 'lucide-react';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
@@ -70,43 +74,6 @@ const provisioningStages = [
   'Applying opening values',
   'Finalizing setup',
 ];
-
-const panelStyle: React.CSSProperties = {
-  backgroundColor: 'var(--bg-surface)',
-  border: '1px solid var(--border-soft)',
-  borderRadius: 'var(--radius-card)',
-  padding: '20px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '16px',
-};
-
-const fieldLabelStyle: React.CSSProperties = {
-  fontSize: '12px',
-  fontWeight: 600,
-  color: 'var(--text-muted)',
-};
-
-const inputStyle: React.CSSProperties = {
-  height: '34px',
-  padding: '0 10px',
-  borderRadius: 'var(--radius-input)',
-  border: '1px solid var(--border-strong)',
-  fontSize: '13px',
-  backgroundColor: 'var(--bg-surface)',
-  color: 'var(--text-strong)',
-};
-
-const textAreaStyle: React.CSSProperties = {
-  minHeight: '72px',
-  padding: '10px',
-  borderRadius: 'var(--radius-input)',
-  border: '1px solid var(--border-strong)',
-  fontSize: '13px',
-  backgroundColor: 'var(--bg-surface)',
-  color: 'var(--text-strong)',
-  resize: 'vertical',
-};
 
 function cloneFuelDraft(product?: OnboardingProductDraft | null): OnboardingProductDraft {
   return product ? { ...product, taxConfig: { ...product.taxConfig } } : createFuelDraft();
@@ -718,19 +685,22 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   if (!isHydrated) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '100vh',
-          color: 'var(--text-muted)',
-        }}
-      >
+      <div className="flex min-h-[100vh] items-center justify-center text-[13px] text-ink-muted">
         Preparing onboarding workspace...
       </div>
     );
   }
+
+  const setupBar = (subtitle: string, middle: React.ReactNode, right: React.ReactNode) => (
+    <header className="relative flex h-[68px] shrink-0 items-center justify-between gap-4 border-b border-border-soft bg-surface px-6">
+      <div className="flex flex-col">
+        <span className="text-[14px] font-semibold text-ink-strong">PumpOS Setup</span>
+        <span className="text-[12px] text-ink-muted">{subtitle}</span>
+      </div>
+      {middle}
+      {right}
+    </header>
+  );
 
   if (showIntro) {
     const prepItems: { t: string; d: string }[] = [
@@ -749,192 +719,73 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       { t: 'Payment terminals', d: 'Card / UPI machines — optional, and easy to add later.' },
     ];
     return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100vh',
-          backgroundColor: 'var(--bg-canvas)',
-          overflow: 'hidden',
-        }}
-      >
-        <header
-          style={{
-            height: '68px',
-            backgroundColor: 'var(--bg-surface)',
-            borderBottom: '1px solid var(--border-soft)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 24px',
-            gap: '16px',
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-strong)' }}>
-              PumpOS Setup
-            </span>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              Let's bring your station online
-            </span>
-          </div>
-          {onExit && (
+      <div className="flex h-[100vh] flex-col overflow-hidden bg-canvas">
+        {setupBar(
+          "Let's bring your station online",
+          null,
+          onExit && (
             <Button type="button" variant="secondary" size="sm" onClick={() => onExit()}>
               Back to dashboard
             </Button>
-          )}
-        </header>
+          ),
+        )}
 
-        <main
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '24px',
-            display: 'flex',
-            justifyContent: 'center',
-          }}
-        >
-          <div
-            style={{
-              width: '100%',
-              maxWidth: '760px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '20px',
-            }}
-          >
-            <div>
-              <h1
-                style={{
-                  fontSize: '20px',
-                  fontWeight: 700,
-                  color: 'var(--text-strong)',
-                  margin: 0,
-                }}
-              >
-                Let's set up your station
-              </h1>
-              <p
-                style={{
-                  fontSize: '13px',
-                  color: 'var(--text-muted)',
-                  lineHeight: 1.6,
-                  marginTop: '6px',
-                }}
-              >
-                PumpOS is built around your station's real infrastructure. Have these details handy
-                so setup is quick and accurate — it usually takes about 5–7 minutes.
-              </p>
-            </div>
-
-            <div style={panelStyle}>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                What to have ready
-              </span>
-              <ul
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px',
-                  margin: 0,
-                  padding: 0,
-                  listStyle: 'none',
-                }}
-              >
-                {prepItems.map((item, i) => (
-                  <li
-                    key={item.t}
-                    style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}
-                  >
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                        width: '22px',
-                        height: '22px',
-                        borderRadius: '999px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        backgroundColor: 'var(--bg-surface-alt)',
-                        color: 'var(--text-muted)',
-                        border: '1px solid var(--border-strong)',
-                      }}
-                    >
-                      {i + 1}
-                    </span>
-                    <span
-                      style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1px' }}
-                    >
-                      <span
-                        style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}
-                      >
-                        {item.t}
-                      </span>
-                      <span
-                        style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.45 }}
-                      >
-                        {item.d}
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div
-              style={{
-                padding: '14px 16px',
-                borderRadius: 'var(--radius-card)',
-                border: '1px solid var(--border-soft)',
-                backgroundColor: 'var(--bg-surface-alt)',
-                fontSize: '12.5px',
-                color: 'var(--text-muted)',
-                lineHeight: 1.55,
-              }}
+        <main className="flex flex-1 justify-center overflow-y-auto p-6">
+          <div className="w-full max-w-[760px]">
+            <PageFrame
+              title="Let's set up your station"
+              subtitle="PumpOS is built around your station's real infrastructure. Have these details handy so setup is quick and accurate — it usually takes about 5–7 minutes."
             >
-              <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
-                Set the infrastructure carefully.{' '}
-              </span>
-              Your tanks, dispensers and nozzles are linked and drive every sale, so getting them
-              right now saves rework — editing them later ripples across the system. Details like
-              payment terminals are easy to change anytime.
-            </div>
+              <div className="flex flex-col gap-5">
+                <section className="flex flex-col gap-2">
+                  <SectionHeader title="What to have ready" />
+                  <div className={STEP_PANEL}>
+                    <ul className="m-0 flex list-none flex-col gap-3 p-0">
+                      {prepItems.map((item, i) => (
+                        <li key={item.t} className="flex items-start gap-3">
+                          <span
+                            aria-hidden="true"
+                            className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface-alt text-[12px] font-semibold text-ink-muted"
+                          >
+                            {i + 1}
+                          </span>
+                          <span className="flex min-w-0 flex-col gap-px">
+                            <span className="text-[13px] font-semibold text-ink-strong">
+                              {item.t}
+                            </span>
+                            <span className="text-[12px] leading-[1.45] text-ink-muted">
+                              {item.d}
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </section>
 
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontSize: '12px',
-                color: 'var(--text-muted)',
-              }}
-            >
-              <Chip tone="neutral" size="xs">
-                Saved automatically
-              </Chip>
-              <span>
-                Your progress is saved as you go — you can leave and pick up where you left off.
-              </span>
-            </div>
+                <div className="rounded-card border border-border-soft bg-surface-alt px-4 py-3.5 text-[12.5px] leading-[1.55] text-ink-muted">
+                  <span className="font-semibold text-ink-strong">
+                    Set the infrastructure carefully.{' '}
+                  </span>
+                  Your tanks, dispensers and nozzles are linked and drive every sale, so getting
+                  them right now saves rework — editing them later ripples across the system.
+                  Details like payment terminals are easy to change anytime.
+                </div>
+
+                <div className="flex items-center gap-2 text-[12px] text-ink-muted">
+                  <Chip tone="neutral" size="xs">
+                    Saved automatically
+                  </Chip>
+                  <span>
+                    Your progress is saved as you go — you can leave and pick up where you left off.
+                  </span>
+                </div>
+              </div>
+            </PageFrame>
           </div>
         </main>
 
-        <footer
-          style={{
-            height: '72px',
-            backgroundColor: 'var(--bg-surface)',
-            borderTop: '1px solid var(--border-soft)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 24px',
-            flexShrink: 0,
-          }}
-        >
+        <footer className="flex h-[72px] shrink-0 items-center justify-between border-t border-border-soft bg-surface px-6">
           {onExit ? (
             <Button type="button" variant="secondary" size="sm" onClick={() => onExit()}>
               Back to dashboard
@@ -942,9 +793,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           ) : (
             <span />
           )}
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            ~5–7 minutes · editable later
-          </div>
+          <div className="text-[12px] text-ink-muted">~5–7 minutes · editable later</div>
           <Button type="button" variant="primary" size="md" onClick={() => setShowIntro(false)}>
             Start setup
           </Button>
@@ -953,153 +802,81 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     );
   }
 
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        backgroundColor: 'var(--bg-canvas)',
-        overflow: 'hidden',
-      }}
-    >
-      <header
-        style={{
-          height: '68px',
-          backgroundColor: 'var(--bg-surface)',
-          borderBottom: '1px solid var(--border-soft)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 24px',
-          gap: '16px',
-          flexShrink: 0,
-          position: 'relative',
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-strong)' }}>
-            PumpOS Setup
-          </span>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-            Setting up your station · saved automatically as you go
-          </span>
-        </div>
+  const closeProvisioning = () =>
+    setProvisioning({
+      isOpen: false,
+      stageIndex: 0,
+      failedMessage: null,
+      failedStage: null,
+      completed: false,
+    });
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
+  return (
+    <div className="flex h-[100vh] flex-col overflow-hidden bg-canvas">
+      {setupBar(
+        'Setting up your station · saved automatically as you go',
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-[13px] font-semibold text-ink-strong">
             {steps[currentStep - 1].title}
           </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="flex items-center gap-1.5">
             {steps.map((s) => (
               <span
                 key={s.num}
                 onClick={() => {
                   if (s.num <= currentStep) moveToStep(s.num);
                 }}
-                style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor:
-                    currentStep === s.num
-                      ? 'var(--brand-primary)'
-                      : currentStep > s.num
-                        ? 'var(--state-success-fg)'
-                        : 'var(--border-strong)',
-                  cursor: s.num <= currentStep ? 'pointer' : 'default',
-                  transition: 'background-color 200ms ease',
-                }}
+                className={cn(
+                  'size-2 rounded-full transition-colors duration-200',
+                  currentStep === s.num
+                    ? 'bg-brand'
+                    : currentStep > s.num
+                      ? 'bg-success-fg'
+                      : 'bg-border-strong',
+                  s.num <= currentStep ? 'cursor-pointer' : 'cursor-default',
+                )}
                 title={s.title}
               />
             ))}
           </div>
-        </div>
+        </div>,
+        <>
+          <div className="flex items-center gap-2.5">
+            <Chip tone="neutral" size="xs">
+              Draft saved
+            </Chip>
+            <Button type="button" variant="secondary" size="sm" onClick={discardDraft}>
+              Discard Draft
+            </Button>
+          </div>
+          {/* Global Progress Bar */}
+          <div className="absolute inset-x-0 bottom-0 h-[2.5px] bg-border-soft">
+            <div
+              className="h-full bg-brand transition-[width] duration-[250ms] ease-out"
+              style={{ width: `${(currentStep / steps.length) * 100}%` }}
+            />
+          </div>
+        </>,
+      )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Chip tone="neutral" size="xs">
-            Draft saved
-          </Chip>
-          <Button type="button" variant="secondary" size="sm" onClick={discardDraft}>
-            Discard Draft
-          </Button>
-        </div>
-
-        {/* Global Progress Bar */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: '2.5px',
-            backgroundColor: 'var(--border-soft)',
-          }}
-        >
-          <div
-            style={{
-              height: '100%',
-              width: `${(currentStep / steps.length) * 100}%`,
-              backgroundColor: 'var(--brand-primary)',
-              transition: 'width 250ms ease-out',
-            }}
-          />
-        </div>
-      </header>
-
-      <main
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: '24px',
-          display: 'flex',
-          justifyContent: 'center',
-        }}
-      >
-        <div
-          style={{
-            width: '100%',
-            maxWidth: '1120px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '20px',
-          }}
-        >
+      <main className="flex flex-1 justify-center overflow-y-auto p-6">
+        <div className="flex w-full max-w-[1120px] flex-col gap-5">
           {errorMsg && (
             <div
-              style={{
-                backgroundColor: 'var(--state-danger-bg)',
-                color: 'var(--state-danger-fg)',
-                border: '1px solid rgba(159, 63, 54, 0.15)',
-                borderRadius: 'var(--radius-card)',
-                padding: '12px 16px',
-                fontSize: '13px',
-                fontWeight: 500,
-              }}
+              role="alert"
+              className="rounded-card border border-danger-fg/15 bg-danger-bg px-4 py-3 text-[13px] font-medium text-danger-fg"
             >
               {errorMsg}
             </div>
           )}
 
-          {currentStep === 1 && (
-            <Step1StationBasics
-              draft={draft}
-              updateDraft={updateDraft}
-              panelStyle={panelStyle}
-              fieldLabelStyle={fieldLabelStyle}
-              inputStyle={inputStyle}
-              textAreaStyle={textAreaStyle}
-            />
-          )}
+          {currentStep === 1 && <Step1StationBasics draft={draft} updateDraft={updateDraft} />}
 
           {currentStep === 2 && (
             <Step2BusinessRules
               draft={draft}
               updateDraft={updateDraft}
               syncTwentyFourSeven={syncTwentyFourSeven}
-              panelStyle={panelStyle}
-              fieldLabelStyle={fieldLabelStyle}
-              inputStyle={inputStyle}
             />
           )}
 
@@ -1112,7 +889,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               onAddProduct={() => setFuelDrawer(cloneFuelDraft())}
               onEditProduct={(p) => setFuelDrawer(cloneFuelDraft(p))}
               onRemoveProduct={removeProduct}
-              panelStyle={panelStyle}
             />
           )}
 
@@ -1125,8 +901,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               }
               onEditTank={(t) => setTankDrawer(cloneTankDraft(t))}
               onRemoveTank={removeTank}
-              panelStyle={panelStyle}
-              inputStyle={inputStyle}
             />
           )}
 
@@ -1138,19 +912,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               onAddCustomDispenser={() => openDispenserDrawer()}
               onManageDispenser={(du) => openDispenserDrawer(du)}
               onRemoveDispenser={removeDispenser}
-              panelStyle={panelStyle}
             />
           )}
 
-          {currentStep === 6 && (
-            <Step6OpeningValues
-              draft={draft}
-              updateDraft={updateDraft}
-              panelStyle={panelStyle}
-              fieldLabelStyle={fieldLabelStyle}
-              inputStyle={inputStyle}
-            />
-          )}
+          {currentStep === 6 && <Step6OpeningValues draft={draft} updateDraft={updateDraft} />}
 
           {currentStep === 7 && (
             <Step7ShiftTemplates
@@ -1159,44 +924,22 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               onAddShiftTemplate={() => setShiftTemplateDrawer(cloneShiftTemplateDraft())}
               onEditShiftTemplate={(st) => setShiftTemplateDrawer(cloneShiftTemplateDraft(st))}
               onRemoveShiftTemplate={removeShiftTemplate}
-              panelStyle={panelStyle}
             />
           )}
 
-          {currentStep === 8 && (
-            <Step8PaymentTerminals
-              draft={draft}
-              updateDraft={updateDraft}
-              panelStyle={panelStyle}
-              fieldLabelStyle={fieldLabelStyle}
-              inputStyle={inputStyle}
-            />
-          )}
+          {currentStep === 8 && <Step8PaymentTerminals draft={draft} updateDraft={updateDraft} />}
 
           {currentStep === 9 && (
             <Step8Review
               draft={draft}
               validationIssues={validationIssues}
               moveToStep={moveToStep}
-              panelStyle={panelStyle}
-              fieldLabelStyle={fieldLabelStyle}
             />
           )}
         </div>
       </main>
 
-      <footer
-        style={{
-          height: '72px',
-          backgroundColor: 'var(--bg-surface)',
-          borderTop: '1px solid var(--border-soft)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 24px',
-          flexShrink: 0,
-        }}
-      >
+      <footer className="flex h-[72px] shrink-0 items-center justify-between border-t border-border-soft bg-surface px-6">
         <Button
           type="button"
           variant="secondary"
@@ -1207,7 +950,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           Previous Step
         </Button>
 
-        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+        <div className="text-[12px] text-ink-muted">
           Step {currentStep} of {steps.length}
           {currentStep < steps.length ? ` · ${steps.length - currentStep} left` : ' · last step'}
         </div>
@@ -1235,36 +978,21 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               e.preventDefault();
               saveFuel();
             }}
-            style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+            className="flex flex-col"
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Fuel Name *
-              </label>
-              <input
-                type="text"
+            <Field label="Fuel Name" htmlFor="onb-fuel-name" required>
+              <TextInput
+                id="onb-fuel-name"
                 value={fuelDrawer.name}
                 onChange={(e) => setFuelDrawer({ ...fuelDrawer, name: e.target.value })}
                 placeholder="e.g. Petrol (MS)"
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                  backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)',
-                }}
                 required
               />
-            </div>
+            </Field>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Fuel Code *
-              </label>
-              <input
-                type="text"
+            <Field label="Fuel Code" htmlFor="onb-fuel-code" required>
+              <TextInput
+                id="onb-fuel-code"
                 value={fuelDrawer.code}
                 onChange={(e) => {
                   const code = e.target.value.toUpperCase();
@@ -1278,81 +1006,28 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   });
                 }}
                 placeholder="e.g. MS"
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                  backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)',
-                }}
                 required
               />
-            </div>
+            </Field>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Sales Unit *
-              </label>
-              <select
+            <Field
+              label="Sales Unit"
+              htmlFor="onb-fuel-unit"
+              required
+              hint="Gaseous fuels (CNG, Auto-LPG) are metered by weight, so tank stock and readings for this fuel are tracked in kg."
+            >
+              <Select
+                id="onb-fuel-unit"
                 value={/^kg$/i.test(fuelDrawer.unit) ? 'kg' : 'L'}
                 onChange={(e) => setFuelDrawer({ ...fuelDrawer, unit: e.target.value })}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                  backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)',
-                }}
                 required
               >
                 <option value="L">Liters (L) — Petrol / Diesel / Ethanol</option>
                 <option value="kg">Kilograms (kg) — CNG / Auto-LPG</option>
-              </select>
-              <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>
-                Gaseous fuels (CNG, Auto-LPG) are metered by weight, so tank stock and readings for
-                this fuel are tracked in kg.
-              </span>
-            </div>
+              </Select>
+            </Field>
 
-            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-              <button
-                type="submit"
-                style={{
-                  flex: 1,
-                  height: '32px',
-                  backgroundColor: 'var(--brand-primary)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                Save Fuel
-              </button>
-              <button
-                type="button"
-                onClick={() => setFuelDrawer(null)}
-                style={{
-                  flex: 1,
-                  height: '32px',
-                  backgroundColor: 'var(--bg-surface-alt)',
-                  color: 'var(--text-default)',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-            </div>
+            <DrawerActions saveLabel="Save Fuel" onCancel={() => setFuelDrawer(null)} />
           </form>
         )}
       </Drawer>
@@ -1364,46 +1039,23 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               e.preventDefault();
               saveTank();
             }}
-            style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+            className="flex flex-col"
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Tank Identifier *
-              </label>
-              <input
-                type="text"
+            <Field label="Tank Identifier" htmlFor="onb-tank-name" required>
+              <TextInput
+                id="onb-tank-name"
                 value={tankDrawer.name}
                 onChange={(e) => setTankDrawer({ ...tankDrawer, name: e.target.value })}
                 placeholder="e.g. Tank 1"
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                  backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)',
-                }}
                 required
               />
-            </div>
+            </Field>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Linked Fuel Product *
-              </label>
-              <select
+            <Field label="Linked Fuel Product" htmlFor="onb-tank-fuel" required>
+              <Select
+                id="onb-tank-fuel"
                 value={tankDrawer.productDraftId}
                 onChange={(e) => setTankDrawer({ ...tankDrawer, productDraftId: e.target.value })}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                  backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)',
-                }}
                 required
               >
                 <option value="">Select fuel</option>
@@ -1412,72 +1064,29 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     {product.name || product.code}
                   </option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </Field>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Capacity (
-                {draft.products.find((p) => p.draftId === tankDrawer.productDraftId)?.unit || 'L'})
-                *
-              </label>
-              <input
-                type="number"
-                min={0}
+            <Field
+              label={`Capacity (${
+                draft.products.find((p) => p.draftId === tankDrawer.productDraftId)?.unit || 'L'
+              })`}
+              htmlFor="onb-tank-capacity"
+              required
+            >
+              <NumberInput
+                id="onb-tank-capacity"
                 step="0.1"
                 value={tankDrawer.capacity || ''}
                 onChange={(e) =>
                   setTankDrawer({ ...tankDrawer, capacity: Number(e.target.value) || 0 })
                 }
                 placeholder="e.g. 20000"
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                  backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)',
-                }}
                 required
               />
-            </div>
+            </Field>
 
-            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-              <button
-                type="submit"
-                style={{
-                  flex: 1,
-                  height: '32px',
-                  backgroundColor: 'var(--brand-primary)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                Save Tank
-              </button>
-              <button
-                type="button"
-                onClick={() => setTankDrawer(null)}
-                style={{
-                  flex: 1,
-                  height: '32px',
-                  backgroundColor: 'var(--bg-surface-alt)',
-                  color: 'var(--text-default)',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-            </div>
+            <DrawerActions saveLabel="Save Tank" onCancel={() => setTankDrawer(null)} />
           </form>
         )}
       </Drawer>
@@ -1493,114 +1102,49 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               e.preventDefault();
               saveShiftTemplate();
             }}
-            style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+            className="flex flex-col"
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Template Name *
-              </label>
-              <input
-                type="text"
+            <Field label="Template Name" htmlFor="onb-shift-name" required>
+              <TextInput
+                id="onb-shift-name"
                 value={shiftTemplateDrawer.name}
                 onChange={(e) =>
                   setShiftTemplateDrawer({ ...shiftTemplateDrawer, name: e.target.value })
                 }
                 placeholder="e.g. Morning Shift"
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                  backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)',
-                }}
                 required
               />
-            </div>
+            </Field>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  Start Time *
-                </label>
-                <input
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Start Time" htmlFor="onb-shift-start" required>
+                <TextInput
+                  id="onb-shift-start"
                   type="time"
                   value={shiftTemplateDrawer.startTime}
                   onChange={(e) =>
                     setShiftTemplateDrawer({ ...shiftTemplateDrawer, startTime: e.target.value })
                   }
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                    backgroundColor: 'var(--bg-surface)',
-                    color: 'var(--text-strong)',
-                  }}
                   required
                 />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  End Time *
-                </label>
-                <input
+              </Field>
+              <Field label="End Time" htmlFor="onb-shift-end" required>
+                <TextInput
+                  id="onb-shift-end"
                   type="time"
                   value={shiftTemplateDrawer.endTime}
                   onChange={(e) =>
                     setShiftTemplateDrawer({ ...shiftTemplateDrawer, endTime: e.target.value })
                   }
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                    backgroundColor: 'var(--bg-surface)',
-                    color: 'var(--text-strong)',
-                  }}
                   required
                 />
-              </div>
+              </Field>
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-              <button
-                type="submit"
-                style={{
-                  flex: 1,
-                  height: '32px',
-                  backgroundColor: 'var(--brand-primary)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                Save Template
-              </button>
-              <button
-                type="button"
-                onClick={() => setShiftTemplateDrawer(null)}
-                style={{
-                  flex: 1,
-                  height: '32px',
-                  backgroundColor: 'var(--bg-surface-alt)',
-                  color: 'var(--text-default)',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-            </div>
+            <DrawerActions
+              saveLabel="Save Template"
+              onCancel={() => setShiftTemplateDrawer(null)}
+            />
           </form>
         )}
       </Drawer>
@@ -1616,14 +1160,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               e.preventDefault();
               saveDispenser();
             }}
-            style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+            className="flex flex-col"
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Dispenser Name *
-              </label>
-              <input
-                type="text"
+            <Field label="Dispenser Name" htmlFor="onb-du-name" required>
+              <TextInput
+                id="onb-du-name"
                 value={dispenserDrawer.dispenser.name}
                 onChange={(e) =>
                   setDispenserDrawer({
@@ -1632,25 +1173,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   })
                 }
                 placeholder="e.g. Dispenser 1"
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                  backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)',
-                }}
                 required
               />
-            </div>
+            </Field>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Code / Reference ID *
-              </label>
-              <input
-                type="text"
+            <Field label="Code / Reference ID" htmlFor="onb-du-code" required>
+              <TextInput
+                id="onb-du-code"
                 value={dispenserDrawer.dispenser.code}
                 onChange={(e) =>
                   setDispenserDrawer({
@@ -1659,135 +1188,79 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   })
                 }
                 placeholder="e.g. DU-01"
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                  backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)',
-                }}
                 required
               />
-            </div>
+            </Field>
 
-            <div
-              style={{
-                borderTop: '1px solid var(--border-soft)',
-                paddingTop: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-              }}
-            >
-              <div
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-              >
-                <div>
-                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                    Nozzle Mappings
-                  </h4>
-                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                    Map each nozzle to a storage tank and fuel type.
-                  </p>
-                </div>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <button
-                    type="button"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      height: '26px',
-                      padding: '0 8px',
-                      backgroundColor: 'var(--bg-surface)',
-                      border: '1px solid var(--border-strong)',
-                      color: 'var(--text-strong)',
-                      borderRadius: 'var(--radius-button)',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => {
-                      const otherNozzlesCount = draft.nozzles.filter(
-                        (n) => n.dispenserDraftId !== dispenserDrawer.dispenser.draftId,
-                      ).length;
-                      const nextNum = otherNozzlesCount + dispenserDrawer.nozzles.length + 1;
-                      const firstTank = draft.tanks[0];
-                      const defaultFuelId =
-                        firstTank?.productDraftId || draft.products[0]?.draftId || '';
-                      const defaultTankId = firstTank?.draftId || '';
-                      setDispenserDrawer({
-                        ...dispenserDrawer,
-                        nozzles: [
-                          ...dispenserDrawer.nozzles,
-                          cloneNozzleDraft(null, {
-                            dispenserDraftId: dispenserDrawer.dispenser.draftId,
-                            tankDraftId: defaultTankId,
-                            productDraftId: defaultFuelId,
-                            name: `N${nextNum}`,
-                          }),
-                        ],
-                      });
-                    }}
-                  >
-                    <Icon name="plus" size="xs" />
-                    <span>Nozzle</span>
-                  </button>
-                </div>
-              </div>
+            <section className="flex flex-col gap-3 border-t border-border-soft pt-4">
+              <SectionHeader
+                title="Nozzle Mappings"
+                subtitle="Map each nozzle to a storage tank and fuel type."
+                controls={{
+                  actions: (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="xs"
+                      leftIcon={<Icon name="plus" size="xs" />}
+                      onClick={() => {
+                        const otherNozzlesCount = draft.nozzles.filter(
+                          (n) => n.dispenserDraftId !== dispenserDrawer.dispenser.draftId,
+                        ).length;
+                        const nextNum = otherNozzlesCount + dispenserDrawer.nozzles.length + 1;
+                        const firstTank = draft.tanks[0];
+                        const defaultFuelId =
+                          firstTank?.productDraftId || draft.products[0]?.draftId || '';
+                        const defaultTankId = firstTank?.draftId || '';
+                        setDispenserDrawer({
+                          ...dispenserDrawer,
+                          nozzles: [
+                            ...dispenserDrawer.nozzles,
+                            cloneNozzleDraft(null, {
+                              dispenserDraftId: dispenserDrawer.dispenser.draftId,
+                              tankDraftId: defaultTankId,
+                              productDraftId: defaultFuelId,
+                              name: `N${nextNum}`,
+                            }),
+                          ],
+                        });
+                      }}
+                    >
+                      Nozzle
+                    </Button>
+                  ),
+                }}
+              />
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div className="flex flex-col gap-3">
                 {dispenserDrawer.nozzles.length === 0 ? (
-                  <div
-                    style={{
-                      padding: '20px',
-                      textAlign: 'center',
-                      color: 'var(--text-muted)',
-                      fontSize: '12px',
-                      border: '1px dashed var(--border-soft)',
-                      borderRadius: 'var(--radius-card)',
-                    }}
-                  >
-                    No nozzles configured for this dispenser yet.
-                  </div>
+                  <EmptyState compact title="No nozzles configured for this dispenser yet." />
                 ) : (
                   dispenserDrawer.nozzles.map((nozzle, index) => {
                     const filteredTanks = draft.tanks.filter(
                       (t) => t.productDraftId === nozzle.productDraftId,
                     );
+                    const updateNozzle = (patch: Partial<OnboardingNozzleDraft>) =>
+                      setDispenserDrawer({
+                        ...dispenserDrawer,
+                        nozzles: dispenserDrawer.nozzles.map((item) =>
+                          item.draftId === nozzle.draftId ? { ...item, ...patch } : item,
+                        ),
+                      });
                     return (
                       <div
                         key={nozzle.draftId}
-                        style={{
-                          padding: '12px',
-                          border: '1px solid var(--border-soft)',
-                          borderRadius: '6px',
-                          backgroundColor: 'var(--bg-surface-alt)',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px',
-                        }}
+                        className="flex flex-col gap-2 rounded-card border border-border-soft bg-surface-alt p-3"
                       >
-                        <div
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              color: 'var(--text-muted)',
-                            }}
-                          >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] font-semibold text-ink-muted">
                             Nozzle #{index + 1}
                           </span>
-                          <button
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="xs"
+                            className="text-danger-fg"
                             onClick={() =>
                               setDispenserDrawer({
                                 ...dispenserDrawer,
@@ -1796,86 +1269,34 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                                 ),
                               })
                             }
-                            style={{
-                              border: 'none',
-                              background: 'none',
-                              color: 'var(--state-danger-fg)',
-                              cursor: 'pointer',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                            }}
                           >
                             Remove
-                          </button>
+                          </Button>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                              Name
-                            </label>
-                            <input
-                              type="text"
-                              value={nozzle.name}
-                              onChange={(e) =>
-                                setDispenserDrawer({
-                                  ...dispenserDrawer,
-                                  nozzles: dispenserDrawer.nozzles.map((item) =>
-                                    item.draftId === nozzle.draftId
-                                      ? { ...item, name: e.target.value }
-                                      : item,
-                                  ),
-                                })
-                              }
-                              style={{
-                                height: '28px',
-                                padding: '0 8px',
-                                borderRadius: 'var(--radius-input)',
-                                border: '1px solid var(--border-strong)',
-                                fontSize: '12px',
-                                backgroundColor: 'var(--bg-surface)',
-                                color: 'var(--text-strong)',
-                              }}
-                              required
-                            />
-                          </div>
-                        </div>
+                        <Field label="Name" htmlFor={`onb-nozzle-name-${nozzle.draftId}`}>
+                          <TextInput
+                            id={`onb-nozzle-name-${nozzle.draftId}`}
+                            value={nozzle.name}
+                            onChange={(e) => updateNozzle({ name: e.target.value })}
+                            required
+                          />
+                        </Field>
 
-                        <div
-                          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}
-                        >
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                              Fuel
-                            </label>
-                            <select
+                        <div className="grid grid-cols-2 gap-2">
+                          <Field label="Fuel" htmlFor={`onb-nozzle-fuel-${nozzle.draftId}`}>
+                            <Select
+                              id={`onb-nozzle-fuel-${nozzle.draftId}`}
                               value={nozzle.productDraftId}
                               onChange={(e) => {
                                 const nextFuelId = e.target.value;
                                 const firstMatchedTank = draft.tanks.find(
                                   (t) => t.productDraftId === nextFuelId,
                                 );
-                                setDispenserDrawer({
-                                  ...dispenserDrawer,
-                                  nozzles: dispenserDrawer.nozzles.map((item) =>
-                                    item.draftId === nozzle.draftId
-                                      ? {
-                                          ...item,
-                                          productDraftId: nextFuelId,
-                                          tankDraftId: firstMatchedTank?.draftId || '',
-                                        }
-                                      : item,
-                                  ),
+                                updateNozzle({
+                                  productDraftId: nextFuelId,
+                                  tankDraftId: firstMatchedTank?.draftId || '',
                                 });
-                              }}
-                              style={{
-                                height: '28px',
-                                padding: '0 4px',
-                                borderRadius: 'var(--radius-input)',
-                                border: '1px solid var(--border-strong)',
-                                fontSize: '12px',
-                                backgroundColor: 'var(--bg-surface)',
-                                color: 'var(--text-strong)',
                               }}
                               required
                             >
@@ -1885,33 +1306,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                                   {p.name}
                                 </option>
                               ))}
-                            </select>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                              Tank
-                            </label>
-                            <select
+                            </Select>
+                          </Field>
+                          <Field label="Tank" htmlFor={`onb-nozzle-tank-${nozzle.draftId}`}>
+                            <Select
+                              id={`onb-nozzle-tank-${nozzle.draftId}`}
                               value={nozzle.tankDraftId}
-                              onChange={(e) =>
-                                setDispenserDrawer({
-                                  ...dispenserDrawer,
-                                  nozzles: dispenserDrawer.nozzles.map((item) =>
-                                    item.draftId === nozzle.draftId
-                                      ? { ...item, tankDraftId: e.target.value }
-                                      : item,
-                                  ),
-                                })
-                              }
-                              style={{
-                                height: '28px',
-                                padding: '0 4px',
-                                borderRadius: 'var(--radius-input)',
-                                border: '1px solid var(--border-strong)',
-                                fontSize: '12px',
-                                backgroundColor: 'var(--bg-surface)',
-                                color: 'var(--text-strong)',
-                              }}
+                              onChange={(e) => updateNozzle({ tankDraftId: e.target.value })}
                               required
                             >
                               <option value="">Select tank</option>
@@ -1920,132 +1321,38 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                                   {t.name}
                                 </option>
                               ))}
-                            </select>
-                          </div>
+                            </Select>
+                          </Field>
                         </div>
                       </div>
                     );
                   })
                 )}
               </div>
-            </div>
+            </section>
 
-            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-              <button
-                type="submit"
-                style={{
-                  flex: 1,
-                  height: '32px',
-                  backgroundColor: 'var(--brand-primary)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                Save Dispenser
-              </button>
-              <button
-                type="button"
-                onClick={() => setDispenserDrawer(null)}
-                style={{
-                  flex: 1,
-                  height: '32px',
-                  backgroundColor: 'var(--bg-surface-alt)',
-                  color: 'var(--text-default)',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-            </div>
+            <DrawerActions saveLabel="Save Dispenser" onCancel={() => setDispenserDrawer(null)} />
           </form>
         )}
       </Drawer>
 
       {/* Provisioning overlay modal */}
       {provisioning.isOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.25)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '24px',
-          }}
-        >
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-ink-strong/25 p-6">
           {provisioning.completed && !provisioning.failedMessage ? (
-            <div
-              style={{
-                width: '100%',
-                maxWidth: '520px',
-                backgroundColor: 'var(--bg-surface)',
-                borderRadius: 'var(--radius-card)',
-                border: '1px solid var(--border-soft)',
-                boxShadow: '0 20px 48px rgba(15, 23, 42, 0.15)',
-                padding: '28px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '18px',
-              }}
-              className="animate-fade-in"
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '10px',
-                  textAlign: 'center',
-                }}
-              >
-                <div
-                  style={{
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '999px',
-                    backgroundColor: 'var(--state-success-bg)',
-                    color: 'var(--state-success-fg)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
+            <div className="flex w-full max-w-[520px] animate-fade-in flex-col gap-[18px] rounded-card border border-border-soft bg-surface p-7 shadow-lg">
+              <div className="flex flex-col items-center gap-2.5 text-center">
+                <div className="flex size-12 items-center justify-center rounded-full bg-success-bg text-success-fg">
                   <Check size={26} />
                 </div>
-                <h3
-                  style={{
-                    fontSize: '19px',
-                    fontWeight: 700,
-                    color: 'var(--text-strong)',
-                    margin: 0,
-                  }}
-                >
+                <h3 className="m-0 text-[18px] font-semibold text-ink-strong">
                   Your station is live
                 </h3>
-                <p
-                  style={{
-                    fontSize: '13px',
-                    color: 'var(--text-muted)',
-                    lineHeight: 1.5,
-                    margin: 0,
-                  }}
-                >
+                <p className="m-0 text-[13px] leading-normal text-ink-muted">
                   {provisionedStation?.name ? (
                     <>
-                      <strong style={{ color: 'var(--text-strong)' }}>
-                        {provisionedStation.name}
-                      </strong>{' '}
-                      is set up and ready for operations.
+                      <strong className="text-ink-strong">{provisionedStation.name}</strong> is set
+                      up and ready for operations.
                     </>
                   ) : (
                     'Your station is set up and ready for operations.'
@@ -2053,7 +1360,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 </p>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+              <div className="grid grid-cols-3 gap-2">
                 {[
                   { label: 'Fuels', value: draft.products.length },
                   { label: 'Tanks', value: draft.tanks.length },
@@ -2064,37 +1371,17 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 ].map((t) => (
                   <div
                     key={t.label}
-                    style={{
-                      backgroundColor: 'var(--bg-surface-alt)',
-                      border: '1px solid var(--border-soft)',
-                      borderRadius: 'var(--radius-card)',
-                      padding: '12px',
-                      textAlign: 'center',
-                    }}
+                    className="rounded-card border border-border-soft bg-surface-alt p-3 text-center"
                   >
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '18px',
-                        fontWeight: 700,
-                        color: 'var(--text-strong)',
-                      }}
-                    >
+                    <div className="font-mono text-[18px] font-semibold text-ink-strong">
                       {t.value}
                     </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t.label}</div>
+                    <div className="text-[12px] text-ink-muted">{t.label}</div>
                   </div>
                 ))}
               </div>
 
-              <p
-                style={{
-                  fontSize: '12px',
-                  color: 'var(--text-muted)',
-                  textAlign: 'center',
-                  margin: 0,
-                }}
-              >
+              <p className="m-0 text-center text-[12px] text-ink-muted">
                 You can fine-tune fuels, pricing and infrastructure anytime from Station.
               </p>
 
@@ -2114,54 +1401,33 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               </Button>
             </div>
           ) : (
-            <div
-              style={{
-                width: '100%',
-                maxWidth: '520px',
-                backgroundColor: 'var(--bg-surface)',
-                borderRadius: 'var(--radius-card)',
-                border: '1px solid var(--border-soft)',
-                boxShadow: '0 20px 48px rgba(15, 23, 42, 0.15)',
-                padding: '24px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '18px',
-              }}
-            >
+            <div className="flex w-full max-w-[520px] flex-col gap-[18px] rounded-card border border-border-soft bg-surface p-6 shadow-lg">
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                <h3 className="text-[18px] font-semibold text-ink-strong">
                   {provisioning.completed ? 'Station Provisioned' : 'Provisioning Station'}
                 </h3>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                <p className="mt-1 text-[13px] text-ink-muted">
                   {provisioning.failedMessage
                     ? 'The draft is still safe locally. Fix the issue and try again.'
                     : 'Applying the full onboarding draft in one backend workflow.'}
                 </p>
               </div>
 
-              <div
-                style={{
-                  height: '8px',
-                  backgroundColor: 'var(--bg-surface-alt)',
-                  borderRadius: '999px',
-                  overflow: 'hidden',
-                }}
-              >
+              <div className="h-2 overflow-hidden rounded-full bg-surface-alt">
                 <div
+                  className={cn(
+                    'h-full transition-[width] duration-200',
+                    provisioning.failedMessage ? 'bg-danger-fg' : 'bg-brand',
+                  )}
                   style={{
-                    height: '100%',
                     width: provisioning.failedMessage
                       ? '100%'
                       : `${((provisioning.stageIndex + (provisioning.completed ? 1 : 0)) / provisioningStages.length) * 100}%`,
-                    backgroundColor: provisioning.failedMessage
-                      ? 'var(--brand-danger)'
-                      : 'var(--brand-primary)',
-                    transition: 'width 200ms ease',
                   }}
                 />
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div className="flex flex-col gap-2.5">
                 {provisioningStages.map((stage, index) => {
                   const isActive =
                     provisioning.stageIndex === index &&
@@ -2175,22 +1441,18 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   return (
                     <div
                       key={stage}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '10px 12px',
-                        borderRadius: 'var(--radius-card)',
-                        backgroundColor: isActive ? 'var(--bg-surface-alt)' : 'transparent',
-                        border: `1px solid ${isActive ? 'var(--border-strong)' : 'transparent'}`,
-                      }}
+                      className={cn(
+                        'flex items-center justify-between rounded-card border px-3 py-2.5',
+                        isActive
+                          ? 'border-border-strong bg-surface-alt'
+                          : 'border-transparent bg-transparent',
+                      )}
                     >
                       <span
-                        style={{
-                          fontSize: '13px',
-                          color: 'var(--text-default)',
-                          fontWeight: isActive ? 600 : 500,
-                        }}
+                        className={cn(
+                          'text-[13px] text-ink-default',
+                          isActive ? 'font-semibold' : 'font-medium',
+                        )}
                       >
                         {stage}
                       </span>
@@ -2217,22 +1479,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               </div>
 
               {provisioning.failedMessage && (
-                <div
-                  style={{
-                    backgroundColor: 'var(--state-danger-bg)',
-                    color: 'var(--state-danger-fg)',
-                    borderRadius: 'var(--radius-card)',
-                    border: '1px solid rgba(159, 63, 54, 0.15)',
-                    padding: '12px 14px',
-                    fontSize: '12px',
-                  }}
-                >
+                <div className="rounded-card border border-danger-fg/15 bg-danger-bg px-3.5 py-3 text-[12px] text-danger-fg">
                   {provisioning.failedMessage}
                 </div>
               )}
 
               {(provisioning.failedMessage || provisioning.completed) && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <div className="flex justify-end gap-2">
                   {provisioning.failedMessage && (
                     <Button
                       type="button"
@@ -2282,33 +1535,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                           targetStep = 6;
 
                         setCurrentStep(targetStep);
-                        setProvisioning({
-                          isOpen: false,
-                          stageIndex: 0,
-                          failedMessage: null,
-                          failedStage: null,
-                          completed: false,
-                        });
+                        closeProvisioning();
                         setErrorMsg(msg);
                       }}
                     >
                       Go to Section
                     </Button>
                   )}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() =>
-                      setProvisioning({
-                        isOpen: false,
-                        stageIndex: 0,
-                        failedMessage: null,
-                        failedStage: null,
-                        completed: false,
-                      })
-                    }
-                  >
+                  <Button type="button" variant="secondary" size="sm" onClick={closeProvisioning}>
                     Close
                   </Button>
                 </div>
@@ -2320,3 +1554,18 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     </div>
   );
 };
+
+/** Save + Cancel row at the foot of each onboarding drawer form. */
+const DrawerActions: React.FC<{ saveLabel: string; onCancel: () => void }> = ({
+  saveLabel,
+  onCancel,
+}) => (
+  <div className="mt-4 flex gap-3">
+    <Button type="submit" variant="primary" size="sm" className="flex-1">
+      {saveLabel}
+    </Button>
+    <Button type="button" variant="secondary" size="sm" className="flex-1" onClick={onCancel}>
+      Cancel
+    </Button>
+  </div>
+);

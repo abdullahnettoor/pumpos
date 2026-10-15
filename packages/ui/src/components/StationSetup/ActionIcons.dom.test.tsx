@@ -90,7 +90,6 @@ describe('Action Icons migration', () => {
         onAddProduct={vi.fn()}
         onEditProduct={vi.fn()}
         onRemoveProduct={vi.fn()}
-        panelStyle={{}}
       />,
     );
 
@@ -126,7 +125,6 @@ describe('Action Icons migration', () => {
         onAddCustomDispenser={vi.fn()}
         onManageDispenser={vi.fn()}
         onRemoveDispenser={vi.fn()}
-        panelStyle={{}}
       />,
     );
 
