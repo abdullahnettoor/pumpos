@@ -21,7 +21,7 @@ const renderTeam = (stations: any[], currentStationId: string | null) => {
   renderWithProviders(<UserRolesAssignment currentStationId={currentStationId} />, {
     queryClient,
   });
-  fireEvent.click(screen.getByRole('button', { name: /Add Team Member/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Add team member/ }));
 };
 const stationBox = (label: string) => screen.getByLabelText(label) as HTMLInputElement;
 
@@ -67,7 +67,7 @@ describe('New Team Member form', () => {
     fireEvent.change(screen.getByPlaceholderText('e.g. 98765 43210'), {
       target: { value: '12345' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Member' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add member' }));
     expect(await screen.findByText('Enter a valid 10-digit Indian mobile number')).toBeTruthy();
     expect(create).not.toHaveBeenCalled();
   });
@@ -77,7 +77,7 @@ describe('New Team Member form', () => {
     fireEvent.change(screen.getByPlaceholderText('e.g. John Doe'), {
       target: { value: 'Ravi Kumar' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Member' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add member' }));
     expect(await screen.findByText('A phone number is required for phone login.')).toBeTruthy();
   });
 
@@ -95,7 +95,7 @@ describe('New Team Member form', () => {
     fireEvent.change(screen.getByPlaceholderText('At least 8 characters'), {
       target: { value: 'Secret123' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Member' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add member' }));
     await waitFor(() => expect(create).toHaveBeenCalled());
     expect(create.mock.calls[0][0]).toMatchObject({
       phone: '+919876543210',

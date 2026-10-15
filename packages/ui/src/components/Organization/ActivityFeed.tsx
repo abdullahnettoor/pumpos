@@ -1,87 +1,156 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Station } from '@pump/shared';
 import { useActivityGroup, useActivityGroups } from '../../query/hooks.js';
-import { Select } from '../primitives/Field.js';
-import { Panel } from '../../pump-ds/index.js';
-import type { ActivityEventItem, ActivityTone } from '../../services/cloud.js';
+import {
+  Button,
+  DataSection,
+  Dot,
+  EmptyState,
+  FilterChips,
+  Icon,
+  Select,
+  SectionHeader,
+  type DotTone,
+  type FilterChipOption,
+} from '../../pump-ds/index.js';
+import type {
+  ActivityEventItem,
+  ActivityGroupSummary,
+  ActivityTone,
+} from '../../services/cloud.js';
+import { formatTime } from '../../utils/format.js';
 import { useRunTask } from '../../utils/runTask.js';
+import { groupActivityByDay } from './organizationModel.js';
 
-const TONE_STYLE: Record<ActivityTone, { bg: string; fg: string }> = {
-  info: { bg: 'var(--state-info-bg)', fg: 'var(--state-info-fg)' },
-  success: { bg: 'var(--state-success-bg)', fg: 'var(--state-success-fg)' },
-  warning: { bg: 'var(--state-warning-bg)', fg: 'var(--state-warning-fg)' },
-  danger: { bg: 'var(--state-danger-bg)', fg: 'var(--state-danger-fg)' },
-  default: { bg: 'var(--bg-surface-alt)', fg: 'var(--text-muted)' },
+/** An event's tone as its row marker; `default` is plain information. */
+const DOT_TONE: Record<ActivityTone, DotTone> = {
+  info: 'info',
+  success: 'success',
+  warning: 'warning',
+  danger: 'danger',
+  default: 'neutral',
 };
 
-const fmtTime = (iso: string) => {
-  try {
-    return new Date(iso).toLocaleString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return '';
-  }
-};
+/** Up to this many options the station filter is chips; past it, a dropdown. */
+const MAX_STATION_CHIPS = 4;
 
 export interface ActivityFeedProps {
   stations: Station[];
 }
 
+const RelatedEvent: React.FC<{ event: ActivityEventItem; primary: ActivityEventItem }> = ({
+  event,
+  primary,
+}) => {
+  const actorChanged =
+    event.actor.kind !== primary.actor.kind ||
+    event.actor.id !== primary.actor.id ||
+    event.actor.displayName !== primary.actor.displayName;
+  return (
+    <li className="list-none border-t border-border-soft py-2 first:border-t-0">
+      <div className="text-[12px] text-ink-strong">{event.description}</div>
+      <div className="mt-0.5 flex gap-2 text-[12px] text-ink-muted">
+        <span className="font-mono text-ink-faint">{event.eventType}</span>
+        {actorChanged && <span>by {event.actor.displayName}</span>}
+      </div>
+    </li>
+  );
+};
+
+const ActivityRow: React.FC<{
+  group: ActivityGroupSummary;
+  expanded: boolean;
+  onToggle: () => void;
+}> = ({ group, expanded, onToggle }) => {
+  const { primary } = group;
+  const detail = useActivityGroup(expanded ? group.groupId : null);
+  const detailId = `activity-group-${group.groupId}`;
+  const meta = [primary.stationName, `by ${primary.actor.displayName}`].filter(Boolean).join(' · ');
+  return (
+    <li className="flex items-start gap-3 border-t border-border-soft px-4 py-2.5 first:border-t-0">
+      <Dot tone={DOT_TONE[primary.tone]} size="md" className="mt-1.5" aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-medium text-ink-strong">{primary.description}</div>
+        <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[12px] text-ink-muted">
+          <span className="shrink-0 font-mono text-ink-faint">{primary.eventType}</span>
+          {meta && <span className="truncate">· {meta}</span>}
+        </div>
+        {group.relatedCount > 0 && (
+          <>
+            <Button
+              variant="ghost"
+              size="xs"
+              aria-expanded={expanded}
+              aria-controls={detailId}
+              onClick={onToggle}
+              className="mt-1 h-auto px-0 text-ink-muted hover:bg-transparent hover:text-ink-strong"
+            >
+              {expanded ? 'Hide' : 'Show'} {group.relatedCount} related event
+              {group.relatedCount === 1 ? '' : 's'}
+            </Button>
+            {expanded && (
+              <div id={detailId} className="mt-1 border-l-2 border-border-strong pl-3">
+                <DataSection
+                  title="related activity"
+                  query={detail}
+                  shape="bare"
+                  placeholderHeight={48}
+                >
+                  <ul className="m-0 list-none p-0">
+                    {detail.data?.related.map((event) => (
+                      <RelatedEvent key={event.eventId} event={event} primary={primary} />
+                    ))}
+                  </ul>
+                </DataSection>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+      <span className="shrink-0 whitespace-nowrap font-mono text-[12px] text-ink-faint">
+        {formatTime(primary.recordedAt)}
+      </span>
+    </li>
+  );
+};
+
 /**
- * Human-readable business-event activity feed (Owner-only, org-scoped). Each row
- * shows a readable label + the raw event type tag, with station / actor / time.
- * Reads from GET /events; filter by station.
+ * Organization › Activity (#538): the business-event feed (Owner-only,
+ * org-scoped) in day groups. The station filter sits in the feed's header;
+ * each day heading carries the date, so a row shows only its time.
  */
 export const ActivityFeed: React.FC<ActivityFeedProps> = ({ stations }) => {
   const runTask = useRunTask();
   const [stationId, setStationId] = useState('');
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const activity = useActivityGroups({ stationId: stationId || undefined, limit: 50 });
-  const detail = useActivityGroup(expandedGroupId);
-  const groups = activity.data?.pages.flatMap((page) => page.items) ?? [];
+  const groups = useMemo(
+    () => activity.data?.pages.flatMap((page) => page.items) ?? [],
+    [activity.data],
+  );
+  const days = useMemo(() => groupActivityByDay(groups, (g) => g.primary.recordedAt), [groups]);
 
-  const toggleGroup = (groupId: string) => {
+  const toggleGroup = (groupId: string) =>
     setExpandedGroupId((current) => (current === groupId ? null : groupId));
-  };
 
-  const renderRelated = (event: ActivityEventItem, primary: ActivityEventItem) => {
-    const actorChanged =
-      event.actor.kind !== primary.actor.kind ||
-      event.actor.id !== primary.actor.id ||
-      event.actor.displayName !== primary.actor.displayName;
-    return (
-      <li
-        key={event.eventId}
-        style={{ padding: '8px 0', borderTop: '1px solid var(--border-soft)' }}
-      >
-        <div style={{ fontSize: '12px', color: 'var(--text-strong)' }}>{event.description}</div>
-        <div
-          style={{
-            display: 'flex',
-            gap: '8px',
-            marginTop: '3px',
-            fontSize: '10px',
-            color: 'var(--text-muted)',
-          }}
-        >
-          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-faint)' }}>
-            {event.eventType}
-          </span>
-          {actorChanged && <span>by {event.actor.displayName}</span>}
-        </div>
-      </li>
-    );
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', maxWidth: 260 }}>
+  const stationFilter =
+    stations.length + 1 <= MAX_STATION_CHIPS ? (
+      <FilterChips
+        aria-label="Show activity for"
+        options={[
+          { value: '', label: 'All stations' },
+          ...stations.map(
+            (s) => ({ value: s.id, label: s.name }) satisfies FilterChipOption<string>,
+          ),
+        ]}
+        value={stationId}
+        onChange={setStationId}
+      />
+    ) : (
+      <div className="w-[200px]">
         <Select
-          className="input-compact"
+          inputSize="sm"
+          aria-label="Show activity for"
           value={stationId}
           onChange={(e) => setStationId(e.target.value)}
         >
@@ -93,171 +162,61 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ stations }) => {
           ))}
         </Select>
       </div>
+    );
 
-      {activity.isLoading ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading activity…</div>
-      ) : activity.error ? (
-        <div style={{ color: 'var(--state-danger-fg)', fontSize: '13px' }}>
-          Failed to load activity.
-        </div>
-      ) : groups.length === 0 ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-          No activity recorded yet.
-        </div>
-      ) : (
-        <Panel flush title="Recent activity">
-          {groups.map((group, i) => {
-            const { primary } = group;
-            const tone = TONE_STYLE[primary.tone];
-            const isExpanded = expandedGroupId === group.groupId;
-            const detailId = `activity-group-${group.groupId}`;
-            const meta = [primary.stationName, `by ${primary.actor.displayName}`]
-              .filter(Boolean)
-              .join(' · ');
-            return (
-              <div
-                key={group.groupId}
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '12px',
-                  padding: '11px 16px',
-                  borderTop: i === 0 ? 'none' : '1px solid var(--border-soft)',
-                }}
-              >
-                <span
-                  aria-hidden="true"
-                  style={{
-                    flexShrink: 0,
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: tone.fg,
-                    marginTop: '5px',
-                  }}
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionHeader
+        title="Recent activity"
+        controls={{ filters: stations.length > 1 ? stationFilter : undefined }}
+      />
+      <DataSection
+        title="activity"
+        query={activity}
+        placeholderHeight={360}
+        flush
+        isEmpty={groups.length === 0}
+        empty={
+          <div className="p-3">
+            <EmptyState
+              compact
+              icon={<Icon name="activity" size="md" />}
+              title="No activity recorded yet"
+              description="Shifts, sales and office records appear here as they happen."
+            />
+          </div>
+        }
+        footer={
+          activity.hasNextPage ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={activity.isFetchingNextPage}
+              onClick={() => runTask(activity.fetchNextPage(), 'Could not load more activity.')}
+            >
+              Load more activity
+            </Button>
+          ) : undefined
+        }
+      >
+        {days.map((day) => (
+          <div key={day.key} className="border-t border-border-soft first:border-t-0">
+            <h3 className="bg-surface-alt px-4 py-1.5 text-[12px] font-semibold text-ink-muted">
+              {day.label}
+            </h3>
+            <ul className="m-0 list-none border-t border-border-soft p-0">
+              {day.items.map((group) => (
+                <ActivityRow
+                  key={group.groupId}
+                  group={group}
+                  expanded={expandedGroupId === group.groupId}
+                  onToggle={() => toggleGroup(group.groupId)}
                 />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: '13px', color: 'var(--text-strong)', fontWeight: 500 }}>
-                    {primary.description}
-                  </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      marginTop: '3px',
-                      fontSize: '11px',
-                      color: 'var(--text-muted)',
-                      minWidth: 0,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '10px',
-                        color: 'var(--text-faint)',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {primary.eventType}
-                    </span>
-                    {meta && (
-                      <span
-                        style={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        · {meta}
-                      </span>
-                    )}
-                  </div>
-                  {group.relatedCount > 0 && (
-                    <>
-                      <button
-                        type="button"
-                        aria-expanded={isExpanded}
-                        aria-controls={detailId}
-                        onClick={() => toggleGroup(group.groupId)}
-                        style={{
-                          marginTop: '7px',
-                          padding: 0,
-                          border: 0,
-                          background: 'transparent',
-                          color: 'var(--text-muted)',
-                          cursor: 'pointer',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {isExpanded ? 'Hide' : 'Show'} {group.relatedCount} related event
-                        {group.relatedCount === 1 ? '' : 's'}
-                      </button>
-                      {isExpanded && (
-                        <div
-                          id={detailId}
-                          style={{
-                            marginTop: '8px',
-                            paddingLeft: '12px',
-                            borderLeft: `2px solid ${tone.fg}`,
-                          }}
-                        >
-                          {detail.isLoading ? (
-                            <div style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
-                              Loading related activity…
-                            </div>
-                          ) : detail.error ? (
-                            <div style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                              Failed to load related activity.
-                            </div>
-                          ) : detail.data ? (
-                            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                              {detail.data.related.map((event) => renderRelated(event, primary))}
-                            </ul>
-                          ) : null}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-                <span
-                  style={{
-                    flexShrink: 0,
-                    fontSize: '11px',
-                    color: 'var(--text-faint)',
-                    fontFamily: 'var(--font-mono)',
-                    whiteSpace: 'nowrap',
-                    marginTop: '1px',
-                  }}
-                >
-                  {fmtTime(primary.recordedAt)}
-                </span>
-              </div>
-            );
-          })}
-          {activity.hasNextPage && (
-            <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border-soft)' }}>
-              <button
-                type="button"
-                onClick={() => runTask(activity.fetchNextPage(), 'Could not load more activity.')}
-                disabled={activity.isFetchingNextPage}
-                style={{
-                  padding: 0,
-                  border: 0,
-                  background: 'transparent',
-                  color: 'var(--accent-primary)',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                }}
-              >
-                {activity.isFetchingNextPage ? 'Loading…' : 'Load more activity'}
-              </button>
-            </div>
-          )}
-        </Panel>
-      )}
-    </div>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </DataSection>
+    </section>
   );
 };

@@ -4,9 +4,11 @@ import { organizationUpdateSchema, type OrganizationUpdateValues } from '@pump/s
 import { useOrganization, queryKeys } from '../../query/hooks.js';
 import { CloudOrganizationService } from '../../services/cloud.js';
 import { useZodForm } from '../../forms/useZodForm.js';
+import { useKeyedSaves } from '../../office-records/useKeyedSaves.js';
 import { Field, TextInput } from '../primitives/Field.js';
-import { Button, Form } from '../../pump-ds/index.js';
+import { Button, DataSection, Form, SectionHeader } from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
+import { useRunTask } from '../../utils/runTask.js';
 
 const orgService = new CloudOrganizationService();
 
@@ -18,12 +20,16 @@ const EMPTY: OrganizationUpdateValues = {
 /**
  * Owner-editable organization profile: the org's display name plus legal /
  * branding metadata (stored in organizations.metadata jsonb). Station-level
- * legal details remain in Station Overview.
+ * legal details remain in Station. The form waits in its Data Section until
+ * the organization has loaded, so it never opens blank over saved details.
  */
 export const OrgProfile: React.FC = () => {
-  const { data: org, isLoading } = useOrganization();
+  const orgQ = useOrganization();
+  const org = orgQ.data;
   const qc = useQueryClient();
   const toast = useToast();
+  const runTask = useRunTask();
+  const save = useKeyedSaves();
   const {
     register,
     handleSubmit,
@@ -50,73 +56,71 @@ export const OrgProfile: React.FC = () => {
 
   const onSubmit = async (values: OrganizationUpdateValues) => {
     try {
-      await orgService.updateOrganization(values);
-      await qc.invalidateQueries({ queryKey: queryKeys.organization() });
-      toast.success('Organization updated.');
+      await save('organization:update', values, (idempotencyKey) =>
+        orgService.updateOrganization(values, { idempotencyKey }),
+      );
     } catch (e: any) {
       toast.error(e.message || 'Failed to update organization');
+      return;
     }
+    toast.success('Organization updated.');
+    runTask(
+      qc.invalidateQueries({ queryKey: queryKeys.organization() }),
+      'Saved, but the profile could not be refreshed.',
+    );
   };
 
-  if (isLoading) {
-    return (
-      <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading organization…</div>
-    );
-  }
-
-  const metaErrors = (errors.metadata as any) || {};
+  const metaErrors = errors.metadata ?? {};
 
   return (
-    <Form
-      onSubmit={handleSubmit(onSubmit)}
-      style={{ maxWidth: 520, display: 'flex', flexDirection: 'column' }}
-    >
-      <Field label="Organization name" required error={errors.name?.message}>
-        <TextInput
-          {...register('name')}
-          invalid={!!errors.name}
-          placeholder="e.g. Sri Lakshmi Fuels"
-        />
-      </Field>
-      <Field label="Legal / trade name" hint="As printed on the GST certificate.">
-        <TextInput {...register('metadata.legalName')} />
-      </Field>
-      <Field label="GSTIN">
-        <TextInput
-          {...register('metadata.gstin')}
-          maxLength={15}
-          placeholder="29ABCDE1234F1Z5"
-          style={{ fontFamily: 'var(--font-mono)' }}
-        />
-      </Field>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-        <Field label="PAN">
-          <TextInput
-            {...register('metadata.pan')}
-            maxLength={10}
-            style={{ fontFamily: 'var(--font-mono)' }}
-          />
-        </Field>
-        <Field label="State code">
-          <TextInput {...register('metadata.stateCode')} maxLength={2} placeholder="29" />
-        </Field>
-      </div>
-      <Field label="Registered address">
-        <TextInput {...register('metadata.address')} />
-      </Field>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-        <Field label="Phone">
-          <TextInput {...register('metadata.phone')} />
-        </Field>
-        <Field label="Email" error={metaErrors.email?.message}>
-          <TextInput {...register('metadata.email')} invalid={!!metaErrors.email} />
-        </Field>
-      </div>
-      <div style={{ marginTop: 'var(--space-2)' }}>
-        <Button type="submit" variant="primary" size="md" loading={isSubmitting}>
-          Save changes
-        </Button>
-      </div>
-    </Form>
+    <section className="flex max-w-[560px] flex-col gap-2">
+      <SectionHeader title="Organization profile" subtitle="Shown on invoices and reports" />
+      <DataSection title="organization profile" query={orgQ} placeholderHeight={420}>
+        <Form onSubmit={handleSubmit(onSubmit)} className="flex flex-col">
+          <Field label="Organization name" required error={errors.name?.message}>
+            <TextInput
+              {...register('name')}
+              invalid={!!errors.name}
+              placeholder="e.g. Sri Lakshmi Fuels"
+            />
+          </Field>
+          <Field label="Legal / trade name" hint="As printed on the GST certificate.">
+            <TextInput {...register('metadata.legalName')} />
+          </Field>
+          <Field label="GSTIN">
+            <TextInput
+              {...register('metadata.gstin')}
+              maxLength={15}
+              placeholder="29ABCDE1234F1Z5"
+              className="font-mono"
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="PAN">
+              <TextInput {...register('metadata.pan')} maxLength={10} className="font-mono" />
+            </Field>
+            <Field label="State code">
+              <TextInput {...register('metadata.stateCode')} maxLength={2} placeholder="29" />
+            </Field>
+          </div>
+          <Field label="Registered address">
+            <TextInput {...register('metadata.address')} />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Phone">
+              <TextInput {...register('metadata.phone')} />
+            </Field>
+            <Field label="Email" error={metaErrors.email?.message}>
+              <TextInput {...register('metadata.email')} invalid={!!metaErrors.email} />
+            </Field>
+          </div>
+          <div>
+            <Button type="submit" variant="primary" size="md" loading={isSubmitting}>
+              Save changes
+            </Button>
+          </div>
+        </Form>
+      </DataSection>
+    </section>
   );
 };
