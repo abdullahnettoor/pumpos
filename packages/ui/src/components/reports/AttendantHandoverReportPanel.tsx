@@ -195,14 +195,20 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
   );
 };
 
+/** The report as the locked-feature screen names it (#605). */
+export const ATTENDANT_REPORT_FEATURE = {
+  title: 'Attendant Handover Report',
+  description: 'Each attendant’s handovers, cash and variance over a date range.',
+};
+
 /**
- * An Organization without the capability gets the explanatory unavailable
- * state rather than silence — the server refuses the request regardless.
+ * An Organization without the capability gets the locked-feature screen
+ * rather than silence — the server refuses the request regardless.
  */
 export const AttendantHandoverReportPanel: React.FC<AttendantHandoverReportPanelProps> = (
   props,
 ) => (
-  <CapabilityRoute capability={ATTENDANT_REPORT_CAPABILITY}>
+  <CapabilityRoute capability={ATTENDANT_REPORT_CAPABILITY} feature={ATTENDANT_REPORT_FEATURE}>
     <AttendantHandoverReportBody {...props} />
   </CapabilityRoute>
 );

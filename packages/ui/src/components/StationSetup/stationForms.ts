@@ -6,6 +6,7 @@ import {
   type DecantationSettings,
   type Station,
 } from '@pump/shared';
+import { letterheadFromStation, type Letterhead } from '../../services/reports/letterhead.js';
 
 /**
  * The Station page's in-page forms (#604): each form's values built from the
@@ -163,4 +164,18 @@ export function decantationGuidanceBody(station: Station, values: DecantationSet
 export function newerStation(current: Station | null, incoming: Station | null): Station | null {
   if (!current || !incoming || current.id !== incoming.id) return incoming;
   return (incoming.updatedAt ?? '') >= (current.updatedAt ?? '') ? incoming : current;
+}
+
+/**
+ * The letterhead the Branding form's values would print (#615 review): the
+ * export's own builder (`letterheadFromStation`) over the station with these
+ * values saved, so the preview keeps its fallbacks (the station's name and
+ * address when Branding has none, the logo setting from Report templates).
+ */
+export function brandingLetterhead(station: Station, values: StationBrandingValues): Letterhead {
+  const body = stationBrandingBody(station, {
+    ...values,
+    gstin: (values.gstin ?? '').toUpperCase(),
+  });
+  return letterheadFromStation({ ...station, settings: body.settings }) ?? {};
 }

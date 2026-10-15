@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { publishNavIntent, __resetNavIntentForTests } from '../nav-intent/store.js';
 import { QueryObserver } from '@tanstack/react-query';
@@ -9,9 +9,12 @@ import { createTestQueryClient, renderWithProviders } from '../test/renderWithPr
 import { queryKeys } from '../query/hooks.js';
 
 const range = vi.hoisted(() => ({ data: [] as unknown[] }));
+/** The role-filtered Access Document the screen reads; entitled unless a test says otherwise. */
+const access = vi.hoisted(() => ({ doc: undefined as unknown }));
 vi.mock('../query/hooks.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   useDailyDssrRange: () => ({ data: range.data, isLoading: false, error: null }),
+  useAccess: () => ({ data: access.doc, isPending: false }),
 }));
 const preview = vi.hoisted(() => ({
   fn: (() => new Promise(() => {})) as (stationId: string, date: string) => Promise<unknown>,
@@ -44,6 +47,20 @@ vi.mock('../access/CapabilityGate.js', async (importOriginal) => ({
 }));
 
 const { ReportsOverview } = await import('./ReportsOverview.js');
+
+const accessDoc = (capabilities: Record<string, unknown>, plan: 'CORE' | null = 'CORE') => ({
+  ...(plan ? { plan } : {}),
+  capabilities,
+  limits: { station_count: { value: 1, used: 1, reached: true } },
+  subscription: { status: 'ACTIVE', mode: 'NORMAL' },
+});
+const ENTITLED = accessDoc({
+  'reports.attendant': { enabled: true, title: 'Attendant Handover Report' },
+});
+
+beforeEach(() => {
+  access.doc = ENTITLED;
+});
 
 afterEach(() => {
   cleanup();
@@ -134,6 +151,55 @@ describe('Reports sub-navigation (#540)', () => {
     expect(screen.getByRole('radiogroup', { name: 'Ledger view' }).textContent).toBe(
       'PartyCash & bank',
     );
+  });
+});
+
+describe('Locked Attendant handovers (#605)', () => {
+  const navButton = () => screen.getByRole('button', { name: /Attendant handovers/ });
+
+  it('an Owner sees the report locked: the plan and Contact us', () => {
+    access.doc = accessDoc({
+      'reports.attendant': {
+        enabled: false,
+        title: 'Attendant Handover Report',
+        visibility: 'UPGRADE',
+        unavailableMessage: 'Not part of your plan.',
+        resolution: 'CONTACT_PUMPOS',
+      },
+    });
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
+    expect(screen.getByRole('img', { name: 'Locked' })).toBeTruthy();
+    fireEvent.click(navButton());
+    const locked = screen.getByRole('region', { name: 'Attendant Handover Report is locked' });
+    expect(locked.textContent).toMatch('Not included in your Core plan.');
+    expect(screen.getByRole('button', { name: 'Contact us' })).toBeTruthy();
+  });
+
+  it('an Accountant sees it locked with whom to ask, and nothing commercial', () => {
+    // The server sends other Roles no plan and no disabled entry.
+    access.doc = accessDoc({}, null);
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Accountant" />);
+    expect(screen.getByRole('img', { name: 'Locked' })).toBeTruthy();
+    fireEvent.click(navButton());
+    const locked = screen.getByRole('region', { name: 'Attendant Handover Report is locked' });
+    expect(locked.textContent).toMatch('Ask your Owner or Manager to enable it.');
+    expect(locked.textContent).not.toMatch(/plan|Contact/i);
+    expect(screen.queryByRole('button', { name: 'Contact us' })).toBeNull();
+  });
+
+  it('shows no lock when the report is entitled, and no entry before access is known', () => {
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
+    expect(screen.queryByRole('img', { name: 'Locked' })).toBeNull();
+    cleanup();
+    access.doc = undefined;
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
+    expect(screen.queryByRole('button', { name: /Attendant handovers/ })).toBeNull();
+  });
+
+  it('Staff never see it: the Role comes first', () => {
+    access.doc = accessDoc({}, null);
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Staff" />);
+    expect(screen.queryByRole('button', { name: /Attendant handovers/ })).toBeNull();
   });
 });
 

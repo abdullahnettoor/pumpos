@@ -108,3 +108,38 @@ describe('Organization profile (#604)', () => {
     );
   });
 });
+
+const field = (label: string) => screen.getByLabelText(label) as HTMLInputElement;
+
+describe('Organization profile (#605)', () => {
+  it('is one column of Legal and Contact, with no letterhead preview (#615 review)', async () => {
+    setup();
+    await screen.findByDisplayValue('Sri Lakshmi Fuels');
+    expect(screen.getByRole('group', { name: 'Legal' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Contact' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Letterhead preview' })).toBeNull();
+  });
+
+  it('fills the state code from the GSTIN, and leaves one typed by hand', async () => {
+    setup();
+    await screen.findByDisplayValue('Sri Lakshmi Fuels');
+    fireEvent.change(field('GSTIN'), { target: { value: '32ABCDE1234F1Z9' } });
+    expect(field('State code').value).toBe('32');
+    fireEvent.change(field('GSTIN'), { target: { value: '29ABCDE1234F1ZW' } });
+    expect(field('State code').value).toBe('29');
+    fireEvent.change(field('State code'), { target: { value: '33' } });
+    fireEvent.change(field('GSTIN'), { target: { value: '32ABCDE1234F1Z9' } });
+    expect(field('State code').value).toBe('33');
+  });
+
+  it('refuses a malformed GSTIN or PAN without saving', async () => {
+    const calls = setup();
+    await screen.findByDisplayValue('Sri Lakshmi Fuels');
+    fireEvent.change(field('GSTIN'), { target: { value: '32ABCDE12' } });
+    fireEvent.change(field('PAN'), { target: { value: 'ABC1' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByText('A GSTIN is 15 characters, like 29ABCDE1234F1ZW')).toBeTruthy();
+    expect(screen.getByText('A PAN is 10 characters, like ABCDE1234F')).toBeTruthy();
+    expect(calls.some((c) => c.method === 'PUT' || c.method === 'PATCH')).toBe(false);
+  });
+});

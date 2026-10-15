@@ -4,7 +4,7 @@ import { PageFrame } from '../page-frame/index.js';
 import { ROUTES } from '../../nav-intent/routes.js';
 import { Tabs, tabPanelProps } from '../../pump-ds/tabs/index.js';
 import { useProducts, usePricing, usePricingHistory } from '../../query/hooks.js';
-import { formatMoney } from '../../utils/format.js';
+import { formatMoney, formatSignedMoney } from '../../utils/format.js';
 import {
   Button,
   Chip,
@@ -13,6 +13,7 @@ import {
   FilterChips,
   Icon,
   InteractiveTable,
+  Panel,
   SearchInput,
   SectionHeader,
   type TableColumn,
@@ -126,7 +127,68 @@ const PricingPage: React.FC<{ station: Station }> = ({ station }) => {
   );
 };
 
-// ---- Fuels: one row per fuel (owner decision, #537) ----
+// ---- Fuels: one card per fuel (owner decision, #605; was one row per fuel, #537) ----
+
+/**
+ * One fuel's price: the price per unit, when it took effect, the last change
+ * (old → new and the signed difference, in plain ink: a price change is not a
+ * problem) and "Change price", which opens the same drawer as before.
+ */
+const FuelPriceCard: React.FC<{
+  row: FuelPriceRow;
+  timeZone: string;
+  onChange: () => void;
+}> = ({ row, timeZone, onChange }) => (
+  <Panel role="region" aria-label={row.productName} data-testid="fuel-price-card">
+    <div className="flex h-full flex-col gap-3">
+      <div className="flex items-baseline gap-2">
+        <span className="truncate text-[14px] font-semibold text-ink-strong">
+          {row.productName}
+        </span>
+        {row.productCode && (
+          <span className="shrink-0 font-mono text-[12px] text-ink-faint">{row.productCode}</span>
+        )}
+      </div>
+      <div className="flex flex-col gap-0.5">
+        {row.price == null ? (
+          <span className="text-[20px] font-semibold text-ink-faint">Not set</span>
+        ) : (
+          <span className="font-mono text-[20px] font-semibold tabular-nums text-ink-strong">
+            {formatMoney(row.price)}/{row.unit}
+          </span>
+        )}
+        <span className="text-[12px] text-ink-muted">
+          {row.effectiveFrom
+            ? `Effective from ${formatStationDateTime(row.effectiveFrom, timeZone)}`
+            : 'No price recorded yet'}
+        </span>
+      </div>
+      <div className="flex flex-col gap-0.5 text-[12px]">
+        <span className="text-ink-muted">Last change</span>
+        {row.lastChange ? (
+          <span className="font-mono text-[13px] tabular-nums text-ink-default">
+            {formatMoney(row.lastChange.from)} → {formatMoney(row.lastChange.to)}{' '}
+            <span className="text-ink-muted">
+              ({formatSignedMoney(row.lastChange.difference, { plus: true })})
+            </span>
+          </span>
+        ) : (
+          <span className="text-[13px] text-ink-faint">None yet</span>
+        )}
+      </div>
+      <div className="mt-auto flex justify-end border-t border-border-soft pt-3">
+        <Button
+          variant="secondary"
+          size="xs"
+          onClick={onChange}
+          aria-label={`Change price of ${row.productName}`}
+        >
+          Change price
+        </Button>
+      </div>
+    </div>
+  </Panel>
+);
 
 const FuelsTab: React.FC<
   ReturnType<typeof useFuelPriceRows> & {
@@ -137,79 +199,6 @@ const FuelsTab: React.FC<
   const history = useMemo(
     () => sortNewestFirst((historyQ.data ?? []) as HistoryRow[]),
     [historyQ.data],
-  );
-
-  const columns = useMemo<TableColumn<FuelPriceRow>[]>(
-    () => [
-      {
-        id: 'product',
-        header: 'Product',
-        kind: 'text',
-        value: (r) => r.productName,
-        cell: (r) => (
-          <span className="inline-flex flex-col leading-tight">
-            <span className="font-medium text-ink-strong">{r.productName}</span>
-            {r.productCode && (
-              <span className="mt-0.5 text-[12px] text-ink-muted">{r.productCode}</span>
-            )}
-          </span>
-        ),
-      },
-      {
-        id: 'price',
-        header: 'Current price',
-        kind: 'money',
-        total: false,
-        emphasis: true,
-        value: (r) => r.price,
-        cell: (r) =>
-          r.price == null ? (
-            <span className="text-ink-faint">Not set</span>
-          ) : (
-            `${formatMoney(r.price)}/${r.unit}`
-          ),
-      },
-      {
-        id: 'effectiveFrom',
-        header: 'Effective from',
-        kind: 'text',
-        value: (r) => (r.effectiveFrom ? formatStationDateTime(r.effectiveFrom, timeZone) : null),
-      },
-      {
-        id: 'lastChange',
-        header: 'Last change',
-        kind: 'text',
-        sortable: false,
-        value: (r) =>
-          r.lastChange
-            ? `${formatMoney(r.lastChange.from)} → ${formatMoney(r.lastChange.to)}`
-            : null,
-        cell: (r) =>
-          r.lastChange ? (
-            <span className="font-mono tabular-nums">
-              {formatMoney(r.lastChange.from)} → {formatMoney(r.lastChange.to)}
-            </span>
-          ) : (
-            <span className="text-ink-faint">—</span>
-          ),
-      },
-      {
-        id: 'action',
-        header: '',
-        kind: 'text',
-        sortable: false,
-        width: '140px',
-        value: () => null,
-        cell: (r) => (
-          <span className="flex justify-end">
-            <Button variant="secondary" size="xs" onClick={() => onChange(r)}>
-              Change price
-            </Button>
-          </span>
-        ),
-      },
-    ],
-    [onChange, timeZone],
   );
 
   const historyColumns = useMemo<TableColumn<HistoryRow>[]>(
@@ -237,26 +226,27 @@ const FuelsTab: React.FC<
           title="fuel prices"
           query={[pricingQ, historyQ, productsQ]}
           placeholderHeight={160}
-          flush
+          shape="cards"
           isEmpty={rows.length === 0}
           empty={
-            <div className="p-3">
-              <EmptyState
-                compact
-                icon={<ConceptIcon concept="fuels" />}
-                title="No fuel products"
-                description="Add fuel products in Station › Products first."
-              />
-            </div>
+            <EmptyState
+              compact
+              icon={<ConceptIcon concept="fuels" />}
+              title="No fuel products"
+              description="Add fuel products in Station › Products first."
+            />
           }
         >
-          <InteractiveTable
-            bare
-            title="fuel prices"
-            columns={columns}
-            rows={rows}
-            rowKey={(r) => r.productId}
-          />
+          <ul
+            aria-label="Fuel prices"
+            className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+          >
+            {rows.map((row) => (
+              <li key={row.productId} className="flex flex-col [&>*]:flex-1">
+                <FuelPriceCard row={row} timeZone={timeZone} onChange={() => onChange(row)} />
+              </li>
+            ))}
+          </ul>
         </DataSection>
       </section>
 

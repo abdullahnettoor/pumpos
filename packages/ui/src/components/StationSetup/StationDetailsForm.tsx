@@ -38,8 +38,10 @@ const ONBOARDING_LABEL: Record<string, string> = {
 
 /**
  * Station › General (#604): an always-on form on React Hook Form + Zod. Its
- * changes show in the tab's unsaved-changes bar. The onboarding status is
- * read-only here: a status chip in the heading.
+ * changes show in the tab's unsaved-changes bar. Two cards side by side
+ * (#605): Station (name, code, address, phone) and Business day (timezone,
+ * day start, grace period). The onboarding status is read-only here: a status
+ * chip in the heading.
  */
 export const StationDetailsForm: React.FC<StationDetailsFormProps> = ({
   station,
@@ -87,15 +89,15 @@ export const StationDetailsForm: React.FC<StationDetailsFormProps> = ({
         }}
       />
       <SectionSaveError error={section.error} />
-      <Panel>
-        <Form
-          onSubmit={(e) => {
-            e.preventDefault();
-            return section.save();
-          }}
-          aria-label="Station details"
-          className="flex max-w-[600px] flex-col gap-1"
-        >
+      <Form
+        onSubmit={(e) => {
+          e.preventDefault();
+          return section.save();
+        }}
+        aria-label="Station details"
+        className="grid items-start gap-4 lg:grid-cols-2"
+      >
+        <Panel title="Station" role="group" aria-label="Station">
           <div className="grid grid-cols-2 gap-x-4">
             <Field label="Station name" required htmlFor={fid('name')} error={errors.name?.message}>
               <TextInput id={fid('name')} invalid={!!errors.name} {...register('name')} />
@@ -112,9 +114,40 @@ export const StationDetailsForm: React.FC<StationDetailsFormProps> = ({
           <Field label="Address" htmlFor={fid('address')} error={errors.address?.message}>
             <TextInput id={fid('address')} invalid={!!errors.address} {...register('address')} />
           </Field>
+          <Field label="Contact phone" htmlFor={fid('phone')} error={errors.phone?.message}>
+            <TextInput id={fid('phone')} invalid={!!errors.phone} {...register('phone')} />
+          </Field>
+        </Panel>
+        <Panel title="Business day" role="group" aria-label="Business day">
+          <Field
+            label="Timezone"
+            htmlFor={fid('timezone')}
+            hint="Used to decide which calendar day operations belong to."
+            error={errors.timezone?.message}
+          >
+            <Select id={fid('timezone')} {...register('timezone')}>
+              <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+              <option value="Asia/Dubai">Asia/Dubai (GST)</option>
+              <option value="Asia/Colombo">Asia/Colombo</option>
+              <option value="Asia/Kathmandu">Asia/Kathmandu</option>
+              <option value="Asia/Dhaka">Asia/Dhaka</option>
+              <option value="UTC">UTC</option>
+            </Select>
+          </Field>
           <div className="grid grid-cols-2 gap-x-4">
-            <Field label="Contact phone" htmlFor={fid('phone')} error={errors.phone?.message}>
-              <TextInput id={fid('phone')} invalid={!!errors.phone} {...register('phone')} />
+            <Field
+              label="Business day starts at"
+              htmlFor={fid('day-start')}
+              hint="Activity before this rolls to the previous day."
+              error={errors.businessDayStartsAt?.message}
+            >
+              <TextInput
+                id={fid('day-start')}
+                type="time"
+                className="font-mono"
+                invalid={!!errors.businessDayStartsAt}
+                {...register('businessDayStartsAt')}
+              />
             </Field>
             <Field
               label="Shift grace period (minutes)"
@@ -128,39 +161,8 @@ export const StationDetailsForm: React.FC<StationDetailsFormProps> = ({
               />
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-x-4">
-            <Field
-              label="Timezone"
-              htmlFor={fid('timezone')}
-              hint="Used to decide which calendar day operations belong to."
-              error={errors.timezone?.message}
-            >
-              <Select id={fid('timezone')} {...register('timezone')}>
-                <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
-                <option value="Asia/Dubai">Asia/Dubai (GST)</option>
-                <option value="Asia/Colombo">Asia/Colombo</option>
-                <option value="Asia/Kathmandu">Asia/Kathmandu</option>
-                <option value="Asia/Dhaka">Asia/Dhaka</option>
-                <option value="UTC">UTC</option>
-              </Select>
-            </Field>
-            <Field
-              label="Business day starts at"
-              htmlFor={fid('day-start')}
-              hint="A fuel day commonly runs 06:00 → 06:00. Activity before this rolls to the previous day."
-              error={errors.businessDayStartsAt?.message}
-            >
-              <TextInput
-                id={fid('day-start')}
-                type="time"
-                className="font-mono"
-                invalid={!!errors.businessDayStartsAt}
-                {...register('businessDayStartsAt')}
-              />
-            </Field>
-          </div>
-        </Form>
-      </Panel>
+        </Panel>
+      </Form>
     </section>
   );
 };

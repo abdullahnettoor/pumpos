@@ -6,24 +6,27 @@ import {
   DataSection,
   EmptyState,
   FilterChips,
-  Icon,
-  InteractiveTable,
-  KpiStrip,
-  KpiTile,
+  Panel,
   SectionHeader,
   StatusChip,
-  TileSection,
   type FilterChipOption,
-  type TableColumn,
 } from '../../pump-ds/index.js';
+import { cn } from '../../pump-ds/lib/cn.js';
 import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
-import { useAccess, useStations } from '../../query/hooks.js';
+import {
+  useAccess,
+  useDispensers,
+  useShiftStatus,
+  useStations,
+  useTanks,
+} from '../../query/hooks.js';
 import { countOf } from '../../utils/ledgerWindow.js';
 import {
   buildStationRows,
   filterStations,
-  stationCapacity,
   stationCounts,
+  stationFacts,
+  stationPlanLine,
   type StationFilter,
   type StationRow,
 } from './organizationModel.js';
@@ -38,77 +41,110 @@ export interface StationsTabProps {
   onOnboard: () => void;
   /** The same gate as the page action (`onboardGate`). */
   onboardGate: { disabled: boolean; title?: string };
-  onConfigure: () => void;
+  /** Opens Station for this station, switching to it first when it is not the current one. */
+  onConfigure: (station: Station) => void;
   onInviteTeam: () => void;
 }
 
 const stationsWord = (n: number) => countOf(n, 'station', 'stations');
 
-const buildColumns = (
-  canSwitch: boolean,
-  onSwitch: (stationId: string) => void,
-  onConfigure: () => void,
-): TableColumn<StationRow>[] => [
-  {
-    id: 'name',
-    header: 'Station',
-    kind: 'text',
-    value: (r) => r.station.name,
-    width: '46%',
-    cell: (r) => (
-      <span className="inline-flex min-w-0 flex-col items-start leading-tight">
-        <span className="inline-flex items-center gap-2 font-medium text-ink-strong">
-          {r.station.name}
-          {r.station.code && (
-            <span className="font-mono text-[12px] text-ink-faint">{r.station.code}</span>
-          )}
-        </span>
-        {r.details && (
-          <span className="mt-0.5 truncate text-[12px] text-ink-muted">{r.details}</span>
-        )}
-      </span>
-    ),
-  },
-  {
-    id: 'status',
-    header: 'Status',
-    kind: 'status',
-    value: (r) => r.state,
-    width: '22%',
-  },
-  {
-    id: 'actions',
-    header: '',
-    kind: 'text',
-    value: () => null,
-    cell: (r) => (
-      <span className="flex items-center justify-end gap-2">
-        {r.active ? (
-          <>
+/**
+ * One station as a card (#605): name and code, address, status, "Current
+ * station", its key facts and the Configure / Switch actions. The facts come
+ * from the cached setup lists and the lite shift status of that station (no
+ * new endpoint); they load and fail on their own, inside the card.
+ */
+const StationCard: React.FC<{
+  row: StationRow;
+  canSwitch: boolean;
+  onSwitch: () => void;
+  onConfigure: () => void;
+}> = ({ row, canSwitch, onSwitch, onConfigure }) => {
+  const { station, state, active } = row;
+  const tanksQ = useTanks(station.id);
+  const dispensersQ = useDispensers(station.id);
+  const statusQ = useShiftStatus(station.id, { lite: true });
+  const facts = stationFacts({
+    settings: station.settings,
+    tanks: tanksQ.data,
+    dispensers: dispensersQ.data,
+    openShift: statusQ.data ? (statusQ.data.shift ?? null) : undefined,
+  });
+  return (
+    <Panel role="region" aria-label={station.name} data-testid="station-card">
+      <div className="flex h-full flex-col gap-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="flex min-w-0 items-baseline gap-2">
+              <span className="min-w-0 break-words text-[14px] font-semibold text-ink-strong">
+                {station.name}
+              </span>
+              {station.code && (
+                <span className="shrink-0 font-mono text-[12px] text-ink-faint">
+                  {station.code}
+                </span>
+              )}
+            </span>
+            <span
+              className={cn('text-[12px]', station.address ? 'text-ink-muted' : 'text-ink-faint')}
+            >
+              {station.address || 'No address'}
+            </span>
+          </div>
+          <StatusChip status={state} className="shrink-0" />
+        </div>
+        <DataSection
+          title="station details"
+          shape="bare"
+          placeholderHeight={72}
+          query={[tanksQ, dispensersQ, statusQ]}
+        >
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px]">
+            {facts.map((f) => (
+              <div
+                key={f.label}
+                className={f.label === 'Open shift' ? 'col-span-2 flex flex-col' : 'flex flex-col'}
+              >
+                <dt className="text-ink-muted">{f.label}</dt>
+                <dd className="truncate text-[13px] text-ink-default">{f.value ?? '—'}</dd>
+              </div>
+            ))}
+          </dl>
+        </DataSection>
+        <div className="mt-auto flex items-center gap-2 border-t border-border-soft pt-3">
+          {active && (
             <Chip tone="neutral" size="md">
               Current station
             </Chip>
-            <Button variant="secondary" size="xs" onClick={onConfigure}>
-              Configure
+          )}
+          <span className="flex-1" />
+          {!active && canSwitch && (
+            <Button variant="secondary" size="xs" onClick={onSwitch}>
+              Switch
             </Button>
-          </>
-        ) : canSwitch ? (
-          <Button variant="secondary" size="xs" onClick={() => onSwitch(r.station.id)}>
-            Set active
+          )}
+          <Button
+            variant="secondary"
+            size="xs"
+            onClick={onConfigure}
+            aria-label={`Configure ${station.name}`}
+          >
+            Configure
           </Button>
-        ) : null}
-      </span>
-    ),
-  },
-];
+        </div>
+      </div>
+    </Panel>
+  );
+};
 
 /**
- * Organization › Stations (#538): a list, layout B. Station usage against the
- * plan's Limit (Access Document) and how many are ready sit on top; the status
- * filter sits in the list's header. Until a station is operational a
- * getting-started prompt leads the tab. Each region waits on its own query
- * (the stations cache, the Access Document), so a failed load shows Retry
- * there and never a false "No stations yet".
+ * Organization › Stations (#538, cards #605): stations as cards, three per
+ * row. No KPI tiles (owner, 15 Oct): plan usage is one line in the Stations
+ * header, only when the plan allows more than one station. The status filter
+ * sits in the same header. Until a station is operational a getting-started
+ * prompt leads the tab. The list waits on the stations cache, and each card
+ * on its own station's facts, so a failed load shows Retry where it failed
+ * and never a false "No stations yet".
  */
 export const StationsTab: React.FC<StationsTabProps> = ({
   stations,
@@ -121,14 +157,10 @@ export const StationsTab: React.FC<StationsTabProps> = ({
   onInviteTeam,
 }) => {
   const [filter, setFilter] = useState<StationFilter>('all');
-  // Station capacity comes from the Access Document. Only Owners and Managers
-  // receive the plan key, so that is the signal for showing it at all. The API
-  // enforces the Limit regardless of what is rendered here.
-  const accessQ = useAccess();
-  const capacity = stationCapacity(accessQ.data);
-  // The usage tile shows while the document loads or fails (with Retry), and
-  // after it loads only for a Role the server sent the plan to.
-  const showUsage = !!capacity || accessQ.isError || accessQ.isPending;
+  // Only Owners and Managers receive the plan; the API enforces the Limit
+  // whatever is rendered here.
+  const { data: access } = useAccess();
+  const planLine = stationPlanLine(access);
   // The list arrives as a prop from the same stations cache; the query is
   // read here for its loading and error state.
   const stationsQ = useStations();
@@ -139,18 +171,6 @@ export const StationsTab: React.FC<StationsTabProps> = ({
   );
   const counts = stationCounts(all);
   const rows = useMemo(() => filterStations(all, filter), [all, filter]);
-  const columns = useMemo(
-    () =>
-      buildColumns(
-        canSwitchStation,
-        (id) => {
-          const station = stations.find((s) => s.id === id);
-          if (station) onStationChange(station);
-        },
-        onConfigure,
-      ),
-    [canSwitchStation, stations, onStationChange, onConfigure],
-  );
   const welcome = counts.ready === 0;
 
   const options: FilterChipOption<StationFilter>[] = [
@@ -158,6 +178,7 @@ export const StationsTab: React.FC<StationsTabProps> = ({
     { value: 'ready', label: 'Ready', count: counts.ready },
     { value: 'setup', label: 'In setup', count: counts.setup },
   ];
+  const station = (id: string) => stations.find((s) => s.id === id);
 
   return (
     <div className="flex flex-col gap-4">
@@ -199,42 +220,16 @@ export const StationsTab: React.FC<StationsTabProps> = ({
         </section>
       )}
 
-      {(showUsage || stations.length > 0) && (
-        <KpiStrip columns="auto">
-          {showUsage && (
-            <TileSection title="station usage" query={accessQ}>
-              {capacity && (
-                <KpiTile
-                  label="Stations on plan"
-                  scope="now"
-                  alert={capacity.reached ? 'warning' : undefined}
-                  value={capacity.label}
-                  hint={capacity.hint}
-                />
-              )}
-            </TileSection>
-          )}
-          {stations.length > 0 && (
-            <TileSection title="stations" query={stationsQ}>
-              <KpiTile
-                label="Ready for operations"
-                scope="now"
-                value={`${counts.ready} of ${counts.all}`}
-                hint={
-                  counts.setup > 0
-                    ? `${stationsWord(counts.setup)} still in setup`
-                    : 'All operational'
-                }
-              />
-            </TileSection>
-          )}
-        </KpiStrip>
-      )}
-
       <section className="flex flex-col gap-2">
         <SectionHeader
           title="Stations"
-          subtitle={filter !== 'all' ? `${rows.length} of ${all.length}` : stationsWord(all.length)}
+          // The plan line is about the plan, not the filter: it stays put
+          // whatever is chosen (the chips carry the counts). Without one, the
+          // count says how many are shown.
+          subtitle={
+            planLine ??
+            (filter !== 'all' ? `${rows.length} of ${all.length}` : stationsWord(all.length))
+          }
           controls={{
             filters: all.length > 1 && (
               <FilterChips
@@ -249,31 +244,43 @@ export const StationsTab: React.FC<StationsTabProps> = ({
         <DataSection
           title="stations"
           query={stationsQ}
-          placeholderHeight={160}
-          flush
+          placeholderHeight={200}
+          shape="cards"
           isEmpty={rows.length === 0}
           empty={
-            <div className="p-3">
-              <EmptyState
-                compact
-                icon={<ConceptIcon concept="stations" />}
-                title={all.length === 0 ? 'No stations yet' : 'No matching stations'}
-                description={
-                  all.length === 0
-                    ? 'Onboard your first station to start running shifts.'
-                    : 'Choose another filter.'
-                }
-              />
-            </div>
+            <EmptyState
+              compact
+              icon={<ConceptIcon concept="stations" />}
+              title={all.length === 0 ? 'No stations yet' : 'No matching stations'}
+              description={
+                all.length === 0
+                  ? 'Onboard your first station to start running shifts.'
+                  : 'Choose another filter.'
+              }
+            />
           }
         >
-          <InteractiveTable
-            bare
-            columns={columns}
-            rows={rows}
-            rowKey={(r) => r.station.id}
-            title="stations"
-          />
+          <ul
+            aria-label="Stations"
+            className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+          >
+            {rows.map((row) => (
+              <li key={row.station.id} className="flex flex-col [&>*]:flex-1">
+                <StationCard
+                  row={row}
+                  canSwitch={canSwitchStation}
+                  onSwitch={() => {
+                    const s = station(row.station.id);
+                    if (s) onStationChange(s);
+                  }}
+                  onConfigure={() => {
+                    const s = station(row.station.id);
+                    if (s) onConfigure(s);
+                  }}
+                />
+              </li>
+            ))}
+          </ul>
         </DataSection>
       </section>
     </div>

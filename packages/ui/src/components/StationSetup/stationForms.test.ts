@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Station } from '@pump/shared';
+import { letterheadFromStation } from '../../services/reports/letterhead.js';
 import {
+  brandingLetterhead,
   decantationGuidanceSchema,
   newerStation,
   stationBrandingBody,
@@ -139,5 +141,49 @@ describe('Station forms (#604)', () => {
       decantationGuidanceSchema.safeParse({ ...base, densitySpecBands: { p: { minKgM3: 720 } } })
         .success,
     ).toBe(true);
+  });
+});
+
+describe('brandingLetterhead (#615 review)', () => {
+  it('prints the values as the export would, upper-casing the GSTIN', () => {
+    const values = {
+      ...stationBrandingValues(station),
+      gstin: '32abcde1234f1z9',
+      roCode: 'IOC-2231',
+      fuelBrand: 'Indian Oil',
+      legalAddress: 'NH 66',
+      pincode: '676503',
+    };
+    expect(brandingLetterhead(station, values)).toEqual(
+      letterheadFromStation({
+        ...station,
+        settings: stationBrandingBody(station, { ...values, gstin: '32ABCDE1234F1Z9' }).settings,
+      }),
+    );
+    expect(brandingLetterhead(station, values)).toMatchObject({
+      legalName: 'Highway Fuels LLP',
+      gstin: '32ABCDE1234F1Z9',
+      roCode: 'IOC-2231',
+      fuelBrand: 'Indian Oil',
+      addressLine: 'NH 66',
+      pincode: '676503',
+    });
+  });
+
+  it('falls back to the station name and address when Branding has none', () => {
+    const bare = { ...station, address: 'Bypass Road, Tirur' };
+    const values = { ...stationBrandingValues(bare), legalName: '', legalAddress: '' };
+    expect(brandingLetterhead(bare, values)).toMatchObject({
+      legalName: 'Highway Fuels',
+      addressLine: 'Bypass Road, Tirur',
+    });
+  });
+
+  it('keeps the Report templates logo choice', () => {
+    const off = {
+      ...station,
+      settings: { ...station.settings, report_config: { showLogo: false } },
+    } as Station;
+    expect(brandingLetterhead(off, stationBrandingValues(off)).showLogo).toBe(false);
   });
 });

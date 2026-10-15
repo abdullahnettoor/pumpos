@@ -19,11 +19,28 @@ vi.mock('../../../access/CapabilityGate.js', async (importOriginal) => ({
   useCapability: () => ({ status: capability }),
 }));
 
+/** Each document the preview draws: the element handed to the PDF renderer. */
+const drawn = vi.hoisted(() => ({ elements: [] as any[] }));
+vi.mock('../../../services/exportPdf.js', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  renderPdf: async (element: unknown) => {
+    drawn.elements.push(element);
+    return new Uint8Array([37, 80, 68, 70]);
+  },
+}));
+vi.mock('../../../services/reports/pdfRaster.js', () => ({
+  rasterizePdf: async () => [{ src: 'data:image/png;base64,AA==', width: 840, height: 1188 }],
+}));
+
 const { ReportTemplatesPanel } = await import('./ReportTemplatesPanel.js');
+const { ShiftSummaryDoc } = await import('../../../services/reports/shiftSummaryDoc.js');
+const { readPdf } = await import('../../../test/pdfTree.js');
+const { letterheadFromStation } = await import('../../../services/reports/letterhead.js');
 
 const station = {
   id: 'st-1',
   name: 'Agent Test Station',
+  address: 'NH 66, Kottakkal',
   settings: {
     legal: { gstin: '32ABCDE1234F1Z5' },
     report_config: { dssr: ['header', 'kpis'], paper: 'A4', showLogo: true },
@@ -33,7 +50,12 @@ const station = {
 beforeEach(() => {
   capability = 'enabled';
   updateStation.mockClear();
+  drawn.elements = [];
 });
+
+/** The last Shift Summary the preview drew. */
+const lastShiftSummary = () =>
+  [...drawn.elements].reverse().find((e) => e.type === ShiftSummaryDoc);
 afterEach(cleanup);
 
 const card = (id: string) => screen.getByTestId(`template-card-${id}`);
@@ -65,7 +87,7 @@ describe('Templates cards', () => {
 });
 
 describe('Customize drawer', () => {
-  it('applies a preset to the switches and the preview', () => {
+  it('applies a preset to the switches and the preview', async () => {
     const drawer = openShiftSummary();
     fireEvent.click(within(drawer).getByRole('radio', { name: /Compact/ }));
     expect(
@@ -74,10 +96,15 @@ describe('Customize drawer', () => {
     expect(
       (within(drawer).getByRole('switch', { name: 'Signatures' }) as HTMLInputElement).checked,
     ).toBe(true);
-    const preview = within(drawer).getByTestId('report-preview');
-    expect(
-      [...preview.querySelectorAll('[data-section]')].map((e) => e.getAttribute('data-section')),
-    ).toEqual(['header', 'meta', 'nozzles', 'cashRecon', 'signatures']);
+    await waitFor(() =>
+      expect(lastShiftSummary()?.props.config.sections).toEqual([
+        'header',
+        'meta',
+        'nozzles',
+        'cashRecon',
+        'signatures',
+      ]),
+    );
     expect(
       within(drawer)
         .getByRole('radio', { name: /Compact/ })
@@ -106,17 +133,44 @@ describe('Customize drawer', () => {
     ).toBe(true);
   });
 
-  it('highlights the section in the preview when its row is hovered, and back', () => {
+  it('previews the real Shift Summary on the sample shift, with the station letterhead', async () => {
     const drawer = openShiftSummary();
-    const row = drawer.querySelector('[data-row="nozzles"]') as HTMLElement;
-    const section = within(drawer)
-      .getByTestId('report-preview')
-      .querySelector('[data-section="nozzles"]') as HTMLElement;
-    fireEvent.mouseEnter(row);
-    expect(section.className).toMatch('ring-brand');
-    fireEvent.mouseLeave(row);
-    fireEvent.mouseEnter(section);
-    expect(row.className).toMatch('bg-brand/10');
+    await waitFor(() => expect(lastShiftSummary()).toBeTruthy());
+    const doc = lastShiftSummary();
+    // The document the export prints, not a drawing of it: its own title and sections.
+    expect(doc.props.config.letterhead.gstin).toBe('32ABCDE1234F1Z5');
+    // The export's letterhead builder: no legal name or address in Branding, so
+    // the station's name and address print (#615 review).
+    expect(doc.props.config.letterhead).toEqual(letterheadFromStation(station));
+    expect(doc.props.config.letterhead.legalName).toBe('Agent Test Station');
+    expect(doc.props.config.letterhead.addressLine).toBe('NH 66, Kottakkal');
+    expect(doc.props.config.paper).toBe('A4');
+    const lines = readPdf(doc).lines;
+    expect(lines).toContain('SHIFT SUMMARY');
+    expect(lines).not.toContain('SHIFT SUMMARY RECORD');
+    expect(
+      await within(drawer).findByRole('img', { name: 'Shift Summary on sample data' }),
+    ).toBeTruthy();
+  });
+
+  it('redraws a moment after a section is switched off, in the order shown', async () => {
+    const drawer = openShiftSummary();
+    await waitFor(() => expect(lastShiftSummary()).toBeTruthy());
+    fireEvent.click(within(drawer).getByRole('switch', { name: 'Warnings' }));
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Move Signatures up' }));
+    await waitFor(() =>
+      expect(lastShiftSummary()?.props.config.sections).toEqual([
+        'header',
+        'meta',
+        'nozzles',
+        'handovers',
+        'terminals',
+        'creditSales',
+        'cashRecon',
+        'signatures',
+        'drawers',
+      ]),
+    );
   });
 
   it('shows unsaved changes and saves the enabled sections in order', async () => {
