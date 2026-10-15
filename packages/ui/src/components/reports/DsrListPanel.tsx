@@ -160,7 +160,7 @@ export const DsrListPanel: React.FC<DsrListPanelProps> = ({
       )}
 
       <DataSection title="DSR totals" query={dssrQ} shape="cards" placeholderHeight={90}>
-        <KpiStrip columns="auto" scope="in-range">
+        <KpiStrip columns="auto">
           <KpiTile label="Generated DSRs" value={String(kpis.count)} />
           <KpiTile label="Net volume sold" value={kpis.volumeLabel} />
           {/* Cash received for sales by shift Drawers. Collections are Office

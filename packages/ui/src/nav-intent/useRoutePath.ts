@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { resolveRoute } from './routes.js';
+import { guardLeave } from '../pump-ds/form/unsavedChanges.js';
 
 /**
  * The shell's current page, mirrored into the URL hash (`#/shifts`) so a reload
@@ -77,12 +78,22 @@ export function useRoutePath(defaultPath: string): [string, RouteNavigate] {
     };
   }, []);
 
+  const current = useRef(path);
+  useEffect(() => {
+    current.current = path;
+  }, [path]);
   const navigate = useCallback<RouteNavigate>((next, options) => {
-    setPath((prev) => {
-      const resolved = resolveRoute(typeof next === 'function' ? next(prev) : next);
-      if (resolved !== prev) replaceNext.current = !!options?.replace;
-      return resolved;
-    });
+    const go = () =>
+      setPath((prev) => {
+        const resolved = resolveRoute(typeof next === 'function' ? next(prev) : next);
+        if (resolved !== prev) replaceNext.current = !!options?.replace;
+        return resolved;
+      });
+    // Leaving a page with unsaved changes asks first (#604). Staying on the
+    // same route (a re-render, a replace of the same path) never asks.
+    const target = resolveRoute(typeof next === 'function' ? next(current.current) : next);
+    if (target === current.current) go();
+    else guardLeave(go);
   }, []);
 
   return [path, navigate];

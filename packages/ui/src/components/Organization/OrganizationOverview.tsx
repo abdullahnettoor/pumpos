@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Station, reachableStations, showStationDropdown, stationLimitMessage } from '@pump/shared';
 import { Tabs, tabPanelProps, type TabItem } from '../../pump-ds/tabs/index.js';
-import { Button, Icon } from '../../pump-ds/index.js';
+import { Button, Icon, guardLeave } from '../../pump-ds/index.js';
 import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
 import { PageFrame } from '../page-frame/index.js';
 import { UserRolesAssignment } from '../StationSetup/UserRolesAssignment.js';
@@ -48,10 +48,12 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
   const intent = useNavIntent();
   const tab: OrgTab =
     intent?.openOrganizationTab === 'desktop' && showDesktopTab ? 'desktop' : chosenTab;
-  const setTab = (next: OrgTab) => {
-    if (intent?.openOrganizationTab) clearNavIntent();
-    setChosenTab(next);
-  };
+  // Leaving the Profile tab with unsaved changes asks first (#604).
+  const setTab = (next: OrgTab) =>
+    guardLeave(() => {
+      if (intent?.openOrganizationTab) clearNavIntent();
+      setChosenTab(next);
+    });
 
   // Same rule as the top-bar breadcrumb: a switch is offered only when more than
   // one station can be reached (this workspace is Owner-only: every station).
@@ -134,7 +136,7 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
               stations={stations}
               selectedStation={selectedStation}
               canSwitchStation={canSwitchStation}
-              onStationChange={onStationChange}
+              onStationChange={(station) => guardLeave(() => onStationChange(station))}
               onOnboard={onboard}
               onboardGate={gate}
               onConfigure={() => onNavigate(ROUTES.station)}

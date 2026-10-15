@@ -34,9 +34,20 @@ export function formatKpiScope(scope: KpiScope): string {
   return shortMonth(Number(m[2]));
 }
 
-/** Two scopes name the same period (the same words on screen). */
+/**
+ * The period a scope covers, as a comparable key: the keyword, the month
+ * (`YYYY-MM`) or the day (`YYYY-MM-DD`). Never the label: Oct 2025 and Oct 2026
+ * read the same but are different periods.
+ */
+function scopeKey(scope: KpiScope): string {
+  if (typeof scope === 'string') return scope;
+  if ('day' in scope) return `day:${scope.day.slice(0, 10)}`;
+  return `month:${scope.month.slice(0, 7)}`;
+}
+
+/** Two scopes cover the same period. */
 export function sameKpiScope(a: KpiScope, b: KpiScope): boolean {
-  return formatKpiScope(a) === formatKpiScope(b);
+  return scopeKey(a) === scopeKey(b);
 }
 
 /**

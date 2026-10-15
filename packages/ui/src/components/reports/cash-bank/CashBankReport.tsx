@@ -216,7 +216,7 @@ export const CashBankReport: React.FC<CashBankReportProps> = ({ selectedStation,
         shape="cards"
         placeholderHeight={90}
       >
-        <KpiStrip columns="auto" scope="in-range">
+        <KpiStrip columns="auto">
           <KpiTile
             label="Opening"
             value={formatMoney(summary.total.opening)}

@@ -3,6 +3,7 @@ import { AppTopBar } from './AppTopBar.js';
 import { AppStatusBar } from './AppStatusBar.js';
 import { cn } from '../pump-ds/lib/cn.js';
 import { Icon, type IconName } from '../pump-ds/icon/index.js';
+import { guardLeave } from '../pump-ds/form/unsavedChanges.js';
 import { Station, canViewReports, type OperatorRole, type Role } from '@pump/shared';
 import { useContainerWidth } from '../hooks/useContainerWidth.js';
 import { useStationBusinessDate } from '../hooks/useStationClock.js';
@@ -76,10 +77,23 @@ export const SIDEBAR_COLLAPSED_KEY = 'pump.sidebar.collapsed';
  * is accepted on any platform; Shift or Alt makes it some other shortcut.
  */
 export function isSidebarShortcut(
-  e: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>,
+  e: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'> &
+    Partial<Pick<KeyboardEvent, 'defaultPrevented' | 'isComposing' | 'target'>>,
 ): boolean {
+  // Someone else handled it, or an IME is composing: not ours.
+  if (e.defaultPrevented || e.isComposing) return false;
+  // While typing, the keys belong to the field (#604 review).
+  if (isEditableTarget(e.target)) return false;
   if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return false;
   return e.key === '\\' || e.code === 'Backslash';
+}
+
+/** An input, textarea, select or contenteditable element: a place you type. */
+function isEditableTarget(target: EventTarget | null | undefined): boolean {
+  if (!target || typeof (target as Element).closest !== 'function') return false;
+  const el = target as HTMLElement;
+  if (el.isContentEditable) return true;
+  return !!el.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
 }
 
 const SIDEBAR_SHORTCUT_LABEL =
@@ -313,7 +327,10 @@ export const AppShell: React.FC<AppShellProps> = ({
           onNavigate={onNavigate}
           onLogout={onLogout}
           stations={stations}
-          onStationChange={onStationChange}
+          // A station switch with unsaved changes asks first (#604).
+          onStationChange={
+            onStationChange && ((station) => guardLeave(() => onStationChange(station)))
+          }
           pageLabel={visibleNavItems.find((n) => n.path === pageRoute(currentPath))?.label}
           stationReady={stationReady}
           userMenuExtras={userMenuExtras}

@@ -294,7 +294,7 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
       )}
 
       <DataSection title="Profit and loss totals" query={plQ} shape="cards" placeholderHeight={90}>
-        <KpiStrip columns="auto" scope="in-range">
+        <KpiStrip columns="auto">
           <KpiTile label="Revenue" value={formatMoney(totals.revenue)} />
           <KpiTile
             label="Gross margin"

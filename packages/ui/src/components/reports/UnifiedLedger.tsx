@@ -403,7 +403,7 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({
             shape="cards"
             placeholderHeight={90}
           >
-            <KpiStrip columns="auto" scope="in-range">
+            <KpiStrip columns="auto">
               <KpiTile label={resolvedCfg.kpiRaises} value={formatMoney(totals.raises)} />
               <KpiTile label={resolvedCfg.kpiLowers} value={formatMoney(totals.lowers)} />
               <KpiTile

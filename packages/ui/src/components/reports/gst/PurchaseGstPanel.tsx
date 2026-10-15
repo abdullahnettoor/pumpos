@@ -176,7 +176,7 @@ export const PurchaseGstPanel: React.FC<{
       />
 
       <DataSection title="GST totals" query={gstQ} shape="cards" placeholderHeight={90}>
-        <KpiStrip columns="auto" scope="in-range">
+        <KpiStrip columns="auto">
           <KpiTile label="Input credit (ITC)" value={formatMoney(itcTotal)} hint={split} />
           <KpiTile
             label="Invoices"

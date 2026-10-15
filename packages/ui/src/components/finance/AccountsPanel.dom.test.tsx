@@ -183,11 +183,8 @@ describe('Accounts › Accounts, a balance list (#530)', () => {
   it('the same page actions on every tab: New account (secondary), New transfer (primary)', async () => {
     render();
     await screen.findByRole('table');
-    // A tabbed page's actions ride on its sticky tab row (#604).
     const actions = () =>
-      Array.from(document.querySelectorAll('[data-page-frame-slot="actions"] button')).map(
-        (b) => b.textContent,
-      );
+      Array.from(document.querySelectorAll('header button')).map((b) => b.textContent);
     for (const tab of ['Accounts', 'Daily cash book', 'Transfers']) {
       fireEvent.click(screen.getByRole('tab', { name: new RegExp(tab) }));
       expect(actions().slice(0, 2), tab).toEqual(['New account', 'New transfer']);

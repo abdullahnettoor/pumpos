@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { Tabs, tabPanelProps, type TabItem } from './Tabs.js';
+import { scrollToReveal, tabsOverflow } from './overflow.js';
 
 afterEach(() => {
   cleanup();
@@ -188,5 +189,51 @@ describe('pump-ds Tabs', () => {
   it('sets no aria-controls when the bar has no id (no dangling panel references)', () => {
     render(<Controlled />);
     expect(screen.getByRole('tab', { name: 'General' }).hasAttribute('aria-controls')).toBe(false);
+  });
+});
+
+describe('pump-ds Tabs overflow (#604)', () => {
+  it('knows which ends of a scrolled bar hide tabs', () => {
+    expect(tabsOverflow({ scrollLeft: 0, clientWidth: 500, scrollWidth: 500 })).toEqual({
+      start: false,
+      end: false,
+    });
+    expect(tabsOverflow({ scrollLeft: 0, clientWidth: 500, scrollWidth: 800 })).toEqual({
+      start: false,
+      end: true,
+    });
+    expect(tabsOverflow({ scrollLeft: 300, clientWidth: 500, scrollWidth: 800 })).toEqual({
+      start: true,
+      end: false,
+    });
+    expect(tabsOverflow({ scrollLeft: 100, clientWidth: 500, scrollWidth: 800 })).toEqual({
+      start: true,
+      end: true,
+    });
+  });
+
+  it('scrolls just enough to bring a tab clear of the edge fade', () => {
+    const box = { scrollLeft: 0, clientWidth: 500 };
+    expect(scrollToReveal(box, { offsetLeft: 100, offsetWidth: 80 })).toBeNull();
+    // Past the right edge: its right side lands 24px inside.
+    expect(scrollToReveal(box, { offsetLeft: 480, offsetWidth: 100 })).toBe(104);
+    // Past the left edge after scrolling.
+    expect(
+      scrollToReveal({ scrollLeft: 300, clientWidth: 500 }, { offsetLeft: 10, offsetWidth: 80 }),
+    ).toBe(0);
+    expect(
+      scrollToReveal({ scrollLeft: 300, clientWidth: 500 }, { offsetLeft: 200, offsetWidth: 80 }),
+    ).toBe(176);
+  });
+
+  it('fades the end that hides tabs', () => {
+    render(<Controlled />);
+    const list = screen.getByRole('tablist');
+    Object.defineProperty(list, 'scrollWidth', { configurable: true, value: 800 });
+    Object.defineProperty(list, 'clientWidth', { configurable: true, value: 500 });
+    fireEvent.scroll(list);
+    expect(list.getAttribute('data-overflow-end')).toBe('true');
+    expect(list.getAttribute('data-overflow-start')).toBeNull();
+    expect(list.className).toContain('mask-image');
   });
 });

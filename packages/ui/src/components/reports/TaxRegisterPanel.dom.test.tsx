@@ -72,7 +72,8 @@ describe('TaxRegisterPanel', () => {
     query = ok(rows);
     renderWithProviders(<TaxRegisterPanel selectedStation={station} />);
     expect(screen.getAllByTestId('control-bar')).toHaveLength(1);
-    expect(screen.getAllByText('In range')).toHaveLength(1);
+    // The range control right above names the period: no caption, no chips (#604).
+    expect(screen.queryByText('In range')).toBeNull();
 
     const gst = sectionOf('section-header-gst-on-merchandise-sales');
     expect(within(gst).getByText('HSN 2710')).toBeTruthy();

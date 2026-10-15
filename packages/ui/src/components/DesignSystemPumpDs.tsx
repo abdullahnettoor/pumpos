@@ -297,9 +297,10 @@ const KpiStripShowcase: React.FC = () => (
 
     <div>
       <div className="mb-2.5 text-[12px] font-medium text-ink-muted">
-        Fixed 4-column grid, small. One shared period, named once for the strip
+        Fixed 4-column grid, small. One shared period, named once for the strip (none under a range
+        control, which names it already)
       </div>
-      <KpiStrip columns={4} scope="in-range">
+      <KpiStrip columns={4} scope="today">
         <KpiTile size="sm" label="Volume sold" value="3,210.75 L" />
         <KpiTile size="sm" label="Cash collected" value="₹1,84,260.00" />
         <KpiTile size="sm" label="UPI collected" value="₹92,140.00" />

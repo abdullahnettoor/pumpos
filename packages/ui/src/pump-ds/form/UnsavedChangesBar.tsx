@@ -6,6 +6,11 @@ export interface UnsavedChangesBarProps {
   dirty: boolean;
   /** Puts the form back to the saved values. */
   onDiscard: () => void;
+  /**
+   * Saves from outside a single form (one bar for several sections). Without
+   * it, Save is the submit button of the `<form>` the bar sits in.
+   */
+  onSave?: () => void;
   /** A save is in flight: Save spins and both buttons wait. */
   saving?: boolean;
   /** The Save button's words. Defaults to "Save". */
@@ -20,13 +25,15 @@ export interface UnsavedChangesBarProps {
  * shown only while the form is dirty, in place of an always-visible Save.
  *
  * Place it last inside the `<form>`: Save is the form's submit button, the
- * primary. The bar sticks to the bottom of the content area, so a long form
+ * primary. A tab with several forms uses one bar for all of them
+ * (`UnsavedSectionsProvider` + `UnsavedSectionsBar`), whose Save saves each. The bar sticks to the bottom of the content area, so a long form
  * keeps it in reach. A drawer keeps its own footer; this is for forms that
  * live on the page.
  */
 export const UnsavedChangesBar: React.FC<UnsavedChangesBarProps> = ({
   dirty,
   onDiscard,
+  onSave,
   saving = false,
   saveLabel = 'Save',
   label = 'Unsaved changes',
@@ -44,7 +51,13 @@ export const UnsavedChangesBar: React.FC<UnsavedChangesBarProps> = ({
         <Button type="button" variant="ghost" size="sm" onClick={onDiscard} disabled={saving}>
           Discard
         </Button>
-        <Button type="submit" variant="primary" size="sm" loading={saving}>
+        <Button
+          type={onSave ? 'button' : 'submit'}
+          variant="primary"
+          size="sm"
+          loading={saving}
+          onClick={onSave}
+        >
           {saveLabel}
         </Button>
       </div>

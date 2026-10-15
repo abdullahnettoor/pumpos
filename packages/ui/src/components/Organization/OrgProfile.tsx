@@ -6,7 +6,13 @@ import { CloudOrganizationService } from '../../services/cloud.js';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { useKeyedSave } from '../../office-records/useKeyedSave.js';
 import { Field, TextInput } from '../primitives/Field.js';
-import { DataSection, Form, SectionHeader, UnsavedChangesBar } from '../../pump-ds/index.js';
+import {
+  DataSection,
+  Form,
+  SectionHeader,
+  UnsavedChangesBar,
+  useUnsavedChangesGuard,
+} from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 
@@ -76,6 +82,15 @@ export const OrgProfile: React.FC = () => {
     );
   };
 
+  // Discard puts the saved details back and starts a new submit, so a save
+  // left unsettled never lends its key to a fresh edit (#604 review).
+  const discard = () => {
+    reset();
+    save.renew();
+  };
+  // Leaving the page, the tab or the window with changes asks first.
+  useUnsavedChangesGuard(isDirty, discard);
+
   const metaErrors = errors.metadata ?? {};
 
   return (
@@ -129,7 +144,7 @@ export const OrgProfile: React.FC = () => {
           <UnsavedChangesBar
             dirty={isDirty}
             saving={isSubmitting}
-            onDiscard={() => reset()}
+            onDiscard={discard}
             saveLabel="Save changes"
           />
         </Form>

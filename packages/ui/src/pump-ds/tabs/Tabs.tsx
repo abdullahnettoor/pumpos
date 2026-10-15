@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, type KeyboardEvent } from 'react';
+import React, { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { cn } from '../lib/cn.js';
+import { scrollToReveal, tabsOverflow, type TabsOverflow } from './overflow.js';
 import { ConceptIcon } from '../icon/ConceptIcon.js';
 import type { Concept } from '../icon/concepts.js';
 import type { ChipTone } from '../chip/Chip.js';
@@ -96,6 +97,14 @@ const keyTarget = (key: string, at: number, last: number): number => {
  * (wrapping), Home/End jump to the ends; only the active tab is in the Tab
  * order.
  */
+/** Edge fades that say "more tabs this way" (#604). */
+const FADE: Record<string, string> = {
+  none: '',
+  start: '[mask-image:linear-gradient(to_right,transparent,black_24px)]',
+  end: '[mask-image:linear-gradient(to_left,transparent,black_24px)]',
+  both: '[mask-image:linear-gradient(to_right,transparent,black_24px,black_calc(100%-24px),transparent)]',
+};
+
 export const Tabs: React.FC<TabsProps> = ({
   id: barId,
   tabs,
@@ -105,7 +114,38 @@ export const Tabs: React.FC<TabsProps> = ({
   'aria-label': ariaLabel,
 }) => {
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const listRef = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState<TabsOverflow>({ start: false, end: false });
   const enabled = tabs.filter((t) => !t.disabled);
+
+  // A bar wider than its row scrolls sideways (#604): fade the ends that hide
+  // tabs, and keep the active tab in view.
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const update = () =>
+      setOverflow((prev) => {
+        const next = tabsOverflow(list);
+        return prev.start === next.start && prev.end === next.end ? prev : next;
+      });
+    update();
+    list.addEventListener('scroll', update, { passive: true });
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    observer?.observe(list);
+    return () => {
+      list.removeEventListener('scroll', update);
+      observer?.disconnect();
+    };
+  }, [tabs.length]);
+
+  useEffect(() => {
+    const list = listRef.current;
+    const tab = refs.current[activeId];
+    if (!list || !tab) return;
+    // Horizontal only: scrollIntoView would also scroll the page.
+    const to = scrollToReveal(list, tab);
+    if (to !== null) list.scrollLeft = to;
+  }, [activeId]);
   const withIcons = tabs.filter(hasIcon).length;
 
   useEffect(() => {
@@ -135,12 +175,16 @@ export const Tabs: React.FC<TabsProps> = ({
 
   return (
     <div
+      ref={listRef}
       role="tablist"
       aria-label={ariaLabel}
       onKeyDown={onKeyDown}
+      data-overflow-start={overflow.start || undefined}
+      data-overflow-end={overflow.end || undefined}
       className={cn(
         'flex gap-0.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none]',
         'shadow-[inset_0_-1px_0_var(--border-soft)]',
+        FADE[overflow.start ? (overflow.end ? 'both' : 'start') : overflow.end ? 'end' : 'none'],
         className,
       )}
     >

@@ -125,8 +125,8 @@ describe('Reports › Cash & bank summary (#531)', () => {
   it('shows Cash + Bank in four in-range tiles, net of transfers between its accounts', () => {
     q.state = ready(DATA);
     renderWithProviders(<CashBankReport selectedStation={STATION} />);
-    // One period for the strip, named once above it (#604).
-    expect(screen.getAllByText('In range')).toHaveLength(1);
+    // The range control right above names the period: no caption, no chips (#604).
+    expect(screen.queryByText('In range')).toBeNull();
     expect(document.querySelectorAll('.kpi-value')).toHaveLength(4);
     // The tile whose label reads `label` (the tables have an Opening column too).
     const tile = (label: string) =>

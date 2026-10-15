@@ -187,7 +187,7 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
       />
 
       <DataSection title="Invoice totals" query={salesQ} shape="cards" placeholderHeight={90}>
-        <KpiStrip columns="auto" scope="in-range">
+        <KpiStrip columns="auto">
           <KpiTile
             label="Merchandise sales"
             value={formatMoney(kpis.total)}

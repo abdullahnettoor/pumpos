@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { __resetUnsavedChangesForTests } from '../../pump-ds/form/unsavedChanges.js';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
 import { FuelPricingPanel } from './FuelPricingPanel.js';
 import { StationOverview } from './StationOverview.js';
@@ -94,6 +95,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  __resetUnsavedChangesForTests();
 });
 
 const header = (init: RequestInit | undefined, name: string) =>
@@ -131,10 +133,24 @@ describe('Station page', () => {
     const form = await screen.findByRole('form', { name: 'Station details' });
     expect(screen.queryByRole('button', { name: 'Edit details' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull();
-    const name = form.querySelector('input[value="Highway Fuels"]') as HTMLInputElement;
+    const name = within(form).getByLabelText(/Station name/) as HTMLInputElement;
+    // Onboarding status is a read-only chip, not a field.
+    expect(screen.getByText('Ready for operations')).toBeTruthy();
+    expect(within(form).queryByRole('combobox', { name: /Onboarding/ })).toBeNull();
+    // While the form is changed, the bar's Save is the one primary: Add demotes.
+    expect(screen.getByRole('button', { name: 'Add' }).className).toContain('bg-brand');
 
     fireEvent.change(name, { target: { value: 'Highway Fuels 2' } });
     expect(screen.getByRole('region', { name: 'Unsaved changes' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add' }).className).not.toContain('bg-brand');
+    // Switching tab asks first.
+    fireEvent.click(screen.getByRole('tab', { name: 'Branding' }));
+    expect(
+      await screen.findByRole('alertdialog', { name: 'Discard unsaved changes?' }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(screen.getByRole('tab', { name: 'General' }).getAttribute('aria-selected')).toBe('true');
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
     expect(name.value).toBe('Highway Fuels');
     expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull();
@@ -146,6 +162,18 @@ describe('Station page', () => {
     expect(header(put.init, 'Idempotency-Key')).toBeTruthy();
     expect(JSON.parse(String(put.init!.body))).toMatchObject({ name: 'Highway Fuels 2' });
     await waitFor(() => expect(onStationSelected).toHaveBeenCalled());
+  });
+
+  it('refuses an invalid GSTIN on Branding without sending (#604 review)', async () => {
+    renderWithProviders(
+      <StationOverview selectedStation={station} userRole="Owner" onStationSelected={() => {}} />,
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: 'Branding' }));
+    const form = await screen.findByRole('form', { name: 'Business, tax and branding' });
+    fireEvent.change(within(form).getByLabelText('GSTIN'), { target: { value: '29ABC' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('A GSTIN is 15 letters and digits')).toBeTruthy();
+    expect(calls.some((c) => c.init?.method === 'PUT')).toBe(false);
   });
 
   it('a failed station list shows Retry, not "No station selected"', async () => {

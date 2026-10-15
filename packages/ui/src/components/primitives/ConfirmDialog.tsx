@@ -1,4 +1,12 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Button, Input } from '../../pump-ds/index.js';
 
 export interface ConfirmOptions {
@@ -30,6 +38,18 @@ const ConfirmContext = createContext<ConfirmFn | null>(null);
 export const useConfirm = (): ((options: ConfirmOptions) => Promise<boolean>) => {
   const ask = useAsk();
   return useCallback(async (options: ConfirmOptions) => (await ask(options)).confirmed, [ask]);
+};
+
+/**
+ * `useConfirm` for code that may render outside a `<ConfirmProvider>` (a
+ * shared guard, a test render): null there, so the caller can fall back.
+ */
+export const useOptionalConfirm = (): ((options: ConfirmOptions) => Promise<boolean>) | null => {
+  const ask = useContext(ConfirmContext);
+  return useMemo(
+    () => (ask ? async (options: ConfirmOptions) => (await ask(options)).confirmed : null),
+    [ask],
+  );
 };
 
 /**

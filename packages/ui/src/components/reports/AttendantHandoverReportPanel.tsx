@@ -137,7 +137,7 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
       />
 
       <DataSection title="Attendant totals" query={reportQ} shape="cards" placeholderHeight={90}>
-        <KpiStrip columns="auto" scope="in-range">
+        <KpiStrip columns="auto">
           <KpiTile
             label="Attendants"
             value={String(attendants.length)}

@@ -334,6 +334,27 @@ describe('AppShell collapse', () => {
     expect(k({ ctrlKey: true, shiftKey: true })).toBe(false);
     expect(k({ metaKey: true, altKey: true })).toBe(false);
     expect(k({ metaKey: true, key: 'k', code: 'KeyK' })).toBe(false);
+    // Not ours when handled already, mid-composition, or while typing.
+    expect(k({ metaKey: true, defaultPrevented: true })).toBe(false);
+    expect(k({ ctrlKey: true, isComposing: true })).toBe(false);
+    for (const tag of ['input', 'textarea', 'select']) {
+      expect(k({ metaKey: true, target: document.createElement(tag) }), tag).toBe(false);
+    }
+    const editable = document.createElement('div');
+    editable.setAttribute('contenteditable', 'true');
+    const inner = document.createElement('span');
+    editable.appendChild(inner);
+    expect(k({ metaKey: true, target: inner })).toBe(false);
+    expect(k({ metaKey: true, target: document.createElement('button') })).toBe(true);
+  });
+
+  it('leaves ⌘\\ alone inside a text field', () => {
+    shell();
+    const field = document.createElement('input');
+    document.body.appendChild(field);
+    fireEvent.keyDown(field, { key: '\\', code: 'Backslash', metaKey: true });
+    expect(screen.getByRole('button', { name: /collapse sidebar/i })).not.toBeNull();
+    field.remove();
   });
 
   it('becomes an icon rail below 1200px of app width and keeps the saved choice', () => {

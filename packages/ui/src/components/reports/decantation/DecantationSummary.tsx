@@ -21,7 +21,7 @@ const varianceWord = (v: number): string =>
 export const DecantationSummary: React.FC<{ totals: DecantationReportTotals }> = ({
   totals: t,
 }) => (
-  <KpiStrip columns="auto" scope="in-range">
+  <KpiStrip columns="auto">
     <KpiTile
       label="Tanker visits"
       value={String(t.totalVisits)}

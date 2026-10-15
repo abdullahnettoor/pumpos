@@ -73,9 +73,9 @@ Build pages from these; the full catalog with props is in
 `packages/ui/src/pump-ds/README.md` ("Modules"). Don't hand-roll what one decides.
 
 - **Page Frame** (`PageFrame`): back link top-left (`back` slot, never top-right),
-  title, one primary button top right, tabs, toolbar. On a tabbed page the
-  actions sit right of the tabs and that row sticks on scroll; the title scrolls
-  away (#604). Nothing else sticks.
+  title, one primary button top right, tabs, toolbar. On a tabbed page only the
+  tab row sticks on scroll; title and actions scroll away (#604). Nothing else
+  sticks.
 - **Section header** (`SectionHeader`): the in-page heading; its `controls` put a
   `ControlBar` directly above the table it filters (layout B).
 - **Controls**: `DateRangeMenu`, `FilterChips` (with counts), `SegmentedControl`
@@ -88,9 +88,10 @@ Build pages from these; the full catalog with props is in
   gets its own chip only when the strip mixes periods.
 - **In-page edit forms** (Station details, Organization profile, station rules):
   no standing Save; `UnsavedChangesBar` ("Unsaved changes · Discard · Save",
-  Save primary) shows only while the form is dirty (#604).
+  Save primary) shows only while the form is dirty, one per tab; React Hook Form +
+  Zod; `useUnsavedChangesGuard` asks before leaving; other primaries demote (#604).
 - **Overlays**: dialogs and the command palette blur the page (`--overlay-blur`)
-  over the scrim; drawers keep their own scrim. The sidebar collapses from its
+  over the scrim; drawers keep a plain scrim. The sidebar collapses from its
   edge, its Collapse button, or ⌘\ / Ctrl+\ (#604).
 - **Data Section** (`DataSection`): loading, refused, "Couldn't load … · Retry",
   empty, content. Never an empty state for a failed query.

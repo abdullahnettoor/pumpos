@@ -507,8 +507,8 @@ select:disabled {
   left: 0;
   width: 100vw;
   height: 100vh;
+  /* A plain scrim, no blur: the page beside a drawer stays sharp (#604). */
   background-color: var(--overlay-drawer);
-  backdrop-filter: blur(2px);
   z-index: 1000;
   opacity: 0;
   animation: drawerFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;

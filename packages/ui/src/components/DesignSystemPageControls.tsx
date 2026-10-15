@@ -100,7 +100,7 @@ const ReportLayout: React.FC = () => {
         exportMenu={<ExportMenu onPdf={noop} onCsv={noop} onPrint={noop} />}
         info={<Tip>Gross margin is by sales day. Expenses and other income are by entry date.</Tip>}
       />
-      <KpiStrip scope="in-range">
+      <KpiStrip>
         <KpiTile
           label="Revenue"
           value="₹87,57,000"

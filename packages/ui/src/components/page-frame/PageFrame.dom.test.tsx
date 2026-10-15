@@ -44,7 +44,7 @@ describe('PageFrame', () => {
     />
   );
 
-  it('places title, tabs with the actions, toolbar and content in a fixed order (#604)', () => {
+  it('places title, actions, tabs, toolbar and content in order; only the tabs stick (#604)', () => {
     const { container } = render(
       <PageFrame
         route={ROUTES.customers}
@@ -64,19 +64,17 @@ describe('PageFrame', () => {
     const content = screen.getByText('Customer table');
 
     expect(before(title, subtitle)).toBe(true);
-    expect(before(subtitle, tabs)).toBe(true);
-    expect(before(tabs, action)).toBe(true);
-    expect(before(action, toolbar)).toBe(true);
+    expect(before(subtitle, action)).toBe(true);
+    expect(before(action, tabs)).toBe(true);
+    expect(before(tabs, toolbar)).toBe(true);
     expect(before(toolbar, content)).toBe(true);
-    // A tabbed page's actions ride on the tab row, which sticks; the title
-    // and subtitle scroll away.
+    // Actions sit on the title row and scroll away with it.
+    expect(action.closest('header')).toBe(title.closest('header'));
     const row = container.querySelector('[data-page-frame-slot="tabs"]')!;
-    expect(row.contains(tabs)).toBe(true);
-    expect(row.contains(action)).toBe(true);
     expect(row.getAttribute('class')).toMatch(/(^|\s)sticky(\s|$)/);
+    expect(row.contains(tabs)).toBe(true);
+    expect(row.contains(action)).toBe(false);
     expect(row.contains(title)).toBe(false);
-    expect(action.closest('header')).toBeNull();
-    // The toolbar and the content do not stick.
     expect(toolbar.closest('.sticky')).toBeNull();
     expect(content.closest('.sticky')).toBeNull();
   });

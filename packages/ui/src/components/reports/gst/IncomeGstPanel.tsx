@@ -150,7 +150,7 @@ export const IncomeGstPanel: React.FC<{
       />
 
       <DataSection title="GST totals" query={gstQ} shape="cards" placeholderHeight={90}>
-        <KpiStrip columns="auto" scope="in-range">
+        <KpiStrip columns="auto">
           <KpiTile label="Taxable value" value={formatMoney(totals.taxable)} hint="net of GST" />
           <KpiTile
             label="CGST + SGST"

@@ -43,6 +43,10 @@ describe('KpiTile', () => {
     expect(kpiTileChip('today', 'today')).toBeNull();
     expect(kpiTileChip({ month: '2026-10-14' }, { month: '2026-10' })).toBeNull();
     expect(kpiTileChip({ month: '2026-10' }, 'today')).toBe('Oct');
+    // Same label, different period: Oct 2025 is not Oct 2026.
+    expect(kpiTileChip({ month: '2025-10' }, { month: '2026-10-01' })).toBe('Oct');
+    expect(kpiTileChip({ day: '2026-10-14' }, { day: '2025-10-14' })).toBe('14 Oct');
+    expect(kpiTileChip({ day: '2026-10-14' }, { day: '2026-10-14' })).toBeNull();
   });
 
   it('finds the one period a strip shares, or none when tiles differ (#604)', () => {
@@ -55,6 +59,7 @@ describe('KpiTile', () => {
     expect(sharedKpiScope(['now', 'now'])).toBeNull();
     expect(sharedKpiScope([{ month: '2026-10' }, 'now'])).toBeNull();
     expect(sharedKpiScope([])).toBeNull();
+    expect(sharedKpiScope([{ month: '2025-10' }, { month: '2026-10' }])).toBeNull();
   });
 
   it('has no colour without alert: the value is plain ink', () => {
