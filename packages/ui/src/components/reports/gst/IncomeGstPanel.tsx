@@ -151,27 +151,15 @@ export const IncomeGstPanel: React.FC<{
 
       <DataSection title="GST totals" query={gstQ} shape="cards" placeholderHeight={90}>
         <KpiStrip columns="auto">
-          <KpiTile
-            label="Taxable value"
-            scope="in-range"
-            value={formatMoney(totals.taxable)}
-            hint="net of GST"
-          />
+          <KpiTile label="Taxable value" value={formatMoney(totals.taxable)} hint="net of GST" />
           <KpiTile
             label="CGST + SGST"
-            scope="in-range"
             value={formatMoney(totals.cgst + totals.sgst)}
             hint="intra-state"
           />
-          <KpiTile
-            label="IGST"
-            scope="in-range"
-            value={formatMoney(totals.igst)}
-            hint="inter-state"
-          />
+          <KpiTile label="IGST" value={formatMoney(totals.igst)} hint="inter-state" />
           <KpiTile
             label="Output GST"
-            scope="in-range"
             value={formatMoney(outputTotal)}
             hint={`${gstRows.length} ${gstRows.length === 1 ? 'entry' : 'entries'}`}
           />

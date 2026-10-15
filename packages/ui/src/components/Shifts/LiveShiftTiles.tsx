@@ -58,11 +58,10 @@ export const LiveShiftTiles: React.FC<LiveShiftTilesProps> = ({ figures, product
           .join(' · ');
 
   return (
-    <KpiStrip columns="auto">
+    <KpiStrip columns="auto" scope="this-shift">
       <TileSection title="product sales" query={productQueries}>
         <KpiTile
           label="Sales"
-          scope="this-shift"
           value={formatMoney(figures.sales)}
           hint={salesHint}
           title={salesHint}
@@ -70,13 +69,11 @@ export const LiveShiftTiles: React.FC<LiveShiftTilesProps> = ({ figures, product
       </TileSection>
       <KpiTile
         label="Card / UPI / Credit"
-        scope="this-shift"
         value={formatMoney(takings.nonCash)}
         hint={`Card ${whole(takings.card)} · UPI ${whole(takings.upi)} · Credit ${whole(takings.credit)}`}
       />
       <KpiTile
         label="Drawer variance"
-        scope="this-shift"
         value={
           drawers.recorded === 0 ? '—' : signedMoneyParts(drawers.variance, { plus: true }).text
         }

@@ -286,3 +286,13 @@ export { DecantationReportPanel } from './components/reports/DecantationReportPa
 export * from './components/inventory/density/index.js';
 
 export * from './theme/index.js';
+export {
+  UnsavedChangesBar,
+  UnsavedSectionsProvider,
+  UnsavedSectionsBar,
+  useUnsavedChangesGuard,
+  useHasUnsavedChanges,
+  hasUnsavedChanges,
+  confirmDiscardUnsaved,
+  guardLeave,
+} from './pump-ds/form/index.js';

@@ -77,11 +77,10 @@ export const IdleShiftView: React.FC<IdleShiftViewProps> = ({
     : '';
   return (
     <div className="flex flex-col gap-4">
-      <KpiStrip columns="auto">
+      <KpiStrip columns="auto" scope="today">
         <TileSection title="today's fuel" query={dayQuery}>
           <KpiTile
             label="Fuel sold"
-            scope="today"
             value={formatQuantity(day.netVolume, 'L')}
             hint={`${countOf(day.shiftsIncluded, 'shift', 'shifts')} closed`}
           />
@@ -89,7 +88,6 @@ export const IdleShiftView: React.FC<IdleShiftViewProps> = ({
         <TileSection title="today's sales" query={dayQuery}>
           <KpiTile
             label="Sales"
-            scope="today"
             value={formatMoney(day.revenue)}
             hint={`Fuel ${formatMoney(day.revenueFuel, { decimals: 0 })} · Products ${formatMoney(
               day.revenueProducts,
@@ -100,7 +98,6 @@ export const IdleShiftView: React.FC<IdleShiftViewProps> = ({
         <TileSection title="today's drawer variance" query={dayQuery}>
           <KpiTile
             label="Drawer variance"
-            scope="today"
             value={variance == null ? '—' : signedMoneyParts(variance, { plus: true }).text}
             alert={varianceAlert(variance)}
             hint={

@@ -1,4 +1,12 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Button, Input } from '../../pump-ds/index.js';
 
 export interface ConfirmOptions {
@@ -30,6 +38,18 @@ const ConfirmContext = createContext<ConfirmFn | null>(null);
 export const useConfirm = (): ((options: ConfirmOptions) => Promise<boolean>) => {
   const ask = useAsk();
   return useCallback(async (options: ConfirmOptions) => (await ask(options)).confirmed, [ask]);
+};
+
+/**
+ * `useConfirm` for code that may render outside a `<ConfirmProvider>` (a
+ * shared guard, a test render): null there, so the caller can fall back.
+ */
+export const useOptionalConfirm = (): ((options: ConfirmOptions) => Promise<boolean>) | null => {
+  const ask = useContext(ConfirmContext);
+  return useMemo(
+    () => (ask ? async (options: ConfirmOptions) => (await ask(options)).confirmed : null),
+    [ask],
+  );
 };
 
 /**
@@ -90,17 +110,9 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
         <div
           role="presentation"
           onMouseDown={() => close(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            // Above drawers (1001): a confirm is often asked from inside one.
-            zIndex: 1100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'var(--overlay-scrim)',
-            padding: '16px',
-          }}
+          // Above drawers (1001): a confirm is often asked from inside one. The
+          // scrim takes the dialog blur (#604); a drawer's scrim does not.
+          className="fixed inset-0 z-[1100] flex items-center justify-center bg-(--overlay-scrim) p-4 backdrop-blur-(--overlay-blur)"
         >
           <div
             role="alertdialog"

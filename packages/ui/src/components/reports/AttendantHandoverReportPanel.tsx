@@ -140,13 +140,11 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
         <KpiStrip columns="auto">
           <KpiTile
             label="Attendants"
-            scope="in-range"
             value={String(attendants.length)}
             hint={`${countOf(totals.shifts, 'shift', 'shifts')} closed`}
           />
           <KpiTile
             label="Net variance"
-            scope="in-range"
             value={formatVariance(totals.variance, 'cash').text}
             alert={varianceAlert(totals.variance)}
             hint={varianceSpread(attendants)}

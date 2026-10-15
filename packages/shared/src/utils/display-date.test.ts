@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCalendarDate, formatInstantDate } from './display-date.js';
+import { formatCalendarDate, formatCalendarRange, formatInstantDate } from './display-date.js';
 import { formatStationDateTime } from './shift-context.js';
 
 // #603: "05 Oct 2026" → "5 Oct 2026" everywhere, one formatter.
@@ -18,5 +18,14 @@ describe('display dates', () => {
     expect(formatStationDateTime('2026-10-04T20:00:00Z', 'Asia/Kolkata')).toBe(
       '5 Oct 2026, 01:30 am',
     );
+  });
+});
+
+describe('formatCalendarRange (#604)', () => {
+  it('shares what both ends share', () => {
+    expect(formatCalendarRange('2026-10-01', '2026-10-15')).toBe('1–15 Oct 2026');
+    expect(formatCalendarRange('2026-09-28', '2026-10-15')).toBe('28 Sep – 15 Oct 2026');
+    expect(formatCalendarRange('2025-12-28', '2026-01-03')).toBe('28 Dec 2025 – 3 Jan 2026');
+    expect(formatCalendarRange('2026-10-05', '2026-10-05')).toBe('5 Oct 2026');
   });
 });

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { __resetUnsavedChangesForTests } from '../../pump-ds/form/unsavedChanges.js';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
 import { FuelPricingPanel } from './FuelPricingPanel.js';
 import { StationOverview } from './StationOverview.js';
@@ -29,8 +30,13 @@ type Route = { status?: number; data?: unknown; message?: string };
 let routes: Record<string, Route>;
 const calls: { url: string; init?: RequestInit }[] = [];
 
+let saved: Record<string, unknown>;
+let version = 0;
+
 beforeEach(() => {
   calls.length = 0;
+  saved = { ...station };
+  version = 0;
   routes = {
     '/setup/stations': { data: [station] },
     '/setup/products': {
@@ -74,10 +80,21 @@ beforeEach(() => {
       const url = String(input);
       calls.push({ url, init });
       const path = new URL(url, 'http://x').pathname.replace(/^\/api/, '');
+      // A station PUT behaves like the server: the body over the saved
+      // station, with a newer updatedAt.
+      if (init?.method === 'PUT' && path.startsWith('/setup/stations/')) {
+        saved = {
+          ...saved,
+          ...JSON.parse(String(init.body)),
+          updatedAt: `2026-10-15T00:00:${String(++version).padStart(2, '0')}Z`,
+        };
+      }
       const route =
-        init?.method && init.method !== 'GET'
-          ? { data: { id: 'new' } }
-          : (routes[path] ?? { data: [] });
+        init?.method === 'PUT' && path.startsWith('/setup/stations/')
+          ? { data: saved }
+          : init?.method && init.method !== 'GET'
+            ? { data: { id: 'new' } }
+            : (routes[path] ?? { data: [] });
       const status = route.status ?? 200;
       const body =
         status >= 400
@@ -94,6 +111,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  __resetUnsavedChangesForTests();
 });
 
 const header = (init: RequestInit | undefined, name: string) =>
@@ -117,6 +135,109 @@ describe('Station page', () => {
     );
     await screen.findByRole('tab', { name: 'General' });
     expect(screen.queryByRole('button', { name: 'Add' })).toBeNull();
+  });
+
+  it('Station details is an in-page form: the unsaved-changes bar shows only while it differs (#604)', async () => {
+    const onStationSelected = vi.fn();
+    renderWithProviders(
+      <StationOverview
+        selectedStation={station}
+        userRole="Owner"
+        onStationSelected={onStationSelected}
+      />,
+    );
+    const form = await screen.findByRole('form', { name: 'Station details' });
+    expect(screen.queryByRole('button', { name: 'Edit details' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull();
+    const name = within(form).getByLabelText(/Station name/) as HTMLInputElement;
+    // Onboarding status is a read-only chip, not a field.
+    expect(screen.getByText('Ready for operations')).toBeTruthy();
+    expect(within(form).queryByRole('combobox', { name: /Onboarding/ })).toBeNull();
+    // While the form is changed, the bar's Save is the one primary: Add demotes.
+    expect(screen.getByRole('button', { name: 'Add' }).className).toContain('bg-brand');
+
+    fireEvent.change(name, { target: { value: 'Highway Fuels 2' } });
+    expect(screen.getByRole('region', { name: 'Unsaved changes' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add' }).className).not.toContain('bg-brand');
+    // Switching tab asks first.
+    fireEvent.click(screen.getByRole('tab', { name: 'Branding' }));
+    expect(
+      await screen.findByRole('alertdialog', { name: 'Discard unsaved changes?' }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(screen.getByRole('tab', { name: 'General' }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(name.value).toBe('Highway Fuels');
+    expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull();
+
+    fireEvent.change(name, { target: { value: 'Highway Fuels 2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(calls.some((c) => c.init?.method === 'PUT')).toBe(true));
+    const put = calls.find((c) => c.init?.method === 'PUT')!;
+    expect(header(put.init, 'Idempotency-Key')).toBeTruthy();
+    expect(JSON.parse(String(put.init!.body))).toMatchObject({ name: 'Highway Fuels 2' });
+    await waitFor(() => expect(onStationSelected).toHaveBeenCalled());
+  });
+
+  it('Rules saves both changed sections, the second built on the first (#604 review)', async () => {
+    renderWithProviders(
+      <StationOverview selectedStation={station} userRole="Owner" onStationSelected={() => {}} />,
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: 'Rules' }));
+    fireEvent.change(await screen.findByLabelText(/Critical below/), { target: { value: '15' } });
+    fireEvent.change(screen.getByLabelText('Settling time (minutes)'), {
+      target: { value: '45' },
+    });
+    expect(screen.getByText('2 sections changed')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const puts = () => calls.filter((c) => c.init?.method === 'PUT');
+    await waitFor(() => expect(puts()).toHaveLength(2));
+    const bodies = puts().map((c) => JSON.parse(String(c.init!.body)));
+    // The decantation body carries the tank levels just saved, not the stale prop's.
+    expect(bodies[1].settings).toMatchObject({
+      tankLevels: { criticalBelowPct: 15 },
+      settlingTimeMinutes: 45,
+    });
+    expect(saved.settings).toMatchObject({
+      tankLevels: { criticalBelowPct: 15 },
+      settlingTimeMinutes: 45,
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull(),
+    );
+    // Keys: one per section.
+    const keys = puts().map((c) => header(c.init, 'Idempotency-Key'));
+    expect(new Set(keys).size).toBe(2);
+  });
+
+  it('a grace period of 0 survives a save (#604 review)', async () => {
+    renderWithProviders(
+      <StationOverview selectedStation={station} userRole="Owner" onStationSelected={() => {}} />,
+    );
+    const form = await screen.findByRole('form', { name: 'Station details' });
+    const grace = within(form).getByLabelText(/Shift grace period/) as HTMLInputElement;
+    fireEvent.change(grace, { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(calls.some((c) => c.init?.method === 'PUT')).toBe(true));
+    const put = calls.find((c) => c.init?.method === 'PUT')!;
+    expect(JSON.parse(String(put.init!.body)).settings.shift_grace_minutes).toBe(0);
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull(),
+    );
+    expect(grace.value).toBe('0');
+  });
+
+  it('refuses an invalid GSTIN on Branding without sending (#604 review)', async () => {
+    renderWithProviders(
+      <StationOverview selectedStation={station} userRole="Owner" onStationSelected={() => {}} />,
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: 'Branding' }));
+    const form = await screen.findByRole('form', { name: 'Business, tax and branding' });
+    fireEvent.change(within(form).getByLabelText('GSTIN'), { target: { value: '29ABC' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('A GSTIN is 15 letters and digits')).toBeTruthy();
+    expect(calls.some((c) => c.init?.method === 'PUT')).toBe(false);
   });
 
   it('a failed station list shows Retry, not "No station selected"', async () => {

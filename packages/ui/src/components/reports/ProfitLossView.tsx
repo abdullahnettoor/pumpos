@@ -295,16 +295,14 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
 
       <DataSection title="Profit and loss totals" query={plQ} shape="cards" placeholderHeight={90}>
         <KpiStrip columns="auto">
-          <KpiTile label="Revenue" scope="in-range" value={formatMoney(totals.revenue)} />
+          <KpiTile label="Revenue" value={formatMoney(totals.revenue)} />
           <KpiTile
             label="Gross margin"
-            scope="in-range"
             value={formatMoney(totals.grossMargin)}
             hint={`${formatPercent(totals.marginPct)} of revenue`}
           />
           <KpiTile
             label="Operating expenses"
-            scope="in-range"
             value={formatMoney(totals.expenses)}
             hint={
               totals.otherIncome > 0
@@ -314,7 +312,6 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
           />
           <KpiTile
             label="Net profit"
-            scope="in-range"
             alert={totals.netProfit < 0 ? 'danger' : undefined}
             value={formatMoney(totals.netProfit)}
           />

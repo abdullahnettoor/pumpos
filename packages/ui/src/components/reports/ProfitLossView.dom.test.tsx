@@ -98,8 +98,9 @@ describe('ProfitLossView', () => {
 
   it('shows at most four in-range tiles, net profit plain unless it is a loss', () => {
     renderWithProviders(<ProfitLossView selectedStation={station} />);
-    const scopes = screen.getAllByText('In range');
-    expect(scopes.length).toBeLessThanOrEqual(4);
+    // The range control right above names the period: no caption, no chips (#604).
+    expect(screen.queryByText('In range')).toBeNull();
+    expect(document.querySelectorAll('.kpi-value').length).toBeLessThanOrEqual(4);
     expect(screen.queryByText('COGS', { selector: '.truncate' })).toBeNull();
     expect(screen.getByText('10.0% of revenue')).toBeTruthy();
     expect(screen.getByText('Other income ₹100.00')).toBeTruthy();

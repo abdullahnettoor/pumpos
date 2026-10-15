@@ -166,13 +166,12 @@ export const DsrListPanel: React.FC<DsrListPanelProps> = ({
 
       <DataSection title="DSR totals" query={dssrQ} shape="cards" placeholderHeight={90}>
         <KpiStrip columns="auto">
-          <KpiTile label="Generated DSRs" scope="in-range" value={String(kpis.count)} />
-          <KpiTile label="Net volume sold" scope="in-range" value={kpis.volumeLabel} />
+          <KpiTile label="Generated DSRs" value={String(kpis.count)} />
+          <KpiTile label="Net volume sold" value={kpis.volumeLabel} />
           {/* Cash received for sales by shift Drawers. Collections are Office
               Records (ADR 0005) and live in the Daily Cash Book. */}
           <KpiTile
             label="Cash sales"
-            scope="in-range"
             value={kpis.cashSales == null ? '—' : formatMoney(kpis.cashSales)}
             hint={
               kpis.daysWithoutCash > 0

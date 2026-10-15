@@ -163,7 +163,7 @@ describe('Suppliers page (#528)', () => {
     ]);
   });
 
-  it('the supplier list is layout B: server tiles with period chips, then the list header and its controls', async () => {
+  it('the supplier list is layout B: server tiles (a chip only on the month figures), then the list header and its controls', async () => {
     renderWithProviders(<PurchasesList selectedStation={station} />);
     const table = await screen.findByRole('table');
     const header = screen.getByTestId('section-header-suppliers');
@@ -174,17 +174,19 @@ describe('Suppliers page (#528)', () => {
     expect(screen.getAllByTestId('control-bar')).toHaveLength(1);
 
     // Payable, Purchased and Paid are the server's figures, never sums of the lists.
-    const chips: [string, string, string][] = [
-      ['Payable', 'Now', '₹1,234.50'],
+    // A balance carries no period chip (#604); the month figures name theirs.
+    const chips: [string, string | null, string][] = [
+      ['Payable', null, '₹1,234.50'],
       ['Purchased', monthName, '₹4,321.00'],
       ['Paid', monthName, '₹987.00'],
-      ['Advance paid', 'Now', '₹250.00'],
+      ['Advance paid', null, '₹250.00'],
     ];
     await screen.findByText('₹1,234.50');
     for (const [label, chip, value] of chips) {
       const tile = tileOf(label);
       expect(before(tile, header)).toBe(true);
-      expect(within(tile).getByText(chip)).toBeTruthy();
+      if (chip) expect(within(tile).getByText(chip)).toBeTruthy();
+      else expect(within(tile).queryByText('Now')).toBeNull();
       expect(within(tile).getByText(value)).toBeTruthy();
       expect(tile.getAttribute('data-alert')).toBeNull();
     }
