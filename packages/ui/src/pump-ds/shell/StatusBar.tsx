@@ -85,6 +85,12 @@ export interface StatusBarProps {
   /** A manual check is running: the version reads "Checking…". */
   checkingUpdates?: boolean;
 
+  /**
+   * Non-production build badge ("Local", "Dev", "Preview"), shown at the far
+   * right next to the version (#603). Production passes nothing.
+   */
+  environmentTag?: string | null;
+
   className?: string;
 }
 
@@ -150,6 +156,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   onUpdate,
   onCheckUpdates,
   checkingUpdates = false,
+  environmentTag,
   className,
 }) => {
   const sync = SYNC_META[syncStatus];
@@ -311,6 +318,18 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             </Segment>
           )}
         </>
+      )}
+
+      {/* Build badge, last: never over page content or its actions. */}
+      {environmentTag && (
+        <Segment className="pr-2 pl-1">
+          <span
+            data-testid="statusbar-environment"
+            className="inline-flex h-[18px] items-center rounded-chip border border-warning-fg/40 bg-warning-bg px-1.5 text-[12px] font-bold uppercase leading-none tracking-[0.08em] text-warning-fg"
+          >
+            {environmentTag}
+          </span>
+        </Segment>
       )}
     </div>
   );

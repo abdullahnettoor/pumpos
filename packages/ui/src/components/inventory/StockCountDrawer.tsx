@@ -75,7 +75,7 @@ export const StockCountDrawer: React.FC<StockCountDrawerProps> = ({
           value={scope}
           onChange={onScopeChange}
           options={[
-            { value: 'item', label: 'Merchandise' },
+            { value: 'item', label: 'Products' },
             { value: 'tank', label: 'Fuel tank' },
           ]}
         />

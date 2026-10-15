@@ -51,6 +51,16 @@ describe('SegmentedControl', () => {
     expect(group).not.toContain('h-8');
   });
 
+  // #603: a column parent (Reports › Ledgers, GST) stretched the track across the page.
+  it('hugs its segments by default, so a column parent never stretches it', () => {
+    render(
+      <SegmentedControl aria-label="Paper" options={options} value="A4" onChange={() => {}} />,
+    );
+    const group = screen.getByRole('radiogroup').className;
+    expect(group).toContain('w-fit');
+    expect(group).not.toContain('w-full');
+  });
+
   it('stretch gives every segment an equal share of the row', () => {
     render(
       <SegmentedControl

@@ -211,7 +211,7 @@ describe('BusinessDayTab', () => {
           { businessDate: '2026-02-27', id: 'bd-old' },
         ],
       });
-      const [today] = await screen.findAllByRole('row', { name: /01 Mar 2026/i });
+      const [today] = await screen.findAllByRole('row', { name: /1 Mar 2026/i });
       fireEvent.click(today);
       await waitFor(() => expect(today.getAttribute('aria-current')).toBe('true'));
     });
@@ -295,7 +295,7 @@ describe('BusinessDayTab', () => {
       await waitFor(() => expect(closeDayButton()).not.toBeNull());
       fireEvent.click(closeDayButton()!);
       await waitFor(() =>
-        expect(screen.getByText(/immutable DSR snapshot for 01 Mar 2026/)).toBeDefined(),
+        expect(screen.getByText(/immutable DSR snapshot for 1 Mar 2026/)).toBeDefined(),
       );
     });
 

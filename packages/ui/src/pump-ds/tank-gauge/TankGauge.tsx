@@ -5,8 +5,9 @@ import { formatQty } from '../../utils/format.js';
 import { stockOfCapacity } from './stockOfCapacity.js';
 
 /**
- * TankGauge — one tank's level (#520): fill in its tone, the % in that tone,
- * "12.4 of 20 KL" and days of cover. The tone comes from the shared tank-level
+ * TankGauge — one tank's level (#520): fill in its tone, the stock as the
+ * headline ("13,000 L", #603) with "of 20,000 L · 65%" under it, and days of
+ * cover. Amber or red only when the tank is low or critical. The tone comes from the shared tank-level
  * model (`deriveTankLevel` + the station's `resolveTankLevelSettings`), so the
  * gauge never decides a threshold itself.
  *
@@ -25,7 +26,7 @@ export interface TankGaugeProps {
   variant?: TankGaugeVariant;
   /** Tube size; `md` (the default) everywhere but a page that is about the tanks. */
   size?: TankGaugeSize;
-  /** Product unit; litres (the default) read as KL. */
+  /** Product unit; litres (the default) or kg for CNG. */
   unit?: string | null;
   /** Shown where days of cover goes when the tank has no sales history. */
   coverFallback?: ReactNode;
@@ -34,10 +35,11 @@ export interface TankGaugeProps {
   className?: string;
 }
 
+/** The headline's colour: a problem only (low / critical); otherwise plain. */
 const TONE_TEXT: Record<TankTone, string> = {
   critical: 'text-danger-fg',
   low: 'text-warning-fg',
-  ok: 'text-success-fg',
+  ok: 'text-ink-strong',
   unknown: 'text-ink-muted',
 };
 
@@ -78,7 +80,7 @@ const TUBE = {
     tube: 'h-[30px] w-3 rounded-sm',
     name: 'text-[12.5px]',
     pct: 'text-[13px]',
-    stock: 'text-[12px]',
+    stock: 'whitespace-nowrap text-[12px]',
     side: 'shrink-0',
   },
   lg: {
@@ -103,17 +105,21 @@ export const TankGauge: React.FC<TankGaugeProps> = ({
   className,
 }) => {
   const t = TUBE[variant === 'tube' ? size : 'md'];
+  const figures = stockOfCapacity(level.stock, level.capacity, unit, level.pct);
+  // Headline: the stock, in tone only when the tank is low or critical.
   const pct = (
-    <span className={cn('font-mono font-semibold tabular-nums', t.pct, TONE_TEXT[level.tone])}>
-      {level.pct === null ? '—' : `${level.pct}%`}
+    <span
+      className={cn(
+        'whitespace-nowrap font-mono font-semibold tabular-nums',
+        t.pct,
+        TONE_TEXT[level.tone],
+      )}
+    >
+      {level.capacity ? figures.stock : '—'}
     </span>
   );
   const word = TANK_TONE_LABEL[level.tone];
-  const stock = (
-    <span className={cn('font-mono text-ink-muted', t.stock)}>
-      {stockOfCapacity(level.stock, level.capacity, unit)}
-    </span>
-  );
+  const stock = <span className={cn('font-mono text-ink-muted', t.stock)}>{figures.detail}</span>;
   const meter = {
     role: 'meter',
     'aria-valuenow': level.pct ?? undefined,
@@ -169,14 +175,14 @@ export const TankGauge: React.FC<TankGaugeProps> = ({
       </span>
       <div className="min-w-0 flex-1">
         <div className={cn('truncate font-semibold text-ink', t.name)}>{name}</div>
-        {stock}
-        {showStatus && <Status level={level} />}
-      </div>
-      <div className={cn('text-right', t.side)}>
         <div>
           {pct}
           {word && <span className="sr-only"> {word}</span>}
         </div>
+        {stock}
+        {showStatus && <Status level={level} />}
+      </div>
+      <div className={cn('text-right', t.side)}>
         <div className="text-[12px] text-ink-muted">
           <Cover days={level.daysOfCover} fallback={coverFallback} />
         </div>

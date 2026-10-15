@@ -7,6 +7,7 @@ import { DensityCalculatorPopover } from '../../primitives/DensityCalculatorPopo
 import { KV, LineTag, Notice } from './StepSection.js';
 import { chambersAfterLineRemoved, emptyLine } from './decantationForm.js';
 import { formatDensity, formatQuantity } from '../../../utils/format.js';
+import { tankQuantity } from '../../../pump-ds/tank-gauge/stockOfCapacity.js';
 import { GRID, lineBorder, lineLabel, tankOf, SummaryCard, type StepProps } from './stepShared.js';
 
 export const TanksStep: React.FC<
@@ -77,7 +78,11 @@ export const TanksStep: React.FC<
                 label="Before dip (L)"
                 required
                 error={errs?.beforeDip?.message}
-                hint={tank ? `Book ${formatQuantity(tank.currentVolume, 'L')}` : undefined}
+                hint={
+                  tank?.currentVolume != null
+                    ? `Book ${tankQuantity(tank.currentVolume)}`
+                    : undefined
+                }
               >
                 <NumberInput
                   aria-label={`Before dip, line ${i + 1}`}

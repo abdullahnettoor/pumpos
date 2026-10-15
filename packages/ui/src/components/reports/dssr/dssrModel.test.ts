@@ -28,7 +28,7 @@ describe('readDssrDay', () => {
     expect(day.shiftsIncluded).toBe(0);
     expect(day.fuel.rows).toEqual([]);
     expect(day.sales.map((l) => l.label)).toEqual([
-      'Merchandise sales',
+      'Product sales',
       'Normal credit sales',
       'Fleet credit sales',
       'Purchases',
@@ -44,7 +44,7 @@ describe('readDssrDay', () => {
       },
     });
     expect(day.sales.slice(-4)).toEqual([
-      { label: 'Merchandise taxable value', value: '₹100.00' },
+      { label: 'Product taxable value', value: '₹100.00' },
       { label: 'Output GST on sales (IGST)', value: '₹18.00' },
       { label: 'Output VAT on fuel', value: '₹50.00' },
       { label: 'Gross margin', value: '₹0.00' },

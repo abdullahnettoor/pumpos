@@ -162,7 +162,7 @@ export const ProductStockView: React.FC<ProductStockViewProps> = ({ itemsQ, high
             <EmptyState
               compact
               icon={<Icon name="package" size="md" />}
-              title={items.length === 0 ? 'No merchandise' : 'No matching products'}
+              title={items.length === 0 ? 'No products' : 'No matching products'}
               description={
                 items.length === 0
                   ? 'Add non-fuel products in Station → Products.'

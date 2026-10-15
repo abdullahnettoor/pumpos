@@ -227,10 +227,10 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
   const statementLines: StatementLine[] = single
     ? [
         { label: 'Fuel revenue', value: single.revenueFuel },
-        { label: 'Merchandise revenue', value: single.revenueMerch },
+        { label: 'Product revenue', value: single.revenueMerch },
         { label: 'Total revenue', value: single.revenue, subtotal: true },
         { label: 'Fuel COGS', value: -single.cogsFuel },
-        { label: 'Merchandise COGS', value: -single.cogsMerch },
+        { label: 'Product COGS', value: -single.cogsMerch },
         {
           label: 'Gross margin',
           value: single.grossMargin,
@@ -285,7 +285,7 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
             <strong className="font-semibold text-ink-strong">
               {closedShiftsToday} closed shift{closedShiftsToday === 1 ? '' : 's'}
             </strong>{' '}
-            plus live merchandise.
+            plus live product sales.
             {hasOpenShift
               ? " Fuel from the currently open shift isn't counted until it closes (nozzle readings are taken at close)."
               : ' Fuel for a shift is counted once that shift closes.'}

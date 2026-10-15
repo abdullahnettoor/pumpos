@@ -15,7 +15,7 @@ import {
   DataSection,
   EmptyState,
   Icon,
-  Input,
+  DatePickerButton,
   InteractiveTable,
   KpiStrip,
   KpiTile,
@@ -123,15 +123,13 @@ export const DsrListPanel: React.FC<DsrListPanelProps> = ({
         actions={
           onGenerate && (
             <div className="flex items-center gap-2">
-              <div className="w-[150px]">
-                <Input
-                  type="date"
-                  inputSize="sm"
-                  aria-label="Business date to generate"
-                  value={generateDate}
-                  onChange={(e) => onGenerateDateChange(e.target.value)}
-                />
-              </div>
+              <DatePickerButton
+                aria-label="Business date to generate"
+                value={generateDate}
+                onChange={onGenerateDateChange}
+                max={computeRange('today', clock).to}
+                align="end"
+              />
               <Button
                 variant="primary"
                 size="sm"

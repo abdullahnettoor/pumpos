@@ -217,9 +217,8 @@ describe('Reports → DSR missing report and Generate (review #579)', () => {
       renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />, {
         queryClient: qc,
       });
-      fireEvent.change(screen.getByLabelText('Business date to generate'), {
-        target: { value: '2026-10-14' },
-      });
+      fireEvent.click(screen.getByRole('button', { name: /^Business date to generate: / }));
+      fireEvent.click(screen.getByRole('button', { name: 'Wed 14 Oct 2026' }));
       await act(async () => fireEvent.click(screen.getByRole('button', { name: /Generate DSR/ })));
       // Generate settled and opened the response while the refetch is still out.
       expect(await screen.findByTestId('dsr-screen')).toBeTruthy();

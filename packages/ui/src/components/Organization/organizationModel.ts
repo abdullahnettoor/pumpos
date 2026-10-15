@@ -2,6 +2,7 @@ import {
   businessDateSettings,
   resolveEntryDate,
   shiftBusinessDate,
+  isUnlimitedLimit,
   stationLimitMessage,
   stationState,
   type PumpState,
@@ -69,7 +70,14 @@ export interface StationCapacity {
   used: number;
   value: number;
   reached: boolean;
-  /** "2 more on this plan", or at the Limit what to do (`stationLimitMessage`). */
+  /** The Limit is the "no limit" sentinel (a demo Organization). */
+  unlimited: boolean;
+  /** The tile figure: `1 of 3`, or just `1` when there is no limit. */
+  label: string;
+  /**
+   * "2 more on this plan", "No station limit on this plan", or at the Limit
+   * what to do (`stationLimitMessage`).
+   */
   hint: string;
 }
 
@@ -84,11 +92,25 @@ export function stationCapacity(
 ): StationCapacity | null {
   const limit = access?.limits?.station_count;
   if (!access?.plan || !limit) return null;
+  // The sentinel is never a number on screen (#603): "1 of 1000000" read as a
+  // plan of a million Stations.
+  if (isUnlimitedLimit(limit.value)) {
+    return {
+      used: limit.used,
+      value: limit.value,
+      reached: false,
+      unlimited: true,
+      label: String(limit.used),
+      hint: 'No station limit on this plan',
+    };
+  }
   const left = Math.max(0, limit.value - limit.used);
   return {
     used: limit.used,
     value: limit.value,
     reached: limit.reached,
+    unlimited: false,
+    label: `${limit.used} of ${limit.value}`,
     hint: limit.reached ? stationLimitMessage(limit.value) : `${left} more on this plan`,
   };
 }

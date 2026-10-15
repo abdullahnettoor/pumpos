@@ -336,7 +336,7 @@ const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
             columns={MERCHANDISE_STOCK_COLUMNS}
             rows={day.merchandiseStock}
             rowKey={(r) => r.key}
-            title="merchandise stock variance"
+            title="product stock variance"
           />
         </section>
       )}

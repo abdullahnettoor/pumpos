@@ -190,7 +190,7 @@ describe('Decantation report PDF', () => {
     const { rows, total } = decantationVisitTable(report);
     expect(rows.map((r) => r.map((c) => c.text))).toEqual([
       [
-        '05 Mar 2026',
+        '5 Mar 2026',
         'KA-01-AA-1111',
         'MS',
         '8,150.00 L',
@@ -198,7 +198,7 @@ describe('Decantation report PDF', () => {
         '−50.00 L',
         '1 short · 1 seal broken',
       ],
-      ['06 Mar 2026', 'KA-01-BB-2222', '—', '—', '0.00 L', 'Pending measurement', '—'],
+      ['6 Mar 2026', 'KA-01-BB-2222', '—', '—', '0.00 L', 'Pending measurement', '—'],
     ]);
     expect(rows[0][1].detail).toBe('DEC-1 · Ramesh');
     // The total is the server's: an invoice split across visits counts once.

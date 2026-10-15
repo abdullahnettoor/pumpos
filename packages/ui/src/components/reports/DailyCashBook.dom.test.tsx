@@ -223,8 +223,8 @@ describe('DailyCashBook', () => {
     fireEvent.click(screen.getByRole('row', { name: 'Cash in Hand entries' }));
     const table = screen.getByRole('table', { name: 'Cash in Hand entries' });
     const row = within(table).getByText('Expense').closest('tr')!;
-    expect(row.textContent).toContain('01 Mar 2026');
-    expect(row.textContent).not.toContain('03 Mar');
+    expect(row.textContent).toContain('1 Mar 2026');
+    expect(row.textContent).not.toContain('3 Mar');
     // 10:00 UTC on the station clock (Asia/Kolkata).
     expect(row.textContent).toMatch(/03:30\s*pm/i);
   });
@@ -239,6 +239,8 @@ describe('DailyCashBook', () => {
 
     expect(screen.getByText('No accounts yet')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
-    expect((screen.getByLabelText('Cash book date') as HTMLInputElement).value).toBe('2026-02-28');
+    expect(
+      screen.getByRole('button', { name: /^Cash book date: / }).getAttribute('data-value'),
+    ).toBe('2026-02-28');
   });
 });

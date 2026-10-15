@@ -303,7 +303,7 @@ export const buildCreditSaleColumns = (): TableColumn<CreditSaleRow>[] => [
     id: 'product',
     header: 'Product',
     kind: 'text',
-    value: (r) => r.productName || 'Merchandise',
+    value: (r) => r.productName || 'Product',
   },
   {
     id: 'vehicle',

@@ -1,3 +1,4 @@
+import { formatInstantDate } from '@pump/shared';
 import type { DomainEvent } from './event.js';
 import { BusinessEvents, type BusinessEventType } from './event-catalog.js';
 
@@ -530,13 +531,7 @@ function formatValue(value: ActivityValue, format: EventValueFormat): string | n
       return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(numeric);
     case 'date': {
       const date = new Date(String(value));
-      return Number.isNaN(date.valueOf())
-        ? null
-        : new Intl.DateTimeFormat('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-          }).format(date);
+      return Number.isNaN(date.valueOf()) ? null : formatInstantDate(date);
     }
     case 'volume-litres':
       return `${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 3 }).format(numeric)} L`;

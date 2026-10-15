@@ -38,6 +38,8 @@ export interface AppStatusBarProps {
   onCheckUpdates?: () => void;
   /** A manual check is running: the version reads "Checking…". */
   checkingUpdates?: boolean;
+  /** Non-production build badge, shown next to the version. */
+  environmentTag?: string | null;
 }
 
 export const AppStatusBar: React.FC<AppStatusBarProps> = ({
@@ -52,6 +54,7 @@ export const AppStatusBar: React.FC<AppStatusBarProps> = ({
   onUpdate,
   onCheckUpdates,
   checkingUpdates,
+  environmentTag,
 }) => {
   const stationId = selectedStation?.id;
 
@@ -110,6 +113,7 @@ export const AppStatusBar: React.FC<AppStatusBarProps> = ({
       onUpdate={onUpdate}
       onCheckUpdates={onCheckUpdates}
       checkingUpdates={checkingUpdates}
+      environmentTag={environmentTag}
     />
   );
 };

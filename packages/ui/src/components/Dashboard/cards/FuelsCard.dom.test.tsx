@@ -124,10 +124,10 @@ describe('FuelsCard', () => {
     expect(screen.getByText('Petrol')).toBeTruthy();
     expect(screen.getByText(/₹104\.50/)).toBeTruthy();
     expect(screen.getByText(/\+1\.0 vs yday/)).toBeTruthy();
-    expect(screen.getByText('60%')).toBeTruthy();
+    expect(screen.getByText('of 20,000 L · 60%')).toBeTruthy();
     expect(screen.getByText('3.4')).toBeTruthy();
     expect(screen.getByText(/days cover/)).toBeTruthy();
-    expect(screen.getByText('12.0 of 20 KL')).toBeTruthy();
+    expect(screen.getByText('12,000 L')).toBeTruthy();
     expect(screen.getByText(/744\.0 at 30 °C/)).toBeTruthy();
     expect(screen.getByText('/L')).toBeTruthy();
     expect(screen.queryByText('Plan purchase ›')).toBeNull();
@@ -184,7 +184,7 @@ describe('FuelsCard', () => {
     hooks.useTankLevelSettings.mockReturnValue({ criticalBelowPct: 10, lowBelowPct: 30 });
     mount();
     expect(hooks.useTankLevelSettings).toHaveBeenCalledWith('st-1');
-    expect(screen.getByText('20%').className).toContain('text-warning-fg');
+    expect(screen.getByText('4,000 L').className).toContain('text-warning-fg');
     expect(screen.getByTestId('fuel-MS').dataset.alert).toBe('false');
   });
 

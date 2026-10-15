@@ -122,7 +122,7 @@ const supplierPdf = partyStatementDoc({
   kind: 'supplier',
   party: { name: 'IOCL Depot', lines: [] },
   range: { from: '2026-09-01', to: '2026-10-31' },
-  periodLabel: '01 Sep 2026 — 31 Oct 2026',
+  periodLabel: '1 Sep 2026 — 31 Oct 2026',
   ledger: supplierLedger,
   generatedAt: new Date('2026-10-10T08:30:00.000Z'),
 });
@@ -146,7 +146,7 @@ describe('a statement prints the same on screen and in the PDF', () => {
     expect(lines).toEqual([
       ['', 'Opening balance', '', '', '₹5,000.00'],
       [
-        '07 Oct 2026',
+        '7 Oct 2026',
         'Credit SaleShift 20261007-1 · 120 L Diesel · KL-11-AB-4521',
         '₹8,500.00',
         '',
@@ -171,7 +171,7 @@ describe('a statement prints the same on screen and in the PDF', () => {
     expect(lines).toEqual([
       ['', 'Opening balance', '', '', '₹1,000.00'],
       ['30 Sep 2026', 'Purchase · HSDINV-77', '', '₹2,000.00', '₹3,000.00'],
-      ['07 Oct 2026', 'Payment madeBank · From Federal Bank', '₹3,500.00', '', '−₹500.00'],
+      ['7 Oct 2026', 'Payment madeBank · From Federal Bank', '₹3,500.00', '', '−₹500.00'],
     ]);
     expect(closing).toEqual(['Closing balance', '', '₹3,500.00', '₹2,000.00', '−₹500.00']);
   });

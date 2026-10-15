@@ -335,3 +335,26 @@ describe('AppShell station switcher', () => {
     expect(screen.getByTestId('topbar-station').tagName).toBe('SPAN');
   });
 });
+
+describe('AppShell build badge (#603)', () => {
+  it('sits in the status bar, not over the page', () => {
+    renderWithProviders(
+      <AppShell
+        navItems={mockNavItems}
+        currentPath="/dashboard"
+        onNavigate={() => {}}
+        userRole="Owner"
+        userName="Admin User"
+        syncStatus="synced"
+        environmentTag="Preview"
+        onLogout={() => {}}
+      >
+        <div>Content Body</div>
+      </AppShell>,
+    );
+    const badge = screen.getByTestId('statusbar-environment');
+    expect(badge.textContent).toBe('Preview');
+    expect(screen.getByRole('main').contains(badge)).toBe(false);
+    expect(screen.getAllByText('Preview')).toHaveLength(1);
+  });
+});

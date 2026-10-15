@@ -186,6 +186,12 @@ describe('Close shift page (#534)', () => {
   });
 
   describe('the sticky footer', () => {
+    // #603: at the end of the scroll the last section cleared the footer.
+    it('leaves room under the steps for the footer', () => {
+      renderWithProviders(<Stateful />);
+      expect(screen.getByTestId('close-shift-steps').className).toContain('pb-16');
+    });
+
     it('shows expected and counted office cash, and the variance once counted', () => {
       renderWithProviders(<Stateful />);
       expect(within(footer()).getByText('₹10,000.00')).toBeDefined();

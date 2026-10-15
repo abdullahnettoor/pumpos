@@ -125,6 +125,8 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
         <Field label="Method" required>
           <SegmentedControl
             aria-label="Method"
+            stretch
+            size="md"
             options={METHODS}
             value={method}
             disabled={disabled}

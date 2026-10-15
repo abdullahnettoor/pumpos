@@ -134,10 +134,9 @@ export function cashErrors(du: AssignedDu, form: DuFormState): HandoverError[] {
 
 function productsErrors(merchNonCash: string, merchRows: MerchRow[]): HandoverError[] {
   const errs: HandoverError[] = [];
-  if (num(merchNonCash) < 0)
-    errs.push({ step: 'products', message: 'Merchandise non-cash negative' });
+  if (num(merchNonCash) < 0) errs.push({ step: 'products', message: 'Product non-cash negative' });
   for (const r of merchRows)
-    if (num(r.quantity) < 0) errs.push({ step: 'products', message: 'Merchandise qty negative' });
+    if (num(r.quantity) < 0) errs.push({ step: 'products', message: 'Product qty negative' });
   return errs;
 }
 

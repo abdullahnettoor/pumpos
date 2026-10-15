@@ -13,6 +13,7 @@ import {
   stationCapacity,
   stationCounts,
 } from './organizationModel.js';
+import { UNLIMITED_LIMIT } from '@pump/shared';
 
 const stations = [
   {
@@ -63,13 +64,31 @@ describe('stationCapacity', () => {
         plan: 'CORE',
         limits: { station_count: { used: 3, value: 5, reached: false } },
       }),
-    ).toEqual({ used: 3, value: 5, reached: false, hint: '2 more on this plan' });
+    ).toEqual({
+      used: 3,
+      value: 5,
+      reached: false,
+      unlimited: false,
+      label: '3 of 5',
+      hint: '2 more on this plan',
+    });
     expect(
       stationCapacity({
         plan: 'CORE',
         limits: { station_count: { used: 1, value: 1, reached: true } },
       })?.hint,
     ).toBe('This plan includes one Station. Contact PumpOS to add another.');
+  });
+
+  // #603: "1 of 1000000 · 999999 more" must never show.
+  it('reads the unlimited sentinel as no limit', () => {
+    const c = stationCapacity({
+      plan: 'CORE',
+      limits: { station_count: { used: 1, value: UNLIMITED_LIMIT, reached: false } },
+    });
+    expect(c).toMatchObject({ unlimited: true, reached: false, label: '1' });
+    expect(c?.hint).toBe('No station limit on this plan');
+    expect(`${c?.label} ${c?.hint}`).not.toMatch(/\d{4,}/);
   });
 });
 

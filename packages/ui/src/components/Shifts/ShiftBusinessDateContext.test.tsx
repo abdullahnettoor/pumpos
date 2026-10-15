@@ -69,9 +69,9 @@ describe('ShiftBusinessDateContext', () => {
         />
       </QueryClientProvider>,
     );
-    expect(html).toContain('Shift Business Date · 10 Sept 2026');
+    expect(html).toContain('Shift Business Date · 10 Sep 2026');
     expect(html).toContain('Scheduled Shift Window · 06:00–14:00');
-    expect(html).toContain('Working on 10 Sept 2026. Actions are being recorded on 12 Sept 2026.');
+    expect(html).toContain('Working on 10 Sep 2026. Actions are being recorded on 12 Sep 2026.');
     expect(html).toContain('2026-09-10 · Open');
     expect(html).toContain('2026-09-13 · Open · Unavailable (future)');
     expect(html).toContain('Custom Business Date');
@@ -93,7 +93,7 @@ describe('ShiftBusinessDateContext', () => {
       />,
     );
     expect(html).toContain('7:00\u00a0am');
-    expect(html).toContain('Working on 10 Sept 2026. Actions are being recorded on 12 Sept 2026.');
+    expect(html).toContain('Working on 10 Sep 2026. Actions are being recorded on 12 Sep 2026.');
   });
 
   it('keeps both lifecycle timestamps and historical context after close', () => {
@@ -114,8 +114,8 @@ describe('ShiftBusinessDateContext', () => {
         onBack={() => {}}
       />,
     );
-    expect(html).toContain('closed 12 Sept 2026, 03:00 pm');
-    expect(html).toContain('Working on 10 Sept 2026. Actions are being recorded on 12 Sept 2026.');
+    expect(html).toContain('closed 12 Sep 2026, 03:00 pm');
+    expect(html).toContain('Working on 10 Sep 2026. Actions are being recorded on 12 Sep 2026.');
     expect(html).toContain('Open next shift');
     expect(html).toContain('Its Shift Summary is saved and locked.');
   });

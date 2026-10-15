@@ -11,7 +11,11 @@ export interface SegmentedControlProps<T extends string> {
   value: T;
   onChange: (value: T) => void;
   disabled?: boolean;
-  /** Fill the row: segments share the width equally (a full-width mobile toggle). */
+  /**
+   * Fill the row: segments share the width equally. Use it in drawers and
+   * forms (a payment channel, a method), and for a full-width mobile toggle.
+   * Without it the control hugs its segments, even in a column layout.
+   */
   stretch?: boolean;
   /** `sm` (default) is 32px, for toolbars; `md` is 36px, to line up with form inputs. */
   size?: 'sm' | 'md';
@@ -34,7 +38,9 @@ export interface SegmentedControlProps<T extends string> {
  * A compact joined segmented control: one track, the selected segment raised
  * on it. For a short inline choice in a toolbar or settings row (paper size,
  * view mode). Each segment is padded to its label, so short and long labels
- * both read clearly.
+ * both read clearly. By default the track hugs its segments (`w-fit`), so a
+ * column parent never stretches it across the page (#603); `stretch` fills
+ * the row instead.
  *
  * A radiogroup with the standard keyboard model: Tab reaches the selected
  * segment only, the arrow keys (and Home / End) move to the neighbouring
@@ -98,7 +104,7 @@ export function SegmentedControl<T extends string>({
           ? 'flex w-full flex-col gap-0.5'
           : stretch
             ? cn('grid w-full items-stretch gap-0.5', height)
-            : cn('inline-flex items-center gap-0.5', height),
+            : cn('inline-flex w-fit items-center gap-0.5', height),
         'rounded-button border border-border-soft bg-surface-alt p-0.5',
         disabled && 'opacity-60',
         className,

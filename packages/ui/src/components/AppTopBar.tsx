@@ -169,7 +169,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
       },
       {
         id: 'merchandise-sale',
-        label: 'Merchandise sale',
+        label: 'Product sale',
         icon: <ConceptIcon concept="product-sales" />,
         onSelect: () => openQuickEntry('merchandise-sale'),
       },

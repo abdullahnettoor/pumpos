@@ -25,12 +25,20 @@ export interface ControlBarProps extends ControlBarSlots {
 }
 
 const ORDER = ['range', 'search', 'filters'] as const;
+
+/**
+ * One control height in a bar (#603): every field is 32px, as the buttons,
+ * date menu, segmented control and filter chips are; search is 240px wide.
+ * Applied by the bar, so a page passing `inputSize="sm"` still lines up.
+ */
+export const CONTROL_BAR_FIT =
+  '[&_input:not([type=checkbox]):not([type=radio])]:h-8 [&_select]:h-8 [&>[data-slot=search]>*]:w-[240px]';
 const END = ['actions', 'exportMenu', 'info'] as const;
 
 /**
  * ControlBar (#567): one row of page controls in a fixed order, range ·
  * search · filters · (space) · actions · export · info tip, so every page reads the
- * same. Pages pass slots, not a layout. The row wraps cleanly on narrow
+ * same. Every control in it is 32px high (#603). Pages pass slots, not a layout. The row wraps cleanly on narrow
  * screens (1366px with the sidebar open): the end group stays together.
  *
  * Layout A (reports) puts one bar under the tabs to drive everything below it;
@@ -43,7 +51,7 @@ export function ControlBar({ className, ...slots }: ControlBarProps) {
   return (
     <div
       data-testid="control-bar"
-      className={cn('flex min-w-0 flex-wrap items-center gap-2', className)}
+      className={cn('flex min-w-0 flex-wrap items-center gap-2', CONTROL_BAR_FIT, className)}
     >
       {ORDER.filter(has).map((k) => (
         <div key={k} data-slot={k} className="flex min-w-0 flex-wrap items-center gap-2">

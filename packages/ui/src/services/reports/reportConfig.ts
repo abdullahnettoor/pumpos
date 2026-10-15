@@ -131,7 +131,7 @@ export const DSSR_SECTION_LABELS: Record<DssrSection, string> = {
   fuelByProduct: 'Fuel Sales by Product',
   nozzles: 'Nozzle Aggregation',
   fuelStockVariance: 'Tank Dip & Fuel Variance',
-  merchandiseStockVariance: 'Merchandise Variance',
+  merchandiseStockVariance: 'Product Stock Variance',
   shifts: 'Included Shifts',
 };
 
@@ -139,7 +139,7 @@ export const ATTENDANT_REPORT_SECTION_LABELS: Record<AttendantReportSection, str
   header: 'Header / Letterhead',
   summary: 'Period Summary',
   fuelSales: 'Fuel Sales by Shift',
-  merchandise: 'Merchandise (Billed + Handover)',
+  merchandise: 'Product Sales (Billed + Handover)',
   creditSales: 'Fuel-on-Credit Sales',
   terminals: 'Payment Terminals',
   variance: 'Variance by Shift',

@@ -297,6 +297,8 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
         >
           <SegmentedControl
             aria-label="What was bought"
+            stretch
+            size="md"
             options={[
               { value: 'FUEL', label: 'Fuel' },
               { value: 'PRODUCTS', label: 'Products' },

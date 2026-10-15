@@ -30,7 +30,7 @@ export const DSSR_TITLES = {
   nozzles: 'Nozzles',
   nozzlesSubtitle: "Volume by nozzle, across the day's shifts",
   fuelStock: 'Tank dip and fuel stock variance',
-  merchandiseStock: 'Merchandise stock variance',
+  merchandiseStock: 'Product stock variance',
   shifts: 'Included shifts',
   attendants: 'Attendant variance',
   attendantsSubtitle: 'At handover, per attendant and DU',
@@ -45,7 +45,7 @@ export const DSSR_EMPTY = {
 
 /** Under the margin tiles. */
 export const DSSR_COGS_NOTE =
-  "Cost of goods sold uses each product's weighted-average cost at day close. Fuel VAT is output tax (excluded from cost); merchandise cost is pre-tax.";
+  "Cost of goods sold uses each product's weighted-average cost at day close. Fuel VAT is output tax (excluded from cost); product cost is pre-tax.";
 
 export interface DssrTile {
   label: string;
@@ -61,12 +61,12 @@ export function dssrTiles(day: DssrDay): DssrTile[] {
     {
       label: 'Total revenue',
       value: formatMoney(margin.revenue),
-      hint: `Fuel ${formatMoney(margin.revenueFuel)} · Merchandise ${formatMoney(margin.revenueMerch)}`,
+      hint: `Fuel ${formatMoney(margin.revenueFuel)} · Products ${formatMoney(margin.revenueMerch)}`,
     },
     {
       label: 'Cost of goods sold',
       value: formatMoney(margin.cogs),
-      hint: `Fuel ${formatMoney(margin.cogsFuel)} · Merchandise ${formatMoney(margin.cogsMerch)}`,
+      hint: `Fuel ${formatMoney(margin.cogsFuel)} · Products ${formatMoney(margin.cogsMerch)}`,
     },
     {
       label: 'Gross margin',
