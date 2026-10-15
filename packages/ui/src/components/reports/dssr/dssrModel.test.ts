@@ -32,6 +32,7 @@ describe('readDssrDay', () => {
       'Normal credit sales',
       'Fleet credit sales',
       'Purchases',
+      'Gross margin',
     ]);
     expect(day.drawerTotals).toEqual({ attendantVariance: null, officeVariance: null });
   });
@@ -42,10 +43,11 @@ describe('readDssrDay', () => {
         salesTax: { gst: { taxable: 100, igst: 18, total: 18 }, vat: { vat: 50 } },
       },
     });
-    expect(day.sales.slice(-3)).toEqual([
+    expect(day.sales.slice(-4)).toEqual([
       { label: 'Merchandise taxable value', value: '₹100.00' },
       { label: 'Output GST on sales (IGST)', value: '₹18.00' },
       { label: 'Output VAT on fuel', value: '₹50.00' },
+      { label: 'Gross margin', value: '₹0.00' },
     ]);
   });
 

@@ -135,7 +135,8 @@ const stockRows = (rows: any[], withProduct: boolean, fallbackUnit: string): Sto
   });
 
 /**
- * The sales summary lines, in the order the report has always printed them.
+ * The sales summary lines, in the order the report has always printed them,
+ * closing on the day's gross margin.
  * Output GST and VAT stay on separate lines: fuel VAT is outside GST (T5).
  */
 function salesLines(snap: Record<string, any>): FigureLine[] {
@@ -163,6 +164,8 @@ function salesLines(snap: Record<string, any>): FigureLine[] {
     );
   }
   if (vat > 0) lines.push({ label: 'Output VAT on fuel', value: formatMoney(vat) });
+  // Last, as the report has always printed it; the Gross margin tile repeats it (#583).
+  lines.push({ label: 'Gross margin', value: formatMoney(snap.pnl?.grossMargin) });
   return lines;
 }
 

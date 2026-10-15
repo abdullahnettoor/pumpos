@@ -44,6 +44,8 @@ exports[`Reports PDF with PumpOS Mark in Letterhead > prints the DSR as the scre
   "₹1,094.13 / ₹1,094.13",
   "Output VAT on fuel",
   "₹66,333.38",
+  "Gross margin",
+  "₹31,145.50",
   "Sales only. Collections, expenses, income and supplier payments are in the Daily cash book.",
   "FUEL SALES BY PRODUCT",
   "PRODUCT | GROSS | TESTING | NET | SALES VALUE",
