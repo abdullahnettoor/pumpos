@@ -1,5 +1,11 @@
 # UI Assessment & Refactor Roadmap
 
+> **Historical (superseded by the UI identity milestone, #515 / #539).** This records
+> the state before the pump-ds migration. `PageLayout`, `KpiCard`, `LoadingSpinner`,
+> `.form-input`, `.form-label`, `.select` and `.dense-table` no longer exist. For
+> current modules see [`packages/ui/src/pump-ds/README.md`](../../packages/ui/src/pump-ds/README.md)
+> and [frontend-patterns.md](frontend-patterns.md).
+
 Historical assessment of the UI refactor. Its findings and migration checklist are
 not a live backlog; verify against the current implementation and GitHub Issues before
 acting on them.

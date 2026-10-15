@@ -10,9 +10,8 @@ import { Spinner } from '../spinner/Spinner.js';
 import { useAsyncAction } from '../../utils/useAsyncAction.js';
 
 /**
- * Button — the single canonical action control for pump-ds. Replaces the
- * scattered `.btn-primary` / `.btn-secondary` / `.btn-danger` / `.btn-ghost`
- * classes with one CVA source of truth.
+ * Button — the single canonical action control, one CVA source of truth for
+ * every variant (the legacy `.btn-*` classes were deleted in #539).
  *
  * Contract (every pump-ds interactive primitive honors this):
  *   default · hover · active · focus-visible · disabled · loading.

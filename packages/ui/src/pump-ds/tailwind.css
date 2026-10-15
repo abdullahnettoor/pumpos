@@ -5,13 +5,13 @@
  *   1. Loads Tailwind v4's utility layer (NOT preflight — see below).
  *   2. Exposes every PumpOS CSS variable declared in `packages/ui/src/index.css`
  *      as a first-class Tailwind theme token, so utilities like `bg-brand`,
- *      `text-strong`, `border-border-soft`, `rounded-card`, `font-mono` all
+ *      `text-ink-strong`, `border-border-soft`, `rounded-card`, `font-mono` all
  *      resolve to the same values as the existing `--brand-primary`,
  *      `--text-strong`, etc.
  *
  * Single source of truth stays in `index.css` — this file only mirrors the
  * variables into Tailwind's `@theme` namespace. Change a raw value in one
- * place; both the legacy CSS classes and the Tailwind utilities pick it up.
+ * place; both the plain CSS classes and the Tailwind utilities pick it up.
  *
  * Load order matters: apps must import `@pump/ui/src/index.css` FIRST (so the
  * raw `--*` variables exist on `:root`), then this file (so Tailwind's
