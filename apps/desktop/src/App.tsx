@@ -516,7 +516,13 @@ const App: React.FC = () => {
       case '/customers':
         return <CustomersList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/reports':
-        return <ReportsOverview selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
+        return (
+          <ReportsOverview
+            selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
+            onNavigate={navigate}
+          />
+        );
       case '/organization':
         return (
           <OrganizationOverview

@@ -10,8 +10,12 @@ export interface ReportRangeBarProps {
   presets?: RangePreset[];
   /** Filters after the range: entity/account pickers, a Cash | Bank switch. */
   filters?: React.ReactNode;
+  /** Buttons that act on the report (Generate DSR), before the export menu. */
+  actions?: React.ReactNode;
   /** `ExportMenu` for the report, at the right end of the bar. */
   exportMenu?: React.ReactNode;
+  /** `InfoTip` explaining how the figures are worked out, last in the bar. */
+  info?: React.ReactNode;
   /**
    * Methodology caption for the tab. Rendered as a caption line *below* the
    * control row — prose in the row stretches the bar and knocks the controls
@@ -36,7 +40,9 @@ export const ReportRangeBar: React.FC<ReportRangeBarProps> = ({
   clock,
   presets,
   filters,
+  actions,
   exportMenu,
+  info,
   note,
 }) => (
   <div className="flex flex-col gap-1.5">
@@ -51,7 +57,9 @@ export const ReportRangeBar: React.FC<ReportRangeBarProps> = ({
         />
       }
       filters={filters}
+      actions={actions}
       exportMenu={exportMenu}
+      info={info}
     />
     {note && <ReportNote>{note}</ReportNote>}
   </div>

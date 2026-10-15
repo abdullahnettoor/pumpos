@@ -1839,6 +1839,38 @@ export interface FundingAccount {
   stationId: string | null;
 }
 
+/** GET /finance/movements — one ledger entry of the station in the range. */
+export interface StationMovement {
+  id: string;
+  entryDate: string;
+  accountId: string;
+  accountType: string;
+  accountName: string;
+  direction: 'in' | 'out' | string;
+  amount: string | number;
+  sourceType: string;
+  /** Shared by the two legs of a transfer or deposit. */
+  transferId: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+/** GET /finance/movements — one account's opening (Σ before `from`). */
+export interface StationAccountOpening {
+  accountId: string;
+  accountType: string;
+  accountName: string;
+  /** Organization-shared (no station). */
+  shared: boolean;
+  isActive: boolean;
+  opening: string | number;
+}
+
+export interface StationMovements {
+  movements: StationMovement[];
+  openings: StationAccountOpening[];
+}
+
 /** GET /finance/cash-book — one ledger entry on the requested date. */
 /** GET /dssr/profit-loss — composed server-side (core composeProfitLoss). */
 export interface ProfitLossFigures {
@@ -2031,17 +2063,19 @@ export class CloudFinanceService {
     );
   }
 
-  /** Station-wide ledger movements (backs the Cash & Bank report). */
+  /**
+   * Station-wide ledger movements in a range, with one opening per account
+   * (Σ before `from`; 0 with no `from`). Backs Reports › Cash & bank and
+   * Accounts › Transfers.
+   */
   async getMovements(params: {
     stationId: string;
     from?: string;
     to?: string;
-  }): Promise<{ movements: any[]; openings: { accountType: string; opening: string }[] }> {
+  }): Promise<StationMovements> {
     const qs = new URLSearchParams({ stationId: params.stationId });
     if (params.from) qs.set('from', params.from);
     if (params.to) qs.set('to', params.to);
-    return request<{ movements: any[]; openings: { accountType: string; opening: string }[] }>(
-      `/finance/movements?${qs.toString()}`,
-    );
+    return request<StationMovements>(`/finance/movements?${qs.toString()}`);
   }
 }
