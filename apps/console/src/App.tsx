@@ -531,6 +531,8 @@ export const App: React.FC = () => {
             userRole={userRole || 'Staff'}
             userName={userName}
             onNavigate={navigate}
+            route={currentPath}
+            onRouteChange={setCurrentPath}
           />
         );
       case '/expenses':

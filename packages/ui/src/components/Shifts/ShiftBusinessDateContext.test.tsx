@@ -114,9 +114,9 @@ describe('ShiftBusinessDateContext', () => {
         onBack={() => {}}
       />,
     );
-    expect(html).toContain('Shift Closed At · 12 Sept 2026, 03:00 pm');
+    expect(html).toContain('closed 12 Sept 2026, 03:00 pm');
     expect(html).toContain('Working on 10 Sept 2026. Actions are being recorded on 12 Sept 2026.');
-    expect(html).toContain('Open next Shift');
-    expect(html).toContain('The Shift Summary is saved permanently.');
+    expect(html).toContain('Open next shift');
+    expect(html).toContain('Its Shift Summary is saved and locked.');
   });
 });

@@ -101,6 +101,42 @@ export function parseAccountRoute(
   return { accountId, range };
 }
 
+/** The steps of the Close shift page (#534), in order; `done` is its success state. */
+export const SHIFT_CLOSE_STEPS = ['readings', 'handovers', 'cash', 'confirm'] as const;
+export type ShiftCloseStep = (typeof SHIFT_CLOSE_STEPS)[number] | 'done';
+
+const isCloseStep = (value: string | null): value is ShiftCloseStep =>
+  value === 'done' || (SHIFT_CLOSE_STEPS as readonly string[]).includes(value ?? '');
+
+/**
+ * One shift's Close shift page (#534): `/shifts/<id>/close`, and its step as
+ * `?step=` past the first. A real address, so a reload resumes the step.
+ */
+export function shiftCloseRoute(shiftId: string, step: ShiftCloseStep = 'readings'): string {
+  const path = `${ROUTES.shifts}/${encodeURIComponent(shiftId)}/close`;
+  return step === 'readings' ? path : `${path}?step=${step}`;
+}
+
+/**
+ * The shift and step a Close shift route names, or null for any other path.
+ * An unknown step reads as the first.
+ */
+export function parseShiftCloseRoute(
+  path: string,
+): { shiftId: string; step: ShiftCloseStep } | null {
+  const [bare, query = ''] = path.split('?');
+  const match = /^\/shifts\/([^/]+)\/close$/.exec(bare);
+  if (!match) return null;
+  let shiftId: string;
+  try {
+    shiftId = decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+  const step = new URLSearchParams(query).get('step');
+  return { shiftId, step: isCloseStep(step) ? step : 'readings' };
+}
+
 /**
  * Where a navigation lands once its intent is applied. `{ openAccountId }`
  * names an address of its own (#576), so it becomes a navigation to the

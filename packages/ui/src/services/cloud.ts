@@ -788,18 +788,26 @@ export class CloudShiftService {
   async updateNozzleReadings(
     shiftId: string,
     readings: { nozzleId: string; closingReading: number }[],
+    opts?: { idempotencyKey?: string },
   ): Promise<any> {
-    return request<any>('/shifts/readings', {
-      method: 'PUT',
-      body: JSON.stringify({ shiftId, readings }),
-    });
+    return request<any>(
+      '/shifts/readings',
+      { method: 'PUT', body: JSON.stringify({ shiftId, readings }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async closeShift(shiftId: string, payload: ShiftClosePayload): Promise<any> {
-    return request<any>('/shifts/close', {
-      method: 'POST',
-      body: JSON.stringify({ shiftId, payload }),
-    });
+  /** Close a shift. Pass an `idempotencyKey` so a retry after a lost answer cannot close twice. */
+  async closeShift(
+    shiftId: string,
+    payload: ShiftClosePayload,
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/shifts/close',
+      { method: 'POST', body: JSON.stringify({ shiftId, payload }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async reopenShift(shiftId: string): Promise<any> {

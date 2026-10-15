@@ -1,13 +1,19 @@
 import React, { useCallback, useRef, useEffect, useMemo, useState } from 'react';
 import { useNavIntent, clearNavIntent } from '../../nav-intent/store.js';
-import { ROUTES } from '../../nav-intent/routes.js';
+import {
+  ROUTES,
+  parseShiftCloseRoute,
+  shiftCloseRoute,
+  type ShiftCloseStep,
+} from '../../nav-intent/routes.js';
+import type { RouteNavigate } from '../../nav-intent/useRoutePath.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatShortDay, inr } from '../../utils/format.js';
 import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
 import { HandoverDrawer } from './HandoverDrawer.js';
 import { ShiftHistoryTab } from './ShiftHistoryTab.js';
-import { CloseShiftWizard } from './CloseShiftWizard.js';
+import { CloseShiftPage, type CloseStep } from './CloseShiftPage.js';
 import { ShiftCloseSuccess } from './ShiftCloseSuccess.js';
 import { BusinessDayTab } from './BusinessDayTab.js';
 import { seedStaffAssignments } from './seedStaffAssignments.js';
@@ -18,14 +24,28 @@ import { IdleShiftView } from './IdleShiftView.js';
 import { ShiftsHeaderActions, type RecordAction } from './ShiftsHeaderActions.js';
 import { dayFigures } from './businessDayModel.js';
 import {
-  VARIANCE_FLAG_RUPEES,
+  nozzleGroups,
   type PreHandoverTotals,
   type StaffAssignmentInput,
 } from './liveShiftModel.js';
+import {
+  EMPTY_CLOSE_DRAFT,
+  closeDrawerRows,
+  closeDrawerTotal,
+  closeWarnings,
+  hasCloseProgress,
+  loadCloseDraft,
+  loadClosedResult,
+  readingErrors,
+  saveCloseDraft,
+  saveClosedResult,
+  type CloseDraft,
+} from './closeShiftModel.js';
 import { PageFrame } from '../page-frame/index.js';
 import {
   Button,
   DataSection,
+  EmptyState,
   Skeleton,
   Tabs,
   tabPanelProps,
@@ -49,7 +69,6 @@ import {
   isAmbiguousMutationError,
   loadPendingTankDipWorkflow,
   savePendingTankDipWorkflow,
-  shouldResetTankDipDraft,
   type PendingTankDipWorkflow,
 } from '../../query/stockCountMutation.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
@@ -62,15 +81,16 @@ import {
 } from '@pump/shared';
 import type { CloseCashDrawer, ShiftStaffAssignment } from '@pump/shared';
 import type { DrawerRow } from './DrawerReconciliationTable.js';
-import type { CloseDropRow } from './CloseShiftWizard.js';
 import type { OpenShiftFormValues } from '@pump/shared';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 import { refreshShiftStatus } from './refreshShiftStatus.js';
+import { useNow } from './useNow.js';
 import {
   officeSubmitKeys,
   sendKeyed,
   type SubmitKeySession,
 } from '../../office-records/submitKeys.js';
+import type { KeyedSave } from '../../office-records/useKeyedSave.js';
 
 const shiftService = new CloudShiftService();
 const TABS_ID = 'shifts';
@@ -116,6 +136,13 @@ interface ShiftsManagementProps {
    * affordance, which is the only route to a day beyond the recent window.
    */
   onNavigate: (path: string) => void;
+  /**
+   * The shell's current path. `/shifts/<id>/close` is the Close shift page
+   * (#534). Omitted, the page keeps its own (no address of its own).
+   */
+  route?: string;
+  /** Changes the path; `{ replace: true }` rewrites the entry (a step change). */
+  onRouteChange?: RouteNavigate;
 }
 
 export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
@@ -123,7 +150,22 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   userRole,
   userName,
   onNavigate,
+  route: shellRoute,
+  onRouteChange,
 }) => {
+  // The page's address: the shell's when it passes one, else its own.
+  const [ownRoute, setOwnRoute] = useState<string>(ROUTES.shifts);
+  const route = shellRoute ?? ownRoute;
+  const goRoute = useCallback<RouteNavigate>(
+    (next, options) =>
+      onRouteChange
+        ? onRouteChange(next, options)
+        : setOwnRoute((prev) => (typeof next === 'function' ? next(prev) : next)),
+    [onRouteChange],
+  );
+  const closeRoute = parseShiftCloseRoute(route);
+  const onCloseRoute = !!closeRoute;
+  const now = useNow();
   const stationId = selectedStation?.id ?? null;
   const stationSettings = (selectedStation?.settings ?? {}) as {
     timezone?: string;
@@ -230,25 +272,46 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // Active Shift Workspace States
   const [closingReadings, setClosingReadings] = useState<Record<string, number>>({});
 
-  // Close Flow Inline States
-  const [isPreparingClose, setIsPreparingClose] = useState(false);
-  const [closeWizardOpen, setCloseWizardOpen] = useState(false);
-  const [closingCash, setClosingCash] = useState(0);
-  // Cash Drops recorded at close (#287).
-  const [closeDrops, setCloseDrops] = useState<CloseDropRow[]>([]);
+  // Close shift page (#534). What the operator enters is a per-shift draft,
+  // kept in the tab's session so a reload or an accidental Back keeps it.
+  const activeShiftId: string | null = data?.activeShift?.id ?? null;
+  const draftOwner = stationId && activeShiftId ? `${stationId}:${activeShiftId}` : null;
+  const [draftState, setDraftState] = useState<{ owner: string | null; draft: CloseDraft }>({
+    owner: null,
+    draft: EMPTY_CLOSE_DRAFT,
+  });
+  if (draftState.owner !== draftOwner) {
+    setDraftState({
+      owner: draftOwner,
+      draft:
+        stationId && activeShiftId ? loadCloseDraft(stationId, activeShiftId) : EMPTY_CLOSE_DRAFT,
+    });
+  }
+  const draft = draftState.owner === draftOwner ? draftState.draft : EMPTY_CLOSE_DRAFT;
+  const updateDraft = useCallback(
+    (patch: Partial<CloseDraft>) =>
+      setDraftState((s) => ({ ...s, draft: { ...s.draft, ...patch } })),
+    [],
+  );
+  useEffect(() => {
+    if (stationId && activeShiftId && draftState.owner === draftOwner) {
+      saveCloseDraft(stationId, activeShiftId, draftState.draft);
+    }
+  }, [stationId, activeShiftId, draftOwner, draftState]);
+  const closingCash = draft.closingCash;
+  const closeDrops = draft.closeDrops;
+  const dipReadings = draft.dipReadings;
+  const dipReasons = draft.dipReasons;
   const [confirmWarningsChecked, setConfirmWarningsChecked] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const inventoryStatusQ = useInventoryStatus(stationId);
   const stationTanks = inventoryStatusQ.data ?? [];
-  const [dipReadings, setDipReadings] = useState<Record<string, number | string>>({});
-  const [dipReasons, setDipReasons] = useState<Record<string, string>>({});
   const [initialPendingWorkflow] = useState(() =>
     stationId ? loadPendingTankDipWorkflow(stationId) : null,
   );
   const [closedShiftSuccess, setClosedShiftSuccess] = useState<PendingTankDipWorkflow | null>(
     initialPendingWorkflow?.closeStatus === 'submitting' ? null : initialPendingWorkflow,
   );
-  const [tankDipDraftShiftId, setTankDipDraftShiftId] = useState<string | null>(null);
   const [uncertainCloseWorkflow, setUncertainCloseWorkflow] =
     useState<PendingTankDipWorkflow | null>(
       initialPendingWorkflow?.closeStatus === 'submitting' ? initialPendingWorkflow : null,
@@ -426,63 +489,26 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         }
       : null;
 
-  // Reactively compute close warnings when close flow is active
-  const warnings: string[] = [];
+  // The close page's review: the old wizard's warnings, in its words.
+  const onClosePage = !!closeRoute && !!data?.activeShift && closeRoute.shiftId === activeShiftId;
+  // The step in the address is the draft's step, so Continue close resumes it.
+  const routeStep = onClosePage && closeRoute.step !== 'done' ? closeRoute.step : null;
+  if (routeStep && routeStep !== draft.step) updateDraft({ step: routeStep });
+  const warnings: string[] = onClosePage
+    ? closeWarnings({
+        readings: data.activeShift.nozzleReadings,
+        closing: closingReadings,
+        assignments: data.activeShift.staffAssignments || [],
+        handovers,
+        creditSales: shiftTotals.creditSales,
+        closingCash,
+        expectedCash,
+        formatMoney: inr,
+      })
+    : [];
 
-  if (data?.activeShift && isPreparingClose) {
-    let zeroVolumeCount = 0;
-    for (const nr of data.activeShift.nozzleReadings) {
-      const opening = Number(nr.openingReading);
-      const closing = closingReadings[nr.nozzleId] ?? opening;
-      const volume = closing - opening;
-
-      if (volume === 0) {
-        zeroVolumeCount++;
-      }
-      if (volume > 5000) {
-        warnings.push(
-          `High volume alert: Nozzle ${nr.nozzleName} sold ${volume.toFixed(2)} ${nr.unit || 'L'}.`,
-        );
-      }
-    }
-
-    if (zeroVolumeCount === data.activeShift.nozzleReadings.length) {
-      warnings.push('Zero fuel volume was sold across all nozzles during this shift.');
-    }
-
-    // Check if all assigned attendants have recorded handovers
-    const assignedStaff = data.activeShift.staffAssignments || [];
-    for (const sa of assignedStaff) {
-      const hasRecorded = handovers.some((h: any) => h.userId === sa.userId && h.duId === sa.duId);
-      if (!hasRecorded) {
-        warnings.push(
-          `Handover not recorded for attendant ${sa.userName} on dispenser ${sa.duName || 'DU'}.`,
-        );
-      }
-    }
-
-    // Mismatch check for credit chits vs customer bills
-    const detailedCreditSum = shiftTotals.creditSales;
-    if (hasHandovers && Math.abs(detailedCreditSum - totalCreditHandedOver) > 1.0) {
-      warnings.push(
-        `Credit Sales mismatch: Attendants declared ${inr(totalCreditHandedOver)} in chits, but only ${inr(detailedCreditSum)} of detailed customer billing has been logged in the transaction panel.`,
-      );
-    }
-
-    if (closingCash === 0 && expectedCash > 0) {
-      warnings.push('Closing cash is ₹0, indicating no collections entered.');
-    }
-    if (Math.abs(cashVariance) > VARIANCE_FLAG_RUPEES) {
-      warnings.push(
-        `Cash discrepancy detected! Variance is ${inr(cashVariance)} (Expected: ${inr(expectedCash)}, Entered: ${inr(closingCash)})`,
-      );
-    }
-  }
-
-  // Quick entry opens the global QuickEntryHost. Minimize the close wizard first if
-  // it's open (preserves its draft — the user can resume via "Continue Close").
+  // Quick entry opens the global QuickEntryHost.
   const launchQuickEntry = (type: QuickEntryType) => {
-    if (closeWizardOpen) setCloseWizardOpen(false);
     // Office Records opened here are still office records: the drawer says so
     // ("not part of <shift>") rather than taking the shift's name as its title.
     openQuickEntry(type, {
@@ -533,7 +559,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     if (!data?.activeShift?.id) return;
     if (shiftSubTab !== 'today') return;
     if (viewingShiftSummary || requestedHistoryShiftId) return;
-    if (closeWizardOpen || qe.open || handoverDrawerOpen) return;
+    if (onCloseRoute || qe.open || handoverDrawerOpen) return;
 
     const handler = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -565,7 +591,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     shiftSubTab,
     viewingShiftSummary,
     requestedHistoryShiftId,
-    closeWizardOpen,
+    onCloseRoute,
     qe.open,
     handoverDrawerOpen,
   ]);
@@ -603,13 +629,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           readingsMap[nr.nozzleId] = Number(nr.closingReading);
         });
         setClosingReadings(readingsMap);
-        if (shouldResetTankDipDraft(tankDipDraftShiftId, statusData.activeShift.id)) {
-          setDipReadings({});
-          setDipReasons({});
-        }
-        setTankDipDraftShiftId(statusData.activeShift.id);
-      } else {
-        setTankDipDraftShiftId(null);
       }
     }
   }
@@ -676,35 +695,39 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     );
   };
 
-  const handleClosingReadingChange = (nozzleId: string, val: number) => {
-    setClosingReadings((prev) => ({
-      ...prev,
-      [nozzleId]: val,
-    }));
-  };
-
-  const handlePrepareClose = () => {
-    if (!data.activeShift) return;
-
-    // Perform validation checks
-    for (const nr of data.activeShift.nozzleReadings) {
-      const opening = Number(nr.openingReading);
-      const closing = closingReadings[nr.nozzleId] ?? opening;
-
-      if (closing < opening) {
-        toast.error(
-          `Closing reading for nozzle ${nr.nozzleName} (${closing}) cannot be less than opening reading (${opening})`,
-        );
-        return;
-      }
+  /**
+   * Close shift / Continue close: the old prepare-close check (no closing
+   * reading below its opening), then the Close shift page at the step the
+   * draft was left on.
+   */
+  const startClose = () => {
+    setSelectedSubTab('today');
+    clearNavIntent();
+    const shift = data?.activeShift;
+    if (!shift) return;
+    const errors = readingErrors(shift.nozzleReadings, closingReadings);
+    if (errors.length > 0) {
+      toast.error(errors[0]);
+      return;
     }
-
-    setConfirmWarningsChecked(false);
-    setIsPreparingClose(true);
-    setCloseWizardOpen(true);
+    if (!hasCloseProgress(draft)) setConfirmWarningsChecked(false);
+    goRoute(shiftCloseRoute(shift.id, draft.step));
   };
 
-  const handleCloseShift = async () => {
+  const setCloseStep = (step: CloseStep) => {
+    updateDraft({ step });
+    if (activeShiftId) goRoute(shiftCloseRoute(activeShiftId, step), { replace: true });
+  };
+
+  const leaveClosePage = () => goRoute(ROUTES.shifts);
+
+  const showCloseResult = (workflow: PendingTankDipWorkflow) => {
+    setClosedShiftSuccess(workflow);
+    if (stationId) saveClosedResult(stationId, workflow.lastClosedShiftId, workflow);
+    goRoute(shiftCloseRoute(workflow.lastClosedShiftId, 'done'), { replace: true });
+  };
+
+  const handleCloseShift = async (save: KeyedSave) => {
     if (!data.activeShift) return;
     try {
       setIsClosing(true);
@@ -758,20 +781,24 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         openedAt: data.activeShift.openedAt,
         closedAt: new Date().toISOString(),
         timeZone: stationSettings.timezone,
+        shiftName: data.activeShift.templateName ?? null,
         tankDips,
         closeStatus: 'submitting',
       };
       if (stationId && tankDips.length > 0) savePendingTankDipWorkflow(stationId, preparedWorkflow);
 
-      const closeResult = await shiftService.closeShift(data.activeShift.id, {
+      // One Idempotency-Key per visit to the close page (#534): a retry after
+      // a lost answer reuses it, so the server answers with the first close
+      // (or refuses an edited retry) rather than closing twice.
+      const payload = {
         closingCash,
         nozzleReadings: readingsArray,
         ...(closeDropEntries.length > 0 ? { closeCashDrops: closeDropEntries } : {}),
-      });
-      setCloseDrops([]);
-
-      setIsPreparingClose(false);
-      setCloseWizardOpen(false);
+      };
+      const closeResult = await save({ stationId, shiftId: closedId, payload }, (idempotencyKey) =>
+        shiftService.closeShift(closedId, payload, { idempotencyKey }),
+      );
+      if (stationId) saveCloseDraft(stationId, closedId, null);
 
       const closedWorkflow: PendingTankDipWorkflow = {
         ...preparedWorkflow,
@@ -779,11 +806,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         closedAt: closeResult.shift.closedAt,
       };
       savePendingTankDipWorkflow(stationId!, closedWorkflow);
-      // The success card is rendered from the close response, which already
+      // The success state is rendered from the close response, which already
       // carries everything it shows. Cache invalidation/refetch runs in the
       // background so the operator is never made to wait on the slowest
       // operational query for feedback the server has already given us.
-      setClosedShiftSuccess(closedWorkflow);
+      showCloseResult(closedWorkflow);
       runTask(loadShiftStatus(), 'Shift closed, but the screen could not be refreshed.');
       await saveTankDips(closedWorkflow).catch(() => undefined);
     } catch (err: any) {
@@ -794,7 +821,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           if (workflow) {
             const confirmed = { ...workflow, closeStatus: 'closed' as const };
             savePendingTankDipWorkflow(stationId, confirmed);
-            setClosedShiftSuccess(confirmed);
+            showCloseResult(confirmed);
             await saveTankDips(confirmed).catch(() => undefined);
           }
         }
@@ -835,7 +862,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const lastShift = data?.lastShift ?? null;
   const lastShiftSummary = data?.lastShiftSummary ?? null;
   const shiftScreenState: 'idle' | 'active' | 'closing' = activeShift
-    ? isPreparingClose
+    ? hasCloseProgress(draft) || draft.step !== 'readings'
       ? 'closing'
       : 'active'
     : 'idle';
@@ -847,33 +874,220 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       }
     : null;
 
-  // Live shift only: the close success screen and the summary view still
-  // replace the page (their own redesign is #534 / #535).
-  if (shiftSubTab === 'today' && closedShiftSuccess) {
-    return (
-      <ShiftCloseSuccess
-        result={closedShiftSuccess}
-        tankDips={closedShiftSuccess.tankDips}
-        onSaveTankDips={() => saveTankDips()}
-        onDiscardTankDips={discardTankDips}
-        onStartNext={() => {
-          setSelectedTemplateId(closedShiftSuccess.nextTemplateId);
-          setBusinessDate(closedShiftSuccess.businessDate);
-          setPreserveNextShiftDate(true);
-          setClosedShiftSuccess(null);
-          setViewingShiftSummary(false);
-          showOpenForm(true);
+  const openHandover = (assignment: StaffAssignmentInput) =>
+    runTask(handleOpenHandoverDrawer(assignment), 'Could not open the handover.');
+
+  const viewShiftSummary = (shiftId: string) => {
+    setViewHistoryShiftId(shiftId);
+    setShiftSubTab('history');
+    goRoute(ROUTES.shifts);
+  };
+  const dismissCloseResult = (result: PendingTankDipWorkflow) => {
+    if (stationId) saveClosedResult(stationId, result.lastClosedShiftId, null);
+    setClosedShiftSuccess(null);
+    setViewingShiftSummary(false);
+  };
+
+  const mayClose = canCloseShift(userRole);
+  const handoverDrawer =
+    activeShift && selectedHandoverAssignment ? (
+      <HandoverDrawer
+        isOpen={handoverDrawerOpen}
+        onClose={() => {
+          setHandoverDrawerOpen(false);
+          setSelectedHandoverAssignment(null);
         }}
-        onViewSummary={() => {
-          setViewHistoryShiftId(closedShiftSuccess.lastClosedShiftId);
-          setShiftSubTab('history');
-          setClosedShiftSuccess(null);
+        shiftId={activeShift.id}
+        stationId={stationId}
+        userId={selectedHandoverAssignment.userId}
+        userName={selectedHandoverAssignment.userName}
+        duId={selectedHandoverAssignment.duId}
+        duCode={selectedHandoverAssignment.duCode || selectedHandoverAssignment.duName}
+        nozzles={activeShift.nozzleReadings.filter(
+          (nr: any) => nr.duId === selectedHandoverAssignment.duId,
+        )}
+        terminals={(activeShift.terminalLinks || []).filter(
+          (t: any) => t.duId === selectedHandoverAssignment.duId || t.duId == null,
+        )}
+        stationHasConfiguredTerminals={(data?.terminals || []).length > 0}
+        customers={handoverCreditCustomers}
+        merchandiseCash={Number(
+          (activeShift.staffAssignments || []).find(
+            (sa: any) => sa.userId === selectedHandoverAssignment.userId,
+          )?.attributed?.merchandiseCash ?? 0,
+        )}
+        openingFloat={Number(
+          (activeShift.staffAssignments || []).find(
+            (sa: any) =>
+              sa.userId === selectedHandoverAssignment.userId &&
+              sa.duId === selectedHandoverAssignment.duId,
+          )?.openingFloat ?? 0,
+        )}
+        merchandiseNonCash={(() => {
+          const a = (activeShift.staffAssignments || []).find(
+            (sa: any) => sa.userId === selectedHandoverAssignment.userId,
+          )?.attributed;
+          return Number(a?.merchandiseCard ?? 0) + Number(a?.merchandiseUpi ?? 0);
+        })()}
+        creditSales={
+          (activeShift.staffAssignments || []).find(
+            (sa: any) =>
+              sa.userId === selectedHandoverAssignment.userId &&
+              sa.duId === selectedHandoverAssignment.duId,
+          )?.creditSales ||
+          selectedHandoverAssignment.creditSales ||
+          []
+        }
+        omcSales={
+          (activeShift.staffAssignments || []).find(
+            (sa: any) =>
+              sa.userId === selectedHandoverAssignment.userId &&
+              sa.duId === selectedHandoverAssignment.duId,
+          )?.omcSales ||
+          selectedHandoverAssignment.omcSales ||
+          []
+        }
+        onCreditChanged={async () => {
+          await loadShiftStatus();
         }}
-        onBack={() => {
-          setClosedShiftSuccess(null);
-          setViewingShiftSummary(false);
-        }}
+        existingHandover={activeShift.handovers?.find(
+          (h: any) =>
+            h.userId === selectedHandoverAssignment.userId &&
+            h.duId === selectedHandoverAssignment.duId,
+        )}
+        onSaveSuccess={() => {}}
       />
+    ) : null;
+
+  // ── Close shift page (#534): `/shifts/<id>/close` ──────────────────────────
+  // A close outcome left on Live shift (a reload with tank dips still to save)
+  // is the close page's final state, as the old screen replaced Live shift.
+  const closePage =
+    closeRoute ??
+    (shiftSubTab === 'today' && closedShiftSuccess
+      ? { shiftId: closedShiftSuccess.lastClosedShiftId, step: 'done' as const }
+      : null);
+  if (closePage) {
+    const result =
+      closedShiftSuccess?.lastClosedShiftId === closePage.shiftId
+        ? closedShiftSuccess
+        : closePage.step === 'done' && stationId
+          ? loadClosedResult<PendingTankDipWorkflow>(stationId, closePage.shiftId)
+          : null;
+    if (result) {
+      return (
+        <ShiftCloseSuccess
+          result={result}
+          shiftName={result.shiftName}
+          tankDips={result.tankDips}
+          onSaveTankDips={() => saveTankDips(result)}
+          onDiscardTankDips={discardTankDips}
+          onStartNext={() => {
+            setSelectedTemplateId(result.nextTemplateId);
+            setBusinessDate(result.businessDate);
+            setPreserveNextShiftDate(true);
+            dismissCloseResult(result);
+            setSelectedSubTab('today');
+            showOpenForm(true);
+            goRoute(ROUTES.shifts);
+          }}
+          onViewSummary={() => {
+            dismissCloseResult(result);
+            viewShiftSummary(result.lastClosedShiftId);
+          }}
+          onBack={() => {
+            dismissCloseResult(result);
+            leaveClosePage();
+          }}
+        />
+      );
+    }
+    if (activeShift && activeShift.id === closePage.shiftId && mayClose) {
+      const step: CloseStep = closePage.step === 'done' ? 'confirm' : closePage.step;
+      const drawerRowsList = closeDrawerRows({
+        drawers: cashSummary?.drawers ?? [],
+        assignments: staffAssignmentRows,
+        handovers,
+      });
+      return (
+        <>
+          <CloseShiftPage
+            shift={activeShift}
+            currentBusinessDate={currentBusinessDate}
+            timeZone={stationSettings.timezone}
+            step={step}
+            onStepChange={setCloseStep}
+            onBack={leaveClosePage}
+            groups={nozzleGroups(activeShift, { now, timeZone: stationSettings.timezone })}
+            readingErrors={readingErrors(activeShift.nozzleReadings, closingReadings)}
+            tanks={stationTanks}
+            drawerRows={drawerRowsList}
+            drawerTotal={closeDrawerTotal(drawerRowsList)}
+            onOpenHandover={openHandover}
+            cashLines={cashLines}
+            productCashOutside={cashSummary?.merchCashOutsideHandover ?? 0}
+            productCashBreakdown={cashSummary?.merchCashBreakdown ?? []}
+            dropDrawers={(cashSummary?.drawers ?? []).map((d) => ({
+              attendantId: d.attendantId,
+              duId: d.duId,
+              label: [d.duName, d.attendantName ?? 'Attendant'].filter(Boolean).join(' · '),
+            }))}
+            canRecordDrops={!!cashSummary}
+            draft={draft}
+            onDraftChange={updateDraft}
+            hasHandovers={hasHandovers}
+            attendantVariance={cashSummary?.attendantVariance ?? totalAttendantVariance}
+            warnings={warnings}
+            confirmWarningsChecked={confirmWarningsChecked}
+            onConfirmWarningsChange={setConfirmWarningsChecked}
+            isClosing={isClosing}
+            onConfirmClose={(save) => runTask(handleCloseShift(save), 'Could not close the shift.')}
+          />
+          {handoverDrawer}
+        </>
+      );
+    }
+    // Loading, or a shift that is not open (closed, another shift) or a role
+    // that cannot close: say so, with the way back.
+    return (
+      <PageFrame
+        route={ROUTES.shifts}
+        title="Close shift"
+        back={{ label: 'Live shift', href: `#${ROUTES.shifts}`, onClick: leaveClosePage }}
+      >
+        <DataSection
+          title="shift status"
+          query={statusQ}
+          shape="cards"
+          placeholderHeight={320}
+          enabled
+        >
+          <EmptyState
+            title={mayClose ? 'This shift is not open' : 'Your role cannot close shifts'}
+            description={
+              mayClose
+                ? 'It may already be closed. Its Shift Summary is in History.'
+                : 'An Owner, Manager or Staff member closes the shift.'
+            }
+            action={
+              <div className="flex gap-2">
+                {mayClose && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => viewShiftSummary(closePage.shiftId)}
+                  >
+                    View shift summary
+                  </Button>
+                )}
+                <Button variant="primary" size="sm" onClick={leaveClosePage}>
+                  Back to Live shift
+                </Button>
+              </div>
+            }
+          />
+        </DataSection>
+      </PageFrame>
     );
   }
 
@@ -896,13 +1110,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     );
   }
 
-  const mayClose = canCloseShift(userRole);
-  const startClose = () => {
-    setSelectedSubTab('today');
-    clearNavIntent();
-    if (isPreparingClose) setCloseWizardOpen(true);
-    else handlePrepareClose();
-  };
   const primary = activeShift
     ? mayClose
       ? {
@@ -934,9 +1141,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       { id: 'history', label: 'History', concept: 'history' },
     ] satisfies TabItem[]
   ).filter((tab) => userRole !== 'Accountant' || tab.id !== 'today');
-
-  const openHandover = (assignment: StaffAssignmentInput) =>
-    runTask(handleOpenHandoverDrawer(assignment), 'Could not open the handover.');
 
   return (
     <>
@@ -1062,112 +1266,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         </div>
       </PageFrame>
 
-      {activeShift && (
-        <CloseShiftWizard
-          isOpen={closeWizardOpen}
-          onClose={() => {
-            setCloseWizardOpen(false);
-            // Keep isPreparingClose=true so the page offers "Continue close".
-            // We only fully exit close mode if no progress has been made.
-            if (closingCash === 0 && Object.keys(dipReadings).length === 0) {
-              setIsPreparingClose(false);
-              setConfirmWarningsChecked(false);
-            }
-          }}
-          shiftTemplateName={activeShift.templateName}
-          openedAt={activeShift.openedAt}
-          businessDate={activeShift.businessDate}
-          currentBusinessDate={currentBusinessDate}
-          scheduledStartTime={activeShift.scheduledStartTime}
-          scheduledEndTime={activeShift.scheduledEndTime}
-          timeZone={stationSettings.timezone}
-          cashLines={cashLines}
-          closingCash={closingCash}
-          onClosingCashChange={setClosingCash}
-          cashSummary={cashSummary}
-          closeCashDrops={closeDrops}
-          onCloseCashDropsChange={setCloseDrops}
-          stationTanks={stationTanks}
-          dipReadings={dipReadings}
-          onDipReadingsChange={setDipReadings}
-          dipReasons={dipReasons}
-          onDipReasonsChange={setDipReasons}
-          warnings={warnings}
-          confirmWarningsChecked={confirmWarningsChecked}
-          onConfirmWarningsChange={setConfirmWarningsChecked}
-          isClosing={isClosing}
-          onConfirmClose={() => handleCloseShift()}
-        />
-      )}
-
-      {activeShift && selectedHandoverAssignment && (
-        <HandoverDrawer
-          isOpen={handoverDrawerOpen}
-          onClose={() => {
-            setHandoverDrawerOpen(false);
-            setSelectedHandoverAssignment(null);
-          }}
-          shiftId={activeShift.id}
-          stationId={stationId}
-          userId={selectedHandoverAssignment.userId}
-          userName={selectedHandoverAssignment.userName}
-          duId={selectedHandoverAssignment.duId}
-          duCode={selectedHandoverAssignment.duCode || selectedHandoverAssignment.duName}
-          nozzles={activeShift.nozzleReadings.filter(
-            (nr: any) => nr.duId === selectedHandoverAssignment.duId,
-          )}
-          terminals={(activeShift.terminalLinks || []).filter(
-            (t: any) => t.duId === selectedHandoverAssignment.duId || t.duId == null,
-          )}
-          stationHasConfiguredTerminals={(data?.terminals || []).length > 0}
-          customers={handoverCreditCustomers}
-          merchandiseCash={Number(
-            (activeShift.staffAssignments || []).find(
-              (sa: any) => sa.userId === selectedHandoverAssignment.userId,
-            )?.attributed?.merchandiseCash ?? 0,
-          )}
-          openingFloat={Number(
-            (activeShift.staffAssignments || []).find(
-              (sa: any) =>
-                sa.userId === selectedHandoverAssignment.userId &&
-                sa.duId === selectedHandoverAssignment.duId,
-            )?.openingFloat ?? 0,
-          )}
-          merchandiseNonCash={(() => {
-            const a = (activeShift.staffAssignments || []).find(
-              (sa: any) => sa.userId === selectedHandoverAssignment.userId,
-            )?.attributed;
-            return Number(a?.merchandiseCard ?? 0) + Number(a?.merchandiseUpi ?? 0);
-          })()}
-          creditSales={
-            (activeShift.staffAssignments || []).find(
-              (sa: any) =>
-                sa.userId === selectedHandoverAssignment.userId &&
-                sa.duId === selectedHandoverAssignment.duId,
-            )?.creditSales ||
-            selectedHandoverAssignment.creditSales ||
-            []
-          }
-          omcSales={
-            (activeShift.staffAssignments || []).find(
-              (sa: any) =>
-                sa.userId === selectedHandoverAssignment.userId &&
-                sa.duId === selectedHandoverAssignment.duId,
-            )?.omcSales ||
-            selectedHandoverAssignment.omcSales ||
-            []
-          }
-          onCreditChanged={async () => {
-            await loadShiftStatus();
-          }}
-          existingHandover={activeShift.handovers?.find(
-            (h: any) =>
-              h.userId === selectedHandoverAssignment.userId &&
-              h.duId === selectedHandoverAssignment.duId,
-          )}
-          onSaveSuccess={() => {}}
-        />
-      )}
+      {handoverDrawer}
     </>
   );
 };

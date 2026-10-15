@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import React from 'react';
+import React, { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import {
@@ -21,6 +21,7 @@ vi.mock('../../hooks/useStationBusinessDate.js', () => ({
 
 const openShift = vi.fn();
 const getShiftStatus = vi.fn();
+const closeShift = vi.fn();
 vi.mock('../../services/cloud.js', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   const Base = actual.CloudShiftService as new () => object;
@@ -29,6 +30,7 @@ vi.mock('../../services/cloud.js', async (importOriginal) => {
     CloudShiftService: class extends Base {
       openShift = (...a: unknown[]) => openShift(...a);
       getShiftStatus = (...a: unknown[]) => getShiftStatus(...a);
+      closeShift = (...a: unknown[]) => closeShift(...a);
     },
   };
 });
@@ -89,10 +91,7 @@ const activeShift = {
   reconciliation: { openingFloat: 2000, cashSales: 3000, handoverCashDrops: 0, drawers: [] },
 };
 
-const mount = (
-  role: 'Owner' | 'Manager' | 'Staff' | 'Accountant',
-  shift: unknown = activeShift,
-) => {
+const seed = (shift: unknown) => {
   const client = createTestQueryClient();
   client.setQueryData(queryKeys.shiftStatus('st-1', false), {
     activeShift: shift,
@@ -123,6 +122,16 @@ const mount = (
     requestedState: 'OPEN',
     openBusinessDays: [{ id: 'bd-1', businessDate: '2026-10-14' }],
   });
+  client.setQueryData(queryKeys.merchandiseHandovers('sh-1'), []);
+  client.setQueryData(queryKeys.merchandiseSales('sh-1'), []);
+  return client;
+};
+
+const mount = (
+  role: 'Owner' | 'Manager' | 'Staff' | 'Accountant',
+  shift: unknown = activeShift,
+) => {
+  const client = seed(shift);
   return renderWithProviders(
     <ShiftsManagement
       selectedStation={STATION}
@@ -138,6 +147,8 @@ let restoreConsole: () => void;
 beforeEach(() => {
   openShift.mockReset();
   getShiftStatus.mockReset();
+  closeShift.mockReset();
+  sessionStorage.clear();
   // 17:30 IST on the shift's day: before its 22:00 scheduled end.
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-14T12:00:00.000Z'));
@@ -311,5 +322,136 @@ describe('the last shift summary link', () => {
     const bar = screen.getByTestId('live-shift-bar');
     fireEvent.click(within(bar).getByRole('button', { name: /Last shift summary/ }));
     expect(screen.getByRole('tab', { name: /History/ }).getAttribute('aria-selected')).toBe('true');
+  });
+});
+
+/** The page under a shell that keeps its route, as the desktop and console shells do. */
+function Host(props: {
+  initial: string;
+  role?: 'Owner' | 'Manager' | 'Staff' | 'Accountant';
+  onRoute: (path: string, options?: { replace?: boolean }) => void;
+}) {
+  const [route, setRoute] = useState(props.initial);
+  return (
+    <ShiftsManagement
+      selectedStation={STATION}
+      userRole={props.role ?? 'Manager'}
+      userName="Anita"
+      onNavigate={vi.fn()}
+      route={route}
+      onRouteChange={(next, options) => {
+        const path = typeof next === 'function' ? next(route) : next;
+        props.onRoute(path, options);
+        setRoute(path);
+      }}
+    />
+  );
+}
+
+const allHandedOver = {
+  ...activeShift,
+  handovers: [
+    ...activeShift.handovers,
+    {
+      id: 'h2',
+      userId: 'u2',
+      duId: 'du2',
+      cashHandedOver: '1000.00',
+      cardHandedOver: '0',
+      upiHandedOver: '0',
+      creditHandedOver: '0',
+      varianceAmount: '0',
+      cashDrops: '0',
+      createdAt: '2026-10-14T14:10:00.000Z',
+    },
+  ],
+};
+
+const host = (
+  initial: string,
+  opts: { role?: 'Owner' | 'Manager' | 'Staff' | 'Accountant'; shift?: unknown } = {},
+) => {
+  const onRoute = vi.fn();
+  const view = renderWithProviders(<Host initial={initial} role={opts.role} onRoute={onRoute} />, {
+    queryClient: seed(opts.shift ?? activeShift),
+  });
+  return { ...view, onRoute };
+};
+
+describe('Close shift page (#534)', () => {
+  it('Close shift opens the page at /shifts/<id>/close', () => {
+    const { onRoute } = host('/shifts');
+    fireEvent.click(screen.getByRole('button', { name: /^Close shift$/ }));
+    expect(onRoute).toHaveBeenCalledWith('/shifts/sh-1/close', undefined);
+    expect(screen.getByRole('heading', { name: 'Close Evening' })).toBeDefined();
+  });
+
+  it('keeps the step in the address, rewriting the entry as it moves', () => {
+    const { onRoute } = host('/shifts/sh-1/close?step=cash');
+    expect(screen.getByLabelText('Counted office cash (float + deposited)')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(onRoute).toHaveBeenLastCalledWith('/shifts/sh-1/close?step=confirm', { replace: true });
+    expect(screen.getByRole('region', { name: 'Shift summary' })).toBeDefined();
+  });
+
+  it('keeps the draft across a reload, and offers Continue close at its step', () => {
+    const first = host('/shifts/sh-1/close?step=cash');
+    fireEvent.change(screen.getByLabelText('Counted office cash (float + deposited)'), {
+      target: { value: '4800' },
+    });
+    first.unmount();
+
+    host('/shifts/sh-1/close?step=cash');
+    expect(
+      (screen.getByLabelText('Counted office cash (float + deposited)') as HTMLInputElement).value,
+    ).toBe('4800');
+    cleanup();
+
+    const { onRoute } = host('/shifts');
+    fireEvent.click(screen.getByRole('button', { name: /Continue close/ }));
+    expect(onRoute).toHaveBeenCalledWith('/shifts/sh-1/close?step=cash', undefined);
+  });
+
+  it('opens a missing handover in the Handover drawer on top of the step', async () => {
+    host('/shifts/sh-1/close?step=handovers');
+    fireEvent.click(screen.getByRole('button', { name: /Record DU2 · Suresh handover/ }));
+    expect(await screen.findByText('Handover · DU2 · Suresh')).toBeDefined();
+    // The page and its step are still there underneath.
+    expect(screen.getByRole('heading', { name: 'Close Evening' })).toBeDefined();
+    expect(screen.getByRole('region', { name: 'Drawers' })).toBeDefined();
+  });
+
+  it('closes with an Idempotency-Key, reused on a retry after a lost answer, then shows the outcome', async () => {
+    closeShift
+      .mockRejectedValueOnce(Object.assign(new Error('Network down'), { status: undefined }))
+      .mockResolvedValueOnce({ shift: { id: 'sh-1', closedAt: '2026-10-14T16:30:00.000Z' } });
+    getShiftStatus.mockResolvedValue(null);
+    const { onRoute } = host('/shifts/sh-1/close?step=confirm', { shift: allHandedOver });
+    fireEvent.click(screen.getByLabelText(/I confirm these readings are correct/));
+    const close = () => screen.getByRole('button', { name: /^Close shift$/ }) as HTMLButtonElement;
+    fireEvent.click(close());
+    await waitFor(() => expect(closeShift).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(close().disabled).toBe(false));
+    fireEvent.click(close());
+    await waitFor(() => expect(closeShift).toHaveBeenCalledTimes(2));
+
+    const [first, second] = closeShift.mock.calls;
+    expect(first[0]).toBe('sh-1');
+    expect(first[2].idempotencyKey).toEqual(expect.any(String));
+    expect(second[2].idempotencyKey).toBe(first[2].idempotencyKey);
+    expect(await screen.findByRole('heading', { name: 'Evening closed' })).toBeDefined();
+    expect(onRoute).toHaveBeenCalledWith('/shifts/sh-1/close?step=done', { replace: true });
+    expect(screen.getByRole('button', { name: /Open next shift/ })).toBeDefined();
+    expect(screen.getByRole('button', { name: /View shift summary/ })).toBeDefined();
+  });
+
+  it('tells an Accountant at the address that their role cannot close', () => {
+    host('/shifts/sh-1/close', { role: 'Accountant' });
+    expect(screen.getByText('Your role cannot close shifts')).toBeDefined();
+  });
+
+  it('says a shift that is not open is not open', () => {
+    host('/shifts/sh-9/close');
+    expect(screen.getByText('This shift is not open')).toBeDefined();
   });
 });

@@ -1,0 +1,119 @@
+import { describe, expect, it } from 'vitest';
+import {
+  acceptedHandoverRecon,
+  handoverNozzles,
+  handoverRecon,
+  sumLines,
+} from './handoverFigures.js';
+
+const nz = (id: string, opening: number, price = 100, extra: object = {}) => ({
+  nozzleId: id,
+  nozzleName: id,
+  productId: 'p-ms',
+  productName: 'Petrol',
+  unit: 'L',
+  openingReading: opening,
+  unitPrice: price,
+  ...extra,
+});
+
+describe('handoverNozzles (#534)', () => {
+  it('lists nozzles in natural order and values volume less testing at the pump price', () => {
+    const f = handoverNozzles(
+      [nz('N10', 100), nz('N2', 200), nz('N1', 50)],
+      { N1: 60, N2: 210, N10: 105 },
+      { N2: 1 },
+    );
+    expect(f.rows.map((r) => r.nozzle)).toEqual(['N1', 'N2', 'N10']);
+    expect(f.volume).toBe(25);
+    expect(f.testing).toBe(1);
+    expect(f.fuelSales).toBe(2400);
+    expect(f.unit).toBe('L');
+    expect(f.meteredByProduct.get('p-ms')).toBe(24);
+  });
+
+  it('defaults a closing reading to the opening and flags one below it', () => {
+    const f = handoverNozzles([nz('N1', 100), nz('N2', 100)], { N2: 90 }, {});
+    expect(f.rows[0]).toMatchObject({ closing: 100, volume: 0, invalid: false });
+    expect(f.rows[1]).toMatchObject({ closing: 90, volume: 0, invalid: true });
+  });
+
+  it('never values sales below zero, and reads mixed units as units', () => {
+    const f = handoverNozzles([nz('N1', 0), nz('N2', 0, 50, { unit: 'kg' })], { N1: 1 }, { N1: 5 });
+    expect(f.fuelSales).toBe(0);
+    expect(f.unit).toBe('units');
+  });
+});
+
+describe('handoverRecon (#534): expected = float + fuel cash + product cash − drops', () => {
+  const base = {
+    fuelSales: 10_000,
+    productCash: 450,
+    card: 2_000,
+    upi: 1_000,
+    credit: 500,
+    omc: 0,
+    openingFloat: 2_000,
+    drops: 3_000,
+    declaredCash: 5_950,
+  };
+
+  it('adds up line by line', () => {
+    const r = handoverRecon(base);
+    expect(r.cardUpi).toBe(3_000);
+    expect(r.creditOmc).toBe(500);
+    expect(r.cashSales).toBe(6_950);
+    expect(r.expected).toBe(5_950);
+    expect(r.variance).toBe(0);
+  });
+
+  it('gives the variance the old formula gave: declared total − expected total − float + drops', () => {
+    const declared = { ...base, declaredCash: 5_750 };
+    const r = handoverRecon(declared);
+    const totalDeclared = 5_750 + 2_000 + 1_000 + 500 + 0;
+    const old = totalDeclared - (10_000 + 450) - 2_000 + 3_000;
+    expect(r.variance).toBe(old);
+    expect(r.variance).toBe(-200);
+  });
+
+  it('sums in paise, so float dust reads as balanced', () => {
+    const r = handoverRecon({
+      ...base,
+      fuelSales: 0.1 + 0.2,
+      productCash: 0,
+      card: 0,
+      upi: 0,
+      credit: 0,
+      drops: 0,
+      openingFloat: 0,
+      declaredCash: 0.3,
+    });
+    expect(r.variance).toBe(0);
+    expect(Object.is(r.variance, -0)).toBe(false);
+  });
+
+  it('lays the server’s accepted figures out as the same lines', () => {
+    const r = acceptedHandoverRecon({
+      handover: { cashHandedOver: '5750.00', cardHandedOver: '2000', upiHandedOver: '1000' },
+      expectedFuelSales: 10_000,
+      merchandiseCash: 450,
+      creditSales: 500,
+      omcCardSales: 0,
+      openingFloat: 2_000,
+      cashDrops: 3_000,
+      expectedCash: 5_950,
+      varianceAmount: -200,
+    });
+    expect(r).toMatchObject({
+      source: 'accepted',
+      cashSales: 6_950,
+      expected: 5_950,
+      declaredCash: 5_750,
+      variance: -200,
+    });
+  });
+
+  it('sums customer-sale lines in paise', () => {
+    expect(sumLines([{ amount: '0.1' }, { amount: 0.2 }, { amount: null }])).toBe(0.3);
+  });
+});
