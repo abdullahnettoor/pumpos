@@ -12,6 +12,7 @@ import { formatShortDay, inr } from '../../utils/format.js';
 import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
 import { HandoverDrawer } from './HandoverDrawer.js';
+import { handoverProductCash } from './handoverFigures.js';
 import { ShiftHistoryTab } from './ShiftHistoryTab.js';
 import { CloseShiftPage } from './CloseShiftPage.js';
 import { ShiftCloseSuccess } from './ShiftCloseSuccess.js';
@@ -531,6 +532,21 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     setViewingShiftSummary(false);
   };
 
+  // The attendant's product cash, counted in one Drawer only (#419).
+  const selectedProductCash =
+    activeShift && selectedHandoverAssignment
+      ? handoverProductCash({
+          assignments: activeShift.staffAssignments || [],
+          userId: selectedHandoverAssignment.userId,
+          duId: selectedHandoverAssignment.duId,
+          productCash: Number(
+            (activeShift.staffAssignments || []).find(
+              (sa: any) => sa.userId === selectedHandoverAssignment.userId,
+            )?.attributed?.merchandiseCash ?? 0,
+          ),
+        })
+      : null;
+
   const handoverDrawer =
     activeShift && selectedHandoverAssignment ? (
       <HandoverDrawer
@@ -552,11 +568,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           (t: any) => t.duId === selectedHandoverAssignment.duId || t.duId == null,
         )}
         stationHasConfiguredTerminals={(data?.terminals || []).length > 0}
-        merchandiseCash={Number(
-          (activeShift.staffAssignments || []).find(
-            (sa: any) => sa.userId === selectedHandoverAssignment.userId,
-          )?.attributed?.merchandiseCash ?? 0,
-        )}
+        merchandiseCash={selectedProductCash?.productCash ?? 0}
+        productCashCountedIn={selectedProductCash?.countedIn ?? null}
         openingFloat={Number(
           (activeShift.staffAssignments || []).find(
             (sa: any) =>

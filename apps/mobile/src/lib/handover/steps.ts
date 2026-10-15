@@ -1,5 +1,11 @@
 import { inr } from '@pump/ui';
-import { reconcileDrawer, type DrawerReconciliation } from '@pump/shared';
+import {
+  dispenserLabel,
+  drawerProductCash,
+  productCashOwner,
+  reconcileDrawer,
+  type DrawerReconciliation,
+} from '@pump/shared';
 import { plural } from '../format.js';
 import { num, round2 } from '../num.js';
 import {
@@ -292,19 +298,38 @@ export interface DuReconciliation extends DrawerReconciliation {
 }
 
 /**
+ * The DU whose Drawer counts the attendant's product cash (the server's rule,
+ * `productCashOwner` in `@pump/shared`, #419): their first DU by code. Null
+ * when they hold no DU.
+ */
+export function productCashDu(dus: readonly AssignedDu[]): AssignedDu | null {
+  return productCashOwner(dus);
+}
+
+/**
+ * Set on a Drawer that does not count the attendant's product cash: the
+ * owning DU's code, for "Product sales: counted in DU-1". Null on the owner.
+ */
+export function productCashCountedIn(du: AssignedDu, dus: readonly AssignedDu[]): string | null {
+  const owner = productCashDu(dus);
+  if (!owner || owner.duId === du.duId) return null;
+  return dispenserLabel(owner) || 'another DU';
+}
+
+/**
  * One Drawer's reconciliation as the server will compute it on save (the shared
  * `reconcileDrawer`, ADR 0005): `expectedCash` is float + cash sales − drops,
- * where cash sales are the metered fuel plus merchandise cash less everything
+ * where cash sales are the metered fuel plus product cash less everything
  * settled by card, UPI, credit or fuel card.
  *
- * `merchCash` is what the server attributes to this Handover. The server reads
- * the attendant's merchandise cash per attendant, not per DU, so today it is
- * the same figure for every DU the attendant holds (double-counted, #419);
- * pass it to every DU to stay faithful to what is saved, and change it here
- * once the server attributes it to one Drawer.
+ * `merchCash` is the attendant's whole product cash. A product sale carries no
+ * DU, so it is counted in ONE Drawer, the first of `dus` by code (#419), and
+ * 0 in the others: what the server records on save.
  */
 export function reconcileDu(input: {
   du: AssignedDu;
+  /** Every DU the attendant holds this shift (`du` among them). */
+  dus: readonly AssignedDu[];
   form: DuFormState;
   credit: CreditLine[];
   omc: CreditLine[];
@@ -319,7 +344,11 @@ export function reconcileDu(input: {
     ...reconcileDrawer({
       openingFloat,
       expectedFuelSales: duFuelSales(du, form),
-      merchandiseCash: input.merchCash,
+      merchandiseCash: drawerProductCash({
+        assignments: input.dus,
+        duId: du.duId,
+        productCash: input.merchCash,
+      }),
       cardHandedOver: card,
       upiHandedOver: upi,
       creditSales: sumLines(input.credit),

@@ -230,6 +230,22 @@ describe('HandoverDrawer', () => {
       expect(rowValue('Cash sales')).toBe('₹5,500.00');
     });
 
+    it('says which Drawer counts the product cash when it is another DU (#419)', () => {
+      renderWithProviders(
+        <HandoverDrawer
+          {...baseProps({
+            merchandiseCash: 0,
+            merchandiseNonCash: 900,
+            productCashCountedIn: 'DU-1',
+          })}
+        />,
+      );
+      setReading(NOZZLE_A, '1050');
+      expect(rowValue('Product sales')).toBe('counted in DU-1');
+      expect(rowValue('Cash sales')).toBe('₹5,000.00');
+      expect(screen.queryByText(/are not drawer cash/)).toBeNull();
+    });
+
     it('leaves product sales taken on card out of the cash expectation', () => {
       // Non-cash product sales never reach the attendant's hands.
       renderWithProviders(<HandoverDrawer {...baseProps({ merchandiseNonCash: 900 })} />);

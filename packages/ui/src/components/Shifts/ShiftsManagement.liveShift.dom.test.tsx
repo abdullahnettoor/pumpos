@@ -431,6 +431,34 @@ describe('Close shift page (#534)', () => {
     expect(screen.getByRole('region', { name: 'Drawers' })).toBeDefined();
   });
 
+  it("counts a two-DU attendant's product cash in their first DU only (#419)", async () => {
+    const attributed = { merchandiseCash: 800, merchandiseCard: 0, merchandiseUpi: 0 };
+    const shift = {
+      ...activeShift,
+      nozzleReadings: [...activeShift.nozzleReadings, reading('n3', 'du3', 300, 300)],
+      staffAssignments: [
+        activeShift.staffAssignments[0],
+        // Listed DU3 first: the owner is picked by code, not by order.
+        { userId: 'u2', userName: 'Suresh', duId: 'du3', duCode: 'DU3', attributed },
+        { ...activeShift.staffAssignments[1], attributed },
+      ],
+    };
+    host('/shifts/sh-1/close?step=handovers', { shift });
+    const rowValue = (label: string) =>
+      [...document.querySelectorAll('dt')].find((d) => d.textContent?.startsWith(label))
+        ?.nextElementSibling?.textContent;
+
+    fireEvent.click(screen.getByRole('button', { name: /Record DU3 · Suresh handover/ }));
+    await screen.findByText('Handover · DU3 · Suresh');
+    expect(rowValue('Product sales')).toBe('counted in DU2');
+    cleanup();
+
+    host('/shifts/sh-1/close?step=handovers', { shift });
+    fireEvent.click(screen.getByRole('button', { name: /Record DU2 · Suresh handover/ }));
+    await screen.findByText('Handover · DU2 · Suresh');
+    expect(rowValue('Product sales (cash)')).toBe('+₹800.00');
+  });
+
   it('closes with an Idempotency-Key, reused on a retry after a lost answer, then shows the outcome', async () => {
     closeShift
       .mockRejectedValueOnce(Object.assign(new Error('Network down'), { status: undefined }))

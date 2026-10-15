@@ -130,8 +130,16 @@ interface HandoverDrawerProps {
   creditSales?: any[];
   /** OMC fleet-card sale lines already recorded for this (attendant, DU). */
   omcSales?: any[];
-  /** Product sales paid in cash this attendant collected (folds into expected). */
+  /**
+   * Product sales paid in cash this attendant collected that THIS Drawer
+   * counts (folds into expected): 0 on a Drawer that does not count it (#419).
+   */
   merchandiseCash?: number;
+  /**
+   * Set when another of the attendant's Drawers counts their product cash:
+   * that DU's code. The line then reads "counted in DU-1", with no amount.
+   */
+  productCashCountedIn?: string | null;
   /** Product sales paid by card/UPI on a terminal (informational; not in cash expected). */
   merchandiseNonCash?: number;
   /** This Drawer's Opening Float, issued at shift open (ADR 0005). */
@@ -207,6 +215,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   creditSales = [],
   omcSales = [],
   merchandiseCash = 0,
+  productCashCountedIn = null,
   merchandiseNonCash = 0,
   openingFloat = 0,
   onCreditChanged,
@@ -1458,9 +1467,10 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
             <dl className="flex flex-col gap-1.5 rounded-card border border-border-soft bg-surface px-4 py-3">
               <ReconLine label="Fuel sales" value={formatMoney(recon.fuelSales)} />
               <ReconLine
+                muted={productCashCountedIn != null}
                 label={
                   <>
-                    Product sales (cash)
+                    {productCashCountedIn != null ? 'Product sales' : 'Product sales (cash)'}
                     {/* Edit opens the recorded sale: it waits for the shift's
                         product sales, and says so if they fail to load. */}
                     <DataSection
@@ -1484,9 +1494,15 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                     </DataSection>
                   </>
                 }
-                value={plus(recon.productCash)}
+                value={
+                  productCashCountedIn != null ? (
+                    <span className="font-sans">counted in {productCashCountedIn}</span>
+                  ) : (
+                    plus(recon.productCash)
+                  )
+                }
               />
-              {productNonCash > 0 && (
+              {productCashCountedIn == null && productNonCash > 0 && (
                 <p className="text-[12px] text-ink-muted">
                   Product sales on card / UPI ({formatMoney(productNonCash)}) are not drawer cash.
                 </p>

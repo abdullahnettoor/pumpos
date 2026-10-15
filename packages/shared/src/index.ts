@@ -28,6 +28,7 @@ export * from './constants/demo.js';
 export * from './constants/report-names.js';
 export * from './utils/desktop-downloads.js';
 export * from './utils/drawer-reconciliation.js';
+export * from './utils/product-cash-drawer.js';
 export * from './utils/days-of-cover.js';
 export * from './utils/money.js';
 export * from './utils/identifiers.js';

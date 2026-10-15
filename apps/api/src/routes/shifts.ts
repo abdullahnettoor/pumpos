@@ -14,6 +14,7 @@ import {
   isAuthorizedForStation,
   isAttendant,
   isHandoverSelfScoped,
+  productCashDrawer,
   resolveBusinessDate,
   type Role,
 } from '@pump/shared';
@@ -831,7 +832,8 @@ shiftsRouter.get('/status', async (c) => {
       else if (r.paymentMethod === 'UPI') a.merchandiseUpi += amt;
       else if (r.paymentMethod === 'Credit') a.merchandiseCredit += amt;
     }
-    // Only the cash the attendant actually holds folds into their handover expected.
+    // Only the cash the attendant actually holds folds into a handover expected
+    // (on one Drawer: see drawerAttributedFor).
     for (const a of attributedMap.values()) a.expectedExtra = a.merchandiseCash;
     const emptyAttr = {
       merchandiseCash: 0,
@@ -843,6 +845,23 @@ shiftsRouter.get('/status', async (c) => {
     };
     const attributedFor = (userId: string | null | undefined) =>
       (userId && attributedMap.get(userId)) || emptyAttr;
+    // A product sale carries no DU: the attendant's product cash folds into ONE
+    // Drawer's expected, their first DU by code (#419), so expectedExtra is the
+    // cash on that Drawer and 0 on the attendant's others.
+    const productCashDuFor = (userId: string | null | undefined) =>
+      productCashDrawer(
+        assignmentRows
+          .filter((r) => r.sa.userId === userId)
+          .map((r) => ({ duId: r.sa.duId, duCode: r.du?.code, duName: r.du?.name })),
+      );
+    const drawerAttributedFor = (
+      userId: string | null | undefined,
+      duId: string | null | undefined,
+    ) => {
+      const a = attributedFor(userId);
+      const owns = duId != null && productCashDuFor(userId) === duId;
+      return { ...a, expectedExtra: owns ? a.merchandiseCash : 0 };
+    };
 
     const staffAssignments = assignmentRows.map(({ sa, staffUser, du }) => {
       const creditSales = creditSalesFor(sa.userId, sa.duId);
@@ -852,7 +871,7 @@ shiftsRouter.get('/status', async (c) => {
         userName: staffUser?.fullName ?? 'Unknown',
         duName: du?.name ?? 'Unknown',
         duCode: du?.code ?? 'Unknown',
-        attributed: attributedFor(sa.userId),
+        attributed: drawerAttributedFor(sa.userId, sa.duId),
         creditSales,
         creditTotal: creditSales.reduce((s: number, l: any) => s + Number(l.amount), 0),
         omcSales,
@@ -866,7 +885,7 @@ shiftsRouter.get('/status', async (c) => {
         assignmentRows.find((a) => a.sa.userId === h.userId)?.staffUser?.fullName ?? 'Attendant',
       duName: assignmentRows.find((a) => a.du?.id === h.duId)?.du?.name ?? null,
       terminalEntries: handoverEntryRows.filter((e) => e.handoverId === h.id),
-      attributed: attributedFor(h.userId),
+      attributed: drawerAttributedFor(h.userId, h.duId),
       creditSales: creditSalesFor(h.userId, h.duId),
       creditTotal: creditSalesFor(h.userId, h.duId).reduce(
         (s: number, l: any) => s + Number(l.amount),

@@ -167,7 +167,35 @@ function handoverContext(overrides: Partial<HandoverContext> = {}): HandoverCont
     creditSales: 0,
     omcCardSales: 0,
     merchandiseCash: 0,
+    attendantDus: [{ duId: 'du-1', duCode: 'DU-1', duName: 'Dispenser 1' }],
     ...overrides,
+  };
+}
+
+/**
+ * The context of one of two Drawers an Attendant holds (DU-1 and DU-2, listed
+ * DU-2 first): each DU's nozzle metered ₹5,000, and ₹800 of product cash.
+ */
+function twoDuContext(duId: 'du-1' | 'du-2'): HandoverContext {
+  const code = duId === 'du-1' ? 'DU-1' : 'DU-2';
+  const base = handoverContext({ merchandiseCash: 800 });
+  return {
+    ...base,
+    dispenser: { ...base.dispenser!, id: duId, name: `Dispenser ${code}`, code },
+    nozzleReadings: [
+      {
+        ...base.nozzleReadings[0],
+        id: `reading-${duId}`,
+        nozzleId: `nozzle-${duId}`,
+        duId,
+        openingReading: '100',
+        unitPrice: '100',
+      },
+    ],
+    attendantDus: [
+      { duId: 'du-2', duCode: 'DU-2', duName: 'Dispenser DU-2' },
+      { duId: 'du-1', duCode: 'DU-1', duName: 'Dispenser DU-1' },
+    ],
   };
 }
 
@@ -213,6 +241,51 @@ function setup(
 }
 
 describe('RecordHandover', () => {
+  describe('product cash on an attendant holding two DUs (#419)', () => {
+    const handOver = (duId: 'du-1' | 'du-2', cashHandedOver: number) => {
+      const { useCase } = setup(twoDuContext(duId));
+      return useCase.execute(
+        {
+          ...command(),
+          duId,
+          cashHandedOver,
+          nozzleReadings: [{ nozzleId: `nozzle-${duId}`, closingReading: 150, testingVolume: 0 }],
+        },
+        context(),
+      );
+    };
+
+    it('counts the ₹800 in DU-1 only, and the Σ variance is 0 when both hand over correctly', async () => {
+      const du1 = await handOver('du-1', 5800);
+      const du2 = await handOver('du-2', 5000);
+      expect(du1.success && du2.success).toBe(true);
+      if (!du1.success || !du2.success) return;
+      expect(du1.data.merchandiseCash).toBe(800);
+      expect(du1.data.expectedTotal).toBe(5800);
+      expect(du1.data.expectedCash).toBe(5800);
+      expect(du2.data.merchandiseCash).toBe(0);
+      expect(du2.data.expectedTotal).toBe(5000);
+      expect(du2.data.expectedCash).toBe(5000);
+      expect(du1.data.varianceAmount + du2.data.varianceAmount).toBe(0);
+    });
+
+    it('records DU-2 short, not DU-1, when the oil cash is in the wrong pouch', async () => {
+      const du1 = await handOver('du-1', 5000);
+      const du2 = await handOver('du-2', 5800);
+      if (!du1.success || !du2.success) throw new Error('handover failed');
+      expect(du1.data.varianceAmount).toBe(-800);
+      expect(du2.data.varianceAmount).toBe(800);
+    });
+  });
+
+  it('counts all the product cash on a single-DU attendant (unchanged)', async () => {
+    const { useCase } = setup(handoverContext({ merchandiseCash: 800 }));
+    const result = await useCase.execute({ ...command(), cashHandedOver: 0 }, context());
+    if (!result.success) throw new Error('handover failed');
+    expect(result.data.merchandiseCash).toBe(800);
+    expect(result.data.expectedTotal).toBeCloseTo(1700.045);
+  });
+
   it('reconciles the Drawer: float + DU cash sales − drops, against cash handed over (#278)', async () => {
     // Metered ₹950.045 (900.045 fuel + 50 merch); ₹650 settled non-cash
     // (card 250 + UPI 100 + credit 200 + OMC 100) → DU cash sales ₹300.045.
