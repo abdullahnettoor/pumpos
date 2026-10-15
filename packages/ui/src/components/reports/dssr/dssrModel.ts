@@ -94,8 +94,12 @@ export interface DssrDay {
   sales: FigureLine[];
   fuel: {
     rows: FuelProductRow[];
-    /** The snapshot's own totals, so the total row is the stored figure. */
-    totals: { gross: number; testing: number; net: number; salesValue: number };
+    /**
+     * The snapshot's own totals, so the total row is the stored figure. `net`
+     * is null for a snapshot that stores no `totalNetVolume`: it is never
+     * derived from gross and testing.
+     */
+    totals: { gross: number; testing: number; net: number | null; salesValue: number };
     /** Fuel units on the day (L, kg). More than one: volumes are never added across them. */
     units: string[];
   };
@@ -203,7 +207,7 @@ export function readDssrDay(row: DssrRow): DssrDay {
       totals: {
         gross,
         testing,
-        net: num(fuel.totalNetVolume ?? gross - testing),
+        net: optionalNum(fuel.totalNetVolume),
         salesValue: num(fuel.totalSalesValue),
       },
       units: Array.from(new Set(byProduct.map((p) => String(p.unit || 'L')))),

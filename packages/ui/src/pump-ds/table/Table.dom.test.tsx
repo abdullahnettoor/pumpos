@@ -414,3 +414,24 @@ describe('plain text, as a PDF prints the table (#580)', () => {
     expect(totalTexts(columns, rows, undefined)).toBeNull();
   });
 });
+
+describe('a stored total row (derive: false)', () => {
+  it('prints only the figures it is given: a missing one is blank, null is —, nothing is summed', () => {
+    expect(
+      totalTexts(columns, rows, {
+        values: { litres: null, amount: 100000 },
+        derive: false,
+      })?.cells,
+    ).toEqual(['Total', '', '—', '', '₹1,00,000.00', '']);
+  });
+
+  it('a qty figure takes the unit it is given, not the rows’ own', () => {
+    expect(
+      totalTexts(columns, rows, {
+        values: { litres: 12.5 },
+        units: { litres: 'kg' },
+        derive: false,
+      })?.cells[2],
+    ).toBe('12.50 kg');
+  });
+});

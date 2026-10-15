@@ -85,9 +85,18 @@ export type TableColumn<T> =
  * column: for a report whose totals are stored (the DSR). There a column
  * missing from `values` stays blank, and `null` prints `—` (a figure that is
  * not added up, such as volumes across L and kg).
+ *
+ * `units` names the unit of a qty figure in `values`, when the total's unit is
+ * not the rows' own (the DSR's shift total takes the day's fuel unit).
  */
 export type TotalRow =
-  boolean | { label?: string; values?: Record<string, Amount>; derive?: boolean };
+  | boolean
+  | {
+      label?: string;
+      values?: Record<string, Amount>;
+      units?: Record<string, string>;
+      derive?: boolean;
+    };
 
 /** Which adapter is rendering; a statement prints, so its status is ink, not a fill. */
 export type TableMode = 'interactive' | 'statement';
@@ -108,7 +117,7 @@ interface KindDef<K extends Kind> {
   /** What the column sorts by; the raw value when absent. */
   sortValue?<T>(col: ColumnOf<K, T>, row: T): number | undefined;
   /** The column's total, formatted; absent when the kind does not add up. */
-  total?<T>(col: ColumnOf<K, T>, rows: T[], given: Amount): string;
+  total?<T>(col: ColumnOf<K, T>, rows: T[], given: Amount, unit?: string): string;
 }
 
 const NUMERIC = 'text-right font-mono tabular-nums';
@@ -170,12 +179,15 @@ const KINDS: { [K in Kind]: KindDef<K> } = {
       formatQuantity(col.value(row), unitOf(col, row), { decimals: col.decimals }),
     sortValue: (col, row) => toNumber(col.value(row)),
     // Quantities are never added across units: a figure the caller passes
-    // obeys the same rule as the sum.
-    total: (col, rows, given) => {
+    // obeys the same rule as the sum, unless the caller names its unit.
+    total: (col, rows, given, unit) => {
+      if (unit != null && given != null) {
+        return formatQuantity(given, unit, { decimals: col.decimals });
+      }
       const units = new Set(rows.map((row) => unitOf(col, row) ?? ''));
       if (units.size > 1) return '—';
-      const [unit] = units;
-      return formatQuantity(given ?? sum(col, rows), unit, { decimals: col.decimals });
+      const [rowUnit] = units;
+      return formatQuantity(given ?? sum(col, rows), rowUnit, { decimals: col.decimals });
     },
   },
   // Dates sit in the sans face with aligned digits, as the Dashboard prints its times.
@@ -287,7 +299,7 @@ export function totalTexts<T>(
   totalRow: TotalRow | undefined,
 ): { cells: string[]; labelled: boolean } | null {
   if (!totalRow) return null;
-  const { label = 'Total', values, derive = true } = totalRow === true ? {} : totalRow;
+  const { label = 'Total', values, units, derive = true } = totalRow === true ? {} : totalRow;
   const figures = columns.map((col) => {
     const total = totalOf(col);
     if (!total) return '';
@@ -295,7 +307,7 @@ export function totalTexts<T>(
       if (!values || !(col.id in values)) return '';
       if (values[col.id] == null) return '—';
     }
-    return total(col, rows, values?.[col.id]);
+    return total(col, rows, values?.[col.id], units?.[col.id]);
   });
   const labelled = figures.length > 0 && !figures[0];
   if (labelled) figures[0] = label;

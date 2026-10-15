@@ -69,7 +69,7 @@ exports[`Reports PDF with PumpOS Mark in Letterhead > prints the DSR as the scre
   "SHIFT | TEMPLATE | CLOSED AT | NET VOLUME | ATTENDANT VAR. | OFFICE COUNT VAR.",
   "20261008-1 | Morning | <shift 1 closed at> | 2,150.25 L | −₹100.00 | −₹150.00",
   "20261008-2 | Evening | <shift 2 closed at> | 2,150.21 L | — | +₹75.50",
-  "Total (volumes not added across L and kg; attendant var. excl. 1 older shift) |  |  | — | −₹100.00 | −₹74.50",
+  "Total (volumes not added across L and kg; attendant var. excl. 1 shift without a separate attendant variance) |  |  | — | −₹100.00 | −₹74.50",
   "ATTENDANT VARIANCE",
   "At handover, per attendant and DU",
   "ATTENDANT · DU | VARIANCE",

@@ -24,7 +24,7 @@ import {
   dssrCellTone,
   dssrTiles,
   fuelTotalRow,
-  fuelUnitsNote,
+  fuelTotalNotes,
   shiftTotalRow,
 } from '../../components/reports/dssr/dssrColumns.js';
 import { pdfTable } from './pdfTable.js';
@@ -96,7 +96,7 @@ const FigureRow = ({ label, value }: { label: string; value: string }) => (
 const MetaCell = ({ label, value }: { label: string; value: string }) => (
   <View style={s.metaCell}>
     <Text style={s.label}>{label.toUpperCase()}</Text>
-    <Text style={s.valMono}>{value}</Text>
+    <Text style={s.valMono}>{value || '\u2014'}</Text>
   </View>
 );
 
@@ -120,7 +120,7 @@ const builders: Record<DssrSection, (day: DssrDay, cfg: DssrReportConfig) => Rea
   meta: (day) => {
     const cells = totalTexts(FUEL_PRODUCT_COLUMNS, day.fuel.rows, fuelTotalRow(day.fuel))?.cells;
     const total = (id: string) => cells?.[FUEL_PRODUCT_COLUMNS.findIndex((c) => c.id === id)] ?? '';
-    const note = fuelUnitsNote(day.fuel);
+    const notes = fuelTotalNotes(day.fuel);
     return (
       <View key="meta">
         <View style={s.metaBox}>
@@ -129,7 +129,9 @@ const builders: Record<DssrSection, (day: DssrDay, cfg: DssrReportConfig) => Rea
           <MetaCell label="Testing volume" value={total('testing')} />
           <MetaCell label="Fuel sales" value={total('salesValue')} />
         </View>
-        {note && <Text style={[s.label, { marginTop: 4 }]}>Totals: {note}.</Text>}
+        {notes.length > 0 && (
+          <Text style={[s.label, { marginTop: 4 }]}>Totals: {notes.join('; ')}.</Text>
+        )}
       </View>
     );
   },

@@ -3,10 +3,15 @@ import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
-import { DSSR_EMPTY_DAY_FIXTURE, DSSR_PARITY_FIXTURE } from '../../test/dssrFixture.js';
+import {
+  DSSR_EMPTY_DAY_FIXTURE,
+  DSSR_NOT_STORED_FIXTURE,
+  DSSR_PARITY_FIXTURE,
+} from '../../test/dssrFixture.js';
 import { readPdf } from '../../test/pdfTree.js';
 import { DailyDssrView } from '../../components/DailyDssrView.js';
 import { DSSR_EMPTY } from '../../components/reports/dssr/dssrColumns.js';
+import type { DssrRow } from '../../components/reports/dssr/dssrModel.js';
 import { DssrDoc } from './dssrDoc.js';
 import { DEFAULT_DSSR_CONFIG } from './reportConfig.js';
 
@@ -40,14 +45,18 @@ const screenTables = (): string[][][] =>
  * the late-entry banner, and the Sealed / Open / Draft chip in the page
  * header (the PDF marks a draft with its own banner).
  */
-const renderBoth = (fixture: typeof DSSR_PARITY_FIXTURE | typeof DSSR_EMPTY_DAY_FIXTURE) => {
+const renderBoth = (fixture: DssrRow) => {
   renderWithProviders(
     <DailyDssrView dailyDssr={fixture} station={station} userRole="Owner" onBack={() => {}} />,
   );
   return readPdf(<DssrDoc dssr={fixture} config={DEFAULT_DSSR_CONFIG} />);
 };
 
-const days = { 'a full day': DSSR_PARITY_FIXTURE, 'an empty day': DSSR_EMPTY_DAY_FIXTURE };
+const days: Record<string, DssrRow> = {
+  'a full day': DSSR_PARITY_FIXTURE,
+  'an empty day': DSSR_EMPTY_DAY_FIXTURE,
+  'a kg day without stored totals': DSSR_NOT_STORED_FIXTURE,
+};
 
 describe.each(Object.entries(days))('DSR screen and PDF parity (#580): %s', (_name, fixture) => {
   it('prints every table with the same headers, rows and totals', () => {
@@ -108,7 +117,7 @@ describe('DSR screen and PDF parity (#580): the words they once disagreed on', (
     // The shift total is the snapshot's: no net volume across L and kg.
     const shifts = pdf.tables.find((t) => t.headers[0] === 'SHIFT');
     expect(shifts?.totals[0].slice(0, 4)).toEqual([
-      'Total (volumes not added across L and kg; attendant var. excl. 1 older shift)',
+      'Total (volumes not added across L and kg; attendant var. excl. 1 shift without a separate attendant variance)',
       '',
       '',
       '—',
@@ -122,5 +131,22 @@ describe('DSR screen and PDF parity (#580): the words they once disagreed on', (
       expect(pdf.lines).toContain(message);
     }
     expect(pdf.tables).toHaveLength(0);
+  });
+
+  it('a total the snapshot does not store is blank in both, and the label says why', () => {
+    const pdf = renderBoth(DSSR_NOT_STORED_FIXTURE);
+    const [fuel, shifts, attendants] = pdf.tables;
+    expect(fuel.totals[0]).toEqual([
+      'Total (net volume not stored for this day)',
+      '310.00 kg',
+      '10.00 kg',
+      '',
+      '₹25,000.00',
+    ]);
+    expect(shifts.totals[0].slice(3)).toEqual(['', '', '']);
+    expect(shifts.totals[0][0]).toBe(
+      'Total (net volume not stored for this day; variance totals not stored for this day)',
+    );
+    expect(attendants.totals[0]).toEqual(['Total (variance total not stored for this day)', '']);
   });
 });

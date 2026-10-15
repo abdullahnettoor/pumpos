@@ -172,3 +172,44 @@ export const DSSR_EMPTY_DAY_FIXTURE = {
     drawer: { attendants: [] },
   },
 };
+
+/**
+ * A kg-only day whose snapshot stores no net volume and no drawer totals
+ * (an older or partial snapshot). Its totals stay blank, never derived, and
+ * the labels say why, alike on the screen and in the PDF.
+ */
+export const DSSR_NOT_STORED_FIXTURE = {
+  businessDate: '2026-10-10',
+  generatedAt: '2026-10-10T22:00:00.000Z',
+  snapshotData: {
+    shiftsIncluded: 1,
+    fuel: {
+      totalGrossVolume: 310,
+      totalTestingVolume: 10,
+      totalSalesValue: 25000,
+      byProduct: [
+        {
+          productName: 'CNG',
+          unit: 'kg',
+          grossVolume: 310,
+          testingVolume: 10,
+          netVolume: 300,
+          salesValue: 25000,
+        },
+      ],
+      nozzles: [],
+    },
+    shifts: [
+      {
+        shiftId: 's1',
+        shiftSequence: 1,
+        templateName: 'Day',
+        closedAt: '2026-10-10T12:00:00.000Z',
+        netVolume: 300,
+        cashVariance: -20,
+        attendantVariance: -20,
+      },
+    ],
+    drawer: { attendants: [{ attendantName: 'Ravi', duName: 'DU 1', variance: -20 }] },
+  },
+};
