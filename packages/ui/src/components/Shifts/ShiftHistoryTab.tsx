@@ -1,13 +1,39 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
-import { Eye } from 'lucide-react';
-import { Panel, Button, StatusChip, DateText } from '../../pump-ds/index.js';
-import { DataTable } from '../primitives/DataTable.js';
-import { inr } from '../../utils/format.js';
+import {
+  DataSection,
+  EmptyState,
+  Icon,
+  InteractiveTable,
+  SectionHeader,
+  VarianceChip,
+  type TableColumn,
+} from '../../pump-ds/index.js';
+import { InfoTip } from '../primitives/InfoTip.js';
+import { formatDate } from '../../utils/format.js';
+import { countOf } from '../../utils/ledgerWindow.js';
 import { formatStationDateTime, shiftDisplayLabel } from '@pump/shared';
 import { useShiftSummaries } from '../../query/hooks.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
 import { useRunTask } from '../../utils/runTask.js';
+
+/** A row of `GET /shift-summaries`, the fields this list reads. */
+interface SummaryRow {
+  id?: string;
+  shiftId: string;
+  status?: string | null;
+  businessDate?: string | null;
+  shiftSequence?: number | null;
+  generatedAt?: string | null;
+  templateName?: string | null;
+  snapshotData?: {
+    templateName?: string | null;
+    shiftStatus?: string | null;
+    closedByName?: string | null;
+    expectedCash?: number | string | null;
+    closingCash?: number | string | null;
+    cashVariance?: number | string | null;
+  } | null;
+}
 
 interface ShiftHistoryTabProps {
   selectedStation: any | null;
@@ -17,9 +43,10 @@ interface ShiftHistoryTabProps {
 }
 
 /**
- * History sub-tab: a pump-ds DataTable of closed/locked shift-summary snapshots.
- * Selecting a row opens the full ShiftSummaryView (print document). Data is read
- * through the cached useShiftSummaries hook (refreshes via operational invalidation).
+ * History (#533): the closed and locked shifts, newest first, on the Table
+ * module in its own Data Section (Retry on failure). A row opens the full
+ * ShiftSummaryView. Read through the cached useShiftSummaries hook (refreshes
+ * via operational invalidation).
  */
 export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
   selectedStation,
@@ -56,135 +83,101 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
     onClearViewShiftId?.();
   };
 
-  const columns = useMemo<ColumnDef<any, any>[]>(
+  const rows = useMemo<SummaryRow[]>(
+    () =>
+      [...summaries].sort((a, b) =>
+        String(b.generatedAt ?? '').localeCompare(String(a.generatedAt ?? '')),
+      ),
+    [summaries],
+  );
+
+  const columns = useMemo<TableColumn<SummaryRow>[]>(
     () => [
       // Business Day leads, and it is the primary read (#226). A shift closing
       // 05:11 on the 17th belongs to the 16th; leading with the closure
       // timestamp invited reading that row as the 17th's.
       {
         id: 'businessDate',
-        header: 'Business Day',
-        cell: ({ row }) =>
-          row.original.businessDate ? (
-            <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
-              <DateText value={row.original.businessDate} />
-            </span>
+        header: 'Business day',
+        kind: 'date',
+        value: (r) => r.businessDate,
+        cell: (r) =>
+          r.businessDate ? (
+            <span className="font-semibold text-ink-strong">{formatDate(r.businessDate)}</span>
           ) : (
-            <span style={{ color: 'var(--text-faint)' }}>—</span>
+            '—'
           ),
-      },
-      // Demoted, not dropped: still the answer to "when was this reconciled?".
-      {
-        accessorKey: 'generatedAt',
-        header: 'Closed At',
-        cell: ({ row }) => (
-          <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-            {formatStationDateTime(row.original.generatedAt, timeZone)}
-          </span>
-        ),
       },
       // The shift's readable name (#228) — `YYYYMMDD-N`, the same string the
       // shift-summary PDF and the attendant statement print.
       {
         id: 'shiftLabel',
         header: 'Shift',
-        cell: ({ row }) => (
-          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
-            {shiftDisplayLabel(row.original)}
-          </span>
-        ),
+        kind: 'text',
+        value: (r) => shiftDisplayLabel(r),
+        cell: (r) => <span className="font-mono">{shiftDisplayLabel(r)}</span>,
       },
       {
         id: 'template',
         header: 'Template',
-        cell: ({ row }) => (
-          <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
-            {/* The list endpoint joins the template and returns its live name
-                top-level. The snapshot copy is the fallback, not the source:
-                reading it first made every row say "Custom". */}
-            {row.original.templateName || row.original.snapshotData?.templateName || 'Custom'}
-          </span>
-        ),
+        kind: 'text',
+        // The list endpoint joins the template and returns its live name
+        // top-level. The snapshot copy is the fallback, not the source:
+        // reading it first made every row say "Custom".
+        value: (r) => r.templateName || r.snapshotData?.templateName || 'Custom',
       },
       {
         id: 'status',
         header: 'Status',
-        cell: ({ row }) => {
-          // The endpoint returns `status`. Reading `shiftStatus` matched
-          // nothing, so a Locked shift rendered as merely Closed.
-          const s = row.original.status || row.original.snapshotData?.shiftStatus || 'CLOSED';
-          return <StatusChip status={s === 'LOCKED' ? 'locked' : 'closed'} size="sm" />;
-        },
+        kind: 'status',
+        // The endpoint returns `status`. Reading `shiftStatus` matched
+        // nothing, so a Locked shift rendered as merely Closed.
+        value: (r) =>
+          (r.status || r.snapshotData?.shiftStatus || 'CLOSED') === 'LOCKED'
+            ? 'locked'
+            : 'shift-closed',
+      },
+      // Demoted, not dropped: still the answer to "when was this reconciled?".
+      {
+        id: 'generatedAt',
+        header: 'Closed at',
+        kind: 'text',
+        value: (r) => formatStationDateTime(r.generatedAt, timeZone),
       },
       {
         id: 'closedBy',
-        header: 'Reconciled By',
-        cell: ({ row }) => (
-          <span style={{ color: 'var(--text-default)' }}>
-            {row.original.snapshotData?.closedByName || 'Unknown'}
-          </span>
-        ),
+        header: 'Reconciled by',
+        kind: 'text',
+        value: (r) => r.snapshotData?.closedByName || 'Unknown',
       },
       {
         id: 'expected',
         header: 'Expected',
-        cell: ({ row }) => (
-          <span style={{ fontFamily: 'var(--font-mono)' }}>
-            {inr(row.original.snapshotData?.expectedCash || 0)}
-          </span>
-        ),
+        kind: 'money',
+        value: (r) => Number(r.snapshotData?.expectedCash || 0),
       },
       {
         id: 'actual',
-        header: 'Actual',
-        cell: ({ row }) => (
-          <span style={{ fontFamily: 'var(--font-mono)' }}>
-            {inr(row.original.snapshotData?.closingCash || 0)}
-          </span>
-        ),
+        header: 'Counted',
+        kind: 'money',
+        value: (r) => Number(r.snapshotData?.closingCash || 0),
       },
       {
         id: 'variance',
         header: 'Variance',
-        cell: ({ row }) => {
-          const v = Number(row.original.snapshotData?.cashVariance || 0);
-          const color =
-            v < 0
-              ? 'var(--brand-danger)'
-              : v > 0
-                ? 'var(--brand-warning)'
-                : 'var(--state-success-fg)';
-          return (
-            <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color }}>
-              {v > 0 ? '+' : ''}
-              {inr(v)}
-            </span>
-          );
-        },
-      },
-      {
-        id: 'actions',
-        header: '',
-        cell: ({ row }) => (
-          <Button
-            variant="secondary"
-            size="xs"
-            leftIcon={<Eye size={12} />}
-            onClick={() => setActiveSummary(row.original)}
-          >
-            View
-          </Button>
-        ),
+        kind: 'money',
+        value: (r) => Number(r.snapshotData?.cashVariance || 0),
+        cell: (r) => <VarianceChip amount={r.snapshotData?.cashVariance || 0} size="md" />,
       },
     ],
-    [timeZone, setActiveSummary],
+    [timeZone],
   );
 
   if (!selectedStation) {
     return (
-      <div style={{ color: 'var(--text-muted)', padding: '24px' }}>
+      <p className="p-6 text-[13px] text-ink-muted">
         Please select a station to view shift history.
-      </div>
+      </p>
     );
   }
 
@@ -193,7 +186,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
       (userRole === 'Owner' || userRole === 'Manager') && activeSummary.shiftStatus === 'CLOSED';
 
     return (
-      <div className="animate-fade-in">
+      <div>
         <ShiftSummaryView
           shiftSummary={activeSummary}
           userRole={userRole}
@@ -214,24 +207,47 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
   }
 
   return (
-    <div
-      className="animate-fade-in"
-      style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
-    >
-      <Panel flush title="Closed & locked shifts">
-        <DataTable
-          columns={columns}
-          data={summaries}
-          isLoading={summariesQ.isLoading}
-          error={summariesQ.error}
-          title="shift history"
-          onRetry={summariesQ.refetch}
+    <section className="flex flex-col gap-2" aria-label="Closed shifts">
+      <SectionHeader
+        title="Closed shifts"
+        subtitle={summariesQ.data ? countOf(rows.length, 'shift', 'shifts') : undefined}
+        controls={{
+          info: (
+            <InfoTip label="About shift history" placement="bottom">
+              Every closed and locked shift, newest first, with the Shift Summary taken at close.
+              Variance is the office count against the expected drawer cash. Open a row for the full
+              summary.
+            </InfoTip>
+          ),
+        }}
+      />
+      <DataSection
+        title="shift history"
+        query={summariesQ}
+        placeholderHeight={240}
+        flush
+        isEmpty={rows.length === 0}
+        empty={
+          <div className="p-3">
+            <EmptyState
+              compact
+              icon={<Icon name="clock" size="md" />}
+              title="No closed shifts yet"
+              description="Close an active shift to generate its first Shift Summary."
+            />
+          </div>
+        }
+      >
+        <InteractiveTable
           bare
-          getRowId={(d: any) => d.id}
-          emptyMessage="No closed shifts yet. Close an active shift to generate your first summary."
-          initialSorting={[{ id: 'generatedAt', desc: true }]}
+          columns={columns}
+          rows={rows}
+          rowKey={(d) => d.id ?? d.shiftId}
+          onRowClick={(row) => setActiveSummary(row)}
+          rowLabel={(r) => `Shift ${shiftDisplayLabel(r)}`}
+          title="shift history"
         />
-      </Panel>
-    </div>
+      </DataSection>
+    </section>
   );
 };

@@ -208,16 +208,9 @@ describe('BusinessDayTab', () => {
           { businessDate: '2026-02-27', id: 'bd-old' },
         ],
       });
-      const dayButtons = await screen.findAllByRole('button', { pressed: false });
-      const today = dayButtons.find((b) => b.textContent?.includes('01'));
-      if (today) {
-        fireEvent.click(today);
-        await waitFor(() =>
-          expect(
-            screen.getAllByRole('button').some((b) => b.getAttribute('aria-pressed') === 'true'),
-          ).toBe(true),
-        );
-      }
+      const [today] = await screen.findAllByRole('row', { name: /01 Mar 2026/i });
+      fireEvent.click(today);
+      await waitFor(() => expect(today.getAttribute('aria-current')).toBe('true'));
     });
 
     it('adopts a date requested after mount, not only the one it started with', async () => {
@@ -269,7 +262,7 @@ describe('BusinessDayTab', () => {
       await waitFor(() => expect(closeDayButton()).not.toBeNull());
       fireEvent.click(closeDayButton()!);
       await waitFor(() =>
-        expect(screen.getByText(new RegExp(`immutable DSR snapshot for ${TODAY}`))).toBeDefined(),
+        expect(screen.getByText(/immutable DSR snapshot for 01 Mar 2026/)).toBeDefined(),
       );
     });
 
@@ -315,17 +308,16 @@ describe('BusinessDayTab', () => {
       // The selected date also appears in the tab's own header, so scope to
       // the list row itself.
       await waitFor(() =>
-        expect(screen.getAllByRole('button', { name: /24 Feb 2026/i }).length).toBeGreaterThan(0),
+        expect(screen.getAllByRole('row', { name: /24 Feb 2026/i }).length).toBeGreaterThan(0),
       );
     });
 
     it('marks a day’s status with a chip, distinct from its counts text', async () => {
-      // `getAllByText(/Closed/i)` would also match "3 closed · 0 open", so the
-      // chip could be deleted and the test still pass. Match the chip's own
-      // exact-cased label node instead.
+      // A closed day reads Sealed (the vocabulary's word for a sealed DSR),
+      // matched on the chip's own label node, not the "3 closed" counts text.
       renderTab({}, { recentBusinessDays: [day({ status: 'CLOSED' })] });
       await waitFor(() =>
-        expect(screen.getAllByText((_, el) => el?.textContent === 'Closed').length).toBeGreaterThan(
+        expect(screen.getAllByText((_, el) => el?.textContent === 'Sealed').length).toBeGreaterThan(
           0,
         ),
       );
@@ -348,17 +340,22 @@ describe('BusinessDayTab', () => {
           ],
         },
       );
-      await screen.findByText(/Open past Business Days · 1/);
-      expect(screen.getAllByRole('button', { name: /27 Feb 2026/i }).length).toBeGreaterThan(0);
+      const openPast = await screen.findByRole('radio', { name: 'Open past days, 1' });
+      expect(openPast.getAttribute('aria-checked')).toBe('true');
+      expect(screen.getAllByRole('row', { name: /27 Feb 2026/i }).length).toBeGreaterThan(0);
+      expect(screen.queryAllByRole('row', { name: /24 Feb 2026/i })).toHaveLength(0);
       expect(onConsumed).toHaveBeenCalled();
-      expect(screen.getByRole('button', { name: /Show all/i })).toBeTruthy();
+      // "All" (every recent day) is one click away.
+      expect(screen.getByRole('radio', { name: 'All, 3' }).getAttribute('aria-checked')).toBe(
+        'false',
+      );
     });
 
     it('selecting a closed day moves the view to that date', async () => {
       renderTab({}, { recentBusinessDays: [day({ businessDate: '2026-02-24' })] });
-      const [row] = await screen.findAllByRole('button', { name: /24 Feb 2026/i });
+      const [row] = await screen.findAllByRole('row', { name: /24 Feb 2026/i });
       fireEvent.click(row);
-      await waitFor(() => expect(row.getAttribute('aria-pressed')).toBe('true'));
+      await waitFor(() => expect(row.getAttribute('aria-current')).toBe('true'));
     });
 
     it('offers "See older" and sends it to the reports page', async () => {
@@ -383,7 +380,7 @@ describe('BusinessDayTab', () => {
       // whose reads refuse them — worse than not offering it.
       const onNavigate = vi.fn();
       renderTab({ onNavigate, userRole: 'Staff' }, { recentBusinessDays: [day({})] });
-      await screen.findAllByRole('button', { name: /24 Feb 2026/i });
+      await screen.findAllByRole('row', { name: /24 Feb 2026/i });
       expect(screen.queryByRole('button', { name: /See older/i })).toBeNull();
     });
 
@@ -456,10 +453,10 @@ describe('BusinessDayTab', () => {
     // click is a real change, not a vacuous assertion.
     await waitFor(() => expect(screen.getByText(/^Live/)).toBeDefined());
 
-    const [row] = await screen.findAllByRole('button', { name: /24 Feb 2026/i });
+    const [row] = await screen.findAllByRole('row', { name: /24 Feb 2026/i });
     fireEvent.click(row);
 
-    await waitFor(() => expect(screen.getAllByText(/Closed/i).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/Sealed/i).length).toBeGreaterThan(1));
     // A stored snapshot is never "Live".
     expect(screen.queryByText(/^Live/)).toBeNull();
     // ...and a closed day offers no close button.
