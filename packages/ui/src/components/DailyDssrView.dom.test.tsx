@@ -313,7 +313,10 @@ describe('DailyDssrView look (#532)', () => {
     };
   }
 
-  /** An active business-day list query on the page, as the app shell has. */
+  /**
+   * A synthetic active query: the business-day list mounted beside the screen
+   * only so Generate has an observed query to invalidate and refetch.
+   */
   const DayList: React.FC = () => {
     useBusinessDayList(station.id);
     return null;
@@ -322,7 +325,7 @@ describe('DailyDssrView look (#532)', () => {
   it('Generate DSR settles on the write, while an invalidated query is still refetching', async () => {
     const prev = '2026-10-08';
     const api = stubGenerate();
-    renderWithProviders(
+    const { queryClient } = renderWithProviders(
       <>
         <DayList />
         <DailyDssrView
@@ -343,6 +346,9 @@ describe('DailyDssrView look (#532)', () => {
     expect(screen.queryByRole('button', { name: 'Generate DSR' })).toBeNull();
     // The invalidated business-day list is refetching, and its answer never came.
     expect(api.listReads()).toBe(2);
+    expect(queryClient.isFetching({ queryKey: queryKeys.businessDayList('st-1') })).toBe(1);
+    // …and the write has settled anyway: onSuccess does not wait on it.
+    expect(queryClient.isMutating()).toBe(0);
     const posts = api.calls.filter((c) => c.method === 'POST');
     expect(posts).toHaveLength(1);
     expect(posts[0].key).toBeTruthy();
