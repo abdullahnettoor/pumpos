@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import type { PayablesSummary } from '@pump/shared';
 import {
+  computeRange,
   DataSection,
   DateRangeMenu,
   EmptyState,
@@ -10,7 +11,7 @@ import {
   KpiTile,
   SearchInput,
   SectionHeader,
-  computeRange,
+  TileSection,
   type DateRange,
 } from '../../pump-ds/index.js';
 import { formatMoney } from '../../utils/format.js';
@@ -31,7 +32,6 @@ import {
   type PurchaseClock,
   type QueryOf,
 } from './supplierFigures.js';
-import { TileSection } from '../customers/TileSection.js';
 
 export interface PurchasesTabProps {
   purchasesQ: QueryOf<PurchaseRow[]>;

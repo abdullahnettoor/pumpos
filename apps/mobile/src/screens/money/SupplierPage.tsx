@@ -42,13 +42,13 @@ export const SupplierPage: React.FC<{
   /** The selected Station: its clock anchors "this month" and the age of the oldest unpaid Purchase. */
   station?: Station | null;
 }> = ({ supplier: initial, station: stationProp = null }) => {
-  // The list row is a snapshot; read the live entry so a refreshed balance shows.
-  const { suppliers } = useSuppliersData();
-  const supplier = suppliers.find((s) => s.id === initial.id) ?? initial;
-
   const shell = useShell();
   const { role } = shell;
   const station = stationProp ?? shell.station;
+
+  // The list row is a snapshot; read the live entry so a refreshed balance shows.
+  const { suppliers } = useSuppliersData(station?.id);
+  const supplier = suppliers.find((s) => s.id === initial.id) ?? initial;
 
   const payable = useSupplierPayableData(station?.id, supplier.id);
   const toast = useToast();

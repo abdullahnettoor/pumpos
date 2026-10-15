@@ -180,11 +180,17 @@ export class DrizzleCustomerLedgerReader {
 export class DrizzleSupplierLedgerReader {
   constructor(private readonly db: DbClient) {}
 
+  /**
+   * @param stationId when given, only that Station's ledger with the supplier
+   *   (#575): each pump has its own account with its OMC.
+   */
   async statement(
     organizationId: string,
     supplierId: string,
     { from, to }: PartyLedgerRange,
+    stationId?: string,
   ): Promise<RangedPartyLedger> {
+    const atStation = stationId ? sql`AND st.station_id = ${stationId}` : sql``;
     const [statement] = (await this.db.execute(sql`
       WITH entries AS (
         SELECT
@@ -222,6 +228,7 @@ export class DrizzleSupplierLedgerReader {
         ) pi ON true
         WHERE st.organization_id = ${organizationId}
           AND st.supplier_id = ${supplierId}
+          ${atStation}
           AND st.entry_date >= ${from}
           AND st.entry_date <= ${to}
       ),
@@ -231,6 +238,7 @@ export class DrizzleSupplierLedgerReader {
         FROM supplier_transactions st
         WHERE st.organization_id = ${organizationId}
           AND st.supplier_id = ${supplierId}
+          ${atStation}
           AND st.entry_date < ${from}
       ),
       ranged AS (

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import type { ReceivablesSummary } from '@pump/shared';
 import {
+  computeRange,
   DataSection,
   DateRangeMenu,
   EmptyState,
@@ -11,7 +12,7 @@ import {
   KpiTile,
   SearchInput,
   SectionHeader,
-  computeRange,
+  TileSection,
   type DateRange,
   type FilterChipOption,
 } from '../../pump-ds/index.js';
@@ -20,7 +21,6 @@ import { countOf, inWindow, type EntryClock } from '../../utils/ledgerWindow.js'
 import { InfoTip } from '../primitives/InfoTip.js';
 import { buildCollectionColumns, methodLabel, type CollectionRow } from './columns.js';
 import { collectionFigures, countByMethod, type QueryOf } from './ledgerKpis.js';
-import { TileSection } from './TileSection.js';
 
 export interface CollectionsTabProps {
   collectionsQ: QueryOf<CollectionRow[]>;

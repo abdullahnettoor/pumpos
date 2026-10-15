@@ -20,7 +20,7 @@ import {
   useInvalidateOperational,
   usePaymentTerminals,
   useProducts,
-  useSuppliers,
+  useStationSuppliers,
 } from '../query/hooks.js';
 import { isIdempotencyKeyConflict, keepsIdempotencyKey } from '../utils/idempotency.js';
 import { useRunTask } from '../utils/runTask.js';
@@ -151,7 +151,10 @@ const OfficeRecordSession: React.FC<
   const expenseCatsQ = useExpenseCategories({ enabled: kind === 'expense' });
   const incomeCatsQ = useIncomeCategories({ enabled: kind === 'income' });
   const customersQ = useCustomers(true, { enabled: kind === 'collection' });
-  const suppliersQ = useSuppliers(true, {
+  // The Station's suppliers, balanced on its own ledger (#575): the picker's
+  // balances and the payment's prefilled amount are what THIS Station owes, so a
+  // payment recorded here never settles another Station's debt.
+  const suppliersQ = useStationSuppliers(stationId, true, {
     enabled: kind === 'purchase' || kind === 'supplier-payment',
   });
   const productsQ = useProducts({ enabled: kind === 'purchase' });
@@ -176,7 +179,16 @@ const OfficeRecordSession: React.FC<
     }
     return map;
   }, [seesBalances, balancesQ.data]);
-  const locked: PartyOption | null = launch?.party ? toParty(launch.party) : null;
+  // A launched party carries whatever balance its screen had; a supplier's is
+  // re-read from this Station's list so the hint and prefill are this Station's.
+  const launchedParty = launch?.party ?? null;
+  const launchedSupplier =
+    launchedParty && (kind === 'purchase' || kind === 'supplier-payment')
+      ? suppliers.find((s) => s.id === launchedParty.id)
+      : undefined;
+  const locked: PartyOption | null = launchedParty
+    ? (launchedSupplier ?? toParty(launchedParty))
+    : null;
 
   // ---- session state ----
   const [session] = useState(() => officeSubmitKeys.session(`${kind}:${stationId}`));

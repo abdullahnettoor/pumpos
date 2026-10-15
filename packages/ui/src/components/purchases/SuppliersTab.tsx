@@ -10,6 +10,7 @@ import {
   KpiTile,
   SearchInput,
   SectionHeader,
+  TileSection,
   type FilterChipOption,
   type TotalRow,
 } from '../../pump-ds/index.js';
@@ -24,7 +25,6 @@ import {
   type QueryOf,
   type SupplierFilter,
 } from './supplierFigures.js';
-import { TileSection } from '../customers/TileSection.js';
 
 export interface SuppliersTabProps {
   suppliersQ: QueryOf<SupplierRow[]>;
@@ -166,9 +166,11 @@ export const SuppliersTab: React.FC<SuppliersTabProps> = ({
             ),
             info: (
               <InfoTip label="About supplier balances" placement="bottom">
-                A supplier&rsquo;s balance is every purchase less every payment. Payable is what you
-                owe active suppliers now; Advance is money paid ahead of purchases. Open a supplier
-                for the full statement.
+                Each station keeps its own account with a supplier: balances here are this
+                station&rsquo;s purchases less its payments. Payable is what this station owes
+                active suppliers now; Advance is money paid ahead of purchases. A payment covering
+                two stations is recorded as one payment at each. Open a supplier for the full
+                statement.
               </InfoTip>
             ),
           }}

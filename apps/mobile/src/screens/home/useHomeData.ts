@@ -5,7 +5,7 @@ import {
   useDailyDssrRange,
   useInventoryStatus,
   useShiftStatus,
-  useSuppliers,
+  useStationSuppliers,
 } from '@pump/ui';
 import {
   businessDateSettings,
@@ -47,7 +47,8 @@ export function useHomeData(station: Station, role: Role | null = null) {
   const statusQ = useShiftStatus(station.id);
   const tanksQ = useInventoryStatus(station.id);
   const customersQ = useCustomers();
-  const suppliersQ = useSuppliers();
+  // Payables are the Station's own (#575), as on the Money tab.
+  const suppliersQ = useStationSuppliers(station.id);
   const alerts = useMobileAlerts(station, role);
   // The station comes from the stations query, so a saved threshold change lands here too.
   const tankLevels = useMemo(() => resolveTankLevelSettings(station.settings), [station.settings]);

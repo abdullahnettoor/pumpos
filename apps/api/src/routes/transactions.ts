@@ -25,6 +25,7 @@ import {
   CreateSupplier,
   UpdateSupplier,
   SetSupplierOpeningBalance,
+  suppliersAtStation,
   err,
   validationError,
   AddVehicle,
@@ -285,13 +286,53 @@ const DEFAULT_INCOME_CATEGORIES = [
 // MASTER DATA — Suppliers
 // ====================================================
 
+/**
+ * The Station a supplier read is scoped to (#575) must be one of the caller's
+ * Organization and one the caller may access. Resolved under
+ * `organization_id` FIRST: `isAuthorizedForStation` waves Owners through
+ * without looking at the station, so it alone would let another
+ * Organization's Station id through (#235). Null when the read may go ahead.
+ */
+async function refuseSupplierStation(
+  c: Context<{ Variables: Variables }>,
+  stationId: string,
+): Promise<Response | null> {
+  const user = c.var.user;
+  if (!(await stationExistsInOrg(c.var.db, user.organizationId, stationId))) {
+    return stationNotFound(c);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
+  }
+  return null;
+}
+
+/**
+ * GET /transactions/suppliers?activeOnly=&stationId=
+ *
+ * The supplier list with each supplier's `currentBalance` (Σ purchases − Σ
+ * payments). With a `stationId` (the Suppliers page, Reports, the mobile Money
+ * tab) it is that Station's list (#575): its own and shared suppliers, plus any
+ * it has ledger entries with (`suppliersAtStation`), each balanced on the
+ * Station's own ledger only, as `/reports/payables` is. Without one it is the
+ * Organization's list and balances, for pickers and older clients.
+ */
 transactionsRouter.get('/suppliers', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const activeOnly = c.req.query('activeOnly') !== 'false';
+  const stationId = c.req.query('stationId') || undefined;
+  if (stationId) {
+    const refused = await refuseSupplierStation(c, stationId);
+    if (refused) return refused;
+  }
 
-  // Outstanding balance = Σ purchases − Σ payments, scoped to the organization.
   // Aggregated in SQL (one row per supplier) + run alongside the list query.
+  const balanceScope = [eq(schema.supplierTransactions.organizationId, user.organizationId)];
+  if (stationId) balanceScope.push(eq(schema.supplierTransactions.stationId, stationId));
   const [list, balanceRows] = await Promise.all([
     new DrizzleSupplierRepository(db).listByOrganization(user.organizationId, activeOnly),
     db
@@ -300,15 +341,16 @@ transactionsRouter.get('/suppliers', async (c) => {
         balance: sql<string>`COALESCE(SUM(${supplierSignedAmount('supplier_transactions')}), 0)`,
       })
       .from(schema.supplierTransactions)
-      .where(eq(schema.supplierTransactions.organizationId, user.organizationId))
+      .where(and(...balanceScope))
       .groupBy(schema.supplierTransactions.supplierId),
   ]);
 
-  const balances: Record<string, number> = {};
-  for (const r of balanceRows) balances[r.supplierId] = Number(r.balance);
+  const balances = new Map<string, number>();
+  for (const r of balanceRows) balances.set(r.supplierId, Number(r.balance));
+  const shown = stationId ? suppliersAtStation(list, stationId, new Set(balances.keys())) : list;
   return c.json({
     success: true,
-    data: list.map((s) => ({ ...s, currentBalance: balances[s.id] ?? 0 })),
+    data: shown.map((s) => ({ ...s, currentBalance: balances.get(s.id) ?? 0 })),
   });
 });
 
@@ -422,10 +464,23 @@ transactionsRouter.delete(
   },
 );
 
+/**
+ * GET /transactions/suppliers/:id/ledger?stationId=&from=&to=
+ *
+ * A supplier's statement. With a `stationId` only that Station's ledger with
+ * the supplier is read (#575): its opening balance, purchases, payments and
+ * adjustments, never another Station's. With `from`/`to` it is the ranged
+ * statement; without, the legacy all-time rows.
+ */
 transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const supplierId = c.req.param('id');
+  const stationId = c.req.query('stationId') || undefined;
+  if (stationId) {
+    const refused = await refuseSupplierStation(c, stationId);
+    if (refused) return refused;
+  }
   const supplier = await new DrizzleSupplierRepository(db).findById(supplierId);
   if (!supplier || supplier.organizationId !== user.organizationId) {
     return c.json(
@@ -447,6 +502,7 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
       user.organizationId,
       supplierId,
       parsedRange.range,
+      stationId,
     );
     return c.json({
       success: true,
@@ -481,6 +537,7 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
       and(
         eq(schema.supplierTransactions.supplierId, supplierId),
         eq(schema.supplierTransactions.organizationId, user.organizationId),
+        stationId ? eq(schema.supplierTransactions.stationId, stationId) : undefined,
       ),
     )
     .orderBy(schema.supplierTransactions.createdAt);

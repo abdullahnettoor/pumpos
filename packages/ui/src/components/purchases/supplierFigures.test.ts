@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { computeRange } from '../../pump-ds/index.js';
 import type { SupplierPaymentRow } from '../../services/cloud.js';
-import { advanceFigures, paymentFigures, purchasedToday, purchasesIn } from './supplierFigures.js';
+import {
+  advanceFigures,
+  paidToday,
+  paymentFigures,
+  purchasedToday,
+  purchasesIn,
+} from './supplierFigures.js';
 
 const clock = { timeZone: 'Asia/Kolkata' };
 const today = computeRange('today', clock).from;
@@ -62,24 +68,20 @@ describe('supplier figures (#528)', () => {
       accountName: 'A',
       accountType,
     });
-    const f = paymentFigures(
-      [
-        row('a', today, 50, 'CASH_IN_HAND'),
-        row('b', today, 30.1, 'PETTY_CASH', 's2'),
-        row('c', today, 200.2, 'BANK', 's2'),
-        row('d', lastMonth, 999, 'BANK', 's3'),
-      ],
-      clock,
-    );
-    expect(f).toMatchObject({
+    const rows = [
+      row('a', today, 50, 'CASH_IN_HAND'),
+      row('b', today, 30.1, 'PETTY_CASH', 's2'),
+      row('c', today, 200.2, 'BANK', 's2'),
+      row('d', lastMonth, 999, 'BANK', 's3'),
+    ];
+    expect(paymentFigures(rows, clock)).toMatchObject({
       month: 280.3,
       monthCount: 3,
       cash: 80.1,
       other: 200.2,
       suppliers: 2,
-      today: 280.3,
-      todayCount: 3,
     });
+    expect(paidToday(rows, clock)).toEqual({ amount: 280.3, count: 3 });
   });
 
   it('adds up advances paid as a positive amount', () => {

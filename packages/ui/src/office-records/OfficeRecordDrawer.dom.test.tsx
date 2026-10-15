@@ -117,7 +117,7 @@ const seeded = (over: { expenses?: any[] } = {}) => {
   qc.setQueryData(queryKeys.expenseCategories(), CATEGORIES);
   qc.setQueryData(queryKeys.incomeCategories(), CATEGORIES);
   qc.setQueryData(queryKeys.customers(true), CUSTOMERS);
-  qc.setQueryData(queryKeys.suppliers(true), SUPPLIERS);
+  qc.setQueryData(queryKeys.stationSuppliers('st-1', true), SUPPLIERS);
   qc.setQueryData(queryKeys.products(), [OIL]);
   qc.setQueryData(queryKeys.expenses(), over.expenses ?? []);
   return qc;
@@ -587,6 +587,19 @@ describe('supplier payment', () => {
     });
     expect(payload).not.toHaveProperty('shiftId');
     expect(opts.idempotencyKey).toEqual(expect.any(String));
+  });
+
+  it("prefills what THIS Station owes, never the organization's balance (#575)", async () => {
+    const qc = seeded();
+    // The organization owes Bharat 9,000 across both pumps; this Station owes 5,000.
+    qc.setQueryData(queryKeys.suppliers(true), [{ ...SUPPLIERS[0], currentBalance: 9000 }]);
+    host('Owner', qc);
+    open('supplier-payment', {
+      origin: 'statement',
+      party: { ...SUPPLIERS[0], currentBalance: 9000 },
+    });
+    expect((screen.getByLabelText('Amount') as HTMLInputElement).value).toBe('5000');
+    expect(screen.getByText('₹5,000.00 owed.')).toBeTruthy();
   });
 
   it('says why an amount is refused instead of doing nothing', async () => {

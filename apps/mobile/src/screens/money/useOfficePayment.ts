@@ -69,8 +69,13 @@ export function useOfficePayment<F extends OfficePaymentFields>(opts: Options<F>
     onSuccess: (_saved, { form }) => {
       key.current = null;
       setUnknownAttempt(null);
+      // Every cached list of the party, except another Station's supplier list
+      // (`[list, activeOnly, stationId]`, #575): this payment is not on its ledger.
       qc.setQueriesData<Array<{ id: string; currentBalance?: unknown }>>(
-        { queryKey: [partyListKey] },
+        {
+          queryKey: [partyListKey],
+          predicate: (q) => q.queryKey[2] === undefined || q.queryKey[2] === stationId,
+        },
         (list) => applyPaymentToParties(list, partyId, Number(form.amount.trim())),
       );
       refreshBalances();

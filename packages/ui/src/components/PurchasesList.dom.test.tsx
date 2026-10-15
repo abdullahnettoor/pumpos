@@ -8,6 +8,11 @@ import { renderWithProviders } from '../test/renderWithProviders.js';
 import { computeRange } from '../pump-ds/index.js';
 import { shortMonth } from '../utils/format.js';
 import { PurchasesList } from './PurchasesList.js';
+import {
+  getNavIntentState,
+  publishNavIntent,
+  __resetNavIntentForTests,
+} from '../nav-intent/store.js';
 
 /**
  * The Suppliers page on the shared modules (#528): Page Frame, layout B for
@@ -143,6 +148,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  __resetNavIntentForTests();
 });
 
 describe('Suppliers page (#528)', () => {
@@ -301,6 +307,19 @@ describe('Suppliers page (#528)', () => {
     expect(await screen.findByText('₹1,234.50')).toBeTruthy();
   });
 
+  it('a failed month request leaves Paid today and Payable standing, whatever the range (#575)', async () => {
+    const month = computeRange('this-month', clock);
+    stubApi({
+      ...DATA,
+      [`/transactions/supplier-payments?stationId=st-1&from=${month.from}&to=${month.to}`]: 'fail',
+    });
+    renderWithProviders(<PurchasesList selectedStation={station} />);
+    fireEvent.click(await screen.findByRole('tab', { name: /Payments/ }));
+    expect(await screen.findByText("Couldn't load paid this month", { exact: false })).toBeTruthy();
+    expect(within(tileOf('Paid today')).getByText('₹600.00')).toBeTruthy();
+    expect(within(tileOf('Payable')).getByText('₹1,234.50')).toBeTruthy();
+  });
+
   it('a failed load shows "Couldn\'t load … · Retry" in each section, never a page error', async () => {
     const fetchMock = stubApi({ ...DATA, '/transactions/suppliers': 'fail' });
     renderWithProviders(<PurchasesList selectedStation={station} />);
@@ -315,5 +334,135 @@ describe('Suppliers page (#528)', () => {
     const n = calls();
     fireEvent.click(within(alerts[1]).getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(calls()).toBeGreaterThan(n));
+  });
+});
+
+/**
+ * Supplier figures are per Station (#575): each pump has its own account with
+ * its OMC. Highway buys from BPCL, City from IOCL, both from a shared lube
+ * distributor. The server answers each Station with its own list and payables.
+ */
+describe('Suppliers page per Station (#575)', () => {
+  const HIGHWAY = station;
+  const CITY = { ...station, id: 'st-2', name: 'City Fuels' };
+  const LISTS: Record<string, unknown[]> = {
+    'st-1': [
+      { id: 'bpcl', name: 'BPCL Kochi', isActive: true, currentBalance: '60000.00', metadata: {} },
+      { id: 'lube', name: 'Lube Co', isActive: true, currentBalance: '4000.00', metadata: {} },
+    ],
+    'st-2': [
+      {
+        id: 'iocl',
+        name: 'IOCL Ernakulam',
+        isActive: true,
+        currentBalance: '70000.00',
+        metadata: {},
+      },
+      { id: 'lube', name: 'Lube Co', isActive: true, currentBalance: '-2000.00', metadata: {} },
+    ],
+  };
+  const payablesOf = (total: number, supplierCount: number) => ({
+    ...PAYABLES,
+    total,
+    supplierCount,
+  });
+  const PAYABLES_AT: Record<string, unknown> = {
+    'st-1': payablesOf(64000, 2),
+    'st-2': payablesOf(70000, 1),
+  };
+
+  /** Answers by path and by the `stationId` the request names. */
+  function stubStations() {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://api.test');
+      const stationId = url.searchParams.get('stationId') ?? '';
+      const data = url.pathname.endsWith('/transactions/suppliers')
+        ? (LISTS[stationId] ?? [])
+        : url.pathname.endsWith('/reports/payables')
+          ? PAYABLES_AT[stationId]
+          : url.pathname.includes('/ledger')
+            ? []
+            : [];
+      return new Response(JSON.stringify({ success: true, data }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  const payableTotal = async () => {
+    const table = await screen.findByRole('table');
+    fireEvent.click(
+      within(screen.getByRole('radiogroup', { name: 'Supplier balance' })).getByRole('radio', {
+        name: /^Payable/,
+      }),
+    );
+    return within(table.querySelector('tfoot') as HTMLElement);
+  };
+
+  it("asks for the Station's list, balances and payables, and shows none of another Station's suppliers", async () => {
+    const fetchMock = stubStations();
+    renderWithProviders(<PurchasesList selectedStation={HIGHWAY} />);
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('BPCL Kochi')).toBeTruthy();
+    expect(within(table).queryByText('IOCL Ernakulam')).toBeNull();
+    const urls = fetchMock.mock.calls.map(([u]) => String(u));
+    expect(
+      urls.some((u) => u.includes('/transactions/suppliers?') && u.includes('stationId=st-1')),
+    ).toBe(true);
+    expect(urls.some((u) => u.includes('/reports/payables?stationId=st-1'))).toBe(true);
+    expect(urls.some((u) => u.includes('stationId=st-2'))).toBe(false);
+  });
+
+  it.each([
+    ['Highway', HIGHWAY, '₹64,000.00'],
+    ['City', CITY, '₹70,000.00'],
+  ])('the Payable tile equals the total of the %s list owed', async (_name, at, owed) => {
+    stubStations();
+    renderWithProviders(<PurchasesList selectedStation={at} />);
+    await waitFor(() => expect(within(tileOf('Payable')).getByText(owed)).toBeTruthy());
+    expect((await payableTotal()).getByText(owed)).toBeTruthy();
+  });
+
+  it('a deep link to a supplier this Station does not list says so, then clears', async () => {
+    stubStations();
+    publishNavIntent({ focusSupplierId: 'iocl', open: 'supplier-statement' });
+    renderWithProviders(<PurchasesList selectedStation={HIGHWAY} />);
+    expect(
+      await screen.findByText(
+        'That supplier has no account at Highway Fuels. Switch to its station to see its statement.',
+      ),
+    ).toBeTruthy();
+    expect(getNavIntentState().intent).toBeNull();
+    expect(screen.queryByTestId('supplier-balance')).toBeNull();
+  });
+
+  it('a deep link to a supplier this Station lists opens its statement', async () => {
+    stubStations();
+    publishNavIntent({ focusSupplierId: 'lube', open: 'supplier-statement' });
+    renderWithProviders(<PurchasesList selectedStation={HIGHWAY} />);
+    expect((await screen.findByTestId('supplier-balance')).textContent).toBe('You owe₹4,000.00');
+  });
+
+  it('a shared supplier shows each Station its own share, row and statement alike', async () => {
+    const fetchMock = stubStations();
+    renderWithProviders(<PurchasesList selectedStation={CITY} />);
+    const table = await screen.findByRole('table');
+    expect(within(table).queryByText('BPCL Kochi')).toBeNull();
+    // At City the distributor is 2,000 paid ahead; at Highway 4,000 is owed.
+    expect(within(tileOf('Advance paid')).getByText('₹2,000.00')).toBeTruthy();
+    fireEvent.click(within(table).getByRole('button', { name: 'Lube Co' }));
+    expect((await screen.findByTestId('supplier-balance')).textContent).toBe(
+      'Advance paid₹2,000.00',
+    );
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([u]) =>
+          String(u).includes('/transactions/suppliers/lube/ledger?stationId=st-2'),
+        ),
+      ).toBe(true),
+    );
   });
 });
