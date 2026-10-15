@@ -2,7 +2,6 @@ import React from 'react';
 import {
   Button,
   DataSection,
-  EmptyState,
   Icon,
   type BackLinkProps,
   type DateRange,
@@ -54,17 +53,14 @@ export const AccountPage: React.FC<AccountPageProps> = ({
 }) => {
   if (notFound) {
     return (
-      <PageFrame route={ROUTES.accounts} title="Account not found" back={back}>
-        <EmptyState
-          icon={<Icon name="wallet" size="md" />}
-          title="This account isn't available"
-          description="It may have been removed, or it belongs to another station."
-          action={
-            <Button variant="secondary" size="sm" onClick={back.onClick}>
-              Go to Accounts
-            </Button>
-          }
-        />
+      // One way back: the back link. The reason is the subtitle, said once.
+      <PageFrame
+        route={ROUTES.accounts}
+        title="Account not found"
+        subtitle="It may have been removed, or it belongs to another station."
+        back={back}
+      >
+        {null}
       </PageFrame>
     );
   }

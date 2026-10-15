@@ -85,6 +85,8 @@ describe("an account's route (#576)", () => {
     ['/accounts/sbi?from=2026-09-30&to=2026-09-01', 'out of order'],
     ['/accounts/sbi?from=2026-09-01', 'half a period'],
     ['/accounts/sbi?from=yesterday&to=2026-09-01', 'not a date'],
+    ['/accounts/sbi?from=2026-02-01&to=2026-02-31', 'a date that does not exist'],
+    ['/accounts/sbi?from=2026-13-01&to=2026-13-02', 'a month that does not exist'],
   ])('drops a period that is %s (%s)', (path) => {
     expect(parseAccountRoute(path)).toEqual({ accountId: 'sbi', range: null });
   });

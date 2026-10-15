@@ -23,6 +23,7 @@ export function BackLink({ label, href, onClick, className }: BackLinkProps) {
   return (
     <a
       href={href}
+      aria-label={`Back to ${label}`}
       onClick={(e) => {
         if (!onClick || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
         e.preventDefault();

@@ -56,7 +56,13 @@ export interface RouteRange {
   to: string;
 }
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** A real calendar date `YYYY-MM-DD` (not `2026-02-31`). */
+const isCalendarDate = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+};
 
 /**
  * One Financial Account's page (#576): `/accounts/<id>`, and its statement
@@ -91,7 +97,7 @@ export function parseAccountRoute(
   const params = new URLSearchParams(query);
   const from = params.get('from') ?? '';
   const to = params.get('to') ?? '';
-  const range = ISO_DATE.test(from) && ISO_DATE.test(to) && from <= to ? { from, to } : null;
+  const range = isCalendarDate(from) && isCalendarDate(to) && from <= to ? { from, to } : null;
   return { accountId, range };
 }
 

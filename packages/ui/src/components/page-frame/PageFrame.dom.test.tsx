@@ -83,7 +83,8 @@ describe('PageFrame', () => {
         content
       </PageFrame>,
     );
-    const link = screen.getByRole('link', { name: 'Accounts' });
+    const link = screen.getByRole('link', { name: 'Back to Accounts' });
+    expect(link.textContent).toBe('Accounts');
     const title = screen.getByRole('heading', { level: 1 });
     expect(link.getAttribute('href')).toBe('#/accounts');
     expect(before(link, title)).toBe(true);

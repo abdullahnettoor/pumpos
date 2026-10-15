@@ -11,7 +11,7 @@ import {
 } from '../../pump-ds/index.js';
 import { useFinancialAccounts } from '../../query/hooks.js';
 import { ROUTES, accountRoute, parseAccountRoute } from '../../nav-intent/routes.js';
-import type { RouteNavigate } from '../../nav-intent/useRoutePath.js';
+import { previousRoute, type RouteNavigate } from '../../nav-intent/useRoutePath.js';
 import { useNavIntentEntry, clearNavIntent } from '../../nav-intent/store.js';
 import { PageFrame } from '../page-frame/index.js';
 import { DailyCashBook } from '../reports/DailyCashBook.js';
@@ -46,6 +46,11 @@ function scrollParent(el: HTMLElement | null): HTMLElement | null {
   }
   return (document.scrollingElement as HTMLElement | null) ?? null;
 }
+
+/** An open drawer or modal dialog: Alt+← there is not the page's to take. */
+const OPEN_OVERLAY = '.drawer-container, [role="dialog"][aria-modal="true"]';
+const inOverlay = (target: EventTarget | null) =>
+  target instanceof Element && !!target.closest('[role="dialog"], .drawer-container');
 
 const isEditable = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
@@ -104,12 +109,25 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({
     setPickedTab(tab);
   };
 
+  // Each drawer mounts fresh per open (keyed), so its form starts from its defaults.
+  const [drawer, setDrawer] = useState<AccountDrawer | null>(null);
+  const [drawerKey, setDrawerKey] = useState(0);
+  // A drawer belongs to the page it was opened on: leaving that page (Back,
+  // another account) closes it, so it never reopens on the next account.
+  const [drawerPage, setDrawerPage] = useState(accountId);
+  if (drawerPage !== accountId) {
+    setDrawerPage(accountId);
+    setDrawer(null);
+  }
+  const open = (d: AccountDrawer) => {
+    setDrawerKey((k) => k + 1);
+    setDrawer(d);
+  };
+
   // ---- the way back, and where the list was ----
   const rootRef = useRef<HTMLDivElement>(null);
   const listScroll = useRef(0);
   const showing = useRef<string | null>(accountId);
-  // Opened from this list in this visit: going back is a history step back.
-  const openedFromList = useRef(false);
 
   // The list's scroll position, kept while the list is on screen.
   useEffect(() => {
@@ -127,34 +145,36 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({
   useLayoutEffect(() => {
     if (showing.current === accountId) return;
     showing.current = accountId;
-    if (!accountId) openedFromList.current = false;
     const scroller = scrollParent(rootRef.current);
     if (scroller) scroller.scrollTop = accountId ? 0 : listScroll.current;
   }, [accountId]);
 
   const openAccount = (id: string) => {
     clearNavIntent();
-    openedFromList.current = true;
     onNavigate(accountRoute(id));
   };
   const backToList = useCallback(() => {
-    if (openedFromList.current) window.history.back();
+    // The list is the entry behind (opened from it, or come back to by
+    // Forward): step back, so Forward still works. Otherwise replace.
+    if (previousRoute() === ROUTES.accounts) window.history.back();
     else onNavigate(ROUTES.accounts, { replace: true });
   }, [onNavigate]);
 
   // Alt+← goes back to the list, as the back link does (not while typing:
   // there it moves the caret).
   useEffect(() => {
-    if (!accountId) return;
+    // Not while one of the page's drawers is open: Alt+← there is the drawer's.
+    if (!accountId || drawer) return;
     const onKey = (e: KeyboardEvent) => {
       if (!e.altKey || e.key !== 'ArrowLeft' || e.metaKey || e.ctrlKey || e.shiftKey) return;
-      if (e.defaultPrevented || isEditable(e.target)) return;
+      if (e.defaultPrevented || isEditable(e.target) || inOverlay(e.target)) return;
+      if (document.querySelector(OPEN_OVERLAY)) return;
       e.preventDefault();
       backToList();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [accountId, backToList]);
+  }, [accountId, drawer, backToList]);
 
   // ---- the statement period, kept in the account's route ----
   const month = useMemo(() => computeRange('this-month', { timeZone }), [timeZone]);
@@ -163,14 +183,6 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({
     if (!accountId) return;
     const isDefault = next.from === month.from && next.to === month.to;
     onNavigate(accountRoute(accountId, isDefault ? null : next), { replace: true });
-  };
-
-  // Each drawer mounts fresh per open (keyed), so its form starts from its defaults.
-  const [drawer, setDrawer] = useState<AccountDrawer | null>(null);
-  const [drawerKey, setDrawerKey] = useState(0);
-  const open = (d: AccountDrawer) => {
-    setDrawerKey((k) => k + 1);
-    setDrawer(d);
   };
 
   // The same page actions on every tab (#530 review); an account's own

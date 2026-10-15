@@ -238,7 +238,7 @@ describe('Accounts › Accounts, a balance list (#530)', () => {
     await screen.findByRole('table', { name: 'SBI Current statement' });
     expect(hash()).toBe('/accounts/sbi');
     expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('SBI Current');
-    fireEvent.click(screen.getByRole('link', { name: /Accounts/ }));
+    fireEvent.click(screen.getByRole('link', { name: 'Back to Accounts' }));
     expect(await screen.findByRole('row', { name: 'SBI Current statement' })).toBeTruthy();
     await waitFor(() => expect(hash()).toBe('/accounts'));
   });
@@ -261,7 +261,7 @@ describe('Accounts › Accounts, a balance list (#530)', () => {
 });
 
 describe("Accounts › an account's page (#576)", () => {
-  const backLink = () => screen.getByRole('link', { name: /Accounts/ });
+  const backLink = () => screen.getByRole('link', { name: 'Back to Accounts' });
 
   it('a shared link opens the page: back link, name and type, balance, its own actions, no tabs', async () => {
     render(accountRoute('sbi'));
@@ -367,9 +367,75 @@ describe("Accounts › an account's page (#576)", () => {
     fireEvent.click(row);
     await screen.findByRole('table', { name: 'SBI Current statement' });
     expect(canvas.scrollTop).toBe(0);
-    fireEvent.click(screen.getByRole('link', { name: /Accounts/ }));
+    fireEvent.click(screen.getByRole('link', { name: 'Back to Accounts' }));
     await screen.findByRole('row', { name: 'SBI Current statement' });
     expect(canvas.scrollTop).toBe(320);
+  });
+
+  it('a drawer open on one account does not reappear on the next', async () => {
+    stubApi({ ...API, '/finance/accounts/cash/ledger': { data: { ...LEDGER, entries: [] } } });
+    render();
+    fireEvent.click(await screen.findByRole('row', { name: 'SBI Current statement' }));
+    await screen.findByRole('table', { name: 'SBI Current statement' });
+    fireEvent.click(screen.getByRole('button', { name: /Add entry/ }));
+    expect(document.querySelector('.drawer-container')).toBeTruthy();
+    act(() => window.history.back());
+    await screen.findByRole('row', { name: 'Cash in Hand statement' });
+    expect(document.querySelector('.drawer-container')).toBeNull();
+    fireEvent.click(screen.getByRole('row', { name: 'Cash in Hand statement' }));
+    await screen.findByRole('table', { name: 'Cash in Hand statement' });
+    expect(document.querySelector('.drawer-container')).toBeNull();
+  });
+
+  it('Alt+← leaves a drawer or dialog alone', async () => {
+    render(accountRoute('sbi'));
+    await screen.findByRole('table', { name: 'SBI Current statement' });
+    fireEvent.click(screen.getByRole('button', { name: /Add entry/ }));
+    const drawer = document.querySelector('.drawer-container') as HTMLElement;
+    fireEvent.keyDown(within(drawer).getByRole('button', { name: 'Cancel' }), {
+      key: 'ArrowLeft',
+      altKey: true,
+    });
+    fireEvent.keyDown(window, { key: 'ArrowLeft', altKey: true });
+    expect(hash()).toBe('/accounts/sbi');
+    expect(document.querySelector('.drawer-container')).toBeTruthy();
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Cancel' }));
+    expect(document.querySelector('.drawer-container')).toBeNull();
+
+    // Focus inside any other dialog (a confirm, the command palette).
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    const button = document.createElement('button');
+    dialog.appendChild(button);
+    document.body.appendChild(dialog);
+    fireEvent.keyDown(button, { key: 'ArrowLeft', altKey: true });
+    expect(hash()).toBe('/accounts/sbi');
+    dialog.remove();
+  });
+
+  it('after Back then Forward, ‹ Accounts still steps back, so Forward works again', async () => {
+    render();
+    fireEvent.click(await screen.findByRole('row', { name: 'SBI Current statement' }));
+    await screen.findByRole('table', { name: 'SBI Current statement' });
+    act(() => window.history.back());
+    await screen.findByRole('row', { name: 'SBI Current statement' });
+    act(() => window.history.forward());
+    await screen.findByRole('table', { name: 'SBI Current statement' });
+    const length = window.history.length;
+    fireEvent.click(backLink());
+    await screen.findByRole('row', { name: 'SBI Current statement' });
+    expect(window.history.length).toBe(length);
+    // A step back, not a replace: the page is still ahead.
+    act(() => window.history.forward());
+    expect(await screen.findByRole('table', { name: 'SBI Current statement' })).toBeTruthy();
+  });
+
+  it('a page reached without the list behind it goes back by replacing', async () => {
+    render(accountRoute('sbi'));
+    await screen.findByRole('table', { name: 'SBI Current statement' });
+    fireEvent.click(backLink());
+    await screen.findByRole('row', { name: 'SBI Current statement' });
+    expect(hash()).toBe('/accounts');
   });
 
   it('Alt+← returns to the list, but not while typing', async () => {
@@ -385,12 +451,17 @@ describe("Accounts › an account's page (#576)", () => {
     expect(hash()).toBe('/accounts');
   });
 
-  it('says "Account not found" for an id that matches no account, with a way back', async () => {
+  it('says "Account not found" for an id that matches no account, once, with one way back', async () => {
     render(accountRoute('gone'));
-    expect(
-      (await screen.findByRole('heading', { level: 1, name: 'Account not found' })).textContent,
-    ).toBe('Account not found');
+    const h1 = await screen.findByRole('heading', { level: 1, name: 'Account not found' });
+    expect(h1.parentElement!.textContent).toContain(
+      'It may have been removed, or it belongs to another station.',
+    );
+    expect(screen.getAllByText(/not found|isn.t available/i)).toHaveLength(1);
     expect(screen.queryByRole('tablist')).toBeNull();
+    // The back link is the one way back.
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /Accounts/ })).toBeNull();
     fireEvent.click(backLink());
     expect(await screen.findByRole('row', { name: 'SBI Current statement' })).toBeTruthy();
     expect(hash()).toBe('/accounts');

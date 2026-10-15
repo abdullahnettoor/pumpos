@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { useRoutePath } from './useRoutePath.js';
+import { previousRoute, useRoutePath } from './useRoutePath.js';
 import { LEGACY_ROUTES } from './routes.js';
 
 afterEach(() => {
@@ -59,6 +59,15 @@ describe('useRoutePath', () => {
     // The next plain navigation pushes again.
     act(() => result.current[1]('/accounts'));
     expect(window.history.length).toBe(before + 1);
+  });
+
+  it('each pushed entry knows the route it was opened from; a replace keeps it (#576)', () => {
+    const { result } = renderHook(() => useRoutePath('/dashboard'));
+    act(() => result.current[1]('/accounts'));
+    act(() => result.current[1]('/accounts/sbi'));
+    expect(previousRoute()).toBe('/accounts');
+    act(() => result.current[1]('/accounts/sbi?from=2026-09-01&to=2026-09-30', { replace: true }));
+    expect(previousRoute()).toBe('/accounts');
   });
 
   describe('renamed routes', () => {

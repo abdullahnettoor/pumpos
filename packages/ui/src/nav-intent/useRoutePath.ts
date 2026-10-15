@@ -27,6 +27,17 @@ function readHashPath(): string | null {
   return raw.startsWith('/') && raw.length > 1 ? resolveRoute(raw) : null;
 }
 
+/**
+ * The route the current history entry was opened from, when this app pushed
+ * it (`history.state.prev`). Survives back/forward and a reload, so a detail
+ * page can tell whether Back lands on its parent (#576). Null when unknown.
+ */
+export function previousRoute(): string | null {
+  if (typeof window === 'undefined') return null;
+  const state = window.history.state as { prev?: unknown } | null;
+  return typeof state?.prev === 'string' ? state.prev : null;
+}
+
 export type RouteNavigate = (
   next: string | ((prev: string) => string),
   options?: { replace?: boolean },
@@ -45,8 +56,12 @@ export function useRoutePath(defaultPath: string): [string, RouteNavigate] {
     if (raw === path) return;
     // An old hash that resolved here is rewritten, not pushed: Back must not
     // land on the legacy URL and bounce straight forward again.
-    if (replace || readHashPath() === path) window.history.replaceState(null, '', `#${path}`);
-    else window.history.pushState(null, '', `#${path}`);
+    // A replaced entry keeps where it was opened from; a pushed one records it.
+    if (replace || readHashPath() === path) {
+      window.history.replaceState(window.history.state, '', `#${path}`);
+    } else {
+      window.history.pushState(raw.startsWith('/') ? { prev: raw } : null, '', `#${path}`);
+    }
   }, [path]);
 
   useEffect(() => {
