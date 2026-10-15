@@ -20,10 +20,13 @@ import { useCapability } from '../access/CapabilityGate.js';
 import {
   ATTENDANT_REPORT_CAPABILITY,
   canViewAttendantReport,
+  canExportReports,
   canViewReports,
   resolveBusinessDate,
 } from '@pump/shared';
 import { useRunTask } from '../utils/runTask.js';
+import { createIdempotencyKey } from '../query/handoverMutation.js';
+import { keepsIdempotencyKey } from '../utils/idempotency.js';
 
 const shiftService = new CloudShiftService();
 
@@ -108,10 +111,16 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
         try {
           const result = await shiftService.getDailyDssrPreview(stationId, date);
           if (!cancelled) setActiveDailyDssr(result);
-        } catch {
-          // No snapshot for that day yet: fall back to selecting it so the
-          // operator can generate one.
-          if (!cancelled) setSelectedDate(date);
+        } catch (err) {
+          if (cancelled) return;
+          if ((err as { code?: unknown } | null)?.code === 'CONFLICT') {
+            // A closed day with no stored report: the DSR screen opens on it
+            // and shows its "Report missing" state, with Generate (#579).
+            setActiveDailyDssr({ businessDate: date, snapshotData: null, missing: true });
+          } else {
+            // Any other failure: select the day so the operator can generate it.
+            setSelectedDate(date);
+          }
         } finally {
           // Cancelled: the operator moved on (another report, another deep
           // link) while this loaded — committing the DSSR tab would snap them
@@ -135,16 +144,28 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
     };
   }, [intent?.openDssrDate, intentToken, stationId, runTask]);
 
+  // One Idempotency-Key per logical Generate of a day: kept while the outcome
+  // is unknown (network drop, 5xx), so a retry cannot freeze the day twice;
+  // renewed on any decided answer or for another day.
+  const generateKeyRef = useRef<{ scope: string; key: string } | null>(null);
   const handleGenerateDailyDssr = async () => {
     if (!selectedStation || !selectedDate) return;
+    const scope = `${selectedStation.id}:${selectedDate}`;
+    if (generateKeyRef.current?.scope !== scope) {
+      generateKeyRef.current = { scope, key: createIdempotencyKey() };
+    }
     try {
       setGeneratingDailyDssr(true);
       setGenerateError(null);
-      const result = await shiftService.generateDailyDssr(selectedStation.id, selectedDate);
+      const result = await shiftService.generateDailyDssr(selectedStation.id, selectedDate, {
+        idempotencyKey: generateKeyRef.current.key,
+      });
+      generateKeyRef.current = null;
       // The list is a cached query — invalidate so the new snapshot appears.
       await qc.invalidateQueries({ queryKey: ['dssr-range'] });
       setActiveDailyDssr(result);
     } catch (err: any) {
+      if (!keepsIdempotencyKey(err)) generateKeyRef.current = null;
       setGenerateError(err.message || 'Failed to generate daily DSR');
     } finally {
       setGeneratingDailyDssr(false);
@@ -236,7 +257,9 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
               onGenerateDateChange={setSelectedDate}
               generating={generatingDailyDssr}
               generateError={generateError}
-              onGenerate={() => void handleGenerateDailyDssr()}
+              onGenerate={
+                canExportReports(userRole) ? () => void handleGenerateDailyDssr() : undefined
+              }
               onOpen={setActiveDailyDssr}
             />
           )}

@@ -77,7 +77,8 @@ export interface DsrListPanelProps {
   onGenerateDateChange: (date: string) => void;
   generating: boolean;
   generateError: string | null;
-  onGenerate: () => void;
+  /** Omitted for a Role the API's generate guard refuses: no Generate control. */
+  onGenerate?: () => void;
   onOpen: (dsr: DsrRow) => void;
   /** Only while the DSR tab shows, so the range query runs only then. */
   enabled: boolean;
@@ -120,27 +121,29 @@ export const DsrListPanel: React.FC<DsrListPanelProps> = ({
         onChange={setRange}
         clock={clock}
         actions={
-          <div className="flex items-center gap-2">
-            <div className="w-[150px]">
-              <Input
-                type="date"
-                inputSize="sm"
-                aria-label="Business date to generate"
-                value={generateDate}
-                onChange={(e) => onGenerateDateChange(e.target.value)}
-              />
+          onGenerate && (
+            <div className="flex items-center gap-2">
+              <div className="w-[150px]">
+                <Input
+                  type="date"
+                  inputSize="sm"
+                  aria-label="Business date to generate"
+                  value={generateDate}
+                  onChange={(e) => onGenerateDateChange(e.target.value)}
+                />
+              </div>
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<Play className="fill-current" />}
+                loading={generating}
+                disabled={!generateDate}
+                onClick={onGenerate}
+              >
+                Generate DSR
+              </Button>
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<Play className="fill-current" />}
-              loading={generating}
-              disabled={!generateDate}
-              onClick={onGenerate}
-            >
-              Generate DSR
-            </Button>
-          </div>
+          )
         }
         info={
           <InfoTip label="About the DSR list" placement="bottom">
@@ -188,8 +191,8 @@ export const DsrListPanel: React.FC<DsrListPanelProps> = ({
               <EmptyState
                 compact
                 icon={<Icon name="zap" size="md" />}
-                title="No DSRs in this period"
-                description="A DSR is made when a business day closes, or pick a date and Generate DSR."
+                title="No DSRs yet"
+                description="A DSR is made when a business day closes. Pick a date and Generate DSR to make the DSR for a day now."
               />
             </div>
           }

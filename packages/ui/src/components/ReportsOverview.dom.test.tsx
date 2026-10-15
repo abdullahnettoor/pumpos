@@ -20,9 +20,21 @@ vi.mock('../services/cloud.js', async (importOriginal) => {
     getDailyDssrPreview(stationId: string, date: string) {
       return preview.fn(stationId, date) as any;
     }
+    generateDailyDssr(...args: unknown[]) {
+      gen.calls.push(args);
+      return Promise.reject(Object.assign(new Error('offline'), { code: 'NETWORK' }));
+    }
   }
   return { ...mod, CloudShiftService };
 });
+const view = vi.hoisted(() => ({ opened: null as unknown }));
+vi.mock('./DailyDssrView.js', () => ({
+  DailyDssrView: ({ dailyDssr }: { dailyDssr: unknown }) => {
+    view.opened = dailyDssr;
+    return <div data-testid="dsr-screen" />;
+  },
+}));
+const gen = vi.hoisted(() => ({ calls: [] as unknown[][] }));
 vi.mock('../access/CapabilityGate.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   useCapability: () => ({ status: 'enabled' }),
@@ -158,6 +170,34 @@ describe('Reports → DSR deep link (review #545)', () => {
     expect(item('DSR')!.getAttribute('aria-current')).toBe('page');
     fireEvent.click(item('Ledgers')!);
     expect(item('Ledgers')!.getAttribute('aria-current')).toBe('page');
+  });
+});
+
+describe('Reports → DSR missing report and Generate (review #579)', () => {
+  it('a deep link to a closed day with no report opens the DSR screen on Report missing', async () => {
+    preview.fn = () =>
+      Promise.reject(Object.assign(new Error('no snapshot'), { code: 'CONFLICT' }));
+    act(() => publishNavIntent({ openDssrDate: '2026-10-01' }));
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
+    expect(await screen.findByTestId('dsr-screen')).toBeTruthy();
+    expect(view.opened).toMatchObject({ businessDate: '2026-10-01', missing: true });
+  });
+
+  it('Generate sends one Idempotency-Key, kept when the outcome is unknown', async () => {
+    gen.calls = [];
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
+    const button = screen.getByRole('button', { name: /Generate DSR/ });
+    await act(async () => fireEvent.click(button));
+    await act(async () => fireEvent.click(button));
+    expect(gen.calls).toHaveLength(2);
+    const key = (c: unknown[]) => (c[2] as { idempotencyKey: string }).idempotencyKey;
+    expect(key(gen.calls[0])).toBeTruthy();
+    expect(key(gen.calls[1])).toBe(key(gen.calls[0]));
+  });
+
+  it('shows Generate only to Roles the API lets generate', () => {
+    renderWithProviders(<ReportsOverview selectedStation={station} userRole="Staff" />);
+    expect(screen.queryByRole('button', { name: /Generate DSR/ })).toBeNull();
   });
 });
 
