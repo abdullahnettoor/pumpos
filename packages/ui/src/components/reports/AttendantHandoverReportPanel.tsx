@@ -1,312 +1,46 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronRight, Download } from 'lucide-react';
-import type {
-  AttendantHandoverReport,
-  AttendantReportDispenser,
-  AttendantReportEntry,
-  AttendantReportShift,
-} from '@pump/shared';
-import { ATTENDANT_REPORT_CAPABILITY, shiftDisplayLabel } from '@pump/shared';
+import type { AttendantHandoverReport, AttendantReportEntry } from '@pump/shared';
+import { ATTENDANT_REPORT_CAPABILITY } from '@pump/shared';
 import { useAttendantHandoverReport } from '../../query/hooks.js';
-import {
-  creditChitRows,
-  shiftShowsCreditBreakdown,
-  type CreditChitRow,
-} from '../../services/reports/attendantCreditLines.js';
 import { computeRange } from '../../pump-ds/date-range/index.js';
 import type { DateRange } from '../../pump-ds/date-range/index.js';
-import { Drawer } from '../Drawer.js';
-import { formatDateTime, inr } from '../../utils/format.js';
+import { formatVariance } from '../../utils/variance.js';
 import {
-  KpiStrip,
-  KpiTile,
-  Panel,
+  DataSection,
   EmptyState,
   Icon,
-  Button,
-  Chip,
-  StatementTable,
+  InteractiveTable,
+  KpiStrip,
+  KpiTile,
+  SectionHeader,
   Select,
-  type TableColumn,
+  type TotalRow,
 } from '../../pump-ds/index.js';
+import { InfoTip } from '../primitives/InfoTip.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
-import { LoadingSpinner } from '../LoadingSpinner.js';
 import { CapabilityRoute } from '../../access/CapabilityGate.js';
 import { generateAttendantReportPdf } from '../../services/reports/generate.js';
-import { groupShiftsByBusinessDay } from '../../services/reports/attendantStatementDays.js';
 import { useRunTask } from '../../utils/runTask.js';
+import { AttendantDetailDrawer } from './attendant/AttendantDetailDrawer.js';
+import { ATTENDANT_COLUMNS, varianceAlert, varianceSpread } from './attendant/attendantColumns.js';
 
 export interface AttendantHandoverReportPanelProps {
   selectedStation: { id: string; name?: string; settings?: Record<string, unknown> } | null;
 }
 
-/*
- * Styles for the attendants summary table only — a navigational list (clickable
- * rows opening the drawer), not a statement, so it is deliberately not the
- * read-only `StatementTable`. Replacing it is a `DataTable` job of its own.
- */
-const th: React.CSSProperties = { padding: '8px 10px', fontWeight: 600 };
-const thR: React.CSSProperties = { ...th, textAlign: 'right' };
-const td: React.CSSProperties = { padding: '8px 10px', color: 'var(--text-default)' };
-const tdR: React.CSSProperties = { ...td, textAlign: 'right', fontFamily: 'var(--font-mono)' };
+/** Every figure comes from closed shifts; an open shift is not in the report yet. */
+const TOTAL_ROW: TotalRow = { label: 'Total excl. open shifts' };
 
-/**
- * Variance reads as money owed either way, so its sign carries the meaning.
- * One reading, expressed as a design-system tone; the summary table below is
- * still inline-styled markup, so it maps that tone to its own colour rather
- * than deciding the sign a second time.
- */
-type VarianceTone = 'danger' | 'success' | 'neutral';
-
-const varianceTone = (amount: number): VarianceTone =>
-  amount < 0 ? 'danger' : amount > 0 ? 'success' : 'neutral';
-
-const TONE_COLOR: Record<VarianceTone, string> = {
-  danger: 'var(--text-danger)',
-  success: 'var(--text-success)',
-  neutral: 'var(--text-muted)',
-};
-
-/**
- * A nozzle meter reading: litres to 3 places. Readings never add up: a total
- * of opening and closing readings means nothing.
- */
-const READING = { kind: 'qty', unit: 'L', decimals: 3, total: false } as const;
-
-type Nozzle = AttendantReportDispenser['nozzles'][number];
-type Terminal = AttendantReportDispenser['terminals'][number];
-
-// Meter readings to 3 places in litres, as the exported PDF prints them.
-const NOZZLE_COLUMNS: TableColumn<Nozzle>[] = [
-  { id: 'nozzle', header: 'Nozzle', kind: 'text', value: (n) => n.nozzleName },
-  { id: 'product', header: 'Product', kind: 'text', value: (n) => n.productName },
-  { ...READING, id: 'opening', header: 'Opening', value: (n) => n.openingReading },
-  { ...READING, id: 'closing', header: 'Closing', value: (n) => n.closingReading },
-  { ...READING, id: 'volume', header: 'Volume', emphasis: true, value: (n) => n.volumeSold },
-  { ...READING, id: 'testing', header: 'Testing', value: (n) => n.testingVolume },
-];
-
-const TERMINAL_COLUMNS: TableColumn<Terminal>[] = [
-  { id: 'terminal', header: 'Terminal', kind: 'text', value: (t) => t.terminalName },
-  { id: 'batch', header: 'Batch', kind: 'text', value: (t) => t.batchRef },
-  { id: 'card', header: 'Card', kind: 'money', value: (t) => t.cardAmount },
-  { id: 'upi', header: 'UPI', kind: 'money', value: (t) => t.upiAmount },
-];
-
-const CREDIT_COLUMNS: TableColumn<CreditChitRow>[] = [
-  { id: 'customer', header: 'Customer', kind: 'text', value: (r) => r.customerName },
-  { id: 'vehicle', header: 'Vehicle', kind: 'text', value: (r) => r.vehicle },
-  { id: 'product', header: 'Product', kind: 'text', value: (r) => r.product },
-  // A volume, not a meter reading: the unit's own decimals (2 for litres).
-  // Chits reconcile by amount; the quantity column is not totalled.
-  {
-    id: 'qty',
-    header: 'Qty',
-    kind: 'qty',
-    unit: (r) => r.unit,
-    total: false,
-    value: (r) => r.quantityValue,
-  },
-  { id: 'amount', header: 'Amount', kind: 'money', value: (r) => r.amount },
-];
-
-const DispenserDetail: React.FC<{ dispenser: AttendantReportDispenser }> = ({ dispenser }) => (
-  <div className="mt-2">
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-[11px] font-semibold text-ink-strong">{dispenser.duName}</span>
-      {dispenser.creditSales !== 0 && (
-        <Chip tone="info" size="xs" variant="soft">
-          Credit {inr(dispenser.creditSales)}
-        </Chip>
-      )}
-    </div>
-
-    <StatementTable
-      label={`${dispenser.duName} nozzle readings`}
-      columns={NOZZLE_COLUMNS}
-      rows={dispenser.nozzles}
-      rowKey={(n) => n.nozzleId}
-    />
-
-    {dispenser.terminals.length > 0 ? (
-      <StatementTable
-        className="mt-1"
-        label={`${dispenser.duName} payment terminals`}
-        columns={TERMINAL_COLUMNS}
-        rows={dispenser.terminals}
-        rowKey={(t) => t.terminalId}
-      />
-    ) : (
-      // A station declaring aggregate card/UPI has no per-terminal batches to
-      // show; saying so beats an empty table the operator has to interpret.
-      <div className="mt-1 px-2 text-[11px] text-ink-faint">
-        Aggregate declaration — card {inr(dispenser.cardHandedOver)}, UPI{' '}
-        {inr(dispenser.upiHandedOver)}
-      </div>
-    )}
-  </div>
-);
-
-/**
- * Who owes the shift's fuel-on-credit. The chits sum to the shift's credit
- * total by construction, so the total is printed beneath them as the same
- * figure the shift line already showed — not a second, re-derived number.
- *
- * Which rows appear, and how each cell reads, come from
- * `attendantCreditLines` — the same source the exported PDF renders from, so
- * the drawer and the export cannot teach the operator two different statements
- * (#244). That shared rule is why a shift carrying a credit total with no
- * chits now shows a placeholder row here instead of nothing at all.
- */
-const CreditBreakdown: React.FC<{ shift: AttendantReportShift }> = ({ shift }) => {
-  if (!shiftShowsCreditBreakdown(shift)) return null;
-  const rows = creditChitRows(shift);
-  return (
-    <div className="mt-3">
-      <div className="text-[11px] font-semibold text-ink-strong">Fuel-on-credit</div>
-      <StatementTable
-        label="Fuel-on-credit chits"
-        columns={CREDIT_COLUMNS}
-        rows={rows}
-        rowKey={(r) => r.key}
-        totalRow={{ values: { amount: shift.creditSales } }}
-      />
-    </div>
-  );
-};
-
-/**
- * One Shift of the statement: its variance, its sales components, then the
- * dispensers it was handed over from and the credit it raised.
- *
- * A Panel per Shift, nested under the Business Day it belongs to — the same
- * structure the exported PDF prints, so the drawer and the export never teach
- * the operator two different shapes for one statement.
- */
-const ShiftCard: React.FC<{ shift: AttendantReportShift }> = ({ shift }) => (
-  <Panel
-    // The shift's readable name (#228) names the card; closing time stays
-    // because it answers a different question — when it was reconciled.
-    title={
-      <span className="flex items-baseline gap-2">
-        {shift.shiftTemplateName ?? 'Shift'}
-        <span className="font-mono text-[11px] font-normal text-ink-muted">
-          {shiftDisplayLabel(shift)}
-        </span>
-        {shift.closedAt && (
-          <span className="font-mono text-[11px] font-normal text-ink-muted">
-            closed {formatDateTime(shift.closedAt)}
-          </span>
-        )}
-      </span>
-    }
-    action={
-      <Chip tone={varianceTone(shift.varianceAmount)} size="xs" variant="soft">
-        Variance {inr(shift.varianceAmount)}
-      </Chip>
-    }
-  >
-    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-muted">
-      <span>Billed {inr(shift.billedSales)}</span>
-      <span>Merch. handover {inr(shift.handoverProductSales)}</span>
-      <span>Credit {inr(shift.creditSales)}</span>
-      <span>Fuel expected {inr(shift.expectedFuelSales)}</span>
-    </div>
-
-    {shift.dispensers.map((dispenser) => (
-      <DispenserDetail key={dispenser.handoverId} dispenser={dispenser} />
-    ))}
-
-    <CreditBreakdown shift={shift} />
-  </Panel>
-);
-
-/**
- * One Attendant's statement: range KPIs, then a section per Business Day.
- *
- * Mirrors the exported PDF — cover figures first, then the days — because the
- * drawer is where the operator decides whether the export is worth sending.
- */
-const AttendantDetailDrawer: React.FC<{
-  attendant: AttendantReportEntry | null;
-  range: DateRange;
-  onClose: () => void;
-  onExport: () => void;
-}> = ({ attendant, range, onClose, onExport }) => {
-  const days = useMemo(
-    () => (attendant ? groupShiftsByBusinessDay(attendant.shifts) : []),
-    [attendant],
-  );
-
-  return (
-    <Drawer
-      isOpen={attendant !== null}
-      onClose={onClose}
-      title={attendant ? `${attendant.attendantName} — handovers` : 'Handovers'}
-      widthVariant="wide"
-      footer={
-        <Button size="sm" variant="secondary" onClick={onExport}>
-          <Download size={13} /> Export statement
-        </Button>
-      }
-    >
-      {attendant && (
-        <div className="flex flex-col gap-3">
-          <KpiStrip>
-            <KpiTile size="sm" label="Shifts" value={String(attendant.shiftsWorked)} />
-            <KpiTile
-              size="sm"
-              label="Cash handed over"
-              value={inr(attendant.totals.cashHandedOver)}
-            />
-            <KpiTile
-              size="sm"
-              label="Card + UPI"
-              value={inr(attendant.totals.cardHandedOver + attendant.totals.upiHandedOver)}
-            />
-            <KpiTile size="sm" label="Fuel-on-credit" value={inr(attendant.totals.creditSales)} />
-            <KpiTile
-              size="sm"
-              label="Net variance"
-              value={inr(attendant.totals.varianceAmount)}
-              alert={attendant.totals.varianceAmount < 0 ? 'danger' : undefined}
-            />
-          </KpiStrip>
-
-          <div className="text-[11px] text-ink-muted">
-            {range.from} to {range.to} · closed shifts only
-          </div>
-
-          {days.map((day) => (
-            <section key={day.businessDate} className="flex flex-col gap-2">
-              <div className="flex items-baseline justify-between gap-2 border-b border-border-soft pb-1">
-                <h3 className="text-[12px] font-semibold text-ink-strong">{day.businessDate}</h3>
-                <span className="font-mono text-[11px] text-ink-muted">
-                  {day.shifts.length} {day.shifts.length === 1 ? 'shift' : 'shifts'}
-                </span>
-              </div>
-              {day.shifts.map((shift) => (
-                <ShiftCard key={shift.shiftId} shift={shift} />
-              ))}
-            </section>
-          ))}
-
-          {days.length === 0 && (
-            <EmptyState
-              title="No handovers"
-              description="This attendant has no closed-shift handovers in the selected range."
-            />
-          )}
-        </div>
-      )}
-    </Drawer>
-  );
-};
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * Attendant Handover Report — per-Attendant accountability across a
  * Business-Date range. One row per Attendant, composed from the Handovers of
  * that station's CLOSED Shifts, so every figure is final.
+ *
+ * Layout A (#567): the range bar drives the tiles and the list below it. The
+ * list's total row carries the money columns; the tiles carry what the table
+ * does not total (the head count, and the net variance beside who was short).
  *
  * Gated on the `reports.attendant` Product Capability; the server re-checks it
  * on every request, so this component assumes nothing about entitlement.
@@ -349,44 +83,50 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
     () =>
       attendants.reduce(
         (acc, a) => ({
-          cash: acc.cash + a.totals.cashHandedOver,
           variance: acc.variance + a.totals.varianceAmount,
           shifts: acc.shifts + a.shiftsWorked,
         }),
-        { cash: 0, variance: 0, shifts: 0 },
+        { variance: 0, shifts: 0 },
       ),
     [attendants],
   );
 
   const openAttendant = attendants.find((a) => a.attendantId === openAttendantId) ?? null;
 
-  // Only reachable from the drawer, which only opens over a loaded report —
-  // so the statement always carries the instant its figures were composed.
-  const exportStatement = (entry: AttendantReportEntry, composedAt: string) =>
+  // Only reachable over a loaded report, so the statement always carries the
+  // instant its figures were composed.
+  const exportStatement = (entry: AttendantReportEntry | null) => {
+    if (!entry || !report) return;
     runTask(
       generateAttendantReportPdf(selectedStation, entry, {
         from: range.from,
         to: range.to,
-        generatedAt: composedAt,
+        generatedAt: report.generatedAt,
       }),
       'Could not export the attendant statement.',
     );
+  };
 
   if (!selectedStation) {
     return (
-      <div style={{ color: 'var(--text-muted)', padding: '24px' }}>
+      <p className="m-0 p-6 text-[13px] text-ink-muted">
         Please select a station to view the attendant handover report.
-      </div>
+      </p>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div className="flex flex-col gap-4">
       <ReportRangeBar
         value={range}
         onChange={setRange}
         clock={clock}
-        note="Closed shifts only. Sales components are listed separately — fuel expected is metered, not a grand total."
+        info={
+          <InfoTip label="About attendant handovers" placement="bottom">
+            Closed shifts only. Sales components are listed separately — fuel expected is metered,
+            not a grand total. Open an attendant to see their shifts and export their statement.
+          </InfoTip>
+        }
         filters={
           <Select
             inputSize="sm"
@@ -405,31 +145,34 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
         }
       />
 
-      <KpiStrip columns="auto">
-        <KpiTile
-          label="Attendants"
-          value={String(attendants.length)}
-          hint={`${totals.shifts} shifts`}
-        />
-        <KpiTile label="Cash handed over" value={inr(totals.cash)} />
-        <KpiTile
-          alert={totals.variance < 0 ? 'danger' : undefined}
-          label="Net variance"
-          value={inr(totals.variance)}
-          hint={totals.variance < 0 ? 'shortage' : totals.variance > 0 ? 'excess' : 'balanced'}
-        />
-      </KpiStrip>
+      <DataSection title="Attendant totals" query={reportQ} shape="cards" placeholderHeight={90}>
+        <KpiStrip columns="auto">
+          <KpiTile
+            label="Attendants"
+            scope="in-range"
+            value={String(attendants.length)}
+            hint={`${plural(totals.shifts, 'shift', 'shifts')} closed`}
+          />
+          <KpiTile
+            label="Net variance"
+            scope="in-range"
+            value={formatVariance(totals.variance, 'cash').text}
+            alert={varianceAlert(totals.variance)}
+            hint={varianceSpread(attendants)}
+          />
+        </KpiStrip>
+      </DataSection>
 
-      {reportQ.isLoading ? (
-        <Panel flush title="Attendant handovers">
-          <div style={{ padding: '16px' }}>
-            <LoadingSpinner text="Loading attendant handovers…" />
-          </div>
-        </Panel>
-      ) : (
-        <Panel flush title="Attendant handovers">
-          {attendants.length === 0 ? (
-            <div style={{ padding: '12px' }}>
+      <section className="flex flex-col gap-2">
+        <SectionHeader title="Attendant handovers" />
+        <DataSection
+          title="Attendant handovers"
+          query={reportQ}
+          placeholderHeight={160}
+          flush
+          isEmpty={attendants.length === 0}
+          empty={
+            <div className="p-3">
               <EmptyState
                 compact
                 icon={<Icon name="users" size="md" />}
@@ -437,79 +180,27 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
                 description="Attendant handovers appear here once their shift is closed."
               />
             </div>
-          ) : (
-            <div style={{ overflow: 'auto' }}>
-              <table
-                style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                  fontSize: '12px',
-                  textAlign: 'left',
-                }}
-              >
-                <thead>
-                  <tr
-                    style={{
-                      backgroundColor: 'var(--bg-surface-alt)',
-                      borderBottom: '1px solid var(--border-soft)',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    <th style={th}>Attendant</th>
-                    <th style={thR}>Shifts</th>
-                    <th style={thR}>Cash</th>
-                    <th style={thR}>Card</th>
-                    <th style={thR}>UPI</th>
-                    <th style={thR}>Credit</th>
-                    <th style={thR}>Fuel sales</th>
-                    <th style={thR}>Billed</th>
-                    <th style={thR}>Merch. handover</th>
-                    <th style={thR}>Credit sales</th>
-                    <th style={thR}>Variance</th>
-                    <th style={{ ...th, width: '20px' }} aria-label="Open detail" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {attendants.map((a) => (
-                    <tr
-                      key={a.attendantId}
-                      style={{ borderBottom: '1px solid var(--border-soft)', cursor: 'pointer' }}
-                      onClick={() => setOpenAttendantId(a.attendantId)}
-                    >
-                      <td style={td}>{a.attendantName}</td>
-                      <td style={tdR}>{a.shiftsWorked}</td>
-                      <td style={tdR}>{inr(a.totals.cashHandedOver)}</td>
-                      <td style={tdR}>{inr(a.totals.cardHandedOver)}</td>
-                      <td style={tdR}>{inr(a.totals.upiHandedOver)}</td>
-                      <td style={tdR}>{inr(a.totals.creditHandedOver)}</td>
-                      <td style={tdR}>{inr(a.totals.expectedFuelSales)}</td>
-                      <td style={tdR}>{inr(a.totals.billedSales)}</td>
-                      <td style={tdR}>{inr(a.totals.handoverProductSales)}</td>
-                      <td style={tdR}>{inr(a.totals.creditSales)}</td>
-                      <td
-                        style={{ ...tdR, color: TONE_COLOR[varianceTone(a.totals.varianceAmount)] }}
-                      >
-                        {inr(a.totals.varianceAmount)}
-                      </td>
-                      <td style={td}>
-                        <ChevronRight size={13} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Panel>
-      )}
+          }
+        >
+          <InteractiveTable
+            bare
+            dense
+            columns={ATTENDANT_COLUMNS}
+            rows={attendants}
+            rowKey={(a) => a.attendantId}
+            totalRow={TOTAL_ROW}
+            title="attendant handovers"
+            onRowClick={(a) => setOpenAttendantId(a.attendantId)}
+            rowLabel={(a) => `${a.attendantName} handovers`}
+          />
+        </DataSection>
+      </section>
 
       <AttendantDetailDrawer
         attendant={openAttendant}
         range={range}
         onClose={() => setOpenAttendantId(null)}
-        onExport={() =>
-          openAttendant && report && exportStatement(openAttendant, report.generatedAt)
-        }
+        onExport={() => exportStatement(openAttendant)}
       />
     </div>
   );
