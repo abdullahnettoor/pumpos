@@ -34,14 +34,20 @@ function useDebounced<T>(value: T, key: string, ms: number): { value: T; key: st
   return current;
 }
 
+/** Thrown for a drawing nobody waits for any more; TanStack reverts the query. */
+const superseded = () => new DOMException('The preview changed before it was drawn', 'AbortError');
+
 /**
  * One drawing at a time: the PDF engine is not safe to run concurrently (a
  * second document laid out while the first loads its fonts fails), and three
- * template cards ask at once.
+ * template cards ask at once. A queued drawing whose query was cancelled —
+ * superseded by a newer input, or its preview closed — is skipped when its
+ * turn comes, so a burst of changes draws the first and the last only.
  */
 let queue: Promise<unknown> = Promise.resolve();
-function oneAtATime<T>(task: () => Promise<T>): Promise<T> {
-  const run = queue.then(task, task);
+function oneAtATime<T>(signal: AbortSignal, task: () => Promise<T>): Promise<T> {
+  const start = () => (signal.aborted ? Promise.reject(superseded()) : task());
+  const run = queue.then(start, start);
   queue = run.catch(() => undefined);
   return run;
 }
@@ -53,6 +59,11 @@ export interface PdfPreviewOptions {
   maxPages?: number;
   /** Wait this long after the last change before drawing again. */
   debounceMs?: number;
+  /**
+   * Keep drawn pages cached after the preview closes (card thumbnails, which
+   * return often). Off for a drawer: its pages are dropped once it closes.
+   */
+  keepCached?: boolean;
 }
 
 /**
@@ -66,24 +77,29 @@ export function usePdfPreview<T>(
   kind: string,
   input: T,
   build: (input: T) => Promise<ReactElement>,
-  { width, maxPages = Infinity, debounceMs = 250 }: PdfPreviewOptions,
+  { width, maxPages = Infinity, debounceMs = 250, keepCached = true }: PdfPreviewOptions,
 ) {
   const debounced = useDebounced(input, previewFingerprint(input), debounceMs);
   const pages = Number.isFinite(maxPages) ? maxPages : 0;
   return useQuery<PdfPageImage[]>({
     queryKey: queryKeys.pdfPreview(kind, debounced.key, width, pages),
-    queryFn: () =>
-      oneAtATime(async () => {
+    // Reading `signal` lets TanStack cancel a drawing whose key was replaced
+    // or whose preview unmounted; the queue then skips it.
+    queryFn: ({ signal }) =>
+      oneAtATime(signal, async () => {
         const [{ renderPdf }, { rasterizePdf }, element] = await Promise.all([
           import('../../../services/exportPdf.js'),
           import('../../../services/reports/pdfRaster.js'),
           build(debounced.value),
         ]);
-        return rasterizePdf(await renderPdf(element), { width, maxPages });
+        const bytes = await renderPdf(element);
+        if (signal.aborted) throw superseded();
+        return rasterizePdf(bytes, { width, maxPages, signal });
       }),
     placeholderData: keepPreviousData,
     staleTime: Infinity,
-    gcTime: 2 * 60_000,
+    // A closed drawer's pages go at once; card thumbnails stay a while.
+    gcTime: keepCached ? 2 * 60_000 : 0,
     retry: false,
     refetchOnWindowFocus: false,
   });

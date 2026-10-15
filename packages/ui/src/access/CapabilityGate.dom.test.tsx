@@ -2,8 +2,8 @@
  * @vitest-environment jsdom
  */
 import React from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient } from '@tanstack/react-query';
 import type { AccessDocument, Role } from '@pump/shared';
 import { capabilityState } from '@pump/shared';
@@ -232,5 +232,28 @@ describe('CapabilityRoute (a bookmarked gated page)', () => {
       undefined,
     );
     expect(container.textContent).toBe('');
+  });
+
+  it('renders the hidden state when the access request failed (#615 review)', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    });
+    // No document cached, and the request for it fails.
+    const failing = vi.fn(async () => new Response('down', { status: 503 }));
+    vi.stubGlobal('fetch', failing);
+    const { container } = render(
+      <QueryProvider client={client}>
+        <CapabilityRoute
+          capability="exports.tally"
+          feature={{ title: 'Tally export', description: 'Send the day to Tally.' }}
+        >
+          <h1>Tally export page</h1>
+        </CapabilityRoute>
+      </QueryProvider>,
+    );
+    await waitFor(() => expect(client.getQueryState(queryKeys.access())?.status).toBe('error'));
+    expect(failing).toHaveBeenCalled();
+    expect(container.textContent).toBe('');
+    vi.unstubAllGlobals();
   });
 });

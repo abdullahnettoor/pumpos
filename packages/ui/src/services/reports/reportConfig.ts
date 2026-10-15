@@ -173,6 +173,11 @@ export interface DocConfigOverrides {
   sections?: readonly string[];
   paper?: 'A4' | 'LETTER';
   showLogo?: boolean;
+  /**
+   * The letterhead, already built by `letterheadFromStation`: a preview hands
+   * over just that, not the whole station.
+   */
+  letterhead?: Letterhead;
 }
 
 interface StationForReports {
@@ -182,7 +187,7 @@ interface StationForReports {
 
 /** The letterhead, with the logo choice the document prints with. */
 function docLetterhead(station: StationForReports | null | undefined, over: DocConfigOverrides) {
-  const letterhead = letterheadFromStation(station);
+  const letterhead = over.letterhead ?? letterheadFromStation(station);
   return letterhead && over.showLogo !== undefined
     ? { ...letterhead, showLogo: over.showLogo }
     : letterhead;

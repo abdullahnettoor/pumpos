@@ -223,10 +223,12 @@ export const StationsTab: React.FC<StationsTabProps> = ({
       <section className="flex flex-col gap-2">
         <SectionHeader
           title="Stations"
+          // The plan line is about the plan, not the filter: it stays put
+          // whatever is chosen (the chips carry the counts). Without one, the
+          // count says how many are shown.
           subtitle={
-            filter !== 'all'
-              ? `${rows.length} of ${all.length}`
-              : (planLine ?? stationsWord(all.length))
+            planLine ??
+            (filter !== 'all' ? `${rows.length} of ${all.length}` : stationsWord(all.length))
           }
           controls={{
             filters: all.length > 1 && (

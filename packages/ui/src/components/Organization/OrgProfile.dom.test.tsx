@@ -4,20 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { createTestQueryClient, renderWithProviders } from '../../test/renderWithProviders.js';
 import { queryKeys } from '../../query/hooks.js';
-/** Each letterhead the preview draws: the element handed to the PDF renderer. */
-const drawn = vi.hoisted(() => ({ elements: [] as any[] }));
-vi.mock('../../services/exportPdf.js', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  renderPdf: async (element: unknown) => {
-    drawn.elements.push(element);
-    return new Uint8Array([37, 80, 68, 70]);
-  },
-}));
-vi.mock('../../services/reports/pdfRaster.js', () => ({
-  rasterizePdf: async () => [{ src: 'data:image/png;base64,AA==', width: 1040, height: 244 }],
-}));
-const { OrgProfile } = await import('./OrgProfile.js');
-const { LetterheadBand } = await import('../../services/reports/shiftSummaryDoc.js');
+import { OrgProfile } from './OrgProfile.js';
 import {
   __resetUnsavedChangesForTests,
   hasUnsavedChanges,
@@ -35,7 +22,6 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   __resetUnsavedChangesForTests();
-  drawn.elements = [];
 });
 
 function setup() {
@@ -126,22 +112,23 @@ describe('Organization profile (#604)', () => {
 const field = (label: string) => screen.getByLabelText(label) as HTMLInputElement;
 
 describe('Organization profile (#605)', () => {
-  it('groups the form into Legal and Contact', async () => {
+  it('is one column of Legal and Contact, with no letterhead preview (#615 review)', async () => {
     setup();
     await screen.findByDisplayValue('Sri Lakshmi Fuels');
     expect(screen.getByRole('group', { name: 'Legal' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Contact' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Letterhead preview' })).toBeNull();
   });
 
   it('fills the state code from the GSTIN, and leaves one typed by hand', async () => {
     setup();
     await screen.findByDisplayValue('Sri Lakshmi Fuels');
-    fireEvent.change(field('GSTIN'), { target: { value: '32ABCDE1234F1Z5' } });
+    fireEvent.change(field('GSTIN'), { target: { value: '32ABCDE1234F1Z9' } });
     expect(field('State code').value).toBe('32');
-    fireEvent.change(field('GSTIN'), { target: { value: '29ABCDE1234F1Z5' } });
+    fireEvent.change(field('GSTIN'), { target: { value: '29ABCDE1234F1ZW' } });
     expect(field('State code').value).toBe('29');
     fireEvent.change(field('State code'), { target: { value: '33' } });
-    fireEvent.change(field('GSTIN'), { target: { value: '32ABCDE1234F1Z5' } });
+    fireEvent.change(field('GSTIN'), { target: { value: '32ABCDE1234F1Z9' } });
     expect(field('State code').value).toBe('33');
   });
 
@@ -151,22 +138,8 @@ describe('Organization profile (#605)', () => {
     fireEvent.change(field('GSTIN'), { target: { value: '32ABCDE12' } });
     fireEvent.change(field('PAN'), { target: { value: 'ABC1' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Save changes' }));
-    expect(await screen.findByText('A GSTIN is 15 characters, like 29ABCDE1234F1Z5')).toBeTruthy();
+    expect(await screen.findByText('A GSTIN is 15 characters, like 29ABCDE1234F1ZW')).toBeTruthy();
     expect(screen.getByText('A PAN is 10 characters, like ABCDE1234F')).toBeTruthy();
     expect(calls.some((c) => c.method === 'PUT' || c.method === 'PATCH')).toBe(false);
-  });
-
-  it('previews the PDFs’ own letterhead band with the details as typed', async () => {
-    setup();
-    await screen.findByDisplayValue('Sri Lakshmi Fuels');
-    const band = () =>
-      drawn.elements.at(-1)?.props.children.props.children as React.ReactElement<any> | undefined;
-    await waitFor(() => expect(band()?.props.letterhead.legalName).toBe('Sri Lakshmi Fuels LLP'));
-    expect(band()!.type).toBe(LetterheadBand);
-    fireEvent.change(field('Legal / trade name'), { target: { value: 'Lakshmi Fuels Pvt Ltd' } });
-    await waitFor(() => expect(band()!.props.letterhead.legalName).toBe('Lakshmi Fuels Pvt Ltd'));
-    expect(
-      await screen.findByRole('img', { name: 'The letterhead with these details' }),
-    ).toBeTruthy();
   });
 });

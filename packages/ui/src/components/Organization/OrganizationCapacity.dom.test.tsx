@@ -3,12 +3,13 @@
  */
 import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { QueryClient } from '@tanstack/react-query';
 import { UNLIMITED_LIMIT, type AccessDocument } from '@pump/shared';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
 import { queryKeys } from '../../query/hooks.js';
 import { OrganizationOverview } from './OrganizationOverview.js';
+import { __resetUnsavedChangesForTests } from '../../pump-ds/form/unsavedChanges.js';
 
 /**
  * Station capacity as the Owner sees it. The server decides who gets
@@ -17,7 +18,10 @@ import { OrganizationOverview } from './OrganizationOverview.js';
  * enforces the Limit regardless of what is rendered.
  */
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  __resetUnsavedChangesForTests();
+});
 
 const document = (over: {
   plan?: 'CORE';
@@ -124,5 +128,36 @@ describe('Station usage on the Organization screen (#605: one line, no tiles)', 
     expect(screen.queryByText(/on your plan/)).toBeNull();
     // Absent access data means not yet (pump-access-gating).
     expect(onboardButtons().every((button) => button.disabled)).toBe(true);
+  });
+});
+
+describe('One primary on Organization (#615 review)', () => {
+  it('Add team member steps down while the Profile has unsaved changes', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    });
+    client.setQueryData(queryKeys.access(), document({ plan: 'CORE', used: 1, value: 3 }));
+    client.setQueryData(queryKeys.organization(), {
+      id: 'org-1',
+      name: 'Sri Lakshmi Fuels',
+      metadata: { phone: '+91 98470 12345' },
+    });
+    renderWithProviders(
+      <OrganizationOverview
+        stations={[]}
+        selectedStation={null}
+        onStationChange={() => {}}
+        onNavigate={() => {}}
+      />,
+      { queryClient: client },
+    );
+    const add = () => screen.getByRole('button', { name: 'Add team member' });
+    expect(add().className).toMatch('bg-brand');
+    fireEvent.click(screen.getByRole('tab', { name: /Profile/ }));
+    const phone = (await screen.findByDisplayValue('+91 98470 12345')) as HTMLInputElement;
+    fireEvent.change(phone, { target: { value: '+91 98470 00000' } });
+    await waitFor(() => expect(add().className).toMatch('border-border-strong'));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(add().className).toMatch('bg-brand'));
   });
 });

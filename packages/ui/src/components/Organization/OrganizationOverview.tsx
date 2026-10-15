@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Station, reachableStations, showStationDropdown, stationLimitMessage } from '@pump/shared';
 import { Tabs, tabPanelProps, type TabItem } from '../../pump-ds/tabs/index.js';
-import { Button, Icon, guardLeave } from '../../pump-ds/index.js';
+import { Button, Icon, guardLeave, useHasUnsavedChanges } from '../../pump-ds/index.js';
 import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
 import { PageFrame } from '../page-frame/index.js';
 import { UserRolesAssignment } from '../StationSetup/UserRolesAssignment.js';
@@ -76,6 +76,9 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
     setMemberOpen(true);
   };
 
+  // While the Profile is changed, its bar's Save is the page's one primary.
+  const formChanged = useHasUnsavedChanges();
+
   // The same page actions on every tab (#515).
   const actions = (
     <>
@@ -90,7 +93,7 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
         Onboard station
       </Button>
       <Button
-        variant="primary"
+        variant={formChanged ? 'secondary' : 'primary'}
         size="sm"
         leftIcon={<Icon name="plus" size="sm" />}
         onClick={addMember}

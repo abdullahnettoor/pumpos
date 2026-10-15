@@ -23,24 +23,24 @@ import { ATTENDANT_STATEMENT_SAMPLE } from './samples/attendantSample.js';
  * attendant statement. Loaded on demand with the PDF engine.
  */
 
-/** The station fields a printed report reads: its name, letterhead, logo and clock. */
-export interface PreviewStation {
-  name?: string;
-  settings?: Record<string, unknown> | null;
-}
-
 export interface TemplatePreviewInput extends DocConfigOverrides {
   template: ReportTemplateId;
-  station: PreviewStation | null;
+  /** The station's name, and its timezone for the printed times. */
+  station: { name?: string; timeZone?: string } | null;
+  /** `letterheadFromStation(station)`: the letterhead the export prints. */
+  letterhead: Letterhead | undefined;
 }
 
 /** One report, laid out with the template being edited, on sample data. */
 export function templatePreviewDoc(input: TemplatePreviewInput): ReactElement {
-  const { template, station, ...over } = input;
+  const { template, station: s, letterhead, ...rest } = input;
+  // The export's letterhead, and the station's name for its fallback.
+  const station = { name: s?.name };
+  const over = { ...rest, letterhead };
   switch (template) {
     case 'shiftSummary': {
       const record = SHIFT_FULL_FIXTURE;
-      const timeZone = (station?.settings as { timezone?: string } | null | undefined)?.timezone;
+      const timeZone = s?.timeZone;
       return (
         <ShiftSummaryDoc
           snapshot={{

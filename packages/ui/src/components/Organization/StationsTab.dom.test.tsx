@@ -107,3 +107,38 @@ describe('Station cards (#605)', () => {
     expect(fact('Tirur', 'Tanks')).toBe('0');
   });
 });
+
+describe('Stations header (#615 review)', () => {
+  it('keeps the plan line whatever the filter', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('down', { status: 503 })),
+    );
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(queryKeys.access(), {
+      plan: 'CORE',
+      capabilities: {},
+      limits: { station_count: { value: 3, used: 2, reached: false } },
+      subscription: { status: 'ACTIVE', mode: 'NORMAL' },
+    });
+    const setup = station('st-2', 'Tirur', { onboardingStatus: 'IN_PROGRESS' } as Partial<Station>);
+    queryClient.setQueryData(queryKeys.stations(), [ONE, setup]);
+    renderWithProviders(
+      <StationsTab
+        stations={[ONE, setup]}
+        selectedStation={ONE}
+        canSwitchStation
+        onStationChange={() => {}}
+        onOnboard={() => {}}
+        onboardGate={{ disabled: false }}
+        onConfigure={() => {}}
+        onInviteTeam={() => {}}
+      />,
+      { queryClient },
+    );
+    expect(screen.getByText('2 of 3 stations on your plan')).toBeTruthy();
+    fireEvent.click(screen.getByRole('radio', { name: /In setup/ }));
+    expect(screen.getByText('2 of 3 stations on your plan')).toBeTruthy();
+    expect(screen.getAllByTestId('station-card')).toHaveLength(1);
+  });
+});

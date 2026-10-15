@@ -90,8 +90,9 @@ export const CapabilityRoute: React.FC<CapabilityRouteProps> = ({
   const accessQ = useAccess();
   const state = lockedFeatureState(accessQ.data, capability);
   if (state.status === 'enabled') return <>{children}</>;
-  // Cold start: nothing until the document says what to show.
-  if (accessQ.isPending) return null;
+  // No document — a cold start, or the request failed — means hidden
+  // (pump-access-gating): say nothing until the document says what to show.
+  if (!accessQ.data) return null;
   if (state.status === 'upgrade') {
     return (
       <LockedFeature

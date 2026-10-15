@@ -5,10 +5,8 @@ import type {
   ReportTemplate,
   SectionState,
 } from '../../../services/reports/reportTemplates.js';
-import type {
-  PreviewStation,
-  TemplatePreviewInput,
-} from '../../../services/reports/previewDocs.js';
+import type { TemplatePreviewInput } from '../../../services/reports/previewDocs.js';
+import { letterheadFromStation } from '../../../services/reports/letterhead.js';
 import { usePdfPreview } from '../pdf-preview/usePdfPreview.js';
 import { PdfPreview } from '../pdf-preview/PdfPreview.js';
 
@@ -23,21 +21,6 @@ export interface ReportDocPreviewProps {
   className?: string;
 }
 
-/** The station fields a printed report reads, so an unrelated change draws nothing new. */
-export function previewStation(station: any): PreviewStation | null {
-  if (!station) return null;
-  const settings = station.settings ?? {};
-  return {
-    name: station.name,
-    settings: {
-      legal: settings.legal,
-      fuel_brand: settings.fuel_brand,
-      logo_data_url: settings.logo_data_url,
-      timezone: settings.timezone,
-    },
-  };
-}
-
 /** What the preview prints: the template, its enabled sections in order, the page settings. */
 export function templatePreviewInput(
   props: Pick<ReportDocPreviewProps, 'template' | 'sections' | 'station' | 'paper' | 'showLogo'>,
@@ -47,7 +30,12 @@ export function templatePreviewInput(
     sections: props.sections.filter((s) => s.enabled).map((s) => s.key),
     paper: props.paper,
     showLogo: props.showLogo,
-    station: previewStation(props.station),
+    station: props.station
+      ? { name: props.station.name, timeZone: props.station.settings?.timezone }
+      : null,
+    // The export's own builder (legal name else name, address fallback, logo),
+    // so the preview cannot drift from what prints.
+    letterhead: letterheadFromStation(props.station),
   };
 }
 
@@ -70,10 +58,17 @@ export const ReportDocPreview: React.FC<ReportDocPreviewProps> = ({
   className,
   ...props
 }) => {
-  const query = usePdfPreview('report-template', templatePreviewInput(props), buildDoc, {
-    width: thumbnail ? THUMBNAIL_WIDTH : DRAWER_PREVIEW_WIDTH,
-    maxPages: thumbnail ? 1 : undefined,
-  });
+  const query = usePdfPreview(
+    thumbnail ? 'report-template-card' : 'report-template-drawer',
+    templatePreviewInput(props),
+    buildDoc,
+    {
+      width: thumbnail ? THUMBNAIL_WIDTH : DRAWER_PREVIEW_WIDTH,
+      maxPages: thumbnail ? 1 : undefined,
+      // The drawer's pages (every page, at full width) go when it closes.
+      keepCached: thumbnail,
+    },
+  );
   const name = `${props.template.name} preview`;
   const ratio = props.paper === 'LETTER' ? 11 / 8.5 : 297 / 210;
 

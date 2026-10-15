@@ -21,12 +21,14 @@ export interface RasterOptions {
   width: number;
   /** Draw at most this many pages (a card thumbnail needs one). */
   maxPages?: number;
+  /** Stop between pages once nobody waits for the drawing. */
+  signal?: AbortSignal;
 }
 
 /** Draw the pages of a PDF as images. */
 export async function rasterizePdf(
   bytes: Uint8Array,
-  { width, maxPages = Infinity }: RasterOptions,
+  { width, maxPages = Infinity, signal }: RasterOptions,
 ): Promise<PdfPageImage[]> {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -36,6 +38,7 @@ export async function rasterizePdf(
     const pages: PdfPageImage[] = [];
     const count = Math.min(doc.numPages, maxPages);
     for (let n = 1; n <= count; n += 1) {
+      signal?.throwIfAborted();
       const page = await doc.getPage(n);
       const scale = (width * 2) / page.getViewport({ scale: 1 }).width;
       const viewport = page.getViewport({ scale });

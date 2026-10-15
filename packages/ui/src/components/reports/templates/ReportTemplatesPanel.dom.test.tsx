@@ -35,10 +35,12 @@ vi.mock('../../../services/reports/pdfRaster.js', () => ({
 const { ReportTemplatesPanel } = await import('./ReportTemplatesPanel.js');
 const { ShiftSummaryDoc } = await import('../../../services/reports/shiftSummaryDoc.js');
 const { readPdf } = await import('../../../test/pdfTree.js');
+const { letterheadFromStation } = await import('../../../services/reports/letterhead.js');
 
 const station = {
   id: 'st-1',
   name: 'Agent Test Station',
+  address: 'NH 66, Kottakkal',
   settings: {
     legal: { gstin: '32ABCDE1234F1Z5' },
     report_config: { dssr: ['header', 'kpis'], paper: 'A4', showLogo: true },
@@ -137,6 +139,11 @@ describe('Customize drawer', () => {
     const doc = lastShiftSummary();
     // The document the export prints, not a drawing of it: its own title and sections.
     expect(doc.props.config.letterhead.gstin).toBe('32ABCDE1234F1Z5');
+    // The export's letterhead builder: no legal name or address in Branding, so
+    // the station's name and address print (#615 review).
+    expect(doc.props.config.letterhead).toEqual(letterheadFromStation(station));
+    expect(doc.props.config.letterhead.legalName).toBe('Agent Test Station');
+    expect(doc.props.config.letterhead.addressLine).toBe('NH 66, Kottakkal');
     expect(doc.props.config.paper).toBe('A4');
     const lines = readPdf(doc).lines;
     expect(lines).toContain('SHIFT SUMMARY');
