@@ -20,6 +20,11 @@ interface ColumnBase<T> {
   emphasis?: boolean;
   /** Fraction of the table width (`'16%'`); defaults to an equal share. */
   width?: string;
+  /**
+   * `false` makes the header plain, not a sort button: a column of inputs (a
+   * grid the operator fills in), where sorting would reorder rows mid-entry.
+   */
+  sortable?: boolean;
 }
 
 type Amount = number | string | null | undefined;

@@ -748,6 +748,22 @@ const DashboardBlocks: React.FC = () => (
           ))}
         </div>
       </div>
+      <div className="mb-2.5 mt-4 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+        TankGauge · tube · size=&quot;lg&quot; · Inventory → Tanks (#536)
+      </div>
+      <div className="grid gap-4 rounded-card border border-border-soft bg-surface p-4 sm:grid-cols-2">
+        {TANK_SAMPLES.map(([name, volume, cover]) => (
+          <TankGauge
+            key={name}
+            name={name}
+            size="lg"
+            level={deriveTankLevel(
+              { capacity: 20000, currentVolume: volume, daysOfCover: cover },
+              DEFAULT_TANK_LEVEL_SETTINGS,
+            )}
+          />
+        ))}
+      </div>
     </div>
 
     {/* Sparkline */}
