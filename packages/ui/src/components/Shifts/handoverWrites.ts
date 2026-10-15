@@ -1,6 +1,7 @@
 import { mutationKeys, queryKeys } from '../../query/hooks.js';
 import type { RecordHandoverMutationInput } from '../../query/handoverMutation.js';
-import { isAwaitingConfirmation } from '../../query/patches/applyPatch.js';
+import { useQueryClient, type QueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { patchConfirmation } from '../../query/patches/applyPatch.js';
 import { useWriteStates, type WriteEntry } from '../../query/pendingWrites.js';
 import { DRAWER_KEY } from './liveShiftInputs.js';
 
@@ -20,20 +21,41 @@ export const useHandoverWrites = (shiftId: string | null): HandoverWrites =>
   useWriteStates(mutationKeys.handover(), handoverWriteKey, shiftId);
 
 /**
- * Whether the shift's money is still to be confirmed: a Handover is saving, or
- * the board holds a patch its refetch has not replaced yet. The shift-level
- * figures a Handover moves (cash sales, expected office cash) are not in its
- * answer, so until then they read "Saving…", never the old or a predicted value.
+ * Where the shift's money stands after a Handover (#606):
+ * - `saving`: a Handover is in flight, or the board holds its patch and the
+ *   refetch has not answered yet;
+ * - `unconfirmed`: that refetch failed. The shift-level figures a Handover
+ *   moves (cash sales, expected office cash) are not in its answer, so they
+ *   stay "Saving…" with an inline Retry, and the shift cannot close, until a
+ *   refetch succeeds;
+ * - `confirmed`: everything shown is the server's.
  */
-export function shiftMoneyConfirming(
+export type ShiftMoneyState = 'confirmed' | 'saving' | 'unconfirmed';
+
+export function shiftMoneyState(
+  writes: HandoverWrites,
+  qc: QueryClient,
+  stationId: string | null,
+): ShiftMoneyState {
+  for (const w of writes.values()) if (w.state === 'saving') return 'saving';
+  if (!stationId) return 'confirmed';
+  const patch = patchConfirmation(qc, queryKeys.shiftStatus(stationId, false));
+  return patch === 'awaiting' ? 'saving' : patch === 'failed' ? 'unconfirmed' : 'confirmed';
+}
+
+/**
+ * The shift's money state, re-read whenever the status query moves (its
+ * update count, status or fetch state), so a failed or retried refetch shows.
+ */
+export function useShiftMoneyState(
   writes: HandoverWrites,
   stationId: string | null,
-  statusState: { dataUpdatedAt?: number; errorUpdatedAt?: number } | undefined,
-): boolean {
-  for (const w of writes.values()) if (w.state === 'saving') return true;
-  return (
-    !!stationId && isAwaitingConfirmation(queryKeys.shiftStatus(stationId, false), statusState)
-  );
+  statusQ: Pick<UseQueryResult, 'dataUpdatedAt' | 'status' | 'fetchStatus'>,
+): ShiftMoneyState {
+  const qc = useQueryClient();
+  // Read so the caller re-renders when they change (tracked query results).
+  void [statusQ.dataUpdatedAt, statusQ.status, statusQ.fetchStatus];
+  return shiftMoneyState(writes, qc, stationId);
 }
 
 /** What a failed write says on its row. */

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
 import type { BusinessDayStatusResponse } from '../services/cloud.js';
 import { queryKeys } from './hooks.js';
-import { isAwaitingConfirmation } from './patches/applyPatch.js';
+import { patchConfirmation } from './patches/applyPatch.js';
 import { withClosedBusinessDay } from './patches/businessDay.js';
 import { inRangeKey, insertRecord, withVoidedRecord } from './patches/officeRecords.js';
 import { cachedStatus } from './patches/shiftStatus.fixtures.js';
@@ -99,7 +99,7 @@ describe('applying shift-board patches through the client', () => {
     for (const key of [keyA, keyB]) {
       const data = qc.getQueryData<BusinessDayStatusResponse>(key)!;
       expect(data.pastOpenBusinessDays).toEqual([]);
-      expect(isAwaitingConfirmation(key, qc.getQueryState(key))).toBe(true);
+      expect(patchConfirmation(qc, key)).toBe('awaiting');
     }
   });
 
@@ -110,22 +110,45 @@ describe('applying shift-board patches through the client', () => {
     patchBusinessDayClosed(qc, 'station-1', closedAnswer);
     const patched = qc.getQueryData(key);
 
-    // What a refetch does on success: new data, a later dataUpdatedAt.
-    qc.setQueryData(key, patched, { updatedAt: Date.now() + 1000 });
+    // What a refetch does on success: the same data, counted as a new update.
+    qc.setQueryData(key, patched);
 
-    expect(isAwaitingConfirmation(key, qc.getQueryState(key))).toBe(false);
+    expect(patchConfirmation(qc, key)).toBe('none');
   });
 
-  it('a failed refetch ends the wait: the patch no longer reads as saving', () => {
+  it('a failed refetch leaves the patch unconfirmed; a later success confirms it', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = queryKeys.businessDayStatus('station-1', '');
+    let fail = true;
+    const queryFn = () =>
+      fail ? Promise.reject(new Error('offline')) : Promise.resolve(dayStatus());
+    qc.setQueryData(key, dayStatus());
+    patchBusinessDayClosed(qc, 'station-1', closedAnswer);
+
+    await qc.fetchQuery({ queryKey: key, queryFn }).catch(() => undefined);
+    expect(patchConfirmation(qc, key)).toBe('failed');
+
+    fail = false;
+    await qc.fetchQuery({ queryKey: key, queryFn });
+    expect(patchConfirmation(qc, key)).toBe('none');
+  });
+
+  it('the mark lives with the entry: removed or cleared, a re-created entry is unmarked', () => {
     const qc = new QueryClient();
     const key = queryKeys.businessDayStatus('station-1', '');
     qc.setQueryData(key, dayStatus());
     patchBusinessDayClosed(qc, 'station-1', closedAnswer);
-    const state = qc.getQueryState(key)!;
+    const at = qc.getQueryState(key)!.dataUpdatedAt;
 
-    expect(isAwaitingConfirmation(key, { ...state, errorUpdatedAt: state.dataUpdatedAt + 5 })).toBe(
-      false,
-    );
+    qc.removeQueries({ queryKey: key });
+    expect(patchConfirmation(qc, key)).toBe('none');
+    // Same key, same timestamp: still a new entry, so not patched.
+    qc.setQueryData(key, dayStatus(), { updatedAt: at });
+    expect(patchConfirmation(qc, key)).toBe('none');
+
+    patchBusinessDayClosed(qc, 'station-1', closedAnswer);
+    qc.clear();
+    expect(patchConfirmation(qc, key)).toBe('none');
   });
 
   it('a customer sale and its void reach the cached board', () => {

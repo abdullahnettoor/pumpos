@@ -362,19 +362,53 @@ describe('Close shift page (#534)', () => {
       expect(closeButton().disabled).toBe(true);
     });
 
-    it('waits for a Handover’s figures: Saving… in the footer, and no close yet (#606)', () => {
-      renderWithProviders(<CloseShiftPage {...baseProps({ step: 'confirm', confirming: true })} />);
+    it('waits for a Handover’s figures: every dependent figure Saving…, no close yet (#606)', () => {
+      renderWithProviders(<CloseShiftPage {...baseProps({ step: 'confirm', money: 'saving' })} />);
       expect(within(footer()).getByText('Saving…')).toBeDefined();
       expect(within(footer()).queryByText('₹10,000.00')).toBeNull();
+      const summary = screen.getByRole('region', { name: 'Shift summary' });
+      expect(within(summary).getAllByText('Saving…')).toHaveLength(2);
       expect(closeButton().disabled).toBe(true);
+      expect(screen.queryByTestId('unconfirmed-totals')).toBeNull();
+    });
+
+    it('holds the cash count’s expected figures as Saving… too (#606)', () => {
+      renderWithProviders(<CloseShiftPage {...baseProps({ step: 'cash', money: 'saving' })} />);
+      const card = screen.getByRole('region', { name: 'Expected office cash' });
+      expect(within(card).getAllByText('Saving…').length).toBeGreaterThanOrEqual(2);
+      expect(within(officeVariance()).getByText('Saving…')).toBeDefined();
+    });
+
+    it('a failed confirmation keeps Close disabled with an inline Retry; confirmed enables it', () => {
+      const onRetryMoney = vi.fn();
+      const { rerender } = renderWithProviders(
+        <CloseShiftPage {...baseProps({ step: 'confirm', money: 'unconfirmed', onRetryMoney })} />,
+      );
+      const note = screen.getByTestId('unconfirmed-totals');
+      expect(note.textContent).toContain("Couldn't confirm the drawer totals");
+      fireEvent.click(within(note).getByRole('button', { name: 'Retry' }));
+      expect(onRetryMoney).toHaveBeenCalledTimes(1);
+      expect(closeButton().disabled).toBe(true);
+
+      rerender(<CloseShiftPage {...baseProps({ step: 'confirm', money: 'confirmed' })} />);
+      expect(screen.queryByTestId('unconfirmed-totals')).toBeNull();
+      expect(closeButton().disabled).toBe(false);
     });
 
     it('marks a Drawer Saving… while its Handover saves, and says why one was refused (#606)', () => {
       const writes = new Map([
-        ['u1|du1', { state: 'saving' as const, variables: {} as never, error: null }],
+        [
+          'u1|du1',
+          { state: 'saving' as const, variables: {} as never, error: null, submittedAt: 1 },
+        ],
         [
           'u2|du2',
-          { state: 'failed' as const, variables: {} as never, error: new Error('Shift is closed') },
+          {
+            state: 'failed' as const,
+            variables: {} as never,
+            error: new Error('Shift is closed'),
+            submittedAt: 1,
+          },
         ],
       ]);
       renderWithProviders(

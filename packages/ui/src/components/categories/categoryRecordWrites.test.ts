@@ -14,6 +14,7 @@ import {
 const saving = (over: Partial<OfficeRecordVariables> = {}): WriteEntry<OfficeRecordVariables> => ({
   state: 'saving',
   error: null,
+  submittedAt: 1,
   variables: {
     stationId: 'st-1',
     kind: 'expense',
@@ -72,6 +73,7 @@ describe('the ledger while writes are in flight (#606)', () => {
     const write: WriteEntry<VoidRecordVariables> = {
       state: 'saving',
       error: null,
+      submittedAt: 1,
       variables: { kind: 'expense', id: 'b', stationId: 'st-1', idempotencyKey: 'k' },
     };
     const out = withVoidWrites(rows, new Map([['b', write]]));

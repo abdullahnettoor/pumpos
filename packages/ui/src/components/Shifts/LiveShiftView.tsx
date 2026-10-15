@@ -18,7 +18,7 @@ import {
 import { NozzleReadingsTable } from './NozzleReadingsTable.js';
 import { ProductSalesSection } from './ProductSalesSection.js';
 import { TakingsSummary } from './TakingsSummary.js';
-import type { HandoverWrites } from './handoverWrites.js';
+import type { HandoverWrites, ShiftMoneyState } from './handoverWrites.js';
 
 /** The open shift as the shift-status payload carries it. */
 export interface LiveShift extends ShiftInput {
@@ -47,11 +47,13 @@ export interface LiveShiftViewProps {
   onViewLastSummary: (() => void) | null;
   /** Handovers still saving or failed, by Drawer key (#606). */
   handoverWrites?: HandoverWrites;
-  /** The shift's money awaits the server's confirmation (#606). */
-  confirming?: boolean;
+  /** Where the shift's money stands after a Handover (#606). */
+  money?: ShiftMoneyState;
+  /** Retries the shift status after a failed confirmation. */
+  onRetryMoney?: () => void;
 }
 
-const money = (v: number) => formatMoney(v, { decimals: 0 });
+const wholeMoney = (v: number) => formatMoney(v, { decimals: 0 });
 
 /**
  * The Live shift tab (#533, layout B): the shift bar, four "This shift" tiles,
@@ -72,7 +74,8 @@ export const LiveShiftView: React.FC<LiveShiftViewProps> = ({
   onStartClose,
   onViewLastSummary,
   handoverWrites,
-  confirming = false,
+  money = 'confirmed',
+  onRetryMoney,
 }) => {
   const handoversQ = useMerchandiseHandovers(
     shift.id,
@@ -99,7 +102,7 @@ export const LiveShiftView: React.FC<LiveShiftViewProps> = ({
         billed,
         now,
         timeZone,
-        formatMoney: money,
+        formatMoney: wholeMoney,
       }),
     [shift, cashDeclared, before, handoverSales, billed, now, timeZone],
   );
@@ -150,7 +153,8 @@ export const LiveShiftView: React.FC<LiveShiftViewProps> = ({
             recorded={figures.drawers.recorded}
             expected={figures.drawers.expected}
             pending={figures.pending}
-            confirming={confirming}
+            money={money}
+            onRetryMoney={onRetryMoney}
           />
           <BeforeCloseChecklist items={figures.checklist} onAction={onAction} canClose={canClose} />
         </aside>
