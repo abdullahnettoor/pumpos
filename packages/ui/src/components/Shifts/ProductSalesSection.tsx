@@ -79,7 +79,7 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
       await sendKeyed(
         officeSubmitKeys.session(`handover-product-sale:delete:${sale.id}`),
         { stationId, saleId: sale.id },
-        (idempotencyKey) => remove.mutateAsync({ saleId: sale.id, idempotencyKey }),
+        (idempotencyKey) => remove.mutateAsync({ saleId: sale.id, shiftId, idempotencyKey }),
       );
       toast.success('Handover product sale removed.');
     } catch (err) {

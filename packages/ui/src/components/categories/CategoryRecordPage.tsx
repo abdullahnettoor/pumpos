@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { canManageExpenseCategory, canVoidExpense } from '@pump/shared';
-import { CloudTransactionService } from '../../services/cloud.js';
 import { ROUTES, type RoutePath } from '../../nav-intent/routes.js';
 import {
   queryKeys,
@@ -12,6 +11,8 @@ import {
   useInvalidateOperational,
 } from '../../query/hooks.js';
 import { openQuickEntry } from '../../quick-entry/store.js';
+import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
+import { useVoidCategoryRecord } from '../../office-records/useRecordOfficeRecord.js';
 import {
   Button,
   DataSection,
@@ -50,8 +51,6 @@ import {
   type CategoryRecord,
 } from './categoryRecordColumns.js';
 
-const transactionService = new CloudTransactionService();
-
 /** Everything that differs between the Expenses and Income pages. */
 const COPY: Record<
   CategoryRecordKind,
@@ -67,7 +66,14 @@ const COPY: Record<
     /** Tile labels: today, this month, into/out of cash, the other accounts. */
     kpis: [string, string, string, string];
     about: string;
-    void: { title: string; confirm: string; done: string; failed: string; task: string };
+    void: {
+      title: string;
+      confirm: string;
+      done: string;
+      failed: string;
+      task: string;
+      refreshFailed: string;
+    };
   }
 > = {
   expense: {
@@ -88,6 +94,7 @@ const COPY: Record<
       done: 'Expense voided.',
       failed: 'Failed to void expense',
       task: 'Could not void the expense.',
+      refreshFailed: 'Expense voided, but the screen could not be refreshed.',
     },
   },
   income: {
@@ -114,13 +121,9 @@ const COPY: Record<
       done: 'Income voided.',
       failed: 'Failed to void income',
       task: 'Could not void the income entry.',
+      refreshFailed: 'Income voided, but the screen could not be refreshed.',
     },
   },
-};
-
-const VOID_RECORD: Record<CategoryRecordKind, (id: string, reason?: string) => Promise<unknown>> = {
-  expense: (id, reason) => transactionService.voidExpense(id, reason),
-  income: (id, reason) => transactionService.voidIncome(id, reason),
 };
 
 const CATEGORY_KEY = {
@@ -177,6 +180,7 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
   const toast = useToast();
   const runTask = useRunTask();
   const ask = useAsk();
+  const voidRecord = useVoidCategoryRecord();
 
   const role = (userRole as any) ?? 'Staff';
   const canManageCategories = canManageExpenseCategory(role);
@@ -213,14 +217,22 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
       });
       if (!confirmed) return;
       try {
-        await VOID_RECORD[kind](row.id, value);
+        // One key per void through the shared store: a retry after a lost
+        // answer reuses it, so it cannot void twice.
+        await sendKeyed(
+          officeSubmitKeys.session(`${kind}:void:${row.id}`),
+          { stationId, id: row.id, reason: value },
+          (idempotencyKey) =>
+            voidRecord.mutateAsync({ kind, id: row.id, stationId, reason: value, idempotencyKey }),
+        );
         toast.success(copy.void.done);
-        await invalidateOperational(stationId);
+        // The row reads Voided from the answer; the rest refreshes in the background.
+        runTask(invalidateOperational(stationId), copy.void.refreshFailed);
       } catch (err: any) {
         toast.error(err.message || copy.void.failed);
       }
     },
-    [ask, copy, invalidateOperational, kind, stationId, toast],
+    [ask, copy, invalidateOperational, kind, stationId, toast, voidRecord, runTask],
   );
 
   const columns = useMemo(

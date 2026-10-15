@@ -1405,11 +1405,12 @@ export class CloudTransactionService {
     );
   }
 
-  async voidExpense(id: string, reason?: string): Promise<any> {
-    return request<any>(`/transactions/expenses/${id}/void`, {
-      method: 'POST',
-      body: JSON.stringify({ reason: reason || undefined }),
-    });
+  async voidExpense(id: string, reason?: string, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      `/transactions/expenses/${id}/void`,
+      { method: 'POST', body: JSON.stringify({ reason: reason || undefined }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async getIncome(params?: { stationId?: string; from?: string; to?: string }): Promise<any[]> {
@@ -1445,11 +1446,12 @@ export class CloudTransactionService {
     );
   }
 
-  async voidIncome(id: string, reason?: string): Promise<any> {
-    return request<any>(`/transactions/income/${id}/void`, {
-      method: 'POST',
-      body: JSON.stringify({ reason: reason || undefined }),
-    });
+  async voidIncome(id: string, reason?: string, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      `/transactions/income/${id}/void`,
+      { method: 'POST', body: JSON.stringify({ reason: reason || undefined }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async recordPurchase(
@@ -1765,35 +1767,39 @@ export class CloudTransactionService {
     );
   }
 
-  async recordSale(payload: {
-    shiftId: string;
-    paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
-    lines: {
-      productId: string;
-      quantity: number;
-      unitPrice: number;
-      discountAmount?: number;
-      taxAmount?: number;
-      tankId?: string | null;
-    }[];
-    customerId?: string | null;
-    vehicleId?: string | null;
-    attendantId?: string | null;
-    notes?: string;
-    /** Ad-hoc walk-in buyer bill-to (used only when no saved customerId is set). */
-    buyer?: {
-      name: string;
-      phone?: string | null;
-      gstin?: string | null;
-      stateCode?: string | null;
-    } | null;
-    /** When true (with a buyer), save/dedup the buyer into the customer registry. */
-    saveAsCustomer?: boolean;
-  }): Promise<any> {
-    return request<any>('/transactions/sales', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async recordSale(
+    payload: {
+      shiftId: string;
+      paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
+      lines: {
+        productId: string;
+        quantity: number;
+        unitPrice: number;
+        discountAmount?: number;
+        taxAmount?: number;
+        tankId?: string | null;
+      }[];
+      customerId?: string | null;
+      vehicleId?: string | null;
+      attendantId?: string | null;
+      notes?: string;
+      /** Ad-hoc walk-in buyer bill-to (used only when no saved customerId is set). */
+      buyer?: {
+        name: string;
+        phone?: string | null;
+        gstin?: string | null;
+        stateCode?: string | null;
+      } | null;
+      /** When true (with a buyer), save/dedup the buyer into the customer registry. */
+      saveAsCustomer?: boolean;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/transactions/sales',
+      { method: 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 

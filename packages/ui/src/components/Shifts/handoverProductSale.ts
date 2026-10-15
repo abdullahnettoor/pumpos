@@ -126,3 +126,20 @@ export function handoverProductSaleSchema(totalOf: (lines: DraftLine[]) => numbe
       }
     });
 }
+
+/**
+ * The names a saved sale's list row shows that the write's answer does not
+ * carry (#606): the employee's and each product's, from the records picked.
+ */
+export function saleLabels(
+  attendantId: string,
+  sellers: { id: string; name: string }[],
+  productById: Record<string, { name: string }>,
+): { attendantName: string | null; productNames: Record<string, string> } {
+  const productNames: Record<string, string> = {};
+  for (const [id, p] of Object.entries(productById)) productNames[id] = p.name;
+  return {
+    attendantName: sellers.find((s) => s.id === attendantId)?.name ?? null,
+    productNames,
+  };
+}
