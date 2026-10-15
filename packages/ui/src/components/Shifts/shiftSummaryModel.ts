@@ -112,6 +112,8 @@ export interface ShiftSummary {
   /** The stored fuel sales value; null for a snapshot without one. */
   fuelSalesValue: number | null;
   handovers: SummaryHandoverRow[];
+  /** Σ attendant variance over the handovers, in paise: the handover total's variance. */
+  handoverVariance: number;
   terminals: SummaryTerminalRow[];
   credit: SummaryCreditRow[];
   /** The stored credit sales total; null for a snapshot without one. */
@@ -284,6 +286,7 @@ export function readShiftSummary(record: ShiftSummaryRecord): ShiftSummary {
     volumes: readVolumes(snap, nozzles),
     fuelSalesValue: snap.totalFuelSalesValue == null ? null : num(snap.totalFuelSalesValue),
     handovers,
+    handoverVariance: paise(...handovers.map((h) => h.variance)),
     terminals,
     credit,
     creditTotal: snap.creditSalesTotal == null ? null : num(snap.creditSalesTotal),

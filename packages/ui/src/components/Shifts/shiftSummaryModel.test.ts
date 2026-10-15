@@ -7,7 +7,12 @@ import {
   totalNote,
   volumeTotalNotes,
 } from './shiftSummaryModel.js';
-import { creditTotalRow, fuelTotalRow, nozzleTotalRow } from './shiftSummaryColumns.js';
+import {
+  creditTotalRow,
+  fuelTotalRow,
+  handoverTotalRow,
+  nozzleTotalRow,
+} from './shiftSummaryColumns.js';
 
 const record = (snap: Record<string, any>, extra: Record<string, any> = {}) => ({
   shiftId: 's1',
@@ -202,5 +207,27 @@ describe('businessDayContext', () => {
     expect(businessDayContext('2026-10-13', '2026-10-14')).toMatch(/^A past business day/);
     expect(businessDayContext('2026-10-14', '2026-10-14')).toBe("Today's business day.");
     expect(businessDayContext(null, '2026-10-14')).toBeNull();
+  });
+});
+
+describe('handover variance total', () => {
+  const handover = (varianceAmount: number) => ({ attendantName: 'A', varianceAmount });
+
+  it('adds the variances in paise and reads them as the rows do', () => {
+    const s = readShiftSummary(
+      record({ handovers: [handover(0.1), handover(0.2), handover(-340)] }),
+    );
+    expect(s.handoverVariance).toBe(-339.7);
+    const total = handoverTotalRow(s);
+    expect(total).toMatchObject({
+      label: 'Total of 3 handovers',
+      values: { variance: -339.7 },
+      texts: { variance: '−₹339.70' },
+    });
+  });
+
+  it('a total that nets to zero reads Balanced', () => {
+    const s = readShiftSummary(record({ handovers: [handover(228.51), handover(-228.51)] }));
+    expect(handoverTotalRow(s)).toMatchObject({ texts: { variance: 'Balanced' } });
   });
 });

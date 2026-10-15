@@ -2,7 +2,6 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
-import { resolveBusinessDate } from '@pump/shared';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
 import {
   SHIFT_FULL_FIXTURE,
@@ -15,8 +14,17 @@ import { readPdf, type PdfText } from '../../test/pdfTree.js';
 import { ShiftSummaryView } from '../../components/Shifts/ShiftSummaryView.js';
 import { NOZZLES_EMPTY, SIGNATURE_LINES } from '../../components/Shifts/shiftSummaryColumns.js';
 import type { ShiftSummaryRecord } from '../../components/Shifts/shiftSummaryModel.js';
-import { ShiftSummaryDoc } from './shiftSummaryDoc.js';
-import { DEFAULT_SHIFT_SUMMARY_CONFIG } from './reportConfig.js';
+
+/** What `generateShiftSummaryPdf` hands the saver: the document and its file name. */
+const printed: { element: React.ReactElement; filename: string }[] = [];
+vi.mock('../exportPdf.js', () => ({
+  exportReactPdf: vi.fn(),
+  outputReactPdf: (element: React.ReactElement, filename: string) => {
+    printed.push({ element, filename });
+    return Promise.resolve();
+  },
+}));
+const { generateShiftSummaryPdf } = await import('./generate.js');
 
 const station = {
   id: 'st-1',
@@ -33,6 +41,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  printed.length = 0;
 });
 
 const text = (el: Element | null | undefined): string => el?.textContent?.trim() ?? '';
@@ -67,6 +76,8 @@ const screenTables = (): string[][][] =>
     );
 
 const NOTE = /^Total: /;
+/** The screen's business-day line (`businessDayContext`), never printed. */
+const BUSINESS_DAY_LINE = /^(Today's business day|A past business day)/;
 
 /** The note under each screen table (`Total: …`), or null where there is none. */
 const screenNotes = (): (string | null)[] =>
@@ -95,9 +106,13 @@ const pdfNotes = (pdf: PdfText): (string | null)[] => {
  * uppercase, as the screen's styles show them.
  *
  * Not compared, because only the screen shows them: the Closed / Locked chip
- * in the page header and the credit sale entry panel (not on paper).
+ * in the page header, the credit sale entry panel, and the business-day line
+ * (advice relative to now; paper prints the absolute dates only).
+ *
+ * The PDF is the one `generateShiftSummaryPdf` builds from the station and the
+ * record, as the screen's Export does.
  */
-const renderBoth = (record: ShiftSummaryRecord) => {
+const renderScreen = (record: ShiftSummaryRecord) =>
   renderWithProviders(
     <ShiftSummaryView
       shiftSummary={record}
@@ -108,25 +123,18 @@ const renderBoth = (record: ShiftSummaryRecord) => {
       station={station}
     />,
   );
-  const clock = {
-    timeZone: station.settings.timezone,
-    currentBusinessDate: resolveBusinessDate({
-      now: new Date(),
-      timeZone: station.settings.timezone,
-      dayStartsAt: station.settings.business_day_starts_at,
-    }),
-  };
-  return readPdf(
-    <ShiftSummaryDoc
-      snapshot={{
-        ...record.snapshotData,
-        businessDate: record.businessDate,
-        shiftSequence: record.shiftSequence,
-      }}
-      config={{ ...DEFAULT_SHIFT_SUMMARY_CONFIG, stationName: station.name }}
-      clock={clock}
-    />,
-  );
+
+const renderPdf = async (record: ShiftSummaryRecord): Promise<PdfText> => {
+  await generateShiftSummaryPdf(station, record.snapshotData, String(record.shiftId), undefined, {
+    businessDate: record.businessDate,
+    shiftSequence: record.shiftSequence,
+  });
+  return readPdf(printed[printed.length - 1].element);
+};
+
+const renderBoth = async (record: ShiftSummaryRecord): Promise<PdfText> => {
+  renderScreen(record);
+  return renderPdf(record);
 };
 
 /** The lines that follow `from` in the PDF, `n` of them. */
@@ -139,8 +147,8 @@ const linesAfter = (pdf: PdfText, from: string, n: number): string[] => {
 describe.each(Object.entries(SHIFT_SUMMARY_FIXTURES))(
   'Shift Summary screen and PDF parity (#595): %s',
   (_name, record) => {
-    it('prints every table with the same headers, rows, totals and notes', () => {
-      const pdf = renderBoth(record);
+    it('prints every table with the same headers, rows, totals and notes', async () => {
+      const pdf = await renderBoth(record);
       const onScreen = screenTables();
       expect(onScreen.length).toBeGreaterThan(0);
       expect(pdf.tables).toHaveLength(onScreen.length);
@@ -153,8 +161,8 @@ describe.each(Object.entries(SHIFT_SUMMARY_FIXTURES))(
       expect(pdfNotes(pdf)).toEqual(screenNotes());
     });
 
-    it('prints the same section titles, details, context and cash lines', () => {
-      const pdf = renderBoth(record);
+    it('prints the same section titles, details, context and cash lines', async () => {
+      const pdf = await renderBoth(record);
       const lines = pdf.lines;
 
       // Section titles, in the screen's order (the page title is the app's, not the report's).
@@ -173,9 +181,12 @@ describe.each(Object.entries(SHIFT_SUMMARY_FIXTURES))(
         expect(linesAfter(pdf, text(dt).toUpperCase(), 1)).toEqual([text(dt.nextElementSibling)]);
       }
 
-      // The business-day line and the snapshot line, word for word.
+      // The snapshot line, word for word; the business-day line stays on screen.
       const notes = Array.from(document.querySelectorAll('.print-area p')).map(text);
-      for (const note of notes.filter((n) => !NOTE.test(n))) expect(lines).toContain(note);
+      for (const note of notes.filter((n) => n.startsWith('Snapshot taken'))) {
+        expect(lines).toContain(note);
+      }
+      expect(lines.filter((l) => BUSINESS_DAY_LINE.test(l))).toEqual([]);
 
       // The cash reconciliation, line by line.
       const cash = document.querySelector('dl[aria-label="Cash reconciliation"]') as HTMLElement;
@@ -194,8 +205,8 @@ describe.each(Object.entries(SHIFT_SUMMARY_FIXTURES))(
 );
 
 describe('Shift Summary screen and PDF parity (#595): the words they once disagreed on', () => {
-  it('2-decimal volumes, 3-decimal meter readings, stored totals, Short / Balanced', () => {
-    const pdf = renderBoth(SHIFT_FULL_FIXTURE);
+  it('2-decimal volumes, 3-decimal meter readings, stored totals, Short / Balanced', async () => {
+    const pdf = await renderBoth(SHIFT_FULL_FIXTURE);
     const [nozzles, fuel, handovers] = pdf.tables;
     expect(nozzles.rows[0]).toEqual([
       'N1',
@@ -217,11 +228,15 @@ describe('Shift Summary screen and PDF parity (#595): the words they once disagr
       '₹1,89,341.75',
     ]);
     expect(handovers.rows.map((r) => r[r.length - 1])).toEqual(['−₹340.00', 'Balanced']);
-    expect(pdf.lines).toContain("Today's business day.");
+    // The variance total reads as its rows do: the chip on screen, its words on paper.
+    expect(handovers.totals[0].at(-1)).toBe('−₹340.00');
+    const total = screen.getByRole('table', { name: 'Attendant handovers' }).querySelector('tfoot');
+    expect(total?.querySelector('[data-variance="short"]')?.textContent).toBe('−₹340.00');
+    expect(screen.getByText("Today's business day.")).toBeTruthy();
   });
 
-  it('a mixed-unit shift: one total row, `—` for volumes, and the note says why', () => {
-    const pdf = renderBoth(SHIFT_MIXED_UNIT_FIXTURE);
+  it('a mixed-unit shift: one total row, `—` for volumes, and the note says why', async () => {
+    const pdf = await renderBoth(SHIFT_MIXED_UNIT_FIXTURE);
     const [nozzles, fuel] = pdf.tables;
     expect(nozzles.rows[1].slice(2)).toEqual([
       '3,400.250 kg',
@@ -238,8 +253,8 @@ describe('Shift Summary screen and PDF parity (#595): the words they once disagr
     ]);
   });
 
-  it('a total the snapshot does not store is blank in both, and the note says why', () => {
-    const pdf = renderBoth(SHIFT_NOT_STORED_FIXTURE);
+  it('a total the snapshot does not store is blank in both, and the note says why', async () => {
+    const pdf = await renderBoth(SHIFT_NOT_STORED_FIXTURE);
     const [nozzles, fuel, credit] = pdf.tables;
     expect(nozzles.totals[0]).toEqual(['Total of 2 nozzles', '', '', '', '150.26 L', '', '']);
     expect(fuel.totals[0]).toEqual(['Total of 1 product', '150.26 L', '', '', '']);
@@ -249,13 +264,28 @@ describe('Shift Summary screen and PDF parity (#595): the words they once disagr
       'Total: testing and net volumes not stored for this shift; sales value total not stored for this shift.',
       'Total: credit sales total not stored for this shift.',
     ]);
-    expect(pdf.lines).toContain(
-      "A past business day: a credit sale logged here belongs to this shift, not today's.",
-    );
   });
 
-  it('a legacy snapshot: one cash variance line and its stored purchases', () => {
-    const pdf = renderBoth(SHIFT_LEGACY_FIXTURE);
+  it('a balanced handover total reads Balanced, on screen and on paper', async () => {
+    const snap = SHIFT_MIXED_UNIT_FIXTURE.snapshotData ?? {};
+    const balanced: ShiftSummaryRecord = {
+      ...SHIFT_MIXED_UNIT_FIXTURE,
+      snapshotData: {
+        ...snap,
+        handovers: (snap.handovers as object[]).map((h) => ({ ...h, varianceAmount: 0 })),
+      },
+    };
+    const pdf = await renderBoth(balanced);
+    const handovers = pdf.tables.find(
+      (t) => t.headers[0] === 'ATTENDANT' && t.headers[1] === 'DISPENSER',
+    );
+    expect(handovers?.totals[0].at(-1)).toBe('Balanced');
+    const total = screen.getByRole('table', { name: 'Attendant handovers' }).querySelector('tfoot');
+    expect(total?.textContent).toContain('Balanced');
+  });
+
+  it('a legacy snapshot: one cash variance line and its stored purchases', async () => {
+    const pdf = await renderBoth(SHIFT_LEGACY_FIXTURE);
     expect(pdf.lines).toContain('Cash variance');
     expect(pdf.lines).not.toContain('Office count variance');
     const purchases = pdf.tables[pdf.tables.length - 1];
@@ -263,13 +293,71 @@ describe('Shift Summary screen and PDF parity (#595): the words they once disagr
     expect(purchases.totals[0]).toEqual(['Total of 2 stored purchases', '', '', '₹4,51,200.50']);
   });
 
-  it('an empty nozzle table prints the screen’s empty text', () => {
+  it('an empty nozzle table prints the screen’s empty text', async () => {
     const empty: ShiftSummaryRecord = {
       ...SHIFT_NOT_STORED_FIXTURE,
       snapshotData: { ...SHIFT_NOT_STORED_FIXTURE.snapshotData, nozzleReadings: [] },
     };
-    const pdf = renderBoth(empty);
+    const pdf = await renderBoth(empty);
     expect(screen.getByText(NOZZLES_EMPTY)).toBeTruthy();
     expect(pdf.lines).toContain(NOZZLES_EMPTY);
+  });
+});
+
+/**
+ * The business-day line is relative to now and to the station's Day Start
+ * (06:00 here). At 05:30 IST on 9 Oct the station is still on its 8 Oct
+ * business day: the screen calls an 8 Oct shift today's. Paper prints the
+ * absolute dates only, so its words do not depend on when it is printed.
+ */
+describe('Shift Summary business day and Day Start (#595)', () => {
+  const BEFORE_DAY_START = new Date('2026-10-09T00:00:00.000Z'); // 05:30 IST
+
+  it("before Day Start, the screen still calls the previous business date today's", () => {
+    vi.setSystemTime(BEFORE_DAY_START);
+    renderScreen(SHIFT_FULL_FIXTURE); // business date 2026-10-08
+    expect(screen.getByText("Today's business day.")).toBeTruthy();
+    expect(screen.queryByText(/A past business day/)).toBeNull();
+  });
+
+  it('the PDF from generateShiftSummaryPdf prints the same absolute dates at any hour', async () => {
+    vi.setSystemTime(BEFORE_DAY_START);
+    const early = await renderPdf(SHIFT_FULL_FIXTURE);
+    vi.setSystemTime(NOW);
+    const later = await renderPdf(SHIFT_FULL_FIXTURE);
+    const body = (pdf: PdfText) => pdf.lines.filter((l) => !l.startsWith('Generated '));
+    expect(body(early)).toEqual(body(later));
+    expect(linesAfter(early, 'BUSINESS DAY', 1)).toEqual(['08 Oct 2026']);
+    // Times in the station's timezone, from the station the generator was given.
+    expect(linesAfter(early, 'OPENED', 1)).toEqual(['08 Oct 2026, 06:00 am']);
+    expect(early.lines.filter((l) => BUSINESS_DAY_LINE.test(l))).toEqual([]);
+    expect(printed[0].filename).toBe('Shift_Summary_20261008-1');
+  });
+});
+
+/**
+ * The fixtures are snapshots the server could have written (#287): the office
+ * expects Σ declared − unassigned drops at close, the cash lines add up to it,
+ * and the variances follow.
+ */
+describe('Shift Summary fixtures are consistent', () => {
+  const twoLevel = Object.entries(SHIFT_SUMMARY_FIXTURES).filter(
+    ([, r]) => Number(r.snapshotData?.cashVarianceModel ?? 1) >= 2 && r.snapshotData?.drawers,
+  );
+  it.each(twoLevel)('%s', (_name, record) => {
+    const s = record.snapshotData as Record<string, any>;
+    const cents = (n: number) => Math.round(n * 100);
+    const sum = (xs: number[]) => xs.reduce((a, x) => a + cents(x), 0);
+    const declared = sum(s.drawers.map((d: any) => d.cashHandedOver));
+    expect(declared - cents(s.unassignedCloseCashDrops ?? 0)).toBe(cents(s.expectedCash));
+    expect(
+      cents(s.openingCash) +
+        cents(s.cashSalesSum) -
+        cents(s.handoverCashDrops) -
+        cents(s.closeCashDrops),
+    ).toBe(cents(s.expectedCash));
+    expect(cents(s.closingCash) - cents(s.expectedCash)).toBe(cents(s.cashVariance));
+    expect(sum(s.drawers.map((d: any) => d.variance))).toBe(cents(s.attendantVariance));
+    expect(sum(s.handovers.map((h: any) => h.varianceAmount))).toBe(cents(s.attendantVariance));
   });
 });

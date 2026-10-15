@@ -435,3 +435,20 @@ describe('a stored total row (derive: false)', () => {
     ).toBe('12.50 kg');
   });
 });
+
+describe('a total cell in words (#595)', () => {
+  it('shows `cells` on screen and prints `texts` on paper', () => {
+    const totalRow = {
+      label: 'Total',
+      values: { amount: 0 },
+      texts: { amount: 'Balanced' },
+      cells: { amount: <span data-testid="chip">Balanced chip</span> },
+    };
+    render(
+      <StatementTable columns={columns} rows={rows} rowKey={(r) => r.id} totalRow={totalRow} />,
+    );
+    expect(screen.getByTestId('chip').textContent).toBe('Balanced chip');
+    const printed = totalTexts(columns, rows, totalRow)?.cells ?? [];
+    expect(printed[columns.findIndex((c) => c.id === 'amount')]).toBe('Balanced');
+  });
+});

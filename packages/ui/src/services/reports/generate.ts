@@ -8,7 +8,7 @@ import {
   resolveSections,
 } from './reportConfig.js';
 import { letterheadFromStation, showLogoFromStation } from './letterhead.js';
-import { DSR_LABEL, formatShiftLabel, resolveBusinessDate, shiftDisplayLabel } from '@pump/shared';
+import { DSR_LABEL, formatShiftLabel, shiftDisplayLabel } from '@pump/shared';
 import type { AttendantReportEntry } from '@pump/shared';
 import type { AttendantReportSection } from './reportConfig.js';
 import { ledgerFileName } from './ledgerFileName.js';
@@ -89,19 +89,13 @@ export async function generateShiftSummaryPdf(
   };
   const businessDate = shift?.businessDate ?? snapshot?.businessDate ?? null;
   const shiftSequence = shift?.shiftSequence ?? snapshot?.shiftSequence ?? null;
-  // The station's clock, as the screen reads it: times in its zone, and the
-  // business-day line against its current business date.
+  // Times print in the station's timezone, as on screen.
   const timeZone: string | undefined = station?.settings?.timezone;
-  const currentBusinessDate = resolveBusinessDate({
-    now: new Date(),
-    timeZone,
-    dayStartsAt: station?.settings?.business_day_starts_at,
-  });
   await outputReactPdf(
     React.createElement(doc.ShiftSummaryDoc, {
       snapshot: { ...snapshot, businessDate, shiftSequence },
       config,
-      clock: { timeZone, currentBusinessDate },
+      clock: { timeZone },
     }),
     // File names stay ASCII: the display fallback carries an ellipsis.
     `Shift_Summary_${formatShiftLabel(businessDate, shiftSequence) ?? String(shiftId).slice(0, 8)}`,

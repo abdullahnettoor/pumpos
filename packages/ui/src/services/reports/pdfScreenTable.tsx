@@ -49,6 +49,7 @@ export function PdfScreenTable<T>({
   note,
   empty,
   tone,
+  totalTone,
   flex,
 }: {
   columns: TableColumn<T>[];
@@ -58,6 +59,8 @@ export function PdfScreenTable<T>({
   empty: string;
   /** The ink of a cell that marks a problem (a shortage red, a surplus amber). */
   tone?: (col: TableColumn<T>, row: T) => string | undefined;
+  /** The same for a total cell (a variance total that is short). */
+  totalTone?: (col: TableColumn<T>) => string | undefined;
   /** A column's share of the page width by column id, where an equal share wraps. */
   flex?: Partial<Record<string, number>>;
 }) {
@@ -72,9 +75,13 @@ export function PdfScreenTable<T>({
   }
   const t = pdfTable(columns, rows, totalRow, tone);
   const cols = t.columns.map((c, i) => ({ ...c, flex: flex?.[columns[i].id] ?? c.flex }));
+  const total = t.total?.map((cell, i) => {
+    const ink = totalTone?.(columns[i]);
+    return ink ? { ...cell, color: ink } : cell;
+  });
   return (
     <>
-      <TableView columns={cols} rows={t.rows} total={t.total} spanLabel keepHeader />
+      <TableView columns={cols} rows={t.rows} total={total} spanLabel keepHeader />
       {note && <PdfNote>{note}</PdfNote>}
     </>
   );

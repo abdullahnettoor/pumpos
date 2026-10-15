@@ -370,7 +370,7 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
             shiftSequence: record.shiftSequence,
           }}
           config={{ ...DEFAULT_SHIFT_SUMMARY_CONFIG, stationName: 'Apex Fuels' }}
-          clock={{ timeZone: 'Asia/Kolkata', currentBusinessDate: '2026-10-08' }}
+          clock={{ timeZone: 'Asia/Kolkata' }}
         />
       );
       const printed = new Date().toLocaleString('en-IN');

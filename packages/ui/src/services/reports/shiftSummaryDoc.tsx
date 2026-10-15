@@ -41,7 +41,6 @@ import type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
 import { DEFAULT_SHIFT_SUMMARY_CONFIG } from './reportConfig.js';
 import type { Letterhead } from './letterhead.js';
 import {
-  businessDayContext,
   creditTotalNotes,
   fuelTotalNotes,
   readShiftSummary,
@@ -75,7 +74,7 @@ import {
   DRAWER_CURRENCY_NOTE,
   type DrawerRow,
 } from '../../components/Shifts/DrawerReconciliationTable.js';
-import { PdfNote, PdfScreenTable, PdfTitle } from './pdfScreenTable.js';
+import { PdfScreenTable, PdfTitle } from './pdfScreenTable.js';
 
 export const C = {
   green: '#1F6A53',
@@ -442,11 +441,13 @@ export const LetterheadBand = ({
  * meter readings, Short / Surplus / Balanced. It never recomputes a figure.
  */
 
-/** The PDF's inputs besides the snapshot: the station's clock, as the screen reads it. */
+/**
+ * The PDF's inputs besides the snapshot: the station's timezone, for its
+ * times. Paper prints absolute dates only: the screen's business-day line is
+ * advice relative to now, so the PDF leaves it out.
+ */
 export interface ShiftSummaryClock {
   timeZone?: string;
-  /** The station's business date when the PDF is made, for the business-day line. */
-  currentBusinessDate?: string;
 }
 
 /** A variance tints only when it is a problem: a shortage red, a surplus amber. */
@@ -489,9 +490,6 @@ const builders: Record<ShiftSummarySection, (ctx: Ctx) => React.ReactNode> = {
     );
   },
   meta: ({ summary, clock }) => {
-    const context = clock.currentBusinessDate
-      ? businessDayContext(summary.businessDate, clock.currentBusinessDate)
-      : null;
     return (
       <View key="meta">
         <View style={s.metaBox}>
@@ -502,7 +500,6 @@ const builders: Record<ShiftSummarySection, (ctx: Ctx) => React.ReactNode> = {
             </View>
           ))}
         </View>
-        {context && <PdfNote>{context}</PdfNote>}
       </View>
     );
   },
@@ -557,6 +554,9 @@ const builders: Record<ShiftSummarySection, (ctx: Ctx) => React.ReactNode> = {
           totalRow={handoverTotalRow(summary)}
           empty=""
           tone={varianceInk((r) => r.variance)}
+          totalTone={(col) =>
+            col.id === 'variance' ? problemInk(summary.handoverVariance) : undefined
+          }
         />
       </View>
     ) : null,

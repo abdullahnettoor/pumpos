@@ -88,14 +88,20 @@ export type TableColumn<T> =
  *
  * `units` names the unit of a qty figure in `values`, when the total's unit is
  * not the rows' own (the DSR's shift total takes the day's fuel unit).
+ *
+ * `cells` renders a total cell yourself (a variance chip), as a column's `cell`
+ * does for a row. The text a PDF prints still comes from `values`.
  */
 export type TotalRow =
   | boolean
   | {
       label?: string;
+      /** A total cell as plain text, for a PDF: what a `cells` chip shows (`Balanced`). */
+      texts?: Record<string, string>;
       values?: Record<string, Amount>;
       units?: Record<string, string>;
       derive?: boolean;
+      cells?: Record<string, ReactNode>;
     };
 
 /** Which adapter is rendering; a statement prints, so its status is ink, not a fill. */
@@ -284,8 +290,15 @@ export function totalCells<T>(
 ): ReactNode[] | null {
   const total = totalTexts(columns, rows, totalRow);
   if (!total) return null;
+  const own = totalRow === true || !totalRow ? undefined : totalRow.cells;
   return total.cells.map((text, i) =>
-    i === 0 && total.labelled ? <span className="font-sans">{text}</span> : text,
+    own && columns[i].id in own ? (
+      own[columns[i].id]
+    ) : i === 0 && total.labelled ? (
+      <span className="font-sans">{text}</span>
+    ) : (
+      text
+    ),
   );
 }
 
@@ -299,8 +312,15 @@ export function totalTexts<T>(
   totalRow: TotalRow | undefined,
 ): { cells: string[]; labelled: boolean } | null {
   if (!totalRow) return null;
-  const { label = 'Total', values, units, derive = true } = totalRow === true ? {} : totalRow;
+  const {
+    label = 'Total',
+    values,
+    units,
+    derive = true,
+    texts,
+  } = totalRow === true ? {} : totalRow;
   const figures = columns.map((col) => {
+    if (texts && col.id in texts) return texts[col.id];
     const total = totalOf(col);
     if (!total) return '';
     if (!derive) {

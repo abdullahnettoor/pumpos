@@ -248,10 +248,19 @@ export function creditTotalRow(s: ShiftSummary): TotalRow {
   };
 }
 
-/** Handover and terminal money is not stored as totals: the table adds the rows in paise. */
+/**
+ * Handover money is not stored as totals: the table adds the rows in paise.
+ * The variance total reads as the rows do, a `VarianceChip` on screen and its
+ * words on paper (Balanced, or the signed figure).
+ */
 export const handoverTotalRow = (s: ShiftSummary): TotalRow => ({
   label: totalLabel(s.handovers.length, 'handover', 'handovers'),
+  values: { variance: s.handoverVariance },
+  texts: { variance: formatVariance(s.handoverVariance, 'cash').text },
+  cells: { variance: <VarianceChip amount={s.handoverVariance} size="md" /> },
 });
+
+/** Terminal money is not stored as totals: the table adds the rows in paise. */
 export const terminalTotalRow = (s: ShiftSummary): TotalRow => ({
   label: totalLabel(s.terminals.length, 'terminal', 'terminals'),
 });
