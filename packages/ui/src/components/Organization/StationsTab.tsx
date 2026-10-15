@@ -36,6 +36,8 @@ export interface StationsTabProps {
   onStationChange: (station: Station) => void;
   /** The getting-started prompt's onboarding link (the page actions carry the same). */
   onOnboard: () => void;
+  /** The same gate as the page action (`onboardGate`). */
+  onboardGate: { disabled: boolean; title?: string };
   onConfigure: () => void;
   onInviteTeam: () => void;
 }
@@ -114,6 +116,7 @@ export const StationsTab: React.FC<StationsTabProps> = ({
   canSwitchStation,
   onStationChange,
   onOnboard,
+  onboardGate,
   onConfigure,
   onInviteTeam,
 }) => {
@@ -178,8 +181,8 @@ export const StationsTab: React.FC<StationsTabProps> = ({
               variant="secondary"
               size="sm"
               leftIcon={<ConceptIcon concept="stations" />}
-              disabled={capacity?.reached === true}
-              title={capacity?.reached ? capacity.hint : undefined}
+              disabled={onboardGate.disabled}
+              title={onboardGate.title}
               onClick={onOnboard}
             >
               Onboard station

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  activityTimeZone,
+  onboardGate,
   buildStationRows,
   filterMembers,
   filterStations,
@@ -68,6 +70,24 @@ describe('stationCapacity', () => {
         limits: { station_count: { used: 1, value: 1, reached: true } },
       })?.hint,
     ).toBe('This plan includes one Station. Contact PumpOS to add another.');
+  });
+});
+
+describe('onboardGate', () => {
+  it('waits for the Access Document, then refuses only at the Limit', () => {
+    expect(onboardGate(undefined).disabled).toBe(true);
+    expect(
+      onboardGate({ limits: { station_count: { used: 1, value: 3, reached: false } } }),
+    ).toEqual({
+      disabled: false,
+    });
+    // A Role without the plan still gets the Limit's answer.
+    expect(
+      onboardGate({ limits: { station_count: { used: 1, value: 1, reached: true } } }),
+    ).toEqual({
+      disabled: true,
+      title: 'This plan includes one Station. Contact PumpOS to add another.',
+    });
   });
 });
 
@@ -166,6 +186,18 @@ describe('groupActivityByDay', () => {
     // 20:00 UTC on the 14th is 01:30 on the 15th in Kolkata.
     const days = groupActivityByDay(['2026-10-14T20:00:00Z'], (i) => i, { timeZone: tz, now });
     expect(days[0]).toMatchObject({ key: '2026-10-15', label: 'Today' });
+  });
+
+  it('reads in one explicit timezone: the station, else Asia/Kolkata', () => {
+    expect(activityTimeZone({ settings: { timezone: 'Asia/Dubai' } })).toBe('Asia/Dubai');
+    expect(activityTimeZone(null)).toBe('Asia/Kolkata');
+    expect(activityTimeZone({ settings: {} })).toBe('Asia/Kolkata');
+    // No station: 20:00 UTC on the 14th still groups on the IST day, not the runner's.
+    const days = groupActivityByDay(['2026-10-14T20:00:00Z'], (i) => i, {
+      timeZone: activityTimeZone(null),
+      now,
+    });
+    expect(days[0].key).toBe('2026-10-15');
   });
 
   it('keeps an unreadable time apart', () => {

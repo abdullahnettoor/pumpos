@@ -36,8 +36,11 @@ const MAX_STATION_CHIPS = 4;
 
 export interface ActivityFeedProps {
   stations: Station[];
-  /** The active Station's timezone: days and times read in it, not the browser's. */
-  timeZone?: string;
+  /**
+   * The one timezone days and times read in (`activityTimeZone`): the active
+   * Station's, else Asia/Kolkata. Never the browser's.
+   */
+  timeZone: string;
 }
 
 const RelatedEvent: React.FC<{ event: ActivityEventItem; primary: ActivityEventItem }> = ({
@@ -63,7 +66,7 @@ const ActivityRow: React.FC<{
   group: ActivityGroupSummary;
   expanded: boolean;
   onToggle: () => void;
-  timeZone?: string;
+  timeZone: string;
 }> = ({ group, expanded, onToggle, timeZone }) => {
   const { primary } = group;
   const detail = useActivityGroup(expanded ? group.groupId : null);

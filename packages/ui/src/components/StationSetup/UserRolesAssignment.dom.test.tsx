@@ -11,6 +11,18 @@ import { queryKeys } from '../../query/hooks.js';
 import { CloudUserAssignmentService } from '../../services/cloud.js';
 import { UserRolesAssignment, defaultNewMemberStationIds } from './UserRolesAssignment.js';
 import { MemberDrawer } from './TeamMemberDrawers.js';
+import type { User } from '@pump/shared';
+
+/** The member the API returns after a save, typed as the service returns it. */
+const savedUser = (id: string): User => ({
+  id,
+  organizationId: 'org-1',
+  fullName: 'Saved member',
+  email: '',
+  status: 'ACTIVE',
+  createdAt: '2026-10-15T00:00:00Z',
+  updatedAt: '2026-10-15T00:00:00Z',
+});
 
 const ST_A = { id: 'st-a', name: 'Kochi', code: 'KOC' };
 const ST_B = { id: 'st-b', name: 'Thrissur', code: 'TCR' };
@@ -91,7 +103,7 @@ describe('New Team Member form', () => {
   it('sends the one stored spelling for a valid mobile (#300)', async () => {
     const create = vi
       .spyOn(CloudUserAssignmentService.prototype, 'createUser')
-      .mockResolvedValue({ id: 'u-new' } as any);
+      .mockResolvedValue(savedUser('u-new'));
     renderTeam([ST_A], null);
     fireEvent.change(screen.getByPlaceholderText('e.g. John Doe'), {
       target: { value: 'Ravi Kumar' },
@@ -150,7 +162,7 @@ describe('Team submit keys (#538)', () => {
       .mockImplementation(async (_body, opts) => {
         keys.push(opts?.idempotencyKey);
         if (keys.length === 1) throw network;
-        return { id: `u-${keys.length}` } as any;
+        return savedUser(`u-${keys.length}`);
       });
 
     await addMember('Ravi Kumar', '98765 43210');

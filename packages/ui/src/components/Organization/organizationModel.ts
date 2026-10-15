@@ -1,4 +1,5 @@
 import {
+  businessDateSettings,
   resolveEntryDate,
   shiftBusinessDate,
   stationLimitMessage,
@@ -92,6 +93,22 @@ export function stationCapacity(
   };
 }
 
+/**
+ * Whether "Onboard station" may be offered. Absent access data means not yet
+ * (pump-access-gating): until the Access Document has loaded the button is
+ * disabled, then it is refused only at the Limit. The API enforces the Limit
+ * whatever is rendered.
+ */
+export function onboardGate(access: Parameters<typeof stationCapacity>[0]): {
+  disabled: boolean;
+  title?: string;
+} {
+  if (!access) return { disabled: true, title: "Checking your plan's station limit…" };
+  const limit = access.limits?.station_count;
+  if (limit?.reached) return { disabled: true, title: stationLimitMessage(limit.value) };
+  return { disabled: false };
+}
+
 // --- Team -------------------------------------------------------------------
 
 export interface MemberLike {
@@ -161,6 +178,14 @@ export interface ActivityDay<T> {
 }
 
 /**
+ * The one timezone the feed reads in: the active Station's, else the shared
+ * default (Asia/Kolkata, as `businessDateSettings`). Day groups and row times
+ * both take this value, so they never disagree, and neither reads the browser.
+ */
+export const activityTimeZone = (station: { settings?: unknown } | null | undefined): string =>
+  businessDateSettings(station?.settings).timeZone;
+
+/**
  * The feed in day groups, newest first as it arrives, each headed by a readable
  * day. Days are the active Station's calendar (`resolveEntryDate`: plain
  * midnight in its timezone, no Day Start), never the browser's.
@@ -168,7 +193,7 @@ export interface ActivityDay<T> {
 export function groupActivityByDay<T>(
   items: readonly T[],
   recordedAt: (item: T) => string,
-  opts: { timeZone?: string | null; now?: Date } = {},
+  opts: { timeZone: string; now?: Date },
 ): ActivityDay<T>[] {
   const { timeZone } = opts;
   const today = resolveEntryDate({ now: opts.now, timeZone });

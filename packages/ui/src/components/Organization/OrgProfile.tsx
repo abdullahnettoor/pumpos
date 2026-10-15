@@ -116,7 +116,7 @@ export const OrgProfile: React.FC = () => {
             </Field>
           </div>
           <div>
-            <Button type="submit" variant="primary" size="md" loading={isSubmitting}>
+            <Button type="submit" variant="secondary" size="md" loading={isSubmitting}>
               Save changes
             </Button>
           </div>

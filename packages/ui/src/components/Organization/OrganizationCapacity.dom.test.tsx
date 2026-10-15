@@ -101,10 +101,11 @@ describe('Station usage on the Organization screen', () => {
     expect(screen.queryByText('Stations on plan')).toBeNull();
   });
 
-  it('shows nothing on a cold start and keeps onboarding usable', () => {
+  it('shows no usage on a cold start and holds onboarding until access has loaded', () => {
     renderOverview(undefined);
 
     expect(screen.queryByText('Stations on plan')).toBeNull();
-    expect(onboardButtons().some((button) => button.disabled)).toBe(false);
+    // Absent access data means not yet (pump-access-gating).
+    expect(onboardButtons().every((button) => button.disabled)).toBe(true);
   });
 });

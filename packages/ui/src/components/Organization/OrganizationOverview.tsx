@@ -7,7 +7,7 @@ import { PageFrame } from '../page-frame/index.js';
 import { UserRolesAssignment } from '../StationSetup/UserRolesAssignment.js';
 import { MemberDrawer } from '../StationSetup/TeamMemberDrawers.js';
 import { useAccess } from '../../query/hooks.js';
-import { stationCapacity } from './organizationModel.js';
+import { activityTimeZone, onboardGate } from './organizationModel.js';
 import { OrgProfile } from './OrgProfile.js';
 import { ActivityFeed } from './ActivityFeed.js';
 import { StationsTab } from './StationsTab.js';
@@ -62,8 +62,7 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
   // Onboarding is refused at the station Limit (Access Document); the API
   // enforces it regardless of what is rendered here.
   const { data: access } = useAccess();
-  const capacity = stationCapacity(access);
-  const capacityMessage = capacity?.reached ? stationLimitMessage(capacity.value) : undefined;
+  const gate = onboardGate(access);
   const onboard = () => onNavigate('/onboarding');
 
   // A new member's drawer mounts fresh per open (keyed): its form and its
@@ -82,8 +81,8 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
         variant="secondary"
         size="sm"
         leftIcon={<ConceptIcon concept="stations" />}
-        disabled={capacity?.reached === true}
-        title={capacityMessage}
+        disabled={gate.disabled}
+        title={gate.title}
         onClick={onboard}
       >
         Onboard station
@@ -137,13 +136,14 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
               canSwitchStation={canSwitchStation}
               onStationChange={onStationChange}
               onOnboard={onboard}
+              onboardGate={gate}
               onConfigure={() => onNavigate(ROUTES.station)}
               onInviteTeam={() => setTab('team')}
             />
           )}
           {tab === 'team' && <UserRolesAssignment currentStationId={selectedStation?.id ?? null} />}
           {tab === 'activity' && (
-            <ActivityFeed stations={stations} timeZone={selectedStation?.settings?.timezone} />
+            <ActivityFeed stations={stations} timeZone={activityTimeZone(selectedStation)} />
           )}
           {tab === 'profile' && <OrgProfile />}
           {tab === 'desktop' && showDesktopTab && <DesktopAppPanel />}
