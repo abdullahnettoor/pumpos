@@ -62,8 +62,47 @@ If there is tension between beauty and speed, preserve speed.
 - Primary font: `Plus Jakarta Sans`
 - Numeric/data font: `Geist Mono`
 - Default body size: `14px`
-- Dense tables may use `12px` to `13px`
-- Compact button heights: `30px`, `36px`, `40px`
+- Dense tables use `13px` (`InteractiveTable`, `GroupedTable`) or `12px` (`StatementTable`)
+- **Nothing below `12px`.** Table headers (10px uppercase) are the only exception;
+  field labels, hints, errors, group headings and captions are 12px
+- Compact button heights: `28px`, `32px`, `36px`, `40px` (pump-ds `Button` sizes)
+
+## Modules (UI identity, #515 / #539)
+
+Build pages from these; the full catalog with props is in
+`packages/ui/src/pump-ds/README.md` ("Modules"). Don't hand-roll what one decides.
+
+- **Page Frame** (`PageFrame`): back link top-left (`back` slot, never top-right),
+  title, one primary button top right, tabs, toolbar.
+- **Section header** (`SectionHeader`): the in-page heading; its `controls` put a
+  `ControlBar` directly above the table it filters (layout B).
+- **Controls**: `DateRangeMenu`, `FilterChips` (with counts), `SegmentedControl`
+  (2–4 views), `Select` for 5+ options, `ExportMenu` and info tip at the right end.
+  Filters apply instantly.
+- **KPI tiles** (`KpiTile` with `scope`, `TileSection`): at most 4, plain figures,
+  colour only through `alert`, never repeating a table total (Reports excepted).
+- **Data Section** (`DataSection`): loading, refused, "Couldn't load … · Retry",
+  empty, content. Never an empty state for a failed query.
+- **Status vocabulary** (`StatusChip`, `VarianceChip`): every status word and tone
+  from one map.
+- **Table** (`InteractiveTable`, `GroupedTable`, `StatementTable`): one column
+  definition; money totals in paise; stored totals with `derive: false`; custom
+  total cells with `cells` + `texts`. A money table has a total row labelled with
+  what it leaves out; a list shows "Total of N shown" only when filtered.
+- **Statement** (`StatementView`, `buildLedgerStatement`): every ledger, screen
+  and PDF from the same rows.
+- **Tank gauge** (`TankGauge`) and **density display** (`DensityReading`): the
+  station's thresholds and the shared density model; never a local threshold.
+- **Office Record entry** (`OfficeRecordDrawer`): the one drawer for expense,
+  income, collection, purchase and supplier payment.
+- **Keyed save** (`useKeyedSave`, `sendKeyed`, `officeSubmitKeys`): every mutation
+  sends an Idempotency-Key; `onSuccess` stays synchronous and invalidation runs in
+  the background with central query keys.
+
+Page rules (#515): ledgers and balance lists use layout B; reports use layout A
+(one bar under the tabs drives everything below). Red and amber only mean a
+problem; ordinary money is plain. No raw `YYYY-MM-DD` dates on screen. A detail
+line never repeats the line above it.
 
 ## Money, Quantity And Naming
 
@@ -142,7 +181,13 @@ Before delivering, verify:
 ## Implementation Guidance
 
 - Reuse shared tokens and component variants instead of creating one-off styles
-- Prefer semantic CSS variables or theme tokens over raw hex values in app code
+- No raw hex/rgba in app code: the style check (`npm run test:classes -w @pump/ui`)
+  fails on it. Shadows and scrims are tokens too (`shadow-(--shadow-popover)`,
+  `bg-(--overlay-scrim)`)
+- No legacy CSS classes: `.btn-*`, `.card*`, `.badge-*`, `.form-*` are gone; use
+  pump-ds `Button`, token classes and `Field`
+- Check dark with the dev switch `?theme=dark` (dark stays hidden behind
+  `APPEARANCE_ENABLED = false`)
 - Keep operator screens tighter than manager/owner screens
 - Reports should look export-friendly and print-friendly
 - Audit screens should emphasize chronology and actor clarity
