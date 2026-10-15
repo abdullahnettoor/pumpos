@@ -11,9 +11,10 @@ import { AccountsPanel } from './AccountsPanel.js';
 
 /**
  * The Accounts drawers keep their behaviour through the #530 move (#572
- * review): each sends the same request (path, method, body, no
- * Idempotency-Key, as before), checks the same things before sending, and
- * refreshes the same caches after.
+ * review): each sends the same request (path, method, body), checks the same
+ * things before sending, and refreshes the same caches after. Each save also
+ * carries one Idempotency-Key per logical submit (#574): kept while the
+ * outcome is unknown, renewed after a decided answer.
  */
 
 vi.mock('@pump/shared', async (importOriginal) => {
@@ -47,9 +48,13 @@ interface Sent {
   headers: Record<string, string>;
 }
 let sent: Sent[] = [];
+/** How the API answers the next writes, in order; a write with none left is saved. */
+type Reply = 'drop' | { status: number; code: string; message: string; details?: unknown };
+let replies: Reply[] = [];
 
 beforeEach(() => {
   sent = [];
+  replies = [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -62,6 +67,15 @@ beforeEach(() => {
           body: JSON.parse(String(init?.body ?? 'null')),
           headers: (init?.headers ?? {}) as Record<string, string>,
         });
+        const reply = replies.shift();
+        if (reply === 'drop') throw new TypeError('Failed to fetch');
+        if (reply) {
+          const { status, ...error } = reply;
+          return new Response(JSON.stringify({ success: false, error }), {
+            status,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
       }
       const data = url.includes('/ledger')
         ? { account: ACCOUNTS[0], periodOpeningBalance: '0', entries: [] }
@@ -94,6 +108,8 @@ const type = (label: string, value: string) =>
   fireEvent.change(field(label), { target: { value } });
 const submit = (name: string) => fireEvent.click(within(drawer()).getByRole('button', { name }));
 const alertText = () => within(drawer()).getByRole('alert').textContent;
+const keyOf = (i: number) => sent[i].headers['Idempotency-Key'];
+const SAFE_RETRY = "Couldn't save. Check the connection and save again.Saving again sends the same";
 
 /** The cache keys a money write refreshes. */
 const MONEY_KEYS = [
@@ -142,7 +158,7 @@ describe('New account drawer', () => {
         metadata: { bankName: 'HDFC Bank', accountNoMasked: '****9876', ifsc: 'HDFC0000123' },
       },
     });
-    expect(Object.keys(sent[0].headers)).not.toContain('Idempotency-Key');
+    expect(keyOf(0)).toBeTruthy();
     await waitFor(() =>
       expect(invalidated(spy)).toEqual([
         queryKeys.financialAccounts('st-1'),
@@ -203,7 +219,7 @@ describe('Transfer drawer', () => {
         notes: null,
       },
     });
-    expect(Object.keys(sent[0].headers)).not.toContain('Idempotency-Key');
+    expect(keyOf(0)).toBeTruthy();
     await waitFor(() => expect(invalidated(spy)).toEqual(MONEY_KEYS));
   });
 });
@@ -245,6 +261,7 @@ describe('Settle to bank drawer', () => {
         notes: null,
       },
     });
+    expect(keyOf(0)).toBeTruthy();
     await waitFor(() => expect(invalidated(spy)).toEqual(MONEY_KEYS));
   });
 });
@@ -269,6 +286,7 @@ describe('Add entry drawer', () => {
         notes: 'Bank charge / fee',
       },
     });
+    expect(keyOf(0)).toBeTruthy();
     await waitFor(() => expect(invalidated(spy)).toEqual(MONEY_KEYS));
   });
 
@@ -302,5 +320,134 @@ describe('Add entry drawer', () => {
       url: '/finance/accounts/cash/opening',
       body: { openingBalance: -1200, openingDate: '2026-04-01' },
     });
+    expect(keyOf(0)).toBeTruthy();
+  });
+});
+
+describe('Idempotency-Key per logical submit (#574)', () => {
+  const openTransfer = async () => {
+    fireEvent.click(screen.getByRole('button', { name: /New transfer/ }));
+    type('Amount (₹)', '750');
+  };
+
+  it('a transfer retried after a dropped response reuses its key and says the retry is safe', async () => {
+    await renderPage();
+    replies = ['drop'];
+    await openTransfer();
+    submit('Record transfer');
+    await waitFor(() => expect(alertText()).toContain(SAFE_RETRY));
+    expect(alertText()).toContain('same transfer, so it cannot be recorded twice.');
+
+    submit('Record transfer');
+    await screen.findByText('Transfer recorded.');
+    expect(sent).toHaveLength(2);
+    expect(keyOf(1)).toBe(keyOf(0));
+
+    // Saved: the next transfer is a new logical submit with a new key.
+    await openTransfer();
+    submit('Record transfer');
+    await waitFor(() => expect(sent).toHaveLength(3));
+    expect(keyOf(2)).not.toBe(keyOf(0));
+  });
+
+  it('keeps the key after a 5xx and an in-progress answer', async () => {
+    await renderPage({ openAccountId: 'pos' });
+    replies = [
+      { status: 503, code: 'INTERNAL', message: 'Service unavailable' },
+      {
+        status: 409,
+        code: 'CONFLICT',
+        message: 'A request with this Idempotency-Key is already in progress',
+        details: { reason: 'IDEMPOTENCY_IN_PROGRESS' },
+      },
+    ];
+    fireEvent.click(await screen.findByRole('button', { name: /Settle to bank/ }));
+    submit('Record settlement');
+    await waitFor(() => expect(alertText()).toContain(SAFE_RETRY));
+    submit('Record settlement');
+    await waitFor(() => expect(sent).toHaveLength(2));
+    await waitFor(() => expect(alertText()).toContain(SAFE_RETRY));
+    submit('Record settlement');
+    await screen.findByText('Settlement recorded.');
+    expect(new Set(sent.map((r) => r.headers['Idempotency-Key'])).size).toBe(1);
+  });
+
+  it('renews the key after a decided refusal', async () => {
+    await renderPage({ openAccountId: 'cash' });
+    replies = [{ status: 400, code: 'VALIDATION_ERROR', message: 'Account is archived.' }];
+    fireEvent.click(await screen.findByRole('button', { name: /Add entry/ }));
+    type('Amount (₹)', '59');
+    submit('Add entry');
+    await waitFor(() => expect(alertText()).toBe('Account is archived.'));
+    submit('Add entry');
+    await screen.findByText('Entry recorded.');
+    expect(keyOf(1)).toBeTruthy();
+    expect(keyOf(1)).not.toBe(keyOf(0));
+  });
+
+  it('an edited retry the API refuses keeps the key and warns the first save may be recorded', async () => {
+    await renderPage();
+    replies = [
+      'drop',
+      {
+        status: 409,
+        code: 'IDEMPOTENCY_KEY_REUSED',
+        message: 'This Idempotency-Key was already used with different request content',
+      },
+    ];
+    await openTransfer();
+    submit('Record transfer');
+    await waitFor(() => expect(alertText()).toContain(SAFE_RETRY));
+    type('Amount (₹)', '800');
+    submit('Record transfer');
+    await waitFor(() => expect(alertText()).toContain("Couldn't save the edited transfer."));
+    expect(alertText()).toContain('Your earlier save may already be recorded.');
+    expect(keyOf(1)).toBe(keyOf(0));
+    type('Amount (₹)', '750');
+    submit('Record transfer');
+    await screen.findByText('Transfer recorded.');
+    expect(keyOf(2)).toBe(keyOf(0));
+  });
+
+  it('closing after a drop and entering the same account again reuses the key', async () => {
+    await renderPage();
+    replies = ['drop'];
+    fireEvent.click(screen.getByRole('button', { name: /New account/ }));
+    type('Name', 'Office petty');
+    submit('Create account');
+    await waitFor(() =>
+      expect(alertText()).toContain('same account, so it cannot be recorded twice.'),
+    );
+    fireEvent.click(within(drawer()).getByRole('button', { name: 'Cancel' }));
+
+    fireEvent.click(screen.getByRole('button', { name: /New account/ }));
+    type('Name', 'Office petty');
+    submit('Create account');
+    await screen.findByText('Account created.');
+    expect(keyOf(1)).toBe(keyOf(0));
+  });
+
+  it('an entry and an opening balance on the same drawer never share a key', async () => {
+    await renderPage({ openAccountId: 'cash' });
+    replies = ['drop'];
+    fireEvent.click(await screen.findByRole('button', { name: /Add entry/ }));
+    type('Amount (₹)', '59');
+    submit('Add entry');
+    await waitFor(() =>
+      expect(alertText()).toContain('same entry, so it cannot be recorded twice.'),
+    );
+    fireEvent.change(field('Type'), { target: { value: 'OPENING' } });
+    submit('Save opening balance');
+    await screen.findByText('Opening balance updated.');
+    expect(sent[1].url).toBe('/finance/accounts/cash/opening');
+    expect(keyOf(1)).toBeTruthy();
+    expect(keyOf(1)).not.toBe(keyOf(0));
+
+    // The dropped entry's key is still held: entering it again reuses it.
+    fireEvent.click(await screen.findByRole('button', { name: /Add entry/ }));
+    type('Amount (₹)', '59');
+    submit('Add entry');
+    await screen.findByText('Entry recorded.');
+    expect(keyOf(2)).toBe(keyOf(0));
   });
 });
