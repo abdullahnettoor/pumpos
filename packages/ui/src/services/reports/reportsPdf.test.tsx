@@ -12,9 +12,14 @@ import { LedgerDoc } from './ledgerDoc.js';
 import { AttendantReportDoc, dayPageTitle } from './attendantReportDoc.js';
 import { MARK_PATH, MARK_VIEWBOX } from '../../pump-ds/brand/Brand.js';
 import { DSSR_PARITY_FIXTURE } from '../../test/dssrFixture.js';
+import { SHIFT_FULL_FIXTURE } from '../../test/shiftSummaryFixture.js';
 import { readPdf } from '../../test/pdfTree.js';
 import { formatDateTime } from '../../utils/format.js';
-import { DEFAULT_DSSR_CONFIG, type DssrSection } from './reportConfig.js';
+import {
+  DEFAULT_DSSR_CONFIG,
+  DEFAULT_SHIFT_SUMMARY_CONFIG,
+  type DssrSection,
+} from './reportConfig.js';
 
 async function streamToBuffer(stream: any): Promise<Buffer> {
   if (Buffer.isBuffer(stream)) return stream;
@@ -27,6 +32,11 @@ async function streamToBuffer(stream: any): Promise<Buffer> {
 
 /**
  * Extracts and decompresses all PDF content streams from a compiled PDF binary buffer.
+ *
+ * `[\r\n]+endstream` also eats a compressed stream's last byte when that byte
+ * is a CR or LF (part of its checksum). The page stream holds the print time,
+ * so about one run in 150 lost it, and a strict inflate threw (#588). The
+ * inflate tolerates the cut-off checksum: the content before it is complete.
  */
 function extractDecompressedStreams(pdfBuffer: Buffer): string[] {
   const raw = pdfBuffer.toString('latin1');
@@ -34,7 +44,9 @@ function extractDecompressedStreams(pdfBuffer: Buffer): string[] {
   const streams: string[] = [];
   for (const m of matches) {
     try {
-      const decomp = zlib.inflateSync(Buffer.from(m[1], 'latin1')).toString('utf8');
+      const decomp = zlib
+        .inflateSync(Buffer.from(m[1], 'latin1'), { finishFlush: zlib.constants.Z_SYNC_FLUSH })
+        .toString('utf8');
       streams.push(decomp);
     } catch {
       // Stream is uncompressed or raw binary
@@ -234,6 +246,7 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     };
     const oldText = texts((ShiftSummaryDoc as any)({ snapshot: old, config })).join(' ');
     expect(oldText).toContain('SUPPLIER FUEL INTAKES');
+    expect(oldText).toContain('Total of 1 stored purchase');
     expect(oldText).toContain('IOCL Depot');
     const newText = texts((ShiftSummaryDoc as any)({ snapshot: base, config })).join(' ');
     expect(newText).not.toContain('SUPPLIER FUEL INTAKES');
@@ -332,6 +345,36 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
       const lines = readPdf(doc).lines.map((line) =>
         Object.entries(times).reduce((l, [time, mark]) => l.split(time).join(mark), line),
       );
+      expect(lines).toMatchSnapshot();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /*
+   * #595: the Shift Summary PDF prints the screen's model (`readShiftSummary`):
+   * 2-decimal volumes, 3-decimal meter readings, stored totals labelled with
+   * what they cover, Short / Surplus / Balanced, sentence case. The print time
+   * in the footer is replaced by a placeholder.
+   */
+  it('prints the Shift Summary as the screen reads it (#595)', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-08T10:00:00.000Z'));
+    try {
+      const record = SHIFT_FULL_FIXTURE;
+      const doc = (
+        <ShiftSummaryDoc
+          snapshot={{
+            ...record.snapshotData,
+            businessDate: record.businessDate,
+            shiftSequence: record.shiftSequence,
+          }}
+          config={{ ...DEFAULT_SHIFT_SUMMARY_CONFIG, stationName: 'Apex Fuels' }}
+          clock={{ timeZone: 'Asia/Kolkata', currentBusinessDate: '2026-10-08' }}
+        />
+      );
+      const printed = new Date().toLocaleString('en-IN');
+      const lines = readPdf(doc).lines.map((line) => line.split(printed).join('<printed at>'));
       expect(lines).toMatchSnapshot();
     } finally {
       vi.useRealTimers();

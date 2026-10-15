@@ -30,7 +30,7 @@ import {
   fuelTotalNotes,
   shiftTotalRow,
 } from '../../components/reports/dssr/dssrColumns.js';
-import { pdfTable } from './pdfTable.js';
+import { PdfNote, PdfScreenTable, PdfTitle } from './pdfScreenTable.js';
 import type { DssrSection, DssrReportConfig } from './reportConfig.js';
 import { DEFAULT_DSSR_CONFIG } from './reportConfig.js';
 
@@ -51,24 +51,13 @@ const toneOf = <T,>(col: TableColumn<T>, row: T): string | undefined => {
   return tone ? TONE[tone] : undefined;
 };
 
-/** A section title, uppercase as the screen's section header shows it. */
-const Title = ({ title, subtitle }: { title: string; subtitle?: string }) => (
-  <>
-    <Text style={s.h2}>{title.toUpperCase()}</Text>
-    {subtitle && <Text style={[s.label, { marginTop: -3, marginBottom: 5 }]}>{subtitle}</Text>}
-  </>
-);
-
 /**
- * One screen table, printed. With no rows it prints the screen's empty text in
- * its place, as the screen does; the total row shows only under rows.
+ * One screen table, printed (`PdfScreenTable`), with the DSR's variance tones
+ * and its total note.
  */
 function Table<T>({
-  columns,
-  rows,
-  totalRow,
   notes = [],
-  empty,
+  ...props
 }: {
   columns: TableColumn<T>[];
   rows: T[];
@@ -77,24 +66,10 @@ function Table<T>({
   notes?: string[];
   empty: string;
 }) {
-  if (rows.length === 0) {
-    return (
-      <View style={s.reconBox}>
-        <Text style={{ fontSize: 8.5, color: C.muted, padding: 8, textAlign: 'center' }}>
-          {empty}
-        </Text>
-      </View>
-    );
-  }
-  const t = pdfTable(columns, rows, totalRow, toneOf);
-  const note = totalNote(notes);
-  return (
-    <>
-      <TableView columns={t.columns} rows={t.rows} total={t.total} />
-      {note && <Text style={[s.label, { marginTop: 4 }]}>{note}</Text>}
-    </>
-  );
+  return <PdfScreenTable {...props} note={totalNote(notes)} tone={toneOf} />;
 }
+
+const Title = PdfTitle;
 
 const FigureRow = ({ label, value }: { label: string; value: string }) => (
   <View style={s.reconRow}>
@@ -141,7 +116,7 @@ const builders: Record<DssrSection, (day: DssrDay, cfg: DssrReportConfig) => Rea
           <MetaCell label="Testing volume" value={total('testing')} />
           <MetaCell label="Fuel sales" value={total('salesValue')} />
         </View>
-        {note && <Text style={[s.label, { marginTop: 4 }]}>{note}</Text>}
+        {note && <PdfNote>{note}</PdfNote>}
       </View>
     );
   },
@@ -156,7 +131,7 @@ const builders: Record<DssrSection, (day: DssrDay, cfg: DssrReportConfig) => Rea
           </View>
         ))}
       </View>
-      <Text style={[s.label, { marginTop: 4 }]}>{DSSR_COGS_NOTE}</Text>
+      <PdfNote>{DSSR_COGS_NOTE}</PdfNote>
     </View>
   ),
   financial: (day) => (
@@ -167,9 +142,9 @@ const builders: Record<DssrSection, (day: DssrDay, cfg: DssrReportConfig) => Rea
           <FigureRow key={line.label} label={line.label} value={line.value} />
         ))}
       </View>
-      <Text style={[s.label, { marginTop: 4 }]}>
+      <PdfNote>
         Sales only. Collections, expenses, income and supplier payments are in the Daily cash book.
-      </Text>
+      </PdfNote>
     </View>
   ),
   // Fuel, nozzles and shifts always print, empty or not, as on screen; the

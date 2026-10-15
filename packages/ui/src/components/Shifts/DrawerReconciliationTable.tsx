@@ -26,7 +26,22 @@ export interface DrawerRow {
 // Cells drop the ₹ symbol and use tabular sans figures so all seven columns
 // fit the close wizard without sideways scroll (#306); the table caption
 // states the currency.
-const money = (v: number | null) => (v == null ? '—' : formatMoney(v, { symbol: false }));
+/** A Drawer figure as the table prints it: no ₹ (the caption states it), `—` when not yet known. */
+export const drawerMoney = (v: number | null | undefined) =>
+  v == null ? '—' : formatMoney(v, { symbol: false });
+const money = drawerMoney;
+
+/** The table's column headers and currency caption, shared with the Shift Summary PDF (#595). */
+export const DRAWER_HEADERS = {
+  attendant: 'Attendant',
+  float: 'Float',
+  sales: 'Cash sales',
+  drops: 'Drops',
+  expected: 'Expected',
+  handed: 'Handed',
+  variance: 'Variance',
+} as const;
+export const DRAWER_CURRENCY_NOTE = 'Amounts in ₹';
 const num: React.CSSProperties = { fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' };
 const Num: React.FC<{ v: number | null }> = ({ v }) => <span style={num}>{money(v)}</span>;
 
@@ -72,7 +87,9 @@ const sumAll = (rows: DrawerRow[], pick: (r: DrawerRow) => number | null): numbe
   return Math.round(total * 100) / 100;
 };
 
-const drops = (r: DrawerRow) => Number(r.cashDrops ?? 0) + Number(r.closeCashDrops ?? 0);
+/** A Drawer's drops: at handover and at close (#287). */
+export const drawerDrops = (r: DrawerRow) =>
+  Number(r.cashDrops ?? 0) + Number(r.closeCashDrops ?? 0);
 
 const buildColumns = (
   rows: DrawerRow[],
@@ -85,7 +102,7 @@ const buildColumns = (
   return [
     {
       id: 'attendant',
-      header: 'Attendant',
+      header: DRAWER_HEADERS.attendant,
       accessorFn: (d) => d.attendantName ?? 'Attendant',
       cell: ({ row }) => (
         <div style={{ lineHeight: 1.3 }}>
@@ -110,42 +127,42 @@ const buildColumns = (
     },
     {
       id: 'float',
-      header: 'Float',
+      header: DRAWER_HEADERS.float,
       accessorKey: 'openingFloat',
       cell: (c) => <Num v={c.getValue()} />,
       footer: foot((r) => Number(r.openingFloat ?? 0)),
     },
     {
       id: 'sales',
-      header: 'Cash sales',
+      header: DRAWER_HEADERS.sales,
       accessorKey: 'cashSales',
       cell: (c) => <Num v={c.getValue()} />,
       footer: foot((r) => r.cashSales),
     },
     {
       id: 'drops',
-      header: 'Drops',
-      accessorFn: drops,
+      header: DRAWER_HEADERS.drops,
+      accessorFn: drawerDrops,
       cell: (c) => <Num v={c.getValue()} />,
-      footer: foot(drops),
+      footer: foot(drawerDrops),
     },
     {
       id: 'expected',
-      header: 'Expected',
+      header: DRAWER_HEADERS.expected,
       accessorKey: 'expectedCash',
       cell: (c) => <Num v={c.getValue()} />,
       footer: foot((r) => r.expectedCash),
     },
     {
       id: 'handed',
-      header: 'Handed',
+      header: DRAWER_HEADERS.handed,
       accessorKey: 'cashHandedOver',
       cell: (c) => <Num v={c.getValue()} />,
       footer: foot((r) => r.cashHandedOver),
     },
     {
       id: 'variance',
-      header: 'Variance',
+      header: DRAWER_HEADERS.variance,
       accessorKey: 'variance',
       cell: (c) => {
         const v = c.getValue() as number | null;
@@ -176,7 +193,9 @@ export const DrawerReconciliationTable: React.FC<{
   totalVariance?: number;
 }> = ({ drawers, showTotals = false, totalVariance }) => (
   <>
-    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Amounts in ₹</div>
+    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+      {DRAWER_CURRENCY_NOTE}
+    </div>
     <DataTable
       bare
       dense
