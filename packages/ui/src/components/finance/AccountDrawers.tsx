@@ -9,7 +9,7 @@ import { CloudFinanceService } from '../../services/cloud.js';
 import { formatMoney } from '../../utils/format.js';
 import { ACCOUNT_TYPE_LABEL, type LedgerAccountType } from '../../utils/ledgerLabels.js';
 import { isIdempotencyKeyConflict, keepsIdempotencyKey } from '../../utils/idempotency.js';
-import { officeSubmitKeys } from '../../office-records/submitKeys.js';
+import { useKeyedSave } from '../../office-records/useKeyedSave.js';
 import type { AccountRow } from './accountsModel.js';
 
 const financeSvc = new CloudFinanceService();
@@ -25,25 +25,6 @@ const financeSvc = new CloudFinanceService();
  * renewed after a decided answer. A retry after a dropped response therefore
  * cannot move money twice.
  */
-
-/**
- * A save under one Idempotency-Key. Scope it so a key is only ever reused on
- * the same route: the API refuses a key sent to another path.
- */
-function useKeyedSave(scope: string) {
-  const [session] = useState(() => officeSubmitKeys.session(`accounts:${scope}`));
-  return async <T,>(body: unknown, send: (idempotencyKey: string) => Promise<T>): Promise<T> => {
-    const key = session.next(JSON.stringify(body));
-    try {
-      const result = await send(key);
-      session.settle();
-      return result;
-    } catch (err) {
-      session.settle(err);
-      throw err;
-    }
-  };
-}
 
 /** A failed save: plain text for a decided refusal, or a title and what to do. */
 type FormErrorValue = string | { title: string; message: string };
@@ -146,7 +127,7 @@ export const NewAccountDrawer: React.FC<Omit<BaseDrawerProps, 'today'>> = ({
   const [ifsc, setIfsc] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<FormErrorValue | null>(null);
-  const save = useKeyedSave(`create:${stationId}`);
+  const save = useKeyedSave(`accounts:create:${stationId}`);
 
   const submit = async () => {
     if (!name.trim()) {
@@ -289,7 +270,7 @@ export const TransferDrawer: React.FC<BaseDrawerProps & { accounts: readonly Acc
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<FormErrorValue | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const save = useKeyedSave(`transfer:${stationId}`);
+  const save = useKeyedSave(`accounts:transfer:${stationId}`);
 
   const submit = async () => {
     if (!fromAccountId || !toAccountId) {
@@ -412,7 +393,7 @@ export const SettleDrawer: React.FC<
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<FormErrorValue | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const save = useKeyedSave(`settle:${stationId}`);
+  const save = useKeyedSave(`accounts:settle:${stationId}`);
 
   const submit = async () => {
     if (!bankId) {
@@ -545,8 +526,8 @@ export const AddEntryDrawer: React.FC<BaseDrawerProps & { account: AccountRow }>
   const [error, setError] = useState<FormErrorValue | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // An entry and an opening balance go to different routes, so each has its own key.
-  const saveEntry = useKeyedSave(`entry:${account.id}`);
-  const saveOpening = useKeyedSave(`opening:${account.id}`);
+  const saveEntry = useKeyedSave(`accounts:entry:${account.id}`);
+  const saveOpening = useKeyedSave(`accounts:opening:${account.id}`);
   const opening = kind === 'OPENING';
 
   // Switching to "Set opening balance" prefills the account's current opening figure/date.

@@ -1804,14 +1804,18 @@ export class CloudOrganizationService {
     return request<any>('/organization');
   }
 
-  async updateOrganization(payload: {
-    name: string;
-    metadata?: Record<string, unknown> | null;
-  }): Promise<any> {
-    return request<any>('/organization', {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
+  async updateOrganization(
+    payload: {
+      name: string;
+      metadata?: Record<string, unknown> | null;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/organization',
+      { method: 'PUT', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 

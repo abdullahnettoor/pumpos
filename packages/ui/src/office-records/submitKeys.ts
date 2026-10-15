@@ -106,3 +106,24 @@ export class OfficeSubmitKeys {
 
 /** The app-wide store of unsettled Office Record keys. */
 export const officeSubmitKeys = new OfficeSubmitKeys();
+
+/**
+ * Sends one body under the session's key and records the outcome: saved
+ * releases the key, an unknown outcome keeps it for the same body (#538, one
+ * helper for every keyed save).
+ */
+export async function sendKeyed<T>(
+  session: SubmitKeySession,
+  body: unknown,
+  send: (idempotencyKey: string) => Promise<T>,
+): Promise<T> {
+  const key = session.next(JSON.stringify(body ?? null));
+  try {
+    const result = await send(key);
+    session.settle();
+    return result;
+  } catch (err) {
+    session.settle(err);
+    throw err;
+  }
+}

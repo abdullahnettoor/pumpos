@@ -1,7 +1,7 @@
 import React from 'react';
 import { Download } from 'lucide-react';
 import { formatFileSize, type DownloadOption } from '@pump/shared';
-import { Button, Chip, Panel } from '../../pump-ds/index.js';
+import { Button, Chip, DataSection, SectionHeader } from '../../pump-ds/index.js';
 import { useDesktopDownloads } from '../../query/hooks.js';
 import {
   desktopOptionsForThisBrowser,
@@ -16,49 +16,38 @@ const OptionRow: React.FC<{ option: DownloadOption; onDownloaded?: () => void }>
   const d = option.download;
   return (
     <li
-      style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px' }}
+      className="flex items-center gap-3 px-4 py-3"
       data-testid={`desktop-option-${option.platform}`}
     >
-      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        <span
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            fontSize: '13px',
-            fontWeight: 600,
-            color: 'var(--text-strong)',
-          }}
-        >
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex items-center gap-2 text-[13px] font-semibold text-ink-strong">
           {option.label}
           {option.recommended && (
-            <Chip tone="success" size="xs">
+            <Chip tone="neutral" size="md">
               Recommended
             </Chip>
           )}
         </span>
-        {d.available ? (
-          <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
-            Version {d.version} · {formatFileSize(d.sizeBytes)}
-            {!d.isLatest && ` · newer releases don't include a ${option.label} installer yet`}
-          </span>
-        ) : (
-          <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
-            Not available yet. Use the web console for now.
-          </span>
-        )}
+        <span className="text-[12px] text-ink-muted">
+          {d.available
+            ? `Version ${d.version} · ${formatFileSize(d.sizeBytes)}${
+                d.isLatest ? '' : ` · newer releases don't include a ${option.label} installer yet`
+              }`
+            : 'Not available yet. Use the web console for now.'}
+        </span>
       </span>
       {d.available && (
         <Button
           variant={option.recommended ? 'primary' : 'secondary'}
           size="sm"
+          leftIcon={<Download size={14} aria-hidden="true" />}
           onClick={() => {
             markDesktopDownloaded();
             onDownloaded?.();
             startDownload(d.url);
           }}
         >
-          <Download size={14} aria-hidden="true" /> Download
+          Download
         </Button>
       )}
     </li>
@@ -66,27 +55,27 @@ const OptionRow: React.FC<{ option: DownloadOption; onDownloaded?: () => void }>
 };
 
 /**
- * Every desktop platform, recommended one first. Reads through the cached
- * downloads query; links go straight to the installer file.
+ * Every desktop platform, recommended one first, in its own Data Section
+ * (#538). Reads through the cached downloads query; links go straight to the
+ * installer file.
  */
 export const DesktopAppPanel: React.FC<{ onDownloaded?: () => void }> = ({ onDownloaded }) => {
-  const { data, isLoading, isError } = useDesktopDownloads();
+  const downloadsQ = useDesktopDownloads();
 
   return (
-    <Panel title="Desktop app" flush>
-      {isLoading ? (
-        <p style={{ padding: 16, fontSize: 13, color: 'var(--text-muted)' }}>Loading downloads…</p>
-      ) : isError || !data ? (
-        <p style={{ padding: 16, fontSize: 13, color: 'var(--text-muted)' }}>
-          Downloads are temporarily unavailable. Try again shortly.
-        </p>
-      ) : (
-        <ul className="divide-y divide-border-soft">
-          {desktopOptionsForThisBrowser(data).map((option) => (
-            <OptionRow key={option.platform} option={option} onDownloaded={onDownloaded} />
-          ))}
+    <section className="flex flex-col gap-2">
+      <SectionHeader
+        title="Desktop app"
+        subtitle="Runs on the office computer, even when the connection drops"
+      />
+      <DataSection title="desktop downloads" query={downloadsQ} placeholderHeight={120} flush>
+        <ul className="m-0 list-none divide-y divide-border-soft p-0">
+          {downloadsQ.data &&
+            desktopOptionsForThisBrowser(downloadsQ.data).map((option) => (
+              <OptionRow key={option.platform} option={option} onDownloaded={onDownloaded} />
+            ))}
         </ul>
-      )}
-    </Panel>
+      </DataSection>
+    </section>
   );
 };

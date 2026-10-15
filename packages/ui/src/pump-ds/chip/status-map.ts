@@ -23,6 +23,8 @@ import {
   Truck,
   Unlink,
   CircleSlash,
+  KeyRound,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react';
 import { statusPresentation, type PumpState } from '@pump/shared';
@@ -112,6 +114,10 @@ export const STATUS_MAP: Record<PumpStatus, StatusMeta> = {
   draft: vocab('day-draft', Pencil),
   active: vocab('active', Check),
   inactive: vocab('inactive', Minus),
+  'no-login': vocab('no-login', KeyRound),
+  'station-ready': vocab('station-ready', CheckCircle),
+  'station-setup': vocab('station-setup', Wrench),
+  'station-not-started': vocab('station-not-started', Circle),
   archived: { label: 'Archived', tone: 'neutral', icon: Archive },
 
   // Sync

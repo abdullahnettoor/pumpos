@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_HELD_KEYS_PER_SCOPE, OfficeSubmitKeys } from './submitKeys.js';
+import { MAX_HELD_KEYS_PER_SCOPE, OfficeSubmitKeys, sendKeyed } from './submitKeys.js';
 
 const network = Object.assign(new Error('offline'), { code: 'NETWORK' });
 const refused = Object.assign(new Error('nope'), { status: 403, code: 'FORBIDDEN' });
@@ -188,5 +188,31 @@ describe('OfficeSubmitKeys: every unanswered key in a scope is kept (#564)', () 
     const o = other.next('{"n":0}');
     other.settle(network);
     expect(keys.session('income:s1').next('{"n":0}')).toBe(o);
+  });
+});
+
+describe('sendKeyed: one helper for every keyed save (#538)', () => {
+  it('sends under the session key and releases it once saved', async () => {
+    const keys = new OfficeSubmitKeys(counter());
+    const sent: string[] = [];
+    await sendKeyed(keys.session('team:create'), { a: 1 }, async (k) => sent.push(k));
+    await sendKeyed(keys.session('team:create'), { a: 1 }, async (k) => sent.push(k));
+    expect(sent[0]).not.toBe(sent[1]);
+  });
+
+  it('a new form recovers the key for the same body, not for a different one', async () => {
+    const keys = new OfficeSubmitKeys(counter());
+    const sent: string[] = [];
+    const fail = async (k: string) => {
+      sent.push(k);
+      throw network;
+    };
+    await expect(sendKeyed(keys.session('team:create'), { name: 'A' }, fail)).rejects.toBe(network);
+    // Another member in a fresh drawer: a fresh key, not a conflict.
+    await sendKeyed(keys.session('team:create'), { name: 'B' }, async (k) => sent.push(k));
+    // Member A again in a fresh drawer: the unsettled key comes back.
+    await sendKeyed(keys.session('team:create'), { name: 'A' }, async (k) => sent.push(k));
+    expect(sent[1]).not.toBe(sent[0]);
+    expect(sent[2]).toBe(sent[0]);
   });
 });
