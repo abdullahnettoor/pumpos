@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   handoverState,
   partyState,
+  stationState,
   tankStates,
   decantationVarianceState,
   statusPresentation,
@@ -31,6 +32,11 @@ describe('statusPresentation: one word and one tone per state', () => {
     // Party / setup
     ['active', 'Active', 'success'],
     ['inactive', 'Inactive', 'neutral'],
+    ['no-login', 'No login', 'neutral'],
+    // Station onboarding (#538): setup in progress is not a problem
+    ['station-ready', 'Ready for operations', 'success'],
+    ['station-setup', 'Setup in progress', 'neutral'],
+    ['station-not-started', 'Setup not started', 'neutral'],
     // Money
     ['overdue', 'Overdue', 'warning'],
     ['over-limit', 'Over limit', 'danger'],
@@ -155,5 +161,14 @@ describe('variancePresentation: the one balanced rule', () => {
     expect(variancePresentation('-12.40', 'cash').state).toBe('short');
     expect(variancePresentation(null, 'cash').state).toBe('balanced');
     expect(variancePresentation('abc', 'cash').state).toBe('balanced');
+  });
+});
+
+describe('stationState (#538)', () => {
+  it('reads the onboarding status, unknown as not started', () => {
+    expect(stationState('READY_FOR_OPERATIONS')).toBe('station-ready');
+    expect(stationState('IN_PROGRESS')).toBe('station-setup');
+    expect(stationState('NOT_STARTED')).toBe('station-not-started');
+    expect(stationState(undefined)).toBe('station-not-started');
   });
 });
