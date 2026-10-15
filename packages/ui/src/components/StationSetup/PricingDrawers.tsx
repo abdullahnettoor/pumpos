@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CloudPricingService, CloudProductService } from '../../services/cloud.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { CloudProductService } from '../../services/cloud.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { Drawer } from '../Drawer.js';
 import { Field, MoneyInput, Select, TextInput } from '../primitives/Field.js';
-import { queryKeys } from '../../query/hooks.js';
+import { queryKeys, useRecordFuelPrice } from '../../query/hooks.js';
 import { formatMoney } from '../../utils/format.js';
 import { Button, Form } from '../../pump-ds/index.js';
-import { useRunTask } from '../../utils/runTask.js';
-import { stationDateTimeInput, stationInputToIso, type FuelPriceRow } from './fuelPriceRows.js';
+import { useRefreshTask, useRunTask } from '../../utils/runTask.js';
+import {
+  stationDateTimeInput,
+  stationInputToIso,
+  type FuelPriceAttempt,
+  type FuelPriceRow,
+} from './fuelPriceRows.js';
 import { useKeyedSave } from '../../office-records/useKeyedSave.js';
 
-const pricingService = new CloudPricingService();
 const productService = new CloudProductService();
 
 /** A non-fuel product as Pricing › Products reads it. */
@@ -31,55 +35,74 @@ export interface MerchRow {
  * Change a fuel's price (#537): the existing fuel-rate flow and validation, in
  * a drawer. "Effective from" is read on the station's clock, not the browser's.
  * Mounted per open, so each change gets its own Idempotency-Key session.
+ *
+ * Applying closes the drawer at once (#606): the fuel's card reads "Saving…"
+ * from the write itself, then the server's price (patched from the answer) or,
+ * if refused, the reason. The answer's current price and history row go into
+ * the cache before the background refresh.
  */
 export const ChangePriceDrawer: React.FC<{
   stationId: string;
   timeZone: string;
   fuels: FuelPriceRow[];
   initial: FuelPriceRow;
+  /**
+   * An attempt whose outcome is unknown (#606 review): the drawer reopens on
+   * its exact rate and effective time, so saving again sends the same body
+   * under the same Idempotency-Key and cannot record the change twice.
+   */
+  attempt?: FuelPriceAttempt | null;
   onClose: () => void;
-}> = ({ stationId, timeZone, fuels, initial, onClose }) => {
+}> = ({ stationId, timeZone, fuels, initial, attempt, onClose }) => {
   const toast = useToast();
-  const runTask = useRunTask();
+  const refresh = useRefreshTask();
   const qc = useQueryClient();
+  const record = useRecordFuelPrice();
   // Mounted per open: one session per price change.
   const save = useKeyedSave(`setup:pricing:${stationId}`);
-  const [productId, setProductId] = useState(initial.productId);
-  const [price, setPrice] = useState('');
+  const [productId, setProductId] = useState(attempt?.productId ?? initial.productId);
+  const [price, setPrice] = useState(attempt ? String(attempt.price) : '');
   // Computed once on open, so a re-render never fights the operator's edit.
   const [effectiveFrom, setEffectiveFrom] = useState(() =>
-    stationDateTimeInput(new Date(), timeZone),
+    stationDateTimeInput(
+      attempt?.effectiveFrom ? new Date(attempt.effectiveFrom) : new Date(),
+      timeZone,
+    ),
   );
-  const [submitting, setSubmitting] = useState(false);
   const fuel = fuels.find((f) => f.productId === productId) ?? initial;
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!productId || !price || submitting) return;
+    if (!productId || !price) return;
     const payload = {
       stationId,
       productId,
       price: parseFloat(price),
       effectiveFrom: stationInputToIso(effectiveFrom, timeZone),
     };
-    try {
-      setSubmitting(true);
-      await save(payload, (idempotencyKey) =>
-        pricingService.recordPricing(payload, { idempotencyKey }),
-      );
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to record new price');
-      setSubmitting(false);
-      return;
-    }
-    toast.success('Fuel rate updated.');
     onClose();
-    runTask(
-      Promise.all([
-        qc.invalidateQueries({ queryKey: queryKeys.pricing(stationId) }),
-        qc.invalidateQueries({ queryKey: queryKeys.pricingHistory(stationId) }),
-      ]),
-      'Saved, but fuel pricing could not be refreshed.',
+    save(payload, (idempotencyKey) => record.mutateAsync({ payload, idempotencyKey })).then(
+      () => {
+        // The card updating, highlighted, is the confirmation; there is no
+        // record of its own to open, so the toast has no action.
+        toast.success('Fuel rate updated.');
+        refresh(
+          () =>
+            Promise.all([
+              qc.invalidateQueries(
+                { queryKey: queryKeys.pricing(stationId) },
+                { throwOnError: true },
+              ),
+              qc.invalidateQueries(
+                { queryKey: queryKeys.pricingHistory(stationId) },
+                { throwOnError: true },
+              ),
+            ]),
+          'Fuel rate updated.',
+        );
+      },
+      // Refused or unanswered: the fuel's card says so, with the next step.
+      () => undefined,
     );
   };
 
@@ -95,7 +118,7 @@ export const ChangePriceDrawer: React.FC<{
       }
       footer={
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" size="md" disabled={submitting} onClick={onClose}>
+          <Button variant="secondary" size="md" onClick={onClose}>
             Cancel
           </Button>
           <Button
@@ -103,7 +126,6 @@ export const ChangePriceDrawer: React.FC<{
             form="change-price-form"
             variant="primary"
             size="md"
-            loading={submitting}
             disabled={!productId || !price}
           >
             Apply new rate
@@ -166,7 +188,9 @@ export const MrpDrawer: React.FC<{ product: MerchRow; onClose: () => void }> = (
         productService.updateProduct(product.id, body, { idempotencyKey }),
       );
     } catch (err: any) {
-      toast.error(err.message || 'Failed to update price');
+      toast.error(
+        withNextStep(err.message || "Couldn't update the price", 'Check the MRP and save again.'),
+      );
       setSaving(false);
       return;
     }

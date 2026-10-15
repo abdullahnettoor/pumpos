@@ -67,8 +67,8 @@ Auth/session and anything live are operational (or uncached); never persist them
    - Patch inside the synchronous `onSuccess`, before the invalidation. Invalidating right after
      also cancels a refetch already in flight, so an older answer cannot overwrite the patch.
    - Patched today: handover, credit / OMC card sale (+ voids), Handover and Billed Product
-     Sales, Expense / Income / Collection / Supplier payment (+ Expense / Income voids), and
-     Business Day close. Left to revalidation: Purchase, shift open and close (their answers
+     Sales, Expense / Income / Collection / Supplier payment (+ Expense / Income voids),
+     Business Day close, and a fuel price change (current price and history). Left to revalidation: Purchase, shift open and close (their answers
      lack the list or board fields).
 
 ## Review checklist (before merge)
