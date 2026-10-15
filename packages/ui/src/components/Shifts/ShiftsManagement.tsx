@@ -56,6 +56,7 @@ import { Station, canCloseShift, canOpenShift } from '@pump/shared';
 import type { OpenShiftFormValues } from '@pump/shared';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 import { refreshShiftStatus } from './refreshShiftStatus.js';
+import { useHandoverWrites, useShiftMoneyState } from './handoverWrites.js';
 import { useNow } from './useNow.js';
 import {
   officeSubmitKeys,
@@ -470,6 +471,18 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     );
   };
 
+  // Handovers in flight or refused, and whether the shift's money is still
+  // to be confirmed by the refresh (#606).
+  const handoverWrites = useHandoverWrites(data?.activeShift?.id ?? null);
+  const money = useShiftMoneyState(handoverWrites, stationId, statusQ);
+  const retryMoney = () => runTask(statusQ.refetch(), 'Could not refresh the shift.');
+  // The live board and the close page read the shift status (#606 review): a
+  // failed status read shows in their Data Section with Retry. After a
+  // Handover, that failure is the inline "Couldn't confirm the drawer totals ·
+  // Retry" instead, with the figures held as Saving…, so the section is kept.
+  const statusSectionQ =
+    money === 'unconfirmed' ? { ...statusQ, isError: false, error: null } : statusQ;
+
   const startClose = () => {
     setSelectedSubTab('today');
     clearNavIntent();
@@ -633,7 +646,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             step={view.step}
             onStepChange={flow.setStep}
             onBack={flow.leave}
-            queries={[inventoryStatusQ, shiftTxQ]}
+            queries={[inventoryStatusQ, shiftTxQ, statusSectionQ]}
             groups={nozzleGroups(activeShift, { now, timeZone: stationSettings.timezone })}
             readingErrors={f.readingErrors}
             tanks={inventoryStatusQ.data ?? []}
@@ -654,6 +667,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             onConfirmWarningsChange={flow.setConfirmWarningsChecked}
             isClosing={flow.isClosing}
             onConfirmClose={(save) => runTask(flow.closeShift(save), 'Could not close the shift.')}
+            handoverWrites={handoverWrites}
+            money={money}
+            onRetryMoney={retryMoney}
           />
           {handoverDrawer}
         </>
@@ -813,7 +829,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           {shiftSubTab === 'today' && (
             <DataSection
               title="shift status"
-              query={statusQ}
+              query={statusSectionQ}
               shape="cards"
               placeholderHeight={420}
               enabled
@@ -831,6 +847,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                   onOpenHandover={openHandover}
                   onStartClose={startClose}
                   onViewLastSummary={viewLastShiftSummary}
+                  handoverWrites={handoverWrites}
+                  money={money}
+                  onRetryMoney={retryMoney}
                 />
               ) : awaitingOpenedShift ? (
                 <Skeleton aria-label="Loading the new shift" height={420} />

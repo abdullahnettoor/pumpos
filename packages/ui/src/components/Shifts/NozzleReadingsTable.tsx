@@ -21,12 +21,15 @@ import {
   type NozzleRow,
   type StaffAssignmentInput,
 } from './liveShiftModel.js';
+import { notSavedMessage, type HandoverWrites } from './handoverWrites.js';
 
 export interface NozzleReadingsTableProps {
   groups: NozzleGroup[];
   timeZone?: string;
   /** Record or view a Drawer's Handover (the Handover drawer). */
   onOpenHandover: (assignment: StaffAssignmentInput) => void;
+  /** Handovers still saving or failed, by Drawer key (#606). */
+  writes?: HandoverWrites;
 }
 
 const READING = { kind: 'qty', unit: 'L', decimals: 3, total: false } as const;
@@ -67,6 +70,7 @@ export const NozzleReadingsTable: React.FC<NozzleReadingsTableProps> = ({
   groups,
   timeZone,
   onOpenHandover,
+  writes,
 }) => {
   const [product, setProduct] = useState('all');
   const products = useMemo(() => nozzleProducts(groups), [groups]);
@@ -88,39 +92,56 @@ export const NozzleReadingsTable: React.FC<NozzleReadingsTableProps> = ({
 
   const tableGroups = useMemo<TableGroup<NozzleRow>[]>(
     () =>
-      shown.map((g) => ({
-        key: g.key,
-        muted: !!g.assignment && !g.handover,
-        rows: g.rows,
-        header: (
-          <div className="flex min-h-7 flex-wrap items-center gap-2">
-            <span className="font-semibold text-ink-strong">{g.label}</span>
-            {g.status && (
-              <StatusChip
-                status={g.status}
-                size="md"
-                label={
-                  g.status === 'handover-recorded' && g.handover?.createdAt
-                    ? `Recorded ${formatClockInZone(g.handover.createdAt, timeZone)}`
-                    : undefined
-                }
-              />
-            )}
-            {g.handover && <VarianceChip amount={g.handover.varianceAmount} size="md" />}
-            {g.assignment && (
-              <Button
-                className="ml-auto"
-                variant={g.handover ? 'ghost' : 'secondary'}
-                size="xs"
-                onClick={() => onOpenHandover(g.assignment!)}
-              >
-                {g.handover ? 'View handover' : 'Record handover'}
-              </Button>
-            )}
-          </div>
-        ),
-      })),
-    [shown, timeZone, onOpenHandover],
+      shown.map((g) => {
+        const write = writes?.get(g.key);
+        // While its Handover saves, the Drawer shows "Saving…", never a variance (#606).
+        const saving = write?.state === 'saving';
+        const failed = notSavedMessage(write);
+        return {
+          key: g.key,
+          muted: !!g.assignment && !g.handover,
+          rows: g.rows,
+          header: (
+            <div className="flex min-h-7 flex-wrap items-center gap-2" data-write={write?.state}>
+              <span className="font-semibold text-ink-strong">{g.label}</span>
+              {saving ? (
+                <StatusChip status="saving" size="md" />
+              ) : (
+                g.status && (
+                  <StatusChip
+                    status={g.status}
+                    size="md"
+                    label={
+                      g.status === 'handover-recorded' && g.handover?.createdAt
+                        ? `Recorded ${formatClockInZone(g.handover.createdAt, timeZone)}`
+                        : undefined
+                    }
+                  />
+                )
+              )}
+              {g.handover && !saving && (
+                <VarianceChip amount={g.handover.varianceAmount} size="md" />
+              )}
+              {g.assignment && (
+                <Button
+                  className="ml-auto"
+                  variant={g.handover ? 'ghost' : 'secondary'}
+                  size="xs"
+                  onClick={() => onOpenHandover(g.assignment!)}
+                >
+                  {g.handover ? 'View handover' : 'Record handover'}
+                </Button>
+              )}
+              {failed && (
+                <span role="alert" className="basis-full text-[12px] text-danger-fg">
+                  {failed}
+                </span>
+              )}
+            </div>
+          ),
+        };
+      }),
+    [shown, timeZone, onOpenHandover, writes],
   );
 
   return (

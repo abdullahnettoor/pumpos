@@ -7,6 +7,7 @@ import {
   type TableColumn,
   type TotalRow,
 } from '../../pump-ds/index.js';
+import { notSavedMessage, type HandoverWrites } from './handoverWrites.js';
 import { formatMoney } from '../../utils/format.js';
 import { formatVariance } from '../../utils/variance.js';
 import {
@@ -83,6 +84,7 @@ const money = (id: Figure, header: string): TableColumn<CloseDrawerRow> => ({
  */
 export function drawerColumns(
   onOpenHandover?: (assignment: StaffAssignmentInput) => void,
+  writes?: HandoverWrites,
 ): TableColumn<CloseDrawerRow>[] {
   return [
     {
@@ -100,25 +102,38 @@ export function drawerColumns(
       value: (r) => (r.pending ? 'handover-pending' : 'handover-recorded'),
       sortable: false,
       width: onOpenHandover ? '22%' : '14%',
-      cell: (r) => (
-        <div className="flex items-center gap-2">
-          <StatusChip
-            status={r.pending ? 'handover-pending' : 'handover-recorded'}
-            size="md"
-            showIcon={!r.pending}
-          />
-          {onOpenHandover && r.assignment && (
-            <Button
-              variant={r.pending ? 'secondary' : 'ghost'}
-              size="xs"
-              onClick={() => onOpenHandover(r.assignment!)}
-            >
-              {r.pending ? 'Record' : 'View'}
-              <span className="sr-only"> {r.label} handover</span>
-            </Button>
-          )}
-        </div>
-      ),
+      cell: (r) => {
+        const write = writes?.get(r.key);
+        const failed = notSavedMessage(write);
+        return (
+          <div className="flex flex-wrap items-center gap-2">
+            {write?.state === 'saving' ? (
+              <StatusChip status="saving" size="md" />
+            ) : (
+              <StatusChip
+                status={r.pending ? 'handover-pending' : 'handover-recorded'}
+                size="md"
+                showIcon={!r.pending}
+              />
+            )}
+            {onOpenHandover && r.assignment && (
+              <Button
+                variant={r.pending ? 'secondary' : 'ghost'}
+                size="xs"
+                onClick={() => onOpenHandover(r.assignment!)}
+              >
+                {r.pending ? 'Record' : 'View'}
+                <span className="sr-only"> {r.label} handover</span>
+              </Button>
+            )}
+            {failed && (
+              <span role="alert" className="basis-full text-[12px] text-danger-fg">
+                {failed}
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     money('openingFloat', 'Float'),
     money('cashSales', 'Cash sales'),

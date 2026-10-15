@@ -4,6 +4,7 @@ import { formatMoney } from '../../utils/format.js';
 import { accountTypeDetail as accountTypeDetailFor } from '../../utils/ledgerLabels.js';
 import { AccountTypeChip } from '../finance/AccountTypeChip.js';
 import type { CategoryRecordKind } from './CategoryManagerDrawer.js';
+import type { WriteEntry } from '../../query/pendingWrites.js';
 
 /** An Expense or Income entry as the ledger lists it. */
 export interface CategoryRecord {
@@ -16,6 +17,10 @@ export interface CategoryRecord {
   accountType?: string | null;
   amount: number | string;
   status?: string | null;
+  /** A save or void in flight, or a refused void (#606). */
+  write?: WriteEntry<unknown>;
+  /** A row for an entry still saving: no figure until the server confirms it. */
+  unsaved?: boolean;
 }
 
 export const isVoided = (r: CategoryRecord) => r.status === 'VOIDED';
@@ -57,8 +62,12 @@ const AccountCell: React.FC<{ row: CategoryRecord }> = ({ row }) => {
  */
 const AmountCell: React.FC<{ row: CategoryRecord }> = ({ row }) => {
   const voided = isVoided(row);
+  const saving = row.write?.state === 'saving';
+  // A new entry still saving shows no amount until the server confirms it (#606).
+  if (row.unsaved) return <StatusChip status="saving" size="sm" className="font-sans" />;
   return (
     <span className="inline-flex items-center justify-end gap-1.5">
+      {saving && <StatusChip status="saving" size="sm" className="font-sans" />}
       {voided && <StatusChip status="voided" size="xs" className="font-sans" />}
       {row.status === 'ADJUSTMENT' && (
         <StatusChip status="adjustment" size="xs" className="font-sans" />
@@ -100,7 +109,17 @@ export function buildCategoryRecordColumns(
       header: 'Description',
       kind: 'text',
       value: (r) => r.description,
-      cell: (r) => <span className="text-ink-muted">{r.description || '—'}</span>,
+      cell: (r) =>
+        r.write?.state === 'failed' ? (
+          <span className="flex flex-col">
+            <span className="text-ink-muted">{r.description || '—'}</span>
+            <span role="alert" className="text-[12px] text-danger-fg">
+              Not voided: {r.write.error?.message || 'the server refused it'}
+            </span>
+          </span>
+        ) : (
+          <span className="text-ink-muted">{r.description || '—'}</span>
+        ),
     },
     {
       id: 'account',
@@ -129,7 +148,7 @@ export function buildCategoryRecordColumns(
       value: () => null,
       width: '6%',
       cell: (r) =>
-        isVoided(r) ? (
+        isVoided(r) || r.unsaved || r.write?.state === 'saving' ? (
           <span className="text-ink-faint">—</span>
         ) : (
           <Button

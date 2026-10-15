@@ -6,6 +6,7 @@ import {
   Icon,
   InteractiveTable,
   SectionHeader,
+  StatusChip,
   type SectionQuery,
   type TableColumn,
   type TotalRow,
@@ -15,14 +16,32 @@ import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
-import { useDeleteHandoverProductSale } from '../../query/hooks.js';
+import { mutationKeys, useDeleteHandoverProductSale } from '../../query/hooks.js';
+import {
+  latestOf,
+  useWriteStates,
+  useWriteStatesAcross,
+  type WriteEntry,
+} from '../../query/pendingWrites.js';
 import { countOf } from '../../utils/ledgerWindow.js';
+import { formatMoney } from '../../utils/format.js';
 import type { ProductSales, ProductSalesRow } from './liveShiftModel.js';
+import { notSavedMessage } from './handoverWrites.js';
 import {
   HandoverProductSaleDrawer,
   type BilledSaleRecord,
   type HandoverSaleRecord,
 } from './HandoverProductSaleDrawer.js';
+
+/** A row with its Handover Product Sale write still saving or refused, if any. */
+type Row = ProductSalesRow & {
+  /** The latest Handover sale save or removal on this row. */
+  handoverWrite?: WriteEntry<unknown>;
+  /** The latest Billed Sale save by this seller. */
+  billedWrite?: WriteEntry<unknown>;
+  /** The latest of the two: what the row says went wrong. */
+  write?: WriteEntry<unknown>;
+};
 
 export interface ProductSalesSectionProps {
   shiftId: string;
@@ -33,6 +52,41 @@ export interface ProductSalesSectionProps {
   handoverSales: HandoverSaleRecord[];
   billed: BilledSaleRecord[];
 }
+
+/**
+ * A Handover sale's save or removal on this shift, by employee: one identity
+ * for both, so whichever was sent last decides the row (#606 review 2).
+ */
+const handoverSaleWriteKey = (
+  v:
+    | { shiftId: string; payload: { attendantId?: string } }
+    | { saleId: string; shiftId?: string; attendantId?: string | null },
+  shiftId: string,
+): string | null =>
+  v.shiftId !== shiftId
+    ? null
+    : 'payload' in v
+      ? (v.payload.attendantId ?? null)
+      : (v.attendantId ?? null);
+
+/** A Billed Sale save, by seller ('unassigned' for none), on this shift. */
+const billedWriteKey = (
+  v: { payload: { shiftId: string; attendantId?: string | null } },
+  shiftId: string,
+): string | null => (v.payload.shiftId === shiftId ? v.payload.attendantId || UNASSIGNED : null);
+const UNASSIGNED = 'unassigned';
+
+/** "Saving…" in place of a figure the server has not confirmed (#606), else the figure. */
+const moneyOrSaving = (saving: boolean, value: number | null) =>
+  saving ? (
+    <StatusChip status="saving" size="sm" className="font-sans" />
+  ) : value == null ? (
+    ''
+  ) : (
+    formatMoney(value)
+  );
+
+const saving = (w: WriteEntry<unknown> | undefined) => w?.state === 'saving';
 
 /**
  * Live shift → Product sales (#533): one row per employee (every attendant on a
@@ -53,6 +107,24 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
   const toast = useToast();
   const runTask = useRunTask();
   const remove = useDeleteHandoverProductSale(stationId);
+  // Each row's save or removal in flight, or refused (#606), from the writes themselves.
+  const handoverWrites = useWriteStatesAcross(
+    [mutationKeys.handoverProductSale(), mutationKeys.deleteHandoverProductSale()],
+    handoverSaleWriteKey,
+    shiftId,
+  );
+  const billedWrites = useWriteStates(mutationKeys.productSale(), billedWriteKey, shiftId);
+  const rows = useMemo(
+    () =>
+      sales.rows.map((r) => {
+        // Save and removal share the employee's identity: the later attempt
+        // wins, finished or not, so a refused edit never outlives a removal.
+        const handoverWrite = r.attendantId ? handoverWrites.get(r.attendantId) : undefined;
+        const billedWrite = billedWrites.get(r.attendantId ?? UNASSIGNED);
+        return { ...r, handoverWrite, billedWrite, write: latestOf(handoverWrite, billedWrite) };
+      }),
+    [sales.rows, handoverWrites, billedWrites],
+  );
   const [drawer, setDrawer] = useState<{
     open: boolean;
     employeeId: string | null;
@@ -79,26 +151,65 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
       await sendKeyed(
         officeSubmitKeys.session(`handover-product-sale:delete:${sale.id}`),
         { stationId, saleId: sale.id },
-        (idempotencyKey) => remove.mutateAsync({ saleId: sale.id, shiftId, idempotencyKey }),
+        (idempotencyKey) =>
+          remove.mutateAsync({
+            saleId: sale.id,
+            shiftId,
+            attendantId: sale.attendantId ?? row.attendantId,
+            idempotencyKey,
+          }),
       );
       toast.success('Handover product sale removed.');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not remove the sale.');
+    } catch {
+      // The row says it was not removed, and why (#606).
     }
   };
 
   // Rebuilt each render: the row buttons call this render's handlers.
-  const columns: TableColumn<ProductSalesRow>[] = [
-    { id: 'employee', header: 'Employee', kind: 'text', value: (r) => r.name },
-    { id: 'billed', header: 'Billed sales', kind: 'money', value: (r) => r.billed, width: '18%' },
+  const columns: TableColumn<Row>[] = [
+    {
+      id: 'employee',
+      header: 'Employee',
+      kind: 'text',
+      value: (r) => r.name,
+      cell: (r) => {
+        const failed = notSavedMessage(r.write);
+        return failed ? (
+          <span className="flex flex-col">
+            <span>{r.name}</span>
+            <span role="alert" className="text-[12px] text-danger-fg">
+              {failed}
+            </span>
+          </span>
+        ) : (
+          r.name
+        );
+      },
+    },
+    {
+      id: 'billed',
+      header: 'Billed sales',
+      kind: 'money',
+      value: (r) => r.billed,
+      cell: (r) => moneyOrSaving(saving(r.billedWrite), r.billed),
+      width: '18%',
+    },
     {
       id: 'handover',
       header: 'Handover sale',
       kind: 'money',
       value: (r) => (r.handoverSale ? r.handover : null),
+      cell: (r) => moneyOrSaving(saving(r.handoverWrite), r.handoverSale ? r.handover : null),
       width: '18%',
     },
-    { id: 'total', header: 'Total', kind: 'money', value: (r) => r.total, width: '18%' },
+    {
+      id: 'total',
+      header: 'Total',
+      kind: 'money',
+      value: (r) => r.total,
+      cell: (r) => moneyOrSaving(saving(r.handoverWrite) || saving(r.billedWrite), r.total),
+      width: '18%',
+    },
     {
       id: 'actions',
       header: '',
@@ -179,7 +290,7 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
         <InteractiveTable
           bare
           columns={columns}
-          rows={sales.rows}
+          rows={rows}
           rowKey={(r) => r.attendantId ?? 'unassigned'}
           totalRow={totalRow}
           title="product sales"
