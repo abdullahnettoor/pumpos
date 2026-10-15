@@ -1,6 +1,5 @@
 import React from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { formatStationDateTime } from '@pump/shared';
 import {
   Button,
   DataSection,
@@ -24,7 +23,6 @@ import { Banner } from '../primitives/Banner.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { ReportNote } from '../reports/ReportNote.js';
-import { formatBusinessDate, formatMoney } from '../../utils/format.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useKeyedSave } from '../../office-records/useKeyedSave.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
@@ -46,6 +44,8 @@ import {
   FUEL_COLUMNS,
   HANDOVER_COLUMNS,
   NOZZLE_COLUMNS,
+  NOZZLES_EMPTY,
+  SIGNATURE_LINES,
   SHIFT_SUMMARY_TITLES as TITLES,
   TERMINAL_COLUMNS,
   creditTotalRow,
@@ -53,6 +53,9 @@ import {
   terminalTotalRow,
   fuelTotalRow,
   nozzleTotalRow,
+  cashLineText,
+  snapshotNote,
+  summaryDetails,
 } from './shiftSummaryColumns.js';
 
 const shiftService = new CloudShiftService();
@@ -93,6 +96,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   const toast = useToast();
   const runTask = useRunTask();
   const timeZone: string | undefined = station?.settings?.timezone;
+  const dayStartsAt: string | undefined = station?.settings?.business_day_starts_at;
   const summary = shiftSummary?.snapshotData ? readShiftSummary(shiftSummary) : null;
   const locked = (shiftStatus ?? (summary?.locked ? 'LOCKED' : 'CLOSED')) === 'LOCKED';
 
@@ -147,7 +151,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   return (
     <PageFrame
       route={ROUTES.shifts}
-      title="Shift summary"
+      title={TITLES.page}
       subtitle={subtitle}
       back={onBack && { label: 'History', href: `#${ROUTES.shifts}`, onClick: onBack }}
       actions={
@@ -194,7 +198,12 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
         }
       >
         {summary && (
-          <SummaryBody summary={summary} record={shiftSummary} timeZone={timeZone}>
+          <SummaryBody
+            summary={summary}
+            record={shiftSummary}
+            timeZone={timeZone}
+            dayStartsAt={dayStartsAt}
+          >
             {userRole !== 'Staff' && (
               <section className="no-print flex flex-col gap-2">
                 <ShiftTransactionsPanel
@@ -224,17 +233,12 @@ const SummaryBody: React.FC<{
     summary.businessDate,
     useStationBusinessDate(timeZone, dayStartsAt),
   );
-  const at = (iso: string | null) => (iso ? formatStationDateTime(iso, timeZone) : '—');
+  const taken = snapshotNote(summary, timeZone);
   return (
     <div className="print-area flex flex-col gap-5">
       <Panel flush>
         <dl className="m-0 grid grid-cols-2 lg:grid-cols-4">
-          {[
-            ['Business day', summary.businessDate ? formatBusinessDate(summary.businessDate) : '—'],
-            ['Opened', at(summary.openedAt)],
-            ['Closed', at(summary.closedAt)],
-            ['Reconciled by', summary.closedBy],
-          ].map(([label, value]) => (
+          {summaryDetails(summary, timeZone).map(([label, value]) => (
             <div key={label} className="flex flex-col gap-0.5 px-4 py-2.5">
               <dt className="text-[12px] text-ink-muted">{label}</dt>
               <dd className="m-0 text-[13px] font-medium text-ink-strong">{value}</dd>
@@ -247,14 +251,10 @@ const SummaryBody: React.FC<{
           </p>
         )}
       </Panel>
-      {summary.generatedAt && (
-        <ReportNote>
-          Snapshot taken at close, {at(summary.generatedAt)}. Its figures never change.
-        </ReportNote>
-      )}
+      {taken && <ReportNote>{taken}</ReportNote>}
 
       {summary.warnings.length > 0 && (
-        <Banner severity="warning" title="Warnings at close">
+        <Banner severity="warning" title={TITLES.warnings}>
           {summary.warnings.length === 1 ? (
             summary.warnings[0]
           ) : (
@@ -274,7 +274,7 @@ const SummaryBody: React.FC<{
         rows={summary.nozzles}
         totalRow={nozzleTotalRow(summary)}
         notes={volumeTotalNotes(summary.volumes)}
-        emptyMessage="No nozzle readings in this summary."
+        emptyMessage={NOZZLES_EMPTY}
       />
       {summary.fuel.length > 0 && (
         <TableSection
@@ -319,7 +319,7 @@ const SummaryBody: React.FC<{
       {summary.drawers.length > 0 && (
         <section className="flex flex-col gap-2">
           <SectionHeader title={TITLES.drawers} subtitle={TITLES.drawersSubtitle} />
-          <DrawerReconciliationTable drawers={summary.drawers} />
+          <DrawerReconciliationTable drawers={summary.drawers} showTotals />
         </section>
       )}
 
@@ -329,10 +329,7 @@ const SummaryBody: React.FC<{
 
       {/* Signature lines, on paper only. */}
       <div className="hidden grid-cols-2 gap-10 pt-12 text-center text-[12px] text-ink-muted print:grid">
-        {[
-          'Operator / reconciliation staff signature',
-          'Owner / manager verification signature',
-        ].map((who) => (
+        {SIGNATURE_LINES.map((who) => (
           <div key={who} className="flex flex-col gap-2">
             <div className="h-10 border-b border-border-strong" />
             <span>{who}</span>
@@ -379,14 +376,6 @@ function TableSection<T extends { key: string }>({
   );
 }
 
-const SIGN: Record<CashLine['role'], string> = {
-  base: '',
-  plus: '+ ',
-  minus: '− ',
-  result: '',
-  variance: '',
-};
-
 /** The drawer cash as a statement: floats, plus sales, less drops, then the variances. */
 const CashReconciliation: React.FC<{ lines: CashLine[] }> = ({ lines }) => (
   <Panel flush>
@@ -405,7 +394,7 @@ const CashReconciliation: React.FC<{ lines: CashLine[] }> = ({ lines }) => (
             {line.role === 'variance' ? (
               <VarianceChip amount={line.amount} size="md" />
             ) : (
-              `${SIGN[line.role]}${formatMoney(line.amount)}`
+              cashLineText(line)
             )}
           </dd>
         </div>

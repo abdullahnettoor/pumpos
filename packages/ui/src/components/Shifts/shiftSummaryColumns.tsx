@@ -1,8 +1,14 @@
 import React from 'react';
+import { formatStationDateTime } from '@pump/shared';
 import { VarianceChip, type TableColumn, type TotalRow } from '../../pump-ds/index.js';
-import { formatQuantity } from '../../utils/format.js';
+import { formatBusinessDate, formatMoney, formatQuantity } from '../../utils/format.js';
 import { formatVariance } from '../../utils/variance.js';
+import {
+  legacyPurchases,
+  type LegacySnapshotPurchase,
+} from '../../services/reports/legacyPurchases.js';
 import type {
+  CashLine,
   ShiftSummary,
   SummaryCreditRow,
   SummaryFuelRow,
@@ -14,6 +20,8 @@ import type {
 
 /** The Shift Summary's section titles (#535). */
 export const SHIFT_SUMMARY_TITLES = {
+  page: 'Shift summary',
+  warnings: 'Warnings at close',
   nozzles: 'Nozzles',
   nozzlesSubtitle: 'Meter readings and volume sold',
   fuel: 'Fuel sales by product',
@@ -24,21 +32,32 @@ export const SHIFT_SUMMARY_TITLES = {
   drawers: 'Drawers',
   drawersSubtitle:
     "Each attendant's pouch: opening float + cash sales − cash drops, against the cash handed over",
+  legacyPurchases: 'Supplier fuel intakes',
   entry: 'Record a credit sale',
 } as const;
 
+/** What the nozzle table says when the snapshot holds no readings. */
+export const NOZZLES_EMPTY = 'No nozzle readings in this summary.';
+
+/** The two signature lines a printed summary closes with. */
+export const SIGNATURE_LINES = [
+  'Operator / reconciliation staff signature',
+  'Owner / manager verification signature',
+] as const;
+
+/** A volume in its unit's precision: 2 decimals for litres and kg (#594 review). */
 const qty = <T,>(
   id: string,
   header: string,
   value: (r: T) => number,
   unit: (r: T) => string,
-  decimals?: number,
-): TableColumn<T> => ({ id, header, kind: 'qty', value, unit, decimals });
+): TableColumn<T> => ({ id, header, kind: 'qty', value, unit });
 
 export const NOZZLE_COLUMNS: TableColumn<SummaryNozzleRow>[] = [
   { id: 'nozzle', header: 'Nozzle', kind: 'text', emphasis: true, value: (r) => r.nozzle },
   { id: 'product', header: 'Product', kind: 'text', value: (r) => r.product },
-  // Meter readings carry 3 decimals and are not a quantity that adds up.
+  // Meter readings carry 3 decimals, in the nozzle's unit (a CNG meter reads kg),
+  // and are not a quantity that adds up.
   {
     id: 'opening',
     header: 'Opening',
@@ -46,6 +65,7 @@ export const NOZZLE_COLUMNS: TableColumn<SummaryNozzleRow>[] = [
     decimals: 3,
     total: false,
     value: (r) => r.opening,
+    unit: (r) => r.unit,
   },
   {
     id: 'closing',
@@ -54,27 +74,25 @@ export const NOZZLE_COLUMNS: TableColumn<SummaryNozzleRow>[] = [
     decimals: 3,
     total: false,
     value: (r) => r.closing,
+    unit: (r) => r.unit,
   },
   qty(
     'gross',
     'Gross',
     (r) => r.gross,
     (r) => r.unit,
-    3,
   ),
   qty(
     'testing',
     'Testing',
     (r) => r.testing,
     (r) => r.unit,
-    3,
   ),
   qty(
     'net',
     'Net',
     (r) => r.net,
     (r) => r.unit,
-    3,
   ),
 ];
 
@@ -114,21 +132,18 @@ export const FUEL_COLUMNS: TableColumn<SummaryFuelRow>[] = [
     'Gross',
     (r) => r.gross,
     (r) => r.unit,
-    3,
   ),
   qty(
     'testing',
     'Testing',
     (r) => r.testing,
     (r) => r.unit,
-    3,
   ),
   qty(
     'net',
     'Net',
     (r) => r.net,
     (r) => r.unit,
-    3,
   ),
   { id: 'salesValue', header: 'Sales value', kind: 'money', value: (r) => r.salesValue },
 ];
@@ -226,10 +241,82 @@ export function creditTotalRow(s: ShiftSummary): TotalRow {
   };
 }
 
-/** Handover and terminal money is not stored as totals: the table adds the rows in paise. */
+/**
+ * Handover money is not stored as totals: the table adds the rows in paise.
+ * The variance total reads as the rows do, a `VarianceChip` on screen and its
+ * words on paper (Balanced, or the signed figure).
+ */
 export const handoverTotalRow = (s: ShiftSummary): TotalRow => ({
   label: totalLabel(s.handovers.length, 'handover', 'handovers'),
+  values: { variance: s.handoverVariance },
+  texts: { variance: formatVariance(s.handoverVariance, 'cash').text },
+  cells: { variance: <VarianceChip amount={s.handoverVariance} size="md" /> },
 });
+
+/** Terminal money is not stored as totals: the table adds the rows in paise. */
 export const terminalTotalRow = (s: ShiftSummary): TotalRow => ({
   label: totalLabel(s.terminals.length, 'terminal', 'terminals'),
+});
+
+/** The details row: business day, open and close times, who reconciled. */
+export function summaryDetails(s: ShiftSummary, timeZone?: string): [string, string][] {
+  const at = (iso: string | null) => (iso ? formatStationDateTime(iso, timeZone) : '—');
+  return [
+    ['Business day', s.businessDate ? formatBusinessDate(s.businessDate) : '—'],
+    ['Opened', at(s.openedAt)],
+    ['Closed', at(s.closedAt)],
+    ['Reconciled by', s.closedBy],
+  ];
+}
+
+/** The line under the details: when the snapshot was taken; null without a time. */
+export function snapshotNote(s: ShiftSummary, timeZone?: string): string | null {
+  return s.generatedAt
+    ? `Snapshot taken at close, ${formatStationDateTime(s.generatedAt, timeZone)}. Its figures never change.`
+    : null;
+}
+
+const SIGN: Record<CashLine['role'], string> = {
+  base: '',
+  plus: '+ ',
+  minus: '− ',
+  result: '',
+  variance: '',
+};
+
+/** A cash reconciliation figure: `+ ₹…` added, `− ₹…` taken off, a variance in its words. */
+export const cashLineText = (line: CashLine): string =>
+  line.role === 'variance'
+    ? formatVariance(line.amount, 'cash').text
+    : `${SIGN[line.role]}${formatMoney(line.amount)}`;
+
+/** A purchase an older snapshot stored (#308), keyed for a table. */
+export type LegacyPurchaseRow = LegacySnapshotPurchase & { key: string };
+
+export const legacyPurchaseRows = (snapshot: unknown): LegacyPurchaseRow[] =>
+  legacyPurchases(snapshot).map((p, i) => ({ ...p, key: String(i) }));
+
+export const LEGACY_PURCHASE_COLUMNS: TableColumn<LegacyPurchaseRow>[] = [
+  {
+    id: 'supplier',
+    header: 'Supplier',
+    kind: 'text',
+    emphasis: true,
+    value: (r) => r.supplierName,
+  },
+  {
+    id: 'ref',
+    header: 'Ref / invoice',
+    kind: 'text',
+    value: (r) =>
+      [r.documentNumber, r.invoiceNumber && `(${r.invoiceNumber})`].filter(Boolean).join(' ') ||
+      null,
+  },
+  { id: 'notes', header: 'Notes', kind: 'text', value: (r) => r.notes },
+  { id: 'amount', header: 'Amount', kind: 'money', value: (r) => r.amount },
+];
+
+/** The stored purchases are not totalled in the snapshot: the table adds the rows in paise. */
+export const legacyPurchaseTotalRow = (rows: LegacyPurchaseRow[]): TotalRow => ({
+  label: `Total of ${rows.length} stored ${rows.length === 1 ? 'purchase' : 'purchases'}`,
 });

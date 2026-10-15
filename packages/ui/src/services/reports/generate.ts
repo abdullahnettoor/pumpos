@@ -89,10 +89,13 @@ export async function generateShiftSummaryPdf(
   };
   const businessDate = shift?.businessDate ?? snapshot?.businessDate ?? null;
   const shiftSequence = shift?.shiftSequence ?? snapshot?.shiftSequence ?? null;
+  // Times print in the station's timezone, as on screen.
+  const timeZone: string | undefined = station?.settings?.timezone;
   await outputReactPdf(
     React.createElement(doc.ShiftSummaryDoc, {
       snapshot: { ...snapshot, businessDate, shiftSequence },
       config,
+      clock: { timeZone },
     }),
     // File names stay ASCII: the display fallback carries an ellipsis.
     `Shift_Summary_${formatShiftLabel(businessDate, shiftSequence) ?? String(shiftId).slice(0, 8)}`,
