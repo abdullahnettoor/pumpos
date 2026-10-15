@@ -107,8 +107,18 @@
   --shadow-popover: 0 8px 24px rgba(24, 32, 26, 0.14);
   --shadow-dialog: 0 12px 32px rgba(24, 32, 26, 0.18);
   --shadow-tooltip: 0 4px 12px rgba(24, 32, 26, 0.18);
+  --shadow-drawer: -8px 0 32px rgba(24, 32, 26, 0.04);
+  /* A switch thumb's lift off its track. */
+  --shadow-control: 0 1px 2px rgba(24, 32, 26, 0.25);
   /* The dim layer behind a modal dialog or the command palette. */
   --overlay-scrim: rgba(24, 32, 26, 0.32);
+  /* The lighter dim layer behind a drawer: the page stays readable beside it. */
+  --overlay-drawer: rgba(24, 32, 26, 0.15);
+  /* A switch thumb: white on its track in both themes. */
+  --control-thumb: #ffffff;
+  /* Focus halo of a text input, and of an invalid one (same mix as pump-ds Input). */
+  --focus-ring: color-mix(in oklab, var(--brand-primary) 18%, transparent);
+  --focus-ring-danger: color-mix(in oklab, var(--state-danger-fg) 18%, transparent);
 
   /* Shell dimensions */
   --status-bar-height: 26px;
@@ -161,7 +171,10 @@
     --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.5);
     --shadow-dialog: 0 12px 32px rgba(0, 0, 0, 0.55);
     --shadow-tooltip: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.45);
+    --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.5);
     --overlay-scrim: rgba(0, 0, 0, 0.55);
+    --overlay-drawer: rgba(0, 0, 0, 0.45);
   }
 }
 
@@ -262,7 +275,7 @@ select {
 .input:focus,
 select:focus {
   border-color: var(--brand-primary);
-  box-shadow: 0 0 0 2px rgba(31, 106, 83, 0.15);
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 /* Compact inputs for filter bars / toolbars. */
@@ -288,7 +301,7 @@ select:focus {
 
 .textarea:focus {
   border-color: var(--brand-primary);
-  box-shadow: 0 0 0 2px rgba(31, 106, 83, 0.15);
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 /* Sentence-case field label. */
@@ -325,7 +338,7 @@ select:focus {
 .input-invalid,
 .input-invalid:focus {
   border-color: var(--brand-danger);
-  box-shadow: 0 0 0 2px rgba(180, 74, 63, 0.15);
+  box-shadow: 0 0 0 2px var(--focus-ring-danger);
 }
 
 /* Disabled inputs read as inert without disappearing. */
@@ -438,8 +451,8 @@ select:disabled {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background-color: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  background-color: var(--control-thumb);
+  box-shadow: var(--shadow-control);
   transition: transform 0.15s ease-in-out;
 }
 .pump-switch-input:checked + .pump-switch-track {
@@ -483,7 +496,7 @@ select:disabled {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background-color: rgba(24, 32, 26, 0.15);
+  background-color: var(--overlay-drawer);
   backdrop-filter: blur(2px);
   z-index: 1000;
   opacity: 0;
@@ -502,7 +515,7 @@ select:disabled {
   z-index: 1001;
   display: flex;
   flex-direction: column;
-  box-shadow: -8px 0 32px rgba(24, 32, 26, 0.04);
+  box-shadow: var(--shadow-drawer);
   transform: translateX(100%);
   animation: drawerSlideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
