@@ -26,6 +26,18 @@ describe('TankLevelSettingsPanel (#520)', () => {
     );
   });
 
+  it('shows Save only once a threshold changes, and Discard puts the saved values back (#604)', () => {
+    render(<TankLevelSettingsPanel value={DEFAULT_TANK_LEVEL_SETTINGS} canEdit onSave={vi.fn()} />);
+    expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Save tank levels' })).toBeNull();
+
+    fireEvent.change(input(/Critical below/), { target: { value: '15' } });
+    expect(screen.getByRole('region', { name: 'Unsaved changes' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(input(/Critical below/).value).toBe('25');
+    expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull();
+  });
+
   it('refuses a critical threshold at or above low', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<TankLevelSettingsPanel value={DEFAULT_TANK_LEVEL_SETTINGS} canEdit onSave={onSave} />);

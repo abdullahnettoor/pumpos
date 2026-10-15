@@ -7,7 +7,7 @@ import {
   type TankLevelSettings,
 } from '@pump/shared';
 import { Field, NumberInput } from '../primitives/Field.js';
-import { Button, Form, Panel, SectionHeader } from '../../pump-ds/index.js';
+import { Form, Panel, SectionHeader, UnsavedChangesBar } from '../../pump-ds/index.js';
 
 export interface TankLevelSettingsPanelProps {
   /** The station's resolved thresholds (`resolveTankLevelSettings`). */
@@ -21,6 +21,7 @@ export interface TankLevelSettingsPanelProps {
 /**
  * Station business rule (#520): when a tank turns low or critical. The same
  * thresholds colour the Dashboard, the alerts bell, Inventory and mobile.
+ * Save shows in the unsaved-changes bar once a threshold is changed (#604).
  */
 export const TankLevelSettingsPanel: React.FC<TankLevelSettingsPanelProps> = ({
   value,
@@ -50,7 +51,7 @@ export const TankLevelSettingsPanel: React.FC<TankLevelSettingsPanelProps> = ({
   return (
     <section className="flex flex-col gap-2">
       <SectionHeader title="Tank levels" subtitle="Dashboard, alerts, Inventory and mobile" />
-      <Panel>
+      <Panel className="overflow-visible">
         <Form
           onSubmit={submit}
           onSubmittingChange={setSaving}
@@ -91,11 +92,12 @@ export const TankLevelSettingsPanel: React.FC<TankLevelSettingsPanelProps> = ({
             </div>
           </fieldset>
           {canEdit ? (
-            <div className="flex justify-end border-t border-border-soft pt-3">
-              <Button type="submit" variant="secondary" size="sm" disabled={!isDirty || saving}>
-                Save tank levels
-              </Button>
-            </div>
+            <UnsavedChangesBar
+              dirty={isDirty}
+              saving={saving}
+              onDiscard={() => reset()}
+              saveLabel="Save tank levels"
+            />
           ) : (
             <p className="text-[12px] text-ink-muted">
               Only an Owner or Manager can change tank levels.

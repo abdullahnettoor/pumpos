@@ -6,7 +6,7 @@ import { CloudOrganizationService } from '../../services/cloud.js';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { useKeyedSave } from '../../office-records/useKeyedSave.js';
 import { Field, TextInput } from '../primitives/Field.js';
-import { Button, DataSection, Form, SectionHeader } from '../../pump-ds/index.js';
+import { DataSection, Form, SectionHeader, UnsavedChangesBar } from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 
@@ -22,6 +22,8 @@ const EMPTY: OrganizationUpdateValues = {
  * branding metadata (stored in organizations.metadata jsonb). Station-level
  * legal details remain in Station. The form waits in its Data Section until
  * the organization has loaded, so it never opens blank over saved details.
+ * Save lives in the unsaved-changes bar, which shows only once a field is
+ * changed (#604); Discard puts the saved details back.
  */
 export const OrgProfile: React.FC = () => {
   const orgQ = useOrganization();
@@ -35,7 +37,7 @@ export const OrgProfile: React.FC = () => {
     register,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useZodForm<OrganizationUpdateValues>(organizationUpdateSchema, { defaultValues: EMPTY });
 
   useEffect(() => {
@@ -64,6 +66,9 @@ export const OrgProfile: React.FC = () => {
       toast.error(e.message || 'Failed to update organization');
       return;
     }
+    // The saved values are the form's new baseline: the bar goes away now,
+    // not when the refetch lands.
+    reset(values);
     toast.success('Organization updated.');
     runTask(
       qc.invalidateQueries({ queryKey: queryKeys.organization() }),
@@ -76,7 +81,13 @@ export const OrgProfile: React.FC = () => {
   return (
     <section className="flex max-w-[560px] flex-col gap-2">
       <SectionHeader title="Organization profile" subtitle="Shown on invoices and reports" />
-      <DataSection title="organization profile" query={orgQ} placeholderHeight={420}>
+      <DataSection
+        title="organization profile"
+        query={orgQ}
+        placeholderHeight={420}
+        // Unclipped, so the unsaved-changes bar can stick (#604).
+        className="overflow-visible"
+      >
         <Form onSubmit={handleSubmit(onSubmit)} className="flex flex-col">
           <Field label="Organization name" required error={errors.name?.message}>
             <TextInput
@@ -115,11 +126,12 @@ export const OrgProfile: React.FC = () => {
               <TextInput {...register('metadata.email')} invalid={!!metaErrors.email} />
             </Field>
           </div>
-          <div>
-            <Button type="submit" variant="secondary" size="md" loading={isSubmitting}>
-              Save changes
-            </Button>
-          </div>
+          <UnsavedChangesBar
+            dirty={isDirty}
+            saving={isSubmitting}
+            onDiscard={() => reset()}
+            saveLabel="Save changes"
+          />
         </Form>
       </DataSection>
     </section>

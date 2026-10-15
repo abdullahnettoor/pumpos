@@ -28,7 +28,6 @@ import {
   Panel,
   Button,
   EmptyState,
-  Chip,
   DataSection,
   Form,
   Icon,
@@ -38,6 +37,7 @@ import {
   MenuSeparator,
   MenuTrigger,
   SectionHeader,
+  UnsavedChangesBar,
 } from '../../pump-ds/index.js';
 import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
@@ -49,6 +49,13 @@ import {
   sendKeyed,
   type SubmitKeySession,
 } from '../../office-records/submitKeys.js';
+import {
+  brandingDraftOf,
+  draftDiffers,
+  generalDraftOf,
+  type BrandingDraft,
+  type GeneralDraft,
+} from './stationDrafts.js';
 
 const stationService = new CloudStationService();
 
@@ -82,8 +89,6 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
-  const [editing, setEditing] = useState(false);
-  const [editingBusiness, setEditingBusiness] = useState(false);
   const [activeTab, setActiveTab] = useState<StationTab>('general');
   const logoInputRef = useRef<HTMLInputElement>(null);
   // The Add ▾ menu picks a tab and asks it to open its add drawer (#537 review).
@@ -98,9 +103,9 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
   });
   /**
    * Every station save sends one Idempotency-Key per logical submit (#537),
-   * through the shared store. Each form gets a new session when its edit is
-   * opened (General, Branding) or after each decided save (Rules forms), so a
-   * new edit never inherits the key of one left unsettled.
+   * through the shared store. A session renews its key after each decided
+   * save; Discard opens a new session (#604), so an edit started over never
+   * inherits the key of one left unsettled.
    */
   const sessions = useRef(new Map<string, SubmitKeySession>());
   const openSession = (form: string) => {
@@ -112,43 +117,34 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     sendKeyed(sessions.current.get(form) ?? openSession(form), body, (idempotencyKey) =>
       stationService.updateStation(id, body, { idempotencyKey }),
     );
-  const startEditing = () => {
-    openSession('general');
-    setEditing(true);
-  };
-  const startEditingBusiness = () => {
-    openSession('branding');
-    setEditingBusiness(true);
-  };
 
-  // General tab form states
-  const [name, setName] = useState(selectedStation?.name ?? '');
-  const [code, setCode] = useState(selectedStation?.code ?? '');
-  const [address, setAddress] = useState(selectedStation?.address || '');
-  const [phone, setPhone] = useState(selectedStation?.phone || '');
-  const [graceMinutes, setGraceMinutes] = useState(
-    selectedStation?.settings?.shift_grace_minutes || 15,
-  );
-  const [timezone, setTimezone] = useState(selectedStation?.settings?.timezone || 'Asia/Kolkata');
-  const [businessDayStartsAt, setBusinessDayStartsAt] = useState(
-    selectedStation?.settings?.business_day_starts_at || '06:00',
-  );
+  // In-page forms (#604): each edits a draft of the saved station and shows
+  // the unsaved-changes bar while the draft differs from it. Their Panels are
+  // `overflow-visible` so the bar can stick (a clipping Panel would hold it).
+  const [savingGeneral, setSavingGeneral] = useState(false);
+  const [savingBranding, setSavingBranding] = useState(false);
+  const [savingDecantation, setSavingDecantation] = useState(false);
+  const [general, setGeneral] = useState(() => generalDraftOf(selectedStation));
+  const setGeneralField = <K extends keyof GeneralDraft>(key: K, value: GeneralDraft[K]) =>
+    setGeneral((d) => ({ ...d, [key]: value }));
+  const generalDirty = draftDiffers(general, generalDraftOf(selectedStation));
+  const discardGeneral = () => {
+    openSession('general');
+    setGeneral(generalDraftOf(selectedStation));
+  };
   // Legal / branding (letterhead for reports & invoices)
-  const [legalName, setLegalName] = useState(selectedStation?.settings?.legal?.legalName || '');
-  const [gstin, setGstin] = useState(selectedStation?.settings?.legal?.gstin || '');
-  const [stateCode, setStateCode] = useState(selectedStation?.settings?.legal?.stateCode || '');
-  const [legalAddress, setLegalAddress] = useState(
-    selectedStation?.settings?.legal?.addressLine || '',
-  );
-  const [pincode, setPincode] = useState(selectedStation?.settings?.legal?.pincode || '');
-  const [roCode, setRoCode] = useState(selectedStation?.settings?.legal?.roCode || '');
-  const [fuelBrand, setFuelBrand] = useState(selectedStation?.settings?.fuel_brand || '');
-  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(
-    selectedStation?.settings?.logo_data_url || null,
-  );
-  const [onboardingStatus, setOnboardingStatus] = useState<string>(
-    selectedStation?.onboardingStatus || 'NOT_STARTED',
-  );
+  const [branding, setBranding] = useState(() => brandingDraftOf(selectedStation));
+  const setBrandingField = <K extends keyof BrandingDraft>(key: K, value: BrandingDraft[K]) =>
+    setBranding((d) => ({ ...d, [key]: value }));
+  const brandingDirty = draftDiffers(branding, brandingDraftOf(selectedStation));
+  const discardBranding = () => {
+    openSession('branding');
+    setBranding(brandingDraftOf(selectedStation));
+  };
+  const { name, code, address, phone, graceMinutes, timezone, businessDayStartsAt } = general;
+  const { onboardingStatus } = general;
+  const { legalName, gstin, stateCode, legalAddress, pincode, roCode, fuelBrand, logoDataUrl } =
+    branding;
   const storedDecantationSettings = resolveDecantationSettings(selectedStation?.settings);
   const [decantationDraft, setDecantationDraft] = useState<{
     stationId: string;
@@ -158,6 +154,11 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     decantationDraft && decantationDraft.stationId === selectedStation?.id
       ? decantationDraft.values
       : storedDecantationSettings;
+  const decantationDirty = draftDiffers(decantationSettings, storedDecantationSettings);
+  const discardDecantation = () => {
+    openSession('decantation');
+    setDecantationDraft(null);
+  };
   const updateDecantationSettings = (
     update: (current: typeof storedDecantationSettings) => typeof storedDecantationSettings,
   ) => {
@@ -218,7 +219,8 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
         onboardingStatus,
       });
       onStationSelected(updated);
-      setEditing(false);
+      // The saved station is the new baseline (the code comes back upper-case).
+      setGeneral(generalDraftOf(updated));
       runTask(loadStations(), 'Saved, but the station list could not be refreshed.');
       toast.success('Station details saved.');
     } catch (err: any) {
@@ -247,7 +249,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
         },
       });
       onStationSelected(updated);
-      setEditingBusiness(false);
+      setBranding(brandingDraftOf(updated));
       runTask(loadStations(), 'Saved, but the station list could not be refreshed.');
       toast.success('Business details saved.');
     } catch (err: any) {
@@ -271,6 +273,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
         },
       });
       onStationSelected(updated);
+      setDecantationDraft(null);
       runTask(loadStations(), 'Saved, but the station list could not be refreshed.');
       toast.success('Decantation settings saved.');
     } catch (err: any) {
@@ -423,48 +426,43 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
 
             {activeTab === 'general' && (
               <section className="flex flex-col gap-2">
-                <SectionHeader
-                  title="Station details"
-                  controls={
-                    editing
-                      ? undefined
-                      : {
-                          actions: (
-                            <Button variant="secondary" size="sm" onClick={startEditing}>
-                              Edit details
-                            </Button>
-                          ),
-                        }
-                  }
-                />
-                <Panel>
-                  {editing ? (
-                    <Form
-                      onSubmit={handleSaveGeneral}
-                      className="flex max-w-[600px] flex-col gap-1"
-                    >
+                <SectionHeader title="Station details" />
+                <Panel className="overflow-visible">
+                  <Form
+                    onSubmit={handleSaveGeneral}
+                    onSubmittingChange={setSavingGeneral}
+                    aria-label="Station details"
+                    className="flex flex-col gap-3"
+                  >
+                    <div className="flex max-w-[600px] flex-col gap-1">
                       <div className="grid grid-cols-2 gap-x-4">
                         <Field label="Station name" required>
                           <TextInput
                             value={name}
-                            onChange={(e) => setName(e.target.value)}
+                            onChange={(e) => setGeneralField('name', e.target.value)}
                             required
                           />
                         </Field>
                         <Field label="Station code" required>
                           <TextInput
                             value={code}
-                            onChange={(e) => setCode(e.target.value)}
+                            onChange={(e) => setGeneralField('code', e.target.value)}
                             required
                           />
                         </Field>
                       </div>
                       <Field label="Address">
-                        <TextInput value={address} onChange={(e) => setAddress(e.target.value)} />
+                        <TextInput
+                          value={address}
+                          onChange={(e) => setGeneralField('address', e.target.value)}
+                        />
                       </Field>
                       <div className="grid grid-cols-2 gap-x-4">
                         <Field label="Contact phone">
-                          <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} />
+                          <TextInput
+                            value={phone}
+                            onChange={(e) => setGeneralField('phone', e.target.value)}
+                          />
                         </Field>
                         <Field label="Shift grace period (minutes)">
                           <TextInput
@@ -472,7 +470,9 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                             min="0"
                             className="font-mono"
                             value={graceMinutes}
-                            onChange={(e) => setGraceMinutes(parseInt(e.target.value))}
+                            onChange={(e) =>
+                              setGeneralField('graceMinutes', parseInt(e.target.value))
+                            }
                           />
                         </Field>
                       </div>
@@ -481,7 +481,10 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                           label="Timezone"
                           hint="Used to decide which calendar day operations belong to."
                         >
-                          <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+                          <Select
+                            value={timezone}
+                            onChange={(e) => setGeneralField('timezone', e.target.value)}
+                          >
                             <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
                             <option value="Asia/Dubai">Asia/Dubai (GST)</option>
                             <option value="Asia/Colombo">Asia/Colombo</option>
@@ -498,51 +501,27 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                             type="time"
                             className="font-mono"
                             value={businessDayStartsAt}
-                            onChange={(e) => setBusinessDayStartsAt(e.target.value)}
+                            onChange={(e) => setGeneralField('businessDayStartsAt', e.target.value)}
                           />
                         </Field>
                       </div>
                       <Field label="Onboarding status" className="max-w-[300px]">
                         <Select
                           value={onboardingStatus}
-                          onChange={(e) => setOnboardingStatus(e.target.value)}
+                          onChange={(e) => setGeneralField('onboardingStatus', e.target.value)}
                         >
                           <option value="NOT_STARTED">Not started</option>
                           <option value="IN_PROGRESS">In progress</option>
                           <option value="READY_FOR_OPERATIONS">Ready for operations</option>
                         </Select>
                       </Field>
-                      <FormActions onCancel={() => setEditing(false)} />
-                    </Form>
-                  ) : (
-                    <DetailList
-                      items={[
-                        { label: 'Name', value: selectedStation.name },
-                        {
-                          label: 'Onboarding',
-                          value: (
-                            <Chip tone={onboardingTone(onboardingStatus)} size="md">
-                              {onboardingLabel(onboardingStatus)}
-                            </Chip>
-                          ),
-                        },
-                        { label: 'Station code', value: selectedStation.code, mono: true },
-                        { label: 'Contact', value: selectedStation.phone },
-                        {
-                          label: 'Grace period',
-                          value: `${selectedStation.settings?.shift_grace_minutes || 15} min`,
-                          mono: true,
-                        },
-                        { label: 'Timezone', value: selectedStation.settings?.timezone },
-                        {
-                          label: 'Business day starts',
-                          value: selectedStation.settings?.business_day_starts_at,
-                          mono: true,
-                        },
-                        { label: 'Address', value: selectedStation.address, wide: true },
-                      ]}
+                    </div>
+                    <UnsavedChangesBar
+                      dirty={generalDirty}
+                      saving={savingGeneral}
+                      onDiscard={discardGeneral}
                     />
-                  )}
+                  </Form>
                 </Panel>
               </section>
             )}
@@ -552,24 +531,15 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                 <SectionHeader
                   title="Business, tax and branding"
                   subtitle="The letterhead on reports and invoices"
-                  controls={
-                    editingBusiness
-                      ? undefined
-                      : {
-                          actions: (
-                            <Button variant="secondary" size="sm" onClick={startEditingBusiness}>
-                              Edit business details
-                            </Button>
-                          ),
-                        }
-                  }
                 />
-                <Panel>
-                  {editingBusiness ? (
-                    <Form
-                      onSubmit={handleSaveBusiness}
-                      className="flex max-w-[600px] flex-col gap-3"
-                    >
+                <Panel className="overflow-visible">
+                  <Form
+                    onSubmit={handleSaveBusiness}
+                    onSubmittingChange={setSavingBranding}
+                    aria-label="Business, tax and branding"
+                    className="flex flex-col gap-3"
+                  >
+                    <div className="flex max-w-[600px] flex-col gap-3">
                       <h3 className="text-[12px] font-semibold text-ink-strong">
                         Legal and tax (report letterhead)
                       </h3>
@@ -577,7 +547,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                         <Field label="Legal / trade name">
                           <TextInput
                             value={legalName}
-                            onChange={(e) => setLegalName(e.target.value)}
+                            onChange={(e) => setBrandingField('legalName', e.target.value)}
                             placeholder="e.g. Sri Lakshmi Fuels"
                           />
                         </Field>
@@ -585,7 +555,9 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                           <TextInput
                             className="font-mono"
                             value={gstin}
-                            onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                            onChange={(e) =>
+                              setBrandingField('gstin', e.target.value.toUpperCase())
+                            }
                             placeholder="29ABCDE1234F1Z5"
                             maxLength={15}
                           />
@@ -594,7 +566,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                           <TextInput
                             className="font-mono"
                             value={stateCode}
-                            onChange={(e) => setStateCode(e.target.value)}
+                            onChange={(e) => setBrandingField('stateCode', e.target.value)}
                             placeholder="e.g. 29 (Karnataka)"
                             maxLength={2}
                           />
@@ -602,14 +574,14 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                         <Field label="Retail outlet / dealer code">
                           <TextInput
                             value={roCode}
-                            onChange={(e) => setRoCode(e.target.value)}
+                            onChange={(e) => setBrandingField('roCode', e.target.value)}
                             placeholder="RO / dealership code"
                           />
                         </Field>
                         <Field label="Address line">
                           <TextInput
                             value={legalAddress}
-                            onChange={(e) => setLegalAddress(e.target.value)}
+                            onChange={(e) => setBrandingField('legalAddress', e.target.value)}
                             placeholder="Street, area, city"
                           />
                         </Field>
@@ -617,7 +589,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                           <TextInput
                             className="font-mono"
                             value={pincode}
-                            onChange={(e) => setPincode(e.target.value)}
+                            onChange={(e) => setBrandingField('pincode', e.target.value)}
                             placeholder="560001"
                             maxLength={6}
                           />
@@ -629,7 +601,10 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                       </h3>
                       <div className="grid grid-cols-2 gap-x-4">
                         <Field label="Fuel company / brand">
-                          <Select value={fuelBrand} onChange={(e) => setFuelBrand(e.target.value)}>
+                          <Select
+                            value={fuelBrand}
+                            onChange={(e) => setBrandingField('fuelBrand', e.target.value)}
+                          >
                             <option value="">— Select —</option>
                             <option value="Indian Oil">Indian Oil (IOCL)</option>
                             <option value="Bharat Petroleum">Bharat Petroleum (BPCL)</option>
@@ -663,7 +638,8 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                                 if (!file) return;
                                 const reader = new FileReader();
                                 reader.onload = () =>
-                                  setLogoDataUrl(
+                                  setBrandingField(
+                                    'logoDataUrl',
                                     typeof reader.result === 'string' ? reader.result : null,
                                   );
                                 reader.readAsDataURL(file);
@@ -682,7 +658,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                                 type="button"
                                 variant="ghost"
                                 size="xs"
-                                onClick={() => setLogoDataUrl(null)}
+                                onClick={() => setBrandingField('logoDataUrl', null)}
                               >
                                 Remove
                               </Button>
@@ -694,21 +670,13 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                         Report paper size and which sections print on each report are set in Station
                         › Report templates.
                       </p>
-                      <FormActions onCancel={() => setEditingBusiness(false)} />
-                    </Form>
-                  ) : (
-                    <DetailList
-                      items={[
-                        { label: 'Legal name', value: legalName },
-                        { label: 'GSTIN', value: gstin, mono: true },
-                        { label: 'State code', value: stateCode, mono: true },
-                        { label: 'Dealer code', value: roCode },
-                        { label: 'Fuel brand', value: fuelBrand },
-                        { label: 'Logo', value: logoDataUrl ? 'Uploaded' : null },
-                        { label: 'Address', value: legalAddress, wide: true },
-                      ]}
+                    </div>
+                    <UnsavedChangesBar
+                      dirty={brandingDirty}
+                      saving={savingBranding}
+                      onDiscard={discardBranding}
                     />
-                  )}
+                  </Form>
                 </Panel>
               </section>
             )}
@@ -727,9 +695,10 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                     title="Decantation guidance"
                     subtitle="Flags readings for review; never blocks an operation"
                   />
-                  <Panel>
+                  <Panel className="overflow-visible">
                     <Form
                       onSubmit={handleSaveDecantation}
+                      onSubmittingChange={setSavingDecantation}
                       aria-label="Decantation guidance"
                       className="flex max-w-[760px] flex-col gap-3"
                     >
@@ -891,11 +860,11 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                         </DataSection>
                       </div>
 
-                      <div className="flex justify-end border-t border-border-soft pt-3">
-                        <Button type="submit" variant="secondary" size="sm">
-                          Save decantation settings
-                        </Button>
-                      </div>
+                      <UnsavedChangesBar
+                        dirty={decantationDirty}
+                        saving={savingDecantation}
+                        onDiscard={discardDecantation}
+                      />
                     </Form>
                   </Panel>
                 </section>
@@ -959,49 +928,3 @@ type StationTab =
   | 'terminals'
   | 'shifts'
   | 'report-templates';
-
-const ONBOARDING_LABEL: Record<string, string> = {
-  NOT_STARTED: 'Not started',
-  IN_PROGRESS: 'In progress',
-  READY_FOR_OPERATIONS: 'Ready for operations',
-};
-const onboardingLabel = (s: string) => ONBOARDING_LABEL[s] ?? s.replace(/_/g, ' ').toLowerCase();
-/** Ready reads green; setup still under way is not a problem, so it stays neutral. */
-const onboardingTone = (s: string) => (s === 'READY_FOR_OPERATIONS' ? 'success' : 'neutral');
-
-/** A read-only view of saved settings: 12px muted label over a 13px value. */
-const DetailList: React.FC<{
-  items: { label: string; value: React.ReactNode; mono?: boolean; wide?: boolean }[];
-}> = ({ items }) => (
-  <dl className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
-    {items.map((item) => (
-      <div key={item.label} className={item.wide ? 'col-span-2' : undefined}>
-        <dt className="text-[12px] text-ink-muted">{item.label}</dt>
-        <dd
-          className={
-            item.mono
-              ? 'mt-1 font-mono text-[13px] tabular-nums text-ink-strong'
-              : 'mt-1 text-[13px] text-ink-strong'
-          }
-        >
-          {item.value == null || item.value === '' ? (
-            <span className="text-ink-faint">—</span>
-          ) : (
-            item.value
-          )}
-        </dd>
-      </div>
-    ))}
-  </dl>
-);
-
-const FormActions: React.FC<{ onCancel: () => void }> = ({ onCancel }) => (
-  <div className="mt-2 flex justify-end gap-2 border-t border-border-soft pt-3">
-    <Button type="button" variant="secondary" size="sm" onClick={onCancel}>
-      Cancel
-    </Button>
-    <Button type="submit" variant="secondary" size="sm">
-      Save
-    </Button>
-  </div>
-);

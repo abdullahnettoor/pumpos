@@ -119,6 +119,35 @@ describe('Station page', () => {
     expect(screen.queryByRole('button', { name: 'Add' })).toBeNull();
   });
 
+  it('Station details is an in-page form: the unsaved-changes bar shows only while it differs (#604)', async () => {
+    const onStationSelected = vi.fn();
+    renderWithProviders(
+      <StationOverview
+        selectedStation={station}
+        userRole="Owner"
+        onStationSelected={onStationSelected}
+      />,
+    );
+    const form = await screen.findByRole('form', { name: 'Station details' });
+    expect(screen.queryByRole('button', { name: 'Edit details' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull();
+    const name = form.querySelector('input[value="Highway Fuels"]') as HTMLInputElement;
+
+    fireEvent.change(name, { target: { value: 'Highway Fuels 2' } });
+    expect(screen.getByRole('region', { name: 'Unsaved changes' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(name.value).toBe('Highway Fuels');
+    expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull();
+
+    fireEvent.change(name, { target: { value: 'Highway Fuels 2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(calls.some((c) => c.init?.method === 'PUT')).toBe(true));
+    const put = calls.find((c) => c.init?.method === 'PUT')!;
+    expect(header(put.init, 'Idempotency-Key')).toBeTruthy();
+    expect(JSON.parse(String(put.init!.body))).toMatchObject({ name: 'Highway Fuels 2' });
+    await waitFor(() => expect(onStationSelected).toHaveBeenCalled());
+  });
+
   it('a failed station list shows Retry, not "No station selected"', async () => {
     routes['/setup/stations'] = { status: 500 };
     renderWithProviders(
