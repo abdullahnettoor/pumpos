@@ -60,4 +60,9 @@ describe('formatStockVariance', () => {
     expect(formatStockVariance(0.2, 'Nos')).toBe('+0.200 Nos');
     expect(formatStockVariance(0.0004, 'L')).toBe('0.00 L');
   });
+
+  it('prints a bare magnitude on request, still to 3 places when needed', () => {
+    expect(formatStockVariance(0.001, 'L', { plus: false })).toBe('0.001 L');
+    expect(formatStockVariance(12.5, 'L', { plus: false })).toBe('12.50 L');
+  });
 });

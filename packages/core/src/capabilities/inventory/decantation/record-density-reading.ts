@@ -137,8 +137,9 @@ export class RecordDensityReading implements UseCase<RecordDensityReadingCommand
 
     if (prev) {
       deltaVsPrevious = roundDensity(density15Val - prev.density15, 2);
-      // The client's jump rule (#556): judged on the change as shown (1 dp), so
-      // a +3.04 at tolerance 3 reads "+3.0" and is not a jump on either side.
+      // The client's jump rule (#556): judged on the magnitude as shown (1 dp),
+      // so a +3.04 at tolerance 3 reads "+3.0" and is not a jump on either side,
+      // and ±3.05 both read 3.1 and are.
       if (densityChangeExceedsTolerance(deltaVsPrevious, tolerance)) {
         const wasDecantation = prev.kind === 'DECANTATION';
         let hasInterveningDecantation = wasDecantation;

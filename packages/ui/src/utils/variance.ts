@@ -61,10 +61,15 @@ export const VARIANCE_TONE_TEXT: Record<StatusTone, string> = {
 export function formatStockVariance(
   amount: number | string | null | undefined,
   unit: string | null | undefined,
+  /** `plus: false` prints a magnitude after its word ("Short 0.004 L"). */
+  opts: { plus?: boolean } = {},
 ): string {
   const n = Number(amount);
   const decimals = quantityDecimals(unit);
   const hidden =
     Number.isFinite(n) && !isBalancedQuantity(n) && Math.round(Math.abs(n) * 10 ** decimals) === 0;
-  return formatQuantity(amount, unit, { plus: true, decimals: hidden ? 3 : undefined });
+  return formatQuantity(amount, unit, {
+    plus: opts.plus ?? true,
+    decimals: hidden ? 3 : undefined,
+  });
 }

@@ -1,4 +1,4 @@
-import { readDssrOmcCard, shiftDisplayLabel, variancePresentation } from '@pump/shared';
+import { readDssrOmcCard, shiftDisplayLabel } from '@pump/shared';
 import type { PumpStatus } from '../../../pump-ds/index.js';
 import { formatMoney } from '../../../utils/format.js';
 
@@ -120,14 +120,21 @@ const optionalNum = (v: unknown): number | null => (v == null ? null : num(v));
 
 /**
  * A stock line's status as the snapshot froze it (`composeDssr`): a DSSR is
- * never re-read under a newer balanced rule (#556). Only a row without one
- * falls back to the shared rule on its frozen variance.
+ * never re-read under a newer balanced rule (#556).
  */
 const FROZEN_STOCK_STATUS: Record<string, StockVarianceRow['status']> = {
   OK: 'balanced',
   Gain: 'surplus',
   Loss: 'short',
 };
+
+/**
+ * A stored row without a frozen status reads by the rule it was composed
+ * under: exact zero (before #556), never the current quantity rule, so a
+ * historical DSR keeps its reading (a frozen 0.0004 stays a surplus).
+ */
+const legacyStockStatus = (variance: number): StockVarianceRow['status'] =>
+  variance < 0 ? 'short' : variance > 0 ? 'surplus' : 'balanced';
 
 const stockRows = (rows: any[], withProduct: boolean, fallbackUnit: string): StockVarianceRow[] =>
   rows.map((v, i) => {
@@ -141,7 +148,7 @@ const stockRows = (rows: any[], withProduct: boolean, fallbackUnit: string): Sto
       actual: num(v.actualQuantity),
       variance,
       // One word set for every variance (#518), the status frozen with the day.
-      status: FROZEN_STOCK_STATUS[v.status] ?? variancePresentation(variance, 'stock').state,
+      status: FROZEN_STOCK_STATUS[v.status] ?? legacyStockStatus(variance),
     };
   });
 

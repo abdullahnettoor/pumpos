@@ -228,6 +228,9 @@ describe('RecordDensityReading', () => {
     [736.96, false],
     [743.06, true],
     [736.94, true],
+    // ±3.05 ties: the magnitude rounds to 3.1 either way.
+    [743.05, true],
+    [736.95, true],
   ])(
     'judges a jump on the change as shown, like the client (#556): %s after 740 at tolerance 3 → %s',
     async (density15, jump) => {

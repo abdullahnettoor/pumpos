@@ -8,6 +8,13 @@ describe('densityChangeExceedsTolerance', () => {
     expect(densityChangeExceedsTolerance(-3.06, 3)).toBe(true);
     expect(densityChangeExceedsTolerance(3, 3)).toBe(false);
   });
+
+  it('rounds the magnitude, so a rise and a fall of the same size read alike (±3.05 ties)', () => {
+    expect(densityChangeExceedsTolerance(3.05, 3)).toBe(true);
+    expect(densityChangeExceedsTolerance(-3.05, 3)).toBe(true);
+    expect(densityChangeExceedsTolerance(3.04, 3)).toBe(false);
+    expect(densityChangeExceedsTolerance(-3.04, 3)).toBe(false);
+  });
 });
 
 describe('isUnexplainedDensityJump', () => {

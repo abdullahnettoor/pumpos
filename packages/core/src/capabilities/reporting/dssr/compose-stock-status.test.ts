@@ -15,7 +15,16 @@ const row = (varianceQuantity: number, inventoryType = 'BULK'): StockRow => ({
   reason: null,
 });
 
-const statuses = (rows: StockRow[]) => {
+/** The part of a composed stock line this test reads. */
+interface ComposedStockLine {
+  status: 'OK' | 'Gain' | 'Loss';
+}
+interface ComposedStock {
+  fuelStockVariance: ComposedStockLine[];
+  merchandiseStockVariance: ComposedStockLine[];
+}
+
+const statuses = (rows: StockRow[]): ComposedStockLine['status'][] => {
   const d = composeDssr({
     shiftSummaries: [],
     purchases: [],
@@ -26,8 +35,8 @@ const statuses = (rows: StockRow[]) => {
     saleItems: [],
     products: {},
     nozzles: {},
-  }) as any;
-  return [...d.fuelStockVariance, ...d.merchandiseStockVariance].map((r: any) => r.status);
+  }) as unknown as ComposedStock;
+  return [...d.fuelStockVariance, ...d.merchandiseStockVariance].map((r) => r.status);
 };
 
 describe('composeDssr stock line status: the shared quantity rule (#556)', () => {

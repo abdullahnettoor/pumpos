@@ -53,19 +53,29 @@ describe('readDssrDay', () => {
     ]);
   });
 
-  it('reads stock variance through the shared vocabulary and quantity rule', () => {
+  it('reads an old-shape row (no frozen status) by the exact-zero rule it was composed under (#556)', () => {
+    // Snapshot rows sealed before the status was stored: tank, figures, no `status`.
     const day = readDssrDay({
       snapshotData: {
         fuelStockVariance: [
-          { tankName: 'T1', varianceQuantity: -2 },
-          { tankName: 'T2', varianceQuantity: 3 },
-          { tankName: 'T3', varianceQuantity: 0.0004 },
-          // 1 ml is a recorded step, not noise (#556).
-          { tankName: 'T4', varianceQuantity: 0.001 },
+          { tankName: 'T1', unit: 'Litre', varianceQuantity: -2 },
+          { tankName: 'T2', unit: 'Litre', varianceQuantity: 3 },
+          { tankName: 'T3', unit: 'Litre', varianceQuantity: 0 },
+          // Under the current quantity rule this would read Balanced; it was sealed a Gain.
+          { tankName: 'T4', unit: 'Litre', varianceQuantity: 0.0004 },
+          { tankName: 'T5', unit: 'Litre', varianceQuantity: '-0.0004' },
         ],
       },
     });
-    expect(day.fuelStock.map((r) => r.status)).toEqual(['short', 'surplus', 'balanced', 'surplus']);
+    expect(day.fuelStock.map((r) => r.status)).toEqual([
+      'short',
+      'surplus',
+      'balanced',
+      'surplus',
+      'short',
+    ]);
+    const variance = FUEL_STOCK_COLUMNS.find((c) => c.id === 'variance')!;
+    expect(dssrCellTone(variance, day.fuelStock[3])).toBe('surplus');
   });
 
   it("keeps a snapshot's frozen stock status, never re-derived under a newer rule (#556)", () => {

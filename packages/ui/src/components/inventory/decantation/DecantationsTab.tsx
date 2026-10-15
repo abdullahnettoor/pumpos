@@ -81,7 +81,7 @@ const varianceLabel = (v: DecantationRow['variances'][number]): string => {
   // The figure only: the words sit on a line of their own (`VarianceChip`).
   if (v.state === 'within-tolerance')
     return `${v.productName} · ${formatStockVariance(v.qty, 'L')}`;
-  return `${v.productName} · ${label} ${formatQuantity(Math.abs(v.qty), 'L')}`;
+  return `${v.productName} · ${label} ${formatStockVariance(Math.abs(v.qty), 'L', { plus: false })}`;
 };
 
 /**

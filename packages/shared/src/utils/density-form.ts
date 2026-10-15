@@ -114,11 +114,12 @@ export function toRecordDensityPayload(
 
 /**
  * Whether a density change is beyond tolerance, judged on the change as shown
- * (1 decimal), so a `+3.0` never reads as a jump at tolerance 3. The one rule
- * for every density jump check on the client.
+ * (1 decimal), so a `+3.0` never reads as a jump at tolerance 3. The magnitude
+ * is rounded, so a rise and a fall of the same size read alike (±3.05 → 3.1).
+ * The one rule for every density jump check, on the client and the server.
  */
 export function densityChangeExceedsTolerance(delta: number, tolerance: number): boolean {
-  return Math.abs(Math.round(delta * 10) / 10) > tolerance;
+  return Math.round(Math.abs(delta) * 10) / 10 > tolerance;
 }
 
 /**
