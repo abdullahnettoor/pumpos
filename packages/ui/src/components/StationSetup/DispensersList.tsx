@@ -1,32 +1,37 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  CloudDispenserService,
-  CloudTankService,
-  CloudProductService,
-  CloudNozzleService,
-} from '../../services/cloud.js';
-import {
-  queryKeys,
-  TIER,
-  useDispensers,
-  useNozzles,
-  useProducts,
-  useTanks,
-} from '../../query/hooks.js';
+import { CloudDispenserService, CloudNozzleService } from '../../services/cloud.js';
+import { queryKeys, useDispensers, useNozzles, useProducts, useTanks } from '../../query/hooks.js';
 import { DispenserUnit, Tank, Product, Nozzle } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useInvalidateOperational } from '../../query/hooks.js';
-import { Button, Form, Icon } from '../../pump-ds/index.js';
+import {
+  officeSubmitKeys,
+  sendKeyed,
+  type SubmitKeySession,
+} from '../../office-records/submitKeys.js';
+import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
+import {
+  Button,
+  Chip,
+  ConceptIcon,
+  DataSection,
+  EmptyState,
+  Form,
+  Icon,
+  SectionHeader,
+  StatusChip,
+} from '../../pump-ds/index.js';
+import { Field, NumberInput, Select, TextInput } from '../primitives/Field.js';
+import { countOf } from '../../utils/ledgerWindow.js';
+import { formatQuantity } from '../../utils/format.js';
 
 const dispenserService = new CloudDispenserService();
-const tankService = new CloudTankService();
-const productService = new CloudProductService();
 const nozzleService = new CloudNozzleService();
 
-export interface DispensersListProps {
+export interface DispensersListProps extends CreateRequestProps {
   stationId: string;
 }
 
@@ -37,10 +42,16 @@ interface NozzleInput {
   currentReading: number;
 }
 
-export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => {
+export const DispensersList: React.FC<DispensersListProps> = ({
+  stationId,
+  createRequest,
+  onCreateHandled,
+}) => {
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
+  // One session per opened edit (#537): a new edit never inherits an unsettled key.
+  const sessionRef = useRef<SubmitKeySession | null>(null);
   const invalidateOperational = useInvalidateOperational();
   // Shared hooks rather than a loader copying four lists into local state.
   const dispensersQ = useDispensers(stationId);
@@ -54,8 +65,6 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
   const products: Product[] = ((productsQ.data as Product[]) ?? []).filter(
     (p) => p.productType === 'FUEL' && p.isActive,
   );
-  const loading =
-    dispensersQ.isPending || tanksQ.isPending || productsQ.isPending || nozzlesQ.isPending;
   const refreshDispensers = () =>
     Promise.all([
       qc.invalidateQueries({ queryKey: queryKeys.dispensers(stationId ?? '') }),
@@ -166,7 +175,12 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     const next = du.status === 'ACTIVE' ? 'MAINTENANCE' : 'ACTIVE';
     try {
       setStatusBusyId(du.id);
-      await dispenserService.updateDispenser(du.id, { status: next });
+      const body = { status: next };
+      await sendKeyed(
+        officeSubmitKeys.session(`setup:dispensers:${du.id}`),
+        body,
+        (idempotencyKey) => dispenserService.updateDispenser(du.id, body, { idempotencyKey }),
+      );
       toast.success(
         next === 'MAINTENANCE' ? `${du.name} is out of service.` : `${du.name} is back in service.`,
       );
@@ -193,26 +207,32 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     try {
       setSubmitting(true);
       // Create Dispenser
-      const createdDU = await dispenserService.createDispenser({
-        stationId,
-        name,
-        code: code.toUpperCase(),
-        status: 'ACTIVE',
-      });
+      const duBody = { stationId, name, code: code.toUpperCase(), status: 'ACTIVE' };
+      const createdDU = await sendKeyed(
+        sessionRef.current ?? officeSubmitKeys.session(`setup:dispensers:${stationId}`),
+        duBody,
+        (idempotencyKey) => dispenserService.createDispenser(duBody, { idempotencyKey }),
+      );
 
-      // Sequential nozzle creations for SQLite resilience
-      for (const nozzleInput of nozzlesList) {
+      // Sequential nozzle creations for SQLite resilience. Each nozzle is its
+      // own request, so its own scope: a key is never shared between rows.
+      for (const [idx, nozzleInput] of nozzlesList.entries()) {
         if (!nozzleInput.tankId || !nozzleInput.productId) {
           throw new Error('Please make sure all nozzles have a valid tank and product selected.');
         }
-        await nozzleService.createNozzle({
+        const nozzleBody = {
           stationId,
           duId: createdDU.id,
           tankId: nozzleInput.tankId,
           productId: nozzleInput.productId,
           name: nozzleInput.name,
           currentReading: nozzleInput.currentReading,
-        });
+        };
+        await sendKeyed(
+          officeSubmitKeys.session(`setup:nozzles:${createdDU.id}:${idx}`),
+          nozzleBody,
+          (idempotencyKey) => nozzleService.createNozzle(nozzleBody, { idempotencyKey }),
+        );
       }
 
       setIsFormOpen(false);
@@ -256,6 +276,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     }
 
     setNozzlesList(recommendedNozzles);
+    sessionRef.current = officeSubmitKeys.session(`setup:dispensers:${stationId}`);
     setIsFormOpen(true);
   };
 
@@ -302,153 +323,161 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     }
 
     setNozzlesList(recommendedNozzles);
+    sessionRef.current = officeSubmitKeys.session(`setup:dispensers:${stationId}`);
     setIsFormOpen(true);
   };
 
-  if (loading)
-    return (
-      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-        Loading dispenser units...
-      </div>
-    );
+  const closeForm = () => {
+    resetForm();
+    setIsFormOpen(false);
+  };
+
+  const openCreate = () => {
+    resetForm();
+    sessionRef.current = officeSubmitKeys.session(`setup:dispensers:${stationId}`);
+    setIsFormOpen(true);
+  };
+  // The Station page's Add ▾ menu opens this drawer.
+  useCreateRequest(createRequest, openCreate, onCreateHandled);
 
   return (
-    <div
-      style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-      className="animate-fade-in"
-    >
-      {/* Header & Add Button */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Dispenser Units (DUs)
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-            Configure physical fuel pump islands, linked underground tanks, and nozzles.
-          </p>
-        </div>
-        {!isFormOpen && (
-          <Button
-            variant="primary"
-            size="sm"
-            leftIcon={<Icon name="plus" size="sm" />}
-            onClick={() => {
-              resetForm();
-              setIsFormOpen(true);
-            }}
-          >
-            Add Dispenser
-          </Button>
-        )}
-      </div>
+    <section className="flex flex-col gap-2">
+      <SectionHeader
+        title="Dispenser units"
+        subtitle={
+          dispensersQ.data ? countOf(dispensers.length, 'dispenser', 'dispensers') : undefined
+        }
+      />
 
-      {/* Recommended Configuration Suggestions Banner */}
       {products.length > 0 && tanks.length > 0 && (
-        <div
-          style={{
-            backgroundColor: 'var(--bg-surface-alt)',
-            padding: '16px 20px',
-            borderRadius: 'var(--radius-card)',
-            border: '1px solid var(--border-soft)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '16px',
-          }}
-        >
-          <div>
-            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>
-              Recommended Layout Templates
-            </span>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-              Select a template to pre-fill the form with standard dispenser configurations:
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={prefillDualNozzles}
-              style={{
-                height: '30px',
-                padding: '0 12px',
-                backgroundColor: 'var(--brand-primary)',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '12px',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-border-soft bg-surface-alt px-4 py-3">
+          <span className="text-[12px] text-ink-muted">
+            Pre-fill the form with a standard dispenser layout:
+          </span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="secondary" onClick={prefillDualNozzles}>
               Auto-fill Dual Dispenser (2 Nozzles)
-            </button>
-            <button
-              onClick={prefillQuadNozzles}
-              style={{
-                height: '30px',
-                padding: '0 12px',
-                backgroundColor: 'var(--bg-surface)',
-                color: 'var(--text-strong)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '12px',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
+            </Button>
+            <Button size="sm" variant="secondary" onClick={prefillQuadNozzles}>
               Auto-fill Quad Dispenser (4 Nozzles)
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
-      {/* Dispenser Creation Drawer */}
-      <Drawer
-        isOpen={isFormOpen}
-        onClose={() => {
-          resetForm();
-          setIsFormOpen(false);
-        }}
-        title="Add Dispenser Island"
+      <DataSection
+        title="dispenser units"
+        query={[dispensersQ, tanksQ, productsQ, nozzlesQ]}
+        placeholderHeight={200}
+        isEmpty={dispensers.length === 0}
+        empty={
+          <EmptyState
+            compact
+            icon={<ConceptIcon concept="dispensers" size="md" />}
+            title="No dispenser units"
+            description="Add the pumps at this station and map their nozzles to tanks."
+          />
+        }
       >
-        <Form
-          onSubmit={handleCreate}
-          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Dispenser Name *
-            </label>
-            <input
-              type="text"
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
+          {dispensers.map((du) => {
+            const duNozzles = nozzles.filter((n) => n.duId === du.id);
+            return (
+              <div
+                key={du.id}
+                data-dispenser={du.id}
+                className="flex flex-col gap-3 rounded-card border border-border-soft bg-surface p-4"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-[14px] font-semibold text-ink-strong">
+                      {du.name}
+                    </span>
+                    <span className="font-mono text-[12px] text-ink-muted">{du.code}</span>
+                  </div>
+                  {/* Maintenance is a warning, not a fault: the pump is
+                      expected back. Only INACTIVE is retired. */}
+                  {du.status === 'MAINTENANCE' ? (
+                    <Chip tone="warning" size="md">
+                      Maintenance
+                    </Chip>
+                  ) : (
+                    <StatusChip status={du.status === 'ACTIVE' ? 'active' : 'inactive'} size="md" />
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-1.5 border-t border-border-soft pt-2.5">
+                  <span className="text-[12px] font-semibold text-ink-muted">Nozzles</span>
+                  {duNozzles.length > 0 ? (
+                    duNozzles.map((n) => {
+                      const prod = products.find((p) => p.id === n.productId);
+                      const tank = tanks.find((t) => t.id === n.tankId);
+                      return (
+                        <div key={n.id} className="flex justify-between gap-2 text-[12px] text-ink">
+                          <span className="font-medium">
+                            {n.name} →{' '}
+                            <span className="text-ink-muted">
+                              {tank?.name || 'No Tank'} ({prod?.name || 'No Fuel'})
+                            </span>
+                          </span>
+                          <span className="font-mono font-semibold text-ink-strong">
+                            {formatQuantity(n.currentReading, prod?.unit || 'L', { decimals: 3 })}
+                          </span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-[12px] text-ink-muted">
+                      No nozzles connected to this dispenser.
+                    </p>
+                  )}
+                </div>
+
+                {/* Taking a pump out of service. The consequences are not
+                    obvious from the word "maintenance", so they are spelled
+                    out: it stops being offered at shift open, which is what
+                    lets a shift open at all while it is broken (#258). */}
+                <div className="flex items-center justify-between gap-2 border-t border-border-soft pt-2.5">
+                  <span className="text-[12px] text-ink-muted">
+                    {du.status === 'ACTIVE'
+                      ? 'In service'
+                      : du.status === 'MAINTENANCE'
+                        ? 'Out of service — not offered at shift open, and its nozzles are not read'
+                        : 'Retired'}
+                  </span>
+                  {/* Only ACTIVE ⇄ MAINTENANCE. A retired dispenser is not the
+                      same as one under repair, and a two-state toggle over a
+                      three-state enum would silently un-retire it. */}
+                  {du.status !== 'INACTIVE' && (
+                    <Button
+                      variant="secondary"
+                      size="xs"
+                      loading={statusBusyId === du.id}
+                      disabled={!!statusBusyId && statusBusyId !== du.id}
+                      onClick={() => handleStatusToggle(du)}
+                    >
+                      {du.status === 'ACTIVE' ? 'Put into maintenance' : 'Return to service'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </DataSection>
+
+      <Drawer isOpen={isFormOpen} onClose={closeForm} title="Add Dispenser Island">
+        <Form onSubmit={handleCreate} className="flex flex-col">
+          <Field label="Dispenser Name" required>
+            <TextInput
               placeholder="e.g. Dispenser 01"
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               required
             />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Code / Reference ID *
-            </label>
-            <input
-              type="text"
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
+          </Field>
+          <Field label="Code / Reference ID" required>
+            <TextInput
               placeholder="e.g. DU-01"
               value={code}
               onChange={(e) => {
@@ -457,22 +486,11 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
               }}
               required
             />
-          </div>
+          </Field>
 
-          {/* Nozzles Mapping Section */}
-          <div
-            style={{
-              borderTop: '1px solid var(--border-soft)',
-              paddingTop: '16px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                Map Nozzles
-              </span>
+          <div className="flex flex-col gap-3 border-t border-border-soft pt-4">
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-semibold text-ink-strong">Map Nozzles</span>
               <Button
                 type="button"
                 variant="secondary"
@@ -485,416 +503,97 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
             </div>
 
             {nozzlesList.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {nozzlesList.map((nozzle, idx) => {
-                  const filteredTanks = tanks.filter((t) => t.productId === nozzle.productId);
-                  return (
-                    <div
-                      key={idx}
-                      style={{
-                        padding: '12px',
-                        border: '1px solid var(--border-soft)',
-                        borderRadius: '6px',
-                        backgroundColor: 'var(--bg-surface-alt)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px',
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}
+              nozzlesList.map((nozzle, idx) => {
+                const filteredTanks = tanks.filter((t) => t.productId === nozzle.productId);
+                return (
+                  <div
+                    key={idx}
+                    className="flex flex-col rounded-card border border-border-soft bg-surface-alt p-3"
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[12px] font-semibold text-ink-muted">
+                        Nozzle #{idx + 1}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => removeNozzleRow(idx)}
                       >
-                        <span
-                          style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}
-                        >
-                          Nozzle #{idx + 1}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removeNozzleRow(idx)}
-                          style={{
-                            border: 'none',
-                            background: 'none',
-                            color: 'var(--state-danger-fg)',
-                            cursor: 'pointer',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                          }}
-                        >
-                          Remove
-                        </button>
-                      </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            Name
-                          </label>
-                          <input
-                            type="text"
-                            value={nozzle.name}
-                            onChange={(e) => handleNozzleNameChange(idx, e.target.value)}
-                            style={{
-                              height: '28px',
-                              padding: '0 8px',
-                              borderRadius: 'var(--radius-input)',
-                              border: '1px solid var(--border-strong)',
-                              fontSize: '12px',
-                            }}
-                            required
-                          />
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            Reading ({products.find((p) => p.id === nozzle.productId)?.unit || 'L'})
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            placeholder="0"
-                            value={nozzle.currentReading || ''}
-                            onChange={(e) =>
-                              handleNozzleReadingChange(idx, parseFloat(e.target.value) || 0)
-                            }
-                            style={{
-                              height: '28px',
-                              padding: '0 8px',
-                              borderRadius: 'var(--radius-input)',
-                              border: '1px solid var(--border-strong)',
-                              fontSize: '12px',
-                            }}
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            Fuel
-                          </label>
-                          <select
-                            value={nozzle.productId}
-                            onChange={(e) => handleNozzleProductChange(idx, e.target.value)}
-                            style={{
-                              height: '28px',
-                              padding: '0 4px',
-                              borderRadius: 'var(--radius-input)',
-                              border: '1px solid var(--border-strong)',
-                              fontSize: '12px',
-                              backgroundColor: 'var(--bg-surface)',
-                            }}
-                          >
-                            {products.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            Tank
-                          </label>
-                          <select
-                            value={nozzle.tankId}
-                            onChange={(e) => handleNozzleTankChange(idx, e.target.value)}
-                            style={{
-                              height: '28px',
-                              padding: '0 4px',
-                              borderRadius: 'var(--radius-input)',
-                              border: '1px solid var(--border-strong)',
-                              fontSize: '12px',
-                              backgroundColor: 'var(--bg-surface)',
-                            }}
-                          >
-                            <option value="">-- Select Tank --</option>
-                            {filteredTanks.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
+                        Remove
+                      </Button>
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="grid grid-cols-2 gap-x-2">
+                      <Field label="Name">
+                        <TextInput
+                          value={nozzle.name}
+                          onChange={(e) => handleNozzleNameChange(idx, e.target.value)}
+                          required
+                        />
+                      </Field>
+                      <Field
+                        label={`Reading (${products.find((p) => p.id === nozzle.productId)?.unit || 'L'})`}
+                      >
+                        <NumberInput
+                          value={nozzle.currentReading || ''}
+                          onChange={(e) =>
+                            handleNozzleReadingChange(idx, parseFloat(e.target.value) || 0)
+                          }
+                          required
+                        />
+                      </Field>
+                      <Field label="Fuel">
+                        <Select
+                          value={nozzle.productId}
+                          onChange={(e) => handleNozzleProductChange(idx, e.target.value)}
+                        >
+                          {products.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                      <Field label="Tank">
+                        <Select
+                          value={nozzle.tankId}
+                          onChange={(e) => handleNozzleTankChange(idx, e.target.value)}
+                        >
+                          <option value="">-- Select Tank --</option>
+                          {filteredTanks.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                    </div>
+                  </div>
+                );
+              })
             ) : (
-              <p
-                style={{
-                  fontSize: '11px',
-                  color: 'var(--text-muted)',
-                  fontStyle: 'italic',
-                  textAlign: 'center',
-                  padding: '12px',
-                }}
-              >
+              <p className="p-3 text-center text-[12px] text-ink-muted">
                 No nozzles mapped yet. Click "Add Nozzle" to connect fuel lines to this dispenser.
               </p>
             )}
           </div>
 
-          <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-            <button
+          <div className="flex gap-3 pt-3">
+            <Button
               type="submit"
+              variant="primary"
+              className="flex-1"
+              loading={submitting}
               disabled={submitting}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: submitting ? 'var(--text-muted)' : 'var(--brand-primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: submitting ? 'not-allowed' : 'pointer',
-              }}
             >
               {submitting ? 'Creating...' : 'Create Dispenser'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                resetForm();
-                setIsFormOpen(false);
-              }}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--bg-surface-alt)',
-                color: 'var(--text-default)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
+            </Button>
+            <Button type="button" variant="secondary" className="flex-1" onClick={closeForm}>
               Cancel
-            </button>
+            </Button>
           </div>
         </Form>
       </Drawer>
-
-      {/* DU Grid View */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-          gap: '16px',
-        }}
-      >
-        {dispensers.map((du) => {
-          const duNozzles = nozzles.filter((n) => n.duId === du.id);
-          return (
-            <div
-              key={du.id}
-              data-dispenser={du.id}
-              style={{
-                backgroundColor: 'var(--bg-surface)',
-                padding: '18px',
-                borderRadius: 'var(--radius-card)',
-                border: '1px solid var(--border-soft)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.01)',
-              }}
-            >
-              <div
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-              >
-                <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-strong)' }}>
-                  {du.name}
-                </span>
-                <span
-                  style={{
-                    fontSize: '10px',
-                    fontWeight: 700,
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    // Maintenance is a warning, not a fault: the pump is
-                    // expected back. Only INACTIVE is retired.
-                    backgroundColor:
-                      du.status === 'ACTIVE'
-                        ? 'var(--state-success-bg)'
-                        : du.status === 'MAINTENANCE'
-                          ? 'var(--state-warning-bg)'
-                          : 'var(--state-danger-bg)',
-                    color:
-                      du.status === 'ACTIVE'
-                        ? 'var(--state-success-fg)'
-                        : du.status === 'MAINTENANCE'
-                          ? 'var(--state-warning-fg)'
-                          : 'var(--state-danger-fg)',
-                  }}
-                >
-                  {du.status}
-                </span>
-              </div>
-              <div>
-                <span
-                  style={{
-                    fontSize: '10px',
-                    color: 'var(--text-muted)',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}
-                >
-                  ISLAND CODE
-                </span>
-                <p
-                  style={{
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    color: 'var(--text-strong)',
-                    marginTop: '2px',
-                  }}
-                >
-                  {du.code}
-                </p>
-              </div>
-
-              {/* Nozzles Sub-list */}
-              <div
-                style={{
-                  borderTop: '1px solid var(--border-soft)',
-                  paddingTop: '10px',
-                  marginTop: '4px',
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: '10px',
-                    color: 'var(--text-muted)',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}
-                >
-                  Nozzles
-                </span>
-                {duNozzles.length > 0 ? (
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '6px',
-                      marginTop: '6px',
-                    }}
-                  >
-                    {duNozzles.map((n) => {
-                      const prod = products.find((p) => p.id === n.productId);
-                      const tank = tanks.find((t) => t.id === n.tankId);
-                      return (
-                        <div
-                          key={n.id}
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            fontSize: '12px',
-                            color: 'var(--text-default)',
-                          }}
-                        >
-                          <span style={{ fontWeight: 500 }}>
-                            {n.name} →{' '}
-                            <span style={{ color: 'var(--text-muted)' }}>
-                              {tank?.name || 'No Tank'} ({prod?.name || 'No Fuel'})
-                            </span>
-                          </span>
-                          <span
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontWeight: 600,
-                              color: 'var(--text-strong)',
-                            }}
-                          >
-                            {parseFloat(n.currentReading.toString()).toLocaleString(undefined, {
-                              minimumFractionDigits: 1,
-                            })}{' '}
-                            {prod?.unit || 'L'}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p
-                    style={{
-                      fontSize: '11px',
-                      color: 'var(--text-muted)',
-                      marginTop: '4px',
-                      fontStyle: 'italic',
-                    }}
-                  >
-                    No nozzles connected to this dispenser.
-                  </p>
-                )}
-              </div>
-
-              {/* Taking a pump out of service. The consequences are not
-                  obvious from the word "maintenance", so they are spelled
-                  out: it stops being offered at shift open, which is what
-                  lets a shift open at all while it is broken (#258). */}
-              <div
-                style={{
-                  borderTop: '1px solid var(--border-soft)',
-                  paddingTop: '10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '8px',
-                }}
-              >
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  {du.status === 'ACTIVE'
-                    ? 'In service'
-                    : du.status === 'MAINTENANCE'
-                      ? 'Out of service — not offered at shift open, and its nozzles are not read'
-                      : 'Retired'}
-                </span>
-                {/* Only ACTIVE ⇄ MAINTENANCE. A retired dispenser is not the
-                    same as one under repair, and a two-state toggle over a
-                    three-state enum would silently un-retire it. */}
-                {du.status !== 'INACTIVE' && (
-                  <Button
-                    variant="secondary"
-                    size="xs"
-                    loading={statusBusyId === du.id}
-                    disabled={!!statusBusyId && statusBusyId !== du.id}
-                    onClick={() => handleStatusToggle(du)}
-                  >
-                    {du.status === 'ACTIVE' ? 'Put into maintenance' : 'Return to service'}
-                  </Button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-
-        {dispensers.length === 0 && (
-          <div
-            style={{
-              gridColumn: '1 / -1',
-              padding: '32px',
-              textAlign: 'center',
-              color: 'var(--text-muted)',
-              backgroundColor: 'var(--bg-surface)',
-              borderRadius: 'var(--radius-card)',
-              border: '1px solid var(--border-soft)',
-            }}
-          >
-            No dispenser units registered yet.
-          </div>
-        )}
-      </div>
-    </div>
+    </section>
   );
 };

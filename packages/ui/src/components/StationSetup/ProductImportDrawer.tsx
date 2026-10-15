@@ -1,7 +1,9 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Drawer } from '../Drawer.js';
+import { Button, Chip, Icon, InteractiveTable, type TableColumn } from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
+import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { CloudProductService } from '../../services/cloud.js';
 import type { Product } from '@pump/shared';
 import { PRODUCT_UNITS } from '@pump/shared';
@@ -131,12 +133,81 @@ interface ParsedRow {
   payload: any | null;
 }
 
+const Faint: React.FC = () => <span className="text-ink-faint">—</span>;
+
+const rowStatus = (r: ParsedRow) =>
+  r.errors.length ? r.errors.join('; ') : r.warnings.length ? r.warnings.join('; ') : 'OK';
+
+const PREVIEW_COLUMNS: TableColumn<ParsedRow>[] = [
+  {
+    id: 'row',
+    header: '#',
+    kind: 'text',
+    width: '6%',
+    value: (r) => r.rowNumber,
+    cell: (r) => <span className="text-ink-muted">{r.rowNumber}</span>,
+  },
+  {
+    id: 'name',
+    header: 'Name',
+    kind: 'text',
+    value: (r) => r.raw.name,
+    cell: (r) => (r.raw.name ? <span className="text-ink-strong">{r.raw.name}</span> : <Faint />),
+  },
+  {
+    id: 'code',
+    header: 'Code',
+    kind: 'text',
+    value: (r) => r.raw.code,
+    cell: (r) => (r.raw.code ? <span className="font-mono">{r.raw.code}</span> : <Faint />),
+  },
+  {
+    id: 'type',
+    header: 'Type',
+    kind: 'text',
+    value: (r) => r.raw.productType,
+    cell: (r) =>
+      r.raw.productType ? (
+        <Chip tone="neutral" size="md">
+          {r.raw.productType}
+        </Chip>
+      ) : (
+        <Faint />
+      ),
+  },
+  {
+    id: 'status',
+    header: 'Status',
+    kind: 'text',
+    width: '40%',
+    value: rowStatus,
+    cell: (r) => (
+      <span
+        className={
+          r.errors.length
+            ? 'whitespace-normal text-danger-fg'
+            : r.warnings.length
+              ? 'whitespace-normal text-warning-fg'
+              : 'text-success-fg'
+        }
+      >
+        {rowStatus(r)}
+      </span>
+    ),
+  },
+];
+
 interface ProductImportDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   existingProducts: Product[];
   selectedStation?: any | null;
-  onImported: () => void | Promise<unknown>;
+  /**
+   * Called once the import has landed. Synchronous on purpose: refresh the
+   * list in the background, so a failed refresh is never read as a failed
+   * import.
+   */
+  onImported: () => void;
 }
 
 /** Split a single CSV line, honoring double-quoted fields (with "" escapes). */
@@ -333,29 +404,31 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
       toast.error('No valid rows to import.');
       return;
     }
+    const stationId = selectedStation?.id;
+    let res: Awaited<ReturnType<typeof productService.importProducts>>;
     try {
       setImporting(true);
-      const res = await productService.importProducts(payloads, selectedStation?.id);
-      setResult({ createdCount: res.createdCount, failed: res.failed });
-      if (res.createdCount > 0)
-        toast.success(`Imported ${res.createdCount} product${res.createdCount === 1 ? '' : 's'}.`);
-      if (res.failed.length > 0)
-        toast.error(
-          `${res.failed.length} row${res.failed.length === 1 ? '' : 's'} failed — see details.`,
-        );
-      await onImported();
+      res = await sendKeyed(
+        officeSubmitKeys.session('setup:products:import'),
+        { products: payloads, stationId },
+        (idempotencyKey) => productService.importProducts(payloads, stationId, { idempotencyKey }),
+      );
     } catch (err: any) {
       toast.error(err.message || 'Import failed');
+      return;
     } finally {
       setImporting(false);
     }
-  };
-
-  const cellStyle: React.CSSProperties = {
-    padding: '6px 8px',
-    fontSize: '12px',
-    borderBottom: '1px solid var(--border-soft)',
-    whiteSpace: 'nowrap',
+    // Reported outside the try: the import has landed, so nothing after this
+    // point may surface as "Import failed".
+    setResult({ createdCount: res.createdCount, failed: res.failed });
+    if (res.createdCount > 0)
+      toast.success(`Imported ${res.createdCount} product${res.createdCount === 1 ? '' : 's'}.`);
+    if (res.failed.length > 0)
+      toast.error(
+        `${res.failed.length} row${res.failed.length === 1 ? '' : 's'} failed — see details.`,
+      );
+    onImported();
   };
 
   return (
@@ -368,76 +441,45 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
       title="Import Products (CSV)"
       widthVariant="wide"
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+      <div className="flex flex-col gap-4">
+        <div className="text-[13px] leading-normal text-ink-muted">
           Upload a CSV to bulk-add products. Rows are validated here before anything is sent.
           Columns:
-          <code
-            style={{
-              display: 'block',
-              marginTop: '6px',
-              fontSize: '11px',
-              color: 'var(--text-default)',
-            }}
-          >
-            {COLUMNS.join(', ')}
-          </code>
-          <span style={{ fontSize: '11px' }}>
+          <code className="mt-1.5 block text-[12px] text-ink">{COLUMNS.join(', ')}</code>
+          <span className="text-[12px]">
             Cost is entered <strong>ex-GST</strong> (pre-tax). Opening stock applies to non-fuel
             items and needs a selected station.
           </span>
-          <span style={{ display: 'block', fontSize: '11px', marginTop: '4px' }}>
-            Accepted units:{' '}
-            <code style={{ fontSize: '11px' }}>{PRODUCT_UNITS.map((u) => u.value).join(', ')}</code>
-            . Common spellings (pc, litre, kgs, job…) are auto-mapped; anything unrecognized imports
-            as <code style={{ fontSize: '11px' }}>Nos</code> with a warning.
+          <span className="mt-1 block text-[12px]">
+            Accepted units: <code>{PRODUCT_UNITS.map((u) => u.value).join(', ')}</code>. Common
+            spellings (pc, litre, kgs, job…) are auto-mapped; anything unrecognized imports as{' '}
+            <code>Nos</code> with a warning.
           </span>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Button
             type="button"
+            variant="primary"
+            leftIcon={<Icon name="upload" size="sm" />}
             onClick={() => fileRef.current?.click()}
-            style={{
-              height: '32px',
-              padding: '0 14px',
-              fontSize: '13px',
-              fontWeight: 600,
-              backgroundColor: 'var(--brand-primary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 'var(--radius-input)',
-              cursor: 'pointer',
-            }}
           >
             Choose CSV file
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
+            leftIcon={<Icon name="download" size="sm" />}
             onClick={downloadSample}
-            style={{
-              height: '32px',
-              padding: '0 14px',
-              fontSize: '13px',
-              backgroundColor: 'var(--bg-surface)',
-              color: 'var(--text-default)',
-              border: '1px solid var(--border-strong)',
-              borderRadius: 'var(--radius-input)',
-              cursor: 'pointer',
-            }}
           >
             Download sample CSV
-          </button>
-          {fileName && (
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>
-              {fileName}
-            </span>
-          )}
+          </Button>
+          {fileName && <span className="text-[12px] text-ink-muted">{fileName}</span>}
           <input
             ref={fileRef}
             type="file"
             accept=".csv,text/csv"
-            style={{ display: 'none' }}
+            className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) runTask(handleFile(f), 'Could not read that CSV file.');
@@ -447,110 +489,31 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
 
         {rows.length > 0 && (
           <>
-            <div style={{ display: 'flex', gap: '16px', fontSize: '12px', fontWeight: 600 }}>
-              <span style={{ color: 'var(--state-success-fg)' }}>{validCount} valid</span>
+            <div className="flex gap-4 text-[12px] font-semibold">
+              <span className="text-success-fg">{validCount} valid</span>
               {warningCount > 0 && (
-                <span style={{ color: 'var(--state-warning-fg)' }}>
-                  {warningCount} with warnings
-                </span>
+                <span className="text-warning-fg">{warningCount} with warnings</span>
               )}
-              <span style={{ color: 'var(--state-danger-fg)' }}>
-                {rows.length - validCount} with errors
-              </span>
-              <span style={{ color: 'var(--text-muted)' }}>{rows.length} total</span>
+              <span className="text-danger-fg">{rows.length - validCount} with errors</span>
+              <span className="text-ink-muted">{rows.length} total</span>
             </div>
 
-            <div
-              style={{
-                maxHeight: '340px',
-                overflow: 'auto',
-                border: '1px solid var(--border-soft)',
-                borderRadius: 'var(--radius-card)',
-              }}
-            >
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr
-                    style={{
-                      backgroundColor: 'var(--bg-surface-alt)',
-                      textAlign: 'left',
-                      position: 'sticky',
-                      top: 0,
-                    }}
-                  >
-                    {['#', 'Name', 'Code', 'Type', 'Status'].map((h) => (
-                      <th
-                        key={h}
-                        style={{ ...cellStyle, fontWeight: 600, color: 'var(--text-muted)' }}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr
-                      key={r.rowNumber}
-                      style={{
-                        backgroundColor: r.errors.length
-                          ? 'var(--state-danger-bg)'
-                          : r.warnings.length
-                            ? 'var(--state-warning-bg)'
-                            : 'transparent',
-                      }}
-                    >
-                      <td style={{ ...cellStyle, color: 'var(--text-muted)' }}>{r.rowNumber}</td>
-                      <td style={{ ...cellStyle, color: 'var(--text-strong)' }}>
-                        {r.raw.name || '—'}
-                      </td>
-                      <td style={{ ...cellStyle, fontFamily: 'var(--font-mono)' }}>
-                        {r.raw.code || '—'}
-                      </td>
-                      <td style={{ ...cellStyle }}>{r.raw.productType || '—'}</td>
-                      <td
-                        style={{
-                          ...cellStyle,
-                          whiteSpace: 'normal',
-                          color: r.errors.length
-                            ? 'var(--state-danger-fg)'
-                            : r.warnings.length
-                              ? 'var(--state-warning-fg)'
-                              : 'var(--state-success-fg)',
-                        }}
-                      >
-                        {r.errors.length
-                          ? r.errors.join('; ')
-                          : r.warnings.length
-                            ? r.warnings.join('; ')
-                            : 'OK'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="max-h-[340px] overflow-auto">
+              <InteractiveTable
+                columns={PREVIEW_COLUMNS}
+                rows={rows}
+                rowKey={(r) => String(r.rowNumber)}
+                title="import preview"
+              />
             </div>
 
             {result && (
-              <div
-                style={{
-                  fontSize: '12px',
-                  padding: '10px 12px',
-                  borderRadius: 'var(--radius-input)',
-                  backgroundColor: 'var(--bg-surface-alt)',
-                }}
-              >
-                <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
+              <div className="rounded-md bg-surface-alt px-3 py-2.5 text-[12px]">
+                <div className="font-semibold text-ink-strong">
                   Imported {result.createdCount} of {rows.length} rows.
                 </div>
                 {result.failed.length > 0 && (
-                  <ul
-                    style={{
-                      margin: '6px 0 0',
-                      paddingLeft: '18px',
-                      color: 'var(--state-danger-fg)',
-                    }}
-                  >
+                  <ul className="mt-1.5 list-disc pl-[18px] text-danger-fg">
                     {result.failed.map((f, i) => (
                       <li key={i}>
                         {f.code || f.name || 'row'}: {f.error}
@@ -561,45 +524,20 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                onClick={reset}
-                style={{
-                  height: '34px',
-                  padding: '0 16px',
-                  fontSize: '13px',
-                  backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-default)',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-input)',
-                  cursor: 'pointer',
-                }}
-              >
+            <div className="flex justify-end gap-2.5">
+              <Button type="button" variant="secondary" onClick={reset}>
                 Clear
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
                 onClick={() => runTask(runImport(), 'Could not import the products.')}
                 disabled={importing || validCount === 0}
-                style={{
-                  height: '34px',
-                  padding: '0 16px',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  backgroundColor:
-                    validCount === 0 ? 'var(--border-strong)' : 'var(--brand-primary)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 'var(--radius-input)',
-                  cursor: validCount === 0 ? 'not-allowed' : 'pointer',
-                  opacity: importing ? 0.7 : 1,
-                }}
               >
                 {importing
                   ? 'Importing…'
                   : `Import ${validCount} product${validCount === 1 ? '' : 's'}`}
-              </button>
+              </Button>
             </div>
           </>
         )}

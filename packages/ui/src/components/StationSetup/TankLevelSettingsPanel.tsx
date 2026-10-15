@@ -7,7 +7,7 @@ import {
   type TankLevelSettings,
 } from '@pump/shared';
 import { Field, NumberInput } from '../primitives/Field.js';
-import { Button, Form } from '../../pump-ds/index.js';
+import { Button, Form, Panel, SectionHeader } from '../../pump-ds/index.js';
 
 export interface TankLevelSettingsPanelProps {
   /** The station's resolved thresholds (`resolveTankLevelSettings`). */
@@ -48,68 +48,61 @@ export const TankLevelSettingsPanel: React.FC<TankLevelSettingsPanelProps> = ({
   });
 
   return (
-    <Form
-      onSubmit={submit}
-      onSubmittingChange={setSaving}
-      aria-label="Tank levels"
-      style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '520px' }}
-    >
-      <div>
-        <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
-          Tank levels
-        </h3>
-        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-          When a tank reads critical or low, as a percent of its capacity. Used by the Dashboard,
-          alerts, Inventory and the mobile app. Defaults: critical below{' '}
-          {DEFAULT_TANK_LEVEL_SETTINGS.criticalBelowPct}%, low below{' '}
-          {DEFAULT_TANK_LEVEL_SETTINGS.lowBelowPct}%.
-        </p>
-      </div>
-      <fieldset
-        disabled={!canEdit || saving}
-        style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
-      >
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <Field
-            label="Critical below (%)"
-            htmlFor="tank-critical-below"
-            error={errors.criticalBelowPct?.message}
-          >
-            <NumberInput
-              id="tank-critical-below"
-              max={100}
-              invalid={!!errors.criticalBelowPct}
-              {...register('criticalBelowPct', { valueAsNumber: true })}
-            />
-          </Field>
-          <Field label="Low below (%)" htmlFor="tank-low-below" error={errors.lowBelowPct?.message}>
-            <NumberInput
-              id="tank-low-below"
-              max={100}
-              invalid={!!errors.lowBelowPct}
-              {...register('lowBelowPct', { valueAsNumber: true })}
-            />
-          </Field>
-        </div>
-      </fieldset>
-      {canEdit ? (
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            borderTop: '1px solid var(--border-soft)',
-            paddingTop: '12px',
-          }}
+    <section className="flex flex-col gap-2">
+      <SectionHeader title="Tank levels" subtitle="Dashboard, alerts, Inventory and mobile" />
+      <Panel>
+        <Form
+          onSubmit={submit}
+          onSubmittingChange={setSaving}
+          aria-label="Tank levels"
+          className="flex max-w-[520px] flex-col gap-3"
         >
-          <Button type="submit" variant="primary" size="sm" disabled={!isDirty || saving}>
-            Save tank levels
-          </Button>
-        </div>
-      ) : (
-        <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-          Only an Owner or Manager can change tank levels.
-        </p>
-      )}
-    </Form>
+          <p className="text-[12px] text-ink-muted">
+            When a tank reads critical or low, as a percent of its capacity. Defaults: critical
+            below {DEFAULT_TANK_LEVEL_SETTINGS.criticalBelowPct}%, low below{' '}
+            {DEFAULT_TANK_LEVEL_SETTINGS.lowBelowPct}%.
+          </p>
+          <fieldset disabled={!canEdit || saving} className="m-0 min-w-0 border-0 p-0">
+            <div className="grid grid-cols-2 gap-x-4">
+              <Field
+                label="Critical below (%)"
+                htmlFor="tank-critical-below"
+                error={errors.criticalBelowPct?.message}
+              >
+                <NumberInput
+                  id="tank-critical-below"
+                  max={100}
+                  invalid={!!errors.criticalBelowPct}
+                  {...register('criticalBelowPct', { valueAsNumber: true })}
+                />
+              </Field>
+              <Field
+                label="Low below (%)"
+                htmlFor="tank-low-below"
+                error={errors.lowBelowPct?.message}
+              >
+                <NumberInput
+                  id="tank-low-below"
+                  max={100}
+                  invalid={!!errors.lowBelowPct}
+                  {...register('lowBelowPct', { valueAsNumber: true })}
+                />
+              </Field>
+            </div>
+          </fieldset>
+          {canEdit ? (
+            <div className="flex justify-end border-t border-border-soft pt-3">
+              <Button type="submit" variant="secondary" size="sm" disabled={!isDirty || saving}>
+                Save tank levels
+              </Button>
+            </div>
+          ) : (
+            <p className="text-[12px] text-ink-muted">
+              Only an Owner or Manager can change tank levels.
+            </p>
+          )}
+        </Form>
+      </Panel>
+    </section>
   );
 };

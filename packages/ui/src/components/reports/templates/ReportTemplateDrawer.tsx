@@ -97,7 +97,7 @@ export const ReportTemplateDrawer: React.FC<ReportTemplateDrawerProps> = ({
           </Button>
           <span className="flex-1" />
           {dirty ? (
-            <Chip tone="warning" dot>
+            <Chip size="md" tone="warning" dot>
               Unsaved changes
             </Chip>
           ) : null}
@@ -130,7 +130,7 @@ export const ReportTemplateDrawer: React.FC<ReportTemplateDrawerProps> = ({
                     )}
                   >
                     <span className="text-[12px] font-semibold text-ink-strong">{p.name}</span>
-                    <span className="text-[11px] text-ink-muted">{p.description}</span>
+                    <span className="text-[12px] text-ink-muted">{p.description}</span>
                   </button>
                 ))}
               </div>
@@ -175,7 +175,7 @@ export const ReportTemplateDrawer: React.FC<ReportTemplateDrawerProps> = ({
 };
 
 const SubHeading: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+  <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
     {children}
   </span>
 );
@@ -221,13 +221,14 @@ const SectionRow: React.FC<{
           <span className={cn(!section.enabled && 'text-ink-faint')}>
             {label}
             {locked ? (
-              <Chip size="xs" className="ml-2" title="The letterhead always prints first">
+              <Chip size="md" className="ml-2" title="The letterhead always prints first">
                 Always
               </Chip>
             ) : null}
           </span>
         }
-        description={template.descriptions[section.key]}
+        // The shared Switch prints its description at 11px (#539); 12px here.
+        description={<span className="text-[12px]">{template.descriptions[section.key]}</span>}
       />
       {locked ? null : (
         <span className="flex shrink-0 gap-1">
