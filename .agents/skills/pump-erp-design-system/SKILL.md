@@ -73,14 +73,25 @@ Build pages from these; the full catalog with props is in
 `packages/ui/src/pump-ds/README.md` ("Modules"). Don't hand-roll what one decides.
 
 - **Page Frame** (`PageFrame`): back link top-left (`back` slot, never top-right),
-  title, one primary button top right, tabs, toolbar.
+  title, one primary button top right, tabs, toolbar. On a tabbed page the
+  actions sit right of the tabs and that row sticks on scroll; the title scrolls
+  away (#604). Nothing else sticks.
 - **Section header** (`SectionHeader`): the in-page heading; its `controls` put a
   `ControlBar` directly above the table it filters (layout B).
 - **Controls**: `DateRangeMenu`, `FilterChips` (with counts), `SegmentedControl`
   (2–4 views), `Select` for 5+ options, `ExportMenu` and info tip at the right end.
   Filters apply instantly.
-- **KPI tiles** (`KpiTile` with `scope`, `TileSection`): at most 4, plain figures,
-  colour only through `alert`, never repeating a table total (Reports excepted).
+- **KPI tiles** (`KpiTile` with `scope`, `KpiStrip`, `TileSection`): at most 4,
+  plain figures, colour only through `alert`, never repeating a table total
+  (Reports excepted). Periods (#604): no label on a balance (`scope="now"`); a
+  period every tile shares is named once on the strip (`KpiStrip scope`); a tile
+  gets its own chip only when the strip mixes periods.
+- **In-page edit forms** (Station details, Organization profile, station rules):
+  no standing Save; `UnsavedChangesBar` ("Unsaved changes · Discard · Save",
+  Save primary) shows only while the form is dirty (#604).
+- **Overlays**: dialogs and the command palette blur the page (`--overlay-blur`)
+  over the scrim; drawers keep their own scrim. The sidebar collapses from its
+  edge, its Collapse button, or ⌘\ / Ctrl+\ (#604).
 - **Data Section** (`DataSection`): loading, refused, "Couldn't load … · Retry",
   empty, content. Never an empty state for a failed query.
 - **Status vocabulary** (`StatusChip`, `VarianceChip`): every status word and tone
@@ -99,8 +110,8 @@ Build pages from these; the full catalog with props is in
   sends an Idempotency-Key; `onSuccess` stays synchronous and invalidation runs in
   the background with central query keys.
 
-Page rules (#515): ledgers and balance lists use layout B; reports use layout A
-(one bar under the tabs drives everything below). Red and amber only mean a
+Page rules (#515, KPI periods revised by #604): ledgers and balance lists use
+layout B; reports use layout A (one bar under the tabs drives everything below). Red and amber only mean a
 problem; ordinary money is plain. No raw `YYYY-MM-DD` dates on screen. A detail
 line never repeats the line above it.
 

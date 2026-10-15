@@ -85,9 +85,9 @@ The module catalog is [`packages/ui/src/pump-ds/README.md`](../../packages/ui/sr
 
 | Module                                                         | Use                                                                          |
 | -------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `PageFrame`                                                    | page header: back link, title, actions, tabs, toolbar, then content          |
+| `PageFrame`                                                    | page header: back link, title, tabs (+ actions, sticky), toolbar, content    |
 | `SectionHeader` + `ControlBar`                                 | in-page heading; its `controls` sit directly above the table they filter     |
-| `KpiTile` / `TileSection`                                      | at most 4 tiles, each with a period chip                                     |
+| `KpiTile` / `TileSection`                                      | at most 4 tiles; a shared period named once on the strip, none on a balance  |
 | `DataSection`                                                  | a region that loads its own data (loading / refused / error + Retry / empty) |
 | `InteractiveTable`, `GroupedTable`, `StatementTable`           | tables from one `TableColumn<T>[]`, with total rows                          |
 | `Drawer`                                                       | slide-in panel (prefer drawers over stacked modals)                          |
