@@ -29,12 +29,27 @@ const { useRecordHandoverMutation } = await import('./handoverMutation.js');
 const { queryKeys, useShiftStatus } = await import('./hooks.js');
 const { nozzleGroups } = await import('../components/Shifts/liveShiftModel.js');
 const { NozzleReadingsTable } = await import('../components/Shifts/NozzleReadingsTable.js');
+const { TakingsSummary } = await import('../components/Shifts/TakingsSummary.js');
+const { liveShiftFigures } = await import('../components/Shifts/liveShiftModel.js');
+const { shiftMoneyConfirming, useHandoverWrites } =
+  await import('../components/Shifts/handoverWrites.js');
 
 const Board: React.FC = () => {
   const statusQ = useShiftStatus('station-1');
   const mutation = useRecordHandoverMutation();
   const shift = statusQ.data?.activeShift;
+  const writes = useHandoverWrites(shift?.id ?? null);
   if (!shift) return null;
+  const now = Date.parse('2026-10-15T09:00:00Z');
+  const figures = liveShiftFigures({
+    shift,
+    cashDeclared: shift.reconciliation.cashSales,
+    before: { card: 0, upi: 0, credit: 0 },
+    handoverSales: [],
+    billed: [],
+    now,
+    formatMoney: String,
+  });
   return (
     <>
       <button
@@ -58,8 +73,16 @@ const Board: React.FC = () => {
         Save
       </button>
       <NozzleReadingsTable
-        groups={nozzleGroups(shift, { now: Date.parse('2026-10-15T09:00:00Z') })}
+        groups={nozzleGroups(shift, { now })}
         onOpenHandover={() => undefined}
+        writes={writes}
+      />
+      <TakingsSummary
+        takings={figures.takings}
+        recorded={figures.drawers.recorded}
+        expected={figures.drawers.expected}
+        pending={figures.pending}
+        confirming={shiftMoneyConfirming(writes, 'station-1', statusQ)}
       />
     </>
   );
@@ -81,6 +104,29 @@ describe('handover save → shift board (#606)', () => {
     getShiftStatus.mockReset();
   });
 
+  it('reads Saving… while the save is in flight, never a variance, then Recorded (#606)', async () => {
+    let answer!: (r: unknown) => void;
+    recordHandover.mockReturnValue(new Promise((r) => (answer = r)));
+    getShiftStatus.mockReturnValue(new Promise(() => {}));
+    seededBoard();
+
+    screen.getByRole('button', { name: 'Save' }).click();
+
+    await waitFor(() => expect(within(raviHeader()).getByText('Saving…')).toBeDefined());
+    expect(within(raviHeader()).queryByText('Pending')).toBeNull();
+    expect(raviHeader().querySelector('[data-variance]')).toBeNull();
+    // Cash sales are not in the answer: they wait for the server.
+    const takings = () => screen.getByText('Cash sales').closest('dl') as HTMLElement;
+    expect(within(takings()).getAllByText('Saving…')).toHaveLength(2);
+
+    answer(ravisHandover);
+
+    await waitFor(() => expect(within(raviHeader()).getByText(/^Recorded/)).toBeDefined());
+    expect(within(raviHeader()).queryByText('Saving…')).toBeNull();
+    // The refetch has not answered: the takings still wait for it.
+    expect(within(takings()).getAllByText('Saving…')).toHaveLength(2);
+  });
+
   it('turns the Drawer Recorded with its variance while the refetch never answers', async () => {
     getShiftStatus.mockReturnValue(new Promise(() => {}));
     recordHandover.mockResolvedValue(ravisHandover);
@@ -91,6 +137,7 @@ describe('handover save → shift board (#606)', () => {
 
     await waitFor(() => expect(within(raviHeader()).getByText(/^Recorded/)).toBeDefined());
     expect(raviHeader().querySelector('[data-variance="short"]')?.textContent).toContain('50');
+    expect(within(raviHeader()).queryByText('Saving…')).toBeNull();
     // The closing reading the server accepted fills the nozzle row.
     expect(screen.getByRole('table').textContent).toMatch(/1,?100\.000/);
     // It did ask the server again, in the background.
@@ -110,6 +157,10 @@ describe('handover save → shift board (#606)', () => {
       await new Promise((r) => setTimeout(r, 0));
       expect(queryClient.getQueryData(queryKeys.shiftStatus('station-1', false))).toBe(before);
       expect(within(raviHeader()).getByText('Pending')).toBeDefined();
+      // Rolled back, with the reason on the row itself.
+      await waitFor(() =>
+        expect(within(raviHeader()).getByRole('alert').textContent).toContain('Shift is closed'),
+      );
       expect(getShiftStatus).not.toHaveBeenCalled();
     } finally {
       restore();

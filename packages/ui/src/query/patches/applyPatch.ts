@@ -63,12 +63,19 @@ export function patchQueriesData<T>(
 
 /**
  * True while the entry still holds a patch the background refetch has not
- * replaced. A refetch always moves `dataUpdatedAt`, even when its answer is
- * structurally equal to the patch, so this never sticks.
+ * replaced: the figures the patch could not write (a shift-level total) are
+ * still the old ones, so a view shows "Saving…" for them. A refetch always
+ * moves `dataUpdatedAt`, even when its answer equals the patch, so this never
+ * sticks. Nor does it after the refetch fails: the operator has been told the
+ * screen could not be refreshed, and "Saving…" would no longer be true.
  */
 export function isAwaitingConfirmation(
   queryKey: QueryKey,
-  dataUpdatedAt: number | undefined,
+  state: { dataUpdatedAt?: number; errorUpdatedAt?: number } | undefined,
 ): boolean {
-  return dataUpdatedAt !== undefined && patchedAt.get(hashKey(queryKey)) === dataUpdatedAt;
+  const dataUpdatedAt = state?.dataUpdatedAt;
+  if (dataUpdatedAt === undefined || patchedAt.get(hashKey(queryKey)) !== dataUpdatedAt) {
+    return false;
+  }
+  return !(state?.errorUpdatedAt && state.errorUpdatedAt >= dataUpdatedAt);
 }

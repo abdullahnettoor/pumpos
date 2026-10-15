@@ -194,4 +194,37 @@ describe('ProductSalesSection', () => {
       expect(removeSale).toHaveBeenCalledWith('m1', { idempotencyKey: expect.any(String) }),
     );
   });
+
+  it('reads Saving… on the row while a removal is in flight, never its figure (#606)', async () => {
+    let answer!: (v: unknown) => void;
+    removeSale.mockReturnValue(new Promise((r) => (answer = r)));
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: "Remove Ravi's handover product sale" }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+
+    const ravi = () => screen.getByText('Ravi').closest('tr') as HTMLElement;
+    await waitFor(() => expect(within(ravi()).getAllByText('Saving…')).toHaveLength(2));
+    expect(within(ravi()).queryByText('₹450.00')).toBeNull();
+
+    answer({ id: 'm1' });
+    await waitFor(() => expect(within(ravi()).queryByText('Saving…')).toBeNull());
+  });
+
+  it('rolls a refused removal back with the reason on the row (#606)', async () => {
+    const restore = muteExpectedConsoleErrors([/Shift is closed/]);
+    try {
+      removeSale.mockRejectedValue(new Error('Shift is closed'));
+      mount();
+      fireEvent.click(screen.getByRole('button', { name: "Remove Ravi's handover product sale" }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+
+      const ravi = () => screen.getByText('Ravi').closest('tr') as HTMLElement;
+      await waitFor(() =>
+        expect(within(ravi()).getByRole('alert').textContent).toContain('Shift is closed'),
+      );
+      expect(within(ravi()).getAllByText('₹450.00').length).toBeGreaterThan(0);
+    } finally {
+      restore();
+    }
+  });
 });

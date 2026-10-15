@@ -1,5 +1,5 @@
 import React from 'react';
-import { Panel } from '../../pump-ds/index.js';
+import { Panel, StatusChip } from '../../pump-ds/index.js';
 import { formatMoney } from '../../utils/format.js';
 import type { NozzleGroup, Takings } from './liveShiftModel.js';
 
@@ -8,9 +8,14 @@ export interface TakingsSummaryProps {
   recorded: number;
   expected: number;
   pending: NozzleGroup[];
+  /**
+   * A Handover is saving or its figures are not confirmed yet (#606): cash
+   * sales and the total are not in its answer, so they read "Saving…".
+   */
+  confirming?: boolean;
 }
 
-const Line: React.FC<{ label: string; value: number; strong?: boolean }> = ({
+const Line: React.FC<{ label: string; value: number | null; strong?: boolean }> = ({
   label,
   value,
   strong,
@@ -24,7 +29,7 @@ const Line: React.FC<{ label: string; value: number; strong?: boolean }> = ({
           : 'font-mono tabular-nums text-ink-default'
       }
     >
-      {formatMoney(value)}
+      {value == null ? <StatusChip status="saving" size="sm" /> : formatMoney(value)}
     </dd>
   </div>
 );
@@ -39,15 +44,16 @@ export const TakingsSummary: React.FC<TakingsSummaryProps> = ({
   recorded,
   expected,
   pending,
+  confirming = false,
 }) => (
   <Panel title="Takings · this shift">
     <dl className="flex flex-col gap-1.5 text-[13px]">
-      <Line label="Cash sales" value={takings.cash} />
+      <Line label="Cash sales" value={confirming ? null : takings.cash} />
       <Line label="Card" value={takings.card} />
       <Line label="UPI" value={takings.upi} />
       <Line label="Credit" value={takings.credit} />
       <div className="mt-1 border-t border-border-soft pt-1.5">
-        <Line label="Total taken" value={takings.total} strong />
+        <Line label="Total taken" value={confirming ? null : takings.total} strong />
       </div>
     </dl>
     <p className="mt-2 text-[12px] text-ink-muted">

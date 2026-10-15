@@ -99,7 +99,7 @@ describe('applying shift-board patches through the client', () => {
     for (const key of [keyA, keyB]) {
       const data = qc.getQueryData<BusinessDayStatusResponse>(key)!;
       expect(data.pastOpenBusinessDays).toEqual([]);
-      expect(isAwaitingConfirmation(key, qc.getQueryState(key)?.dataUpdatedAt)).toBe(true);
+      expect(isAwaitingConfirmation(key, qc.getQueryState(key))).toBe(true);
     }
   });
 
@@ -113,7 +113,19 @@ describe('applying shift-board patches through the client', () => {
     // What a refetch does on success: new data, a later dataUpdatedAt.
     qc.setQueryData(key, patched, { updatedAt: Date.now() + 1000 });
 
-    expect(isAwaitingConfirmation(key, qc.getQueryState(key)?.dataUpdatedAt)).toBe(false);
+    expect(isAwaitingConfirmation(key, qc.getQueryState(key))).toBe(false);
+  });
+
+  it('a failed refetch ends the wait: the patch no longer reads as saving', () => {
+    const qc = new QueryClient();
+    const key = queryKeys.businessDayStatus('station-1', '');
+    qc.setQueryData(key, dayStatus());
+    patchBusinessDayClosed(qc, 'station-1', closedAnswer);
+    const state = qc.getQueryState(key)!;
+
+    expect(isAwaitingConfirmation(key, { ...state, errorUpdatedAt: state.dataUpdatedAt + 5 })).toBe(
+      false,
+    );
   });
 
   it('a customer sale and its void reach the cached board', () => {

@@ -362,6 +362,31 @@ describe('Close shift page (#534)', () => {
       expect(closeButton().disabled).toBe(true);
     });
 
+    it('waits for a Handover’s figures: Saving… in the footer, and no close yet (#606)', () => {
+      renderWithProviders(<CloseShiftPage {...baseProps({ step: 'confirm', confirming: true })} />);
+      expect(within(footer()).getByText('Saving…')).toBeDefined();
+      expect(within(footer()).queryByText('₹10,000.00')).toBeNull();
+      expect(closeButton().disabled).toBe(true);
+    });
+
+    it('marks a Drawer Saving… while its Handover saves, and says why one was refused (#606)', () => {
+      const writes = new Map([
+        ['u1|du1', { state: 'saving' as const, variables: {} as never, error: null }],
+        [
+          'u2|du2',
+          { state: 'failed' as const, variables: {} as never, error: new Error('Shift is closed') },
+        ],
+      ]);
+      renderWithProviders(
+        <CloseShiftPage {...baseProps({ step: 'handovers', handoverWrites: writes })} />,
+      );
+      const row = (label: string) => screen.getByText(label).closest('tr') as HTMLElement;
+      expect(within(row('DU1 · Ravi')).getByText('Saving…')).toBeDefined();
+      expect(within(row('DU2 · Suresh')).getByRole('alert').textContent).toContain(
+        'Shift is closed',
+      );
+    });
+
     it('closes when nothing is outstanding, and shows progress while it runs', () => {
       const onConfirmClose = vi.fn();
       const { rerender } = renderWithProviders(

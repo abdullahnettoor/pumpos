@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { historicalShiftMessage, type ShiftCloseCashSummaryLines } from '@pump/shared';
-import { Button, DataSection, Icon, VarianceChip, type SectionQuery } from '../../pump-ds/index.js';
+import {
+  Button,
+  DataSection,
+  Icon,
+  StatusChip,
+  VarianceChip,
+  type SectionQuery,
+} from '../../pump-ds/index.js';
 import { cn } from '../../pump-ds/lib/cn.js';
 import { PageFrame } from '../page-frame/index.js';
 import { useKeyedSave, type KeyedSave } from '../../office-records/useKeyedSave.js';
@@ -16,6 +23,7 @@ import {
 } from './CloseShiftSteps.js';
 import type { CloseDraft, CloseDrawerRow, CloseDrawerTotal } from './closeShiftModel.js';
 import type { NozzleGroup, StaffAssignmentInput } from './liveShiftModel.js';
+import type { HandoverWrites } from './handoverWrites.js';
 
 export type CloseStep = Exclude<ShiftCloseStep, 'done'>;
 
@@ -71,6 +79,13 @@ export interface CloseShiftPageProps {
    * skeleton; if one fails, "Couldn't load … · Retry", never empty figures.
    */
   queries?: SectionQuery[];
+  /** Handovers still saving or failed, by Drawer key (#606). */
+  handoverWrites?: HandoverWrites;
+  /**
+   * A Handover's figures await the server (#606): the expected office cash is
+   * not in its answer, so it reads "Saving…" and the shift cannot close yet.
+   */
+  confirming?: boolean;
 }
 
 /**
@@ -96,6 +111,7 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
     readingErrors,
     isClosing,
     onConfirmClose,
+    confirming = false,
   } = props;
   const save = useKeyedSave(`shift:close:${shift.id}`);
   // The cash count is a form: an amount it refuses never reaches the draft,
@@ -104,6 +120,7 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
   const index = SHIFT_CLOSE_STEPS.indexOf(step);
   const pendingDrawers = drawerRows.filter((r) => r.pending).length;
   const canSubmit =
+    !confirming &&
     pendingDrawers === 0 &&
     readingErrors.length === 0 &&
     (warnings.length === 0 || confirmWarningsChecked);
@@ -187,6 +204,7 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
                 rows={drawerRows}
                 total={props.drawerTotal}
                 onOpenHandover={props.onOpenHandover}
+                writes={props.handoverWrites}
               />
             )}
             {step === 'cash' && (
@@ -223,7 +241,11 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
               <div className="flex items-baseline gap-2">
                 <dt className="text-ink-muted">Expected office cash</dt>
                 <dd className="font-mono tabular-nums text-ink-strong">
-                  {formatMoney(cashLines.expectedOfficeCash)}
+                  {confirming ? (
+                    <StatusChip status="saving" size="sm" />
+                  ) : (
+                    formatMoney(cashLines.expectedOfficeCash)
+                  )}
                 </dd>
               </div>
               <div className="flex items-baseline gap-2">
@@ -235,7 +257,7 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
               <div className="flex items-center gap-2">
                 <dt className="sr-only">Office count variance</dt>
                 <dd>
-                  {counted ? (
+                  {confirming ? null : counted ? (
                     <VarianceChip
                       amount={draft.closingCash - cashLines.expectedOfficeCash}
                       size="md"

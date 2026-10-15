@@ -21,6 +21,7 @@ import { formatMoney, MINUS } from '../../utils/format.js';
 import { formatVariance } from '../../utils/variance.js';
 import { NozzleReadingsTable } from './NozzleReadingsTable.js';
 import { drawerColumns, drawerTotalRow } from './DrawerReconciliationTable.js';
+import type { HandoverWrites } from './handoverWrites.js';
 import {
   cashCountDefaults,
   cashCountSchema,
@@ -245,6 +246,8 @@ export interface HandoversStepProps {
   rows: CloseDrawerRow[];
   total: CloseDrawerTotal;
   onOpenHandover: (assignment: StaffAssignmentInput) => void;
+  /** Handovers still saving or failed, by Drawer key (#606). */
+  writes?: HandoverWrites;
 }
 
 /** "1 drawer has not handed over. Hand over every drawer before closing." */
@@ -256,9 +259,17 @@ export const PendingDrawersNote: React.FC<{ count: number }> = ({ count }) =>
     </CloseNote>
   ) : null;
 
-export const HandoversStep: React.FC<HandoversStepProps> = ({ rows, total, onOpenHandover }) => {
+export const HandoversStep: React.FC<HandoversStepProps> = ({
+  rows,
+  total,
+  onOpenHandover,
+  writes,
+}) => {
   const pending = rows.filter((r) => r.pending).length;
-  const columns = React.useMemo(() => drawerColumns(onOpenHandover), [onOpenHandover]);
+  const columns = React.useMemo(
+    () => drawerColumns(onOpenHandover, writes),
+    [onOpenHandover, writes],
+  );
 
   return (
     <div className="flex flex-col gap-3">

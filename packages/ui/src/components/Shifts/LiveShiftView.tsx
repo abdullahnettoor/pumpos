@@ -18,6 +18,7 @@ import {
 import { NozzleReadingsTable } from './NozzleReadingsTable.js';
 import { ProductSalesSection } from './ProductSalesSection.js';
 import { TakingsSummary } from './TakingsSummary.js';
+import type { HandoverWrites } from './handoverWrites.js';
 
 /** The open shift as the shift-status payload carries it. */
 export interface LiveShift extends ShiftInput {
@@ -44,6 +45,10 @@ export interface LiveShiftViewProps {
   onStartClose: () => void;
   /** Opens the last closed shift's summary (History); null when there is none. */
   onViewLastSummary: (() => void) | null;
+  /** Handovers still saving or failed, by Drawer key (#606). */
+  handoverWrites?: HandoverWrites;
+  /** The shift's money awaits the server's confirmation (#606). */
+  confirming?: boolean;
 }
 
 const money = (v: number) => formatMoney(v, { decimals: 0 });
@@ -66,6 +71,8 @@ export const LiveShiftView: React.FC<LiveShiftViewProps> = ({
   onOpenHandover,
   onStartClose,
   onViewLastSummary,
+  handoverWrites,
+  confirming = false,
 }) => {
   const handoversQ = useMerchandiseHandovers(
     shift.id,
@@ -126,6 +133,7 @@ export const LiveShiftView: React.FC<LiveShiftViewProps> = ({
             groups={figures.groups}
             timeZone={timeZone}
             onOpenHandover={onOpenHandover}
+            writes={handoverWrites}
           />
           <ProductSalesSection
             shiftId={shift.id}
@@ -142,6 +150,7 @@ export const LiveShiftView: React.FC<LiveShiftViewProps> = ({
             recorded={figures.drawers.recorded}
             expected={figures.drawers.expected}
             pending={figures.pending}
+            confirming={confirming}
           />
           <BeforeCloseChecklist items={figures.checklist} onAction={onAction} canClose={canClose} />
         </aside>

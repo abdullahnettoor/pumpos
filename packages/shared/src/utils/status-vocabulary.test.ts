@@ -59,6 +59,8 @@ describe('statusPresentation: one word and one tone per state', () => {
     ['measured', 'Measured', 'success'],
     ['discarded', 'Discarded', 'neutral'],
     ['purchase-not-linked', 'Purchase not linked', 'warning'],
+    // A write in flight (#606): not a problem, so neutral
+    ['saving', 'Saving…', 'neutral'],
   ];
 
   it.each(cases)('%s reads "%s" in %s', (state, label, tone) => {

@@ -25,6 +25,7 @@ import {
   CircleSlash,
   KeyRound,
   Wrench,
+  CloudUpload,
   type LucideIcon,
 } from 'lucide-react';
 import { statusPresentation, type PumpState } from '@pump/shared';
@@ -128,6 +129,8 @@ export const STATUS_MAP: Record<PumpStatus, StatusMeta> = {
   pending: vocab('handover-pending', Clock, { pulse: true }),
   offline: { label: 'Offline', tone: 'neutral', icon: CloudOff },
   'sync-failed': { label: 'Sync failed', tone: 'danger', icon: AlertTriangle },
+  // A write in flight (#606); the outbox's "Waiting to sync" will sit beside it.
+  saving: vocab('saving', CloudUpload, { pulse: true }),
 
   // Financial
   paid: { label: 'Paid', tone: 'success', icon: CheckCircle },

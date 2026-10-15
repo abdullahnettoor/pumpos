@@ -56,6 +56,7 @@ import { Station, canCloseShift, canOpenShift } from '@pump/shared';
 import type { OpenShiftFormValues } from '@pump/shared';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 import { refreshShiftStatus } from './refreshShiftStatus.js';
+import { shiftMoneyConfirming, useHandoverWrites } from './handoverWrites.js';
 import { useNow } from './useNow.js';
 import {
   officeSubmitKeys,
@@ -470,6 +471,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     );
   };
 
+  // Handovers in flight or refused, and whether the shift's money is still
+  // to be confirmed by the refresh (#606).
+  const handoverWrites = useHandoverWrites(data?.activeShift?.id ?? null);
+  const moneyConfirming = shiftMoneyConfirming(handoverWrites, stationId, statusQ);
+
   const startClose = () => {
     setSelectedSubTab('today');
     clearNavIntent();
@@ -654,6 +660,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             onConfirmWarningsChange={flow.setConfirmWarningsChecked}
             isClosing={flow.isClosing}
             onConfirmClose={(save) => runTask(flow.closeShift(save), 'Could not close the shift.')}
+            handoverWrites={handoverWrites}
+            confirming={moneyConfirming}
           />
           {handoverDrawer}
         </>
@@ -831,6 +839,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                   onOpenHandover={openHandover}
                   onStartClose={startClose}
                   onViewLastSummary={viewLastShiftSummary}
+                  handoverWrites={handoverWrites}
+                  confirming={moneyConfirming}
                 />
               ) : awaitingOpenedShift ? (
                 <Skeleton aria-label="Loading the new shift" height={420} />
