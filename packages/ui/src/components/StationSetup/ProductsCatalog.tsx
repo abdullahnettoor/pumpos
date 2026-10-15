@@ -24,7 +24,11 @@ import { Checkbox } from '../primitives/Toggle.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useRunTask } from '../../utils/runTask.js';
-import { useKeyedSaves } from './useKeyedSaves.js';
+import {
+  officeSubmitKeys,
+  sendKeyed,
+  type SubmitKeySession,
+} from '../../office-records/submitKeys.js';
 import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
 
 const productService = new CloudProductService();
@@ -127,7 +131,9 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
-  const { save, renew } = useKeyedSaves();
+  // One session per opened edit (#537): a new edit never inherits an unsettled key.
+  // State, not a ref: startEdit is handed to the column builder during render.
+  const [session, setSession] = useState<SubmitKeySession | null>(null);
   const confirm = useConfirm();
   // Read through the shared hook instead of copying the list into local state
   // behind an effect — that pattern was the source of this file's
@@ -182,7 +188,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
         taxConfig: { vat_rate: 0, hsn_code: '2710' },
         isActive: true,
       };
-      await save(`setup:product:create:quick-${type}`, body, (idempotencyKey) =>
+      await sendKeyed(officeSubmitKeys.session('setup:products:new'), body, (idempotencyKey) =>
         productService.createProduct(body, { idempotencyKey }),
       );
       runTask(refreshProducts(), 'Saved, but the product list could not be refreshed.');
@@ -235,8 +241,10 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
 
       if (editingProduct) {
         const id = editingProduct.id;
-        await save(`setup:product:update:${id}`, payload, (idempotencyKey) =>
-          productService.updateProduct(id, payload, { idempotencyKey }),
+        await sendKeyed(
+          session ?? officeSubmitKeys.session(`setup:products:${id}`),
+          payload,
+          (idempotencyKey) => productService.updateProduct(id, payload, { idempotencyKey }),
         );
       } else {
         // Opening cost basis is only seeded at creation; thereafter it is
@@ -248,8 +256,8 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
           payload.openingStock = Number(openingStock);
           payload.stationId = selectedStation?.id ?? undefined;
         }
-        await save(
-          `setup:product:create:${selectedStation?.id ?? 'org'}`,
+        await sendKeyed(
+          session ?? officeSubmitKeys.session('setup:products:new'),
           payload,
           (idempotencyKey) => productService.createProduct(payload, { idempotencyKey }),
         );
@@ -298,7 +306,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
     setPriceInclusive(tc.price_inclusive !== false);
     setVatRate(tc.vat_rate != null ? Number(tc.vat_rate) : 0);
     setIsCodeEdited(true);
-    renew();
+    setSession(officeSubmitKeys.session(`setup:products:${p.id}`));
     setIsFormOpen(true);
   };
 
@@ -313,8 +321,10 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
     )
       return;
     try {
-      await save(`setup:product:archive:${id}`, { isActive: false }, (idempotencyKey) =>
-        productService.archiveProduct(id, { idempotencyKey }),
+      await sendKeyed(
+        officeSubmitKeys.session(`setup:products:${id}`),
+        { isActive: false },
+        (idempotencyKey) => productService.archiveProduct(id, { idempotencyKey }),
       );
       runTask(refreshProducts(), 'Saved, but the product list could not be refreshed.');
       toast.success('Product archived.');
@@ -345,7 +355,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
 
   const openCreate = () => {
     resetForm();
-    renew();
+    setSession(officeSubmitKeys.session('setup:products:new'));
     setIsFormOpen(true);
   };
   // The Station page's Add ▾ menu opens the add drawer or the CSV import.

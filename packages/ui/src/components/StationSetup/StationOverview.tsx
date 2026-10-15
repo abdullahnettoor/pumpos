@@ -44,7 +44,11 @@ import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
 import { TankLevelSettingsPanel } from './TankLevelSettingsPanel.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { ReportTemplatesPanel } from '../reports/templates/ReportTemplatesPanel.js';
-import { useKeyedSaves } from './useKeyedSaves.js';
+import {
+  officeSubmitKeys,
+  sendKeyed,
+  type SubmitKeySession,
+} from '../../office-records/submitKeys.js';
 
 const stationService = new CloudStationService();
 
@@ -93,20 +97,27 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     onCreateHandled: () => setAddRequest(null),
   });
   /**
-   * Every station save sends one Idempotency-Key per logical submit (#537), one
-   * scope per form; opening an edit starts new sessions.
+   * Every station save sends one Idempotency-Key per logical submit (#537),
+   * through the shared store. Each form gets a new session when its edit is
+   * opened (General, Branding) or after each decided save (Rules forms), so a
+   * new edit never inherits the key of one left unsettled.
    */
-  const { save: keyedSave, renew: renewKeys } = useKeyedSaves();
+  const sessions = useRef(new Map<string, SubmitKeySession>());
+  const openSession = (form: string) => {
+    const s = officeSubmitKeys.session(`setup:stations:${selectedStation?.id ?? 'none'}:${form}`);
+    sessions.current.set(form, s);
+    return s;
+  };
   const updateStation = (form: string, id: string, body: unknown) =>
-    keyedSave(`setup:station:${form}:${id}`, body, (idempotencyKey) =>
+    sendKeyed(sessions.current.get(form) ?? openSession(form), body, (idempotencyKey) =>
       stationService.updateStation(id, body, { idempotencyKey }),
     );
   const startEditing = () => {
-    renewKeys();
+    openSession('general');
     setEditing(true);
   };
   const startEditingBusiness = () => {
-    renewKeys();
+    openSession('branding');
     setEditingBusiness(true);
   };
 

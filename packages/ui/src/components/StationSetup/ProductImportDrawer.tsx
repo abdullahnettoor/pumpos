@@ -3,7 +3,7 @@ import { Drawer } from '../Drawer.js';
 import { Button, Chip, Icon, InteractiveTable, type TableColumn } from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
-import { useKeyedSaves } from './useKeyedSaves.js';
+import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { CloudProductService } from '../../services/cloud.js';
 import type { Product } from '@pump/shared';
 import { PRODUCT_UNITS } from '@pump/shared';
@@ -246,7 +246,6 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
 }) => {
   const toast = useToast();
   const runTask = useRunTask();
-  const { save, renew } = useKeyedSaves();
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState('');
   const [rows, setRows] = useState<ParsedRow[]>([]);
@@ -272,13 +271,10 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
     setRows([]);
     setResult(null);
     if (fileRef.current) fileRef.current.value = '';
-    renew();
   };
 
   const handleFile = async (file: File) => {
     setResult(null);
-    // A new file is a new import, never a retry of the last one.
-    renew();
     const text = await file.text();
     setFileName(file.name);
     const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
@@ -412,8 +408,8 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
     let res: Awaited<ReturnType<typeof productService.importProducts>>;
     try {
       setImporting(true);
-      res = await save(
-        `setup:product:import:${stationId ?? 'org'}`,
+      res = await sendKeyed(
+        officeSubmitKeys.session('setup:products:import'),
         { products: payloads, stationId },
         (idempotencyKey) => productService.importProducts(payloads, stationId, { idempotencyKey }),
       );

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudTankService } from '../../services/cloud.js';
 import { queryKeys, useProducts, useTanks } from '../../query/hooks.js';
@@ -19,7 +19,11 @@ import { countOf } from '../../utils/ledgerWindow.js';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
-import { useKeyedSaves } from './useKeyedSaves.js';
+import {
+  officeSubmitKeys,
+  sendKeyed,
+  type SubmitKeySession,
+} from '../../office-records/submitKeys.js';
 import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
 
 const tankService = new CloudTankService();
@@ -36,7 +40,8 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
-  const { save, renew } = useKeyedSaves();
+  // One session per opened edit (#537): a new edit never inherits an unsettled key.
+  const sessionRef = useRef<SubmitKeySession | null>(null);
   // Shared hooks instead of a loader copying into local state behind an effect.
   const tanksQ = useTanks(stationId);
   const productsQ = useProducts();
@@ -73,8 +78,10 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
     }
     try {
       const body = { stationId, name, productId, capacity };
-      await save(`setup:tank:create:${stationId}`, body, (idempotencyKey) =>
-        tankService.createTank(body, { idempotencyKey }),
+      await sendKeyed(
+        sessionRef.current ?? officeSubmitKeys.session(`setup:tanks:${stationId}`),
+        body,
+        (idempotencyKey) => tankService.createTank(body, { idempotencyKey }),
       );
       setIsFormOpen(false);
       resetForm();
@@ -108,10 +115,12 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
           : `Diesel Tank ${sameProductTanksCount + 1}`;
 
       const body = { stationId, name: tankName, productId: fuel.id, capacity: cap };
-      // Its own scope per fuel, so a Petrol quick add left unanswered never
-      // lends its key to a Diesel one.
-      await save(`setup:tank:create:${stationId}:quick-${fuelCode}`, body, (idempotencyKey) =>
-        tankService.createTank(body, { idempotencyKey }),
+      // A session per action: the shared store hands an unsettled key back
+      // only for the same body, so Petrol never lends its key to Diesel.
+      await sendKeyed(
+        officeSubmitKeys.session(`setup:tanks:${stationId}`),
+        body,
+        (idempotencyKey) => tankService.createTank(body, { idempotencyKey }),
       );
 
       runTask(refreshTanks(), 'Saved, but the tank list could not be refreshed.');
@@ -135,7 +144,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
     setName(fuelCode === 'MS' ? 'Petrol Tank 1' : 'Diesel Tank 1');
     setCapacity(fuelCode === 'MS' ? 15000 : 20000);
     setProductId(fuel.id);
-    renew();
+    sessionRef.current = officeSubmitKeys.session(`setup:tanks:${stationId}`);
     setIsFormOpen(true);
   };
 
@@ -177,7 +186,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
 
   const openCreate = () => {
     resetForm();
-    renew();
+    sessionRef.current = officeSubmitKeys.session(`setup:tanks:${stationId}`);
     setIsFormOpen(true);
   };
   // The Station page's Add ▾ menu opens this drawer.

@@ -20,7 +20,11 @@ import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys, useFinancialAccounts, usePaymentTerminals } from '../../query/hooks.js';
-import { useKeyedSaves } from './useKeyedSaves.js';
+import {
+  officeSubmitKeys,
+  sendKeyed,
+  type SubmitKeySession,
+} from '../../office-records/submitKeys.js';
 import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
 
 const terminalService = new CloudPaymentTerminalService();
@@ -107,7 +111,9 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({
 }) => {
   const toast = useToast();
   const runTask = useRunTask();
-  const { save, renew } = useKeyedSaves();
+  // One session per opened edit (#537): a new edit never inherits an unsettled key.
+  // State, not a ref: openEdit is handed to the column builder during render.
+  const [session, setSession] = useState<SubmitKeySession | null>(null);
   // Shared hooks rather than a loader copying into state behind an effect.
   const qc = useQueryClient();
   const terminalsQ = usePaymentTerminals(stationId);
@@ -150,7 +156,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({
   const openCreate = () => {
     resetForm();
     setLabel(`PoS ${terminals.length + 1}`);
-    renew();
+    setSession(officeSubmitKeys.session(`setup:payment-terminals:${stationId}`));
     setIsFormOpen(true);
   };
 
@@ -162,7 +168,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({
     setSupportsCard(t.supportsCard);
     setSupportsUpi(t.supportsUpi);
     setClearingAccountId((t as any).clearingAccountId || '');
-    renew();
+    setSession(officeSubmitKeys.session(`setup:payment-terminals:${t.id}`));
     setIsFormOpen(true);
   };
 
@@ -181,13 +187,17 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({
       };
       if (editingId) {
         const id = editingId;
-        await save(`setup:terminal:update:${id}`, payload, (idempotencyKey) =>
-          terminalService.updateTerminal(id, payload, { idempotencyKey }),
+        await sendKeyed(
+          session ?? officeSubmitKeys.session(`setup:payment-terminals:${id}`),
+          payload,
+          (idempotencyKey) => terminalService.updateTerminal(id, payload, { idempotencyKey }),
         );
       } else {
         const body = { stationId, ...payload };
-        await save(`setup:terminal:create:${stationId}`, body, (idempotencyKey) =>
-          terminalService.createTerminal(body, { idempotencyKey }),
+        await sendKeyed(
+          session ?? officeSubmitKeys.session(`setup:payment-terminals:${stationId}`),
+          body,
+          (idempotencyKey) => terminalService.createTerminal(body, { idempotencyKey }),
         );
       }
       setIsFormOpen(false);
@@ -204,9 +214,11 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({
   const toggleActive = async (t: PaymentTerminal) => {
     try {
       const body = { isActive: !t.isActive };
-      // Its own scope: an edit left unanswered must not lend its key here.
-      await save(`setup:terminal:deactivate:${t.id}`, body, (idempotencyKey) =>
-        terminalService.updateTerminal(t.id, body, { idempotencyKey }),
+      // Its own session: an edit left unanswered must not lend its key here.
+      await sendKeyed(
+        officeSubmitKeys.session(`setup:payment-terminals:${t.id}`),
+        body,
+        (idempotencyKey) => terminalService.updateTerminal(t.id, body, { idempotencyKey }),
       );
       runTask(refreshTerminals(), 'Saved, but the terminal list could not be refreshed.');
       toast.success(t.isActive ? 'Terminal disabled.' : 'Terminal enabled.');

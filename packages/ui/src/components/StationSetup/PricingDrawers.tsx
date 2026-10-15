@@ -9,7 +9,7 @@ import { formatMoney } from '../../utils/format.js';
 import { Button, Form } from '../../pump-ds/index.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { stationDateTimeInput, stationInputToIso, type FuelPriceRow } from './fuelPriceRows.js';
-import { useKeyedSaves } from './useKeyedSaves.js';
+import { useKeyedSave } from '../../office-records/useKeyedSave.js';
 
 const pricingService = new CloudPricingService();
 const productService = new CloudProductService();
@@ -42,7 +42,8 @@ export const ChangePriceDrawer: React.FC<{
   const toast = useToast();
   const runTask = useRunTask();
   const qc = useQueryClient();
-  const { save } = useKeyedSaves();
+  // Mounted per open: one session per price change.
+  const save = useKeyedSave(`setup:pricing:${stationId}`);
   const [productId, setProductId] = useState(initial.productId);
   const [price, setPrice] = useState('');
   // Computed once on open, so a re-render never fights the operator's edit.
@@ -63,7 +64,7 @@ export const ChangePriceDrawer: React.FC<{
     };
     try {
       setSubmitting(true);
-      await save(`setup:pricing:record:${stationId}`, payload, (idempotencyKey) =>
+      await save(payload, (idempotencyKey) =>
         pricingService.recordPricing(payload, { idempotencyKey }),
       );
     } catch (err: any) {
@@ -151,7 +152,7 @@ export const MrpDrawer: React.FC<{ product: MerchRow; onClose: () => void }> = (
   const toast = useToast();
   const runTask = useRunTask();
   const qc = useQueryClient();
-  const { save } = useKeyedSaves();
+  const save = useKeyedSave(`setup:products:${product.id}`);
   const [value, setValue] = useState(
     product.sellingPrice != null ? String(product.sellingPrice) : '',
   );
@@ -161,7 +162,7 @@ export const MrpDrawer: React.FC<{ product: MerchRow; onClose: () => void }> = (
     const body = { sellingPrice: value === '' ? null : Number(value) };
     try {
       setSaving(true);
-      await save(`setup:product:update:${product.id}`, body, (idempotencyKey) =>
+      await save(body, (idempotencyKey) =>
         productService.updateProduct(product.id, body, { idempotencyKey }),
       );
     } catch (err: any) {

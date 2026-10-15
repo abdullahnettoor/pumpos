@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudShiftTemplateService } from '../../services/cloud.js';
 import { ShiftTemplate } from '@pump/shared';
@@ -18,7 +18,11 @@ import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { queryKeys, useShiftTemplates } from '../../query/hooks.js';
 import { countOf } from '../../utils/ledgerWindow.js';
-import { useKeyedSaves } from './useKeyedSaves.js';
+import {
+  officeSubmitKeys,
+  sendKeyed,
+  type SubmitKeySession,
+} from '../../office-records/submitKeys.js';
 import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
 
 const templateService = new CloudShiftTemplateService();
@@ -64,7 +68,8 @@ export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
 }) => {
   const toast = useToast();
   const runTask = useRunTask();
-  const { save, renew } = useKeyedSaves();
+  // One session per opened edit (#537): a new edit never inherits an unsettled key.
+  const sessionRef = useRef<SubmitKeySession | null>(null);
   const qc = useQueryClient();
   const templatesQ = useShiftTemplates();
   const templates: ShiftTemplate[] = templatesQ.data ?? [];
@@ -82,8 +87,10 @@ export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
     e.preventDefault();
     try {
       const body = { name, startTime, endTime, isActive: true };
-      await save('setup:shift-template:create', body, (idempotencyKey) =>
-        templateService.createTemplate(body, { idempotencyKey }),
+      await sendKeyed(
+        sessionRef.current ?? officeSubmitKeys.session('setup:shift-templates:new'),
+        body,
+        (idempotencyKey) => templateService.createTemplate(body, { idempotencyKey }),
       );
       setIsFormOpen(false);
       runTask(loadTemplates(), 'Saved, but the template list could not be refreshed.');
@@ -98,8 +105,10 @@ export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
       setPrefilling(true);
       // One request per shift, each under its own scope so the keys differ.
       for (const [idx, body] of DEFAULT_SHIFTS.entries()) {
-        await save(`setup:shift-template:create:prefill-${idx}`, body, (idempotencyKey) =>
-          templateService.createTemplate(body, { idempotencyKey }),
+        await sendKeyed(
+          officeSubmitKeys.session(`setup:shift-templates:new:prefill-${idx}`),
+          body,
+          (idempotencyKey) => templateService.createTemplate(body, { idempotencyKey }),
         );
       }
       runTask(loadTemplates(), 'Saved, but the template list could not be refreshed.');
@@ -130,7 +139,7 @@ export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
 
   const openCreate = () => {
     resetForm();
-    renew();
+    sessionRef.current = officeSubmitKeys.session('setup:shift-templates:new');
     setIsFormOpen(true);
   };
   // The Station page's Add ▾ menu opens this drawer.

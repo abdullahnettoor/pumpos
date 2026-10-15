@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudDispenserService, CloudNozzleService } from '../../services/cloud.js';
 import { queryKeys, useDispensers, useNozzles, useProducts, useTanks } from '../../query/hooks.js';
@@ -7,7 +7,11 @@ import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useInvalidateOperational } from '../../query/hooks.js';
-import { useKeyedSaves } from './useKeyedSaves.js';
+import {
+  officeSubmitKeys,
+  sendKeyed,
+  type SubmitKeySession,
+} from '../../office-records/submitKeys.js';
 import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
 import {
   Button,
@@ -46,7 +50,8 @@ export const DispensersList: React.FC<DispensersListProps> = ({
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
-  const { save, renew } = useKeyedSaves();
+  // One session per opened edit (#537): a new edit never inherits an unsettled key.
+  const sessionRef = useRef<SubmitKeySession | null>(null);
   const invalidateOperational = useInvalidateOperational();
   // Shared hooks rather than a loader copying four lists into local state.
   const dispensersQ = useDispensers(stationId);
@@ -171,8 +176,10 @@ export const DispensersList: React.FC<DispensersListProps> = ({
     try {
       setStatusBusyId(du.id);
       const body = { status: next };
-      await save(`setup:dispenser:update:${du.id}`, body, (idempotencyKey) =>
-        dispenserService.updateDispenser(du.id, body, { idempotencyKey }),
+      await sendKeyed(
+        officeSubmitKeys.session(`setup:dispensers:${du.id}`),
+        body,
+        (idempotencyKey) => dispenserService.updateDispenser(du.id, body, { idempotencyKey }),
       );
       toast.success(
         next === 'MAINTENANCE' ? `${du.name} is out of service.` : `${du.name} is back in service.`,
@@ -201,8 +208,8 @@ export const DispensersList: React.FC<DispensersListProps> = ({
       setSubmitting(true);
       // Create Dispenser
       const duBody = { stationId, name, code: code.toUpperCase(), status: 'ACTIVE' };
-      const createdDU = await save(
-        `setup:dispenser:create:${stationId}`,
+      const createdDU = await sendKeyed(
+        sessionRef.current ?? officeSubmitKeys.session(`setup:dispensers:${stationId}`),
         duBody,
         (idempotencyKey) => dispenserService.createDispenser(duBody, { idempotencyKey }),
       );
@@ -221,8 +228,10 @@ export const DispensersList: React.FC<DispensersListProps> = ({
           name: nozzleInput.name,
           currentReading: nozzleInput.currentReading,
         };
-        await save(`setup:nozzle:create:${createdDU.id}:${idx}`, nozzleBody, (idempotencyKey) =>
-          nozzleService.createNozzle(nozzleBody, { idempotencyKey }),
+        await sendKeyed(
+          officeSubmitKeys.session(`setup:nozzles:${createdDU.id}:${idx}`),
+          nozzleBody,
+          (idempotencyKey) => nozzleService.createNozzle(nozzleBody, { idempotencyKey }),
         );
       }
 
@@ -267,7 +276,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
     }
 
     setNozzlesList(recommendedNozzles);
-    renew();
+    sessionRef.current = officeSubmitKeys.session(`setup:dispensers:${stationId}`);
     setIsFormOpen(true);
   };
 
@@ -314,7 +323,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
     }
 
     setNozzlesList(recommendedNozzles);
-    renew();
+    sessionRef.current = officeSubmitKeys.session(`setup:dispensers:${stationId}`);
     setIsFormOpen(true);
   };
 
@@ -325,7 +334,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
 
   const openCreate = () => {
     resetForm();
-    renew();
+    sessionRef.current = officeSubmitKeys.session(`setup:dispensers:${stationId}`);
     setIsFormOpen(true);
   };
   // The Station page's Add ▾ menu opens this drawer.

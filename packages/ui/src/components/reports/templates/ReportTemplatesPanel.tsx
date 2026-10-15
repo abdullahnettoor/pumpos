@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ATTENDANT_REPORT_CAPABILITY } from '@pump/shared';
 import { CloudStationService } from '../../../services/cloud.js';
@@ -8,7 +8,11 @@ import { useToast } from '../../primitives/ToastProvider.js';
 import { Switch } from '../../primitives/Toggle.js';
 import { Button, Chip, Panel, SectionHeader, SegmentedControl } from '../../../pump-ds/index.js';
 import { useRunTask } from '../../../utils/runTask.js';
-import { useKeyedSaves } from '../../StationSetup/useKeyedSaves.js';
+import {
+  officeSubmitKeys,
+  sendKeyed,
+  type SubmitKeySession,
+} from '../../../office-records/submitKeys.js';
 import { paperFromStation } from '../../../services/reports/reportConfig.js';
 import { showLogoFromStation } from '../../../services/reports/letterhead.js';
 import {
@@ -44,7 +48,10 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({ sele
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
-  const keyed = useKeyedSaves();
+  // The Customize drawer gets a session when it opens (#537); each page
+  // setting change is its own action with its own session.
+  const sessionRef = useRef<SubmitKeySession | null>(null);
+  const formScope = (form: string) => `setup:stations:${selectedStation.id}:${form}`;
   const [editing, setEditing] = useState<ReportTemplateId | null>(null);
   const [savingPage, setSavingPage] = useState(false);
   // The Attendant Handover Report is gated: an Organization without it is not
@@ -57,10 +64,10 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({ sele
   const paper = paperFromStation(selectedStation);
   const showLogo = showLogoFromStation(selectedStation);
 
-  const save = async (scope: string, change: ReportConfigChange, success: string) => {
+  const save = async (session: SubmitKeySession, change: ReportConfigChange, success: string) => {
     const body = { settings: reportConfigSettings(selectedStation, change) };
     try {
-      await keyed.save(scope, body, (idempotencyKey) =>
+      await sendKeyed(session, body, (idempotencyKey) =>
         stationService.updateStation(selectedStation.id, body, { idempotencyKey }),
       );
     } catch (err: any) {
@@ -78,7 +85,7 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({ sele
     setSavingPage(true);
     try {
       await save(
-        `setup:report-templates:${selectedStation.id}`,
+        officeSubmitKeys.session(formScope('page-settings')),
         change,
         'Report page settings saved.',
       );
@@ -141,7 +148,7 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({ sele
               paper={paper}
               showLogo={showLogo}
               onCustomize={() => {
-                keyed.renew();
+                sessionRef.current = officeSubmitKeys.session(formScope(template.id));
                 setEditing(template.id);
               }}
             />
@@ -160,7 +167,7 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({ sele
           onClose={() => setEditing(null)}
           onSave={(sections) =>
             save(
-              `setup:report-template:${editingTemplate.id}:${selectedStation.id}`,
+              sessionRef.current ?? officeSubmitKeys.session(formScope(editingTemplate.id)),
               { [editingTemplate.id]: sections },
               `${editingTemplate.name} template saved.`,
             )
