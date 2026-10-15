@@ -64,7 +64,11 @@ export const OrganizationDrawer: React.FC<OrganizationDrawerProps> = ({ target, 
         {tab === 'owner' ? (
           <OwnerTab row={row} onRun={run} target={target} />
         ) : access.isLoading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-8)' }}>
+          <div
+            role="status"
+            aria-label="Loading organization access"
+            style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-8)' }}
+          >
             <Spinner className="size-6 text-brand" />
           </div>
         ) : access.error ? (
