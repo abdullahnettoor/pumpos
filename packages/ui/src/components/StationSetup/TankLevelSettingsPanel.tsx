@@ -92,7 +92,7 @@ export const TankLevelSettingsPanel: React.FC<TankLevelSettingsPanelProps> = ({
           </fieldset>
           {canEdit ? (
             <div className="flex justify-end border-t border-border-soft pt-3">
-              <Button type="submit" variant="primary" size="sm" disabled={!isDirty || saving}>
+              <Button type="submit" variant="secondary" size="sm" disabled={!isDirty || saving}>
                 Save tank levels
               </Button>
             </div>
