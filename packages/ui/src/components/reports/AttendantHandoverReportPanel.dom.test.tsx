@@ -330,7 +330,8 @@ describe('AttendantHandoverReportPanel list', () => {
 
     const tiles = Array.from(document.querySelectorAll('.kpi-value')).map((v) => v.parentElement!);
     expect(tiles.length).toBeLessThanOrEqual(4);
-    for (const tile of tiles) expect(tile.textContent).toContain('In range');
+    // The range control right above names the period: no caption, no chips (#604).
+    expect(screen.queryByText('In range')).toBeNull();
     const net = screen.getByText('Net variance').closest('[data-alert]');
     expect(net?.getAttribute('data-alert')).toBe('danger');
     expect(net?.textContent).toContain('1 short');

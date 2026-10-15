@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { stubContainerWidth } from './Dashboard/testing/containerWidth.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from './primitives/ToastProvider.js';
-import { AppShell, SIDEBAR_COLLAPSED_KEY, type NavItem } from './AppShell.js';
+import { AppShell, SIDEBAR_COLLAPSED_KEY, isSidebarShortcut, type NavItem } from './AppShell.js';
 import type { SidebarBadges } from '../query/useSidebarBadges.js';
 import { NAV_PAGES } from '../nav-intent/routes.js';
 
@@ -287,12 +287,86 @@ describe('AppShell collapse', () => {
     expect(screen.getByRole('button', { name: /expand sidebar/i })).not.toBeNull();
   });
 
+  it('toggles from the sidebar edge: a pointer affordance outside the tab order (#604)', () => {
+    shell();
+    const edge = screen.getByTestId('sidebar-edge');
+    expect(edge.getAttribute('aria-hidden')).toBe('true');
+    expect(edge.tabIndex).toBe(-1);
+    // Not a second "Collapse sidebar" control for a screen reader.
+    expect(screen.getAllByRole('button', { name: /collapse sidebar/i })).toHaveLength(1);
+    fireEvent.click(edge);
+    expect(screen.getByRole('button', { name: /expand sidebar/i })).not.toBeNull();
+    expect(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBe('1');
+    fireEvent.click(edge);
+    expect(screen.getByRole('button', { name: /collapse sidebar/i })).not.toBeNull();
+  });
+
+  it('toggles with ⌘\\ or Ctrl+\\, and the Collapse button names the shortcut (#604)', () => {
+    shell();
+    const button = screen.getByRole('button', { name: /collapse sidebar/i });
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(button.getAttribute('aria-keyshortcuts')).toBe('Meta+\\ Control+\\');
+    fireEvent.keyDown(document, { key: '\\', code: 'Backslash', metaKey: true });
+    expect(
+      screen.getByRole('button', { name: /expand sidebar/i }).getAttribute('aria-expanded'),
+    ).toBe('false');
+    fireEvent.keyDown(document, { key: '\\', code: 'Backslash', ctrlKey: true });
+    expect(screen.getByRole('button', { name: /collapse sidebar/i })).not.toBeNull();
+    // A plain backslash (typing) does nothing.
+    fireEvent.keyDown(document, { key: '\\', code: 'Backslash' });
+    expect(screen.getByRole('button', { name: /collapse sidebar/i })).not.toBeNull();
+  });
+
+  it('matches the sidebar shortcut only with ⌘ or Ctrl and no other modifier', () => {
+    const k = (over: Partial<KeyboardEvent>) =>
+      isSidebarShortcut({
+        key: '\\',
+        code: 'Backslash',
+        metaKey: false,
+        ctrlKey: false,
+        altKey: false,
+        shiftKey: false,
+        ...over,
+      });
+    expect(k({ metaKey: true })).toBe(true);
+    expect(k({ ctrlKey: true })).toBe(true);
+    expect(k({})).toBe(false);
+    expect(k({ ctrlKey: true, shiftKey: true })).toBe(false);
+    expect(k({ metaKey: true, altKey: true })).toBe(false);
+    expect(k({ metaKey: true, key: 'k', code: 'KeyK' })).toBe(false);
+    // Not ours when handled already, mid-composition, or while typing.
+    expect(k({ metaKey: true, defaultPrevented: true })).toBe(false);
+    expect(k({ ctrlKey: true, isComposing: true })).toBe(false);
+    for (const tag of ['input', 'textarea', 'select']) {
+      expect(k({ metaKey: true, target: document.createElement(tag) }), tag).toBe(false);
+    }
+    const editable = document.createElement('div');
+    editable.setAttribute('contenteditable', 'true');
+    const inner = document.createElement('span');
+    editable.appendChild(inner);
+    expect(k({ metaKey: true, target: inner })).toBe(false);
+    expect(k({ metaKey: true, target: document.createElement('button') })).toBe(true);
+  });
+
+  it('leaves ⌘\\ alone inside a text field', () => {
+    shell();
+    const field = document.createElement('input');
+    document.body.appendChild(field);
+    fireEvent.keyDown(field, { key: '\\', code: 'Backslash', metaKey: true });
+    expect(screen.getByRole('button', { name: /collapse sidebar/i })).not.toBeNull();
+    field.remove();
+  });
+
   it('becomes an icon rail below 1200px of app width and keeps the saved choice', () => {
     stub.restore();
     stub = stubContainerWidth(1100);
     shell();
     expect(screen.getByRole('button', { name: /expand sidebar/i })).not.toBeNull();
     expect(screen.queryByText('Operate')).toBeNull();
+    expect(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBeNull();
+    // The rail is forced: no edge to click, and the shortcut changes nothing.
+    expect(screen.queryByTestId('sidebar-edge')).toBeNull();
+    fireEvent.keyDown(document, { key: '\\', code: 'Backslash', metaKey: true });
     expect(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBeNull();
     act(() => stub.setWidth(1400));
     expect(screen.getByRole('button', { name: /collapse sidebar/i })).not.toBeNull();

@@ -24,27 +24,23 @@ export const DecantationSummary: React.FC<{ totals: DecantationReportTotals }> =
   <KpiStrip columns="auto">
     <KpiTile
       label="Tanker visits"
-      scope="in-range"
       value={String(t.totalVisits)}
       hint={`${t.measuredVisits} measured · ${t.pendingVisits} pending`}
     />
     <KpiTile
       label="Settled invoice volume"
-      scope="in-range"
       value={litres(t.totalInvoiceQty)}
       hint={`${litres(t.pendingInvoiceQty)} pending · ${t.settlingInvoiceCount} settling`}
     />
     <KpiTile
       alert={t.totalVarianceQty < 0 ? 'danger' : undefined}
       label="Settled invoice variance"
-      scope="in-range"
       value={formatQuantity(t.totalVarianceQty, 'L', { plus: true })}
       hint={varianceWord(t.totalVarianceQty)}
     />
     <KpiTile
       alert={t.transitDiscrepancies > 0 ? 'danger' : undefined}
       label="Transit discrepancies"
-      scope="in-range"
       value={String(t.transitDiscrepancies)}
       hint={`${t.totalChambersShort} short · ${t.totalChambersExcess} excess · ${t.totalSealsBroken} broken seals · ${t.totalChambersNotEmptied} unemptied`}
     />

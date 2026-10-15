@@ -111,7 +111,8 @@ const COLUMNS: TableColumn<CategoryRow>[] = [
  * "By category" tab reads the same view with `kind="income"`. VOIDED excluded.
  *
  * Layout A (#567): one control bar with the range menu drives the tiles and
- * the table below it, so every tile reads `In range`. A tile never repeats the
+ * the table below it. The range menu right above names the period, so the
+ * tiles carry no period label (#604). A tile never repeats the
  * table's total (the total row carries it), so the first tile is the average
  * per day over the range.
  */
@@ -178,20 +179,13 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
         <KpiStrip columns="auto">
           <KpiTile
             label="Average per day"
-            scope="in-range"
             value={formatMoney(total / days)}
             hint={`over ${days} ${days === 1 ? 'day' : 'days'}`}
           />
-          <KpiTile label="Entries" scope="in-range" value={String(active.length)} />
-          <KpiTile
-            label="Categories"
-            scope="in-range"
-            value={String(byCategory.length)}
-            hint={copy.withAmount}
-          />
+          <KpiTile label="Entries" value={String(active.length)} />
+          <KpiTile label="Categories" value={String(byCategory.length)} hint={copy.withAmount} />
           <KpiTile
             label="Largest category"
-            scope="in-range"
             value={formatMoney(largest?.total ?? 0)}
             hint={largest?.name ?? '—'}
           />

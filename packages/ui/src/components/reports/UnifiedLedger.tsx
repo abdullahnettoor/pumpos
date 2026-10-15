@@ -404,20 +404,11 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({
             placeholderHeight={90}
           >
             <KpiStrip columns="auto">
-              <KpiTile
-                label={resolvedCfg.kpiRaises}
-                scope="in-range"
-                value={formatMoney(totals.raises)}
-              />
-              <KpiTile
-                label={resolvedCfg.kpiLowers}
-                scope="in-range"
-                value={formatMoney(totals.lowers)}
-              />
+              <KpiTile label={resolvedCfg.kpiRaises} value={formatMoney(totals.raises)} />
+              <KpiTile label={resolvedCfg.kpiLowers} value={formatMoney(totals.lowers)} />
               <KpiTile
                 alert={resolvedCfg.alertBelowZero && totals.net < 0 ? 'danger' : undefined}
                 label={resolvedCfg.balanceLabel}
-                scope="in-range"
                 value={formatMoney(totals.net)}
                 hint="at the end of the range"
               />

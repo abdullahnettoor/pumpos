@@ -32,23 +32,25 @@ describe('PageFrame', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('DSR · 9 Oct');
   });
 
-  it('places title, actions, tabs, toolbar and content in a fixed order', () => {
-    render(
+  const customerTabs = (
+    <Tabs
+      aria-label="Customers"
+      activeId="a"
+      onChange={() => {}}
+      tabs={[
+        { id: 'a', label: 'Customers', concept: 'customers' },
+        { id: 'b', label: 'Collections', concept: 'collections' },
+      ]}
+    />
+  );
+
+  it('places title, actions, tabs, toolbar and content in order; only the tabs stick (#604)', () => {
+    const { container } = render(
       <PageFrame
         route={ROUTES.customers}
         subtitle="23 credit customers"
         actions={<button type="button">Add customer</button>}
-        tabs={
-          <Tabs
-            aria-label="Customers"
-            activeId="a"
-            onChange={() => {}}
-            tabs={[
-              { id: 'a', label: 'Customers', concept: 'customers' },
-              { id: 'b', label: 'Collections', concept: 'collections' },
-            ]}
-          />
-        }
+        tabs={customerTabs}
         toolbar={<input aria-label="Search customers" />}
       >
         <p>Customer table</p>
@@ -66,9 +68,27 @@ describe('PageFrame', () => {
     expect(before(action, tabs)).toBe(true);
     expect(before(tabs, toolbar)).toBe(true);
     expect(before(toolbar, content)).toBe(true);
-    // Actions sit on the title row, not under it.
+    // Actions sit on the title row and scroll away with it.
     expect(action.closest('header')).toBe(title.closest('header'));
-    expect(tabs.closest('header')).toBeNull();
+    const row = container.querySelector('[data-page-frame-slot="tabs"]')!;
+    expect(row.getAttribute('class')).toMatch(/(^|\s)sticky(\s|$)/);
+    expect(row.contains(tabs)).toBe(true);
+    expect(row.contains(action)).toBe(false);
+    expect(row.contains(title)).toBe(false);
+    expect(toolbar.closest('.sticky')).toBeNull();
+    expect(content.closest('.sticky')).toBeNull();
+  });
+
+  it('keeps the actions on the title row of a page without tabs, and sticks nothing', () => {
+    const { container } = render(
+      <PageFrame route={ROUTES.accounts} actions={<button type="button">Add account</button>}>
+        content
+      </PageFrame>,
+    );
+    const title = screen.getByRole('heading', { level: 1 });
+    const action = screen.getByRole('button', { name: 'Add account' });
+    expect(action.closest('header')).toBe(title.closest('header'));
+    expect(container.querySelector('.sticky')).toBeNull();
   });
 
   it('a detail page names its parent in the back slot: a link top-left, above the title (#576)', () => {

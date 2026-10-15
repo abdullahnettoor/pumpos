@@ -150,7 +150,8 @@ describe('Customers list (#527)', () => {
     expect(tile('Overdue').getAttribute('data-alert')).toBe('warning');
     expect(tile('Over credit limit').getAttribute('data-alert')).toBe('danger');
     expect(tile('Receivable').getAttribute('data-alert')).toBeNull();
-    expect(screen.getAllByText('Now').length).toBe(3);
+    // Balances carry no chip (#604); only the month figure names its period.
+    expect(screen.queryByText('Now')).toBeNull();
     expect(screen.getByText(month)).toBeTruthy();
     // Collected this month counts only this month's entry date.
     expect(within(tile('Collected')).getByText('₹1,200.00')).toBeTruthy();

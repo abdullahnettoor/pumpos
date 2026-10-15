@@ -164,12 +164,13 @@ afterEach(() => {
 });
 
 describe('Accounts › Accounts, a balance list (#530)', () => {
-  it('reads tiles (Now), then the list under its header, with one primary button', async () => {
+  it('reads balance tiles (no period chip), then the list under its header, with one primary button', async () => {
     render();
     const table = await screen.findByRole('table');
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Accounts');
     expect(tileLabels()).toBe(3);
-    expect(screen.getAllByText('Now')).toHaveLength(3);
+    // A balance has no period, so it carries no chip (#604).
+    expect(screen.queryByText('Now')).toBeNull();
     expect(screen.getByTestId('section-header-accounts').textContent).toContain('4 accounts');
     expect(
       within(screen.getByTestId('section-header-accounts')).getByTestId('control-bar'),

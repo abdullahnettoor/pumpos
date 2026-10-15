@@ -190,15 +190,13 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
         <KpiStrip columns="auto">
           <KpiTile
             label="Product sales"
-            scope="in-range"
             value={formatMoney(kpis.total)}
             hint={`${rows.length} ${rows.length === 1 ? 'sale' : 'sales'}`}
           />
-          <KpiTile label="Invoiced" scope="in-range" value={String(kpis.invoiced)} />
+          <KpiTile label="Invoiced" value={String(kpis.invoiced)} />
           <KpiTile
             alert={kpis.pending > 0 ? 'warning' : undefined}
             label="Not invoiced"
-            scope="in-range"
             value={String(kpis.pending)}
           />
         </KpiStrip>

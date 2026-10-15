@@ -112,6 +112,9 @@
   --shadow-control: 0 1px 2px rgba(24, 32, 26, 0.25);
   /* The dim layer behind a modal dialog or the command palette. */
   --overlay-scrim: rgba(24, 32, 26, 0.32);
+  /* A light blur on top of that scrim (#604): dialogs and the command palette
+     only. A drawer keeps its plain scrim, so the page beside it stays sharp. */
+  --overlay-blur: 4px;
   /* The lighter dim layer behind a drawer: the page stays readable beside it. */
   --overlay-drawer: rgba(24, 32, 26, 0.15);
   /* A switch thumb: white on its track in both themes. */
@@ -483,6 +486,14 @@ select:disabled {
 }
 
 /* Reduced motion support */
+/* Blur costs GPU time on low-end machines and some readers find it hard to
+   look through: drop it when the reader asks for less transparency (#604). */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --overlay-blur: 0px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in {
     animation: none;
@@ -496,8 +507,8 @@ select:disabled {
   left: 0;
   width: 100vw;
   height: 100vh;
+  /* A plain scrim, no blur: the page beside a drawer stays sharp (#604). */
   background-color: var(--overlay-drawer);
-  backdrop-filter: blur(2px);
   z-index: 1000;
   opacity: 0;
   animation: drawerFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;

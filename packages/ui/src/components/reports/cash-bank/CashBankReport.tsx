@@ -219,14 +219,12 @@ export const CashBankReport: React.FC<CashBankReportProps> = ({ selectedStation,
         <KpiStrip columns="auto">
           <KpiTile
             label="Opening"
-            scope="in-range"
             value={formatMoney(summary.total.opening)}
             hint="Cash + Bank"
             alert={summary.total.opening < 0 ? 'danger' : undefined}
           />
           <KpiTile
             label="Money in"
-            scope="in-range"
             value={formatMoney(summary.total.moneyIn)}
             hint={
               movedBetween > 0
@@ -236,7 +234,6 @@ export const CashBankReport: React.FC<CashBankReportProps> = ({ selectedStation,
           />
           <KpiTile
             label="Money out"
-            scope="in-range"
             value={formatMoney(summary.total.moneyOut)}
             hint={
               summary.deposited > 0
@@ -246,7 +243,6 @@ export const CashBankReport: React.FC<CashBankReportProps> = ({ selectedStation,
           />
           <KpiTile
             label="Closing"
-            scope="in-range"
             value={formatMoney(summary.total.closing)}
             hint="Cash + Bank"
             alert={summary.total.closing < 0 ? 'danger' : undefined}
