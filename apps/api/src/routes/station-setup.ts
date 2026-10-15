@@ -52,6 +52,10 @@ import {
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
+import {
+  listCurrentFuelPrices,
+  listFuelPriceHistory,
+} from '../infra/repositories/fuel-price-queries.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { createDispatcher } from '../infra/events.js';
 import { runInTransaction } from '../infra/transaction.js';
@@ -1284,48 +1288,7 @@ stationSetupRouter.get('/pricing', async (c) => {
   }
 
   try {
-    const fuels = await db
-      .select()
-      .from(schema.products)
-      .where(
-        and(
-          eq(schema.products.organizationId, user.organizationId),
-          eq(schema.products.productType, 'FUEL'),
-          eq(schema.products.isActive, true),
-        ),
-      );
-
-    const fuelIds = fuels.map((f) => f.id);
-    const allPrices =
-      fuelIds.length > 0
-        ? await db
-            .select()
-            .from(schema.fuelPrices)
-            .where(
-              and(
-                eq(schema.fuelPrices.stationId, stationId),
-                inArray(schema.fuelPrices.productId, fuelIds),
-              ),
-            )
-            .orderBy(desc(schema.fuelPrices.effectiveFrom))
-        : [];
-
-    const latestByProduct = new Map<string, (typeof allPrices)[number]>();
-    for (const p of allPrices) {
-      if (!latestByProduct.has(p.productId)) latestByProduct.set(p.productId, p);
-    }
-
-    const prices = fuels.map((f) => {
-      const latestPrice = latestByProduct.get(f.id);
-      return {
-        productId: f.id,
-        productName: f.name,
-        productCode: f.code,
-        price: latestPrice ? Number(latestPrice.price) : 0,
-        effectiveFrom: latestPrice ? latestPrice.effectiveFrom : null,
-      };
-    });
-
+    const prices = await listCurrentFuelPrices(db, user.organizationId, stationId);
     return c.json({ success: true, data: prices });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
@@ -1353,25 +1316,7 @@ stationSetupRouter.get('/pricing/history', async (c) => {
   }
 
   try {
-    const list = await db
-      .select({
-        id: schema.fuelPrices.id,
-        productId: schema.fuelPrices.productId,
-        productName: schema.products.name,
-        productCode: schema.products.code,
-        price: schema.fuelPrices.price,
-        effectiveFrom: schema.fuelPrices.effectiveFrom,
-        createdAt: schema.fuelPrices.createdAt,
-      })
-      .from(schema.fuelPrices)
-      .innerJoin(schema.products, eq(schema.fuelPrices.productId, schema.products.id))
-      .where(
-        and(
-          eq(schema.fuelPrices.stationId, stationId),
-          eq(schema.fuelPrices.organizationId, user.organizationId),
-        ),
-      )
-      .orderBy(desc(schema.fuelPrices.effectiveFrom));
+    const list = await listFuelPriceHistory(db, user.organizationId, stationId);
 
     return c.json({ success: true, data: list });
   } catch (err: any) {

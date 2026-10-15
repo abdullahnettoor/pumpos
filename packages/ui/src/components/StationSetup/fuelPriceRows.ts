@@ -38,8 +38,9 @@ export interface FuelPriceRow {
 const time = (iso: string | null | undefined): number => (iso ? new Date(iso).getTime() : 0);
 
 /**
- * Latest first: by effective time, then by when it was recorded, then by id,
- * so two prices effective at the same moment always read in the same order.
+ * Latest first: by effective time, then by when it was recorded, then by id:
+ * the API's order (`fuelPricesNewestFirst`), so two prices effective at the
+ * same moment read the same here as on the server.
  */
 const newestFirst = (a: FuelPriceHistoryEntry, b: FuelPriceHistoryEntry): number =>
   time(b.effectiveFrom) - time(a.effectiveFrom) ||
@@ -52,9 +53,9 @@ export function sortNewestFirst<T extends FuelPriceHistoryEntry>(entries: T[]): 
 }
 
 /**
- * The fuel rows, in the order the API lists the fuels. When the history holds
- * the fuel's prices, the row reads its current price from the same ordered
- * list as the last change, so the two can never disagree on a tie.
+ * The fuel rows, in the order the API lists the fuels. The current price is
+ * the API's: the price shift close sells at. The last change reads the history
+ * in the API's order (the same tie-breakers), so it ends on that price.
  */
 export function buildFuelPriceRows(
   current: CurrentFuelPrice[],
@@ -63,18 +64,13 @@ export function buildFuelPriceRows(
 ): FuelPriceRow[] {
   return current.map((cp) => {
     const [latest, previous] = sortNewestFirst(history.filter((h) => h.productId === cp.productId));
-    const price = latest
-      ? Number(latest.price)
-      : cp.effectiveFrom != null
-        ? Number(cp.price)
-        : null;
     return {
       productId: cp.productId,
       productName: cp.productName,
       productCode: cp.productCode ?? null,
       unit: unitOf(cp.productId) || 'L',
-      price,
-      effectiveFrom: latest ? latest.effectiveFrom : cp.effectiveFrom,
+      price: cp.effectiveFrom != null ? Number(cp.price) : null,
+      effectiveFrom: cp.effectiveFrom,
       lastChange:
         latest && previous ? { from: Number(previous.price), to: Number(latest.price) } : null,
     };

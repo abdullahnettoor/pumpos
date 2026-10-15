@@ -75,7 +75,8 @@ describe('price ties', () => {
     { id: 'b', productId: 'ms', price: 104, effectiveFrom: at, createdAt: '2026-10-09T11:00:00Z' },
     { id: 'c', productId: 'ms', price: 98, effectiveFrom: '2026-09-01T00:00:00Z' },
   ];
-  const current = [{ productId: 'ms', productName: 'Petrol', price: 100, effectiveFrom: at }];
+  // The API resolves the tie the same way (fuelPricesNewestFirst): 104 is current.
+  const current = [{ productId: 'ms', productName: 'Petrol', price: 104, effectiveFrom: at }];
 
   it('orders equal effective times by when they were recorded, then by id, in any input order', () => {
     expect(sortNewestFirst(tied).map((e) => e.id)).toEqual(['b', 'a', 'c']);
@@ -85,7 +86,7 @@ describe('price ties', () => {
     expect(sortNewestFirst([...noCreated].reverse()).map((e) => e.id)).toEqual(['b', 'a', 'c']);
   });
 
-  it('reads the current price and the last change from the same order', () => {
+  it("shows the API's current price, and a last change that ends on it", () => {
     for (const history of [tied, [...tied].reverse()]) {
       const [row] = buildFuelPriceRows(current, history, () => 'L');
       expect(row!.price).toBe(104);

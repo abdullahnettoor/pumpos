@@ -1,6 +1,7 @@
 import { and, eq, inArray, desc } from 'drizzle-orm';
 import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type { Role } from '@pump/shared';
+import { fuelPricesNewestFirst } from './fuel-price-queries.js';
 import type {
   InServiceDispenserReader,
   Tank,
@@ -509,7 +510,7 @@ export class DrizzleFuelPriceRepository implements FuelPriceRepository {
           eq(schema.fuelPrices.stationId, stationId),
         ),
       )
-      .orderBy(desc(schema.fuelPrices.effectiveFrom));
+      .orderBy(...fuelPricesNewestFirst());
     return rows.map((r) => this.toEntity(r));
   }
 }
