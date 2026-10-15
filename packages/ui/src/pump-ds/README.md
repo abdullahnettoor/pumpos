@@ -45,7 +45,9 @@ a time — never in place.
      refusal.
    - **failed** (any other failure, even mixed with refusals) shows "Couldn't
      load <title> · Retry" (Retry refetches only the failed queries that can be
-     retried, never the refused ones).
+     retried, never the refused ones). The title reads mid-sentence, so it is
+     lowercased word by word, except an acronym (two or more letters, all
+     capitals): "Couldn't load the DSR", "Couldn't load GST totals".
    - **empty** only after every query succeeded with nothing to show,
      otherwise the content.
 
