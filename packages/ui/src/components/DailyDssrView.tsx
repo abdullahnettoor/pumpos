@@ -157,23 +157,14 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({
   );
 
   return (
-    // TODO(#576): move Back to Reports to the Page Frame `back` slot once #578 merges.
     <PageFrame
       route={ROUTES.reports}
       title={DSR_LABEL}
       subtitle={subtitle}
-      actions={
-        onBack && (
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={<Icon name="arrow-left" size="sm" />}
-            onClick={onBack}
-          >
-            Back to Reports
-          </Button>
-        )
-      }
+      // The DSR is a view inside /reports, not a route of its own: the entry
+      // behind it in history is not the Reports list, so back closes the view
+      // (onBack) instead of history.back().
+      back={onBack && { label: 'Reports', href: `#${ROUTES.reports}`, onClick: onBack }}
       toolbar={
         <ControlBar
           className="w-full"

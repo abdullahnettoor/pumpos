@@ -181,6 +181,18 @@ describe('DailyDssrView look (#532)', () => {
     expect(screen.getByText('Open')).toBeTruthy();
   });
 
+  it('goes back to Reports from the Page Frame back link', () => {
+    const onBack = vi.fn();
+    renderWithProviders(
+      <DailyDssrView dailyDssr={snapshotRow('2026-10-09')} station={station} onBack={onBack} />,
+    );
+    const link = screen.getByRole('link', { name: 'Back to Reports' });
+    expect(link.getAttribute('href')).toBe('#/reports');
+    fireEvent.click(link);
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /Back to Reports/ })).toBeNull();
+  });
+
   it('puts the day picker, Export and the info tip in one control bar', () => {
     view(snapshotRow('2026-10-09'));
     const bar = screen.getByTestId('control-bar');
