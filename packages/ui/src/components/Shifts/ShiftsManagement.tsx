@@ -1,23 +1,25 @@
 import React, { useCallback, useRef, useEffect, useMemo, useState } from 'react';
 import { useNavIntent, clearNavIntent } from '../../nav-intent/store.js';
+import { ROUTES } from '../../nav-intent/routes.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { inr } from '../../utils/format.js';
+import { formatShortDay, inr } from '../../utils/format.js';
 import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
 import { HandoverDrawer } from './HandoverDrawer.js';
-import { ShiftControlBar } from './ShiftControlBar.js';
 import { ShiftHistoryTab } from './ShiftHistoryTab.js';
 import { CloseShiftWizard } from './CloseShiftWizard.js';
 import { ShiftCloseSuccess } from './ShiftCloseSuccess.js';
-import { AttendantHandoversDashboard } from './AttendantHandoversDashboard.js';
-import { MerchandiseHandoversPanel } from './MerchandiseHandoversPanel.js';
-import { NozzleReadingsGrid } from './NozzleReadingsGrid.js';
-import { ShiftTotalsSummary } from './ShiftTotalsSummary.js';
 import { BusinessDayTab } from './BusinessDayTab.js';
 import { seedStaffAssignments } from './seedStaffAssignments.js';
 import { buildOpenShiftAssignments } from './openShiftAssignments.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
-import { Tabs, type TabItem } from '../../pump-ds/tabs/index.js';
+import { LiveShiftView } from './LiveShiftView.js';
+import { IdleShiftView } from './IdleShiftView.js';
+import { ShiftsHeaderActions, type RecordAction } from './ShiftsHeaderActions.js';
+import { dayFigures } from './businessDayModel.js';
+import type { PreHandoverTotals, StaffAssignmentInput } from './liveShiftModel.js';
+import { PageFrame } from '../page-frame/index.js';
+import { Button, DataSection, Tabs, tabPanelProps, type TabItem } from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
@@ -26,6 +28,7 @@ import {
   useShiftTransactions,
   useInventoryStatus,
   useInvalidateOperational,
+  useDailyDssrPreview,
   queryKeys,
 } from '../../query/hooks.js';
 import {
@@ -39,17 +42,22 @@ import {
   type PendingTankDipWorkflow,
 } from '../../query/stockCountMutation.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
-import { Station, buildCloseCashSummary, parseDrawerKey } from '@pump/shared';
+import {
+  Station,
+  buildCloseCashSummary,
+  canCloseShift,
+  canOpenShift,
+  parseDrawerKey,
+} from '@pump/shared';
 import type { CloseCashDrawer, ShiftStaffAssignment } from '@pump/shared';
 import type { DrawerRow } from './DrawerReconciliationTable.js';
 import type { CloseDropRow } from './CloseShiftWizard.js';
 import type { OpenShiftFormValues } from '@pump/shared';
-import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play } from 'lucide-react';
-import { LoadingSpinner } from '../LoadingSpinner.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 import { refreshShiftStatus } from './refreshShiftStatus.js';
 
 const shiftService = new CloudShiftService();
+const TABS_ID = 'shifts';
 const transactionService = new CloudTransactionService();
 
 interface ShiftTotals {
@@ -110,6 +118,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     stationSettings.business_day_starts_at,
   );
   const statusQ = useShiftStatus(stationId, { refetchOnWindowFocus: false });
+  // Idle Live shift: today so far, from the Business Day's DSR (the Dashboard
+  // and Business days read the same cached preview).
+  const todayQ = useDailyDssrPreview(stationId, currentBusinessDate, {
+    enabled:
+      !!stationId && !!statusQ.data && !statusQ.data.activeShift && userRole !== 'Accountant',
+  });
+  const todayFigures = useMemo(() => dayFigures(todayQ.data?.snapshotData), [todayQ.data]);
   const invalidateOperational = useInvalidateOperational();
   const runTask = useRunTask();
   const qc = useQueryClient();
@@ -183,6 +198,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     { nozzleId: string; openingReading: number }[]
   >([]);
   const [isOpening, setIsOpening] = useState(false);
+  // Idle Live shift: the open-shift form shows once the operator asks for it.
+  const [openFormVisible, setOpenFormVisible] = useState(false);
   // Active Shift Workspace States
   const [closingReadings, setClosingReadings] = useState<Record<string, number>>({});
 
@@ -306,6 +323,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // invalidateOperational — no manual reload wiring.
   const shiftTxQ = useShiftTransactions(data?.activeShift?.id ?? null);
   const shiftTotals = useMemo(() => computeShiftTotals(shiftTxQ.data), [shiftTxQ.data]);
+  const beforeHandovers = useMemo<PreHandoverTotals>(
+    () => ({
+      card: shiftTotals.cardCollections,
+      upi: shiftTotals.upiCollections,
+      credit: shiftTotals.creditSales,
+    }),
+    [shiftTotals],
+  );
 
   const recon = data?.activeShift?.reconciliation;
   const handovers = data?.activeShift?.handovers || [];
@@ -313,14 +338,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   const totalCashHandedOver = handovers.reduce(
     (sum: number, h: any) => sum + Number(h.cashHandedOver || 0),
-    0,
-  );
-  const totalCardHandedOver = handovers.reduce(
-    (sum: number, h: any) => sum + Number(h.cardHandedOver || 0),
-    0,
-  );
-  const totalUpiHandedOver = handovers.reduce(
-    (sum: number, h: any) => sum + Number(h.upiHandedOver || 0),
     0,
   );
   const totalCreditHandedOver = handovers.reduce(
@@ -333,11 +350,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     (sum: number, h: any) => sum + Number(h.varianceAmount || 0),
     0,
   );
-
-  const activeCashCollections = hasHandovers ? totalCashHandedOver : shiftTotals.cashCollections;
-  const activeCardCollections = hasHandovers ? totalCardHandedOver : shiftTotals.cardCollections;
-  const activeUpiCollections = hasHandovers ? totalUpiHandedOver : shiftTotals.upiCollections;
-  const activeCreditSales = hasHandovers ? totalCreditHandedOver : shiftTotals.creditSales;
 
   // Close-shift cash summary (#307, ADR 0005): the server recon when loaded,
   // else Σ Opening Floats from the staff assignments. The two-level variance
@@ -457,21 +469,18 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const triggerPurchaseDrawer = () => launchQuickEntry('purchase');
   const triggerMerchandiseSaleDrawer = () => launchQuickEntry('merchandise-sale');
 
-  const quickEntryActions = [
-    { key: 'expense', label: 'Record expense', onClick: triggerExpenseDrawer, hotkey: 'E' },
-    {
-      key: 'collection',
-      label: 'Record collection',
-      onClick: triggerCollectionDrawer,
-      hotkey: 'C',
-    },
-    {
-      key: 'merchandise-sale',
-      label: 'Merchandise Sale',
-      onClick: triggerMerchandiseSaleDrawer,
-      hotkey: 'M',
-    },
-    { key: 'purchase', label: 'Record purchase', onClick: triggerPurchaseDrawer, hotkey: 'P' },
+  // Record ▾ (#533): a Product sale (a Billed Sale) while a shift is open, then
+  // the Office Records. Same launchers and hotkeys as the old shift bar.
+  const productSaleAction: RecordAction = {
+    key: 'merchandise-sale',
+    label: 'Product sale',
+    hotkey: 'M',
+    onSelect: triggerMerchandiseSaleDrawer,
+  };
+  const officeRecordActions: RecordAction[] = [
+    { key: 'expense', label: 'Expense', hotkey: 'E', onSelect: triggerExpenseDrawer },
+    { key: 'collection', label: 'Collection', hotkey: 'C', onSelect: triggerCollectionDrawer },
+    { key: 'purchase', label: 'Purchase', hotkey: 'P', onSelect: triggerPurchaseDrawer },
   ];
 
   // The shortcut triggers are re-created every render, so the listener reads
@@ -602,6 +611,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
       await shiftService.openShift(payload);
       await loadShiftStatus();
+      setOpenFormVisible(false);
       toast.success('Shift opened.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to open shift');
@@ -778,137 +788,32 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   if (!selectedStation) {
     return (
-      <div style={{ color: 'var(--text-muted)', padding: '24px' }}>
+      <p className="p-6 text-[13px] text-ink-muted">
         Please select a station to manage operational shifts.
-      </div>
+      </p>
     );
   }
 
-  if (loading) {
-    return <LoadingSpinner text="Resolving shift workspace states..." />;
-  }
-
-  if (error) {
-    return (
-      <div
-        style={{
-          padding: '24px',
-          backgroundColor: 'var(--state-danger-bg)',
-          color: 'var(--state-danger-fg)',
-          borderRadius: 'var(--radius-card)',
-        }}
-      >
-        <strong>Error:</strong> {error.message || 'Failed to load shifts configuration'}
-      </div>
-    );
-  }
-
-  if (!data) {
-    return <LoadingSpinner text="Resolving shift workspace states..." />;
-  }
-
-  const {
-    activeShift,
-    lastShift,
-    lastShiftSummary,
-    canReopenLastShift,
-    gracePeriodExpiresAt,
-    templates,
-    nozzles,
-    staff,
-    dispensers,
-    terminals,
-  } = data;
+  // The status payload is untyped; LiveShiftView reads it through `LiveShift`.
+  const activeShift = data?.activeShift ?? null;
+  const lastShift = data?.lastShift ?? null;
+  const lastShiftSummary = data?.lastShiftSummary ?? null;
   const shiftScreenState: 'idle' | 'active' | 'closing' = activeShift
     ? isPreparingClose
       ? 'closing'
       : 'active'
     : 'idle';
 
-  const renderShiftSubTabs = () => (
-    // Lift the tab strip above the sticky control-bar backdrop (z-20) so its
-    // underline baseline is never masked by the backdrop at rest.
-    <div style={{ position: 'relative', zIndex: 25 }}>
-      <Tabs
-        aria-label="Shift views"
-        className="no-print"
-        activeId={shiftSubTab}
-        onChange={(id) => setShiftSubTab(id as 'today' | 'business-day' | 'history')}
-        tabs={(
-          [
-            {
-              id: 'today',
-              label: 'Live shift',
-              concept: 'live-shift',
-              badge: activeShift ? 'open' : undefined,
-            },
-            {
-              id: 'business-day',
-              label: 'Business days',
-              concept: 'business-days',
-            },
-            { id: 'history', label: 'History', concept: 'history' },
-          ] satisfies TabItem[]
-        ).filter((tab) => userRole !== 'Accountant' || tab.id !== 'today')}
-      />
-    </div>
-  );
+  const viewLastShiftSummary = lastShiftSummary
+    ? () => {
+        setViewHistoryShiftId(lastShiftSummary.shiftId);
+        setShiftSubTab('history');
+      }
+    : null;
 
-  // Sub-tab: Business Day (read-only day cockpit)
-  if (shiftSubTab === 'business-day') {
-    return (
-      <div
-        className="animate-fade-in"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-          fontFamily: 'var(--font-sans)',
-        }}
-      >
-        {renderShiftSubTabs()}
-        <BusinessDayTab
-          selectedStation={selectedStation}
-          userRole={userRole}
-          activeBusinessDayId={activeShift?.businessDayId ?? null}
-          requestedBusinessDate={requestedBusinessDayDate}
-          onBusinessDateSelected={() => setRequestedBusinessDayDate(null)}
-          openPastDaysRequested={intentOpenPastDays}
-          onOpenPastDaysConsumed={() => {
-            setSelectedSubTab('business-day');
-            clearNavIntent();
-          }}
-          onNavigate={onNavigate}
-        />
-      </div>
-    );
-  }
-
-  // Sub-tab: History
-  if (shiftSubTab === 'history') {
-    return (
-      <div
-        className="animate-fade-in"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-          fontFamily: 'var(--font-sans)',
-        }}
-      >
-        {renderShiftSubTabs()}
-        <ShiftHistoryTab
-          selectedStation={selectedStation}
-          userRole={userRole}
-          viewShiftId={requestedHistoryShiftId}
-          onClearViewShiftId={clearRequestedHistoryShiftId}
-        />
-      </div>
-    );
-  }
-
-  // Render Success Screen if set
-  if (closedShiftSuccess) {
+  // Live shift only: the close success screen and the summary view still
+  // replace the page (their own redesign is #534 / #535).
+  if (shiftSubTab === 'today' && closedShiftSuccess) {
     return (
       <ShiftCloseSuccess
         result={closedShiftSuccess}
@@ -921,6 +826,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           setPreserveNextShiftDate(true);
           setClosedShiftSuccess(null);
           setViewingShiftSummary(false);
+          setOpenFormVisible(true);
         }}
         onViewSummary={() => {
           setViewHistoryShiftId(closedShiftSuccess.lastClosedShiftId);
@@ -935,14 +841,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     );
   }
 
-  // Render Shift Summary View if toggled
-  if (viewingShiftSummary && lastShiftSummary) {
+  if (shiftSubTab === 'today' && viewingShiftSummary && lastShiftSummary) {
     return (
       <ShiftSummaryView
         shiftSummary={lastShiftSummary}
         userRole={userRole}
-        canReopen={canReopenLastShift}
-        gracePeriodExpiresAt={gracePeriodExpiresAt}
+        canReopen={data?.canReopenLastShift}
+        gracePeriodExpiresAt={data?.gracePeriodExpiresAt}
         shiftStatus={lastShift?.status}
         station={selectedStation}
         onTransactionAdded={loadShiftStatus}
@@ -955,86 +860,174 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     );
   }
 
-  // Render Active Shift Workspace
-  if (shiftScreenState === 'active' || shiftScreenState === 'closing') {
-    return (
-      <div
-        className="animate-fade-in"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-          fontFamily: 'var(--font-sans)',
-        }}
+  const mayClose = canCloseShift(userRole);
+  const startClose = () => {
+    setSelectedSubTab('today');
+    clearNavIntent();
+    if (isPreparingClose) setCloseWizardOpen(true);
+    else handlePrepareClose();
+  };
+  const primary = activeShift
+    ? mayClose
+      ? {
+          label: shiftScreenState === 'closing' ? 'Continue close' : 'Close shift',
+          icon: 'lock' as const,
+          onClick: startClose,
+        }
+      : null
+    : data && canOpenShift(userRole) && !openFormVisible
+      ? {
+          label: 'Open shift',
+          icon: 'play' as const,
+          onClick: () => {
+            setShiftSubTab('today');
+            setOpenFormVisible(true);
+          },
+        }
+      : null;
+
+  const tabs: TabItem[] = (
+    [
+      {
+        id: 'today',
+        label: 'Live shift',
+        concept: 'live-shift',
+        badge: activeShift ? 'shift-live' : undefined,
+      },
+      { id: 'business-day', label: 'Business days', concept: 'business-days' },
+      { id: 'history', label: 'History', concept: 'history' },
+    ] satisfies TabItem[]
+  ).filter((tab) => userRole !== 'Accountant' || tab.id !== 'today');
+
+  const openHandover = (assignment: StaffAssignmentInput) =>
+    runTask(handleOpenHandoverDrawer(assignment), 'Could not open the handover.');
+
+  return (
+    <>
+      <PageFrame
+        route={ROUTES.shifts}
+        subtitle={`${selectedStation.name} · Business day ${formatShortDay(
+          activeShift?.businessDate ?? currentBusinessDate,
+        )}`}
+        actions={
+          <ShiftsHeaderActions
+            productSale={activeShift ? productSaleAction : null}
+            officeRecords={officeRecordActions}
+            primary={primary}
+          />
+        }
+        tabs={
+          <Tabs
+            id={TABS_ID}
+            aria-label="Shift views"
+            className="no-print"
+            activeId={shiftSubTab}
+            onChange={(id) => setShiftSubTab(id as 'today' | 'business-day' | 'history')}
+            tabs={tabs}
+          />
+        }
       >
-        {renderShiftSubTabs()}
-        <ShiftControlBar
-          activeShift={activeShift}
-          shiftTotals={shiftTotals}
-          handoversCompleted={handovers.length}
-          handoversAssigned={activeShift.staffAssignments?.length || 0}
-          quickActions={quickEntryActions}
-          onCloseShiftClick={() => {
-            if (isPreparingClose) {
-              setCloseWizardOpen(true);
-            } else {
-              handlePrepareClose();
-            }
-          }}
-          isPreparingClose={shiftScreenState === 'closing'}
-          currentBusinessDate={currentBusinessDate}
-          timeZone={stationSettings.timezone}
-          onViewLastShiftSummary={
-            lastShiftSummary
-              ? () => {
-                  setViewHistoryShiftId(lastShiftSummary.shiftId);
-                  setShiftSubTab('history');
-                }
-              : undefined
-          }
-        />
+        <div {...tabPanelProps(TABS_ID, shiftSubTab)}>
+          {shiftSubTab === 'business-day' && (
+            <BusinessDayTab
+              selectedStation={selectedStation}
+              userRole={userRole}
+              activeBusinessDayId={activeShift?.businessDayId ?? null}
+              requestedBusinessDate={requestedBusinessDayDate}
+              onBusinessDateSelected={() => setRequestedBusinessDayDate(null)}
+              openPastDaysRequested={intentOpenPastDays}
+              onOpenPastDaysConsumed={() => {
+                setSelectedSubTab('business-day');
+                clearNavIntent();
+              }}
+              onNavigate={onNavigate}
+            />
+          )}
+          {shiftSubTab === 'history' && (
+            <ShiftHistoryTab
+              selectedStation={selectedStation}
+              userRole={userRole}
+              viewShiftId={requestedHistoryShiftId}
+              onClearViewShiftId={clearRequestedHistoryShiftId}
+            />
+          )}
+          {shiftSubTab === 'today' && (
+            <DataSection
+              title="shift status"
+              query={statusQ}
+              shape="cards"
+              placeholderHeight={420}
+              enabled
+            >
+              {activeShift ? (
+                <LiveShiftView
+                  shift={activeShift}
+                  stationId={stationId}
+                  timeZone={stationSettings.timezone}
+                  currentBusinessDate={currentBusinessDate}
+                  cashDeclared={cashLines.cashDeclared}
+                  before={beforeHandovers}
+                  closing={shiftScreenState === 'closing'}
+                  canClose={mayClose}
+                  onOpenHandover={openHandover}
+                  onStartClose={startClose}
+                />
+              ) : openFormVisible && data ? (
+                <section className="flex flex-col gap-3" aria-label="Open a shift">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="text-[14px] font-semibold text-ink-strong">Open a shift</h2>
+                    <Button variant="ghost" size="sm" onClick={() => setOpenFormVisible(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                  <OpenShiftForm
+                    lastShift={lastShift}
+                    stationId={selectedStation.id}
+                    templates={data.templates}
+                    dispensers={data.dispensers}
+                    staff={data.staff}
+                    nozzles={data.nozzles}
+                    terminals={data.terminals}
+                    terminalAssignments={terminalAssignments}
+                    onTerminalAssignmentChange={handleTerminalAssignmentChange}
+                    selectedTemplateId={selectedTemplateId}
+                    businessDate={businessDate}
+                    currentBusinessDate={currentBusinessDate}
+                    staffAssignments={staffAssignments}
+                    onStaffAssignmentChange={handleStaffAssignmentChange}
+                    onOpeningFloatChange={handleOpeningFloatChange}
+                    initialReadings={initialReadings}
+                    onInitialReadingChange={handleInitialReadingChange}
+                    isOpening={isOpening}
+                    onSubmit={handleOpenShift}
+                  />
+                </section>
+              ) : (
+                <IdleShiftView
+                  dayQuery={todayQ}
+                  day={todayFigures}
+                  lastShift={lastShift}
+                  lastVariance={
+                    lastShiftSummary?.snapshotData?.cashVariance != null
+                      ? Number(lastShiftSummary.snapshotData.cashVariance)
+                      : null
+                  }
+                  timeZone={stationSettings.timezone}
+                  onViewLastSummary={viewLastShiftSummary}
+                />
+              )}
+            </DataSection>
+          )}
+        </div>
+      </PageFrame>
 
-        {/* 1. Merchandise Handovers (walk-in bulk, per employee) */}
-        <MerchandiseHandoversPanel
-          shiftId={activeShift.id}
-          stationId={selectedStation?.id ?? null}
-          onChanged={loadShiftStatus}
-          initialHandovers={data?.activeShift?.merchandiseHandovers}
-          initialSales={data?.activeShift?.merchandiseSales}
-        />
-
-        {/* 2. Attendant (DU) Handovers Dashboard */}
-        <AttendantHandoversDashboard
-          staffAssignments={activeShift.staffAssignments}
-          handovers={handovers}
-          onRecordHandover={handleOpenHandoverDrawer}
-        />
-
-        {/* 3. Nozzle Readings Grid (fuel sales preview) */}
-        <NozzleReadingsGrid
-          nozzleReadings={activeShift.nozzleReadings}
-          closingReadings={closingReadings}
-          staffAssignments={data?.activeShift?.staffAssignments || []}
-        />
-
-        {/* 4. Shift Totals Summary Card (KPI) */}
-        <ShiftTotalsSummary
-          shiftTotals={shiftTotals}
-          cashCollections={activeCashCollections}
-          cardCollections={activeCardCollections}
-          upiCollections={activeUpiCollections}
-          creditSales={activeCreditSales}
-          handoverCount={handovers.length}
-        />
-
-        {/* Close Shift Wizard (Drawer) */}
+      {activeShift && (
         <CloseShiftWizard
           isOpen={closeWizardOpen}
           onClose={() => {
             setCloseWizardOpen(false);
-            // Keep isPreparingClose=true so the control bar shows "Continue Close"
-            // User cancels explicitly via the wizard's Cancel button only on step 1
-            // and we only fully exit close mode if they haven't made progress.
+            // Keep isPreparingClose=true so the page offers "Continue close".
+            // We only fully exit close mode if no progress has been made.
             if (closingCash === 0 && Object.keys(dipReadings).length === 0) {
               setIsPreparingClose(false);
               setConfirmWarningsChecked(false);
@@ -1064,118 +1057,76 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           isClosing={isClosing}
           onConfirmClose={() => handleCloseShift()}
         />
+      )}
 
-        {selectedHandoverAssignment && (
-          <HandoverDrawer
-            isOpen={handoverDrawerOpen}
-            onClose={() => {
-              setHandoverDrawerOpen(false);
-              setSelectedHandoverAssignment(null);
-            }}
-            shiftId={activeShift.id}
-            stationId={stationId}
-            userId={selectedHandoverAssignment.userId}
-            userName={selectedHandoverAssignment.userName}
-            duId={selectedHandoverAssignment.duId}
-            duCode={selectedHandoverAssignment.duCode || selectedHandoverAssignment.duName}
-            nozzles={activeShift.nozzleReadings.filter(
-              (nr: any) => nr.duId === selectedHandoverAssignment.duId,
-            )}
-            terminals={(activeShift.terminalLinks || []).filter(
-              (t: any) => t.duId === selectedHandoverAssignment.duId || t.duId == null,
-            )}
-            stationHasConfiguredTerminals={(data?.terminals || []).length > 0}
-            customers={handoverCreditCustomers}
-            merchandiseCash={Number(
-              (activeShift.staffAssignments || []).find(
-                (sa: any) => sa.userId === selectedHandoverAssignment.userId,
-              )?.attributed?.merchandiseCash ?? 0,
-            )}
-            openingFloat={Number(
-              (activeShift.staffAssignments || []).find(
-                (sa: any) =>
-                  sa.userId === selectedHandoverAssignment.userId &&
-                  sa.duId === selectedHandoverAssignment.duId,
-              )?.openingFloat ?? 0,
-            )}
-            merchandiseNonCash={(() => {
-              const a = (activeShift.staffAssignments || []).find(
-                (sa: any) => sa.userId === selectedHandoverAssignment.userId,
-              )?.attributed;
-              return Number(a?.merchandiseCard ?? 0) + Number(a?.merchandiseUpi ?? 0);
-            })()}
-            creditSales={
-              (activeShift.staffAssignments || []).find(
-                (sa: any) =>
-                  sa.userId === selectedHandoverAssignment.userId &&
-                  sa.duId === selectedHandoverAssignment.duId,
-              )?.creditSales ||
-              selectedHandoverAssignment.creditSales ||
-              []
-            }
-            omcSales={
-              (activeShift.staffAssignments || []).find(
-                (sa: any) =>
-                  sa.userId === selectedHandoverAssignment.userId &&
-                  sa.duId === selectedHandoverAssignment.duId,
-              )?.omcSales ||
-              selectedHandoverAssignment.omcSales ||
-              []
-            }
-            onCreditChanged={async () => {
-              await loadShiftStatus();
-            }}
-            existingHandover={activeShift.handovers?.find(
-              (h: any) =>
-                h.userId === selectedHandoverAssignment.userId &&
-                h.duId === selectedHandoverAssignment.duId,
-            )}
-            onSaveSuccess={() => {}}
-          />
-        )}
-      </div>
-    );
-  }
-
-  // Render Open Shift Form
-  return (
-    <div
-      className="animate-fade-in"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '16px',
-        fontFamily: 'var(--font-sans)',
-      }}
-    >
-      {renderShiftSubTabs()}
-      <OpenShiftForm
-        lastShiftSummary={lastShiftSummary}
-        lastShift={lastShift}
-        stationId={selectedStation.id}
-        templates={templates}
-        dispensers={dispensers}
-        staff={staff}
-        nozzles={nozzles}
-        terminals={terminals}
-        terminalAssignments={terminalAssignments}
-        onTerminalAssignmentChange={handleTerminalAssignmentChange}
-        selectedTemplateId={selectedTemplateId}
-        businessDate={businessDate}
-        currentBusinessDate={currentBusinessDate}
-        timeZone={stationSettings.timezone}
-        staffAssignments={staffAssignments}
-        onStaffAssignmentChange={handleStaffAssignmentChange}
-        onOpeningFloatChange={handleOpeningFloatChange}
-        initialReadings={initialReadings}
-        onInitialReadingChange={handleInitialReadingChange}
-        isOpening={isOpening}
-        onSubmit={handleOpenShift}
-        onViewLastShiftSummary={() => {
-          setViewHistoryShiftId(lastShiftSummary.shiftId);
-          setShiftSubTab('history');
-        }}
-      />
-    </div>
+      {activeShift && selectedHandoverAssignment && (
+        <HandoverDrawer
+          isOpen={handoverDrawerOpen}
+          onClose={() => {
+            setHandoverDrawerOpen(false);
+            setSelectedHandoverAssignment(null);
+          }}
+          shiftId={activeShift.id}
+          stationId={stationId}
+          userId={selectedHandoverAssignment.userId}
+          userName={selectedHandoverAssignment.userName}
+          duId={selectedHandoverAssignment.duId}
+          duCode={selectedHandoverAssignment.duCode || selectedHandoverAssignment.duName}
+          nozzles={activeShift.nozzleReadings.filter(
+            (nr: any) => nr.duId === selectedHandoverAssignment.duId,
+          )}
+          terminals={(activeShift.terminalLinks || []).filter(
+            (t: any) => t.duId === selectedHandoverAssignment.duId || t.duId == null,
+          )}
+          stationHasConfiguredTerminals={(data?.terminals || []).length > 0}
+          customers={handoverCreditCustomers}
+          merchandiseCash={Number(
+            (activeShift.staffAssignments || []).find(
+              (sa: any) => sa.userId === selectedHandoverAssignment.userId,
+            )?.attributed?.merchandiseCash ?? 0,
+          )}
+          openingFloat={Number(
+            (activeShift.staffAssignments || []).find(
+              (sa: any) =>
+                sa.userId === selectedHandoverAssignment.userId &&
+                sa.duId === selectedHandoverAssignment.duId,
+            )?.openingFloat ?? 0,
+          )}
+          merchandiseNonCash={(() => {
+            const a = (activeShift.staffAssignments || []).find(
+              (sa: any) => sa.userId === selectedHandoverAssignment.userId,
+            )?.attributed;
+            return Number(a?.merchandiseCard ?? 0) + Number(a?.merchandiseUpi ?? 0);
+          })()}
+          creditSales={
+            (activeShift.staffAssignments || []).find(
+              (sa: any) =>
+                sa.userId === selectedHandoverAssignment.userId &&
+                sa.duId === selectedHandoverAssignment.duId,
+            )?.creditSales ||
+            selectedHandoverAssignment.creditSales ||
+            []
+          }
+          omcSales={
+            (activeShift.staffAssignments || []).find(
+              (sa: any) =>
+                sa.userId === selectedHandoverAssignment.userId &&
+                sa.duId === selectedHandoverAssignment.duId,
+            )?.omcSales ||
+            selectedHandoverAssignment.omcSales ||
+            []
+          }
+          onCreditChanged={async () => {
+            await loadShiftStatus();
+          }}
+          existingHandover={activeShift.handovers?.find(
+            (h: any) =>
+              h.userId === selectedHandoverAssignment.userId &&
+              h.duId === selectedHandoverAssignment.duId,
+          )}
+          onSaveSuccess={() => {}}
+        />
+      )}
+    </>
   );
 };

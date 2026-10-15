@@ -1,6 +1,5 @@
 {
   "dead-class": {
-    "components/Shifts/ShiftControlBar.tsx": 1,
     "components/Shifts/ShiftSummaryView.tsx": 1
   },
   "raw-color": {
@@ -16,7 +15,6 @@
     "components/primitives/Menu.tsx": 1,
     "components/primitives/ToastProvider.tsx": 1,
     "components/primitives/Tooltip.tsx": 1,
-    "components/Shifts/NozzleReadingsGrid.tsx": 2,
     "components/Shifts/ShiftSummaryView.tsx": 1,
     "components/StationSetup/DispensersList.tsx": 2,
     "components/StationSetup/OnboardingSteps/Step4Tanks.tsx": 1,

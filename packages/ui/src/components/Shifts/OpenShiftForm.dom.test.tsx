@@ -31,7 +31,6 @@ const seedStatus = (
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const baseProps = (over: Record<string, unknown> = {}): any =>
   ({
-    lastShiftSummary: null,
     lastShift: null,
     stationId: STATION,
     templates: [{ id: 'tpl-1', name: 'Morning', startTime: '06:00', endTime: '14:00' }],
@@ -51,7 +50,6 @@ const baseProps = (over: Record<string, unknown> = {}): any =>
     onInitialReadingChange: vi.fn(),
     isOpening: false,
     onSubmit: vi.fn(),
-    onViewLastShiftSummary: vi.fn(),
     ...over,
   }) as any;
 
@@ -83,9 +81,9 @@ describe('OpenShiftForm', () => {
     restoreConsole();
   });
 
-  it('renders the no-active-shift state', () => {
+  it('renders the open-shift form', () => {
     renderForm();
-    expect(screen.getByText('No active shift')).toBeDefined();
+    expect(screen.getByText('Shift details')).toBeDefined();
   });
 
   describe('business-day gating', () => {

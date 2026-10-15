@@ -1,22 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FileText, Info, Play } from 'lucide-react';
+import { Info, Play } from 'lucide-react';
 import { Panel, Button, Chip, Form } from '../../pump-ds/index.js';
 import { Field, Select, NumberInput, DateField } from '../primitives/Field.js';
 import { inr } from '../../utils/format.js';
 import type { BusinessDayStatusItem } from '../../services/cloud.js';
-import {
-  compareByDispenserThenNozzle,
-  dispenserLabel,
-  formatStationDateTime,
-  shiftDisplayLabel,
-} from '@pump/shared';
+import { compareByDispenserThenNozzle, dispenserLabel } from '@pump/shared';
 import { createOpenShiftFormSchema, type OpenShiftFormValues } from '@pump/shared';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { useBusinessDayStatus } from '../../query/hooks.js';
 
 interface OpenShiftFormProps {
-  lastShiftSummary: any;
   lastShift: any;
   stationId: string;
   templates: any[];
@@ -29,7 +23,6 @@ interface OpenShiftFormProps {
   selectedTemplateId: string;
   businessDate: string;
   currentBusinessDate: string;
-  timeZone?: string;
   staffAssignments: { userId: string; duId: string; openingFloat: number }[];
   onStaffAssignmentChange: (duId: string, userId: string) => void;
   /** Opening Float per dispenser Drawer (ADR 0005). */
@@ -38,7 +31,6 @@ interface OpenShiftFormProps {
   onInitialReadingChange: (nozzleId: string, value: number) => void;
   isOpening: boolean;
   onSubmit: (values: OpenShiftFormValues) => void | Promise<unknown>;
-  onViewLastShiftSummary: () => void;
 }
 
 const sectionHeading: React.CSSProperties = {
@@ -228,7 +220,6 @@ const DispenserAssignmentCard: React.FC<{
  * Extracted from ShiftsManagement (presentational; state lives in the parent).
  */
 export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
-  lastShiftSummary,
   lastShift,
   stationId,
   templates,
@@ -241,7 +232,6 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   selectedTemplateId,
   businessDate,
   currentBusinessDate,
-  timeZone,
   staffAssignments,
   onStaffAssignmentChange,
   onOpeningFloatChange,
@@ -249,7 +239,6 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   onInitialReadingChange,
   isOpening,
   onSubmit,
-  onViewLastShiftSummary,
 }) => {
   /**
    * Terminals on no dispenser. They keep their own panel rather than vanishing:
@@ -328,77 +317,6 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   const dateChoice = !customDateMode && knownOpenDate ? formBusinessDate : 'custom';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '12px',
-        }}
-      >
-        <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            No active shift
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
-            Open a shift template to enable nozzle readings and daily cash reconciliation.
-          </p>
-        </div>
-        {lastShiftSummary && (
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={<FileText />}
-            onClick={onViewLastShiftSummary}
-          >
-            Last shift summary
-          </Button>
-        )}
-      </div>
-
-      {lastShiftSummary && (
-        <Panel title="Most recent closed shift">
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-              gap: '12px',
-              fontSize: '12px',
-              color: 'var(--text-muted)',
-            }}
-          >
-            <span>
-              Shift:{' '}
-              <strong style={{ color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>
-                {shiftDisplayLabel({
-                  businessDate: lastShift?.businessDate ?? lastShiftSummary.businessDate,
-                  shiftSequence: lastShift?.shiftSequence ?? lastShiftSummary.shiftSequence,
-                  shiftId: lastShiftSummary.shiftId ?? lastShiftSummary.snapshotData?.shiftId,
-                })}
-              </strong>
-            </span>
-            <span>
-              Template:{' '}
-              <strong style={{ color: 'var(--text-default)' }}>
-                {lastShiftSummary.snapshotData?.templateName ||
-                  lastShiftSummary.templateName ||
-                  '—'}
-              </strong>
-            </span>
-            <span>
-              Shift Closed At:{' '}
-              <strong style={{ color: 'var(--text-default)' }}>
-                {formatStationDateTime(
-                  lastShiftSummary.snapshotData?.closedAt || lastShiftSummary.closedAt,
-                  timeZone,
-                )}
-              </strong>
-            </span>
-          </div>
-        </Panel>
-      )}
-
       {/* Main open-shift form */}
       <Form
         onSubmit={handleSubmit(onSubmit)}
