@@ -352,11 +352,12 @@ export class CloudStationService implements IStationService {
     return request<Station[]>('/setup/stations');
   }
 
-  async createStation(data: any): Promise<Station> {
-    return request<Station>('/setup/stations', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createStation(data: any, opts?: { idempotencyKey?: string }): Promise<Station> {
+    return request<Station>(
+      '/setup/stations',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async updateStation(id: string, data: any, opts?: { idempotencyKey?: string }): Promise<Station> {
@@ -371,18 +372,23 @@ export class CloudStationService implements IStationService {
     return request<any>(`/setup/onboarding/status?stationId=${stationId}`);
   }
 
-  async completeOnboarding(stationId: string): Promise<any> {
-    return request<any>('/setup/onboarding/complete', {
-      method: 'POST',
-      body: JSON.stringify({ stationId }),
-    });
+  async completeOnboarding(stationId: string, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      '/setup/onboarding/complete',
+      { method: 'POST', body: JSON.stringify({ stationId }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async finalizeOnboarding(payload: FinalizeOnboardingPayload): Promise<FinalizeOnboardingResult> {
-    return request<FinalizeOnboardingResult>('/setup/onboarding/finalize', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async finalizeOnboarding(
+    payload: FinalizeOnboardingPayload,
+    opts?: { idempotencyKey?: string },
+  ): Promise<FinalizeOnboardingResult> {
+    return request<FinalizeOnboardingResult>(
+      '/setup/onboarding/finalize',
+      { method: 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async getCurrentSession(): Promise<any> {

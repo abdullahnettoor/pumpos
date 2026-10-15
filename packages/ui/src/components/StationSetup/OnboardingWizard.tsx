@@ -45,6 +45,7 @@ import { Step7ShiftTemplates } from './OnboardingSteps/Step7ShiftTemplates.js';
 import { Step8PaymentTerminals } from './OnboardingSteps/Step8PaymentTerminals.js';
 import { Step8Review } from './OnboardingSteps/Step8Review.js';
 import { useRunTask } from '../../utils/runTask.js';
+import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 
 const stationService = new CloudStationService();
 
@@ -657,9 +658,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     try {
       await wait(150);
       setProvisioning((prev) => ({ ...prev, stageIndex: 1 }));
-      const result = await stationService.finalizeOnboarding({
-        draft,
-      });
+      // Keyed per Go live (#537): after a dropped connection, going live again
+      // with the same draft reuses the key, so the station is created once.
+      const payload = { draft };
+      const result = await sendKeyed(
+        officeSubmitKeys.session('setup:onboarding:finalize'),
+        payload,
+        (idempotencyKey) => stationService.finalizeOnboarding(payload, { idempotencyKey }),
+      );
 
       setProvisioning((prev) => ({ ...prev, stageIndex: 2 }));
       await wait(150);
