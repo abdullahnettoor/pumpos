@@ -164,12 +164,13 @@ afterEach(() => {
 });
 
 describe('Accounts › Accounts, a balance list (#530)', () => {
-  it('reads tiles (Now), then the list under its header, with one primary button', async () => {
+  it('reads balance tiles (no period chip), then the list under its header, with one primary button', async () => {
     render();
     const table = await screen.findByRole('table');
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Accounts');
     expect(tileLabels()).toBe(3);
-    expect(screen.getAllByText('Now')).toHaveLength(3);
+    // A balance has no period, so it carries no chip (#604).
+    expect(screen.queryByText('Now')).toBeNull();
     expect(screen.getByTestId('section-header-accounts').textContent).toContain('4 accounts');
     expect(
       within(screen.getByTestId('section-header-accounts')).getByTestId('control-bar'),
@@ -182,8 +183,11 @@ describe('Accounts › Accounts, a balance list (#530)', () => {
   it('the same page actions on every tab: New account (secondary), New transfer (primary)', async () => {
     render();
     await screen.findByRole('table');
+    // A tabbed page's actions ride on its sticky tab row (#604).
     const actions = () =>
-      Array.from(document.querySelectorAll('header button')).map((b) => b.textContent);
+      Array.from(document.querySelectorAll('[data-page-frame-slot="actions"] button')).map(
+        (b) => b.textContent,
+      );
     for (const tab of ['Accounts', 'Daily cash book', 'Transfers']) {
       fireEvent.click(screen.getByRole('tab', { name: new RegExp(tab) }));
       expect(actions().slice(0, 2), tab).toEqual(['New account', 'New transfer']);
