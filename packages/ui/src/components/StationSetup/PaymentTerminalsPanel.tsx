@@ -74,10 +74,8 @@ const buildTerminalColumns = (
     id: 'clearing',
     header: 'Settles into',
     kind: 'text',
-    value: (t) => clearingName((t as any).clearingAccountId),
-    cell: (t) => (
-      <span className="text-ink-muted">{clearingName((t as any).clearingAccountId)}</span>
-    ),
+    value: (t) => clearingName(t.clearingAccountId),
+    cell: (t) => <span className="text-ink-muted">{clearingName(t.clearingAccountId)}</span>,
   },
   {
     id: 'status',
@@ -134,9 +132,8 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({
   // Clearing accounts are a filtered view of the station's financial accounts,
   // so derive rather than store. Both the list and the picker read them, so a
   // failed load shows Retry on the section rather than an empty picker.
-  const clearingAccounts: any[] = ((accountsQ.data as any[]) ?? []).filter(
-    (a: any) => a.accountType === 'MERCHANT_CLEARING',
-  );
+  const accounts: { id: string; name: string; accountType: string }[] = accountsQ.data ?? [];
+  const clearingAccounts = accounts.filter((a) => a.accountType === 'MERCHANT_CLEARING');
 
   const clearingName = (id: string | null | undefined) => {
     if (!id) return 'Auto (by provider)';
@@ -167,7 +164,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({
     setTerminalCode(t.terminalCode || '');
     setSupportsCard(t.supportsCard);
     setSupportsUpi(t.supportsUpi);
-    setClearingAccountId((t as any).clearingAccountId || '');
+    setClearingAccountId(t.clearingAccountId || '');
     setSession(officeSubmitKeys.session(`setup:payment-terminals:${t.id}`));
     setIsFormOpen(true);
   };

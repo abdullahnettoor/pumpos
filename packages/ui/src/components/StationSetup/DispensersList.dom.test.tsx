@@ -130,6 +130,31 @@ describe('DispensersList — taking a pump out of service', () => {
     expect(screen.queryByText(/is out of service\./i)).toBeNull();
   });
 
+  it('a retry after a dropped connection sends the same Idempotency-Key; a new change after success gets a new one', async () => {
+    // A one-off action opens its own session; the shared store hands the
+    // unsettled key back for the same body, so the change cannot apply twice.
+    updateDispenser.mockRejectedValueOnce(new Error('Network down'));
+    render();
+    const toggle = () =>
+      fireEvent.click(card('Pump One').getByRole('button', { name: /maintenance/i }));
+    const keyOf = (n: number) =>
+      (updateDispenser.mock.calls[n]?.[2] as { idempotencyKey: string }).idempotencyKey;
+
+    toggle();
+    await waitFor(() => expect(updateDispenser).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText(/Network down/i)).toBeDefined());
+    toggle();
+    await waitFor(() => expect(updateDispenser).toHaveBeenCalledTimes(2));
+    expect(keyOf(1)).toBe(keyOf(0));
+
+    await waitFor(() =>
+      expect(card('Pump One').getByRole('button', { name: /maintenance/i })).toBeDefined(),
+    );
+    toggle();
+    await waitFor(() => expect(updateDispenser).toHaveBeenCalledTimes(3));
+    expect(keyOf(2)).not.toBe(keyOf(1));
+  });
+
   describe('refreshing what the change reaches', () => {
     it('refreshes the shifts screen, which decides whether the pump is offered', async () => {
       // The dispenser list and shift status are different cache tiers. Only

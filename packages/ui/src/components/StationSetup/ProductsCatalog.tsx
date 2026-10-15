@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudProductService } from '../../services/cloud.js';
 import { queryKeys, useProducts } from '../../query/hooks.js';
-import { Product, PRODUCT_UNITS } from '@pump/shared';
+import { Product, PRODUCT_UNITS, type TaxCategory } from '@pump/shared';
 import {
   Button,
   Chip,
@@ -63,9 +63,8 @@ const buildProductColumns = (
     id: 'brand',
     header: 'Brand',
     kind: 'text',
-    value: (p) => (p as any).brand,
-    cell: (p) =>
-      (p as any).brand ? <span className="text-ink-muted">{(p as any).brand}</span> : <Faint />,
+    value: (p) => p.brand,
+    cell: (p) => (p.brand ? <span className="text-ink-muted">{p.brand}</span> : <Faint />),
   },
   {
     id: 'code',
@@ -163,9 +162,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
   >('FUEL');
   const [inventoryType, setInventoryType] = useState<'BULK' | 'ITEM' | 'NONE'>('BULK');
   const [stockTracked, setStockTracked] = useState(true);
-  const [taxCategory, setTaxCategory] = useState<'FUEL_VAT' | 'GST' | 'EXEMPT' | 'NON_TAXABLE'>(
-    'FUEL_VAT',
-  );
+  const [taxCategory, setTaxCategory] = useState<TaxCategory>('FUEL_VAT');
   const [unit, setUnit] = useState('L');
   const [brand, setBrand] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
@@ -279,18 +276,14 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
     setProductType(p.productType);
     setInventoryType(p.inventoryType);
     setStockTracked(p.stockTracked);
-    setTaxCategory((p as any).taxCategory || (p.productType === 'FUEL' ? 'FUEL_VAT' : 'GST'));
+    setTaxCategory(p.taxCategory || (p.productType === 'FUEL' ? 'FUEL_VAT' : 'GST'));
     setUnit(p.unit);
-    setBrand((p as any).brand ?? '');
-    setSellingPrice((p as any).sellingPrice != null ? String((p as any).sellingPrice) : '');
-    setCostPrice(
-      (p as any).costBasis != null && Number((p as any).costBasis) > 0
-        ? String((p as any).costBasis)
-        : '',
-    );
+    setBrand(p.brand ?? '');
+    setSellingPrice(p.sellingPrice != null ? String(p.sellingPrice) : '');
+    setCostPrice(p.costBasis != null && Number(p.costBasis) > 0 ? String(p.costBasis) : '');
     // taxConfig is a jsonb column; normalize in case it arrives as a JSON string
     // so the GST rate / HSN / inclusive flag reliably repopulate on edit.
-    const rawTc = (p as any).taxConfig;
+    const rawTc = p.taxConfig;
     const tc =
       (typeof rawTc === 'string'
         ? (() => {
@@ -368,8 +361,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
     if (filterType && p.productType !== filterType) return false;
     if (filterText) {
       const q = filterText.toLowerCase();
-      const hay =
-        `${p.name} ${p.code} ${(p as any).brand ?? ''} ${(p as any).category ?? ''}`.toLowerCase();
+      const hay = `${p.name} ${p.code} ${p.brand ?? ''} ${p.category ?? ''}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -631,7 +623,10 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             label="Tax Category"
             hint="Petrol/diesel attract state VAT (no input credit); lubes & merchandise attract GST."
           >
-            <Select value={taxCategory} onChange={(e) => setTaxCategory(e.target.value as any)}>
+            <Select
+              value={taxCategory}
+              onChange={(e) => setTaxCategory(e.target.value as TaxCategory)}
+            >
               <option value="FUEL_VAT">Fuel — VAT (outside GST)</option>
               <option value="GST">GST (lubricants / merchandise)</option>
               <option value="EXEMPT">GST Exempt</option>
