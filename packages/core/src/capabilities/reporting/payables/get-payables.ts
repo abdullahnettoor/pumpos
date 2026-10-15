@@ -11,7 +11,7 @@ import { composePayables, composeSupplierPayable } from './compose.js';
 import type { PayablesReader, PayablesQuery } from './ports.js';
 
 export interface GetPayablesCommand {
-  /** Gates access and supplies the clock (timezone + Day Start); the figures themselves are Organization-wide. */
+  /** Scopes the figures to this Station's supplier ledger and supplies the clock (timezone + Day Start). */
   stationId: string;
 }
 
@@ -33,7 +33,7 @@ function windowsOf(ctx: ExecutionContext) {
     timeZone: ctx.timeZone,
     dayStartsAt: ctx.businessDayStartsAt,
   });
-  const query: Omit<PayablesQuery, 'organizationId'> = {
+  const query: Omit<PayablesQuery, 'organizationId' | 'stationId'> = {
     purchasedFrom: windows.businessMonth.from,
     purchasedTo: windows.businessMonth.to,
     fuelPurchaseFrom: windows.entryMonth.from,
@@ -57,7 +57,7 @@ function windowsOf(ctx: ExecutionContext) {
 }
 
 /**
- * What the Organization owes its suppliers: total, this month's purchased vs
+ * What the Station owes its suppliers: total, this month's purchased vs
  * paid, and a row per supplier that is owed money (oldest unpaid Purchase, how
  * many are unpaid). Read-only; emits no Business Event. Station access is the
  * route's to enforce; the use case reads under the caller's Organization.
@@ -73,7 +73,11 @@ export class GetPayables implements UseCase<GetPayablesCommand, PayablesSummary>
     if (!input.stationId || !isValidBusinessDate(currentBusinessDate)) {
       return err(validationError('Payables require a Station'));
     }
-    const source = await this.reader.summary({ organizationId: ctx.organizationId, ...query });
+    const source = await this.reader.summary({
+      organizationId: ctx.organizationId,
+      stationId: input.stationId,
+      ...query,
+    });
     return ok(composePayables(source, currentBusinessDate, months));
   }
 }
@@ -98,6 +102,7 @@ export class GetSupplierPayable implements UseCase<
     }
     const source = await this.reader.supplier({
       organizationId: ctx.organizationId,
+      stationId: input.stationId,
       supplierId: input.supplierId,
       ...query,
     });

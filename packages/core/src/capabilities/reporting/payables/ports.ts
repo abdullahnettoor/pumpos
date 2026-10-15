@@ -16,12 +16,16 @@ import type {
  */
 
 /**
- * Payables are Organization-wide: a supplier and its balance belong to the
- * Organization (like the suppliers list's `currentBalance`), so a query names no
- * Station. The Station only gates access (the route) and supplies the clock.
+ * Payables are per Station (#575): each pump has its own account with its OMC
+ * (dealer code, invoices, statement), and two pumps of one owner may buy from
+ * different OMCs. So every figure is read from the Station's own supplier
+ * ledger (`supplier_transactions.station_id`), inside the Organization. A
+ * supplier shared by two Stations shows each Station only its own share.
  */
 export interface PayablesQuery {
   organizationId: string;
+  /** Only this Station's supplier ledger is read. */
+  stationId: string;
   /** Purchases of this Business Date range are "this month" (inclusive). */
   purchasedFrom: string;
   purchasedTo: string;
