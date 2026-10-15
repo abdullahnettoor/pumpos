@@ -58,3 +58,8 @@ export function buildFuelPriceRows(
     };
   });
 }
+
+/** Price history, the latest change first (a copy; the cache stays as served). */
+export function sortNewestFirst<T extends { effectiveFrom: string }>(entries: T[]): T[] {
+  return [...entries].sort((a, b) => time(b.effectiveFrom) - time(a.effectiveFrom));
+}

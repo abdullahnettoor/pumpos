@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildFuelPriceRows } from './fuelPriceRows.js';
+import { buildFuelPriceRows, sortNewestFirst } from './fuelPriceRows.js';
 
 const unit = (id: string) => (id === 'cng' ? 'kg' : undefined);
 
@@ -48,5 +48,17 @@ describe('buildFuelPriceRows', () => {
       ['kg', 80, null],
       ['L', null, null],
     ]);
+  });
+});
+
+describe('sortNewestFirst', () => {
+  it('lists the latest change first and leaves the input alone', () => {
+    const input = [
+      { id: 'a', effectiveFrom: '2026-01-01T00:00:00Z' },
+      { id: 'c', effectiveFrom: '2026-10-01T00:00:00Z' },
+      { id: 'b', effectiveFrom: '2026-05-01T00:00:00Z' },
+    ];
+    expect(sortNewestFirst(input).map((e) => e.id)).toEqual(['c', 'b', 'a']);
+    expect(input[0]!.id).toBe('a');
   });
 });

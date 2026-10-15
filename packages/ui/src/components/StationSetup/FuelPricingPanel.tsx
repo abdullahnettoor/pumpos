@@ -27,6 +27,7 @@ import { useRunTask } from '../../utils/runTask.js';
 import { countOf } from '../../utils/ledgerWindow.js';
 import {
   buildFuelPriceRows,
+  sortNewestFirst,
   type CurrentFuelPrice,
   type FuelPriceHistoryEntry,
   type FuelPriceRow,
@@ -123,7 +124,10 @@ const FuelsTab: React.FC<{ stationId: string }> = ({ stationId }) => {
     return buildFuelPriceRows(current, entries, (id) => units.get(id));
   }, [pricingQ.data, historyQ.data, productsQ.data]);
 
-  const history = useMemo(() => ((historyQ.data ?? []) as HistoryRow[]).slice(), [historyQ.data]);
+  const history = useMemo(
+    () => sortNewestFirst((historyQ.data ?? []) as HistoryRow[]),
+    [historyQ.data],
+  );
 
   const columns = useMemo<TableColumn<FuelPriceRow>[]>(
     () => [

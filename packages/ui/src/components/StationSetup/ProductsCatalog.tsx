@@ -91,14 +91,15 @@ const buildProductColumns = (
     header: '',
     kind: 'text',
     sortable: false,
+    width: '150px',
     value: () => null,
     cell: (p) => (
-      <span className="inline-flex gap-1.5">
+      <span className="flex justify-end gap-1.5">
         <Button variant="secondary" size="xs" onClick={() => startEdit(p)}>
           Edit
         </Button>
         {p.isActive && (
-          <Button variant="danger" size="xs" onClick={() => archive(p.id)}>
+          <Button variant="ghost" size="xs" onClick={() => archive(p.id)}>
             Archive
           </Button>
         )}
