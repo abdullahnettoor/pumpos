@@ -1142,6 +1142,19 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     ] satisfies TabItem[]
   ).filter((tab) => userRole !== 'Accountant' || tab.id !== 'today');
 
+  const historyTab = (
+    <ShiftHistoryTab
+      selectedStation={selectedStation}
+      userRole={userRole}
+      viewShiftId={requestedHistoryShiftId}
+      onClearViewShiftId={clearRequestedHistoryShiftId}
+      onOpenShift={setViewHistoryShiftId}
+    />
+  );
+  // An open Shift Summary is a page of its own (#535), with its back link to
+  // History, so it renders outside this page's frame and tabs.
+  if (shiftSubTab === 'history' && requestedHistoryShiftId) return historyTab;
+
   return (
     <>
       <PageFrame
@@ -1184,14 +1197,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               onNavigate={onNavigate}
             />
           )}
-          {shiftSubTab === 'history' && (
-            <ShiftHistoryTab
-              selectedStation={selectedStation}
-              userRole={userRole}
-              viewShiftId={requestedHistoryShiftId}
-              onClearViewShiftId={clearRequestedHistoryShiftId}
-            />
-          )}
+          {shiftSubTab === 'history' && historyTab}
           {shiftSubTab === 'today' && (
             <DataSection
               title="shift status"

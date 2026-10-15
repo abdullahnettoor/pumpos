@@ -18,6 +18,7 @@ import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { formatMoney, MINUS } from '../../utils/format.js';
 import { formatVariance } from '../../utils/variance.js';
 import { NozzleReadingsTable } from './NozzleReadingsTable.js';
+import { drawerColumns, drawerTotalRow } from './DrawerReconciliationTable.js';
 import {
   dipCount,
   type CloseDraft,
@@ -251,68 +252,7 @@ export const PendingDrawersNote: React.FC<{ count: number }> = ({ count }) =>
 
 export const HandoversStep: React.FC<HandoversStepProps> = ({ rows, total, onOpenHandover }) => {
   const pending = rows.filter((r) => r.pending).length;
-  const columns = React.useMemo<TableColumn<CloseDrawerRow>[]>(() => {
-    const money = (
-      id: keyof CloseDrawerTotal['values'],
-      header: string,
-    ): TableColumn<CloseDrawerRow> => ({
-      id,
-      header,
-      kind: 'money',
-      value: (r) => r[id],
-      cell: (r) => (r[id] == null ? '—' : formatMoney(r[id])),
-    });
-    return [
-      {
-        id: 'drawer',
-        header: 'Drawer',
-        kind: 'text',
-        value: (r) => r.label,
-        emphasis: true,
-        width: '19%',
-      },
-      {
-        id: 'status',
-        header: 'Handover',
-        kind: 'status',
-        value: (r) => (r.pending ? 'handover-pending' : 'handover-recorded'),
-        sortable: false,
-        width: '22%',
-        cell: (r) => (
-          <div className="flex items-center gap-2">
-            <StatusChip
-              status={r.pending ? 'handover-pending' : 'handover-recorded'}
-              size="md"
-              showIcon={!r.pending}
-            />
-            {r.assignment && (
-              <Button
-                variant={r.pending ? 'secondary' : 'ghost'}
-                size="xs"
-                onClick={() => onOpenHandover(r.assignment!)}
-              >
-                {r.pending ? 'Record' : 'View'}
-                <span className="sr-only"> {r.label} handover</span>
-              </Button>
-            )}
-          </div>
-        ),
-      },
-      money('openingFloat', 'Float'),
-      money('cashSales', 'Cash sales'),
-      money('drops', 'Drops'),
-      money('expected', 'Expected'),
-      money('declared', 'Declared'),
-      {
-        id: 'variance',
-        header: 'Variance',
-        kind: 'money',
-        value: (r) => r.variance,
-        cell: (r) => (r.variance == null ? '—' : <VarianceChip amount={r.variance} size="md" />),
-        text: (r) => (r.variance == null ? '—' : formatVariance(r.variance, 'cash').text),
-      },
-    ];
-  }, [onOpenHandover]);
+  const columns = React.useMemo(() => drawerColumns(onOpenHandover), [onOpenHandover]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -326,14 +266,7 @@ export const HandoversStep: React.FC<HandoversStepProps> = ({ rows, total, onOpe
             rows={rows}
             rowKey={(r) => r.key}
             emptyMessage="No attendant drawers on this shift."
-            totalRow={{
-              label: total.label,
-              derive: false,
-              values: {
-                ...total.values,
-                variance: pending === rows.length ? null : total.variance,
-              },
-            }}
+            totalRow={drawerTotalRow(rows, total)}
           />
         </div>
       </section>

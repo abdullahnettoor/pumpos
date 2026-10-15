@@ -810,11 +810,12 @@ export class CloudShiftService {
     );
   }
 
-  async reopenShift(shiftId: string): Promise<any> {
-    return request<any>('/shifts/reopen', {
-      method: 'POST',
-      body: JSON.stringify({ shiftId }),
-    });
+  async reopenShift(shiftId: string, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      '/shifts/reopen',
+      { method: 'POST', body: JSON.stringify({ shiftId }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async recordHandover(

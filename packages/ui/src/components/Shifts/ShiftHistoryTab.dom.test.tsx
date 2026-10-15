@@ -152,3 +152,26 @@ describe('ShiftHistoryTab', () => {
     });
   });
 });
+
+describe('ShiftHistoryTab reopen', () => {
+  afterEach(() => {
+    cleanup();
+    summaries.mockReset();
+  });
+
+  it('offers Reopen on a closed shift, read from the row status', () => {
+    summaries.mockReturnValue([apiRow()]);
+    renderWithProviders(
+      <ShiftHistoryTab selectedStation={STATION} userRole="Owner" viewShiftId="shift-1" />,
+    );
+    expect(screen.getByRole('button', { name: /Reopen shift/ })).toBeDefined();
+  });
+
+  it('does not offer Reopen on a locked shift', () => {
+    summaries.mockReturnValue([apiRow({ status: 'LOCKED' })]);
+    renderWithProviders(
+      <ShiftHistoryTab selectedStation={STATION} userRole="Owner" viewShiftId="shift-1" />,
+    );
+    expect(screen.queryByRole('button', { name: /Reopen shift/ })).toBeNull();
+  });
+});
