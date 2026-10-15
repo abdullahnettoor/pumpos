@@ -761,6 +761,7 @@ archived in `docs/archive/initial-v1/` and are historical context only. Current
 task status lives in GitHub Issues, not roadmap phase status labels.
 
 <!-- graft:start -->
+
 ## Graft — repo context graph
 
 This repo is indexed in `graft/`: small linked markdown nodes that explain each
