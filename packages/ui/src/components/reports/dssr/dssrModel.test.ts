@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { dssrDayStatus, readDssrDay } from './dssrModel.js';
-import { fuelTotalRow, shiftTotalRow } from './dssrColumns.js';
+import {
+  SHIFT_COLUMNS,
+  ATTENDANT_COLUMNS,
+  attendantTotalRow,
+  fuelTotalRow,
+  shiftTotalRow,
+} from './dssrColumns.js';
+import { totalTexts } from '../../../pump-ds/table/columns.js';
 
 describe('dssrDayStatus (Business Day Status)', () => {
   it('a stored snapshot is Sealed; a preview is Open today and a Draft before it', () => {
@@ -83,5 +90,80 @@ describe('readDssrDay', () => {
       'Total (attendant var. excl. 1 older shift)',
     );
     expect(day.shifts.map((s) => s.label)).toEqual(['20261009-1', '20261009-2']);
+  });
+
+  /*
+   * #583 review: the shift and attendant totals are the snapshot's, never a
+   * sum of the rows. Each fixture's stored total differs from its rows' sum.
+   */
+  const shiftDay = (snapshotData: Record<string, unknown>) =>
+    readDssrDay({
+      businessDate: '2026-10-09',
+      snapshotData: {
+        shifts: [
+          {
+            shiftId: 'a',
+            shiftSequence: 1,
+            netVolume: 100,
+            cashVariance: -10,
+            attendantVariance: -4,
+          },
+          { shiftId: 'b', shiftSequence: 2, netVolume: 50, cashVariance: 5, attendantVariance: 2 },
+        ],
+        drawer: {
+          totalCashVariance: -7,
+          totalAttendantVariance: -3,
+          attendants: [{ attendantName: 'Ravi', variance: -4 }],
+        },
+        ...snapshotData,
+      },
+    });
+
+  it('reads the shift total net volume from fuel.totalNetVolume, not the rows', () => {
+    const day = shiftDay({
+      fuel: { totalNetVolume: 149.5, byProduct: [{ productName: 'Petrol', unit: 'L' }] },
+    });
+    expect(totalTexts(SHIFT_COLUMNS, day.shifts, shiftTotalRow(day))?.cells).toEqual([
+      'Total',
+      '',
+      '',
+      '149.50 L',
+      '−₹3.00',
+      '−₹7.00',
+    ]);
+  });
+
+  it('a mixed-unit day prints the shift net volume total as —, and says why', () => {
+    const day = shiftDay({
+      fuel: {
+        totalNetVolume: 150,
+        byProduct: [
+          { productName: 'Petrol', unit: 'L' },
+          { productName: 'CNG', unit: 'kg' },
+        ],
+      },
+    });
+    expect(totalTexts(SHIFT_COLUMNS, day.shifts, shiftTotalRow(day))?.cells.slice(0, 4)).toEqual([
+      'Total (volumes not added across L and kg)',
+      '',
+      '',
+      '—',
+    ]);
+  });
+
+  it('leaves a variance total the snapshot lacks blank, never summing the rows', () => {
+    const day = shiftDay({ drawer: { attendants: [{ attendantName: 'Ravi', variance: -4 }] } });
+    expect(totalTexts(SHIFT_COLUMNS, day.shifts, shiftTotalRow(day))?.cells.slice(4)).toEqual([
+      '',
+      '',
+    ]);
+    expect(totalTexts(ATTENDANT_COLUMNS, day.attendants, attendantTotalRow(day))?.cells).toEqual([
+      'Total',
+      '',
+    ]);
+    const stored = shiftDay({});
+    expect(
+      totalTexts(ATTENDANT_COLUMNS, stored.attendants, attendantTotalRow(stored))?.cells,
+    ).toEqual(['Total', '−₹3.00']);
   });
 });

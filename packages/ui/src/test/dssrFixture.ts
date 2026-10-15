@@ -154,3 +154,21 @@ export const DSSR_PARITY_FIXTURE = {
     },
   },
 };
+
+/**
+ * A sealed DSR for a day with nothing on it: no fuel, no nozzles, no shifts.
+ * The screen and the PDF both print the empty sections with the same text.
+ */
+export const DSSR_EMPTY_DAY_FIXTURE = {
+  businessDate: '2026-10-09',
+  generatedAt: '2026-10-09T22:00:00.000Z',
+  snapshotData: {
+    shiftsIncluded: 0,
+    pnl: {},
+    fuel: { byProduct: [], nozzles: [] },
+    fuelStockVariance: [],
+    merchandiseStockVariance: [],
+    shifts: [],
+    drawer: { attendants: [] },
+  },
+};

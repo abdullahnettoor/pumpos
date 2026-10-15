@@ -42,6 +42,7 @@ import {
   NOZZLE_COLUMNS,
   SHIFT_COLUMNS,
   DSSR_COGS_NOTE,
+  DSSR_EMPTY,
   DSSR_TITLES,
   attendantTotalRow,
   dssrTiles,
@@ -296,7 +297,7 @@ const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
           rowKey={(r) => r.key}
           totalRow={fuelTotalRow(day.fuel)}
           title="fuel sales"
-          emptyMessage={`No fuel sales in the ${DSR_LABEL}.`}
+          emptyMessage={DSSR_EMPTY.fuel}
         />
       </section>
 
@@ -307,7 +308,7 @@ const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
           rows={day.nozzles}
           rowKey={(r) => r.key}
           title="nozzles"
-          emptyMessage={`No nozzle data in the ${DSR_LABEL}.`}
+          emptyMessage={DSSR_EMPTY.nozzles}
         />
       </section>
 
@@ -343,7 +344,7 @@ const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
           rowKey={(r) => r.key}
           totalRow={shiftTotalRow(day)}
           title="included shifts"
-          emptyMessage="No shifts were included for this day."
+          emptyMessage={DSSR_EMPTY.shifts}
         />
       </section>
 

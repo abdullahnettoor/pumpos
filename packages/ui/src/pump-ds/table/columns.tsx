@@ -80,8 +80,14 @@ export type TableColumn<T> =
  * The closing row. `true` sums every money and qty column under a "Total"
  * label. Pass `values` to print a figure the rows explain (the server's total)
  * instead of re-deriving it.
+ *
+ * `derive: false` prints only the figures in `values` and never sums a
+ * column: for a report whose totals are stored (the DSR). There a column
+ * missing from `values` stays blank, and `null` prints `—` (a figure that is
+ * not added up, such as volumes across L and kg).
  */
-export type TotalRow = boolean | { label?: string; values?: Record<string, Amount> };
+export type TotalRow =
+  boolean | { label?: string; values?: Record<string, Amount>; derive?: boolean };
 
 /** Which adapter is rendering; a statement prints, so its status is ink, not a fill. */
 export type TableMode = 'interactive' | 'statement';
@@ -281,10 +287,15 @@ export function totalTexts<T>(
   totalRow: TotalRow | undefined,
 ): { cells: string[]; labelled: boolean } | null {
   if (!totalRow) return null;
-  const { label = 'Total', values } = totalRow === true ? {} : totalRow;
+  const { label = 'Total', values, derive = true } = totalRow === true ? {} : totalRow;
   const figures = columns.map((col) => {
     const total = totalOf(col);
-    return total ? total(col, rows, values?.[col.id]) : '';
+    if (!total) return '';
+    if (!derive) {
+      if (!values || !(col.id in values)) return '';
+      if (values[col.id] == null) return '—';
+    }
+    return total(col, rows, values?.[col.id]);
   });
   const labelled = figures.length > 0 && !figures[0];
   if (labelled) figures[0] = label;

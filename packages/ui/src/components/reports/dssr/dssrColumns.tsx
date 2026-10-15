@@ -1,5 +1,5 @@
 import React from 'react';
-import { variancePresentation, type VarianceKind } from '@pump/shared';
+import { DSR_LABEL, variancePresentation, type VarianceKind } from '@pump/shared';
 import type { TableColumn, TotalRow } from '../../../pump-ds/index.js';
 import {
   formatDateTime,
@@ -34,6 +34,13 @@ export const DSSR_TITLES = {
   shifts: 'Included shifts',
   attendants: 'Attendant variance',
   attendantsSubtitle: 'At handover, per attendant and DU',
+} as const;
+
+/** What an empty table on the DSR says, on screen and in the PDF. */
+export const DSSR_EMPTY = {
+  fuel: `No fuel sales in the ${DSR_LABEL}.`,
+  nozzles: `No nozzle data in the ${DSR_LABEL}.`,
+  shifts: 'No shifts were included for this day.',
 } as const;
 
 /** Under the margin tiles. */
@@ -141,6 +148,7 @@ export function fuelTotalRow(fuel: DssrDay['fuel']): TotalRow {
       net: fuel.totals.net,
       salesValue: fuel.totals.salesValue,
     },
+    derive: false,
   };
 }
 
@@ -230,18 +238,25 @@ export const SHIFT_COLUMNS: TableColumn<ShiftRow>[] = [
 ];
 
 /**
- * The day's variance totals, as stored with the snapshot. A shift closed
- * before two-level variance has no attendant figure, so the label says the
- * total leaves it out.
+ * The day's shift totals, as stored with the snapshot: net volume is the
+ * day's net fuel volume (`fuel.totalNetVolume`), the variances the drawer
+ * totals. Nothing is summed from the rows; a total the snapshot lacks stays
+ * blank. On a mixed-unit day the net volume reads `—`, as the fuel total
+ * does, and a shift closed before two-level variance has no attendant
+ * figure: the label says both.
  */
 export function shiftTotalRow(day: DssrDay): TotalRow {
+  const mixed = fuelUnitsNote(day.fuel);
   const withoutAttendant = day.shifts.filter((s) => s.attendantVariance == null).length;
+  const notes = [
+    mixed,
+    withoutAttendant > 0 &&
+      `attendant var. excl. ${withoutAttendant} older ${withoutAttendant === 1 ? 'shift' : 'shifts'}`,
+  ].filter(Boolean);
   return {
-    label:
-      withoutAttendant > 0
-        ? `Total (attendant var. excl. ${withoutAttendant} older ${withoutAttendant === 1 ? 'shift' : 'shifts'})`
-        : 'Total',
+    label: notes.length > 0 ? `Total (${notes.join('; ')})` : 'Total',
     values: {
+      netVolume: mixed ? null : day.fuel.totals.net,
       ...(day.drawerTotals.attendantVariance != null && {
         attendantVariance: day.drawerTotals.attendantVariance,
       }),
@@ -249,6 +264,7 @@ export function shiftTotalRow(day: DssrDay): TotalRow {
         officeVariance: day.drawerTotals.officeVariance,
       }),
     },
+    derive: false,
   };
 }
 
@@ -265,9 +281,8 @@ export const ATTENDANT_COLUMNS: TableColumn<AttendantRow>[] = [
   },
 ];
 
-/** The attendants' total: the stored day total, or the rows' sum for a snapshot without one. */
+/** The attendants' total: the stored day total; blank for a snapshot without one. */
 export function attendantTotalRow(day: DssrDay): TotalRow {
-  return day.drawerTotals.attendantVariance == null
-    ? true
-    : { values: { variance: day.drawerTotals.attendantVariance } };
+  const stored = day.drawerTotals.attendantVariance;
+  return { values: stored == null ? {} : { variance: stored }, derive: false };
 }

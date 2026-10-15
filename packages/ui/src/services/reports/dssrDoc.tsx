@@ -13,6 +13,7 @@ import {
 import {
   ATTENDANT_COLUMNS,
   DSSR_COGS_NOTE,
+  DSSR_EMPTY,
   DSSR_TITLES,
   FUEL_PRODUCT_COLUMNS,
   FUEL_STOCK_COLUMNS,
@@ -55,16 +56,30 @@ const Title = ({ title, subtitle }: { title: string; subtitle?: string }) => (
   </>
 );
 
-/** One screen table, printed. */
+/**
+ * One screen table, printed. With no rows it prints the screen's empty text in
+ * its place, as the screen does; the total row shows only under rows.
+ */
 function Table<T>({
   columns,
   rows,
   totalRow,
+  empty,
 }: {
   columns: TableColumn<T>[];
   rows: T[];
   totalRow?: TotalRow;
+  empty: string;
 }) {
+  if (rows.length === 0) {
+    return (
+      <View style={s.reconBox}>
+        <Text style={{ fontSize: 8.5, color: C.muted, padding: 8, textAlign: 'center' }}>
+          {empty}
+        </Text>
+      </View>
+    );
+  }
   const t = pdfTable(columns, rows, totalRow, toneOf);
   return <TableView columns={t.columns} rows={t.rows} total={t.total} />;
 }
@@ -145,56 +160,62 @@ const builders: Record<DssrSection, (day: DssrDay, cfg: DssrReportConfig) => Rea
       </Text>
     </View>
   ),
-  fuelByProduct: (day) =>
-    day.fuel.rows.length === 0 ? null : (
-      <View key="fuelByProduct">
-        <Title title={DSSR_TITLES.fuel} />
-        <Table
-          columns={FUEL_PRODUCT_COLUMNS}
-          rows={day.fuel.rows}
-          totalRow={fuelTotalRow(day.fuel)}
-        />
-      </View>
-    ),
-  nozzles: (day) =>
-    day.nozzles.length === 0 ? null : (
-      <View key="nozzles">
-        <Title title={DSSR_TITLES.nozzles} subtitle={DSSR_TITLES.nozzlesSubtitle} />
-        <Table columns={NOZZLE_COLUMNS} rows={day.nozzles} />
-      </View>
-    ),
+  // Fuel, nozzles and shifts always print, empty or not, as on screen; the
+  // stock and attendant sections only when the day has them.
+  fuelByProduct: (day) => (
+    <View key="fuelByProduct">
+      <Title title={DSSR_TITLES.fuel} />
+      <Table
+        columns={FUEL_PRODUCT_COLUMNS}
+        rows={day.fuel.rows}
+        totalRow={fuelTotalRow(day.fuel)}
+        empty={DSSR_EMPTY.fuel}
+      />
+    </View>
+  ),
+  nozzles: (day) => (
+    <View key="nozzles">
+      <Title title={DSSR_TITLES.nozzles} subtitle={DSSR_TITLES.nozzlesSubtitle} />
+      <Table columns={NOZZLE_COLUMNS} rows={day.nozzles} empty={DSSR_EMPTY.nozzles} />
+    </View>
+  ),
   fuelStockVariance: (day) =>
     day.fuelStock.length === 0 ? null : (
       <View key="fuelStockVariance">
         <Title title={DSSR_TITLES.fuelStock} />
-        <Table columns={FUEL_STOCK_COLUMNS} rows={day.fuelStock} />
+        <Table columns={FUEL_STOCK_COLUMNS} rows={day.fuelStock} empty="" />
       </View>
     ),
   merchandiseStockVariance: (day) =>
     day.merchandiseStock.length === 0 ? null : (
       <View key="merchandiseStockVariance">
         <Title title={DSSR_TITLES.merchandiseStock} />
-        <Table columns={MERCHANDISE_STOCK_COLUMNS} rows={day.merchandiseStock} />
+        <Table columns={MERCHANDISE_STOCK_COLUMNS} rows={day.merchandiseStock} empty="" />
       </View>
     ),
-  shifts: (day) =>
-    day.shifts.length === 0 ? null : (
-      <View key="shifts">
-        <Title title={DSSR_TITLES.shifts} />
-        <Table columns={SHIFT_COLUMNS} rows={day.shifts} totalRow={shiftTotalRow(day)} />
-        {/* Attendant (Handover) variance per Attendant/DU across the day (#287). */}
-        {day.attendants.length > 0 && (
-          <>
-            <Title title={DSSR_TITLES.attendants} subtitle={DSSR_TITLES.attendantsSubtitle} />
-            <Table
-              columns={ATTENDANT_COLUMNS}
-              rows={day.attendants}
-              totalRow={attendantTotalRow(day)}
-            />
-          </>
-        )}
-      </View>
-    ),
+  shifts: (day) => (
+    <View key="shifts">
+      <Title title={DSSR_TITLES.shifts} />
+      <Table
+        columns={SHIFT_COLUMNS}
+        rows={day.shifts}
+        totalRow={shiftTotalRow(day)}
+        empty={DSSR_EMPTY.shifts}
+      />
+      {/* Attendant (Handover) variance per Attendant/DU across the day (#287). */}
+      {day.attendants.length > 0 && (
+        <>
+          <Title title={DSSR_TITLES.attendants} subtitle={DSSR_TITLES.attendantsSubtitle} />
+          <Table
+            columns={ATTENDANT_COLUMNS}
+            rows={day.attendants}
+            totalRow={attendantTotalRow(day)}
+            empty=""
+          />
+        </>
+      )}
+    </View>
+  ),
 };
 
 /**
