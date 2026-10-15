@@ -1,5 +1,5 @@
 import React from 'react';
-import { variancePresentation } from '@pump/shared';
+import { formatStationDateTime, shiftDisplayLabel, variancePresentation } from '@pump/shared';
 import {
   Button,
   EmptyState,
@@ -11,12 +11,7 @@ import {
   type SectionQuery,
 } from '../../pump-ds/index.js';
 import { countOf } from '../../utils/ledgerWindow.js';
-import {
-  formatClockInZone,
-  formatMoney,
-  formatQuantity,
-  signedMoneyParts,
-} from '../../utils/format.js';
+import { formatMoney, formatQuantity, signedMoneyParts } from '../../utils/format.js';
 import type { DayFigures } from './businessDayModel.js';
 
 export interface IdleShiftViewProps {
@@ -25,9 +20,13 @@ export interface IdleShiftViewProps {
   day: DayFigures;
   lastShift: {
     templateName?: string | null;
+    businessDate?: string | null;
+    shiftSequence?: number | null;
     closedAt?: string | null;
     closedByName?: string | null;
   } | null;
+  /** The last shift's id, for its readable name when it has no sequence. */
+  lastShiftId: string | null;
   /** The last shift's office count variance, when its summary is loaded. */
   lastVariance: number | null;
   timeZone?: string;
@@ -49,6 +48,7 @@ export const IdleShiftView: React.FC<IdleShiftViewProps> = ({
   dayQuery,
   day,
   lastShift,
+  lastShiftId,
   lastVariance,
   timeZone,
   onViewLastSummary,
@@ -58,11 +58,22 @@ export const IdleShiftView: React.FC<IdleShiftViewProps> = ({
     lastVariance == null
       ? ''
       : `, ${variancePresentation(lastVariance, 'cash').label.toLowerCase()}`;
+  // "Morning (20261015-1) closed 15 Oct 2026, 02:02 pm by Anita, balanced."
+  const name = lastShift
+    ? `${lastShift.templateName || 'The last shift'}${
+        lastShift.businessDate
+          ? ` (${shiftDisplayLabel({
+              businessDate: lastShift.businessDate,
+              shiftSequence: lastShift.shiftSequence ?? null,
+              shiftId: lastShiftId ?? '',
+            })})`
+          : ''
+      }`
+    : '';
   const closed = lastShift?.closedAt
-    ? `${lastShift.templateName || 'The last shift'} closed at ${formatClockInZone(
-        lastShift.closedAt,
-        timeZone,
-      )}${lastShift.closedByName ? ` by ${lastShift.closedByName}` : ''}${lastWord}. `
+    ? `${name} closed ${formatStationDateTime(lastShift.closedAt, timeZone)}${
+        lastShift.closedByName ? ` by ${lastShift.closedByName}` : ''
+      }${lastWord}. `
     : '';
   return (
     <div className="flex flex-col gap-4">

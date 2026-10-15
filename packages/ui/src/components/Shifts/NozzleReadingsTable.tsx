@@ -15,6 +15,7 @@ import { InfoTip } from '../primitives/InfoTip.js';
 import { formatClockInZone, formatMoney } from '../../utils/format.js';
 import {
   filterNozzleGroups,
+  nozzleTotal,
   nozzleProducts,
   type NozzleGroup,
   type NozzleRow,
@@ -23,8 +24,6 @@ import {
 
 export interface NozzleReadingsTableProps {
   groups: NozzleGroup[];
-  /** The Drawers that have not handed over, for the total row's label. */
-  pending: NozzleGroup[];
   timeZone?: string;
   /** Record or view a Drawer's Handover (the Handover drawer). */
   onOpenHandover: (assignment: StaffAssignmentInput) => void;
@@ -66,7 +65,6 @@ const COLUMNS: TableColumn<NozzleRow>[] = [
  */
 export const NozzleReadingsTable: React.FC<NozzleReadingsTableProps> = ({
   groups,
-  pending,
   timeZone,
   onOpenHandover,
 }) => {
@@ -81,16 +79,12 @@ export const NozzleReadingsTable: React.FC<NozzleReadingsTableProps> = ({
     [products, nozzleCount],
   );
   const shown = useMemo(() => filterNozzleGroups(groups, product), [groups, product]);
-  const shownCount = shown.reduce((s, g) => s + g.rows.length, 0);
 
+  // The total sums handed-over Drawers only and says which it leaves out.
   const totalRow = useMemo<TotalRow>(() => {
-    if (product !== 'all') return { label: `Total of ${shownCount} shown` };
-    if (pending.length > 0) {
-      const dus = pending.map((g) => g.du).join(', ');
-      return { label: `Total excl. ${dus}` };
-    }
-    return { label: 'Total' };
-  }, [product, shownCount, pending]);
+    const t = nozzleTotal(shown, product !== 'all');
+    return { label: t.label, values: { litres: t.litres, value: t.value } };
+  }, [shown, product]);
 
   const tableGroups = useMemo<TableGroup<NozzleRow>[]>(
     () =>

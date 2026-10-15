@@ -19,25 +19,19 @@ export interface LiveShiftTilesProps {
 const whole = (v: number) => formatMoney(v, { decimals: 0 });
 
 /**
- * Live shift's four tiles (#533), all "This shift": Fuel sold, Sales (fuel +
- * products), Card / UPI / Credit, and Drawer variance. Plain figures; only the
+ * Live shift's three tiles (#533), all "This shift": Sales (fuel + products),
+ * Card / UPI / Credit, and Drawer variance. No Fuel sold tile: its litres are
+ * the nozzle table's total (#515), so they sit in the Sales hint. Plain figures; only the
  * variance takes colour, through `alert`, and only when it is not balanced.
  * Everyone sees the variance (owner decision, 15 Oct).
  */
 export const LiveShiftTiles: React.FC<LiveShiftTilesProps> = ({ figures, productQueries }) => {
   const { fuel, drawers, takings, products, pending } = figures;
-  const fuelValue =
-    fuel.byUnit.length === 0
-      ? formatQuantity(0, 'L')
-      : fuel.byUnit.map((u) => formatQuantity(u.litres, u.unit)).join(' · ');
-  const fuelHint = [
-    pending.length > 0 ? `${pending.map((g) => g.du).join(', ')} not in yet` : null,
-    ...fuel.byProduct.map(
-      (p) => `${p.product} ${formatQuantity(p.litres, p.unit, { decimals: 0 })}`,
-    ),
-  ]
-    .filter(Boolean)
+  // Litres are the nozzle table's total, so they ride in the Sales hint, not a tile of their own.
+  const litres = fuel.byUnit
+    .map((u) => formatQuantity(u.litres, u.unit, { decimals: 0 }))
     .join(' · ');
+  const fuelHint = `Fuel ${whole(fuel.value)}${litres ? ` (${litres})` : ''}`;
 
   const v = variancePresentation(drawers.variance, 'cash');
   const alert: KpiAlert | undefined =
@@ -60,18 +54,12 @@ export const LiveShiftTiles: React.FC<LiveShiftTilesProps> = ({ figures, product
 
   return (
     <KpiStrip columns="auto">
-      <KpiTile
-        label="Fuel sold"
-        scope="this-shift"
-        value={fuelValue}
-        hint={fuelHint || 'No closing readings yet'}
-      />
       <TileSection title="product sales" query={productQueries}>
         <KpiTile
           label="Sales"
           scope="this-shift"
           value={formatMoney(figures.sales)}
-          hint={`Fuel ${whole(fuel.value)} · Products ${whole(products.total)}`}
+          hint={`${fuelHint} · Products ${whole(products.total)}`}
         />
       </TileSection>
       <KpiTile

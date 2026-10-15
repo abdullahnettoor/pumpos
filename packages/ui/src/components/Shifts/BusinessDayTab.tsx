@@ -45,6 +45,7 @@ import {
   queryKeys,
 } from '../../query/hooks.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
+import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { dayFigures, dayShifts, type DayShiftRow } from './businessDayModel.js';
 
 const shiftService = new CloudShiftService();
@@ -380,7 +381,13 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     if (!ok) return;
     try {
       setClosing(true);
-      await shiftService.closeBusinessDay(snap.businessDayId, stationId);
+      // One key per close; a retry after an unanswered close reuses it.
+      const businessDayId: string = snap.businessDayId;
+      await sendKeyed(
+        officeSubmitKeys.session(`business-day:close:${businessDayId}`),
+        { stationId, businessDayId, businessDate },
+        (key) => shiftService.closeBusinessDay(businessDayId, stationId, { idempotencyKey: key }),
+      );
       toast.success('Business day closed · DSR generated.');
       await Promise.all([
         invalidateOperational(stationId),

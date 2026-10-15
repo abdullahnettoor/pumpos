@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   cashToDrawer,
-  draftError,
+  handoverProductSaleSchema,
   draftTotals,
   lineTax,
   saleLines,
@@ -56,12 +56,26 @@ describe('cashToDrawer', () => {
   });
 });
 
-describe('draftError', () => {
-  const rows = [{ productId: 'oil', quantity: '1' }];
+describe('handoverProductSaleSchema', () => {
+  const schema = handoverProductSaleSchema((lines) => draftTotals(lines, { oil }).total);
+  const lines = [{ productId: 'oil', quantity: '1' }];
+  const errorOf = (v: Record<string, unknown>) => {
+    const r = schema.safeParse({ attendantId: 'u1', lines, nonCash: '', ...v });
+    return r.success ? null : r.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+  };
+
   it('asks for the employee, then a line, then a card/UPI part within the total', () => {
-    expect(draftError({ attendantId: '', rows, total: 450, nonCash: 0 })).toMatch(/employee/);
-    expect(draftError({ attendantId: 'u1', rows: [], total: 0, nonCash: 0 })).toMatch(/product/);
-    expect(draftError({ attendantId: 'u1', rows, total: 450, nonCash: 450.01 })).toMatch(/card/);
-    expect(draftError({ attendantId: 'u1', rows, total: 450, nonCash: 450 })).toBeNull();
+    expect(errorOf({ attendantId: '' })).toEqual([
+      'attendantId: Select the employee who made the sales.',
+    ]);
+    expect(errorOf({ lines: [{ productId: '', quantity: '2' }] })).toEqual([
+      'lines: Add at least one product with a quantity.',
+    ]);
+    expect(errorOf({ nonCash: '450.01' })).toEqual([
+      'nonCash: The card/UPI part cannot be more than the sale total.',
+    ]);
+    expect(errorOf({ nonCash: 'abc' })?.[0]).toMatch(/as an amount/);
+    expect(errorOf({ nonCash: '450' })).toBeNull();
+    expect(errorOf({})).toBeNull();
   });
 });

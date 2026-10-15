@@ -41,18 +41,19 @@ const groups = nozzleGroups(
 describe('NozzleReadingsTable', () => {
   it('opens the Handover of the drawer whose button is pressed', () => {
     const onOpen = vi.fn();
-    render(<NozzleReadingsTable groups={groups} pending={[groups[1]]} onOpenHandover={onOpen} />);
+    render(<NozzleReadingsTable groups={groups} onOpenHandover={onOpen} />);
     fireEvent.click(screen.getByRole('button', { name: 'Record handover' }));
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u2', duId: 'du2' }));
   });
 
   it('filters by product at once, and the total says how many it shows', () => {
-    render(<NozzleReadingsTable groups={groups} pending={[groups[1]]} onOpenHandover={vi.fn()} />);
+    render(<NozzleReadingsTable groups={groups} onOpenHandover={vi.fn()} />);
     const table = screen.getByRole('table', { name: 'Nozzle readings' });
     expect(within(table).getByText('Total excl. DU2')).toBeDefined();
     fireEvent.click(screen.getByRole('radio', { name: 'Diesel, 2' }));
     expect(within(table).queryByText('N1')).toBeNull();
-    const total = within(table).getByText('Total of 2 shown').closest('tr')!;
+    // N3 is DU2's, still out: shown, but not summed, and the label says so.
+    const total = within(table).getByText('Total of 2 shown excl. DU2').closest('tr')!;
     expect(total.textContent).toContain('20.00 L');
   });
 });

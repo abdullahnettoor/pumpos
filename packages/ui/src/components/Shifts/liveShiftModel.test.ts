@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   beforeCloseChecklist,
   drawerFigures,
+  filterNozzleGroups,
   fuelTotals,
+  nozzleTotal,
   liveShiftFigures,
   liveShiftState,
   nozzleGroups,
@@ -189,6 +191,45 @@ describe('fuelTotals', () => {
     });
     const t = fuelTotals([row(0.1), row(0.2)]);
     expect(t.value).toBe(0.3);
+  });
+});
+
+describe('nozzleTotal', () => {
+  // DU2 is still out, but one of its meters has moved.
+  const moved = shift({
+    nozzleReadings: shift().nozzleReadings!.map((r) =>
+      r.nozzleId === 'n3' ? { ...r, closingReading: '87430.600' } : r,
+    ),
+  });
+
+  it('sums handed-over drawers and unassigned nozzles, never a pending drawer', () => {
+    const groups = nozzleGroups(moved, { now: BEFORE_END, timeZone: TZ });
+    expect(groups[1].rows[0].litres).toBe(10);
+    expect(nozzleTotal(groups, false)).toEqual({
+      label: 'Total excl. DU2',
+      litres: 482.65,
+      value: 46962.95,
+    });
+  });
+
+  it('says how many it shows when filtered, and what it still leaves out', () => {
+    const groups = filterNozzleGroups(
+      nozzleGroups(moved, { now: BEFORE_END, timeZone: TZ }),
+      'p-Petrol',
+    );
+    expect(nozzleTotal(groups, true)).toEqual({
+      label: 'Total of 2 shown excl. DU2',
+      litres: 180.4,
+      value: 18491,
+    });
+  });
+
+  it('reads plain Total once every drawer has handed over', () => {
+    const groups = nozzleGroups(shift({ staffAssignments: [shift().staffAssignments![1]] }), {
+      now: BEFORE_END,
+      timeZone: TZ,
+    }).filter((g) => g.du !== 'DU2');
+    expect(nozzleTotal(groups, false).label).toBe('Total');
   });
 });
 

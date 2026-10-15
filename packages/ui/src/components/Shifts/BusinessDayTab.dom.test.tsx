@@ -242,7 +242,28 @@ describe('BusinessDayTab', () => {
       expect(closeBusinessDay).not.toHaveBeenCalled();
 
       fireEvent.click(screen.getByRole('button', { name: 'Close day' }));
-      await waitFor(() => expect(closeBusinessDay).toHaveBeenCalledWith('bd-1', STATION.id));
+      await waitFor(() =>
+        expect(closeBusinessDay).toHaveBeenCalledWith('bd-1', STATION.id, {
+          idempotencyKey: expect.any(String),
+        }),
+      );
+    });
+
+    it('keys the close, and a retry after a lost answer reuses the key', async () => {
+      closeBusinessDay
+        .mockReset()
+        .mockRejectedValueOnce(Object.assign(new Error('Network down'), { status: undefined }))
+        .mockResolvedValueOnce(undefined);
+      renderTab();
+      for (const n of [1, 2]) {
+        await waitFor(() => expect(closeDayButton()!.disabled).toBe(false));
+        fireEvent.click(closeDayButton()!);
+        fireEvent.click(await screen.findByRole('button', { name: 'Close day' }));
+        await waitFor(() => expect(closeBusinessDay).toHaveBeenCalledTimes(n));
+      }
+      const [first, second] = closeBusinessDay.mock.calls;
+      expect(first[2].idempotencyKey).toEqual(expect.any(String));
+      expect(second[2].idempotencyKey).toBe(first[2].idempotencyKey);
     });
 
     it('does not seal the day if the operator backs out', async () => {
@@ -288,7 +309,11 @@ describe('BusinessDayTab', () => {
       await waitFor(() => expect(screen.getByText('Close this business day?')).toBeDefined());
       expect(screen.getByText(/Decantation warnings:/i)).toBeDefined();
       fireEvent.click(screen.getByRole('button', { name: 'Close day' }));
-      await waitFor(() => expect(closeBusinessDay).toHaveBeenCalledWith('bd-1', STATION.id));
+      await waitFor(() =>
+        expect(closeBusinessDay).toHaveBeenCalledWith('bd-1', STATION.id, {
+          idempotencyKey: expect.any(String),
+        }),
+      );
     });
   });
 

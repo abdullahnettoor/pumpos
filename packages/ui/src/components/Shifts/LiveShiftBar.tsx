@@ -1,6 +1,6 @@
 import React from 'react';
 import { historicalShiftMessage, type ShiftStatusState } from '@pump/shared';
-import { StatusChip } from '../../pump-ds/index.js';
+import { Button, Icon, StatusChip } from '../../pump-ds/index.js';
 import { Banner } from '../primitives/Banner.js';
 import { formatClockInZone, formatElapsedSince, formatHHMM } from '../../utils/format.js';
 
@@ -17,12 +17,14 @@ export interface LiveShiftBarProps {
   handoversExpected: number;
   /** The close flow has started (its draft is kept while the operator works). */
   closing: boolean;
+  /** Opens the last closed shift's summary; omitted when there is none. */
+  onViewLastSummary?: (() => void) | null;
 }
 
 /**
  * The open shift's one line (#533): its name and status, who opened it and
- * when, how long it has run, the scheduled end, and how many Drawers have
- * handed over. A shift on a past Business Day says so underneath.
+ * when, how long it has run, the scheduled end, how many Drawers have
+ * handed over, and a link to the last closed shift's summary. A shift on a past Business Day says so underneath.
  */
 export const LiveShiftBar: React.FC<LiveShiftBarProps> = ({
   templateName,
@@ -36,6 +38,7 @@ export const LiveShiftBar: React.FC<LiveShiftBarProps> = ({
   handoversRecorded,
   handoversExpected,
   closing,
+  onViewLastSummary,
 }) => {
   const historical = historicalShiftMessage(businessDate, currentBusinessDate);
   const end = formatHHMM(scheduledEndTime);
@@ -74,6 +77,17 @@ export const LiveShiftBar: React.FC<LiveShiftBarProps> = ({
             {handoversRecorded} of {handoversExpected}
           </span>
         </span>
+        {onViewLastSummary && (
+          <Button
+            className="ml-auto"
+            variant="ghost"
+            size="xs"
+            leftIcon={<Icon name="file-text" size="xs" aria-hidden="true" />}
+            onClick={onViewLastSummary}
+          >
+            Last shift summary
+          </Button>
+        )}
       </div>
       {historical && <Banner severity="warning">{historical}</Banner>}
     </div>

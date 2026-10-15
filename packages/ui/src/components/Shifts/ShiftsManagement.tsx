@@ -17,7 +17,11 @@ import { LiveShiftView } from './LiveShiftView.js';
 import { IdleShiftView } from './IdleShiftView.js';
 import { ShiftsHeaderActions, type RecordAction } from './ShiftsHeaderActions.js';
 import { dayFigures } from './businessDayModel.js';
-import type { PreHandoverTotals, StaffAssignmentInput } from './liveShiftModel.js';
+import {
+  VARIANCE_FLAG_RUPEES,
+  type PreHandoverTotals,
+  type StaffAssignmentInput,
+} from './liveShiftModel.js';
 import { PageFrame } from '../page-frame/index.js';
 import { Button, DataSection, Tabs, tabPanelProps, type TabItem } from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
@@ -55,6 +59,7 @@ import type { CloseDropRow } from './CloseShiftWizard.js';
 import type { OpenShiftFormValues } from '@pump/shared';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 import { refreshShiftStatus } from './refreshShiftStatus.js';
+import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 
 const shiftService = new CloudShiftService();
 const TABS_ID = 'shifts';
@@ -445,7 +450,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     if (closingCash === 0 && expectedCash > 0) {
       warnings.push('Closing cash is ₹0, indicating no collections entered.');
     }
-    if (Math.abs(cashVariance) > 100) {
+    if (Math.abs(cashVariance) > VARIANCE_FLAG_RUPEES) {
       warnings.push(
         `Cash discrepancy detected! Variance is ${inr(cashVariance)} (Expected: ${inr(expectedCash)}, Entered: ${inr(closingCash)})`,
       );
@@ -609,7 +614,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         payload.initialReadings = initialReadings;
       }
 
-      await shiftService.openShift(payload);
+      // One key per open: a retry after an unanswered open (same station, day,
+      // template and assignments) reuses it, so the shift cannot open twice.
+      await sendKeyed(
+        officeSubmitKeys.session(`shift:open:${selectedStation.id}`),
+        payload,
+        (key) => shiftService.openShift(payload, { idempotencyKey: key }),
+      );
       await loadShiftStatus();
       setOpenFormVisible(false);
       toast.success('Shift opened.');
@@ -914,6 +925,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             productSale={activeShift ? productSaleAction : null}
             officeRecords={officeRecordActions}
             primary={primary}
+            showHotkeys={shiftSubTab === 'today' && !!activeShift}
           />
         }
         tabs={
@@ -971,6 +983,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                   canClose={mayClose}
                   onOpenHandover={openHandover}
                   onStartClose={startClose}
+                  onViewLastSummary={viewLastShiftSummary}
                 />
               ) : openFormVisible && data ? (
                 <section className="flex flex-col gap-3" aria-label="Open a shift">
@@ -1007,6 +1020,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                   dayQuery={todayQ}
                   day={todayFigures}
                   lastShift={lastShift}
+                  lastShiftId={lastShiftSummary?.shiftId ?? lastShift?.id ?? null}
                   lastVariance={
                     lastShiftSummary?.snapshotData?.cashVariance != null
                       ? Number(lastShiftSummary.snapshotData.cashVariance)

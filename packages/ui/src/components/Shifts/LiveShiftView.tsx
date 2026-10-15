@@ -41,6 +41,8 @@ export interface LiveShiftViewProps {
   canClose: boolean;
   onOpenHandover: (assignment: StaffAssignmentInput) => void;
   onStartClose: () => void;
+  /** Opens the last closed shift's summary (History); null when there is none. */
+  onViewLastSummary: (() => void) | null;
 }
 
 const money = (v: number) => formatMoney(v, { decimals: 0 });
@@ -72,6 +74,7 @@ export const LiveShiftView: React.FC<LiveShiftViewProps> = ({
   canClose,
   onOpenHandover,
   onStartClose,
+  onViewLastSummary,
 }) => {
   const handoversQ = useMerchandiseHandovers(
     shift.id,
@@ -123,13 +126,13 @@ export const LiveShiftView: React.FC<LiveShiftViewProps> = ({
         handoversRecorded={figures.drawers.recorded}
         handoversExpected={figures.drawers.expected}
         closing={closing}
+        onViewLastSummary={onViewLastSummary}
       />
       <LiveShiftTiles figures={figures} productQueries={[handoversQ, billedQ]} />
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="flex min-w-0 flex-col gap-5">
           <NozzleReadingsTable
             groups={figures.groups}
-            pending={figures.pending}
             timeZone={timeZone}
             onOpenHandover={onOpenHandover}
           />

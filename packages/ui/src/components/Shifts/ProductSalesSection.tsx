@@ -14,7 +14,7 @@ import { InfoTip } from '../primitives/InfoTip.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
-import { useKeyedSave } from '../../office-records/useKeyedSave.js';
+import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { useDeleteHandoverProductSale } from '../../query/hooks.js';
 import { countOf } from '../../utils/ledgerWindow.js';
 import type { ProductSales, ProductSalesRow } from './liveShiftModel.js';
@@ -53,7 +53,6 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
   const toast = useToast();
   const runTask = useRunTask();
   const remove = useDeleteHandoverProductSale(stationId);
-  const removeKeyed = useKeyedSave('handover-product-sale:delete');
   const [drawer, setDrawer] = useState<{
     open: boolean;
     employeeId: string | null;
@@ -74,8 +73,13 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
     });
     if (!ok) return;
     try {
-      await removeKeyed({ stationId, saleId: sale.id }, (idempotencyKey) =>
-        remove.mutateAsync({ saleId: sale.id, idempotencyKey }),
+      // One key session per confirmed removal, scoped to the sale's route: a
+      // removal of another sale never reuses this key, while removing the same
+      // sale again after an unanswered try recovers it from the shared store.
+      await sendKeyed(
+        officeSubmitKeys.session(`handover-product-sale:delete:${sale.id}`),
+        { stationId, saleId: sale.id },
+        (idempotencyKey) => remove.mutateAsync({ saleId: sale.id, idempotencyKey }),
       );
       toast.success('Handover product sale removed.');
     } catch (err) {

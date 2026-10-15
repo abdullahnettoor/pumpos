@@ -2,12 +2,22 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DataSection,
   EmptyState,
+  FilterChips,
   Icon,
   InteractiveTable,
   SectionHeader,
   VarianceChip,
+  type FilterChipOption,
   type TableColumn,
+  type TotalRow,
 } from '../../pump-ds/index.js';
+import {
+  historyCounts,
+  historyTotalLabel,
+  matchesHistory,
+  newestFirst,
+  type HistoryFilter,
+} from './shiftHistoryModel.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import { formatDate } from '../../utils/format.js';
 import { countOf } from '../../utils/ledgerWindow.js';
@@ -83,12 +93,23 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
     onClearViewShiftId?.();
   };
 
-  const rows = useMemo<SummaryRow[]>(
-    () =>
-      [...summaries].sort((a, b) =>
-        String(b.generatedAt ?? '').localeCompare(String(a.generatedAt ?? '')),
-      ),
-    [summaries],
+  const [filter, setFilter] = useState<HistoryFilter>('all');
+  const all = useMemo<SummaryRow[]>(() => newestFirst<SummaryRow>(summaries), [summaries]);
+  const counts = useMemo(() => historyCounts(all), [all]);
+  const rows = useMemo(() => all.filter((r) => matchesHistory(r, filter)), [all, filter]);
+  const filterOptions = useMemo<FilterChipOption<HistoryFilter>[]>(
+    () => [
+      { value: 'all', label: 'All', count: counts.all },
+      { value: 'short', label: 'Short', count: counts.short, status: 'short' },
+      { value: 'surplus', label: 'Surplus', count: counts.surplus, status: 'surplus' },
+      { value: 'balanced', label: 'Balanced', count: counts.balanced },
+    ],
+    [counts],
+  );
+  // A money table has a total row; it says how many shifts it covers.
+  const totalRow = useMemo<TotalRow>(
+    () => ({ label: historyTotalLabel(rows.length, filter !== 'all') }),
+    [rows.length, filter],
   );
 
   const columns = useMemo<TableColumn<SummaryRow>[]>(
@@ -210,8 +231,16 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
     <section className="flex flex-col gap-2" aria-label="Closed shifts">
       <SectionHeader
         title="Closed shifts"
-        subtitle={summariesQ.data ? countOf(rows.length, 'shift', 'shifts') : undefined}
+        subtitle={summariesQ.data ? countOf(all.length, 'shift', 'shifts') : undefined}
         controls={{
+          filters: summariesQ.data && (
+            <FilterChips
+              aria-label="Shift variance"
+              options={filterOptions}
+              value={filter}
+              onChange={setFilter}
+            />
+          ),
           info: (
             <InfoTip label="About shift history" placement="bottom">
               Every closed and locked shift, newest first, with the Shift Summary taken at close.
@@ -232,8 +261,12 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
             <EmptyState
               compact
               icon={<Icon name="clock" size="md" />}
-              title="No closed shifts yet"
-              description="Close an active shift to generate its first Shift Summary."
+              title={all.length === 0 ? 'No closed shifts yet' : 'No matching shifts'}
+              description={
+                all.length === 0
+                  ? 'Close an active shift to generate its first Shift Summary.'
+                  : 'Try a different filter.'
+              }
             />
           </div>
         }
@@ -242,6 +275,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
           bare
           columns={columns}
           rows={rows}
+          totalRow={totalRow}
           rowKey={(d) => d.id ?? d.shiftId}
           onRowClick={(row) => setActiveSummary(row)}
           rowLabel={(r) => `Shift ${shiftDisplayLabel(r)}`}

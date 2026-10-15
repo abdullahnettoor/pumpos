@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import {
   createTestQueryClient,
   muteExpectedConsoleErrors,
@@ -18,6 +18,20 @@ import { closeQuickEntry, useQuickEntry } from '../../quick-entry/store.js';
 vi.mock('../../hooks/useStationBusinessDate.js', () => ({
   useStationBusinessDate: () => '2026-10-14',
 }));
+
+const openShift = vi.fn();
+const getShiftStatus = vi.fn();
+vi.mock('../../services/cloud.js', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const Base = actual.CloudShiftService as new () => object;
+  return {
+    ...actual,
+    CloudShiftService: class extends Base {
+      openShift = (...a: unknown[]) => openShift(...a);
+      getShiftStatus = (...a: unknown[]) => getShiftStatus(...a);
+    },
+  };
+});
 
 const { ShiftsManagement } = await import('./ShiftsManagement.js');
 const { queryKeys } = await import('../../query/hooks.js');
@@ -84,8 +98,15 @@ const mount = (
     activeShift: shift,
     lastShift: shift
       ? null
-      : { templateName: 'Morning', closedAt: '2026-10-14T08:32:00.000Z', closedByName: 'Anita' },
-    lastShiftSummary: null,
+      : {
+          id: 'sh-0',
+          templateName: 'Morning',
+          businessDate: '2026-10-14',
+          shiftSequence: 1,
+          closedAt: '2026-10-14T08:32:00.000Z',
+          closedByName: 'Anita',
+        },
+    lastShiftSummary: { shiftId: 'sh-0', snapshotData: { cashVariance: 0 } },
     templates: [{ id: 't1', name: 'Morning', startTime: '06:00', endTime: '14:00' }],
     nozzles: [],
     staff: [],
@@ -95,6 +116,10 @@ const mount = (
   client.setQueryData(queryKeys.shiftTransactions('sh-1'), {});
   client.setQueryData(queryKeys.inventoryStatus('st-1'), []);
   client.setQueryData(queryKeys.dssrPreview('st-1', '2026-10-14'), null);
+  client.setQueryData(queryKeys.businessDayStatus('st-1', '2026-10-14'), {
+    requestedState: 'OPEN',
+    openBusinessDays: [{ id: 'bd-1', businessDate: '2026-10-14' }],
+  });
   return renderWithProviders(
     <ShiftsManagement
       selectedStation={STATION}
@@ -198,10 +223,44 @@ describe('Live shift with no shift open', () => {
   it('says no shift is open and offers Open shift, which shows the form', () => {
     mount('Manager', null);
     expect(screen.getByText('No shift open')).toBeDefined();
-    expect(screen.getByText(/Morning closed at/)).toBeDefined();
+    expect(
+      screen.getByText(/Morning \(20261014-1\) closed 14 Oct 2026, 02:02 pm by Anita, balanced/),
+    ).toBeDefined();
+    expect(screen.getByRole('button', { name: /View last shift summary/ })).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: /Open shift/ }));
     expect(screen.getByText('Shift details')).toBeDefined();
     // The form's own submit is the primary now; the header has none.
     expect(screen.queryByRole('button', { name: /^Open shift$/ })).toBeNull();
+  });
+});
+
+describe('opening a shift (#533 review)', () => {
+  it('sends an Idempotency-Key, and a retry after a lost answer reuses it', async () => {
+    openShift
+      .mockRejectedValueOnce(Object.assign(new Error('Network down'), { status: undefined }))
+      .mockResolvedValueOnce({ id: 'sh-new' });
+    getShiftStatus.mockResolvedValue({ activeShift: null, templates: [] });
+    mount('Manager', null);
+    fireEvent.click(screen.getByRole('button', { name: /Open shift/ }));
+    const start = () => screen.getByRole('button', { name: /Start Shift Operations/ });
+    await waitFor(() => expect((start() as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(start());
+    await waitFor(() => expect(openShift).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect((start() as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(start());
+    await waitFor(() => expect(openShift).toHaveBeenCalledTimes(2));
+    const [first, second] = openShift.mock.calls;
+    expect(first[0]).toMatchObject({ stationId: 'st-1', businessDate: '2026-10-14' });
+    expect(first[1].idempotencyKey).toEqual(expect.any(String));
+    expect(second[1].idempotencyKey).toBe(first[1].idempotencyKey);
+  });
+});
+
+describe('the last shift summary link', () => {
+  it('sits in the live shift bar when a closed shift exists', () => {
+    mount('Manager');
+    const bar = screen.getByTestId('live-shift-bar');
+    fireEvent.click(within(bar).getByRole('button', { name: /Last shift summary/ }));
+    expect(screen.getByRole('tab', { name: /History/ }).getAttribute('aria-selected')).toBe('true');
   });
 });

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { toPaise } from '../../utils/ledgerWindow.js';
 
 /**
@@ -84,17 +85,44 @@ export function draftTotals(
 export const cashToDrawer = (total: number, nonCash: number): number =>
   Math.max(0, (toPaise(total) - toPaise(nonCash)) / 100);
 
-/** Why the form cannot be saved yet, or null. */
-export function draftError(input: {
+/** The form's values: what the operator typed, before it is parsed. */
+export interface HandoverProductSaleFormValues {
   attendantId: string;
-  rows: DraftLine[];
-  total: number;
-  nonCash: number;
-}): string | null {
-  if (!input.attendantId) return 'Select the employee who made the sales.';
-  if (saleLines(input.rows).length === 0) return 'Add at least one product with a quantity.';
-  if (toPaise(input.nonCash) > toPaise(input.total)) {
-    return 'The card/UPI part cannot be more than the sale total.';
-  }
-  return null;
+  lines: DraftLine[];
+  /** The card / UPI part of the sale, rupees as typed ('' = none). */
+  nonCash: string;
+}
+
+/**
+ * The form's rules (React Hook Form + Zod, through `useZodForm`): an employee,
+ * at least one product with a quantity, and a card / UPI part that is an
+ * amount no larger than the sale total. `totalOf` prices the lines (the
+ * products' own configuration), so the schema is built per product list.
+ */
+export function handoverProductSaleSchema(totalOf: (lines: DraftLine[]) => number) {
+  return z
+    .object({
+      attendantId: z.string().min(1, 'Select the employee who made the sales.'),
+      lines: z
+        .array(z.object({ productId: z.string(), quantity: z.string() }))
+        .refine(
+          (lines) => saleLines(lines).length > 0,
+          'Add at least one product with a quantity.',
+        ),
+      nonCash: z
+        .string()
+        .refine(
+          (v) => v.trim() === '' || (Number.isFinite(Number(v)) && Number(v) >= 0),
+          'Enter the card/UPI part as an amount.',
+        ),
+    })
+    .superRefine((v, ctx) => {
+      if (toPaise(Number(v.nonCash) || 0) > toPaise(totalOf(v.lines))) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['nonCash'],
+          message: 'The card/UPI part cannot be more than the sale total.',
+        });
+      }
+    });
 }

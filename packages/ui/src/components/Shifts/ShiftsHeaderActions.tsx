@@ -25,6 +25,8 @@ export interface ShiftsHeaderActionsProps {
   officeRecords: RecordAction[];
   /** The page's one primary action: Close shift, or Open shift when none is open. */
   primary: { label: string; icon: 'lock' | 'play'; onClick: () => void } | null;
+  /** Show the hotkeys: only where they work (Live shift, with a shift open). */
+  showHotkeys: boolean;
 }
 
 const ICON: Record<RecordAction['key'], 'shopping-bag' | 'receipt' | 'wallet' | 'cart'> = {
@@ -37,12 +39,14 @@ const ICON: Record<RecordAction['key'], 'shopping-bag' | 'receipt' | 'wallet' | 
 /**
  * The Shifts page actions (#533), the same on every tab: a Record ▾ menu (a
  * Product sale, then the Office Records) and the page's one primary button.
- * The hotkeys shown are the ones the Live shift tab already listens for.
+ * The hotkeys are shown only where they work: the Live shift tab with a shift
+ * open, which is where the page listens for them.
  */
 export const ShiftsHeaderActions: React.FC<ShiftsHeaderActionsProps> = ({
   productSale,
   officeRecords,
   primary,
+  showHotkeys,
 }) => (
   <div className="flex items-center gap-2">
     {(productSale || officeRecords.length > 0) && (
@@ -61,7 +65,7 @@ export const ShiftsHeaderActions: React.FC<ShiftsHeaderActionsProps> = ({
           {productSale && (
             <MenuItem
               icon={<Icon name={ICON[productSale.key]} size="sm" />}
-              shortcut={productSale.hotkey}
+              shortcut={showHotkeys ? productSale.hotkey : undefined}
               onSelect={productSale.onSelect}
             >
               {productSale.label}
@@ -77,7 +81,7 @@ export const ShiftsHeaderActions: React.FC<ShiftsHeaderActionsProps> = ({
             <MenuItem
               key={a.key}
               icon={<Icon name={ICON[a.key]} size="sm" />}
-              shortcut={a.hotkey}
+              shortcut={showHotkeys ? a.hotkey : undefined}
               onSelect={a.onSelect}
             >
               {a.label}

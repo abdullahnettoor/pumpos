@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
 
 /**
@@ -97,7 +97,32 @@ describe('ShiftHistoryTab', () => {
   it('shows who reconciled the shift and the expected drawer', () => {
     render([apiRow()]);
     expect(screen.getByText('Priya Nair')).toBeDefined();
-    expect(screen.getByText(/18,200/)).toBeDefined();
+    expect(body().getByText(/18,200/)).toBeDefined();
+  });
+
+  it('totals Expected, Counted and Variance, and says what the total covers', () => {
+    render([
+      apiRow(),
+      apiRow({
+        id: 's2',
+        shiftId: 'shift-2',
+        snapshotData: {
+          closedByName: 'Ravi',
+          expectedCash: 1000,
+          closingCash: 900,
+          cashVariance: -100,
+        },
+      }),
+    ]);
+    const foot = document.querySelector('tfoot tr')!;
+    expect(foot.textContent).toContain('Total of 2 shifts');
+    expect(foot.textContent).toContain('₹19,200.00');
+    expect(foot.textContent).toContain('₹19,400.00');
+    expect(foot.textContent).toContain('₹200.00');
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Short, 1' }));
+    expect(document.querySelector('tfoot tr')!.textContent).toContain('Total of 1 shown');
+    expect(body().queryByText('Priya Nair')).toBeNull();
   });
 
   describe('which column leads (#226)', () => {
