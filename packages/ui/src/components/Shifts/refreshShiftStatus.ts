@@ -20,10 +20,10 @@ export async function refreshShiftStatus(
   // Another view failing to refresh must not end the wait early: the shift
   // status is refetched (and awaited) either way, and that failure is
   // reported after it (#606 review 2).
-  let failure: unknown = null;
+  let failure: Error | null = null;
   await (opts ? invalidateOperational(stationId, opts) : invalidateOperational(stationId)).catch(
     (e: unknown) => {
-      failure = e;
+      failure = e instanceof Error ? e : new Error(String(e));
     },
   );
   if (stationId) {
