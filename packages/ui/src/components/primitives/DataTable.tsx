@@ -53,6 +53,11 @@ export interface DataTableProps<T> {
   bare?: boolean;
   /** Highlight (and scroll into view) the row whose id matches. Used by deep-links. */
   highlightRowId?: string | null;
+  /**
+   * The row the screen is showing the detail of (a picked day): marked
+   * `aria-current` and tinted like a highlight, without scrolling to it.
+   */
+  selectedRowId?: string | null;
   /** Tighter cell padding so wide tables fit without horizontal scroll. */
   dense?: boolean;
   /**
@@ -83,6 +88,7 @@ export function DataTable<T>({
   initialSorting,
   bare = false,
   highlightRowId,
+  selectedRowId,
   dense = false,
   rowLabel,
 }: DataTableProps<T>) {
@@ -178,9 +184,11 @@ export function DataTable<T>({
           <tbody>
             {table.getRowModel().rows.map((row) => {
               const isHighlighted = highlightRowId != null && row.id === highlightRowId;
+              const isSelected = selectedRowId != null && row.id === selectedRowId;
               return (
                 <tr
                   key={row.id}
+                  aria-current={isSelected ? 'true' : undefined}
                   onClick={
                     onRowClick
                       ? () => runTask(onRowClick(row.original), 'Could not open that row.')
@@ -209,8 +217,12 @@ export function DataTable<T>({
                   style={{
                     borderBottom: '1px solid var(--border-soft)',
                     cursor: onRowClick ? 'pointer' : 'default',
-                    backgroundColor: isHighlighted ? 'var(--state-info-bg)' : undefined,
-                    boxShadow: isHighlighted ? 'inset 2px 0 0 var(--state-info-fg)' : undefined,
+                    backgroundColor:
+                      isHighlighted || isSelected ? 'var(--state-info-bg)' : undefined,
+                    boxShadow:
+                      isHighlighted || isSelected
+                        ? 'inset 2px 0 0 var(--state-info-fg)'
+                        : undefined,
                     transition: 'background-color 0.4s ease',
                   }}
                 >

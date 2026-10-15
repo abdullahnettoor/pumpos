@@ -131,7 +131,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({
   const handleMerchandise = async (values: MerchandiseSaleEntryFormValues) => {
     const shiftId = values.targetShiftId || activeShiftId;
     if (!shiftId) {
-      setError('A shift must be open to record a merchandise sale.');
+      setError('A shift must be open to record a product sale.');
       return;
     }
     const lines = (values.lines || [])
@@ -176,7 +176,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({
         'Sale recorded, but the screen could not be refreshed.',
       );
     } catch (err: any) {
-      setError(err.message || 'Failed to record merchandise sale');
+      setError(err.message || 'Failed to record the product sale');
     } finally {
       setSubmitting(false);
     }
@@ -198,7 +198,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({
   }
 
   // A merchandise sale is shift-anchored, so its title names the shift.
-  const title = activeShift ? `${activeShift.templateName} · Merchandise Sale` : 'Merchandise Sale';
+  const title = activeShift ? `${activeShift.templateName} · Product sale` : 'Product sale';
 
   return (
     <Drawer isOpen={qe.open} onClose={close} title={title}>
@@ -215,7 +215,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({
             fontSize: '13px',
           }}
         >
-          A shift must be open to record a merchandise sale. Open a shift, then try again.
+          A shift must be open to record a product sale. Open a shift, then try again.
         </div>
       ) : (
         <MerchandiseSaleEntryForm

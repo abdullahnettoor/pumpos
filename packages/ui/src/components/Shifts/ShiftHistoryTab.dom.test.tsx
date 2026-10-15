@@ -97,7 +97,29 @@ describe('ShiftHistoryTab', () => {
   it('shows who reconciled the shift and the expected drawer', () => {
     render([apiRow()]);
     expect(screen.getByText('Priya Nair')).toBeDefined();
-    expect(screen.getByText(/18,200/)).toBeDefined();
+    expect(body().getByText(/18,200/)).toBeDefined();
+  });
+
+  it('totals Expected, Counted and Variance, and says how many shifts it covers', () => {
+    render([
+      apiRow(),
+      apiRow({
+        id: 's2',
+        shiftId: 'shift-2',
+        snapshotData: {
+          closedByName: 'Ravi',
+          expectedCash: 1000,
+          closingCash: 900,
+          cashVariance: -100,
+        },
+      }),
+    ]);
+    const foot = document.querySelector('tfoot tr')!;
+    expect(foot.textContent).toContain('Total of 2 shifts');
+    expect(foot.textContent).toContain('₹19,200.00');
+    expect(foot.textContent).toContain('₹19,400.00');
+    expect(foot.textContent).toContain('₹200.00');
+    expect(screen.queryByRole('radio')).toBeNull();
   });
 
   describe('which column leads (#226)', () => {

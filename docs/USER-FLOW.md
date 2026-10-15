@@ -127,7 +127,9 @@ Roles:
 
 ## 6. Open a shift
 
-Sidebar → **Shifts** → **Live shift** tab → open-shift form:
+Sidebar → **Shifts** → **Live shift** tab. With no shift open it shows today
+so far and what closed last; **Open shift** (top right) shows the open-shift
+form:
 
 1. Pick the **Shift template** and confirm the **Shift Business Date** (it
    defaults correctly for the station's day-start; before 06:00 the date is
@@ -145,11 +147,13 @@ open shift.
 
 ## 7. Run the shift
 
-The active-shift workspace is the operator's home during the day. Quick
-actions on the shift control bar: **Record expense (E)** · **Record collection (C)**
-· **Merchandise Sale** · **Record purchase (P)**. Transactions land in the
-tabs: Petty Expenses · Fuel Deliveries (Purchases) · Credit Sales &
-Collections.
+The Live shift tab is the operator's home during the day: the shift bar (Live,
+running time, scheduled end, handovers done), four "This shift" tiles (Fuel
+sold · Sales · Card / UPI / Credit · Drawer variance), the **Nozzle readings**
+grouped by attendant and the **Product sales** per employee, with the takings
+and a **Before close** checklist on the right. **Record ▾** (top right, on
+every tab) holds **Product sale (M)** and the Office Records: **Expense (E)** ·
+**Collection (C)** · **Purchase (P)**.
 
 What happens during a typical shift, and where to record it:
 
@@ -160,8 +164,8 @@ What happens during a typical shift, and where to record it:
   handover drawer → **Log Credit Sale** → pick customer, vehicle, fuel,
   amount. It debits the customer's ledger — no cash expected in the drawer.
   OMC fleet-card swipes: **Add OMC card sale**.
-- **Merchandise sale**: **Merchandise Sale** → product, quantity, payment
-  mode. Stock decrements automatically.
+- **Product sale** (a Billed Sale): **Record ▾ → Product sale** → product,
+  quantity, payment mode. Stock decrements automatically.
 - **Customer collection** (customer pays down credit): **Record collection (C)**
   opens the **Record collection** drawer: entry date, customer (required: there is
   no walk-in), method, amount, and the **Funding account** it landed in (Cash
@@ -179,22 +183,22 @@ What happens during a typical shift, and where to record it:
   invoice date until you change it). A product purchase opened here still
   reads "Product purchase · Business Day <date>": it adds stock to the day.
 - **Attendant handover** (attendant ends duty or hands cash to the safe):
-  handover dashboard → **Record Handover** → enter the DU's closing nozzle
+  Nozzle readings → the attendant's row → **Record handover** → enter the DU's closing nozzle
   readings, count the whole pouch by denomination ("Count handover cash by
   denomination") — float included — enter any **Cash Drops** taken from the
   pouch mid-shift, record card/UPI slips per terminal, list credit sales →
   **Save Handover & Readings**. The Drawer's expected cash is opening float +
   DU cash sales − cash drops; the difference from the counted cash is that
   attendant's **variance** — record the actual
-  count; variance is tracked, not hidden. Merchandise attendants use
-  **Record Merchandise Handover**.
+  count; variance is tracked, not hidden. Products sold without a bill go on
+  the employee's **Handover Product Sale** (Product sales → **Record**).
 
 Done when: every attendant has handed over — all readings, cash counts, and
 credit sales are in before you close.
 
 ## 8. Close the shift
 
-Live shift → **Close Shift** — a 4-step wizard:
+Live shift → **Close shift** (top right) — a 4-step wizard:
 
 1. **Cash Reconciliation** — "Count safe cash by denomination". Expected
    drawer cash = Σ opening floats + cash sales − cash drops, the sum of the

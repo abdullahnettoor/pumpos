@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
-import { ShiftControlBar } from './ShiftControlBar.js';
+import { LiveShiftBar } from './LiveShiftBar.js';
 import { ShiftCloseSuccess } from './ShiftCloseSuccess.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -47,7 +47,6 @@ describe('ShiftBusinessDateContext', () => {
     const html = renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>
         <OpenShiftForm
-          lastShiftSummary={null}
           lastShift={{ id: 'previous' }}
           stationId="station-1"
           templates={[{ id: 'template-1', name: 'Morning', startTime: '06:00', endTime: '14:00' }]}
@@ -60,7 +59,6 @@ describe('ShiftBusinessDateContext', () => {
           selectedTemplateId="template-1"
           businessDate="2026-09-10"
           currentBusinessDate="2026-09-12"
-          timeZone="Asia/Kolkata"
           onOpeningFloatChange={() => undefined}
           staffAssignments={[]}
           onStaffAssignmentChange={() => {}}
@@ -68,7 +66,6 @@ describe('ShiftBusinessDateContext', () => {
           onInitialReadingChange={() => {}}
           isOpening={false}
           onSubmit={() => {}}
-          onViewLastShiftSummary={() => {}}
         />
       </QueryClientProvider>,
     );
@@ -80,33 +77,23 @@ describe('ShiftBusinessDateContext', () => {
     expect(html).toContain('Custom Business Date');
   });
 
-  it('shows the Station-local lifecycle time in the active state', () => {
+  it('shows the Station-local opened time and the historical context on the live shift', () => {
     const html = renderToStaticMarkup(
-      <ShiftControlBar
-        activeShift={{
-          ...historical,
-          templateName: 'Morning',
-          openedAt: '2026-09-12T01:30:00.000Z',
-          openingCash: 1000,
-        }}
-        shiftTotals={{
-          cashCollections: 0,
-          cashExpenses: 0,
-          cardCollections: 0,
-          upiCollections: 0,
-          creditSales: 0,
-          expenseCount: 0,
-        }}
-        handoversCompleted={0}
-        handoversAssigned={0}
-        quickActions={[]}
-        onCloseShiftClick={() => {}}
-        isPreparingClose={false}
-        currentBusinessDate="2026-09-12"
+      <LiveShiftBar
+        templateName="Morning"
+        state="shift-live"
+        openedAt="2026-09-12T01:30:00.000Z"
+        scheduledEndTime="14:00"
+        businessDate={historical.businessDate}
+        currentBusinessDate={historical.currentBusinessDate}
         timeZone="Asia/Kolkata"
+        handoversRecorded={0}
+        handoversExpected={2}
+        closing={false}
       />,
     );
-    expect(html).toContain('Shift Opened At · 12 Sept 2026, 07:00 am');
+    expect(html).toContain('7:00\u00a0am');
+    expect(html).toContain('Working on 10 Sept 2026. Actions are being recorded on 12 Sept 2026.');
   });
 
   it('keeps both lifecycle timestamps and historical context after close', () => {

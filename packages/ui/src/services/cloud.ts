@@ -777,11 +777,12 @@ export class CloudShiftService {
     return request<any | null>('/shifts/my-assignment');
   }
 
-  async openShift(payload: ShiftOpenPayload): Promise<any> {
-    return request<any>('/shifts/open', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async openShift(payload: ShiftOpenPayload, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      '/shifts/open',
+      { method: 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async updateNozzleReadings(
@@ -869,11 +870,16 @@ export class CloudShiftService {
     );
   }
 
-  async closeBusinessDay(businessDayId: string, stationId: string): Promise<any> {
-    return request<any>('/shifts/business-day/close', {
-      method: 'POST',
-      body: JSON.stringify({ businessDayId, stationId }),
-    });
+  async closeBusinessDay(
+    businessDayId: string,
+    stationId: string,
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/shifts/business-day/close',
+      { method: 'POST', body: JSON.stringify({ businessDayId, stationId }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async getDailyDssr(stationId: string, date: string): Promise<any> {
@@ -1707,8 +1713,15 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/shifts/${shiftId}/merchandise-sales`);
   }
 
-  async deleteMerchandiseHandover(saleId: string): Promise<any> {
-    return request<any>(`/transactions/merchandise-handovers/${saleId}`, { method: 'DELETE' });
+  async deleteMerchandiseHandover(
+    saleId: string,
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      `/transactions/merchandise-handovers/${saleId}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   /** Office Record (ADR 0005): entry date + funding account, no shift. */

@@ -82,9 +82,29 @@ a time — never in place.
   does). `units` names a qty figure's unit when it is not the rows' own (the
   DSR's shift total takes the day's fuel unit).
 - **Sorting** puts empty and broken values last in either direction.
+- **`selectedRowId`** (`InteractiveTable`) marks the row whose detail the
+  screen shows (a picked Business Day): `aria-current` and the highlight tint,
+  without the scroll that `highlightRowId` (a deep link) does.
 - **PDF.** `cellText` and `totalTexts` read a cell and the total row as plain
   text, for a PDF that prints the screen's table (the DSR, #580). A column whose
   `cell` changes the words or figures sets `text` too, so both print the same.
+
+### GroupedTable
+
+`GroupedTable` is a read-only working table whose rows fall into groups, each
+under a full-width header row: the nozzles of each Drawer under "DU1 · Ravi",
+with that Drawer's status and button in the header.
+
+- **Same columns** as `InteractiveTable` and `StatementTable`, and the same
+  13px look.
+- **Not sortable**: sorting would break the groups apart, so rows keep the
+  order given, group by group.
+- **Group headers** take any node (`header`); `muted` reads a group's rows
+  quieter (figures not in yet).
+- **Total row** sums every group's rows, or prints `totalRow.values` when the
+  caller decides what counts (Live shift leaves out Drawers still out). The
+  label spans the leading columns that add nothing up, so a label that names
+  what it leaves out ("Total excl. DU2") has room to read.
 
 ## Style check
 

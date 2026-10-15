@@ -1672,6 +1672,44 @@ export function useUnlinkDecantationPurchase(stationId: string | null | undefine
   });
 }
 
+/**
+ * Record (or replace) an employee's Handover Product Sale for a shift (#533).
+ * The shift reconciliation, the Product sales lists and stock refresh in the
+ * background (never awaited).
+ */
+export function useRecordHandoverProductSale(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: {
+      shiftId: string;
+      payload: {
+        attendantId?: string;
+        lines: { productId: string; quantity: number }[];
+        nonCashAmount?: number;
+      };
+      idempotencyKey: string;
+    }) =>
+      txService.recordMerchandiseHandover(vars.shiftId, vars.payload, {
+        idempotencyKey: vars.idempotencyKey,
+      }),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
+}
+
+/** Remove a Handover Product Sale (restores its stock); refreshes in the background. */
+export function useDeleteHandoverProductSale(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: { saleId: string; idempotencyKey: string }) =>
+      txService.deleteMerchandiseHandover(vars.saleId, { idempotencyKey: vars.idempotencyKey }),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
+}
+
 export function useDensityTodaySummary(
   stationId: string | null | undefined,
   businessDate?: string,

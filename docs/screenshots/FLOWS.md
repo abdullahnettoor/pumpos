@@ -33,13 +33,13 @@ Captured on the preview console against a freshly onboarded station ("Hilltop Fu
 
 - Shifts → Live shift → open form: template, business date, opening cash float,
   opening nozzle readings, attendant→DU + POS→DU assignment → **Start Shift Operations** `[27–29]`
-- Quick actions: Record expense (E) `[31]` · Record collection (C) `[37]` · Merchandise Sale (M) `[30]` ·
-  Record purchase (P) — fuel drop with tank allocation `[32]`
+- **Record ▾**: Product sale (M) `[30]` · Office record: Expense (E) `[31]` · Collection (C) `[37]` ·
+  Purchase (P) — fuel drop with tank allocation `[32]` (screenshots predate #533)
 - **Record Handover** per DU: closing readings + testing, POS card/UPI batch,
   customer credit sale (chit) `[33]`, cash deposit; live variance preview `[34–36]`
   (DU-2 shows a small cash shortage `[36]`)
 - Workspace after 2/2 handovers: variances per attendant, nozzle reconciliation `[38]`
-- **Begin Close** → 4-step wizard: Cash Reconciliation `[39]` → Physical Dip Readings `[40]` →
+- **Close shift** → 4-step wizard: Cash Reconciliation `[39]` → Physical Dip Readings `[40]` →
   Review Warnings `[41]` → Confirm `[42]` → **Close Shift** → success + immutable summary `[43–44]`
 
 ## Business day & reporting

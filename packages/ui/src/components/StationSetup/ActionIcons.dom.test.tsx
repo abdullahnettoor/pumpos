@@ -2,7 +2,6 @@
 import React from 'react';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import { ShiftControlBar } from '../Shifts/ShiftControlBar.js';
 import { Drawer } from '../Drawer.js';
 import { Step3FuelsCatalog } from './OnboardingSteps/Step3FuelsCatalog.js';
 import { Step5Dispensers } from './OnboardingSteps/Step5Dispensers.js';
@@ -24,48 +23,6 @@ describe('Action Icons migration', () => {
     const svg = closeBtn.querySelector('svg');
     expect(svg).toBeTruthy();
     expect(svg?.classList.contains('lucide-x')).toBe(true);
-    expect(svg?.getAttribute('aria-hidden')).toBe('true');
-  });
-
-  it('ShiftControlBar renders Begin Close with arrow-right icon and clean text without unicode arrow', () => {
-    const dummyShift = {
-      templateName: 'Morning Shift',
-      openedAt: new Date(Date.now() - 3600000).toISOString(),
-      openingCash: 5000,
-      businessDate: '2026-09-16',
-      scheduledStartTime: '06:00',
-      scheduledEndTime: '14:00',
-    };
-
-    render(
-      <ShiftControlBar
-        activeShift={dummyShift}
-        shiftTotals={{
-          cashCollections: 0,
-          cashExpenses: 0,
-          cardCollections: 0,
-          upiCollections: 0,
-          creditSales: 0,
-          expenseCount: 0,
-        }}
-        handoversCompleted={0}
-        handoversAssigned={0}
-        quickActions={[]}
-        onCloseShiftClick={vi.fn()}
-        isPreparingClose={false}
-        currentBusinessDate="2026-09-16"
-      />,
-    );
-
-    const closeBtn = screen.getByRole('button', { name: /Begin Close/i });
-    expect(closeBtn).toBeTruthy();
-    // Raw unicode arrow glyph "→" must NOT be in the button text content
-    expect(closeBtn.textContent).not.toContain('→');
-    expect(closeBtn.textContent).toContain('Begin Close');
-
-    const svg = closeBtn.querySelector('svg');
-    expect(svg).toBeTruthy();
-    expect(svg?.classList.contains('lucide-arrow-right')).toBe(true);
     expect(svg?.getAttribute('aria-hidden')).toBe('true');
   });
 
