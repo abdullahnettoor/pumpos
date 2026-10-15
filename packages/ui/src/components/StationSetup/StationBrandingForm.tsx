@@ -20,8 +20,12 @@ import {
 
 export interface StationBrandingFormProps {
   station: Station;
-  /** Sends the body under the form's key; resolves with the saved station. */
-  onSave: (body: ReturnType<typeof stationBrandingBody>) => Promise<Station>;
+  /**
+   * Sends the body under the form's key; resolves with the saved station.
+   * The body is built from the latest saved station, not this render's prop,
+   * so a section saved just before (one bar, several sections) is kept.
+   */
+  onSave: (build: (saved: Station) => ReturnType<typeof stationBrandingBody>) => Promise<Station>;
   /** Discard: renew the form's key session. */
   onDiscard: () => void;
 }
@@ -57,7 +61,7 @@ export const StationBrandingForm: React.FC<StationBrandingFormProps> = ({
     dirty: isDirty,
     submit: () =>
       submitSection(handleSubmit, async (values) => {
-        const updated = await onSave(stationBrandingBody(station, values));
+        const updated = await onSave((saved) => stationBrandingBody(saved, values));
         reset(stationBrandingValues(updated));
       }),
     discard: () => {

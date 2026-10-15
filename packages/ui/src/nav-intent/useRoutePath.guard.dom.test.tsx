@@ -51,4 +51,46 @@ describe('a route change with unsaved changes asks first (#604)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Discard changes' }));
     await waitFor(() => expect(screen.getByTestId('path').textContent).toBe('/customers'));
   });
+
+  it('Back with a changed form asks; Keep editing restores the address, Discard goes back', async () => {
+    window.history.replaceState(null, '', '#/dashboard');
+    render(
+      <ConfirmProvider>
+        <App dirty />
+      </ConfirmProvider>,
+    );
+    // An earlier page in history, then the browser's Back to it.
+    const back = (to: string) =>
+      act(() => {
+        window.history.replaceState(null, '', `#${to}`);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      });
+    back('/customers');
+    expect(window.location.hash).toBe('#/dashboard');
+    fireEvent.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(screen.getByTestId('path').textContent).toBe('/dashboard');
+    expect(window.location.hash).toBe('#/dashboard');
+
+    back('/customers');
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    await waitFor(() => expect(screen.getByTestId('path').textContent).toBe('/customers'));
+    expect(window.location.hash).toBe('#/customers');
+  });
+
+  it('Back with nothing changed moves at once', () => {
+    window.history.replaceState(null, '', '#/dashboard');
+    render(
+      <ConfirmProvider>
+        <App dirty={false} />
+      </ConfirmProvider>,
+    );
+    act(() => {
+      window.history.replaceState(null, '', '#/customers');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(screen.getByTestId('path').textContent).toBe('/customers');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
 });

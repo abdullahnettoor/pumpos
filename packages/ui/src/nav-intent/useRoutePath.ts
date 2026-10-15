@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { resolveRoute } from './routes.js';
-import { guardLeave } from '../pump-ds/form/unsavedChanges.js';
+import {
+  confirmDiscardUnsaved,
+  guardLeave,
+  hasUnsavedChanges,
+} from '../pump-ds/form/unsavedChanges.js';
 
 /**
  * The shell's current page, mirrored into the URL hash (`#/shifts`) so a reload
@@ -65,10 +69,30 @@ export function useRoutePath(defaultPath: string): [string, RouteNavigate] {
     }
   }, [path]);
 
+  // The route on screen, for the listeners and `navigate` below.
+  const current = useRef(path);
   useEffect(() => {
+    current.current = path;
+  }, [path]);
+
+  useEffect(() => {
+    // Back / Forward (#604 review): with unsaved changes, put the address back
+    // and ask first; only a confirmed leave moves. Both events fire for one
+    // step; the second reads the restored hash and does nothing.
     const onHash = () => {
       const next = readHashPath();
-      if (next) setPath(next);
+      if (!next) return;
+      const here = current.current;
+      if (next === here || !hasUnsavedChanges()) {
+        setPath(next);
+        return;
+      }
+      window.history.replaceState(window.history.state, '', `#${here}`);
+      void confirmDiscardUnsaved().then((ok) => {
+        if (!ok) return;
+        window.history.replaceState(window.history.state, '', `#${next}`);
+        setPath(next);
+      });
     };
     window.addEventListener('hashchange', onHash);
     window.addEventListener('popstate', onHash);
@@ -78,10 +102,6 @@ export function useRoutePath(defaultPath: string): [string, RouteNavigate] {
     };
   }, []);
 
-  const current = useRef(path);
-  useEffect(() => {
-    current.current = path;
-  }, [path]);
   const navigate = useCallback<RouteNavigate>((next, options) => {
     const go = () =>
       setPath((prev) => {

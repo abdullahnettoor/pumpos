@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Station } from '@pump/shared';
 import {
   decantationGuidanceSchema,
+  newerStation,
   stationBrandingBody,
   stationBrandingSchema,
   stationBrandingValues,
@@ -55,6 +56,22 @@ describe('Station forms (#604)', () => {
       stateCode: '',
       logoDataUrl: null,
     });
+  });
+
+  it('keeps a grace period of 0 through a save (#604 review)', () => {
+    const zero = { ...station, settings: { ...station.settings, shift_grace_minutes: 0 } };
+    expect(stationGeneralValues(zero).graceMinutes).toBe(0);
+    const body = stationGeneralBody(station, { ...stationGeneralValues(station), graceMinutes: 0 });
+    expect(body.settings.shift_grace_minutes).toBe(0);
+  });
+
+  it('builds the next save on the newest copy of the station', () => {
+    const older = { ...station, updatedAt: '2026-10-15T00:00:01Z' };
+    const newer = { ...station, updatedAt: '2026-10-15T00:00:02Z' };
+    expect(newerStation(newer, older)).toBe(newer);
+    expect(newerStation(older, newer)).toBe(newer);
+    expect(newerStation(null, older)).toBe(older);
+    expect(newerStation(newer, { ...older, id: 'st-2' })?.id).toBe('st-2');
   });
 
   it('validates General: name and code, whole non-negative minutes, HH:MM', () => {

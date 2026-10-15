@@ -37,7 +37,7 @@ export function stationGeneralValues(station: Station | null): StationGeneralVal
     code: station?.code ?? '',
     address: station?.address || '',
     phone: station?.phone || '',
-    graceMinutes: station?.settings?.shift_grace_minutes || 15,
+    graceMinutes: station?.settings?.shift_grace_minutes ?? 15,
     timezone: station?.settings?.timezone || 'Asia/Kolkata',
     businessDayStartsAt: station?.settings?.business_day_starts_at || '06:00',
   };
@@ -61,9 +61,9 @@ export function stationGeneralBody(
       shift_grace_minutes: values.graceMinutes,
       timezone: values.timezone,
       business_day_starts_at: values.businessDayStartsAt,
-      shift_lock_grace_days: station.settings?.shift_lock_grace_days || 3,
-      offline_warning_days: station.settings?.offline_warning_days || 3,
-      offline_critical_days: station.settings?.offline_critical_days || 7,
+      shift_lock_grace_days: station.settings?.shift_lock_grace_days ?? 3,
+      offline_warning_days: station.settings?.offline_warning_days ?? 3,
+      offline_critical_days: station.settings?.offline_critical_days ?? 7,
     },
   };
 }
@@ -153,4 +153,14 @@ export function withDensityBand(
 /** The update body for Decantation guidance, merged over the saved settings. */
 export function decantationGuidanceBody(station: Station, values: DecantationSettings) {
   return { settings: { ...(station.settings || {}), ...values } };
+}
+
+/**
+ * The station to build the next save on (#604 review): the incoming one,
+ * unless it is the same station and older than the one a save returned (a
+ * station list not refetched yet).
+ */
+export function newerStation(current: Station | null, incoming: Station | null): Station | null {
+  if (!current || !incoming || current.id !== incoming.id) return incoming;
+  return (incoming.updatedAt ?? '') >= (current.updatedAt ?? '') ? incoming : current;
 }

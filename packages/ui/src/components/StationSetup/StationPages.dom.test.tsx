@@ -30,8 +30,13 @@ type Route = { status?: number; data?: unknown; message?: string };
 let routes: Record<string, Route>;
 const calls: { url: string; init?: RequestInit }[] = [];
 
+let saved: Record<string, unknown>;
+let version = 0;
+
 beforeEach(() => {
   calls.length = 0;
+  saved = { ...station };
+  version = 0;
   routes = {
     '/setup/stations': { data: [station] },
     '/setup/products': {
@@ -75,10 +80,21 @@ beforeEach(() => {
       const url = String(input);
       calls.push({ url, init });
       const path = new URL(url, 'http://x').pathname.replace(/^\/api/, '');
+      // A station PUT behaves like the server: the body over the saved
+      // station, with a newer updatedAt.
+      if (init?.method === 'PUT' && path.startsWith('/setup/stations/')) {
+        saved = {
+          ...saved,
+          ...JSON.parse(String(init.body)),
+          updatedAt: `2026-10-15T00:00:${String(++version).padStart(2, '0')}Z`,
+        };
+      }
       const route =
-        init?.method && init.method !== 'GET'
-          ? { data: { id: 'new' } }
-          : (routes[path] ?? { data: [] });
+        init?.method === 'PUT' && path.startsWith('/setup/stations/')
+          ? { data: saved }
+          : init?.method && init.method !== 'GET'
+            ? { data: { id: 'new' } }
+            : (routes[path] ?? { data: [] });
       const status = route.status ?? 200;
       const body =
         status >= 400
@@ -162,6 +178,54 @@ describe('Station page', () => {
     expect(header(put.init, 'Idempotency-Key')).toBeTruthy();
     expect(JSON.parse(String(put.init!.body))).toMatchObject({ name: 'Highway Fuels 2' });
     await waitFor(() => expect(onStationSelected).toHaveBeenCalled());
+  });
+
+  it('Rules saves both changed sections, the second built on the first (#604 review)', async () => {
+    renderWithProviders(
+      <StationOverview selectedStation={station} userRole="Owner" onStationSelected={() => {}} />,
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: 'Rules' }));
+    fireEvent.change(await screen.findByLabelText(/Critical below/), { target: { value: '15' } });
+    fireEvent.change(screen.getByLabelText('Settling time (minutes)'), {
+      target: { value: '45' },
+    });
+    expect(screen.getByText('2 sections changed')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const puts = () => calls.filter((c) => c.init?.method === 'PUT');
+    await waitFor(() => expect(puts()).toHaveLength(2));
+    const bodies = puts().map((c) => JSON.parse(String(c.init!.body)));
+    // The decantation body carries the tank levels just saved, not the stale prop's.
+    expect(bodies[1].settings).toMatchObject({
+      tankLevels: { criticalBelowPct: 15 },
+      settlingTimeMinutes: 45,
+    });
+    expect(saved.settings).toMatchObject({
+      tankLevels: { criticalBelowPct: 15 },
+      settlingTimeMinutes: 45,
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull(),
+    );
+    // Keys: one per section.
+    const keys = puts().map((c) => header(c.init, 'Idempotency-Key'));
+    expect(new Set(keys).size).toBe(2);
+  });
+
+  it('a grace period of 0 survives a save (#604 review)', async () => {
+    renderWithProviders(
+      <StationOverview selectedStation={station} userRole="Owner" onStationSelected={() => {}} />,
+    );
+    const form = await screen.findByRole('form', { name: 'Station details' });
+    const grace = within(form).getByLabelText(/Shift grace period/) as HTMLInputElement;
+    fireEvent.change(grace, { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(calls.some((c) => c.init?.method === 'PUT')).toBe(true));
+    const put = calls.find((c) => c.init?.method === 'PUT')!;
+    expect(JSON.parse(String(put.init!.body)).settings.shift_grace_minutes).toBe(0);
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull(),
+    );
+    expect(grace.value).toBe('0');
   });
 
   it('refuses an invalid GSTIN on Branding without sending (#604 review)', async () => {

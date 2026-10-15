@@ -43,6 +43,7 @@ import { StationBrandingForm } from './StationBrandingForm.js';
 import { DecantationGuidanceForm } from './DecantationGuidanceForm.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { ReportTemplatesPanel } from '../reports/templates/ReportTemplatesPanel.js';
+import { newerStation } from './stationForms.js';
 import {
   officeSubmitKeys,
   sendKeyed,
@@ -128,9 +129,24 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
    * background. A failure rejects, so the form's section shows it and stays
    * changed.
    */
-  const saveForm = async (form: string, body: unknown, saved: string): Promise<Station> => {
-    if (!selectedStation) throw new Error('Select a station first.');
-    const updated = await updateStation(form, selectedStation.id, body);
+  // The last station the server returned: every section's body is built on it,
+  // so saving several sections in a row never sends stale settings back.
+  const latestStation = useRef(selectedStation);
+  useEffect(() => {
+    // A prop older than what a save just returned (the station list not yet
+    // refetched) must not replace it.
+    latestStation.current = newerStation(latestStation.current, selectedStation);
+  }, [selectedStation]);
+  const saveForm = async (
+    form: string,
+    build: (saved: Station) => unknown,
+    saved: string,
+  ): Promise<Station> => {
+    const base = latestStation.current;
+    if (!base) throw new Error('Select a station first.');
+    const updated = await updateStation(form, base.id, build(base));
+    // The next section in the same Save builds on this one (#604 review).
+    latestStation.current = updated;
     onStationSelected(updated);
     runTask(loadStations(), 'Saved, but the station list could not be refreshed.');
     toast.success(saved);
@@ -143,10 +159,11 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
    * awaited) so the Dashboard, alerts and Inventory pick the change up.
    */
   const handleSaveTankLevels = async (tankLevels: TankLevelSettings) => {
-    if (!selectedStation) return;
     await saveForm(
       'tank-levels',
-      { settings: { ...(selectedStation.settings || {}), [TANK_LEVEL_SETTINGS_KEY]: tankLevels } },
+      (saved) => ({
+        settings: { ...(saved.settings || {}), [TANK_LEVEL_SETTINGS_KEY]: tankLevels },
+      }),
       'Tank levels saved.',
     );
   };
@@ -284,7 +301,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                 <>
                   <StationDetailsForm
                     station={selectedStation}
-                    onSave={(body) => saveForm('general', body, 'Station details saved.')}
+                    onSave={(build) => saveForm('general', build, 'Station details saved.')}
                     onDiscard={() => openSession('general')}
                   />
                   <UnsavedSectionsBar />
@@ -295,7 +312,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                 <>
                   <StationBrandingForm
                     station={selectedStation}
-                    onSave={(body) => saveForm('branding', body, 'Business details saved.')}
+                    onSave={(build) => saveForm('branding', build, 'Business details saved.')}
                     onDiscard={() => openSession('branding')}
                   />
                   <UnsavedSectionsBar />
@@ -317,7 +334,9 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                     station={selectedStation}
                     fuelProducts={fuelProducts}
                     productsQuery={productsQ}
-                    onSave={(body) => saveForm('decantation', body, 'Decantation settings saved.')}
+                    onSave={(build) =>
+                      saveForm('decantation', build, 'Decantation settings saved.')
+                    }
                     onDiscard={() => openSession('decantation')}
                   />
                   <UnsavedSectionsBar />

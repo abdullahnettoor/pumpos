@@ -29,8 +29,14 @@ export interface DecantationGuidanceFormProps {
   /** The station's fuel products, for the density bands. */
   fuelProducts: Product[];
   productsQuery: SectionQuery;
-  /** Sends the body under the form's key; resolves with the saved station. */
-  onSave: (body: ReturnType<typeof decantationGuidanceBody>) => Promise<Station>;
+  /**
+   * Sends the body under the form's key; resolves with the saved station.
+   * The body is built from the latest saved station, not this render's prop,
+   * so a section saved just before (one bar, several sections) is kept.
+   */
+  onSave: (
+    build: (saved: Station) => ReturnType<typeof decantationGuidanceBody>,
+  ) => Promise<Station>;
   /** Discard: renew the form's key session. */
   onDiscard: () => void;
 }
@@ -66,7 +72,7 @@ export const DecantationGuidanceForm: React.FC<DecantationGuidanceFormProps> = (
     dirty: isDirty,
     submit: () =>
       submitSection(handleSubmit, async (values) => {
-        const updated = await onSave(decantationGuidanceBody(station, values));
+        const updated = await onSave((saved) => decantationGuidanceBody(saved, values));
         reset(decantationGuidanceValues(updated));
       }),
     discard: () => {
