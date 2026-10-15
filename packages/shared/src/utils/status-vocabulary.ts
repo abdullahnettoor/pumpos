@@ -9,6 +9,7 @@
  */
 import { isBalancedVariance } from './shift-close-cash.js';
 import type { DuStatus } from './handover-status.js';
+import { TANK_TONE_LABEL, type TankLevel } from './tank-level.js';
 
 export type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
@@ -24,6 +25,18 @@ export type PartyStatusState = 'active' | 'inactive';
 export type MoneyStatusState = 'overdue' | 'over-limit' | 'voided' | 'adjustment';
 /** A Fuel Purchase whose fuel has not yet been linked to a Decantation (ADR 0007). */
 export type PurchaseStatusState = 'awaiting-decantation';
+/**
+ * A tank's stock state beside its gauge (#536). Critical and Low are the tank
+ * level's words (`TANK_TONE_LABEL`); over capacity and a pending Decantation
+ * are states of the book stock.
+ */
+export type TankStatusState =
+  'tank-critical' | 'tank-low' | 'tank-over-capacity' | 'tank-waiting-decantation';
+/** A product's on-hand stock (merchandise): none left, or sold below zero. */
+export type StockStatusState = 'out-of-stock' | 'oversold';
+/** A Decantation (tanker visit) and a tank line without its Fuel Purchase (ADR 0007). */
+export type DecantationStatusState =
+  'decantation-draft' | 'pending-measurement' | 'measured' | 'discarded' | 'purchase-not-linked';
 
 export type PumpState =
   | VarianceStatusState
@@ -32,7 +45,10 @@ export type PumpState =
   | DayStatusState
   | PartyStatusState
   | MoneyStatusState
-  | PurchaseStatusState;
+  | PurchaseStatusState
+  | TankStatusState
+  | StockStatusState
+  | DecantationStatusState;
 
 export interface StatusPresentation {
   label: string;
@@ -81,6 +97,20 @@ const VOCABULARY: Record<PumpState, StatusPresentation> = {
   voided: { label: 'Voided', tone: 'neutral', struck: true },
   adjustment: { label: 'Adjustment', tone: 'info' },
   'awaiting-decantation': { label: 'Awaiting decantation', tone: 'neutral' },
+
+  'tank-critical': { label: TANK_TONE_LABEL.critical!, tone: 'danger' },
+  'tank-low': { label: TANK_TONE_LABEL.low!, tone: 'warning' },
+  'tank-over-capacity': { label: 'Over capacity', tone: 'info' },
+  'tank-waiting-decantation': { label: 'Waiting on decantation', tone: 'warning' },
+
+  'out-of-stock': { label: 'Out of stock', tone: 'warning' },
+  oversold: { label: 'Oversold', tone: 'danger' },
+
+  'decantation-draft': { label: 'Draft', tone: 'warning' },
+  'pending-measurement': { label: 'Pending measurement', tone: 'neutral' },
+  measured: { label: 'Measured', tone: 'success' },
+  discarded: { label: 'Discarded', tone: 'neutral' },
+  'purchase-not-linked': { label: 'Purchase not linked', tone: 'warning' },
 };
 
 /** The canonical word and tone for a state. */
@@ -92,6 +122,22 @@ export const handoverState = (status: DuStatus): HandoverStatusState => `handove
 /** A party's active flag as a vocabulary state (never "Suspended"). */
 export const partyState = (isActive: boolean): PartyStatusState =>
   isActive ? 'active' : 'inactive';
+
+/**
+ * A tank's states beside its gauge, most urgent first: its level (Critical /
+ * Low, same thresholds as every gauge), book stock over capacity, and a
+ * pending Decantation. An ordinary level has no state.
+ */
+export const tankStates = (
+  level: Pick<TankLevel, 'tone' | 'overCapacity' | 'waitingOnDecantation'>,
+): TankStatusState[] => {
+  const out: TankStatusState[] = [];
+  if (level.tone === 'critical') out.push('tank-critical');
+  else if (level.tone === 'low') out.push('tank-low');
+  if (level.overCapacity) out.push('tank-over-capacity');
+  if (level.waitingOnDecantation) out.push('tank-waiting-decantation');
+  return out;
+};
 
 /** Cash variances are rupees; stock variances are litres. Same words, same tones. */
 export type VarianceKind = 'cash' | 'stock';
