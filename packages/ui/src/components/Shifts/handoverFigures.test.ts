@@ -3,6 +3,7 @@ import { reconcileDrawer } from '@pump/shared';
 import {
   acceptedHandoverRecon,
   handoverNozzles,
+  handoverProductCash,
   handoverRecon,
   handoverReconInput,
   sumAmounts,
@@ -232,5 +233,34 @@ describe('handoverRecon (#534): expected = float + fuel cash + product cash − 
     });
     expect(agg.variance).toBe(aggServer.varianceAmount);
     expect(agg.expected).toBe(aggServer.expectedCash);
+  });
+});
+
+describe('handoverProductCash (#419)', () => {
+  const assignments = [
+    { userId: 'bala', duId: 'du2', duCode: 'DU-2', duName: 'Pump 2' },
+    { userId: 'bala', duId: 'du1', duCode: 'DU-1', duName: 'Pump 1' },
+    { userId: 'arun', duId: 'du0', duCode: 'DU-0', duName: 'Pump 0' },
+  ];
+
+  it("counts an attendant's product cash in their first DU by code only", () => {
+    expect(
+      handoverProductCash({ assignments, userId: 'bala', duId: 'du1', productCash: 800 }),
+    ).toEqual({ productCash: 800, countedIn: null });
+    expect(
+      handoverProductCash({ assignments, userId: 'bala', duId: 'du2', productCash: 800 }),
+    ).toEqual({ productCash: 0, countedIn: 'DU-1' });
+  });
+
+  it("ignores other attendants' DUs", () => {
+    expect(
+      handoverProductCash({ assignments, userId: 'arun', duId: 'du0', productCash: 300 }),
+    ).toEqual({ productCash: 300, countedIn: null });
+  });
+
+  it('counts it here when the shift lists no assignment for the attendant', () => {
+    expect(
+      handoverProductCash({ assignments: [], userId: 'bala', duId: 'du2', productCash: 800 }),
+    ).toEqual({ productCash: 800, countedIn: null });
   });
 });

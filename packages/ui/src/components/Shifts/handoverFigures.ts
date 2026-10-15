@@ -1,4 +1,4 @@
-import { compareNatural, reconcileDrawer } from '@pump/shared';
+import { compareNatural, dispenserLabel, productCashOwner, reconcileDrawer } from '@pump/shared';
 
 // ── Nozzle readings ─────────────────────────────────────────────────────────
 
@@ -288,4 +288,38 @@ export function acceptedHandoverRecon(a: AcceptedHandover): HandoverRecon {
     declaredTotal: paise(a.declaredTotal),
     variance: paise(a.varianceAmount),
   };
+}
+
+// ── Product cash: which Drawer counts it ────────────────────────────────────
+
+/** One Drawer's share of its attendant's cash product sales (#419). */
+export interface DrawerProductCash {
+  /** All of the attendant's product cash on the owning Drawer, 0 on the others. */
+  productCash: number;
+  /** Set on a Drawer that does not count it: the owning DU's code ("DU-1"). */
+  countedIn: string | null;
+}
+
+/**
+ * The product cash one Drawer counts, by the server's rule
+ * (`productCashOwner` in `@pump/shared`): a Product Sale carries no DU, so an
+ * attendant on several DUs has it counted in their first DU by code only.
+ * `assignments` are the shift's staff assignments; only `userId`'s are read.
+ */
+export function handoverProductCash(input: {
+  assignments: readonly {
+    userId: string;
+    duId: string;
+    duCode?: string | null;
+    duName?: string | null;
+  }[];
+  userId: string;
+  duId: string;
+  productCash: number;
+}): DrawerProductCash {
+  const owner = productCashOwner(input.assignments.filter((a) => a.userId === input.userId));
+  // No assignment found (an older payload): the Drawer being handed over counts it.
+  if (!owner || owner.duId === input.duId)
+    return { productCash: input.productCash, countedIn: null };
+  return { productCash: 0, countedIn: dispenserLabel(owner) || 'another DU' };
 }

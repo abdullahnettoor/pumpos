@@ -40,6 +40,8 @@ import {
   merchTotal,
   merchandiseCash,
   nozzleGrossVolume,
+  productCashCountedIn,
+  productCashDu,
   productsStep,
   readingsStep,
   reconcileDu,
@@ -385,6 +387,7 @@ export const HandoverPanel: React.FC<{
       forms[du.duId]
         ? reconcileDu({
             du,
+            dus,
             form: forms[du.duId],
             credit: creditByDu[du.duId] ?? [],
             omc: omcByDu[du.duId] ?? [],
@@ -395,6 +398,7 @@ export const HandoverPanel: React.FC<{
     ]),
   );
   const live = sumReconciliations(Object.values(reconciliations));
+  const productsDuId = productCashDu(dus)?.duId ?? null;
   const allAccepted = dus.length > 0 && dus.every((du) => acceptedByDu[du.duId]);
   const acceptedSummary = allAccepted
     ? {
@@ -509,8 +513,10 @@ export const HandoverPanel: React.FC<{
         const credits = creditStep(credit, omc);
         const terminals = terminalsStep(du, form, aggregateNonCashAllowed);
         const cash = cashStep(form, recorded);
-        // Products are recorded once per person, so they sit in the first DU's set.
-        const hasProducts = duIndex === 0;
+        // Products are recorded once per person, so they sit in the set of the DU
+        // whose Drawer counts their cash (#419); the others say where it went.
+        const hasProducts = productsDuId ? du.duId === productsDuId : duIndex === 0;
+        const productsCountedIn = productCashCountedIn(du, dus);
         const float = reconciliation.openingFloat;
 
         return (
@@ -630,6 +636,11 @@ export const HandoverPanel: React.FC<{
                 <span className="num">{inr(reconciliation.cashSales)}</span> − drops{' '}
                 <span className="num">{inr(reconciliation.cashDrops)}</span>
               </p>
+              {productsCountedIn ? (
+                <p className="text-xs text-text-muted">
+                  Product sales: counted in {productsCountedIn}
+                </p>
+              ) : null}
               <p className="text-[11px] text-text-faint">
                 Confirm physical cash at close. Hand over everything in the pouch, float included.
               </p>

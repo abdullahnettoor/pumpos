@@ -646,12 +646,11 @@ describe('HandoverPanel steps (mobile)', () => {
   });
 
   describe('several DUs with merchandise', () => {
-    // Merchandise cash is per attendant, and the server attributes it to every
-    // Handover (#419). The preview mirrors that, so each Drawer's expected cash
-    // and the strip are the same figures the save will record.
-    it('keeps each Drawer and the strip consistent', () => {
+    // Product cash is per attendant: it is counted in ONE Drawer, their first DU
+    // by code (#419), as the server records it. Listed D-2 first on purpose.
+    it('counts it in the first DU by code, and the strip adds up', () => {
       assignment.data = makeAssignment({
-        dispenserUnits: [du('1', NOZZLE), du('2', NOZZLE_2)],
+        dispenserUnits: [du('2', NOZZLE_2), du('1', NOZZLE)],
       });
       products.data = [
         { id: 'oil', name: 'Engine oil', productType: 'LUBE', sellingPrice: 400, isActive: true },
@@ -661,15 +660,24 @@ describe('HandoverPanel steps (mobile)', () => {
       ];
       withClient(<HandoverPanel />);
       const expectedCash = screen.getAllByText(/Expected cash:/).map((n) => n.textContent);
+      // DU 2 first, then DU 1 (the payload's order): only DU 1 counts the ₹800.
       expect(expectedCash).toHaveLength(2);
-      for (const text of expectedCash) expect(text).toContain('cash sales ₹800.00');
+      expect(expectedCash[0]).toContain('cash sales ₹0.00');
+      expect(expectedCash[1]).toContain('cash sales ₹800.00');
+      // The other Drawer says where the product cash went, with no amount.
+      expect(screen.getAllByText(/Product sales: counted in/).map((n) => n.textContent)).toEqual([
+        'Product sales: counted in D-1',
+      ]);
+      // Products are entered once, in the set of the DU that counts them.
+      const du1 = screen.getByText('DU 1').closest('div') as HTMLElement;
+      expect(within(du1).getByText('Products sold')).toBeDefined();
 
       const strip = within(screen.getByRole('group', { name: 'Handover summary' }));
       const cell = (label: string) => strip.getByText(label).nextElementSibling!.textContent;
-      // Σ of the two Drawers' expected totals, so the variance below adds up.
-      expect(cell('Expected')).toBe('₹1,600.00');
+      // Σ of the two Drawers' expected totals: the ₹800 once.
+      expect(cell('Expected')).toBe('₹800.00');
       typeIn(/DU 1 · Cash \(₹\)/, '800');
-      typeIn(/DU 2 · Cash \(₹\)/, '800');
+      typeIn(/DU 2 · Cash \(₹\)/, '0');
       expect(cell('Variance')).toBe('Balanced');
     });
   });
