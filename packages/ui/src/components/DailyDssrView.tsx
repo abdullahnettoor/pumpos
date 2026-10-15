@@ -40,13 +40,13 @@ import {
   FUEL_STOCK_COLUMNS,
   MERCHANDISE_STOCK_COLUMNS,
   NOZZLE_COLUMNS,
-  SHIFT_COLUMNS,
   DSSR_COGS_NOTE,
   DSSR_EMPTY,
   DSSR_TITLES,
   attendantTotalNotes,
   attendantTotalRow,
   fuelTotalNotes,
+  shiftColumns,
   shiftTotalNotes,
   totalNote,
   dssrTiles,
@@ -252,6 +252,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({
 
 /** The report itself: notices, headline tiles, then one section per table. */
 const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
+  const shiftCols = useMemo(() => shiftColumns(day), [day]);
   return (
     <div className="flex flex-col gap-5">
       {(day.lateEntryCount > 0 || day.warnings.length > 0) && (
@@ -344,7 +345,7 @@ const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
       <section className="flex flex-col gap-2">
         <SectionHeader title={DSSR_TITLES.shifts} />
         <InteractiveTable
-          columns={SHIFT_COLUMNS}
+          columns={shiftCols}
           rows={day.shifts}
           rowKey={(r) => r.key}
           totalRow={shiftTotalRow(day)}

@@ -213,3 +213,66 @@ export const DSSR_NOT_STORED_FIXTURE = {
     drawer: { attendants: [{ attendantName: 'Ravi', duName: 'DU 1', variance: -20 }] },
   },
 };
+
+/**
+ * A kg-only day (CNG) with every total stored: the shift rows and their total
+ * read in kg, the day's one fuel unit, never litres (#587).
+ */
+export const DSSR_KG_DAY_FIXTURE = {
+  businessDate: '2026-10-11',
+  generatedAt: '2026-10-11T22:00:00.000Z',
+  snapshotData: {
+    shiftsIncluded: 2,
+    fuel: {
+      totalGrossVolume: 412.5,
+      totalTestingVolume: 2.5,
+      totalNetVolume: 410,
+      totalSalesValue: 36900,
+      byProduct: [
+        {
+          productName: 'CNG',
+          unit: 'kg',
+          grossVolume: 412.5,
+          testingVolume: 2.5,
+          netVolume: 410,
+          salesValue: 36900,
+        },
+      ],
+      nozzles: [
+        {
+          nozzleName: 'C1',
+          productName: 'CNG',
+          unit: 'kg',
+          grossVolume: 412.5,
+          testingVolume: 2.5,
+          netVolume: 410,
+        },
+      ],
+    },
+    shifts: [
+      {
+        shiftId: 's1',
+        shiftSequence: 1,
+        templateName: 'Morning',
+        closedAt: '2026-10-11T08:30:00.000Z',
+        netVolume: 250.25,
+        cashVariance: 0,
+        attendantVariance: 0,
+      },
+      {
+        shiftId: 's2',
+        shiftSequence: 2,
+        templateName: 'Evening',
+        closedAt: '2026-10-11T16:30:00.000Z',
+        netVolume: 159.75,
+        cashVariance: -10,
+        attendantVariance: -10,
+      },
+    ],
+    drawer: {
+      totalCashVariance: -10,
+      totalAttendantVariance: -10,
+      attendants: [{ attendantName: 'Ravi', duName: 'DU 1', variance: -10 }],
+    },
+  },
+};

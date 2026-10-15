@@ -19,9 +19,9 @@ import {
   FUEL_STOCK_COLUMNS,
   MERCHANDISE_STOCK_COLUMNS,
   NOZZLE_COLUMNS,
-  SHIFT_COLUMNS,
   attendantTotalNotes,
   attendantTotalRow,
+  shiftColumns,
   shiftTotalNotes,
   totalNote,
   dssrCellTone,
@@ -185,7 +185,7 @@ const builders: Record<DssrSection, (day: DssrDay, cfg: DssrReportConfig) => Rea
     <View key="shifts">
       <Title title={DSSR_TITLES.shifts} />
       <Table
-        columns={SHIFT_COLUMNS}
+        columns={shiftColumns(day)}
         rows={day.shifts}
         totalRow={shiftTotalRow(day)}
         notes={shiftTotalNotes(day)}
