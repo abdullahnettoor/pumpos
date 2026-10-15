@@ -476,10 +476,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const handoverWrites = useHandoverWrites(data?.activeShift?.id ?? null);
   const money = useShiftMoneyState(handoverWrites, stationId, statusQ);
   const retryMoney = () => runTask(statusQ.refetch(), 'Could not refresh the shift.');
-  // The close page's figures come from the shift status too (#606 review): a
-  // failed status read shows there with Retry. After a Handover, that failure
-  // is the inline "Couldn't confirm the drawer totals" instead, with the
-  // figures held as Saving…, so the section itself is not replaced.
+  // The live board and the close page read the shift status (#606 review): a
+  // failed status read shows in their Data Section with Retry. After a
+  // Handover, that failure is the inline "Couldn't confirm the drawer totals ·
+  // Retry" instead, with the figures held as Saving…, so the section is kept.
   const statusSectionQ =
     money === 'unconfirmed' ? { ...statusQ, isError: false, error: null } : statusQ;
 
@@ -829,7 +829,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           {shiftSubTab === 'today' && (
             <DataSection
               title="shift status"
-              query={statusQ}
+              query={statusSectionQ}
               shape="cards"
               placeholderHeight={420}
               enabled

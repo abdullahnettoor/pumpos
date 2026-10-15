@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useMutationState, type MutationKey } from '@tanstack/react-query';
+import { hashKey, useMutationState, type MutationKey } from '@tanstack/react-query';
 
 /**
  * Rows read their "Saving…" state from the write itself (#606): the mutation
@@ -75,8 +75,26 @@ export function useWriteStates<V, S>(
   identify: (variables: V, scope: S) => string | null,
   scope: S,
 ): Map<string, WriteEntry<V>> {
+  return useWriteStatesAcross([mutationKey], identify, scope);
+}
+
+/**
+ * The same across several kinds of write on one row (a Handover sale's save
+ * and its removal), keyed by a stable identity they share (the employee).
+ * Completed attempts take part in "latest wins" (#606 review 2): a removal
+ * that succeeded after a refused edit clears the row, rather than letting the
+ * edit's old failure show again.
+ */
+export function useWriteStatesAcross<V, S>(
+  mutationKeys: readonly MutationKey[],
+  identify: (variables: V, scope: S) => string | null,
+  scope: S,
+): Map<string, WriteEntry<V>> {
+  const hashes = mutationKeys.map((k) => hashKey(k));
   const snapshots = useMutationState({
-    filters: { mutationKey },
+    filters: {
+      predicate: (m) => !!m.options.mutationKey && hashes.includes(hashKey(m.options.mutationKey)),
+    },
     select: (m): MutationSnapshot<V> => ({
       status: m.state.status,
       variables: m.state.variables as V | undefined,

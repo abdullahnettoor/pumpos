@@ -17,7 +17,12 @@ import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { mutationKeys, useDeleteHandoverProductSale } from '../../query/hooks.js';
-import { latestOf, useWriteStates, type WriteEntry } from '../../query/pendingWrites.js';
+import {
+  latestOf,
+  useWriteStates,
+  useWriteStatesAcross,
+  type WriteEntry,
+} from '../../query/pendingWrites.js';
 import { countOf } from '../../utils/ledgerWindow.js';
 import { formatMoney } from '../../utils/format.js';
 import type { ProductSales, ProductSalesRow } from './liveShiftModel.js';
@@ -48,11 +53,21 @@ export interface ProductSalesSectionProps {
   billed: BilledSaleRecord[];
 }
 
-/** A Handover Product Sale save, by employee, on this shift. */
-const saleWriteKey = (
-  v: { shiftId: string; payload: { attendantId?: string } },
+/**
+ * A Handover sale's save or removal on this shift, by employee: one identity
+ * for both, so whichever was sent last decides the row (#606 review 2).
+ */
+const handoverSaleWriteKey = (
+  v:
+    | { shiftId: string; payload: { attendantId?: string } }
+    | { saleId: string; shiftId?: string; attendantId?: string | null },
   shiftId: string,
-): string | null => (v.shiftId === shiftId ? (v.payload.attendantId ?? null) : null);
+): string | null =>
+  v.shiftId !== shiftId
+    ? null
+    : 'payload' in v
+      ? (v.payload.attendantId ?? null)
+      : (v.attendantId ?? null);
 
 /** A Billed Sale save, by seller ('unassigned' for none), on this shift. */
 const billedWriteKey = (
@@ -60,10 +75,6 @@ const billedWriteKey = (
   shiftId: string,
 ): string | null => (v.payload.shiftId === shiftId ? v.payload.attendantId || UNASSIGNED : null);
 const UNASSIGNED = 'unassigned';
-
-/** A Handover Product Sale removal, by sale, on this shift. */
-const removeWriteKey = (v: { saleId: string; shiftId?: string }, shiftId: string): string | null =>
-  v.shiftId === shiftId ? v.saleId : null;
 
 /** "Saving…" in place of a figure the server has not confirmed (#606), else the figure. */
 const moneyOrSaving = (saving: boolean, value: number | null) =>
@@ -97,26 +108,22 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
   const runTask = useRunTask();
   const remove = useDeleteHandoverProductSale(stationId);
   // Each row's save or removal in flight, or refused (#606), from the writes themselves.
-  const saleWrites = useWriteStates(mutationKeys.handoverProductSale(), saleWriteKey, shiftId);
-  const removeWrites = useWriteStates(
-    mutationKeys.deleteHandoverProductSale(),
-    removeWriteKey,
+  const handoverWrites = useWriteStatesAcross(
+    [mutationKeys.handoverProductSale(), mutationKeys.deleteHandoverProductSale()],
+    handoverSaleWriteKey,
     shiftId,
   );
   const billedWrites = useWriteStates(mutationKeys.productSale(), billedWriteKey, shiftId);
   const rows = useMemo(
     () =>
       sales.rows.map((r) => {
-        // Save and removal both act on the Handover sale: the later one wins,
-        // so a refused edit never hides a removal sent after it.
-        const handoverWrite = latestOf(
-          r.attendantId ? saleWrites.get(r.attendantId) : undefined,
-          r.handoverSale ? removeWrites.get(r.handoverSale.id) : undefined,
-        );
+        // Save and removal share the employee's identity: the later attempt
+        // wins, finished or not, so a refused edit never outlives a removal.
+        const handoverWrite = r.attendantId ? handoverWrites.get(r.attendantId) : undefined;
         const billedWrite = billedWrites.get(r.attendantId ?? UNASSIGNED);
         return { ...r, handoverWrite, billedWrite, write: latestOf(handoverWrite, billedWrite) };
       }),
-    [sales.rows, saleWrites, removeWrites, billedWrites],
+    [sales.rows, handoverWrites, billedWrites],
   );
   const [drawer, setDrawer] = useState<{
     open: boolean;
@@ -144,7 +151,13 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
       await sendKeyed(
         officeSubmitKeys.session(`handover-product-sale:delete:${sale.id}`),
         { stationId, saleId: sale.id },
-        (idempotencyKey) => remove.mutateAsync({ saleId: sale.id, shiftId, idempotencyKey }),
+        (idempotencyKey) =>
+          remove.mutateAsync({
+            saleId: sale.id,
+            shiftId,
+            attendantId: sale.attendantId ?? row.attendantId,
+            idempotencyKey,
+          }),
       );
       toast.success('Handover product sale removed.');
     } catch {

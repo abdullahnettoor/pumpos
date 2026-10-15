@@ -37,6 +37,7 @@ vi.mock('../../services/cloud.js', async (importOriginal) => {
 
 const { ShiftsManagement } = await import('./ShiftsManagement.js');
 const { queryKeys } = await import('../../query/hooks.js');
+const { patchShiftStatusWithHandover } = await import('../../query/handoverMutation.js');
 
 const STATION = {
   id: 'st-1',
@@ -310,9 +311,11 @@ describe('opening a shift (#533 review)', () => {
     const start = () => screen.getByRole('button', { name: /Start Shift Operations/ });
     await waitFor(() => expect((start() as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(start());
-    expect(await screen.findByText('Shift opened.')).toBeDefined();
+    // Explicit waits, not a race with the toast's own timer (#606 review 2).
+    await waitFor(() => expect(openShift).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Shift opened.', {}, { timeout: 3000 })).toBeDefined();
+    expect(await screen.findByLabelText('Loading the new shift')).toBeDefined();
     expect(screen.queryByText('Shift details')).toBeNull();
-    expect(screen.getByLabelText('Loading the new shift')).toBeDefined();
   });
 });
 
@@ -583,5 +586,78 @@ describe('Close shift page (#534)', () => {
   it('says a shift that is not open is not open', () => {
     host('/shifts/sh-9/close');
     expect(screen.getByText('This shift is not open')).toBeDefined();
+  });
+});
+
+describe('the live board after a handover whose refresh failed (#606 review 2)', () => {
+  it('keeps the board and says inline that the drawer totals are unconfirmed, with Retry', async () => {
+    const restore = muteExpectedConsoleErrors([/offline/]);
+    try {
+      const client = seed(activeShift);
+      renderWithProviders(
+        <ShiftsManagement
+          selectedStation={STATION}
+          userRole="Manager"
+          userName="Anita"
+          onNavigate={vi.fn()}
+        />,
+        { queryClient: client },
+      );
+      // Suresh's handover is accepted: the board takes it from the answer.
+      patchShiftStatusWithHandover(client, 'st-1', {
+        handover: {
+          id: 'h2',
+          shiftId: 'sh-1',
+          attendantId: 'u2',
+          duId: 'du2',
+          cashHandedOver: '1000.00',
+          cardHandedOver: '0',
+          upiHandedOver: '0',
+          creditHandedOver: '0',
+          testingVolume: '0',
+          expectedSales: '0',
+          openingFloat: '1000',
+          cashDrops: '0',
+          expectedCash: '1000.00',
+          varianceAmount: '0.00',
+          createdAt: '2026-10-14T15:00:00.000Z',
+        },
+        terminalEntries: [],
+        nozzleReadings: [],
+        expectedFuelSales: 0,
+        merchandiseCash: 0,
+        expectedSales: 0,
+        expectedTotal: 0,
+        creditSales: 0,
+        omcCardSales: 0,
+        declaredTotal: 0,
+        openingFloat: 1000,
+        cashDrops: 0,
+        expectedCash: 1000,
+        varianceAmount: 0,
+        replaced: false,
+      });
+      // …and its refresh fails.
+      getShiftStatus.mockRejectedValue(new Error('offline'));
+      await client
+        .refetchQueries({ queryKey: queryKeys.shiftStatus('st-1', false) })
+        .catch(() => undefined);
+
+      const note = await screen.findByTestId('unconfirmed-totals');
+      expect(note.textContent).toContain("Couldn't confirm the drawer totals");
+      // The board is still there: its nozzle table and Takings, figures held.
+      expect(screen.getByRole('region', { name: 'Nozzle readings' })).toBeDefined();
+      expect(screen.queryByText(/Couldn't load shift status/)).toBeNull();
+      const takings = screen.getByText('Cash sales').closest('dl') as HTMLElement;
+      expect(within(takings).getAllByText('Saving…')).toHaveLength(2);
+
+      // Retry: the server answers, the totals are confirmed.
+      getShiftStatus.mockResolvedValue(client.getQueryData(queryKeys.shiftStatus('st-1', false)));
+      fireEvent.click(within(note).getByRole('button', { name: 'Retry' }));
+      await waitFor(() => expect(screen.queryByTestId('unconfirmed-totals')).toBeNull());
+      expect(within(takings).queryByText('Saving…')).toBeNull();
+    } finally {
+      restore();
+    }
   });
 });
