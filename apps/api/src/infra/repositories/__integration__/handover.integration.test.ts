@@ -403,7 +403,25 @@ describe.skipIf(!CONNECTION)('POST /shifts/handovers against real Postgres', () 
 
   describe('an attendant on DU-1 and DU-2 with ₹800 of product cash (#419)', () => {
     // Each DU metered 50 L × ₹100 = ₹5,000; no float, no non-cash.
-    const handOver = async (duId: string, nozzleId: string, cashHandedOver: number) => {
+    interface HandoverAnswer {
+      merchandiseCash: number;
+      expectedCash: number;
+      varianceAmount: number;
+    }
+    interface StatusAnswer {
+      activeShift: {
+        staffAssignments: {
+          userId: string;
+          duId: string;
+          attributed: { merchandiseCash: number; expectedExtra: number };
+        }[];
+      };
+    }
+    const handOver = async (
+      duId: string,
+      nozzleId: string,
+      cashHandedOver: number,
+    ): Promise<HandoverAnswer> => {
       const res = await post({
         shiftId: SHIFT,
         userId: TWO_DU_ATTENDANT,
@@ -412,7 +430,7 @@ describe.skipIf(!CONNECTION)('POST /shifts/handovers against real Postgres', () 
         nozzleReadings: [{ nozzleId, closingReading: 150 }],
       });
       expect(res.status).toBe(200);
-      return ((await res.json()) as any).data;
+      return ((await res.json()) as { data: HandoverAnswer }).data;
     };
 
     it('expects the ₹800 on DU-1 only, so correct pouches balance to a Σ variance of 0', async () => {
@@ -433,10 +451,10 @@ describe.skipIf(!CONNECTION)('POST /shifts/handovers against real Postgres', () 
     it('folds the product cash into DU-1 expected extra only, on the shift status', async () => {
       const res = await app.request(`/status?stationId=${STATION}`);
       expect(res.status).toBe(200);
-      const shift = ((await res.json()) as any).data.activeShift;
+      const shift = ((await res.json()) as { data: StatusAnswer }).data.activeShift;
       const extra = (duId: string) =>
-        shift.staffAssignments.find((a: any) => a.userId === TWO_DU_ATTENDANT && a.duId === duId)
-          .attributed;
+        shift.staffAssignments.find((a) => a.userId === TWO_DU_ATTENDANT && a.duId === duId)
+          ?.attributed;
       expect(extra(DU_A)).toMatchObject({ merchandiseCash: 800, expectedExtra: 800 });
       expect(extra(DU_B)).toMatchObject({ merchandiseCash: 800, expectedExtra: 0 });
     });

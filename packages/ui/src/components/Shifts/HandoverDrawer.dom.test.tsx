@@ -244,6 +244,10 @@ describe('HandoverDrawer', () => {
       expect(rowValue('Product sales')).toBe('counted in DU-1');
       expect(rowValue('Cash sales')).toBe('₹5,000.00');
       expect(screen.queryByText(/are not drawer cash/)).toBeNull();
+      // Product sales are per attendant: this Drawer can still edit them.
+      const edit = screen.getByRole('button', { name: "Edit attendant's product sales" });
+      fireEvent.click(edit);
+      expect(screen.getByRole('dialog', { name: 'Product sale for user-1' })).toBeDefined();
     });
 
     it('leaves product sales taken on card out of the cash expectation', () => {

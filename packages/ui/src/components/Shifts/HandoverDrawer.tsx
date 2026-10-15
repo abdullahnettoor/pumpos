@@ -1488,8 +1488,15 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                         className="h-6 px-1.5 text-brand"
                         onClick={() => setProductSale((p) => ({ open: true, token: p.token + 1 }))}
                       >
-                        Edit
-                        <span className="sr-only"> {userName}'s product sales</span>
+                        {productCashCountedIn != null ? (
+                          // Product sales are per attendant: every Drawer can edit them.
+                          "Edit attendant's product sales"
+                        ) : (
+                          <>
+                            Edit
+                            <span className="sr-only"> {userName}'s product sales</span>
+                          </>
+                        )}
                       </Button>
                     </DataSection>
                   </>

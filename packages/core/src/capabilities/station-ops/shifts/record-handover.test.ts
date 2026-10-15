@@ -269,7 +269,7 @@ describe('RecordHandover', () => {
       expect(du1.data.varianceAmount + du2.data.varianceAmount).toBe(0);
     });
 
-    it('records DU-2 short, not DU-1, when the oil cash is in the wrong pouch', async () => {
+    it('records DU-1 short and DU-2 over when the oil cash is in the wrong pouch', async () => {
       const du1 = await handOver('du-1', 5000);
       const du2 = await handOver('du-2', 5800);
       if (!du1.success || !du2.success) throw new Error('handover failed');
