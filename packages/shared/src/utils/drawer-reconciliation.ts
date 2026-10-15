@@ -12,7 +12,10 @@ export interface DrawerReconciliationInput {
   openingFloat: number;
   /** Σ net litres × unit price over the Drawer's nozzles. */
   expectedFuelSales: number;
-  /** Merchandise cash the server attributes to this Handover. */
+  /**
+   * Product cash this Drawer counts: the Attendant's whole product cash on the
+   * Drawer `productCashDrawer` names, 0 on their other Drawers (#419).
+   */
   merchandiseCash: number;
   cardHandedOver: number;
   upiHandedOver: number;

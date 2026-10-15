@@ -365,7 +365,9 @@ Per Drawer, at Handover: `Opening Float + DU cash sales − Cash Drops`,
 compared with the cash handed over (attendant variance). At Shift close the
 office's expected cash is Σ declared cash (less unnamed close drops), compared
 with the office count (office count variance). The two levels are separate (#287). Office money, card/UPI and credit never enter it. Cash the office takes from a Drawer is a
-Cash Drop.
+Cash Drop. An Attendant's cash Product Sales carry no DU, so they count in one
+Drawer only: the Attendant's first assigned DU by code, in natural order
+(`productCashDrawer`, #419). Their other Drawers count no product cash.
 _Avoid_: cash count, tally
 
 **Cash in Hand**:

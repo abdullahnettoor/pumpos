@@ -15,6 +15,8 @@ import {
   sumReconciliations,
   nozzleNetVolume,
   readingsErrors,
+  productCashCountedIn,
+  productCashDu,
   reconcileDu,
   terminalErrors,
   productsStep,
@@ -413,6 +415,7 @@ describe('reconcileDu', () => {
     });
     const r = reconcileDu({
       du: d,
+      dus: [d],
       form: f,
       credit: [line(700)],
       omc: [line(300)],
@@ -427,6 +430,52 @@ describe('reconcileDu', () => {
       expectedTotal: 5400,
       declaredTotal: 6900,
       varianceAmount: 0,
+    });
+  });
+
+  describe('an attendant on DU-1 and DU-2 with ₹800 of product cash (#419)', () => {
+    // Each DU meters 50 L × ₹100 = ₹5,000; no float.
+    const one = du({ duId: 'du-1', duCode: 'DU-1', openingFloat: 0, nozzles: [du().nozzles[0]] });
+    const two = du({ duId: 'du-2', duCode: 'DU-2', openingFloat: 0, nozzles: [du().nozzles[0]] });
+    const dus = [two, one];
+    const reconcile = (d: AssignedDu, cash: string) =>
+      reconcileDu({
+        du: d,
+        dus,
+        form: form(d, { readings: { n1: '1050' }, cash }),
+        credit: [],
+        omc: [],
+        merchCash: 800,
+        aggregateNonCashAllowed: true,
+      });
+
+    it('expects the product cash in DU-1 only', () => {
+      expect(reconcile(one, '5800')).toMatchObject({ expectedCash: 5800, varianceAmount: 0 });
+      expect(reconcile(two, '5000')).toMatchObject({ expectedCash: 5000, varianceAmount: 0 });
+      expect(
+        sumReconciliations([reconcile(one, '5800'), reconcile(two, '5000')]).varianceAmount,
+      ).toBe(0);
+    });
+
+    it('names DU-1 on the other Drawer, and nothing on DU-1', () => {
+      expect(productCashDu(dus)?.duId).toBe('du-1');
+      expect(productCashCountedIn(two, dus)).toBe('DU-1');
+      expect(productCashCountedIn(one, dus)).toBeNull();
+    });
+
+    it('leaves a single-DU attendant unchanged', () => {
+      expect(productCashCountedIn(one, [one])).toBeNull();
+      expect(
+        reconcileDu({
+          du: one,
+          dus: [one],
+          form: form(one, { readings: { n1: '1050' }, cash: '5800' }),
+          credit: [],
+          omc: [],
+          merchCash: 800,
+          aggregateNonCashAllowed: true,
+        }).expectedCash,
+      ).toBe(5800);
     });
   });
 });

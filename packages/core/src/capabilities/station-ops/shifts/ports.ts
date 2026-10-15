@@ -114,7 +114,19 @@ export interface HandoverContext {
   terminals: HandoverTerminal[];
   creditSales: number;
   omcCardSales: number;
+  /** The Attendant's whole cash product sales this Shift (no DU on a sale). */
   merchandiseCash: number;
+  /**
+   * Every DU the Attendant is assigned to on this Shift: `productCashDrawer`
+   * picks the one whose Drawer counts `merchandiseCash` (#419).
+   */
+  attendantDus: HandoverAttendantDu[];
+}
+
+export interface HandoverAttendantDu {
+  duId: string;
+  duCode: string | null;
+  duName: string | null;
 }
 
 export interface HandoverContextReader {

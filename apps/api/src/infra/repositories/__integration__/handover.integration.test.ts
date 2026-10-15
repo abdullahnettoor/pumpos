@@ -34,6 +34,12 @@ const DU = '00000000-0000-0000-0000-00000000f10a';
 const NOZZLE_1 = '00000000-0000-0000-0000-00000000f10b';
 const NOZZLE_2 = '00000000-0000-0000-0000-00000000f10c';
 const TERMINAL = '00000000-0000-0000-0000-00000000f10d';
+// #419: an attendant on two DUs (DU-2 seeded first) with ₹800 of product cash.
+const TWO_DU_ATTENDANT = '00000000-0000-0000-0000-00000000f10e';
+const DU_A = '00000000-0000-0000-0000-00000000f10f';
+const DU_B = '00000000-0000-0000-0000-00000000f110';
+const NOZZLE_A = '00000000-0000-0000-0000-00000000f111';
+const NOZZLE_B = '00000000-0000-0000-0000-00000000f112';
 
 const BOOTSTRAP = `
   do $$ begin
@@ -130,6 +136,13 @@ describe.skipIf(!CONNECTION)('POST /shifts/handovers against real Postgres', () 
     await db.insert(schema.users).values([
       { id: MANAGER, organizationId: ORG, fullName: 'Meera', role: 'Manager', status: 'ACTIVE' },
       { id: ATTENDANT, organizationId: ORG, fullName: 'Arun', role: 'Attendant', status: 'ACTIVE' },
+      {
+        id: TWO_DU_ATTENDANT,
+        organizationId: ORG,
+        fullName: 'Bala',
+        role: 'Attendant',
+        status: 'ACTIVE',
+      },
     ]);
     await db.insert(schema.shiftTemplates).values({
       id: TEMPLATE,
@@ -238,6 +251,52 @@ describe.skipIf(!CONNECTION)('POST /shifts/handovers against real Postgres', () 
       terminalId: TERMINAL,
       duId: DU,
     });
+
+    // DU-2 is inserted (and assigned) before DU-1: the owner is picked by code.
+    await db.insert(schema.dispenserUnits).values([
+      { id: DU_B, organizationId: ORG, stationId: STATION, name: 'Pump 2', code: 'DU-2' },
+      { id: DU_A, organizationId: ORG, stationId: STATION, name: 'Pump 1', code: 'DU-1' },
+    ]);
+    await db.insert(schema.nozzles).values(
+      [
+        [NOZZLE_B, DU_B],
+        [NOZZLE_A, DU_A],
+      ].map(([id, duId]) => ({
+        id,
+        organizationId: ORG,
+        stationId: STATION,
+        duId,
+        tankId: TANK,
+        productId: FUEL,
+        name: 'N1',
+        currentReading: '100',
+      })),
+    );
+    await db.insert(schema.nozzleReadings).values(
+      [NOZZLE_B, NOZZLE_A].map((nozzleId) => ({
+        shiftId: SHIFT,
+        nozzleId,
+        openingReading: '100',
+        closingReading: '100',
+        volumeSold: '0',
+        unitPrice: '100',
+      })),
+    );
+    await db.insert(schema.shiftStaffAssignments).values([
+      { shiftId: SHIFT, userId: TWO_DU_ATTENDANT, duId: DU_B, openingFloat: '0' },
+      { shiftId: SHIFT, userId: TWO_DU_ATTENDANT, duId: DU_A, openingFloat: '0' },
+    ]);
+    await db.insert(schema.sales).values({
+      documentNumber: 'SAL-419',
+      shiftId: SHIFT,
+      businessDayId: DAY,
+      saleType: 'Product',
+      paymentMethod: 'Cash',
+      attendantId: TWO_DU_ATTENDANT,
+      subtotalAmount: '800',
+      taxAmount: '0',
+      totalAmount: '800',
+    });
   }
 
   const post = (payload: Record<string, unknown>) =>
@@ -340,5 +399,64 @@ describe.skipIf(!CONNECTION)('POST /shifts/handovers against real Postgres', () 
       .where(eq(schema.handoverTerminalEntries.shiftId, SHIFT));
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({ cardAmount: '300.00', upiAmount: '200.00', batchRef: null });
+  });
+
+  describe('an attendant on DU-1 and DU-2 with ₹800 of product cash (#419)', () => {
+    // Each DU metered 50 L × ₹100 = ₹5,000; no float, no non-cash.
+    interface HandoverAnswer {
+      merchandiseCash: number;
+      expectedCash: number;
+      varianceAmount: number;
+    }
+    interface StatusAnswer {
+      activeShift: {
+        staffAssignments: {
+          userId: string;
+          duId: string;
+          attributed: { merchandiseCash: number; expectedExtra: number };
+        }[];
+      };
+    }
+    const handOver = async (
+      duId: string,
+      nozzleId: string,
+      cashHandedOver: number,
+    ): Promise<HandoverAnswer> => {
+      const res = await post({
+        shiftId: SHIFT,
+        userId: TWO_DU_ATTENDANT,
+        duId,
+        cashHandedOver,
+        nozzleReadings: [{ nozzleId, closingReading: 150 }],
+      });
+      expect(res.status).toBe(200);
+      return ((await res.json()) as { data: HandoverAnswer }).data;
+    };
+
+    it('expects the ₹800 on DU-1 only, so correct pouches balance to a Σ variance of 0', async () => {
+      const du1 = await handOver(DU_A, NOZZLE_A, 5800);
+      const du2 = await handOver(DU_B, NOZZLE_B, 5000);
+      expect(du1).toMatchObject({ merchandiseCash: 800, expectedCash: 5800, varianceAmount: 0 });
+      expect(du2).toMatchObject({ merchandiseCash: 0, expectedCash: 5000, varianceAmount: 0 });
+
+      const stored = await db
+        .select()
+        .from(schema.attendantHandovers)
+        .where(eq(schema.attendantHandovers.userId, TWO_DU_ATTENDANT));
+      const byDu = new Map(stored.map((h) => [h.duId, h]));
+      expect(byDu.get(DU_A)).toMatchObject({ expectedCash: '5800.00', varianceAmount: '0.00' });
+      expect(byDu.get(DU_B)).toMatchObject({ expectedCash: '5000.00', varianceAmount: '0.00' });
+    });
+
+    it('folds the product cash into DU-1 expected extra only, on the shift status', async () => {
+      const res = await app.request(`/status?stationId=${STATION}`);
+      expect(res.status).toBe(200);
+      const shift = ((await res.json()) as { data: StatusAnswer }).data.activeShift;
+      const extra = (duId: string) =>
+        shift.staffAssignments.find((a) => a.userId === TWO_DU_ATTENDANT && a.duId === duId)
+          ?.attributed;
+      expect(extra(DU_A)).toMatchObject({ merchandiseCash: 800, expectedExtra: 800 });
+      expect(extra(DU_B)).toMatchObject({ merchandiseCash: 800, expectedExtra: 0 });
+    });
   });
 });
