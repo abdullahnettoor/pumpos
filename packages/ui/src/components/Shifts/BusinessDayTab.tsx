@@ -44,6 +44,7 @@ import {
   useDecantationDayCloseWarnings,
   queryKeys,
 } from '../../query/hooks.js';
+import { patchBusinessDayClosed } from '../../query/shiftStatusPatches.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
@@ -385,11 +386,13 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
       setClosing(true);
       // One key per close; a retry after an unanswered close reuses it.
       const businessDayId: string = snap.businessDayId;
-      await sendKeyed(
+      const closed = await sendKeyed(
         officeSubmitKeys.session(`business-day:close:${businessDayId}`),
         { stationId, businessDayId, businessDate },
         (key) => shiftService.closeBusinessDay(businessDayId, stationId, { idempotencyKey: key }),
       );
+      // The day reads Closed from the answer (#606); its DSR arrives with the refresh.
+      patchBusinessDayClosed(qc, stationId, closed);
       // Closed: report it from the response; the caches refresh in the
       // background (caching rule 6). The day's DSSR snapshot only exists once
       // the close succeeds, so both the single-day and range views refetch.
@@ -398,7 +401,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
         Promise.all([
           invalidateOperational(stationId),
           qc.invalidateQueries({ queryKey: queryKeys.dssr(stationId, businessDate) }),
-          qc.invalidateQueries({ queryKey: ['dssr-range'] }),
+          qc.invalidateQueries({ queryKey: queryKeys.dssrRangePrefix() }),
         ]),
         'Day closed, but the screen could not be refreshed.',
       );

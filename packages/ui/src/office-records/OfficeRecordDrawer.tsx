@@ -45,6 +45,7 @@ import { PreviewCards, PreviewStrip, type PreviewViewProps } from './PreviewPane
 import { officeRecordRequest, type OfficeRecordSubmission } from './send.js';
 import { officeSubmitKeys } from './submitKeys.js';
 import { useMediaQuery } from './useMediaQuery.js';
+import { officeRecordLabels, useRecordOfficeRecord } from './useRecordOfficeRecord.js';
 import { usePriorRecords } from './usePriorRecords.js';
 
 export interface OfficeRecordDrawerProps {
@@ -192,6 +193,7 @@ const OfficeRecordSession: React.FC<
 
   // ---- session state ----
   const [session] = useState(() => officeSubmitKeys.session(`${kind}:${stationId}`));
+  const record = useRecordOfficeRecord();
   const [draft, setDraft] = useState<FormDraft | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<{
@@ -210,10 +212,15 @@ const OfficeRecordSession: React.FC<
   const save = async (submission: OfficeRecordSubmission) => {
     const request = officeRecordRequest(stationId, submission);
     const key = session.next(JSON.stringify(request.body));
+    const labels = officeRecordLabels(submission, {
+      categories,
+      accounts: fundingQ.data ?? [],
+      parties: [...(locked ? [locked] : []), ...(kind === 'collection' ? customers : suppliers)],
+    });
     setSubmitting(true);
     setFailure(null);
     try {
-      await request.send(key);
+      await record.mutateAsync({ stationId, kind, request, idempotencyKey: key, labels });
     } catch (err: any) {
       session.settle(err);
       setFailure(

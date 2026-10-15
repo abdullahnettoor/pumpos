@@ -10,9 +10,11 @@ import {
   CloudProductService,
   CloudUserAssignmentService,
 } from '../services/cloud.js';
-import { useShiftStatus, useInvalidateOperational, queryKeys, TIER } from '../query/hooks.js';
+import { useShiftStatus, useRecordProductSale, queryKeys, TIER } from '../query/hooks.js';
+import { officeSubmitKeys, sendKeyed } from '../office-records/submitKeys.js';
 import { OfficeRecordDrawer } from '../office-records/OfficeRecordDrawer.js';
 import { isOfficeRecordKind } from '../office-records/kinds.js';
+import { productSaleLabels } from './productSaleLabels.js';
 import { useQuickEntry, closeQuickEntry } from './store.js';
 
 const txService = new CloudTransactionService();
@@ -42,7 +44,6 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
-  const invalidateOperational = useInvalidateOperational();
 
   const stationId = selectedStation?.id ?? null;
   const isSale = qe.open && qe.type === 'merchandise-sale';
@@ -59,6 +60,20 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({
 
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const recordSale = useRecordProductSale(stationId);
+  // One Idempotency-Key session per open of the drawer: a retry after a lost
+  // answer reuses the key, so the sale cannot land twice (#606).
+  const sessionOwner = `${qe.token}:${stationId ?? ''}`;
+  const [saleKeys, setSaleKeys] = useState(() => ({
+    owner: sessionOwner,
+    session: officeSubmitKeys.session(`product-sale:${stationId ?? ''}`),
+  }));
+  if (saleKeys.owner !== sessionOwner) {
+    setSaleKeys({
+      owner: sessionOwner,
+      session: officeSubmitKeys.session(`product-sale:${stationId ?? ''}`),
+    });
+  }
   const [error, setError] = useState<string | null>(null);
 
   // Load the lookups a merchandise sale needs (cached; runs on each open).
@@ -151,7 +166,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({
       setError(null);
       const buyerName = (values.buyerName || '').trim();
       const useBuyer = values.paymentMethod !== 'Credit' && !values.customerId && !!buyerName;
-      await txService.recordSale({
+      const payload = {
         shiftId,
         paymentMethod: values.paymentMethod,
         lines,
@@ -168,13 +183,13 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({
             }
           : undefined,
         saveAsCustomer: useBuyer ? !!values.saveAsCustomer : undefined,
-      });
+      };
+      const labels = productSaleLabels(payload, { sellers, products, customers });
+      await sendKeyed(saleKeys.session, { stationId, payload }, (idempotencyKey) =>
+        recordSale.mutateAsync({ payload, idempotencyKey, labels }),
+      );
       toast.success('Sale recorded.');
       close();
-      runTask(
-        invalidateOperational(stationId),
-        'Sale recorded, but the screen could not be refreshed.',
-      );
     } catch (err: any) {
       setError(err.message || 'Failed to record the product sale');
     } finally {

@@ -24,6 +24,7 @@ import {
   type DraftLine,
   type HandoverProductSaleFormValues,
   type PricedProduct,
+  saleLabels,
 } from './handoverProductSale.js';
 
 /** A Handover Product Sale as listed for the shift (with its lines). */
@@ -244,7 +245,12 @@ const SaleForm: React.FC<SaleFormProps> = ({
     };
     try {
       await save({ stationId, shiftId, ...payload }, (idempotencyKey) =>
-        record.mutateAsync({ shiftId, payload, idempotencyKey }),
+        record.mutateAsync({
+          shiftId,
+          payload,
+          idempotencyKey,
+          labels: saleLabels(values.attendantId, sellers, productById),
+        }),
       );
       toast.success(
         editingId ? 'Handover product sale updated.' : 'Handover product sale recorded.',

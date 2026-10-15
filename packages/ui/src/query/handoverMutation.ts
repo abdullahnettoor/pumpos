@@ -1,11 +1,13 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
   CloudShiftService,
   type RecordHandoverPayload,
   type RecordHandoverResult,
 } from '../services/cloud.js';
 import { useRunTask } from '../utils/runTask.js';
-import { queryKeys } from './hooks.js';
+import { mutationKeys, queryKeys } from './hooks.js';
+import { patchQueryData } from './patches/applyPatch.js';
+import { withAcceptedHandover, type ShiftStatusSlice } from './patches/shiftStatus.js';
 
 const shiftService = new CloudShiftService();
 
@@ -140,6 +142,24 @@ export type BackgroundTaskRunner = (
 ) => void;
 
 /**
+ * Writes the accepted Handover into the cached shift board (#606), so the
+ * Drawer reads Recorded with its variance from the save's own answer, before
+ * (and even without) the background refetch.
+ */
+export function patchShiftStatusWithHandover(
+  queryClient: QueryClient,
+  stationId: string,
+  result: RecordHandoverResult,
+): void {
+  patchQueryData<ShiftStatusSlice>(queryClient, queryKeys.shiftStatus(stationId, false), (s) =>
+    withAcceptedHandover(s, result),
+  );
+}
+
+/** Applies a write's answer to the cache; injected so the options stay testable without a client. */
+export type HandoverAnswerPatcher = (stationId: string, result: RecordHandoverResult) => void;
+
+/**
  * Mutation options as a value so the "never gate success on the refetch"
  * convention is assertable in a test rather than only readable in review.
  *
@@ -157,14 +177,16 @@ export type BackgroundTaskRunner = (
 export function recordHandoverMutationOptions(
   queryClient: HandoverInvalidationClient,
   runBackgroundTask: BackgroundTaskRunner,
+  applyAnswer: HandoverAnswerPatcher,
 ) {
   return {
+    mutationKey: mutationKeys.handover(),
     mutationFn: ({ payload, idempotencyKey }: RecordHandoverMutationInput) =>
       shiftService.recordHandover(payload, { idempotencyKey }),
-    onSuccess: (
-      _result: RecordHandoverResult,
-      { stationId }: RecordHandoverMutationInput,
-    ): void => {
+    onSuccess: (result: RecordHandoverResult, { stationId }: RecordHandoverMutationInput): void => {
+      // The answer first, then the refresh: invalidating straight after the
+      // patch also cancels a refetch already in flight with the old board.
+      applyAnswer(stationId, result);
       runBackgroundTask(refreshAfterHandover(queryClient, stationId), HANDOVER_REFRESH_FAILED);
     },
   };
@@ -173,5 +195,9 @@ export function recordHandoverMutationOptions(
 export function useRecordHandoverMutation() {
   const queryClient = useQueryClient();
   const runBackgroundTask = useRunTask();
-  return useMutation(recordHandoverMutationOptions(queryClient, runBackgroundTask));
+  return useMutation(
+    recordHandoverMutationOptions(queryClient, runBackgroundTask, (stationId, result) =>
+      patchShiftStatusWithHandover(queryClient, stationId, result),
+    ),
+  );
 }

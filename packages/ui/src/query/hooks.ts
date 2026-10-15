@@ -28,6 +28,16 @@ import {
   type DecantationDayCloseWarnings,
 } from '../services/cloud.js';
 import { resolveTankLevelSettings, type TankLevelSettings } from '@pump/shared';
+import { patchQueryData } from './patches/applyPatch.js';
+import {
+  billedSaleRow,
+  handoverProductSaleRow,
+  withBilledSale,
+  withHandoverProductSale,
+  withoutSale,
+  type SaleAnswer,
+  type SaleLabels,
+} from './patches/productSales.js';
 import type {
   DensityTodaySummary,
   ShiftTemplate,
@@ -125,11 +135,15 @@ export const queryKeys = {
   merchandiseSales: (shiftId: string) => ['merchandise-sales', shiftId] as const,
   expenses: () => ['expenses'] as const,
   income: (stationId = '', from = '', to = '') => ['income', stationId, from, to] as const,
+  /** Every cached Income range of a station. */
+  incomePrefix: (stationId: string) => ['income', stationId] as const,
   purchases: (stationId?: string) =>
     stationId ? (['purchases', stationId] as const) : (['purchases'] as const),
   purchaseItems: (purchaseId: string) => ['purchase-items', purchaseId] as const,
   supplierPayments: (stationId: string, from = '', to = '') =>
     ['supplier-payments', stationId, from, to] as const,
+  /** Every cached Supplier payments range of a station. */
+  supplierPaymentsPrefix: (stationId: string) => ['supplier-payments', stationId] as const,
   decantations: (stationId: string, status = '') => ['decantations', stationId, status] as const,
   collections: () => ['collections'] as const,
   creditSales: () => ['credit-sales'] as const,
@@ -238,6 +252,20 @@ export const queryKeys = {
   dailyCashBookPrefix: () => ['daily-cash-book'] as const,
   /** Every `financeMovements` range: what a money write invalidates. */
   financeMovementsPrefix: () => ['finance-movements'] as const,
+} as const;
+
+/**
+ * Mutation keys (#606): a write in flight is found by its key and variables
+ * (`useMutationState`), so a row can read "Saving…" from the mutation itself
+ * rather than from a local flag, even after the drawer that sent it closed.
+ */
+export const mutationKeys = {
+  handover: () => ['record-handover'] as const,
+  handoverProductSale: () => ['record-handover-product-sale'] as const,
+  deleteHandoverProductSale: () => ['delete-handover-product-sale'] as const,
+  productSale: () => ['record-product-sale'] as const,
+  officeRecord: () => ['record-office-record'] as const,
+  voidOfficeRecord: () => ['void-office-record'] as const,
 } as const;
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -1674,12 +1702,15 @@ export function useUnlinkDecantationPurchase(stationId: string | null | undefine
 
 /**
  * Record (or replace) an employee's Handover Product Sale for a shift (#533).
- * The shift reconciliation, the Product sales lists and stock refresh in the
- * background (never awaited).
+ * The answer leads the shift's Handover Product Sales list at once (#606); the
+ * shift reconciliation, the lists and stock refresh in the background (never
+ * awaited).
  */
 export function useRecordHandoverProductSale(stationId: string | null | undefined) {
   const invalidate = useInvalidateOperational();
+  const qc = useQueryClient();
   return useMutation({
+    mutationKey: mutationKeys.handoverProductSale(),
     mutationFn: (vars: {
       shiftId: string;
       payload: {
@@ -1688,23 +1719,70 @@ export function useRecordHandoverProductSale(stationId: string | null | undefine
         nonCashAmount?: number;
       };
       idempotencyKey: string;
-    }) =>
+      /** Names the list shows that the answer does not carry. */
+      labels?: SaleLabels;
+    }): Promise<SaleAnswer> =>
       txService.recordMerchandiseHandover(vars.shiftId, vars.payload, {
         idempotencyKey: vars.idempotencyKey,
       }),
-    onSuccess: () => {
+    onSuccess: (answer, vars) => {
+      if (answer?.sale && vars.labels) {
+        const row = handoverProductSaleRow(answer, vars.labels);
+        patchQueryData<{ id: string; attendantId?: string | null }[]>(
+          qc,
+          queryKeys.merchandiseHandovers(vars.shiftId),
+          (list) => withHandoverProductSale(list, row),
+        );
+      }
       void invalidate(stationId);
     },
   });
 }
 
-/** Remove a Handover Product Sale (restores its stock); refreshes in the background. */
+/** Remove a Handover Product Sale (restores its stock); leaves the list at once, refreshes in the background. */
 export function useDeleteHandoverProductSale(stationId: string | null | undefined) {
   const invalidate = useInvalidateOperational();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { saleId: string; idempotencyKey: string }) =>
+    mutationKey: mutationKeys.deleteHandoverProductSale(),
+    mutationFn: (vars: { saleId: string; shiftId?: string; idempotencyKey: string }) =>
       txService.deleteMerchandiseHandover(vars.saleId, { idempotencyKey: vars.idempotencyKey }),
-    onSuccess: () => {
+    onSuccess: (_answer, vars) => {
+      if (vars.shiftId) {
+        patchQueryData<{ id: string }[]>(qc, queryKeys.merchandiseHandovers(vars.shiftId), (list) =>
+          withoutSale(list, vars.saleId),
+        );
+      }
+      void invalidate(stationId);
+    },
+  });
+}
+
+/**
+ * Record a Billed (quick-entry) Product Sale (#606): keyed, and the answer
+ * leads the shift's Billed Sales list at once; everything else it moves
+ * (attribution, stock, receivables) refreshes in the background.
+ */
+export function useRecordProductSale(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationKey: mutationKeys.productSale(),
+    mutationFn: (vars: {
+      payload: Parameters<CloudTransactionService['recordSale']>[0];
+      idempotencyKey: string;
+      labels?: SaleLabels;
+    }): Promise<SaleAnswer> =>
+      txService.recordSale(vars.payload, { idempotencyKey: vars.idempotencyKey }),
+    onSuccess: (answer, vars) => {
+      if (answer?.sale && vars.labels) {
+        const row = billedSaleRow(answer, vars.labels);
+        patchQueryData<{ id: string }[]>(
+          qc,
+          queryKeys.merchandiseSales(vars.payload.shiftId),
+          (list) => withBilledSale(list, row),
+        );
+      }
       void invalidate(stationId);
     },
   });

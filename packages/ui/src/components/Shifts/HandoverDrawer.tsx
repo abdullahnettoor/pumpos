@@ -35,7 +35,12 @@ import {
   type RecordHandoverPayload,
   type RecordHandoverResult,
 } from '../../services/cloud.js';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRecordHandoverMutation } from '../../query/handoverMutation.js';
+import {
+  patchShiftStatusWithCustomerSale,
+  patchShiftStatusWithoutCustomerSale,
+} from '../../query/shiftStatusPatches.js';
 import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { formatMoney, formatQuantity, MINUS } from '../../utils/format.js';
 import { useRunTask } from '../../utils/runTask.js';
@@ -223,6 +228,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   const [keySession, setKeySession] = useState(() => officeSubmitKeys.session(keyScope));
   const renewKeySession = () => setKeySession(officeSubmitKeys.session(keyScope));
   const recordHandover = useRecordHandoverMutation();
+  const queryClient = useQueryClient();
   // Denomination counts for the handover cash (held here so re-opening the
   // popover preserves them). Reset when the drawer opens.
   const [cashBreakdown, setCashBreakdown] = useState<CashBreakdown>({});
@@ -570,6 +576,15 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       };
       if (isOmc) setOmcLines((prev) => [...prev, line]);
       else setCreditLines((prev) => [...prev, line]);
+      // The board gets the sale from the answer too (#606); the refresh confirms it.
+      if (entry?.id) {
+        patchShiftStatusWithCustomerSale(queryClient, stationId, entry, {
+          customerName: line.customerName,
+          customerType: line.customerType,
+          productName: prod?.name ?? null,
+          productCode: prod?.code ?? null,
+        });
+      }
       setAcceptedResult(null);
       renewKeySession();
       resetCcRow();
@@ -594,6 +609,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
         (idempotencyKey) => transactionService.voidCreditSale(id, { idempotencyKey }),
       );
       setCreditLines((prev) => prev.filter((l) => l.id !== id));
+      patchShiftStatusWithoutCustomerSale(queryClient, stationId, shiftId, id);
       setAcceptedResult(null);
       renewKeySession();
       refreshAfterCreditChange();
@@ -615,6 +631,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
         (idempotencyKey) => transactionService.voidOmcCardSale(id, { idempotencyKey }),
       );
       setOmcLines((prev) => prev.filter((l) => l.id !== id));
+      patchShiftStatusWithoutCustomerSale(queryClient, stationId, shiftId, id);
       setAcceptedResult(null);
       renewKeySession();
       refreshAfterCreditChange();
