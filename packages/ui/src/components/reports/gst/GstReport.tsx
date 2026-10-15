@@ -28,15 +28,15 @@ export const GstReport: React.FC<{
 }> = ({ selectedStation, initialView, onViewChange }) => {
   const [picked, setPicked] = useState<GstView>(initialView ?? 'sales');
   const view = initialView ?? picked;
-  // One period for all three views, so switching view keeps the dates (#531
-  // later unifies the range control itself). Office records use the plain
-  // station calendar date, so the default month is the entry-date month.
+  // One period for all three views, so switching view keeps the dates. Each
+  // view's control bar shows it. Office records use the plain station
+  // calendar date, so the default month is the entry-date month.
   const [range, setRange] = useState<DateRange>(() =>
     computeRange('this-month', { timeZone: selectedStation?.settings?.timezone }),
   );
   const rangeProps = { range, onRangeChange: setRange };
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div className="flex flex-col gap-4">
       <SegmentedControl
         aria-label="GST view"
         options={VIEWS}

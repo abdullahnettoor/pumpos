@@ -217,7 +217,8 @@ describe('Reports → Daily DSR KPI strip (#516)', () => {
     ];
     renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
     expect(screen.getByRole('columnheader', { name: /Cash sales/ })).toBeTruthy();
-    const rows = screen.getAllByRole('row').slice(1);
+    // Body rows only: the total row closes the table.
+    const rows = Array.from(document.querySelectorAll('tbody tr')) as HTMLElement[];
     const cashCell = (r: HTMLElement) => {
       const headers = screen.getAllByRole('columnheader');
       const i = headers.findIndex((h) => /Cash sales/.test(h.textContent ?? ''));

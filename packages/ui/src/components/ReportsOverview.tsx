@@ -1,15 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavIntentEntry, clearNavIntent } from '../nav-intent/store.js';
-import type { ColumnDef } from '@tanstack/react-table';
 import { CloudShiftService } from '../services/cloud.js';
-import { useDailyDssrRange } from '../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { DailyDssrView } from './DailyDssrView.js';
 import { DSR_LABEL } from '@pump/shared';
 import { PageFrame } from './page-frame/index.js';
 import { ROUTES } from '../nav-intent/routes.js';
-import { DataTable } from './primitives/DataTable.js';
-import { DateField } from './primitives/Field.js';
+import type { NavIntent } from '../nav-intent/store.js';
+import { DsrListPanel } from './reports/DsrListPanel.js';
 import { ExpenseRegister } from './reports/ExpenseRegister.js';
 import { LedgersReport } from './reports/LedgersReport.js';
 import { InvoicesPanel } from './reports/InvoicesPanel.js';
@@ -21,84 +19,19 @@ import { DecantationReportPanel } from './reports/DecantationReportPanel.js';
 import { useCapability } from '../access/CapabilityGate.js';
 import {
   ATTENDANT_REPORT_CAPABILITY,
-  deriveDssrRangeKpis,
-  readDssrCashSales,
-  readDssrNetVolume,
-  readSnapshot,
   canViewAttendantReport,
   canViewReports,
+  resolveBusinessDate,
 } from '@pump/shared';
-import { formatQty, inr } from '../utils/format.js';
-import { resolveBusinessDate } from '@pump/shared';
-import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText } from '../pump-ds/index.js';
-import { Play, Zap } from 'lucide-react';
 import { useRunTask } from '../utils/runTask.js';
 
 const shiftService = new CloudShiftService();
 
-const dssrColumns: ColumnDef<any, any>[] = [
-  {
-    accessorKey: 'businessDate',
-    header: 'Business Date',
-    cell: ({ getValue }) => <DateText value={getValue() as string} />,
-  },
-  {
-    id: 'shifts',
-    header: 'Shifts',
-    cell: ({ row }) => (
-      <span style={{ color: 'var(--text-default)' }}>
-        {Number(row.original.snapshotData?.shiftsIncluded || 0)}
-      </span>
-    ),
-  },
-  {
-    id: 'volume',
-    header: 'Net Volume Sold',
-    cell: ({ row }) => {
-      const perUnit = Object.entries(readDssrNetVolume(readSnapshot(row.original)));
-      const label =
-        perUnit.map(([unit, qty]) => formatQty(qty, 2, unit)).join(' · ') || formatQty(0, 2, 'L');
-      return (
-        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
-          {label}
-        </span>
-      );
-    },
-  },
-  {
-    // Per-day source of the "Cash sales" tile. Days frozen before #516 carry no
-    // figure and read "—" until regenerated, never ₹0.
-    id: 'cashSales',
-    header: 'Cash sales',
-    cell: ({ row }) => {
-      const cash = readDssrCashSales(readSnapshot(row.original));
-      return (
-        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
-          {cash == null ? '—' : inr(cash)}
-        </span>
-      );
-    },
-  },
-  {
-    id: 'grossMargin',
-    header: 'Gross Margin',
-    cell: ({ row }) => (
-      <span
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontWeight: 600,
-          color: 'var(--state-success-fg)',
-        }}
-      >
-        {inr(row.original.snapshotData?.pnl?.grossMargin || 0)}
-      </span>
-    ),
-  },
-];
-
 interface ReportsOverviewProps {
   selectedStation: any | null;
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
+  /** Leaves Reports for another page (a cash & bank row opens its account on Accounts). */
+  onNavigate?: (path: string, intent?: NavIntent) => void;
 }
 
 /**
@@ -116,7 +49,11 @@ type ReportsTab =
   | 'gst'
   | 'expense-register';
 
-export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStation, userRole }) => {
+export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
+  selectedStation,
+  userRole,
+  onNavigate,
+}) => {
   const qc = useQueryClient();
   const runTask = useRunTask();
   const stationId = selectedStation?.id ?? null;
@@ -151,24 +88,6 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
   );
   const [generatingDailyDssr, setGeneratingDailyDssr] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
-
-  // Rolling 30-day window for the DSSR list, anchored to the station's business date.
-  const { from, to } = useMemo(() => {
-    const toD = resolveBusinessDate({ timeZone: clock.timeZone, dayStartsAt: clock.dayStartsAt });
-    const d = new Date(`${toD}T00:00:00Z`);
-    d.setUTCDate(d.getUTCDate() - 30);
-    return { from: d.toISOString().split('T')[0], to: toD };
-  }, [clock.timeZone, clock.dayStartsAt]);
-
-  const dssrQ = useDailyDssrRange(stationId, from, to, {
-    enabled: !!stationId && activeTab === 'daily-dssr',
-  } as any);
-  // Memoised so `kpis` below actually memoises: a bare `?? []` hands the
-  // dependency list a new array on every render while the query is loading.
-  const dssrList = useMemo(() => dssrQ.data ?? [], [dssrQ.data]);
-
-  // Read through the shared DSSR reader (#516): the component never sums raw keys.
-  const kpis = useMemo(() => deriveDssrRangeKpis(dssrList), [dssrList]);
 
   // Deep-link: opening a past business day from the top-bar anchor dropdown.
   // Uses the on-the-fly preview so it works whether or not a snapshot exists.
@@ -284,9 +203,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
 
   if (!selectedStation) {
     return (
-      <div style={{ color: 'var(--text-muted)', padding: '24px' }}>
-        Please select a station to view reports.
-      </div>
+      <p className="m-0 p-6 text-[13px] text-ink-muted">Select a station to see its reports.</p>
     );
   }
 
@@ -310,101 +227,23 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
       <div className="grid grid-cols-[200px_minmax(0,1fr)] gap-4">
         <ReportsNav groups={navGroups} activeId={activeTab} onChange={setActiveTab} />
         <div className="min-w-0">
-          {/* Daily DSR Tab */}
           {activeTab === 'daily-dssr' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <KpiStrip columns="auto">
-                <KpiTile label="Generated DSRs" value={String(kpis.count)} hint="last 30 days" />
-                <KpiTile label="Net volume sold" value={kpis.volumeLabel} hint="period" />
-                {/* Cash received for sales by shift Drawers. Collections are Office
-                    Records (ADR 0005) and live in the Daily Cash Book. */}
-                <KpiTile
-                  label="Cash sales"
-                  value={kpis.cashSales == null ? '—' : inr(kpis.cashSales)}
-                  hint={
-                    kpis.daysWithoutCash > 0
-                      ? `${kpis.daysWithoutCash} older ${kpis.daysWithoutCash === 1 ? 'day' : 'days'} not counted`
-                      : 'period'
-                  }
-                />
-              </KpiStrip>
-
-              <Panel title="Generate a daily snapshot">
-                <div
-                  style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}
-                >
-                  <div style={{ maxWidth: '220px' }}>
-                    <label className="field-label">Business Date</label>
-                    <DateField
-                      value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
-                    />
-                  </div>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    leftIcon={<Play style={{ fill: 'currentColor' }} />}
-                    loading={generatingDailyDssr}
-                    disabled={!selectedDate}
-                    onClick={handleGenerateDailyDssr}
-                  >
-                    Generate DSR
-                  </Button>
-                </div>
-                {generateError && (
-                  <div
-                    style={{
-                      marginTop: '10px',
-                      padding: '8px 12px',
-                      backgroundColor: 'var(--state-danger-bg)',
-                      color: 'var(--state-danger-fg)',
-                      borderRadius: 'var(--radius-input)',
-                      fontSize: '12px',
-                    }}
-                  >
-                    {generateError}
-                  </div>
-                )}
-              </Panel>
-
-              <Panel flush title="Recent DSRs">
-                {dssrQ.isLoading ? (
-                  <div style={{ padding: '16px' }}>
-                    <EmptyState
-                      compact
-                      icon={<Zap />}
-                      title="Loading…"
-                      description="Fetching recent daily snapshots."
-                    />
-                  </div>
-                ) : dssrList.length === 0 ? (
-                  <div style={{ padding: '12px' }}>
-                    <EmptyState
-                      compact
-                      icon={<Zap />}
-                      title="No daily DSR reports"
-                      description="Generate a daily snapshot above to get started."
-                    />
-                  </div>
-                ) : (
-                  <DataTable
-                    bare
-                    columns={dssrColumns}
-                    data={dssrList}
-                    error={dssrQ.error}
-                    title="daily reports"
-                    onRetry={dssrQ.refetch}
-                    emptyMessage="No daily DSR reports."
-                    getRowId={(r: any) => r.id}
-                    onRowClick={(r: any) => setActiveDailyDssr(r)}
-                    initialSorting={[{ id: 'businessDate', desc: true }]}
-                  />
-                )}
-              </Panel>
-            </div>
+            <DsrListPanel
+              stationId={stationId}
+              clock={clock}
+              enabled={activeTab === 'daily-dssr'}
+              generateDate={selectedDate}
+              onGenerateDateChange={setSelectedDate}
+              generating={generatingDailyDssr}
+              generateError={generateError}
+              onGenerate={handleGenerateDailyDssr}
+              onOpen={setActiveDailyDssr}
+            />
           )}
 
-          {activeTab === 'ledger' && <LedgersReport selectedStation={selectedStation} />}
+          {activeTab === 'ledger' && (
+            <LedgersReport selectedStation={selectedStation} onNavigate={onNavigate} />
+          )}
 
           {activeTab === 'pnl' && userRole === 'Owner' && (
             <ProfitLossView selectedStation={selectedStation} />
