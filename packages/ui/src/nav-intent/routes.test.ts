@@ -8,7 +8,9 @@ import {
   navTarget,
   pageRoute,
   parseAccountRoute,
+  parseShiftCloseRoute,
   resolveRoute,
+  shiftCloseRoute,
 } from './routes.js';
 import { CONCEPT_ICON } from '../pump-ds/icon/concepts.js';
 import { ICON_REGISTRY } from '../pump-ds/icon/registry.js';
@@ -115,5 +117,36 @@ describe("an account's route (#576)", () => {
       intent: { openReportsTab: 'gst' },
     });
     expect(navTarget(ROUTES.shifts)).toEqual({ path: ROUTES.shifts, intent: null });
+  });
+});
+
+describe("a shift's Close shift route (#534)", () => {
+  it('names the shift, and the step past the first', () => {
+    expect(shiftCloseRoute('sh-1')).toBe('/shifts/sh-1/close');
+    expect(shiftCloseRoute('sh-1', 'readings')).toBe('/shifts/sh-1/close');
+    expect(shiftCloseRoute('sh-1', 'cash')).toBe('/shifts/sh-1/close?step=cash');
+    expect(shiftCloseRoute('a/b', 'done')).toBe('/shifts/a%2Fb/close?step=done');
+  });
+
+  it('reads back the shift and step, an unknown step as the first', () => {
+    expect(parseShiftCloseRoute('/shifts/sh-1/close?step=handovers')).toEqual({
+      shiftId: 'sh-1',
+      step: 'handovers',
+    });
+    expect(parseShiftCloseRoute('/shifts/sh-1/close?step=nope')).toEqual({
+      shiftId: 'sh-1',
+      step: 'readings',
+    });
+    expect(parseShiftCloseRoute(shiftCloseRoute('a/b', 'done'))).toEqual({
+      shiftId: 'a/b',
+      step: 'done',
+    });
+  });
+
+  it('is not any other path, and belongs to the Shifts page', () => {
+    expect(parseShiftCloseRoute('/shifts')).toBeNull();
+    expect(parseShiftCloseRoute('/shifts/sh-1')).toBeNull();
+    expect(parseShiftCloseRoute('/accounts/sh-1/close')).toBeNull();
+    expect(pageRoute('/shifts/sh-1/close?step=cash')).toBe(ROUTES.shifts);
   });
 });

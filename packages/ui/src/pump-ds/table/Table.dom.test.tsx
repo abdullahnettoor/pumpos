@@ -124,6 +124,23 @@ describe.each(Object.entries(adapters))('%s table: shared column kinds', (_name,
 });
 
 describe('total row', () => {
+  it('renders a total cell the caller supplies, while the PDF text keeps the figure', () => {
+    const totalRow = {
+      label: 'Total',
+      values: { amount: -340 },
+      derive: false,
+      cells: { amount: <span data-testid="chip">−₹340.00 chip</span> },
+    };
+    const worded = { ...totalRow, texts: { amount: 'Short −₹340.00' } };
+    render(
+      <InteractiveTable columns={columns} rows={rows} rowKey={(r) => r.id} totalRow={totalRow} />,
+    );
+    expect(screen.getByTestId('chip').textContent).toBe('−₹340.00 chip');
+    expect(totalTexts(columns, rows, totalRow)?.cells[4]).toBe('−₹340.00');
+    // `texts` is the custom cell's plain text, as a PDF prints it.
+    expect(totalTexts(columns, rows, worded)?.cells[4]).toBe('Short −₹340.00');
+  });
+
   it('prints a figure the caller passes instead of re-deriving it', () => {
     render(
       <StatementTable
