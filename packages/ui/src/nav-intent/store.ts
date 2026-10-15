@@ -59,8 +59,9 @@ export interface NavIntent {
   /** Open a specific tab of the Accounts page (the Daily cash book lives there). */
   openAccountsTab?: 'cash-book' | 'transfers';
   /**
-   * Open one Financial Account's statement on Accounts (#530). Reports › Cash &
-   * bank links each account row here.
+   * Open one Financial Account's page (#530, #576). Reports › Cash & bank
+   * links each account row here. The shell turns it into a navigation to
+   * `accountRoute(id)` (`navTarget`), so it never reaches the page as an intent.
    */
   openAccountId?: string;
   /** Open the Record Purchase drawer on arrival at Suppliers → Purchases. */

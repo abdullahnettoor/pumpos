@@ -7,7 +7,7 @@ import { Station, canViewReports, type OperatorRole, type Role } from '@pump/sha
 import { useContainerWidth } from '../hooks/useContainerWidth.js';
 import { useStationBusinessDate } from '../hooks/useStationClock.js';
 import { useSidebarBadges, type SidebarBadges } from '../query/useSidebarBadges.js';
-import { NAV_GROUPS, ROUTES } from '../nav-intent/routes.js';
+import { NAV_GROUPS, ROUTES, pageRoute } from '../nav-intent/routes.js';
 import type { UserMenuAction } from '../pump-ds/shell/index.js';
 
 export interface NavItem {
@@ -280,7 +280,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           onLogout={onLogout}
           stations={stations}
           onStationChange={onStationChange}
-          pageLabel={visibleNavItems.find((n) => n.path === currentPath)?.label}
+          pageLabel={visibleNavItems.find((n) => n.path === pageRoute(currentPath))?.label}
           stationReady={stationReady}
           userMenuExtras={userMenuExtras}
         />
@@ -313,7 +313,8 @@ export const AppShell: React.FC<AppShellProps> = ({
                 {collapsed && gi > 0 && <div className="mx-2 mb-2 h-px bg-border-soft" />}
                 <div className="flex flex-col gap-0.5">
                   {group.items.map((item) => {
-                    const isActive = currentPath === item.path;
+                    // A detail route (`/accounts/<id>`) keeps its page active.
+                    const isActive = pageRoute(currentPath) === item.path;
                     return (
                       <button
                         key={item.path}

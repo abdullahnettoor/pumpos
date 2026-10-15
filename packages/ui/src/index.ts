@@ -6,8 +6,19 @@ export type { QuickEntryType, QuickEntryState } from './quick-entry/store.js';
 export { publishNavIntent, clearNavIntent, useNavIntent } from './nav-intent/store.js';
 export type { NavIntent } from './nav-intent/store.js';
 export { useRoutePath } from './nav-intent/useRoutePath.js';
-export { ROUTES, LEGACY_ROUTES, resolveRoute, NAV_PAGES, NAV_GROUPS } from './nav-intent/routes.js';
-export type { RoutePath, NavPage } from './nav-intent/routes.js';
+export {
+  ROUTES,
+  LEGACY_ROUTES,
+  resolveRoute,
+  pageRoute,
+  accountRoute,
+  parseAccountRoute,
+  navTarget,
+  NAV_PAGES,
+  NAV_GROUPS,
+} from './nav-intent/routes.js';
+export type { RoutePath, NavPage, RouteRange } from './nav-intent/routes.js';
+export type { RouteNavigate } from './nav-intent/useRoutePath.js';
 export * from './components/Drawer.js';
 export { ErrorBoundary } from './components/ErrorBoundary.js';
 export { Login } from './components/Auth/Login.js';

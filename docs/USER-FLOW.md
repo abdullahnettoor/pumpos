@@ -258,10 +258,12 @@ undo your edit or close and start again.
   Statement**. OMC-CMS fleet-card settlement is supported; customer-owned
   prepaid wallet top-up/drawdown is not currently available.
 - **Accounts** (cash, bank, petty cash, card/UPI clearing): Sidebar →
-  **Accounts** → **New Account**, **Transfer Money** (e.g. safe cash →
-  bank deposit), **Settle to Bank** (clear card/UPI settlements into the
-  bank account), **Add Entry** (bank charges, interest, adjustments),
-  per-account statements, **Set opening balance**. The **Daily cash book** tab
+  **Accounts** → **New account**, **New transfer** (e.g. safe cash →
+  bank deposit). Click an account to open its own page (`#/accounts/<id>`,
+  with its statement period in the address): **Add entry** (bank charges,
+  interest, adjustments, **Set opening balance**) and, for a card/UPI
+  clearing account, **Settle to bank**. **‹ Accounts** (top-left), browser
+  Back or Alt+← return to the list where you left it. The **Daily cash book** tab
   shows each account's opening, in, out and closing for one entry date, live.
 
 ## 10. Inventory checks
