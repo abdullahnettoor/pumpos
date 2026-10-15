@@ -291,10 +291,10 @@ select:focus {
   box-shadow: 0 0 0 2px rgba(31, 106, 83, 0.15);
 }
 
-/* Sentence-case field label. */
+/* Sentence-case field label. 12px is the app's smallest text (#515). */
 .field-label {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
   margin-bottom: 4px;
@@ -302,7 +302,7 @@ select:focus {
 
 .field-error {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--state-danger-fg);
   margin-top: 4px;
 }
@@ -310,14 +310,14 @@ select:focus {
 /* Muted helper text under a field (the neutral counterpart to .field-error). */
 .field-hint {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
   margin-top: 4px;
 }
 
-/* Required marker appended to a field label. */
+/* Required marker appended to a field label. Neutral: red means a problem. */
 .field-required {
-  color: var(--state-danger-fg);
+  color: var(--text-muted);
   margin-left: 2px;
 }
 
@@ -400,7 +400,7 @@ select:disabled {
   color: var(--text-strong);
 }
 .pump-check-desc {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 

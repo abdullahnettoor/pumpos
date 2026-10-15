@@ -137,7 +137,6 @@ export const StatementView: React.FC<StatementViewProps> = ({
       )}
       <StatementTable<StatementLine>
         label={label}
-        className="text-xs"
         columns={COLUMNS}
         rows={lines}
         rowKey={(l) => l.id}

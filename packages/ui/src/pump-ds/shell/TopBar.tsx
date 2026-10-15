@@ -409,7 +409,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         {quickCreate.length > 0 && (
           <Menu>
             <MenuTrigger asChild>
-              <Button variant="primary" size="sm" leftIcon={<Icon name="plus" size="xs" />}>
+              <Button variant="secondary" size="sm" leftIcon={<Icon name="plus" size="xs" />}>
                 New
               </Button>
             </MenuTrigger>

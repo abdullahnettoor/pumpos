@@ -5,6 +5,13 @@ import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { Hono } from 'hono';
 import { schema, type DbClient } from '@pump/db';
+import type {
+  PartyLedgerEntry,
+  PayablesSummary,
+  RangedPartyLedger,
+  Result,
+  SupplierPayableSummary,
+} from '@pump/shared';
 import { transactionsRouter } from '../../../routes/transactions.js';
 import { reportsRouter } from '../../../routes/reports.js';
 
@@ -100,18 +107,22 @@ describe.skipIf(!CONNECTION)('Suppliers per Station through the routes (#575)', 
       role: 'Manager',
       assignedStationIds: [CITY],
     });
-  const get = async (app: Hono<any>, url: string) => {
+  /** A GET through the routes, its body read as the typed response envelope. */
+  const get = async <T>(app: Hono<any>, url: string) => {
     const res = await app.request(url);
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: (await res.json()) as Result<T> };
+  };
+  /** The data of a success envelope; an error envelope fails the test with its message. */
+  const dataOf = <T>(body: Result<T>): T => {
+    if (!body.success) throw new Error(`${body.error.code}: ${body.error.message}`);
+    return body.data;
   };
   const listAt = async (station: string) => {
-    const { body } = await get(
+    const { body } = await get<Row[]>(
       owner(),
       `/transactions/suppliers?activeOnly=false&stationId=${station}`,
     );
-    return new Map<string, number>(
-      (body.data as Row[]).map((s) => [s.id, Number(s.currentBalance)]),
-    );
+    return new Map<string, number>(dataOf(body).map((s) => [s.id, Number(s.currentBalance)]));
   };
 
   beforeAll(async () => {
@@ -215,9 +226,9 @@ describe.skipIf(!CONNECTION)('Suppliers per Station through the routes (#575)', 
     });
 
     it('keeps the Organization list without a Station, for pickers and older clients', async () => {
-      const { body } = await get(owner(), '/transactions/suppliers?activeOnly=false');
+      const { body } = await get<Row[]>(owner(), '/transactions/suppliers?activeOnly=false');
       const all = new Map<string, number>(
-        (body.data as Row[]).map((s) => [s.id, Number(s.currentBalance)]),
+        dataOf(body).map((s) => [s.id, Number(s.currentBalance)]),
       );
       expect([...all.keys()].sort()).toEqual([BPCL, IOCL, LUBE, IDLE_CITY].sort());
       expect(all.get(LUBE)).toBe(2000);
@@ -241,21 +252,26 @@ describe.skipIf(!CONNECTION)('Suppliers per Station through the routes (#575)', 
 
   describe('GET /transactions/suppliers/:id/ledger?stationId=', () => {
     it("reads only the Station's ledger with a shared supplier, ranged and all-time", async () => {
-      const ranged = await get(
-        owner(),
-        `/transactions/suppliers/${LUBE}/ledger?stationId=${CITY}&from=2026-10-01&to=2026-10-31`,
+      const ranged = dataOf(
+        (
+          await get<RangedPartyLedger>(
+            owner(),
+            `/transactions/suppliers/${LUBE}/ledger?stationId=${CITY}&from=2026-10-01&to=2026-10-31`,
+          )
+        ).body,
       );
-      expect(ranged.body.data.entries.map((e: any) => e.transactionType)).toEqual([
-        'Purchase',
-        'Payment',
-      ]);
-      expect(ranged.body.data.closingBalance).toBe('-2000.00');
+      expect(ranged.entries.map((e) => e.transactionType)).toEqual(['Purchase', 'Payment']);
+      expect(ranged.closingBalance).toBe('-2000.00');
 
-      const allTime = await get(
-        owner(),
-        `/transactions/suppliers/${LUBE}/ledger?stationId=${HIGHWAY}`,
+      const allTime = dataOf(
+        (
+          await get<PartyLedgerEntry[]>(
+            owner(),
+            `/transactions/suppliers/${LUBE}/ledger?stationId=${HIGHWAY}`,
+          )
+        ).body,
       );
-      expect(allTime.body.data.map((e: any) => Number(e.amount))).toEqual([4000]);
+      expect(allTime.map((e) => Number(e.amount))).toEqual([4000]);
     });
 
     it('refuses a Station the caller is not assigned to', async () => {
@@ -280,30 +296,42 @@ describe.skipIf(!CONNECTION)('Suppliers per Station through the routes (#575)', 
 
   describe('GET /reports/payables?stationId=', () => {
     it("owes only the Station's own OMC and its share of the shared supplier", async () => {
-      const highway = await get(owner(), `/reports/payables?stationId=${HIGHWAY}`);
-      expect(highway.body.data.total).toBe(64000);
-      expect(highway.body.data.suppliers.map((s: any) => s.supplierId).sort()).toEqual(
-        [BPCL, LUBE].sort(),
+      const highway = dataOf(
+        (await get<PayablesSummary>(owner(), `/reports/payables?stationId=${HIGHWAY}`)).body,
       );
-      const city = await get(owner(), `/reports/payables?stationId=${CITY}`);
-      expect(city.body.data.total).toBe(70000);
-      expect(city.body.data.suppliers.map((s: any) => s.supplierId)).toEqual([IOCL]);
+      expect(highway.total).toBe(64000);
+      expect(highway.suppliers.map((s) => s.supplierId).sort()).toEqual([BPCL, LUBE].sort());
+      const city = dataOf(
+        (await get<PayablesSummary>(owner(), `/reports/payables?stationId=${CITY}`)).body,
+      );
+      expect(city.total).toBe(70000);
+      expect(city.suppliers.map((s) => s.supplierId)).toEqual([IOCL]);
     });
 
     it('equals the positive balances of the same Station list', async () => {
       for (const station of [HIGHWAY, CITY]) {
         const list = await listAt(station);
         const owed = [...list.values()].filter((b) => b > 0).reduce((a, b) => a + b, 0);
-        const { body } = await get(owner(), `/reports/payables?stationId=${station}`);
-        expect(body.data.total).toBe(owed);
+        const { body } = await get<PayablesSummary>(
+          owner(),
+          `/reports/payables?stationId=${station}`,
+        );
+        expect(dataOf(body).total).toBe(owed);
       }
     });
 
     it("answers a supplier's payable from the Station's ledger", async () => {
-      const lubeAtCity = await get(owner(), `/reports/payables/${LUBE}?stationId=${CITY}`);
-      expect(lubeAtCity.body.data.balance).toBe(-2000);
-      const ioclAtHighway = await get(owner(), `/reports/payables/${IOCL}?stationId=${HIGHWAY}`);
-      expect(ioclAtHighway.body.data.balance).toBe(0);
+      const payable = async (supplier: string, station: string) =>
+        dataOf(
+          (
+            await get<SupplierPayableSummary>(
+              owner(),
+              `/reports/payables/${supplier}?stationId=${station}`,
+            )
+          ).body,
+        );
+      expect((await payable(LUBE, CITY)).balance).toBe(-2000);
+      expect((await payable(IOCL, HIGHWAY)).balance).toBe(0);
     });
 
     it("refuses another organization's Station", async () => {
