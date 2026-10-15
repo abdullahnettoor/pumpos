@@ -77,8 +77,9 @@ const FILTERS: Record<
 const varianceLabel = (v: DecantationRow['variances'][number]): string => {
   const label = statusPresentation(v.state).label;
   if (v.state === 'tanker-matches') return `${v.productName} · ${label}`;
+  // The neutral tone and the tip say "within tolerance"; the chip keeps the figure.
   if (v.state === 'within-tolerance')
-    return `${v.productName} · ${formatQuantity(v.qty, 'L', { plus: true })}, ${label.toLowerCase()}`;
+    return `${v.productName} · ${formatQuantity(v.qty, 'L', { plus: true })}`;
   return `${v.productName} · ${label} ${formatQuantity(Math.abs(v.qty), 'L')}`;
 };
 
@@ -165,7 +166,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
         header: 'Date',
         kind: 'date',
         value: dateOf,
-        width: '12%',
+        width: '13%',
         cell: (r) => (
           <div className="flex flex-col gap-0.5">
             <span className="whitespace-nowrap">{formatDate(dateOf(r))}</span>
@@ -180,7 +181,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
         header: 'Tanker',
         kind: 'text',
         value: (r) => r.decantation.tankerNumber,
-        width: '13%',
+        width: '12%',
         cell: (r) => (
           <div className="flex flex-col gap-0.5">
             <span className="whitespace-nowrap font-semibold text-ink">
@@ -196,6 +197,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
         id: 'tanks',
         header: 'Tanks',
         kind: 'text',
+        width: '15%',
         value: (r) => r.tanks.map((t) => t.tankName).join(', '),
         sortable: false,
         cell: (r) => (
@@ -250,6 +252,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
                   status={v.state}
                   size="md"
                   label={varianceLabel(v)}
+                  title={statusPresentation(v.state).label}
                 />
               ))}
             </Stack>
@@ -280,39 +283,26 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
           ),
       },
       {
-        id: 'flags',
-        header: 'Flags',
-        kind: 'text',
-        value: (r) => r.decantation.flags.length,
-        sortable: false,
-        cell: (r) =>
-          r.decantation.flags.length === 0 ? (
-            <Muted />
-          ) : (
-            <Stack>
-              {r.decantation.flags.map((f, i) => (
-                <Chip
-                  key={i}
-                  size="md"
-                  tone="danger"
-                  title={f.message}
-                  icon={<Icon name="alert-triangle" size="xs" />}
-                >
-                  {FLAG_LABEL[f.code] ?? f.code}
-                </Chip>
-              ))}
-            </Stack>
-          ),
-      },
-      {
         id: 'status',
         header: 'Status',
         kind: 'text',
         value: (r) => r.decantation.status,
-        width: '15%',
+        width: '16%',
+        // Flags are problems of the visit, so they sit under its status.
         cell: (r) => (
           <Stack>
             <StatusChip status={STATUS[r.decantation.status]} size="md" />
+            {r.decantation.flags.map((f, i) => (
+              <Chip
+                key={i}
+                size="md"
+                tone="danger"
+                title={f.message}
+                icon={<Icon name="alert-triangle" size="xs" />}
+              >
+                {FLAG_LABEL[f.code] ?? f.code}
+              </Chip>
+            ))}
             {r.unlinked.map((p) => (
               <span key={p} className="inline-flex items-center gap-1">
                 <StatusChip
@@ -385,9 +375,10 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
               info: (
                 <InfoTip label="About decantations" placement="bottom">
                   One row per tanker visit. Received is measured at the next tank dip, so it shows
-                  once every tank line is measured; the total leaves pending visits and unlinked
-                  invoices out. A visit still open shows whatever the range. Excess or short within
-                  the station&rsquo;s tolerance reads grey.
+                  once every tank line is measured. The total adds invoice and received only for
+                  products that have both, so pending and unlinked lines are left out of both
+                  columns. A visit still open shows whatever the range. Excess or short within the
+                  station&rsquo;s tolerance reads grey; flags sit under the status.
                 </InfoTip>
               ),
             }}
