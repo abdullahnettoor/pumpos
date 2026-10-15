@@ -9,7 +9,13 @@ import {
   flaggedDrawers,
   hasCloseProgress,
   loadCloseDraft,
+  cashCountSchema,
+  closeOutcomeFigures,
+  nextTemplateAfter,
+  outcomeStanding,
   parseCloseDraft,
+  parseCloseOutcome,
+  pruneCloseDrafts,
   readingErrors,
   saveCloseDraft,
 } from './closeShiftModel.js';
@@ -20,6 +26,10 @@ const memory = () => {
     getItem: (k: string) => m.get(k) ?? null,
     setItem: (k: string, v: string) => void m.set(k, v),
     removeItem: (k: string) => void m.delete(k),
+    key: (i: number) => [...m.keys()][i] ?? null,
+    get length() {
+      return m.size;
+    },
     m,
   };
 };
@@ -52,14 +62,21 @@ describe('the close draft (#534)', () => {
     expect(store.m.size).toBe(0);
   });
 
-  it('reads a malformed draft as empty, field by field', () => {
+  it('discards a stored draft that does not match its schema, whole', () => {
+    const valid = { ...EMPTY_CLOSE_DRAFT, closingCash: 10 };
+    expect(parseCloseDraft(JSON.stringify(valid))).toEqual(valid);
     expect(parseCloseDraft('{oops')).toEqual(EMPTY_CLOSE_DRAFT);
     expect(parseCloseDraft('[1]')).toEqual(EMPTY_CLOSE_DRAFT);
-    expect(
-      parseCloseDraft(
-        JSON.stringify({ step: 'done', closingCash: 'x', closeDrops: [{ amount: 5 }] }),
-      ),
-    ).toEqual({ ...EMPTY_CLOSE_DRAFT, closeDrops: [{ drawerKey: '', amount: 5 }] });
+    // A reason that is not text would crash the progress check: discarded.
+    expect(parseCloseDraft(JSON.stringify({ ...valid, dipReasons: { tk1: 42 } }))).toEqual(
+      EMPTY_CLOSE_DRAFT,
+    );
+    expect(parseCloseDraft(JSON.stringify({ ...valid, closingCash: -5 }))).toEqual(
+      EMPTY_CLOSE_DRAFT,
+    );
+    expect(parseCloseDraft(JSON.stringify({ ...valid, cashBreakdown: { '500': 1.5 } }))).toEqual(
+      EMPTY_CLOSE_DRAFT,
+    );
   });
 
   it('counts typed figures as progress, not the step alone', () => {
@@ -181,5 +198,86 @@ describe('close readings and warnings, in the old wizard’s words', () => {
     const w = closeWarnings({ ...base, closing: { n1: 5200, n2: 200 }, closingCash: 1100 });
     expect(w).toEqual(['High volume alert: Nozzle N1 sold 5100.00 L.']);
     expect(closeWarnings({ ...base, closingCash: 1100.01 })).toHaveLength(1);
+  });
+});
+
+describe('the close lifecycle follows the cloud (#534 review)', () => {
+  it('drops every draft of the station but the open shift’s', () => {
+    const store = memory();
+    const d = { ...EMPTY_CLOSE_DRAFT, closingCash: 1 };
+    saveCloseDraft('st-1', 'sh-1', d, store);
+    saveCloseDraft('st-1', 'sh-2', d, store);
+    saveCloseDraft('st-2', 'sh-9', d, store);
+    pruneCloseDrafts('st-1', 'sh-2', store);
+    expect([...store.m.keys()].sort()).toEqual([
+      closeDraftKey('st-1', 'sh-2'),
+      closeDraftKey('st-2', 'sh-9'),
+    ]);
+    pruneCloseDrafts('st-1', null, store);
+    expect([...store.m.keys()]).toEqual([closeDraftKey('st-2', 'sh-9')]);
+  });
+
+  it('shows an outcome only while the status does not contradict it', () => {
+    const closed = { activeShift: null, lastShift: { id: 'sh-1' } };
+    expect(outcomeStanding('sh-1', 0, null, 0)).toBe('wait');
+    expect(outcomeStanding('sh-1', 0, closed, 100)).toBe('show');
+    // Open again, or another shift closed since: dropped.
+    expect(outcomeStanding('sh-1', 0, { activeShift: { id: 'sh-1' } }, 100)).toBe('drop');
+    expect(outcomeStanding('sh-1', 0, { activeShift: null, lastShift: { id: 'sh-2' } }, 100)).toBe(
+      'drop',
+    );
+    // Learnt from the close answer after the status was read: the status is older.
+    expect(outcomeStanding('sh-1', 200, { activeShift: { id: 'sh-1' } }, 100)).toBe('show');
+  });
+
+  it('reads a stored outcome only when every field the closed state reads is there', () => {
+    const outcome = {
+      expectedCash: 1,
+      closingCash: 1,
+      variance: 0,
+      lastClosedShiftId: 'sh-1',
+      nextTemplateId: '',
+      businessDate: '2026-10-14',
+      currentBusinessDate: '2026-10-14',
+      openedAt: 'x',
+      closedAt: 'y',
+      tankDips: [],
+    };
+    expect(parseCloseOutcome(outcome)).toEqual(outcome);
+    expect(parseCloseOutcome({ lastClosedShiftId: 'sh-1' })).toBeNull();
+    expect(parseCloseOutcome({ ...outcome, tankDips: [{ tankId: 1 }] })).toBeNull();
+  });
+
+  it('takes the closed state’s cash from the close response, else what was sent', () => {
+    const sent = { expectedCash: 10, closingCash: 9, variance: -1 };
+    expect(
+      closeOutcomeFigures(
+        { expectedDrawerCash: '12.50', closingCash: 9, cashVariance: -3.5 },
+        sent,
+      ),
+    ).toEqual({ expectedCash: 12.5, closingCash: 9, variance: -3.5 });
+    expect(closeOutcomeFigures(undefined, sent)).toEqual(sent);
+    expect(closeOutcomeFigures({ cashVariance: null }, sent)).toEqual(sent);
+  });
+
+  it('names the next template round the list', () => {
+    const t = [{ id: 'a' }, { id: 'b' }];
+    expect(nextTemplateAfter(t, 'a')).toBe('b');
+    expect(nextTemplateAfter(t, 'b')).toBe('a');
+    expect(nextTemplateAfter(t, 'zz')).toBe('a');
+    expect(nextTemplateAfter([], 'a')).toBe('');
+  });
+});
+
+describe('the cash count form (#534 review)', () => {
+  it('takes blanks and amounts of zero or more, never a negative or a word', () => {
+    const ok = (closingCash: string, amount = '') =>
+      cashCountSchema.safeParse({ closingCash, closeDrops: [{ drawerKey: '', amount }] }).success;
+    expect(ok('')).toBe(true);
+    expect(ok('0')).toBe(true);
+    expect(ok('1250.50', '300')).toBe(true);
+    expect(ok('-1')).toBe(false);
+    expect(ok('abc')).toBe(false);
+    expect(ok('10', '-5')).toBe(false);
   });
 });

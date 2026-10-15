@@ -14,13 +14,15 @@ import { handoverResultFor } from '../../test/handoverResult.js';
  */
 const mutateAsync = vi.fn();
 const recordCollection = vi.fn();
+const voidCreditSale = vi.fn();
+const voidOmcCardSale = vi.fn();
 
 vi.mock('../../services/cloud.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CloudTransactionService: class {
     recordCollection = (...a: unknown[]) => recordCollection(...a);
-    voidCreditSale = vi.fn();
-    voidOmcCardSale = vi.fn();
+    voidCreditSale = (...a: unknown[]) => voidCreditSale(...a);
+    voidOmcCardSale = (...a: unknown[]) => voidOmcCardSale(...a);
   },
 }));
 
@@ -31,11 +33,37 @@ vi.mock('../../query/handoverMutation.js', async (importOriginal) => ({
   saveHandoverRequestIdentity: vi.fn(),
 }));
 
+/** A query that has loaded `data`, as the Data Section reads it. */
+const loaded = (data: unknown[]) => ({
+  data,
+  isPending: false,
+  isError: false,
+  fetchStatus: 'idle' as const,
+  refetch: vi.fn(),
+});
+
+/** A query that failed, as the Data Section reads it. */
+const failed = () => ({
+  data: undefined,
+  isPending: false,
+  isError: true,
+  fetchStatus: 'idle' as const,
+  error: new Error('down'),
+  refetch: vi.fn(),
+});
+
+type FakeQuery = ReturnType<typeof loaded> | ReturnType<typeof failed>;
+const queries: { customers: () => FakeQuery; productSales: () => FakeQuery } = {
+  customers: () => loaded([]),
+  productSales: () => loaded([]),
+};
+
 vi.mock('../../query/hooks.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  useAllVehicles: () => ({ data: [] }),
-  useMerchandiseHandovers: () => ({ data: [] }),
-  useMerchandiseSales: () => ({ data: [] }),
+  useAllVehicles: () => loaded([]),
+  useCustomers: () => queries.customers(),
+  useMerchandiseHandovers: () => queries.productSales(),
+  useMerchandiseSales: () => loaded([]),
 }));
 
 // The Edit link opens the Handover Product Sale drawer; its own form is pinned
@@ -116,6 +144,10 @@ describe('HandoverDrawer', () => {
         Promise.resolve(handoverResultFor(payload)),
       );
     recordCollection.mockReset();
+    voidCreditSale.mockReset().mockResolvedValue({});
+    voidOmcCardSale.mockReset().mockResolvedValue({});
+    queries.customers = () => loaded([]);
+    queries.productSales = () => loaded([]);
     // Only the noise these tests provoke on purpose; React's act() and
     // unmounted-update warnings must still reach the console.
     restoreConsole = muteExpectedConsoleErrors([
@@ -575,6 +607,72 @@ describe('HandoverDrawer', () => {
       const [first, second] = mutateAsync.mock.calls.map((c) => c[0]);
       expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
     });
+  });
+
+  describe('failed reads show an error with Retry, never an empty list (#534 review)', () => {
+    it('says the customers could not load when adding a customer sale', () => {
+      queries.customers = failed;
+      renderWithProviders(<HandoverDrawer {...baseProps()} />);
+      fireEvent.click(screen.getByRole('button', { name: /Add customer sale/ }));
+      expect(screen.getByText(/Couldn.t load customers and vehicles/)).toBeDefined();
+      expect(screen.getByRole('button', { name: /Retry/ })).toBeDefined();
+      expect(screen.queryByText('Payment channel')).toBeNull();
+    });
+
+    it('says the product sales could not load instead of offering Edit', () => {
+      queries.productSales = failed;
+      renderWithProviders(<HandoverDrawer {...baseProps({ merchandiseCash: 450 })} />);
+      expect(screen.queryByRole('button', { name: /Edit Ravi's product sales/ })).toBeNull();
+      expect(screen.getByText(/Couldn.t load product sales/)).toBeDefined();
+    });
+  });
+
+  describe('voiding a customer sale is keyed (#534 review)', () => {
+    it('sends an Idempotency-Key, reused when the same void is retried after a lost answer', async () => {
+      voidCreditSale
+        .mockReset()
+        .mockRejectedValueOnce(Object.assign(new Error('Network down'), { status: undefined }))
+        .mockResolvedValueOnce({});
+      renderWithProviders(
+        <HandoverDrawer
+          {...baseProps({ creditSales: [{ id: 'c1', amount: 1000, customerName: 'Acme' }] })}
+        />,
+      );
+      const voidButton = () => screen.getByRole('button', { name: 'Void this credit sale' });
+      fireEvent.click(voidButton());
+      await waitFor(() => expect(voidCreditSale).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect((voidButton() as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(voidButton());
+      await waitFor(() => expect(voidCreditSale).toHaveBeenCalledTimes(2));
+      const [first, second] = voidCreditSale.mock.calls;
+      expect(first[0]).toBe('c1');
+      expect(first[1].idempotencyKey).toEqual(expect.any(String));
+      expect(second[1].idempotencyKey).toBe(first[1].idempotencyKey);
+    });
+
+    it('keys an OMC card void too', async () => {
+      renderWithProviders(
+        <HandoverDrawer {...baseProps({ omcSales: [{ id: 'o1', amount: 500 }] })} />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Void this OMC card sale' }));
+      await waitFor(() => expect(voidOmcCardSale).toHaveBeenCalledTimes(1));
+      expect(voidOmcCardSale.mock.calls[0][1].idempotencyKey).toEqual(expect.any(String));
+    });
+  });
+
+  it('restores the declared total as one line (#534 review)', () => {
+    renderWithProviders(
+      <HandoverDrawer
+        {...baseProps({
+          creditSales: [{ id: 'c1', amount: 1000, customerName: 'Acme' }],
+          omcSales: [{ id: 'o1', amount: 250 }],
+        })}
+      />,
+    );
+    setField('cashHandedOver', '2500');
+    setField('cardHandedOver', '1000');
+    setField('upiHandedOver', '500');
+    expect(rowValue('Declared total (cash + card + UPI + credit + OMC)')).toBe('₹5,250.00');
   });
 
   describe('product sales in the reconciliation (#534)', () => {

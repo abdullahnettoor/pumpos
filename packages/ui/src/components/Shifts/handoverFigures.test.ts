@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { reconcileDrawer } from '@pump/shared';
 import {
   acceptedHandoverRecon,
   handoverNozzles,
@@ -76,6 +77,61 @@ describe('handoverRecon (#534): expected = float + fuel cash + product cash − 
     expect(r.variance).toBe(-200);
   });
 
+  it('matches the server’s reconcileDrawer to the paisa on fractional inputs', () => {
+    const cases = [
+      {
+        ...base,
+        fuelSales: 0.005,
+        productCash: 0,
+        card: 0,
+        upi: 0,
+        credit: 0,
+        omc: 0,
+        openingFloat: 0,
+        drops: 0,
+        declaredCash: 0,
+      },
+      {
+        ...base,
+        fuelSales: 102_078.13125,
+        productCash: 0.005,
+        card: 0.004,
+        declaredCash: 98_000.995,
+      },
+      {
+        ...base,
+        fuelSales: 9_755.4419,
+        upi: 1_000.335,
+        credit: 0.115,
+        drops: 0.005,
+        declaredCash: 8_754.99,
+      },
+    ];
+    for (const c of cases) {
+      const server = reconcileDrawer({
+        openingFloat: c.openingFloat,
+        expectedFuelSales: c.fuelSales,
+        merchandiseCash: c.productCash,
+        cardHandedOver: c.card,
+        upiHandedOver: c.upi,
+        creditSales: c.credit,
+        omcCardSales: c.omc,
+        cashHandedOver: c.declaredCash,
+        cashDrops: c.drops,
+      });
+      const r = handoverRecon(c);
+      expect(r.variance).toBe(server.varianceAmount);
+      expect(r.expected).toBe(server.expectedCash);
+      expect(r.cashSales).toBe(server.cashSales);
+    }
+    // Fuel ₹0.005 with nothing declared is balanced, as the server records it.
+    expect(handoverRecon(cases[0]).variance).toBe(0);
+  });
+
+  it('totals everything declared: cash + card + UPI + credit + OMC', () => {
+    expect(handoverRecon({ ...base, omc: 250 }).declaredTotal).toBe(5_950 + 3_000 + 500 + 250);
+  });
+
   it('sums in paise, so float dust reads as balanced', () => {
     const r = handoverRecon({
       ...base,
@@ -102,6 +158,7 @@ describe('handoverRecon (#534): expected = float + fuel cash + product cash − 
       openingFloat: 2_000,
       cashDrops: 3_000,
       expectedCash: 5_950,
+      declaredTotal: 9_250,
       varianceAmount: -200,
     });
     expect(r).toMatchObject({
@@ -110,6 +167,7 @@ describe('handoverRecon (#534): expected = float + fuel cash + product cash − 
       expected: 5_950,
       declaredCash: 5_750,
       variance: -200,
+      declaredTotal: 9_250,
     });
   });
 

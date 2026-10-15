@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Drawer } from '../Drawer.js';
 import {
   Button,
+  DataSection,
   Form,
   Icon,
   Input,
@@ -22,7 +23,12 @@ import { Combobox } from '../primitives/Combobox.js';
 import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPopover.js';
 import { CustomerFormDrawer } from '../customers/CustomerFormDrawer.js';
 import { VehicleDrawer } from '../customers/VehicleDrawer.js';
-import { useAllVehicles, useMerchandiseHandovers, useMerchandiseSales } from '../../query/hooks.js';
+import {
+  useAllVehicles,
+  useCustomers,
+  useMerchandiseHandovers,
+  useMerchandiseSales,
+} from '../../query/hooks.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import {
   CloudTransactionService,
@@ -112,8 +118,6 @@ interface HandoverDrawerProps {
   nozzles: any[];
   terminals?: any[];
   stationHasConfiguredTerminals?: boolean;
-  /** Credit-eligible (non-prepaid Credit/Fleet) customers, each with currentBalance + creditLimit. */
-  customers?: any[];
   /** Fuel-on-credit lines already recorded for this (attendant, DU). */
   creditSales?: any[];
   /** OMC fleet-card sale lines already recorded for this (attendant, DU). */
@@ -192,7 +196,6 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   nozzles,
   terminals = [],
   stationHasConfiguredTerminals = false,
-  customers = [],
   creditSales = [],
   omcSales = [],
   merchandiseCash = 0,
@@ -328,13 +331,21 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   const [extraCustomers, setExtraCustomers] = useState<any[]>([]);
   const [extraVehicles, setExtraVehicles] = useState<any[]>([]);
   // Cached vehicles (semi tier) for the client-side credit picker — no server search.
-  const { data: allVehiclesData } = useAllVehicles(true);
+  const vehiclesQ = useAllVehicles(true);
+  const allVehiclesData = vehiclesQ.data;
+  // Customers pickable for on-account billing: all except legacy
+  // station-prepaid non-fleet wallets. Prepaid Fleet customers are included
+  // (OMC fleet cards, settled to CMS).
+  const customersQ = useCustomers(true);
+  const customers = useMemo(
+    () => (customersQ.data ?? []).filter((c: any) => c.customerType === 'Fleet' || !c.isPrepaid),
+    [customersQ.data],
+  );
   // The shift's Product Sales (cached operational reads, shared with Live
   // shift), so "Edit" opens this employee's Handover Product Sale (#533).
   const productHandoversQ = useMerchandiseHandovers(shiftId);
   const productBilledQ = useMerchandiseSales(shiftId);
   const [productSale, setProductSale] = useState({ open: false, token: 0 });
-  const productSalesReady = !!productHandoversQ.data && !!productBilledQ.data;
 
   const resetCcRow = () => {
     ccIdemKeyRef.current = null;
@@ -582,7 +593,13 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
     setError(null);
     try {
       setCcBusy(true);
-      await transactionService.voidCreditSale(id);
+      // One key per void, through the shared store: a retry of the same void
+      // after a lost answer reuses it, so it cannot void twice.
+      await sendKeyed(
+        officeSubmitKeys.session(`credit-sale:void:${id}`),
+        { stationId, shiftId, id },
+        (idempotencyKey) => transactionService.voidCreditSale(id, { idempotencyKey }),
+      );
       setCreditLines((prev) => prev.filter((l) => l.id !== id));
       setAcceptedResult(null);
       renewKeySession();
@@ -599,7 +616,11 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
     setError(null);
     try {
       setCcBusy(true);
-      await transactionService.voidOmcCardSale(id);
+      await sendKeyed(
+        officeSubmitKeys.session(`omc-card-sale:void:${id}`),
+        { stationId, shiftId, id },
+        (idempotencyKey) => transactionService.voidOmcCardSale(id, { idempotencyKey }),
+      );
       setOmcLines((prev) => prev.filter((l) => l.id !== id));
       setAcceptedResult(null);
       renewKeySession();
@@ -1127,161 +1148,175 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                 Add customer sale
               </Button>
             ) : (
-              <div className="flex flex-col gap-3 rounded-input border border-border-soft bg-surface p-3">
-                {/* Channel: station receivable (Credit) vs OMC fleet card (→ CMS) */}
-                <div className="flex flex-col gap-1">
-                  <span className="text-[12px] font-medium text-ink-muted">Payment channel</span>
-                  <SegmentedControl
-                    aria-label="Payment channel"
-                    value={ccChannel}
-                    onChange={setCcChannel}
-                    options={[
-                      { value: 'credit', label: 'Credit (receivable)' },
-                      { value: 'omc', label: 'OMC card → CMS' },
-                    ]}
-                  />
-                  {ccChannel === 'omc' && (
-                    <span className="text-[12px] text-ink-muted">
-                      Settled to CMS by the Oil Company — not a receivable. Customer is optional.
-                    </span>
-                  )}
-                </div>
+              // The picker needs the customers and vehicles: a failed load says
+              // so, with Retry, rather than offering an empty list.
+              <DataSection
+                title="customers and vehicles"
+                query={[customersQ, vehiclesQ]}
+                shape="bare"
+                placeholderHeight={160}
+                enabled
+              >
+                <div className="flex flex-col gap-3 rounded-input border border-border-soft bg-surface p-3">
+                  {/* Channel: station receivable (Credit) vs OMC fleet card (→ CMS) */}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[12px] font-medium text-ink-muted">Payment channel</span>
+                    <SegmentedControl
+                      aria-label="Payment channel"
+                      value={ccChannel}
+                      onChange={setCcChannel}
+                      options={[
+                        { value: 'credit', label: 'Credit (receivable)' },
+                        { value: 'omc', label: 'OMC card → CMS' },
+                      ]}
+                    />
+                    {ccChannel === 'omc' && (
+                      <span className="text-[12px] text-ink-muted">
+                        Settled to CMS by the Oil Company — not a receivable. Customer is optional.
+                      </span>
+                    )}
+                  </div>
 
-                {/* Combined picker: customer name OR vehicle number (cached, client-side) */}
-                <div className="flex flex-col gap-1">
-                  <span className="text-[12px] font-medium text-ink-muted">
-                    Customer or vehicle{ccChannel === 'omc' ? ' (optional)' : ''}
-                  </span>
-                  <Combobox
-                    options={creditOptions}
-                    value={ccSelectValue}
-                    onChange={handleCreditSelect}
-                    placeholder="Select customer or vehicle…"
-                    searchPlaceholder="Search name or vehicle no.…"
-                    emptyMessage="No credit customer or vehicle found."
-                    createActions={[
-                      {
-                        label: '＋ New customer',
-                        sublabel: 'Create and bill in one step',
-                        onSelect: () => setNewCustomerOpen(true),
-                      },
-                      {
-                        label: '＋ New vehicle',
-                        sublabel: 'Add a vehicle to a customer',
-                        onSelect: () => setNewVehicleOpen(true),
-                      },
-                    ]}
-                  />
-                  {ccChannel === 'credit' && ccCustomerId && ccAvailable != null && (
-                    <span className="text-[12px] text-ink-muted">
-                      Available credit {formatMoney(ccAvailable)}
+                  {/* Combined picker: customer name OR vehicle number (cached, client-side) */}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[12px] font-medium text-ink-muted">
+                      Customer or vehicle{ccChannel === 'omc' ? ' (optional)' : ''}
                     </span>
-                  )}
-                </div>
+                    <Combobox
+                      options={creditOptions}
+                      value={ccSelectValue}
+                      onChange={handleCreditSelect}
+                      placeholder="Select customer or vehicle…"
+                      searchPlaceholder="Search name or vehicle no.…"
+                      emptyMessage="No credit customer or vehicle found."
+                      createActions={[
+                        {
+                          label: '＋ New customer',
+                          sublabel: 'Create and bill in one step',
+                          onSelect: () => setNewCustomerOpen(true),
+                        },
+                        {
+                          label: '＋ New vehicle',
+                          sublabel: 'Add a vehicle to a customer',
+                          onSelect: () => setNewVehicleOpen(true),
+                        },
+                      ]}
+                    />
+                    {ccChannel === 'credit' && ccCustomerId && ccAvailable != null && (
+                      <span className="text-[12px] text-ink-muted">
+                        Available credit {formatMoney(ccAvailable)}
+                      </span>
+                    )}
+                  </div>
 
-                {(ccCustomerId || ccChannel === 'omc') && (
-                  <>
-                    <div className="grid grid-cols-[1.4fr_1fr_1fr] gap-2">
-                      <div className="flex min-w-0 flex-col gap-0.5">
-                        <FieldLabel htmlFor="cc-fuel">Fuel</FieldLabel>
-                        <Select
-                          id="cc-fuel"
-                          inputSize="sm"
-                          value={ccProductId}
-                          onChange={(e) => handleCcProductChange(e.target.value)}
-                          disabled={ccBusy}
-                        >
-                          <option value="">Select fuel</option>
-                          {duProducts.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                              {p.code ? ` (${p.code})` : ''}
-                            </option>
-                          ))}
-                        </Select>
+                  {(ccCustomerId || ccChannel === 'omc') && (
+                    <>
+                      <div className="grid grid-cols-[1.4fr_1fr_1fr] gap-2">
+                        <div className="flex min-w-0 flex-col gap-0.5">
+                          <FieldLabel htmlFor="cc-fuel">Fuel</FieldLabel>
+                          <Select
+                            id="cc-fuel"
+                            inputSize="sm"
+                            value={ccProductId}
+                            onChange={(e) => handleCcProductChange(e.target.value)}
+                            disabled={ccBusy}
+                          >
+                            <option value="">Select fuel</option>
+                            {duProducts.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                                {p.code ? ` (${p.code})` : ''}
+                              </option>
+                            ))}
+                          </Select>
+                        </div>
+                        <div className="flex min-w-0 flex-col gap-0.5">
+                          <FieldLabel htmlFor="cc-qty">
+                            Qty (L){ccPrice ? ` · ₹${ccPrice}/L` : ''}
+                          </FieldLabel>
+                          <Input
+                            id="cc-qty"
+                            inputSize="sm"
+                            type="number"
+                            step="0.001"
+                            min="0"
+                            placeholder="0"
+                            className="text-right font-mono"
+                            value={ccQty}
+                            onChange={(e) => handleCcQtyChange(e.target.value)}
+                            disabled={ccBusy}
+                          />
+                        </div>
+                        <div className="flex min-w-0 flex-col gap-0.5">
+                          <FieldLabel htmlFor="cc-amount">Amount (₹)</FieldLabel>
+                          <Input
+                            id="cc-amount"
+                            inputSize="sm"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0"
+                            name="ccAmount"
+                            aria-label="Customer sale amount"
+                            className="text-right font-mono font-semibold"
+                            value={ccAmount}
+                            onChange={(e) => handleCcAmountChange(e.target.value)}
+                            disabled={ccBusy}
+                          />
+                        </div>
                       </div>
                       <div className="flex min-w-0 flex-col gap-0.5">
-                        <FieldLabel htmlFor="cc-qty">
-                          Qty (L){ccPrice ? ` · ₹${ccPrice}/L` : ''}
+                        <FieldLabel htmlFor="cc-notes">
+                          Remarks (driver, slip no., notes)
                         </FieldLabel>
                         <Input
-                          id="cc-qty"
+                          id="cc-notes"
                           inputSize="sm"
-                          type="number"
-                          step="0.001"
-                          min="0"
-                          placeholder="0"
-                          className="text-right font-mono"
-                          value={ccQty}
-                          onChange={(e) => handleCcQtyChange(e.target.value)}
+                          value={ccNotes}
+                          onChange={(e) => setCcNotes(e.target.value)}
                           disabled={ccBusy}
+                          placeholder="e.g. driver name / phone / slip ref"
                         />
                       </div>
-                      <div className="flex min-w-0 flex-col gap-0.5">
-                        <FieldLabel htmlFor="cc-amount">Amount (₹)</FieldLabel>
-                        <Input
-                          id="cc-amount"
-                          inputSize="sm"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="0"
-                          name="ccAmount"
-                          aria-label="Customer sale amount"
-                          className="text-right font-mono font-semibold"
-                          value={ccAmount}
-                          onChange={(e) => handleCcAmountChange(e.target.value)}
-                          disabled={ccBusy}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex min-w-0 flex-col gap-0.5">
-                      <FieldLabel htmlFor="cc-notes">Remarks (driver, slip no., notes)</FieldLabel>
-                      <Input
-                        id="cc-notes"
-                        inputSize="sm"
-                        value={ccNotes}
-                        onChange={(e) => setCcNotes(e.target.value)}
-                        disabled={ccBusy}
-                        placeholder="e.g. driver name / phone / slip ref"
-                      />
-                    </div>
-                    {ccChannel === 'credit' && ccExceeds && (
-                      <CloseNote tone="warning">
-                        Exceeds available credit
-                        {ccAvailable != null ? ` (${formatMoney(ccAvailable)})` : ''}. You can still
-                        record it.
-                      </CloseNote>
-                    )}
-                  </>
-                )}
+                      {ccChannel === 'credit' && ccExceeds && (
+                        <CloseNote tone="warning">
+                          Exceeds available credit
+                          {ccAvailable != null ? ` (${formatMoney(ccAvailable)})` : ''}. You can
+                          still record it.
+                        </CloseNote>
+                      )}
+                    </>
+                  )}
 
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="sm"
-                    leftIcon={<Icon name="plus" size="xs" />}
-                    onClick={addCreditLine}
-                    disabled={(ccChannel === 'credit' && !ccCustomerId) || !(Number(ccAmount) > 0)}
-                    loading={ccBusy}
-                  >
-                    {ccChannel === 'omc' ? 'Add OMC card sale' : 'Add credit sale'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      resetCcRow();
-                      setCcOpen(false);
-                    }}
-                    disabled={ccBusy}
-                  >
-                    Done
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      leftIcon={<Icon name="plus" size="xs" />}
+                      onClick={addCreditLine}
+                      disabled={
+                        (ccChannel === 'credit' && !ccCustomerId) || !(Number(ccAmount) > 0)
+                      }
+                      loading={ccBusy}
+                    >
+                      {ccChannel === 'omc' ? 'Add OMC card sale' : 'Add credit sale'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        resetCcRow();
+                        setCcOpen(false);
+                      }}
+                      disabled={ccBusy}
+                    >
+                      Done
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              </DataSection>
             )}
           </section>
 
@@ -1393,17 +1428,27 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                 label={
                   <>
                     Product sales (cash)
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="xs"
-                      className="h-6 px-1.5 text-brand"
-                      disabled={!productSalesReady}
-                      onClick={() => setProductSale((p) => ({ open: true, token: p.token + 1 }))}
+                    {/* Edit opens the recorded sale: it waits for the shift's
+                        product sales, and says so if they fail to load. */}
+                    <DataSection
+                      title="product sales"
+                      query={[productHandoversQ, productBilledQ]}
+                      shape="bare"
+                      placeholderHeight={24}
+                      enabled
+                      className="inline-flex"
                     >
-                      Edit
-                      <span className="sr-only"> {userName}'s product sales</span>
-                    </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        className="h-6 px-1.5 text-brand"
+                        onClick={() => setProductSale((p) => ({ open: true, token: p.token + 1 }))}
+                      >
+                        Edit
+                        <span className="sr-only"> {userName}'s product sales</span>
+                      </Button>
+                    </DataSection>
                   </>
                 }
                 value={plus(recon.productCash)}
@@ -1420,6 +1465,11 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
               <ReconLine label="Cash drops" value={minus(recon.drops)} />
               <ReconLine total label="Expected in drawer" value={formatMoney(recon.expected)} />
               <ReconLine label="Declared cash" value={formatMoney(recon.declaredCash)} />
+              <ReconLine
+                muted
+                label="Declared total (cash + card + UPI + credit + OMC)"
+                value={formatMoney(recon.declaredTotal)}
+              />
               <div className="flex items-center justify-between gap-3 border-t border-border-soft pt-1.5 text-[13px] font-semibold text-ink-strong">
                 <dt>Variance</dt>
                 <dd>

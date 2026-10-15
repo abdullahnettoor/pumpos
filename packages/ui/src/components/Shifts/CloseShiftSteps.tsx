@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useFieldArray } from 'react-hook-form';
+import { useZodForm } from '../../forms/useZodForm.js';
 import { drawerKey, type ShiftCloseCashSummaryLines } from '@pump/shared';
 import {
   Button,
@@ -20,11 +22,14 @@ import { formatVariance } from '../../utils/variance.js';
 import { NozzleReadingsTable } from './NozzleReadingsTable.js';
 import { drawerColumns, drawerTotalRow } from './DrawerReconciliationTable.js';
 import {
+  cashCountDefaults,
+  cashCountSchema,
+  cashCountToDraft,
   dipCount,
+  type CashCountFormValues,
   type CloseDraft,
   type CloseDrawerRow,
   type CloseDrawerTotal,
-  type CloseDropRow,
 } from './closeShiftModel.js';
 import type { NozzleGroup, StaffAssignmentInput } from './liveShiftModel.js';
 
@@ -295,6 +300,8 @@ export interface CashCountStepProps {
   canRecordDrops: boolean;
   draft: CloseDraft;
   onDraftChange: DraftPatch;
+  /** Whether the count and drops as typed are valid (the page holds Next until they are). */
+  onValidityChange?: (valid: boolean) => void;
 }
 
 export const CashCountStep: React.FC<CashCountStepProps> = ({
@@ -305,14 +312,40 @@ export const CashCountStep: React.FC<CashCountStepProps> = ({
   canRecordDrops,
   draft,
   onDraftChange,
+  onValidityChange,
 }) => {
   const [showWhy, setShowWhy] = useState(false);
   const variance = draft.closingCash - lines.expectedOfficeCash;
   const office = formatVariance(variance, 'cash');
-  const drops = draft.closeDrops;
-  const setDrops = (closeDrops: CloseDropRow[]) => onDraftChange({ closeDrops });
-  const updateDrop = (i: number, patch: Partial<CloseDropRow>) =>
-    setDrops(drops.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  // React Hook Form + Zod: the count and the drops as typed. Only values the
+  // schema accepts reach the draft, so a negative amount never reaches
+  // Confirm or the API.
+  const {
+    register,
+    control,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useZodForm<CashCountFormValues>(cashCountSchema, {
+    mode: 'onChange',
+    defaultValues: cashCountDefaults(draft),
+  });
+  const { fields, append, remove } = useFieldArray({ control, name: 'closeDrops' });
+  const toDraft = useRef({ onDraftChange, onValidityChange });
+  useEffect(() => {
+    toDraft.current = { onDraftChange, onValidityChange };
+  });
+  useEffect(() => {
+    const sub = watch((values) => {
+      const parsed = cashCountSchema.safeParse(values);
+      toDraft.current.onValidityChange?.(parsed.success);
+      if (parsed.success) toDraft.current.onDraftChange(cashCountToDraft(parsed.data));
+    });
+    return () => {
+      sub.unsubscribe();
+      toDraft.current.onValidityChange?.(true);
+    };
+  }, [watch]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -355,61 +388,65 @@ export const CashCountStep: React.FC<CashCountStepProps> = ({
               size="xs"
               leftIcon={<Icon name="plus" size="xs" />}
               onClick={() =>
-                setDrops([
-                  ...drops,
-                  { drawerKey: dropDrawers[0] ? drawerKey(dropDrawers[0]) : '', amount: 0 },
-                ])
+                append({ drawerKey: dropDrawers[0] ? drawerKey(dropDrawers[0]) : '', amount: '' })
               }
             >
               Add drop
             </Button>
           </div>
-          {drops.length === 0 ? (
+          {fields.length === 0 ? (
             <p className="text-[12px] text-ink-muted">
               Cash the office takes from a drawer now. A drop naming no drawer lowers the expected
               office cash.
             </p>
           ) : (
-            drops.map((row, i) => (
-              <div
-                key={i}
-                role="group"
-                aria-labelledby="close-drops-heading"
-                className="flex items-center gap-2"
-              >
-                <Select
-                  aria-label="Drop from drawer"
-                  className="flex-[1.4]"
-                  value={row.drawerKey}
-                  onChange={(e) => updateDrop(i, { drawerKey: e.target.value })}
+            fields.map((field, i) => {
+              const amountError = errors.closeDrops?.[i]?.amount?.message;
+              return (
+                <div
+                  key={field.id}
+                  role="group"
+                  aria-labelledby="close-drops-heading"
+                  className="flex flex-col gap-0.5"
                 >
-                  {dropDrawers.map((d) => (
-                    <option key={drawerKey(d)} value={drawerKey(d)}>
-                      {d.label}
-                    </option>
-                  ))}
-                  <option value="">No drawer (office)</option>
-                </Select>
-                <Input
-                  aria-label="Drop amount"
-                  type="number"
-                  min="0"
-                  inputMode="decimal"
-                  placeholder="Amount"
-                  className="flex-1 text-right font-mono"
-                  value={row.amount || ''}
-                  onChange={(e) => updateDrop(i, { amount: Number(e.target.value) })}
-                />
-                <Button
-                  variant="ghost"
-                  size="md"
-                  iconOnly
-                  aria-label="Remove drop"
-                  leftIcon={<Icon name="x" size="sm" />}
-                  onClick={() => setDrops(drops.filter((_, j) => j !== i))}
-                />
-              </div>
-            ))
+                  <div className="flex items-center gap-2">
+                    <Select
+                      aria-label="Drop from drawer"
+                      className="flex-[1.4]"
+                      {...register(`closeDrops.${i}.drawerKey`)}
+                    >
+                      {dropDrawers.map((d) => (
+                        <option key={drawerKey(d)} value={drawerKey(d)}>
+                          {d.label}
+                        </option>
+                      ))}
+                      <option value="">No drawer (office)</option>
+                    </Select>
+                    <Input
+                      aria-label="Drop amount"
+                      type="number"
+                      min="0"
+                      inputMode="decimal"
+                      placeholder="Amount"
+                      invalid={!!amountError}
+                      className="flex-1 text-right font-mono"
+                      {...register(`closeDrops.${i}.amount`)}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="md"
+                      iconOnly
+                      aria-label="Remove drop"
+                      leftIcon={<Icon name="x" size="sm" />}
+                      onClick={() => remove(i)}
+                    />
+                  </div>
+                  {amountError && (
+                    <span className="text-right text-[12px] text-danger-fg">{amountError}</span>
+                  )}
+                </div>
+              );
+            })
           )}
         </section>
       )}
@@ -424,18 +461,23 @@ export const CashCountStep: React.FC<CashCountStepProps> = ({
             inputMode="decimal"
             placeholder="0"
             autoFocus
+            invalid={!!errors.closingCash}
             className="flex-1 text-right font-mono"
-            value={draft.closingCash || ''}
-            onChange={(e) => onDraftChange({ closingCash: Number(e.target.value) })}
+            {...register('closingCash')}
           />
           <CashCountPopover
             breakdown={draft.cashBreakdown}
             onBreakdownChange={(cashBreakdown) => onDraftChange({ cashBreakdown })}
-            onApply={(t) => onDraftChange({ closingCash: t })}
+            onApply={(t) => setValue('closingCash', String(t), { shouldValidate: true })}
             currentValue={draft.closingCash}
             title="Count safe cash by denomination"
           />
         </div>
+        {errors.closingCash?.message && (
+          <span className="text-[12px] text-danger-fg" role="alert">
+            {errors.closingCash.message}
+          </span>
+        )}
         <div
           className="flex items-center justify-between gap-3 rounded-card border border-border-soft bg-surface px-4 py-2.5 text-[13px]"
           data-testid="office-count-variance"

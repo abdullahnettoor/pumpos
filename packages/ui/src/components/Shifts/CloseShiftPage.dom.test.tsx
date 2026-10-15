@@ -11,6 +11,7 @@ import {
   type CloseDraft,
 } from './closeShiftModel.js';
 import { IDEMPOTENCY_KEY_REUSED } from '@pump/shared';
+import { DrawerReconciliationTable } from './DrawerReconciliationTable.js';
 
 /**
  * The Close shift page (#534): the old wizard's checks and figures on a page
@@ -160,6 +161,30 @@ describe('Close shift page (#534)', () => {
     expect(onDraftChange).not.toHaveBeenCalled();
   });
 
+  it('shows an error with Retry, not empty figures, when the tanks or transactions fail', () => {
+    const refetch = vi.fn();
+    renderWithProviders(
+      <CloseShiftPage
+        {...baseProps({
+          queries: [
+            { isPending: false, isError: false, fetchStatus: 'idle' },
+            {
+              isPending: false,
+              isError: true,
+              fetchStatus: 'idle',
+              error: new Error('x'),
+              refetch,
+            },
+          ],
+        })}
+      />,
+    );
+    expect(screen.getByText(/Couldn.t load close figures/)).toBeDefined();
+    expect(screen.queryByRole('contentinfo', { name: 'Close shift' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Retry/ }));
+    expect(refetch).toHaveBeenCalled();
+  });
+
   describe('the sticky footer', () => {
     it('shows expected and counted office cash, and the variance once counted', () => {
       renderWithProviders(<Stateful />);
@@ -264,6 +289,21 @@ describe('Close shift page (#534)', () => {
       fireEvent.click(screen.getByRole('button', { name: /Record DU2 · Suresh handover/ }));
       expect(onOpenHandover).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u2' }));
     });
+  });
+
+  it('reads the drawers’ variance total as a chip, with the one balanced rule (#534 review)', () => {
+    const drawers = [drawer('u1', 'du1', 5000, 0.004), drawer('u2', 'du2', 5000, -0.004)];
+    const { container } = renderWithProviders(
+      <DrawerReconciliationTable drawers={drawers} showTotals />,
+    );
+    const foot = container.querySelector('tfoot')!;
+    expect(within(foot as HTMLElement).getByText('Balanced')).toBeDefined();
+    cleanup();
+    const short = [drawer('u1', 'du1', 4880, -120)];
+    const again = renderWithProviders(<DrawerReconciliationTable drawers={short} showTotals />);
+    const total = again.container.querySelector('tfoot [data-variance]')!;
+    expect(total.getAttribute('data-variance')).toBe('short');
+    expect(total.textContent).toBe('−₹120.00');
   });
 
   describe('confirm and submit gating', () => {

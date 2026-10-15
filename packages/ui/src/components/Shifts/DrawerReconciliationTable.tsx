@@ -5,6 +5,7 @@ import {
   StatusChip,
   VarianceChip,
   type TableColumn,
+  type TotalRow,
 } from '../../pump-ds/index.js';
 import { formatMoney } from '../../utils/format.js';
 import { formatVariance } from '../../utils/variance.js';
@@ -103,15 +104,20 @@ export function drawerColumns(
   ];
 }
 
-/** The total row: the handed-over Drawers, labelled with what it leaves out. */
-export const drawerTotalRow = (rows: CloseDrawerRow[], total: CloseDrawerTotal) => ({
-  label: total.label,
-  derive: false,
-  values: {
-    ...total.values,
-    variance: rows.every((r) => r.pending) ? null : total.variance,
-  },
-});
+/**
+ * The total row: the handed-over Drawers, labelled with what it leaves out.
+ * The variance total reads as the rows do, a `VarianceChip` with the one
+ * balanced rule; the figure stays in `values` for a printed copy.
+ */
+export const drawerTotalRow = (rows: CloseDrawerRow[], total: CloseDrawerTotal): TotalRow => {
+  const none = rows.length === 0 || rows.every((r) => r.pending);
+  return {
+    label: total.label,
+    derive: false,
+    values: { ...total.values, variance: none ? null : total.variance },
+    cells: none ? undefined : { variance: <VarianceChip amount={total.variance} size="md" /> },
+  };
+};
 
 /**
  * Per-Drawer reconciliation: Opening Float + DU cash sales − Cash Drops,

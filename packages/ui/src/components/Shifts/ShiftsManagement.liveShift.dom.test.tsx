@@ -91,14 +91,14 @@ const activeShift = {
   reconciliation: { openingFloat: 2000, cashSales: 3000, handoverCashDrops: 0, drawers: [] },
 };
 
-const seed = (shift: unknown) => {
+const seed = (shift: unknown, lastShiftId = 'sh-0') => {
   const client = createTestQueryClient();
   client.setQueryData(queryKeys.shiftStatus('st-1', false), {
     activeShift: shift,
     lastShift: shift
       ? null
       : {
-          id: 'sh-0',
+          id: lastShiftId,
           templateName: 'Morning',
           businessDate: '2026-10-14',
           shiftSequence: 1,
@@ -371,11 +371,15 @@ const allHandedOver = {
 
 const host = (
   initial: string,
-  opts: { role?: 'Owner' | 'Manager' | 'Staff' | 'Accountant'; shift?: unknown } = {},
+  opts: {
+    role?: 'Owner' | 'Manager' | 'Staff' | 'Accountant';
+    shift?: unknown;
+    lastShiftId?: string;
+  } = {},
 ) => {
   const onRoute = vi.fn();
   const view = renderWithProviders(<Host initial={initial} role={opts.role} onRoute={onRoute} />, {
-    queryClient: seed(opts.shift ?? activeShift),
+    queryClient: seed('shift' in opts ? opts.shift : activeShift, opts.lastShiftId),
   });
   return { ...view, onRoute };
 };
@@ -426,8 +430,15 @@ describe('Close shift page (#534)', () => {
   it('closes with an Idempotency-Key, reused on a retry after a lost answer, then shows the outcome', async () => {
     closeShift
       .mockRejectedValueOnce(Object.assign(new Error('Network down'), { status: undefined }))
-      .mockResolvedValueOnce({ shift: { id: 'sh-1', closedAt: '2026-10-14T16:30:00.000Z' } });
-    getShiftStatus.mockResolvedValue(null);
+      .mockResolvedValueOnce({
+        shift: { id: 'sh-1', closedAt: '2026-10-14T16:30:00.000Z' },
+        snapshot: { expectedDrawerCash: 3000, closingCash: 0, cashVariance: -3000 },
+      });
+    getShiftStatus.mockResolvedValue({
+      activeShift: null,
+      lastShift: { id: 'sh-1', templateName: 'Evening', businessDate: '2026-10-14' },
+      templates: [],
+    });
     const { onRoute } = host('/shifts/sh-1/close?step=confirm', { shift: allHandedOver });
     fireEvent.click(screen.getByLabelText(/I confirm these readings are correct/));
     const close = () => screen.getByRole('button', { name: /^Close shift$/ }) as HTMLButtonElement;
@@ -445,6 +456,102 @@ describe('Close shift page (#534)', () => {
     expect(onRoute).toHaveBeenCalledWith('/shifts/sh-1/close?step=done', { replace: true });
     expect(screen.getByRole('button', { name: /Open next shift/ })).toBeDefined();
     expect(screen.getByRole('button', { name: /View shift summary/ })).toBeDefined();
+    // The office cash is the close response's snapshot.
+    const office = screen.getByRole('region', { name: 'Office cash' });
+    expect(within(office).getByText('₹3,000.00')).toBeDefined();
+  });
+
+  it('drops a draft once the shift is closed elsewhere, and starts clean on a reopen', () => {
+    sessionStorage.setItem(
+      'pumpos:close-draft:st-1:sh-1',
+      JSON.stringify({
+        step: 'cash',
+        closingCash: 4800,
+        closeDrops: [],
+        recordDip: false,
+        dipReadings: {},
+        dipReasons: {},
+        cashBreakdown: {},
+      }),
+    );
+    // Closed in another tab: the status names no open shift.
+    host('/shifts/sh-1/close?step=cash', { shift: null });
+    expect(screen.getByText('This shift is not open')).toBeDefined();
+    expect(sessionStorage.getItem('pumpos:close-draft:st-1:sh-1')).toBeNull();
+    cleanup();
+
+    // Reopened: the page starts from an empty count.
+    host('/shifts/sh-1/close?step=cash');
+    expect(
+      (screen.getByLabelText('Counted office cash (float + deposited)') as HTMLInputElement).value,
+    ).toBe('');
+  });
+
+  it('never shows a stored outcome for a shift that is open again', () => {
+    sessionStorage.setItem(
+      'pumpos:closed-shift:st-1:sh-1',
+      JSON.stringify({
+        expectedCash: 3000,
+        closingCash: 3000,
+        variance: 0,
+        lastClosedShiftId: 'sh-1',
+        nextTemplateId: 't1',
+        businessDate: '2026-10-14',
+        currentBusinessDate: '2026-10-14',
+        openedAt: '2026-10-14T08:30:00.000Z',
+        closedAt: '2026-10-14T16:30:00.000Z',
+        shiftName: 'Evening',
+        tankDips: [],
+        closeStatus: 'closed',
+      }),
+    );
+    // The status says sh-1 is open (reopened since).
+    host('/shifts/sh-1/close?step=done');
+    expect(screen.queryByRole('heading', { name: 'Evening closed' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Close Evening' })).toBeDefined();
+    expect(sessionStorage.getItem('pumpos:closed-shift:st-1:sh-1')).toBeNull();
+  });
+
+  it('shows a stored outcome the status confirms, and discards one that does not match', () => {
+    const outcome = {
+      expectedCash: 3000,
+      closingCash: 3000,
+      variance: 0,
+      lastClosedShiftId: 'sh-1',
+      nextTemplateId: 't1',
+      businessDate: '2026-10-14',
+      currentBusinessDate: '2026-10-14',
+      openedAt: '2026-10-14T08:30:00.000Z',
+      closedAt: '2026-10-14T16:30:00.000Z',
+      shiftName: 'Evening',
+      tankDips: [],
+      closeStatus: 'closed',
+    };
+    sessionStorage.setItem('pumpos:closed-shift:st-1:sh-1', JSON.stringify(outcome));
+    host('/shifts/sh-1/close?step=done', { shift: null, lastShiftId: 'sh-1' });
+    expect(screen.getByRole('heading', { name: 'Evening closed' })).toBeDefined();
+    cleanup();
+
+    // Only the id survived: not an outcome, so nothing renders from it.
+    sessionStorage.setItem(
+      'pumpos:closed-shift:st-1:sh-1',
+      JSON.stringify({ lastClosedShiftId: 'sh-1' }),
+    );
+    host('/shifts/sh-1/close?step=done', { shift: null, lastShiftId: 'sh-1' });
+    expect(screen.queryByRole('heading', { name: 'Evening closed' })).toBeNull();
+    expect(screen.getByText('This shift is not open')).toBeDefined();
+  });
+
+  it('holds Next on Cash count until a negative count is fixed, and never stores it', async () => {
+    host('/shifts/sh-1/close?step=cash');
+    const count = screen.getByLabelText('Counted office cash (float + deposited)');
+    const next = () => screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement;
+    fireEvent.change(count, { target: { value: '-50' } });
+    expect(await screen.findByText('Enter an amount of zero or more.')).toBeDefined();
+    expect(next().disabled).toBe(true);
+    expect(sessionStorage.getItem('pumpos:close-draft:st-1:sh-1') ?? '').not.toContain('-50');
+    fireEvent.change(count, { target: { value: '50' } });
+    await waitFor(() => expect(next().disabled).toBe(false));
   });
 
   it('tells an Accountant at the address that their role cannot close', () => {

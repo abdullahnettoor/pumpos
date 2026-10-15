@@ -1516,12 +1516,22 @@ export class CloudTransactionService {
     );
   }
 
-  async voidCreditSale(id: string): Promise<any> {
-    return request<any>(`/transactions/credit-sales/${id}`, { method: 'DELETE' });
+  /** Void a credit sale. Pass an `idempotencyKey` so a retry cannot void twice. */
+  async voidCreditSale(id: string, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      `/transactions/credit-sales/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async voidOmcCardSale(id: string): Promise<any> {
-    return request<any>(`/transactions/omc-card-sales/${id}`, { method: 'DELETE' });
+  /** Void an OMC card sale. Pass an `idempotencyKey` so a retry cannot void twice. */
+  async voidOmcCardSale(id: string, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      `/transactions/omc-card-sales/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async getInventoryStatus(stationId: string): Promise<any[]> {

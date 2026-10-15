@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { historicalShiftMessage, type ShiftCloseCashSummaryLines } from '@pump/shared';
-import { Button, Icon, VarianceChip } from '../../pump-ds/index.js';
+import { Button, DataSection, Icon, VarianceChip, type SectionQuery } from '../../pump-ds/index.js';
 import { cn } from '../../pump-ds/lib/cn.js';
 import { PageFrame } from '../page-frame/index.js';
 import { useKeyedSave, type KeyedSave } from '../../office-records/useKeyedSave.js';
@@ -65,6 +65,12 @@ export interface CloseShiftPageProps {
   isClosing: boolean;
   /** Close the shift; `save` sends it under this page's Idempotency-Key. */
   onConfirmClose: (save: KeyedSave) => void;
+  /**
+   * The reads the steps depend on beyond the shift status (the station's
+   * tanks, the shift's transactions). Until they load the page shows a
+   * skeleton; if one fails, "Couldn't load … · Retry", never empty figures.
+   */
+  queries?: SectionQuery[];
 }
 
 /**
@@ -92,6 +98,9 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
     onConfirmClose,
   } = props;
   const save = useKeyedSave(`shift:close:${shift.id}`);
+  // The cash count is a form: an amount it refuses never reaches the draft,
+  // and the page does not move on from it until it is fixed.
+  const [cashValid, setCashValid] = useState(true);
   const index = SHIFT_CLOSE_STEPS.indexOf(step);
   const pendingDrawers = drawerRows.filter((r) => r.pending).length;
   const canSubmit =
@@ -124,6 +133,7 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
                   variant="ghost"
                   size="sm"
                   aria-current={state === 'active' ? 'step' : undefined}
+                  disabled={step === 'cash' && !cashValid && s !== step}
                   onClick={() => go(i)}
                   className={cn(
                     'gap-2 rounded-chip px-3 text-[13px]',
@@ -152,115 +162,125 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
 
         {historical && <CloseNote tone="warning">{historical}</CloseNote>}
 
-        <div className="min-h-[320px]">
-          {step === 'readings' && (
-            <ReadingsStep
-              groups={props.groups}
-              readingErrors={readingErrors}
-              tanks={props.tanks}
-              draft={draft}
-              onDraftChange={props.onDraftChange}
-              onOpenHandover={props.onOpenHandover}
-            />
-          )}
-          {step === 'handovers' && (
-            <HandoversStep
-              rows={drawerRows}
-              total={props.drawerTotal}
-              onOpenHandover={props.onOpenHandover}
-            />
-          )}
-          {step === 'cash' && (
-            <CashCountStep
-              lines={cashLines}
-              productCashOutside={props.productCashOutside}
-              productCashBreakdown={props.productCashBreakdown}
-              dropDrawers={props.dropDrawers}
-              canRecordDrops={props.canRecordDrops}
-              draft={draft}
-              onDraftChange={props.onDraftChange}
-            />
-          )}
-          {step === 'confirm' && (
-            <ConfirmStep
-              hasHandovers={props.hasHandovers}
-              attendantVariance={props.attendantVariance}
-              expectedCash={cashLines.expectedOfficeCash}
-              draft={draft}
-              pendingDrawers={pendingDrawers}
-              warnings={warnings}
-              confirmWarningsChecked={confirmWarningsChecked}
-              onConfirmWarningsChange={props.onConfirmWarningsChange}
-            />
-          )}
-        </div>
-
-        <footer
-          aria-label="Close shift"
-          className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-card border border-border-soft bg-surface px-4 py-3 shadow-sm"
+        <DataSection
+          title="close figures"
+          query={props.queries}
+          shape="bare"
+          placeholderHeight={320}
+          enabled
         >
-          <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px]">
-            <div className="flex items-baseline gap-2">
-              <dt className="text-ink-muted">Expected office cash</dt>
-              <dd className="font-mono tabular-nums text-ink-strong">
-                {formatMoney(cashLines.expectedOfficeCash)}
-              </dd>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <dt className="text-ink-muted">Counted</dt>
-              <dd className="font-mono tabular-nums text-ink-strong">
-                {formatMoney(draft.closingCash)}
-              </dd>
-            </div>
-            <div className="flex items-center gap-2">
-              <dt className="sr-only">Office count variance</dt>
-              <dd>
-                {counted ? (
-                  <VarianceChip
-                    amount={draft.closingCash - cashLines.expectedOfficeCash}
-                    size="md"
-                  />
-                ) : (
-                  <span className="text-[12px] text-ink-muted">Not counted yet</span>
-                )}
-              </dd>
-            </div>
-          </dl>
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-[12px] text-ink-muted">
-              Step {index + 1} of {SHIFT_CLOSE_STEPS.length}
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<Icon name="chevron-left" size="xs" />}
-              onClick={index === 0 ? onBack : () => go(index - 1)}
-            >
-              {index === 0 ? 'Cancel' : 'Back'}
-            </Button>
-            {step === 'confirm' ? (
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<Icon name="lock" size="xs" />}
-                disabled={!canSubmit}
-                loading={isClosing}
-                onClick={() => onConfirmClose(save)}
-              >
-                {isClosing ? 'Closing shift…' : 'Close shift'}
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                size="sm"
-                rightIcon={<Icon name="chevron-right" size="xs" />}
-                onClick={() => go(index + 1)}
-              >
-                Next
-              </Button>
+          <div className="min-h-[320px]">
+            {step === 'readings' && (
+              <ReadingsStep
+                groups={props.groups}
+                readingErrors={readingErrors}
+                tanks={props.tanks}
+                draft={draft}
+                onDraftChange={props.onDraftChange}
+                onOpenHandover={props.onOpenHandover}
+              />
+            )}
+            {step === 'handovers' && (
+              <HandoversStep
+                rows={drawerRows}
+                total={props.drawerTotal}
+                onOpenHandover={props.onOpenHandover}
+              />
+            )}
+            {step === 'cash' && (
+              <CashCountStep
+                lines={cashLines}
+                productCashOutside={props.productCashOutside}
+                productCashBreakdown={props.productCashBreakdown}
+                dropDrawers={props.dropDrawers}
+                canRecordDrops={props.canRecordDrops}
+                draft={draft}
+                onDraftChange={props.onDraftChange}
+                onValidityChange={setCashValid}
+              />
+            )}
+            {step === 'confirm' && (
+              <ConfirmStep
+                hasHandovers={props.hasHandovers}
+                attendantVariance={props.attendantVariance}
+                expectedCash={cashLines.expectedOfficeCash}
+                draft={draft}
+                pendingDrawers={pendingDrawers}
+                warnings={warnings}
+                confirmWarningsChecked={confirmWarningsChecked}
+                onConfirmWarningsChange={props.onConfirmWarningsChange}
+              />
             )}
           </div>
-        </footer>
+
+          <footer
+            aria-label="Close shift"
+            className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-card border border-border-soft bg-surface px-4 py-3 shadow-sm"
+          >
+            <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px]">
+              <div className="flex items-baseline gap-2">
+                <dt className="text-ink-muted">Expected office cash</dt>
+                <dd className="font-mono tabular-nums text-ink-strong">
+                  {formatMoney(cashLines.expectedOfficeCash)}
+                </dd>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <dt className="text-ink-muted">Counted</dt>
+                <dd className="font-mono tabular-nums text-ink-strong">
+                  {formatMoney(draft.closingCash)}
+                </dd>
+              </div>
+              <div className="flex items-center gap-2">
+                <dt className="sr-only">Office count variance</dt>
+                <dd>
+                  {counted ? (
+                    <VarianceChip
+                      amount={draft.closingCash - cashLines.expectedOfficeCash}
+                      size="md"
+                    />
+                  ) : (
+                    <span className="text-[12px] text-ink-muted">Not counted yet</span>
+                  )}
+                </dd>
+              </div>
+            </dl>
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-[12px] text-ink-muted">
+                Step {index + 1} of {SHIFT_CLOSE_STEPS.length}
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<Icon name="chevron-left" size="xs" />}
+                onClick={index === 0 ? onBack : () => go(index - 1)}
+              >
+                {index === 0 ? 'Cancel' : 'Back'}
+              </Button>
+              {step === 'confirm' ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon={<Icon name="lock" size="xs" />}
+                  disabled={!canSubmit}
+                  loading={isClosing}
+                  onClick={() => onConfirmClose(save)}
+                >
+                  {isClosing ? 'Closing shift…' : 'Close shift'}
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  rightIcon={<Icon name="chevron-right" size="xs" />}
+                  disabled={step === 'cash' && !cashValid}
+                  onClick={() => go(index + 1)}
+                >
+                  Next
+                </Button>
+              )}
+            </div>
+          </footer>
+        </DataSection>
       </div>
     </PageFrame>
   );

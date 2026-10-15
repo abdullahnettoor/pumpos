@@ -1,4 +1,4 @@
-import { compareNatural } from '@pump/shared';
+import { compareNatural, reconcileDrawer } from '@pump/shared';
 import { toPaise } from '../../utils/ledgerWindow.js';
 
 // ── Nozzle readings ─────────────────────────────────────────────────────────
@@ -118,10 +118,12 @@ export const sumLines = (lines: { amount?: number | string | null }[]): number =
  *   Opening float + Cash sales − Cash drops                         = Expected in drawer
  *   Declared cash − Expected in drawer                              = Variance
  *
- * The same figures as before the redesign (variance = declared total −
- * expected total − float + drops), regrouped so expected = float + fuel cash
- * + product cash − drops. Summed in whole paise. Once the server accepts the
- * Handover its own figures replace the preview.
+ * The figures that matter (cash sales, expected in drawer, variance) come from
+ * `reconcileDrawer` in `@pump/shared`: the one formula the server's
+ * `record-handover` and the mobile preview use, so the preview never differs
+ * from the recorded figure by a paisa. The other lines are its inputs, shown
+ * to the paisa. Once the server accepts the Handover its own figures replace
+ * the preview.
  */
 export interface HandoverRecon {
   source: 'preview' | 'accepted';
@@ -137,6 +139,8 @@ export interface HandoverRecon {
   drops: number;
   expected: number;
   declaredCash: number;
+  /** Cash + card + UPI + credit + OMC: everything the attendant declared. */
+  declaredTotal: number;
   variance: number;
 }
 
@@ -152,25 +156,34 @@ export interface HandoverReconInput {
   declaredCash: number;
 }
 
-const r = (paise: number) => paise / 100 || 0;
+/** A figure shown to the paisa; `|| 0` normalises -0. */
+const paise = (v: number) => Math.round(v * 100) / 100 || 0;
 
 export function handoverRecon(i: HandoverReconInput): HandoverRecon {
-  const cardUpi = toPaise(i.card) + toPaise(i.upi);
-  const creditOmc = toPaise(i.credit) + toPaise(i.omc);
-  const cashSales = toPaise(i.fuelSales) + toPaise(i.productCash) - cardUpi - creditOmc;
-  const expected = toPaise(i.openingFloat) + cashSales - toPaise(i.drops);
+  const d = reconcileDrawer({
+    openingFloat: i.openingFloat,
+    expectedFuelSales: i.fuelSales,
+    merchandiseCash: i.productCash,
+    cardHandedOver: i.card,
+    upiHandedOver: i.upi,
+    creditSales: i.credit,
+    omcCardSales: i.omc,
+    cashHandedOver: i.declaredCash,
+    cashDrops: i.drops,
+  });
   return {
     source: 'preview',
-    fuelSales: r(toPaise(i.fuelSales)),
-    productCash: r(toPaise(i.productCash)),
-    cardUpi: r(cardUpi),
-    creditOmc: r(creditOmc),
-    cashSales: r(cashSales),
-    openingFloat: r(toPaise(i.openingFloat)),
-    drops: r(toPaise(i.drops)),
-    expected: r(expected),
-    declaredCash: r(toPaise(i.declaredCash)),
-    variance: r(toPaise(i.declaredCash) - expected),
+    fuelSales: paise(i.fuelSales),
+    productCash: paise(i.productCash),
+    cardUpi: paise(i.card + i.upi),
+    creditOmc: paise(i.credit + i.omc),
+    cashSales: d.cashSales,
+    openingFloat: paise(i.openingFloat),
+    drops: paise(i.drops),
+    expected: d.expectedCash,
+    declaredCash: paise(i.declaredCash),
+    declaredTotal: paise(d.declaredTotal),
+    variance: d.varianceAmount,
   };
 }
 
@@ -188,23 +201,25 @@ export interface AcceptedHandover {
   openingFloat: number;
   cashDrops: number;
   expectedCash: number;
+  declaredTotal: number;
   varianceAmount: number;
 }
 
 /** The server's figures, laid out as the same lines (cash sales is what makes them add up). */
 export function acceptedHandoverRecon(a: AcceptedHandover): HandoverRecon {
-  const expected = toPaise(a.expectedCash);
+  const n = (v: string | number) => Number(v) || 0;
   return {
     source: 'accepted',
-    fuelSales: r(toPaise(a.expectedFuelSales)),
-    productCash: r(toPaise(a.merchandiseCash)),
-    cardUpi: r(toPaise(a.handover.cardHandedOver) + toPaise(a.handover.upiHandedOver)),
-    creditOmc: r(toPaise(a.creditSales) + toPaise(a.omcCardSales)),
-    cashSales: r(expected - toPaise(a.openingFloat) + toPaise(a.cashDrops)),
-    openingFloat: r(toPaise(a.openingFloat)),
-    drops: r(toPaise(a.cashDrops)),
-    expected: r(expected),
-    declaredCash: r(toPaise(a.handover.cashHandedOver)),
-    variance: r(toPaise(a.varianceAmount)),
+    fuelSales: paise(a.expectedFuelSales),
+    productCash: paise(a.merchandiseCash),
+    cardUpi: paise(n(a.handover.cardHandedOver) + n(a.handover.upiHandedOver)),
+    creditOmc: paise(a.creditSales + a.omcCardSales),
+    cashSales: paise(a.expectedCash - a.openingFloat + a.cashDrops),
+    openingFloat: paise(a.openingFloat),
+    drops: paise(a.cashDrops),
+    expected: paise(a.expectedCash),
+    declaredCash: paise(n(a.handover.cashHandedOver)),
+    declaredTotal: paise(a.declaredTotal),
+    variance: paise(a.varianceAmount),
   };
 }

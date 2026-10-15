@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { isBalancedVariance } from '@pump/shared';
+import type { PendingTankDipWorkflow } from '../../query/stockCountMutation.js';
 import type { ShiftCloseStep } from '../../nav-intent/routes.js';
 import { toPaise } from '../../utils/ledgerWindow.js';
 import { DRAWER_KEY, duText, n, type Num, type StaffAssignmentInput } from './liveShiftInputs.js';
@@ -58,39 +60,72 @@ export function hasCloseProgress(draft: CloseDraft): boolean {
 export const dipCount = (draft: Pick<CloseDraft, 'dipReadings'>): number =>
   Object.values(draft.dipReadings).filter((v) => v !== '' && v != null).length;
 
-const STEPS = new Set(['readings', 'handovers', 'cash', 'confirm']);
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-const finite = (v: unknown, fallback = 0) =>
-  typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+// ── Stored shapes, checked on the way back in ───────────────────────────────
 
-/** A stored draft, read defensively: anything malformed falls back to empty. */
-export function parseCloseDraft(raw: string | null): CloseDraft {
-  if (!raw) return EMPTY_CLOSE_DRAFT;
-  let v: unknown;
+const money = z.number().finite().nonnegative();
+
+/** A stored draft: anything that does not match is discarded whole (#534 review). */
+export const closeDraftSchema = z.object({
+  step: z.enum(['readings', 'handovers', 'cash', 'confirm']),
+  closingCash: money,
+  closeDrops: z.array(z.object({ drawerKey: z.string(), amount: money })),
+  recordDip: z.boolean(),
+  dipReadings: z.record(z.union([money, z.literal('')])),
+  dipReasons: z.record(z.string()),
+  cashBreakdown: z.record(z.number().int().nonnegative()),
+});
+
+const tankDipSchema = z.object({
+  tankId: z.string(),
+  tankName: z.string(),
+  actualQuantity: z.number().finite(),
+  reason: z.string().optional(),
+  status: z.enum(['pending', 'saving', 'saved', 'failed']),
+  error: z.string().optional(),
+  idempotencyKey: z.string(),
+  expectedQuantity: z.number().finite().optional(),
+  varianceQuantity: z.number().finite().optional(),
+  warnings: z.array(z.string()).optional(),
+});
+
+/** A stored close outcome (`PendingTankDipWorkflow`): every field the closed state reads. */
+export const closeOutcomeSchema = z.object({
+  expectedCash: z.number().finite(),
+  closingCash: z.number().finite(),
+  variance: z.number().finite(),
+  lastClosedShiftId: z.string().min(1),
+  nextTemplateId: z.string(),
+  businessDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  currentBusinessDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  scheduledStartTime: z.string().nullish(),
+  scheduledEndTime: z.string().nullish(),
+  openedAt: z.string().min(1),
+  closedAt: z.string().min(1),
+  timeZone: z.string().optional(),
+  shiftName: z.string().nullish(),
+  tankDips: z.array(tankDipSchema),
+  closeStatus: z.enum(['submitting', 'closed']).optional(),
+});
+
+const parseJson = (raw: string | null): unknown => {
+  if (!raw) return null;
   try {
-    v = JSON.parse(raw);
+    return JSON.parse(raw);
   } catch {
-    return EMPTY_CLOSE_DRAFT;
+    return null;
   }
-  if (!isRecord(v)) return EMPTY_CLOSE_DRAFT;
-  const pick = <T>(key: string, test: (x: unknown) => boolean, fallback: T): T =>
-    test(v[key]) ? (v[key] as T) : fallback;
-  const drops = Array.isArray(v.closeDrops)
-    ? v.closeDrops.filter(isRecord).map((d) => ({
-        drawerKey: typeof d.drawerKey === 'string' ? d.drawerKey : '',
-        amount: finite(d.amount),
-      }))
-    : [];
-  return {
-    step: pick('step', (x) => typeof x === 'string' && STEPS.has(x), 'readings'),
-    closingCash: finite(v.closingCash),
-    closeDrops: drops,
-    recordDip: v.recordDip === true,
-    dipReadings: pick('dipReadings', isRecord, {}),
-    dipReasons: pick('dipReasons', isRecord, {}),
-    cashBreakdown: pick('cashBreakdown', isRecord, {}),
-  };
+};
+
+/** A stored draft, or the empty draft when it is missing or does not match. */
+export function parseCloseDraft(raw: string | null): CloseDraft {
+  const parsed = closeDraftSchema.safeParse(parseJson(raw));
+  return parsed.success ? parsed.data : EMPTY_CLOSE_DRAFT;
+}
+
+/** A stored close outcome, or null when it is missing or does not match. */
+export function parseCloseOutcome(value: unknown): PendingTankDipWorkflow | null {
+  const parsed = closeOutcomeSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 /**
@@ -101,7 +136,8 @@ export function parseCloseDraft(raw: string | null): CloseDraft {
 export const closeDraftKey = (stationId: string, shiftId: string) =>
   `pumpos:close-draft:${stationId}:${shiftId}`;
 
-type DraftStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+type DraftStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> &
+  Partial<Pick<Storage, 'key' | 'length'>>;
 
 const sessionStore = (): DraftStorage | null =>
   typeof sessionStorage === 'undefined' ? null : sessionStorage;
@@ -135,6 +171,31 @@ export function saveCloseDraft(
 }
 
 /**
+ * The cloud decides (#534 review): once the server says which shift is open,
+ * every draft this tab kept for any other shift of the station is dropped,
+ * so a draft never outlives a close made elsewhere or returns on a reopen.
+ */
+export function pruneCloseDrafts(
+  stationId: string,
+  openShiftId: string | null,
+  storage: DraftStorage | null = sessionStore(),
+): void {
+  try {
+    if (!storage?.key || storage.length == null) return;
+    const prefix = closeDraftKey(stationId, '');
+    const keep = openShiftId ? closeDraftKey(stationId, openShiftId) : null;
+    const stale: string[] = [];
+    for (let i = 0; i < storage.length; i++) {
+      const k = storage.key(i);
+      if (k && k.startsWith(prefix) && k !== keep) stale.push(k);
+    }
+    stale.forEach((k) => storage.removeItem(k));
+  } catch {
+    // Nothing to prune when storage is blocked.
+  }
+}
+
+/**
  * The close's outcome, kept for the tab session so a reload of the close
  * page's final state (`?step=done`) shows it again. Tank dips still to save
  * are kept separately (`savePendingTankDipWorkflow`), as before.
@@ -145,7 +206,7 @@ export const closedResultKey = (stationId: string, shiftId: string) =>
 export function saveClosedResult(
   stationId: string,
   shiftId: string,
-  result: object | null,
+  result: PendingTankDipWorkflow | null,
   storage: DraftStorage | null = sessionStore(),
 ): void {
   try {
@@ -157,19 +218,102 @@ export function saveClosedResult(
   }
 }
 
-/** A kept close outcome for this shift, or null (missing or not an object). */
-export function loadClosedResult<T extends { lastClosedShiftId: string }>(
+/** A kept close outcome for this shift, or null (missing, malformed or another shift's). */
+export function loadClosedResult(
   stationId: string,
   shiftId: string,
   storage: DraftStorage | null = sessionStore(),
-): T | null {
+): PendingTankDipWorkflow | null {
   try {
-    const v: unknown = JSON.parse(storage?.getItem(closedResultKey(stationId, shiftId)) ?? 'null');
-    return isRecord(v) && v.lastClosedShiftId === shiftId ? (v as T) : null;
+    const outcome = parseCloseOutcome(
+      parseJson(storage?.getItem(closedResultKey(stationId, shiftId)) ?? null),
+    );
+    return outcome?.lastClosedShiftId === shiftId ? outcome : null;
   } catch {
     return null;
   }
 }
+
+/**
+ * Whether a close outcome may still be shown, against the server's shift
+ * status (#534 review). `wait` until the status is known; `show` when the
+ * status predates the outcome (the close answered after the status was read)
+ * or confirms it; `drop` once the shift is open again or another shift has
+ * closed since.
+ */
+export function outcomeStanding(
+  shiftId: string,
+  seenAt: number,
+  status: { activeShift?: { id: string } | null; lastShift?: { id: string } | null } | null,
+  statusUpdatedAt: number,
+): 'show' | 'wait' | 'drop' {
+  if (!status) return 'wait';
+  if (seenAt >= statusUpdatedAt) return 'show';
+  if (status.activeShift?.id === shiftId) return 'drop';
+  if (status.lastShift && status.lastShift.id !== shiftId) return 'drop';
+  return 'show';
+}
+
+/**
+ * The closed state's office cash, from the close response's snapshot where it
+ * carries them (#534 review), else the figures the page sent.
+ */
+export function closeOutcomeFigures(
+  snapshot: unknown,
+  sent: { expectedCash: number; closingCash: number; variance: number },
+): { expectedCash: number; closingCash: number; variance: number } {
+  const snap =
+    typeof snapshot === 'object' && snapshot !== null ? (snapshot as Record<string, unknown>) : {};
+  const pick = (key: string, fallback: number) => {
+    const v = snap[key];
+    const x = typeof v === 'number' || typeof v === 'string' ? Number(v) : Number.NaN;
+    return v !== null && v !== '' && Number.isFinite(x) ? x : fallback;
+  };
+  return {
+    expectedCash: pick('expectedDrawerCash', sent.expectedCash),
+    closingCash: pick('closingCash', sent.closingCash),
+    variance: pick('cashVariance', sent.variance),
+  };
+}
+
+/** The template after this shift's, round the station's list (the next shift to open). */
+export function nextTemplateAfter(templates: { id: string }[], currentId?: string | null): string {
+  if (templates.length === 0) return '';
+  const i = templates.findIndex((t) => t.id === currentId);
+  return i === -1 ? templates[0].id : templates[(i + 1) % templates.length].id;
+}
+
+// ── The cash count form ─────────────────────────────────────────────────────
+
+/** An amount as typed: blank (none) or a figure of zero or more. */
+const typedAmount = z
+  .string()
+  .refine(
+    (v) => v.trim() === '' || (Number.isFinite(Number(v)) && Number(v) >= 0),
+    'Enter an amount of zero or more.',
+  );
+
+/** The Cash count step's form (React Hook Form + Zod): the count and the drops at close. */
+export const cashCountSchema = z.object({
+  closingCash: typedAmount,
+  closeDrops: z.array(z.object({ drawerKey: z.string(), amount: typedAmount })),
+});
+export type CashCountFormValues = z.infer<typeof cashCountSchema>;
+
+const typed = (v: number) => (v ? String(v) : '');
+
+export const cashCountDefaults = (draft: CloseDraft): CashCountFormValues => ({
+  closingCash: typed(draft.closingCash),
+  closeDrops: draft.closeDrops.map((d) => ({ drawerKey: d.drawerKey, amount: typed(d.amount) })),
+});
+
+/** The valid form, as the draft holds it. */
+export const cashCountToDraft = (
+  v: CashCountFormValues,
+): Pick<CloseDraft, 'closingCash' | 'closeDrops'> => ({
+  closingCash: Number(v.closingCash) || 0,
+  closeDrops: v.closeDrops.map((d) => ({ drawerKey: d.drawerKey, amount: Number(d.amount) || 0 })),
+});
 
 // ── The Handovers step: one row per Drawer ──────────────────────────────────
 
