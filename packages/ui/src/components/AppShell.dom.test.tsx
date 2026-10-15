@@ -188,6 +188,17 @@ const shell = (props: Partial<React.ComponentProps<typeof AppShell>> = {}) =>
 
 const sidebar = () => screen.getByRole('navigation').textContent!;
 
+describe("AppShell on a page's detail route (#576)", () => {
+  it("keeps Accounts active on an account's page", () => {
+    shell({ currentPath: '/accounts/sbi?from=2026-09-01&to=2026-09-30' });
+    const nav = screen.getByRole('navigation');
+    const active = Array.from(nav.querySelectorAll('button')).filter((b) =>
+      /\bbg-info-bg\b/.test(b.getAttribute('class') ?? ''),
+    );
+    expect(active.map((b) => b.textContent)).toEqual(['Accounts']);
+  });
+});
+
 describe('AppShell sidebar groups (#540)', () => {
   it('shows the five groups to an Owner, in order', () => {
     shell();

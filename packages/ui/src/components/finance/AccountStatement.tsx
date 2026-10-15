@@ -31,8 +31,19 @@ export interface AccountStatementProps {
   account: AccountRow;
   /** The station, for its clock. */
   selectedStation: { settings?: { timezone?: string } } | null;
-  /** Buttons that act on this account (Add entry, Settle to bank), in the statement's header. */
+  /** Buttons that act on this account, in the statement's header (a page puts them in its own header). */
   actions?: React.ReactNode;
+  /**
+   * The statement period, when its owner keeps it (the account page keeps it
+   * in its URL, #576). Omitted, the statement keeps its own, from this month.
+   */
+  range?: DateRange;
+  onRangeChange?: (range: DateRange) => void;
+  /**
+   * Show the Balance tile. The account page shows the balance in its subtitle,
+   * so it leaves the tile out rather than repeat it.
+   */
+  showBalance?: boolean;
 }
 
 /**
@@ -41,19 +52,25 @@ export interface AccountStatementProps {
  * period in the section header. Money in is a Debit, money out a Credit.
  *
  * Exported so other pages can show an account's statement (Reports › Cash &
- * bank, #531); to open it on Accounts instead, publish `{ openAccountId }`.
- * Key it by the account id so the period starts at this month for each one.
+ * bank, #531); to open the account's own page instead, navigate to
+ * `accountRoute(id)` (#576). Key it by the account id so an uncontrolled
+ * period starts at this month for each one.
  */
 export const AccountStatement: React.FC<AccountStatementProps> = ({
   account,
   selectedStation,
   actions,
+  range: controlledRange,
+  onRangeChange,
+  showBalance = true,
 }) => {
   const timeZone = selectedStation?.settings?.timezone;
   // Ledger entries are dated by entry date: the plain station calendar date (ADR 0005).
   const entryClock = useMemo(() => ({ timeZone }), [timeZone]);
   const month = useMemo(() => computeRange('this-month', entryClock), [entryClock]);
-  const [range, setRange] = useState<DateRange>(month);
+  const [ownRange, setOwnRange] = useState<DateRange>(month);
+  const range = controlledRange ?? ownRange;
+  const setRange = onRangeChange ?? setOwnRange;
 
   const ledgerQ = useAccountLedger(account.id, { from: range.from, to: range.to });
   // The month the tiles read. Same key as the table at its default period, so one request.
@@ -78,13 +95,15 @@ export const AccountStatement: React.FC<AccountStatementProps> = ({
     <div className="flex flex-col gap-4">
       <DataSection title="account totals" query={monthQ} shape="cards" placeholderHeight={90}>
         <KpiStrip columns="auto">
-          <KpiTile
-            label="Balance"
-            scope="now"
-            value={formatMoney(balance)}
-            alert={balance < 0 ? 'danger' : undefined}
-            hint={balance < 0 ? 'overdrawn' : undefined}
-          />
+          {showBalance && (
+            <KpiTile
+              label="Balance"
+              scope="now"
+              value={formatMoney(balance)}
+              alert={balance < 0 ? 'danger' : undefined}
+              hint={balance < 0 ? 'overdrawn' : undefined}
+            />
+          )}
           <KpiTile label="Money in" scope={monthScope} value={formatMoney(flows.moneyIn)} />
           <KpiTile label="Money out" scope={monthScope} value={formatMoney(flows.moneyOut)} />
         </KpiStrip>
