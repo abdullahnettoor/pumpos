@@ -30,7 +30,7 @@ export const Step7ShiftTemplates: React.FC<Step7ShiftTemplatesProps> = ({
           <Button type="button" variant="secondary" size="sm" onClick={() => onAutofillShifts(3)}>
             Autofill 3 Shifts
           </Button>
-          <Button type="button" variant="primary" size="sm" onClick={onAddShiftTemplate}>
+          <Button type="button" variant="secondary" size="sm" onClick={onAddShiftTemplate}>
             Add Shift Template
           </Button>
         </>

@@ -160,7 +160,7 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
             <div>
               <span className="text-[12px] font-semibold text-ink-muted">Operating Mode</span>
               <div className="mt-1">
-                <Chip tone={scheduleLocked ? 'success' : 'info'} size="sm">
+                <Chip tone={scheduleLocked ? 'success' : 'info'} size="md">
                   {scheduleLocked ? '24/7' : 'Scheduled'}
                 </Chip>
               </div>

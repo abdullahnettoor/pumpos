@@ -25,7 +25,7 @@ export const Step4Tanks: React.FC<Step4TanksProps> = ({
       title="Storage Tanks"
       subtitle="Map each tank to its fuel and define its capacity."
       actions={
-        <Button type="button" variant="primary" size="sm" onClick={onAddTank}>
+        <Button type="button" variant="secondary" size="sm" onClick={onAddTank}>
           Add Tank
         </Button>
       }
@@ -85,7 +85,7 @@ export const Step4Tanks: React.FC<Step4TanksProps> = ({
                   <div className="flex flex-col gap-1.5">
                     <span className="text-[14px] font-semibold text-ink-strong">{tank.name}</span>
                     <div className="self-start">
-                      <Chip tone="neutral" size="sm">
+                      <Chip tone="neutral" size="md">
                         {product?.name || 'Unmapped'}
                       </Chip>
                     </div>

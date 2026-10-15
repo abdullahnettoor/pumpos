@@ -773,7 +773,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 text-[12px] text-ink-muted">
-                  <Chip tone="neutral" size="xs">
+                  <Chip tone="neutral" size="md">
                     Saved automatically
                   </Chip>
                   <span>
@@ -842,7 +842,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         </div>,
         <>
           <div className="flex items-center gap-2.5">
-            <Chip tone="neutral" size="xs">
+            <Chip tone="neutral" size="md">
               Draft saved
             </Chip>
             <Button type="button" variant="secondary" size="sm" onClick={discardDraft}>
@@ -1457,19 +1457,19 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                         {stage}
                       </span>
                       {isFailed ? (
-                        <Chip tone="danger" size="sm">
+                        <Chip tone="danger" size="md">
                           Failed
                         </Chip>
                       ) : isCompleted ? (
-                        <Chip tone="success" size="sm">
+                        <Chip tone="success" size="md">
                           Done
                         </Chip>
                       ) : isActive ? (
-                        <Chip tone="info" size="sm">
+                        <Chip tone="info" size="md">
                           Running
                         </Chip>
                       ) : (
-                        <Chip tone="neutral" size="sm">
+                        <Chip tone="neutral" size="md">
                           Queued
                         </Chip>
                       )}

@@ -41,7 +41,7 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
       title="Review & Provision"
       subtitle="Review the full setup, resolve any issues, then provision the entire station in one shot."
       actions={
-        <Chip tone={validationIssues.length === 0 ? 'success' : 'warning'} size="sm">
+        <Chip tone={validationIssues.length === 0 ? 'success' : 'warning'} size="md">
           {validationIssues.length === 0 ? 'Ready' : `${validationIssues.length} Issues`}
         </Chip>
       }
@@ -134,14 +134,14 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
               }}
             />
             <div className={STEP_PANEL}>
-              <div className="grid grid-cols-4 gap-3">
+              <dl className="grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-4">
                 {counts.map((c) => (
-                  <div key={c.label} className="rounded-card bg-surface-alt p-3">
-                    <div className={LABEL}>{c.label}</div>
-                    <div className="mt-1 text-[18px] font-semibold text-ink-strong">{c.value}</div>
+                  <div key={c.label}>
+                    <dt className="text-[12px] text-ink-muted">{c.label}</dt>
+                    <dd className="mt-1 text-[13px] tabular-nums text-ink-strong">{c.value}</dd>
                   </div>
                 ))}
-              </div>
+              </dl>
             </div>
           </section>
         </div>

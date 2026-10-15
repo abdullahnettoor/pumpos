@@ -50,7 +50,7 @@ export const Step3FuelsCatalog: React.FC<Step3FuelsCatalogProps> = ({
               Diesel (HSD)
             </Button>
           )}
-          <Button type="button" variant="primary" size="sm" onClick={onAddProduct}>
+          <Button type="button" variant="secondary" size="sm" onClick={onAddProduct}>
             Add Fuel
           </Button>
         </>
@@ -79,7 +79,7 @@ export const Step3FuelsCatalog: React.FC<Step3FuelsCatalogProps> = ({
                       {product.code || '—'}
                     </span>
                   </div>
-                  <Chip tone="neutral" size="sm">
+                  <Chip tone="neutral" size="md">
                     {product.taxCategory === 'FUEL_VAT' ? 'Fuel VAT' : product.taxCategory}
                   </Chip>
                 </div>

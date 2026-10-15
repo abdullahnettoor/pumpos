@@ -77,7 +77,7 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
       title="Payment Terminals"
       subtitle="Add the card/UPI machines (POS devices) at this station. These are linked to dispensers when a shift is opened. Optional — you can run cash-only and add terminals later from Station → Payment terminals."
       actions={
-        <Button type="button" variant="primary" size="sm" onClick={addTerminal}>
+        <Button type="button" variant="secondary" size="sm" onClick={addTerminal}>
           Add Terminal
         </Button>
       }

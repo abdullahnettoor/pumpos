@@ -46,7 +46,7 @@ export const Step5Dispensers: React.FC<Step5DispensersProps> = ({
           >
             Add Quad (4 Nozzles)
           </Button>
-          <Button type="button" variant="primary" size="sm" onClick={onAddCustomDispenser}>
+          <Button type="button" variant="secondary" size="sm" onClick={onAddCustomDispenser}>
             Add Custom
           </Button>
         </>
@@ -70,7 +70,7 @@ export const Step5Dispensers: React.FC<Step5DispensersProps> = ({
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-[14px] font-semibold text-ink-strong">{du.name}</span>
-                    <StatusChip status={du.status === 'ACTIVE' ? 'active' : 'inactive'} />
+                    <StatusChip size="md" status={du.status === 'ACTIVE' ? 'active' : 'inactive'} />
                   </div>
                   <div>
                     <span className={fieldCaption}>Island code</span>
