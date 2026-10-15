@@ -1,4 +1,4 @@
-import type { Query, QueryClient, QueryFilters, QueryKey } from '@tanstack/react-query';
+import type { Query, QueryCache, QueryClient, QueryFilters, QueryKey } from '@tanstack/react-query';
 
 /**
  * Writing a write's own answer into the cache (#606): "patch from the
@@ -17,31 +17,48 @@ import type { Query, QueryClient, QueryFilters, QueryKey } from '@tanstack/react
  */
 
 /**
- * The patched entries: the Query itself (not its key) maps to its
- * `dataUpdateCount` at the patch (a count, not a clock: a refetch in the same
- * millisecond still moves it). Keyed weakly, so the mark lives exactly as
- * long as the entry: removing the query, garbage-collecting it or clearing the
- * client drops it, and a query re-created under the same key starts unmarked.
+ * The patched entries, keyed by the Query itself (not its key), so the mark
+ * lives exactly as long as the entry: removing the query, garbage-collecting
+ * it or clearing the client drops it, and a query re-created under the same
+ * key starts unmarked.
+ *
+ * Only a successful **fetch** of the entry clears the mark (#606 review 2):
+ * not another patch, not a rejected (no-op) patch, not any other
+ * `setQueryData`. A cache listener per client watches for it.
  */
-const patchedAt = new WeakMap<Query, number>();
+const patched = new WeakMap<Query, true>();
+const watched = new WeakSet<QueryCache>();
+
+function watch(qc: QueryClient) {
+  const cache = qc.getQueryCache();
+  if (watched.has(cache)) return;
+  watched.add(cache);
+  cache.subscribe((event) => {
+    // A fetch's success is the only non-manual success: setQueryData is manual.
+    if (event.type === 'updated' && event.action.type === 'success' && !event.action.manual) {
+      patched.delete(event.query);
+    }
+  });
+}
 
 const findQuery = (qc: QueryClient, queryKey: QueryKey): Query | undefined =>
   qc.getQueryCache().find({ queryKey, exact: true });
 
-/** A cache entry is patched only if it holds data; an absent one is left to the refetch. */
+/**
+ * A cache entry is patched only if it holds data and the patch changes it. An
+ * absent entry is left to the refetch; a patch that changes nothing (an older
+ * answer the out-of-order guard rejects) is not written at all.
+ */
 function patchOne<T>(qc: QueryClient, queryKey: QueryKey, patch: (data: T) => T): boolean {
-  let changed = false;
-  qc.setQueryData<T>(queryKey, (old) => {
-    if (old === undefined) return old;
-    const next = patch(old);
-    changed = next !== old;
-    return next;
-  });
-  if (changed) {
-    const query = findQuery(qc, queryKey);
-    if (query) patchedAt.set(query, query.state.dataUpdateCount);
-  }
-  return changed;
+  const old = qc.getQueryData<T>(queryKey);
+  if (old === undefined) return false;
+  const next = patch(old);
+  if (next === old) return false;
+  watch(qc);
+  qc.setQueryData<T>(queryKey, next);
+  const query = findQuery(qc, queryKey);
+  if (query) patched.set(query, true);
+  return true;
 }
 
 /** Patches one cached query; returns whether anything changed. */
@@ -72,8 +89,8 @@ export function patchQueriesData<T>(
 
 /**
  * Where a patched entry stands:
- * - `none`: no patch, or a refetch has since replaced it (confirmed). A
- *   refetch always moves `dataUpdateCount`, even when its answer equals the patch.
+ * - `none`: no patch, or a successful fetch has since replaced it (confirmed),
+ *   even one whose answer equals the patch.
  * - `awaiting`: the patch is still what the entry holds, and no refetch has
  *   failed since (one may be in flight, or not started).
  * - `failed`: the refetch after the patch failed and no later one has
@@ -84,15 +101,9 @@ export type PatchConfirmation = 'none' | 'awaiting' | 'failed';
 
 export function patchConfirmation(qc: QueryClient, queryKey: QueryKey): PatchConfirmation {
   const query = findQuery(qc, queryKey);
-  if (!query) return 'none';
-  const at = patchedAt.get(query);
-  if (at === undefined) return 'none';
-  const { dataUpdateCount, status, fetchStatus } = query.state;
-  if (dataUpdateCount !== at) {
-    patchedAt.delete(query);
-    return 'none';
-  }
-  // The patch set the entry to success; an error status now can only be a
+  if (!query || !patched.has(query)) return 'none';
+  const { status, fetchStatus } = query.state;
+  // A patch sets the entry to success; an error status now can only be a
   // refetch that failed after it. A retry in flight reads as awaiting again.
   return status === 'error' && fetchStatus === 'idle' ? 'failed' : 'awaiting';
 }

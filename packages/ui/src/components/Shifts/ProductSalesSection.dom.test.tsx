@@ -249,7 +249,11 @@ describe('ProductSalesSection', () => {
 
     await waitFor(() => expect(within(ravi()).getAllByText('Saving…')).toHaveLength(2));
     expect(within(ravi()).queryByRole('alert')).toBeNull();
+
+    // The removal succeeds: the old refusal must not come back (#606 review 2).
     answer({ id: 'm1' });
+    await waitFor(() => expect(within(ravi()).queryByText('Saving…')).toBeNull());
+    expect(within(ravi()).queryByRole('alert')).toBeNull();
   });
 
   it('a Billed Sale in flight reads Saving… on its seller’s row (#606 review)', async () => {

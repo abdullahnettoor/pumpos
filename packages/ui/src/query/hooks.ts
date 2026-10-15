@@ -1753,8 +1753,13 @@ export function useDeleteHandoverProductSale(stationId: string | null | undefine
   const qc = useQueryClient();
   return useMutation({
     mutationKey: mutationKeys.deleteHandoverProductSale(),
-    mutationFn: (vars: { saleId: string; shiftId?: string; idempotencyKey: string }) =>
-      txService.deleteMerchandiseHandover(vars.saleId, { idempotencyKey: vars.idempotencyKey }),
+    mutationFn: (vars: {
+      saleId: string;
+      shiftId?: string;
+      /** The employee whose sale it is: the row's identity for its write state. */
+      attendantId?: string | null;
+      idempotencyKey: string;
+    }) => txService.deleteMerchandiseHandover(vars.saleId, { idempotencyKey: vars.idempotencyKey }),
     onSuccess: (_answer, vars) => {
       if (vars.shiftId) {
         patchQueryData<{ id: string }[]>(qc, queryKeys.merchandiseHandovers(vars.shiftId), (list) =>
