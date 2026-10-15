@@ -21,6 +21,13 @@ export type ShiftStatusState = 'shift-live' | 'shift-past-end' | 'shift-closed';
 export type DayStatusState = 'day-open' | 'day-draft' | 'day-sealed' | 'day-final';
 /** A party (customer, supplier, member) or a setup record. */
 export type PartyStatusState = 'active' | 'inactive';
+/** A team member kept on record without a login (#538). */
+export type MemberStatusState = 'no-login';
+/**
+ * A Station's onboarding (#538). Setup in progress is work in hand, not a
+ * problem, so it reads neutral; only Ready for operations is green.
+ */
+export type StationStatusState = 'station-ready' | 'station-setup' | 'station-not-started';
 /** A money record's state; `adjustment` marks an entry posted to correct another. */
 export type MoneyStatusState = 'overdue' | 'over-limit' | 'voided' | 'adjustment';
 /** A Fuel Purchase whose fuel has not yet been linked to a Decantation (ADR 0007). */
@@ -51,6 +58,8 @@ export type PumpState =
   | ShiftStatusState
   | DayStatusState
   | PartyStatusState
+  | MemberStatusState
+  | StationStatusState
   | MoneyStatusState
   | PurchaseStatusState
   | TankStatusState
@@ -98,6 +107,11 @@ const VOCABULARY: Record<PumpState, StatusPresentation> = {
 
   active: { label: 'Active', tone: 'success' },
   inactive: { label: 'Inactive', tone: 'neutral' },
+  'no-login': { label: 'No login', tone: 'neutral' },
+
+  'station-ready': { label: 'Ready for operations', tone: 'success' },
+  'station-setup': { label: 'Setup in progress', tone: 'neutral' },
+  'station-not-started': { label: 'Setup not started', tone: 'neutral' },
 
   overdue: { label: 'Overdue', tone: 'warning' },
   'over-limit': { label: 'Over limit', tone: 'danger' },
@@ -133,6 +147,14 @@ export const handoverState = (status: DuStatus): HandoverStatusState => `handove
 /** A party's active flag as a vocabulary state (never "Suspended"). */
 export const partyState = (isActive: boolean): PartyStatusState =>
   isActive ? 'active' : 'inactive';
+
+/** A Station's `onboardingStatus` as a vocabulary state; anything unknown has not started. */
+export const stationState = (onboardingStatus: string | null | undefined): StationStatusState =>
+  onboardingStatus === 'READY_FOR_OPERATIONS'
+    ? 'station-ready'
+    : onboardingStatus === 'IN_PROGRESS'
+      ? 'station-setup'
+      : 'station-not-started';
 
 /**
  * A tank's states beside its gauge, most urgent first: its level (Critical /

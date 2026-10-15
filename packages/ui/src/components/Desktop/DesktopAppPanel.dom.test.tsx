@@ -4,9 +4,17 @@ import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { DesktopDownloads } from '@pump/shared';
 
-const state: { data?: DesktopDownloads; isLoading: boolean; isError: boolean } = {
-  isLoading: false,
+const state: {
+  data?: DesktopDownloads;
+  isPending: boolean;
+  isError: boolean;
+  fetchStatus: 'idle';
+  refetch: () => void;
+} = {
+  isPending: false,
   isError: false,
+  fetchStatus: 'idle',
+  refetch: vi.fn(),
 };
 vi.mock('../../query/hooks.js', () => ({ useDesktopDownloads: () => state }));
 const startDownload = vi.fn();
@@ -74,11 +82,13 @@ describe('DesktopAppPanel', () => {
     expect(onDownloaded).toHaveBeenCalled();
   });
 
-  it('shows a friendly message when downloads cannot load', () => {
+  it('offers Retry when downloads cannot load', () => {
     state.data = undefined;
     state.isError = true;
     render(<DesktopAppPanel />);
-    expect(screen.getByText(/temporarily unavailable/)).toBeTruthy();
+    expect(screen.getByText(/Couldn't load desktop downloads/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(state.refetch).toHaveBeenCalled();
     state.isError = false;
   });
 });

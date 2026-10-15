@@ -28,7 +28,6 @@
     "components/StationSetup/ProductsCatalog.tsx": 1,
     "components/StationSetup/ShiftTemplates.tsx": 2,
     "components/StationSetup/TanksGrid.tsx": 1,
-    "components/StationSetup/UserRolesAssignment.tsx": 17,
     "components/StationSetup/WebOnboardingNotice.tsx": 3,
     "pump-ds/command-palette/CommandPalette.tsx": 1,
     "theme/config.ts": 2
@@ -36,7 +35,6 @@
   "undefined-var": {
     "components/Auth/AcceptInvite.tsx": 1,
     "components/Auth/Login.tsx": 1,
-    "components/Organization/ActivityFeed.tsx": 1,
     "components/primitives/ToastProvider.tsx": 1,
     "components/Shifts/ShiftSummaryView.tsx": 1,
     "components/StationSetup/WebOnboardingNotice.tsx": 2
