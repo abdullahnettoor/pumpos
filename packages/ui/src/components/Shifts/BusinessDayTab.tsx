@@ -45,6 +45,7 @@ import {
   queryKeys,
 } from '../../query/hooks.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
+import { useRunTask } from '../../utils/runTask.js';
 import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { dayFigures, dayShifts, type DayShiftRow } from './businessDayModel.js';
 
@@ -115,6 +116,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   const confirm = useConfirm();
   const qc = useQueryClient();
   const invalidateOperational = useInvalidateOperational();
+  const runTask = useRunTask();
   const [closing, setClosing] = useState(false);
   const canClose = userRole === 'Owner' || userRole === 'Manager';
 
@@ -388,14 +390,18 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
         { stationId, businessDayId, businessDate },
         (key) => shiftService.closeBusinessDay(businessDayId, stationId, { idempotencyKey: key }),
       );
+      // Closed: report it from the response; the caches refresh in the
+      // background (caching rule 6). The day's DSSR snapshot only exists once
+      // the close succeeds, so both the single-day and range views refetch.
       toast.success('Business day closed · DSR generated.');
-      await Promise.all([
-        invalidateOperational(stationId),
-        // The day's DSSR snapshot only exists once the close succeeds, so both
-        // the single-day and range views are stale until they refetch.
-        qc.invalidateQueries({ queryKey: queryKeys.dssr(stationId, businessDate) }),
-        qc.invalidateQueries({ queryKey: ['dssr-range'] }),
-      ]);
+      runTask(
+        Promise.all([
+          invalidateOperational(stationId),
+          qc.invalidateQueries({ queryKey: queryKeys.dssr(stationId, businessDate) }),
+          qc.invalidateQueries({ queryKey: ['dssr-range'] }),
+        ]),
+        'Day closed, but the screen could not be refreshed.',
+      );
     } catch (err: any) {
       toast.error(err.message || 'Failed to close the business day.');
     } finally {

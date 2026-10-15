@@ -49,11 +49,13 @@ describe('NozzleReadingsTable', () => {
   it('filters by product at once, and the total says how many it shows', () => {
     render(<NozzleReadingsTable groups={groups} onOpenHandover={vi.fn()} />);
     const table = screen.getByRole('table', { name: 'Nozzle readings' });
-    expect(within(table).getByText('Total excl. DU2')).toBeDefined();
+    expect(within(table).getByText('Total excl. DU2, not handed over')).toBeDefined();
     fireEvent.click(screen.getByRole('radio', { name: 'Diesel, 2' }));
     expect(within(table).queryByText('N1')).toBeNull();
     // N3 is DU2's, still out: shown, but not summed, and the label says so.
-    const total = within(table).getByText('Total of 2 shown excl. DU2').closest('tr')!;
+    const total = within(table)
+      .getByText('Total of 2 shown excl. DU2, not handed over')
+      .closest('tr')!;
     expect(total.textContent).toContain('20.00 L');
   });
 });

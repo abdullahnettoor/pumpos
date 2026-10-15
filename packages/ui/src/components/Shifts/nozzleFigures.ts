@@ -191,6 +191,13 @@ export const isPendingGroup = (g: NozzleGroup): boolean => !!g.assignment && !g.
 export const countedRows = (groups: NozzleGroup[]): NozzleRow[] =>
   groups.filter((g) => !isPendingGroup(g)).flatMap((g) => g.rows);
 
+/**
+ * What the shift's fuel figures leave out, in the words both the nozzle total
+ * and the Sales tile use: "excl. DU2, not handed over". Empty when nothing is out.
+ */
+export const pendingNote = (pending: NozzleGroup[]): string =>
+  pending.length > 0 ? `excl. ${pending.map((g) => g.du).join(', ')}, not handed over` : '';
+
 export interface NozzleTotal {
   /** Says what the row leaves out: "Total excl. DU2", "Total of 4 shown". */
   label: string;
@@ -206,10 +213,10 @@ export interface NozzleTotal {
 export function nozzleTotal(shown: NozzleGroup[], filtered: boolean): NozzleTotal {
   const t = fuelTotals(countedRows(shown));
   const count = shown.reduce((s, g) => s + g.rows.length, 0);
-  const pending = shown.filter(isPendingGroup).map((g) => g.du);
+  const note = pendingNote(shown.filter(isPendingGroup));
   const base = filtered ? `Total of ${count} shown` : 'Total';
   return {
-    label: pending.length > 0 ? `${base} excl. ${pending.join(', ')}` : base,
+    label: note ? `${base} ${note}` : base,
     litres: t.byUnit.reduce((s, u) => s + Math.round(u.litres * 1000), 0) / 1000,
     value: t.value,
   };

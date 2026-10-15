@@ -20,6 +20,9 @@ vi.mock('../../services/cloud.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CloudShiftService: class {
     closeBusinessDay = (...a: unknown[]) => closeBusinessDay(...a);
+    // A refresh after the close never answers: the close must not wait on it.
+    getDailyDssrPreview = () => new Promise(() => {});
+    getDailyDssr = () => new Promise(() => {});
   },
 }));
 
@@ -264,6 +267,15 @@ describe('BusinessDayTab', () => {
       const [first, second] = closeBusinessDay.mock.calls;
       expect(first[2].idempotencyKey).toEqual(expect.any(String));
       expect(second[2].idempotencyKey).toBe(first[2].idempotencyKey);
+    });
+
+    it('reports the close from its answer and refreshes in the background', async () => {
+      renderTab();
+      await waitFor(() => expect(closeDayButton()).not.toBeNull());
+      fireEvent.click(closeDayButton()!);
+      fireEvent.click(await screen.findByRole('button', { name: 'Close day' }));
+      expect(await screen.findByText(/Business day closed/)).toBeDefined();
+      await waitFor(() => expect(closeDayButton()?.getAttribute('aria-busy') ?? null).toBeNull());
     });
 
     it('does not seal the day if the operator backs out', async () => {

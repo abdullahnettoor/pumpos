@@ -107,7 +107,10 @@ const mount = (
           closedByName: 'Anita',
         },
     lastShiftSummary: { shiftId: 'sh-0', snapshotData: { cashVariance: 0 } },
-    templates: [{ id: 't1', name: 'Morning', startTime: '06:00', endTime: '14:00' }],
+    templates: [
+      { id: 't1', name: 'Morning', startTime: '06:00', endTime: '14:00' },
+      { id: 't2', name: 'Evening', startTime: '14:00', endTime: '22:00' },
+    ],
     nozzles: [],
     staff: [],
     dispensers: [],
@@ -133,6 +136,8 @@ const mount = (
 
 let restoreConsole: () => void;
 beforeEach(() => {
+  openShift.mockReset();
+  getShiftStatus.mockReset();
   // 17:30 IST on the shift's day: before its 22:00 scheduled end.
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-14T12:00:00.000Z'));
@@ -194,13 +199,19 @@ describe('Live shift, layout B', () => {
     expect(within(table).getByText('+₹120.00')).toBeDefined();
   });
 
+  it('says in the Sales hint what the fuel figure leaves out, in the total row’s words', () => {
+    mount('Manager');
+    const sales = screen.getByText('Sales').closest('[title]')!;
+    expect(sales.textContent).toContain('Excl. DU2, not handed over · Fuel');
+  });
+
   it('groups the readings by drawer, each with its handover button', () => {
     mount('Manager');
     const table = screen.getByRole('table', { name: 'Nozzle readings' });
     expect(within(table).getByText('DU1 · Ravi')).toBeDefined();
     expect(within(table).getByRole('button', { name: 'View handover' })).toBeDefined();
     expect(within(table).getByRole('button', { name: 'Record handover' })).toBeDefined();
-    expect(within(table).getByText('Total excl. DU2')).toBeDefined();
+    expect(within(table).getByText('Total excl. DU2, not handed over')).toBeDefined();
   });
 
   it('lists every attendant under Product sales, in GLOSSARY words', () => {
@@ -253,6 +264,44 @@ describe('opening a shift (#533 review)', () => {
     expect(first[0]).toMatchObject({ stationId: 'st-1', businessDate: '2026-10-14' });
     expect(first[1].idempotencyKey).toEqual(expect.any(String));
     expect(second[1].idempotencyKey).toBe(first[1].idempotencyKey);
+  });
+
+  it('keeps the key for the form’s lifetime, so an edited retry is refused, not opened twice', async () => {
+    openShift
+      .mockRejectedValueOnce(Object.assign(new Error('Network down'), { status: undefined }))
+      .mockResolvedValueOnce({ id: 'sh-new' });
+    getShiftStatus.mockResolvedValue({ activeShift: null, templates: [] });
+    mount('Manager', null);
+    fireEvent.click(screen.getByRole('button', { name: /Open shift/ }));
+    const start = () => screen.getByRole('button', { name: /Start Shift Operations/ });
+    await waitFor(() => expect((start() as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(start());
+    await waitFor(() => expect(openShift).toHaveBeenCalledTimes(1));
+
+    // The answer was lost; the operator changes the template and tries again.
+    fireEvent.change(screen.getByDisplayValue(/Morning · Scheduled/), { target: { value: 't2' } });
+    await waitFor(() => expect((start() as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(start());
+    await waitFor(() => expect(openShift).toHaveBeenCalledTimes(2));
+
+    const [first, second] = openShift.mock.calls;
+    expect(first[0].shiftTemplateId).toBe('t1');
+    expect(second[0].shiftTemplateId).toBe('t2');
+    expect(second[1].idempotencyKey).toBe(first[1].idempotencyKey);
+  });
+
+  it('reports the open at once and refreshes in the background', async () => {
+    openShift.mockResolvedValueOnce({ id: 'sh-new' });
+    // The refresh never answers: the screen must not wait on it.
+    getShiftStatus.mockReturnValue(new Promise(() => {}));
+    mount('Manager', null);
+    fireEvent.click(screen.getByRole('button', { name: /Open shift/ }));
+    const start = () => screen.getByRole('button', { name: /Start Shift Operations/ });
+    await waitFor(() => expect((start() as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(start());
+    expect(await screen.findByText('Shift opened.')).toBeDefined();
+    expect(screen.queryByText('Shift details')).toBeNull();
+    expect(screen.getByLabelText('Loading the new shift')).toBeDefined();
   });
 });
 

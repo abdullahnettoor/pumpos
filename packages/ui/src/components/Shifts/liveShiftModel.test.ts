@@ -206,7 +206,7 @@ describe('nozzleTotal', () => {
     const groups = nozzleGroups(moved, { now: BEFORE_END, timeZone: TZ });
     expect(groups[1].rows[0].litres).toBe(10);
     expect(nozzleTotal(groups, false)).toEqual({
-      label: 'Total excl. DU2',
+      label: 'Total excl. DU2, not handed over',
       litres: 482.65,
       value: 46962.95,
     });
@@ -218,7 +218,7 @@ describe('nozzleTotal', () => {
       'p-Petrol',
     );
     expect(nozzleTotal(groups, true)).toEqual({
-      label: 'Total of 2 shown excl. DU2',
+      label: 'Total of 2 shown excl. DU2, not handed over',
       litres: 180.4,
       value: 18491,
     });

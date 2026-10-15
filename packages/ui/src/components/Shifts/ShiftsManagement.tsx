@@ -23,7 +23,14 @@ import {
   type StaffAssignmentInput,
 } from './liveShiftModel.js';
 import { PageFrame } from '../page-frame/index.js';
-import { Button, DataSection, Tabs, tabPanelProps, type TabItem } from '../../pump-ds/index.js';
+import {
+  Button,
+  DataSection,
+  Skeleton,
+  Tabs,
+  tabPanelProps,
+  type TabItem,
+} from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
@@ -59,7 +66,11 @@ import type { CloseDropRow } from './CloseShiftWizard.js';
 import type { OpenShiftFormValues } from '@pump/shared';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 import { refreshShiftStatus } from './refreshShiftStatus.js';
-import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
+import {
+  officeSubmitKeys,
+  sendKeyed,
+  type SubmitKeySession,
+} from '../../office-records/submitKeys.js';
 
 const shiftService = new CloudShiftService();
 const TABS_ID = 'shifts';
@@ -205,6 +216,17 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [isOpening, setIsOpening] = useState(false);
   // Idle Live shift: the open-shift form shows once the operator asks for it.
   const [openFormVisible, setOpenFormVisible] = useState(false);
+  // One Idempotency-Key session for the open-shift form's lifetime: a retry
+  // after a lost answer reuses the key even if the form was edited, so the
+  // server refuses it as an edited retry rather than opening a second shift.
+  const openShiftKeys = useRef<SubmitKeySession | null>(null);
+  // Opened: the success is shown at once; the new shift renders when the
+  // status refresh (background) lands.
+  const [awaitingOpenedShift, setAwaitingOpenedShift] = useState(false);
+  const showOpenForm = (visible: boolean) => {
+    openShiftKeys.current = null;
+    setOpenFormVisible(visible);
+  };
   // Active Shift Workspace States
   const [closingReadings, setClosingReadings] = useState<Record<string, number>>({});
 
@@ -614,16 +636,19 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         payload.initialReadings = initialReadings;
       }
 
-      // One key per open: a retry after an unanswered open (same station, day,
-      // template and assignments) reuses it, so the shift cannot open twice.
-      await sendKeyed(
-        officeSubmitKeys.session(`shift:open:${selectedStation.id}`),
-        payload,
-        (key) => shiftService.openShift(payload, { idempotencyKey: key }),
+      openShiftKeys.current ??= officeSubmitKeys.session(`shift:open:${selectedStation.id}`);
+      await sendKeyed(openShiftKeys.current, payload, (key) =>
+        shiftService.openShift(payload, { idempotencyKey: key }),
       );
-      await loadShiftStatus();
-      setOpenFormVisible(false);
+      // The open is saved: report it now; the workspace refreshes in the
+      // background (caching rule 6) and the new shift shows when it lands.
+      showOpenForm(false);
+      setAwaitingOpenedShift(true);
       toast.success('Shift opened.');
+      runTask(
+        loadShiftStatus().finally(() => setAwaitingOpenedShift(false)),
+        'Shift opened, but the screen could not be refreshed.',
+      );
     } catch (err: any) {
       toast.error(err.message || 'Failed to open shift');
     } finally {
@@ -837,7 +862,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           setPreserveNextShiftDate(true);
           setClosedShiftSuccess(null);
           setViewingShiftSummary(false);
-          setOpenFormVisible(true);
+          showOpenForm(true);
         }}
         onViewSummary={() => {
           setViewHistoryShiftId(closedShiftSuccess.lastClosedShiftId);
@@ -892,7 +917,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           icon: 'play' as const,
           onClick: () => {
             setShiftSubTab('today');
-            setOpenFormVisible(true);
+            showOpenForm(true);
           },
         }
       : null;
@@ -985,11 +1010,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                   onStartClose={startClose}
                   onViewLastSummary={viewLastShiftSummary}
                 />
+              ) : awaitingOpenedShift ? (
+                <Skeleton aria-label="Loading the new shift" height={420} />
               ) : openFormVisible && data ? (
                 <section className="flex flex-col gap-3" aria-label="Open a shift">
                   <div className="flex items-center justify-between gap-2">
                     <h2 className="text-[14px] font-semibold text-ink-strong">Open a shift</h2>
-                    <Button variant="ghost" size="sm" onClick={() => setOpenFormVisible(false)}>
+                    <Button variant="ghost" size="sm" onClick={() => showOpenForm(false)}>
                       Cancel
                     </Button>
                   </div>

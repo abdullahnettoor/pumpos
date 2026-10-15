@@ -8,7 +8,7 @@ import {
   type SectionQuery,
 } from '../../pump-ds/index.js';
 import { formatMoney, formatQuantity, signedMoneyParts } from '../../utils/format.js';
-import type { LiveShiftFigures } from './liveShiftModel.js';
+import { pendingNote, type LiveShiftFigures } from './liveShiftModel.js';
 
 export interface LiveShiftTilesProps {
   figures: LiveShiftFigures;
@@ -31,7 +31,12 @@ export const LiveShiftTiles: React.FC<LiveShiftTilesProps> = ({ figures, product
   const litres = fuel.byUnit
     .map((u) => formatQuantity(u.litres, u.unit, { decimals: 0 }))
     .join(' · ');
-  const fuelHint = `Fuel ${whole(fuel.value)}${litres ? ` (${litres})` : ''}`;
+  // Same rows as the nozzle total, and the same words for what is left out.
+  const note = pendingNote(pending);
+  // The exclusion leads, so a narrow tile truncates the breakdown, never it.
+  const salesHint = note
+    ? `${note[0].toUpperCase()}${note.slice(1)} · Fuel ${whole(fuel.value)} · Products ${whole(products.total)}`
+    : `Fuel ${whole(fuel.value)}${litres ? ` (${litres})` : ''} · Products ${whole(products.total)}`;
 
   const v = variancePresentation(drawers.variance, 'cash');
   const alert: KpiAlert | undefined =
@@ -59,7 +64,8 @@ export const LiveShiftTiles: React.FC<LiveShiftTilesProps> = ({ figures, product
           label="Sales"
           scope="this-shift"
           value={formatMoney(figures.sales)}
-          hint={`${fuelHint} · Products ${whole(products.total)}`}
+          hint={salesHint}
+          title={salesHint}
         />
       </TileSection>
       <KpiTile
