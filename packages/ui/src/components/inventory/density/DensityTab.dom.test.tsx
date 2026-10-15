@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { renderWithProviders, createTestQueryClient } from '../../../test/renderWithProviders.js';
 import { DensityTab } from './DensityTab.js';
 import { queryKeys } from '../../../query/hooks.js';
@@ -139,7 +139,10 @@ function seedQueryClient() {
   return qc;
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('DensityTab (Variant D)', () => {
   it('renders Today view by default with product cards, missing banner, and header buttons', () => {
@@ -204,7 +207,7 @@ describe('DensityTab (Variant D)', () => {
     fireEvent.click(registerBtn);
 
     // Register log table should now be rendered
-    expect(screen.getByText(/Density Register Log/i)).toBeDefined();
+    expect(screen.getByRole('heading', { name: /Density register/i })).toBeDefined();
     expect(screen.getByText(/Rajesh Manager/i)).toBeDefined();
     expect(screen.getByText(/Sunil Operator/i)).toBeDefined();
 
@@ -318,7 +321,7 @@ describe('DensityTab · shared density reading (#521)', () => {
   it('Today lists recent readings in the station timezone', () => {
     renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: seedChatham() });
     const card = screen.getByTestId('density-card-prod-ms');
-    expect(within(card).getByText(/11 Oct 8:15 pm · MORNING/)).toBeDefined();
+    expect(within(card).getByText('11 Oct 8:15 pm · Morning')).toBeDefined();
   });
 
   it('Register shows station time, 15 °C to one decimal and the jump word', () => {
@@ -348,7 +351,7 @@ describe('DensityTab · shared density reading (#521)', () => {
     expect(screen.queryByTestId('density-card-prod-ms')).toBeNull();
     expect(screen.queryByText(/am|pm/)).toBeNull();
     fireEvent.click(screen.getByRole('radio', { name: /Register/i }));
-    expect(screen.queryByText('Density Register Log')).toBeNull();
+    expect(screen.queryByText('Rajesh Manager')).toBeNull();
     expect(screen.queryByText(/\d:\d{2} (am|pm)/)).toBeNull();
   });
 
@@ -372,19 +375,118 @@ describe('DensityTab · shared density reading (#521)', () => {
   it('Register dates read as day and month', () => {
     renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: seedChatham() });
     fireEvent.click(screen.getByRole('radio', { name: /Register/i }));
-    expect(screen.getByText('11 Oct')).toBeDefined();
+    expect(screen.getAllByText('11 Oct')).toHaveLength(2);
     expect(screen.queryByText('2026-10-11')).toBeNull();
   });
 
-  it('a Decantation beyond tolerance takes its routine tone, not the jump tone', () => {
+  it('a Decantation beyond tolerance is a new load in the Δ chip; the routine chip stays neutral', () => {
     const qc = seedChatham();
     qc.setQueryData(queryKeys.densityReadings(STATION_ID, '', '', '', '', 500), [
       { ...MOCK_READING_MS, kind: 'DECANTATION', delta: 6 },
     ]);
     renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
     fireEvent.click(screen.getByRole('radio', { name: /Register/i }));
-    const chipOf = (text: string) => screen.getByText(text).parentElement as HTMLElement;
-    expect(chipOf('DECANTATION').className).toContain('bg-info-bg text-info-fg');
+    const table = screen.getByRole('table');
+    const chipOf = (text: string) => within(table).getByText(text).parentElement as HTMLElement;
+    expect(chipOf('Decantation').className).toContain('bg-surface-alt text-ink-muted');
     expect(chipOf('+6.0').className).toContain('bg-info-bg text-info-fg');
+  });
+});
+
+describe('DensityTab · design system (#536, #557)', () => {
+  it('names routines in sentence case in Today, the Register chips and the routine filter', () => {
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: seedChatham() });
+    expect(screen.queryByText(/MORNING|ADHOC|DECANTATION/)).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: /Register/i }));
+    const table = screen.getByRole('table');
+    expect(within(table).getByText('Morning')).toBeDefined();
+    expect(within(table).getByText('Ad-hoc')).toBeDefined();
+    expect(within(table).queryByText(/MORNING|ADHOC/)).toBeNull();
+    const routine = screen.getByRole('combobox', { name: 'Filter by kind' });
+    expect(Array.from(routine.querySelectorAll('option')).map((o) => o.textContent)).toEqual([
+      'All routines',
+      'Morning',
+      'Ad-hoc',
+      'Decantation',
+    ]);
+  });
+
+  it('the Register routine filter applies instantly', () => {
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: seedChatham() });
+    fireEvent.click(screen.getByRole('radio', { name: /Register/i }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by kind' }), {
+      target: { value: 'ADHOC' },
+    });
+    expect(screen.queryByText('Rajesh Manager')).toBeNull();
+    expect(screen.getByText('Sunil Operator')).toBeDefined();
+    expect(screen.getByText('1 reading')).toBeDefined();
+  });
+
+  it('the missing-density button names the product the banner names first', () => {
+    const qc = seedQueryClient();
+    qc.setQueryData(queryKeys.densityToday(STATION_ID, ''), {
+      ...MOCK_TODAY_SUMMARY,
+      missingProducts: [
+        { productId: 'prod-hsd', productName: 'Power Petrol', productCode: 'XP95' },
+      ],
+    });
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+    const banner = screen.getByTestId('missing-density-banner');
+    expect(within(banner).getByText(/Missing today: Power Petrol/)).toBeDefined();
+    expect(within(banner).getByRole('button', { name: 'Record Power Petrol' })).toBeDefined();
+    expect(within(banner).queryByText(/XP95/)).toBeNull();
+  });
+
+  it('a recent reading keeps date · routine on one line and the sample point on its own', () => {
+    const qc = seedChatham();
+    const reading = { ...MOCK_READING_MS, tankName: 'Tank 1', nozzleName: 'DU-1 N2', delta: 5.2 };
+    qc.setQueryData(queryKeys.densityToday(STATION_ID, ''), {
+      ...MOCK_TODAY_SUMMARY,
+      products: [{ ...MOCK_TODAY_SUMMARY.products[0], lastReadings: [reading] }],
+    });
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+    const row = screen.getByTestId('recent-reading');
+    const line = within(row).getByText('11 Oct 8:15 pm · Morning');
+    expect(line.className).toContain('truncate');
+    const sampled = within(row).getByText('Tank 1 · DU-1 N2');
+    expect(sampled.className).toContain('truncate');
+    expect(sampled).not.toBe(line);
+    const figure = within(row).getByText('753.8').parentElement as HTMLElement;
+    expect(figure.className).toContain('shrink-0');
+    expect(figure.contains(within(row).getByText(/\+5\.2 vs prev/))).toBe(true);
+  });
+
+  it('keeps the tab free of primary buttons (the page header owns the one primary)', () => {
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: seedChatham() });
+    for (const name of [
+      /Print board/i,
+      /Record density/i,
+      /Record today's density/i,
+      /Record High Speed/i,
+    ]) {
+      const button = screen.getByRole('button', { name });
+      expect(button.className).toContain('bg-surface text-ink-strong');
+      expect(button.className).not.toContain('bg-brand');
+    }
+  });
+
+  it("shows Couldn't load · Retry when today's summary fails, never an empty state", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ success: false, error: { code: 'INTERNAL', message: 'boom' } }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const qc = seedChatham();
+    qc.removeQueries({ queryKey: queryKeys.densityToday(STATION_ID, '') });
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toMatch(/Couldn't load today's density ·/);
+    expect(screen.queryByText(/No density summary/)).toBeNull();
+    const calls = fetchMock.mock.calls.length;
+    fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(calls));
   });
 });
