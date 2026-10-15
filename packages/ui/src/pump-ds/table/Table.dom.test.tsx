@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders as render } from '../../test/renderWithProviders.js';
 import { InteractiveTable } from './InteractiveTable.js';
 import { StatementTable } from '../statement-table/StatementTable.js';
-import type { TableColumn } from './columns.js';
+import { cellText, totalTexts, type TableColumn } from './columns.js';
 
 type Sale = {
   id: string;
@@ -372,5 +372,45 @@ describe('statement adapter', () => {
       />,
     );
     expect(isNumericCell(screen.getByText('n/a'))).toBe(true);
+  });
+});
+
+describe('plain text, as a PDF prints the table (#580)', () => {
+  it('reads each cell as the screen shows it, a status as its word', () => {
+    render(<StatementTable columns={columns} rows={rows} rowKey={(r) => r.id} />);
+    const shown = Array.from(screen.getAllByRole('row')[1].querySelectorAll('td')).map(
+      (c) => c.textContent,
+    );
+    expect(columns.map((col) => cellText(col, rows[0]))).toEqual(shown);
+    expect(cellText(columns[5], rows[1])).toBe('Unpaid');
+  });
+
+  it('a column with its own cell prints its text; text alone is the cell', () => {
+    const col: TableColumn<Sale> = {
+      id: 'v',
+      header: 'Variance',
+      kind: 'money',
+      value: (r) => r.amount,
+      text: (r) => `+${r.amount}`,
+      cell: (r) => <b>+{r.amount}</b>,
+    };
+    expect(cellText(col, rows[0])).toBe('+114700');
+    render(
+      <StatementTable
+        columns={[{ ...col, cell: undefined }]}
+        rows={rows.slice(0, 1)}
+        rowKey={(r) => r.id}
+      />,
+    );
+    expect(screen.getByText('+114700')).toBeTruthy();
+  });
+
+  it('reads the total row as the screen prints it, label first', () => {
+    render(<StatementTable columns={columns} rows={rows} rowKey={(r) => r.id} totalRow />);
+    expect(totalTexts(columns, rows, true)).toEqual({
+      cells: footerCells().map((c) => c ?? ''),
+      labelled: true,
+    });
+    expect(totalTexts(columns, rows, undefined)).toBeNull();
   });
 });

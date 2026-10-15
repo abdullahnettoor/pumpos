@@ -5,8 +5,8 @@ import { formatMoney } from '../../../utils/format.js';
 /**
  * The DSR screen's section models (#532): one pure read of a stored DSR
  * snapshot or a live preview, so the screen renders figures and never sums raw
- * snapshot keys itself. The PDF (`dssrDoc`) still reads the snapshot directly;
- * see the PR for where the two differ.
+ * snapshot keys itself. The PDF (`dssrDoc`) reads the same model and prints the
+ * screen's columns (`dssrColumns`), so the two never disagree (#580).
  */
 
 /** What the DSR reads return (the services are untyped): a stored snapshot row or a preview. */

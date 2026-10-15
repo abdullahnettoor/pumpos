@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import React from 'react';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -11,6 +11,10 @@ import { InvoiceDoc } from './invoiceDoc.js';
 import { LedgerDoc } from './ledgerDoc.js';
 import { AttendantReportDoc, dayPageTitle } from './attendantReportDoc.js';
 import { MARK_PATH, MARK_VIEWBOX } from '../../pump-ds/brand/Brand.js';
+import { DSSR_PARITY_FIXTURE } from '../../test/dssrFixture.js';
+import { readPdf } from '../../test/pdfTree.js';
+import { formatDateTime } from '../../utils/format.js';
+import { DEFAULT_DSSR_CONFIG } from './reportConfig.js';
 
 async function streamToBuffer(stream: any): Promise<Buffer> {
   if (Buffer.isBuffer(stream)) return stream;
@@ -318,13 +322,43 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
         }),
       );
     const withOmc = render({ omcCard: { total: 2000, count: 1 } });
-    const at = withOmc.indexOf('OMC Card Sales');
-    expect(at).toBeGreaterThan(withOmc.indexOf('Fleet Credit Sales'));
+    const at = withOmc.indexOf('OMC card sales');
+    expect(at).toBeGreaterThan(withOmc.indexOf('Fleet credit sales'));
     expect(withOmc[at + 1]).toMatch(/2,000/);
     // Unchanged for a snapshot frozen before the field and for a day without any.
     const legacy = render({});
-    expect(legacy).not.toContain('OMC Card Sales');
+    expect(legacy).not.toContain('OMC card sales');
     expect(render({ omcCard: { total: 0, count: 0 } })).toEqual(legacy);
+  });
+
+  /*
+   * #580: the DSR PDF prints the screen's model (`readDssrDay`): 2 decimals
+   * for volumes, Short / Surplus / Balanced, sentence case, and one total row
+   * that never adds volumes across L and kg. Times print in the runner's zone,
+   * so they are replaced by a placeholder; the footer's print time too.
+   */
+  it('prints the DSR as the screen reads it (#580)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-09T06:00:00.000Z'));
+    try {
+      const snap = DSSR_PARITY_FIXTURE.snapshotData;
+      const times: Record<string, string> = {
+        [formatDateTime(DSSR_PARITY_FIXTURE.generatedAt)]: '<generated at>',
+        [formatDateTime(snap.shifts[0].closedAt)]: '<shift 1 closed at>',
+        [formatDateTime(snap.shifts[1].closedAt)]: '<shift 2 closed at>',
+        [new Date().toLocaleString('en-IN')]: '<printed at>',
+      };
+      const doc = (DssrDoc as any)({
+        dssr: DSSR_PARITY_FIXTURE,
+        config: { ...DEFAULT_DSSR_CONFIG, stationName: 'Apex Fuels' },
+      });
+      const lines = readPdf(doc).lines.map((line) =>
+        Object.entries(times).reduce((l, [time, mark]) => l.split(time).join(mark), line),
+      );
+      expect(lines).toMatchSnapshot();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('generates real PDF buffer for Tax Invoice with verified vector mark in PDF stream', async () => {

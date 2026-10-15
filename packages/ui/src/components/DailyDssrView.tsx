@@ -24,7 +24,7 @@ import { ReportNote } from './reports/ReportNote.js';
 import { DayPicker } from './reports/DayPicker.js';
 import { invalidateAfterDssrGenerate, useDailyDssrPreview } from '../query/hooks.js';
 import { CloudShiftService } from '../services/cloud.js';
-import { formatBusinessDate, formatDateTime, formatMoney } from '../utils/format.js';
+import { formatBusinessDate, formatDateTime } from '../utils/format.js';
 import { useRunTask } from '../utils/runTask.js';
 import { officeSubmitKeys } from '../office-records/submitKeys.js';
 import {
@@ -41,6 +41,10 @@ import {
   MERCHANDISE_STOCK_COLUMNS,
   NOZZLE_COLUMNS,
   SHIFT_COLUMNS,
+  DSSR_COGS_NOTE,
+  DSSR_TITLES,
+  attendantTotalRow,
+  dssrTiles,
   fuelTotalRow,
   shiftTotalRow,
 } from './reports/dssr/dssrColumns.js';
@@ -243,7 +247,6 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({
 
 /** The report itself: notices, headline tiles, then one section per table. */
 const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
-  const { margin } = day;
   return (
     <div className="flex flex-col gap-5">
       {(day.lateEntryCount > 0 || day.warnings.length > 0) && (
@@ -273,40 +276,20 @@ const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
       {/* The margin statement as tiles: every figure once, none repeating a table total. */}
       <div className="flex flex-col gap-1.5">
         <KpiStrip columns={4}>
-          <KpiTile
-            label="Shifts included"
-            value={String(day.shiftsIncluded)}
-            hint="closed shifts"
-          />
-          <KpiTile
-            label="Total revenue"
-            value={formatMoney(margin.revenue)}
-            hint={`Fuel ${formatMoney(margin.revenueFuel)} · Merchandise ${formatMoney(margin.revenueMerch)}`}
-          />
-          <KpiTile
-            label="Cost of goods sold"
-            value={formatMoney(margin.cogs)}
-            hint={`Fuel ${formatMoney(margin.cogsFuel)} · Merchandise ${formatMoney(margin.cogsMerch)}`}
-          />
-          <KpiTile
-            label="Gross margin"
-            value={formatMoney(margin.grossMargin)}
-            hint="Revenue − cost of goods sold"
-          />
+          {dssrTiles(day).map((tile) => (
+            <KpiTile key={tile.label} label={tile.label} value={tile.value} hint={tile.hint} />
+          ))}
         </KpiStrip>
-        <ReportNote>
-          Cost of goods sold uses each product&apos;s weighted-average cost at day close. Fuel VAT
-          is output tax (excluded from cost); merchandise cost is pre-tax.
-        </ReportNote>
+        <ReportNote>{DSSR_COGS_NOTE}</ReportNote>
       </div>
 
       <section className="flex flex-col gap-2">
-        <SectionHeader title="Sales summary" />
-        <FigureList lines={day.sales} label="Sales summary" />
+        <SectionHeader title={DSSR_TITLES.sales} />
+        <FigureList lines={day.sales} label={DSSR_TITLES.sales} />
       </section>
 
       <section className="flex flex-col gap-2">
-        <SectionHeader title="Fuel sales by product" />
+        <SectionHeader title={DSSR_TITLES.fuel} />
         <InteractiveTable
           columns={FUEL_PRODUCT_COLUMNS}
           rows={day.fuel.rows}
@@ -318,7 +301,7 @@ const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
       </section>
 
       <section className="flex flex-col gap-2">
-        <SectionHeader title="Nozzles" subtitle="Volume by nozzle, across the day's shifts" />
+        <SectionHeader title={DSSR_TITLES.nozzles} subtitle={DSSR_TITLES.nozzlesSubtitle} />
         <InteractiveTable
           columns={NOZZLE_COLUMNS}
           rows={day.nozzles}
@@ -330,7 +313,7 @@ const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
 
       {day.fuelStock.length > 0 && (
         <section className="flex flex-col gap-2">
-          <SectionHeader title="Tank dip and fuel stock variance" />
+          <SectionHeader title={DSSR_TITLES.fuelStock} />
           <InteractiveTable
             columns={FUEL_STOCK_COLUMNS}
             rows={day.fuelStock}
@@ -342,7 +325,7 @@ const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
 
       {day.merchandiseStock.length > 0 && (
         <section className="flex flex-col gap-2">
-          <SectionHeader title="Merchandise stock variance" />
+          <SectionHeader title={DSSR_TITLES.merchandiseStock} />
           <InteractiveTable
             columns={MERCHANDISE_STOCK_COLUMNS}
             rows={day.merchandiseStock}
@@ -353,7 +336,7 @@ const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
       )}
 
       <section className="flex flex-col gap-2">
-        <SectionHeader title="Included shifts" />
+        <SectionHeader title={DSSR_TITLES.shifts} />
         <InteractiveTable
           columns={SHIFT_COLUMNS}
           rows={day.shifts}
@@ -367,16 +350,12 @@ const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
       {/* Attendant (Handover) variance per Attendant/DU for the day (#287). */}
       {day.attendants.length > 0 && (
         <section className="flex flex-col gap-2">
-          <SectionHeader title="Attendant variance" subtitle="At handover, per attendant and DU" />
+          <SectionHeader title={DSSR_TITLES.attendants} subtitle={DSSR_TITLES.attendantsSubtitle} />
           <InteractiveTable
             columns={ATTENDANT_COLUMNS}
             rows={day.attendants}
             rowKey={(r) => r.key}
-            totalRow={
-              day.drawerTotals.attendantVariance == null
-                ? true
-                : { values: { variance: day.drawerTotals.attendantVariance } }
-            }
+            totalRow={attendantTotalRow(day)}
             title="attendant variance"
           />
         </section>

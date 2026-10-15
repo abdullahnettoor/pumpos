@@ -1,40 +1,92 @@
 import React from 'react';
 import { Document, Page, View, Text } from '@react-pdf/renderer';
+import { C, s, TableView, LetterheadBand } from './shiftSummaryDoc.js';
+import { DSR_FULL_NAME, DSR_LABEL } from '@pump/shared';
+import type { TableColumn, TotalRow } from '../../pump-ds/table/columns.js';
+import { totalTexts } from '../../pump-ds/table/columns.js';
+import { formatBusinessDate, formatDateTime } from '../../utils/format.js';
 import {
-  C,
-  s,
-  TableView,
-  Kpi,
-  varColor,
-  inr,
-  vol3,
-  vol3u,
-  unitTotals,
-  fmtDateTime,
-  LetterheadBand,
-  type Col,
-  type Cell,
-} from './shiftSummaryDoc.js';
-import { DSR_FULL_NAME, DSR_LABEL, readDssrOmcCard, shiftDisplayLabel } from '@pump/shared';
+  readDssrDay,
+  type DssrDay,
+  type DssrRow,
+} from '../../components/reports/dssr/dssrModel.js';
+import {
+  ATTENDANT_COLUMNS,
+  DSSR_COGS_NOTE,
+  DSSR_TITLES,
+  FUEL_PRODUCT_COLUMNS,
+  FUEL_STOCK_COLUMNS,
+  MERCHANDISE_STOCK_COLUMNS,
+  NOZZLE_COLUMNS,
+  SHIFT_COLUMNS,
+  attendantTotalRow,
+  dssrCellTone,
+  dssrTiles,
+  fuelTotalRow,
+  fuelUnitsNote,
+  shiftTotalRow,
+} from '../../components/reports/dssr/dssrColumns.js';
+import { pdfTable } from './pdfTable.js';
 import type { DssrSection, DssrReportConfig } from './reportConfig.js';
 import { DEFAULT_DSSR_CONFIG } from './reportConfig.js';
 
 export type { DssrSection, DssrReportConfig } from './reportConfig.js';
 export { DEFAULT_DSSR_CONFIG, DSSR_SECTION_LABELS } from './reportConfig.js';
 
-const ReconRow = ({ label, value, color }: { label: string; value: string; color?: string }) => (
+/*
+ * The PDF reads the DSR through `readDssrDay`, the screen's model, and prints
+ * the screen's columns, total rows, titles and words (#580): the same volume
+ * decimals, Short / Surplus / Balanced, and the mixed-unit total label. It
+ * never recomputes a figure; every figure is the stored snapshot's.
+ */
+
+/** A variance figure or Status tints as the screen's: a shortage red, a surplus amber. */
+const TONE = { short: C.danger, surplus: C.amber } as const;
+const toneOf = <T,>(col: TableColumn<T>, row: T): string | undefined => {
+  const tone = dssrCellTone(col, row);
+  return tone ? TONE[tone] : undefined;
+};
+
+/** A section title, uppercase as the screen's section header shows it. */
+const Title = ({ title, subtitle }: { title: string; subtitle?: string }) => (
+  <>
+    <Text style={s.h2}>{title.toUpperCase()}</Text>
+    {subtitle && <Text style={[s.label, { marginTop: -3, marginBottom: 5 }]}>{subtitle}</Text>}
+  </>
+);
+
+/** One screen table, printed. */
+function Table<T>({
+  columns,
+  rows,
+  totalRow,
+}: {
+  columns: TableColumn<T>[];
+  rows: T[];
+  totalRow?: TotalRow;
+}) {
+  const t = pdfTable(columns, rows, totalRow, toneOf);
+  return <TableView columns={t.columns} rows={t.rows} total={t.total} />;
+}
+
+const FigureRow = ({ label, value }: { label: string; value: string }) => (
   <View style={s.reconRow}>
     <Text style={{ fontSize: 8.5, color: C.body }}>{label}</Text>
-    <Text
-      style={{ fontSize: 8.5, fontFamily: 'Geist Mono', color: color ?? C.ink, fontWeight: 700 }}
-    >
+    <Text style={{ fontSize: 8.5, fontFamily: 'Geist Mono', color: C.ink, fontWeight: 700 }}>
       {value}
     </Text>
   </View>
 );
 
-const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.ReactNode> = {
-  header: (d, cfg) => (
+const MetaCell = ({ label, value }: { label: string; value: string }) => (
+  <View style={s.metaCell}>
+    <Text style={s.label}>{label.toUpperCase()}</Text>
+    <Text style={s.valMono}>{value}</Text>
+  </View>
+);
+
+const builders: Record<DssrSection, (day: DssrDay, cfg: DssrReportConfig) => React.ReactNode> = {
+  header: (day, cfg) => (
     <View key="header">
       <LetterheadBand
         title={DSR_FULL_NAME.toUpperCase()}
@@ -43,318 +95,106 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
         showLogo={cfg.showLogo}
       />
       <Text style={s.sub}>
-        Business Date {d.businessDate}
-        {d.generatedAt ? ` \u2022 Generated ${fmtDateTime(d.generatedAt)}` : ''}
+        {formatBusinessDate(day.businessDate)}
+        {day.generatedAt ? ` \u00b7 Generated ${formatDateTime(day.generatedAt)}` : ''}
       </Text>
     </View>
   ),
-  meta: (d) => {
-    const f = d.fuel || {};
-    const bp = (f.byProduct || []) as any[];
-    const gross = Number(f.totalGrossVolume ?? f.totalVolume ?? 0);
-    const testing = Number(f.totalTestingVolume || 0);
-    const net = Number(f.totalNetVolume ?? gross - testing);
+  // The day's fuel figures: the fuel table's own total row, so a mixed-unit
+  // day prints `—` for its volumes here too, and says why.
+  meta: (day) => {
+    const cells = totalTexts(FUEL_PRODUCT_COLUMNS, day.fuel.rows, fuelTotalRow(day.fuel))?.cells;
+    const total = (id: string) => cells?.[FUEL_PRODUCT_COLUMNS.findIndex((c) => c.id === id)] ?? '';
+    const note = fuelUnitsNote(day.fuel);
     return (
-      <View key="meta" style={s.metaBox}>
-        <View style={s.metaCell}>
-          <Text style={s.label}>SHIFTS INCLUDED</Text>
-          <Text style={s.val}>{d.shiftsIncluded ?? 0}</Text>
+      <View key="meta">
+        <View style={s.metaBox}>
+          <MetaCell label="Net fuel volume" value={total('net')} />
+          <MetaCell label="Gross volume" value={total('gross')} />
+          <MetaCell label="Testing volume" value={total('testing')} />
+          <MetaCell label="Fuel sales" value={total('salesValue')} />
         </View>
-        <View style={s.metaCell}>
-          <Text style={s.label}>NET FUEL VOLUME</Text>
-          <Text style={s.valMono}>
-            {bp.length ? unitTotals(bp, (p) => Number(p.netVolume || 0)) : vol3(net)}
-          </Text>
-        </View>
-        <View style={s.metaCell}>
-          <Text style={s.label}>GROSS / TESTING</Text>
-          <Text style={s.valMono}>
-            {bp.length
-              ? `${unitTotals(bp, (p) => Number(p.grossVolume || 0))} / ${unitTotals(bp, (p) => Number(p.testingVolume || 0))}`
-              : `${vol3(gross)} / ${vol3(testing)}`}
-          </Text>
-        </View>
-        <View style={s.metaCell}>
-          <Text style={s.label}>FUEL SALES</Text>
-          <Text style={s.valMono}>{inr(f.totalSalesValue)}</Text>
-        </View>
+        {note && <Text style={[s.label, { marginTop: 4 }]}>Totals: {note}.</Text>}
       </View>
     );
   },
-  kpis: (d) => {
-    const credit = d.credit || {};
-    const pnl = d.pnl || {};
-    return (
-      <View key="kpis" style={s.kpiRow}>
-        <Kpi l="Total Revenue" v={inr(pnl.revenue)} c={C.ink} />
-        <Kpi l="Gross Margin" v={inr(pnl.grossMargin)} c={C.success} />
-        <Kpi
-          l="Credit (Normal + Fleet)"
-          v={inr(Number(credit.normalCredit || 0) + Number(credit.fleetCredit || 0))}
-          c={C.amber}
-        />
+  kpis: (day) => (
+    <View key="kpis">
+      <View style={s.kpiRow}>
+        {dssrTiles(day).map((tile) => (
+          <View key={tile.label} style={s.kpi}>
+            <Text style={s.kpiLabel}>{tile.label.toUpperCase()}</Text>
+            <Text style={s.kpiVal}>{tile.value}</Text>
+            <Text style={{ fontSize: 7, color: C.muted, marginTop: 2 }}>{tile.hint}</Text>
+          </View>
+        ))}
       </View>
-    );
-  },
-  financial: (d) => {
-    const credit = d.credit || {};
-    const pur = d.purchases || {};
-    const pnl = d.pnl || {};
-    const merch = d.merchandise || {};
-    const omc = readDssrOmcCard(d);
-    const sTax = (d.salesTax || {}) as {
-      gst?: Record<string, number>;
-      vat?: Record<string, number>;
-    };
-    return (
-      <View key="financial">
-        <Text style={s.h2}>SALES SUMMARY</Text>
-        <View style={s.reconBox}>
-          <ReconRow label="Merchandise Sales" value={inr(merch.salesValue)} />
-          <ReconRow label="Normal Credit Sales" value={inr(credit.normalCredit)} color={C.amber} />
-          <ReconRow label="Fleet Credit Sales" value={inr(credit.fleetCredit)} color={C.amber} />
-          {/* ADR 0001: OMC card fuel settles to the OMC Wallet; only snapshots that carry it print it. */}
-          {omc && <ReconRow label="OMC Card Sales" value={inr(omc.total)} />}
-          <ReconRow label="Purchases" value={inr(pur.total)} />
-          {/* T5 — output tax on sales: GST (merchandise) and VAT (fuel) kept apart. */}
-          {Number(sTax.gst?.total || 0) > 0 && (
-            <>
-              <ReconRow
-                label="Merchandise — Taxable Value"
-                value={inr(Number(sTax.gst?.taxable || 0))}
-              />
-              {Number(sTax.gst?.igst || 0) > 0 ? (
-                <ReconRow
-                  label="Output GST on Sales (IGST)"
-                  value={inr(Number(sTax.gst?.igst || 0))}
-                />
-              ) : (
-                <ReconRow
-                  label="Output GST on Sales (CGST / SGST)"
-                  value={`${inr(Number(sTax.gst?.cgst || 0))} / ${inr(Number(sTax.gst?.sgst || 0))}`}
-                />
-              )}
-            </>
-          )}
-          {Number(sTax.vat?.vat || 0) > 0 && (
-            <ReconRow label="Output VAT on Fuel" value={inr(Number(sTax.vat?.vat || 0))} />
-          )}
-          <ReconRow label="Gross Margin" value={inr(pnl.grossMargin)} color={C.green} />
-        </View>
-        <Text style={[s.label, { marginTop: 4 }]}>
-          Sales only. Collections, expenses, income and supplier payments are in the Daily Cash
-          Book.
-        </Text>
+      <Text style={[s.label, { marginTop: 4 }]}>{DSSR_COGS_NOTE}</Text>
+    </View>
+  ),
+  financial: (day) => (
+    <View key="financial">
+      <Title title={DSSR_TITLES.sales} />
+      <View style={s.reconBox}>
+        {day.sales.map((line) => (
+          <FigureRow key={line.label} label={line.label} value={line.value} />
+        ))}
       </View>
-    );
-  },
-  fuelByProduct: (d) => {
-    const f = d.fuel || {};
-    const list = (f.byProduct || []) as any[];
-    if (list.length === 0) return null;
-    const rows: Cell[][] = list.map((p) => [
-      { text: `${p.productName || 'Unknown'}${p.productCode ? ` (${p.productCode})` : ''}` },
-      { text: vol3u(p.grossVolume, p.unit) },
-      {
-        text: vol3u(p.testingVolume, p.unit),
-        color: Number(p.testingVolume || 0) > 0 ? C.amber : C.muted,
-      },
-      { text: vol3u(p.netVolume, p.unit) },
-      { text: inr(p.salesValue) },
-    ]);
-    const cols: Col[] = [
-      { header: 'Product', flex: 2.2, strong: true },
-      { header: 'Gross', flex: 1.2, align: 'right', mono: true },
-      { header: 'Testing', flex: 1.1, align: 'right', mono: true },
-      { header: 'Net', flex: 1.2, align: 'right', mono: true, strong: true },
-      { header: 'Sales Value', flex: 1.6, align: 'right', mono: true },
-    ];
-    return (
+      <Text style={[s.label, { marginTop: 4 }]}>
+        Sales only. Collections, expenses, income and supplier payments are in the Daily cash book.
+      </Text>
+    </View>
+  ),
+  fuelByProduct: (day) =>
+    day.fuel.rows.length === 0 ? null : (
       <View key="fuelByProduct">
-        <Text style={s.h2}>FUEL SALES BY PRODUCT</Text>
-        <TableView
-          columns={cols}
-          rows={rows}
-          totals={Array.from(new Set<string>(list.map((p) => String(p.unit || 'L')))).map((u) => {
-            const pu = list.filter((p) => (p.unit || 'L') === u);
-            return [
-              { text: `TOTAL \u2014 ${u}` },
-              {
-                text: vol3u(
-                  pu.reduce((a, p) => a + Number(p.grossVolume || 0), 0),
-                  u,
-                ),
-                color: C.muted,
-              },
-              {
-                text: vol3u(
-                  pu.reduce((a, p) => a + Number(p.testingVolume || 0), 0),
-                  u,
-                ),
-                color: C.muted,
-              },
-              {
-                text: vol3u(
-                  pu.reduce((a, p) => a + Number(p.netVolume || 0), 0),
-                  u,
-                ),
-                color: C.green,
-              },
-              { text: inr(pu.reduce((a, p) => a + Number(p.salesValue || 0), 0)), color: C.ink },
-            ];
-          })}
+        <Title title={DSSR_TITLES.fuel} />
+        <Table
+          columns={FUEL_PRODUCT_COLUMNS}
+          rows={day.fuel.rows}
+          totalRow={fuelTotalRow(day.fuel)}
         />
       </View>
-    );
-  },
-  nozzles: (d) => {
-    const list = (d.fuel?.nozzles || []) as any[];
-    if (list.length === 0) return null;
-    const rows: Cell[][] = list.map((nz) => [
-      { text: nz.nozzleName || 'Unknown' },
-      { text: nz.productName || 'Unknown' },
-      { text: vol3u(nz.grossVolume, nz.unit) },
-      {
-        text: vol3u(nz.testingVolume, nz.unit),
-        color: Number(nz.testingVolume || 0) > 0 ? C.amber : C.muted,
-      },
-      { text: vol3u(nz.netVolume, nz.unit) },
-    ]);
-    const cols: Col[] = [
-      { header: 'Nozzle', flex: 1.3, strong: true },
-      { header: 'Product', flex: 2 },
-      { header: 'Gross', flex: 1.2, align: 'right', mono: true },
-      { header: 'Testing', flex: 1.1, align: 'right', mono: true },
-      { header: 'Net', flex: 1.2, align: 'right', mono: true, strong: true },
-    ];
-    return (
+    ),
+  nozzles: (day) =>
+    day.nozzles.length === 0 ? null : (
       <View key="nozzles">
-        <Text style={s.h2}>NOZZLE AGGREGATION</Text>
-        <TableView columns={cols} rows={rows} />
+        <Title title={DSSR_TITLES.nozzles} subtitle={DSSR_TITLES.nozzlesSubtitle} />
+        <Table columns={NOZZLE_COLUMNS} rows={day.nozzles} />
       </View>
-    );
-  },
-  fuelStockVariance: (d) => {
-    const list = (d.fuelStockVariance || []) as any[];
-    if (list.length === 0) return null;
-    const rows: Cell[][] = list.map((v) => {
-      const variance = Number(v.varianceQuantity || 0);
-      return [
-        { text: v.tankName || 'Unknown' },
-        { text: v.productName || 'Unknown' },
-        { text: vol3u(v.expectedQuantity, v.unit) },
-        { text: vol3u(v.actualQuantity, v.unit) },
-        { text: `${variance > 0 ? '+' : ''}${vol3u(variance, v.unit)}`, color: varColor(variance) },
-        { text: v.status || '-', color: varColor(variance) },
-      ];
-    });
-    const cols: Col[] = [
-      { header: 'Tank', flex: 1.3, strong: true },
-      { header: 'Product', flex: 1.6 },
-      { header: 'Book', flex: 1.3, align: 'right', mono: true },
-      { header: 'Dip', flex: 1.3, align: 'right', mono: true },
-      { header: 'Variance', flex: 1.3, align: 'right', mono: true },
-      { header: 'Status', flex: 1 },
-    ];
-    return (
+    ),
+  fuelStockVariance: (day) =>
+    day.fuelStock.length === 0 ? null : (
       <View key="fuelStockVariance">
-        <Text style={s.h2}>TANK DIP &amp; FUEL STOCK VARIANCE</Text>
-        <TableView columns={cols} rows={rows} />
+        <Title title={DSSR_TITLES.fuelStock} />
+        <Table columns={FUEL_STOCK_COLUMNS} rows={day.fuelStock} />
       </View>
-    );
-  },
-  merchandiseStockVariance: (d) => {
-    const list = (d.merchandiseStockVariance || []) as any[];
-    if (list.length === 0) return null;
-    const rows: Cell[][] = list.map((v) => {
-      const variance = Number(v.varianceQuantity || 0);
-      return [
-        { text: v.productName || 'Unknown' },
-        { text: v.unit || '-' },
-        { text: String(Number(v.expectedQuantity || 0).toLocaleString('en-IN')) },
-        { text: String(Number(v.actualQuantity || 0).toLocaleString('en-IN')) },
-        {
-          text: `${variance > 0 ? '+' : ''}${Number(variance).toLocaleString('en-IN')}`,
-          color: varColor(variance),
-        },
-        { text: v.status || '-', color: varColor(variance) },
-      ];
-    });
-    const cols: Col[] = [
-      { header: 'Product', flex: 2, strong: true },
-      { header: 'Unit', flex: 1 },
-      { header: 'Book', flex: 1.2, align: 'right', mono: true },
-      { header: 'Counted', flex: 1.2, align: 'right', mono: true },
-      { header: 'Variance', flex: 1.2, align: 'right', mono: true },
-      { header: 'Status', flex: 1 },
-    ];
-    return (
+    ),
+  merchandiseStockVariance: (day) =>
+    day.merchandiseStock.length === 0 ? null : (
       <View key="merchandiseStockVariance">
-        <Text style={s.h2}>MERCHANDISE STOCK VARIANCE (UNITS)</Text>
-        <TableView columns={cols} rows={rows} />
+        <Title title={DSSR_TITLES.merchandiseStock} />
+        <Table columns={MERCHANDISE_STOCK_COLUMNS} rows={day.merchandiseStock} />
       </View>
-    );
-  },
-  shifts: (d) => {
-    const list = (d.shifts || []) as any[];
-    if (list.length === 0) return null;
-    const rows: Cell[][] = list.map((sh) => {
-      const v = Number(sh.cashVariance || 0);
-      const av = sh.attendantVariance == null ? null : Number(sh.attendantVariance);
-      return [
-        {
-          text: shiftDisplayLabel({
-            businessDate: d.businessDate as string | null | undefined,
-            shiftSequence: sh.shiftSequence,
-            shiftId: sh.shiftId,
-          }),
-        },
-        { text: sh.templateName || 'Custom' },
-        { text: sh.closedAt ? fmtDateTime(sh.closedAt) : '-' },
-        { text: vol3(sh.netVolume) },
-        av == null
-          ? { text: '—' }
-          : { text: `${av > 0 ? '+' : ''}${inr(av)}`, color: varColor(av) },
-        { text: `${v > 0 ? '+' : ''}${inr(v)}`, color: varColor(v) },
-      ];
-    });
-    const cols: Col[] = [
-      { header: 'Shift', flex: 1.2, mono: true, strong: true },
-      { header: 'Template', flex: 1.6 },
-      { header: 'Closed At', flex: 2 },
-      { header: 'Net Volume', flex: 1.3, align: 'right', mono: true },
-      { header: 'Attendant Var.', flex: 1.4, align: 'right', mono: true },
-      { header: 'Office Count Var.', flex: 1.5, align: 'right', mono: true },
-    ];
-    // Attendant (Handover) variance per Attendant/DU across the day (#287).
-    const attendants = (d.drawer?.attendants || []) as any[];
-    return (
+    ),
+  shifts: (day) =>
+    day.shifts.length === 0 ? null : (
       <View key="shifts">
-        <Text style={s.h2}>INCLUDED SHIFTS</Text>
-        <TableView columns={cols} rows={rows} />
-        {attendants.length > 0 && (
+        <Title title={DSSR_TITLES.shifts} />
+        <Table columns={SHIFT_COLUMNS} rows={day.shifts} totalRow={shiftTotalRow(day)} />
+        {/* Attendant (Handover) variance per Attendant/DU across the day (#287). */}
+        {day.attendants.length > 0 && (
           <>
-            <Text style={s.h2}>ATTENDANT VARIANCE</Text>
-            <TableView
-              columns={[
-                { header: 'Attendant', flex: 3, strong: true },
-                { header: 'Variance', flex: 1.4, align: 'right', mono: true },
-              ]}
-              rows={attendants.map((a) => {
-                const av = Number(a.variance || 0);
-                return [
-                  { text: `${a.attendantName ?? 'Attendant'}${a.duName ? ` · ${a.duName}` : ''}` },
-                  av == null
-                    ? { text: '—' }
-                    : { text: `${av > 0 ? '+' : ''}${inr(av)}`, color: varColor(av) },
-                ];
-              })}
+            <Title title={DSSR_TITLES.attendants} subtitle={DSSR_TITLES.attendantsSubtitle} />
+            <Table
+              columns={ATTENDANT_COLUMNS}
+              rows={day.attendants}
+              totalRow={attendantTotalRow(day)}
             />
           </>
         )}
       </View>
-    );
-  },
+    ),
 };
 
 /**
@@ -386,23 +226,20 @@ const DraftBanner = () => (
 /**
  * Daily Station Sales Report (DSR; internal name `dssr`) as a branded, mono-numeric react-pdf
  * document. Reuses the shift-summary primitive kit (fonts, table, KPIs) so both
- * reports stay visually identical. Reads the immutable DSSR snapshot.
+ * reports stay visually identical. Reads the immutable DSSR snapshot through
+ * the screen's model (`readDssrDay`), so it prints what the screen shows.
  */
-export const DssrDoc: React.FC<{ dssr: any; config?: DssrReportConfig }> = ({
-  dssr,
-  config = DEFAULT_DSSR_CONFIG,
-}) => {
-  const d = {
-    ...(dssr?.snapshotData || {}),
-    businessDate: dssr?.businessDate ?? dssr?.snapshotData?.businessDate,
-    generatedAt: dssr?.generatedAt ?? dssr?.snapshotData?.generatedAt,
-  };
+export const DssrDoc: React.FC<{
+  dssr: (DssrRow & { draft?: boolean }) | null | undefined;
+  config?: DssrReportConfig;
+}> = ({ dssr, config = DEFAULT_DSSR_CONFIG }) => {
+  const day = readDssrDay(dssr ?? {});
   const draft = dssr?.draft === true;
   return (
     <Document>
       <Page size={config.paper} style={s.page}>
         {draft && <DraftBanner />}
-        {config.sections.map((key) => builders[key]?.(d, config))}
+        {config.sections.map((key) => builders[key]?.(day, config))}
         <View style={s.foot} fixed>
           <Text>
             Generated {new Date().toLocaleString('en-IN')}

@@ -1,7 +1,12 @@
 import React from 'react';
 import { variancePresentation, type VarianceKind } from '@pump/shared';
 import type { TableColumn, TotalRow } from '../../../pump-ds/index.js';
-import { formatDateTime, formatQuantity, signedMoneyParts } from '../../../utils/format.js';
+import {
+  formatDateTime,
+  formatMoney,
+  formatQuantity,
+  signedMoneyParts,
+} from '../../../utils/format.js';
 import type {
   AttendantRow,
   DssrDay,
@@ -10,6 +15,59 @@ import type {
   ShiftRow,
   StockVarianceRow,
 } from './dssrModel.js';
+
+/**
+ * The DSR's columns, total rows and words, read by both the screen
+ * (`DailyDssrView`) and the PDF (`dssrDoc`), so the two print the same rows,
+ * words and totals (#580). Every column that renders its own `cell` also sets
+ * `text`, which is what the PDF prints.
+ */
+
+/** The DSR's section titles, on screen and in the PDF. */
+export const DSSR_TITLES = {
+  sales: 'Sales summary',
+  fuel: 'Fuel sales by product',
+  nozzles: 'Nozzles',
+  nozzlesSubtitle: "Volume by nozzle, across the day's shifts",
+  fuelStock: 'Tank dip and fuel stock variance',
+  merchandiseStock: 'Merchandise stock variance',
+  shifts: 'Included shifts',
+  attendants: 'Attendant variance',
+  attendantsSubtitle: 'At handover, per attendant and DU',
+} as const;
+
+/** Under the margin tiles. */
+export const DSSR_COGS_NOTE =
+  "Cost of goods sold uses each product's weighted-average cost at day close. Fuel VAT is output tax (excluded from cost); merchandise cost is pre-tax.";
+
+export interface DssrTile {
+  label: string;
+  value: string;
+  hint: string;
+}
+
+/** The margin statement as tiles: every figure once, none repeating a table total. */
+export function dssrTiles(day: DssrDay): DssrTile[] {
+  const { margin } = day;
+  return [
+    { label: 'Shifts included', value: String(day.shiftsIncluded), hint: 'closed shifts' },
+    {
+      label: 'Total revenue',
+      value: formatMoney(margin.revenue),
+      hint: `Fuel ${formatMoney(margin.revenueFuel)} · Merchandise ${formatMoney(margin.revenueMerch)}`,
+    },
+    {
+      label: 'Cost of goods sold',
+      value: formatMoney(margin.cogs),
+      hint: `Fuel ${formatMoney(margin.cogsFuel)} · Merchandise ${formatMoney(margin.cogsMerch)}`,
+    },
+    {
+      label: 'Gross margin',
+      value: formatMoney(margin.grossMargin),
+      hint: 'Revenue − cost of goods sold',
+    },
+  ];
+}
 
 /**
  * Red and amber mean a problem (#515 page rules): a shortage reads red, a
@@ -21,6 +79,10 @@ const VARIANCE_TEXT: Record<string, string | undefined> = {
   surplus: 'text-warning-fg',
 };
 
+const signedMoney = (amount: number): string => signedMoneyParts(amount, { plus: true }).text;
+const signedQty = (amount: number, unit: string): string =>
+  formatQuantity(amount, unit, { plus: true });
+
 const VarianceFigure: React.FC<{ amount: number; kind: VarianceKind; children: string }> = ({
   amount,
   kind,
@@ -29,15 +91,27 @@ const VarianceFigure: React.FC<{ amount: number; kind: VarianceKind; children: s
 
 const SignedMoney: React.FC<{ amount: number }> = ({ amount }) => (
   <VarianceFigure amount={amount} kind="cash">
-    {signedMoneyParts(amount, { plus: true }).text}
+    {signedMoney(amount)}
   </VarianceFigure>
 );
 
-const SignedQty: React.FC<{ amount: number; unit: string }> = ({ amount, unit }) => (
-  <VarianceFigure amount={amount} kind="stock">
-    {formatQuantity(amount, unit, { plus: true })}
-  </VarianceFigure>
-);
+/** The columns whose figure is a variance, tinted by the shared vocabulary. */
+const VARIANCE_COLUMNS = new Set(['variance', 'attendantVariance', 'officeVariance']);
+
+/**
+ * How a DSR cell is tinted: `short` (red) or `surplus` (amber) for a variance
+ * figure or its Status, nothing for a balanced one or any other cell. The PDF
+ * colours its cells by this; the screen's cells and chips follow the same rule.
+ */
+export function dssrCellTone<T>(col: TableColumn<T>, row: T): 'short' | 'surplus' | null {
+  let state: string | null = null;
+  if (col.kind === 'status') state = col.value(row);
+  else if (VARIANCE_COLUMNS.has(col.id)) {
+    const v = col.value(row);
+    state = v == null || v === '' ? null : variancePresentation(v as number, 'cash').state;
+  }
+  return state === 'short' || state === 'surplus' ? state : null;
+}
 
 export const FUEL_PRODUCT_COLUMNS: TableColumn<FuelProductRow>[] = [
   { id: 'product', header: 'Product', kind: 'text', emphasis: true, value: (r) => r.product },
@@ -47,17 +121,20 @@ export const FUEL_PRODUCT_COLUMNS: TableColumn<FuelProductRow>[] = [
   { id: 'salesValue', header: 'Sales value', kind: 'money', value: (r) => r.salesValue },
 ];
 
+/** On a day with more than one fuel unit, why its volumes are not added up; else null. */
+export function fuelUnitsNote(fuel: DssrDay['fuel']): string | null {
+  return fuel.units.length > 1 ? `volumes not added across ${fuel.units.join(' and ')}` : null;
+}
+
 /**
  * The fuel total row carries the snapshot's own totals. Volumes are never
  * added across units (L and kg), so on a mixed day the label says so and the
  * volume cells read `—`.
  */
 export function fuelTotalRow(fuel: DssrDay['fuel']): TotalRow {
+  const note = fuelUnitsNote(fuel);
   return {
-    label:
-      fuel.units.length > 1
-        ? `Total (volumes not added across ${fuel.units.join(' and ')})`
-        : 'Total',
+    label: note ? `Total (${note})` : 'Total',
     values: {
       gross: fuel.totals.gross,
       testing: fuel.totals.testing,
@@ -89,7 +166,12 @@ const STOCK_VARIANCE: TableColumn<StockVarianceRow> = {
   kind: 'qty',
   unit: (r) => r.unit,
   value: (r) => r.variance,
-  cell: (r) => <SignedQty amount={r.variance} unit={r.unit} />,
+  text: (r) => signedQty(r.variance, r.unit),
+  cell: (r) => (
+    <VarianceFigure amount={r.variance} kind="stock">
+      {signedQty(r.variance, r.unit)}
+    </VarianceFigure>
+  ),
 };
 
 const STOCK_STATUS: TableColumn<StockVarianceRow> = {
@@ -125,7 +207,7 @@ export const SHIFT_COLUMNS: TableColumn<ShiftRow>[] = [
     header: 'Closed at',
     kind: 'date',
     value: (r) => r.closedAt,
-    cell: (r) => formatDateTime(r.closedAt),
+    text: (r) => formatDateTime(r.closedAt),
   },
   { id: 'netVolume', header: 'Net volume', kind: 'qty', unit: 'L', value: (r) => r.netVolume },
   {
@@ -134,6 +216,7 @@ export const SHIFT_COLUMNS: TableColumn<ShiftRow>[] = [
     kind: 'money',
     value: (r) => r.attendantVariance,
     // Null for shifts closed before #287: their office variance already includes it.
+    text: (r) => (r.attendantVariance == null ? '—' : signedMoney(r.attendantVariance)),
     cell: (r) => (r.attendantVariance == null ? '—' : <SignedMoney amount={r.attendantVariance} />),
   },
   {
@@ -141,6 +224,7 @@ export const SHIFT_COLUMNS: TableColumn<ShiftRow>[] = [
     header: 'Office count var.',
     kind: 'money',
     value: (r) => r.officeVariance,
+    text: (r) => signedMoney(r.officeVariance),
     cell: (r) => <SignedMoney amount={r.officeVariance} />,
   },
 ];
@@ -175,7 +259,15 @@ export const ATTENDANT_COLUMNS: TableColumn<AttendantRow>[] = [
     header: 'Variance',
     kind: 'money',
     value: (r) => r.variance,
+    text: (r) => signedMoney(r.variance),
     cell: (r) => <SignedMoney amount={r.variance} />,
     width: '22%',
   },
 ];
+
+/** The attendants' total: the stored day total, or the rows' sum for a snapshot without one. */
+export function attendantTotalRow(day: DssrDay): TotalRow {
+  return day.drawerTotals.attendantVariance == null
+    ? true
+    : { values: { variance: day.drawerTotals.attendantVariance } };
+}

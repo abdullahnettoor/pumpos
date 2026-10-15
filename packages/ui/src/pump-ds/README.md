@@ -75,6 +75,9 @@ a time — never in place.
   figure (non-finite) makes the total `—`, never a sum that counted it as 0.
   A qty column with mixed units totals `—`.
 - **Sorting** puts empty and broken values last in either direction.
+- **PDF.** `cellText` and `totalTexts` read a cell and the total row as plain
+  text, for a PDF that prints the screen's table (the DSR, #580). A column whose
+  `cell` changes the words or figures sets `text` too, so both print the same.
 
 ## Style check
 
