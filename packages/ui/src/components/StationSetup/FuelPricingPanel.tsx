@@ -1,29 +1,23 @@
 import React, { useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { CloudPricingService, CloudProductService } from '../../services/cloud.js';
-import type { Station } from '@pump/shared';
-import { useToast } from '../primitives/ToastProvider.js';
+import { businessDateSettings, formatStationDateTime, type Station } from '@pump/shared';
 import { PageFrame } from '../page-frame/index.js';
 import { ROUTES } from '../../nav-intent/routes.js';
 import { Tabs, tabPanelProps } from '../../pump-ds/tabs/index.js';
-import { Drawer } from '../Drawer.js';
-import { Field, MoneyInput, Select, TextInput } from '../primitives/Field.js';
-import { queryKeys, useProducts, usePricing, usePricingHistory } from '../../query/hooks.js';
-import { formatDateTime, formatMoney } from '../../utils/format.js';
+import { useProducts, usePricing, usePricingHistory } from '../../query/hooks.js';
+import { formatMoney } from '../../utils/format.js';
 import {
   Button,
   Chip,
   DataSection,
   EmptyState,
   FilterChips,
-  Form,
+  Icon,
   InteractiveTable,
   SearchInput,
   SectionHeader,
   type TableColumn,
 } from '../../pump-ds/index.js';
 import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
-import { useRunTask } from '../../utils/runTask.js';
 import { countOf } from '../../utils/ledgerWindow.js';
 import {
   buildFuelPriceRows,
@@ -32,10 +26,7 @@ import {
   type FuelPriceHistoryEntry,
   type FuelPriceRow,
 } from './fuelPriceRows.js';
-import { useKeyedSave } from './useKeyedSave.js';
-
-const pricingService = new CloudPricingService();
-const productService = new CloudProductService();
+import { ChangePriceDrawer, MrpDrawer, type MerchRow } from './PricingDrawers.js';
 
 type TabType = 'fuels' | 'merchandise';
 type MerchFilter = 'all' | 'unpriced';
@@ -44,34 +35,28 @@ interface FuelPricingPanelProps {
   selectedStation: Station | null;
 }
 
-interface MerchRow {
-  id: string;
-  name: string;
-  code?: string | null;
-  brand?: string | null;
-  category?: string | null;
-  unit?: string | null;
-  sellingPrice?: number | string | null;
-  productType?: string;
-  isActive?: boolean;
-}
-
 interface HistoryRow extends FuelPriceHistoryEntry {
   productName: string;
 }
 
 const isPriced = (p: MerchRow) => p.sellingPrice != null && Number(p.sellingPrice) > 0;
 
-/** "Now" in the operator's local time, as a `datetime-local` value. */
-const localNowInput = () => {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
-};
+/** The fuel rows and the queries they read, shared by the page action and the Fuels tab. */
+function useFuelPriceRows(stationId: string) {
+  const pricingQ = usePricing(stationId);
+  const historyQ = usePricingHistory(stationId);
+  const productsQ = useProducts();
+  const rows = useMemo(() => {
+    const products: { id: string; unit?: string | null }[] = productsQ.data ?? [];
+    const units = new Map(products.map((p) => [p.id, p.unit]));
+    const current: CurrentFuelPrice[] = pricingQ.data ?? [];
+    const entries: FuelPriceHistoryEntry[] = historyQ.data ?? [];
+    return buildFuelPriceRows(current, entries, (id) => units.get(id));
+  }, [pricingQ.data, historyQ.data, productsQ.data]);
+  return { rows, pricingQ, historyQ, productsQ };
+}
 
 export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStation }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('fuels');
-
   if (!selectedStation) {
     return (
       <PageFrame route={ROUTES.pricing}>
@@ -83,11 +68,31 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
       </PageFrame>
     );
   }
+  return <PricingPage station={selectedStation} />;
+};
+
+const PricingPage: React.FC<{ station: Station }> = ({ station }) => {
+  const [activeTab, setActiveTab] = useState<TabType>('fuels');
+  const [changing, setChanging] = useState<FuelPriceRow | null>(null);
+  const { timeZone } = businessDateSettings(station.settings);
+  const fuels = useFuelPriceRows(station.id);
 
   return (
     <PageFrame
       route={ROUTES.pricing}
       subtitle="Fuel rates and product MRP for this station."
+      actions={
+        // The one page primary, the same on both tabs (#537 review).
+        <Button
+          variant="primary"
+          size="sm"
+          leftIcon={<Icon name="pencil" size="sm" />}
+          disabled={fuels.rows.length === 0}
+          onClick={() => setChanging(fuels.rows[0] ?? null)}
+        >
+          Change price
+        </Button>
+      }
       tabs={
         <Tabs
           id="pricing"
@@ -102,28 +107,33 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
       }
     >
       <div {...tabPanelProps('pricing', activeTab)} className="flex flex-col gap-6">
-        {activeTab === 'fuels' ? <FuelsTab stationId={selectedStation.id} /> : <ProductsTab />}
+        {activeTab === 'fuels' ? (
+          <FuelsTab {...fuels} timeZone={timeZone} onChange={setChanging} />
+        ) : (
+          <ProductsTab />
+        )}
       </div>
+      {changing && (
+        <ChangePriceDrawer
+          stationId={station.id}
+          timeZone={timeZone}
+          fuels={fuels.rows}
+          initial={changing}
+          onClose={() => setChanging(null)}
+        />
+      )}
     </PageFrame>
   );
 };
 
 // ---- Fuels: one row per fuel (owner decision, #537) ----
 
-const FuelsTab: React.FC<{ stationId: string }> = ({ stationId }) => {
-  const pricingQ = usePricing(stationId);
-  const historyQ = usePricingHistory(stationId);
-  const productsQ = useProducts();
-  const [changing, setChanging] = useState<FuelPriceRow | null>(null);
-
-  const rows = useMemo(() => {
-    const products: { id: string; unit?: string | null }[] = productsQ.data ?? [];
-    const units = new Map(products.map((p) => [p.id, p.unit]));
-    const current: CurrentFuelPrice[] = pricingQ.data ?? [];
-    const entries: FuelPriceHistoryEntry[] = historyQ.data ?? [];
-    return buildFuelPriceRows(current, entries, (id) => units.get(id));
-  }, [pricingQ.data, historyQ.data, productsQ.data]);
-
+const FuelsTab: React.FC<
+  ReturnType<typeof useFuelPriceRows> & {
+    timeZone: string;
+    onChange: (row: FuelPriceRow) => void;
+  }
+> = ({ rows, pricingQ, historyQ, productsQ, timeZone, onChange }) => {
   const history = useMemo(
     () => sortNewestFirst((historyQ.data ?? []) as HistoryRow[]),
     [historyQ.data],
@@ -163,7 +173,7 @@ const FuelsTab: React.FC<{ stationId: string }> = ({ stationId }) => {
         id: 'effectiveFrom',
         header: 'Effective from',
         kind: 'text',
-        value: (r) => (r.effectiveFrom ? formatDateTime(r.effectiveFrom) : null),
+        value: (r) => (r.effectiveFrom ? formatStationDateTime(r.effectiveFrom, timeZone) : null),
       },
       {
         id: 'lastChange',
@@ -192,14 +202,14 @@ const FuelsTab: React.FC<{ stationId: string }> = ({ stationId }) => {
         value: () => null,
         cell: (r) => (
           <span className="flex justify-end">
-            <Button variant="secondary" size="xs" onClick={() => setChanging(r)}>
+            <Button variant="secondary" size="xs" onClick={() => onChange(r)}>
               Change price
             </Button>
           </span>
         ),
       },
     ],
-    [],
+    [onChange, timeZone],
   );
 
   const historyColumns = useMemo<TableColumn<HistoryRow>[]>(
@@ -210,10 +220,10 @@ const FuelsTab: React.FC<{ stationId: string }> = ({ stationId }) => {
         id: 'effectiveFrom',
         header: 'Effective from',
         kind: 'text',
-        value: (r) => formatDateTime(r.effectiveFrom),
+        value: (r) => formatStationDateTime(r.effectiveFrom, timeZone),
       },
     ],
-    [],
+    [timeZone],
   );
 
   return (
@@ -225,7 +235,7 @@ const FuelsTab: React.FC<{ stationId: string }> = ({ stationId }) => {
         />
         <DataSection
           title="fuel prices"
-          query={[pricingQ, historyQ]}
+          query={[pricingQ, historyQ, productsQ]}
           placeholderHeight={160}
           flush
           isEmpty={rows.length === 0}
@@ -281,125 +291,7 @@ const FuelsTab: React.FC<{ stationId: string }> = ({ stationId }) => {
           />
         </DataSection>
       </section>
-
-      {changing && (
-        <ChangePriceDrawer
-          stationId={stationId}
-          fuels={rows}
-          initial={changing}
-          onClose={() => setChanging(null)}
-        />
-      )}
     </>
-  );
-};
-
-/** The existing fuel-rate flow and validation, in a drawer. */
-const ChangePriceDrawer: React.FC<{
-  stationId: string;
-  fuels: FuelPriceRow[];
-  initial: FuelPriceRow;
-  onClose: () => void;
-}> = ({ stationId, fuels, initial, onClose }) => {
-  const toast = useToast();
-  const runTask = useRunTask();
-  const qc = useQueryClient();
-  const save = useKeyedSave(`pricing:${stationId}`);
-  const [productId, setProductId] = useState(initial.productId);
-  const [price, setPrice] = useState('');
-  // Computed once on open, so a re-render never fights the operator's edit.
-  const [effectiveFrom, setEffectiveFrom] = useState(localNowInput);
-  const [submitting, setSubmitting] = useState(false);
-  const fuel = fuels.find((f) => f.productId === productId) ?? initial;
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!productId || !price || submitting) return;
-    const payload = {
-      stationId,
-      productId,
-      price: parseFloat(price),
-      effectiveFrom: new Date(effectiveFrom).toISOString(),
-    };
-    try {
-      setSubmitting(true);
-      await save(payload, (idempotencyKey) =>
-        pricingService.recordPricing(payload, { idempotencyKey }),
-      );
-      toast.success('Fuel rate updated.');
-      onClose();
-      runTask(
-        Promise.all([
-          qc.invalidateQueries({ queryKey: queryKeys.pricing(stationId) }),
-          qc.invalidateQueries({ queryKey: queryKeys.pricingHistory(stationId) }),
-        ]),
-        'Saved, but fuel pricing could not be refreshed.',
-      );
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to record new price');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <Drawer
-      isOpen
-      onClose={onClose}
-      title="Change price"
-      subtitle={
-        fuel.price == null
-          ? `${fuel.productName} · no price yet`
-          : `${fuel.productName} · now ${formatMoney(fuel.price)}/${fuel.unit}`
-      }
-      footer={
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" size="md" disabled={submitting} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="change-price-form"
-            variant="primary"
-            size="md"
-            loading={submitting}
-            disabled={!productId || !price}
-          >
-            Apply new rate
-          </Button>
-        </div>
-      }
-    >
-      <Form id="change-price-form" onSubmit={submit} className="flex flex-col gap-3">
-        <Field label="Fuel product" required>
-          <Select value={productId} onChange={(e) => setProductId(e.target.value)} required>
-            {fuels.map((f) => (
-              <option key={f.productId} value={f.productId}>
-                {f.productName}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label={`Rate / ${fuel.unit} (₹)`} required>
-          <MoneyInput
-            step="0.01"
-            placeholder="e.g. 96.43"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            required
-            autoFocus
-          />
-        </Field>
-        <Field label="Effective from" required>
-          <TextInput
-            type="datetime-local"
-            value={effectiveFrom}
-            onChange={(e) => setEffectiveFrom(e.target.value)}
-            required
-          />
-        </Field>
-      </Form>
-    </Drawer>
   );
 };
 
@@ -466,7 +358,7 @@ const ProductsTab: React.FC = () => {
           isPriced(r) ? (
             formatMoney(r.sellingPrice)
           ) : (
-            <Chip tone="warning" size="xs">
+            <Chip tone="warning" size="md">
               Not set
             </Chip>
           ),
@@ -558,71 +450,5 @@ const ProductsTab: React.FC = () => {
       </DataSection>
       {editing && <MrpDrawer product={editing} onClose={() => setEditing(null)} />}
     </section>
-  );
-};
-
-const MrpDrawer: React.FC<{ product: MerchRow; onClose: () => void }> = ({ product, onClose }) => {
-  const toast = useToast();
-  const runTask = useRunTask();
-  const qc = useQueryClient();
-  const save = useKeyedSave(`product-price:${product.id}`);
-  const [value, setValue] = useState(
-    product.sellingPrice != null ? String(product.sellingPrice) : '',
-  );
-  const [saving, setSaving] = useState(false);
-
-  const submit = async () => {
-    const body = { sellingPrice: value === '' ? null : Number(value) };
-    try {
-      setSaving(true);
-      await save({ id: product.id, ...body }, (idempotencyKey) =>
-        productService.updateProduct(product.id, body, { idempotencyKey }),
-      );
-      toast.success('Price updated.');
-      onClose();
-      runTask(
-        qc.invalidateQueries({ queryKey: queryKeys.products() }),
-        'Saved, but products could not be refreshed.',
-      );
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update price');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Drawer
-      isOpen
-      onClose={onClose}
-      title="Set price"
-      subtitle={product.name}
-      footer={
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" size="md" disabled={saving} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button variant="primary" size="md" loading={saving} onClick={submit}>
-            Save price
-          </Button>
-        </div>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <p className="text-[12px] text-ink-muted">
-          The MRP prefills this product on product sales. Leave it blank to clear it.
-        </p>
-        <Field label="MRP (₹)">
-          <MoneyInput
-            step="0.01"
-            min="0"
-            placeholder="e.g. 250"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            autoFocus
-          />
-        </Field>
-      </div>
-    </Drawer>
   );
 };
