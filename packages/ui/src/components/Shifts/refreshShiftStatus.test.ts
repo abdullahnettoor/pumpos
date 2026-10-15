@@ -81,4 +81,24 @@ describe('refreshShiftStatus', () => {
       { throwOnError: true },
     );
   });
+
+  it('still waits for the shift status when another view fails to refresh, then reports it', async () => {
+    const refetch = deferred();
+    const invalidateOperational = vi.fn(() => Promise.reject(new Error('dashboard offline')));
+    const queryClient = { refetchQueries: vi.fn(() => refetch.promise) };
+    let settled = false;
+
+    const refresh = refreshShiftStatus(queryClient, invalidateOperational, 'station-1', {
+      throwOnError: true,
+    }).catch((e: Error) => {
+      settled = true;
+      return e;
+    });
+    await flush();
+    expect(queryClient.refetchQueries).toHaveBeenCalled();
+    expect(settled).toBe(false);
+
+    refetch.resolve();
+    expect(((await refresh) as Error).message).toBe('dashboard offline');
+  });
 });
