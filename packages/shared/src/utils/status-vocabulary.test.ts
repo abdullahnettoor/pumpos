@@ -3,6 +3,7 @@ import {
   handoverState,
   partyState,
   tankStates,
+  decantationVarianceState,
   statusPresentation,
   variancePresentation,
   type PumpState,
@@ -45,7 +46,9 @@ describe('statusPresentation: one word and one tone per state', () => {
     ['out-of-stock', 'Out of stock', 'warning'],
     ['oversold', 'Oversold', 'danger'],
     // Decantation
-    ['decantation-draft', 'Draft', 'warning'],
+    ['decantation-draft', 'Saved as draft', 'neutral'],
+    ['tanker-matches', 'Matches', 'success'],
+    ['within-tolerance', 'Within tolerance', 'neutral'],
     ['pending-measurement', 'Pending measurement', 'neutral'],
     ['measured', 'Measured', 'success'],
     ['discarded', 'Discarded', 'neutral'],
@@ -82,6 +85,15 @@ describe('state mappers', () => {
       tankStates({ tone: 'critical', overCapacity: false, waitingOnDecantation: true }),
     ).toEqual(['tank-critical', 'tank-waiting-decantation']);
     expect(tankStates({ ...base, tone: 'ok', overCapacity: true })).toEqual(['tank-over-capacity']);
+  });
+
+  it('reads a decantation variance against the station tolerance (% of invoice)', () => {
+    expect(decantationVarianceState(0, 12000, 0.5)).toBe('tanker-matches');
+    expect(decantationVarianceState(-60, 12000, 0.5)).toBe('within-tolerance'); // limit 60 L
+    expect(decantationVarianceState(60, 12000, 0.5)).toBe('within-tolerance');
+    expect(decantationVarianceState(-61, 12000, 0.5)).toBe('short');
+    expect(decantationVarianceState(61, 12000, 0.5)).toBe('surplus');
+    expect(decantationVarianceState(-1, null, 0.5)).toBe('short'); // no invoice: no allowance
   });
 
   it('names a party from its active flag', () => {

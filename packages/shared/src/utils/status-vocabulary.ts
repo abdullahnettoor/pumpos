@@ -36,7 +36,14 @@ export type TankStatusState =
 export type StockStatusState = 'out-of-stock' | 'oversold';
 /** A Decantation (tanker visit) and a tank line without its Fuel Purchase (ADR 0007). */
 export type DecantationStatusState =
-  'decantation-draft' | 'pending-measurement' | 'measured' | 'discarded' | 'purchase-not-linked';
+  | 'decantation-draft'
+  | 'pending-measurement'
+  | 'measured'
+  | 'discarded'
+  | 'purchase-not-linked'
+  /** A tanker's received quantity against its invoice (`decantationVarianceState`). */
+  | 'tanker-matches'
+  | 'within-tolerance';
 
 export type PumpState =
   | VarianceStatusState
@@ -106,7 +113,11 @@ const VOCABULARY: Record<PumpState, StatusPresentation> = {
   'out-of-stock': { label: 'Out of stock', tone: 'warning' },
   oversold: { label: 'Oversold', tone: 'danger' },
 
-  'decantation-draft': { label: 'Draft', tone: 'warning' },
+  // Neutral: an ordinary draft is work in hand, not a problem. "Draft" alone is
+  // the amber Business-Day word, so this one names itself.
+  'decantation-draft': { label: 'Saved as draft', tone: 'neutral' },
+  'tanker-matches': { label: 'Matches', tone: 'success' },
+  'within-tolerance': { label: 'Within tolerance', tone: 'neutral' },
   'pending-measurement': { label: 'Pending measurement', tone: 'neutral' },
   measured: { label: 'Measured', tone: 'success' },
   discarded: { label: 'Discarded', tone: 'neutral' },
@@ -138,6 +149,26 @@ export const tankStates = (
   if (level.waitingOnDecantation) out.push('tank-waiting-decantation');
   return out;
 };
+
+/**
+ * A Decantation's received − invoiced quantity for one product, read against
+ * the station's quantity tolerance (a percent of the invoice,
+ * `resolveDecantationSettings().quantityTolerance`). Zero matches; a
+ * difference within tolerance is neutral (transit loss, temperature); beyond
+ * it a shortage is Short (red) and an excess Surplus (amber), the variance words.
+ */
+export type DecantationVarianceState = 'tanker-matches' | 'within-tolerance' | 'short' | 'surplus';
+
+export function decantationVarianceState(
+  varianceQty: number,
+  invoiceQty: number | null | undefined,
+  tolerancePct: number,
+): DecantationVarianceState {
+  if (varianceQty === 0) return 'tanker-matches';
+  const limit = (Math.abs(Number(invoiceQty) || 0) * tolerancePct) / 100;
+  if (Math.abs(varianceQty) <= limit) return 'within-tolerance';
+  return varianceQty < 0 ? 'short' : 'surplus';
+}
 
 /** Cash variances are rupees; stock variances are litres. Same words, same tones. */
 export type VarianceKind = 'cash' | 'stock';

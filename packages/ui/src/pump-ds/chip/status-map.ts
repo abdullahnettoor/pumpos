@@ -177,4 +177,6 @@ export const STATUS_MAP: Record<PumpStatus, StatusMeta> = {
   measured: vocab('measured', CheckCircle),
   discarded: vocab('discarded', Ban),
   'purchase-not-linked': vocab('purchase-not-linked', Unlink),
+  'tanker-matches': vocab('tanker-matches', Check),
+  'within-tolerance': vocab('within-tolerance', Minus),
 };
