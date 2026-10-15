@@ -582,7 +582,7 @@ describe('Home: tanks, money, removed sections', () => {
     expect(level('XP95')).toBe('low'); // 35%
     expect(container.querySelectorAll('[data-level]')).toHaveLength(3);
     // Stock leads, its capacity line under it (#609).
-    expect(screen.getByText(/of 20,000 L · 18%/)).toBeTruthy();
+    expect(screen.getByText('18%')).toBeTruthy();
     expect(screen.getByText('12,400 L', { exact: false })).toBeTruthy();
   });
 

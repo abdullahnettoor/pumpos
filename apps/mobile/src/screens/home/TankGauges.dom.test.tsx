@@ -61,7 +61,8 @@ describe('TankGauges grid', () => {
       />,
     );
     expect(getByText('800 L', { exact: false }).className).toContain('text-bad');
-    expect(getByText('of 10,000 L · 8%')).toBeTruthy();
+    expect(getByText('of 10,000 L')).toBeTruthy();
+    expect(getByText('8%')).toBeTruthy();
     expect(getByText('Waiting on decantation')).toBeTruthy();
     expect(getByText('Critical')).toBeTruthy();
   });
@@ -71,7 +72,8 @@ describe('TankGauges grid', () => {
     const head = getByText('6,000 L', { exact: false });
     expect(head.className).toContain('text-text-high');
     expect(head.className).not.toContain('text-good');
-    expect(getByText('of 10,000 L · 60%')).toBeTruthy();
+    expect(getByText('of 10,000 L')).toBeTruthy();
+    expect(getByText('60%')).toBeTruthy();
   });
 
   it('names the tone with the shared model words (desktop parity)', () => {

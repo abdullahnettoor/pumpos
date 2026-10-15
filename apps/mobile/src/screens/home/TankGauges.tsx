@@ -53,14 +53,21 @@ export const TankGauges: React.FC<{ tanks: readonly TankGauge[] }> = ({ tanks })
         </div>
         <div className="min-w-0">
           <p className="truncate text-xs font-bold text-text-high">{t.title}</p>
-          <p className={`num mt-1.5 text-base font-semibold leading-tight ${TEXT[t.level]}`}>
+          <p
+            className={`num mt-1.5 whitespace-nowrap text-sm font-semibold leading-tight ${TEXT[t.level]}`}
+          >
             {t.pct === null ? '—' : t.stock}
             {TANK_TONE_LABEL[t.level] && (
               <span className="sr-only"> {TANK_TONE_LABEL[t.level]}</span>
             )}
           </p>
           <p className="mt-0.5 text-[10px] leading-snug text-text-muted">
-            {t.detail && <span className="num block">{t.detail}</span>}
+            {/* `of 20,000 L` and `65%` each whole, never split mid-figure in a narrow card. */}
+            {t.detail.split(' · ').map((part) => (
+              <span key={part} className="num block whitespace-nowrap">
+                {part}
+              </span>
+            ))}
             <span className="block truncate">{t.tankName}</span>
           </p>
           {t.cover && (
