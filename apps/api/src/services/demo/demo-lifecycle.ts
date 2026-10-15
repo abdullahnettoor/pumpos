@@ -1,4 +1,4 @@
-import { and, eq, ilike, ne, sql } from 'drizzle-orm';
+import { and, eq, ilike, isNotNull, ne, sql } from 'drizzle-orm';
 import { schema, seedDemoStation, type DbClient } from '@pump/db';
 import { err, ok, SuspendOrganization, type CoreError, type Result } from '@pump/core';
 import { buildPlatformContext } from '../../infra/context.js';
@@ -259,7 +259,45 @@ export interface CreatedDemo {
   ownerEmail: string;
   authUserId: string;
   password?: string;
+  /** On-duty attendant login (same password); only for demos without a prospect email. */
+  attendantEmail?: string;
+  attendantName?: string;
   demoExpiresAt: string;
+}
+
+/** The attendant who signs in on mobile: still on duty in today's open shift. */
+const DEMO_LOGIN_ATTENDANT = 'Ravi K';
+
+/** The demo attendant login for an owner login: `slug-code-attendant@…`. */
+export function demoAttendantEmail(ownerEmail: string): string {
+  return ownerEmail.replace('@', '-attendant@');
+}
+
+/**
+ * Attach an attendant login to the seeded on-duty attendant (Ravi K; Anitha S
+ * has already handed over). Falls back to any attendant on small demos.
+ */
+async function linkDemoAttendantLogin(
+  tx: DbClient,
+  organizationId: string,
+  login: { authUserId: string; email: string },
+) {
+  const attendants = await tx
+    .select({ id: schema.users.id, fullName: schema.users.fullName })
+    .from(schema.users)
+    .where(
+      and(eq(schema.users.organizationId, organizationId), eq(schema.users.role, 'Attendant')),
+    );
+  const target =
+    attendants.find((user) => user.fullName === DEMO_LOGIN_ATTENDANT) ??
+    attendants.find((user) => user.fullName !== 'Anitha S') ??
+    attendants[0];
+  if (!target) throw new Error('Demo has no attendant to give a login');
+  await tx
+    .update(schema.users)
+    .set({ authUserId: login.authUserId, email: login.email })
+    .where(eq(schema.users.id, target.id));
+  return target.fullName;
 }
 
 /**
@@ -328,6 +366,7 @@ export async function createDemo(
 
   let organizationId: string | undefined;
   let authUserId: string | undefined;
+  let attendantAuthUserId: string | undefined;
   try {
     if (prospectEmail) {
       const seeded = await runInTransaction(db, async (tx) => {
@@ -403,17 +442,28 @@ export async function createDemo(
       return ok(true);
     });
     if (!seeded.success) throw new Error(seeded.error.message);
+    const attendantEmail = demoAttendantEmail(ownerEmail);
+    const attendant = await admin.createUser({ email: attendantEmail, password });
+    attendantAuthUserId = attendant.id;
+    const attendantName = await linkDemoAttendantLogin(db, owner.organizationId, {
+      authUserId: attendant.id,
+      email: attendantEmail,
+    });
     logDemo('DEMO_ORGANIZATION_CREATED', { organizationId, platformAdmin: actor.email });
     return ok({
       organizationId,
       ownerEmail: owner.email ?? ownerEmail,
       authUserId,
       password,
+      attendantEmail,
+      attendantName,
       demoExpiresAt: expiresAt.toISOString(),
     });
   } catch (error) {
     logDemoError('create', { organizationId, authUserId }, error);
     await rollbackCreate(db, admin, organizationId, authUserId);
+    if (attendantAuthUserId)
+      await deleteLogins(admin, organizationId ?? 'unknown', [attendantAuthUserId]);
     return failure('DEMO_CREATE_FAILED', 'Could not create the demo organization.');
   }
 }
@@ -474,9 +524,26 @@ export async function resetDemo(
     const setup = station
       ? storedDemoSetup(station)
       : { stationName: 'Sample Fuels', town: 'Thrissur', tanks: 2, nozzles: 6, attendants: 3 };
+    const [attendantLogin] = await tx
+      .select({ authUserId: schema.users.authUserId, email: schema.users.email })
+      .from(schema.users)
+      .where(
+        and(
+          eq(schema.users.organizationId, organizationId),
+          eq(schema.users.role, 'Attendant'),
+          isNotNull(schema.users.authUserId),
+        ),
+      )
+      .limit(1);
     await limitAbandonedTransaction(tx);
     await clearDemoData(tx, organizationId, { keepOwner: true });
     await seedDemoOrganization(tx, organizationId, owner.id, setup, { now: options.now });
+    // Keep the shared attendant login working after a reset.
+    if (attendantLogin?.authUserId && attendantLogin.email)
+      await linkDemoAttendantLogin(tx, organizationId, {
+        authUserId: attendantLogin.authUserId,
+        email: attendantLogin.email,
+      });
     return ok({ organizationId, reset: true as const });
   });
   if (result.success)

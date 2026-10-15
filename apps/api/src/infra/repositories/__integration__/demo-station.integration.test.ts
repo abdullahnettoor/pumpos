@@ -650,6 +650,17 @@ describe.skipIf(!CONNECTION)('demo stations against real Postgres', () => {
         .from(schema.tanks)
         .where(eq(schema.tanks.organizationId, data.organizationId));
       expect(tanksBefore).toHaveLength(3);
+      // A demo created without a prospect email gives the on-duty attendant a login.
+      const attendantLogin = crypto.randomUUID();
+      await db
+        .update(schema.users)
+        .set({ authUserId: attendantLogin, email: 'lifecycle-attendant@demo.pumpos.app' })
+        .where(
+          and(
+            eq(schema.users.organizationId, data.organizationId),
+            eq(schema.users.fullName, 'Ravi K'),
+          ),
+        );
 
       const reset = await app(admin).request(
         `/demos/${data.organizationId}/reset`,
@@ -675,6 +686,17 @@ describe.skipIf(!CONNECTION)('demo stations against real Postgres', () => {
           and(eq(schema.users.organizationId, data.organizationId), eq(schema.users.role, 'Owner')),
         );
       expect(owner.authUserId).toBe(data.authUserId);
+      const [ravi] = await db
+        .select()
+        .from(schema.users)
+        .where(
+          and(
+            eq(schema.users.organizationId, data.organizationId),
+            eq(schema.users.fullName, 'Ravi K'),
+          ),
+        );
+      expect(ravi.authUserId).toBe(attendantLogin);
+      expect(ravi.email).toBe('lifecycle-attendant@demo.pumpos.app');
 
       const extended = await app(admin).request(
         `/demos/${data.organizationId}/extend`,
@@ -695,6 +717,7 @@ describe.skipIf(!CONNECTION)('demo stations against real Postgres', () => {
       );
       expect(deleted.status).toBe(200);
       expect(calls.deleted).toContain(data.authUserId);
+      expect(calls.deleted).toContain(attendantLogin);
       expect(await rowsLeftFor(data.organizationId)).toEqual({});
       expect(
         await db
