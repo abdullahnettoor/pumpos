@@ -26,6 +26,11 @@
  * `npm run test:classes:baseline -w @pump/ui` rewrites the list from scratch
  * (may raise entries): one-off rebaselines only, never in a normal PR.
  *
+ * Documented exceptions (the only entries the list may keep, #539):
+ * - `theme/config.ts` raw-color 2: `THEME_COLORS` is the canvas as literal hex
+ *   because the pre-paint script sets `<meta name="theme-color">` before any
+ *   CSS loads. `theme/tokens.test.ts` keeps it equal to `--bg-canvas`.
+ *
  * Run: `npm run test:classes -w @pump/ui`
  * Plain CSS classes defined in `index.css` are allowed; add marker classes
  * with no CSS (like `group`) to MARKER_CLASSES in `class-guard/scan.ts`.

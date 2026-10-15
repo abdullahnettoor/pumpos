@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { THEME_COLORS } from './config.js';
 
 const css = readFileSync(fileURLToPath(new URL('../index.css', import.meta.url)), 'utf8');
 
@@ -165,5 +166,26 @@ describe('light text-on tokens keep the existing look', () => {
 describe('print ink', () => {
   it('dark tokens apply on screen only, so a printed statement is dark ink on paper', () => {
     expect(css).toMatch(/@media not print\s*\{\s*(\/\*[\s\S]*?\*\/\s*)?:root\.dark\s*\{/);
+  });
+});
+
+describe("THEME_COLORS (the style check's one documented raw-colour exception, #539)", () => {
+  // The pre-paint script sets <meta name="theme-color"> before any CSS loads,
+  // so config.ts carries the canvas as literal hex. It must stay the canvas.
+  it('equals --bg-canvas in each theme', () => {
+    expect(THEME_COLORS.light).toBe(light['--bg-canvas']);
+    expect(THEME_COLORS.dark).toBe(dark['--bg-canvas']);
+  });
+
+  it('declares every elevation token in both themes', () => {
+    for (const token of [
+      '--shadow-popover',
+      '--shadow-dialog',
+      '--shadow-tooltip',
+      '--overlay-scrim',
+    ]) {
+      expect(light[token], `light ${token}`).toBeDefined();
+      expect(dark[token], `dark ${token}`).toBeDefined();
+    }
   });
 });

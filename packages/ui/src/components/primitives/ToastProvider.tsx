@@ -46,7 +46,7 @@ const VARIANT_STYLE: Record<ToastVariant, { border: string; bg: string; fg: stri
     fg: 'var(--state-danger-fg)',
   },
   success: {
-    border: 'var(--brand-success)',
+    border: 'var(--state-success-fg)',
     bg: 'var(--state-success-bg)',
     fg: 'var(--state-success-fg)',
   },
@@ -118,7 +118,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 border: '1px solid var(--border-soft)',
                 borderLeftWidth: '3px',
                 borderRadius: 'var(--radius-card)',
-                boxShadow: '0 6px 18px rgba(0,0,0,0.12)',
+                boxShadow: 'var(--shadow-popover)',
                 padding: '10px 14px',
                 fontFamily: 'var(--font-sans)',
                 fontSize: '13px',

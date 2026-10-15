@@ -77,7 +77,7 @@ export const MenuContent = forwardRef<React.ElementRef<typeof RadixMenu.Content>
           align={align}
           className={cn(
             'z-50 min-w-[220px] overflow-hidden rounded-card border border-border-soft bg-surface py-1',
-            'shadow-[0_8px_24px_rgba(24,32,26,0.12)]',
+            'shadow-(--shadow-popover)',
             className,
           )}
           {...props}

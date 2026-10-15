@@ -50,7 +50,7 @@ export const Tooltip: React.FC<TooltipProps> = ({ content, placement = 'top', ch
             lineHeight: 1.4,
             padding: '4px 8px',
             borderRadius: '6px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
+            boxShadow: 'var(--shadow-tooltip)',
             pointerEvents: 'none',
           }}
         >

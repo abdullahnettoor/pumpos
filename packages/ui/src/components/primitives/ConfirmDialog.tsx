@@ -98,7 +98,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backgroundColor: 'var(--overlay-scrim)',
             padding: '16px',
           }}
         >
@@ -113,7 +113,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
               backgroundColor: 'var(--bg-surface)',
               border: '1px solid var(--border-soft)',
               borderRadius: 'var(--radius-card)',
-              boxShadow: '0 12px 32px rgba(0,0,0,0.18)',
+              boxShadow: 'var(--shadow-dialog)',
               padding: '20px',
               display: 'flex',
               flexDirection: 'column',

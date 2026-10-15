@@ -367,7 +367,7 @@ export function DateRangeMenu({
             style={position}
             className={cn(
               'z-[1050] w-[320px] rounded-card border border-border-soft bg-surface p-1.5',
-              'shadow-[0_8px_24px_rgba(24,32,26,0.12)]',
+              'shadow-(--shadow-popover)',
             )}
             onKeyDown={onPopoverKeyDown}
             onBlur={onPopoverBlur}
