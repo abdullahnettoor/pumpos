@@ -8,8 +8,6 @@
     "components/Auth/AcceptInvite.tsx": 2,
     "components/Auth/Login.tsx": 1,
     "components/DesignSystem.tsx": 29,
-    "components/inventory/decantation/ChambersStep.tsx": 1,
-    "components/inventory/decantation/StepSection.tsx": 5,
     "components/primitives/CashCountPopover.tsx": 1,
     "components/primitives/Combobox.tsx": 1,
     "components/primitives/ConfirmDialog.tsx": 2,

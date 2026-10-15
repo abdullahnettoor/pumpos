@@ -33,6 +33,7 @@ function toColumnDefs<T>(
     accessorFn: (row: T) => sortValue(col, row),
     cell: ({ row }) => renderCell(col, row.original, 'interactive'),
     footer: totals ? () => totals[i] : undefined,
+    enableSorting: col.sortable !== false,
     sortDescFirst: false,
     sortUndefined: 'last',
     meta: {

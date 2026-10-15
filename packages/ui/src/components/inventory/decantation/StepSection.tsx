@@ -1,5 +1,7 @@
 import React from 'react';
 import { Icon } from '../../../pump-ds/index.js';
+import { cn } from '../../../pump-ds/lib/cn.js';
+import { lineSwatch } from './stepShared.js';
 
 export interface StepSectionProps {
   n: number;
@@ -14,6 +16,13 @@ export interface StepSectionProps {
   children: React.ReactNode;
 }
 
+/** Step number badge: finished (collapsed) → success, open → brand fill, else quiet. */
+const BADGE = {
+  done: 'bg-success-bg text-success-fg',
+  open: 'bg-brand text-on-brand',
+  idle: 'bg-surface-alt text-ink-muted',
+} as const;
+
 /**
  * One step of the Decantation stepper (accordion). A finished step collapses into a
  * compact card of its recorded values; clicking the header opens it again to edit.
@@ -27,140 +36,89 @@ export const StepSection: React.FC<StepSectionProps> = ({
   onOpen,
   readOnly = false,
   children,
-}) => (
-  <section
-    aria-label={title}
-    style={{
-      border: `1px solid ${open ? 'var(--brand-primary)' : 'var(--border-soft)'}`,
-      borderRadius: 'var(--radius-input, 8px)',
-      marginBottom: 10,
-      overflow: 'hidden',
-      background: 'var(--bg-surface)',
-    }}
-  >
-    <button
-      type="button"
-      onClick={readOnly ? undefined : onOpen}
-      aria-expanded={open}
-      disabled={readOnly}
-      style={{
-        width: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: '10px 12px',
-        background: open ? 'var(--bg-surface-alt)' : 'transparent',
-        border: 0,
-        cursor: readOnly ? 'default' : 'pointer',
-        textAlign: 'left',
-        color: 'var(--text-strong)',
-      }}
-    >
-      <span
-        aria-hidden="true"
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: 11,
-          flexShrink: 0,
-          display: 'grid',
-          placeItems: 'center',
-          fontSize: 11,
-          fontWeight: 600,
-          background:
-            done && !open
-              ? 'var(--state-success-bg)'
-              : open
-                ? 'var(--brand-primary)'
-                : 'var(--bg-surface-alt)',
-          color:
-            done && !open
-              ? 'var(--state-success-fg)'
-              : open
-                ? 'var(--text-on-brand, #fff)'
-                : 'var(--text-muted)',
-        }}
-      >
-        {done && !open ? <Icon name="check" size="xs" /> : n}
-      </span>
-      <span style={{ fontWeight: 600, fontSize: 13 }}>{title}</span>
-      <span style={{ flex: 1 }} />
-      {done && !open && (
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-          {readOnly ? 'Sealed' : 'Edit'}
-        </span>
+}) => {
+  const collapsedDone = done && !open;
+  return (
+    <section
+      aria-label={title}
+      className={cn(
+        'mb-2.5 overflow-hidden rounded-input border bg-surface',
+        open ? 'border-brand' : 'border-border-soft',
       )}
-    </button>
-    {open ? (
-      <div style={{ padding: '4px 12px 12px' }}>{children}</div>
-    ) : done ? (
-      <div
-        style={{
-          padding: '2px 12px 10px 44px',
-          cursor: readOnly ? 'default' : 'pointer',
-        }}
+    >
+      {/* Full-width accordion header, not an action button: stays a native button. */}
+      <button
+        type="button"
         onClick={readOnly ? undefined : onOpen}
+        aria-expanded={open}
+        disabled={readOnly}
+        className={cn(
+          'flex w-full items-center gap-2.5 border-0 px-3 py-2.5 text-left text-ink',
+          open ? 'bg-surface-alt' : 'bg-transparent',
+          readOnly ? 'cursor-default' : 'cursor-pointer',
+        )}
       >
-        {summary}
-      </div>
-    ) : null}
-  </section>
-);
+        <span
+          aria-hidden="true"
+          className={cn(
+            'grid size-[22px] shrink-0 place-items-center rounded-full text-[12px] font-semibold',
+            BADGE[collapsedDone ? 'done' : open ? 'open' : 'idle'],
+          )}
+        >
+          {collapsedDone ? <Icon name="check" size="xs" /> : n}
+        </span>
+        <span className="text-[13px] font-semibold">{title}</span>
+        <span className="flex-1" />
+        {collapsedDone && (
+          <span className="text-[12px] text-ink-muted">{readOnly ? 'Sealed' : 'Edit'}</span>
+        )}
+      </button>
+      {open ? (
+        <div className="px-3 pb-3 pt-1">{children}</div>
+      ) : done ? (
+        <div
+          className={cn('pb-2.5 pl-11 pr-3 pt-0.5', readOnly ? 'cursor-default' : 'cursor-pointer')}
+          onClick={readOnly ? undefined : onOpen}
+        >
+          {summary}
+        </div>
+      ) : null}
+    </section>
+  );
+};
 
 /** Compact label/value pairs for the finished-step cards. */
 export const KV: React.FC<{ items: [string, React.ReactNode][] }> = ({ items }) => (
-  <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 12 }}>
+  <div className="flex flex-wrap gap-[18px] text-[12px]">
     {items.map(([k, v]) => (
-      <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <span
-          style={{
-            fontSize: 10,
-            textTransform: 'uppercase',
-            letterSpacing: '.04em',
-            color: 'var(--text-muted)',
-          }}
-        >
-          {k}
-        </span>
-        <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{v}</span>
+      <div key={k} className="flex flex-col gap-px">
+        <span className="text-[12px] text-ink-muted">{k}</span>
+        <span className="font-semibold tabular-nums">{v}</span>
       </div>
     ))}
   </div>
 );
 
-export const LINE_COLORS = ['#2563eb', '#c2410c', '#7c3aed', '#0f766e'];
-
 export const LineTag: React.FC<{ i: number; label: string }> = ({ i, label }) => (
-  <span
-    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600 }}
-  >
-    <span
-      aria-hidden="true"
-      style={{
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        background: LINE_COLORS[i % LINE_COLORS.length],
-      }}
-    />
+  <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold">
+    <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', lineSwatch(i))} />
     {label}
   </span>
 );
 
+const NOTICE_TONE = {
+  danger: 'bg-danger-bg text-danger-fg',
+  info: 'bg-info-bg text-info-fg',
+  warning: 'bg-warning-bg text-warning-fg',
+} as const;
+
 export const Notice: React.FC<{
-  tone: 'danger' | 'info' | 'warning';
+  tone: keyof typeof NOTICE_TONE;
   children: React.ReactNode;
 }> = ({ tone, children }) => (
   <div
     role="note"
-    style={{
-      background: `var(--state-${tone}-bg)`,
-      color: `var(--state-${tone}-fg)`,
-      padding: '6px 10px',
-      borderRadius: 'var(--radius-input, 6px)',
-      fontSize: 12,
-      margin: '6px 0',
-    }}
+    className={cn('my-1.5 rounded-input px-2.5 py-1.5 text-[12px]', NOTICE_TONE[tone])}
   >
     {children}
   </div>

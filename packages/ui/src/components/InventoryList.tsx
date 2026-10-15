@@ -1,12 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
+import { canRecordDecantation, type Role } from '@pump/shared';
 import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
-import { PageLayout } from './primitives/PageLayout.js';
-import { DataTable } from './primitives/DataTable.js';
-import { Tabs, type TabItem } from '../pump-ds/tabs/index.js';
-import { Drawer } from './Drawer.js';
-import { Field, NumberInput, TextInput, Select } from './primitives/Field.js';
+import { ROUTES } from '../nav-intent/routes.js';
+import { Button, Icon, Tabs, tabPanelProps, type TabItem } from '../pump-ds/index.js';
 import { CloudTransactionService } from '../services/cloud.js';
+import { useRunTask } from '../utils/runTask.js';
 import {
   useInventoryStatus,
   useInventoryItems,
@@ -15,31 +13,17 @@ import {
   useTankLevelSettings,
   useInvalidateOperational,
 } from '../query/hooks.js';
-import {
-  Panel,
-  Button,
-  KpiStrip,
-  KpiTile,
-  StatusChip,
-  Chip,
-  MeterRow,
-  EmptyState,
-  DateText,
-  Form,
-  Icon,
-} from '../pump-ds/index.js';
+import { PageFrame } from './page-frame/index.js';
+import { Banner } from './primitives/Banner.js';
 import { DensityTab } from './inventory/density/index.js';
 import { DecantationsTab } from './inventory/decantation/DecantationsTab.js';
-import { canRecordDecantation, variancePresentation, type Role } from '@pump/shared';
-import { VARIANCE_TONE_TEXT } from '../utils/variance.js';
-import {
-  tankPct,
-  classifyTank,
-  OVER_CAPACITY_EXPLANATION,
-  type StockHealth,
-} from '../utils/stock.js';
-import { formatQuantity } from '../utils/format.js';
-import { TankStatusChips } from './inventory/TankStatusChips.js';
+import { InventoryTiles } from './inventory/InventoryTiles.js';
+import { TanksView } from './inventory/TanksView.js';
+import { ProductStockView } from './inventory/ProductStockView.js';
+import { MovementsView } from './inventory/MovementsView.js';
+import { ReconciliationsView } from './inventory/ReconciliationsView.js';
+import { StockCountDrawer, type CountScope } from './inventory/StockCountDrawer.js';
+import type { ItemRow, TankRow } from './inventory/inventoryFigures.js';
 import {
   isAmbiguousMutationError,
   loadPendingStockCountRequest,
@@ -50,15 +34,6 @@ import {
 
 const transactionService = new CloudTransactionService();
 
-/** Meter colour per stock level: the station's tank levels, not MeterRow's auto tone. */
-// TODO(#536): adopt TankGauge tones
-const METER_TONE: Record<StockHealth, 'danger' | 'warning' | 'brand' | 'info'> = {
-  critical: 'danger',
-  low: 'warning',
-  ok: 'brand',
-  over: 'info',
-};
-
 interface InventoryListProps {
   selectedStation: any | null;
   /** Gates the Decantations tab (Owner, Manager, Accountant) and the Owner review banner. */
@@ -67,281 +42,34 @@ interface InventoryListProps {
 
 type TabType = 'tanks' | 'density' | 'items' | 'movements' | 'variances' | 'decantations';
 
-const SearchBox: React.FC<{
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}> = ({ value, onChange, placeholder }) => (
-  <div style={{ position: 'relative' }}>
-    <Icon
-      name="search"
-      size="xs"
-      style={{
-        position: 'absolute',
-        left: '8px',
-        top: '50%',
-        transform: 'translateY(-50%)',
-        color: 'var(--text-muted)',
-      }}
-    />
-    <input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      style={{
-        height: '28px',
-        padding: '0 8px 0 26px',
-        width: '220px',
-        borderRadius: 'var(--radius-input)',
-        border: '1px solid var(--border-strong)',
-        fontSize: '12px',
-        background: 'var(--bg-surface)',
-      }}
-    />
-  </div>
-);
+const TABS_ID = 'inventory';
 
-const movementColumns: ColumnDef<any, any>[] = [
-  {
-    accessorKey: 'businessDate',
-    header: 'Business Day',
-    cell: ({ getValue }) => <DateText value={getValue() as string} tone="muted" />,
-  },
-  {
-    accessorKey: 'productName',
-    header: 'Product',
-    cell: ({ row }) => (
-      <span style={{ fontWeight: 500, color: 'var(--text-strong)' }}>
-        {row.original.productName}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'movementType',
-    header: 'Type',
-    cell: ({ getValue }) => {
-      const t = getValue() as string;
-      const tone =
-        t === 'Purchase' || t === 'Decantation'
-          ? 'info'
-          : t === 'Variance'
-            ? 'danger'
-            : t === 'Adjustment'
-              ? 'warning'
-              : t === 'Sale'
-                ? 'success'
-                : 'neutral';
-      return (
-        <Chip tone={tone} size="xs">
-          {t}
-        </Chip>
-      );
-    },
-  },
-  {
-    accessorKey: 'quantity',
-    header: 'Quantity',
-    cell: ({ row }) => {
-      const q = Number(row.original.quantity);
-      const unit = row.original.productUnit ?? 'L';
-      const positive = q > 0;
-      return (
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '2px',
-            fontFamily: 'var(--font-mono)',
-            color: positive ? 'var(--state-success-fg)' : 'var(--text-strong)',
-            fontWeight: positive ? 600 : 400,
-          }}
-        >
-          {positive ? (
-            <Icon name="arrow-up-right" size="xs" />
-          ) : (
-            <Icon name="arrow-down-right" size="xs" />
-          )}
-          {Math.abs(q).toLocaleString('en-IN', { maximumFractionDigits: 3 })} {unit}
-        </span>
-      );
-    },
-  },
-  {
-    accessorKey: 'referenceType',
-    header: 'Reference',
-    cell: ({ getValue }) => (
-      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-        {(getValue() as string) ?? 'N/A'}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'tankName',
-    header: 'Tank',
-    cell: ({ getValue }) => (
-      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-        {(getValue() as string) ?? '—'}
-      </span>
-    ),
-  },
-];
+/** The tabs about stock carry the four stock tiles (owner decision, 15 Oct). */
+const STOCK_TABS: ReadonlySet<TabType> = new Set(['tanks', 'items', 'movements', 'variances']);
 
-const varianceColumns: ColumnDef<any, any>[] = [
-  {
-    accessorKey: 'businessDate',
-    header: 'Business Day',
-    cell: ({ getValue }) => <DateText value={getValue() as string} tone="muted" />,
-  },
-  {
-    accessorKey: 'productName',
-    header: 'Product',
-    cell: ({ row }) => (
-      <span style={{ fontWeight: 500, color: 'var(--text-strong)' }}>
-        {row.original.productName}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'expectedQuantity',
-    header: 'Expected',
-    cell: ({ row }) => (
-      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-        {Number(row.original.expectedQuantity).toLocaleString('en-IN', {
-          maximumFractionDigits: 3,
-        })}{' '}
-        {row.original.productUnit ?? 'L'}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'actualQuantity',
-    header: 'Actual',
-    cell: ({ row }) => (
-      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
-        {Number(row.original.actualQuantity).toLocaleString('en-IN', { maximumFractionDigits: 3 })}{' '}
-        {row.original.productUnit ?? 'L'}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'varianceQuantity',
-    header: 'Variance',
-    cell: ({ row }) => {
-      const diff = Number(row.original.varianceQuantity);
-      const unit = row.original.productUnit ?? 'L';
-      // A surplus is amber, a shortage red (#518).
-      const { state, tone } = variancePresentation(diff, 'stock');
-      const color = state === 'balanced' ? 'var(--text-strong)' : VARIANCE_TONE_TEXT[tone];
-      return (
-        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color }}>
-          {diff > 0
-            ? `+${diff.toLocaleString('en-IN', { maximumFractionDigits: 3 })}`
-            : diff.toLocaleString('en-IN', { maximumFractionDigits: 3 })}{' '}
-          {unit}
-        </span>
-      );
-    },
-  },
-  {
-    id: 'status',
-    header: 'Status',
-    cell: ({ row }) => {
-      // The one balanced rule (#518): no ±0.5% band around zero.
-      const { state } = variancePresentation(row.original.varianceQuantity, 'stock');
-      return <StatusChip status={state} size="xs" />;
-    },
-  },
-  {
-    accessorKey: 'reason',
-    header: 'Reason',
-    cell: ({ getValue }) => (
-      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-        {(getValue() as string) ?? 'Reconciliation run'}
-      </span>
-    ),
-  },
-];
-
-const itemColumns: ColumnDef<any, any>[] = [
-  {
-    accessorKey: 'name',
-    header: 'Product',
-    cell: ({ row }) => (
-      <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{row.original.name}</span>
-    ),
-  },
-  {
-    accessorKey: 'code',
-    header: 'Code',
-    cell: ({ getValue }) => (
-      <span
-        style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontSize: '12px' }}
-      >
-        {(getValue() as string) ?? '—'}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'productType',
-    header: 'Type',
-    cell: ({ getValue }) => (
-      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-        {(getValue() as string) ?? '—'}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'unit',
-    header: 'Unit',
-    cell: ({ getValue }) => (
-      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-        {(getValue() as string) ?? '—'}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'quantity',
-    header: 'On Hand',
-    cell: ({ row }) => {
-      const q = Number(row.original.quantity);
-      const oversold = q < 0;
-      const empty = q === 0;
-      const color = oversold
-        ? 'var(--state-danger-fg)'
-        : empty
-          ? 'var(--state-warning-fg)'
-          : 'var(--text-strong)';
-      return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color }}>
-            {q.toLocaleString('en-IN', { maximumFractionDigits: 2 })} {row.original.unit ?? ''}
-          </span>
-          {oversold && (
-            <Chip tone="danger" size="xs">
-              Oversold
-            </Chip>
-          )}
-          {empty && (
-            <Chip tone="warning" size="xs">
-              Out of stock
-            </Chip>
-          )}
-        </span>
-      );
-    },
-  },
-];
-
+/**
+ * The Inventory page (#536): Tanks · Decantations · Density · Product stock ·
+ * Movements · Reconciliations, on the Page Frame. The four stock tiles sit on
+ * top of the stock tabs only (owner decision); each tab's list carries its own controls
+ * in its section header (layout B, #567), and every region loads in its own
+ * Data Section. "Reconcile stock" is the one primary action.
+ */
 export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, userRole }) => {
   const [selectedTab, setSelectedTab] = useState<TabType>('tanks');
   const stationId = selectedStation?.id ?? null;
   const invalidateOperational = useInvalidateOperational();
+  const runTask = useRunTask();
 
   const tanksQ = useInventoryStatus(stationId);
   const itemsQ = useInventoryItems(stationId);
   const movementsQ = useInventoryMovements(stationId);
   const variancesQ = useInventoryVariances(stationId);
   const tankLevels = useTankLevelSettings(stationId);
+
+  // A movement and a stock count sit on a Business Day: the full station clock.
+  const timeZone = selectedStation?.settings?.timezone;
+  const dayStartsAt = selectedStation?.settings?.business_day_starts_at;
+  const clock = useMemo(() => ({ timeZone, dayStartsAt }), [timeZone, dayStartsAt]);
 
   // Deep-link focus (from a dashboard/bell stock alert): switch to the target
   // tab and highlight the offending tank card / merchandise row. Derived from
@@ -375,7 +103,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
 
   // Stock count / opening balance / adjustment
   const [countOpen, setCountOpen] = useState(false);
-  const [countScope, setCountScope] = useState<'item' | 'tank'>('item');
+  const [countScope, setCountScope] = useState<CountScope>('item');
   const [countTargetId, setCountTargetId] = useState('');
   const [countActual, setCountActual] = useState('');
   const [countReason, setCountReason] = useState('');
@@ -384,71 +112,25 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
   const [countNotice, setCountNotice] = useState<string[]>([]);
   const countRequestRef = useRef<StockCountRequestIdentity | null>(loadPendingStockCountRequest());
 
-  const items = useMemo(() => itemsQ.data ?? [], [itemsQ.data]);
-  const tanksData = useMemo(() => tanksQ.data ?? [], [tanksQ.data]);
+  const items = useMemo<ItemRow[]>(() => itemsQ.data ?? [], [itemsQ.data]);
+  const tanks = useMemo<TankRow[]>(() => tanksQ.data ?? [], [tanksQ.data]);
 
-  const kpis = useMemo(() => {
-    const fuelByUnit: Record<string, number> = {};
-    for (const t of tanksData) {
-      const u = t.productUnit || 'L';
-      fuelByUnit[u] = (fuelByUnit[u] || 0) + Number(t.currentVolume || 0);
-    }
-    // Liquids first, then gaseous — so the L total is the headline value and any
-    // kg total moves into the hint (a single-line KPI can't add L + kg anyway).
-    const entries = Object.entries(fuelByUnit).sort(
-      (a, b) =>
-        (/^(l|liters?|litres?)$/i.test(a[0]) ? 0 : 1) -
-        (/^(l|liters?|litres?)$/i.test(b[0]) ? 0 : 1),
-    );
-    const tankCount = `${tanksData.length} ${tanksData.length === 1 ? 'tank' : 'tanks'}`;
-    const totalFuelValue = entries.length
-      ? formatQuantity(entries[0][1], entries[0][0])
-      : formatQuantity(0, 'L');
-    const totalFuelHint = [
-      ...entries.slice(1).map(([u, v]) => formatQuantity(v, u)),
-      tankCount,
-    ].join(' · ');
-    const levels = tanksData.map((t: any) =>
-      classifyTank(tankPct(t.currentVolume, t.capacity), tankLevels),
-    );
-    const lowTanks = levels.filter((level) => level === 'low' || level === 'critical').length;
-    const overTanks = levels.filter((level) => level === 'over').length;
-    const oversold = items.filter((i: any) => Number(i.quantity) < 0).length;
-    const outOfStock = items.filter((i: any) => Number(i.quantity) === 0).length;
-    const variances = (variancesQ.data ?? []).length;
-    return { totalFuelValue, totalFuelHint, lowTanks, overTanks, oversold, outOfStock, variances };
-  }, [tanksData, items, variancesQ.data, tankLevels]);
+  const firstTarget = (scope: CountScope) =>
+    scope === 'item' ? (items[0]?.productId ?? '') : (tanks[0]?.id ?? '');
 
-  const [movementSearch, setMovementSearch] = useState('');
-  const [itemSearch, setItemSearch] = useState('');
-  const filteredMovements = useMemo(() => {
-    const q = movementSearch.trim().toLowerCase();
-    const d = movementsQ.data ?? [];
-    if (!q) return d;
-    return d.filter(
-      (m: any) =>
-        (m.productName || '').toLowerCase().includes(q) ||
-        (m.movementType || '').toLowerCase().includes(q) ||
-        (m.tankName || '').toLowerCase().includes(q),
-    );
-  }, [movementsQ.data, movementSearch]);
-  const filteredItems = useMemo(() => {
-    const q = itemSearch.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter(
-      (i: any) =>
-        (i.name || '').toLowerCase().includes(q) || (i.code || '').toLowerCase().includes(q),
-    );
-  }, [items, itemSearch]);
-
-  const openCount = (scope: 'item' | 'tank') => {
+  const openCount = (scope: CountScope) => {
     setCountScope(scope);
-    setCountTargetId(scope === 'item' ? (items[0]?.productId ?? '') : (tanksData[0]?.id ?? ''));
+    setCountTargetId(firstTarget(scope));
     setCountActual('');
     setCountReason('');
     setCountError(null);
     setCountNotice([]);
     setCountOpen(true);
+  };
+
+  const changeCountScope = (scope: CountScope) => {
+    setCountScope(scope);
+    setCountTargetId(firstTarget(scope));
   };
 
   const submitCount = async (e: React.FormEvent) => {
@@ -460,7 +142,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
       let productId = countTargetId;
       let tankId: string | null = null;
       if (countScope === 'tank') {
-        const tank = tanksData.find((t: any) => t.id === countTargetId);
+        const tank = tanks.find((t) => t.id === countTargetId);
         productId = tank?.productId ?? '';
         tankId = countTargetId;
       }
@@ -480,7 +162,11 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
       savePendingStockCountRequest(null);
       setCountNotice((counted.warnings ?? []).map((w) => w.message));
       setCountOpen(false);
-      await invalidateOperational(stationId);
+      // The count is saved; refreshing the stock views is a background concern (caching rule 6).
+      runTask(
+        invalidateOperational(stationId),
+        'Count saved, but the stock views may be out of date.',
+      );
     } catch (err: any) {
       if (!isAmbiguousMutationError(err)) {
         countRequestRef.current = null;
@@ -494,19 +180,26 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
 
   if (!selectedStation) {
     return (
-      <div style={{ color: 'var(--text-muted)', padding: '24px', fontFamily: 'var(--font-sans)' }}>
-        Please select a station to view inventory.
-      </div>
+      <p className="p-6 text-[13px] text-ink-muted">Please select a station to view inventory.</p>
     );
   }
 
-  const tanks = tanksQ.data ?? [];
+  const tabs: TabItem[] = [
+    { id: 'tanks', label: 'Tanks', concept: 'tanks' },
+    ...(showDecantations
+      ? [{ id: 'decantations', label: 'Decantations', concept: 'decantations' } satisfies TabItem]
+      : []),
+    { id: 'density', label: 'Density', concept: 'density' },
+    { id: 'items', label: 'Product stock', concept: 'product-stock' },
+    { id: 'movements', label: 'Movements', concept: 'movements' },
+    { id: 'variances', label: 'Reconciliations', concept: 'reconciliations' },
+  ];
 
   return (
-    <div className="animate-fade-in">
-      <PageLayout
-        title="Inventory"
-        subtitle="Monitor tank stock levels, audit physical dip variances, and inspect fuel movements."
+    <>
+      <PageFrame
+        route={ROUTES.inventory}
+        subtitle="Tank levels, product stock, density, decantations and every stock movement."
         actions={
           <Button
             variant="primary"
@@ -514,500 +207,61 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
             leftIcon={<Icon name="clipboard-check" size="sm" />}
             onClick={() => openCount(activeTab === 'tanks' ? 'tank' : 'item')}
           >
-            Reconcile Stock
+            Reconcile stock
           </Button>
         }
-        toolbar={
+        tabs={
           <Tabs
+            id={TABS_ID}
             aria-label="Inventory views"
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as TabType)}
-            tabs={[
-              { id: 'tanks', label: 'Tanks', concept: 'tanks' },
-              ...(showDecantations
-                ? [
-                    {
-                      id: 'decantations',
-                      label: 'Decantations',
-                      concept: 'decantations',
-                    } satisfies TabItem,
-                  ]
-                : []),
-              { id: 'density', label: 'Density', concept: 'density' },
-              {
-                id: 'items',
-                label: 'Product stock',
-                concept: 'product-stock',
-              },
-              { id: 'movements', label: 'Movements', concept: 'movements' },
-              {
-                id: 'variances',
-                label: 'Reconciliations',
-                concept: 'reconciliations',
-              },
-            ]}
+            tabs={tabs}
           />
         }
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div {...tabPanelProps(TABS_ID, activeTab)} className="flex flex-col gap-4">
           {countNotice.length > 0 && (
-            <div
-              role="status"
-              style={{
-                backgroundColor: 'var(--state-warning-bg)',
-                color: 'var(--state-warning-fg)',
-                padding: '8px 12px',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '12px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                gap: '12px',
-              }}
-            >
-              <span>{countNotice.join(' ')}</span>
-              <button
-                type="button"
-                onClick={() => setCountNotice([])}
-                style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}
-              >
-                Dismiss
-              </button>
-            </div>
+            <Banner severity="warning" dismissible onDismiss={() => setCountNotice([])}>
+              {countNotice.join(' ')}
+            </Banner>
           )}
-          <KpiStrip columns="auto">
-            <KpiTile
-              label="Total fuel stock"
-              value={kpis.totalFuelValue}
-              hint={kpis.totalFuelHint}
-            />
-            <KpiTile
-              alert={kpis.lowTanks > 0 ? 'warning' : undefined}
-              label="Tanks low / critical"
-              value={String(kpis.lowTanks)}
-              hint={`below ${tankLevels.lowBelowPct}% capacity`}
-            />
-            <KpiTile
-              label="Book stock over capacity"
-              value={String(kpis.overTanks)}
-              hint="may reconcile at shift close"
-            />
-            <KpiTile
-              alert={kpis.outOfStock > 0 ? 'warning' : undefined}
-              label="Out of stock"
-              value={String(kpis.outOfStock)}
-              hint="zero on-hand"
-            />
-            <KpiTile
-              alert={kpis.oversold > 0 ? 'danger' : undefined}
-              label="Oversold items"
-              value={String(kpis.oversold)}
-              hint="negative on-hand"
-            />
-            <KpiTile
-              label="Reconciliations"
-              value={String(kpis.variances)}
-              hint="variances logged"
-            />
-          </KpiStrip>
-
-          {activeTab === 'tanks' &&
-            (tanksQ.isLoading ? (
-              <div style={{ padding: '16px' }}>
-                <EmptyState
-                  compact
-                  icon={<Icon name="tank" size="md" />}
-                  title="Loading tanks…"
-                  description="Fetching current tank levels."
-                />
-              </div>
-            ) : tanks.length === 0 ? (
-              <EmptyState
-                compact
-                icon={<Icon name="tank" size="md" />}
-                title="No fuel tanks"
-                description="No fuel tanks configured for this station."
-              />
-            ) : (
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                  gap: '12px',
-                }}
-              >
-                {tanks.map((tank: any) => {
-                  const cap = Number(tank.capacity) || 0;
-                  const vol = Number(tank.currentVolume) || 0;
-                  const pct = tankPct(vol, cap);
-                  const level = classifyTank(pct, tankLevels);
-                  const highlighted = highlightId === tank.id;
-                  return (
-                    <div
-                      key={tank.id}
-                      ref={(el) => {
-                        if (el && highlighted)
-                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                      }}
-                      style={{
-                        backgroundColor: 'var(--bg-surface)',
-                        border: `1px solid ${highlighted ? 'var(--state-info-fg)' : 'var(--border-soft)'}`,
-                        borderRadius: 'var(--radius-card)',
-                        padding: '14px 16px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '12px',
-                        boxShadow: highlighted ? '0 0 0 3px var(--state-info-bg)' : undefined,
-                        transition: 'border-color 0.4s ease, box-shadow 0.4s ease',
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'flex-start',
-                          gap: '8px',
-                        }}
-                      >
-                        <div style={{ minWidth: 0 }}>
-                          <h4
-                            style={{
-                              fontSize: '14px',
-                              fontWeight: 600,
-                              color: 'var(--text-strong)',
-                            }}
-                          >
-                            {tank.name}
-                          </h4>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              fontWeight: 500,
-                            }}
-                          >
-                            {tank.productName} · {tank.productCode}
-                          </span>
-                        </div>
-                        <TankStatusChips tank={tank} tankLevels={tankLevels} />
-                      </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'baseline',
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: '22px',
-                            fontWeight: 700,
-                            color: 'var(--text-strong)',
-                            fontFamily: 'var(--font-mono)',
-                          }}
-                        >
-                          {vol.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
-                          <span
-                            style={{
-                              fontSize: '12px',
-                              fontWeight: 500,
-                              color: 'var(--text-muted)',
-                              marginLeft: '4px',
-                            }}
-                          >
-                            {tank.productUnit || 'L'}
-                          </span>
-                        </span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          of {cap.toLocaleString('en-IN')} {tank.productUnit || 'L'}
-                        </span>
-                      </div>
-                      <MeterRow
-                        label=""
-                        value={Math.min(vol, cap)}
-                        max={cap || 1}
-                        tone={METER_TONE[level]}
-                        valueLabel={`${pct.toFixed(0)}% capacity`}
-                      />
-                      {level === 'over' && (
-                        <p
-                          style={{
-                            margin: 0,
-                            fontSize: '11px',
-                            lineHeight: 1.45,
-                            color: 'var(--state-info-fg)',
-                          }}
-                        >
-                          {OVER_CAPACITY_EXPLANATION}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-
-          {activeTab === 'items' && (
-            <Panel
-              flush
-              title="Merchandise stock"
-              action={
-                <SearchBox
-                  value={itemSearch}
-                  onChange={setItemSearch}
-                  placeholder="Search product / code…"
-                />
-              }
-            >
-              {itemsQ.isLoading ? (
-                <div style={{ padding: '16px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Icon name="package" size="md" />}
-                    title="Loading…"
-                    description="Fetching merchandise stock."
-                  />
-                </div>
-              ) : filteredItems.length === 0 ? (
-                <div style={{ padding: '12px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Icon name="package" size="md" />}
-                    title={items.length === 0 ? 'No merchandise' : 'No matches'}
-                    description={
-                      items.length === 0
-                        ? 'Add non-fuel products in Station → Products.'
-                        : 'Try a different search.'
-                    }
-                  />
-                </div>
-              ) : (
-                <DataTable
-                  bare
-                  columns={itemColumns}
-                  data={filteredItems}
-                  emptyMessage="No merchandise."
-                  getRowId={(r: any) => r.productId}
-                  initialSorting={[{ id: 'name', desc: false }]}
-                  highlightRowId={highlightId}
-                />
-              )}
-            </Panel>
+          {STOCK_TABS.has(activeTab) && (
+            <InventoryTiles tanksQ={tanksQ} itemsQ={itemsQ} tankLevels={tankLevels} />
           )}
 
-          {activeTab === 'movements' && (
-            <Panel
-              flush
-              title="Stock movements"
-              action={
-                <SearchBox
-                  value={movementSearch}
-                  onChange={setMovementSearch}
-                  placeholder="Search product / type / tank…"
-                />
-              }
-            >
-              {movementsQ.isLoading ? (
-                <div style={{ padding: '16px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Icon name="arrow-left-right" size="md" />}
-                    title="Loading…"
-                    description="Fetching movements."
-                  />
-                </div>
-              ) : filteredMovements.length === 0 ? (
-                <div style={{ padding: '12px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Icon name="arrow-left-right" size="md" />}
-                    title={(movementsQ.data ?? []).length === 0 ? 'No movements' : 'No matches'}
-                    description={
-                      (movementsQ.data ?? []).length === 0
-                        ? 'No stock movements recorded.'
-                        : 'Try a different search.'
-                    }
-                  />
-                </div>
-              ) : (
-                <DataTable
-                  bare
-                  columns={movementColumns}
-                  data={filteredMovements}
-                  emptyMessage="No stock movements."
-                  getRowId={(r: any) => r.id}
-                />
-              )}
-            </Panel>
+          {activeTab === 'tanks' && (
+            <TanksView tanksQ={tanksQ} tankLevels={tankLevels} highlightId={highlightId} />
           )}
-
-          {activeTab === 'density' && <DensityTab stationId={stationId} />}
-
           {activeTab === 'decantations' && showDecantations && (
-            <DecantationsTab station={selectedStation} userRole={userRole} />
+            <DecantationsTab station={selectedStation} userRole={userRole} clock={clock} />
           )}
-
+          {activeTab === 'density' && <DensityTab stationId={stationId} />}
+          {activeTab === 'items' && <ProductStockView itemsQ={itemsQ} highlightId={highlightId} />}
+          {activeTab === 'movements' && <MovementsView movementsQ={movementsQ} clock={clock} />}
           {activeTab === 'variances' && (
-            <Panel flush title="Reconciliations">
-              {variancesQ.isLoading ? (
-                <div style={{ padding: '16px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Icon name="scale" size="md" />}
-                    title="Loading…"
-                    description="Fetching variances."
-                  />
-                </div>
-              ) : (variancesQ.data ?? []).length === 0 ? (
-                <div style={{ padding: '12px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Icon name="scale" size="md" />}
-                    title="No reconciliations"
-                    description="No reconciliation logs or physical variances logged yet."
-                  />
-                </div>
-              ) : (
-                <DataTable
-                  bare
-                  columns={varianceColumns}
-                  data={variancesQ.data}
-                  emptyMessage="No variances."
-                  getRowId={(r: any) => r.id}
-                />
-              )}
-            </Panel>
+            <ReconciliationsView variancesQ={variancesQ} clock={clock} />
           )}
         </div>
-      </PageLayout>
+      </PageFrame>
 
-      <Drawer isOpen={countOpen} onClose={() => setCountOpen(false)} title="Stock Reconciliation">
-        <Form
-          onSubmit={submitCount}
-          style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
-        >
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            Enter the physically measured quantity. Book stock is reconciled to it (a variance is
-            logged and an adjustment movement posts the difference). Use this to set an opening
-            balance for a new product or correct a count.
-          </div>
-          {countScope === 'tank' && (
-            <div
-              style={{
-                backgroundColor: 'var(--state-warning-bg)',
-                color: 'var(--state-warning-fg)',
-                padding: '8px 12px',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '12px',
-                lineHeight: 1.5,
-              }}
-            >
-              A dip taken while a Shift is open records the measurement and variance, but book stock
-              is NOT adjusted — fuel dispensed during the open Shift is not yet booked, so the
-              variance may include un-booked sales.
-            </div>
-          )}
-          {countError && (
-            <div
-              style={{
-                backgroundColor: 'var(--state-danger-bg)',
-                color: 'var(--state-danger-fg)',
-                padding: '8px 12px',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '12px',
-              }}
-            >
-              {countError}
-            </div>
-          )}
-          <Field label="Scope">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              {(['item', 'tank'] as const).map((s) => (
-                <Button
-                  key={s}
-                  type="button"
-                  variant={countScope === s ? 'primary' : 'secondary'}
-                  size="sm"
-                  fullWidth
-                  leftIcon={
-                    s === 'item' ? (
-                      <Icon name="package" size="sm" />
-                    ) : (
-                      <Icon name="tank" size="sm" />
-                    )
-                  }
-                  onClick={() => {
-                    setCountScope(s);
-                    setCountTargetId(
-                      s === 'item' ? (items[0]?.productId ?? '') : (tanksData[0]?.id ?? ''),
-                    );
-                  }}
-                >
-                  {s === 'item' ? 'Merchandise' : 'Fuel Tank'}
-                </Button>
-              ))}
-            </div>
-          </Field>
-          <Field label={countScope === 'item' ? 'Product' : 'Tank'}>
-            <Select
-              value={countTargetId}
-              onChange={(e) => setCountTargetId(e.target.value)}
-              required
-            >
-              {countScope === 'item'
-                ? items.map((i: any) => (
-                    <option key={i.productId} value={i.productId}>
-                      {i.name} ({i.code}) — on hand {Number(i.quantity).toLocaleString('en-IN')}{' '}
-                      {i.unit ?? ''}
-                    </option>
-                  ))
-                : tanksData.map((t: any) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} — {t.productName} — {Number(t.currentVolume).toLocaleString('en-IN')}{' '}
-                      L
-                    </option>
-                  ))}
-            </Select>
-          </Field>
-          <Field label="Actual Counted Quantity">
-            <NumberInput
-              min="0"
-              step="any"
-              value={countActual}
-              onChange={(e) => setCountActual(e.target.value)}
-              placeholder="Measured quantity"
-              required
-            />
-          </Field>
-          <Field label="Reason" hint="optional">
-            <TextInput
-              value={countReason}
-              onChange={(e) => setCountReason(e.target.value)}
-              placeholder="e.g. opening stock, monthly count, breakage"
-            />
-          </Field>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-            <Button
-              type="submit"
-              variant="primary"
-              size="md"
-              fullWidth
-              loading={countSubmitting}
-              disabled={!countTargetId || countActual === ''}
-            >
-              Reconcile Stock
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              onClick={() => setCountOpen(false)}
-              disabled={countSubmitting}
-            >
-              Cancel
-            </Button>
-          </div>
-        </Form>
-      </Drawer>
-    </div>
+      <StockCountDrawer
+        isOpen={countOpen}
+        onClose={() => setCountOpen(false)}
+        scope={countScope}
+        onScopeChange={changeCountScope}
+        targetId={countTargetId}
+        onTargetChange={setCountTargetId}
+        actual={countActual}
+        onActualChange={setCountActual}
+        reason={countReason}
+        onReasonChange={setCountReason}
+        items={items}
+        tanks={tanks}
+        submitting={countSubmitting}
+        error={countError}
+        onSubmit={submitCount}
+      />
+    </>
   );
 };

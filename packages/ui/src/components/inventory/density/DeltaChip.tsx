@@ -50,7 +50,7 @@ export const DeltaChip: React.FC<DeltaChipProps> = ({
       : 'neutral';
 
   return (
-    <Chip tone={tone} size="sm" className="tabular-nums">
+    <Chip tone={tone} size="md" className="tabular-nums">
       {isUnexplained ? `${shown} · ${DENSITY_FLAG.jump.label}` : shown}
     </Chip>
   );
