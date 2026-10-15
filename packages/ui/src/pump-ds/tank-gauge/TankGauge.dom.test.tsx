@@ -103,3 +103,19 @@ describe('TankGauge', () => {
     expect(screen.getByText('—')).toBeTruthy();
   });
 });
+
+describe('TankGauge tube layout (#609)', () => {
+  it('puts name and cover on the left, stock and capacity right-aligned on the right', () => {
+    const { container } = render(
+      <TankGauge name="Tank 1" level={level(13_000, { daysOfCover: 10.7 })} />,
+    );
+    const [left, right] = Array.from(
+      container.firstElementChild!.querySelectorAll(':scope > div'),
+    ) as HTMLElement[];
+    expect(left.textContent).toContain('Tank 1');
+    expect(left.textContent).toContain('10.7 days cover');
+    expect(right.className).toContain('text-right');
+    expect(right.textContent).toContain('13,000 L');
+    expect(right.textContent).toContain('of 20,000 L');
+  });
+});

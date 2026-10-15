@@ -72,8 +72,9 @@ describe('ShiftBusinessDateContext', () => {
     expect(html).toContain('Shift Business Date · 10 Sep 2026');
     expect(html).toContain('Scheduled Shift Window · 06:00–14:00');
     expect(html).toContain('Working on 10 Sep 2026. Actions are being recorded on 12 Sep 2026.');
-    expect(html).toContain('2026-09-10 · Open');
-    expect(html).toContain('2026-09-13 · Open · Unavailable (future)');
+    expect(html).toContain('10 Sep 2026 · Open');
+    expect(html).toContain('13 Sep 2026 · Open · Unavailable (future)');
+    expect(html).not.toMatch(/\d{4}-\d{2}-\d{2} · Open/);
     expect(html).toContain('Custom Business Date');
   });
 

@@ -81,7 +81,6 @@ const TUBE = {
     name: 'text-[12.5px]',
     pct: 'text-[13px]',
     stock: 'whitespace-nowrap text-[12px]',
-    side: 'shrink-0',
   },
   lg: {
     gap: 'gap-4',
@@ -89,8 +88,6 @@ const TUBE = {
     name: 'text-[14px]',
     pct: 'text-[18px] leading-tight',
     stock: 'whitespace-nowrap text-[13px]',
-    // A long cover fallback wraps under the % instead of squeezing the stock.
-    side: 'max-w-[45%] shrink-0',
   },
 } as const satisfies Record<TankGaugeSize, Record<string, string>>;
 
@@ -155,9 +152,11 @@ export const TankGauge: React.FC<TankGaugeProps> = ({
     );
   }
 
+  // Tube (#609): two lines each side. Left: name, days cover under it.
+  // Right, right-aligned: the stock headline, "of 20,000 L · 65%" under it.
   return (
     <div
-      className={cn('flex items-center', t.gap, className)}
+      className={cn('flex min-w-0 items-center', t.gap, className)}
       data-tone={level.tone}
       data-size={size}
     >
@@ -175,17 +174,17 @@ export const TankGauge: React.FC<TankGaugeProps> = ({
       </span>
       <div className="min-w-0 flex-1">
         <div className={cn('truncate font-semibold text-ink', t.name)}>{name}</div>
+        <div className="text-[12px] text-ink-muted">
+          <Cover days={level.daysOfCover} fallback={coverFallback} />
+        </div>
+        {showStatus && <Status level={level} />}
+      </div>
+      <div className="shrink-0 text-right">
         <div>
           {pct}
           {word && <span className="sr-only"> {word}</span>}
         </div>
         {stock}
-        {showStatus && <Status level={level} />}
-      </div>
-      <div className={cn('text-right', t.side)}>
-        <div className="text-[12px] text-ink-muted">
-          <Cover days={level.daysOfCover} fallback={coverFallback} />
-        </div>
       </div>
     </div>
   );

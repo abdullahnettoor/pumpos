@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { DateRangeMenu } from './DateRangeMenu.js';
+import { calendarDay, datePicker, pickDate, pickedDate } from '../../test/datePicker.js';
 import type { DateRange } from './range.js';
 
 // 14 Oct 2026, 03:00 IST. With a 06:00 Day Start the station is still on 13 Oct.
@@ -98,47 +99,61 @@ describe('DateRangeMenu', () => {
     const onChange = vi.fn();
     render(<Harness onChange={onChange} />);
     fireEvent.click(trigger());
-    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-10-03' } });
+    pickDate('From', '2026-10-03');
     expect(onChange).toHaveBeenLastCalledWith({ from: '2026-10-03', to: '2026-10-14' });
-    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-10-10' } });
+    pickDate('To', '2026-10-10');
     expect(onChange).toHaveBeenLastCalledWith({ from: '2026-10-03', to: '2026-10-10' });
     expect(trigger().textContent).toBe('Custom3–10 Oct');
-    // The popover stays open while the dates are being typed.
+    // The popover stays open while the dates are being picked.
     expect(screen.getByRole('menu')).toBeTruthy();
   });
 
-  it('never applies a partial year while one is typed', () => {
-    const onChange = vi.fn();
-    render(<Harness onChange={onChange} />);
+  it('shows the custom dates as pickers, not native date inputs (#609)', () => {
+    render(<Harness />);
     fireEvent.click(trigger());
-    const from = screen.getByLabelText<HTMLInputElement>('From');
-    const to = screen.getByLabelText<HTMLInputElement>('To');
-    // A native date input reports the year as it grows: 0002, 0020, 0202, 2026.
-    for (const partial of ['0002-10-12', '0020-10-12', '0202-10-12']) {
-      fireEvent.change(to, { target: { value: partial } });
-      expect(onChange).not.toHaveBeenCalled();
-      expect(from.value).toBe('2026-10-01');
-    }
-    fireEvent.change(to, { target: { value: '2026-10-12' } });
-    expect(onChange).toHaveBeenCalledTimes(1);
-    expect(onChange).toHaveBeenCalledWith({ from: '2026-10-01', to: '2026-10-12' });
-    expect(from.value).toBe('2026-10-01');
+    const pop = screen.getByTestId('date-range-popover');
+    expect(pop.querySelector('input[type="date"]')).toBeNull();
+    expect(datePicker('From').textContent).toContain('Thu 1 Oct 2026');
+    expect(datePicker('To').textContent).toContain('Wed 14 Oct 2026');
   });
 
-  it('reorders a backwards range only on blur or Enter', () => {
+  it('offers no custom date after the station today or before 2000', () => {
+    render(<Harness />);
+    fireEvent.click(trigger());
+    fireEvent.click(datePicker('To'));
+    expect(calendarDay('2026-10-14')?.disabled).toBe(false);
+    expect(calendarDay('2026-10-15')?.disabled).toBe(true);
+    // 2000 is the earliest month the calendar pages back to.
+    expect(calendarDay('2000-01-01')?.disabled).toBe(false);
+    expect(calendarDay('1999-12-31')).toBeNull();
+  });
+
+  it('keeps the menu open while a From/To calendar is used', () => {
+    render(<Harness />);
+    fireEvent.click(trigger());
+    fireEvent.click(datePicker('From'));
+    const day = calendarDay('2026-10-05')!;
+    // The calendar is portalled outside the popover: a press there is inside.
+    fireEvent.mouseDown(day);
+    expect(screen.getByRole('menu')).toBeTruthy();
+    // Escape closes only the calendar.
+    fireEvent.keyDown(day, { key: 'Escape' });
+    expect(screen.queryByTestId('date-picker-popover')).toBeNull();
+    expect(screen.getByRole('menu')).toBeTruthy();
+  });
+
+  it('reorders a backwards range only when focus leaves the pair', () => {
     const onChange = vi.fn();
     render(<Harness onChange={onChange} />);
     fireEvent.click(trigger());
-    const to = screen.getByLabelText<HTMLInputElement>('To');
-    fireEvent.change(to, { target: { value: '2026-09-20' } });
+    pickDate('To', '2026-09-20');
     expect(onChange).not.toHaveBeenCalled();
-    fireEvent.blur(to);
+    fireEvent.focusOut(datePicker('To'));
     expect(onChange).toHaveBeenLastCalledWith({ from: '2026-09-20', to: '2026-10-01' });
 
-    const from = screen.getByLabelText<HTMLInputElement>('From');
-    fireEvent.change(from, { target: { value: '2026-10-05' } });
+    pickDate('From', '2026-10-05');
     expect(onChange).toHaveBeenCalledTimes(1);
-    fireEvent.keyDown(from, { key: 'Enter' });
+    fireEvent.focusOut(datePicker('From'));
     expect(onChange).toHaveBeenLastCalledWith({ from: '2026-10-01', to: '2026-10-05' });
   });
 
@@ -146,15 +161,13 @@ describe('DateRangeMenu', () => {
     const onChange = vi.fn();
     render(<Harness initial={{ from: '2026-09-01', to: '2026-09-30' }} onChange={onChange} />);
     fireEvent.click(trigger());
-    const from = screen.getByLabelText<HTMLInputElement>('From');
-    const to = screen.getByLabelText<HTMLInputElement>('To');
-    fireEvent.change(from, { target: { value: '2026-10-10' } });
+    pickDate('From', '2026-10-10');
     // Tab from From to To: the range is still being built.
-    fireEvent.blur(from, { relatedTarget: to });
+    fireEvent.focusOut(datePicker('From'), { relatedTarget: datePicker('To') });
     expect(onChange).not.toHaveBeenCalled();
-    expect(from.value).toBe('2026-10-10');
-    fireEvent.change(to, { target: { value: '2026-10-14' } });
-    fireEvent.blur(to, { relatedTarget: from });
+    expect(pickedDate('From')).toBe('2026-10-10');
+    pickDate('To', '2026-10-14');
+    fireEvent.focusOut(datePicker('To'), { relatedTarget: datePicker('From') });
     expect(onChange.mock.calls).toEqual([[{ from: '2026-10-10', to: '2026-10-14' }]]);
     expect(trigger().textContent).toBe('Custom10–14 Oct');
   });
@@ -163,57 +176,32 @@ describe('DateRangeMenu', () => {
     const onChange = vi.fn();
     render(<Harness onChange={onChange} />);
     fireEvent.click(trigger());
-    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-09-20' } });
+    pickDate('To', '2026-09-20');
     expect(onChange).not.toHaveBeenCalled();
     fireEvent.mouseDown(screen.getByRole('button', { name: 'Outside' }));
     expect(onChange.mock.calls).toEqual([[{ from: '2026-09-20', to: '2026-10-01' }]]);
   });
 
-  it('discards the typed draft on Escape', () => {
+  it('discards the picked draft on Escape, and the next opening starts from the applied range', () => {
     const onChange = vi.fn();
     render(<Harness onChange={onChange} />);
     fireEvent.click(trigger());
-    const to = screen.getByLabelText<HTMLInputElement>('To');
+    pickDate('To', '2026-09-20');
+    const to = datePicker('To');
     to.focus();
-    fireEvent.change(to, { target: { value: '2026-09-20' } });
     fireEvent.keyDown(to, { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();
     expect(document.activeElement).toBe(trigger());
     expect(onChange).not.toHaveBeenCalled();
     expect(trigger().textContent).toBe('This month1–14 Oct');
-  });
-
-  it('starts each opening from the applied range, not a stale draft', () => {
-    const onChange = vi.fn();
-    render(<Harness onChange={onChange} />);
     fireEvent.click(trigger());
-    const to = screen.getByLabelText<HTMLInputElement>('To');
-    fireEvent.change(to, { target: { value: '0202-10-12' } });
-    fireEvent.click(trigger());
-    fireEvent.click(trigger());
-    expect(screen.getByLabelText<HTMLInputElement>('To').value).toBe('2026-10-14');
-    expect(onChange).not.toHaveBeenCalled();
+    expect(pickedDate('To')).toBe('2026-10-14');
   });
 
   it('opens above drawers (z-index 1050, as Combobox)', () => {
     render(<Harness />);
     fireEvent.click(trigger());
     expect(screen.getByTestId('date-range-popover').className).toContain('z-[1050]');
-  });
-
-  it('rejects a date before 2000 or after the station today, and reverts it on blur', () => {
-    const onChange = vi.fn();
-    render(<Harness onChange={onChange} />);
-    fireEvent.click(trigger());
-    const to = screen.getByLabelText<HTMLInputElement>('To');
-    fireEvent.change(to, { target: { value: '2026-10-20' } });
-    fireEvent.blur(to);
-    const from = screen.getByLabelText<HTMLInputElement>('From');
-    fireEvent.change(from, { target: { value: '1999-12-31' } });
-    fireEvent.keyDown(from, { key: 'Enter' });
-    expect(onChange).not.toHaveBeenCalled();
-    expect(to.value).toBe('2026-10-14');
-    expect(from.value).toBe('2026-10-01');
   });
 
   it('follows the menu keyboard pattern and returns focus on Escape', () => {
@@ -264,7 +252,7 @@ describe('DateRangeMenu', () => {
     expect(pop.style.top).toBe('138px');
     expect(pop.style.left).toBe('40px');
     // A press inside the portalled popover is not a click outside.
-    fireEvent.mouseDown(screen.getByLabelText('From'));
+    fireEvent.mouseDown(datePicker('From'));
     expect(screen.getByRole('menu')).toBeTruthy();
   });
 
@@ -301,8 +289,8 @@ describe('DateRangeMenu', () => {
     const pop = screen.getByTestId('date-range-popover');
     expect(pop.contains(document.activeElement)).toBe(true);
 
-    const from = screen.getByLabelText<HTMLInputElement>('From');
-    const to = screen.getByLabelText<HTMLInputElement>('To');
+    const from = datePicker('From');
+    const to = datePicker('To');
     // The custom fields are in the Tab order after the presets.
     expect(from.tabIndex).toBe(0);
     from.focus();

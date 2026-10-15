@@ -12,7 +12,8 @@ const tank = (n: number): TankGauge => ({
   tankName: `Tank ${n}`,
   pct: 60,
   fill: 60,
-  volume: '6,000 L',
+  stock: '6,000 L',
+  detail: 'of 10,000 L · 60%',
   level: 'ok',
   cover: '',
   waitingOnDecantation: false,
@@ -47,16 +48,47 @@ describe('TankGauges grid', () => {
   it('shows low-stock state and waiting on decantation together', () => {
     const { getByText } = render(
       <TankGauges
-        tanks={[{ ...tank(1), level: 'critical', pct: 8, waitingOnDecantation: true }]}
+        tanks={[
+          {
+            ...tank(1),
+            level: 'critical',
+            pct: 8,
+            stock: '800 L',
+            detail: 'of 10,000 L · 8%',
+            waitingOnDecantation: true,
+          },
+        ]}
       />,
     );
+    expect(getByText('800 L', { exact: false }).className).toContain('text-bad');
+    expect(getByText('of 10,000 L')).toBeTruthy();
     expect(getByText('8%')).toBeTruthy();
     expect(getByText('Waiting on decantation')).toBeTruthy();
     expect(getByText('Critical')).toBeTruthy();
   });
 
+  it('leads with the stock, plain unless the tank is low or critical (#609)', () => {
+    const { getByText } = render(<TankGauges tanks={[tank(1)]} />);
+    const head = getByText('6,000 L', { exact: false });
+    expect(head.className).toContain('text-text-high');
+    expect(head.className).not.toContain('text-good');
+    expect(getByText('of 10,000 L')).toBeTruthy();
+    expect(getByText('60%')).toBeTruthy();
+  });
+
   it('names the tone with the shared model words (desktop parity)', () => {
     const { getByText } = render(<TankGauges tanks={[{ ...tank(1), level: 'low', pct: 30 }]} />);
     expect(getByText('Low')).toBeTruthy();
+  });
+});
+
+describe('TankGauges text size (#611 review)', () => {
+  it('sets capacity, percent and cover at 12px, never 10px', () => {
+    const { container, getByText } = render(
+      <TankGauges tanks={[{ ...tank(1), cover: '2.6 days' }]} />,
+    );
+    expect(container.innerHTML).not.toContain('text-[10px]');
+    expect(getByText('60%').parentElement!.className).toContain('text-xs');
+    expect(getByText('2.6 days').className).toContain('text-xs');
   });
 });

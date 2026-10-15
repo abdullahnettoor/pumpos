@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
+import { resolveEntryDate } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { Field, TextInput, Textarea } from '../primitives/Field.js';
 import { Checkbox } from '../primitives/Toggle.js';
-import { Button, Form } from '../../pump-ds/index.js';
+import { Button, DatePickerButton, Form } from '../../pump-ds/index.js';
 import { CloudTransactionService } from '../../services/cloud.js';
-import { useInvalidateOperational } from '../../query/hooks.js';
+import { useInvalidateOperational, useStationTimeZone } from '../../query/hooks.js';
 import { useToast } from '../primitives/ToastProvider.js';
 
 const transactionService = new CloudTransactionService();
@@ -57,6 +58,10 @@ const SupplierForm: React.FC<Omit<SupplierFormDrawerProps, 'isOpen'>> = ({
   );
   const [openingDue, setOpeningDue] = useState('');
   const [openingAsOf, setOpeningAsOf] = useState('');
+  // An opening balance is dated by the station's calendar (Entry Date, ADR
+  // 0005), never this device's.
+  const timeZone = useStationTimeZone(stationId);
+  const today = resolveEntryDate({ timeZone });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -212,11 +217,12 @@ const SupplierForm: React.FC<Omit<SupplierFormDrawerProps, 'isOpen'>> = ({
               />
             </Field>
             <Field label="As of date" hint="Defaults to today">
-              <TextInput
-                type="date"
-                max={new Date().toLocaleDateString('en-CA')}
+              <DatePickerButton
+                variant="field"
+                aria-label="Opening due as of"
                 value={openingAsOf}
-                onChange={(e) => setOpeningAsOf(e.target.value)}
+                onChange={setOpeningAsOf}
+                max={today}
                 disabled={submitting}
               />
             </Field>
