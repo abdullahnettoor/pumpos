@@ -42,9 +42,13 @@ export const Field: React.FC<FieldProps> = ({
       <label className="field-label" htmlFor={htmlFor}>
         {label}
         {required && (
-          <span className="field-required" aria-hidden="true">
-            *
-          </span>
+          <>
+            <span className="field-required" aria-hidden="true">
+              *
+            </span>
+            {/* The asterisk is visual; a screen reader hears the word. */}
+            <span className="sr-only"> (required)</span>
+          </>
         )}
       </label>
     )}

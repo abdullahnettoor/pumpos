@@ -369,13 +369,13 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
             )}
           </>
         ) : calculationError ? (
-          <div style={{ fontSize: '11px', color: 'var(--state-warning-fg)' }}>
+          <div style={{ fontSize: '12px', color: 'var(--state-warning-fg)' }}>
             {calculationError}
           </div>
         ) : (
           <div
             style={{
-              fontSize: '11px',
+              fontSize: '12px',
               color: 'var(--text-faint)',
               textAlign: 'center',
               padding: '4px 0',
@@ -387,7 +387,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
       </div>
 
       {hasManualMismatch && (
-        <div style={{ fontSize: '10px', color: 'var(--state-warning-fg)' }}>
+        <div style={{ fontSize: '12px', color: 'var(--state-warning-fg)' }}>
           Field shows {currentValue} — Apply to replace with {roundedRho15?.toFixed(2)}.
         </div>
       )}

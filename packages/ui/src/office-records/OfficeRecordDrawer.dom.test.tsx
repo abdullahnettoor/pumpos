@@ -309,10 +309,10 @@ describe('Office Record drawer: one entry definition per kind (#526)', () => {
     host();
     open('expense', { origin: 'page' });
     expect(fieldLabels()).toEqual([
-      'Entry date*',
-      'Category*',
-      'Amount*',
-      'Funding account*',
+      'Entry date* (required)',
+      'Category* (required)',
+      'Amount* (required)',
+      'Funding account* (required)',
       'Description',
     ]);
     expect(screen.getByText('Office record · dated by entry date')).toBeTruthy();
