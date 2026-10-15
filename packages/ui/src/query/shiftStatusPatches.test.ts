@@ -5,7 +5,8 @@ import { queryKeys } from './hooks.js';
 import { patchConfirmation } from './patches/applyPatch.js';
 import { withClosedBusinessDay } from './patches/businessDay.js';
 import { inRangeKey, insertRecord, withVoidedRecord } from './patches/officeRecords.js';
-import { cachedStatus } from './patches/shiftStatus.fixtures.js';
+import { cachedStatus, ravisHandover } from './patches/shiftStatus.fixtures.js';
+import { patchShiftStatusWithHandover } from './handoverMutation.js';
 import {
   patchBusinessDayClosed,
   patchShiftStatusWithCustomerSale,
@@ -103,17 +104,50 @@ describe('applying shift-board patches through the client', () => {
     }
   });
 
-  it('a refetch confirms a patch even when its answer equals it', () => {
+  it('a refetch confirms a patch even when its answer equals it', async () => {
     const qc = new QueryClient();
     const key = queryKeys.businessDayStatus('station-1', '');
     qc.setQueryData(key, dayStatus());
     patchBusinessDayClosed(qc, 'station-1', closedAnswer);
     const patched = qc.getQueryData(key);
 
-    // What a refetch does on success: the same data, counted as a new update.
-    qc.setQueryData(key, patched);
+    await qc.fetchQuery({ queryKey: key, queryFn: () => Promise.resolve(patched) });
 
     expect(patchConfirmation(qc, key)).toBe('none');
+  });
+
+  it('only a successful fetch clears the mark: another setQueryData does not', () => {
+    const qc = new QueryClient();
+    const key = queryKeys.businessDayStatus('station-1', '');
+    qc.setQueryData(key, dayStatus());
+    patchBusinessDayClosed(qc, 'station-1', closedAnswer);
+
+    qc.setQueryData(key, (d: BusinessDayStatusResponse | undefined) => d);
+    qc.setQueryData(key, { ...qc.getQueryData<BusinessDayStatusResponse>(key)! });
+
+    expect(patchConfirmation(qc, key)).toBe('awaiting');
+  });
+
+  it('a late older handover answer after a failed refresh keeps it failed (#606 review 2)', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = queryKeys.shiftStatus('station-1', false);
+    qc.setQueryData(key, cachedStatus());
+    patchShiftStatusWithHandover(qc, 'station-1', ravisHandover);
+    await qc
+      .fetchQuery({ queryKey: key, queryFn: () => Promise.reject(new Error('offline')) })
+      .catch(() => undefined);
+    expect(patchConfirmation(qc, key)).toBe('failed');
+    const count = qc.getQueryState(key)!.dataUpdateCount;
+
+    const older = {
+      ...ravisHandover,
+      handover: { ...ravisHandover.handover, createdAt: '2026-10-15T09:00:00.000Z' },
+    };
+    patchShiftStatusWithHandover(qc, 'station-1', older);
+
+    // Rejected by the out-of-order guard: nothing written, still unconfirmed.
+    expect(qc.getQueryState(key)!.dataUpdateCount).toBe(count);
+    expect(patchConfirmation(qc, key)).toBe('failed');
   });
 
   it('a failed refetch leaves the patch unconfirmed; a later success confirms it', async () => {
