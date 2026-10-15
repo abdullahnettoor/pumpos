@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import React from 'react';
+import React, { useEffect } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useRoutePath } from './useRoutePath.js';
@@ -15,10 +15,13 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
-let go: (path: string) => void = () => {};
+const nav: { go: (path: string) => void } = { go: () => {} };
+const go = (path: string) => nav.go(path);
 const App: React.FC<{ dirty: boolean }> = ({ dirty }) => {
   const [path, navigate] = useRoutePath('/dashboard');
-  go = navigate;
+  useEffect(() => {
+    nav.go = navigate;
+  });
   useUnsavedChangesGuard(dirty, () => {});
   return <p data-testid="path">{path}</p>;
 };

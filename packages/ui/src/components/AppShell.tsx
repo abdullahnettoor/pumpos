@@ -454,11 +454,6 @@ export const AppShell: React.FC<AppShellProps> = ({
             position: 'relative',
           }}
         >
-          {environmentTag ? (
-            <div className="pointer-events-none absolute right-4 top-3 z-20 inline-flex h-[22px] items-center rounded-chip border border-warning-fg/40 bg-warning-bg px-2 text-[12px] font-bold uppercase tracking-[0.08em] text-warning-fg">
-              {environmentTag}
-            </div>
-          ) : null}
           {/* Subscription state is app-wide, so the notice sits above every
               screen rather than being remembered on each one. */}
           <SubscriptionNotice />
@@ -480,6 +475,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           onUpdate={onUpdate}
           onCheckUpdates={onCheckUpdates}
           checkingUpdates={checkingUpdates}
+          environmentTag={environmentTag}
         />
       </div>
     </div>

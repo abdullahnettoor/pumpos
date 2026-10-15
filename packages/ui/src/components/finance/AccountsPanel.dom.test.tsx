@@ -541,7 +541,9 @@ describe('Accounts › Transfers, odd legs (#572 review)', () => {
     expect(odd.querySelector('[title]')).toBeNull();
     const tip = within(odd).getByRole('button', { name: 'About this variance' });
     fireEvent.click(tip);
-    expect(odd.textContent).toMatch(/₹400\.00 left Cash in Hand, ₹390\.00 reached Bank of Baroda/);
+    expect(screen.getByRole('tooltip').textContent).toMatch(
+      /₹400\.00 left Cash in Hand, ₹390\.00 reached Bank of Baroda/,
+    );
     expect(within(table).getAllByText('Variance')).toHaveLength(1);
   });
 });

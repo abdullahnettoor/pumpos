@@ -238,8 +238,8 @@ describe('Inventory page (#536)', () => {
     const gauge = t1.querySelector('[data-size]') as HTMLElement;
     expect(gauge.dataset.size).toBe('lg');
     expect(gauge.dataset.tone).toBe('critical');
-    expect(within(t1).getByText('10%').className).toContain('text-danger-fg');
-    expect(within(t1).getByText('2.0 of 20 KL')).toBeTruthy();
+    expect(within(t1).getByText('2,000 L').className).toContain('text-danger-fg');
+    expect(within(t1).getByText('of 20,000 L · 10%')).toBeTruthy();
     // The gauge's own (screen-reader) word and the state chip agree.
     expect(within(t1).getAllByText('Critical').length).toBe(2);
     const t2 = screen.getByTestId('tank-t2');

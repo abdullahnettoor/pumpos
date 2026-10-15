@@ -439,7 +439,7 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     const doc = React.createElement(LedgerDoc, {
       title: 'CUSTOMER LEDGER',
       entityName: 'Acme Transport',
-      periodLabel: '01 Sep 2026 — 18 Sep 2026',
+      periodLabel: '1 Sep 2026 — 18 Sep 2026',
       debitLabel: 'Debits',
       creditLabel: 'Credits',
       balanceLabel: 'Closing Balance',

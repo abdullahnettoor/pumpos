@@ -107,7 +107,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     {
       id: 'suppliers',
       label: 'Add suppliers',
-      description: 'Record fuel and merchandise suppliers.',
+      description: 'Record fuel and product suppliers.',
       done: (suppliers?.length ?? 0) > 0,
       locked: !isReadyStation,
       lockedHint: 'Available once your station is live.',

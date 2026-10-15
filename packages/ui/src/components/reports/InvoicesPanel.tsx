@@ -189,7 +189,7 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
       <DataSection title="Invoice totals" query={salesQ} shape="cards" placeholderHeight={90}>
         <KpiStrip columns="auto">
           <KpiTile
-            label="Merchandise sales"
+            label="Product sales"
             value={formatMoney(kpis.total)}
             hint={`${rows.length} ${rows.length === 1 ? 'sale' : 'sales'}`}
           />
@@ -203,9 +203,9 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
       </DataSection>
 
       <section className="flex flex-col gap-2">
-        <SectionHeader title="Merchandise invoices" />
+        <SectionHeader title="Product invoices" />
         <DataSection
-          title="Merchandise invoices"
+          title="Product invoices"
           query={salesQ}
           placeholderHeight={200}
           flush
@@ -215,8 +215,8 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
               <EmptyState
                 compact
                 icon={<Icon name="file-text" size="md" />}
-                title="No merchandise sales"
-                description="No merchandise sales in this date range."
+                title="No product sales"
+                description="No product sales in this date range."
               />
             </div>
           }
@@ -227,7 +227,7 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
             rows={rows}
             rowKey={(r: any) => r.id}
             totalRow
-            title="Merchandise invoices"
+            title="Product invoices"
           />
         </DataSection>
       </section>

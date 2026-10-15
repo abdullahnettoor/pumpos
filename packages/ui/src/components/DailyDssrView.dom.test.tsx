@@ -171,7 +171,7 @@ describe('DailyDssrView look (#532)', () => {
     view(snapshotRow('2026-10-09'));
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('DSR');
     expect(screen.getByText('Sealed')).toBeTruthy();
-    expect(screen.getByText(/^09 Oct 2026 · Generated /)).toBeTruthy();
+    expect(screen.getByText(/^9 Oct 2026 · Generated /)).toBeTruthy();
     // No raw YYYY-MM-DD anywhere a reader sees (the date field's value is not text).
     expect(document.body.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
@@ -201,7 +201,7 @@ describe('DailyDssrView look (#532)', () => {
     view(snapshotRow('2026-10-09'));
     const bar = screen.getByTestId('control-bar');
     expect(within(bar).getByRole('button', { name: 'Previous day' })).toBeTruthy();
-    expect(within(bar).getByLabelText('DSR date')).toBeTruthy();
+    expect(within(bar).getByRole('button', { name: /^DSR date: / })).toBeTruthy();
     expect(within(bar).getByRole('button', { name: 'Export the DSR' })).toBeTruthy();
     expect(within(bar).getByRole('button', { name: 'About the DSR' })).toBeTruthy();
     // The old Save PDF / Print buttons are items of the Export menu now.
@@ -237,7 +237,7 @@ describe('DailyDssrView look (#532)', () => {
     view(snapshotRow('2026-10-09'));
     expect(fetchMock).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
-    expect(await screen.findByText(/^08 Oct 2026 · Generated /)).toBeTruthy();
+    expect(await screen.findByText(/^8 Oct 2026 · Generated /)).toBeTruthy();
     expect(String(fetchMock.mock.calls[0][0])).toContain(
       `/dssr/daily/preview?stationId=st-1&date=${prev}`,
     );
@@ -344,7 +344,7 @@ describe('DailyDssrView look (#532)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Generate DSR' }));
     await waitFor(() => expect(api.calls.some((c) => c.method === 'POST')).toBe(true));
     api.release();
-    expect(await screen.findByText(/^08 Oct 2026 · Generated /)).toBeTruthy();
+    expect(await screen.findByText(/^8 Oct 2026 · Generated /)).toBeTruthy();
     expect(screen.getByText('Sealed')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Generate DSR' })).toBeNull();
     // The invalidated business-day list is refetching, and its answer never came.
@@ -371,7 +371,7 @@ describe('DailyDssrView look (#532)', () => {
     await waitFor(() => expect(api.calls.some((c) => c.method === 'POST')).toBe(true));
     // Step to another day while the write is still in flight, then let it answer.
     fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
-    expect(await screen.findByText(/^07 Oct 2026$/)).toBeTruthy();
+    expect(await screen.findByText(/^7 Oct 2026$/)).toBeTruthy();
     api.release();
     await waitFor(() =>
       expect(
@@ -388,7 +388,7 @@ describe('DailyDssrView look (#532)', () => {
     expect(JSON.parse(post?.body ?? '{}')).toEqual({ stationId: 'st-1', businessDate: asked });
     // Back on the asked day, the generated report shows from the cache.
     fireEvent.click(screen.getByRole('button', { name: 'Next day' }));
-    expect(await screen.findByText(/^08 Oct 2026 · Generated /)).toBeTruthy();
+    expect(await screen.findByText(/^8 Oct 2026 · Generated /)).toBeTruthy();
   });
 
   it('a row that only names its day is read like any other day', async () => {
@@ -416,7 +416,7 @@ describe('DailyDssrView look (#532)', () => {
   it('never goes past today', () => {
     view({ ...snapshotRow(today), live: true });
     expect(screen.getByRole('button', { name: 'Next day' }).hasAttribute('disabled')).toBe(true);
-    expect(screen.queryByRole('button', { name: 'Today' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Today' }).hasAttribute('disabled')).toBe(true);
   });
 
   it('has no inline styles and no text below 12px', () => {

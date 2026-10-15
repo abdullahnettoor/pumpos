@@ -6,6 +6,7 @@ import {
   readSnapshot,
 } from '@pump/shared';
 import { Play } from 'lucide-react';
+import { resolveBusinessDate } from '@pump/shared';
 import { useDailyDssrRange } from '../../query/hooks.js';
 import { formatDate, formatMoney, formatQty } from '../../utils/format.js';
 import { countOf } from '../../utils/ledgerWindow.js';
@@ -15,7 +16,7 @@ import {
   DataSection,
   EmptyState,
   Icon,
-  Input,
+  DatePickerButton,
   InteractiveTable,
   KpiStrip,
   KpiTile,
@@ -101,6 +102,12 @@ export const DsrListPanel: React.FC<DsrListPanelProps> = ({
   enabled,
 }) => {
   const [range, setRange] = useState<DateRange>(() => computeRange('last-30', clock));
+  // The latest day a DSR can be generated for: the station's business date
+  // (its timezone and Day Start), never this device's calendar day (#603 review).
+  const stationToday = resolveBusinessDate({
+    timeZone: clock.timeZone,
+    dayStartsAt: clock.dayStartsAt,
+  });
   const dssrQ = useDailyDssrRange(stationId, range.from, range.to, {
     enabled: !!stationId && enabled,
   });
@@ -123,15 +130,13 @@ export const DsrListPanel: React.FC<DsrListPanelProps> = ({
         actions={
           onGenerate && (
             <div className="flex items-center gap-2">
-              <div className="w-[150px]">
-                <Input
-                  type="date"
-                  inputSize="sm"
-                  aria-label="Business date to generate"
-                  value={generateDate}
-                  onChange={(e) => onGenerateDateChange(e.target.value)}
-                />
-              </div>
+              <DatePickerButton
+                aria-label="Business date to generate"
+                value={generateDate}
+                onChange={onGenerateDateChange}
+                max={stationToday}
+                align="end"
+              />
               <Button
                 variant="primary"
                 size="sm"

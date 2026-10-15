@@ -1,11 +1,32 @@
-import { formatQty } from '../../utils/format.js';
+import { formatQuantity } from '../../utils/format.js';
 
-const isLitre = (unit?: string | null) => !unit?.trim() || /^(l|litre|liter)s?$/i.test(unit.trim());
+/**
+ * A tank's stock in the shared quantity format, whole units (#603): litres and
+ * kg read `13,000 L` / `1,200 kg`. Stock and capacity always share one unit
+ * and precision, so a tank never reads "13.0 of 20 KL".
+ */
+export function tankQuantity(value: number, unit?: string | null): string {
+  return formatQuantity(value, unit?.trim() || 'L', { decimals: 0 });
+}
 
-const trimKl = (kl: number) => formatQty(kl, 1).replace(/\.0$/, '');
+export interface StockOfCapacity {
+  /** The headline: `13,000 L`. */
+  stock: string;
+  /** The line under it: `of 20,000 L · 65%` (no % without a capacity). */
+  detail: string;
+}
 
-/** "12.4 of 20 KL" for litres; "1,200 of 2,000 kg" for anything else. */
-export function stockOfCapacity(stock: number, capacity: number, unit?: string | null): string {
-  if (isLitre(unit)) return `${formatQty(stock / 1000, 1)} of ${trimKl(capacity / 1000)} KL`;
-  return `${formatQty(stock, 0)} of ${formatQty(capacity, 0)} ${unit!.trim()}`;
+/** A tank's stock as its headline and its capacity line (#603). */
+export function stockOfCapacity(
+  stock: number,
+  capacity: number | null | undefined,
+  unit?: string | null,
+  pct?: number | null,
+): StockOfCapacity {
+  const head = tankQuantity(stock, unit);
+  if (!capacity) return { stock: head, detail: '' };
+  return {
+    stock: head,
+    detail: `of ${tankQuantity(capacity, unit)}${pct == null ? '' : ` · ${pct}%`}`,
+  };
 }

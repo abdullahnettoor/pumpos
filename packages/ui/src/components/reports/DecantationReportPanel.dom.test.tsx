@@ -453,7 +453,7 @@ describe('DecantationReportPanel DOM tests', () => {
     expect(screen.getByText('Underground tank dips')).toBeTruthy();
     expect(screen.getByText('Invoice reconciliation')).toBeTruthy();
     // The business date reads as a date, never the raw ISO form
-    expect(screen.getAllByText('05 Mar 2026').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('5 Mar 2026').length).toBeGreaterThan(0);
     expect(document.body.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}(?!_)/);
 
     // Chambers details

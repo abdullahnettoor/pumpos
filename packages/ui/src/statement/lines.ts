@@ -1,4 +1,4 @@
-import { SHORT_MONTHS } from '../utils/format.js';
+import { formatCalendarDate } from '@pump/shared';
 import { rowDetail, type LedgerStatement } from './model.js';
 
 /**
@@ -37,18 +37,17 @@ export interface StatementLine {
 
 /**
  * A statement's date as every view prints it, the PDF's period header
- * included: `07 Oct 2026`. Read from the `YYYY-MM-DD` parts, never through a
- * locale (`SHORT_MONTHS`: en-IN / en-GB print "Sept") or a time zone (a calendar date has none).
- * Anything else prints as given; nothing prints blank.
+ * included: `7 Oct 2026` (the shared `formatCalendarDate`, #603). Read from
+ * the `YYYY-MM-DD` parts, never through a locale (en-IN / en-GB print "Sept")
+ * or a time zone (a calendar date has none). Anything else prints as given;
+ * nothing prints blank.
  */
 export function statementDate(date: string | null | undefined): string {
   if (!date) return '';
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  const month = m ? SHORT_MONTHS[Number(m[2]) - 1] : undefined;
-  return m && month ? `${m[3]} ${month} ${m[1]}` : date;
+  return formatCalendarDate(date);
 }
 
-/** A line's date as both views print it: `09 Oct 2026`, blank when undated. */
+/** A line's date as both views print it: `9 Oct 2026`, blank when undated. */
 export const lineDate = (date: string): string => statementDate(date);
 
 /** The lines of a statement, top to bottom. */

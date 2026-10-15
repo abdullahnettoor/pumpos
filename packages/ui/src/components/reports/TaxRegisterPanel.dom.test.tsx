@@ -75,14 +75,14 @@ describe('TaxRegisterPanel', () => {
     // The range control right above names the period: no caption, no chips (#604).
     expect(screen.queryByText('In range')).toBeNull();
 
-    const gst = sectionOf('section-header-gst-on-merchandise-sales');
+    const gst = sectionOf('section-header-gst-on-product-sales');
     expect(within(gst).getByText('HSN 2710')).toBeTruthy();
     const gstFoot = gst.querySelector('tfoot') as HTMLElement;
     expect(within(gstFoot).getByText('Total')).toBeTruthy();
     expect(within(gstFoot).getByText('₹1,180.00')).toBeTruthy();
 
     const vat = sectionOf('section-header-vat-on-fuel-sales');
-    expect(within(vat).getByText('04 Oct 2026')).toBeTruthy();
+    expect(within(vat).getByText('4 Oct 2026')).toBeTruthy();
     expect(vat.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
     expect(within(vat).getAllByText('50.00 L').length).toBeGreaterThan(0);
     const vatFoot = vat.querySelector('tfoot') as HTMLElement;

@@ -208,7 +208,7 @@ export const StationsTab: React.FC<StationsTabProps> = ({
                   label="Stations on plan"
                   scope="now"
                   alert={capacity.reached ? 'warning' : undefined}
-                  value={`${capacity.used} of ${capacity.value}`}
+                  value={capacity.label}
                   hint={capacity.hint}
                 />
               )}

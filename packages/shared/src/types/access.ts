@@ -162,6 +162,25 @@ export function capabilityState(
 }
 
 /**
+ * A Limit value at or above this is "no limit". Demo Organizations are not
+ * metered, so the API lifts their Limits to this sentinel rather than leaving
+ * the Limit out; every screen that shows a Limit reads it through
+ * `isUnlimitedLimit` so the sentinel is never printed as a number (#603).
+ */
+export const UNLIMITED_LIMIT = 1_000_000;
+
+/** Is this Limit value the "no limit" sentinel? */
+export function isUnlimitedLimit(value: number): boolean {
+  return value >= UNLIMITED_LIMIT;
+}
+
+/** One Limit as a line of text: `1 of 3 used`, `3 of 3 used (reached)`, `1 used · no limit`. */
+export function limitUsageText(entry: AccessLimitEntry): string {
+  if (isUnlimitedLimit(entry.value)) return `${entry.used} used · no limit`;
+  return `${entry.used} of ${entry.value} used${entry.reached ? ' (reached)' : ''}`;
+}
+
+/**
  * The sentence shown when Station capacity is used up. Defined once: the API
  * puts it in the LIMIT_REACHED error, the Organization screen shows it beside
  * a disabled onboarding action, and they must not drift.

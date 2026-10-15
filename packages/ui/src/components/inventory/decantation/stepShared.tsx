@@ -10,6 +10,10 @@ export interface TankOption {
   productId: string;
   productName: string;
   currentVolume: number | null;
+  /** Tank capacity, for the "of 20,000 L · 65%" line (#603). */
+  capacity?: number | null;
+  /** The product's unit (L, or kg for CNG). */
+  unit?: string | null;
 }
 
 export interface StepProps {

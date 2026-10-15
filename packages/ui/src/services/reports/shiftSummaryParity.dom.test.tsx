@@ -390,9 +390,9 @@ describe('Shift Summary business day and Day Start (#595)', () => {
     const later = await renderPdf(SHIFT_FULL_FIXTURE);
     const body = (pdf: PdfText) => pdf.lines.filter((l) => !l.startsWith('Generated '));
     expect(body(early)).toEqual(body(later));
-    expect(linesAfter(early, 'BUSINESS DAY', 1)).toEqual(['08 Oct 2026']);
+    expect(linesAfter(early, 'BUSINESS DAY', 1)).toEqual(['8 Oct 2026']);
     // Times in the station's timezone, from the station the generator was given.
-    expect(linesAfter(early, 'OPENED', 1)).toEqual(['08 Oct 2026, 06:00 am']);
+    expect(linesAfter(early, 'OPENED', 1)).toEqual(['8 Oct 2026, 06:00 am']);
     expect(early.lines.filter((l) => BUSINESS_DAY_LINE.test(l))).toEqual([]);
     expect(printed[0].filename).toBe('Shift_Summary_20261008-1');
   });

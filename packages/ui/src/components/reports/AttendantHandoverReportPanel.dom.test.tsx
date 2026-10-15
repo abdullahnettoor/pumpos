@@ -182,7 +182,7 @@ describe('AttendantHandoverReportPanel drawer', () => {
     // Day headings are section headers, read as dates rather than raw ISO.
     const drawer = within(document.querySelector('.drawer-container') as HTMLElement);
     const dates = drawer.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
-    expect(dates).toEqual(['01 Mar 2026', '02 Mar 2026']);
+    expect(dates).toEqual(['1 Mar 2026', '2 Mar 2026']);
     expect(screen.getByText('Morning')).toBeTruthy();
     expect(screen.getByText('Night')).toBeTruthy();
   });

@@ -183,8 +183,8 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({
         }
         info={
           <InfoTip label="About the sales tax register" placement="bottom">
-            Output tax collected on sales. GST on merchandise is creditable to the buyer. Fuel VAT
-            is outside GST, carries no input credit and is reported separately. Each figure is the
+            Output tax collected on sales. GST on products is creditable to the buyer. Fuel VAT is
+            outside GST, carries no input credit and is reported separately. Each figure is the
             split frozen on the sale line when it was recorded.
           </InfoTip>
         }
@@ -193,7 +193,7 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({
       <DataSection title="Output tax totals" query={salesQ} shape="cards" placeholderHeight={90}>
         <KpiStrip columns="auto">
           <KpiTile
-            label="Output GST (merchandise)"
+            label="Output GST (products)"
             value={formatMoney(totals.gstOutput)}
             hint={`${gstSaleRows.length} ${gstSaleRows.length === 1 ? 'line' : 'lines'}`}
           />
@@ -206,9 +206,9 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({
       </DataSection>
 
       <section className="flex flex-col gap-2">
-        <SectionHeader title="GST on merchandise sales" />
+        <SectionHeader title="GST on product sales" />
         <DataSection
-          title="GST on merchandise sales"
+          title="GST on product sales"
           query={salesQ}
           placeholderHeight={160}
           flush
@@ -219,7 +219,7 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({
                 compact
                 icon={<Icon name="percent" size="md" />}
                 title="No GST sales in this period"
-                description="Merchandise lines appear here once their product carries a GST rate."
+                description="Product lines appear here once their product carries a GST rate."
               />
             </div>
           }
@@ -231,7 +231,7 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({
             rows={gstSaleRows}
             rowKey={(r) => r.id}
             totalRow
-            title="GST on merchandise sales"
+            title="GST on product sales"
           />
         </DataSection>
       </section>

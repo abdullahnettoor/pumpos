@@ -1,4 +1,4 @@
-import { stationLimitMessage } from '@pump/shared';
+import { isUnlimitedLimit, stationLimitMessage } from '@pump/shared';
 import { err, limitReachedError, ok } from '../../kernel/index.js';
 import type { Result } from '../../kernel/index.js';
 import type { OrganizationAccessInputs } from './ports.js';
@@ -41,7 +41,9 @@ export async function ensureStationCapacity(
   const value = resolveEffectiveLimit('station_count', inputs, registry);
   const used = inputs.usage.station_count ?? 0;
 
-  if (used >= value) {
+  // The "no limit" sentinel (a demo Organization, #603) never refuses, however
+  // many Stations it already has.
+  if (!isUnlimitedLimit(value) && used >= value) {
     return err(
       limitReachedError(stationLimitMessage(value), {
         limit: 'station_count',

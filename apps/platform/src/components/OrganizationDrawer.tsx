@@ -8,6 +8,7 @@
  *   Billing      → `organization plan|subscription|suspend|restore`
  */
 import React, { useState } from 'react';
+import { limitUsageText } from '@pump/shared';
 import { Banner, Drawer, Field, NumberInput, Select, Tabs, TextInput, Spinner } from '@pump/ui';
 import { commands, useInvalidatePlatform, useOrganizationAccess } from '../api/queries.js';
 import type { ApiTarget } from '../api/targets.js';
@@ -351,9 +352,7 @@ const LimitRow: React.FC<{
       <div style={{ fontSize: '13px' }}>
         <strong>{limitKey}</strong>{' '}
         <span style={{ color: entry?.reached ? 'var(--state-warning-fg)' : 'var(--text-muted)' }}>
-          {entry
-            ? `${entry.used} of ${entry.value} used${entry.reached ? ' (reached)' : ''}`
-            : 'not resolved'}
+          {entry ? limitUsageText(entry) : 'not resolved'}
         </span>
       </div>
       <Field label="New value">

@@ -103,7 +103,7 @@ export function FilterChips<T extends string>({
             tabIndex={checked || (at < 0 && i === 0) ? 0 : -1}
             onClick={() => !checked && onChange(opt.value)}
             className={cn(
-              'inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-chip border px-2.5 text-[12px] font-medium transition-colors',
+              'inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-chip border px-2.5 text-[12px] font-medium transition-colors',
               'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
               checked
                 ? 'border-brand bg-brand/10 text-brand'

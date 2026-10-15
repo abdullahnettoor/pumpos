@@ -1,4 +1,10 @@
-import { unitLabel } from '@pump/shared';
+import {
+  SHORT_MONTH_NAMES,
+  displayDate,
+  formatCalendarDate,
+  formatInstantDate,
+  unitLabel,
+} from '@pump/shared';
 
 /** What a money figure reads when the value is present but not a finite number. */
 const NOT_A_FIGURE = '—';
@@ -191,7 +197,8 @@ export function formatTemperature(value: number | null | undefined): string {
 
 /**
  * Date & time formatting — the single source of truth so every date renders
- * identically across the app (canonical `DD Mon YYYY`, en-IN, day-first). Use
+ * identically across the app (canonical `5 Oct 2026`: day first, no leading
+ * zero, the month from a fixed table; `@pump/shared` `displayDate`, #603). Use
  * the `DateText` pump-ds primitive for the visual (icon + text); use these
  * functions when you only need the string (labels, PDFs, ledger rows).
  *
@@ -210,21 +217,16 @@ export function toDate(value: string | number | Date | null | undefined): Date |
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-const DATE_FULL: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', year: 'numeric' };
-
 /**
- * Format a business date (`YYYY-MM-DD`) as `09 Jul 2026`.
+ * Format a business date (`YYYY-MM-DD`) as `9 Jul 2026`.
  *
  * Business dates are a bare calendar day with no time or zone (see
- * AGENTS.md "Business-Day Date Resolution"), so this formats in UTC: building a
- * local-midnight Date would let a negative-offset timezone roll the label back
- * to the previous day. Returns the input unchanged if it isn't a valid date.
+ * AGENTS.md "Business-Day Date Resolution"), so this reads the parts as
+ * written: no timezone can roll the label back to the previous day. Returns
+ * the input unchanged if it isn't a valid date.
  */
 export function formatBusinessDate(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.toLocaleDateString('en-IN', { ...DATE_FULL, timeZone: 'UTC' });
+  return formatCalendarDate(iso);
 }
 
 /** Canonical date: `11 Jul 2026`. Pass `compact` for a 2-digit year (`11 Jul 26`). */
@@ -234,10 +236,9 @@ export function formatDate(
 ): string {
   const d = toDate(value);
   if (!d) return opts.fallback ?? '—';
-  return d.toLocaleDateString(
-    'en-IN',
-    opts.compact ? { day: '2-digit', month: 'short', year: '2-digit' } : DATE_FULL,
-  );
+  return displayDate(d.getFullYear(), d.getMonth() + 1, d.getDate(), {
+    year: opts.compact ? 'short' : 'full',
+  });
 }
 
 /** Canonical date + time: `11 Jul 2026, 06:30 am`. */
@@ -247,7 +248,7 @@ export function formatDateTime(
 ): string {
   const d = toDate(value);
   if (!d) return opts.fallback ?? '—';
-  return d.toLocaleString('en-IN', { ...DATE_FULL, hour: '2-digit', minute: '2-digit' });
+  return `${formatInstantDate(d)}, ${formatTime(d)}`;
 }
 
 /** Canonical time-of-day: `06:30 am`. */
@@ -320,9 +321,8 @@ export function formatShortDay(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
   if (!y || !m || !d) return iso;
   const dt = new Date(Date.UTC(y, m - 1, d));
-  const part = (o: Intl.DateTimeFormatOptions) =>
-    dt.toLocaleDateString('en-IN', { ...o, timeZone: 'UTC' });
-  return `${part({ weekday: 'short' })} ${d} ${part({ month: 'short' })}`;
+  const weekday = dt.toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'UTC' });
+  return `${weekday} ${d} ${shortMonth(m)}`;
 }
 
 /**
@@ -366,14 +366,10 @@ export function formatAxisHour(ms: number, timeZone?: string): string {
 
 /** `6 Oct` from an ISO instant (in `timeZone`) or a `YYYY-MM-DD` business date. */
 export function formatDayMonth(value: string | number | Date, timeZone?: string): string {
-  const dateOnly = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
-  const d = dateOnly ? new Date(`${value}T00:00:00Z`) : new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: dateOnly ? 'UTC' : timeZone,
-  });
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return formatCalendarDate(value, { year: 'none' });
+  }
+  return formatInstantDate(new Date(value), timeZone, { year: 'none' }) ?? String(value);
 }
 
 /**
@@ -381,20 +377,7 @@ export function formatDayMonth(value: string | number | Date, timeZone?: string)
  * and en-GB print "Sept" on some runtimes and "Sep" on others. Shared by date
  * spans, KPI period chips and statements.
  */
-export const SHORT_MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-] as const;
+export const SHORT_MONTHS = SHORT_MONTH_NAMES;
 
 /** `shortMonth(9)` → `Sep`. Months are 1–12; anything else prints as given. */
 export function shortMonth(month: number): string {

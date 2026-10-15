@@ -169,7 +169,9 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
           placeholderHeight={320}
           enabled
         >
-          <div className="min-h-[320px]">
+          {/* Bottom padding the height of the sticky footer (#603), so at the
+              end of the scroll the last section clears it. */}
+          <div className="min-h-[320px] pb-16" data-testid="close-shift-steps">
             {step === 'readings' && (
               <ReadingsStep
                 groups={props.groups}

@@ -169,7 +169,7 @@ export { computeRange } from './pump-ds/date-range/index.js';
 export type { DateRange, RangePreset, RangeClock } from './pump-ds/date-range/index.js';
 export { Checkbox, Switch } from './components/primitives/Toggle.js';
 export type { CheckboxProps, SwitchProps } from './components/primitives/Toggle.js';
-export { Tooltip } from './components/primitives/Tooltip.js';
+export { Tooltip, TooltipProvider } from './components/primitives/Tooltip.js';
 export type { TooltipProps } from './components/primitives/Tooltip.js';
 export { InfoTip } from './components/primitives/InfoTip.js';
 export type { InfoTipProps } from './components/primitives/InfoTip.js';

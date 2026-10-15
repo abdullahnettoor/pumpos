@@ -58,7 +58,7 @@ describe('InvoicesPanel', () => {
     renderWithProviders(<InvoicesPanel selectedStation={station} userRole="Owner" />);
     // The range control right above names the period: no caption, no chips (#604).
     expect(screen.queryByText('In range')).toBeNull();
-    const section = screen.getByTestId('section-header-merchandise-invoices').parentElement!;
+    const section = screen.getByTestId('section-header-product-invoices').parentElement!;
     const bodyRows = section.querySelectorAll('tbody tr');
     expect(within(bodyRows[0] as HTMLElement).getByText('Acme Logistics')).toBeTruthy();
     expect(within(bodyRows[1] as HTMLElement).getByText('Walk-in')).toBeTruthy();
@@ -71,7 +71,7 @@ describe('InvoicesPanel', () => {
   it('shows the empty state only after a successful load', () => {
     query = ok([]);
     renderWithProviders(<InvoicesPanel selectedStation={station} userRole="Owner" />);
-    expect(screen.getByText('No merchandise sales')).toBeTruthy();
+    expect(screen.getByText('No product sales')).toBeTruthy();
   });
 
   it('keeps Staff from issuing a new invoice', () => {
