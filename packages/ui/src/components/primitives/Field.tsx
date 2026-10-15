@@ -22,6 +22,11 @@ export interface FieldProps {
   hint?: string;
   /** Validation message; when set, renders in the danger colour. */
   error?: string;
+  /**
+   * Id for the hint / error line, so a control that `htmlFor` cannot reach
+   * (a button such as `DatePickerButton`) can name it in `aria-describedby`.
+   */
+  messageId?: string;
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
@@ -33,6 +38,7 @@ export const Field: React.FC<FieldProps> = ({
   required,
   hint,
   error,
+  messageId,
   children,
   className,
   style,
@@ -54,9 +60,13 @@ export const Field: React.FC<FieldProps> = ({
     )}
     {children}
     {error ? (
-      <span className="field-error">{error}</span>
+      <span id={messageId} className="field-error">
+        {error}
+      </span>
     ) : hint ? (
-      <span className="field-hint">{hint}</span>
+      <span id={messageId} className="field-hint">
+        {hint}
+      </span>
     ) : null}
   </div>
 );

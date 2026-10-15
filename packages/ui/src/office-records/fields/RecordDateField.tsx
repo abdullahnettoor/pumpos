@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { shiftBusinessDate } from '@pump/shared';
 import { Field } from '../../components/primitives/Field.js';
 import { DatePickerButton } from '../../pump-ds/date-picker/index.js';
@@ -32,6 +32,7 @@ export const RecordDateField: React.FC<RecordDateFieldProps> = ({
   name,
 }) => {
   const { today, disabled } = useOfficeRecordContext();
+  const messageId = useId();
   const yesterday = today ? shiftBusinessDate(today, -1) : '';
   const latest = max ?? today;
   const shown =
@@ -58,7 +59,7 @@ export const RecordDateField: React.FC<RecordDateFieldProps> = ({
   );
 
   return (
-    <Field label={label} required error={error} hint={shown}>
+    <Field label={label} required error={error} hint={shown} messageId={messageId}>
       <div className="flex items-center gap-2">
         <div className="w-48" data-name={name}>
           <DatePickerButton
@@ -68,6 +69,7 @@ export const RecordDateField: React.FC<RecordDateFieldProps> = ({
             max={latest || undefined}
             disabled={disabled}
             invalid={!!error}
+            aria-describedby={messageId}
             onChange={onChange}
           />
         </div>

@@ -358,6 +358,15 @@ describe('expense', () => {
     expect(recordExpense).not.toHaveBeenCalled();
   });
 
+  it('describes the entry date picker by its hint (#611 review)', () => {
+    host();
+    open('expense', { origin: 'page' });
+    const id = datePicker('Entry date').getAttribute('aria-describedby')!;
+    expect(document.getElementById(id)?.textContent).toBe(
+      'Office record: dated, not part of any shift.',
+    );
+  });
+
   it('sends the entry date, account and an Idempotency-Key, then closes', async () => {
     host();
     open('expense', { origin: 'page' });

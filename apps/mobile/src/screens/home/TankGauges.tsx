@@ -61,17 +61,18 @@ export const TankGauges: React.FC<{ tanks: readonly TankGauge[] }> = ({ tanks })
               <span className="sr-only"> {TANK_TONE_LABEL[t.level]}</span>
             )}
           </p>
-          <p className="mt-0.5 text-[10px] leading-snug text-text-muted">
-            {/* `of 20,000 L` and `65%` each whole, never split mid-figure in a narrow card. */}
+          <p className="mt-0.5 text-xs leading-snug text-text-muted">
+            {/* `of 20,000 L` and `65%` on their own lines; a figure keeps its unit
+                (only "of" may wrap), so a narrow card never splits `1,00,000 L`. */}
             {t.detail.split(' · ').map((part) => (
-              <span key={part} className="num block whitespace-nowrap">
-                {part}
+              <span key={part} className="num block">
+                {part.replace(/ (?=\S+$)/, '\u00a0')}
               </span>
             ))}
             <span className="block truncate">{t.tankName}</span>
           </p>
           {t.cover && (
-            <p className="num mt-0.5 text-[10px] leading-snug text-text-muted">
+            <p className="num mt-0.5 text-xs leading-snug text-text-muted">
               <span className="sr-only">Cover </span>
               {t.cover}
             </p>

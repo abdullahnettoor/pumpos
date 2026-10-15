@@ -81,3 +81,14 @@ describe('TankGauges grid', () => {
     expect(getByText('Low')).toBeTruthy();
   });
 });
+
+describe('TankGauges text size (#611 review)', () => {
+  it('sets capacity, percent and cover at 12px, never 10px', () => {
+    const { container, getByText } = render(
+      <TankGauges tanks={[{ ...tank(1), cover: '2.6 days' }]} />,
+    );
+    expect(container.innerHTML).not.toContain('text-[10px]');
+    expect(getByText('60%').parentElement!.className).toContain('text-xs');
+    expect(getByText('2.6 days').className).toContain('text-xs');
+  });
+});

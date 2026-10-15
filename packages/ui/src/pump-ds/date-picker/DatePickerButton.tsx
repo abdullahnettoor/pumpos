@@ -35,6 +35,11 @@ export interface DatePickerButtonProps {
   value: string;
   /** Called with a day picked from the calendar. */
   onChange: (date: string) => void;
+  /**
+   * Focus left the control (the button and its calendar), e.g. for a form
+   * library's touched state. Moving between the two is not a blur.
+   */
+  onBlur?: () => void;
   /** The latest day that can be picked (the station's today). */
   max?: string;
   /** The earliest day that can be picked. */
@@ -80,6 +85,7 @@ export const DatePickerButton = forwardRef<HTMLButtonElement, DatePickerButtonPr
     {
       value,
       onChange,
+      onBlur,
       max,
       min,
       'aria-label': ariaLabel,
@@ -125,7 +131,10 @@ export const DatePickerButton = forwardRef<HTMLButtonElement, DatePickerButtonPr
       triggerRef,
       popoverRef,
       align,
-      onPressOutside: () => setOpen(false),
+      onPressOutside: () => {
+        setOpen(false);
+        onBlur?.();
+      },
     });
 
     // The focused day follows the arrows.
@@ -197,6 +206,7 @@ export const DatePickerButton = forwardRef<HTMLButtonElement, DatePickerButtonPr
       const next = e.relatedTarget as Node | null;
       if (next && !popoverRef.current?.contains(next) && !triggerRef.current?.contains(next)) {
         setOpen(false);
+        onBlur?.();
       }
     };
 
@@ -222,6 +232,11 @@ export const DatePickerButton = forwardRef<HTMLButtonElement, DatePickerButtonPr
           aria-expanded={open}
           aria-controls={open ? gridId : undefined}
           data-value={value}
+          onBlur={(e) => {
+            // Into its own calendar is not leaving the control.
+            const next = e.relatedTarget as Node | null;
+            if (!popoverRef.current?.contains(next)) onBlur?.();
+          }}
           onClick={() => (open ? setOpen(false) : openCalendar())}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown') {

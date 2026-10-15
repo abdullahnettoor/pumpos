@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
+import { Controller } from 'react-hook-form';
 import { Info, Play } from 'lucide-react';
 import { Panel, Button, Chip, DatePickerButton, Form } from '../../pump-ds/index.js';
 import { Field, Select, NumberInput } from '../primitives/Field.js';
@@ -297,9 +298,11 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   const schema = createOpenShiftFormSchema(currentBusinessDate, businessDayState);
   const {
     register,
+    control,
     handleSubmit,
     watch,
     setValue,
+    trigger,
     formState: { errors },
   } = useZodForm<OpenShiftFormValues>(schema, {
     defaultValues: { shiftTemplateId: selectedTemplateId, businessDate },
@@ -315,6 +318,9 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   const selectedTemplate = templates.find((template: any) => template.id === formTemplateId);
   const knownOpenDate = openBusinessDays.some((day) => day.businessDate === formBusinessDate);
   const dateChoice = !customDateMode && knownOpenDate ? formBusinessDate : 'custom';
+  const customDateHintId = useId();
+  const futureDateId = useId();
+  const futureDate = formBusinessDate > currentBusinessDate;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Main open-shift form */}
@@ -379,6 +385,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
             {dateChoice === 'custom' && (
               <Field
                 label="Custom Business Date"
+                messageId={customDateHintId}
                 error={errors.businessDate?.message}
                 hint={
                   businessDayState === 'CLOSED'
@@ -392,19 +399,33 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                           : 'Checking the Business Day lifecycle state.'
                 }
               >
-                <DatePickerButton
-                  variant="field"
-                  aria-label="Custom Business Date"
-                  value={formBusinessDate ?? ''}
-                  max={currentBusinessDate}
-                  invalid={!!errors.businessDate}
-                  onChange={(date) => {
-                    setPickedBusinessDate(date);
-                    setValue('businessDate', date, { shouldValidate: true, shouldDirty: true });
-                  }}
+                <Controller
+                  control={control}
+                  name="businessDate"
+                  render={({ field }) => (
+                    <DatePickerButton
+                      ref={field.ref}
+                      variant="field"
+                      aria-label="Custom Business Date"
+                      aria-describedby={
+                        futureDate ? `${customDateHintId} ${futureDateId}` : customDateHintId
+                      }
+                      value={field.value ?? ''}
+                      max={currentBusinessDate}
+                      invalid={!!errors.businessDate}
+                      onBlur={field.onBlur}
+                      onChange={(date) => {
+                        setPickedBusinessDate(date);
+                        field.onChange(date);
+                        // Checked on each pick, as the native field was.
+                        void trigger('businessDate');
+                      }}
+                    />
+                  )}
                 />
-                {formBusinessDate > currentBusinessDate && (
+                {futureDate && (
                   <div
+                    id={futureDateId}
                     style={{ marginTop: '5px', color: 'var(--state-danger-fg)', fontSize: '11px' }}
                   >
                     Unavailable: future Business Dates cannot be used to open a Shift.

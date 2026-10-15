@@ -222,6 +222,21 @@ describe('OpenShiftForm', () => {
       expect(onSubmit.mock.calls[0][0].businessDate).toBe('2026-02-27');
     });
 
+    it('wires the custom date through the form: describedby, focusable ref, touched (#611)', async () => {
+      renderForm({}, { requestedState: 'CLOSED', openBusinessDays: [] });
+      const picker = datePicker('Custom Business Date');
+      const ids = picker.getAttribute('aria-describedby')!.split(' ');
+      expect(document.getElementById(ids[0]!)?.textContent).toContain(
+        'Unavailable: this Business Day is closed',
+      );
+      // Submitting with an error focuses the first invalid field: the picker.
+      fireEvent.submit(openButton().closest('form')!);
+      await waitFor(() => expect(document.activeElement).toBe(picker));
+      await waitFor(() => expect(picker.getAttribute('aria-invalid')).toBe('true'));
+      const message = document.getElementById(ids[0]!)?.textContent ?? '';
+      expect(message.length).toBeGreaterThan(0);
+    });
+
     it('offers no custom Business Date after the station clock (#609)', () => {
       renderForm({}, { requestedState: 'NOT_CREATED', openBusinessDays: [] });
       fireEvent.click(datePicker('Custom Business Date'));

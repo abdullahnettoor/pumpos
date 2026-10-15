@@ -167,3 +167,28 @@ describe('DatePickerButton as a form field (#609)', () => {
     expect(calendar.current).toBeNull();
   });
 });
+
+describe('DatePickerButton onBlur (#611 review)', () => {
+  it('fires when focus leaves the control, not when it moves into its calendar', () => {
+    const onBlur = vi.fn();
+    render(
+      <>
+        <DatePickerButton
+          aria-label="DSR date"
+          value="2026-10-11"
+          onChange={() => {}}
+          onBlur={onBlur}
+        />
+        <button type="button">Elsewhere</button>
+      </>,
+    );
+    fireEvent.click(trigger());
+    const day = screen.getByRole('button', { name: 'Sun 11 Oct 2026' });
+    fireEvent.blur(trigger(), { relatedTarget: day });
+    expect(onBlur).not.toHaveBeenCalled();
+    fireEvent.blur(day, { relatedTarget: screen.getByRole('button', { name: 'Elsewhere' }) });
+    expect(onBlur).toHaveBeenCalledTimes(1);
+    fireEvent.blur(trigger(), { relatedTarget: screen.getByRole('button', { name: 'Elsewhere' }) });
+    expect(onBlur).toHaveBeenCalledTimes(2);
+  });
+});
