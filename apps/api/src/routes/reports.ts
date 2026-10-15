@@ -266,7 +266,7 @@ reportsRouter.get('/insights/credit-health', async (c) => {
 /**
  * GET /api/reports/payables?stationId=
  *
- * What the Organization owes its suppliers, settled FIFO (a Supplier Payment
+ * What the Station owes its suppliers, settled FIFO (a Supplier Payment
  * settles the oldest Purchase first): total, this month's purchased vs paid and
  * a row per supplier that is owed money (largest first, capped) with its unpaid
  * Purchase count and oldest unpaid date. ONE aggregate statement whatever the
@@ -274,9 +274,11 @@ reportsRouter.get('/insights/credit-health', async (c) => {
  * only other read). Open to the Roles that see the Money tab. No due dates:
  * suppliers carry no payment terms.
  *
- * Organization-wide like the suppliers list's `currentBalance`: the station only
- * gates access and supplies the timezone and Day Start the month and age are
- * measured with.
+ * Per Station (#575), like the suppliers list's `currentBalance` read with a
+ * `stationId`: only that Station's supplier ledger counts, because each pump
+ * has its own account with its OMC. The Station also supplies the timezone and
+ * Day Start the month and age are measured with. An org-wide view is out of
+ * scope; no caller needs one.
  */
 reportsRouter.get('/payables', async (c) => {
   const user = c.var.user;
@@ -300,9 +302,9 @@ reportsRouter.get('/payables', async (c) => {
 /**
  * GET /api/reports/payables/:supplierId?stationId=
  *
- * One supplier's payable (NET balance: negative = paid ahead), last payment,
- * this month's purchased vs paid and purchases by product. One aggregate
- * statement. A supplier outside the caller's Organization, or an id that is not
+ * One supplier's payable at this Station (NET balance: negative = paid ahead),
+ * last payment, this month's purchased vs paid and purchases by product, all
+ * from the Station's own ledger with that supplier. One aggregate statement. A supplier outside the caller's Organization, or an id that is not
  * a uuid, is a 404.
  */
 reportsRouter.get('/payables/:supplierId', async (c) => {

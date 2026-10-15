@@ -10,6 +10,7 @@ import {
   KpiTile,
   SearchInput,
   SectionHeader,
+  TileSection,
   type FilterChipOption,
   type TotalRow,
 } from '../../pump-ds/index.js';
@@ -27,7 +28,6 @@ import {
   type CustomerRow,
 } from './customerStanding.js';
 import { collectionFigures, type QueryOf } from './ledgerKpis.js';
-import { TileSection } from './TileSection.js';
 
 export interface CustomerListTabProps {
   customersQ: QueryOf<CustomerRow[]>;

@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import type { TankLevelSettings } from '@pump/shared';
-import { KpiStrip, KpiTile, type SectionQuery } from '../../pump-ds/index.js';
-import { TileSection } from '../customers/TileSection.js';
+import { KpiStrip, KpiTile, TileSection, type SectionQuery } from '../../pump-ds/index.js';
 import {
   fuelStock,
   itemCounts,

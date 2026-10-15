@@ -6,8 +6,8 @@ import {
   usePayables,
   useReceivables,
   useSupplierPayable,
+  useStationSuppliers,
   useSupplierStatement,
-  useSuppliers,
 } from '@pump/ui';
 import type { CustomerReceivable, SupplierPayable } from '@pump/shared';
 import type { MoneyCustomer, MoneySupplier } from '../../lib/money/parties.js';
@@ -19,15 +19,17 @@ import type { DateRange } from '../../lib/money/statementRange.js';
  * `useInvalidateOperational` whenever a balance moves) and the receivables
  * summary and statement (operational tier). The lists' `currentBalance` is
  * already Σ credit sales − Σ collections (customers) and Σ purchases − Σ
- * payments (suppliers), so no ledger is fetched for them.
+ * payments (suppliers), so no ledger is fetched for them. Supplier figures are
+ * the selected Station's (#575): each pump has its own account with its OMC.
  */
 export function useCustomersData() {
   const q = useCustomers();
   return { customers: (q.data ?? []) as MoneyCustomer[], isLoading: q.isLoading };
 }
 
-export function useSuppliersData() {
-  const q = useSuppliers();
+/** The Station's suppliers, each balanced on its own ledger; empty until a Station is chosen. */
+export function useSuppliersData(stationId: string | null | undefined) {
+  const q = useStationSuppliers(stationId);
   return { suppliers: (q.data ?? []) as MoneySupplier[], isLoading: q.isLoading };
 }
 
@@ -99,9 +101,13 @@ export function useSupplierPayableData(
   return { summary: q.data ?? null, isLoading: q.isLoading, isError: q.isError };
 }
 
-/** A supplier's statement over a date range, like the customer's. */
-export function useSupplierStatementData(supplierId: string, range: DateRange) {
-  const q = useSupplierStatement(supplierId, range);
+/** A supplier's statement at the Station over a date range, like the customer's. */
+export function useSupplierStatementData(
+  stationId: string | null | undefined,
+  supplierId: string,
+  range: DateRange,
+) {
+  const q = useSupplierStatement(stationId, supplierId, range);
   return {
     ledger: q.data ?? null,
     isLoading: q.isLoading,

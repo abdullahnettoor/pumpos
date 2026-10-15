@@ -52,9 +52,9 @@ const IdentityLine: React.FC<{ label: string; children: React.ReactNode; mono?: 
 );
 
 /**
- * Supplier account statement: summary + full ledger + quick actions
- * (Edit · Record payment · New purchase). Fetches the ledger via
- * `useSupplierLedger` (cached). Record payment opens the shared Office Record
+ * Supplier account statement at the selected Station (#575): summary + full
+ * ledger + quick actions (Edit · Record payment · New purchase). Fetches the
+ * Station's ledger with the supplier via `useSupplierLedger` (cached). Record payment opens the shared Office Record
  * drawer over the statement, with this supplier fixed.
  */
 export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = ({
@@ -65,7 +65,8 @@ export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = (
   onEdit,
   onNewPurchase,
 }) => {
-  const ledgerQ = useSupplierLedger(supplier?.id);
+  // This Station's ledger with the supplier only (#575), as the row balance is.
+  const ledgerQ = useSupplierLedger(stationId, supplier?.id);
   // All-time ledger: no opening balance, the running balance starts at zero.
   const timeZone = clock?.timeZone;
   const dayStartsAt = clock?.dayStartsAt;

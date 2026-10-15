@@ -48,11 +48,20 @@ const toSourceRow = (r: PerSupplierRow): PayableSourceRow => ({
  * summed once; left inlined, the single-supplier plan re-scanned the ledger once
  * per debit (a nested loop of N x M).
  *
+ * Per Station (#575): only the Station's own ledger rows are read
+ * (`st.station_id`), so a supplier shared by two Stations is settled separately
+ * at each, and another Station's OMC never shows up here.
+ *
  * Tenancy: every row is reached through `organization_id` (the ledger row and the
  * supplier itself). `scope` narrows to one supplier, or to active suppliers (the
  * list, matching the To pay list).
  */
-const supplierLedger = (organizationId: string, scope: SQL) => sql`
+interface LedgerScope {
+  organizationId: string;
+  stationId: string;
+}
+
+const supplierLedger = ({ organizationId, stationId }: LedgerScope, scope: SQL) => sql`
   SELECT st.id, st.supplier_id, st.entry_date AS date, st.created_at,
          st.transaction_type AS type, st.transaction_type AS kind,
          st.reference_type, st.reference_id,
@@ -60,10 +69,10 @@ const supplierLedger = (organizationId: string, scope: SQL) => sql`
          ${supplierSignedAmount('st')} AS amount
   FROM supplier_transactions st
   JOIN suppliers su ON su.id = st.supplier_id AND su.organization_id = ${organizationId}
-  WHERE st.organization_id = ${organizationId} ${scope}`;
+  WHERE st.organization_id = ${organizationId} AND st.station_id = ${stationId} ${scope}`;
 
-const supplierFifoCtes = (organizationId: string, scope: SQL) => sql`
-  ${fifoCtes({ ledger: supplierLedger(organizationId, scope), entityColumn: 'supplier_id' })},
+const supplierFifoCtes = (ledgerScope: LedgerScope, scope: SQL) => sql`
+  ${fifoCtes({ ledger: supplierLedger(ledgerScope, scope), entityColumn: 'supplier_id' })},
   per_supplier AS (
     SELECT supplier_id,
       SUM(open_amount) AS balance,
@@ -80,18 +89,20 @@ const supplierFifoCtes = (organizationId: string, scope: SQL) => sql`
  * bounded result (totals, at most `PAYABLES_SUPPLIER_LIMIT` suppliers; or one
  * supplier with at most `PAYABLES_PRODUCT_LIMIT` products).
  *
- * Indexes: `supplier_transactions_org_supplier_entry_date_idx` (single supplier),
+ * Indexes: `supplier_transactions_org_station_entry_date_idx` (the list),
+ * `supplier_transactions_org_supplier_entry_date_idx` (single supplier),
  * `purchase_items_purchase_id_idx`, the `purchases` / `suppliers` primary keys.
- * The list is one pass over the organization's supplier ledger, the same shape
- * as the suppliers list's balance query.
+ * The list is one pass over the Station's supplier ledger, the same shape as
+ * the suppliers list's balance query.
  */
 export class DrizzlePayablesReader implements PayablesReader {
   constructor(private readonly db: DbClient) {}
 
   async summary(q: PayablesQuery): Promise<PayablesSource> {
     const org = q.organizationId;
+    const ledgerScope = { organizationId: org, stationId: q.stationId };
     const rows = (await this.db.execute(sql`
-      WITH ${supplierFifoCtes(org, sql`AND su.is_active`)},
+      WITH ${supplierFifoCtes(ledgerScope, sql`AND su.is_active`)},
       -- A Purchase falls in the month by its own anchor: Product Purchases by
       -- business day, Fuel Purchases (no business day) by Entry Date. A ledger
       -- row whose purchase is missing counts on the business-day window.
@@ -151,8 +162,9 @@ export class DrizzlePayablesReader implements PayablesReader {
   async supplier(q: SupplierPayableQuery): Promise<SupplierPayableSource | null> {
     const org = q.organizationId;
     const id = q.supplierId;
+    const ledgerScope = { organizationId: org, stationId: q.stationId };
     const rows = (await this.db.execute(sql`
-      WITH ${supplierFifoCtes(org, sql`AND su.id = ${id}`)},
+      WITH ${supplierFifoCtes(ledgerScope, sql`AND su.id = ${id}`)},
       last_payment AS (
         SELECT -l.signed AS amount, l.date AS "entryDate",
                fa.account_type AS method, fa.name AS "fundingAccountName"

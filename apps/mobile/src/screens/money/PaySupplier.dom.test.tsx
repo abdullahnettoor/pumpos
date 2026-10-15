@@ -320,7 +320,7 @@ describe('saving', () => {
     expect(keys).toContain(JSON.stringify(ui.queryKeys.payables('st-1')));
     expect(keys).toContain(JSON.stringify(ui.queryKeys.supplierPayable('st-1', 's1')));
     expect(keys).toContain(JSON.stringify(ui.queryKeys.supplierStatements('s1')));
-    expect(keys).toContain(JSON.stringify(ui.queryKeys.supplierLedger('s1')));
+    expect(keys).toContain(JSON.stringify(ui.queryKeys.supplierLedgers('s1')));
   });
 
   it('paying more than is owed leaves an advance', async () => {

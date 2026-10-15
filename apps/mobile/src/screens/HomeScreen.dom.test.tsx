@@ -28,6 +28,8 @@ const feed = vi.hoisted(() => ({
   decantations: [] as unknown[],
   customers: [] as unknown[],
   suppliers: [] as unknown[],
+  /** The Station each supplier-list read named (#575). */
+  supplierStations: [] as string[],
   alerts: [] as unknown[],
   previewError: false,
   assignment: null as unknown,
@@ -48,7 +50,10 @@ vi.mock('@pump/ui', async (importOriginal) => {
     useDecantations: () => q(feed.decantations),
     isoToLocalTime: (value: string) => value,
     useCustomers: () => q(feed.customers),
-    useSuppliers: () => q(feed.suppliers),
+    useStationSuppliers: (stationId: string) => {
+      feed.supplierStations.push(stationId);
+      return q(feed.suppliers);
+    },
   };
 });
 vi.mock('../lib/alerts.js', () => ({ useMobileAlerts: () => feed.alerts }));
@@ -609,6 +614,12 @@ describe('Home: tanks, money, removed sections', () => {
       within(screen.getByText('Payable').closest('button')!).getByText('₹10.43L'),
     ).toBeTruthy();
     expect(nav.views.money?.view).toBe('collect');
+  });
+
+  it("reads Payable from the Station's own suppliers (#575)", () => {
+    renderHome();
+    expect(feed.supplierStations.length).toBeGreaterThan(0);
+    expect(feed.supplierStations.every((id) => id === 'st-1')).toBe(true);
   });
 
   it('opens Money on its Payable segment from the Payable tile', () => {

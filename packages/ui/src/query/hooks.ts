@@ -135,17 +135,26 @@ export const queryKeys = {
   creditSales: () => ['credit-sales'] as const,
   vehicles: (activeOnly = false) => ['vehicles', activeOnly] as const,
   customers: (activeOnly = true) => ['customers', activeOnly] as const,
+  /** The Organization's suppliers (pickers, search); also the prefix of `stationSuppliers`. */
   suppliers: (activeOnly = true) => ['suppliers', activeOnly] as const,
+  /** One Station's suppliers, balanced on its own ledger (#575). */
+  stationSuppliers: (stationId: string, activeOnly = true) =>
+    ['suppliers', activeOnly, stationId] as const,
   customerLedger: (customerId: string) => ['customer-ledger', customerId] as const,
-  supplierLedger: (supplierId: string) => ['supplier-ledger', supplierId] as const,
+  /** Every cached all-time ledger of one supplier, any Station (prefix of `supplierLedger`). */
+  supplierLedgers: (supplierId: string) => ['supplier-ledger', supplierId] as const,
+  /** One supplier's all-time ledger at one Station (#575). */
+  supplierLedger: (supplierId: string, stationId: string) =>
+    ['supplier-ledger', supplierId, stationId] as const,
   /** Every cached statement window of one customer (prefix of `customerStatement`). */
   customerStatements: (customerId: string) => ['customer-statement', customerId] as const,
   customerStatement: (customerId: string, from: string, to: string) =>
     ['customer-statement', customerId, from, to] as const,
-  /** Every cached statement window of one supplier (prefix of `supplierStatement`). */
+  /** Every cached statement window of one supplier, any Station (prefix of `supplierStatement`). */
   supplierStatements: (supplierId: string) => ['supplier-statement', supplierId] as const,
-  supplierStatement: (supplierId: string, from: string, to: string) =>
-    ['supplier-statement', supplierId, from, to] as const,
+  /** One supplier's statement window at one Station (#575: each pump has its own account). */
+  supplierStatement: (supplierId: string, from: string, to: string, stationId: string) =>
+    ['supplier-statement', supplierId, from, to, stationId] as const,
   payables: (stationId: string) => ['payables', stationId] as const,
   supplierPayable: (stationId: string, supplierId: string) =>
     ['payables', stationId, supplierId] as const,
@@ -279,17 +288,19 @@ export function invalidateAfterDssrGenerate(
   void qc.invalidateQueries({ queryKey: queryKeys.businessDayList(stationId) });
 }
 
-/** The key of one party's statement window: `[prefix, partyId, from, to]`. */
+/**
+ * The key of one party's statement window: `[prefix, partyId, from, to]`, and
+ * for a supplier the Station last (`[..., stationId]`).
+ */
 export type StatementKey =
   ReturnType<typeof queryKeys.customerStatement> | ReturnType<typeof queryKeys.supplierStatement>;
 
 /** Whether `key` is a customer or supplier statement window (the shape the two builders above make). */
 export function isStatementKey(key: readonly unknown[] | undefined): key is StatementKey {
+  if (!key) return false;
+  const length = key[0] === 'customer-statement' ? 4 : key[0] === 'supplier-statement' ? 5 : 0;
   return (
-    !!key &&
-    key.length === 4 &&
-    (key[0] === 'customer-statement' || key[0] === 'supplier-statement') &&
-    key.slice(1).every((part) => typeof part === 'string')
+    length > 0 && key.length === length && key.slice(1).every((part) => typeof part === 'string')
   );
 }
 
@@ -939,12 +950,38 @@ export function useCustomers(activeOnly = true, options?: Options<any[]>) {
   });
 }
 
+/**
+ * The Organization's suppliers, each balanced on every Station's ledger. For
+ * pickers and search; a screen that shows balances next to a Station's
+ * payables reads `useStationSuppliers` instead.
+ */
 export function useSuppliers(activeOnly = true, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.suppliers(activeOnly),
     queryFn: () => txService.getSuppliers(activeOnly),
     ...TIER.semi,
     ...options,
+  });
+}
+
+/**
+ * One Station's suppliers (#575): its own and shared ones, plus any it has
+ * ledger entries with, each `currentBalance` read from the Station's ledger
+ * only, so the rows agree with `usePayables(stationId)`. Disabled until a
+ * Station is chosen. Semi tier; `useInvalidateOperational` refreshes the
+ * `suppliers` prefix whenever a balance moves.
+ */
+export function useStationSuppliers(
+  stationId: string | null | undefined,
+  activeOnly = true,
+  options?: Options<any[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.stationSuppliers(stationId ?? '', activeOnly),
+    queryFn: () => txService.getSuppliers(activeOnly, stationId!),
+    ...TIER.semi,
+    ...options,
+    enabled: !!stationId && (options?.enabled ?? true),
   });
 }
 
@@ -966,12 +1003,18 @@ export function useCustomerLedger(customerId: string | null | undefined, options
  */
 function widensStatementWindow(
   previousKey: readonly unknown[] | undefined,
-  partyId: string | null | undefined,
-  range: { from: string; to: string },
+  key: readonly unknown[],
 ): boolean {
-  if (!isStatementKey(previousKey)) return false;
-  const [, previousId, previousFrom, previousTo] = previousKey;
-  return previousId === partyId && previousTo === range.to && previousFrom > range.from;
+  if (!isStatementKey(previousKey) || !isStatementKey(key)) return false;
+  const [kind, previousId, previousFrom, previousTo, previousStation] = previousKey;
+  const [nextKind, partyId, from, to, stationId] = key;
+  return (
+    kind === nextKind &&
+    previousId === partyId &&
+    previousStation === stationId &&
+    previousTo === to &&
+    previousFrom > from
+  );
 }
 
 /**
@@ -984,26 +1027,36 @@ function widensStatementWindow(
  * arrives, so the list never collapses to a spinner. Only that case carries rows
  * over: another range (the Filter) or another party loads from scratch.
  */
+/**
+ * Whose statement: a customer (Organization-wide), or a supplier at one
+ * Station (#575: each pump has its own account with its OMC).
+ */
+export type StatementParty =
+  | { kind: 'customer'; id: string | null | undefined }
+  | { kind: 'supplier'; id: string | null | undefined; stationId: string | null | undefined };
+
 export function usePartyStatement(
-  kind: 'customer' | 'supplier',
-  partyId: string | null | undefined,
+  party: StatementParty,
   range: { from: string; to: string },
   options?: Options<RangedPartyLedger>,
 ) {
-  const customer = kind === 'customer';
+  const partyId = party.id ?? '';
+  const stationId = party.kind === 'supplier' ? (party.stationId ?? '') : '';
+  const queryKey =
+    party.kind === 'customer'
+      ? queryKeys.customerStatement(partyId, range.from, range.to)
+      : queryKeys.supplierStatement(partyId, range.from, range.to, stationId);
   return useQuery({
-    queryKey: customer
-      ? queryKeys.customerStatement(partyId ?? '', range.from, range.to)
-      : queryKeys.supplierStatement(partyId ?? '', range.from, range.to),
+    queryKey,
     queryFn: () =>
-      customer
-        ? txService.getCustomerLedgerRange(partyId!, range)
-        : txService.getSupplierLedgerRange(partyId!, range),
-    enabled: !!partyId,
+      party.kind === 'customer'
+        ? txService.getCustomerLedgerRange(partyId, range)
+        : txService.getSupplierLedgerRange(partyId, range, stationId),
     placeholderData: (previous, previousQuery) =>
-      widensStatementWindow(previousQuery?.queryKey, partyId, range) ? previous : undefined,
+      widensStatementWindow(previousQuery?.queryKey, queryKey) ? previous : undefined,
     ...TIER.operational,
     ...options,
+    enabled: !!partyId && (party.kind === 'customer' || !!stationId) && (options?.enabled ?? true),
   });
 }
 
@@ -1012,22 +1065,28 @@ export const useCustomerStatement = (
   customerId: string | null | undefined,
   range: { from: string; to: string },
   options?: Options<RangedPartyLedger>,
-) => usePartyStatement('customer', customerId, range, options);
+) => usePartyStatement({ kind: 'customer', id: customerId }, range, options);
 
-/** A supplier's statement: `usePartyStatement` for a supplier. */
+/** A supplier's statement at one Station: `usePartyStatement` for a supplier. */
 export const useSupplierStatement = (
+  stationId: string | null | undefined,
   supplierId: string | null | undefined,
   range: { from: string; to: string },
   options?: Options<RangedPartyLedger>,
-) => usePartyStatement('supplier', supplierId, range, options);
+) => usePartyStatement({ kind: 'supplier', id: supplierId, stationId }, range, options);
 
-export function useSupplierLedger(supplierId: string | null | undefined, options?: Options<any[]>) {
+/** One supplier's all-time ledger rows at one Station (#575). Disabled until both are known. */
+export function useSupplierLedger(
+  stationId: string | null | undefined,
+  supplierId: string | null | undefined,
+  options?: Options<any[]>,
+) {
   return useQuery({
-    queryKey: queryKeys.supplierLedger(supplierId ?? ''),
-    queryFn: () => txService.getSupplierLedger(supplierId!),
-    enabled: !!supplierId,
+    queryKey: queryKeys.supplierLedger(supplierId ?? '', stationId ?? ''),
+    queryFn: () => txService.getSupplierLedger(supplierId!, stationId!),
     ...TIER.operational,
     ...options,
+    enabled: !!supplierId && !!stationId && (options?.enabled ?? true),
   });
 }
 
@@ -1343,9 +1402,9 @@ export function useCustomerReceivable(
 }
 
 /**
- * What the Organization owes its suppliers (total, this month's purchased vs paid,
- * a row per supplier that is owed money). One statement over every supplier
- * ledger. Plain operational tier (it refetches on window focus, like the statements
+ * What the Station owes its suppliers (total, this month's purchased vs paid,
+ * a row per supplier that is owed money), from the Station's own supplier
+ * ledger (#575). One statement. Plain operational tier (it refetches on window focus, like the statements
  * beside it); a purchase or supplier payment invalidates it
  * (`useInvalidateOperational`). Not persisted.
  */
