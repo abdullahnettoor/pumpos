@@ -63,7 +63,7 @@ export const AfterStep: React.FC<StepProps> = ({ form, values, tanks, flags, rev
             ) : (
               <StatusChip
                 status="pending-measurement"
-                size="sm"
+                size="md"
                 label="Pending measurement: next Tank Dip"
               />
             )}
@@ -93,7 +93,7 @@ export const AfterSummary: React.FC<StepProps> = ({ values, tanks, review }) => 
         ) : (
           <StatusChip
             status="pending-measurement"
-            size="sm"
+            size="md"
             label="Pending measurement: next Tank Dip"
           />
         )}

@@ -83,7 +83,7 @@ export const InvoicesSummary: React.FC<
       />
       <div className="flex flex-wrap gap-1.5">
         {picked.map(({ productId, purchase }) => (
-          <Chip key={productId} size="sm" tone="neutral">
+          <Chip key={productId} size="md" tone="neutral">
             {tanks.find((t) => t.productId === productId)?.productName} ·{' '}
             {purchase?.invoiceNumber || purchase?.documentNumber || 'linked'}
             {purchase ? ` · ${formatQuantity(purchase.invoiceQty, 'L')}` : ''}
@@ -96,7 +96,7 @@ export const InvoicesSummary: React.FC<
           <StatusChip
             key={p}
             status="purchase-not-linked"
-            size="sm"
+            size="md"
             label={`${tanks.find((t) => t.productId === p)?.productName}: purchase not linked`}
           />
         ))}

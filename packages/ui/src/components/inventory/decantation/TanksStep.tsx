@@ -159,7 +159,7 @@ export const TanksSummary: React.FC<
                 ? ([
                     [
                       'Density',
-                      <Chip key="d" size="sm" tone="danger">
+                      <Chip key="d" size="md" tone="danger">
                         Out of tolerance
                       </Chip>,
                     ],

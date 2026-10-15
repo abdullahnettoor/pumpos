@@ -270,7 +270,7 @@ export const ChambersSummary: React.FC<StepProps> = ({ values, tanks }) =>
       {values.chambers.map((c, i) => (
         <Chip
           key={i}
-          size="sm"
+          size="md"
           tone={
             c.mark === 'SHORT' || !c.sealOk
               ? 'danger'

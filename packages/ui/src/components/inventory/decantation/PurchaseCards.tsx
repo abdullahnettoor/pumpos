@@ -62,9 +62,9 @@ export const PurchaseCards: React.FC<{
             </div>
             {(p.awaitingDecantation || p.linkedDecantationCount > 0) && (
               <div className="mt-1 flex gap-1">
-                {p.awaitingDecantation && <StatusChip status="awaiting-decantation" size="xs" />}
+                {p.awaitingDecantation && <StatusChip status="awaiting-decantation" size="md" />}
                 {p.linkedDecantationCount > 0 && (
-                  <Chip tone="neutral" size="xs" variant="soft">
+                  <Chip tone="neutral" size="md" variant="soft">
                     Linked to {p.linkedDecantationCount}
                   </Chip>
                 )}

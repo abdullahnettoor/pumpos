@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { resolveDecantationSettings, type DecantationView } from '@pump/shared';
+import { resolveDecantationSettings, statusPresentation, type DecantationView } from '@pump/shared';
 import {
   Button,
   Chip,
@@ -12,7 +12,6 @@ import {
   SectionHeader,
   StatusChip,
   computeRange,
-  type ChipTone,
   type DateRange,
   type FilterChipOption,
   type PumpStatus,
@@ -25,7 +24,7 @@ import { InfoTip } from '../../primitives/InfoTip.js';
 import { useDecantations, useInventoryStatus } from '../../../query/hooks.js';
 import { DecantationDrawer } from './DecantationDrawer.js';
 import { LinkPurchaseDrawer } from './LinkPurchaseDrawer.js';
-import { toDecantationRow, type DecantationRow } from './decantationRows.js';
+import { decantationTotal, toDecantationRow, type DecantationRow } from './decantationRows.js';
 import { formatDensity, formatQuantity, formatDate } from '../../../utils/format.js';
 import { countOf, inWindow } from '../../../utils/ledgerWindow.js';
 
@@ -71,15 +70,17 @@ const FILTERS: Record<
   },
 };
 
-/** Within the station's quantity tolerance a difference is neutral; beyond it, a problem. */
-const varianceTone = (v: DecantationRow['variances'][number]): ChipTone =>
-  v.kind === 'OK'
-    ? 'success'
-    : !v.outOfTolerance
-      ? 'neutral'
-      : v.kind === 'SHORT'
-        ? 'danger'
-        : 'warning';
+/**
+ * One product's received − invoiced as a vocabulary chip: the word and tone
+ * come from `decantationVarianceState` (station tolerance), the figure here.
+ */
+const varianceLabel = (v: DecantationRow['variances'][number]): string => {
+  const label = statusPresentation(v.state).label;
+  if (v.state === 'tanker-matches') return `${v.productName} · ${label}`;
+  if (v.state === 'within-tolerance')
+    return `${v.productName} · ${formatQuantity(v.qty, 'L', { plus: true })}, ${label.toLowerCase()}`;
+  return `${v.productName} · ${label} ${formatQuantity(Math.abs(v.qty), 'L')}`;
+};
 
 const dateOf = (r: DecantationRow) => r.decantation.businessDate ?? r.decantation.createdAt;
 
@@ -152,15 +153,9 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
     [inRange],
   );
   const rows = useMemo(() => inRange.filter(FILTERS[filter].test), [inRange, filter]);
-  // Invoice and received compare like with like: both sum measured visits only.
   const totalRow = useMemo<TotalRow>(() => {
-    const measured = rows.filter((r) => r.receivedQty != null);
-    const sum = (pick: (r: DecantationRow) => number | null) =>
-      measured.reduce((acc, r) => acc + (pick(r) ?? 0), 0);
-    return {
-      label: 'Total excl. pending',
-      values: { invoiceQty: sum((r) => r.invoiceQty), received: sum((r) => r.receivedQty) },
-    };
+    const t = decantationTotal(rows);
+    return { label: t.label, values: { invoiceQty: t.invoiceQty, received: t.receivedQty } };
   }, [rows]);
 
   const columns = useMemo<TableColumn<DecantationRow>[]>(
@@ -250,11 +245,12 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
           ) : (
             <Stack>
               {r.variances.map((v) => (
-                <Chip key={v.productName} size="md" tone={varianceTone(v)}>
-                  {v.kind === 'OK'
-                    ? `${v.productName} · Matches`
-                    : `${v.productName} · ${v.kind === 'SHORT' ? 'Short' : 'Excess'} ${formatQuantity(v.qty, 'L')}`}
-                </Chip>
+                <StatusChip
+                  key={v.productName}
+                  status={v.state}
+                  size="md"
+                  label={varianceLabel(v)}
+                />
               ))}
             </Stack>
           ),

@@ -27,9 +27,9 @@ export const ReviewStep: React.FC<StepProps> = ({ values, tanks, flags, review }
                   '—'
                 ) : (
                   <span className="inline-flex items-center gap-1.5">
-                    <VarianceChip size="sm" kind="stock" amount={inv.variance} />
+                    <VarianceChip size="md" kind="stock" amount={inv.variance} />
                     {inv.outOfTolerance && (
-                      <Chip size="sm" tone="danger">
+                      <Chip size="md" tone="danger">
                         Out of tolerance
                       </Chip>
                     )}
@@ -44,7 +44,7 @@ export const ReviewStep: React.FC<StepProps> = ({ values, tanks, flags, review }
         <StatusChip
           key={p}
           status="purchase-not-linked"
-          size="sm"
+          size="md"
           label={`${tanks.find((t) => t.productId === p)?.productName}: purchase not linked`}
         />
       ))}
@@ -75,7 +75,7 @@ export const ReviewStep: React.FC<StepProps> = ({ values, tanks, flags, review }
     <div>
       <div className="mb-1.5 text-[12px] font-semibold">Flags</div>
       {flags.flags.length === 0 ? (
-        <Chip size="sm" tone="success">
+        <Chip size="md" tone="success">
           Nothing flagged
         </Chip>
       ) : (

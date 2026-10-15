@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DecantationView } from '@pump/shared';
-import { toDecantationRow } from './decantationRows.js';
+import { decantationTotal, toDecantationRow } from './decantationRows.js';
 
 const names = {
   tanks: { 't-1': 'Tank 1', 't-2': 'Tank 2', 't-3': 'Tank 3' },
@@ -125,8 +125,8 @@ describe('toDecantationRow', () => {
     expect(r.invoiceQty).toBe(15000);
     expect(r.receivedQty).toBe(14910);
     expect(r.variances).toEqual([
-      { productName: 'HSD', kind: 'SHORT', qty: 90, outOfTolerance: true },
-      { productName: 'MS', kind: 'OK', qty: 0, outOfTolerance: false },
+      { productName: 'HSD', state: 'short', qty: -90 },
+      { productName: 'MS', state: 'tanker-matches', qty: 0 },
     ]);
     expect(r.density).toEqual([
       { productName: 'HSD', diff: 4, invoiceDensity: 830, roDensity: 834, outOfTolerance: true },
@@ -148,5 +148,56 @@ describe('toDecantationRow', () => {
     );
     expect(r.receivedQty).toBeNull();
     expect(r.unlinked).toEqual(['HSD']);
+  });
+});
+
+describe('decantationTotal', () => {
+  const link = (productId: string, invoiceQty: number, receivedQty: number | null) => ({
+    productId,
+    purchaseId: productId,
+    invoiceNumber: 'I',
+    supplierName: null,
+    invoiceQty,
+    invoiceDensity: null,
+    receivedQty,
+    varianceQty: receivedQty == null ? null : receivedQty - invoiceQty,
+    varianceComputedAt: receivedQty == null ? null : 'now',
+  });
+  const measured = (productId: string) =>
+    line({ id: productId, productId, status: 'MEASURED', receivedQty: 1 });
+
+  it('sums only lines with both an invoice and a receipt, so the columns compare', () => {
+    const rows = [
+      // Measured, both products linked: counts.
+      visit({
+        status: 'MEASURED',
+        lines: [measured('p-ms'), measured('p-hsd')],
+        links: [link('p-ms', 3000, 2990), link('p-hsd', 6000, 6010)],
+        unlinkedProductIds: [],
+      }),
+    ].map((v) => toDecantationRow(v, names, 0.2));
+    expect(decantationTotal(rows)).toEqual({
+      label: 'Total',
+      invoiceQty: 9000,
+      receivedQty: 9000,
+    });
+  });
+
+  it('leaves out a measured product with no purchase from both columns, and says so', () => {
+    const rows = [
+      visit({
+        status: 'MEASURED',
+        lines: [measured('p-ms'), measured('p-hsd')],
+        links: [link('p-hsd', 6000, 5900)],
+        unlinkedProductIds: ['p-ms'],
+      }),
+      // Linked but still waiting for its after-dip.
+      visit({ lines: [line({ id: 'x' })], links: [link('p-hsd', 12000, null)] }),
+    ].map((v) => toDecantationRow(v, names, 0.2));
+    expect(decantationTotal(rows)).toEqual({
+      label: 'Total excl. pending and unlinked',
+      invoiceQty: 6000,
+      receivedQty: 5900,
+    });
   });
 });

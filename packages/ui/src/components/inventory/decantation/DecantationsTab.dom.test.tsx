@@ -146,7 +146,8 @@ describe('DecantationsTab', () => {
     // header + 2 visits + the total row
     expect(screen.getAllByRole('row').length).toBe(4);
     // Only the measured visit adds up: invoice 6,000 vs received 5,900, not the pending 12,000.
-    const total = screen.getByText('Total excl. pending').closest('tr')!;
+    // Visit A: HSD still pending, MS has no purchase; both left out and named.
+    const total = screen.getByText('Total excl. pending and unlinked').closest('tr')!;
     expect(within(total).getByText('6,000.00 L')).toBeTruthy();
     expect(within(total).getByText('5,900.00 L')).toBeTruthy();
   });

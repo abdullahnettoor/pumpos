@@ -301,7 +301,7 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
         visit
       </span>
       {flagged && (
-        <Chip size="sm" tone="danger">
+        <Chip size="md" tone="danger">
           {flags.flags.length} flag{flags.flags.length === 1 ? '' : 's'}
         </Chip>
       )}
