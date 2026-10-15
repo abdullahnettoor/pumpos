@@ -10,6 +10,7 @@ import {
   hasCloseProgress,
   loadCloseDraft,
   cashCountSchema,
+  denominationCountError,
   closeOutcomeFigures,
   nextTemplateAfter,
   outcomeStanding,
@@ -279,5 +280,16 @@ describe('the cash count form (#534 review)', () => {
     expect(ok('-1')).toBe(false);
     expect(ok('abc')).toBe(false);
     expect(ok('10', '-5')).toBe(false);
+  });
+});
+
+describe('denomination counts (#534 review round 2)', () => {
+  it('takes blank or a whole number of notes, refusing a fraction or a negative', () => {
+    expect(denominationCountError('')).toBeNull();
+    expect(denominationCountError('0')).toBeNull();
+    expect(denominationCountError('12')).toBeNull();
+    expect(denominationCountError('1.5')).toBe('Enter a whole number of notes, zero or more.');
+    expect(denominationCountError('-2')).toBe('Enter a whole number of notes, zero or more.');
+    expect(denominationCountError('1e3')).not.toBeNull();
   });
 });

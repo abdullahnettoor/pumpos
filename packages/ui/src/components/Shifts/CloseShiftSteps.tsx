@@ -25,6 +25,7 @@ import {
   cashCountDefaults,
   cashCountSchema,
   cashCountToDraft,
+  denominationCountError,
   dipCount,
   type CashCountFormValues,
   type CloseDraft,
@@ -471,6 +472,7 @@ export const CashCountStep: React.FC<CashCountStepProps> = ({
             onApply={(t) => setValue('closingCash', String(t), { shouldValidate: true })}
             currentValue={draft.closingCash}
             title="Count safe cash by denomination"
+            validateCount={denominationCountError}
           />
         </div>
         {errors.closingCash?.message && (

@@ -52,11 +52,22 @@ const transactionService = new CloudTransactionService();
 
 export type CloseStep = Exclude<ShiftCloseStep, 'done'>;
 
-/** A close outcome, and when this tab learnt it (0 when read back from storage). */
+/** A close outcome, and when this tab learnt it (kept with the outcome, so a reload keeps it). */
 interface HeldOutcome {
   outcome: PendingTankDipWorkflow;
   seenAt: number;
 }
+
+const holding = (outcome: PendingTankDipWorkflow): HeldOutcome => ({
+  outcome,
+  seenAt: outcome.seenAt ?? 0,
+});
+
+/** The outcome stamped with now: this tab has just learnt the shift closed. */
+const learnt = (outcome: PendingTankDipWorkflow): PendingTankDipWorkflow => ({
+  ...outcome,
+  seenAt: Date.now(),
+});
 
 /** What the close page shows for an address `/shifts/<id>/close`. */
 export type CloseView =
@@ -151,7 +162,7 @@ export function useCloseShiftFlow(input: CloseShiftFlowInput) {
   const readStored = (id: string | null) => {
     const stored = id ? parseCloseOutcome(loadPendingTankDipWorkflow(id)) : null;
     return {
-      held: stored && stored.closeStatus !== 'submitting' ? { outcome: stored, seenAt: 0 } : null,
+      held: stored && stored.closeStatus !== 'submitting' ? holding(stored) : null,
       uncertain: stored?.closeStatus === 'submitting' ? stored : null,
     };
   };
@@ -198,7 +209,7 @@ export function useCloseShiftFlow(input: CloseShiftFlowInput) {
       if (cancelled) return;
       setUncertain(null);
       savePendingTankDipWorkflow(stationId, confirmed);
-      setHeld({ outcome: confirmed, seenAt: Date.now() });
+      setHeld(holding(learnt(confirmed)));
       void saveTankDips(confirmed);
     });
     return () => {
@@ -218,7 +229,7 @@ export function useCloseShiftFlow(input: CloseShiftFlowInput) {
         : step === 'done' && stationId
           ? (() => {
               const stored = loadClosedResult(stationId, shiftId);
-              return stored ? { outcome: stored, seenAt: 0 } : null;
+              return stored ? holding(stored) : null;
             })()
           : null;
     if (!kept) return null;
@@ -326,9 +337,13 @@ export function useCloseShiftFlow(input: CloseShiftFlowInput) {
   };
 
   const showOutcome = (outcome: PendingTankDipWorkflow) => {
-    setHeld({ outcome, seenAt: Date.now() });
-    if (stationId) saveClosedResult(stationId, outcome.lastClosedShiftId, outcome);
-    goRoute(shiftCloseRoute(outcome.lastClosedShiftId, 'done'), { replace: true });
+    const stamped = learnt(outcome);
+    setHeld(holding(stamped));
+    if (stationId) {
+      saveClosedResult(stationId, stamped.lastClosedShiftId, stamped);
+      savePendingTankDipWorkflow(stationId, stamped);
+    }
+    goRoute(shiftCloseRoute(stamped.lastClosedShiftId, 'done'), { replace: true });
   };
 
   const closeShift = async (save: KeyedSave) => {
@@ -459,9 +474,12 @@ export function useCloseShiftFlow(input: CloseShiftFlowInput) {
   }
   if (closeRoute?.step === 'done' && stationId && data) {
     const stored = loadClosedResult(stationId, closeRoute.shiftId);
+    // The stored copy is judged by when it was learnt, as the held one is: a
+    // status read before the close (the cache at reload) cannot drop it.
     if (
       stored &&
-      outcomeStanding(stored.lastClosedShiftId, 0, data, statusQ.dataUpdatedAt) === 'drop'
+      outcomeStanding(stored.lastClosedShiftId, stored.seenAt ?? 0, data, statusQ.dataUpdatedAt) ===
+        'drop'
     ) {
       forgetOutcome(stationId, stored.lastClosedShiftId);
     }

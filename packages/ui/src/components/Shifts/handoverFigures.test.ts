@@ -4,7 +4,8 @@ import {
   acceptedHandoverRecon,
   handoverNozzles,
   handoverRecon,
-  sumLines,
+  handoverReconInput,
+  sumAmounts,
 } from './handoverFigures.js';
 
 const nz = (id: string, opening: number, price = 100, extra: object = {}) => ({
@@ -171,7 +172,65 @@ describe('handoverRecon (#534): expected = float + fuel cash + product cash − 
     });
   });
 
-  it('sums customer-sale lines in paise', () => {
-    expect(sumLines([{ amount: '0.1' }, { amount: 0.2 }, { amount: null }])).toBe(0.3);
+  it('sums amounts as entered, never rounding a line on its own', () => {
+    expect(sumAmounts([{ amount: '0.005' }, { amount: 0.005 }, { amount: null }])).toBeCloseTo(
+      0.01,
+      10,
+    );
+  });
+
+  it('maps the drawer’s form as the payload does, so a ₹0.005 card line matches the server (#534 review)', () => {
+    // Fuel ₹1, one terminal batch of ₹0.005 card, nothing declared.
+    const input = handoverReconInput({
+      terminals: [{ terminalId: 't1' }],
+      aggregateAllowed: false,
+      values: { cashHandedOver: '', cashDrops: '', terminalCard: { t1: '0.005' }, terminalUpi: {} },
+      creditLines: [],
+      omcLines: [],
+      fuelSales: 1,
+      productCash: 0,
+      openingFloat: 0,
+    });
+    const server = reconcileDrawer({
+      openingFloat: 0,
+      expectedFuelSales: 1,
+      merchandiseCash: 0,
+      cardHandedOver: 0.005,
+      upiHandedOver: 0,
+      creditSales: 0,
+      omcCardSales: 0,
+      cashHandedOver: 0,
+      cashDrops: 0,
+    });
+    const r = handoverRecon(input);
+    expect(r.variance).toBe(server.varianceAmount);
+    expect(r.expected).toBe(server.expectedCash);
+    expect(r.cashSales).toBe(server.cashSales);
+    // Same for raw credit and OMC lines and aggregate totals.
+    const agg = handoverRecon(
+      handoverReconInput({
+        terminals: [],
+        aggregateAllowed: true,
+        values: { cashHandedOver: '3.335', cardHandedOver: '0.005', upiHandedOver: '0.005' },
+        creditLines: [{ amount: '0.005' }],
+        omcLines: [{ amount: 0.005 }],
+        fuelSales: 3.36,
+        productCash: 0,
+        openingFloat: 0,
+      }),
+    );
+    const aggServer = reconcileDrawer({
+      openingFloat: 0,
+      expectedFuelSales: 3.36,
+      merchandiseCash: 0,
+      cardHandedOver: 0.005,
+      upiHandedOver: 0.005,
+      creditSales: 0.005,
+      omcCardSales: 0.005,
+      cashHandedOver: 3.335,
+      cashDrops: 0,
+    });
+    expect(agg.variance).toBe(aggServer.varianceAmount);
+    expect(agg.expected).toBe(aggServer.expectedCash);
   });
 });

@@ -40,12 +40,14 @@ import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js'
 import { formatMoney, formatQuantity, MINUS } from '../../utils/format.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { CloseNote } from './CloseShiftSteps.js';
+import { denominationCountError } from './closeShiftModel.js';
 import { HandoverProductSaleDrawer } from './HandoverProductSaleDrawer.js';
 import {
   acceptedHandoverRecon,
   handoverNozzles,
   handoverRecon,
-  sumLines,
+  handoverReconInput,
+  sumAmounts,
   type HandoverNozzleRow,
 } from './handoverFigures.js';
 
@@ -281,25 +283,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   // the per-terminal batches (single source of truth).
   const duTerminals = terminals.filter((t: any) => t.duId === duId);
   const hasTerminals = duTerminals.length > 0;
-  const formTerminalCard = formValues.terminalCard || {};
-  const formTerminalUpi = formValues.terminalUpi || {};
-  const terminalCardTotal = sumLines(
-    duTerminals.map((t: any) => ({ amount: formTerminalCard[t.terminalId] })),
-  );
-  const terminalUpiTotal = sumLines(
-    duTerminals.map((t: any) => ({ amount: formTerminalUpi[t.terminalId] })),
-  );
   const aggregateAllowed = !stationHasConfiguredTerminals;
-  const effectiveCard = hasTerminals
-    ? terminalCardTotal
-    : aggregateAllowed
-      ? Number(formValues.cardHandedOver || 0)
-      : 0;
-  const effectiveUpi = hasTerminals
-    ? terminalUpiTotal
-    : aggregateAllowed
-      ? Number(formValues.upiHandedOver || 0)
-      : 0;
 
   // ---- Fuel-on-credit (credit chits) declared for this (attendant, DU) ----
   // Seeded on open; the drawer unmounts on close, so there is nothing to reset.
@@ -644,10 +628,10 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   // (each is a real receivable). The credit chits total is DERIVED from them and
   // sits on the DECLARED side — the fuel is already metered in the nozzle reading,
   // so credit is NOT added to expected (that would double-count).
-  const creditTotal = sumLines(creditLines);
+  const creditTotal = sumAmounts(creditLines);
   // OMC fleet-card sales — settled to CMS (a non-drawer channel), never a
   // receivable. Like credit, the fuel is metered so it sits on the declared side.
-  const omcTotal = sumLines(omcLines);
+  const omcTotal = sumAmounts(omcLines);
   // Recorded customer-sale lines grouped by receivable type (Credit / Fleet /
   // Regular), each with its own subtotal. Station-prepaid customers never reach
   // this list (they draw down a balance instead of accruing a receivable).
@@ -660,23 +644,24 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
     }
     return [...ORDER, 'Other']
       .filter((t) => map.has(t))
-      .map((t) => ({ type: t, label: t, lines: map.get(t)!, subtotal: sumLines(map.get(t)!) }));
+      .map((t) => ({ type: t, label: t, lines: map.get(t)!, subtotal: sumAmounts(map.get(t)!) }));
   }, [creditLines]);
 
   // The reconciliation: the live preview, or the server's figures once accepted.
-  const recon = acceptedResult
-    ? acceptedHandoverRecon(acceptedResult)
-    : handoverRecon({
-        fuelSales: fuel.fuelSales,
-        productCash: Number(merchandiseCash) || 0,
-        card: effectiveCard,
-        upi: effectiveUpi,
-        credit: creditTotal,
-        omc: omcTotal,
-        openingFloat: Number(openingFloat) || 0,
-        drops: Number(formValues.cashDrops) || 0,
-        declaredCash: Number(formCash) || 0,
-      });
+  // The form mapped as the payload carries it, every amount raw (#534 review).
+  const reconInput = handoverReconInput({
+    terminals: duTerminals,
+    aggregateAllowed,
+    values: formValues,
+    creditLines,
+    omcLines,
+    fuelSales: fuel.fuelSales,
+    productCash: Number(merchandiseCash) || 0,
+    openingFloat: Number(openingFloat) || 0,
+  });
+  const terminalCardTotal = reconInput.terminalCard;
+  const terminalUpiTotal = reconInput.terminalUpi;
+  const recon = acceptedResult ? acceptedHandoverRecon(acceptedResult) : handoverRecon(reconInput);
   const productNonCash = Number(merchandiseNonCash) || 0;
   const shownVolume = acceptedResult
     ? acceptedResult.nozzleReadings.reduce((sum, reading) => sum + reading.grossVolume, 0)
@@ -1347,6 +1332,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                     }
                     currentValue={Number(formCash) || 0}
                     title="Count handover cash by denomination"
+                    validateCount={denominationCountError}
                   />
                 </div>
                 <FieldError message={errors.cashHandedOver?.message} />

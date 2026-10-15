@@ -103,6 +103,7 @@ export const closeOutcomeSchema = z.object({
   closedAt: z.string().min(1),
   timeZone: z.string().optional(),
   shiftName: z.string().nullish(),
+  seenAt: z.number().finite().nonnegative().optional(),
   tankDips: z.array(tankDipSchema),
   closeStatus: z.enum(['submitting', 'closed']).optional(),
 });
@@ -293,11 +294,29 @@ const typedAmount = z
     'Enter an amount of zero or more.',
   );
 
-/** The Cash count step's form (React Hook Form + Zod): the count and the drops at close. */
+/** A denomination count as typed: blank (none) or a whole number of notes, zero or more. */
+const typedCount = z
+  .string()
+  .refine(
+    (v) => v.trim() === '' || (/^\d+$/.test(v.trim()) && Number.isSafeInteger(Number(v))),
+    'Enter a whole number of notes, zero or more.',
+  );
+
+/**
+ * The Cash count step's form (React Hook Form + Zod): the count, the drops at
+ * close, and the denomination counts behind the count (whole, non-negative).
+ */
 export const cashCountSchema = z.object({
   closingCash: typedAmount,
   closeDrops: z.array(z.object({ drawerKey: z.string(), amount: typedAmount })),
+  denominations: z.record(typedCount).optional(),
 });
+
+/** A denomination count's error through `cashCountSchema`, or null when it is a valid count. */
+export function denominationCountError(raw: string): string | null {
+  const parsed = cashCountSchema.shape.denominations.safeParse({ count: raw });
+  return parsed.success ? null : (parsed.error.issues[0]?.message ?? 'Enter a whole number.');
+}
 export type CashCountFormValues = z.infer<typeof cashCountSchema>;
 
 const typed = (v: number) => (v ? String(v) : '');

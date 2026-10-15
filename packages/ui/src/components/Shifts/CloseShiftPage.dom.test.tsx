@@ -251,6 +251,27 @@ describe('Close shift page (#534)', () => {
       expect((screen.getByLabelText('Count of ₹500') as HTMLInputElement).value).toBe('3');
     });
 
+    it('refuses a fractional or negative denomination count inline, never flooring it', () => {
+      atCash();
+      fireEvent.click(screen.getByRole('button', { name: 'Count safe cash by denomination' }));
+      const count = () => screen.getByLabelText('Count of ₹500') as HTMLInputElement;
+      fireEvent.change(count(), { target: { value: '2.5' } });
+      expect(screen.getByRole('alert').textContent).toBe(
+        'Enter a whole number of notes, zero or more.',
+      );
+      expect(count().value).toBe('2.5');
+      expect(count().getAttribute('aria-invalid')).toBe('true');
+      const apply = () => screen.getByRole('button', { name: /^Apply/ }) as HTMLButtonElement;
+      expect(apply().disabled).toBe(true);
+      expect(apply().textContent).toContain('₹0.00');
+      fireEvent.change(count(), { target: { value: '-1' } });
+      expect(apply().disabled).toBe(true);
+      fireEvent.change(count(), { target: { value: '3' } });
+      expect(apply().disabled).toBe(false);
+      fireEvent.click(apply());
+      expect(counted().value).toBe('1500');
+    });
+
     it('adds a drop at close naming the first drawer, which can name none', () => {
       atCash();
       fireEvent.click(screen.getByRole('button', { name: 'Add drop' }));

@@ -375,11 +375,12 @@ const host = (
     role?: 'Owner' | 'Manager' | 'Staff' | 'Accountant';
     shift?: unknown;
     lastShiftId?: string;
+    client?: ReturnType<typeof seed>;
   } = {},
 ) => {
   const onRoute = vi.fn();
   const view = renderWithProviders(<Host initial={initial} role={opts.role} onRoute={onRoute} />, {
-    queryClient: seed('shift' in opts ? opts.shift : activeShift, opts.lastShiftId),
+    queryClient: opts.client ?? seed('shift' in opts ? opts.shift : activeShift, opts.lastShiftId),
   });
   return { ...view, onRoute };
 };
@@ -459,6 +460,26 @@ describe('Close shift page (#534)', () => {
     // The office cash is the close response's snapshot.
     const office = screen.getByRole('region', { name: 'Office cash' });
     expect(within(office).getByText('₹3,000.00')).toBeDefined();
+  });
+
+  it('keeps the closed state across a reload made before the status refreshes (#534 review)', async () => {
+    closeShift.mockResolvedValueOnce({
+      shift: { id: 'sh-1', closedAt: '2026-10-14T12:05:00.000Z' },
+    });
+    // The refresh never answers: the cached status still says sh-1 is open.
+    getShiftStatus.mockReturnValue(new Promise(() => {}));
+    const client = seed(allHandedOver);
+    vi.setSystemTime(new Date('2026-10-14T12:05:00.000Z'));
+    const first = host('/shifts/sh-1/close?step=confirm', { client });
+    fireEvent.click(screen.getByLabelText(/I confirm these readings are correct/));
+    fireEvent.click(screen.getByRole('button', { name: /^Close shift$/ }));
+    expect(await screen.findByRole('heading', { name: 'Evening closed' })).toBeDefined();
+    first.unmount();
+
+    // Reload at the outcome's address, the cached (pre-close) status unchanged.
+    host('/shifts/sh-1/close?step=done', { client });
+    expect(screen.getByRole('heading', { name: 'Evening closed' })).toBeDefined();
+    expect(sessionStorage.getItem('pumpos:closed-shift:st-1:sh-1')).not.toBeNull();
   });
 
   it('drops a draft once the shift is closed elsewhere, and starts clean on a reopen', () => {

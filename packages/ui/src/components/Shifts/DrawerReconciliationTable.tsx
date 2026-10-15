@@ -12,10 +12,38 @@ import { formatVariance } from '../../utils/variance.js';
 import {
   closeDrawerRows,
   closeDrawerTotal,
+  type CloseDrawerInput,
   type CloseDrawerRow,
   type CloseDrawerTotal,
 } from './closeShiftModel.js';
 import type { StaffAssignmentInput } from './liveShiftModel.js';
+
+/**
+ * The Drawers table (#534): one definition for every place it shows, the Shift
+ * summary screen, the Close shift page's Handovers step and the Shift Summary
+ * PDF (#595).
+ *
+ * - Row model: `drawerRows` (or `closeDrawerRows` with staff assignments, for
+ *   Record / View links) and `closeDrawerTotal`, pure, summed in paise.
+ * - Columns: `drawerColumns()`; pass `onOpenHandover` for the close page.
+ * - Total row: `drawerTotalRow(rows, total)`; the variance total is a
+ *   `VarianceChip` on screen (`cells`) and its word or signed figure in print
+ *   (`texts`).
+ * - Plain text for a PDF: the Table module's `cellText(col, row)` and
+ *   `totalTexts(columns, rows, totalRow)` read every cell as the screen shows
+ *   it (no ₹0.00 for a blank, "Pending" / "Recorded", "Balanced").
+ */
+export {
+  closeDrawerRows,
+  closeDrawerTotal,
+  type CloseDrawerInput,
+  type CloseDrawerRow,
+  type CloseDrawerTotal,
+};
+
+/** The Drawers table's rows from the server's reconciled Drawers (no links). */
+export const drawerRows = (drawers: CloseDrawerInput[]): CloseDrawerRow[] =>
+  closeDrawerRows({ drawers, assignments: [], handovers: [] });
 
 /** One Attendant's Drawer, as reconciled by the server (ADR 0005, #278). */
 export interface DrawerRow {
@@ -36,12 +64,16 @@ export interface DrawerRow {
 
 type Figure = keyof CloseDrawerTotal['values'];
 
+/** A blank figure (a Drawer not handed over) reads "—", on screen and in print. */
+const figure = (v: number | null) => (v == null ? '—' : formatMoney(v));
+
 const money = (id: Figure, header: string): TableColumn<CloseDrawerRow> => ({
   id,
   header,
   kind: 'money',
   value: (r) => r[id],
-  cell: (r) => (r[id] == null ? '—' : formatMoney(r[id])),
+  cell: (r) => figure(r[id]),
+  text: (r) => figure(r[id]),
 });
 
 /**
@@ -106,16 +138,20 @@ export function drawerColumns(
 
 /**
  * The total row: the handed-over Drawers, labelled with what it leaves out.
- * The variance total reads as the rows do, a `VarianceChip` with the one
- * balanced rule; the figure stays in `values` for a printed copy.
+ * The variance total reads as the rows do: a `VarianceChip` with the one
+ * balanced rule on screen, its text ("Balanced", "−₹220.00") in print.
  */
-export const drawerTotalRow = (rows: CloseDrawerRow[], total: CloseDrawerTotal): TotalRow => {
+export const drawerTotalRow = (
+  rows: CloseDrawerRow[],
+  total: CloseDrawerTotal = closeDrawerTotal(rows),
+): TotalRow => {
   const none = rows.length === 0 || rows.every((r) => r.pending);
   return {
     label: total.label,
     derive: false,
     values: { ...total.values, variance: none ? null : total.variance },
     cells: none ? undefined : { variance: <VarianceChip amount={total.variance} size="md" /> },
+    texts: none ? undefined : { variance: formatVariance(total.variance, 'cash').text },
   };
 };
 
@@ -128,10 +164,7 @@ export const DrawerReconciliationTable: React.FC<{
   drawers: DrawerRow[];
   showTotals?: boolean;
 }> = ({ drawers, showTotals = false }) => {
-  const rows = useMemo(
-    () => closeDrawerRows({ drawers, assignments: [], handovers: [] }),
-    [drawers],
-  );
+  const rows = useMemo(() => drawerRows(drawers), [drawers]);
   const columns = useMemo(() => drawerColumns(), []);
   return (
     <div className="overflow-hidden rounded-card border border-border-soft bg-surface">
@@ -142,7 +175,7 @@ export const DrawerReconciliationTable: React.FC<{
         rows={rows}
         rowKey={(r) => r.key}
         emptyMessage="No attendant drawers on this shift."
-        totalRow={showTotals ? drawerTotalRow(rows, closeDrawerTotal(rows)) : undefined}
+        totalRow={showTotals ? drawerTotalRow(rows) : undefined}
       />
     </div>
   );

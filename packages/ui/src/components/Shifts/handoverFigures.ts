@@ -1,5 +1,4 @@
 import { compareNatural, reconcileDrawer } from '@pump/shared';
-import { toPaise } from '../../utils/ledgerWindow.js';
 
 // ── Nozzle readings ─────────────────────────────────────────────────────────
 
@@ -106,9 +105,74 @@ export function handoverNozzles(
 
 // ── The reconciliation ──────────────────────────────────────────────────────
 
-/** Σ of customer-sale lines' amounts, in whole paise. */
-export const sumLines = (lines: { amount?: number | string | null }[]): number =>
-  lines.reduce((s, l) => s + toPaise(l.amount), 0) / 100;
+/**
+ * Σ of amounts as entered, unrounded: what the payload sends and the server
+ * sums. Rounding happens once, on what `reconcileDrawer` returns (#534 review
+ * round 2); a figure shown alone is rounded by its money format.
+ */
+export const sumAmounts = (lines: { amount?: number | string | null }[]): number =>
+  lines.reduce((s, l) => {
+    const n = Number(l.amount ?? 0);
+    return Number.isFinite(n) ? s + n : s;
+  }, 0);
+
+/** The drawer's form, as the reconciliation reads it. */
+export interface HandoverReconFormInput {
+  /** The DU's own terminals (only these carry its card / UPI). */
+  terminals: { terminalId: string }[];
+  /** No station terminal configured: one card and one UPI total are typed. */
+  aggregateAllowed: boolean;
+  values: {
+    cashHandedOver?: unknown;
+    cashDrops?: unknown;
+    cardHandedOver?: unknown;
+    upiHandedOver?: unknown;
+    terminalCard?: Record<string, unknown>;
+    terminalUpi?: Record<string, unknown>;
+  };
+  creditLines: { amount?: number | string | null }[];
+  omcLines: { amount?: number | string | null }[];
+  fuelSales: number;
+  productCash: number;
+  openingFloat: number;
+}
+
+const amount = (v: unknown) => {
+  const n = Number(v ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/**
+ * The drawer's form mapped to the reconciliation's inputs, the way the save
+ * payload carries them: card / UPI from the DU's terminal batches (or the
+ * typed totals when the station has no terminal), credit and OMC card from the
+ * recorded lines. Every amount raw, so the preview is the server's figure.
+ */
+export function handoverReconInput(f: HandoverReconFormInput): HandoverReconInput & {
+  terminalCard: number;
+  terminalUpi: number;
+} {
+  const terminalCard = sumAmounts(
+    f.terminals.map((t) => ({ amount: amount(f.values.terminalCard?.[t.terminalId]) })),
+  );
+  const terminalUpi = sumAmounts(
+    f.terminals.map((t) => ({ amount: amount(f.values.terminalUpi?.[t.terminalId]) })),
+  );
+  const has = f.terminals.length > 0;
+  return {
+    fuelSales: f.fuelSales,
+    productCash: f.productCash,
+    card: has ? terminalCard : f.aggregateAllowed ? amount(f.values.cardHandedOver) : 0,
+    upi: has ? terminalUpi : f.aggregateAllowed ? amount(f.values.upiHandedOver) : 0,
+    credit: sumAmounts(f.creditLines),
+    omc: sumAmounts(f.omcLines),
+    openingFloat: f.openingFloat,
+    drops: amount(f.values.cashDrops),
+    declaredCash: amount(f.values.cashHandedOver),
+    terminalCard,
+    terminalUpi,
+  };
+}
 
 /**
  * The Handover drawer's reconciliation (#534), the lines the operator reads
@@ -173,15 +237,17 @@ export function handoverRecon(i: HandoverReconInput): HandoverRecon {
   });
   return {
     source: 'preview',
-    fuelSales: paise(i.fuelSales),
-    productCash: paise(i.productCash),
-    cardUpi: paise(i.card + i.upi),
-    creditOmc: paise(i.credit + i.omc),
+    // Inputs as entered: their money format rounds them for display.
+    fuelSales: i.fuelSales,
+    productCash: i.productCash,
+    cardUpi: i.card + i.upi,
+    creditOmc: i.credit + i.omc,
+    openingFloat: i.openingFloat,
+    drops: i.drops,
+    declaredCash: i.declaredCash,
+    // The reconciliation's own figures, rounded once, by `reconcileDrawer`.
     cashSales: d.cashSales,
-    openingFloat: paise(i.openingFloat),
-    drops: paise(i.drops),
     expected: d.expectedCash,
-    declaredCash: paise(i.declaredCash),
     declaredTotal: paise(d.declaredTotal),
     variance: d.varianceAmount,
   };

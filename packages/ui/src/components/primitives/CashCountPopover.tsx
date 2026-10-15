@@ -24,6 +24,13 @@ export interface CashCountPopoverProps {
   disabled?: boolean;
   /** Accessible label + tooltip for the trigger. */
   title?: string;
+  /**
+   * Checks a count as typed; returns the message to show, or null when it is
+   * a valid count. With it, a refused count (a fraction, a negative) shows an
+   * inline error, is not counted and holds Apply, instead of being silently
+   * floored. Without it, counts are floored to whole notes as before.
+   */
+  validateCount?: (raw: string) => string | null;
 }
 
 const DEFAULT_DENOMS = [500, 200, 100, 50, 20, 10, 5, 2, 1];
@@ -48,7 +55,11 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
   denominations = DEFAULT_DENOMS,
   disabled = false,
   title = 'Count cash by denomination',
+  validateCount,
 }) => {
+  // What was typed in a row whose count was refused (kept so it can be fixed).
+  const [refused, setRefused] = useState<Record<string, { raw: string; message: string }>>({});
+  const hasRefused = Object.keys(refused).length > 0;
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number; placement: 'top' | 'bottom' } | null>(
     null,
@@ -103,6 +114,13 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
   }, [open]);
 
   const setCount = (d: number, raw: string) => {
+    if (validateCount) {
+      const message = validateCount(raw);
+      setRefused(({ [String(d)]: _gone, ...rest }) =>
+        message ? { ...rest, [String(d)]: { raw, message } } : rest,
+      );
+      if (message) return;
+    }
     const n = Math.max(0, Math.floor(Number(raw) || 0));
     const next = { ...breakdown };
     if (n > 0) next[String(d)] = n;
@@ -114,7 +132,10 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
     onApply(total);
     setOpen(false);
   };
-  const clear = () => onBreakdownChange({});
+  const clear = () => {
+    setRefused({});
+    onBreakdownChange({});
+  };
 
   const numInputStyle: React.CSSProperties = {
     width: '64px',
@@ -171,6 +192,7 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
       <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
         {denominations.map((d, i) => {
           const count = Number(breakdown[String(d)]) || 0;
+          const bad = refused[String(d)];
           return (
             <div
               key={d}
@@ -189,12 +211,16 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
                 inputMode="numeric"
                 min={0}
                 step={1}
-                value={count > 0 ? count : ''}
+                value={bad ? bad.raw : count > 0 ? count : ''}
                 placeholder="0"
                 autoFocus={i === 0}
                 onChange={(e) => setCount(d, e.target.value)}
                 aria-label={`Count of ₹${d}`}
-                style={numInputStyle}
+                aria-invalid={bad ? true : undefined}
+                aria-describedby={bad ? `count-error-${d}` : undefined}
+                style={
+                  bad ? { ...numInputStyle, borderColor: 'var(--state-danger-fg)' } : numInputStyle
+                }
               />
               <span
                 style={{
@@ -206,6 +232,15 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
               >
                 {inr(d * count)}
               </span>
+              {bad && (
+                <span
+                  id={`count-error-${d}`}
+                  role="alert"
+                  className="col-span-3 text-right text-[12px] text-danger-fg"
+                >
+                  {bad.message}
+                </span>
+              )}
             </div>
           );
         })}
@@ -251,6 +286,7 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
         <button
           type="button"
           onClick={apply}
+          disabled={hasRefused}
           className="btn btn-primary btn-sm"
           style={{ flex: 1 }}
         >

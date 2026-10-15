@@ -35,6 +35,11 @@ export interface PendingTankDipWorkflow {
   timeZone?: string;
   /** The closed shift's name ("Evening"), for the close page's final state (#534). */
   shiftName?: string | null;
+  /**
+   * When this tab learnt the shift was closed (epoch ms, #534). A shift status
+   * read before it cannot contradict the close; one read after it can.
+   */
+  seenAt?: number;
   tankDips: PendingTankDip[];
   closeStatus?: 'submitting' | 'closed';
 }
