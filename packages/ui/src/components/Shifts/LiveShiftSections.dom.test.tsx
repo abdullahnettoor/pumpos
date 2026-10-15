@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render as rtlRender, screen, within } from '@testing-library/react';
+import { TooltipProvider } from '../primitives/Tooltip.js';
 import { NozzleReadingsTable } from './NozzleReadingsTable.js';
 import { BeforeCloseChecklist } from './BeforeCloseChecklist.js';
 import { nozzleGroups, type CheckItem } from './liveShiftModel.js';
+
+/** The app mounts one TooltipProvider; so does this render. */
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: TooltipProvider });
 
 afterEach(cleanup);
 

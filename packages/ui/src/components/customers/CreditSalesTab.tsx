@@ -128,7 +128,7 @@ export const CreditSalesTab: React.FC<CreditSalesTabProps> = ({
             ),
             info: (
               <InfoTip label="About credit sales" placement="bottom">
-                Credit sales are receivables: fuel and merchandise on credit. They never touch the
+                Credit sales are receivables: fuel and products on credit. They never touch the
                 drawer; record them from the shift handover.
               </InfoTip>
             ),
@@ -148,7 +148,7 @@ export const CreditSalesTab: React.FC<CreditSalesTabProps> = ({
                 title={all.length === 0 ? 'No credit sales yet' : 'No matching credit sales'}
                 description={
                   all.length === 0
-                    ? 'Fuel-on-credit and merchandise-on-credit sales appear here.'
+                    ? 'Fuel-on-credit and product-on-credit sales appear here.'
                     : 'Adjust the range or search.'
                 }
               />

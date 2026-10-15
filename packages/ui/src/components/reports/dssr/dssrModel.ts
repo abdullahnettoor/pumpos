@@ -145,7 +145,7 @@ function salesLines(snap: Record<string, any>): FigureLine[] {
   const vat = num(snap.salesTax?.vat?.vat);
   const omcCard = readDssrOmcCard(snap);
   const lines: FigureLine[] = [
-    { label: 'Merchandise sales', value: formatMoney(snap.merchandise?.salesValue) },
+    { label: 'Product sales', value: formatMoney(snap.merchandise?.salesValue) },
     { label: 'Normal credit sales', value: formatMoney(credit.normalCredit) },
     { label: 'Fleet credit sales', value: formatMoney(credit.fleetCredit) },
   ];
@@ -153,7 +153,7 @@ function salesLines(snap: Record<string, any>): FigureLine[] {
   if (omcCard) lines.push({ label: 'OMC card sales', value: formatMoney(omcCard.total) });
   lines.push({ label: 'Purchases', value: formatMoney(snap.purchases?.total) });
   if (num(gst.total) > 0) {
-    lines.push({ label: 'Merchandise taxable value', value: formatMoney(gst.taxable) });
+    lines.push({ label: 'Product taxable value', value: formatMoney(gst.taxable) });
     lines.push(
       num(gst.igst) > 0
         ? { label: 'Output GST on sales (IGST)', value: formatMoney(gst.igst) }

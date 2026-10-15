@@ -83,7 +83,7 @@ describe('partyStatementDoc', () => {
   it('puts a sale in the debit column and a collection in the credit column, oldest first', () => {
     expect(build(customerLedger).rows).toEqual([
       {
-        dateLabel: '07 Oct 2026',
+        dateLabel: '7 Oct 2026',
         particulars: 'Credit Sale',
         detail: 'Shift 20261007-1 · 120 L Diesel · KL-11-AB-4521',
         debit: 8500,

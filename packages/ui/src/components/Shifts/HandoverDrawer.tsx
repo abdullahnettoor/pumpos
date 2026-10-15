@@ -283,6 +283,15 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   // the per-terminal batches (single source of truth).
   const duTerminals = terminals.filter((t: any) => t.duId === duId);
   const hasTerminals = duTerminals.length > 0;
+  // The Card and UPI columns show when any of this DU's machines takes them.
+  const terminalCols = {
+    card: duTerminals.some((t: any) => t.supportsCard),
+    upi: duTerminals.some((t: any) => t.supportsUpi),
+  };
+  const terminalGrid =
+    terminalCols.card && terminalCols.upi
+      ? 'grid-cols-[minmax(0,1fr)_8rem_8rem]'
+      : 'grid-cols-[minmax(0,1fr)_8rem]';
   const aggregateAllowed = !stationHasConfiguredTerminals;
 
   // ---- Fuel-on-credit (credit chits) declared for this (attendant, DU) ----
@@ -968,48 +977,67 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
               subtitle={hasTerminals ? 'Batch totals per machine' : undefined}
             />
             {hasTerminals ? (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1.5">
+                {/* Column labels once (#603); each machine is one centred row. */}
+                <div className={cn('grid items-end gap-3 px-3', terminalGrid)} aria-hidden="true">
+                  <span className="text-[12px] font-medium text-ink-muted">Machine</span>
+                  {terminalCols.card && (
+                    <span className="text-right text-[12px] font-medium text-ink-muted">
+                      Card (₹)
+                    </span>
+                  )}
+                  {terminalCols.upi && (
+                    <span className="text-right text-[12px] font-medium text-ink-muted">
+                      UPI (₹)
+                    </span>
+                  )}
+                </div>
                 {duTerminals.map((t: any) => (
                   <div
                     key={t.terminalId}
-                    className="flex flex-wrap items-end gap-3 rounded-input border border-border-soft bg-surface px-3 py-2.5"
+                    className={cn(
+                      'grid items-center gap-3 rounded-input border border-border-soft bg-surface px-3 py-2',
+                      terminalGrid,
+                    )}
                   >
-                    <div className="min-w-[140px] flex-1 text-[13px] font-semibold text-ink-strong">
+                    <div className="min-w-0 truncate text-[13px] font-semibold text-ink-strong">
                       {t.label}
                       {t.provider && (
                         <span className="font-normal text-ink-muted"> · {t.provider}</span>
                       )}
                     </div>
-                    {t.supportsCard && (
-                      <div className="flex flex-col gap-0.5">
-                        <FieldLabel htmlFor={`tc-${t.terminalId}`}>Card (₹)</FieldLabel>
+                    {terminalCols.card &&
+                      (t.supportsCard ? (
                         <Input
                           id={`tc-${t.terminalId}`}
+                          aria-label={`Card (₹), ${t.label}`}
                           inputSize="sm"
                           type="number"
                           step="any"
                           min="0"
                           placeholder="0"
-                          className="w-32 text-right font-mono"
+                          className="text-right font-mono"
                           {...register(`terminalCard.${t.terminalId}`)}
                         />
-                      </div>
-                    )}
-                    {t.supportsUpi && (
-                      <div className="flex flex-col gap-0.5">
-                        <FieldLabel htmlFor={`tu-${t.terminalId}`}>UPI (₹)</FieldLabel>
+                      ) : (
+                        <span className="text-right text-[12px] text-ink-faint">No card</span>
+                      ))}
+                    {terminalCols.upi &&
+                      (t.supportsUpi ? (
                         <Input
                           id={`tu-${t.terminalId}`}
+                          aria-label={`UPI (₹), ${t.label}`}
                           inputSize="sm"
                           type="number"
                           step="any"
                           min="0"
                           placeholder="0"
-                          className="w-32 text-right font-mono"
+                          className="text-right font-mono"
                           {...register(`terminalUpi.${t.terminalId}`)}
                         />
-                      </div>
-                    )}
+                      ) : (
+                        <span className="text-right text-[12px] text-ink-faint">No UPI</span>
+                      ))}
                   </div>
                 ))}
                 <dl className="flex flex-col gap-1 px-1">
@@ -1148,6 +1176,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                     <span className="text-[12px] font-medium text-ink-muted">Payment channel</span>
                     <SegmentedControl
                       aria-label="Payment channel"
+                      stretch
                       value={ccChannel}
                       onChange={setCcChannel}
                       options={[

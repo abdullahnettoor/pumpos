@@ -12,10 +12,8 @@ import type {
   StationCapacityPort,
 } from '@pump/core';
 import { isLimitKey } from '@pump/core';
+import { UNLIMITED_LIMIT } from '@pump/shared';
 import type { LimitKey, ProductPlanKey, SubscriptionStatus } from '@pump/shared';
-
-/** Limit value used for demo Organizations, which are not metered. */
-const DEMO_UNLIMITED = 1_000_000;
 
 type GrantRow = typeof schema.organizationCapabilityGrants.$inferSelect;
 type OverrideRow = typeof schema.organizationLimitOverrides.$inferSelect;
@@ -112,7 +110,7 @@ export class DrizzleOrganizationAccessReader implements OrganizationAccessReader
     // as ACTIVE with no paid-through date, and every Limit is lifted. Suspension
     // still applies, so the demo expiry job can cut access.
     if (organization?.isDemo) {
-      limitOverrides.station_count = DEMO_UNLIMITED;
+      limitOverrides.station_count = UNLIMITED_LIMIT;
     }
 
     return {

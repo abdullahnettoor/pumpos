@@ -570,7 +570,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             <MoneyInput
               value={sellingPrice}
               onChange={(e) => setSellingPrice(e.target.value)}
-              placeholder="Optional — prefills merchandise sales"
+              placeholder="Optional — prefills product sales"
               disabled={productType === 'FUEL'}
             />
           </Field>
@@ -621,14 +621,14 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
 
           <Field
             label="Tax Category"
-            hint="Petrol/diesel attract state VAT (no input credit); lubes & merchandise attract GST."
+            hint="Petrol/diesel attract state VAT (no input credit); lubes & other products attract GST."
           >
             <Select
               value={taxCategory}
               onChange={(e) => setTaxCategory(e.target.value as TaxCategory)}
             >
               <option value="FUEL_VAT">Fuel — VAT (outside GST)</option>
-              <option value="GST">GST (lubricants / merchandise)</option>
+              <option value="GST">GST (lubricants / products)</option>
               <option value="EXEMPT">GST Exempt</option>
               <option value="NON_TAXABLE">Non-Taxable</option>
             </Select>

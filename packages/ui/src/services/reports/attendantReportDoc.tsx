@@ -162,7 +162,7 @@ const builders: Record<
     ];
     return (
       <View key="merchandise" wrap={false}>
-        <SectionTitle>Merchandise</SectionTitle>
+        <SectionTitle>Products</SectionTitle>
         <TableView
           columns={columns}
           rows={shifts.map((shift) => [

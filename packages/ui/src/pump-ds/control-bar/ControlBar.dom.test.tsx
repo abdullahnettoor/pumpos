@@ -45,6 +45,15 @@ describe('ControlBar', () => {
     expect(end.contains(screen.getByRole('button', { name: 'Add entry' }))).toBe(true);
   });
 
+  // #603: search, chips, buttons, segmented and date fields all 32px; search 240px.
+  it('gives every field in it one 32px height and search a fixed width', () => {
+    render(<ControlBar search={<span>Search</span>} />);
+    const cls = screen.getByTestId('control-bar').className;
+    expect(cls).toContain('[&_select]:h-8');
+    expect(cls).toContain('[&_input:not([type=checkbox]):not([type=radio])]:h-8');
+    expect(cls).toContain('[&>[data-slot=search]>*]:w-[240px]');
+  });
+
   it('leaves out empty slots', () => {
     render(<ControlBar range={<span>Range</span>} filters={null} />);
     expect(slotsOf(screen.getByTestId('control-bar'))).toEqual(['range']);

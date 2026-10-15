@@ -99,7 +99,7 @@ describe.each(Object.entries(adapters))('%s table: shared column kinds', (_name,
 
   it('a date reads in the sans face, as the Dashboard prints its times', () => {
     renderTable();
-    const date = screen.getByText('09 Jul 2026');
+    const date = screen.getByText('9 Jul 2026');
     expect(date.className).toContain('text-left');
     expect(date.className).not.toContain('font-mono');
   });
@@ -108,7 +108,7 @@ describe.each(Object.entries(adapters))('%s table: shared column kinds', (_name,
     renderTable();
     expect(screen.getByText('₹92.50')).toBeTruthy();
     expect(screen.getByText('8.50 L')).toBeTruthy();
-    expect(screen.getByText('09 Jul 2026')).toBeTruthy();
+    expect(screen.getByText('9 Jul 2026')).toBeTruthy();
   });
 
   it('status cells read the status vocabulary', () => {

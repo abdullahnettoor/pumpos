@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Role } from '@pump/shared';
+import { UNLIMITED_LIMIT, type Role } from '@pump/shared';
 import { FixedClock, SequentialIdGenerator } from '../../kernel/index.js';
 import type { ExecutionContext } from '../../kernel/index.js';
 import { GetAccessDocument } from './get-access-document.js';
@@ -102,6 +102,14 @@ describe('the CORE baseline', () => {
   it('reports the Limit as available to an Organization with no Station yet', () => {
     const doc = documentFor('Owner', { usage: { station_count: 0 } });
     expect(doc.limits.station_count).toEqual({ value: 1, used: 0, reached: false });
+  });
+
+  it('never reports an unlimited plan as reached (#603)', () => {
+    const doc = documentFor('Owner', {
+      usage: { station_count: 3 },
+      limitOverrides: { station_count: UNLIMITED_LIMIT },
+    });
+    expect(doc.limits.station_count).toEqual({ value: UNLIMITED_LIMIT, used: 3, reached: false });
   });
 
   it('lets an Organization Limit override replace the plan value', () => {

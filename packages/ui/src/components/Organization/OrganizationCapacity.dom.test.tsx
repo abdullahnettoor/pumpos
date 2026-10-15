@@ -5,7 +5,7 @@ import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { QueryClient } from '@tanstack/react-query';
-import type { AccessDocument } from '@pump/shared';
+import { UNLIMITED_LIMIT, type AccessDocument } from '@pump/shared';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
 import { queryKeys } from '../../query/hooks.js';
 import { OrganizationOverview } from './OrganizationOverview.js';
@@ -93,6 +93,15 @@ describe('Station usage on the Organization screen', () => {
     renderOverview(document({ plan: 'CORE', used: 4, value: 5, reached: false }));
 
     expect(screen.queryByText('4 of 5')).toBeTruthy();
+  });
+
+  it('never prints the unlimited sentinel (#603)', () => {
+    renderOverview(document({ plan: 'CORE', used: 1, value: UNLIMITED_LIMIT, reached: false }));
+
+    expect(screen.getByText('Stations on plan')).toBeTruthy();
+    expect(screen.getByText('No station limit on this plan')).toBeTruthy();
+    expect(screen.queryByText(/1000000|999999/)).toBeNull();
+    expect(onboardButtons().some((button) => button.disabled)).toBe(false);
   });
 
   it('shows no commercial guidance to a Role the server withheld the plan from', () => {

@@ -57,7 +57,7 @@ describe('InvoicesPanel', () => {
   it('lists merchandise sales newest first with a total and in-range tiles', () => {
     renderWithProviders(<InvoicesPanel selectedStation={station} userRole="Owner" />);
     expect(screen.getAllByText('In range')).toHaveLength(3);
-    const section = screen.getByTestId('section-header-merchandise-invoices').parentElement!;
+    const section = screen.getByTestId('section-header-product-invoices').parentElement!;
     const bodyRows = section.querySelectorAll('tbody tr');
     expect(within(bodyRows[0] as HTMLElement).getByText('Acme Logistics')).toBeTruthy();
     expect(within(bodyRows[1] as HTMLElement).getByText('Walk-in')).toBeTruthy();
@@ -70,7 +70,7 @@ describe('InvoicesPanel', () => {
   it('shows the empty state only after a successful load', () => {
     query = ok([]);
     renderWithProviders(<InvoicesPanel selectedStation={station} userRole="Owner" />);
-    expect(screen.getByText('No merchandise sales')).toBeTruthy();
+    expect(screen.getByText('No product sales')).toBeTruthy();
   });
 
   it('keeps Staff from issuing a new invoice', () => {

@@ -1,11 +1,9 @@
 import React, {
-  useCallback,
   useEffect,
   useId,
   useLayoutEffect,
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -13,6 +11,7 @@ import { cn } from '../lib/cn.js';
 import { Icon } from '../icon/Icon.js';
 import { Input } from '../input/Input.js';
 import { formatDateSpan } from '../../utils/format.js';
+import { isInsideAny, useAnchoredPopover } from '../lib/anchoredPopover.js';
 import {
   PRESET_LABEL,
   computeRange,
@@ -22,11 +21,6 @@ import {
   type RangePreset,
 } from './range.js';
 
-const GAP = 6;
-
-function isInside(node: Node | null, ...refs: Array<React.RefObject<HTMLElement | null>>): boolean {
-  return node != null && refs.some((r) => r.current?.contains(node));
-}
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 /** The earliest custom date: a partly typed year (`0020`) is not a date. */
 const MIN_DATE = '2000-01-01';
@@ -100,7 +94,6 @@ export function DateRangeMenu({
   const [picked, setPicked] = useState<RangePreset | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<CSSProperties>({ position: 'fixed', top: 0, left: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const menuId = useId();
@@ -115,7 +108,7 @@ export function DateRangeMenu({
   const active: RangePreset = pickedStillMatches ? picked : matchPreset(value, presets, clock, now);
   const span = (r: DateRange) => formatDateSpan(r.from, r.to, { referenceDate: today });
 
-  const inside = (node: Node | null) => isInside(node, rootRef, popoverRef);
+  const inside = (node: Node | null) => isInsideAny(node, [rootRef, popoverRef]);
 
   // What the custom fields show. A field may hold a date still being typed;
   // only a complete, plausible date reaches `onChange`. Mirrored in a ref so a
@@ -185,36 +178,6 @@ export function DateRangeMenu({
   // Escape throws the typed dates away.
   const discardCustom = () => setDraft(valueRef.current);
 
-  // Fixed under the button (above it when there is no room below), lined up
-  // with the button's start or end edge.
-  const place = useCallback(() => {
-    const trigger = triggerRef.current;
-    if (!trigger) return;
-    const r = trigger.getBoundingClientRect();
-    const height = popoverRef.current?.getBoundingClientRect().height ?? 0;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const edge = align ?? (r.left + r.width / 2 > vw / 2 ? 'end' : 'start');
-    const below = vh - r.bottom - GAP;
-    const flip = height > below && r.top - GAP > below;
-    setPosition({
-      position: 'fixed',
-      ...(flip ? { bottom: vh - r.top + GAP } : { top: r.bottom + GAP }),
-      ...(edge === 'end' ? { right: vw - r.right } : { left: r.left }),
-    });
-  }, [align]);
-
-  useLayoutEffect(() => {
-    if (!open) return;
-    place();
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
-    return () => {
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
-    };
-  }, [open, place]);
-
   // Closing commits the custom draft (Escape discards it first; a preset
   // replaces it).
   const close = (returnFocus: boolean) => {
@@ -223,17 +186,20 @@ export function DateRangeMenu({
     if (returnFocus) triggerRef.current?.focus();
   };
 
-  // A click outside closes the popover without moving focus.
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent | MouseEvent) => {
-      if (isInside(e.target as Node, rootRef, popoverRef)) return;
+  // Fixed under the button (above it when there is no room below), lined up
+  // with its start or end edge; a click outside commits the custom dates and
+  // closes without moving focus. Shared with DatePickerButton.
+  const position = useAnchoredPopover({
+    open,
+    triggerRef,
+    popoverRef,
+    insideRefs: [rootRef],
+    align,
+    onPressOutside: () => {
       commitRef.current();
       setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
+    },
+  });
 
   // Opening puts focus on the selected preset (the first, when custom). Only
   // on open: a later value change must not pull focus out of the date fields.

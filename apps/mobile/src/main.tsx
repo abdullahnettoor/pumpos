@@ -5,6 +5,7 @@ import {
   createQueryClient,
   ErrorBoundary,
   ToastProvider,
+  TooltipProvider,
   setPdfSaver,
 } from '@pump/ui';
 import '@pump/ui/src/index.css';
@@ -57,7 +58,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <QueryProvider client={queryClient}>
         <ThemeProvider>
           <ToastProvider>
-            <App />
+            <TooltipProvider>
+              <App />
+            </TooltipProvider>
           </ToastProvider>
         </ThemeProvider>
       </QueryProvider>
