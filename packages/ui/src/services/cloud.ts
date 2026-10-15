@@ -395,11 +395,12 @@ export class CloudProductService implements IProductService {
     return request<Product[]>('/setup/products');
   }
 
-  async createProduct(data: any): Promise<Product> {
-    return request<Product>('/setup/products', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createProduct(data: any, opts?: { idempotencyKey?: string }): Promise<Product> {
+    return request<Product>(
+      '/setup/products',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async updateProduct(id: string, data: any, opts?: { idempotencyKey?: string }): Promise<Product> {
@@ -410,26 +411,29 @@ export class CloudProductService implements IProductService {
     );
   }
 
-  async archiveProduct(id: string): Promise<void> {
-    await request<void>(`/setup/products/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ isActive: false }),
-    });
+  async archiveProduct(id: string, opts?: { idempotencyKey?: string }): Promise<void> {
+    await request<void>(
+      `/setup/products/${id}`,
+      { method: 'PUT', body: JSON.stringify({ isActive: false }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async importProducts(
     products: any[],
     stationId?: string,
+    opts?: { idempotencyKey?: string },
   ): Promise<{
     total: number;
     createdCount: number;
     created: { id: string; code: string }[];
     failed: { code?: string; name?: string; error: string }[];
   }> {
-    return request('/setup/products/import', {
-      method: 'POST',
-      body: JSON.stringify({ products, stationId }),
-    });
+    return request(
+      '/setup/products/import',
+      { method: 'POST', body: JSON.stringify({ products, stationId }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
@@ -438,19 +442,23 @@ export class CloudPaymentTerminalService implements IPaymentTerminalService {
     return request<PaymentTerminal[]>(`/setup/payment-terminals?stationId=${stationId}`);
   }
 
-  async createTerminal(data: {
-    stationId: string;
-    label: string;
-    provider?: string | null;
-    terminalCode?: string | null;
-    supportsCard?: boolean;
-    supportsUpi?: boolean;
-    clearingAccountId?: string | null;
-  }): Promise<PaymentTerminal> {
-    return request<PaymentTerminal>('/setup/payment-terminals', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createTerminal(
+    data: {
+      stationId: string;
+      label: string;
+      provider?: string | null;
+      terminalCode?: string | null;
+      supportsCard?: boolean;
+      supportsUpi?: boolean;
+      clearingAccountId?: string | null;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<PaymentTerminal> {
+    return request<PaymentTerminal>(
+      '/setup/payment-terminals',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async updateTerminal(
@@ -464,17 +472,21 @@ export class CloudPaymentTerminalService implements IPaymentTerminalService {
       isActive: boolean;
       clearingAccountId: string | null;
     }>,
+    opts?: { idempotencyKey?: string },
   ): Promise<PaymentTerminal> {
-    return request<PaymentTerminal>(`/setup/payment-terminals/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+    return request<PaymentTerminal>(
+      `/setup/payment-terminals/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async deleteTerminal(id: string): Promise<void> {
-    await request<void>(`/setup/payment-terminals/${id}`, {
-      method: 'DELETE',
-    });
+  async deleteTerminal(id: string, opts?: { idempotencyKey?: string }): Promise<void> {
+    await request<void>(
+      `/setup/payment-terminals/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
@@ -483,24 +495,28 @@ export class CloudTankService implements ITankService {
     return request<Tank[]>(`/setup/tanks?stationId=${stationId}`);
   }
 
-  async createTank(data: any): Promise<Tank> {
-    return request<Tank>('/setup/tanks', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createTank(data: any, opts?: { idempotencyKey?: string }): Promise<Tank> {
+    return request<Tank>(
+      '/setup/tanks',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async updateTank(id: string, data: any): Promise<Tank> {
-    return request<Tank>(`/setup/tanks/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  async updateTank(id: string, data: any, opts?: { idempotencyKey?: string }): Promise<Tank> {
+    return request<Tank>(
+      `/setup/tanks/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async deleteTank(id: string): Promise<void> {
-    await request<void>(`/setup/tanks/${id}`, {
-      method: 'DELETE',
-    });
+  async deleteTank(id: string, opts?: { idempotencyKey?: string }): Promise<void> {
+    await request<void>(
+      `/setup/tanks/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
@@ -509,24 +525,32 @@ export class CloudDispenserService implements IDispenserService {
     return request<DispenserUnit[]>(`/setup/dispensers?stationId=${stationId}`);
   }
 
-  async createDispenser(data: any): Promise<DispenserUnit> {
-    return request<DispenserUnit>('/setup/dispensers', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createDispenser(data: any, opts?: { idempotencyKey?: string }): Promise<DispenserUnit> {
+    return request<DispenserUnit>(
+      '/setup/dispensers',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async updateDispenser(id: string, data: any): Promise<DispenserUnit> {
-    return request<DispenserUnit>(`/setup/dispensers/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  async updateDispenser(
+    id: string,
+    data: any,
+    opts?: { idempotencyKey?: string },
+  ): Promise<DispenserUnit> {
+    return request<DispenserUnit>(
+      `/setup/dispensers/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async deleteDispenser(id: string): Promise<void> {
-    await request<void>(`/setup/dispensers/${id}`, {
-      method: 'DELETE',
-    });
+  async deleteDispenser(id: string, opts?: { idempotencyKey?: string }): Promise<void> {
+    await request<void>(
+      `/setup/dispensers/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
@@ -535,24 +559,28 @@ export class CloudNozzleService implements INozzleService {
     return request<Nozzle[]>(`/setup/nozzles?stationId=${stationId}`);
   }
 
-  async createNozzle(data: any): Promise<Nozzle> {
-    return request<Nozzle>('/setup/nozzles', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createNozzle(data: any, opts?: { idempotencyKey?: string }): Promise<Nozzle> {
+    return request<Nozzle>(
+      '/setup/nozzles',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async updateNozzle(id: string, data: any): Promise<Nozzle> {
-    return request<Nozzle>(`/setup/nozzles/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  async updateNozzle(id: string, data: any, opts?: { idempotencyKey?: string }): Promise<Nozzle> {
+    return request<Nozzle>(
+      `/setup/nozzles/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async deleteNozzle(id: string): Promise<void> {
-    await request<void>(`/setup/nozzles/${id}`, {
-      method: 'DELETE',
-    });
+  async deleteNozzle(id: string, opts?: { idempotencyKey?: string }): Promise<void> {
+    await request<void>(
+      `/setup/nozzles/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
@@ -561,24 +589,32 @@ export class CloudShiftTemplateService implements IShiftTemplateService {
     return request<ShiftTemplate[]>('/setup/shift-templates');
   }
 
-  async createTemplate(data: any): Promise<ShiftTemplate> {
-    return request<ShiftTemplate>('/setup/shift-templates', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createTemplate(data: any, opts?: { idempotencyKey?: string }): Promise<ShiftTemplate> {
+    return request<ShiftTemplate>(
+      '/setup/shift-templates',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async updateTemplate(id: string, data: any): Promise<ShiftTemplate> {
-    return request<ShiftTemplate>(`/setup/shift-templates/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  async updateTemplate(
+    id: string,
+    data: any,
+    opts?: { idempotencyKey?: string },
+  ): Promise<ShiftTemplate> {
+    return request<ShiftTemplate>(
+      `/setup/shift-templates/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async deleteTemplate(id: string): Promise<void> {
-    await request<void>(`/setup/shift-templates/${id}`, {
-      method: 'DELETE',
-    });
+  async deleteTemplate(id: string, opts?: { idempotencyKey?: string }): Promise<void> {
+    await request<void>(
+      `/setup/shift-templates/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
