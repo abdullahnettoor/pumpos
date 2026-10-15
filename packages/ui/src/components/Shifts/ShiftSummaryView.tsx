@@ -26,10 +26,13 @@ import { useToast } from '../primitives/ToastProvider.js';
 import { ReportNote } from '../reports/ReportNote.js';
 import { formatBusinessDate, formatMoney } from '../../utils/format.js';
 import { useRunTask } from '../../utils/runTask.js';
+import { useKeyedSave } from '../../office-records/useKeyedSave.js';
+import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
 import { LegacyPurchasesTable } from './LegacyPurchasesTable.js';
 import { DrawerReconciliationTable } from './DrawerReconciliationTable.js';
 import {
+  businessDayContext,
   creditTotalNotes,
   fuelTotalNotes,
   readShiftSummary,
@@ -46,6 +49,8 @@ import {
   SHIFT_SUMMARY_TITLES as TITLES,
   TERMINAL_COLUMNS,
   creditTotalRow,
+  handoverTotalRow,
+  terminalTotalRow,
   fuelTotalRow,
   nozzleTotalRow,
 } from './shiftSummaryColumns.js';
@@ -91,8 +96,14 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   const summary = shiftSummary?.snapshotData ? readShiftSummary(shiftSummary) : null;
   const locked = (shiftStatus ?? (summary?.locked ? 'LOCKED' : 'CLOSED')) === 'LOCKED';
 
+  const saveReopen = useKeyedSave('shifts:reopen');
   const reopen = useMutation({
-    mutationFn: (shiftId: string) => shiftService.reopenShift(shiftId),
+    // One Idempotency-Key per logical reopen: a retry after a dropped response
+    // reuses it, so the shift cannot be reopened twice.
+    mutationFn: (shiftId: string) =>
+      saveReopen({ stationId: station?.id, shiftId }, (idempotencyKey) =>
+        shiftService.reopenShift(shiftId, { idempotencyKey }),
+      ),
     // Synchronous on purpose (pump-data-caching rule 6): the caller refreshes in the background.
     onSuccess: () => {
       toast.success('Shift reopened.');
@@ -206,8 +217,13 @@ const SummaryBody: React.FC<{
   summary: ShiftSummary;
   record: any;
   timeZone?: string;
+  dayStartsAt?: string;
   children?: React.ReactNode;
-}> = ({ summary, record, timeZone, children }) => {
+}> = ({ summary, record, timeZone, dayStartsAt, children }) => {
+  const dayContext = businessDayContext(
+    summary.businessDate,
+    useStationBusinessDate(timeZone, dayStartsAt),
+  );
   const at = (iso: string | null) => (iso ? formatStationDateTime(iso, timeZone) : '—');
   return (
     <div className="print-area flex flex-col gap-5">
@@ -225,6 +241,11 @@ const SummaryBody: React.FC<{
             </div>
           ))}
         </dl>
+        {dayContext && (
+          <p className="m-0 border-t border-border-soft px-4 py-2 text-[12px] text-ink-muted">
+            {dayContext}
+          </p>
+        )}
       </Panel>
       {summary.generatedAt && (
         <ReportNote>
@@ -269,7 +290,7 @@ const SummaryBody: React.FC<{
           title={TITLES.handovers}
           columns={HANDOVER_COLUMNS}
           rows={summary.handovers}
-          totalRow
+          totalRow={handoverTotalRow(summary)}
         />
       )}
       {summary.terminals.length > 0 && (
@@ -277,7 +298,7 @@ const SummaryBody: React.FC<{
           title={TITLES.terminals}
           columns={TERMINAL_COLUMNS}
           rows={summary.terminals}
-          totalRow
+          totalRow={terminalTotalRow(summary)}
         />
       )}
       {summary.credit.length > 0 && (

@@ -195,7 +195,8 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
 
   if (activeSummary || viewShiftId) {
     const canReopen =
-      (userRole === 'Owner' || userRole === 'Manager') && activeSummary?.shiftStatus === 'CLOSED';
+      (userRole === 'Owner' || userRole === 'Manager') &&
+      (activeSummary?.shiftStatus ?? activeSummary?.status) === 'CLOSED';
 
     return (
       <div>
@@ -204,7 +205,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
           query={summariesQ}
           userRole={userRole}
           canReopen={canReopen}
-          shiftStatus={activeSummary?.shiftStatus}
+          shiftStatus={activeSummary?.shiftStatus ?? activeSummary?.status}
           station={selectedStation}
           onReopenSuccess={() => {
             runTask(

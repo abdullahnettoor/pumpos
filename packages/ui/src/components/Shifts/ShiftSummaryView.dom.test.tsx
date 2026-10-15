@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
 
+const reopenShift = vi.fn((..._args: unknown[]) => Promise.resolve({}));
 const recordCollection = vi.fn((..._args: unknown[]) => Promise.resolve({ id: 'c1' }));
 
 vi.mock('../../services/cloud.js', async (importOriginal) => {
@@ -12,6 +13,9 @@ vi.mock('../../services/cloud.js', async (importOriginal) => {
     ...actual,
     CloudTransactionService: class {
       recordCollection = recordCollection;
+    },
+    CloudShiftService: class {
+      reopenShift = reopenShift;
     },
   };
 });
@@ -110,5 +114,18 @@ describe('ShiftSummaryView', () => {
     expect(
       (recordCollection.mock.calls[0][1] as { idempotencyKey: string }).idempotencyKey,
     ).toEqual(expect.any(String));
+  });
+
+  it('reopens with an Idempotency-Key', async () => {
+    const onReopenSuccess = vi.fn();
+    view({ canReopen: true, onReopenSuccess });
+    fireEvent.click(screen.getByRole('button', { name: /Reopen shift/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Reopen' }));
+    await waitFor(() => expect(reopenShift).toHaveBeenCalledTimes(1));
+    expect(reopenShift.mock.calls[0][0]).toBe('shift-1');
+    expect((reopenShift.mock.calls[0][1] as { idempotencyKey: string }).idempotencyKey).toEqual(
+      expect.any(String),
+    );
+    await waitFor(() => expect(onReopenSuccess).toHaveBeenCalled());
   });
 });

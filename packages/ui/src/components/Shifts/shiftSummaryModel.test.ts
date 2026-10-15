@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  businessDayContext,
   creditTotalNotes,
   fuelTotalNotes,
   readShiftSummary,
@@ -49,6 +50,7 @@ describe('readShiftSummary', () => {
       net: 29.5,
     });
     expect(nozzleTotalRow(s)).toEqual({
+      label: 'Total of 2 nozzles',
       values: { gross: 30.5, testing: 1, net: 29.5 },
       units: { gross: 'L', testing: 'L', net: 'L' },
       derive: false,
@@ -90,7 +92,11 @@ describe('readShiftSummary', () => {
       'net volume not stored for this shift',
       'sales value total not stored for this shift',
     ]);
-    expect(creditTotalRow(s)).toEqual({ values: {}, derive: false });
+    expect(creditTotalRow(s)).toEqual({
+      label: 'Total of 1 credit sale',
+      values: {},
+      derive: false,
+    });
     expect(creditTotalNotes(s)).toEqual(['credit sales total not stored for this shift']);
   });
 
@@ -99,7 +105,7 @@ describe('readShiftSummary', () => {
       record({ totalFuelSalesValue: 1234.5, creditSalesTotal: 800, creditSales: [] }),
     );
     expect(s.fuelSalesValue).toBe(1234.5);
-    expect(creditTotalRow(s)).toEqual({ values: { amount: 800 }, derive: false });
+    expect(creditTotalRow(s)).toMatchObject({ values: { amount: 800 }, derive: false });
   });
 
   it('adds card and UPI in paise', () => {
@@ -170,5 +176,31 @@ describe('readShiftSummary', () => {
     expect(s.label).toBe('20261014-2');
     expect(s.locked).toBe(true);
     expect(s.template).toBe('Morning');
+  });
+
+  it('names each volume total a partial snapshot lacks', () => {
+    const s = readShiftSummary(
+      record({ nozzleReadings: [nozzle('N1', 'L', 10, 0)], totalNetVolumeSold: 10 }),
+    );
+    expect(nozzleTotalRow(s)).toMatchObject({ values: { net: 10 } });
+    expect(volumeTotalNotes(s.volumes)).toEqual([
+      'gross and testing volumes not stored for this shift',
+    ]);
+    const t = readShiftSummary(
+      record({
+        nozzleReadings: [nozzle('N1', 'L', 10, 0)],
+        totalVolumeSold: 10,
+        totalNetVolumeSold: 10,
+      }),
+    );
+    expect(volumeTotalNotes(t.volumes)).toEqual(['testing volume not stored for this shift']);
+  });
+});
+
+describe('businessDayContext', () => {
+  it('says whether the shift is on a past day, without dates', () => {
+    expect(businessDayContext('2026-10-13', '2026-10-14')).toMatch(/^A past business day/);
+    expect(businessDayContext('2026-10-14', '2026-10-14')).toBe("Today's business day.");
+    expect(businessDayContext(null, '2026-10-14')).toBeNull();
   });
 });

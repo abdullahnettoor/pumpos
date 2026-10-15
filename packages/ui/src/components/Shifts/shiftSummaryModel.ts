@@ -299,8 +299,20 @@ const notStored = (what: string) => `${what} not stored for this shift`;
 /** Why the volume totals read `—` or blank; empty when every total prints. */
 export function volumeTotalNotes(v: VolumeTotals): string[] {
   if (v.units.length > 1) return [`volumes not added across ${v.units.join(' and ')}`];
-  if (v.unit && v.net == null) return [notStored('net volume')];
-  return [];
+  if (!v.unit) return [];
+  const missing = (
+    [
+      ['gross', v.gross],
+      ['testing', v.testing],
+      ['net', v.net],
+    ] as const
+  )
+    .filter(([, value]) => value == null)
+    .map(([name]) => name);
+  if (missing.length === 0) return [];
+  const names =
+    missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(', ')} and ${missing.at(-1)}`;
+  return [notStored(`${names} volume${missing.length > 1 ? 's' : ''}`)];
 }
 
 /** The fuel-by-product notes: the volume notes, plus a sales value the snapshot lacks. */
@@ -318,4 +330,19 @@ export function creditTotalNotes(s: ShiftSummary): string[] {
 /** One line under a table: `Total: a; b.`, or null when every total prints. */
 export function totalNote(notes: string[]): string | null {
   return notes.length > 0 ? `Total: ${notes.join('; ')}.` : null;
+}
+
+/**
+ * Where the shift's business day stands against the station's current one,
+ * without repeating either date (the details row shows the shift's day).
+ */
+export function businessDayContext(
+  businessDate: string | null,
+  currentBusinessDate: string,
+): string | null {
+  if (!businessDate) return null;
+  if (businessDate < currentBusinessDate)
+    return "A past business day: a credit sale logged here belongs to this shift, not today's.";
+  if (businessDate === currentBusinessDate) return "Today's business day.";
+  return null;
 }

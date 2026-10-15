@@ -3,7 +3,9 @@ import { useMutation } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useCustomers, useInvalidateOperational } from '../../query/hooks.js';
-import { Button, Form, Panel, StatusChip } from '../../pump-ds/index.js';
+import { z } from 'zod';
+import { Button, DataSection, Form, Panel, StatusChip } from '../../pump-ds/index.js';
+import { useZodForm } from '../../forms/useZodForm.js';
 import { Field, MoneyInput, Select, TextInput } from '../primitives/Field.js';
 import { Banner } from '../primitives/Banner.js';
 import { useKeyedSave } from '../../office-records/useKeyedSave.js';
@@ -18,6 +20,16 @@ interface ShiftTransactionsPanelProps {
   onTransactionAdded?: () => void | Promise<unknown>;
   isReadOnly?: boolean;
 }
+
+const creditSaleSchema = z.object({
+  customerId: z.string(),
+  amount: z
+    .string()
+    .min(1, 'Enter an amount')
+    .refine((v) => Number.isFinite(Number(v)) && Number(v) > 0, 'Enter an amount above zero'),
+  notes: z.string().max(500).optional(),
+});
+type CreditSaleValues = z.infer<typeof creditSaleSchema>;
 
 interface CreditSaleBody {
   shiftId: string;
@@ -48,11 +60,18 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
   const customersQ = useCustomers(true);
   const customers: any[] = customersQ.data ?? [];
 
-  const [customerIdRaw, setCustomerId] = useState('');
-  const [amount, setAmount] = useState('');
-  const [notes, setNotes] = useState('');
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors },
+  } = useZodForm<CreditSaleValues>(creditSaleSchema, {
+    defaultValues: { customerId: '', amount: '', notes: '' },
+  });
   // Whatever the operator picked, else the first customer.
-  const customerId = customerIdRaw || customers[0]?.id || '';
+  const customerId = watch('customerId') || customers[0]?.id || '';
+  const amount = watch('amount');
 
   const record = useMutation({
     mutationFn: (body: CreditSaleBody) =>
@@ -72,8 +91,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
     // run in the background. A credit sale moves the customer's balance, the
     // shift and the day, so every operational key refreshes.
     onSuccess: () => {
-      setAmount('');
-      setNotes('');
+      reset({ customerId: customerId, amount: '', notes: '' });
       runTask(invalidateOperational(), 'Saved, but the screen could not be refreshed.');
       if (onTransactionAdded) {
         runTask(
@@ -85,9 +103,8 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
     onError: (err: unknown) => setError((err as Error)?.message || 'Failed to record credit sale'),
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isReadOnly || !amount) return;
+  const onSubmit = (values: CreditSaleValues) => {
+    if (isReadOnly) return;
     if (!customerId) {
       setError('A customer account must be selected for Credit Sales.');
       return;
@@ -97,13 +114,12 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
       shiftId,
       stationId,
       customerId,
-      amount: Number(amount),
-      notes: notes || undefined,
+      amount: Number(values.amount),
+      notes: values.notes || undefined,
     });
   };
 
   const busy = isReadOnly || record.isPending;
-  const loadError = customersQ.error ? 'Could not load customers. Reopen the page to retry.' : null;
 
   return (
     <Panel
@@ -114,59 +130,49 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
         Purchases, expenses and collections are not part of a shift — record them from Suppliers,
         Expenses or Customers.
       </p>
-      {(error || loadError) && (
+      {error && (
         <div className="mb-3">
-          <Banner severity="danger">{error ?? loadError}</Banner>
+          <Banner severity="danger">{error}</Banner>
         </div>
       )}
-      <Form onSubmit={handleSubmit} className="flex max-w-[480px] flex-col">
-        <Field label="Customer account" required>
-          <Select
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            disabled={busy || customersQ.isPending}
-          >
-            <option value="">
-              {customersQ.isPending ? 'Loading customers…' : 'Select customer'}
-            </option>
-            {customers.map((cust) => (
-              <option key={cust.id} value={cust.id}>
-                {cust.name} ({cust.customerType})
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Amount (₹)" required>
-          <MoneyInput
-            step="0.01"
-            placeholder="0.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            disabled={busy}
-            required
-          />
-        </Field>
-        <Field label="Notes / fleet slip ID">
-          <TextInput
-            placeholder="e.g. Slip #9921"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            disabled={busy}
-          />
-        </Field>
-        <div>
-          <Button
-            type="submit"
-            variant="primary"
-            size="sm"
-            leftIcon={<Plus size={13} />}
-            loading={record.isPending}
-            disabled={busy || !amount}
-          >
-            {record.isPending ? 'Recording…' : 'Log credit sale'}
-          </Button>
-        </div>
-      </Form>
+      <DataSection title="customers" query={customersQ} shape="bare" placeholderHeight={200}>
+        <Form onSubmit={handleSubmit(onSubmit)} className="flex max-w-[480px] flex-col">
+          <Field label="Customer account" required>
+            <Select {...register('customerId')} value={customerId} disabled={busy}>
+              <option value="">Select customer</option>
+              {customers.map((cust) => (
+                <option key={cust.id} value={cust.id}>
+                  {cust.name} ({cust.customerType})
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Amount (₹)" required error={errors.amount?.message}>
+            <MoneyInput
+              step="0.01"
+              placeholder="0.00"
+              {...register('amount')}
+              invalid={!!errors.amount}
+              disabled={busy}
+            />
+          </Field>
+          <Field label="Notes / fleet slip ID">
+            <TextInput placeholder="e.g. Slip #9921" {...register('notes')} disabled={busy} />
+          </Field>
+          <div>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              leftIcon={<Plus size={13} />}
+              loading={record.isPending}
+              disabled={busy || !amount}
+            >
+              {record.isPending ? 'Recording…' : 'Log credit sale'}
+            </Button>
+          </div>
+        </Form>
+      </DataSection>
     </Panel>
   );
 };

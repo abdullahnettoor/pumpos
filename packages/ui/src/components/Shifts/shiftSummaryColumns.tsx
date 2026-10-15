@@ -94,8 +94,17 @@ const volumeValues = (v: VolumeTotals) =>
 const volumeUnits = (v: VolumeTotals) =>
   v.unit ? { gross: v.unit, testing: v.unit, net: v.unit } : undefined;
 
+/** A total row's label: what it covers ("Total of 3 nozzles"). */
+export const totalLabel = (n: number, one: string, many: string): string =>
+  `Total of ${n} ${n === 1 ? one : many}`;
+
 export function nozzleTotalRow(s: ShiftSummary): TotalRow {
-  return { values: volumeValues(s.volumes), units: volumeUnits(s.volumes), derive: false };
+  return {
+    label: totalLabel(s.nozzles.length, 'nozzle', 'nozzles'),
+    values: volumeValues(s.volumes),
+    units: volumeUnits(s.volumes),
+    derive: false,
+  };
 }
 
 export const FUEL_COLUMNS: TableColumn<SummaryFuelRow>[] = [
@@ -126,6 +135,7 @@ export const FUEL_COLUMNS: TableColumn<SummaryFuelRow>[] = [
 
 export function fuelTotalRow(s: ShiftSummary): TotalRow {
   return {
+    label: totalLabel(s.fuel.length, 'product', 'products'),
     values: {
       ...volumeValues(s.volumes),
       ...(s.fuelSalesValue != null && { salesValue: s.fuelSalesValue }),
@@ -201,7 +211,7 @@ export const CREDIT_COLUMNS: TableColumn<SummaryCreditRow>[] = [
     total: false,
     value: (r) => r.quantity,
     unit: (r) => r.unit,
-    text: (r) => (r.quantity == null ? '—' : formatQuantity(r.quantity, r.unit, { decimals: 3 })),
+    text: (r) => (r.quantity == null ? '—' : formatQuantity(r.quantity, r.unit)),
   },
   { id: 'notes', header: 'Notes', kind: 'text', value: (r) => r.notes },
   { id: 'amount', header: 'Amount', kind: 'money', value: (r) => r.amount },
@@ -210,7 +220,16 @@ export const CREDIT_COLUMNS: TableColumn<SummaryCreditRow>[] = [
 /** The credit total as stored; blank (with a note) for a snapshot without one. */
 export function creditTotalRow(s: ShiftSummary): TotalRow {
   return {
+    label: totalLabel(s.credit.length, 'credit sale', 'credit sales'),
     values: s.creditTotal == null ? {} : { amount: s.creditTotal },
     derive: false,
   };
 }
+
+/** Handover and terminal money is not stored as totals: the table adds the rows in paise. */
+export const handoverTotalRow = (s: ShiftSummary): TotalRow => ({
+  label: totalLabel(s.handovers.length, 'handover', 'handovers'),
+});
+export const terminalTotalRow = (s: ShiftSummary): TotalRow => ({
+  label: totalLabel(s.terminals.length, 'terminal', 'terminals'),
+});
