@@ -9,3 +9,5 @@ export type {
   StatusColumn,
   TotalRow,
 } from './columns.js';
+export { GroupedTable } from './GroupedTable.js';
+export type { GroupedTableProps, TableGroup } from './GroupedTable.js';

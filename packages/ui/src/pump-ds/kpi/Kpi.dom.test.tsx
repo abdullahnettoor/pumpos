@@ -24,6 +24,8 @@ describe('KpiTile', () => {
     expect(formatKpiScope('today')).toBe('Today');
     expect(formatKpiScope('in-range')).toBe('In range');
     expect(formatKpiScope('now')).toBe('Now');
+    expect(formatKpiScope('this-shift')).toBe('This shift');
+    expect(formatKpiScope({ day: '2026-10-14' })).toBe('14 Oct');
     expect(formatKpiScope({ month: '2026-10' })).toBe('Oct');
     // One locale-free month table: never ICU's "Sept".
     expect(formatKpiScope({ month: '2026-09-30' })).toBe('Sep');
