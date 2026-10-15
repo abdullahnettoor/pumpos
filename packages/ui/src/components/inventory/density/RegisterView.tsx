@@ -1,5 +1,12 @@
 import React, { useMemo } from 'react';
-import { Chip, InteractiveTable, Select, type TableColumn } from '../../../pump-ds/index.js';
+import {
+  Chip,
+  FilterChips,
+  InteractiveTable,
+  Select,
+  type FilterChipOption,
+  type TableColumn,
+} from '../../../pump-ds/index.js';
 import {
   formatClockInZone,
   formatDayMonth,
@@ -7,50 +14,75 @@ import {
   formatTemperature,
 } from '../../../utils/format.js';
 import { DeltaChip } from './DeltaChip.js';
-import { DENSITY_KIND_LABEL, DENSITY_KINDS, type DensityRegisterFilter } from './densityKind.js';
-import type { DensityReadingWithContext } from '@pump/shared';
+import {
+  DENSITY_KIND_LABEL,
+  DENSITY_KINDS,
+  routineCounts,
+  type DensityRegisterFilter,
+} from './densityKind.js';
+import type { DensityReadingKind, DensityReadingWithContext } from '@pump/shared';
 
 export interface RegisterFiltersProps {
   products: Array<{ id: string; name: string; code: string }>;
+  /** Every reading, unfiltered: the routine chips count from it. */
+  readings: readonly DensityReadingWithContext[];
   value: DensityRegisterFilter;
   onChange: (value: DensityRegisterFilter) => void;
 }
 
-/** The Register's row filters, for the section header's control bar. Apply instantly. */
-export const RegisterFilters: React.FC<RegisterFiltersProps> = ({ products, value, onChange }) => (
-  <>
-    <Select
-      inputSize="sm"
-      className="min-w-[150px]"
-      value={value.productId}
-      onChange={(e) => onChange({ ...value, productId: e.target.value })}
-      aria-label="Filter by product"
-    >
-      <option value="">All products</option>
-      {products.map((product) => (
-        <option key={product.id} value={product.id}>
-          {product.name} ({product.code})
-        </option>
-      ))}
-    </Select>
-    <Select
-      inputSize="sm"
-      className="min-w-[130px]"
-      value={value.kind}
-      onChange={(e) =>
-        onChange({ ...value, kind: e.target.value as DensityRegisterFilter['kind'] })
-      }
-      aria-label="Filter by kind"
-    >
-      <option value="">All routines</option>
-      {DENSITY_KINDS.map((kind) => (
-        <option key={kind} value={kind}>
-          {DENSITY_KIND_LABEL[kind]}
-        </option>
-      ))}
-    </Select>
-  </>
-);
+type RoutineChip = DensityReadingKind | 'ALL';
+
+/**
+ * The Register's row filters, for the section header's control bar. Apply
+ * instantly: products in a select (any number of fuels), the three routines as
+ * counted filter chips.
+ */
+export const RegisterFilters: React.FC<RegisterFiltersProps> = ({
+  products,
+  readings,
+  value,
+  onChange,
+}) => {
+  const counts = useMemo(
+    () => routineCounts(readings, value.productId),
+    [readings, value.productId],
+  );
+  const options = useMemo<FilterChipOption<RoutineChip>[]>(
+    () => [
+      { value: 'ALL', label: 'All', count: counts.ALL },
+      ...DENSITY_KINDS.map((kind) => ({
+        value: kind,
+        label: DENSITY_KIND_LABEL[kind],
+        count: counts[kind],
+      })),
+    ],
+    [counts],
+  );
+  return (
+    <>
+      <Select
+        inputSize="sm"
+        className="min-w-[150px]"
+        value={value.productId}
+        onChange={(e) => onChange({ ...value, productId: e.target.value })}
+        aria-label="Filter by product"
+      >
+        <option value="">All products</option>
+        {products.map((product) => (
+          <option key={product.id} value={product.id}>
+            {product.name} ({product.code})
+          </option>
+        ))}
+      </Select>
+      <FilterChips<RoutineChip>
+        aria-label="Routine"
+        options={options}
+        value={value.kind || 'ALL'}
+        onChange={(kind) => onChange({ ...value, kind: kind === 'ALL' ? '' : kind })}
+      />
+    </>
+  );
+};
 
 export interface RegisterViewProps {
   /** The rows to show, already filtered and ordered (`filterDensityReadings`). */
@@ -102,7 +134,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ readings, tolerance,
         kind: 'text',
         value: (r) => DENSITY_KIND_LABEL[r.kind],
         cell: (r) => (
-          <Chip size="sm" tone="neutral">
+          <Chip size="md" tone="neutral">
             {DENSITY_KIND_LABEL[r.kind]}
           </Chip>
         ),

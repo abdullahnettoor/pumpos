@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Button,
   DataSection,
@@ -8,6 +8,8 @@ import {
   SegmentedControl,
 } from '../../../pump-ds/index.js';
 import { formatDayMonth } from '../../../utils/format.js';
+import { countOf } from '../../../utils/ledgerWindow.js';
+import { officeSubmitKeys, type SubmitKeySession } from '../../../office-records/submitKeys.js';
 import {
   useDensityReadings,
   useDensityTodaySummary,
@@ -36,7 +38,7 @@ export interface DensityTabProps {
   stationId: string;
 }
 
-const readingCount = (n: number) => `${n} ${n === 1 ? 'reading' : 'readings'}`;
+const readingCount = (n: number) => countOf(n, 'reading', 'readings');
 
 export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
   const [view, setView] = useState<'today' | 'register'>('today');
@@ -76,13 +78,26 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
     return (nozzlesQ.data ?? []).filter((n) => fuelIds.has(n.productId));
   }, [nozzlesQ.data, fuelProducts]);
 
+  // One Idempotency-Key per logical save, through the shared key store: kept
+  // while a save's outcome is unknown (drop, 5xx), renewed after a decided
+  // answer, so a retry cannot record the same reading twice.
+  const keys = useRef<SubmitKeySession | null>(null);
   const handleOpenRecord = (prodId?: string) => {
+    keys.current = officeSubmitKeys.session(`density:${stationId}`);
     setPresetProductId(prodId);
     setIsRecordOpen(true);
   };
 
   const handleSaveDensity = async (payload: RecordDensityReadingPayload) => {
-    await recordDensity.mutateAsync({ payload });
+    const session = (keys.current ??= officeSubmitKeys.session(`density:${stationId}`));
+    const idempotencyKey = session.next(JSON.stringify(payload));
+    try {
+      await recordDensity.mutateAsync({ payload, idempotencyKey });
+      session.settle();
+    } catch (err) {
+      session.settle(err);
+      throw err;
+    }
 
     if (payload.kind === 'MORNING') {
       const prod = fuelProducts.find((p) => p.id === payload.productId);
@@ -216,6 +231,7 @@ export const DensityTab: React.FC<DensityTabProps> = ({ stationId }) => {
               {view === 'register' && (
                 <RegisterFilters
                   products={fuelProducts}
+                  readings={readingsQ.data ?? []}
                   value={registerFilter}
                   onChange={setRegisterFilter}
                 />

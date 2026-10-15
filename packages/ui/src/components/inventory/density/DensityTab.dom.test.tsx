@@ -402,21 +402,19 @@ describe('DensityTab · design system (#536, #557)', () => {
     expect(within(table).getByText('Morning')).toBeDefined();
     expect(within(table).getByText('Ad-hoc')).toBeDefined();
     expect(within(table).queryByText(/MORNING|ADHOC/)).toBeNull();
-    const routine = screen.getByRole('combobox', { name: 'Filter by kind' });
-    expect(Array.from(routine.querySelectorAll('option')).map((o) => o.textContent)).toEqual([
-      'All routines',
-      'Morning',
-      'Ad-hoc',
-      'Decantation',
-    ]);
+    // Routine filter: counted chips, not a dropdown (3 routines + All).
+    const routine = screen.getByRole('radiogroup', { name: 'Routine' });
+    expect(
+      within(routine)
+        .getAllByRole('radio')
+        .map((r) => r.getAttribute('aria-label')),
+    ).toEqual(['All, 2', 'Morning, 1', 'Ad-hoc, 1', 'Decantation, 0']);
   });
 
   it('the Register routine filter applies instantly', () => {
     renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: seedChatham() });
     fireEvent.click(screen.getByRole('radio', { name: /Register/i }));
-    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by kind' }), {
-      target: { value: 'ADHOC' },
-    });
+    fireEvent.click(screen.getByRole('radio', { name: 'Ad-hoc, 1' }));
     expect(screen.queryByText('Rajesh Manager')).toBeNull();
     expect(screen.getByText('Sunil Operator')).toBeDefined();
     expect(screen.getByText('1 reading')).toBeDefined();
@@ -488,5 +486,67 @@ describe('DensityTab · design system (#536, #557)', () => {
     const calls = fetchMock.mock.calls.length;
     fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(calls));
+  });
+});
+
+describe('DensityTab · one Idempotency-Key per save', () => {
+  it('retries a dropped save under the same key, and a new save gets a new one', async () => {
+    let posts = 0;
+    const qc = seedChatham();
+    const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST' && ++posts === 1) throw new TypeError('Failed to fetch');
+      // A save refreshes the reads: answer them with what is seeded.
+      const data =
+        init?.method === 'POST'
+          ? { id: `rd-${posts}` }
+          : String(url).includes('/setup/stations')
+            ? qc.getQueryData(queryKeys.stations())
+            : String(url).includes('/setup/products')
+              ? PRODUCTS
+              : String(url).includes('/density/today')
+                ? MOCK_TODAY_SUMMARY
+                : [];
+      return new Response(JSON.stringify({ success: true, data }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithProviders(<DensityTab stationId={STATION_ID} />, { queryClient: qc });
+
+    const fill = () => {
+      fireEvent.change(screen.getByLabelText(/Observed hydrometer/), { target: { value: '745' } });
+      fireEvent.change(screen.getByLabelText(/Observed temperature/), {
+        target: { value: '28.5' },
+      });
+    };
+    const keysSent = () =>
+      fetchMock.mock.calls
+        .filter(([, init]) => init?.method === 'POST')
+        .map(([, init]) => new Headers(init?.headers).get('Idempotency-Key'));
+
+    fireEvent.click(screen.getByRole('button', { name: /Record density/i }));
+    fill();
+    fireEvent.click(screen.getByRole('button', { name: /Save reading/i }));
+    await waitFor(() => expect(keysSent().length).toBe(1));
+    // The drop leaves the drawer open; saving again reuses the key.
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('button', { name: /Save reading/i }) as HTMLButtonElement).disabled,
+      ).toBe(false),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Save reading/i }));
+    await waitFor(() => expect(keysSent().length).toBe(2));
+    const [first, retry] = keysSent();
+    expect(first).toBeTruthy();
+    expect(retry).toBe(first);
+
+    // Saved: the next reading is a new request.
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Save reading/i })).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: /Record density/i }));
+    fill();
+    fireEvent.click(screen.getByRole('button', { name: /Save reading/i }));
+    await waitFor(() => expect(keysSent().length).toBe(3));
+    expect(keysSent()[2]).not.toBe(first);
   });
 });

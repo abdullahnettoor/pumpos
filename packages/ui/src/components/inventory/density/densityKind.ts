@@ -47,3 +47,17 @@ export function filterDensityReadings(
         b.businessDate.localeCompare(a.businessDate) || b.recordedAt.localeCompare(a.recordedAt),
     );
 }
+
+/**
+ * Readings per routine for the Register's routine chips, within the chosen
+ * product (the counts say what each chip would show).
+ */
+export function routineCounts(
+  readings: readonly DensityReadingWithContext[],
+  productId: string,
+): Record<DensityReadingKind | 'ALL', number> {
+  const mine = productId ? readings.filter((r) => r.productId === productId) : readings;
+  const counts = { ALL: mine.length, MORNING: 0, ADHOC: 0, DECANTATION: 0 };
+  for (const r of mine) counts[r.kind] += 1;
+  return counts;
+}
