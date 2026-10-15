@@ -15,12 +15,22 @@ export type EntryClock = Pick<RangeClock, 'timeZone'>;
 export const inWindow = (date: string | null | undefined, w: DateRange): boolean =>
   !!date && date >= w.from && date <= w.to;
 
+/** A rupee figure in whole paise; a missing or broken figure is 0. */
+export const toPaise = (v: number | string | null | undefined): number => {
+  const n = Number(v || 0);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+};
+
+/** Σ of rupee figures, in whole paise so the sum is the sum of the figures shown. */
+export const sumRupees = (values: Iterable<number | string | null | undefined>): number => {
+  let paise = 0;
+  for (const v of values) paise += toPaise(v);
+  return paise / 100;
+};
+
 /** Σ `amount`, in whole paise so the sum is the sum of the figures shown. */
 export const sumAmounts = (rows: readonly { amount: number | string }[]): number =>
-  rows.reduce((acc, r) => {
-    const n = Number(r.amount || 0);
-    return acc + (Number.isFinite(n) ? Math.round(n * 100) : 0);
-  }, 0) / 100;
+  sumRupees(rows.map((r) => r.amount));
 
 /** "1 entry", "3 entries". */
 export const countOf = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;

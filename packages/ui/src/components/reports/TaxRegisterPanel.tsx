@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useSalesTaxRegister } from '../../query/hooks.js';
 import { formatDate, formatMoney } from '../../utils/format.js';
+import { salesTaxTotals } from './totals/reportTotals.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import {
   ControlBar,
@@ -161,14 +162,7 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({
     [saleRows],
   );
 
-  const totals = useMemo(() => {
-    let gstOutput = 0;
-    for (const r of gstSaleRows)
-      gstOutput += figure(r.cgst) + figure(r.sgst) + figure(r.igst) + figure(r.cess);
-    let vat = 0;
-    for (const r of vatSaleRows) vat += figure(r.vat);
-    return { gstOutput, vat };
-  }, [gstSaleRows, vatSaleRows]);
+  const totals = useMemo(() => salesTaxTotals(saleRows), [saleRows]);
 
   if (!selectedStation) {
     return (

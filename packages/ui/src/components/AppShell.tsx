@@ -306,7 +306,7 @@ export const AppShell: React.FC<AppShellProps> = ({
             {groupedNav.map((group, gi) => (
               <div key={group.heading || `grp-${gi}`} className={gi > 0 ? 'mt-4' : ''}>
                 {!collapsed && group.heading && (
-                  <div className="px-2 pb-1.5 font-mono text-[10px] font-medium uppercase tracking-wider text-ink-faint">
+                  <div className="px-2 pb-1.5 font-mono text-[12px] font-medium uppercase tracking-wider text-ink-faint">
                     {group.heading}
                   </div>
                 )}

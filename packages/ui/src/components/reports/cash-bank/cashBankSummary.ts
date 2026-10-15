@@ -1,5 +1,6 @@
 import type { StationMovements } from '../../../services/cloud.js';
 import { CASH_ACCOUNT_TYPES, accountTypeRank } from '../../../utils/ledgerLabels.js';
+import { toPaise } from '../../../utils/ledgerWindow.js';
 
 /**
  * Reports › Cash & bank as a per-account summary (#531, owner decision 14 Oct):
@@ -66,16 +67,13 @@ export interface CashBankSummary {
 const GROUP_OF = (type: string): CashBankGroup =>
   (CASH_ACCOUNT_TYPES as string[]).includes(type) ? 'cash' : type === 'BANK' ? 'bank' : 'other';
 
-/** In whole paise, so every sum is the sum of the figures shown. */
-const paise = (v: number | string | null | undefined): number => {
-  const n = Number(v ?? 0);
-  return Number.isFinite(n) ? Math.round(n * 100) : 0;
-};
+// Every sum is in whole paise, so it is the sum of the figures shown.
+const paise = toPaise;
 const rupees = (p: number) => p / 100;
 
 /** Whether an account is idle: nothing in the range and nothing held. */
 const isIdle = (a: CashBankAccountRow) =>
-  a.entries === 0 && Math.round(a.opening * 100) === 0 && Math.round(a.closing * 100) === 0;
+  a.entries === 0 && toPaise(a.opening) === 0 && toPaise(a.closing) === 0;
 
 /**
  * Builds the summary from `GET /finance/movements`. Organization-shared

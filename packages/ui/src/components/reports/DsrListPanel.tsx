@@ -103,7 +103,7 @@ export const DsrListPanel: React.FC<DsrListPanelProps> = ({
   const [range, setRange] = useState<DateRange>(() => computeRange('last-30', clock));
   const dssrQ = useDailyDssrRange(stationId, range.from, range.to, {
     enabled: !!stationId && enabled,
-  } as any);
+  });
   // Memoised so `kpis` below actually memoises while the query is loading.
   const list = useMemo<DsrRow[]>(() => dssrQ.data ?? [], [dssrQ.data]);
   // Newest day first.
@@ -205,7 +205,7 @@ export const DsrListPanel: React.FC<DsrListPanelProps> = ({
             title="daily reports"
             onRowClick={onOpen}
             rowLabel={(r) => `DSR ${formatDate(r.businessDate)}`}
-            totalRow={{ label: 'Total' }}
+            totalRow={{ label: 'Total excl. cash sales' }}
           />
         </DataSection>
       </section>

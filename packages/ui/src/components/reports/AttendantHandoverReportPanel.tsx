@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { countOf } from '../../utils/ledgerWindow.js';
 import type { AttendantHandoverReport, AttendantReportEntry } from '@pump/shared';
 import { ATTENDANT_REPORT_CAPABILITY } from '@pump/shared';
 import { useAttendantHandoverReport } from '../../query/hooks.js';
@@ -17,6 +18,7 @@ import {
   type TotalRow,
 } from '../../pump-ds/index.js';
 import { InfoTip } from '../primitives/InfoTip.js';
+import { attendantTotals } from './totals/reportTotals.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
 import { CapabilityRoute } from '../../access/CapabilityGate.js';
 import { generateAttendantReportPdf } from '../../services/reports/generate.js';
@@ -31,8 +33,6 @@ export interface AttendantHandoverReportPanelProps {
 /** Every figure comes from closed shifts; an open shift is not in the report yet. */
 // Variance is not added up across attendants (see ATTENDANT_COLUMNS).
 const TOTAL_ROW: TotalRow = { label: 'Total excl. variance' };
-
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * Attendant Handover Report — per-Attendant accountability across a
@@ -80,17 +80,7 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
     [allAttendants, attendantId],
   );
 
-  const totals = useMemo(
-    () =>
-      attendants.reduce(
-        (acc, a) => ({
-          variance: acc.variance + a.totals.varianceAmount,
-          shifts: acc.shifts + a.shiftsWorked,
-        }),
-        { variance: 0, shifts: 0 },
-      ),
-    [attendants],
-  );
+  const totals = useMemo(() => attendantTotals(attendants), [attendants]);
 
   const openAttendant = attendants.find((a) => a.attendantId === openAttendantId) ?? null;
 
@@ -152,7 +142,7 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
             label="Attendants"
             scope="in-range"
             value={String(attendants.length)}
-            hint={`${plural(totals.shifts, 'shift', 'shifts')} closed`}
+            hint={`${countOf(totals.shifts, 'shift', 'shifts')} closed`}
           />
           <KpiTile
             label="Net variance"

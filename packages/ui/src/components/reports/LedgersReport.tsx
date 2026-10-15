@@ -12,8 +12,8 @@ const VIEWS = [
 ] as const;
 
 /**
- * Reports → Ledgers (#540): the party ledger and the cash & bank summary under
- * one entry. Live balances and per-account statements stay in Accounts; a
+ * Reports → Ledgers (#540): the party ledger (customers, suppliers, owner)
+ * and the cash & bank summary under one entry. Live balances and per-account statements stay in Accounts; a
  * cash & bank row opens its account's statement there (#531).
  */
 export const LedgersReport: React.FC<{
@@ -24,7 +24,12 @@ export const LedgersReport: React.FC<{
   return (
     <div className="flex flex-col gap-4">
       <SegmentedControl aria-label="Ledger view" options={VIEWS} value={view} onChange={setView} />
-      {view === 'party' && <UnifiedLedger selectedStation={selectedStation} />}
+      {view === 'party' && (
+        <UnifiedLedger
+          selectedStation={selectedStation}
+          onOpenCashBank={() => setView('cash-bank')}
+        />
+      )}
       {view === 'cash-bank' && (
         <CashBankReport selectedStation={selectedStation} onNavigate={onNavigate} />
       )}

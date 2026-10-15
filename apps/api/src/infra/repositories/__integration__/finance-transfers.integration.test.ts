@@ -224,16 +224,64 @@ describe.skipIf(!CONNECTION)('GET /finance/movements pairs transfer legs (#530)'
   it('returns one opening per account: Σ before the range, 0 for all time', async () => {
     const OTHER_STATION = id(8);
     const OTHER_CASH = id(9);
+    const INACTIVE = id(10);
+    const FOREIGN_ORG = id(11);
+    const FOREIGN_STATION = id(12);
+    const FOREIGN_BANK = id(13);
     await db
       .insert(schema.stations)
       .values({ id: OTHER_STATION, organizationId: ORG, name: 'Station B', code: 'STB' });
+    await db.insert(schema.financialAccounts).values([
+      {
+        id: OTHER_CASH,
+        organizationId: ORG,
+        stationId: OTHER_STATION,
+        accountType: 'CASH_IN_HAND',
+        name: 'Station B cash',
+      },
+      // An inactive account of this station that never moved.
+      {
+        id: INACTIVE,
+        organizationId: ORG,
+        stationId: STATION,
+        accountType: 'BANK',
+        name: 'Old ICICI',
+        isActive: false,
+      },
+    ]);
+    // Another tenant: its accounts never show, and its entries never count.
+    await db.insert(schema.organizations).values({ id: FOREIGN_ORG, name: 'Tenant B' });
+    await db
+      .insert(schema.stations)
+      .values({ id: FOREIGN_STATION, organizationId: FOREIGN_ORG, name: 'Other', code: 'OTH' });
     await db.insert(schema.financialAccounts).values({
-      id: OTHER_CASH,
-      organizationId: ORG,
-      stationId: OTHER_STATION,
-      accountType: 'CASH_IN_HAND',
-      name: 'Station B cash',
+      id: FOREIGN_BANK,
+      organizationId: FOREIGN_ORG,
+      stationId: null,
+      accountType: 'BANK',
+      name: 'Tenant B shared bank',
     });
+    await db.insert(schema.ledgerEntries).values([
+      {
+        organizationId: FOREIGN_ORG,
+        stationId: FOREIGN_STATION,
+        accountId: FOREIGN_BANK,
+        direction: 'in',
+        amount: '999',
+        entryDate: '2026-10-01',
+        sourceType: 'ADJUSTMENT',
+      },
+      // The shared head-office account moved at Station B too: not this station's money.
+      {
+        organizationId: ORG,
+        stationId: OTHER_STATION,
+        accountId: ORG_BANK,
+        direction: 'in',
+        amount: '7000',
+        entryDate: '2026-10-01',
+        sourceType: 'ADJUSTMENT',
+      },
+    ]);
 
     // Everything above happened on 10 Oct (moves) and 11 Oct (a ₹50 bank charge).
     const res = await app.request(
@@ -242,7 +290,9 @@ describe.skipIf(!CONNECTION)('GET /finance/movements pairs transfer legs (#530)'
     expect(res.status).toBe(200);
     const { data } = (await res.json()) as any;
     const byId = new Map((data.openings as any[]).map((o) => [o.accountId, o]));
-    expect([...byId.keys()].sort()).toEqual([CASH, BANK, ORG_BANK, PETTY].sort());
+    expect([...byId.keys()].sort()).toEqual([CASH, BANK, ORG_BANK, PETTY, INACTIVE].sort());
+    expect(byId.get(INACTIVE)).toMatchObject({ isActive: false, shared: false });
+    expect(Number(byId.get(INACTIVE).opening)).toBe(0);
     expect(byId.get(CASH)).toMatchObject({
       accountType: 'CASH_IN_HAND',
       accountName: 'Cash in Hand',
@@ -253,17 +303,23 @@ describe.skipIf(!CONNECTION)('GET /finance/movements pairs transfer legs (#530)'
     expect(Number(byId.get(PETTY).opening)).toBe(300);
     expect(Number(byId.get(BANK).opening)).toBe(3000); // the 11 Oct charge is in range
     expect(byId.get(ORG_BANK)).toMatchObject({ shared: true });
+    // Only this station's ₹2,000; Station B's ₹7,000 on the same account stays out.
     expect(Number(byId.get(ORG_BANK).opening)).toBe(2000);
 
     // No `from`: the range is all time, nothing precedes it.
     const all = await app.request(`/finance/movements?stationId=${STATION}`);
     const allData = ((await all.json()) as any).data;
+    // Station B's entry on the shared account and Tenant B's entry are not this station's.
+    const amounts = (allData.movements as any[]).map((m) => Number(m.amount));
+    expect(amounts).not.toContain(7000);
+    expect(amounts).not.toContain(999);
     expect((allData.openings as any[]).map((o) => [o.accountId, Number(o.opening)]).sort()).toEqual(
       [
         [CASH, 0],
         [BANK, 0],
         [ORG_BANK, 0],
         [PETTY, 0],
+        [INACTIVE, 0],
       ].sort(),
     );
   });

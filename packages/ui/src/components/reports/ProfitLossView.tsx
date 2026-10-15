@@ -31,6 +31,7 @@ import {
 import { cn } from '../../pump-ds/lib/cn.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
+import { productUnits } from './totals/productUnits.js';
 
 export interface ProfitLossViewProps {
   selectedStation: any | null;
@@ -171,9 +172,7 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
   );
 
   const productColumns = useMemo<TableColumn<ProfitLossProductMargin>[]>(() => {
-    const unitById = new Map<string, string>(
-      (products ?? []).map((p: any) => [String(p.id), String(p.unit ?? '')]),
-    );
+    const unitOf = productUnits(products);
     return [
       {
         id: 'product',
@@ -195,7 +194,7 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
         header: 'Qty',
         kind: 'qty',
         value: (p) => p.quantity,
-        unit: (p) => unitById.get(p.productId) || (p.kind === 'fuel' ? 'L' : 'Nos'),
+        unit: unitOf,
       },
       { id: 'revenue', header: 'Revenue', kind: 'money', value: (p) => p.revenue },
       { id: 'cogs', header: 'COGS', kind: 'money', value: (p) => p.cogs },

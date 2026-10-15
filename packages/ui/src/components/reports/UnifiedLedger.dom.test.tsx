@@ -59,12 +59,25 @@ describe('UnifiedLedger', () => {
     expect(screen.getByText('Select a ledger')).toBeTruthy();
     expect(money.mock.calls.every(([p]) => p.stationId == null)).toBe(true);
 
-    // Cash needs no entity: choosing it loads the statement at once.
+    // Owner needs no entity: choosing it loads the statement at once.
     fireEvent.click(screen.getByRole('button', { name: /Customer/ }));
-    fireEvent.mouseDown(screen.getByRole('option', { name: /^Cash/ }));
+    fireEvent.mouseDown(screen.getByRole('option', { name: /^Owner/ }));
     expect(money).toHaveBeenLastCalledWith(expect.objectContaining({ stationId: 'st-1' }));
     expect(screen.queryByText('Select a ledger')).toBeNull();
-    expect(screen.getByText('Cash ledger')).toBeTruthy();
+    expect(screen.getByText('Owner ledger')).toBeTruthy();
+  });
+
+  it('offers no merged Cash or Bank statement, and points to Cash & bank (#531)', () => {
+    const onOpenCashBank = vi.fn();
+    renderWithProviders(
+      <UnifiedLedger selectedStation={STATION} onOpenCashBank={onOpenCashBank} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Customer/ }));
+    const options = screen.getAllByRole('option').map((o) => o.textContent);
+    expect(options).toEqual(['Customer', 'Supplier', 'Owner']);
+    fireEvent.mouseDown(screen.getByRole('option', { name: /^Customer/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Cash & bank' }));
+    expect(onOpenCashBank).toHaveBeenCalled();
   });
 
   it('dates a party row by the station clock, never the UTC slice of its timestamp (#568)', () => {

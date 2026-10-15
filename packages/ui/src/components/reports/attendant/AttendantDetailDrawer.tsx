@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { countOf } from '../../../utils/ledgerWindow.js';
 import type {
   AttendantReportDispenser,
   AttendantReportEntry,
@@ -188,8 +189,6 @@ const ShiftCard: React.FC<{ shift: AttendantReportShift }> = ({ shift }) => (
   </Panel>
 );
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
 /**
  * One Attendant's statement: range KPIs, then a section per Business Day.
  *
@@ -243,7 +242,7 @@ export const AttendantDetailDrawer: React.FC<{
               size="sm"
               label="Cash handed over"
               value={formatMoney(totals.cashHandedOver)}
-              hint={`over ${plural(attendant.shiftsWorked, 'shift', 'shifts')}`}
+              hint={`over ${countOf(attendant.shiftsWorked, 'shift', 'shifts')}`}
             />
             <KpiTile
               size="sm"
@@ -257,7 +256,7 @@ export const AttendantDetailDrawer: React.FC<{
             <section key={day.businessDate} className="flex flex-col gap-2">
               <SectionHeader
                 title={formatBusinessDate(day.businessDate)}
-                subtitle={plural(day.shifts.length, 'shift', 'shifts')}
+                subtitle={countOf(day.shifts.length, 'shift', 'shifts')}
               />
               {day.shifts.map((shift) => (
                 <ShiftCard key={shift.shiftId} shift={shift} />

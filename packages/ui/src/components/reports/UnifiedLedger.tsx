@@ -31,6 +31,7 @@ import {
   KpiTile,
   DataSection,
   EmptyState,
+  Button,
   ExportMenu,
   Icon,
   SectionHeader,
@@ -40,23 +41,21 @@ import {
 
 export interface UnifiedLedgerProps {
   selectedStation: any | null;
+  /** Switches Ledgers to the Cash & bank summary, where every cash and bank account sits. */
+  onOpenCashBank?: () => void;
 }
 
-type EntityType = 'customer' | 'supplier' | 'cash' | 'bank' | 'owner';
+type EntityType = 'customer' | 'supplier' | 'owner';
 
 const TYPE_OPTIONS = [
   { value: 'customer', label: 'Customer' },
   { value: 'supplier', label: 'Supplier' },
-  { value: 'cash', label: 'Cash' },
-  { value: 'bank', label: 'Bank' },
   { value: 'owner', label: 'Owner' },
 ];
 
 const TYPE_LABEL: Record<EntityType, string> = {
   customer: 'Customer',
   supplier: 'Supplier',
-  cash: 'Cash',
-  bank: 'Bank',
   owner: 'Owner',
 };
 
@@ -64,7 +63,7 @@ interface LedgerSource {
   /** Requires picking a specific entity (customer/supplier). */
   needsEntity: boolean;
   /** Where the ledger rows come from for this type. */
-  moneyAccount?: 'Cash' | 'Bank' | 'Owner';
+  moneyAccount?: 'Owner';
   /** The account kind: decides which column (Debit or Credit) raises the balance. */
   kind: StatementKind;
   balanceLabel: string;
@@ -108,32 +107,6 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     alertBelowZero: false,
     entries: (rows) => partyEntries(rows, 'supplier'),
   },
-  cash: {
-    needsEntity: false,
-    moneyAccount: 'Cash',
-    kind: 'account',
-    balanceLabel: 'Balance',
-    kpiRaises: 'Received',
-    kpiLowers: 'Paid out',
-    emptyText: 'No cash movements in the selected range.',
-    caption:
-      'Debit = received · Credit = paid out. Recorded cash receipts & payments only — fuel/drawer reconciliation lives in the DSR. Opening balance is carried from before the range.',
-    alertBelowZero: true,
-    entries: (rows) => moneyEntries(rows),
-  },
-  bank: {
-    needsEntity: false,
-    moneyAccount: 'Bank',
-    kind: 'account',
-    balanceLabel: 'Balance',
-    kpiRaises: 'Received',
-    kpiLowers: 'Paid out',
-    emptyText: 'No bank movements in the selected range.',
-    caption:
-      'Debit = received · Credit = paid out. Recorded bank/card/UPI receipts & payments. Opening balance is carried from before the range.',
-    alertBelowZero: true,
-    entries: (rows) => moneyEntries(rows),
-  },
   owner: {
     needsEntity: false,
     moneyAccount: 'Owner',
@@ -160,12 +133,19 @@ interface Committed {
 
 /**
  * Entity-aware Ledger (Phase L6). Pick an entity type (Customer, Supplier,
- * Cash, Bank, Owner), the specific entity and a period: the statement loads as
+ * Owner), the specific entity and a period: the statement loads as
  * soon as the choice is complete (#567), with no Apply step. Only the list and
  * ledger the chosen type needs are fetched. All types render through the
  * Statement module (screen and PDF); new entities plug in via the REGISTRY above.
+ *
+ * Cash and bank are not here (owner decision, #531): a merged Cash or Bank
+ * statement matches no passbook. Ledgers › Cash & bank summarises every
+ * account, and each account's statement is on Accounts.
  */
-export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation }) => {
+export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({
+  selectedStation,
+  onOpenCashBank,
+}) => {
   const s = selectedStation?.settings || {};
   const timeZone: string | undefined = s.timezone;
   const dayStartsAt: string | undefined = s.business_day_starts_at;
@@ -265,15 +245,14 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
       };
     }
     const account = REGISTRY[committed.type].moneyAccount;
-    // Money openings come from the backend as raw signed net (in − out). Cash/Bank
-    // balances rise with money in, so that is the opening; the Owner balance rises
-    // with money out (owner-funded), so its opening is negated.
+    // Money openings come from the backend as raw signed net (in − out). The
+    // Owner balance rises with money out (owner-funded), so its opening is negated.
     const rawOpening = Number(
       (money.data?.openings || []).find((o: any) => o.account === account)?.opening ?? 0,
     );
     return {
       entries: (money.data?.movements || []).filter((m: any) => m.account === account),
-      openingBalance: committed.type === 'owner' ? -rawOpening : rawOpening,
+      openingBalance: -rawOpening,
       loading: money.isLoading,
     };
   }, [
@@ -400,7 +379,14 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
           compact
           icon={<Icon name="ledger" size="md" />}
           title="Select a ledger"
-          description="Pick a customer or supplier to load the statement."
+          description="Pick a customer or supplier to load the statement. Cash and bank accounts are in Cash & bank, and each account's statement is on Accounts."
+          action={
+            onOpenCashBank && (
+              <Button variant="secondary" size="sm" onClick={onOpenCashBank}>
+                Open Cash &amp; bank
+              </Button>
+            )
+          }
         />
       ) : (
         <>
@@ -458,13 +444,7 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
 };
 
 function labelForType(t: EntityType): string {
-  return t === 'cash'
-    ? 'Cash ledger'
-    : t === 'bank'
-      ? 'Bank ledger'
-      : t === 'owner'
-        ? 'Owner ledger'
-        : '';
+  return t === 'owner' ? 'Owner ledger' : '';
 }
 
 /**
