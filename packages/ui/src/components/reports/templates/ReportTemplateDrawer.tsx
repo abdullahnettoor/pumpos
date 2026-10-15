@@ -227,7 +227,8 @@ const SectionRow: React.FC<{
             ) : null}
           </span>
         }
-        description={template.descriptions[section.key]}
+        // The shared Switch prints its description at 11px (#539); 12px here.
+        description={<span className="text-[12px]">{template.descriptions[section.key]}</span>}
       />
       {locked ? null : (
         <span className="flex shrink-0 gap-1">

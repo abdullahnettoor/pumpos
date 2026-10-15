@@ -104,7 +104,7 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
               title="Infrastructure & Values"
               controls={{
                 actions: (
-                  <>
+                  <span className="flex gap-1.5">
                     <Button
                       type="button"
                       variant="secondary"
@@ -129,7 +129,7 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
                     >
                       Dispensers
                     </Button>
-                  </>
+                  </span>
                 ),
               }}
             />
