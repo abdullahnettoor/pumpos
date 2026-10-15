@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supplierStatementParty, useAccess, useToast } from '@pump/ui';
+import { supplierStatementParty, useAccess, useToast, withNextStep } from '@pump/ui';
 import type { Station } from '@pump/shared';
 import { supplierPaymentAccess } from '../../lib/money/supplierPayment.js';
 import { balanceOf, supplierIdentity, type MoneySupplier } from '../../lib/money/parties.js';
@@ -78,7 +78,7 @@ export const SupplierPage: React.FC<{
       }
       share={statement.share}
       download={statement.download}
-      onActionError={(message) => toast.error(message)}
+      onActionError={(message) => toast.error(withNextStep(message, 'Try again.'))}
     >
       <SupplierBalanceCard
         supplier={supplier}

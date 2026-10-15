@@ -1,9 +1,9 @@
 import React, { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { canManageExpenseCategory, canVoidExpense } from '@pump/shared';
-import { CloudTransactionService } from '../../services/cloud.js';
 import { ROUTES, type RoutePath } from '../../nav-intent/routes.js';
 import {
+  mutationKeys,
   queryKeys,
   useExpenseCategories,
   useExpenses,
@@ -12,6 +12,16 @@ import {
   useInvalidateOperational,
 } from '../../query/hooks.js';
 import { openQuickEntry } from '../../quick-entry/store.js';
+import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
+import { useVoidCategoryRecord } from '../../office-records/useRecordOfficeRecord.js';
+import { useWriteStates } from '../../query/pendingWrites.js';
+import { useFlashingRows } from '../../utils/rowFlash.js';
+import {
+  recordWriteKey,
+  savingRecordRows,
+  voidWriteKey,
+  withVoidWrites,
+} from './categoryRecordWrites.js';
 import {
   Button,
   DataSection,
@@ -36,11 +46,10 @@ import {
 import { formatMoney } from '../../utils/format.js';
 import { CASH_ACCOUNT_TYPES } from '../../utils/ledgerLabels.js';
 import { countOf, inWindow, sumAmounts } from '../../utils/ledgerWindow.js';
-import { useRunTask } from '../../utils/runTask.js';
+import { useRefreshTask, useRunTask } from '../../utils/runTask.js';
 import { PageFrame } from '../page-frame/index.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import { useAsk } from '../primitives/ConfirmDialog.js';
-import { useToast } from '../primitives/ToastProvider.js';
 import { CategoryAnalytics } from '../expenses/CategoryAnalytics.js';
 import { CategoryManagerDrawer, type CategoryRecordKind } from './CategoryManagerDrawer.js';
 import {
@@ -49,8 +58,6 @@ import {
   isVoided,
   type CategoryRecord,
 } from './categoryRecordColumns.js';
-
-const transactionService = new CloudTransactionService();
 
 /** Everything that differs between the Expenses and Income pages. */
 const COPY: Record<
@@ -67,7 +74,12 @@ const COPY: Record<
     /** Tile labels: today, this month, into/out of cash, the other accounts. */
     kpis: [string, string, string, string];
     about: string;
-    void: { title: string; confirm: string; done: string; failed: string; task: string };
+    void: {
+      title: string;
+      confirm: string;
+      task: string;
+      saved: string;
+    };
   }
 > = {
   expense: {
@@ -85,9 +97,8 @@ const COPY: Record<
     void: {
       title: 'Void this expense?',
       confirm: 'Void expense',
-      done: 'Expense voided.',
-      failed: 'Failed to void expense',
       task: 'Could not void the expense.',
+      saved: 'Expense voided.',
     },
   },
   income: {
@@ -111,16 +122,10 @@ const COPY: Record<
     void: {
       title: 'Void this income entry?',
       confirm: 'Void income',
-      done: 'Income voided.',
-      failed: 'Failed to void income',
       task: 'Could not void the income entry.',
+      saved: 'Income voided.',
     },
   },
-};
-
-const VOID_RECORD: Record<CategoryRecordKind, (id: string, reason?: string) => Promise<unknown>> = {
-  expense: (id, reason) => transactionService.voidExpense(id, reason),
-  income: (id, reason) => transactionService.voidIncome(id, reason),
 };
 
 const CATEGORY_KEY = {
@@ -174,9 +179,18 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
 
   const invalidateOperational = useInvalidateOperational();
   const qc = useQueryClient();
-  const toast = useToast();
   const runTask = useRunTask();
+  const refresh = useRefreshTask();
   const ask = useAsk();
+  const voidRecord = useVoidCategoryRecord();
+  // Saves and voids in flight, from the writes themselves (#606).
+  const recordWrites = useWriteStates(
+    mutationKeys.officeRecord(),
+    recordWriteKey,
+    `${kind}:${stationId ?? ''}`,
+  );
+  const voidWrites = useWriteStates(mutationKeys.voidOfficeRecord(), voidWriteKey, kind);
+  const flashing = useFlashingRows();
 
   const role = (userRole as any) ?? 'Staff';
   const canManageCategories = canManageExpenseCategory(role);
@@ -213,14 +227,22 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
       });
       if (!confirmed) return;
       try {
-        await VOID_RECORD[kind](row.id, value);
-        toast.success(copy.void.done);
-        await invalidateOperational(stationId);
-      } catch (err: any) {
-        toast.error(err.message || copy.void.failed);
+        // One key per void through the shared store: a retry after a lost
+        // answer reuses it, so it cannot void twice.
+        await sendKeyed(
+          officeSubmitKeys.session(`${kind}:void:${row.id}`),
+          { stationId, id: row.id, reason: value },
+          (idempotencyKey) =>
+            voidRecord.mutateAsync({ kind, id: row.id, stationId, reason: value, idempotencyKey }),
+        );
+        // The row reads Voided and is highlighted (#606): no toast. The rest
+        // refreshes in the background; a failure says so briefly, with Retry.
+        refresh(() => invalidateOperational(stationId, { throwOnError: true }), copy.void.saved);
+      } catch {
+        // The row says it was not voided, and why (#606).
       }
     },
-    [ask, copy, invalidateOperational, kind, stationId, toast],
+    [ask, copy, invalidateOperational, kind, stationId, voidRecord, refresh],
   );
 
   const columns = useMemo(
@@ -272,6 +294,11 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
       })
       .sort((a, b) => (b.entryDate ?? '').localeCompare(a.entryDate ?? ''));
   }, [records, categoryFilter, search, range.from, range.to]);
+  // What the table lists: entries still saving on top, then the ledger with its voids in flight.
+  const tableRows = useMemo(
+    () => [...savingRecordRows(recordWrites), ...withVoidWrites(rows, voidWrites)],
+    [rows, recordWrites, voidWrites],
+  );
 
   // Voided entries stay listed but add nothing; the label says so when one shows.
   const totalRow = useMemo<TotalRow>(() => {
@@ -406,7 +433,7 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
                   query={recordsQ}
                   placeholderHeight={240}
                   flush
-                  isEmpty={rows.length === 0}
+                  isEmpty={tableRows.length === 0}
                   empty={
                     <div className="p-3">
                       <EmptyState
@@ -425,8 +452,9 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
                   <InteractiveTable
                     bare
                     columns={columns}
-                    rows={rows}
+                    rows={tableRows}
                     rowKey={(r) => r.id}
+                    flashRowIds={flashing}
                     totalRow={totalRow}
                     title={copy.noun}
                   />

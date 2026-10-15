@@ -19,7 +19,7 @@ import {
   type TotalRow,
 } from '../../pump-ds/index.js';
 import { Banner } from '../primitives/Banner.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
   CloudShiftService,
@@ -44,8 +44,9 @@ import {
   useDecantationDayCloseWarnings,
   queryKeys,
 } from '../../query/hooks.js';
+import { patchBusinessDayClosed } from '../../query/shiftStatusPatches.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
-import { useRunTask } from '../../utils/runTask.js';
+import { useRefreshTask, useRunTask } from '../../utils/runTask.js';
 import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { dayFigures, dayShifts, type DayShiftRow } from './businessDayModel.js';
 
@@ -117,6 +118,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   const qc = useQueryClient();
   const invalidateOperational = useInvalidateOperational();
   const runTask = useRunTask();
+  const refresh = useRefreshTask();
   const [closing, setClosing] = useState(false);
   const canClose = userRole === 'Owner' || userRole === 'Manager';
 
@@ -385,25 +387,37 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
       setClosing(true);
       // One key per close; a retry after an unanswered close reuses it.
       const businessDayId: string = snap.businessDayId;
-      await sendKeyed(
+      const closed = await sendKeyed(
         officeSubmitKeys.session(`business-day:close:${businessDayId}`),
         { stationId, businessDayId, businessDate },
         (key) => shiftService.closeBusinessDay(businessDayId, stationId, { idempotencyKey: key }),
       );
+      // The day reads Closed from the answer (#606); its DSR arrives with the refresh.
+      patchBusinessDayClosed(qc, stationId, closed);
       // Closed: report it from the response; the caches refresh in the
       // background (caching rule 6). The day's DSSR snapshot only exists once
       // the close succeeds, so both the single-day and range views refetch.
       toast.success('Business day closed · DSR generated.');
-      runTask(
-        Promise.all([
-          invalidateOperational(stationId),
-          qc.invalidateQueries({ queryKey: queryKeys.dssr(stationId, businessDate) }),
-          qc.invalidateQueries({ queryKey: ['dssr-range'] }),
-        ]),
-        'Day closed, but the screen could not be refreshed.',
+      refresh(
+        () =>
+          Promise.all([
+            invalidateOperational(stationId, { throwOnError: true }),
+            qc.invalidateQueries(
+              { queryKey: queryKeys.dssr(stationId, businessDate) },
+              { throwOnError: true },
+            ),
+            qc.invalidateQueries({ queryKey: queryKeys.dssrRangePrefix() }, { throwOnError: true }),
+          ]),
+        'Day closed.',
       );
     } catch (err: any) {
-      toast.error(err.message || 'Failed to close the business day.');
+      toast.error(withNextStep(err.message, 'Nothing was sealed. Try closing it again.'), {
+        title: 'Day not closed',
+        action: {
+          label: 'Try again',
+          onClick: () => runTask(handleCloseDay(), 'Could not close the day.'),
+        },
+      });
     } finally {
       setClosing(false);
     }

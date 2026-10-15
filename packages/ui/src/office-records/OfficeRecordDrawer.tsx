@@ -23,7 +23,7 @@ import {
   useStationSuppliers,
 } from '../query/hooks.js';
 import { isIdempotencyKeyConflict, keepsIdempotencyKey } from '../utils/idempotency.js';
-import { useRunTask } from '../utils/runTask.js';
+import { useRefreshTask, useRunTask } from '../utils/runTask.js';
 import { OfficeRecordContext, type OfficeRecordContextValue } from './context.js';
 import { typedAmount, type FormDraft } from './draft.js';
 import type { PartyOption } from './fields/PartyField.js';
@@ -45,6 +45,8 @@ import { PreviewCards, PreviewStrip, type PreviewViewProps } from './PreviewPane
 import { officeRecordRequest, type OfficeRecordSubmission } from './send.js';
 import { officeSubmitKeys } from './submitKeys.js';
 import { useMediaQuery } from './useMediaQuery.js';
+import { currentPage, goToRoute } from '../nav-intent/routes.js';
+import { officeRecordLabels, useRecordOfficeRecord } from './useRecordOfficeRecord.js';
 import { usePriorRecords } from './usePriorRecords.js';
 
 export interface OfficeRecordDrawerProps {
@@ -142,6 +144,7 @@ const OfficeRecordSession: React.FC<
   });
   const toast = useToast();
   const runTask = useRunTask();
+  const refresh = useRefreshTask();
   const invalidateOperational = useInvalidateOperational();
   const side = useMediaQuery(PREVIEW_SIDE_QUERY);
   const formId = `office-record-${kind}`;
@@ -192,6 +195,7 @@ const OfficeRecordSession: React.FC<
 
   // ---- session state ----
   const [session] = useState(() => officeSubmitKeys.session(`${kind}:${stationId}`));
+  const record = useRecordOfficeRecord();
   const [draft, setDraft] = useState<FormDraft | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<{
@@ -210,10 +214,15 @@ const OfficeRecordSession: React.FC<
   const save = async (submission: OfficeRecordSubmission) => {
     const request = officeRecordRequest(stationId, submission);
     const key = session.next(JSON.stringify(request.body));
+    const labels = officeRecordLabels(submission, {
+      categories,
+      accounts: fundingQ.data ?? [],
+      parties: [...(locked ? [locked] : []), ...(kind === 'collection' ? customers : suppliers)],
+    });
     setSubmitting(true);
     setFailure(null);
     try {
-      await request.send(key);
+      await record.mutateAsync({ stationId, kind, request, idempotencyKey: key, labels });
     } catch (err: any) {
       session.settle(err);
       setFailure(
@@ -230,10 +239,20 @@ const OfficeRecordSession: React.FC<
     session.settle();
     setSubmitting(false);
     const paidToo = submission.kind === 'purchase' && !!submission.payment;
-    toast.success(paidToo ? 'Purchase and supplier payment recorded.' : def.saved);
-    runTask(
-      invalidateOperational(stationId),
-      `${def.label} recorded, but the screen could not be refreshed.`,
+    // Secondary to the row it adds (step 1). Recorded from another page, the
+    // toast offers the way to the list (#606).
+    const away = currentPage() !== def.list.route;
+    toast.success(
+      paidToo ? 'Purchase and supplier payment recorded.' : def.saved,
+      away
+        ? { action: { label: def.list.label, onClick: () => goToRoute(def.list.route) } }
+        : undefined,
+    );
+    // The saved row is on screen from the answer; a failed refresh says so
+    // briefly, with Retry (#606).
+    refresh(
+      () => invalidateOperational(stationId, { throwOnError: true }),
+      `${def.label} recorded.`,
     );
     if (addAnother) {
       setCarry(carryOver(submission));

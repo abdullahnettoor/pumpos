@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Drawer } from '../Drawer.js';
 import { Button, Chip, EmptyState, Input, Form, Icon } from '../../pump-ds/index.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { CATEGORY_API as API, type CategoryRecordKind, type CategoryTax } from './categoryApi.js';
 
 export type { CategoryRecordKind };
@@ -116,7 +116,12 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
       await onChanged();
       toast.success('Category added.');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to add category');
+      toast.error(
+        withNextStep(
+          err.message || "Couldn't add the category",
+          'Check the name and add it again.',
+        ),
+      );
     } finally {
       setAdding(false);
     }
@@ -144,7 +149,9 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
       await onChanged();
       toast.success(taxed ? 'Category saved.' : 'Category renamed.');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to save category');
+      toast.error(
+        withNextStep(err.message || "Couldn't save the category", 'Check the name and save again.'),
+      );
     } finally {
       setSavingId(null);
     }

@@ -29,16 +29,22 @@ import {
   useMerchandiseHandovers,
   useMerchandiseSales,
 } from '../../query/hooks.js';
-import { useToast } from '../primitives/ToastProvider.js';
 import {
   CloudTransactionService,
   type RecordHandoverPayload,
   type RecordHandoverResult,
 } from '../../services/cloud.js';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRecordHandoverMutation } from '../../query/handoverMutation.js';
+import {
+  patchShiftStatusWithCustomerSale,
+  patchShiftStatusWithoutCustomerSale,
+} from '../../query/shiftStatusPatches.js';
 import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { formatMoney, formatQuantity, MINUS } from '../../utils/format.js';
-import { useRunTask } from '../../utils/runTask.js';
+import { useRefreshTask, useRunTask } from '../../utils/runTask.js';
+import { flashRows } from '../../utils/rowFlash.js';
+import { DRAWER_KEY } from './liveShiftInputs.js';
 import { CloseNote } from './CloseShiftSteps.js';
 import { denominationCountError } from './closeShiftModel.js';
 import { HandoverProductSaleDrawer } from './HandoverProductSaleDrawer.js';
@@ -214,7 +220,6 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   // declared needs one explicit confirmation before submit.
   const [zeroTerminalsConfirmed, setZeroTerminalsConfirmed] = useState(false);
   const [acceptedResult, setAcceptedResult] = useState<RecordHandoverResult | null>(null);
-  const toast = useToast();
   // One Idempotency-Key session per drawer open (#534): a retry after a lost
   // answer reuses the key, even when edited (the server refuses an edited
   // retry). A customer sale added or voided changes what the server would
@@ -223,6 +228,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   const [keySession, setKeySession] = useState(() => officeSubmitKeys.session(keyScope));
   const renewKeySession = () => setKeySession(officeSubmitKeys.session(keyScope));
   const recordHandover = useRecordHandoverMutation();
+  const queryClient = useQueryClient();
   // Denomination counts for the handover cash (held here so re-opening the
   // popover preserves them). Reset when the drawer opens.
   const [cashBreakdown, setCashBreakdown] = useState<CashBreakdown>({});
@@ -315,6 +321,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   const [ccNotes, setCcNotes] = useState('');
   const [ccBusy, setCcBusy] = useState(false);
   const runTask = useRunTask();
+  const refresh = useRefreshTask();
   // Idempotency key for the line currently being added — held across a failed
   // retry (same key → server de-dupes) and cleared on success or any edit.
   const ccIdemKeyRef = useRef<string | null>(null);
@@ -517,8 +524,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
    * is what kept the spinner running for seconds after the sale was recorded
    * (#219), and the prefill latch already stops the refetch clobbering entry.
    */
-  const refreshAfterCreditChange = () =>
-    runTask(onCreditChanged?.(), 'Sale recorded, but the screen could not be refreshed.');
+  const refreshAfterCreditChange = () => refresh(async () => onCreditChanged?.(), 'Sale recorded.');
 
   const addCreditLine = async () => {
     setError(null);
@@ -570,6 +576,15 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       };
       if (isOmc) setOmcLines((prev) => [...prev, line]);
       else setCreditLines((prev) => [...prev, line]);
+      // The board gets the sale from the answer too (#606); the refresh confirms it.
+      if (entry?.id) {
+        patchShiftStatusWithCustomerSale(queryClient, stationId, entry, {
+          customerName: line.customerName,
+          customerType: line.customerType,
+          productName: prod?.name ?? null,
+          productCode: prod?.code ?? null,
+        });
+      }
       setAcceptedResult(null);
       renewKeySession();
       resetCcRow();
@@ -594,6 +609,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
         (idempotencyKey) => transactionService.voidCreditSale(id, { idempotencyKey }),
       );
       setCreditLines((prev) => prev.filter((l) => l.id !== id));
+      patchShiftStatusWithoutCustomerSale(queryClient, stationId, shiftId, id);
       setAcceptedResult(null);
       renewKeySession();
       refreshAfterCreditChange();
@@ -615,6 +631,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
         (idempotencyKey) => transactionService.voidOmcCardSale(id, { idempotencyKey }),
       );
       setOmcLines((prev) => prev.filter((l) => l.id !== id));
+      patchShiftStatusWithoutCustomerSale(queryClient, stationId, shiftId, id);
       setAcceptedResult(null);
       renewKeySession();
       refreshAfterCreditChange();
@@ -796,11 +813,12 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       }
       acceptedFormFingerprintRef.current = JSON.stringify(getValues());
       setAcceptedResult(result);
+      // The Drawer's row on the board and the close page confirms it (#606).
+      flashRows([DRAWER_KEY(userId, duId)]);
       onSaveSuccess();
     } catch (err: any) {
-      const message = err.message || 'Failed to save attendant handover';
-      setError(message);
-      toast.error(message);
+      // Said in the drawer and on the Drawer's row on the board (#606): no toast.
+      setError(err.message || 'Could not save the handover. Check the figures and try again.');
     } finally {
       setSubmitting(false);
     }

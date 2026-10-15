@@ -136,8 +136,10 @@ Default accent behavior:
 
 - Petrol Green for primary action
 - Diesel Blue for information
-- Amber for warning and pending sync
+- Amber for warning
 - Red for destructive or critical states
+- Neutral for a write in flight ("Saving…", later "Waiting to sync"); only a failed or
+  refused write takes a problem tone (#606)
 
 Do not overuse accent color.
 

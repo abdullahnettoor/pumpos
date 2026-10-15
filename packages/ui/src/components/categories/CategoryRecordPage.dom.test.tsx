@@ -464,3 +464,41 @@ describe('Income › GST for Staff (#529)', () => {
     }
   });
 });
+
+describe('voiding reads on the row itself (#606)', () => {
+  const voidFirst = async () => {
+    const table = await screen.findByRole('table');
+    const row = within(table).getByText('Entry r1').closest('tr') as HTMLElement;
+    fireEvent.click(within(row).getByRole('button', { name: 'Void expense' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Void expense' }));
+    return () => within(table).getByText('Entry r1').closest('tr') as HTMLElement;
+  };
+
+  it('shows Saving… on the row while the void is in flight, and no void button', async () => {
+    stubApi({
+      '/transactions/expenses/r1/void': 'hang',
+      '/transactions/expenses': { data: RECORDS },
+    });
+    renderWithProviders(PAGES.expense.render());
+
+    const row = await voidFirst();
+
+    await waitFor(() => expect(within(row()).getByText('Saving…')).toBeTruthy());
+    expect(within(row()).queryByRole('button', { name: 'Void expense' })).toBeNull();
+  });
+
+  it('says on the row why a void was refused, and leaves it as it was', async () => {
+    stubApi({
+      '/transactions/expenses/r1/void': 'fail',
+      '/transactions/expenses': { data: RECORDS },
+    });
+    renderWithProviders(PAGES.expense.render());
+
+    const row = await voidFirst();
+
+    await waitFor(() => expect(within(row()).getByRole('alert').textContent).toContain('boom'));
+    expect(within(row()).queryByText('Voided')).toBeNull();
+    expect(within(row()).getByRole('button', { name: 'Void expense' })).toBeTruthy();
+  });
+});

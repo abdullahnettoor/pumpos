@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useToast } from '../components/primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../components/primitives/ToastProvider.js';
 
 /**
  * Starts an async task from a synchronous context — a React effect or a DOM
@@ -36,8 +36,39 @@ export function useRunTask(): (task: void | undefined | Promise<unknown>, messag
       runTask(task, (error) => {
         // Keep the stack for the console; give the operator the plain message.
         console.error(message, error);
-        toast.error(message);
+        // Errors say what to do next (#606): a background task can be redone.
+        toast.error(withNextStep(message, 'Try again; if it keeps failing, reload the page.'));
       });
+    },
+    [toast],
+  );
+}
+
+/** How long a "Saved. Couldn't refresh" toast stays (it auto-dismisses, #606). */
+export const REFRESH_FAILED_MS = 6000;
+
+/**
+ * Starts the background refresh after a save whose answer already put
+ * everything on screen (#606, owner decision). If the refresh fails, the save
+ * still stands: a short toast says so, with Retry, and leaves on its own.
+ * Where the answer leaves totals unconfirmed (a Handover), the page shows an
+ * inline Retry instead (see `UnconfirmedTotalsNote`), not this.
+ *
+ * `refresh` must reject on failure (`invalidate(stationId, { throwOnError: true })`).
+ */
+export function useRefreshTask(): (refresh: () => Promise<unknown>, saved: string) => void {
+  const toast = useToast();
+  return useCallback(
+    (refresh: () => Promise<unknown>, saved: string) => {
+      const start = () =>
+        runTask(refresh(), (error) => {
+          console.error(saved, error);
+          toast.error(`${saved} Couldn't refresh the screen.`, {
+            duration: REFRESH_FAILED_MS,
+            action: { label: 'Retry', onClick: start },
+          });
+        });
+      start();
     },
     [toast],
   );

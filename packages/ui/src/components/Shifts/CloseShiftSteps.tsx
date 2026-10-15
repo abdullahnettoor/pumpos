@@ -21,6 +21,8 @@ import { formatMoney, MINUS } from '../../utils/format.js';
 import { formatVariance } from '../../utils/variance.js';
 import { NozzleReadingsTable } from './NozzleReadingsTable.js';
 import { drawerColumns, drawerTotalRow } from './DrawerReconciliationTable.js';
+import type { HandoverWrites } from './handoverWrites.js';
+import { useFlashingRows } from '../../utils/rowFlash.js';
 import {
   cashCountDefaults,
   cashCountSchema,
@@ -245,6 +247,8 @@ export interface HandoversStepProps {
   rows: CloseDrawerRow[];
   total: CloseDrawerTotal;
   onOpenHandover: (assignment: StaffAssignmentInput) => void;
+  /** Handovers still saving or failed, by Drawer key (#606). */
+  writes?: HandoverWrites;
 }
 
 /** "1 drawer has not handed over. Hand over every drawer before closing." */
@@ -256,9 +260,18 @@ export const PendingDrawersNote: React.FC<{ count: number }> = ({ count }) =>
     </CloseNote>
   ) : null;
 
-export const HandoversStep: React.FC<HandoversStepProps> = ({ rows, total, onOpenHandover }) => {
+export const HandoversStep: React.FC<HandoversStepProps> = ({
+  rows,
+  total,
+  onOpenHandover,
+  writes,
+}) => {
   const pending = rows.filter((r) => r.pending).length;
-  const columns = React.useMemo(() => drawerColumns(onOpenHandover), [onOpenHandover]);
+  const flashing = useFlashingRows();
+  const columns = React.useMemo(
+    () => drawerColumns(onOpenHandover, writes),
+    [onOpenHandover, writes],
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -271,6 +284,7 @@ export const HandoversStep: React.FC<HandoversStepProps> = ({ rows, total, onOpe
             columns={columns}
             rows={rows}
             rowKey={(r) => r.key}
+            flashRowIds={flashing}
             emptyMessage="No attendant drawers on this shift."
             totalRow={drawerTotalRow(rows, total)}
           />
@@ -303,7 +317,12 @@ export interface CashCountStepProps {
   onDraftChange: DraftPatch;
   /** Whether the count and drops as typed are valid (the page holds Next until they are). */
   onValidityChange?: (valid: boolean) => void;
+  /** The shift totals await the server (#606): their figures read "Saving…". */
+  pending?: boolean;
 }
+
+/** "Saving…" in place of a figure built on unconfirmed shift totals (#606). */
+const SAVING = <StatusChip status="saving" size="sm" className="font-sans" />;
 
 export const CashCountStep: React.FC<CashCountStepProps> = ({
   lines,
@@ -314,6 +333,7 @@ export const CashCountStep: React.FC<CashCountStepProps> = ({
   draft,
   onDraftChange,
   onValidityChange,
+  pending = false,
 }) => {
   const [showWhy, setShowWhy] = useState(false);
   const variance = draft.closingCash - lines.expectedOfficeCash;
@@ -354,7 +374,7 @@ export const CashCountStep: React.FC<CashCountStepProps> = ({
         <SectionHeader title="Expected office cash" />
         <Card>
           <Line label="Opening floats" value={formatMoney(lines.openingFloats)} />
-          <Line label="Cash declared" value={signed(lines.cashDeclared, '+')} />
+          <Line label="Cash declared" value={pending ? SAVING : signed(lines.cashDeclared, '+')} />
           {productCashOutside > 0 && (
             <Line
               sub
@@ -366,12 +386,19 @@ export const CashCountStep: React.FC<CashCountStepProps> = ({
             <Line key={b.sellerName} sub label={b.sellerName} value={formatMoney(b.amount)} />
           ))}
           {lines.handoverDrops > 0 && (
-            <Line label="Handover drops" value={signed(lines.handoverDrops, '−')} />
+            <Line
+              label="Handover drops"
+              value={pending ? SAVING : signed(lines.handoverDrops, '−')}
+            />
           )}
           {lines.unassignedCloseDrops > 0 && (
             <Line label="Office drops at close" value={signed(lines.unassignedCloseDrops, '−')} />
           )}
-          <Line total label="Expected office cash" value={formatMoney(lines.expectedOfficeCash)} />
+          <Line
+            total
+            label="Expected office cash"
+            value={pending ? SAVING : formatMoney(lines.expectedOfficeCash)}
+          />
         </Card>
       </section>
 
@@ -486,9 +513,9 @@ export const CashCountStep: React.FC<CashCountStepProps> = ({
           data-state={office.state}
         >
           <span className="font-medium text-ink-strong">Office count variance</span>
-          <VarianceChip amount={variance} size="md" />
+          {pending ? SAVING : <VarianceChip amount={variance} size="md" />}
         </div>
-        {office.state !== 'balanced' && (
+        {!pending && office.state !== 'balanced' && (
           <div className="flex flex-col gap-1">
             <Button
               variant="ghost"
@@ -549,6 +576,8 @@ export interface ConfirmStepProps {
   warnings: string[];
   confirmWarningsChecked: boolean;
   onConfirmWarningsChange: (checked: boolean) => void;
+  /** The shift totals await the server (#606): their figures read "Saving…". */
+  pending?: boolean;
 }
 
 export const ConfirmStep: React.FC<ConfirmStepProps> = ({
@@ -560,6 +589,7 @@ export const ConfirmStep: React.FC<ConfirmStepProps> = ({
   warnings,
   confirmWarningsChecked,
   onConfirmWarningsChange,
+  pending = false,
 }) => (
   <div className="flex flex-col gap-5">
     <section className="flex flex-col gap-2" aria-label="Shift summary">
@@ -571,12 +601,14 @@ export const ConfirmStep: React.FC<ConfirmStepProps> = ({
             value={<VarianceChip amount={attendantVariance} size="md" />}
           />
         )}
-        <Line label="Expected office cash" value={formatMoney(expectedCash)} />
+        <Line label="Expected office cash" value={pending ? SAVING : formatMoney(expectedCash)} />
         <Line label="Counted office cash" value={formatMoney(draft.closingCash)} />
         <Line
           total
           label="Office count variance"
-          value={<VarianceChip amount={draft.closingCash - expectedCash} size="md" />}
+          value={
+            pending ? SAVING : <VarianceChip amount={draft.closingCash - expectedCash} size="md" />
+          }
         />
         <Line label="Tank dips captured" value={dipCount(draft)} />
         <Line

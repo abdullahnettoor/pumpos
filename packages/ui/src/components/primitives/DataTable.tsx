@@ -60,6 +60,8 @@ export interface DataTableProps<T> {
   selectedRowId?: string | null;
   /** Tighter cell padding so wide tables fit without horizontal scroll. */
   dense?: boolean;
+  /** Rows a save just updated, tinted for a moment (#606, `useFlashingRows`). */
+  flashRowIds?: ReadonlySet<string>;
   /**
    * With `onRowClick`: names each row ("Cash in Hand entries") and makes it
    * reachable by Tab and opened by Enter or Space. Opt-in, so tables without it
@@ -91,6 +93,7 @@ export function DataTable<T>({
   selectedRowId,
   dense = false,
   rowLabel,
+  flashRowIds,
 }: DataTableProps<T>) {
   const cellPad = dense ? '6px 6px' : '9px 12px';
   const runTask = useRunTask();
@@ -185,10 +188,12 @@ export function DataTable<T>({
             {table.getRowModel().rows.map((row) => {
               const isHighlighted = highlightRowId != null && row.id === highlightRowId;
               const isSelected = selectedRowId != null && row.id === selectedRowId;
+              const isFlashing = !!flashRowIds?.has(row.id) && !isHighlighted && !isSelected;
               return (
                 <tr
                   key={row.id}
                   aria-current={isSelected ? 'true' : undefined}
+                  data-flash={isFlashing ? 'true' : undefined}
                   onClick={
                     onRowClick
                       ? () => runTask(onRowClick(row.original), 'Could not open that row.')
@@ -198,8 +203,10 @@ export function DataTable<T>({
                     ? {
                         tabIndex: 0,
                         'aria-label': rowLabel(row.original),
-                        className:
+                        className: cn(
                           'focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand',
+                          isFlashing && 'bg-success-bg',
+                        ),
                         onKeyDown: (e: React.KeyboardEvent<HTMLTableRowElement>) => {
                           if (e.target !== e.currentTarget) return;
                           if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -207,7 +214,9 @@ export function DataTable<T>({
                           runTask(onRowClick(row.original), 'Could not open that row.');
                         },
                       }
-                    : {})}
+                    : isFlashing
+                      ? { className: 'bg-success-bg' }
+                      : {})}
                   ref={(el) => {
                     if (el && isHighlighted && scrolledToRef.current !== row.id) {
                       scrolledToRef.current = row.id;

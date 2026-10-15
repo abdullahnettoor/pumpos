@@ -16,7 +16,7 @@ import {
 import { Button, Icon, Tabs, tabPanelProps } from '../pump-ds/index.js';
 import { PageFrame } from './page-frame/index.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
-import { useToast } from './primitives/ToastProvider.js';
+import { useToast, withNextStep } from './primitives/ToastProvider.js';
 import { CustomerFormDrawer } from './customers/CustomerFormDrawer.js';
 import { VehicleDrawer } from './customers/VehicleDrawer.js';
 import { StatementDrawer } from './customers/StatementDrawer.js';
@@ -140,7 +140,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
       toast.success('Vehicle deleted.');
       await qc.invalidateQueries({ queryKey: ['vehicles'] });
     } catch (err: any) {
-      toast.error(err.message || 'Failed to delete vehicle');
+      toast.error(
+        withNextStep(err.message || "Couldn't delete the vehicle", 'Try again from its row.'),
+      );
     }
   };
 

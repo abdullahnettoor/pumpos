@@ -39,8 +39,8 @@ import {
   tabPanelProps,
   type TabItem,
 } from '../../pump-ds/index.js';
-import { useToast } from '../primitives/ToastProvider.js';
-import { useRunTask } from '../../utils/runTask.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
+import { useRefreshTask, useRunTask } from '../../utils/runTask.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
   useShiftStatus,
@@ -56,6 +56,7 @@ import { Station, canCloseShift, canOpenShift } from '@pump/shared';
 import type { OpenShiftFormValues } from '@pump/shared';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 import { refreshShiftStatus } from './refreshShiftStatus.js';
+import { useHandoverWrites, useShiftMoneyState } from './handoverWrites.js';
 import { useNow } from './useNow.js';
 import {
   officeSubmitKeys,
@@ -156,6 +157,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const todayFigures = useMemo(() => dayFigures(todayQ.data?.snapshotData), [todayQ.data]);
   const invalidateOperational = useInvalidateOperational();
   const runTask = useRunTask();
+  const refresh = useRefreshTask();
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -277,7 +279,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const inventoryStatusQ = useInventoryStatus(stationId);
   // Keep broad operational invalidation, then wait for the active full status
   // query so lifecycle transitions cannot render its stale active Shift.
-  const loadShiftStatus = () => refreshShiftStatus(qc, invalidateOperational, stationId);
+  const loadShiftStatus = (opts?: { throwOnError?: boolean }) =>
+    refreshShiftStatus(qc, invalidateOperational, stationId, opts);
   const mayClose = canCloseShift(userRole);
   // The Close shift page (#534): draft, figures, the keyed close and its outcome.
   const flow = useCloseShiftFlow({
@@ -439,12 +442,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       showOpenForm(false);
       setAwaitingOpenedShift(true);
       toast.success('Shift opened.');
-      runTask(
-        loadShiftStatus().finally(() => setAwaitingOpenedShift(false)),
-        'Shift opened, but the screen could not be refreshed.',
+      refresh(
+        () => loadShiftStatus({ throwOnError: true }).finally(() => setAwaitingOpenedShift(false)),
+        'Shift opened.',
       );
     } catch (err: any) {
-      toast.error(err.message || 'Failed to open shift');
+      toast.error(withNextStep(err.message, 'Check the form and open the shift again.'), {
+        title: 'Shift not opened',
+      });
     } finally {
       setIsOpening(false);
     }
@@ -469,6 +474,18 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       prev.map((r) => (r.nozzleId === nozzleId ? { ...r, openingReading } : r)),
     );
   };
+
+  // Handovers in flight or refused, and whether the shift's money is still
+  // to be confirmed by the refresh (#606).
+  const handoverWrites = useHandoverWrites(data?.activeShift?.id ?? null);
+  const money = useShiftMoneyState(handoverWrites, stationId, statusQ);
+  const retryMoney = () => runTask(statusQ.refetch(), 'Could not refresh the shift.');
+  // The live board and the close page read the shift status (#606 review): a
+  // failed status read shows in their Data Section with Retry. After a
+  // Handover, that failure is the inline "Couldn't confirm the drawer totals ·
+  // Retry" instead, with the figures held as Saving…, so the section is kept.
+  const statusSectionQ =
+    money === 'unconfirmed' ? { ...statusQ, isError: false, error: null } : statusQ;
 
   const startClose = () => {
     setSelectedSubTab('today');
@@ -572,7 +589,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           []
         }
         onCreditChanged={async () => {
-          await loadShiftStatus();
+          await loadShiftStatus({ throwOnError: true });
         }}
         existingHandover={activeShift.handovers?.find(
           (h: any) =>
@@ -633,7 +650,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             step={view.step}
             onStepChange={flow.setStep}
             onBack={flow.leave}
-            queries={[inventoryStatusQ, shiftTxQ]}
+            queries={[inventoryStatusQ, shiftTxQ, statusSectionQ]}
             groups={nozzleGroups(activeShift, { now, timeZone: stationSettings.timezone })}
             readingErrors={f.readingErrors}
             tanks={inventoryStatusQ.data ?? []}
@@ -654,6 +671,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             onConfirmWarningsChange={flow.setConfirmWarningsChecked}
             isClosing={flow.isClosing}
             onConfirmClose={(save) => runTask(flow.closeShift(save), 'Could not close the shift.')}
+            handoverWrites={handoverWrites}
+            money={money}
+            onRetryMoney={retryMoney}
           />
           {handoverDrawer}
         </>
@@ -715,7 +735,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         onTransactionAdded={loadShiftStatus}
         onReopenSuccess={() => {
           setViewingShiftSummary(false);
-          runTask(loadShiftStatus(), 'Shift reopened, but the screen could not be refreshed.');
+          refresh(() => loadShiftStatus({ throwOnError: true }), 'Shift reopened.');
         }}
         onBack={() => setViewingShiftSummary(false)}
       />
@@ -813,7 +833,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           {shiftSubTab === 'today' && (
             <DataSection
               title="shift status"
-              query={statusQ}
+              query={statusSectionQ}
               shape="cards"
               placeholderHeight={420}
               enabled
@@ -831,6 +851,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                   onOpenHandover={openHandover}
                   onStartClose={startClose}
                   onViewLastSummary={viewLastShiftSummary}
+                  handoverWrites={handoverWrites}
+                  money={money}
+                  onRetryMoney={retryMoney}
                 />
               ) : awaitingOpenedShift ? (
                 <Skeleton aria-label="Loading the new shift" height={420} />

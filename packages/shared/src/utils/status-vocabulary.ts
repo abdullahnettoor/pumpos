@@ -52,8 +52,17 @@ export type DecantationStatusState =
   | 'tanker-matches'
   | 'within-tolerance';
 
+/**
+ * A write the operator made, before the server confirms it (#606). `saving`
+ * is in flight: the row shows it in place of any figure, never a predicted
+ * value. The planned durable outbox (Level 2 resilience) adds its "Waiting to
+ * sync" here as a sibling state, so a queued write reads the same way.
+ */
+export type WriteStatusState = 'saving';
+
 export type PumpState =
   | VarianceStatusState
+  | WriteStatusState
   | HandoverStatusState
   | ShiftStatusState
   | DayStatusState
@@ -91,6 +100,9 @@ const VOCABULARY: Record<PumpState, StatusPresentation> = {
   balanced: { label: 'Balanced', tone: VARIANCE_TONE.balanced },
   surplus: { label: 'Surplus', tone: VARIANCE_TONE.surplus },
   short: { label: 'Short', tone: VARIANCE_TONE.short },
+
+  // Neutral: a save in flight is not a problem. The pulse says it is moving.
+  saving: { label: 'Saving…', tone: 'neutral' },
 
   'handover-pending': { label: 'Pending', tone: 'neutral' },
   'handover-due': { label: 'Handover due', tone: 'warning' },

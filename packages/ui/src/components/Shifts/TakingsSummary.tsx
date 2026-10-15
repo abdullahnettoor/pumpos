@@ -1,6 +1,8 @@
 import React from 'react';
-import { Panel } from '../../pump-ds/index.js';
+import { Panel, StatusChip } from '../../pump-ds/index.js';
 import { formatMoney } from '../../utils/format.js';
+import type { ShiftMoneyState } from './handoverWrites.js';
+import { UnconfirmedTotalsNote } from './UnconfirmedTotalsNote.js';
 import type { NozzleGroup, Takings } from './liveShiftModel.js';
 
 export interface TakingsSummaryProps {
@@ -8,9 +10,16 @@ export interface TakingsSummaryProps {
   recorded: number;
   expected: number;
   pending: NozzleGroup[];
+  /**
+   * After a Handover (#606): cash sales and the total are not in its answer,
+   * so they read "Saving…" until a refetch confirms them; if that refetch
+   * failed, an inline Retry says so.
+   */
+  money?: ShiftMoneyState;
+  onRetryMoney?: () => void;
 }
 
-const Line: React.FC<{ label: string; value: number; strong?: boolean }> = ({
+const Line: React.FC<{ label: string; value: number | null; strong?: boolean }> = ({
   label,
   value,
   strong,
@@ -24,7 +33,11 @@ const Line: React.FC<{ label: string; value: number; strong?: boolean }> = ({
           : 'font-mono tabular-nums text-ink-default'
       }
     >
-      {formatMoney(value)}
+      {value == null ? (
+        <StatusChip status="saving" size="sm" className="font-sans" />
+      ) : (
+        formatMoney(value)
+      )}
     </dd>
   </div>
 );
@@ -39,25 +52,35 @@ export const TakingsSummary: React.FC<TakingsSummaryProps> = ({
   recorded,
   expected,
   pending,
-}) => (
-  <Panel title="Takings · this shift">
-    <dl className="flex flex-col gap-1.5 text-[13px]">
-      <Line label="Cash sales" value={takings.cash} />
-      <Line label="Card" value={takings.card} />
-      <Line label="UPI" value={takings.upi} />
-      <Line label="Credit" value={takings.credit} />
-      <div className="mt-1 border-t border-border-soft pt-1.5">
-        <Line label="Total taken" value={takings.total} strong />
-      </div>
-    </dl>
-    <p className="mt-2 text-[12px] text-ink-muted">
-      {recorded === 0
-        ? 'Card, UPI and credit from the shift’s entries until a handover is recorded.'
-        : pending.length > 0
-          ? `From ${recorded} of ${expected} handovers · ${pending
-              .map((g) => g.du)
-              .join(', ')} pending`
-          : `From all ${expected} handovers`}
-    </p>
-  </Panel>
-);
+  money = 'confirmed',
+  onRetryMoney,
+}) => {
+  const held = money !== 'confirmed';
+  return (
+    <Panel title="Takings · this shift">
+      <dl className="flex flex-col gap-1.5 text-[13px]">
+        <Line label="Cash sales" value={held ? null : takings.cash} />
+        <Line label="Card" value={takings.card} />
+        <Line label="UPI" value={takings.upi} />
+        <Line label="Credit" value={takings.credit} />
+        <div className="mt-1 border-t border-border-soft pt-1.5">
+          <Line label="Total taken" value={held ? null : takings.total} strong />
+        </div>
+      </dl>
+      <p className="mt-2 text-[12px] text-ink-muted">
+        {recorded === 0
+          ? 'Card, UPI and credit from the shift’s entries until a handover is recorded.'
+          : pending.length > 0
+            ? `From ${recorded} of ${expected} handovers · ${pending
+                .map((g) => g.du)
+                .join(', ')} pending`
+            : `From all ${expected} handovers`}
+      </p>
+      {money === 'unconfirmed' && (
+        <div className="mt-2">
+          <UnconfirmedTotalsNote onRetry={onRetryMoney} />
+        </div>
+      )}
+    </Panel>
+  );
+};

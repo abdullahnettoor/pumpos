@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { useSales, queryKeys } from '../../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudTransactionService } from '../../services/cloud.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { computeRange } from '../../pump-ds/date-range/index.js';
 import type { DateRange } from '../../pump-ds/date-range/index.js';
 import { paperFromStation } from '../../services/reports/reportConfig.js';
@@ -100,7 +100,12 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
           qc.invalidateQueries({ queryKey: ['invoices'] }),
         ]);
       } catch (err: any) {
-        toast.error(err.message || 'Failed to generate invoice.');
+        toast.error(
+          withNextStep(
+            err.message || "Couldn't generate the invoice",
+            'Try again from the sale’s row.',
+          ),
+        );
       } finally {
         setBusyId(null);
       }

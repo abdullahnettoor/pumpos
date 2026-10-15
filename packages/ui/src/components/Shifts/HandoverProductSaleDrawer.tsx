@@ -5,9 +5,9 @@ import { Banner } from '../primitives/Banner.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { Field, MoneyInput, NumberInput, Select } from '../primitives/Field.js';
 import { Drawer } from '../Drawer.js';
-import { useToast } from '../primitives/ToastProvider.js';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { useKeyedSave } from '../../office-records/useKeyedSave.js';
+import { flashRows } from '../../utils/rowFlash.js';
 import {
   useInventoryItems,
   useProducts,
@@ -24,6 +24,7 @@ import {
   type DraftLine,
   type HandoverProductSaleFormValues,
   type PricedProduct,
+  saleLabels,
 } from './handoverProductSale.js';
 
 /** A Handover Product Sale as listed for the shift (with its lines). */
@@ -159,7 +160,6 @@ const SaleForm: React.FC<SaleFormProps> = ({
   users,
   stockRows,
 }) => {
-  const toast = useToast();
   const save = useKeyedSave(`handover-product-sale:${shiftId}`);
   const record = useRecordHandoverProductSale(stationId);
 
@@ -244,11 +244,15 @@ const SaleForm: React.FC<SaleFormProps> = ({
     };
     try {
       await save({ stationId, shiftId, ...payload }, (idempotencyKey) =>
-        record.mutateAsync({ shiftId, payload, idempotencyKey }),
+        record.mutateAsync({
+          shiftId,
+          payload,
+          idempotencyKey,
+          labels: saleLabels(values.attendantId, sellers, productById),
+        }),
       );
-      toast.success(
-        editingId ? 'Handover product sale updated.' : 'Handover product sale recorded.',
-      );
+      // Its row on Product sales updates and is highlighted (#606): no toast.
+      flashRows([values.attendantId]);
       onClose();
     } catch (err) {
       setError('root', {

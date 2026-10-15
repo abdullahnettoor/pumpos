@@ -18,6 +18,8 @@ export interface TableGroup<T> {
   rows: T[];
   /** Read the group's rows quieter (figures not in yet). */
   muted?: boolean;
+  /** A save just updated this group: its header is tinted for a moment (#606). */
+  flash?: boolean;
 }
 
 export interface GroupedTableProps<T> {
@@ -72,7 +74,13 @@ export function GroupedTable<T>({
         </thead>
         {groups.map((group) => (
           <tbody key={group.key} data-group={group.key}>
-            <tr className="border-b border-border-soft bg-surface-alt">
+            <tr
+              className={cn(
+                'border-b border-border-soft transition-colors duration-500 motion-reduce:transition-none',
+                group.flash ? 'bg-success-bg' : 'bg-surface-alt',
+              )}
+              data-flash={group.flash ? 'true' : undefined}
+            >
               <th
                 scope="colgroup"
                 colSpan={columns.length}

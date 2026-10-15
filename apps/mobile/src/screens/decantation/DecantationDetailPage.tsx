@@ -7,6 +7,7 @@ import {
   useLinkablePurchases,
   useLinkDecantationPurchase,
   useToast,
+  withNextStep,
   formatQuantity,
 } from '@pump/ui';
 import { resolveDecantationSettings } from '@pump/shared';
@@ -57,7 +58,12 @@ export const DecantationDetailPage: React.FC<{ station: Station; decantationId: 
       toast.success('Purchase linked.');
       setLinking(null);
     } catch (e) {
-      toast.error((e as { message?: string } | null)?.message || 'Could not link the purchase');
+      toast.error(
+        withNextStep(
+          (e as { message?: string } | null)?.message || "Couldn't link the purchase",
+          'Pick it again and link it.',
+        ),
+      );
     }
   };
 

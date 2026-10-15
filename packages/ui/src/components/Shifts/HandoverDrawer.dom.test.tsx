@@ -366,7 +366,7 @@ describe('HandoverDrawer', () => {
       expect(mutateAsync.mock.calls[0][0].payload.terminalEntries).toBeUndefined();
     });
 
-    it('shows failed saves inline and in a toast while keeping the retry idempotent', async () => {
+    it('shows failed saves inline, not in a toast, while keeping the retry idempotent', async () => {
       mutateAsync.mockRejectedValue(new Error('Assigned user cannot record this handover'));
       renderWithProviders(<HandoverDrawer {...baseProps()} />);
       setReading(NOZZLE_A, '1050');
@@ -379,9 +379,7 @@ describe('HandoverDrawer', () => {
           'Assigned user cannot record this handover',
         ),
       );
-      expect(screen.getByRole('status').textContent).toBe(
-        'Assigned user cannot record this handover',
-      );
+      expect(screen.queryByRole('status')).toBeNull();
       const firstKey = mutateAsync.mock.calls[0][0].idempotencyKey;
       fireEvent.click(saveButton());
       await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));

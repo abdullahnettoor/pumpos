@@ -17,8 +17,8 @@ import {
 } from '../../query/stockCountMutation.js';
 import { inr } from '../../utils/format.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
-import { useToast } from '../primitives/ToastProvider.js';
-import { useRunTask } from '../../utils/runTask.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
+import { useRefreshTask, useRunTask } from '../../utils/runTask.js';
 import type { DrawerRow } from './DrawerReconciliationTable.js';
 import {
   EMPTY_CLOSE_DRAFT,
@@ -89,7 +89,7 @@ export interface CloseShiftFlowInput {
   creditSales: number;
   tanks: { id: string; name: string }[];
   /** Refresh the shift status after the close (background). */
-  loadShiftStatus: () => Promise<unknown>;
+  loadShiftStatus: (opts?: { throwOnError?: boolean }) => Promise<unknown>;
   mayClose: boolean;
 }
 
@@ -121,6 +121,7 @@ export function useCloseShiftFlow(input: CloseShiftFlowInput) {
   const toast = useToast();
   const confirm = useConfirm();
   const runTask = useRunTask();
+  const refresh = useRefreshTask();
   const data = statusQ.data ?? null;
   const activeShift = data?.activeShift ?? null;
   const activeShiftId: string | null = activeShift?.id ?? null;
@@ -324,7 +325,9 @@ export function useCloseShiftFlow(input: CloseShiftFlowInput) {
     if (!activeShift) return;
     const errors = figures.readingErrors;
     if (errors.length > 0) {
-      toast.error(errors[0]);
+      toast.error(withNextStep(errors[0], 'Correct it in that Drawer’s handover, then close.'), {
+        title: 'Cannot close yet',
+      });
       return;
     }
     if (!hasCloseProgress(draft)) setConfirmWarningsChecked(false);
@@ -406,7 +409,7 @@ export function useCloseShiftFlow(input: CloseShiftFlowInput) {
       if (stationId) savePendingTankDipWorkflow(stationId, closed);
       // Shown from the close response at once; the refresh runs in the background.
       showOutcome(closed);
-      runTask(loadShiftStatus(), 'Shift closed, but the screen could not be refreshed.');
+      refresh(() => loadShiftStatus({ throwOnError: true }), 'Shift closed.');
       await saveTankDips(closed).catch(() => undefined);
     } catch (err: any) {
       if (stationId && isAmbiguousMutationError(err)) {
@@ -423,7 +426,9 @@ export function useCloseShiftFlow(input: CloseShiftFlowInput) {
       } else if (stationId) {
         savePendingTankDipWorkflow(stationId, null);
       }
-      toast.error(err.message || 'Failed to close shift');
+      toast.error(withNextStep(err.message, 'Check the figures and close again.'), {
+        title: 'Shift not closed',
+      });
     } finally {
       setIsClosing(false);
     }

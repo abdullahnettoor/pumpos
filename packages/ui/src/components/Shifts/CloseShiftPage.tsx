@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { historicalShiftMessage, type ShiftCloseCashSummaryLines } from '@pump/shared';
-import { Button, DataSection, Icon, VarianceChip, type SectionQuery } from '../../pump-ds/index.js';
+import {
+  Button,
+  DataSection,
+  Icon,
+  StatusChip,
+  VarianceChip,
+  type SectionQuery,
+} from '../../pump-ds/index.js';
 import { cn } from '../../pump-ds/lib/cn.js';
 import { PageFrame } from '../page-frame/index.js';
 import { useKeyedSave, type KeyedSave } from '../../office-records/useKeyedSave.js';
@@ -16,6 +23,8 @@ import {
 } from './CloseShiftSteps.js';
 import type { CloseDraft, CloseDrawerRow, CloseDrawerTotal } from './closeShiftModel.js';
 import type { NozzleGroup, StaffAssignmentInput } from './liveShiftModel.js';
+import type { HandoverWrites, ShiftMoneyState } from './handoverWrites.js';
+import { UnconfirmedTotalsNote } from './UnconfirmedTotalsNote.js';
 
 export type CloseStep = Exclude<ShiftCloseStep, 'done'>;
 
@@ -71,6 +80,15 @@ export interface CloseShiftPageProps {
    * skeleton; if one fails, "Couldn't load … · Retry", never empty figures.
    */
   queries?: SectionQuery[];
+  /** Handovers still saving or failed, by Drawer key (#606). */
+  handoverWrites?: HandoverWrites;
+  /**
+   * Where the shift's money stands after a Handover (#606). Until it is
+   * confirmed, every figure built on the shift totals reads "Saving…" and the
+   * shift cannot close; if the refetch failed, an inline Retry says so.
+   */
+  money?: ShiftMoneyState;
+  onRetryMoney?: () => void;
 }
 
 /**
@@ -96,7 +114,10 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
     readingErrors,
     isClosing,
     onConfirmClose,
+    money = 'confirmed',
+    onRetryMoney,
   } = props;
+  const confirming = money !== 'confirmed';
   const save = useKeyedSave(`shift:close:${shift.id}`);
   // The cash count is a form: an amount it refuses never reaches the draft,
   // and the page does not move on from it until it is fixed.
@@ -104,6 +125,7 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
   const index = SHIFT_CLOSE_STEPS.indexOf(step);
   const pendingDrawers = drawerRows.filter((r) => r.pending).length;
   const canSubmit =
+    !confirming &&
     pendingDrawers === 0 &&
     readingErrors.length === 0 &&
     (warnings.length === 0 || confirmWarningsChecked);
@@ -187,6 +209,7 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
                 rows={drawerRows}
                 total={props.drawerTotal}
                 onOpenHandover={props.onOpenHandover}
+                writes={props.handoverWrites}
               />
             )}
             {step === 'cash' && (
@@ -199,6 +222,7 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
                 draft={draft}
                 onDraftChange={props.onDraftChange}
                 onValidityChange={setCashValid}
+                pending={confirming}
               />
             )}
             {step === 'confirm' && (
@@ -211,10 +235,16 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
                 warnings={warnings}
                 confirmWarningsChecked={confirmWarningsChecked}
                 onConfirmWarningsChange={props.onConfirmWarningsChange}
+                pending={confirming}
               />
             )}
           </div>
 
+          {money === 'unconfirmed' && (
+            <div className="mb-2">
+              <UnconfirmedTotalsNote onRetry={onRetryMoney} />
+            </div>
+          )}
           <footer
             aria-label="Close shift"
             className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-card border border-border-soft bg-surface px-4 py-3 shadow-sm"
@@ -223,7 +253,11 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
               <div className="flex items-baseline gap-2">
                 <dt className="text-ink-muted">Expected office cash</dt>
                 <dd className="font-mono tabular-nums text-ink-strong">
-                  {formatMoney(cashLines.expectedOfficeCash)}
+                  {confirming ? (
+                    <StatusChip status="saving" size="sm" className="font-sans" />
+                  ) : (
+                    formatMoney(cashLines.expectedOfficeCash)
+                  )}
                 </dd>
               </div>
               <div className="flex items-baseline gap-2">
@@ -235,7 +269,7 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
               <div className="flex items-center gap-2">
                 <dt className="sr-only">Office count variance</dt>
                 <dd>
-                  {counted ? (
+                  {confirming ? null : counted ? (
                     <VarianceChip
                       amount={draft.closingCash - cashLines.expectedOfficeCash}
                       size="md"

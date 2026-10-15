@@ -370,8 +370,10 @@ Accent should signal importance, not paint the whole product.
 
 - Use Petrol Green for primary CTAs and active emphasis
 - Use Diesel Blue for informational contexts and navigation emphasis
-- Use Amber for warnings, pending sync, and variance attention
+- Use Amber for warnings and variance attention
 - Use Red only for failure, destructive actions, and critical exceptions
+- A write in flight ("Saving…", and the outbox's "Waiting to sync") is neutral: it is not a
+  problem. Amber or red is only for a write that failed or was refused (#606)
 
 Do not flood screens with accent colors.
 
