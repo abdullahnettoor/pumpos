@@ -12,13 +12,13 @@ import {
   KpiTile,
   SectionHeader,
   StatusChip,
+  TileSection,
   type FilterChipOption,
   type TableColumn,
 } from '../../pump-ds/index.js';
 import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
 import { useAccess, useStations } from '../../query/hooks.js';
 import { countOf } from '../../utils/ledgerWindow.js';
-import { TileSection } from '../customers/TileSection.js';
 import {
   buildStationRows,
   filterStations,
