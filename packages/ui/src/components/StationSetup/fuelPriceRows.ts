@@ -112,3 +112,12 @@ export function stationInputToIso(value: string, timeZone: string): string {
   const [date = '', hhmm = '00:00'] = value.split('T');
   return new Date(localToInstant(date, hhmm.slice(0, 5), timeZone)).toISOString();
 }
+
+/** A price change in flight or refused, as the card reads it (#606). */
+export interface FuelPriceWriteVars {
+  payload: { stationId: string; productId: string };
+}
+
+/** A change of this station's prices, by fuel; null for another station's. */
+export const fuelPriceWriteKey = (v: FuelPriceWriteVars, stationId: string): string | null =>
+  v.payload.stationId === stationId ? v.payload.productId : null;

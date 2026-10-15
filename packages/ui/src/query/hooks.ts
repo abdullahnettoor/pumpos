@@ -31,6 +31,12 @@ import { resolveTankLevelSettings, type TankLevelSettings } from '@pump/shared';
 import { patchQueryData } from './patches/applyPatch.js';
 import { flashRows } from '../utils/rowFlash.js';
 import {
+  withRecordedCurrentPrice,
+  withRecordedPriceInHistory,
+  type FuelPriceHistoryRow,
+  type RecordedFuelPrice,
+} from './patches/fuelPrices.js';
+import {
   billedSaleRow,
   handoverProductSaleRow,
   withBilledSale,
@@ -270,6 +276,7 @@ export const mutationKeys = {
   productSale: () => ['record-product-sale'] as const,
   officeRecord: () => ['record-office-record'] as const,
   voidOfficeRecord: () => ['void-office-record'] as const,
+  fuelPrice: () => ['record-fuel-price'] as const,
 } as const;
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -458,6 +465,47 @@ export function usePricing(stationId: string | null | undefined, options?: Optio
     enabled: !!stationId,
     ...TIER.semi,
     ...options,
+  });
+}
+
+/**
+ * Change a fuel's price (#537, #606): keyed by the caller's session. The answer
+ * goes into the price history and, when the server would now read it as
+ * current, into the current prices; the card is highlighted. The caller starts
+ * the background refresh.
+ */
+export function useRecordFuelPrice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationKey: mutationKeys.fuelPrice(),
+    mutationFn: (vars: {
+      payload: {
+        stationId: string;
+        productId: string;
+        price: number;
+        effectiveFrom?: string | null;
+      };
+      idempotencyKey: string;
+    }): Promise<RecordedFuelPrice> =>
+      pricingSvc.recordPricing(vars.payload, { idempotencyKey: vars.idempotencyKey }),
+    onSuccess: (answer, { payload }): void => {
+      if (!answer?.id || !answer.effectiveFrom) return;
+      const { stationId } = payload;
+      const row = qc
+        .getQueryData<FuelPrice[]>(queryKeys.pricing(stationId))
+        ?.find((c) => c.productId === answer.productId);
+      patchQueryData<FuelPriceHistoryRow[]>(qc, queryKeys.pricingHistory(stationId), (h) =>
+        withRecordedPriceInHistory(h, answer, {
+          productName: row?.productName ?? null,
+          productCode: row?.productCode ?? null,
+        }),
+      );
+      const history = qc.getQueryData<FuelPriceHistoryRow[]>(queryKeys.pricingHistory(stationId));
+      patchQueryData<FuelPrice[]>(qc, queryKeys.pricing(stationId), (c) =>
+        withRecordedCurrentPrice(c, answer, history),
+      );
+      flashRows([answer.productId]);
+    },
   });
 }
 

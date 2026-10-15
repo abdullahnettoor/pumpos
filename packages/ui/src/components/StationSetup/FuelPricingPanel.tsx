@@ -3,7 +3,11 @@ import { businessDateSettings, formatStationDateTime, type Station } from '@pump
 import { PageFrame } from '../page-frame/index.js';
 import { ROUTES } from '../../nav-intent/routes.js';
 import { Tabs, tabPanelProps } from '../../pump-ds/tabs/index.js';
-import { useProducts, usePricing, usePricingHistory } from '../../query/hooks.js';
+import { mutationKeys, useProducts, usePricing, usePricingHistory } from '../../query/hooks.js';
+import { useWriteStates, type WriteEntry } from '../../query/pendingWrites.js';
+import { useFlashingRows } from '../../utils/rowFlash.js';
+import { cn } from '../../pump-ds/lib/cn.js';
+import { withNextStep } from '../primitives/ToastProvider.js';
 import { formatMoney, formatSignedMoney } from '../../utils/format.js';
 import {
   Button,
@@ -16,12 +20,14 @@ import {
   Panel,
   SearchInput,
   SectionHeader,
+  StatusChip,
   type TableColumn,
 } from '../../pump-ds/index.js';
 import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
 import { countOf } from '../../utils/ledgerWindow.js';
 import {
   buildFuelPriceRows,
+  fuelPriceWriteKey,
   sortNewestFirst,
   type CurrentFuelPrice,
   type FuelPriceHistoryEntry,
@@ -109,7 +115,7 @@ const PricingPage: React.FC<{ station: Station }> = ({ station }) => {
     >
       <div {...tabPanelProps('pricing', activeTab)} className="flex flex-col gap-6">
         {activeTab === 'fuels' ? (
-          <FuelsTab {...fuels} timeZone={timeZone} onChange={setChanging} />
+          <FuelsTab {...fuels} stationId={station.id} timeZone={timeZone} onChange={setChanging} />
         ) : (
           <ProductsTab />
         )}
@@ -138,8 +144,22 @@ const FuelPriceCard: React.FC<{
   row: FuelPriceRow;
   timeZone: string;
   onChange: () => void;
-}> = ({ row, timeZone, onChange }) => (
-  <Panel role="region" aria-label={row.productName} data-testid="fuel-price-card">
+  /** Its price change in flight or refused (#606). */
+  write?: WriteEntry<unknown>;
+  /** Just saved: tinted for a moment, the main confirmation (#606). */
+  flash?: boolean;
+}> = ({ row, timeZone, onChange, write, flash }) => (
+  <Panel
+    role="region"
+    aria-label={row.productName}
+    data-testid="fuel-price-card"
+    data-write={write?.state}
+    data-flash={flash ? 'true' : undefined}
+    className={cn(
+      'transition-colors duration-500 motion-reduce:transition-none',
+      flash && 'bg-success-bg',
+    )}
+  >
     <div className="flex h-full flex-col gap-3">
       <div className="flex items-baseline gap-2">
         <span className="truncate text-[14px] font-semibold text-ink-strong">
@@ -150,7 +170,12 @@ const FuelPriceCard: React.FC<{
         )}
       </div>
       <div className="flex flex-col gap-0.5">
-        {row.price == null ? (
+        {write?.state === 'saving' ? (
+          // No price before the server confirms it (#606).
+          <span className="flex h-[30px] items-center">
+            <StatusChip status="saving" size="md" />
+          </span>
+        ) : row.price == null ? (
           <span className="text-[20px] font-semibold text-ink-faint">Not set</span>
         ) : (
           <span className="font-mono text-[20px] font-semibold tabular-nums text-ink-strong">
@@ -176,11 +201,20 @@ const FuelPriceCard: React.FC<{
           <span className="text-[13px] text-ink-faint">None yet</span>
         )}
       </div>
+      {write?.state === 'failed' && (
+        <p role="alert" className="text-[12px] text-danger-fg">
+          {withNextStep(
+            `Not saved: ${write.error?.message || 'the server refused the new rate'}`,
+            'Use Change price to try again.',
+          )}
+        </p>
+      )}
       <div className="mt-auto flex justify-end border-t border-border-soft pt-3">
         <Button
           variant="secondary"
           size="xs"
           onClick={onChange}
+          disabled={write?.state === 'saving'}
           aria-label={`Change price of ${row.productName}`}
         >
           Change price
@@ -192,10 +226,14 @@ const FuelPriceCard: React.FC<{
 
 const FuelsTab: React.FC<
   ReturnType<typeof useFuelPriceRows> & {
+    stationId: string;
     timeZone: string;
     onChange: (row: FuelPriceRow) => void;
   }
-> = ({ rows, pricingQ, historyQ, productsQ, timeZone, onChange }) => {
+> = ({ rows, pricingQ, historyQ, productsQ, timeZone, onChange, stationId }) => {
+  // Each card's price change in flight or refused, from the write itself (#606).
+  const writes = useWriteStates(mutationKeys.fuelPrice(), fuelPriceWriteKey, stationId);
+  const flashing = useFlashingRows();
   const history = useMemo(
     () => sortNewestFirst((historyQ.data ?? []) as HistoryRow[]),
     [historyQ.data],
@@ -243,7 +281,13 @@ const FuelsTab: React.FC<
           >
             {rows.map((row) => (
               <li key={row.productId} className="flex flex-col [&>*]:flex-1">
-                <FuelPriceCard row={row} timeZone={timeZone} onChange={() => onChange(row)} />
+                <FuelPriceCard
+                  row={row}
+                  timeZone={timeZone}
+                  onChange={() => onChange(row)}
+                  write={writes.get(row.productId)}
+                  flash={flashing.has(row.productId)}
+                />
               </li>
             ))}
           </ul>
