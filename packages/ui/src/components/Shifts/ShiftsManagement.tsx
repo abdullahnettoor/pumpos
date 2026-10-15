@@ -40,7 +40,7 @@ import {
   type TabItem,
 } from '../../pump-ds/index.js';
 import { useToast, withNextStep } from '../primitives/ToastProvider.js';
-import { useRunTask } from '../../utils/runTask.js';
+import { useRefreshTask, useRunTask } from '../../utils/runTask.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
   useShiftStatus,
@@ -157,6 +157,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const todayFigures = useMemo(() => dayFigures(todayQ.data?.snapshotData), [todayQ.data]);
   const invalidateOperational = useInvalidateOperational();
   const runTask = useRunTask();
+  const refresh = useRefreshTask();
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -278,7 +279,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const inventoryStatusQ = useInventoryStatus(stationId);
   // Keep broad operational invalidation, then wait for the active full status
   // query so lifecycle transitions cannot render its stale active Shift.
-  const loadShiftStatus = () => refreshShiftStatus(qc, invalidateOperational, stationId);
+  const loadShiftStatus = (opts?: { throwOnError?: boolean }) =>
+    refreshShiftStatus(qc, invalidateOperational, stationId, opts);
   const mayClose = canCloseShift(userRole);
   // The Close shift page (#534): draft, figures, the keyed close and its outcome.
   const flow = useCloseShiftFlow({
@@ -440,9 +442,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       showOpenForm(false);
       setAwaitingOpenedShift(true);
       toast.success('Shift opened.');
-      runTask(
-        loadShiftStatus().finally(() => setAwaitingOpenedShift(false)),
-        'Shift opened, but the screen could not be refreshed.',
+      refresh(
+        () => loadShiftStatus({ throwOnError: true }).finally(() => setAwaitingOpenedShift(false)),
+        'Shift opened.',
       );
     } catch (err: any) {
       toast.error(withNextStep(err.message, 'Check the form and open the shift again.'), {
@@ -587,7 +589,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           []
         }
         onCreditChanged={async () => {
-          await loadShiftStatus();
+          await loadShiftStatus({ throwOnError: true });
         }}
         existingHandover={activeShift.handovers?.find(
           (h: any) =>
@@ -733,7 +735,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         onTransactionAdded={loadShiftStatus}
         onReopenSuccess={() => {
           setViewingShiftSummary(false);
-          runTask(loadShiftStatus(), 'Shift reopened, but the screen could not be refreshed.');
+          refresh(() => loadShiftStatus({ throwOnError: true }), 'Shift reopened.');
         }}
         onBack={() => setViewingShiftSummary(false)}
       />

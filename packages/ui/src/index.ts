@@ -141,7 +141,7 @@ export { Tabs, tabPanelProps } from './pump-ds/tabs/index.js';
 export type { TabsProps, TabItem, TabTone } from './pump-ds/tabs/index.js';
 export { ConfirmProvider, useConfirm } from './components/primitives/ConfirmDialog.js';
 export type { ConfirmOptions } from './components/primitives/ConfirmDialog.js';
-export { ToastProvider, useToast } from './components/primitives/ToastProvider.js';
+export { ToastProvider, useToast, withNextStep } from './components/primitives/ToastProvider.js';
 export type {
   ToastApi,
   ToastVariant,

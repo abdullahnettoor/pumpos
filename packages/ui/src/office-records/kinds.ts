@@ -25,7 +25,7 @@ export interface OfficeRecordKindDef {
   concept: Concept;
   /** The confirmation toast. */
   saved: string;
-  /** The page that lists it, for the toast's "View" (#606). */
+  /** The page that lists it, for the toast's "View record" (#606, owner decision). */
   list: { route: RoutePath; label: string };
   /** "Money goes out of" or "Money comes into" the Funding Account. */
   accountHint: string;
@@ -58,7 +58,7 @@ export const OFFICE_RECORD_KINDS: Record<OfficeRecordKind, OfficeRecordKindDef> 
     title: 'Record expense',
     concept: 'expenses',
     saved: 'Expense recorded.',
-    list: { route: ROUTES.expenses, label: 'View expenses' },
+    list: { route: ROUTES.expenses, label: 'View record' },
     accountHint: OUT,
     dating: OFFICE_DATING,
   },
@@ -67,7 +67,7 @@ export const OFFICE_RECORD_KINDS: Record<OfficeRecordKind, OfficeRecordKindDef> 
     title: 'Record income',
     concept: 'income',
     saved: 'Income recorded.',
-    list: { route: ROUTES.income, label: 'View income' },
+    list: { route: ROUTES.income, label: 'View record' },
     accountHint: IN,
     dating: OFFICE_DATING,
   },
@@ -76,7 +76,7 @@ export const OFFICE_RECORD_KINDS: Record<OfficeRecordKind, OfficeRecordKindDef> 
     title: 'Record collection',
     concept: 'collections',
     saved: 'Collection recorded.',
-    list: { route: ROUTES.customers, label: 'View customers' },
+    list: { route: ROUTES.customers, label: 'View record' },
     accountHint: IN,
     dating: OFFICE_DATING,
   },
@@ -85,7 +85,7 @@ export const OFFICE_RECORD_KINDS: Record<OfficeRecordKind, OfficeRecordKindDef> 
     title: 'Record purchase',
     concept: 'purchases',
     saved: 'Purchase recorded.',
-    list: { route: ROUTES.suppliers, label: 'View suppliers' },
+    list: { route: ROUTES.suppliers, label: 'View record' },
     accountHint: OUT,
     dating: {
       dateLabel: 'Invoice date',
@@ -97,7 +97,7 @@ export const OFFICE_RECORD_KINDS: Record<OfficeRecordKind, OfficeRecordKindDef> 
     title: 'Record supplier payment',
     concept: 'payments',
     saved: 'Supplier payment recorded.',
-    list: { route: ROUTES.suppliers, label: 'View suppliers' },
+    list: { route: ROUTES.suppliers, label: 'View record' },
     accountHint: OUT,
     dating: OFFICE_DATING,
   },

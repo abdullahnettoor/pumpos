@@ -21,7 +21,7 @@ import { countOf } from '../../utils/ledgerWindow.js';
 import { Drawer } from '../Drawer.js';
 import { ProductImportDrawer } from './ProductImportDrawer.js';
 import { Checkbox } from '../primitives/Toggle.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useRunTask } from '../../utils/runTask.js';
 import {
@@ -191,7 +191,9 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
       runTask(refreshProducts(), 'Saved, but the product list could not be refreshed.');
       toast.success('Standard product added.');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to quick add standard product');
+      toast.error(
+        withNextStep(err.message || "Couldn't add the standard product", 'Try adding it again.'),
+      );
     }
   };
 
@@ -265,7 +267,12 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
       runTask(refreshProducts(), 'Saved, but the product list could not be refreshed.');
       toast.success(editingProduct ? 'Product updated.' : 'Product created.');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to save product');
+      toast.error(
+        withNextStep(
+          err.message || "Couldn't save the product",
+          'Check the details and save again.',
+        ),
+      );
     }
   };
 
@@ -322,7 +329,9 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
       runTask(refreshProducts(), 'Saved, but the product list could not be refreshed.');
       toast.success('Product archived.');
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(
+        withNextStep(err.message || "Couldn't archive the product", 'Try again from its row.'),
+      );
     }
   };
 

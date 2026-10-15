@@ -1538,84 +1538,89 @@ export function useInsightsCreditHealth(
  */
 export function useInvalidateOperational() {
   const qc = useQueryClient();
-  return (stationId?: string | null) => {
+  return (stationId?: string | null, opts?: { throwOnError?: boolean }) => {
+    // `throwOnError`: a refetch that fails rejects the returned promise, so a
+    // caller that reports refresh failures (useRefreshTask, #606) sees it.
+    // Without it (the default), failures stay on each query, as before.
+    const inv = (queryKey: readonly unknown[]) =>
+      qc.invalidateQueries({ queryKey }, { throwOnError: !!opts?.throwOnError });
     const invalidations = [
-      qc.invalidateQueries({ queryKey: ['purchase-gst-register'] }),
-      qc.invalidateQueries({ queryKey: ['shift-status'] }),
-      qc.invalidateQueries({ queryKey: ['business-day-status'] }),
-      qc.invalidateQueries({ queryKey: ['shift-summaries'] }),
-      qc.invalidateQueries({ queryKey: ['dashboard-summary'] }),
-      qc.invalidateQueries({ queryKey: ['business-day-list'] }),
-      qc.invalidateQueries({ queryKey: ['shift-transactions'] }),
-      qc.invalidateQueries({ queryKey: ['merchandise-handovers'] }),
-      qc.invalidateQueries({ queryKey: ['merchandise-sales'] }),
+      inv(['purchase-gst-register']),
+      inv(['shift-status']),
+      inv(['business-day-status']),
+      inv(['shift-summaries']),
+      inv(['dashboard-summary']),
+      inv(['business-day-list']),
+      inv(['shift-transactions']),
+      inv(['merchandise-handovers']),
+      inv(['merchandise-sales']),
       // The Attendant Handover Report reads closed-shift handovers, so closing
       // a shift (or correcting one) changes it within the same session.
-      qc.invalidateQueries({ queryKey: ['attendant-handover-report'] }),
+      inv(['attendant-handover-report']),
       // Decantation Report: measurements and invoice settlement move it.
-      qc.invalidateQueries({ queryKey: ['decantation-report'] }),
+      inv(['decantation-report']),
       // Insights read sealed days; closing a Business Day adds one to the range.
-      qc.invalidateQueries({ queryKey: ['insights-sales'] }),
+      inv(['insights-sales']),
       // ...and so do the part 2 blocks: closed-day Shift Summaries, Tank Dips and
       // Credit Sales move with a close, Collections (Entry Date) with a collection.
-      qc.invalidateQueries({ queryKey: ['insights-attendant-variance'] }),
-      qc.invalidateQueries({ queryKey: ['insights-stock-loss'] }),
-      qc.invalidateQueries({ queryKey: ['insights-credit-health'] }),
+      inv(['insights-attendant-variance']),
+      inv(['insights-stock-loss']),
+      inv(['insights-credit-health']),
       // Business Day cockpit + P&L read the live DSSR preview — refresh it too.
-      qc.invalidateQueries({ queryKey: ['dssr'] }),
-      qc.invalidateQueries({ queryKey: ['dssr-preview'] }),
+      inv(['dssr']),
+      inv(['dssr-preview']),
       // Closing a Business Day writes its snapshot: the mobile Home's 7-day trend reads the range.
-      qc.invalidateQueries({ queryKey: ['dssr-range'] }),
-      qc.invalidateQueries({ queryKey: ['expenses'] }),
-      qc.invalidateQueries({ queryKey: ['income'] }),
-      qc.invalidateQueries({ queryKey: ['purchases'] }),
-      qc.invalidateQueries({ queryKey: ['supplier-payments'] }),
+      inv(['dssr-range']),
+      inv(['expenses']),
+      inv(['income']),
+      inv(['purchases']),
+      inv(['supplier-payments']),
       // Decantations and the Fuel Purchases they link to move together (#469).
-      qc.invalidateQueries({ queryKey: ['decantations'] }),
-      qc.invalidateQueries({ queryKey: ['linkable-purchases'] }),
-      qc.invalidateQueries({ queryKey: ['collections'] }),
-      qc.invalidateQueries({ queryKey: ['customers'] }),
+      inv(['decantations']),
+      inv(['linkable-purchases']),
+      inv(['collections']),
+      inv(['customers']),
       // Receivables are settled FIFO from the same ledger as a customer's balance,
       // and the statement reads it: a credit sale or collection moves both.
-      qc.invalidateQueries({ queryKey: ['receivables'] }),
-      qc.invalidateQueries({ queryKey: ['customer-statement'] }),
+      inv(['receivables']),
+      inv(['customer-statement']),
       // Payables are settled FIFO from the supplier ledger, like a supplier's
       // balance: a purchase or supplier payment moves them and the statement.
-      qc.invalidateQueries({ queryKey: ['payables'] }),
-      qc.invalidateQueries({ queryKey: ['supplier-statement'] }),
+      inv(['payables']),
+      inv(['supplier-statement']),
       // The statement drawers read the party ledgers: a record made over an open
       // statement must show in it.
-      qc.invalidateQueries({ queryKey: ['supplier-ledger'] }),
-      qc.invalidateQueries({ queryKey: ['customer-ledger'] }),
+      inv(['supplier-ledger']),
+      inv(['customer-ledger']),
       // Money layer: account balances, statements and the Cash & Bank register all
       // move with expenses / income / collections / payments.
-      qc.invalidateQueries({ queryKey: ['financial-accounts'] }),
-      qc.invalidateQueries({ queryKey: ['account-ledger'] }),
-      qc.invalidateQueries({ queryKey: queryKeys.financeMovementsPrefix() }),
-      qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() }),
-      qc.invalidateQueries({ queryKey: queryKeys.profitLossAll() }),
-      qc.invalidateQueries({ queryKey: ['money-movements'] }),
+      inv(['financial-accounts']),
+      inv(['account-ledger']),
+      inv(queryKeys.financeMovementsPrefix()),
+      inv(queryKeys.dailyCashBookPrefix()),
+      inv(queryKeys.profitLossAll()),
+      inv(['money-movements']),
       // Suppliers carry computed payable balances that move with purchases/payments,
       // and new suppliers are created from PurchasesList — keep them fresh too.
-      qc.invalidateQueries({ queryKey: ['suppliers'] }),
-      qc.invalidateQueries({ queryKey: ['activity-groups'] }),
-      qc.invalidateQueries({ queryKey: ['density-readings'] }),
-      qc.invalidateQueries({ queryKey: ['density-today'] }),
-      qc.invalidateQueries({ queryKey: ['activity-group'] }),
+      inv(['suppliers']),
+      inv(['activity-groups']),
+      inv(['density-readings']),
+      inv(['density-today']),
+      inv(['activity-group']),
       // Tank levels (#520) live in the static stations cache (24h, persisted).
       // An Owner may change them on another device; riding this cadence picks
       // the change up on the next operational write. One GET /setup/stations.
-      qc.invalidateQueries({ queryKey: queryKeys.stations() }),
+      inv(queryKeys.stations()),
     ];
     if (stationId) {
       invalidations.push(
-        qc.invalidateQueries({ queryKey: ['inventory-status', stationId] }),
-        qc.invalidateQueries({ queryKey: ['inventory-items', stationId] }),
-        qc.invalidateQueries({ queryKey: ['inventory-movements', stationId] }),
-        qc.invalidateQueries({ queryKey: ['inventory-variances', stationId] }),
-        qc.invalidateQueries({ queryKey: ['density-readings', stationId] }),
-        qc.invalidateQueries({ queryKey: ['density-today', stationId] }),
-        qc.invalidateQueries({ queryKey: ['decantation-day-close-warnings', stationId] }),
+        inv(['inventory-status', stationId]),
+        inv(['inventory-items', stationId]),
+        inv(['inventory-movements', stationId]),
+        inv(['inventory-variances', stationId]),
+        inv(['density-readings', stationId]),
+        inv(['density-today', stationId]),
+        inv(['decantation-day-close-warnings', stationId]),
       );
     }
     return Promise.all(invalidations).then(() => undefined);

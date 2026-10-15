@@ -4,7 +4,7 @@ import { CloudDispenserService, CloudNozzleService } from '../../services/cloud.
 import { queryKeys, useDispensers, useNozzles, useProducts, useTanks } from '../../query/hooks.js';
 import { DispenserUnit, Tank, Product, Nozzle } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useInvalidateOperational } from '../../query/hooks.js';
 import {
@@ -185,7 +185,12 @@ export const DispensersList: React.FC<DispensersListProps> = ({
         next === 'MAINTENANCE' ? `${du.name} is out of service.` : `${du.name} is back in service.`,
       );
     } catch (err: any) {
-      toast.error(err?.message || 'Could not change the dispenser status.');
+      toast.error(
+        withNextStep(
+          err?.message || "Couldn't change the dispenser status",
+          'Try again from its row.',
+        ),
+      );
       return;
     } finally {
       setStatusBusyId(null);
@@ -240,7 +245,12 @@ export const DispensersList: React.FC<DispensersListProps> = ({
       runTask(refreshDispensers(), 'Saved, but the dispenser list could not be refreshed.');
       toast.success('Dispenser unit created.');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to create dispenser unit and nozzles');
+      toast.error(
+        withNextStep(
+          err.message || "Couldn't create the dispenser unit and nozzles",
+          'Check the details and save again.',
+        ),
+      );
     } finally {
       setSubmitting(false);
     }

@@ -42,7 +42,7 @@ import {
 } from '../../query/shiftStatusPatches.js';
 import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { formatMoney, formatQuantity, MINUS } from '../../utils/format.js';
-import { useRunTask } from '../../utils/runTask.js';
+import { useRefreshTask, useRunTask } from '../../utils/runTask.js';
 import { flashRows } from '../../utils/rowFlash.js';
 import { DRAWER_KEY } from './liveShiftInputs.js';
 import { CloseNote } from './CloseShiftSteps.js';
@@ -321,6 +321,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   const [ccNotes, setCcNotes] = useState('');
   const [ccBusy, setCcBusy] = useState(false);
   const runTask = useRunTask();
+  const refresh = useRefreshTask();
   // Idempotency key for the line currently being added — held across a failed
   // retry (same key → server de-dupes) and cleared on success or any edit.
   const ccIdemKeyRef = useRef<string | null>(null);
@@ -523,8 +524,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
    * is what kept the spinner running for seconds after the sale was recorded
    * (#219), and the prefill latch already stops the refetch clobbering entry.
    */
-  const refreshAfterCreditChange = () =>
-    runTask(onCreditChanged?.(), 'Sale recorded, but the screen could not be refreshed.');
+  const refreshAfterCreditChange = () => refresh(async () => onCreditChanged?.(), 'Sale recorded.');
 
   const addCreditLine = async () => {
     setError(null);

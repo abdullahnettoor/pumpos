@@ -67,4 +67,18 @@ describe('refreshShiftStatus', () => {
     expect(invalidateOperational).toHaveBeenCalledWith(null);
     expect(queryClient.refetchQueries).not.toHaveBeenCalled();
   });
+
+  it('passes throwOnError through, so a failed refetch rejects (#606)', async () => {
+    const invalidateOperational = vi.fn(() => Promise.resolve());
+    const queryClient = { refetchQueries: vi.fn(() => Promise.reject(new Error('offline'))) };
+
+    await expect(
+      refreshShiftStatus(queryClient, invalidateOperational, 'station-1', { throwOnError: true }),
+    ).rejects.toThrow('offline');
+    expect(invalidateOperational).toHaveBeenCalledWith('station-1', { throwOnError: true });
+    expect(queryClient.refetchQueries).toHaveBeenCalledWith(
+      { queryKey: queryKeys.shiftStatus('station-1', false), type: 'active' },
+      { throwOnError: true },
+    );
+  });
 });

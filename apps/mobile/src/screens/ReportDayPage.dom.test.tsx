@@ -348,7 +348,9 @@ describe('ReportDayPage', () => {
     feed.failFetch = true;
     mount('2026-10-06');
     fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
-    await waitFor(() => expect(screen.getByText('Could not load older days.')).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText("Couldn't load older days. Scroll down to try again.")).toBeTruthy(),
+    );
     expect(feed.fetchNext).toHaveBeenCalledTimes(1);
     expect(screen.getByText('DSR · Tue, 6 Oct')).toBeTruthy();
     // The button is usable again, and a retry that now succeeds steps back.
@@ -383,7 +385,7 @@ describe('ReportDayPage', () => {
       feed.failPdf = true;
       mount('2026-10-06');
       fireEvent.click(screen.getByRole('button', { name: 'Share' }));
-      await waitFor(() => expect(screen.getByText('No PDF today')).toBeTruthy());
+      await waitFor(() => expect(screen.getByText(/^No PDF today\. Try again\./)).toBeTruthy());
     });
   });
 

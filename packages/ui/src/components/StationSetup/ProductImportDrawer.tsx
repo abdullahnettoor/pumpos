@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Drawer } from '../Drawer.js';
 import { Button, Chip, Icon, InteractiveTable, type TableColumn } from '../../pump-ds/index.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { CloudProductService } from '../../services/cloud.js';
@@ -280,7 +280,9 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
     const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
     if (lines.length < 2) {
       setRows([]);
-      toast.error('CSV has no data rows.');
+      toast.error(
+        withNextStep('The CSV has no data rows', 'Add rows under the header and upload it again.'),
+      );
       return;
     }
     const header = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
@@ -294,7 +296,12 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
       colIndex['producttype'] < 0 ||
       colIndex['unit'] < 0
     ) {
-      toast.error('CSV must include at least: name, code, productType, unit.');
+      toast.error(
+        withNextStep(
+          'The CSV must include at least: name, code, productType, unit',
+          'Add the missing columns and upload it again.',
+        ),
+      );
       setRows([]);
       return;
     }
@@ -401,7 +408,9 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
   const runImport = async () => {
     const payloads = rows.filter((r) => r.errors.length === 0 && r.payload).map((r) => r.payload);
     if (payloads.length === 0) {
-      toast.error('No valid rows to import.');
+      toast.error(
+        withNextStep('No valid rows to import', 'Fix the rows marked in the preview, then import.'),
+      );
       return;
     }
     const stationId = selectedStation?.id;
@@ -414,7 +423,9 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
         (idempotencyKey) => productService.importProducts(payloads, stationId, { idempotencyKey }),
       );
     } catch (err: any) {
-      toast.error(err.message || 'Import failed');
+      toast.error(
+        withNextStep(err.message || 'The import failed', 'Check the file and import again.'),
+      );
       return;
     } finally {
       setImporting(false);
@@ -426,7 +437,10 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
       toast.success(`Imported ${res.createdCount} product${res.createdCount === 1 ? '' : 's'}.`);
     if (res.failed.length > 0)
       toast.error(
-        `${res.failed.length} row${res.failed.length === 1 ? '' : 's'} failed — see details.`,
+        withNextStep(
+          `${res.failed.length} row${res.failed.length === 1 ? '' : 's'} failed`,
+          'See the details below, fix them and import those rows again.',
+        ),
       );
     onImported();
   };

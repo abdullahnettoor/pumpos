@@ -73,9 +73,23 @@ export function withNextStep(reason: string | null | undefined, next: string): s
   return r ? `${/[.!?…]$/.test(r) ? r : `${r}.`} ${next}` : next;
 }
 
-/** The stack as it should read after adding a toast: newest last, at most `MAX_TOASTS`. */
-export function pushToast<T>(stack: readonly T[], toast: T, max = MAX_TOASTS): T[] {
-  return [...stack, toast].slice(-max);
+/**
+ * The stack as it should read after adding a toast: newest last, at most
+ * `MAX_TOASTS`. An error is never pushed out (#606 review): past the limit the
+ * oldest success or info goes, even the new one. Only errors can exceed it.
+ */
+export function pushToast<T extends { variant: ToastVariant }>(
+  stack: readonly T[],
+  toast: T,
+  max = MAX_TOASTS,
+): T[] {
+  const next = [...stack, toast];
+  while (next.length > max) {
+    const i = next.findIndex((t) => t.variant !== 'error');
+    if (i < 0) break;
+    next.splice(i, 1);
+  }
+  return next;
 }
 
 /**

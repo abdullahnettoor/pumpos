@@ -29,6 +29,21 @@ describe('flashRows (#606)', () => {
   });
 });
 
+describe('overlapping flashes (#606 review)', () => {
+  it('a newer flash of the same row keeps it lit for its own full time', () => {
+    vi.useFakeTimers();
+    render(<Probe />);
+    act(() => flashRows(['r1']));
+    act(() => vi.advanceTimersByTime(FLASH_MS / 2));
+    act(() => flashRows(['r1']));
+    act(() => vi.advanceTimersByTime(FLASH_MS / 2 + 1));
+    // The first flash's timer has fired; the second still holds the row.
+    expect(screen.getByText('r1')).toBeDefined();
+    act(() => vi.advanceTimersByTime(FLASH_MS / 2));
+    expect(screen.getByText('none')).toBeDefined();
+  });
+});
+
 describe('tables tint the rows a save updated (#606)', () => {
   it('a flat table tints only the named row', () => {
     renderWithProviders(

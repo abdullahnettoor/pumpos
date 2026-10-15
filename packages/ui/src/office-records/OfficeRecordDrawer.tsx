@@ -23,7 +23,7 @@ import {
   useStationSuppliers,
 } from '../query/hooks.js';
 import { isIdempotencyKeyConflict, keepsIdempotencyKey } from '../utils/idempotency.js';
-import { useRunTask } from '../utils/runTask.js';
+import { useRefreshTask, useRunTask } from '../utils/runTask.js';
 import { OfficeRecordContext, type OfficeRecordContextValue } from './context.js';
 import { typedAmount, type FormDraft } from './draft.js';
 import type { PartyOption } from './fields/PartyField.js';
@@ -144,6 +144,7 @@ const OfficeRecordSession: React.FC<
   });
   const toast = useToast();
   const runTask = useRunTask();
+  const refresh = useRefreshTask();
   const invalidateOperational = useInvalidateOperational();
   const side = useMediaQuery(PREVIEW_SIDE_QUERY);
   const formId = `office-record-${kind}`;
@@ -247,9 +248,11 @@ const OfficeRecordSession: React.FC<
         ? { action: { label: def.list.label, onClick: () => goToRoute(def.list.route) } }
         : undefined,
     );
-    runTask(
-      invalidateOperational(stationId),
-      `${def.label} recorded, but the screen could not be refreshed.`,
+    // The saved row is on screen from the answer; a failed refresh says so
+    // briefly, with Retry (#606).
+    refresh(
+      () => invalidateOperational(stationId, { throwOnError: true }),
+      `${def.label} recorded.`,
     );
     if (addAnother) {
       setCarry(carryOver(submission));

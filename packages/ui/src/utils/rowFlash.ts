@@ -9,6 +9,8 @@ import { useSyncExternalStore } from 'react';
 export const FLASH_MS = 1600;
 
 let flashing: ReadonlySet<string> = new Set();
+/** When each key's latest flash ends: a newer flash of a key extends it (#606 review). */
+const until = new Map<string, number>();
 const listeners = new Set<() => void>();
 
 function set(next: ReadonlySet<string>) {
@@ -20,11 +22,20 @@ function set(next: ReadonlySet<string>) {
 export function flashRows(keys: readonly (string | null | undefined)[]): void {
   const added = keys.filter((k): k is string => !!k);
   if (added.length === 0) return;
+  const ends = Date.now() + FLASH_MS;
+  for (const k of added) until.set(k, ends);
   set(new Set([...flashing, ...added]));
   setTimeout(() => {
+    const now = Date.now();
     const next = new Set(flashing);
-    for (const k of added) next.delete(k);
-    set(next);
+    for (const k of added) {
+      // Only the key's own latest flash ends it; an earlier timer leaves it lit.
+      if ((until.get(k) ?? 0) <= now) {
+        until.delete(k);
+        next.delete(k);
+      }
+    }
+    if (next.size !== flashing.size) set(next);
   }, FLASH_MS);
 }
 

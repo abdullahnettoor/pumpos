@@ -16,7 +16,7 @@ import { countOf } from '../../utils/ledgerWindow.js';
 import { Drawer } from '../Drawer.js';
 import { Checkbox } from '../primitives/Toggle.js';
 import { ProviderField } from '../primitives/ProviderField.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys, useFinancialAccounts, usePaymentTerminals } from '../../query/hooks.js';
@@ -202,7 +202,12 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({
       runTask(refreshTerminals(), 'Saved, but the terminal list could not be refreshed.');
       toast.success(editingId ? 'Terminal updated.' : 'Terminal added.');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to save payment terminal');
+      toast.error(
+        withNextStep(
+          err.message || "Couldn't save the payment terminal",
+          'Check the details and save again.',
+        ),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -220,7 +225,9 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({
       runTask(refreshTerminals(), 'Saved, but the terminal list could not be refreshed.');
       toast.success(t.isActive ? 'Terminal disabled.' : 'Terminal enabled.');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to update terminal');
+      toast.error(
+        withNextStep(err.message || "Couldn't update the terminal", 'Try again from its row.'),
+      );
     }
   };
 

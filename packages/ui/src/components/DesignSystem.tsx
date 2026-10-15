@@ -900,7 +900,7 @@ const FeedbackPanel: React.FC = () => {
               size="sm"
               onClick={() =>
                 toast.success('Expense recorded.', {
-                  action: { label: 'View expenses', onClick: () => undefined },
+                  action: { label: 'View record', onClick: () => undefined },
                 })
               }
             >

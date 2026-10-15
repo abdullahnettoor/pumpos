@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { Station } from '@pump/shared';
 import { useStations, useUsers } from '../../query/hooks.js';
 import { Switch } from '../primitives/Toggle.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import {
@@ -208,7 +208,9 @@ export const UserRolesAssignment: React.FC<UserRolesAssignmentProps> = ({
             : userService.deactivateUser(u.id, { idempotencyKey }),
       );
     } catch (err: any) {
-      toast.error(err.message || 'Failed to update member');
+      toast.error(
+        withNextStep(err.message || "Couldn't update the member", 'Try again from their row.'),
+      );
       return;
     }
     team.merge({ ...u, ...updated });

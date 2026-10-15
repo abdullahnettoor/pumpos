@@ -46,7 +46,7 @@ import {
 } from '../../query/hooks.js';
 import { patchBusinessDayClosed } from '../../query/shiftStatusPatches.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
-import { useRunTask } from '../../utils/runTask.js';
+import { useRefreshTask, useRunTask } from '../../utils/runTask.js';
 import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { dayFigures, dayShifts, type DayShiftRow } from './businessDayModel.js';
 
@@ -118,6 +118,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   const qc = useQueryClient();
   const invalidateOperational = useInvalidateOperational();
   const runTask = useRunTask();
+  const refresh = useRefreshTask();
   const [closing, setClosing] = useState(false);
   const canClose = userRole === 'Owner' || userRole === 'Manager';
 
@@ -397,13 +398,17 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
       // background (caching rule 6). The day's DSSR snapshot only exists once
       // the close succeeds, so both the single-day and range views refetch.
       toast.success('Business day closed · DSR generated.');
-      runTask(
-        Promise.all([
-          invalidateOperational(stationId),
-          qc.invalidateQueries({ queryKey: queryKeys.dssr(stationId, businessDate) }),
-          qc.invalidateQueries({ queryKey: queryKeys.dssrRangePrefix() }),
-        ]),
-        'Day closed, but the screen could not be refreshed.',
+      refresh(
+        () =>
+          Promise.all([
+            invalidateOperational(stationId, { throwOnError: true }),
+            qc.invalidateQueries(
+              { queryKey: queryKeys.dssr(stationId, businessDate) },
+              { throwOnError: true },
+            ),
+            qc.invalidateQueries({ queryKey: queryKeys.dssrRangePrefix() }, { throwOnError: true }),
+          ]),
+        'Day closed.',
       );
     } catch (err: any) {
       toast.error(withNextStep(err.message, 'Nothing was sealed. Try closing it again.'), {

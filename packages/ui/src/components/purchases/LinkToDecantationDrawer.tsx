@@ -1,7 +1,7 @@
 import React from 'react';
 import { Drawer } from '../Drawer.js';
 import { Button, DataSection, DateText, EmptyState, SectionHeader } from '../../pump-ds/index.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import type { PurchaseLinkRow } from './columns.js';
 import {
   useDecantations,
@@ -54,7 +54,12 @@ export const LinkToDecantationDrawer: React.FC<LinkToDecantationDrawerProps> = (
       toast.success(`Linked to decantation ${decantation.documentNumber}.`);
       onClose();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not link the purchase.');
+      toast.error(
+        withNextStep(
+          e instanceof Error ? e.message : "Couldn't link the purchase",
+          'Pick the decantation again and link it.',
+        ),
+      );
     }
   };
 

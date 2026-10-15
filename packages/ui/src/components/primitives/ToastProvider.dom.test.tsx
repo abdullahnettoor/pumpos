@@ -10,6 +10,7 @@ import {
   useToast,
   withNextStep,
   type ToastApi,
+  type ToastVariant,
 } from './ToastProvider.js';
 
 /** The toast host (#606): one bottom-centre stack, successes leave, errors stay. */
@@ -74,7 +75,25 @@ describe('ToastProvider (#606)', () => {
       'Note 4',
       'Note 5',
     ]);
-    expect(pushToast([1, 2, 3], 4)).toEqual([2, 3, 4]);
+  });
+
+  it('never pushes an error out: the oldest success goes, even the new one', () => {
+    type T = { id: number; variant: ToastVariant };
+    const e = (id: number): T => ({ id, variant: 'error' });
+    const ok = (id: number): T => ({ id, variant: 'success' });
+    expect(pushToast([e(1), ok(2), e(3)], ok(4)).map((t) => t.id)).toEqual([1, 3, 4]);
+    expect(pushToast([e(1), e(2), e(3)], ok(4)).map((t) => t.id)).toEqual([1, 2, 3]);
+    expect(pushToast([e(1), e(2), e(3)], e(4)).map((t) => t.id)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('a burst of successes cannot hide an undismissed error', () => {
+    mount();
+    act(() => {
+      api.error('Shift not opened. Check the form and open the shift again.');
+      for (let i = 1; i <= 4; i += 1) api.success(`Saved ${i}`);
+    });
+    expect(screen.getByRole('alert')).toBeDefined();
+    expect(screen.getAllByRole('status').map((t) => t.textContent)).toEqual(['Saved 3', 'Saved 4']);
   });
 
   it('sits bottom centre, above the status bar, with no inline style', () => {

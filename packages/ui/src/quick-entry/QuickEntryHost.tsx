@@ -195,7 +195,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({
         'Sale recorded.',
         currentPage() === ROUTES.shifts
           ? undefined
-          : { action: { label: 'View shift', onClick: () => goToRoute(ROUTES.shifts) } },
+          : { action: { label: 'View record', onClick: () => goToRoute(ROUTES.shifts) } },
       );
       close();
     } catch (err: any) {

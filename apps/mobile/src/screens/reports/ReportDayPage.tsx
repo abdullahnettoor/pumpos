@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { generateDssrPdf, useBusinessDayList, useToast } from '@pump/ui';
+import { generateDssrPdf, useBusinessDayList, useToast, withNextStep } from '@pump/ui';
 import { DSR_LABEL, type BusinessDayListItem, type Station } from '@pump/shared';
 import { DayTiles } from '../../components/DayTiles.js';
 import { SalesByProduct } from '../../components/SalesByProduct.js';
@@ -71,7 +71,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
       }
       goTo(t);
     } catch {
-      toast.error('Could not load older days.');
+      toast.error(withNextStep("Couldn't load older days", 'Scroll down to try again.'));
     } finally {
       setStepping(false);
     }
@@ -194,7 +194,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
       download={
         model ? { onPress: () => pdf(model, 'download'), label: 'Download PDF' } : undefined
       }
-      onActionError={(message) => toast.error(message)}
+      onActionError={(message) => toast.error(withNextStep(message, 'Try again.'))}
     >
       <div ref={top} />
       {body}

@@ -4,7 +4,7 @@ import {
   type RecordHandoverPayload,
   type RecordHandoverResult,
 } from '../services/cloud.js';
-import { useRunTask } from '../utils/runTask.js';
+import { runTask } from '../utils/runTask.js';
 import { mutationKeys, queryKeys } from './hooks.js';
 import { patchQueryData } from './patches/applyPatch.js';
 import { withAcceptedHandover, type ShiftStatusSlice } from './patches/shiftStatus.js';
@@ -177,7 +177,8 @@ export type HandoverAnswerPatcher = (stationId: string, result: RecordHandoverRe
  * (#244). A default is exactly how the silence got here: the refresh runs
  * unawaited, so if it fails the operator keeps looking at stale balances with
  * nothing to tell them. Making it a parameter forces each caller to name a
- * surface; `useRecordHandoverMutation` supplies the toasting one.
+ * surface. `useRecordHandoverMutation` reports to the console only: the
+ * failure itself shows inline on the board and close page (#606).
  */
 export function recordHandoverMutationOptions(
   queryClient: HandoverInvalidationClient,
@@ -199,7 +200,12 @@ export function recordHandoverMutationOptions(
 
 export function useRecordHandoverMutation() {
   const queryClient = useQueryClient();
-  const runBackgroundTask = useRunTask();
+  // A failed refresh after a Handover is not a toast (#606, owner decision):
+  // it leaves the shift totals unconfirmed, and the board and close page say
+  // so inline with Retry, holding those figures as "Saving…" until a refetch
+  // succeeds. The console keeps the detail.
+  const runBackgroundTask: BackgroundTaskRunner = (task, message) =>
+    runTask(task, (error) => console.error(message, error));
   return useMutation(
     recordHandoverMutationOptions(queryClient, runBackgroundTask, (stationId, result) =>
       patchShiftStatusWithHandover(queryClient, stationId, result),
