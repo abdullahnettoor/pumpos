@@ -82,7 +82,7 @@ describe('locked-feature words (#605)', () => {
 
   it('writes to PumpOS about the feature', () => {
     expect(pumposContactHref('Attendant Handover Report')).toBe(
-      'mailto:support@pumpos.app?subject=Enable%20Attendant%20Handover%20Report',
+      'mailto:hello@pumpos.app?subject=Enable%20Attendant%20Handover%20Report',
     );
   });
 });

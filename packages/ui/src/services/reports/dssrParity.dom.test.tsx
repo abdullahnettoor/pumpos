@@ -5,6 +5,7 @@ import { cleanup, screen } from '@testing-library/react';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
 import {
   DSSR_EMPTY_DAY_FIXTURE,
+  DSSR_KG_DAY_FIXTURE,
   DSSR_NOT_STORED_FIXTURE,
   DSSR_PARITY_FIXTURE,
 } from '../../test/dssrFixture.js';
@@ -77,6 +78,7 @@ const days: Record<string, DssrRow> = {
   'a full day': DSSR_PARITY_FIXTURE,
   'an empty day': DSSR_EMPTY_DAY_FIXTURE,
   'a kg day without stored totals': DSSR_NOT_STORED_FIXTURE,
+  'a kg-only day': DSSR_KG_DAY_FIXTURE,
 };
 
 describe.each(Object.entries(days))('DSR screen and PDF parity (#580): %s', (_name, fixture) => {
@@ -140,6 +142,8 @@ describe('DSR screen and PDF parity (#580): the words they once disagreed on', (
     // The shift total is the snapshot's: no net volume across L and kg.
     const shifts = pdf.tables.find((t) => t.headers[0] === 'SHIFT');
     expect(shifts?.totals[0].slice(0, 4)).toEqual(['Total', '', '', '—']);
+    // Nor in any one shift's: a shift's volume adds L and kg (#587).
+    expect(shifts?.rows.map((r) => r[3])).toEqual(['—', '—']);
     // The reasons sit under the tables, one line each, not in the total label.
     expect(pdfNotes(pdf)).toEqual([
       'Total: volumes not added across L and kg.',
@@ -172,5 +176,14 @@ describe('DSR screen and PDF parity (#580): the words they once disagreed on', (
       'Total: variance total not stored for this day.',
     ]);
     expect(screenNotes()).toEqual(pdfNotes(pdf));
+    // The shift row is in the day's unit, kg, though its total is not stored (#587).
+    expect(shifts.rows.map((r) => r[3])).toEqual(['300.00 kg']);
+  });
+
+  it('a kg-only day prints every shift net volume in kg, the total too (#587)', () => {
+    const pdf = renderBoth(DSSR_KG_DAY_FIXTURE);
+    const shifts = pdf.tables.find((t) => t.headers[0] === 'SHIFT');
+    expect(shifts?.rows.map((r) => r[3])).toEqual(['250.25 kg', '159.75 kg']);
+    expect(shifts?.totals[0][3]).toBe('410.00 kg');
   });
 });

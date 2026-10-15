@@ -232,7 +232,7 @@ export const MERCHANDISE_STOCK_COLUMNS: TableColumn<StockVarianceRow>[] = [
   STOCK_STATUS,
 ];
 
-export const SHIFT_COLUMNS: TableColumn<ShiftRow>[] = [
+const SHIFT_LEAD_COLUMNS: TableColumn<ShiftRow>[] = [
   { id: 'label', header: 'Shift', kind: 'text', emphasis: true, value: (r) => r.label },
   { id: 'template', header: 'Template', kind: 'text', value: (r) => r.template },
   {
@@ -242,7 +242,27 @@ export const SHIFT_COLUMNS: TableColumn<ShiftRow>[] = [
     value: (r) => r.closedAt,
     text: (r) => formatDateTime(r.closedAt),
   },
-  { id: 'netVolume', header: 'Net volume', kind: 'qty', unit: 'L', value: (r) => r.netVolume },
+];
+
+/**
+ * A shift's net volume, in the day's fuel unit, as the shift total row reads
+ * it (#587). On a mixed L/kg day it reads `—`: a shift's volume adds litres
+ * and kilograms, so it has no one unit. `shiftTotalNotes` says why, under the
+ * table. A day with no fuel rows keeps litres.
+ */
+function shiftNetVolumeColumn(fuel: DssrDay['fuel']): TableColumn<ShiftRow> {
+  const mixed = fuelUnitsNote(fuel) != null;
+  return {
+    id: 'netVolume',
+    header: 'Net volume',
+    kind: 'qty',
+    unit: dayUnit(fuel) ?? 'L',
+    value: (r) => r.netVolume,
+    ...(mixed && { text: () => '—' }),
+  };
+}
+
+const SHIFT_VARIANCE_COLUMNS: TableColumn<ShiftRow>[] = [
   {
     id: 'attendantVariance',
     header: 'Attendant var.',
@@ -261,6 +281,11 @@ export const SHIFT_COLUMNS: TableColumn<ShiftRow>[] = [
     cell: (r) => <SignedMoney amount={r.officeVariance} />,
   },
 ];
+
+/** The included shifts' columns; the net volume takes the day's fuel unit (#587). */
+export function shiftColumns(day: DssrDay): TableColumn<ShiftRow>[] {
+  return [...SHIFT_LEAD_COLUMNS, shiftNetVolumeColumn(day.fuel), ...SHIFT_VARIANCE_COLUMNS];
+}
 
 /** Why the shift totals show `—` or a blank, and which shifts the attendant total leaves out. */
 export function shiftTotalNotes(day: DssrDay): string[] {

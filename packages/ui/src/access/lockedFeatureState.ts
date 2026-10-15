@@ -66,10 +66,9 @@ export const lockedPlanLine = (plan: string | null): string =>
 export const LOCKED_ASK_LINE = 'Ask your Owner or Manager to enable it.';
 
 /**
- * Where "Contact us" goes. No in-app support channel exists yet, so it opens
- * an email to PumpOS.
- * TODO(#605): replace with the real support channel once there is one.
+ * Where "Contact us" goes: an email to PumpOS, at the address the marketing
+ * site gives.
  */
-export const PUMPOS_CONTACT_EMAIL = 'support@pumpos.app';
+export const PUMPOS_CONTACT_EMAIL = 'hello@pumpos.app';
 export const pumposContactHref = (feature: string): string =>
   `mailto:${PUMPOS_CONTACT_EMAIL}?subject=${encodeURIComponent(`Enable ${feature}`)}`;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { dssrDayStatus, readDssrDay } from './dssrModel.js';
 import {
   FUEL_PRODUCT_COLUMNS,
-  SHIFT_COLUMNS,
+  shiftColumns,
   ATTENDANT_COLUMNS,
   attendantTotalNotes,
   attendantTotalRow,
@@ -12,7 +12,7 @@ import {
   fuelTotalRow,
   shiftTotalRow,
 } from './dssrColumns.js';
-import { totalTexts } from '../../../pump-ds/table/columns.js';
+import { cellText, totalTexts } from '../../../pump-ds/table/columns.js';
 
 describe('dssrDayStatus (Business Day Status)', () => {
   it('a stored snapshot is Sealed; a preview is Open today and a Draft before it', () => {
@@ -127,7 +127,7 @@ describe('readDssrDay', () => {
     const day = shiftDay({
       fuel: { totalNetVolume: 149.5, byProduct: [{ productName: 'Petrol', unit: 'L' }] },
     });
-    expect(totalTexts(SHIFT_COLUMNS, day.shifts, shiftTotalRow(day))?.cells).toEqual([
+    expect(totalTexts(shiftColumns(day), day.shifts, shiftTotalRow(day))?.cells).toEqual([
       'Total',
       '',
       '',
@@ -147,12 +147,9 @@ describe('readDssrDay', () => {
         ],
       },
     });
-    expect(totalTexts(SHIFT_COLUMNS, day.shifts, shiftTotalRow(day))?.cells.slice(0, 4)).toEqual([
-      'Total',
-      '',
-      '',
-      '—',
-    ]);
+    expect(
+      totalTexts(shiftColumns(day), day.shifts, shiftTotalRow(day))?.cells.slice(0, 4),
+    ).toEqual(['Total', '', '', '—']);
     expect(shiftTotalNotes(day)).toEqual(['volumes not added across L and kg']);
   });
 
@@ -162,7 +159,7 @@ describe('readDssrDay', () => {
       fuel,
       drawer: { attendants: [{ attendantName: 'Ravi', variance: -4 }] },
     });
-    expect(totalTexts(SHIFT_COLUMNS, day.shifts, shiftTotalRow(day))?.cells).toEqual([
+    expect(totalTexts(shiftColumns(day), day.shifts, shiftTotalRow(day))?.cells).toEqual([
       'Total',
       '',
       '',
@@ -181,14 +178,9 @@ describe('readDssrDay', () => {
       drawer: { totalCashVariance: -7, attendants: [{ attendantName: 'Ravi', variance: -4 }] },
     });
     expect(shiftTotalNotes(officeOnly)).toEqual(['attendant var. total not stored for this day']);
-    expect(totalTexts(SHIFT_COLUMNS, officeOnly.shifts, shiftTotalRow(officeOnly))?.cells).toEqual([
-      'Total',
-      '',
-      '',
-      '149.50 L',
-      '',
-      '−₹7.00',
-    ]);
+    expect(
+      totalTexts(shiftColumns(officeOnly), officeOnly.shifts, shiftTotalRow(officeOnly))?.cells,
+    ).toEqual(['Total', '', '', '149.50 L', '', '−₹7.00']);
     const stored = shiftDay({ fuel });
     expect(
       totalTexts(ATTENDANT_COLUMNS, stored.attendants, attendantTotalRow(stored))?.cells,
@@ -208,12 +200,9 @@ describe('readDssrDay', () => {
       },
     });
     expect(day.fuel.totals.net).toBeNull();
-    expect(totalTexts(SHIFT_COLUMNS, day.shifts, shiftTotalRow(day))?.cells.slice(0, 4)).toEqual([
-      'Total',
-      '',
-      '',
-      '',
-    ]);
+    expect(
+      totalTexts(shiftColumns(day), day.shifts, shiftTotalRow(day))?.cells.slice(0, 4),
+    ).toEqual(['Total', '', '', '']);
     expect(shiftTotalNotes(day)).toEqual(['net volume not stored for this day']);
     expect(fuelTotalNotes(day.fuel)).toEqual(['net volume not stored for this day']);
     expect(totalTexts(FUEL_PRODUCT_COLUMNS, day.fuel.rows, fuelTotalRow(day.fuel))?.cells).toEqual([
@@ -229,6 +218,43 @@ describe('readDssrDay', () => {
     const day = shiftDay({
       fuel: { totalNetVolume: 149.5, byProduct: [{ productName: 'CNG', unit: 'kg' }] },
     });
-    expect(totalTexts(SHIFT_COLUMNS, day.shifts, shiftTotalRow(day))?.cells[3]).toBe('149.50 kg');
+    expect(totalTexts(shiftColumns(day), day.shifts, shiftTotalRow(day))?.cells[3]).toBe(
+      '149.50 kg',
+    );
+  });
+
+  /* #587: a shift's net volume takes the day's fuel unit, as the shift total does. */
+  const shiftNetVolumes = (day: ReturnType<typeof readDssrDay>) => {
+    const net = shiftColumns(day).find((c) => c.id === 'netVolume');
+    return day.shifts.map((s) => (net ? cellText(net, s) : null));
+  };
+
+  it('prints each shift’s net volume in kg on a kg-only day', () => {
+    const day = shiftDay({
+      fuel: { totalNetVolume: 150, byProduct: [{ productName: 'CNG', unit: 'kg' }] },
+    });
+    expect(shiftNetVolumes(day)).toEqual(['100.00 kg', '50.00 kg']);
+  });
+
+  it('prints each shift’s net volume in L on a litres-only day, and on a day with no fuel', () => {
+    const litres = shiftDay({
+      fuel: { totalNetVolume: 150, byProduct: [{ productName: 'Petrol', unit: 'L' }] },
+    });
+    expect(shiftNetVolumes(litres)).toEqual(['100.00 L', '50.00 L']);
+    expect(shiftNetVolumes(shiftDay({ fuel: { byProduct: [] } }))).toEqual(['100.00 L', '50.00 L']);
+  });
+
+  it('prints each shift’s net volume as — on a mixed L/kg day, with the mixed-unit note', () => {
+    const day = shiftDay({
+      fuel: {
+        totalNetVolume: 150,
+        byProduct: [
+          { productName: 'Petrol', unit: 'L' },
+          { productName: 'CNG', unit: 'kg' },
+        ],
+      },
+    });
+    expect(shiftNetVolumes(day)).toEqual(['—', '—']);
+    expect(shiftTotalNotes(day)).toEqual(['volumes not added across L and kg']);
   });
 });
