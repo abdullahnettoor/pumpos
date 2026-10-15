@@ -9,7 +9,7 @@ import React, {
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn.js';
 import { Icon } from '../icon/Icon.js';
-import { Input } from '../input/Input.js';
+import { DatePickerButton } from '../date-picker/DatePickerButton.js';
 import { formatDateSpan } from '../../utils/format.js';
 import { isInsideAny, useAnchoredPopover } from '../lib/anchoredPopover.js';
 import {
@@ -70,13 +70,13 @@ export interface DateRangeMenuProps {
  * Panel or KpiStrip's `overflow-hidden` never clips it. It opens below the
  * button, or above when there is no room below.
  *
- * Custom dates apply only when complete and plausible (year 2000 or later, not
- * after the station's today), so a year being typed (`0002`, `0020`…) never
- * reaches `onChange`. A backwards range is put the right way round only when
- * focus leaves the From/To pair, on Enter, or when the popover closes, so
- * tabbing from From to To never commits a half-built range. Escape discards
- * the typed dates. The popover sits at z-index 1050 (as Combobox), above
- * drawers.
+ * The custom From and To are `DatePickerButton`s (#609: `Thu 1 Oct 2026`, not
+ * a native "01/10/2026"), from 2000 up to the station's today. A pair in order
+ * applies at once. A backwards pair is put the right way round only when focus
+ * leaves the From/To pair or when the popover closes, so picking From after
+ * To never commits a half-built range. Escape discards the picked dates. The
+ * popover sits at z-index 1050 (as Combobox), above drawers; the calendars
+ * open above it.
  */
 export function DateRangeMenu({
   value,
@@ -108,7 +108,8 @@ export function DateRangeMenu({
   const active: RangePreset = pickedStillMatches ? picked : matchPreset(value, presets, clock, now);
   const span = (r: DateRange) => formatDateSpan(r.from, r.to, { referenceDate: today });
 
-  const inside = (node: Node | null) => isInsideAny(node, [rootRef, popoverRef]);
+  const inside = (node: Node | null) =>
+    isInsideAny(node, [rootRef, popoverRef, fromCalRef, toCalRef]);
 
   // What the custom fields show. A field may hold a date still being typed;
   // only a complete, plausible date reaches `onChange`. Mirrored in a ref so a
@@ -137,8 +138,13 @@ export function DateRangeMenu({
     valueRef.current = v;
     draftRef.current = v;
   }, [valueFrom, valueTo]);
-  const fromRef = useRef<HTMLInputElement>(null);
-  const toRef = useRef<HTMLInputElement>(null);
+  const fromRef = useRef<HTMLButtonElement>(null);
+  const toRef = useRef<HTMLButtonElement>(null);
+  // The From / To calendars are portalled too: presses and focus there are
+  // inside this menu (#609).
+  const fromCalRef = useRef<HTMLDivElement | null>(null);
+  const toCalRef = useRef<HTMLDivElement | null>(null);
+  const inPair = (node: Node | null) => isInsideAny(node, [fromRef, toRef, fromCalRef, toCalRef]);
 
   const plausible = (d: string) => ISO_DATE.test(d) && d >= MIN_DATE && d <= today;
   const same = (a: DateRange, b: DateRange) => a.from === b.from && a.to === b.to;
@@ -157,7 +163,7 @@ export function DateRangeMenu({
     if (plausible(next.from) && plausible(next.to) && next.from <= next.to) apply(next);
   };
 
-  // When focus leaves the From/To pair, on Enter, or when the popover closes:
+  // When focus leaves the From/To pair, or when the popover closes:
   // put a backwards range the right way round, and drop anything implausible
   // back to the applied value.
   const commitCustom = () => {
@@ -193,7 +199,7 @@ export function DateRangeMenu({
     open,
     triggerRef,
     popoverRef,
-    insideRefs: [rootRef],
+    insideRefs: [rootRef, fromCalRef, toCalRef],
     align,
     onPressOutside: () => {
       commitRef.current();
@@ -287,18 +293,11 @@ export function DateRangeMenu({
     }
   };
 
-  const onFieldKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      commitCustom();
-    }
-  };
-
-  // Moving between From and To keeps building the range; leaving the pair
-  // (or closing the popover) commits it.
-  const onFieldBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    const next = e.relatedTarget;
-    if (next != null && (next === fromRef.current || next === toRef.current)) return;
+  // Moving between From and To (and their calendars) keeps building the
+  // range; leaving the pair (or closing the popover) commits it.
+  const onFieldBlur = (e: React.FocusEvent<HTMLElement>) => {
+    const next = e.relatedTarget as Node | null;
+    if (next != null && inPair(next)) return;
     commitCustom();
   };
 
@@ -332,7 +331,7 @@ export function DateRangeMenu({
             ref={popoverRef}
             style={position}
             className={cn(
-              'z-[1050] w-[320px] rounded-card border border-border-soft bg-surface p-1.5',
+              'z-[1050] w-[360px] rounded-card border border-border-soft bg-surface p-1.5',
               'shadow-(--shadow-popover)',
             )}
             onKeyDown={onPopoverKeyDown}
@@ -372,32 +371,24 @@ export function DateRangeMenu({
               aria-label="Custom range"
               className="mt-1 flex items-end gap-2 border-t border-border-soft px-1 pb-1 pt-2.5"
             >
-              <label className="flex min-w-0 flex-1 flex-col gap-1 text-[12px] font-semibold text-ink-muted">
-                From
-                <Input
-                  type="date"
-                  inputSize="sm"
-                  className="min-w-0 px-2"
-                  ref={fromRef}
-                  value={draft.from}
-                  onChange={(e) => typeCustom({ from: e.target.value })}
-                  onBlur={onFieldBlur}
-                  onKeyDown={onFieldKeyDown}
-                />
-              </label>
-              <label className="flex min-w-0 flex-1 flex-col gap-1 text-[12px] font-semibold text-ink-muted">
-                To
-                <Input
-                  type="date"
-                  inputSize="sm"
-                  className="min-w-0 px-2"
-                  ref={toRef}
-                  value={draft.to}
-                  onChange={(e) => typeCustom({ to: e.target.value })}
-                  onBlur={onFieldBlur}
-                  onKeyDown={onFieldKeyDown}
-                />
-              </label>
+              {(['from', 'to'] as const).map((end) => (
+                <div key={end} className="flex min-w-0 flex-1 flex-col gap-1" onBlur={onFieldBlur}>
+                  <span className="text-[12px] font-semibold text-ink-muted" aria-hidden="true">
+                    {end === 'from' ? 'From' : 'To'}
+                  </span>
+                  <DatePickerButton
+                    ref={end === 'from' ? fromRef : toRef}
+                    calendarRef={end === 'from' ? fromCalRef : toCalRef}
+                    variant="field"
+                    aria-label={end === 'from' ? 'From' : 'To'}
+                    value={draft[end]}
+                    min={MIN_DATE}
+                    max={today}
+                    align={end === 'from' ? 'start' : 'end'}
+                    onChange={(d) => typeCustom({ [end]: d })}
+                  />
+                </div>
+              ))}
             </div>
           </div>,
           document.body,

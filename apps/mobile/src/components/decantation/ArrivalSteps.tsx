@@ -1,5 +1,5 @@
 import React from 'react';
-import { emptyChamber, formatQuantity } from '@pump/ui';
+import { bookStock, emptyChamber, formatQuantity } from '@pump/ui';
 import type { Visit } from '../../lib/decantation/useVisit.js';
 import {
   AddButton,
@@ -124,11 +124,7 @@ export const TanksStep: React.FC<{ visit: Visit; showErrors: boolean }> = ({
               label="Before dip (L)"
               ariaLabel={`Before dip (L) tank ${i + 1}`}
               value={l.beforeDip}
-              meta={
-                tank?.currentVolume != null
-                  ? `Book ${formatQuantity(tank.currentVolume, 'L')}`
-                  : undefined
-              }
+              meta={tank ? bookStock(tank) : undefined}
               error={showErrors ? err?.beforeDip : undefined}
               onChange={(x) => v.setLine(i, { beforeDip: x })}
             />

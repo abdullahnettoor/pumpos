@@ -5,6 +5,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { resolveEntryDate, shiftBusinessDate } from '@pump/shared';
+import { calendarDay, datePicker, pickDate, pickedDate } from '../test/datePicker.js';
 import {
   createTestQueryClient,
   muteExpectedConsoleErrors,
@@ -357,12 +358,19 @@ describe('expense', () => {
     expect(recordExpense).not.toHaveBeenCalled();
   });
 
+  it('describes the entry date picker by its hint (#611 review)', () => {
+    host();
+    open('expense', { origin: 'page' });
+    const id = datePicker('Entry date').getAttribute('aria-describedby')!;
+    expect(document.getElementById(id)?.textContent).toBe(
+      'Office record: dated, not part of any shift.',
+    );
+  });
+
   it('sends the entry date, account and an Idempotency-Key, then closes', async () => {
     host();
     open('expense', { origin: 'page' });
-    fireEvent.change(document.querySelector('[name="entryDate"]')!, {
-      target: { value: '2026-01-15' },
-    });
+    pickDate('Entry date', '2026-01-15');
     chooseCategory('cat-tea');
     setAmount('50');
     fireEvent.click(screen.getByRole('radio', { name: /HDFC Current/ }));
@@ -409,7 +417,7 @@ describe('expense', () => {
     expect((screen.getByRole('radio', { name: /HDFC Current/ }) as HTMLInputElement).checked).toBe(
       true,
     );
-    expect((document.querySelector('[name="entryDate"]') as HTMLInputElement).value).toBe(TODAY);
+    expect(pickedDate('Entry date')).toBe(TODAY);
 
     chooseCategory('cat-power');
     setAmount('120');
@@ -739,9 +747,7 @@ describe('purchase', () => {
 
   const payNow = () =>
     fireEvent.click(screen.getByRole('checkbox', { name: /Also record a supplier payment now/ }));
-  const dateInput = (name: string) =>
-    document.querySelector(`[name="${name}"]`) as HTMLInputElement;
-  const paymentDate = () => screen.getByLabelText('Payment date') as HTMLInputElement;
+  const paymentDate = () => pickedDate('Payment date');
   const setQuantity = (value: string) =>
     fireEvent.change(document.querySelector('[name="lines.0.quantity"]')!, { target: { value } });
 
@@ -749,28 +755,25 @@ describe('purchase', () => {
     host();
     open('purchase', { origin: 'page', purchaseType: 'FUEL', defaults: { supplierId: 'sup-1' } });
     payNow();
-    expect(paymentDate().value).toBe(TODAY);
-    expect(paymentDate().max).toBe(TODAY);
-    fireEvent.change(dateInput('transactionDate'), { target: { value: '2026-01-10' } });
-    expect(paymentDate().value).toBe('2026-01-10');
+    expect(paymentDate()).toBe(TODAY);
+    pickDate('Invoice date', '2026-01-10');
+    expect(paymentDate()).toBe('2026-01-10');
     expect(screen.getByText(/Saved as its own Supplier payment, dated 10 Jan 2026/)).toBeTruthy();
 
-    fireEvent.change(paymentDate(), { target: { value: '2026-01-12' } });
-    fireEvent.change(dateInput('transactionDate'), { target: { value: '2026-01-09' } });
-    expect(paymentDate().value).toBe('2026-01-12');
+    pickDate('Payment date', '2026-01-12');
+    pickDate('Invoice date', '2026-01-09');
+    expect(paymentDate()).toBe('2026-01-12');
     expect(screen.getByText(/Saved as its own Supplier payment, dated 12 Jan 2026/)).toBeTruthy();
   });
 
-  it('refuses a payment dated after today', async () => {
+  it('offers no payment date after today', async () => {
     await productPurchase();
     payNow();
-    fireEvent.click(screen.getByRole('radio', { name: /HDFC Current/ }));
-    fireEvent.change(paymentDate(), { target: { value: '2999-01-01' } });
-    await record('Record purchase');
-    await waitFor(() =>
-      expect(screen.getByText('A payment cannot be dated after today')).toBeTruthy(),
-    );
-    expect(recordPurchase).not.toHaveBeenCalled();
+    fireEvent.click(datePicker('Payment date'));
+    expect(calendarDay(TODAY)?.disabled).toBe(false);
+    // Tomorrow is either disabled in this month or behind a disabled "Next month".
+    const tomorrow = calendarDay(shiftBusinessDate(TODAY, 1));
+    expect(tomorrow == null || tomorrow.disabled).toBe(true);
   });
 
   it('asks for the pay-now account inside the form', async () => {
@@ -824,9 +827,9 @@ describe('purchase', () => {
           lines: [{ productId: OIL.id, quantity: 10, unitPrice: 450 }],
         },
       });
-      expect(dateInput('transactionDate').value).toBe('2026-10-14');
+      expect(pickedDate('Business date')).toBe('2026-10-14');
       payNow();
-      expect(paymentDate().value).toBe('2026-10-15');
+      expect(paymentDate()).toBe('2026-10-15');
       fireEvent.click(screen.getByRole('radio', { name: /HDFC Current/ }));
       await record('Record purchase');
       await waitFor(() => expect(recordPurchase).toHaveBeenCalledTimes(1));
@@ -849,7 +852,7 @@ describe('purchase', () => {
     payNow();
     fireEvent.click(screen.getByRole('radio', { name: /HDFC Current/ }));
     const earlier = shiftBusinessDate(TODAY, -1);
-    fireEvent.change(paymentDate(), { target: { value: earlier } });
+    pickDate('Payment date', earlier);
     fireEvent.click(screen.getByLabelText('Add another after saving'));
     await record('Record purchase');
     await waitFor(() => expect(recordPurchase).toHaveBeenCalledTimes(1));
@@ -862,7 +865,7 @@ describe('purchase', () => {
     expect((screen.getByRole('radio', { name: /HDFC Current/ }) as HTMLInputElement).checked).toBe(
       true,
     );
-    expect(paymentDate().value).toBe(earlier);
+    expect(paymentDate()).toBe(earlier);
     expect((document.querySelector('[name="lines.0.quantity"]') as HTMLInputElement).value).toBe(
       '',
     );

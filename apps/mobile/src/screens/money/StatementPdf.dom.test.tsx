@@ -330,6 +330,9 @@ describe.each<Kind>(['customer', 'supplier'])('%s statement range and PDF', (kin
       pick('Custom range');
       fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-09-05' } });
       fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-09-20' } });
+      // Beside each native picker, the date as desktop reads it (#609).
+      expect(screen.getByText('Sat 5 Sep 2026')).toBeTruthy();
+      expect(screen.getByText('Sun 20 Sep 2026')).toBeTruthy();
       apply();
       await waitFor(() =>
         expect(lastAsked()).toEqual({ id: party.id, from: '2026-09-05', to: '2026-09-20' }),

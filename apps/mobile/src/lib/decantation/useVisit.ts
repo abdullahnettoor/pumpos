@@ -34,6 +34,10 @@ export interface TankOption {
   productId: string;
   productName: string;
   currentVolume: number | null;
+  /** For the "Book 13,000 L of 20,000 L · 65%" line, as on desktop (#609). */
+  capacity: number | null;
+  /** The product's unit (L, or kg for CNG). */
+  unit: string | null;
 }
 
 const DIRTY = { shouldDirty: true } as const;
@@ -85,6 +89,8 @@ export function useVisit(station: Station, decantation?: DecantationView) {
         productId: t.productId,
         productName: t.productName ?? t.productCode ?? 'Fuel',
         currentVolume: t.currentVolume != null ? Number(t.currentVolume) : null,
+        capacity: t.capacity != null ? Number(t.capacity) : null,
+        unit: t.productUnit ?? null,
       })),
     [tanksQ.data],
   );
