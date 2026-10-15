@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../services/supabase.js';
-import { Form, Icon, PumpOSLockup } from '../../pump-ds/index.js';
-import { authBrandHeaderStyle } from './brandHeader.js';
+import { Button, Form, Icon } from '../../pump-ds/index.js';
+import { Banner } from '../primitives/Banner.js';
+import { Field, TextInput } from '../primitives/Field.js';
+import { AuthScreen } from './AuthScreen.js';
 
 /**
  * AcceptInvite — the landing page for a Supabase invite / recovery link.
@@ -17,27 +19,6 @@ import { authBrandHeaderStyle } from './brandHeader.js';
  * bootstrap then routes the user (Owner/Manager with no ready station land in
  * the Organization hub / desktop notice; everyone else proceeds to the app).
  */
-
-const labelStyle: React.CSSProperties = {
-  fontSize: '11px',
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  fontWeight: 600,
-  color: 'var(--text-muted)',
-};
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  height: '36px',
-  padding: '0 12px',
-  border: '1px solid var(--border-strong)',
-  borderRadius: 'var(--radius-input)',
-  fontSize: '13px',
-  backgroundColor: 'var(--bg-surface)',
-  color: 'var(--text-strong)',
-  outline: 'none',
-  boxSizing: 'border-box',
-};
 
 export interface AcceptInviteProps {
   /** Called after the password is set successfully (host typically reloads). */
@@ -130,269 +111,106 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
     }
   };
 
+  const openApp = () => (onDone ? onDone() : window.location.assign('/'));
+  const copyDesktopUrl = () => {
+    navigator.clipboard
+      .writeText(desktopUrl)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1800);
+      })
+      .catch(() => {
+        /* clipboard blocked — URL is shown as selectable text */
+      });
+  };
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        minHeight: '100vh',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'var(--bg-canvas)',
-        fontFamily: 'var(--font-sans)',
-        padding: '20px',
-      }}
+    <AuthScreen
+      title={done ? 'Password set' : 'Set your password'}
+      subtitle={email && !done ? email : undefined}
     >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '380px',
-          backgroundColor: 'var(--bg-surface)',
-          border: '1px solid var(--border-soft)',
-          borderRadius: 'var(--radius-card)',
-          padding: '32px 24px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '20px',
-          boxShadow: 'var(--shadow-1)',
-        }}
-        className="animate-fade-in"
-      >
-        <div style={{ textAlign: 'center' }}>
-          <PumpOSLockup orientation="stacked" style={authBrandHeaderStyle} />
-          <h1
-            style={{
-              fontSize: '14px',
-              fontWeight: 600,
-              color: 'var(--text-strong)',
-              marginTop: '8px',
-            }}
-          >
-            {done ? 'Password set' : 'Set your password'}
-          </h1>
-          {email && !done && (
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              {email}
-            </p>
+      {errorMsg && <Banner severity="danger">{errorMsg}</Banner>}
+
+      {!ready ? (
+        <p className="text-center text-[13px] text-ink-muted">Verifying your invite…</p>
+      ) : done ? (
+        <div className="flex flex-col gap-3.5">
+          {onMobile ? (
+            <>
+              <p className="text-[13px] leading-normal text-ink-muted">
+                Your password is set. To finish setting up your station, open PumpOS on a desktop or
+                laptop — station onboarding isn't available on mobile.
+              </p>
+              <div className="flex items-center justify-between gap-2 break-all rounded-input border border-border-strong bg-surface-alt px-3 py-2.5 font-mono text-[12px] text-ink-strong">
+                <span>{desktopUrl}</span>
+                <Button variant="secondary" size="xs" className="shrink-0" onClick={copyDesktopUrl}>
+                  {copied ? 'Copied' : 'Copy'}
+                </Button>
+              </div>
+              <Button variant="secondary" fullWidth onClick={openApp}>
+                Open the app anyway
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-[13px] leading-normal text-ink-muted">
+                Your password is set. Continue to PumpOS — if setup for your station isn't finished
+                yet, you'll be guided to complete it on the desktop app.
+              </p>
+              <Button fullWidth onClick={openApp} rightIcon={<Icon name="arrow-right" size="xs" />}>
+                Continue
+              </Button>
+            </>
           )}
         </div>
-
-        {errorMsg && (
-          <div
-            style={{
-              backgroundColor: 'var(--state-danger-bg)',
-              border: '1px solid var(--border-soft)',
-              color: 'var(--state-danger-fg)',
-              padding: '10px 12px',
-              borderRadius: 'var(--radius-input)',
-              fontSize: '12px',
-              fontWeight: 500,
-            }}
-          >
-            ⚠️ {errorMsg}
-          </div>
-        )}
-
-        {!ready ? (
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center' }}>
-            Verifying your invite…
+      ) : !hasSession ? (
+        <div className="flex flex-col gap-3.5">
+          <p className="text-[13px] leading-normal text-ink-muted">
+            This invite link is invalid or has expired. Ask your administrator to send a new invite,
+            or sign in if you already set a password.
           </p>
-        ) : done ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {onMobile ? (
-              <>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  Your password is set. To finish setting up your station, open PumpOS on a desktop
-                  or laptop — station onboarding isn't available on mobile.
-                </p>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '8px',
-                    padding: '10px 12px',
-                    backgroundColor: 'var(--bg-surface-alt)',
-                    border: '1px solid var(--border-strong)',
-                    borderRadius: 'var(--radius-input)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '12px',
-                    color: 'var(--text-strong)',
-                    wordBreak: 'break-all',
-                  }}
-                >
-                  <span>{desktopUrl}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard
-                        .writeText(desktopUrl)
-                        .then(() => {
-                          setCopied(true);
-                          setTimeout(() => setCopied(false), 1800);
-                        })
-                        .catch(() => {
-                          /* clipboard blocked — URL is shown as selectable text */
-                        });
-                    }}
-                    style={{
-                      flexShrink: 0,
-                      height: '26px',
-                      padding: '0 10px',
-                      border: '1px solid var(--border-strong)',
-                      backgroundColor: 'transparent',
-                      borderRadius: 'var(--radius-button)',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      color: 'var(--text-default)',
-                    }}
-                  >
-                    {copied ? 'Copied' : 'Copy'}
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => (onDone ? onDone() : window.location.assign('/'))}
-                  style={{
-                    height: '36px',
-                    backgroundColor: 'transparent',
-                    color: 'var(--text-default)',
-                    border: '1px solid var(--border-strong)',
-                    borderRadius: 'var(--radius-button)',
-                    fontWeight: 600,
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    width: '100%',
-                  }}
-                >
-                  Open the app anyway
-                </button>
-              </>
-            ) : (
-              <>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  Your password is set. Continue to PumpOS — if setup for your station isn't
-                  finished yet, you'll be guided to complete it on the desktop app.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => (onDone ? onDone() : window.location.assign('/'))}
-                  style={{
-                    height: '36px',
-                    backgroundColor: 'var(--brand-primary)',
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: 'var(--radius-button)',
-                    fontWeight: 600,
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    width: '100%',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                  }}
-                >
-                  Continue
-                  <Icon name="arrow-right" size="xs" aria-hidden />
-                </button>
-              </>
-            )}
-          </div>
-        ) : !hasSession ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              This invite link is invalid or has expired. Ask your administrator to send a new
-              invite, or sign in if you already set a password.
-            </p>
-            <button
-              type="button"
-              onClick={() => window.location.assign('/')}
-              style={{
-                height: '36px',
-                backgroundColor: 'transparent',
-                color: 'var(--text-default)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-                width: '100%',
-              }}
-            >
-              Go to sign in
-            </button>
-          </div>
-        ) : (
-          <Form
-            onSubmit={handleSubmit}
-            style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
-          >
-            <div className="form-group">
-              <label className="form-label" style={labelStyle}>
-                New password
-              </label>
-              <input
-                type="password"
-                className="form-input"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-                disabled={loading}
-                autoFocus
-                style={inputStyle}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label" style={labelStyle}>
-                Confirm password
-              </label>
-              <input
-                type="password"
-                className="form-input"
-                placeholder="••••••••"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                required
-                minLength={8}
-                disabled={loading}
-                style={inputStyle}
-              />
-            </div>
-            <button
-              type="submit"
+          <Button variant="secondary" fullWidth onClick={() => window.location.assign('/')}>
+            Go to sign in
+          </Button>
+        </div>
+      ) : (
+        <Form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+          <Field label="New password" htmlFor="invite-password">
+            <TextInput
+              id="invite-password"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={8}
               disabled={loading}
-              style={{
-                height: '36px',
-                backgroundColor: 'var(--brand-primary)',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                marginTop: '8px',
-                width: '100%',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-              }}
-            >
-              {loading ? (
-                'Saving…'
-              ) : (
-                <>
-                  Set password &amp; continue
-                  <Icon name="arrow-right" size="xs" aria-hidden />
-                </>
-              )}
-            </button>
-          </Form>
-        )}
-      </div>
-    </div>
+              autoFocus
+            />
+          </Field>
+          <Field label="Confirm password" htmlFor="invite-confirm">
+            <TextInput
+              id="invite-confirm"
+              type="password"
+              placeholder="••••••••"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              required
+              minLength={8}
+              disabled={loading}
+            />
+          </Field>
+          <Button
+            type="submit"
+            fullWidth
+            disabled={loading}
+            className="mt-2"
+            rightIcon={loading ? undefined : <Icon name="arrow-right" size="xs" />}
+          >
+            {loading ? 'Saving…' : 'Set password & continue'}
+          </Button>
+        </Form>
+      )}
+    </AuthScreen>
   );
 };

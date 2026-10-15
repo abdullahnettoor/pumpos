@@ -179,16 +179,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     return (
       <div className="animate-fade-in flex flex-col gap-5">
         <PageHeader title="Dashboard" subtitle={subtitle} />
-        <div
-          className="card card-default"
-          style={{
-            padding: '28px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-            alignItems: 'flex-start',
-          }}
-        >
+        <div className="flex flex-col items-start gap-4 rounded-card border border-border-soft bg-surface p-7">
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>
               Welcome, {firstName}

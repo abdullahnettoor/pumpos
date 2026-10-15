@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Calculator } from 'lucide-react';
+import { Button } from '../../pump-ds/button/index.js';
 import { inr } from '../../utils/format.js';
 
 /** Counts keyed by denomination value as a string, e.g. `{ "500": 12, "100": 8 }`. */
@@ -164,7 +165,7 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
         background: 'var(--bg-surface)',
         border: '1px solid var(--border-strong)',
         borderRadius: 'var(--radius-card)',
-        boxShadow: '0 8px 24px rgba(24,32,26,0.16)',
+        boxShadow: 'var(--shadow-popover)',
         zIndex: 1100,
         padding: '10px',
         display: 'flex',
@@ -275,23 +276,12 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
       )}
 
       <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
-        <button
-          type="button"
-          onClick={clear}
-          className="btn btn-secondary btn-sm"
-          style={{ flex: '0 0 auto' }}
-        >
+        <Button variant="secondary" size="sm" onClick={clear} className="flex-none">
           Clear
-        </button>
-        <button
-          type="button"
-          onClick={apply}
-          disabled={hasRefused}
-          className="btn btn-primary btn-sm"
-          style={{ flex: 1 }}
-        >
+        </Button>
+        <Button size="sm" onClick={apply} disabled={hasRefused} className="flex-1">
           Apply {inr(total)}
-        </button>
+        </Button>
       </div>
     </div>
   );

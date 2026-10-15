@@ -381,27 +381,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           }}
         >
           {environmentTag ? (
-            <div
-              style={{
-                position: 'absolute',
-                top: '12px',
-                right: '16px',
-                zIndex: 20,
-                height: '22px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                padding: '0 8px',
-                borderRadius: '999px',
-                border: '1px solid rgba(250, 204, 21, 0.45)',
-                backgroundColor: 'rgba(250, 204, 21, 0.14)',
-                color: '#854d0e',
-                fontSize: '10px',
-                fontWeight: 700,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                pointerEvents: 'none',
-              }}
-            >
+            <div className="pointer-events-none absolute right-4 top-3 z-20 inline-flex h-[22px] items-center rounded-chip border border-warning-fg/40 bg-warning-bg px-2 text-[12px] font-bold uppercase tracking-[0.08em] text-warning-fg">
               {environmentTag}
             </div>
           ) : null}

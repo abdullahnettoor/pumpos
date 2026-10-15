@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Calculator } from 'lucide-react';
+import { Button } from '../../pump-ds/button/index.js';
 import {
   DEFAULT_DENSITY_METHOD,
   DEFAULT_DENSITY_TOLERANCE_KG_M3,
@@ -202,7 +203,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
         background: 'var(--bg-surface)',
         border: '1px solid var(--border-strong)',
         borderRadius: 'var(--radius-card)',
-        boxShadow: '0 8px 24px rgba(24,32,26,0.16)',
+        boxShadow: 'var(--shadow-popover)',
         zIndex: 1100,
         padding: '12px',
         display: 'flex',
@@ -229,7 +230,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
             fontWeight: 600,
             padding: '2px 5px',
             borderRadius: '4px',
-            background: 'var(--bg-surface-alt, #f0f2f0)',
+            background: 'var(--bg-surface-alt)',
             color: 'var(--text-muted)',
             fontFamily: 'var(--font-mono)',
           }}
@@ -301,7 +302,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
         style={{
           borderRadius: 'var(--radius-input)',
           border: '1px solid var(--border-soft)',
-          background: 'var(--bg-surface-alt, #f7f9f7)',
+          background: 'var(--bg-surface-alt)',
           padding: '8px 10px',
           display: 'flex',
           flexDirection: 'column',
@@ -359,9 +360,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
                 <span
                   style={{
                     fontWeight: 600,
-                    color: isWithinTol
-                      ? 'var(--state-success-fg, #15803d)'
-                      : 'var(--state-warning-fg, #b45309)',
+                    color: isWithinTol ? 'var(--state-success-fg)' : 'var(--state-warning-fg)',
                   }}
                 >
                   {isWithinTol ? 'Within tolerance' : 'Outside tolerance'} (±{tolerance})
@@ -370,13 +369,13 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
             )}
           </>
         ) : calculationError ? (
-          <div style={{ fontSize: '11px', color: 'var(--state-warning-fg, #b45309)' }}>
+          <div style={{ fontSize: '12px', color: 'var(--state-warning-fg)' }}>
             {calculationError}
           </div>
         ) : (
           <div
             style={{
-              fontSize: '11px',
+              fontSize: '12px',
               color: 'var(--text-faint)',
               textAlign: 'center',
               padding: '4px 0',
@@ -388,29 +387,18 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
       </div>
 
       {hasManualMismatch && (
-        <div style={{ fontSize: '10px', color: 'var(--state-warning-fg, #b45309)' }}>
+        <div style={{ fontSize: '12px', color: 'var(--state-warning-fg)' }}>
           Field shows {currentValue} — Apply to replace with {roundedRho15?.toFixed(2)}.
         </div>
       )}
 
       <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
-        <button
-          type="button"
-          onClick={clear}
-          className="btn btn-secondary btn-sm"
-          style={{ flex: '0 0 auto' }}
-        >
+        <Button variant="secondary" size="sm" onClick={clear} className="flex-none">
           Clear
-        </button>
-        <button
-          type="button"
-          onClick={apply}
-          disabled={roundedRho15 == null}
-          className="btn btn-primary btn-sm"
-          style={{ flex: 1 }}
-        >
+        </Button>
+        <Button size="sm" onClick={apply} disabled={roundedRho15 == null} className="flex-1">
           {roundedRho15 != null ? 'Apply ' + roundedRho15.toFixed(1) : 'Apply'}
-        </button>
+        </Button>
       </div>
     </div>
   );

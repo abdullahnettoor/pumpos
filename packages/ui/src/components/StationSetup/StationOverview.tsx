@@ -470,7 +470,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                           <TextInput
                             type="number"
                             min="0"
-                            className="mono-num"
+                            className="font-mono"
                             value={graceMinutes}
                             onChange={(e) => setGraceMinutes(parseInt(e.target.value))}
                           />
@@ -496,7 +496,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                         >
                           <TextInput
                             type="time"
-                            className="mono-num"
+                            className="font-mono"
                             value={businessDayStartsAt}
                             onChange={(e) => setBusinessDayStartsAt(e.target.value)}
                           />
@@ -583,7 +583,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                         </Field>
                         <Field label="GSTIN">
                           <TextInput
-                            className="mono-num"
+                            className="font-mono"
                             value={gstin}
                             onChange={(e) => setGstin(e.target.value.toUpperCase())}
                             placeholder="29ABCDE1234F1Z5"
@@ -592,7 +592,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                         </Field>
                         <Field label="State code (place of supply)">
                           <TextInput
-                            className="mono-num"
+                            className="font-mono"
                             value={stateCode}
                             onChange={(e) => setStateCode(e.target.value)}
                             placeholder="e.g. 29 (Karnataka)"
@@ -615,7 +615,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                         </Field>
                         <Field label="Pincode">
                           <TextInput
-                            className="mono-num"
+                            className="font-mono"
                             value={pincode}
                             onChange={(e) => setPincode(e.target.value)}
                             placeholder="560001"
@@ -781,7 +781,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                             min="0.1"
                             max="100"
                             step="0.1"
-                            className="mono-num"
+                            className="font-mono"
                             value={decantationSettings.densityToleranceKgM3}
                             onChange={(e) =>
                               updateDecantationSettings((current) => ({
@@ -800,7 +800,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                             min="0"
                             max="100"
                             step="0.01"
-                            className="mono-num"
+                            className="font-mono"
                             value={decantationSettings.quantityTolerance}
                             onChange={(e) =>
                               updateDecantationSettings((current) => ({
@@ -819,7 +819,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                             min="0"
                             max="1440"
                             step="1"
-                            className="mono-num"
+                            className="font-mono"
                             value={decantationSettings.settlingTimeMinutes}
                             onChange={(e) =>
                               updateDecantationSettings((current) => ({
@@ -864,7 +864,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                                     type="number"
                                     min="0"
                                     step="0.1"
-                                    className="mono-num"
+                                    className="font-mono"
                                     aria-label={`${product.name} minimum density`}
                                     value={band.minKgM3 ?? ''}
                                     onChange={(e) =>
@@ -877,7 +877,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                                     type="number"
                                     min="0"
                                     step="0.1"
-                                    className="mono-num"
+                                    className="font-mono"
                                     aria-label={`${product.name} maximum density`}
                                     value={band.maxKgM3 ?? ''}
                                     onChange={(e) =>

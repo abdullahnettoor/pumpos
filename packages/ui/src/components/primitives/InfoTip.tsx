@@ -91,7 +91,7 @@ export const InfoTip: React.FC<InfoTipProps> = ({ children, label, placement = '
             lineHeight: 1.45,
             padding: '8px 10px',
             borderRadius: '6px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
+            boxShadow: 'var(--shadow-tooltip)',
           }}
         >
           {children}
