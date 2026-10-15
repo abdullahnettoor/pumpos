@@ -66,7 +66,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-(--overlay-scrim)" />
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-(--overlay-scrim) backdrop-blur-(--overlay-blur)" />
         <Dialog.Content
           aria-label="Command palette"
           className="fixed left-1/2 top-[15vh] z-50 w-[min(92vw,560px)] -translate-x-1/2 overflow-hidden rounded-drawer border border-border-soft bg-surface shadow-(--shadow-dialog) outline-none"
