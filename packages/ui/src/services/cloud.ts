@@ -359,11 +359,12 @@ export class CloudStationService implements IStationService {
     });
   }
 
-  async updateStation(id: string, data: any): Promise<Station> {
-    return request<Station>(`/setup/stations/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  async updateStation(id: string, data: any, opts?: { idempotencyKey?: string }): Promise<Station> {
+    return request<Station>(
+      `/setup/stations/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async getOnboardingStatus(stationId: string): Promise<any> {
@@ -401,11 +402,12 @@ export class CloudProductService implements IProductService {
     });
   }
 
-  async updateProduct(id: string, data: any): Promise<Product> {
-    return request<Product>(`/setup/products/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  async updateProduct(id: string, data: any, opts?: { idempotencyKey?: string }): Promise<Product> {
+    return request<Product>(
+      `/setup/products/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async archiveProduct(id: string): Promise<void> {
@@ -1715,16 +1717,20 @@ export class CloudPricingService {
     return request<any[]>(`/setup/pricing/history?stationId=${stationId}`);
   }
 
-  async recordPricing(payload: {
-    stationId: string;
-    productId: string;
-    price: number;
-    effectiveFrom?: string | null;
-  }): Promise<any> {
-    return request<any>('/setup/pricing', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async recordPricing(
+    payload: {
+      stationId: string;
+      productId: string;
+      price: number;
+      effectiveFrom?: string | null;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/setup/pricing',
+      { method: 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
