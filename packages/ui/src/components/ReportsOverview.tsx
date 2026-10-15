@@ -236,7 +236,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
               onGenerateDateChange={setSelectedDate}
               generating={generatingDailyDssr}
               generateError={generateError}
-              onGenerate={handleGenerateDailyDssr}
+              onGenerate={() => void handleGenerateDailyDssr()}
               onOpen={setActiveDailyDssr}
             />
           )}
