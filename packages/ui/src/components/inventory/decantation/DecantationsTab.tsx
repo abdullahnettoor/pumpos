@@ -91,6 +91,10 @@ const visits = (n: number) => countOf(n, 'visit', 'visits');
 
 const Muted: React.FC = () => <span className="text-ink-faint">—</span>;
 
+const Qty: React.FC<{ value: number }> = ({ value }) => (
+  <span className="whitespace-nowrap">{formatQuantity(value, 'L')}</span>
+);
+
 const Stack: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="flex flex-col items-start gap-1">{children}</div>
 );
@@ -169,7 +173,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
         width: '12%',
         cell: (r) => (
           <div className="flex flex-col gap-0.5">
-            <span>{formatDate(dateOf(r))}</span>
+            <span className="whitespace-nowrap">{formatDate(dateOf(r))}</span>
             <span className="font-mono text-[12px] text-ink-muted">
               {r.decantation.documentNumber}
             </span>
@@ -223,7 +227,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
         value: (r) => r.invoiceQty,
         unit: 'L',
         width: '10%',
-        cell: (r) => (r.invoiceQty != null ? formatQuantity(r.invoiceQty, 'L') : <Muted />),
+        cell: (r) => (r.invoiceQty != null ? <Qty value={r.invoiceQty} /> : <Muted />),
       },
       {
         id: 'received',
@@ -232,7 +236,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
         value: (r) => r.receivedQty,
         unit: 'L',
         width: '10%',
-        cell: (r) => (r.receivedQty != null ? formatQuantity(r.receivedQty, 'L') : <Muted />),
+        cell: (r) => (r.receivedQty != null ? <Qty value={r.receivedQty} /> : <Muted />),
       },
       {
         id: 'variance',
