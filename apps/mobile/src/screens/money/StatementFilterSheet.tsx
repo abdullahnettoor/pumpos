@@ -12,6 +12,7 @@ import {
   type StatementRangeForm,
 } from '../../lib/money/statementRange.js';
 import { inputClass } from '../../components/handover/Fields.js';
+import { pickedDateLabel } from '../../lib/dates.js';
 import { BottomSheet } from '../../ui/BottomSheet.js';
 import { SegmentedControl } from '../../ui/SegmentedControl.js';
 
@@ -30,16 +31,23 @@ interface Props {
 const DateField: React.FC<{
   label: string;
   max: string;
+  /** The field's value, shown beside the label as `Tue 1 Sep 2026` (#609). */
+  value: string;
   error: string | undefined;
   inputProps: React.InputHTMLAttributes<HTMLInputElement>;
-}> = ({ label, max, error, inputProps }) => {
+}> = ({ label, max, value, error, inputProps }) => {
   const id = useId();
   const errorId = `${id}-error`;
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-[11.5px] font-semibold text-text-muted">
-        {label}
-      </label>
+      <div className="flex items-baseline justify-between gap-2">
+        <label htmlFor={id} className="text-[11.5px] font-semibold text-text-muted">
+          {label}
+        </label>
+        <span className="num truncate text-xs font-semibold text-text-high">
+          {pickedDateLabel(value)}
+        </span>
+      </div>
       <input
         id={id}
         type="date"
@@ -123,12 +131,14 @@ const Form: React.FC<Omit<Props, 'open'>> = ({ onClose, today, choice, onApply }
           <DateField
             label="From"
             max={today}
+            value={watch('from') ?? ''}
             error={errors.from?.message}
             inputProps={register('from')}
           />
           <DateField
             label="To"
             max={today}
+            value={watch('to') ?? ''}
             error={errors.to?.message}
             inputProps={register('to')}
           />

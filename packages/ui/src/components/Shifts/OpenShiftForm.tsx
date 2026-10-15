@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Info, Play } from 'lucide-react';
-import { Panel, Button, Chip, Form } from '../../pump-ds/index.js';
-import { Field, Select, NumberInput, DateField } from '../primitives/Field.js';
-import { inr } from '../../utils/format.js';
+import { Panel, Button, Chip, DatePickerButton, Form } from '../../pump-ds/index.js';
+import { Field, Select, NumberInput } from '../primitives/Field.js';
+import { formatBusinessDate, inr } from '../../utils/format.js';
 import type { BusinessDayStatusItem } from '../../services/cloud.js';
 import { compareByDispenserThenNozzle, dispenserLabel } from '@pump/shared';
 import { createOpenShiftFormSchema, type OpenShiftFormValues } from '@pump/shared';
@@ -369,7 +369,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                     value={day.businessDate}
                     disabled={day.businessDate > currentBusinessDate}
                   >
-                    {day.businessDate} · Open
+                    {formatBusinessDate(day.businessDate)} · Open
                     {day.businessDate > currentBusinessDate ? ' · Unavailable (future)' : ''}
                   </option>
                 ))}
@@ -392,12 +392,16 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                           : 'Checking the Business Day lifecycle state.'
                 }
               >
-                <DateField
-                  {...register('businessDate', {
-                    onChange: (e) => setPickedBusinessDate(e.target.value),
-                  })}
+                <DatePickerButton
+                  variant="field"
+                  aria-label="Custom Business Date"
+                  value={formBusinessDate ?? ''}
+                  max={currentBusinessDate}
                   invalid={!!errors.businessDate}
-                  required
+                  onChange={(date) => {
+                    setPickedBusinessDate(date);
+                    setValue('businessDate', date, { shouldValidate: true, shouldDirty: true });
+                  }}
                 />
                 {formBusinessDate > currentBusinessDate && (
                   <div

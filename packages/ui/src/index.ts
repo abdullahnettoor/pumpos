@@ -227,6 +227,14 @@ export * from './pump-ds/spinner/index.js';
 // Used by the desktop update surface: a design-system meter instead of a
 // native <progress>, and the design-system button inside its drawer.
 export * from './pump-ds/meter/index.js';
+// Tank stock as every tank card reads it (#603): `13,000 L` over `of 20,000 L · 65%`;
+// mobile's tank cards and decantation step use the same strings (#609).
+export {
+  stockOfCapacity,
+  tankQuantity,
+  type StockOfCapacity,
+} from './pump-ds/tank-gauge/stockOfCapacity.js';
+export { bookStock } from './components/inventory/decantation/bookStock.js';
 export { STATUS_BAR_HEIGHT_PX } from './pump-ds/shell/index.js';
 export * from './pump-ds/button/index.js';
 // Shared with the mobile Control Room primitives (apps/mobile/src/ui).

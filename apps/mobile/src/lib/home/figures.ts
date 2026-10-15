@@ -5,7 +5,7 @@
  */
 import { deriveTankLevel, formatDaysOfCover } from '@pump/shared';
 import type { TankLevelSettings, TankTone } from '@pump/shared';
-import { MONEY_TERMS } from '@pump/ui';
+import { MONEY_TERMS, stockOfCapacity } from '@pump/ui';
 import { num } from '../num.js';
 import { plural } from '../format.js';
 import { dayCashVariance, type CashVariance } from '../cashVariance.js';
@@ -76,7 +76,10 @@ export interface TankGauge {
   /** Tube fill, 0–100. */
   fill: number;
   level: TankGaugeLevel;
-  volume: string;
+  /** The headline, as on desktop (#603, #609): `13,000 L` (kg for CNG). */
+  stock: string;
+  /** Under it: `of 20,000 L · 65%`; '' without a capacity. */
+  detail: string;
   /**
    * "2.6 days" / "0.9 day": how long the stock lasts at the last 7 closed days'
    * selling rate. Computed by the server; '' when there is no sales history
@@ -85,14 +88,6 @@ export interface TankGauge {
   cover: string;
   /** A pending Decantation for this tank means current book stock is incomplete. */
   waitingOnDecantation: boolean;
-}
-
-const unitText = (unit: unknown): string => (typeof unit === 'string' ? unit.trim() : '');
-const isLitre = (unit: unknown) => !unitText(unit) || /^(l|litre|liter)s?$/i.test(unitText(unit));
-
-function volumeLabel(volume: number, unit: unknown): string {
-  if (isLitre(unit)) return `${(volume / 1000).toFixed(1)} KL`;
-  return `${Math.round(volume).toLocaleString('en-IN')} ${unitText(unit)}`;
 }
 
 export function deriveTanks(
@@ -109,6 +104,8 @@ export function deriveTanks(
       },
       tankLevels,
     );
+    const unit = typeof t.productUnit === 'string' ? t.productUnit : null;
+    const figures = stockOfCapacity(level.stock, level.capacity, unit, level.pct);
     return {
       id: String(t.id),
       title: String(t.productCode || t.productName || t.name),
@@ -116,7 +113,8 @@ export function deriveTanks(
       pct: level.pct,
       fill: level.fill,
       level: level.tone,
-      volume: volumeLabel(level.stock, t.productUnit),
+      stock: figures.stock,
+      detail: figures.detail,
       cover: formatDaysOfCover(t.daysOfCover),
       waitingOnDecantation: level.waitingOnDecantation,
     };

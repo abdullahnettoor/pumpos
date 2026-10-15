@@ -1,14 +1,13 @@
 import React from 'react';
 import { shiftBusinessDate } from '@pump/shared';
-import { DateField, Field } from '../../components/primitives/Field.js';
+import { Field } from '../../components/primitives/Field.js';
+import { DatePickerButton } from '../../pump-ds/date-picker/index.js';
 import { cn } from '../../pump-ds/lib/cn.js';
-import { formatBusinessDate } from '../../utils/format.js';
 import { useOfficeRecordContext } from '../context.js';
 
-export interface RecordDateFieldProps extends Omit<
-  React.InputHTMLAttributes<HTMLInputElement>,
-  'value' | 'onChange'
-> {
+export interface RecordDateFieldProps {
+  /** The form field this date fills (kept on the button as `data-name`). */
+  name?: string;
   label?: string;
   value: string;
   onChange: (value: string) => void;
@@ -30,7 +29,7 @@ export const RecordDateField: React.FC<RecordDateFieldProps> = ({
   hint,
   max,
   error,
-  ...rest
+  name,
 }) => {
   const { today, disabled } = useOfficeRecordContext();
   const yesterday = today ? shiftBusinessDate(today, -1) : '';
@@ -38,7 +37,7 @@ export const RecordDateField: React.FC<RecordDateFieldProps> = ({
   const shown =
     hint ??
     (value && value !== today
-      ? `Lands in the Daily cash book for ${formatBusinessDate(value)}.`
+      ? 'Lands in the Daily cash book for that day.'
       : 'Office record: dated, not part of any shift.');
 
   const quick = (date: string, text: string) => (
@@ -61,15 +60,15 @@ export const RecordDateField: React.FC<RecordDateFieldProps> = ({
   return (
     <Field label={label} required error={error} hint={shown}>
       <div className="flex items-center gap-2">
-        <div className="w-44">
-          <DateField
-            {...rest}
+        <div className="w-48" data-name={name}>
+          <DatePickerButton
+            variant="field"
             aria-label={label}
             value={value}
             max={latest || undefined}
             disabled={disabled}
             invalid={!!error}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={onChange}
           />
         </div>
         {quick(today, 'Today')}
