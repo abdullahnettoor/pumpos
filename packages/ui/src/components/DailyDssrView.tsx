@@ -108,13 +108,17 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({
 
   const canGenerate = !!stationId && !!userRole && canExportReports(userRole);
   const generate = useMutation({
+    // The day is the mutation's own variable, never the screen's current date:
+    // the operator may step to another day while Generate is still in flight.
     // One Idempotency-Key per logical generate: a retry after a dropped
     // response reuses it, so the snapshot cannot be generated twice.
-    mutationFn: async () => {
+    mutationFn: async (day: { stationId: string; date: string }) => {
       const keys = officeSubmitKeys.session('dssr:generate');
-      const idempotencyKey = keys.next(JSON.stringify({ stationId, businessDate: date }));
+      const idempotencyKey = keys.next(
+        JSON.stringify({ stationId: day.stationId, businessDate: day.date }),
+      );
       try {
-        const result: unknown = await shiftService.generateDailyDssr(stationId!, date, {
+        const result: unknown = await shiftService.generateDailyDssr(day.stationId, day.date, {
           idempotencyKey,
         });
         keys.settle();
@@ -127,18 +131,18 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({
     // Synchronous on purpose (pump-data-caching rule 6): the screen shows the
     // write's own response at once, and the refreshes run in the background.
     // Returning them would keep Generate spinning until every refetch lands.
-    onSuccess: (generated) => {
-      const dayKey = queryKeys.dssrPreview(stationId!, date);
+    onSuccess: (generated, day) => {
+      const dayKey = queryKeys.dssrPreview(day.stationId, day.date);
       qc.setQueryData(dayKey, generated);
       const keyOf = JSON.stringify(dayKey);
       void qc.invalidateQueries({
-        queryKey: queryKeys.dssrPreviewPrefix(stationId!),
+        queryKey: queryKeys.dssrPreviewPrefix(day.stationId),
         // The day just generated already holds the write's answer.
         predicate: (q) => JSON.stringify(q.queryKey) !== keyOf,
       });
       void qc.invalidateQueries({ queryKey: ['dssr'] });
       void qc.invalidateQueries({ queryKey: ['dssr-range'] });
-      void qc.invalidateQueries({ queryKey: queryKeys.businessDayList(stationId!) });
+      void qc.invalidateQueries({ queryKey: queryKeys.businessDayList(day.stationId) });
     },
   });
 
@@ -222,7 +226,10 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({
                     size="sm"
                     loading={generate.isPending}
                     onClick={() =>
-                      runTask(generate.mutateAsync(), `Could not generate the ${DSR_LABEL}.`)
+                      runTask(
+                        generate.mutateAsync({ stationId, date }),
+                        `Could not generate the ${DSR_LABEL}.`,
+                      )
                     }
                   >
                     Generate {DSR_LABEL}

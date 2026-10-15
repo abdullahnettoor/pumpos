@@ -3,11 +3,12 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { resolveBusinessDate, type Role } from '@pump/shared';
 import { renderWithProviders } from '../test/renderWithProviders.js';
 import { DailyDssrView } from './DailyDssrView.js';
 import { addDays } from '../utils/cashBook.js';
+import { queryKeys, useBusinessDayList } from '../query/hooks.js';
 
 afterEach(() => {
   cleanup();
@@ -267,45 +268,118 @@ describe('DailyDssrView look (#532)', () => {
     }
   });
 
-  it('Generate DSR sends one Idempotency-Key and shows the response without waiting on refetches', async () => {
-    const prev = '2026-10-08';
-    let generated = false;
-    const calls: { url: string; method: string; key: string | null }[] = [];
+  /**
+   * A fetch stub for Generate: a closed day with no report until the POST,
+   * whose answer the test releases. Reads of `/dssr/days` (the business-day
+   * list) answer once, then hang, so a refetch after the write stays pending.
+   */
+  function stubGenerate() {
+    const calls: { url: string; method: string; key: string | null; body?: string }[] = [];
+    let releasePost: (() => void) | null = null;
+    let listReads = 0;
+    const json = (status: number, body: unknown) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      });
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        const headers = new Headers(init?.headers);
-        calls.push({ url, method: init?.method ?? 'GET', key: headers.get('Idempotency-Key') });
-        const json = (status: number, body: unknown) =>
-          new Response(JSON.stringify(body), {
-            status,
-            headers: { 'Content-Type': 'application/json' },
-          });
+        const method = init?.method ?? 'GET';
+        calls.push({
+          url,
+          method,
+          key: new Headers(init?.headers).get('Idempotency-Key'),
+          body: typeof init?.body === 'string' ? init.body : undefined,
+        });
         if (url.includes('/dssr/daily/generate')) {
-          generated = true;
-          return json(200, { success: true, data: snapshotRow(prev) });
+          const date = (JSON.parse(String(init?.body)) as { businessDate: string }).businessDate;
+          await new Promise<void>((resolve) => (releasePost = resolve));
+          return json(200, { success: true, data: snapshotRow(date) });
         }
-        // Every read after the write hangs: success must not wait on it.
-        if (generated) return new Promise<Response>(() => {});
+        if (url.includes('/dssr/days')) {
+          listReads += 1;
+          if (listReads > 1) return new Promise<Response>(() => {});
+          return json(200, { success: true, data: { month: '2026-10', days: [] } });
+        }
         return json(409, { success: false, error: { code: 'CONFLICT', message: 'no' } });
       }),
     );
-    view(snapshotRow('2026-10-09'), 'Accountant');
+    return {
+      calls,
+      listReads: () => listReads,
+      release: () => releasePost?.(),
+    };
+  }
+
+  /** An active business-day list query on the page, as the app shell has. */
+  const DayList: React.FC = () => {
+    useBusinessDayList(station.id);
+    return null;
+  };
+
+  it('Generate DSR settles on the write, while an invalidated query is still refetching', async () => {
+    const prev = '2026-10-08';
+    const api = stubGenerate();
+    renderWithProviders(
+      <>
+        <DayList />
+        <DailyDssrView
+          dailyDssr={snapshotRow('2026-10-09')}
+          station={station}
+          userRole="Accountant"
+          onBack={() => {}}
+        />
+      </>,
+    );
+    await waitFor(() => expect(api.listReads()).toBe(1));
     fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Generate DSR' }));
+    await waitFor(() => expect(api.calls.some((c) => c.method === 'POST')).toBe(true));
+    api.release();
     expect(await screen.findByText(/^08 Oct 2026 · Generated /)).toBeTruthy();
     expect(screen.getByText('Sealed')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Generate DSR' })).toBeNull();
-    const posts = calls.filter((c) => c.method === 'POST');
+    // The invalidated business-day list is refetching, and its answer never came.
+    expect(api.listReads()).toBe(2);
+    const posts = api.calls.filter((c) => c.method === 'POST');
     expect(posts).toHaveLength(1);
-    expect(posts[0].url).toContain('/dssr/daily/generate');
     expect(posts[0].key).toBeTruthy();
     // The generated day is not read again: it already holds the write's answer.
-    const previewReads = calls.filter(
-      (c) => c.url.includes('/dssr/daily/preview') && c.url.includes(prev),
+    expect(
+      api.calls.filter((c) => c.url.includes(`preview?stationId=st-1&date=${prev}`)),
+    ).toHaveLength(1);
+  });
+
+  it('Generate DSR lands on the day it was asked for, even after stepping away', async () => {
+    const asked = '2026-10-08';
+    const other = '2026-10-07';
+    const api = stubGenerate();
+    const { queryClient } = view(snapshotRow('2026-10-09'), 'Owner');
+    fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Generate DSR' }));
+    await waitFor(() => expect(api.calls.some((c) => c.method === 'POST')).toBe(true));
+    // Step to another day while the write is still in flight, then let it answer.
+    fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
+    expect(await screen.findByText(/^07 Oct 2026$/)).toBeTruthy();
+    api.release();
+    await waitFor(() =>
+      expect(
+        (
+          queryClient.getQueryData(queryKeys.dssrPreview('st-1', asked)) as {
+            businessDate?: string;
+          }
+        )?.businessDate,
+      ).toBe(asked),
     );
-    expect(previewReads).toHaveLength(1);
+    expect(queryClient.getQueryData(queryKeys.dssrPreview('st-1', other))).toBeUndefined();
+    expect(screen.getByText('Report missing')).toBeTruthy();
+    const post = api.calls.find((c) => c.method === 'POST');
+    expect(JSON.parse(post?.body ?? '{}')).toEqual({ stationId: 'st-1', businessDate: asked });
+    // Back on the asked day, the generated report shows from the cache.
+    fireEvent.click(screen.getByRole('button', { name: 'Next day' }));
+    expect(await screen.findByText(/^08 Oct 2026 · Generated /)).toBeTruthy();
   });
 
   it('a row that only names its day is read like any other day', async () => {
