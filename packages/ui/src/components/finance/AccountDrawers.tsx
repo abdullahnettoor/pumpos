@@ -8,6 +8,8 @@ import { queryKeys } from '../../query/hooks.js';
 import { CloudFinanceService } from '../../services/cloud.js';
 import { formatMoney } from '../../utils/format.js';
 import { ACCOUNT_TYPE_LABEL, type LedgerAccountType } from '../../utils/ledgerLabels.js';
+import { isIdempotencyKeyConflict, keepsIdempotencyKey } from '../../utils/idempotency.js';
+import { officeSubmitKeys } from '../../office-records/submitKeys.js';
 import type { AccountRow } from './accountsModel.js';
 
 const financeSvc = new CloudFinanceService();
@@ -15,8 +17,57 @@ const financeSvc = new CloudFinanceService();
 /**
  * The Accounts drawers (#530): new account, transfer, settle to bank and add
  * entry. Each mounts fresh on open (the parent keys it), so its form starts
- * from its defaults; submit, validation and cache invalidation are unchanged.
+ * from its defaults.
+ *
+ * Every save sends one Idempotency-Key per logical submit (#574), through the
+ * Office Record key store (#526/#564): the key is kept while the outcome is
+ * unknown (no answer, a 5xx, in progress, or an edited retry refused), and
+ * renewed after a decided answer. A retry after a dropped response therefore
+ * cannot move money twice.
  */
+
+/**
+ * A save under one Idempotency-Key. Scope it so a key is only ever reused on
+ * the same route: the API refuses a key sent to another path.
+ */
+function useKeyedSave(scope: string) {
+  const [session] = useState(() => officeSubmitKeys.session(`accounts:${scope}`));
+  return async <T,>(body: unknown, send: (idempotencyKey: string) => Promise<T>): Promise<T> => {
+    const key = session.next(JSON.stringify(body));
+    try {
+      const result = await send(key);
+      session.settle();
+      return result;
+    } catch (err) {
+      session.settle(err);
+      throw err;
+    }
+  };
+}
+
+/** A failed save: plain text for a decided refusal, or a title and what to do. */
+type FormErrorValue = string | { title: string; message: string };
+
+/**
+ * What a failed save tells the operator. While the outcome is unknown, saving
+ * again is safe (same key); an edited retry the API refused may already be recorded.
+ */
+function saveFailure(err: any, what: string, fallback: string): FormErrorValue {
+  if (isIdempotencyKeyConflict(err)) {
+    return {
+      title: `Couldn't save the edited ${what}.`,
+      message:
+        'Your earlier save may already be recorded. Check the list, then undo your edit or close and start again.',
+    };
+  }
+  if (keepsIdempotencyKey(err)) {
+    return {
+      title: "Couldn't save. Check the connection and save again.",
+      message: `Saving again sends the same ${what}, so it cannot be recorded twice.`,
+    };
+  }
+  return err?.message || fallback;
+}
 
 /** Every money write refreshes balances, statements and the Daily cash book. */
 async function invalidateMoney(qc: QueryClient, stationId: string | null) {
@@ -27,9 +78,16 @@ async function invalidateMoney(qc: QueryClient, stationId: string | null) {
   await qc.invalidateQueries({ queryKey: queryKeys.financeMovementsPrefix() });
 }
 
-const FormError: React.FC<{ children: ReactNode }> = ({ children }) => (
+const FormError: React.FC<{ error: FormErrorValue }> = ({ error }) => (
   <div role="alert" className="rounded-input bg-danger-bg px-3 py-2.5 text-[12px] text-danger-fg">
-    {children}
+    {typeof error === 'string' ? (
+      error
+    ) : (
+      <>
+        <strong className="block font-semibold">{error.title}</strong>
+        {error.message}
+      </>
+    )}
   </div>
 );
 
@@ -87,7 +145,8 @@ export const NewAccountDrawer: React.FC<Omit<BaseDrawerProps, 'today'>> = ({
   const [accountNo, setAccountNo] = useState('');
   const [ifsc, setIfsc] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FormErrorValue | null>(null);
+  const save = useKeyedSave(`create:${stationId}`);
 
   const submit = async () => {
     if (!name.trim()) {
@@ -103,20 +162,23 @@ export const NewAccountDrawer: React.FC<Omit<BaseDrawerProps, 'today'>> = ({
         if (accountNo.trim()) metadata.accountNoMasked = accountNo.trim();
         if (ifsc.trim()) metadata.ifsc = ifsc.trim();
       }
-      await financeSvc.createAccount({
+      const payload = {
         stationId,
         accountType,
         name: name.trim(),
         openingBalance: Number(openingBalance) || 0,
         openingDate: openingDate || null,
         metadata: Object.keys(metadata).length ? metadata : null,
-      });
+      };
+      await save(payload, (idempotencyKey) =>
+        financeSvc.createAccount(payload, { idempotencyKey }),
+      );
       onClose();
       await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
       await qc.invalidateQueries({ queryKey: queryKeys.fundingAccountsAll() });
       toast.success('Account created.');
     } catch (err: any) {
-      setError(err.message || 'Failed to create account.');
+      setError(saveFailure(err, 'account', 'Failed to create account.'));
     } finally {
       setSubmitting(false);
     }
@@ -125,7 +187,7 @@ export const NewAccountDrawer: React.FC<Omit<BaseDrawerProps, 'today'>> = ({
   return (
     <Drawer isOpen={isOpen} onClose={onClose} title="New account">
       <div className="flex flex-col gap-3.5">
-        {error && <FormError>{error}</FormError>}
+        {error && <FormError error={error} />}
         <Field label="Type">
           <Select
             value={accountType}
@@ -225,8 +287,9 @@ export const TransferDrawer: React.FC<BaseDrawerProps & { accounts: readonly Acc
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(today);
   const [notes, setNotes] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FormErrorValue | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const save = useKeyedSave(`transfer:${stationId}`);
 
   const submit = async () => {
     if (!fromAccountId || !toAccountId) {
@@ -244,18 +307,21 @@ export const TransferDrawer: React.FC<BaseDrawerProps & { accounts: readonly Acc
     setSubmitting(true);
     setError(null);
     try {
-      await financeSvc.recordTransfer({
+      const payload = {
         fromAccountId,
         toAccountId,
         amount: Number(amount),
         date: date || null,
         notes: notes || null,
-      });
+      };
+      await save(payload, (idempotencyKey) =>
+        financeSvc.recordTransfer(payload, { idempotencyKey }),
+      );
       onClose();
       await invalidateMoney(qc, stationId);
       toast.success('Transfer recorded.');
     } catch (err: any) {
-      setError(err.message || 'Failed to record transfer.');
+      setError(saveFailure(err, 'transfer', 'Failed to record transfer.'));
     } finally {
       setSubmitting(false);
     }
@@ -270,7 +336,7 @@ export const TransferDrawer: React.FC<BaseDrawerProps & { accounts: readonly Acc
   return (
     <Drawer isOpen={isOpen} onClose={onClose} title="Transfer money">
       <div className="flex flex-col gap-3.5">
-        {error && <FormError>{error}</FormError>}
+        {error && <FormError error={error} />}
         <Field label="From">
           <Select
             value={fromAccountId}
@@ -344,8 +410,9 @@ export const SettleDrawer: React.FC<
   const [fee, setFee] = useState('');
   const [date, setDate] = useState(today);
   const [notes, setNotes] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FormErrorValue | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const save = useKeyedSave(`settle:${stationId}`);
 
   const submit = async () => {
     if (!bankId) {
@@ -363,19 +430,22 @@ export const SettleDrawer: React.FC<
     setSubmitting(true);
     setError(null);
     try {
-      await financeSvc.recordSettlement({
+      const payload = {
         clearingAccountId: account.id,
         bankAccountId: bankId,
         grossAmount: Number(gross),
         feeAmount: Number(fee) || 0,
         date: date || null,
         notes: notes || null,
-      });
+      };
+      await save(payload, (idempotencyKey) =>
+        financeSvc.recordSettlement(payload, { idempotencyKey }),
+      );
       onClose();
       await invalidateMoney(qc, stationId);
       toast.success('Settlement recorded.');
     } catch (err: any) {
-      setError(err.message || 'Failed to record settlement.');
+      setError(saveFailure(err, 'settlement', 'Failed to record settlement.'));
     } finally {
       setSubmitting(false);
     }
@@ -384,7 +454,7 @@ export const SettleDrawer: React.FC<
   return (
     <Drawer isOpen={isOpen} onClose={onClose} title="Settle to bank">
       <div className="flex flex-col gap-3.5">
-        {error && <FormError>{error}</FormError>}
+        {error && <FormError error={error} />}
         <Field label="Settle into (bank)">
           <Select value={bankId} onChange={(e) => setBankId(e.target.value)} disabled={submitting}>
             <option value="">— Select bank —</option>
@@ -472,8 +542,11 @@ export const AddEntryDrawer: React.FC<BaseDrawerProps & { account: AccountRow }>
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(today);
   const [notes, setNotes] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FormErrorValue | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // An entry and an opening balance go to different routes, so each has its own key.
+  const saveEntry = useKeyedSave(`entry:${account.id}`);
+  const saveOpening = useKeyedSave(`opening:${account.id}`);
   const opening = kind === 'OPENING';
 
   // Switching to "Set opening balance" prefills the account's current opening figure/date.
@@ -498,15 +571,15 @@ export const AddEntryDrawer: React.FC<BaseDrawerProps & { account: AccountRow }>
       setSubmitting(true);
       setError(null);
       try {
-        await financeSvc.setOpeningBalance(account.id, {
-          openingBalance: value,
-          openingDate: date || null,
-        });
+        const payload = { openingBalance: value, openingDate: date || null };
+        await saveOpening(payload, (idempotencyKey) =>
+          financeSvc.setOpeningBalance(account.id, payload, { idempotencyKey }),
+        );
         onClose();
         await invalidateMoney(qc, stationId);
         toast.success('Opening balance updated.');
       } catch (err: any) {
-        setError(err.message || 'Failed to update opening balance.');
+        setError(saveFailure(err, 'opening balance', 'Failed to update opening balance.'));
       } finally {
         setSubmitting(false);
       }
@@ -521,18 +594,21 @@ export const AddEntryDrawer: React.FC<BaseDrawerProps & { account: AccountRow }>
     setError(null);
     try {
       const k = ENTRY_KIND[kind];
-      await financeSvc.recordAdjustment(account.id, {
+      const payload = {
         direction: k.direction,
         amount: Number(amount),
         sourceType: k.sourceType,
         date: date || null,
         notes: notes || k.label,
-      });
+      };
+      await saveEntry(payload, (idempotencyKey) =>
+        financeSvc.recordAdjustment(account.id, payload, { idempotencyKey }),
+      );
       onClose();
       await invalidateMoney(qc, stationId);
       toast.success('Entry recorded.');
     } catch (err: any) {
-      setError(err.message || 'Failed to record entry.');
+      setError(saveFailure(err, 'entry', 'Failed to record entry.'));
     } finally {
       setSubmitting(false);
     }
@@ -541,7 +617,7 @@ export const AddEntryDrawer: React.FC<BaseDrawerProps & { account: AccountRow }>
   return (
     <Drawer isOpen={isOpen} onClose={onClose} title="Add entry">
       <div className="flex flex-col gap-3.5">
-        {error && <FormError>{error}</FormError>}
+        {error && <FormError error={error} />}
         <Field label="Type">
           <Select
             value={kind}

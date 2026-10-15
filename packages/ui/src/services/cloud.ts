@@ -1934,15 +1934,22 @@ export class CloudFinanceService {
     return request<any>(`/finance/accounts/${accountId}/ledger${suffix}`);
   }
 
-  async createAccount(payload: {
-    stationId?: string | null;
-    accountType: 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
-    name: string;
-    openingBalance?: number;
-    openingDate?: string | null;
-    metadata?: Record<string, unknown> | null;
-  }): Promise<any> {
-    return request<any>('/finance/accounts', { method: 'POST', body: JSON.stringify(payload) });
+  async createAccount(
+    payload: {
+      stationId?: string | null;
+      accountType: 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
+      name: string;
+      openingBalance?: number;
+      openingDate?: string | null;
+      metadata?: Record<string, unknown> | null;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/finance/accounts',
+      { method: 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async updateAccount(
@@ -1959,34 +1966,50 @@ export class CloudFinanceService {
   async setOpeningBalance(
     id: string,
     payload: { openingBalance: number; openingDate?: string | null },
+    opts?: { idempotencyKey?: string },
   ): Promise<any> {
-    return request<any>(`/finance/accounts/${id}/opening`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
+    return request<any>(
+      `/finance/accounts/${id}/opening`,
+      { method: 'PUT', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   /** Move money between two accounts (deposit / petty-cash float / bank↔bank). */
-  async recordTransfer(payload: {
-    fromAccountId: string;
-    toAccountId: string;
-    amount: number;
-    date?: string | null;
-    notes?: string | null;
-  }): Promise<any> {
-    return request<any>('/finance/transfers', { method: 'POST', body: JSON.stringify(payload) });
+  async recordTransfer(
+    payload: {
+      fromAccountId: string;
+      toAccountId: string;
+      amount: number;
+      date?: string | null;
+      notes?: string | null;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/finance/transfers',
+      { method: 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   /** Settle a card/UPI clearing batch to a bank account, net of MDR fee. */
-  async recordSettlement(payload: {
-    clearingAccountId: string;
-    bankAccountId: string;
-    grossAmount: number;
-    feeAmount?: number;
-    date?: string | null;
-    notes?: string | null;
-  }): Promise<any> {
-    return request<any>('/finance/settlements', { method: 'POST', body: JSON.stringify(payload) });
+  async recordSettlement(
+    payload: {
+      clearingAccountId: string;
+      bankAccountId: string;
+      grossAmount: number;
+      feeAmount?: number;
+      date?: string | null;
+      notes?: string | null;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/finance/settlements',
+      { method: 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   /** Manual entry against one account: bank charge / interest / adjustment. */
@@ -1999,11 +2022,13 @@ export class CloudFinanceService {
       date?: string | null;
       notes?: string | null;
     },
+    opts?: { idempotencyKey?: string },
   ): Promise<any> {
-    return request<any>(`/finance/accounts/${accountId}/entry`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+    return request<any>(
+      `/finance/accounts/${accountId}/entry`,
+      { method: 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   /** Station-wide ledger movements (backs the Cash & Bank report). */
