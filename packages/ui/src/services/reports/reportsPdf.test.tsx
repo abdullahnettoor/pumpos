@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import React from 'react';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -11,6 +11,10 @@ import { InvoiceDoc } from './invoiceDoc.js';
 import { LedgerDoc } from './ledgerDoc.js';
 import { AttendantReportDoc, dayPageTitle } from './attendantReportDoc.js';
 import { MARK_PATH, MARK_VIEWBOX } from '../../pump-ds/brand/Brand.js';
+import { DSSR_PARITY_FIXTURE } from '../../test/dssrFixture.js';
+import { readPdf } from '../../test/pdfTree.js';
+import { formatDateTime } from '../../utils/format.js';
+import { DEFAULT_DSSR_CONFIG, type DssrSection } from './reportConfig.js';
 
 async function streamToBuffer(stream: any): Promise<Buffer> {
   if (Buffer.isBuffer(stream)) return stream;
@@ -258,38 +262,22 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
   });
 
   it('marks a draft DSR as not closed, outside the configurable sections, and leaves a sealed one unmarked', () => {
-    const texts = (node: any): string[] => {
-      if (node == null || typeof node === 'boolean') return [];
-      if (typeof node === 'string' || typeof node === 'number') return [String(node)];
-      if (Array.isArray(node)) return node.flatMap(texts);
-      if (typeof node.type === 'function' && node.type !== Text) {
-        return texts((node.type as any)(node.props));
-      }
-      return texts(node.props?.children);
-    };
     // A layout that prints no header at all must still carry the draft mark.
-    const config = { sections: ['meta'] as any[], paper: 'A4' as const };
+    const config = { sections: ['meta'] as DssrSection[], paper: 'A4' as const };
     const base = { businessDate: '2026-10-08', snapshotData: { shiftsIncluded: 2 } };
-    const draft = texts((DssrDoc as any)({ dssr: { ...base, draft: true }, config })).join(' ');
+    const draft = readPdf(<DssrDoc dssr={{ ...base, draft: true }} config={config} />).lines.join(
+      ' ',
+    );
     expect(draft).toContain('DRAFT \u2014 DAY NOT CLOSED');
-    const sealed = texts((DssrDoc as any)({ dssr: base, config })).join(' ');
+    const sealed = readPdf(<DssrDoc dssr={base} config={config} />).lines.join(' ');
     expect(sealed).not.toContain('DRAFT');
   });
 
   it('titles the DSR PDF "Daily Station Sales Report" and names the file DSR-<date> (#570)', () => {
-    const texts = (node: any): string[] => {
-      if (node == null || typeof node === 'boolean') return [];
-      if (typeof node === 'string' || typeof node === 'number') return [String(node)];
-      if (Array.isArray(node)) return node.flatMap(texts);
-      if (typeof node.type === 'function' && node.type !== Text) {
-        return texts((node.type as any)(node.props));
-      }
-      return texts(node.props?.children);
-    };
-    const config = { sections: ['header'] as any[], paper: 'A4' as const };
-    const text = texts((DssrDoc as any)({ dssr: { businessDate: '2026-10-08' }, config })).join(
-      ' ',
-    );
+    const config = { sections: ['header'] as DssrSection[], paper: 'A4' as const };
+    const text = readPdf(
+      <DssrDoc dssr={{ businessDate: '2026-10-08' }} config={config} />,
+    ).lines.join(' ');
     expect(text).toContain('DAILY STATION SALES REPORT');
     expect(text).not.toMatch(/DSSR|SALES SUMMARY RECORD/);
     expect(dsrFileName('2026-10-08', false)).toBe('DSR-2026-10-08');
@@ -297,34 +285,57 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
   });
 
   it('prints OMC card sales in the DSR sales summary only when the snapshot carries them', () => {
-    const texts = (node: any): string[] => {
-      if (node == null || typeof node === 'boolean') return [];
-      if (typeof node === 'string' || typeof node === 'number') return [String(node)];
-      if (Array.isArray(node)) return node.flatMap(texts);
-      if (typeof node.type === 'function' && node.type !== Text) {
-        return texts((node.type as any)(node.props));
-      }
-      return texts(node.props?.children);
-    };
-    const config = { sections: ['financial'] as any[], paper: 'A4' as const };
+    const config = { sections: ['financial'] as DssrSection[], paper: 'A4' as const };
     const render = (snapshotData: Record<string, unknown>) =>
-      texts(
-        (DssrDoc as any)({
-          dssr: {
+      readPdf(
+        <DssrDoc
+          dssr={{
             businessDate: '2026-10-10',
             snapshotData: { credit: { normalCredit: 0, fleetCredit: 34040 }, ...snapshotData },
-          },
-          config,
-        }),
-      );
+          }}
+          config={config}
+        />,
+      ).lines;
     const withOmc = render({ omcCard: { total: 2000, count: 1 } });
-    const at = withOmc.indexOf('OMC Card Sales');
-    expect(at).toBeGreaterThan(withOmc.indexOf('Fleet Credit Sales'));
+    const at = withOmc.indexOf('OMC card sales');
+    expect(at).toBeGreaterThan(withOmc.indexOf('Fleet credit sales'));
     expect(withOmc[at + 1]).toMatch(/2,000/);
     // Unchanged for a snapshot frozen before the field and for a day without any.
     const legacy = render({});
-    expect(legacy).not.toContain('OMC Card Sales');
+    expect(legacy).not.toContain('OMC card sales');
     expect(render({ omcCard: { total: 0, count: 0 } })).toEqual(legacy);
+  });
+
+  /*
+   * #580: the DSR PDF prints the screen's model (`readDssrDay`): 2 decimals
+   * for volumes, Short / Surplus / Balanced, sentence case, and one total row
+   * that never adds volumes across L and kg. Times print in the runner's zone,
+   * so they are replaced by a placeholder; the footer's print time too.
+   */
+  it('prints the DSR as the screen reads it (#580)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-09T06:00:00.000Z'));
+    try {
+      const snap = DSSR_PARITY_FIXTURE.snapshotData;
+      const times: Record<string, string> = {
+        [formatDateTime(DSSR_PARITY_FIXTURE.generatedAt)]: '<generated at>',
+        [formatDateTime(snap.shifts[0].closedAt)]: '<shift 1 closed at>',
+        [formatDateTime(snap.shifts[1].closedAt)]: '<shift 2 closed at>',
+        [new Date().toLocaleString('en-IN')]: '<printed at>',
+      };
+      const doc = (
+        <DssrDoc
+          dssr={DSSR_PARITY_FIXTURE}
+          config={{ ...DEFAULT_DSSR_CONFIG, stationName: 'Apex Fuels' }}
+        />
+      );
+      const lines = readPdf(doc).lines.map((line) =>
+        Object.entries(times).reduce((l, [time, mark]) => l.split(time).join(mark), line),
+      );
+      expect(lines).toMatchSnapshot();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('generates real PDF buffer for Tax Invoice with verified vector mark in PDF stream', async () => {
