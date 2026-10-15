@@ -268,7 +268,8 @@ signals importance; it never paints the whole screen.
 
 - **Petrol Green (#1F6A53) — `primary`:** primary CTAs and active emphasis.
 - **Diesel Blue (#2E5E88) — `secondary`:** informational context and navigation emphasis.
-- **Signal Amber (#B7811E) — `tertiary`:** warnings, pending sync, variance attention.
+- **Signal Amber (#B7811E) — `tertiary`:** warnings and variance attention. A write in
+  flight (Saving…, Waiting to sync) is neutral, not amber; only a failed write takes a problem tone.
 - **Alert Red (#B44A3F) — `error`:** failure, destructive actions, critical exceptions only.
 - **Canvas (#F6F7F4) — `neutral`:** the app background. Content sits on
   **Surface (#FFFFFF)**; grouped or recessed areas use **Surface Alt (#F1F3EF)**.
