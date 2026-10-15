@@ -56,6 +56,33 @@ export function logDemoError(
   });
 }
 
+// No lookalikes (0/o, 1/l/i) so the login can be read out or typed from a chat.
+const SHAREABLE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
+
+function randomCode(length: number, alphabet = SHAREABLE_ALPHABET): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
+}
+
+/**
+ * A short, shareable demo login, e.g. `samplefuels-k7m2qx@demo.pumpos.app`.
+ * Six random characters keep collisions negligible across demos with the
+ * same station name.
+ */
+export function demoOwnerEmail(stationName: string): string {
+  const slug =
+    stationName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '')
+      .slice(0, 16) || 'demo';
+  return `${slug}-${randomCode(6)}@demo.pumpos.app`;
+}
+
+/** A short demo password that meets the 8-character minimum, e.g. `Demo4827`. */
+export function demoPassword(): string {
+  return `Demo${randomCode(4, '0123456789')}`;
+}
+
 /** Lock the organisation row and confirm it is still a demo. */
 export async function lockDemoOrganization(tx: DbClient, organizationId: string) {
   const [organization] = await tx
@@ -352,8 +379,8 @@ export async function createDemo(
       });
     }
 
-    const ownerEmail = `owner+${crypto.randomUUID()}@demo.pumpos.invalid`;
-    const password = `${crypto.randomUUID()}aA1!`;
+    const ownerEmail = demoOwnerEmail(setup.stationName);
+    const password = demoPassword();
     const created = await admin.createUser({
       email: ownerEmail,
       password,
