@@ -26,7 +26,7 @@ import {
 } from '@pump/shared';
 import { useRunTask } from '../utils/runTask.js';
 import { officeSubmitKeys } from '../office-records/submitKeys.js';
-import { dailyDssrPreviewQuery, queryKeys } from '../query/hooks.js';
+import { dailyDssrPreviewQuery, invalidateAfterDssrGenerate } from '../query/hooks.js';
 
 const shiftService = new CloudShiftService();
 
@@ -164,8 +164,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
       keys.settle();
       // The response is the DSR: open it now; the list catches up in the background.
       setActiveDailyDssr(result);
-      void qc.invalidateQueries({ queryKey: queryKeys.dssrRangePrefix() });
-      void qc.invalidateQueries({ queryKey: queryKeys.dssrPreview(stationKey, selectedDate) });
+      invalidateAfterDssrGenerate(qc, stationKey, selectedDate, result);
     } catch (err: any) {
       keys.settle(err);
       setGenerateError(err.message || 'Failed to generate the DSR');

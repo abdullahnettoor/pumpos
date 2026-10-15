@@ -4,7 +4,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { publishNavIntent, __resetNavIntentForTests } from '../nav-intent/store.js';
-import { renderWithProviders } from '../test/renderWithProviders.js';
+import { QueryObserver } from '@tanstack/react-query';
+import { createTestQueryClient, renderWithProviders } from '../test/renderWithProviders.js';
+import { queryKeys } from '../query/hooks.js';
 
 const range = vi.hoisted(() => ({ data: [] as unknown[] }));
 vi.mock('../query/hooks.js', async (importOriginal) => ({
@@ -196,18 +198,39 @@ describe('Reports → DSR missing report and Generate (review #579)', () => {
     expect(key(gen.calls[1])).toBe(key(gen.calls[0]));
   });
 
-  it('a generated DSR opens from the response, and the list refreshes in the background', async () => {
+  it('a generated DSR opens from the response while every DSR view refreshes in the background', async () => {
     gen.calls = [];
     gen.result = { businessDate: '2026-10-14', snapshotData: { shiftsIncluded: 2 } };
+    const qc = createTestQueryClient();
+    const dayKey = queryKeys.dssr('st-1', '2026-10-14');
+    const dayListKey = queryKeys.businessDayList('st-1');
+    qc.setQueryData(dayListKey, []);
+    // Shifts › Business Day is watching that day; its refetch never answers.
+    const watcher = new QueryObserver(qc, {
+      queryKey: dayKey,
+      queryFn: () => new Promise(() => {}),
+      initialData: { stale: true },
+      staleTime: Infinity,
+    });
+    const stop = watcher.subscribe(() => {});
     try {
-      renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
+      renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />, {
+        queryClient: qc,
+      });
       fireEvent.change(screen.getByLabelText('Business date to generate'), {
         target: { value: '2026-10-14' },
       });
       await act(async () => fireEvent.click(screen.getByRole('button', { name: /Generate DSR/ })));
+      // Generate settled and opened the response while the refetch is still out.
       expect(await screen.findByTestId('dsr-screen')).toBeTruthy();
       expect(view.opened).toBe(gen.result);
+      expect(qc.getQueryState(dayKey)?.fetchStatus).toBe('fetching');
+      expect(qc.getQueryState(dayKey)?.isInvalidated).toBe(true);
+      expect(qc.getQueryState(dayListKey)?.isInvalidated).toBe(true);
+      // The day just written holds the write's answer.
+      expect(qc.getQueryData(queryKeys.dssrPreview('st-1', '2026-10-14'))).toBe(gen.result);
     } finally {
+      stop();
       gen.result = null;
     }
   });

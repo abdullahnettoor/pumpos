@@ -22,7 +22,7 @@ import { Banner } from './primitives/Banner.js';
 import { InfoTip } from './primitives/InfoTip.js';
 import { ReportNote } from './reports/ReportNote.js';
 import { DayPicker } from './reports/DayPicker.js';
-import { queryKeys, useDailyDssrPreview } from '../query/hooks.js';
+import { invalidateAfterDssrGenerate, useDailyDssrPreview } from '../query/hooks.js';
 import { CloudShiftService } from '../services/cloud.js';
 import { formatBusinessDate, formatDateTime, formatMoney } from '../utils/format.js';
 import { useRunTask } from '../utils/runTask.js';
@@ -131,19 +131,8 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({
     // Synchronous on purpose (pump-data-caching rule 6): the screen shows the
     // write's own response at once, and the refreshes run in the background.
     // Returning them would keep Generate spinning until every refetch lands.
-    onSuccess: (generated, day) => {
-      const dayKey = queryKeys.dssrPreview(day.stationId, day.date);
-      qc.setQueryData(dayKey, generated);
-      const keyOf = JSON.stringify(dayKey);
-      void qc.invalidateQueries({
-        queryKey: queryKeys.dssrPreviewPrefix(day.stationId),
-        // The day just generated already holds the write's answer.
-        predicate: (q) => JSON.stringify(q.queryKey) !== keyOf,
-      });
-      void qc.invalidateQueries({ queryKey: ['dssr'] });
-      void qc.invalidateQueries({ queryKey: ['dssr-range'] });
-      void qc.invalidateQueries({ queryKey: queryKeys.businessDayList(day.stationId) });
-    },
+    onSuccess: (generated, day) =>
+      invalidateAfterDssrGenerate(qc, day.stationId, day.date, generated),
   });
 
   // Save PDF and Print render the same DssrDoc, so they match page for page (#309).
