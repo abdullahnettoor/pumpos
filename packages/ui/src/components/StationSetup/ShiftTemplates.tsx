@@ -14,7 +14,7 @@ import {
 } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { Field, TextInput } from '../primitives/Field.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { queryKeys, useShiftTemplates } from '../../query/hooks.js';
 import { countOf } from '../../utils/ledgerWindow.js';
@@ -96,7 +96,12 @@ export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
       runTask(loadTemplates(), 'Saved, but the template list could not be refreshed.');
       toast.success('Shift template created.');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to create shift template');
+      toast.error(
+        withNextStep(
+          err.message || "Couldn't create the shift template",
+          'Check the times and save again.',
+        ),
+      );
     }
   };
 
@@ -114,7 +119,12 @@ export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
       runTask(loadTemplates(), 'Saved, but the template list could not be refreshed.');
       toast.success('Default shifts created.');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to pre-fill default shifts');
+      toast.error(
+        withNextStep(
+          err.message || "Couldn't add the default shifts",
+          'Try again, or add the shifts one by one.',
+        ),
+      );
     } finally {
       setPrefilling(false);
     }

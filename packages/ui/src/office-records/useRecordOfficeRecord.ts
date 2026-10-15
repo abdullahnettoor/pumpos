@@ -13,6 +13,7 @@ import {
   type RecordLabels,
 } from '../query/patches/officeRecords.js';
 import { CloudTransactionService } from '../services/cloud.js';
+import { flashRows } from '../utils/rowFlash.js';
 import type { OfficeRecordKind } from './kinds.js';
 import type { OfficeRecordRequest, OfficeRecordSubmission } from './send.js';
 
@@ -82,6 +83,7 @@ export function useRecordOfficeRecord() {
     mutationFn: (vars: OfficeRecordVariables) => vars.request.send(vars.idempotencyKey),
     onSuccess: (answer: unknown, vars: OfficeRecordVariables): void => {
       patchOfficeRecordLists(qc, vars, answer);
+      flashRows([(answer as { id?: string } | null)?.id]);
     },
   });
 }
@@ -131,6 +133,7 @@ export function useVoidCategoryRecord() {
     onSuccess: (answer: unknown, vars: VoidRecordVariables): void => {
       const record = answer as AnsweredRecord | null | undefined;
       if (!record?.id || !record.status) return;
+      flashRows([record.id]);
       if (vars.kind === 'expense') {
         patchQueryData<Rows>(qc, queryKeys.expenses(), (list) => withVoidedRecord(list, record));
       } else if (vars.stationId) {

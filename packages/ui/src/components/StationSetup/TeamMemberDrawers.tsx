@@ -9,11 +9,14 @@ import { queryKeys, useStations } from '../../query/hooks.js';
 import { Drawer } from '../Drawer.js';
 import { Field, Select, TextInput } from '../primitives/Field.js';
 import { Checkbox } from '../primitives/Toggle.js';
-import { useToast, type ToastApi } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep, type ToastApi } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useKeyedSave } from '../../office-records/useKeyedSave.js';
 import { Button, Form, Icon, SegmentedControl } from '../../pump-ds/index.js';
 import { loginIdentity } from '../Organization/organizationModel.js';
+
+/** The credentials could not reach the clipboard (#606: say what to do next). */
+const COPY_FAILED = 'Copy failed. Select the text and copy it, or note it down.';
 
 /**
  * The Team drawers (#538): new / edit member (with the credentials to hand
@@ -82,8 +85,8 @@ async function copyText(text: string): Promise<boolean> {
  */
 function copyWithFeedback(text: string, label: string, toast: ToastApi): void {
   copyText(text)
-    .then((ok) => (ok ? toast.success(`${label} copied.`) : toast.error('Copy failed.')))
-    .catch(() => toast.error('Copy failed.'));
+    .then((ok) => (ok ? toast.success(`${label} copied.`) : toast.error(COPY_FAILED)))
+    .catch(() => toast.error(COPY_FAILED));
 }
 
 /**
@@ -231,11 +234,21 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
         return;
       }
       if (!isPhone && (!values.email || values.email.trim() === '')) {
-        toast.error('An email address is required for email login.');
+        toast.error(
+          withNextStep(
+            'An email address is required for email login',
+            'Enter one, or choose username login.',
+          ),
+        );
         return;
       }
       if (!values.password || values.password.length < 8) {
-        toast.error('Set a password of at least 8 characters (use Generate).');
+        toast.error(
+          withNextStep(
+            'The password needs at least 8 characters',
+            'Type a longer one or use Generate.',
+          ),
+        );
         return;
       }
     }
@@ -264,7 +277,12 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
           : userService.createUser(payload, { idempotencyKey }),
       );
     } catch (err: any) {
-      toast.error(err.message || 'Failed to save team member');
+      toast.error(
+        withNextStep(
+          err.message || "Couldn't save the team member",
+          'Check the details and save again.',
+        ),
+      );
       return;
     }
 
@@ -467,7 +485,9 @@ export const ResetPasswordDrawer: React.FC<ResetPasswordDrawerProps> = ({
         userService.resetUserPassword(user.id, password, { idempotencyKey }),
       );
     } catch (err: any) {
-      toast.error(err.message || 'Failed to reset password');
+      toast.error(
+        withNextStep(err.message || "Couldn't reset the password", 'Try resetting it again.'),
+      );
       setBusy(false);
       return;
     }

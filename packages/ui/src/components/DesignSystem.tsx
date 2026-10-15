@@ -863,7 +863,7 @@ const FeedbackPanel: React.FC = () => {
     <div>
       <Section
         title="Toasts"
-        description="Non-blocking notifications (replaces alert). Auto-dismiss after a few seconds; errors linger longer. Success after a save, error on failure, info for neutral notices."
+        description="One stack, bottom centre above the status bar, at most three. Secondary to the row a save updates. Successes leave after 4 seconds and may carry an action; errors stay until dismissed and say what to do next."
       >
         <Card>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
@@ -873,7 +873,11 @@ const FeedbackPanel: React.FC = () => {
             <Button
               variant="danger"
               size="sm"
-              onClick={() => toast.error('Failed to save expense')}
+              onClick={() =>
+                toast.error('Account is closed. Choose another account and save again.', {
+                  title: 'Expense not saved',
+                })
+              }
             >
               Error
             </Button>
@@ -890,6 +894,17 @@ const FeedbackPanel: React.FC = () => {
               onClick={() => toast.success('DSR compiled for 01 Jul', { title: 'Report ready' })}
             >
               With title
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                toast.success('Expense recorded.', {
+                  action: { label: 'View record', onClick: () => undefined },
+                })
+              }
+            >
+              With action
             </Button>
           </div>
         </Card>

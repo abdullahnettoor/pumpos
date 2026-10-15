@@ -17,6 +17,7 @@ import {
 import { useSupplierPayments } from '../../query/hooks.js';
 import type { SupplierPaymentRow } from '../../services/cloud.js';
 import { formatMoney } from '../../utils/format.js';
+import { useFlashingRows } from '../../utils/rowFlash.js';
 import { countOf, type EntryClock } from '../../utils/ledgerWindow.js';
 import { MONEY_TERMS } from '../../utils/moneyTerms.js';
 import { InfoTip } from '../primitives/InfoTip.js';
@@ -52,6 +53,8 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({
 }) => {
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', entryClock));
   const [search, setSearch] = useState('');
+  // A payment just recorded is highlighted when it lands (#606).
+  const flashing = useFlashingRows();
   // The ledger reads its range from the server. Paid and Suppliers paid read
   // this month's payments, Paid today reads today's and Payable the payables
   // summary: three requests, so a failed month request never blanks Paid today
@@ -181,6 +184,7 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({
             columns={PAYMENT_COLUMNS}
             rows={rows}
             rowKey={(p) => p.id}
+            flashRowIds={flashing}
             totalRow
             title="supplier payments"
             onRowClick={(p) => onOpenSupplier(p.supplierId)}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { customerStatementParty, useAccess, useToast } from '@pump/ui';
+import { customerStatementParty, useAccess, useToast, withNextStep } from '@pump/ui';
 import type { Station } from '@pump/shared';
 import { collectionAccess } from '../../lib/money/collection.js';
 import { creditLimitAccess } from '../../lib/money/creditLimit.js';
@@ -89,7 +89,7 @@ export const CustomerPage: React.FC<{
       }
       share={statement.share}
       download={statement.download}
-      onActionError={(message) => toast.error(message)}
+      onActionError={(message) => toast.error(withNextStep(message, 'Try again.'))}
     >
       <BalanceCard
         customer={customer}

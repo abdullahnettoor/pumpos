@@ -288,7 +288,7 @@ describe.each<Kind>(['customer', 'supplier'])('%s statement range and PDF', (kin
     mount(kind);
     await ready();
     fireEvent.click(download());
-    expect(await screen.findByText('Could not build the PDF')).toBeTruthy();
+    expect(await screen.findByText('Could not build the PDF. Try again.')).toBeTruthy();
   });
 
   describe('Filter', () => {

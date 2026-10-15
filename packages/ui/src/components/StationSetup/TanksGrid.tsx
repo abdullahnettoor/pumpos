@@ -17,7 +17,7 @@ import {
 import { Field, NumberInput, Select, TextInput } from '../primitives/Field.js';
 import { countOf } from '../../utils/ledgerWindow.js';
 import { Drawer } from '../Drawer.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import {
   officeSubmitKeys,
@@ -73,7 +73,12 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!productId) {
-      toast.error('Please define a fuel product in the catalog first.');
+      toast.error(
+        withNextStep(
+          'There is no fuel product yet',
+          'Add one in the product catalog, then add the tank.',
+        ),
+      );
       return;
     }
     try {
@@ -88,7 +93,12 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
       runTask(refreshTanks(), 'Saved, but the tank list could not be refreshed.');
       toast.success('Tank created.');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to create tank');
+      toast.error(
+        withNextStep(
+          err.message || "Couldn't create the tank",
+          'Check the details and save again.',
+        ),
+      );
     }
   };
 
@@ -96,13 +106,16 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
     const fuel = fuelProducts.find((p) => p.code === fuelCode);
     if (!fuel) {
       toast.error(
-        `Please define active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'} in the catalog first.`,
+        withNextStep(
+          `There is no active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'}`,
+          'Add it in the product catalog, then add the tank.',
+        ),
       );
       return;
     }
     const cap = parseInt(capStr);
     if (!cap || cap <= 0) {
-      toast.error('Please enter a valid capacity');
+      toast.error(withNextStep('The capacity is not valid', 'Enter the tank capacity in litres.'));
       return;
     }
 
@@ -126,7 +139,12 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
       runTask(refreshTanks(), 'Saved, but the tank list could not be refreshed.');
       toast.success('Tank created.');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to create tank');
+      toast.error(
+        withNextStep(
+          err.message || "Couldn't create the tank",
+          'Check the details and save again.',
+        ),
+      );
     } finally {
       setQuickSubmitting(false);
     }
@@ -136,7 +154,10 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
     const fuel = fuelProducts.find((p) => p.code === fuelCode);
     if (!fuel) {
       toast.error(
-        `Please define active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'} in step 2 first.`,
+        withNextStep(
+          `There is no active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'}`,
+          'Add it in step 2, then add the tank.',
+        ),
       );
       return;
     }

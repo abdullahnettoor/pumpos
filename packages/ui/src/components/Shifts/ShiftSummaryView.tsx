@@ -21,7 +21,7 @@ import { PageFrame } from '../page-frame/index.js';
 import { ROUTES } from '../../nav-intent/routes.js';
 import { Banner } from '../primitives/Banner.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { ReportNote } from '../reports/ReportNote.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useKeyedSave } from '../../office-records/useKeyedSave.js';
@@ -170,7 +170,10 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
               loading={reopen.isPending}
               onClick={() =>
                 handleReopen(summary.shiftId).catch((err: unknown) =>
-                  toast.error((err as Error)?.message || 'Failed to reopen shift'),
+                  toast.error(
+                    withNextStep((err as Error)?.message, 'The shift is still closed. Try again.'),
+                    { title: 'Shift not reopened' },
+                  ),
                 )
               }
             >

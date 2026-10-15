@@ -15,6 +15,7 @@ import { openQuickEntry } from '../../quick-entry/store.js';
 import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { useVoidCategoryRecord } from '../../office-records/useRecordOfficeRecord.js';
 import { useWriteStates } from '../../query/pendingWrites.js';
+import { useFlashingRows } from '../../utils/rowFlash.js';
 import {
   recordWriteKey,
   savingRecordRows,
@@ -45,11 +46,10 @@ import {
 import { formatMoney } from '../../utils/format.js';
 import { CASH_ACCOUNT_TYPES } from '../../utils/ledgerLabels.js';
 import { countOf, inWindow, sumAmounts } from '../../utils/ledgerWindow.js';
-import { useRunTask } from '../../utils/runTask.js';
+import { useRefreshTask, useRunTask } from '../../utils/runTask.js';
 import { PageFrame } from '../page-frame/index.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import { useAsk } from '../primitives/ConfirmDialog.js';
-import { useToast } from '../primitives/ToastProvider.js';
 import { CategoryAnalytics } from '../expenses/CategoryAnalytics.js';
 import { CategoryManagerDrawer, type CategoryRecordKind } from './CategoryManagerDrawer.js';
 import {
@@ -77,9 +77,8 @@ const COPY: Record<
     void: {
       title: string;
       confirm: string;
-      done: string;
       task: string;
-      refreshFailed: string;
+      saved: string;
     };
   }
 > = {
@@ -98,9 +97,8 @@ const COPY: Record<
     void: {
       title: 'Void this expense?',
       confirm: 'Void expense',
-      done: 'Expense voided.',
       task: 'Could not void the expense.',
-      refreshFailed: 'Expense voided, but the screen could not be refreshed.',
+      saved: 'Expense voided.',
     },
   },
   income: {
@@ -124,9 +122,8 @@ const COPY: Record<
     void: {
       title: 'Void this income entry?',
       confirm: 'Void income',
-      done: 'Income voided.',
       task: 'Could not void the income entry.',
-      refreshFailed: 'Income voided, but the screen could not be refreshed.',
+      saved: 'Income voided.',
     },
   },
 };
@@ -182,8 +179,8 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
 
   const invalidateOperational = useInvalidateOperational();
   const qc = useQueryClient();
-  const toast = useToast();
   const runTask = useRunTask();
+  const refresh = useRefreshTask();
   const ask = useAsk();
   const voidRecord = useVoidCategoryRecord();
   // Saves and voids in flight, from the writes themselves (#606).
@@ -193,6 +190,7 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
     `${kind}:${stationId ?? ''}`,
   );
   const voidWrites = useWriteStates(mutationKeys.voidOfficeRecord(), voidWriteKey, kind);
+  const flashing = useFlashingRows();
 
   const role = (userRole as any) ?? 'Staff';
   const canManageCategories = canManageExpenseCategory(role);
@@ -237,14 +235,14 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
           (idempotencyKey) =>
             voidRecord.mutateAsync({ kind, id: row.id, stationId, reason: value, idempotencyKey }),
         );
-        toast.success(copy.void.done);
-        // The row reads Voided from the answer; the rest refreshes in the background.
-        runTask(invalidateOperational(stationId), copy.void.refreshFailed);
+        // The row reads Voided and is highlighted (#606): no toast. The rest
+        // refreshes in the background; a failure says so briefly, with Retry.
+        refresh(() => invalidateOperational(stationId, { throwOnError: true }), copy.void.saved);
       } catch {
         // The row says it was not voided, and why (#606).
       }
     },
-    [ask, copy, invalidateOperational, kind, stationId, toast, voidRecord, runTask],
+    [ask, copy, invalidateOperational, kind, stationId, voidRecord, refresh],
   );
 
   const columns = useMemo(
@@ -456,6 +454,7 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
                     columns={columns}
                     rows={tableRows}
                     rowKey={(r) => r.id}
+                    flashRowIds={flashing}
                     totalRow={totalRow}
                     title={copy.noun}
                   />

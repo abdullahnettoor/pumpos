@@ -240,3 +240,18 @@ export const NAV_GROUPS: readonly { heading: string; paths: readonly string[] }[
   { heading: 'Insight', paths: [ROUTES.reports] },
   { heading: 'Setup', paths: [ROUTES.station, ROUTES.organization] },
 ];
+
+/**
+ * Goes to a page from outside the shell's navigate (a toast's "View" action,
+ * #606): through the hash, so the shell's leave guard still asks first.
+ */
+export function goToRoute(path: string): void {
+  if (typeof window !== 'undefined') window.location.hash = path;
+}
+
+/** The page the window shows now (from the hash), or null outside a browser. */
+export function currentPage(): string | null {
+  if (typeof window === 'undefined') return null;
+  const raw = window.location.hash.replace(/^#/, '');
+  return raw.startsWith('/') ? pageRoute(resolveRoute(raw)) : null;
+}

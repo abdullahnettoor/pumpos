@@ -4,7 +4,7 @@ import { ATTENDANT_REPORT_CAPABILITY } from '@pump/shared';
 import { CloudStationService } from '../../../services/cloud.js';
 import { queryKeys } from '../../../query/hooks.js';
 import { useCapability } from '../../../access/CapabilityGate.js';
-import { useToast } from '../../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../../primitives/ToastProvider.js';
 import { Switch } from '../../primitives/Toggle.js';
 import { Button, Chip, Panel, SectionHeader, SegmentedControl } from '../../../pump-ds/index.js';
 import { useRunTask } from '../../../utils/runTask.js';
@@ -71,7 +71,12 @@ export const ReportTemplatesPanel: React.FC<ReportTemplatesPanelProps> = ({ sele
         stationService.updateStation(selectedStation.id, body, { idempotencyKey }),
       );
     } catch (err: any) {
-      toast.error(err?.message || 'Could not save the report template.');
+      toast.error(
+        withNextStep(
+          err?.message || "Couldn't save the report template",
+          'Check it and save again.',
+        ),
+      );
       throw err;
     }
     toast.success(success);

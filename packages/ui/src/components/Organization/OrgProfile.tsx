@@ -13,7 +13,7 @@ import {
   UnsavedChangesBar,
   useUnsavedChangesGuard,
 } from '../../pump-ds/index.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 
 const orgService = new CloudOrganizationService();
@@ -69,7 +69,12 @@ export const OrgProfile: React.FC = () => {
         orgService.updateOrganization(values, { idempotencyKey }),
       );
     } catch (e: any) {
-      toast.error(e.message || 'Failed to update organization');
+      toast.error(
+        withNextStep(
+          e.message || "Couldn't update the organization",
+          'Check the details and save again.',
+        ),
+      );
       return;
     }
     // The saved values are the form's new baseline: the bar goes away now,
