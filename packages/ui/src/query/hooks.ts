@@ -478,6 +478,9 @@ export function useRecordFuelPrice() {
   const qc = useQueryClient();
   return useMutation({
     mutationKey: mutationKeys.fuelPrice(),
+    // The attempt is what a retry restores (same body, same key), so it stays
+    // for the session rather than the default five minutes.
+    gcTime: Infinity,
     mutationFn: (vars: {
       payload: {
         stationId: string;
@@ -486,28 +489,42 @@ export function useRecordFuelPrice() {
         effectiveFrom?: string | null;
       };
       idempotencyKey: string;
-    }): Promise<RecordedFuelPrice> =>
-      pricingSvc.recordPricing(vars.payload, { idempotencyKey: vars.idempotencyKey }),
+    }): Promise<RecordedFuelPrice> => {
+      // Bounded (#606 review): a hung request ends as an unknown outcome, so
+      // the card can never stay "Saving…" for good.
+      const timeout = new AbortController();
+      const timer = setTimeout(() => timeout.abort(), FUEL_PRICE_TIMEOUT_MS);
+      return pricingSvc
+        .recordPricing(vars.payload, {
+          idempotencyKey: vars.idempotencyKey,
+          signal: timeout.signal,
+        })
+        .finally(() => clearTimeout(timer));
+    },
     onSuccess: (answer, { payload }): void => {
       if (!answer?.id || !answer.effectiveFrom) return;
       const { stationId } = payload;
       const row = qc
         .getQueryData<FuelPrice[]>(queryKeys.pricing(stationId))
         ?.find((c) => c.productId === answer.productId);
+      // The current price is judged against the history as it was before the answer.
+      const history = qc.getQueryData<FuelPriceHistoryRow[]>(queryKeys.pricingHistory(stationId));
+      patchQueryData<FuelPrice[]>(qc, queryKeys.pricing(stationId), (c) =>
+        withRecordedCurrentPrice(c, answer, history),
+      );
       patchQueryData<FuelPriceHistoryRow[]>(qc, queryKeys.pricingHistory(stationId), (h) =>
         withRecordedPriceInHistory(h, answer, {
           productName: row?.productName ?? null,
           productCode: row?.productCode ?? null,
         }),
       );
-      const history = qc.getQueryData<FuelPriceHistoryRow[]>(queryKeys.pricingHistory(stationId));
-      patchQueryData<FuelPrice[]>(qc, queryKeys.pricing(stationId), (c) =>
-        withRecordedCurrentPrice(c, answer, history),
-      );
       flashRows([answer.productId]);
     },
   });
 }
+
+/** How long a fuel price change may wait for its answer before it reads as unconfirmed. */
+export const FUEL_PRICE_TIMEOUT_MS = 20_000;
 
 /** Past price changes for a station. Semi-static: appended to, never edited. */
 export function usePricingHistory(stationId: string | null | undefined, options?: Options<any[]>) {

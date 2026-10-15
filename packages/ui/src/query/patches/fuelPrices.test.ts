@@ -68,10 +68,10 @@ const apply = (
   a: RecordedFuelPrice,
   c: ReturnType<typeof current> = current(),
   h: FuelPriceHistoryRow[] = history(),
-) => {
-  const nextHistory = withRecordedPriceInHistory(h, a, labels);
-  return { history: nextHistory, current: withRecordedCurrentPrice(c, a, nextHistory) };
-};
+) => ({
+  current: withRecordedCurrentPrice(c, a, h),
+  history: withRecordedPriceInHistory(h, a, labels),
+});
 
 describe('fuel price patches (#606)', () => {
   it('writes the server’s price and effective-from; the last change recomputes from history', () => {
@@ -120,11 +120,48 @@ describe('fuel price patches (#606)', () => {
     expect(twice.current).toBe(once.current);
   });
 
-  it('without a cached history, an answer is current only from the cached effective-from on', () => {
+  it('without a cached history, only a later effective time proves the answer current', () => {
     const c = current();
     expect(
       withRecordedCurrentPrice(c, answer({ effectiveFrom: '2026-10-05T00:30:00.000Z' }), undefined),
     ).toBe(c);
     expect(withRecordedCurrentPrice(c, answer(), undefined)[0].price).toBe(103.1);
+  });
+
+  it('an equal-time replay with no history leaves the current price to the refetch (#606 review)', () => {
+    // The cache holds ₹104 effective 15 Oct (a newer save); an older answer for
+    // the same moment arrives. Without recorded times, nothing is proven.
+    const c = current().map((r) =>
+      r.productId === 'p-ms' ? { ...r, price: 104, effectiveFrom: '2026-10-15T00:30:00.000Z' } : r,
+    );
+    expect(withRecordedCurrentPrice(c, answer(), undefined)).toBe(c);
+  });
+
+  it('a stale history cache cannot let an older answer replace a newer current price', () => {
+    // History predates the cached current price (₹104 from 16 Oct); the answer
+    // is newer than that history but older than the current price.
+    const c = current().map((r) =>
+      r.productId === 'p-ms' ? { ...r, price: 104, effectiveFrom: '2026-10-16T00:30:00.000Z' } : r,
+    );
+    expect(withRecordedCurrentPrice(c, answer(), history())).toBe(c);
+  });
+
+  it('an equal effective time is proven by the matching history entry’s recorded time', () => {
+    const same = answer({ effectiveFrom: '2026-10-10T00:30:00.000Z' });
+    expect(apply(same).current[0].price).toBe(103.1);
+    const earlier = answer({
+      effectiveFrom: '2026-10-10T00:30:00.000Z',
+      createdAt: '2026-10-10T00:10:00.000Z',
+    });
+    const c = current();
+    expect(apply(earlier, c).current).toBe(c);
+  });
+
+  it('a future-dated price is current at once, as on the server (#619)', () => {
+    const future = answer({ effectiveFrom: '2027-01-01T00:30:00.000Z' });
+    expect(apply(future).current[0]).toMatchObject({
+      price: 103.1,
+      effectiveFrom: '2027-01-01T00:30:00.000Z',
+    });
   });
 });

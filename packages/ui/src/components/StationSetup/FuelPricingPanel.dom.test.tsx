@@ -25,7 +25,7 @@ vi.mock('../../services/cloud.js', async (importOriginal) => {
   };
 });
 
-const { queryKeys } = await import('../../query/hooks.js');
+const { FUEL_PRICE_TIMEOUT_MS, queryKeys } = await import('../../query/hooks.js');
 const { FuelPricingPanel } = await import('./FuelPricingPanel.js');
 
 /** Pricing › Fuels as cards (#605): price, effective from, last change, Change price. */
@@ -33,6 +33,7 @@ const { FuelPricingPanel } = await import('./FuelPricingPanel.js');
 afterEach(() => {
   cleanup();
   recordPricing.mockReset();
+  vi.useRealTimers();
 });
 
 const station = {
@@ -126,7 +127,8 @@ describe('changing a price (#606)', () => {
 
     await waitFor(() => expect(within(card('Petrol')).getByText('Saving…')).toBeTruthy());
     expect(card('Petrol').textContent).not.toMatch('₹102.50/L');
-    expect(recordPricing.mock.calls[0][1]).toEqual({ idempotencyKey: expect.any(String) });
+    expect(recordPricing.mock.calls[0][1]).toMatchObject({ idempotencyKey: expect.any(String) });
+    expect(recordPricing.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
 
     answer({
       id: 'h3',
@@ -160,6 +162,105 @@ describe('changing a price (#606)', () => {
         'Not saved: Rate must be positive. Use Change price to try again.',
       );
       expect(card('Petrol').textContent).toMatch('₹102.50/L');
+    } finally {
+      restore();
+    }
+  });
+
+  /** Opens the drawer on Petrol, rate and effective time as given, and applies. */
+  const rateInput = () => screen.getByPlaceholderText('e.g. 96.43') as HTMLInputElement;
+  const whenInput = () =>
+    document.querySelector('input[type="datetime-local"]') as HTMLInputElement;
+
+  it('after an unknown outcome, Try again reopens on the same body and reuses the key', async () => {
+    const restore = muteExpectedConsoleErrors([/Network error/]);
+    try {
+      recordPricing.mockRejectedValueOnce(
+        Object.assign(new Error('Network error'), { code: 'NETWORK' }),
+      );
+      setup();
+      fireEvent.click(
+        within(card('Petrol')).getByRole('button', { name: 'Change price of Petrol' }),
+      );
+      fireEvent.change(rateInput(), { target: { value: '103.10' } });
+      fireEvent.change(whenInput(), { target: { value: '2026-10-15T06:00' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Apply new rate' }));
+
+      const alert = await within(card('Petrol')).findByRole('alert');
+      expect(alert.textContent).toContain("Couldn't confirm the new rate.");
+      const [firstBody, firstOpts] = recordPricing.mock.calls[0];
+
+      recordPricing.mockReturnValue(new Promise(() => {}));
+      fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }));
+      // The attempt, exactly: not a blank rate or a new "now".
+      expect(rateInput().value).toBe('103.1');
+      expect(whenInput().value).toBe('2026-10-15T06:00');
+      fireEvent.click(screen.getByRole('button', { name: 'Apply new rate' }));
+
+      await waitFor(() => expect(recordPricing).toHaveBeenCalledTimes(2));
+      const [secondBody, secondOpts] = recordPricing.mock.calls[1];
+      expect(secondBody).toEqual(firstBody);
+      expect(secondOpts.idempotencyKey).toBe(firstOpts.idempotencyKey);
+    } finally {
+      restore();
+    }
+  });
+
+  it('after a decided refusal, Change price starts fresh', async () => {
+    const restore = muteExpectedConsoleErrors([/Rate must be positive/]);
+    try {
+      recordPricing.mockRejectedValueOnce(
+        Object.assign(new Error('Rate must be positive'), { status: 400 }),
+      );
+      setup();
+      change('103.10');
+      await within(card('Petrol')).findByRole('alert');
+
+      fireEvent.click(
+        within(card('Petrol')).getByRole('button', { name: 'Change price of Petrol' }),
+      );
+      expect(rateInput().value).toBe('');
+    } finally {
+      restore();
+    }
+  });
+
+  it('a hung change times out as unconfirmed, and Try again reuses the key', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    recordPricing.mockImplementation(
+      (_body: unknown, opts: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          opts.signal?.addEventListener('abort', () =>
+            reject(Object.assign(new Error('Network error'), { code: 'NETWORK' })),
+          );
+        }),
+    );
+    const restore = muteExpectedConsoleErrors([/Network error/]);
+    try {
+      setup();
+      change('103.10');
+      await waitFor(() => expect(within(card('Petrol')).getByText('Saving…')).toBeTruthy());
+
+      await vi.advanceTimersByTimeAsync(FUEL_PRICE_TIMEOUT_MS + 1);
+
+      const alert = await within(card('Petrol')).findByRole('alert');
+      expect(alert.textContent).toContain("Couldn't confirm the new rate.");
+      expect(within(card('Petrol')).queryByText('Saving…')).toBeNull();
+      expect(
+        (
+          within(card('Petrol')).getByRole('button', {
+            name: 'Change price of Petrol',
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false);
+
+      fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Apply new rate' }));
+      await waitFor(() => expect(recordPricing).toHaveBeenCalledTimes(2));
+      expect(recordPricing.mock.calls[1][0]).toEqual(recordPricing.mock.calls[0][0]);
+      expect(recordPricing.mock.calls[1][1].idempotencyKey).toBe(
+        recordPricing.mock.calls[0][1].idempotencyKey,
+      );
     } finally {
       restore();
     }

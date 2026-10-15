@@ -5,7 +5,8 @@ import { schema, type DbClient } from '@pump/db';
  * The one order of a station's fuel prices, latest first (#537 review):
  * effective time, then when it was recorded, then id. Two prices effective at
  * the same moment always resolve the same way, so the price Pricing shows as
- * current is the price shift close sells at.
+ * current is the price shift close sells at. The client orders the same way
+ * with `compareFuelPricesNewestFirst` (@pump/shared); change both together.
  */
 export const fuelPricesNewestFirst = () => [
   desc(schema.fuelPrices.effectiveFrom),

@@ -1,5 +1,6 @@
-import { localToInstant } from '@pump/shared';
+import { compareFuelPricesNewestFirst, localToInstant } from '@pump/shared';
 import { toPaise } from '../../utils/ledgerWindow.js';
+import { unknownOutcome } from '../../office-records/submitKeys.js';
 
 /**
  * Pricing › Fuels (#537): one row per fuel, built from the current prices and
@@ -48,17 +49,13 @@ export function priceChange(from: number | string, to: number | string) {
   };
 }
 
-const time = (iso: string | null | undefined): number => (iso ? new Date(iso).getTime() : 0);
-
 /**
- * Latest first: by effective time, then by when it was recorded, then by id:
- * the API's order (`fuelPricesNewestFirst`), so two prices effective at the
- * same moment read the same here as on the server.
+ * Latest first: the API's order (`compareFuelPricesNewestFirst`, shared with
+ * the SQL), so two prices effective at the same moment read the same here as
+ * on the server.
  */
 const newestFirst = (a: FuelPriceHistoryEntry, b: FuelPriceHistoryEntry): number =>
-  time(b.effectiveFrom) - time(a.effectiveFrom) ||
-  time(b.createdAt) - time(a.createdAt) ||
-  (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+  compareFuelPricesNewestFirst(a, b);
 
 /** Price history, the latest change first (a copy; the cache stays as served). */
 export function sortNewestFirst<T extends FuelPriceHistoryEntry>(entries: T[]): T[] {
@@ -113,11 +110,30 @@ export function stationInputToIso(value: string, timeZone: string): string {
   return new Date(localToInstant(date, hhmm.slice(0, 5), timeZone)).toISOString();
 }
 
+/** What a price change sent: the body a retry must send again (#606). */
+export interface FuelPriceAttempt {
+  stationId: string;
+  productId: string;
+  price: number;
+  effectiveFrom?: string | null;
+}
+
 /** A price change in flight or refused, as the card reads it (#606). */
 export interface FuelPriceWriteVars {
-  payload: { stationId: string; productId: string };
+  payload: FuelPriceAttempt;
 }
 
 /** A change of this station's prices, by fuel; null for another station's. */
 export const fuelPriceWriteKey = (v: FuelPriceWriteVars, stationId: string): string | null =>
   v.payload.stationId === stationId ? v.payload.productId : null;
+
+/**
+ * The attempt to restore when a fuel's last change has an unknown outcome
+ * (no answer, a timeout, a 5xx, a key conflict): its exact body, so a retry
+ * reuses its Idempotency-Key. A decided refusal (a 4xx) starts fresh: null.
+ */
+export function unconfirmedAttempt(
+  write: { state: 'saving' | 'failed'; error: unknown; variables: FuelPriceWriteVars } | undefined,
+): FuelPriceAttempt | null {
+  return write?.state === 'failed' && unknownOutcome(write.error) ? write.variables.payload : null;
+}

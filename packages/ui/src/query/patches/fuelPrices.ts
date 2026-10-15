@@ -1,3 +1,4 @@
+import { isProvablyNewerFuelPrice } from '@pump/shared';
 import {
   sortNewestFirst,
   type CurrentFuelPrice,
@@ -11,7 +12,8 @@ import {
  * Only what the server returned is written: the new price's id, price,
  * effective-from and created-at. The product's name and code come from the
  * cached current-price row (the same product). The card's "last change" is
- * not patched; it recomputes from the history with `priceChange`.
+ * not patched; it recomputes from the history with `priceChange`. Order is the
+ * server's (`compareFuelPricesNewestFirst`, @pump/shared).
  */
 
 /** What POST /setup/pricing answers. */
@@ -54,12 +56,20 @@ export function withRecordedPriceInHistory<T extends FuelPriceHistoryRow>(
 }
 
 /**
- * The product's current price, as the server picks it: the latest of its
- * prices in the history order. So a backdated change, or an answer that
- * arrives after a newer save of the same fuel (out of order), leaves the
- * current price alone. `history` must already hold the answer
- * (`withRecordedPriceInHistory`); without a cached history, an answer is
- * current only if it takes effect at or after the cached current price.
+ * The product's current price, replaced by the answer only when the cache
+ * proves the server now reads the answer as current (#606 review): it must be
+ * provably later, in the server's order (`isProvablyNewerFuelPrice`), than
+ * both the cached current price and the latest cached history entry of the
+ * product. The cached current price is known by its effective time, plus the
+ * recorded time and id of the history entry that matches it, when one does.
+ * Anything unproven (an equal-time replay with no history, a stale history, a
+ * backdated or out-of-order answer) is left to the refetch.
+ *
+ * A future-dated price is current on the server at once (#619 tracks that),
+ * so it is current here too.
+ *
+ * `history` is the cached history *before* the answer joined it, or undefined
+ * when none is cached.
  */
 export function withRecordedCurrentPrice<T extends CurrentFuelPrice>(
   current: T[],
@@ -69,16 +79,22 @@ export function withRecordedCurrentPrice<T extends CurrentFuelPrice>(
   const at = current.findIndex((c) => c.productId === answer.productId);
   if (at < 0) return current;
   const row = current[at];
-  const latest = history
-    ? sortNewestFirst(history.filter((h) => h.productId === answer.productId))[0]
-    : undefined;
-  const isCurrent = history
-    ? latest?.id === answer.id
-    : !row.effectiveFrom || Date.parse(answer.effectiveFrom) >= Date.parse(row.effectiveFrom);
-  if (!isCurrent) return current;
-  const price = Number(answer.price);
-  if (Number(row.price) === price && row.effectiveFrom === answer.effectiveFrom) return current;
+  const mine = sortNewestFirst(
+    (history ?? []).filter((h) => h.productId === answer.productId && h.id !== answer.id),
+  );
+  const key = { id: answer.id, effectiveFrom: answer.effectiveFrom, createdAt: answer.createdAt };
+  if (row.effectiveFrom) {
+    // The history entry that is the cached current price, if the history holds it.
+    const matched = mine.find(
+      (h) => h.effectiveFrom === row.effectiveFrom && Number(h.price) === Number(row.price),
+    );
+    const known = matched
+      ? { effectiveFrom: matched.effectiveFrom, createdAt: matched.createdAt, id: matched.id }
+      : { effectiveFrom: row.effectiveFrom };
+    if (!isProvablyNewerFuelPrice(key, known)) return current;
+  }
+  if (mine[0] && !isProvablyNewerFuelPrice(key, mine[0])) return current;
   const next = [...current];
-  next[at] = { ...row, price, effectiveFrom: answer.effectiveFrom };
+  next[at] = { ...row, price: Number(answer.price), effectiveFrom: answer.effectiveFrom };
   return next;
 }

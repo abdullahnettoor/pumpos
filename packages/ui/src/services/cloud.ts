@@ -1819,11 +1819,13 @@ export class CloudPricingService {
       price: number;
       effectiveFrom?: string | null;
     },
-    opts?: { idempotencyKey?: string },
+    opts?: { idempotencyKey?: string; signal?: AbortSignal },
   ): Promise<any> {
+    // `signal` bounds the wait (#606): an aborted request reads as a network
+    // failure, an unknown outcome, so the caller keeps its Idempotency-Key.
     return request<any>(
       '/setup/pricing',
-      { method: 'POST', body: JSON.stringify(payload) },
+      { method: 'POST', body: JSON.stringify(payload), signal: opts?.signal },
       { idempotencyKey: opts?.idempotencyKey },
     );
   }

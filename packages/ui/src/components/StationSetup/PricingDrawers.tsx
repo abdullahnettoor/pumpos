@@ -8,7 +8,12 @@ import { queryKeys, useRecordFuelPrice } from '../../query/hooks.js';
 import { formatMoney } from '../../utils/format.js';
 import { Button, Form } from '../../pump-ds/index.js';
 import { useRefreshTask, useRunTask } from '../../utils/runTask.js';
-import { stationDateTimeInput, stationInputToIso, type FuelPriceRow } from './fuelPriceRows.js';
+import {
+  stationDateTimeInput,
+  stationInputToIso,
+  type FuelPriceAttempt,
+  type FuelPriceRow,
+} from './fuelPriceRows.js';
 import { useKeyedSave } from '../../office-records/useKeyedSave.js';
 
 const productService = new CloudProductService();
@@ -41,19 +46,28 @@ export const ChangePriceDrawer: React.FC<{
   timeZone: string;
   fuels: FuelPriceRow[];
   initial: FuelPriceRow;
+  /**
+   * An attempt whose outcome is unknown (#606 review): the drawer reopens on
+   * its exact rate and effective time, so saving again sends the same body
+   * under the same Idempotency-Key and cannot record the change twice.
+   */
+  attempt?: FuelPriceAttempt | null;
   onClose: () => void;
-}> = ({ stationId, timeZone, fuels, initial, onClose }) => {
+}> = ({ stationId, timeZone, fuels, initial, attempt, onClose }) => {
   const toast = useToast();
   const refresh = useRefreshTask();
   const qc = useQueryClient();
   const record = useRecordFuelPrice();
   // Mounted per open: one session per price change.
   const save = useKeyedSave(`setup:pricing:${stationId}`);
-  const [productId, setProductId] = useState(initial.productId);
-  const [price, setPrice] = useState('');
+  const [productId, setProductId] = useState(attempt?.productId ?? initial.productId);
+  const [price, setPrice] = useState(attempt ? String(attempt.price) : '');
   // Computed once on open, so a re-render never fights the operator's edit.
   const [effectiveFrom, setEffectiveFrom] = useState(() =>
-    stationDateTimeInput(new Date(), timeZone),
+    stationDateTimeInput(
+      attempt?.effectiveFrom ? new Date(attempt.effectiveFrom) : new Date(),
+      timeZone,
+    ),
   );
   const fuel = fuels.find((f) => f.productId === productId) ?? initial;
 
