@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudStationService } from '../../services/cloud.js';
 import { queryKeys, useProducts, useStations } from '../../query/hooks.js';
@@ -22,13 +22,21 @@ import { PageFrame } from '../page-frame/index.js';
 import { ROUTES } from '../../nav-intent/routes.js';
 import { Field, TextInput, Select } from '../primitives/Field.js';
 import { useToast } from '../primitives/ToastProvider.js';
-import { LoadingSpinner } from '../LoadingSpinner.js';
-import { Panel, Button, EmptyState, Chip, Form } from '../../pump-ds/index.js';
+import {
+  Panel,
+  Button,
+  EmptyState,
+  Chip,
+  DataSection,
+  Form,
+  SectionHeader,
+} from '../../pump-ds/index.js';
 import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
 import { TankLevelSettingsPanel } from './TankLevelSettingsPanel.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { ReportTemplatesPanel } from '../reports/templates/ReportTemplatesPanel.js';
+import { useKeyedSave } from './useKeyedSave.js';
 
 const stationService = new CloudStationService();
 
@@ -65,17 +73,14 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
   const runTask = useRunTask();
   const [editing, setEditing] = useState(false);
   const [editingBusiness, setEditingBusiness] = useState(false);
-  const [activeTab, setActiveTab] = useState<
-    | 'general'
-    | 'business'
-    | 'rules'
-    | 'products'
-    | 'tanks'
-    | 'dispensers'
-    | 'terminals'
-    | 'shifts'
-    | 'report-templates'
-  >('general');
+  const [activeTab, setActiveTab] = useState<StationTab>('general');
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const saveStation = useKeyedSave(`station:${selectedStation?.id ?? 'none'}`);
+  /** Every station save sends one Idempotency-Key per logical submit (#537). */
+  const updateStation = (id: string, body: unknown) =>
+    saveStation({ id, body }, (idempotencyKey) =>
+      stationService.updateStation(id, body, { idempotencyKey }),
+    );
 
   // General tab form states
   const [name, setName] = useState(selectedStation?.name ?? '');
@@ -157,7 +162,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     if (!selectedStation) return;
 
     try {
-      const updated = await stationService.updateStation(selectedStation.id, {
+      const updated = await updateStation(selectedStation.id, {
         name,
         code: code.toUpperCase(),
         address,
@@ -187,7 +192,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     if (!selectedStation) return;
 
     try {
-      const updated = await stationService.updateStation(selectedStation.id, {
+      const updated = await updateStation(selectedStation.id, {
         settings: {
           ...(selectedStation.settings || {}),
           legal: {
@@ -220,7 +225,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
       return;
     }
     try {
-      const updated = await stationService.updateStation(selectedStation.id, {
+      const updated = await updateStation(selectedStation.id, {
         settings: {
           ...(selectedStation.settings || {}),
           ...parsed.data,
@@ -242,7 +247,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
   const handleSaveTankLevels = async (tankLevels: TankLevelSettings) => {
     if (!selectedStation) return;
     try {
-      const updated = await stationService.updateStation(selectedStation.id, {
+      const updated = await updateStation(selectedStation.id, {
         settings: { ...(selectedStation.settings || {}), [TANK_LEVEL_SETTINGS_KEY]: tankLevels },
       });
       onStationSelected(updated);
@@ -255,41 +260,39 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
   };
 
   if (loading) {
-    return <LoadingSpinner text="Loading station overview..." />;
+    // The page frame stands while the station list loads; the section waits.
+    return (
+      <PageFrame route={ROUTES.station} subtitle={SUBTITLE}>
+        <DataSection title="station" query={stationsQ} placeholderHeight={240}>
+          {null}
+        </DataSection>
+      </PageFrame>
+    );
   }
+
+  const canRules = userRole === 'Owner' || userRole === 'Manager';
+  const fuelProducts = (productsQ.data ?? []).filter((product) => product.productType === 'FUEL');
 
   return (
     <PageFrame
       route={ROUTES.station}
-      subtitle="Review and modify station components, products, tanks, nozzles, and settings."
+      subtitle={SUBTITLE}
       tabs={
         selectedStation ? (
           <Tabs
             id="station-setup"
             aria-label="Station setup"
             activeId={activeTab}
-            onChange={(id) => setActiveTab(id as any)}
+            onChange={(id) => setActiveTab(id as StationTab)}
             tabs={[
               { id: 'general', label: 'General', concept: 'general' },
               { id: 'business', label: 'Branding', concept: 'branding' },
               { id: 'products', label: 'Products', concept: 'products' },
               { id: 'tanks', label: 'Tanks', concept: 'tanks' },
-              {
-                id: 'dispensers',
-                label: 'Dispensers',
-                concept: 'dispensers',
-              },
-              {
-                id: 'terminals',
-                label: 'Payment terminals',
-                concept: 'payment-terminals',
-              },
-              {
-                id: 'shifts',
-                label: 'Shift templates',
-                concept: 'shift-templates',
-              },
-              ...(userRole === 'Owner' || userRole === 'Manager'
+              { id: 'dispensers', label: 'Dispensers', concept: 'dispensers' },
+              { id: 'terminals', label: 'Payment terminals', concept: 'payment-terminals' },
+              { id: 'shifts', label: 'Shift templates', concept: 'shift-templates' },
+              ...(canRules
                 ? [{ id: 'rules', label: 'Rules', concept: 'rules' } satisfies TabItem]
                 : []),
               ...(canManageReportTemplates(userRole)
@@ -307,667 +310,323 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
       }
     >
       {selectedStation ? (
-        <div
-          {...tabPanelProps('station-setup', activeTab)}
-          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-        >
+        <div {...tabPanelProps('station-setup', activeTab)} className="flex flex-col gap-6">
           {/* Report templates carry their own panels (moved from Reports, #540). */}
           {activeTab === 'report-templates' && canManageReportTemplates(userRole) && (
             <ReportTemplatesPanel selectedStation={selectedStation} />
           )}
 
-          {/* Tab Content Panels */}
-          {activeTab !== 'report-templates' && (
-            <Panel style={{ minHeight: '350px' }}>
-              {activeTab === 'general' && (
-                <div>
-                  {editing ? (
-                    <Form
-                      onSubmit={handleSaveGeneral}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '12px',
-                        maxWidth: '600px',
-                      }}
-                    >
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        <Field label="Station Name" required>
-                          <TextInput
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            required
-                          />
-                        </Field>
-                        <Field label="Station Code" required>
-                          <TextInput
-                            value={code}
-                            onChange={(e) => setCode(e.target.value)}
-                            required
-                          />
-                        </Field>
-                      </div>
-
-                      <Field label="Physical Address">
-                        <TextInput value={address} onChange={(e) => setAddress(e.target.value)} />
+          {activeTab === 'general' && (
+            <section className="flex flex-col gap-2">
+              <SectionHeader
+                title="Station details"
+                controls={
+                  editing
+                    ? undefined
+                    : {
+                        actions: (
+                          <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
+                            Edit details
+                          </Button>
+                        ),
+                      }
+                }
+              />
+              <Panel>
+                {editing ? (
+                  <Form onSubmit={handleSaveGeneral} className="flex max-w-[600px] flex-col gap-1">
+                    <div className="grid grid-cols-2 gap-x-4">
+                      <Field label="Station name" required>
+                        <TextInput
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          required
+                        />
                       </Field>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        <Field label="Contact Phone">
-                          <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} />
-                        </Field>
-                        <Field label="Shift Grace Period (Minutes)">
-                          <TextInput
-                            type="number"
-                            min="0"
-                            className="mono-num"
-                            value={graceMinutes}
-                            onChange={(e) => setGraceMinutes(parseInt(e.target.value))}
-                          />
-                        </Field>
-                      </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        <Field
-                          label="Timezone"
-                          hint="Used to decide which calendar day operations belong to."
-                        >
-                          <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-                            <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
-                            <option value="Asia/Dubai">Asia/Dubai (GST)</option>
-                            <option value="Asia/Colombo">Asia/Colombo</option>
-                            <option value="Asia/Kathmandu">Asia/Kathmandu</option>
-                            <option value="Asia/Dhaka">Asia/Dhaka</option>
-                            <option value="UTC">UTC</option>
-                          </Select>
-                        </Field>
-                        <Field
-                          label="Business Day Starts At"
-                          hint="A fuel day commonly runs 06:00 → 06:00. Activity before this rolls to the previous day."
-                        >
-                          <TextInput
-                            type="time"
-                            className="mono-num"
-                            value={businessDayStartsAt}
-                            onChange={(e) => setBusinessDayStartsAt(e.target.value)}
-                          />
-                        </Field>
-                      </div>
-
-                      <Field label="Onboarding Readiness Status" style={{ maxWidth: '300px' }}>
-                        <Select
-                          value={onboardingStatus}
-                          onChange={(e) => setOnboardingStatus(e.target.value)}
-                        >
-                          <option value="NOT_STARTED">NOT STARTED</option>
-                          <option value="IN_PROGRESS">IN PROGRESS</option>
-                          <option value="READY_FOR_OPERATIONS">READY FOR OPERATIONS</option>
+                      <Field label="Station code" required>
+                        <TextInput
+                          value={code}
+                          onChange={(e) => setCode(e.target.value)}
+                          required
+                        />
+                      </Field>
+                    </div>
+                    <Field label="Address">
+                      <TextInput value={address} onChange={(e) => setAddress(e.target.value)} />
+                    </Field>
+                    <div className="grid grid-cols-2 gap-x-4">
+                      <Field label="Contact phone">
+                        <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} />
+                      </Field>
+                      <Field label="Shift grace period (minutes)">
+                        <TextInput
+                          type="number"
+                          min="0"
+                          className="mono-num"
+                          value={graceMinutes}
+                          onChange={(e) => setGraceMinutes(parseInt(e.target.value))}
+                        />
+                      </Field>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4">
+                      <Field
+                        label="Timezone"
+                        hint="Used to decide which calendar day operations belong to."
+                      >
+                        <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+                          <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                          <option value="Asia/Dubai">Asia/Dubai (GST)</option>
+                          <option value="Asia/Colombo">Asia/Colombo</option>
+                          <option value="Asia/Kathmandu">Asia/Kathmandu</option>
+                          <option value="Asia/Dhaka">Asia/Dhaka</option>
+                          <option value="UTC">UTC</option>
                         </Select>
                       </Field>
-
-                      <div
-                        style={{
-                          display: 'flex',
-                          gap: '8px',
-                          justifyContent: 'flex-end',
-                          marginTop: '12px',
-                          borderTop: '1px solid var(--border-soft)',
-                          paddingTop: '12px',
-                        }}
+                      <Field
+                        label="Business day starts at"
+                        hint="A fuel day commonly runs 06:00 → 06:00. Activity before this rolls to the previous day."
                       >
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setEditing(false)}
-                        >
-                          Cancel
-                        </Button>
-                        <Button type="submit" variant="primary" size="sm">
-                          Save Configuration
-                        </Button>
-                      </div>
-                    </Form>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <div>
-                          <h3
-                            style={{
-                              fontSize: '15px',
-                              fontWeight: 600,
-                              color: 'var(--text-strong)',
-                            }}
-                          >
-                            {selectedStation.name}
-                          </h3>
-                          <p
-                            style={{
-                              fontSize: '12px',
-                              color: 'var(--text-muted)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              marginTop: '4px',
-                            }}
-                          >
-                            Status:
-                            <Chip
-                              tone={
-                                onboardingStatus === 'READY_FOR_OPERATIONS' ? 'success' : 'warning'
-                              }
-                              size="sm"
-                            >
-                              {onboardingStatus.replace(/_/g, ' ')}
-                            </Chip>
-                          </p>
-                        </div>
-                        <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
-                          Edit General Parameters
-                        </Button>
-                      </div>
-
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                          gap: '16px',
-                          borderTop: '1px solid var(--border-soft)',
-                          paddingTop: '16px',
-                        }}
-                      >
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              fontWeight: 600,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.05em',
-                            }}
-                          >
-                            Location Code
-                          </span>
-                          <p
-                            style={{
-                              fontSize: '14px',
-                              fontWeight: 600,
-                              marginTop: '4px',
-                              color: 'var(--text-strong)',
-                              fontFamily: 'var(--font-mono)',
-                            }}
-                          >
-                            {selectedStation.code}
-                          </p>
-                        </div>
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              fontWeight: 600,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.05em',
-                            }}
-                          >
-                            Contact
-                          </span>
-                          <p
-                            style={{
-                              fontSize: '13px',
-                              fontWeight: 500,
-                              marginTop: '4px',
-                              color: 'var(--text-default)',
-                            }}
-                          >
-                            {selectedStation.phone || '—'}
-                          </p>
-                        </div>
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              fontWeight: 600,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.05em',
-                            }}
-                          >
-                            Grace Period
-                          </span>
-                          <p
-                            style={{
-                              fontSize: '13px',
-                              fontWeight: 500,
-                              marginTop: '4px',
-                              color: 'var(--text-default)',
-                              fontFamily: 'var(--font-mono)',
-                            }}
-                          >
-                            {selectedStation.settings?.shift_grace_minutes || 15} min
-                          </p>
-                        </div>
-                        <div style={{ gridColumn: 'span 2' }}>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              fontWeight: 600,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.05em',
-                            }}
-                          >
-                            Address
-                          </span>
-                          <p
-                            style={{
-                              fontSize: '13px',
-                              fontWeight: 500,
-                              marginTop: '4px',
-                              color: 'var(--text-default)',
-                            }}
-                          >
-                            {selectedStation.address || '—'}
-                          </p>
-                        </div>
-                      </div>
+                        <TextInput
+                          type="time"
+                          className="mono-num"
+                          value={businessDayStartsAt}
+                          onChange={(e) => setBusinessDayStartsAt(e.target.value)}
+                        />
+                      </Field>
                     </div>
-                  )}
-                </div>
-              )}
-
-              {activeTab === 'business' && (
-                <div>
-                  {editingBusiness ? (
-                    <Form
-                      onSubmit={handleSaveBusiness}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '12px',
-                        maxWidth: '600px',
-                      }}
-                    >
-                      <div>
-                        <h3
-                          style={{
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            color: 'var(--text-strong)',
-                            marginBottom: '10px',
-                          }}
-                        >
-                          Legal &amp; Tax (Report Letterhead)
-                        </h3>
-                        <div
-                          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}
-                        >
-                          <Field label="Legal / Trade Name">
-                            <TextInput
-                              value={legalName}
-                              onChange={(e) => setLegalName(e.target.value)}
-                              placeholder="e.g. Sri Lakshmi Fuels"
-                            />
-                          </Field>
-                          <Field label="GSTIN">
-                            <TextInput
-                              className="mono-num"
-                              value={gstin}
-                              onChange={(e) => setGstin(e.target.value.toUpperCase())}
-                              placeholder="29ABCDE1234F1Z5"
-                              maxLength={15}
-                            />
-                          </Field>
-                          <Field label="State Code (place of supply)">
-                            <TextInput
-                              className="mono-num"
-                              value={stateCode}
-                              onChange={(e) => setStateCode(e.target.value)}
-                              placeholder="e.g. 29 (Karnataka)"
-                              maxLength={2}
-                            />
-                          </Field>
-                          <Field label="Retail Outlet / Dealer Code">
-                            <TextInput
-                              value={roCode}
-                              onChange={(e) => setRoCode(e.target.value)}
-                              placeholder="RO / dealership code"
-                            />
-                          </Field>
-                          <Field label="Address Line">
-                            <TextInput
-                              value={legalAddress}
-                              onChange={(e) => setLegalAddress(e.target.value)}
-                              placeholder="Street, area, city"
-                            />
-                          </Field>
-                          <Field label="Pincode">
-                            <TextInput
-                              className="mono-num"
-                              value={pincode}
-                              onChange={(e) => setPincode(e.target.value)}
-                              placeholder="560001"
-                              maxLength={6}
-                            />
-                          </Field>
-                        </div>
-                      </div>
-
-                      <div
-                        style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}
+                    <Field label="Onboarding status" className="max-w-[300px]">
+                      <Select
+                        value={onboardingStatus}
+                        onChange={(e) => setOnboardingStatus(e.target.value)}
                       >
-                        <h3
-                          style={{
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            color: 'var(--text-strong)',
-                            marginBottom: '10px',
-                          }}
-                        >
-                          Branding
-                        </h3>
-                        <div
-                          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}
-                        >
-                          <Field label="Fuel Company / Brand">
-                            <Select
-                              value={fuelBrand}
-                              onChange={(e) => setFuelBrand(e.target.value)}
-                            >
-                              <option value="">— Select —</option>
-                              <option value="Indian Oil">Indian Oil (IOCL)</option>
-                              <option value="Bharat Petroleum">Bharat Petroleum (BPCL)</option>
-                              <option value="Hindustan Petroleum">
-                                Hindustan Petroleum (HPCL)
-                              </option>
-                              <option value="Nayara Energy">Nayara Energy</option>
-                              <option value="Jio-bp">Jio-bp (Reliance)</option>
-                              <option value="Shell">Shell</option>
-                              <option value="Other">Other</option>
-                            </Select>
-                          </Field>
-                          <Field
-                            label="Logo (optional, your own)"
-                            hint="Upload your outlet's own logo. Used on report letterheads."
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              {logoDataUrl && (
-                                <img
-                                  src={logoDataUrl}
-                                  alt="logo"
-                                  style={{
-                                    width: 36,
-                                    height: 36,
-                                    objectFit: 'contain',
-                                    border: '1px solid var(--border-soft)',
-                                    borderRadius: 4,
-                                  }}
-                                />
-                              )}
-                              <input
-                                type="file"
-                                accept="image/png,image/jpeg"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (!file) return;
-                                  const reader = new FileReader();
-                                  reader.onload = () =>
-                                    setLogoDataUrl(
-                                      typeof reader.result === 'string' ? reader.result : null,
-                                    );
-                                  reader.readAsDataURL(file);
-                                }}
-                                style={{ fontSize: '12px' }}
-                              />
-                              {logoDataUrl && (
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  size="xs"
-                                  onClick={() => setLogoDataUrl(null)}
-                                >
-                                  Remove
-                                </Button>
-                              )}
-                            </div>
-                          </Field>
-                        </div>
-                      </div>
-
-                      <div
-                        style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}
-                      >
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          Report paper size and which sections print on each report are set in{' '}
-                          <strong>Station → Report templates</strong>.
-                        </span>
-                      </div>
-
-                      <div
-                        style={{
-                          display: 'flex',
-                          gap: '8px',
-                          justifyContent: 'flex-end',
-                          marginTop: '12px',
-                          borderTop: '1px solid var(--border-soft)',
-                          paddingTop: '12px',
-                        }}
-                      >
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setEditingBusiness(false)}
-                        >
-                          Cancel
-                        </Button>
-                        <Button type="submit" variant="primary" size="sm">
-                          Save Configuration
-                        </Button>
-                      </div>
-                    </Form>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <div>
-                          <h3
-                            style={{
-                              fontSize: '15px',
-                              fontWeight: 600,
-                              color: 'var(--text-strong)',
-                            }}
-                          >
-                            Business, Tax &amp; Branding
-                          </h3>
-                          <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            Legal identity and letterhead used across reports and invoices.
-                          </p>
-                        </div>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setEditingBusiness(true)}
-                        >
-                          Edit Business Details
-                        </Button>
-                      </div>
-
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                          gap: '16px',
-                          borderTop: '1px solid var(--border-soft)',
-                          paddingTop: '16px',
-                        }}
-                      >
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              fontWeight: 600,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.05em',
-                            }}
-                          >
-                            Legal Name
-                          </span>
-                          <p
-                            style={{
-                              fontSize: '13px',
-                              fontWeight: 500,
-                              marginTop: '4px',
-                              color: 'var(--text-default)',
-                            }}
-                          >
-                            {legalName || '—'}
-                          </p>
-                        </div>
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              fontWeight: 600,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.05em',
-                            }}
-                          >
-                            GSTIN
-                          </span>
-                          <p
-                            style={{
-                              fontSize: '13px',
-                              fontWeight: 500,
-                              marginTop: '4px',
-                              color: 'var(--text-default)',
-                              fontFamily: 'var(--font-mono)',
-                            }}
-                          >
-                            {gstin || '—'}
-                          </p>
-                        </div>
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              fontWeight: 600,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.05em',
-                            }}
-                          >
-                            State Code
-                          </span>
-                          <p
-                            style={{
-                              fontSize: '13px',
-                              fontWeight: 500,
-                              marginTop: '4px',
-                              color: 'var(--text-default)',
-                              fontFamily: 'var(--font-mono)',
-                            }}
-                          >
-                            {stateCode || '—'}
-                          </p>
-                        </div>
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              fontWeight: 600,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.05em',
-                            }}
-                          >
-                            Fuel Brand
-                          </span>
-                          <p
-                            style={{
-                              fontSize: '13px',
-                              fontWeight: 500,
-                              marginTop: '4px',
-                              color: 'var(--text-default)',
-                            }}
-                          >
-                            {fuelBrand || '—'}
-                          </p>
-                        </div>
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              fontWeight: 600,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.05em',
-                            }}
-                          >
-                            Logo
-                          </span>
-                          <p
-                            style={{
-                              fontSize: '13px',
-                              fontWeight: 500,
-                              marginTop: '4px',
-                              color: 'var(--text-default)',
-                            }}
-                          >
-                            {logoDataUrl ? 'Uploaded' : '—'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {activeTab === 'rules' && (userRole === 'Owner' || userRole === 'Manager') && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  {/* Tank levels sit above the decantation tolerances (Station › Rules, #520). */}
-                  <TankLevelSettingsPanel
-                    key={selectedStation.id}
-                    value={resolveTankLevelSettings(selectedStation.settings)}
-                    canEdit={canManageTankLevels(userRole)}
-                    onSave={handleSaveTankLevels}
+                        <option value="NOT_STARTED">Not started</option>
+                        <option value="IN_PROGRESS">In progress</option>
+                        <option value="READY_FOR_OPERATIONS">Ready for operations</option>
+                      </Select>
+                    </Field>
+                    <FormActions onCancel={() => setEditing(false)} />
+                  </Form>
+                ) : (
+                  <DetailList
+                    items={[
+                      { label: 'Name', value: selectedStation.name },
+                      {
+                        label: 'Onboarding',
+                        value: (
+                          <Chip tone={onboardingTone(onboardingStatus)} size="sm">
+                            {onboardingLabel(onboardingStatus)}
+                          </Chip>
+                        ),
+                      },
+                      { label: 'Station code', value: selectedStation.code, mono: true },
+                      { label: 'Contact', value: selectedStation.phone },
+                      {
+                        label: 'Grace period',
+                        value: `${selectedStation.settings?.shift_grace_minutes || 15} min`,
+                        mono: true,
+                      },
+                      { label: 'Timezone', value: selectedStation.settings?.timezone },
+                      {
+                        label: 'Business day starts',
+                        value: selectedStation.settings?.business_day_starts_at,
+                        mono: true,
+                      },
+                      { label: 'Address', value: selectedStation.address, wide: true },
+                    ]}
                   />
-                  <div style={{ borderTop: '1px solid var(--border-soft)' }} />
+                )}
+              </Panel>
+            </section>
+          )}
+
+          {activeTab === 'business' && (
+            <section className="flex flex-col gap-2">
+              <SectionHeader
+                title="Business, tax and branding"
+                subtitle="The letterhead on reports and invoices"
+                controls={
+                  editingBusiness
+                    ? undefined
+                    : {
+                        actions: (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setEditingBusiness(true)}
+                          >
+                            Edit business details
+                          </Button>
+                        ),
+                      }
+                }
+              />
+              <Panel>
+                {editingBusiness ? (
+                  <Form onSubmit={handleSaveBusiness} className="flex max-w-[600px] flex-col gap-3">
+                    <h3 className="text-[12px] font-semibold text-ink-strong">
+                      Legal and tax (report letterhead)
+                    </h3>
+                    <div className="grid grid-cols-2 gap-x-4">
+                      <Field label="Legal / trade name">
+                        <TextInput
+                          value={legalName}
+                          onChange={(e) => setLegalName(e.target.value)}
+                          placeholder="e.g. Sri Lakshmi Fuels"
+                        />
+                      </Field>
+                      <Field label="GSTIN">
+                        <TextInput
+                          className="mono-num"
+                          value={gstin}
+                          onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                          placeholder="29ABCDE1234F1Z5"
+                          maxLength={15}
+                        />
+                      </Field>
+                      <Field label="State code (place of supply)">
+                        <TextInput
+                          className="mono-num"
+                          value={stateCode}
+                          onChange={(e) => setStateCode(e.target.value)}
+                          placeholder="e.g. 29 (Karnataka)"
+                          maxLength={2}
+                        />
+                      </Field>
+                      <Field label="Retail outlet / dealer code">
+                        <TextInput
+                          value={roCode}
+                          onChange={(e) => setRoCode(e.target.value)}
+                          placeholder="RO / dealership code"
+                        />
+                      </Field>
+                      <Field label="Address line">
+                        <TextInput
+                          value={legalAddress}
+                          onChange={(e) => setLegalAddress(e.target.value)}
+                          placeholder="Street, area, city"
+                        />
+                      </Field>
+                      <Field label="Pincode">
+                        <TextInput
+                          className="mono-num"
+                          value={pincode}
+                          onChange={(e) => setPincode(e.target.value)}
+                          placeholder="560001"
+                          maxLength={6}
+                        />
+                      </Field>
+                    </div>
+
+                    <h3 className="border-t border-border-soft pt-3 text-[12px] font-semibold text-ink-strong">
+                      Branding
+                    </h3>
+                    <div className="grid grid-cols-2 gap-x-4">
+                      <Field label="Fuel company / brand">
+                        <Select value={fuelBrand} onChange={(e) => setFuelBrand(e.target.value)}>
+                          <option value="">— Select —</option>
+                          <option value="Indian Oil">Indian Oil (IOCL)</option>
+                          <option value="Bharat Petroleum">Bharat Petroleum (BPCL)</option>
+                          <option value="Hindustan Petroleum">Hindustan Petroleum (HPCL)</option>
+                          <option value="Nayara Energy">Nayara Energy</option>
+                          <option value="Jio-bp">Jio-bp (Reliance)</option>
+                          <option value="Shell">Shell</option>
+                          <option value="Other">Other</option>
+                        </Select>
+                      </Field>
+                      <Field
+                        label="Logo (optional, your own)"
+                        hint="Upload your outlet's own logo. Used on report letterheads."
+                      >
+                        <div className="flex items-center gap-2.5">
+                          {logoDataUrl && (
+                            <img
+                              src={logoDataUrl}
+                              alt="logo"
+                              className="size-9 rounded border border-border-soft object-contain"
+                            />
+                          )}
+                          <input
+                            type="file"
+                            aria-label="Logo file"
+                            accept="image/png,image/jpeg"
+                            className="sr-only"
+                            ref={logoInputRef}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = () =>
+                                setLogoDataUrl(
+                                  typeof reader.result === 'string' ? reader.result : null,
+                                );
+                              reader.readAsDataURL(file);
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="xs"
+                            onClick={() => logoInputRef.current?.click()}
+                          >
+                            {logoDataUrl ? 'Replace' : 'Upload logo'}
+                          </Button>
+                          {logoDataUrl && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => setLogoDataUrl(null)}
+                            >
+                              Remove
+                            </Button>
+                          )}
+                        </div>
+                      </Field>
+                    </div>
+                    <p className="text-[12px] text-ink-muted">
+                      Report paper size and which sections print on each report are set in Station ›
+                      Report templates.
+                    </p>
+                    <FormActions onCancel={() => setEditingBusiness(false)} />
+                  </Form>
+                ) : (
+                  <DetailList
+                    items={[
+                      { label: 'Legal name', value: legalName },
+                      { label: 'GSTIN', value: gstin, mono: true },
+                      { label: 'State code', value: stateCode, mono: true },
+                      { label: 'Dealer code', value: roCode },
+                      { label: 'Fuel brand', value: fuelBrand },
+                      { label: 'Logo', value: logoDataUrl ? 'Uploaded' : null },
+                      { label: 'Address', value: legalAddress, wide: true },
+                    ]}
+                  />
+                )}
+              </Panel>
+            </section>
+          )}
+
+          {activeTab === 'rules' && canRules && (
+            <>
+              {/* Tank levels sit above the decantation tolerances (Station › Rules, #520). */}
+              <TankLevelSettingsPanel
+                key={selectedStation.id}
+                value={resolveTankLevelSettings(selectedStation.settings)}
+                canEdit={canManageTankLevels(userRole)}
+                onSave={handleSaveTankLevels}
+              />
+              <section className="flex flex-col gap-2">
+                <SectionHeader
+                  title="Decantation guidance"
+                  subtitle="Flags readings for review; never blocks an operation"
+                />
+                <Panel>
                   <Form
                     onSubmit={handleSaveDecantation}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '16px',
-                      maxWidth: '760px',
-                    }}
+                    aria-label="Decantation guidance"
+                    className="flex max-w-[760px] flex-col gap-3"
                   >
-                    <div>
-                      <h3
-                        style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}
-                      >
-                        Decantation guidance
-                      </h3>
-                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                        These station values help flag readings for review. They never prevent an
-                        operation.
-                      </p>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div className="grid grid-cols-2 gap-x-4">
                       <Field
                         label="Density method"
                         hint="Used to convert observed density to 15 °C."
@@ -1065,106 +724,82 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                       </Field>
                     </div>
 
-                    <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
-                      <h4
-                        style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}
-                      >
+                    <div className="flex flex-col gap-2 border-t border-border-soft pt-3">
+                      <h3 className="text-[12px] font-semibold text-ink-strong">
                         Product density bands at 15 °C
-                      </h4>
-                      <p
-                        style={{
-                          fontSize: '12px',
-                          color: 'var(--text-muted)',
-                          marginTop: '4px',
-                          marginBottom: '10px',
-                        }}
-                      >
+                      </h3>
+                      <p className="text-[12px] text-ink-muted">
                         Optional product-specific bounds in kg/m³. Leave both fields blank for no
                         band.
                       </p>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {(productsQ.data ?? [])
-                          .filter((product) => product.productType === 'FUEL')
-                          .map((product) => {
-                            const band = decantationSettings.densitySpecBands[product.id] ?? {};
-                            return (
-                              <div
-                                key={product.id}
-                                style={{
-                                  display: 'grid',
-                                  gridTemplateColumns: 'minmax(180px, 1fr) 1fr 1fr',
-                                  gap: '12px',
-                                  alignItems: 'end',
-                                }}
-                              >
-                                <span style={{ fontSize: '13px', color: 'var(--text-default)' }}>
-                                  {product.name}
-                                </span>
-                                <Field label={`Minimum (kg/m³)`}>
-                                  <TextInput
-                                    type="number"
-                                    min="0"
-                                    step="0.1"
-                                    className="mono-num"
-                                    aria-label={`${product.name} minimum density`}
-                                    value={band.minKgM3 ?? ''}
-                                    onChange={(e) =>
-                                      setDensityBand(product.id, 'minKgM3', e.target.value)
-                                    }
-                                  />
-                                </Field>
-                                <Field label="Maximum (kg/m³)">
-                                  <TextInput
-                                    type="number"
-                                    min="0"
-                                    step="0.1"
-                                    className="mono-num"
-                                    aria-label={`${product.name} maximum density`}
-                                    value={band.maxKgM3 ?? ''}
-                                    onChange={(e) =>
-                                      setDensityBand(product.id, 'maxKgM3', e.target.value)
-                                    }
-                                  />
-                                </Field>
-                              </div>
-                            );
-                          })}
-                        {!productsQ.isLoading &&
-                          !(productsQ.data ?? []).some(
-                            (product) => product.productType === 'FUEL',
-                          ) && (
-                            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                              No fuel products are set up for this station.
-                            </p>
-                          )}
-                      </div>
+                      <DataSection
+                        title="fuel products"
+                        query={productsQ}
+                        placeholderHeight={80}
+                        shape="bare"
+                        isEmpty={fuelProducts.length === 0}
+                        empty={
+                          <p className="text-[12px] text-ink-muted">
+                            No fuel products are set up for this station.
+                          </p>
+                        }
+                      >
+                        {fuelProducts.map((product) => {
+                          const band = decantationSettings.densitySpecBands[product.id] ?? {};
+                          return (
+                            <div
+                              key={product.id}
+                              className="grid grid-cols-[minmax(180px,1fr)_1fr_1fr] items-end gap-3"
+                            >
+                              <span className="pb-6 text-[13px] text-ink">{product.name}</span>
+                              <Field label="Minimum (kg/m³)">
+                                <TextInput
+                                  type="number"
+                                  min="0"
+                                  step="0.1"
+                                  className="mono-num"
+                                  aria-label={`${product.name} minimum density`}
+                                  value={band.minKgM3 ?? ''}
+                                  onChange={(e) =>
+                                    setDensityBand(product.id, 'minKgM3', e.target.value)
+                                  }
+                                />
+                              </Field>
+                              <Field label="Maximum (kg/m³)">
+                                <TextInput
+                                  type="number"
+                                  min="0"
+                                  step="0.1"
+                                  className="mono-num"
+                                  aria-label={`${product.name} maximum density`}
+                                  value={band.maxKgM3 ?? ''}
+                                  onChange={(e) =>
+                                    setDensityBand(product.id, 'maxKgM3', e.target.value)
+                                  }
+                                />
+                              </Field>
+                            </div>
+                          );
+                        })}
+                      </DataSection>
                     </div>
 
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        borderTop: '1px solid var(--border-soft)',
-                        paddingTop: '12px',
-                      }}
-                    >
+                    <div className="flex justify-end border-t border-border-soft pt-3">
                       <Button type="submit" variant="primary" size="sm">
-                        Save Decantation Settings
+                        Save decantation settings
                       </Button>
                     </div>
                   </Form>
-                </div>
-              )}
-
-              {activeTab === 'products' && <ProductsCatalog selectedStation={selectedStation} />}
-              {activeTab === 'tanks' && <TanksGrid stationId={selectedStation.id} />}
-              {activeTab === 'dispensers' && <DispensersList stationId={selectedStation.id} />}
-              {activeTab === 'terminals' && (
-                <PaymentTerminalsPanel stationId={selectedStation.id} />
-              )}
-              {activeTab === 'shifts' && <ShiftTemplates />}
-            </Panel>
+                </Panel>
+              </section>
+            </>
           )}
+
+          {activeTab === 'products' && <ProductsCatalog selectedStation={selectedStation} />}
+          {activeTab === 'tanks' && <TanksGrid stationId={selectedStation.id} />}
+          {activeTab === 'dispensers' && <DispensersList stationId={selectedStation.id} />}
+          {activeTab === 'terminals' && <PaymentTerminalsPanel stationId={selectedStation.id} />}
+          {activeTab === 'shifts' && <ShiftTemplates />}
         </div>
       ) : (
         <EmptyState
@@ -1176,3 +811,62 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     </PageFrame>
   );
 };
+
+const SUBTITLE = 'Products, tanks, dispensers, terminals, shifts and station rules.';
+
+type StationTab =
+  | 'general'
+  | 'business'
+  | 'rules'
+  | 'products'
+  | 'tanks'
+  | 'dispensers'
+  | 'terminals'
+  | 'shifts'
+  | 'report-templates';
+
+const ONBOARDING_LABEL: Record<string, string> = {
+  NOT_STARTED: 'Not started',
+  IN_PROGRESS: 'In progress',
+  READY_FOR_OPERATIONS: 'Ready for operations',
+};
+const onboardingLabel = (s: string) => ONBOARDING_LABEL[s] ?? s.replace(/_/g, ' ').toLowerCase();
+/** Ready reads green; setup still under way is not a problem, so it stays neutral. */
+const onboardingTone = (s: string) => (s === 'READY_FOR_OPERATIONS' ? 'success' : 'neutral');
+
+/** A read-only view of saved settings: 12px muted label over a 13px value. */
+const DetailList: React.FC<{
+  items: { label: string; value: React.ReactNode; mono?: boolean; wide?: boolean }[];
+}> = ({ items }) => (
+  <dl className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
+    {items.map((item) => (
+      <div key={item.label} className={item.wide ? 'col-span-2' : undefined}>
+        <dt className="text-[12px] text-ink-muted">{item.label}</dt>
+        <dd
+          className={
+            item.mono
+              ? 'mt-1 font-mono text-[13px] tabular-nums text-ink-strong'
+              : 'mt-1 text-[13px] text-ink-strong'
+          }
+        >
+          {item.value == null || item.value === '' ? (
+            <span className="text-ink-faint">—</span>
+          ) : (
+            item.value
+          )}
+        </dd>
+      </div>
+    ))}
+  </dl>
+);
+
+const FormActions: React.FC<{ onCancel: () => void }> = ({ onCancel }) => (
+  <div className="mt-2 flex justify-end gap-2 border-t border-border-soft pt-3">
+    <Button type="button" variant="secondary" size="sm" onClick={onCancel}>
+      Cancel
+    </Button>
+    <Button type="submit" variant="primary" size="sm">
+      Save
+    </Button>
+  </div>
+);
