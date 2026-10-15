@@ -10,13 +10,13 @@ import {
   type FilterChipOption,
 } from '../../pump-ds/index.js';
 import { cn } from '../../pump-ds/lib/cn.js';
-import { formatQuantity } from '../../utils/format.js';
 import { OVER_CAPACITY_EXPLANATION } from '../../utils/stock.js';
 import { countOf } from '../../utils/ledgerWindow.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import { TankStatusChips } from './TankStatusChips.js';
 import {
   TANK_FILTERS,
+  tanksStock,
   tankViews,
   type TankFilter,
   type TankRow,
@@ -108,15 +108,7 @@ export const TanksView: React.FC<TanksViewProps> = ({ tanksQ, tankLevels, highli
     [tanks, filter, highlightId],
   );
   const filtered = filter !== 'all';
-  // Stock adds up only within one unit (litres, or CNG's kg).
-  const units = new Set(rows.map((t) => t.row.productUnit?.trim() || 'L'));
-  const shownStock =
-    filtered && rows.length > 0 && units.size === 1
-      ? formatQuantity(
-          rows.reduce((acc, t) => acc + t.level.stock, 0),
-          [...units][0],
-        )
-      : null;
+  const shownStock = filtered ? tanksStock(rows) : null;
 
   return (
     <section className="flex flex-col gap-2">

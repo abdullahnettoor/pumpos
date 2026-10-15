@@ -3,6 +3,7 @@ import {
   DataSection,
   DateRangeMenu,
   EmptyState,
+  FilterChips,
   Icon,
   InteractiveTable,
   SearchInput,
@@ -10,6 +11,7 @@ import {
   Select,
   computeRange,
   type DateRange,
+  type FilterChipOption,
   type RangeClock,
   type TableColumn,
   type TotalRow,
@@ -21,6 +23,7 @@ import {
   movementTypeLabel,
   movementsIn,
   oneProduct,
+  productCounts,
   productsOf,
   referenceLabel,
   type MovementRow,
@@ -41,6 +44,9 @@ const MOVEMENT_TYPES = [
   'Variance',
   'OpeningBalance',
 ] as const;
+
+/** Fewer products than this read as counted chips; more, as a dropdown (control vocabulary). */
+const PRODUCT_CHIPS_BELOW = 5;
 
 const movements = (n: number) => countOf(n, 'movement', 'movements');
 
@@ -104,6 +110,13 @@ export const MovementsView: React.FC<MovementsViewProps> = ({ movementsQ, clock 
       ),
     [all, range, type, productId, search],
   );
+  const productOptions = useMemo<FilterChipOption<string>[]>(() => {
+    const counts = productCounts(all, { range, type, search });
+    return [
+      { value: '', label: 'All', count: counts[''] },
+      ...products.map((p) => ({ value: p.id, label: p.name, count: counts[p.id] ?? 0 })),
+    ];
+  }, [all, products, range, type, search]);
   const totalRow = useMemo<TotalRow | undefined>(
     () =>
       oneProduct(rows)
@@ -152,19 +165,28 @@ export const MovementsView: React.FC<MovementsViewProps> = ({ movementsQ, clock 
                   </option>
                 ))}
               </Select>
-              <Select
-                inputSize="sm"
-                aria-label="Product"
-                value={productId}
-                onChange={(e) => setProductId(e.target.value)}
-              >
-                <option value="">All products</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
+              {products.length < PRODUCT_CHIPS_BELOW ? (
+                <FilterChips
+                  aria-label="Product"
+                  options={productOptions}
+                  value={productId}
+                  onChange={setProductId}
+                />
+              ) : (
+                <Select
+                  inputSize="sm"
+                  aria-label="Product"
+                  value={productId}
+                  onChange={(e) => setProductId(e.target.value)}
+                >
+                  <option value="">All products</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
             </>
           ),
           info: (

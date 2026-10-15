@@ -4,6 +4,7 @@ import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
 import { ROUTES } from '../nav-intent/routes.js';
 import { Button, Icon, Tabs, tabPanelProps, type TabItem } from '../pump-ds/index.js';
 import { CloudTransactionService } from '../services/cloud.js';
+import { useRunTask } from '../utils/runTask.js';
 import {
   useInventoryStatus,
   useInventoryItems,
@@ -43,10 +44,13 @@ type TabType = 'tanks' | 'density' | 'items' | 'movements' | 'variances' | 'deca
 
 const TABS_ID = 'inventory';
 
+/** The tabs about stock carry the four stock tiles (owner decision, 15 Oct). */
+const STOCK_TABS: ReadonlySet<TabType> = new Set(['tanks', 'items', 'movements', 'variances']);
+
 /**
  * The Inventory page (#536): Tanks · Decantations · Density · Product stock ·
  * Movements · Reconciliations, on the Page Frame. The four stock tiles sit on
- * top of every tab (owner decision); each tab's list carries its own controls
+ * top of the stock tabs only (owner decision); each tab's list carries its own controls
  * in its section header (layout B, #567), and every region loads in its own
  * Data Section. "Reconcile stock" is the one primary action.
  */
@@ -54,6 +58,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
   const [selectedTab, setSelectedTab] = useState<TabType>('tanks');
   const stationId = selectedStation?.id ?? null;
   const invalidateOperational = useInvalidateOperational();
+  const runTask = useRunTask();
 
   const tanksQ = useInventoryStatus(stationId);
   const itemsQ = useInventoryItems(stationId);
@@ -157,7 +162,11 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
       savePendingStockCountRequest(null);
       setCountNotice((counted.warnings ?? []).map((w) => w.message));
       setCountOpen(false);
-      await invalidateOperational(stationId);
+      // The count is saved; refreshing the stock views is a background concern (caching rule 6).
+      runTask(
+        invalidateOperational(stationId),
+        'Count saved, but the stock views may be out of date.',
+      );
     } catch (err: any) {
       if (!isAmbiguousMutationError(err)) {
         countRequestRef.current = null;
@@ -217,7 +226,9 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
               {countNotice.join(' ')}
             </Banner>
           )}
-          <InventoryTiles tanksQ={tanksQ} itemsQ={itemsQ} tankLevels={tankLevels} />
+          {STOCK_TABS.has(activeTab) && (
+            <InventoryTiles tanksQ={tanksQ} itemsQ={itemsQ} tankLevels={tankLevels} />
+          )}
 
           {activeTab === 'tanks' && (
             <TanksView tanksQ={tanksQ} tankLevels={tankLevels} highlightId={highlightId} />

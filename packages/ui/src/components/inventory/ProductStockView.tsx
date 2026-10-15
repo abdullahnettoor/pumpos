@@ -69,7 +69,7 @@ const COLUMNS: TableColumn<ItemRow>[] = [
     value: (i) => itemState(i) ?? '',
     cell: (i) => {
       const state = itemState(i);
-      return state ? <StatusChip status={state} size="xs" /> : null;
+      return state ? <StatusChip status={state} size="md" /> : null;
     },
     width: '16%',
   },

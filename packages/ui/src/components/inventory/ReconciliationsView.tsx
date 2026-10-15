@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { variancePresentation, type VarianceStatusState } from '@pump/shared';
+import type { VarianceStatusState } from '@pump/shared';
 import {
   DataSection,
   DateRangeMenu,
@@ -15,11 +15,16 @@ import {
   type TableColumn,
   type TotalRow,
 } from '../../pump-ds/index.js';
-import { cn } from '../../pump-ds/lib/cn.js';
 import { formatQuantity } from '../../utils/format.js';
-import { countOf, inWindow } from '../../utils/ledgerWindow.js';
+import { countOf } from '../../utils/ledgerWindow.js';
 import { InfoTip } from '../primitives/InfoTip.js';
-import { oneProduct, type VarianceRow } from './inventoryFigures.js';
+import {
+  oneProduct,
+  reconciliationCounts,
+  reconciliationsIn,
+  varianceState,
+  type VarianceRow,
+} from './inventoryFigures.js';
 import type { QueryOf } from '../purchases/supplierFigures.js';
 
 export interface ReconciliationsViewProps {
@@ -36,7 +41,7 @@ const FILTER_LABEL: Record<Filter, string> = {
   balanced: 'Balanced',
 };
 
-const stateOf = (r: VarianceRow) => variancePresentation(r.varianceQuantity, 'stock').state;
+const stateOf = varianceState;
 
 /** A variance's figure in its tone: red short, amber surplus (#518), plain when balanced. */
 const VARIANCE_TEXT: Record<VarianceStatusState, string> = {
@@ -82,7 +87,7 @@ const COLUMNS: TableColumn<VarianceRow>[] = [
     value: (r) => r.varianceQuantity,
     unit: (r) => r.productUnit,
     cell: (r) => (
-      <span className={cn('font-semibold', VARIANCE_TEXT[stateOf(r)])}>
+      <span className={VARIANCE_TEXT[stateOf(r)]}>
         {formatQuantity(r.varianceQuantity, r.productUnit, { plus: true })}
       </span>
     ),
@@ -103,24 +108,16 @@ export const ReconciliationsView: React.FC<ReconciliationsViewProps> = ({ varian
   const [range, setRange] = useState<DateRange>(() => computeRange('this-year', clock));
   const [filter, setFilter] = useState<Filter>('all');
   const all = useMemo(() => variancesQ.data ?? [], [variancesQ.data]);
-  const inRange = useMemo(
-    () =>
-      all
-        .filter((r) => inWindow(r.businessDate, range))
-        .sort((a, b) => (b.businessDate ?? '').localeCompare(a.businessDate ?? '')),
-    [all, range],
-  );
-  const options = useMemo<FilterChipOption<Filter>[]>(
-    () =>
-      (Object.keys(FILTER_LABEL) as Filter[]).map((value) => ({
-        value,
-        label: FILTER_LABEL[value],
-        count:
-          value === 'all' ? inRange.length : inRange.filter((r) => stateOf(r) === value).length,
-        ...(value === 'short' || value === 'surplus' ? { status: value } : {}),
-      })),
-    [inRange],
-  );
+  const inRange = useMemo(() => reconciliationsIn(all, range), [all, range]);
+  const options = useMemo<FilterChipOption<Filter>[]>(() => {
+    const counts = reconciliationCounts(inRange);
+    return (Object.keys(FILTER_LABEL) as Filter[]).map((value) => ({
+      value,
+      label: FILTER_LABEL[value],
+      count: counts[value],
+      ...(value === 'short' || value === 'surplus' ? { status: value } : {}),
+    }));
+  }, [inRange]);
   const rows = useMemo(
     () => (filter === 'all' ? inRange : inRange.filter((r) => stateOf(r) === filter)),
     [inRange, filter],

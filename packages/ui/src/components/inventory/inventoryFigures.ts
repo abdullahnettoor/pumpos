@@ -1,5 +1,7 @@
 import {
   deriveTankLevel,
+  variancePresentation,
+  type VarianceStatusState,
   tankStates,
   type StockStatusState,
   type TankLevel,
@@ -103,6 +105,21 @@ export function fuelStock(rows: readonly TankRow[]): { value: string; hint: stri
   };
 }
 
+/**
+ * The stock of the tanks shown, for a filtered list's total: litres (or kg)
+ * add up only within one unit, so mixed units have no total (`null`).
+ */
+export function tanksStock(tanks: readonly TankView[]): string | null {
+  const units = new Set(
+    tanks.map((t) => (isLitre(t.row.productUnit) ? 'L' : t.row.productUnit!.trim())),
+  );
+  if (tanks.length === 0 || units.size !== 1) return null;
+  return formatQuantity(
+    tanks.reduce((acc, t) => acc + t.level.stock, 0),
+    [...units][0],
+  );
+}
+
 /** Low or critical tanks; `critical` decides the tile's alert. */
 export const lowTanks = (tanks: readonly TankView[]) => ({
   count: tanks.filter((t) => t.level.tone === 'low' || t.level.tone === 'critical').length,
@@ -162,6 +179,22 @@ export function movementsIn(
   );
 }
 
+/**
+ * Rows each product filter would show, under the other filters (range, type,
+ * search): the counts on the product chips. `''` is every product.
+ */
+export function productCounts(
+  rows: readonly MovementRow[],
+  f: { range: DateRange; type: string; search: string },
+): Record<string, number> {
+  const counts: Record<string, number> = { '': 0 };
+  for (const m of movementsIn(rows, { ...f, productId: '' })) {
+    counts[''] += 1;
+    if (m.productId) counts[m.productId] = (counts[m.productId] ?? 0) + 1;
+  }
+  return counts;
+}
+
 /** Distinct products in rows, by name: the product filter's options. */
 export function productsOf(
   rows: readonly { productId?: string | null; productName?: string | null }[],
@@ -207,3 +240,24 @@ export const movementTypeLabel = (type: string) =>
   type
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/ (\w)/g, (_, c: string) => ` ${c.toLowerCase()}`);
+
+// ── Reconciliations ──────────────────────────────────────────────────────────
+
+/** A stock count's variance as a state: the one balanced rule (#518). */
+export const varianceState = (r: Pick<VarianceRow, 'varianceQuantity'>): VarianceStatusState =>
+  variancePresentation(r.varianceQuantity, 'stock').state;
+
+/** Stock counts in the range, newest first. */
+export const reconciliationsIn = (rows: readonly VarianceRow[], range: DateRange): VarianceRow[] =>
+  rows
+    .filter((r) => inWindow(r.businessDate, range))
+    .sort((a, b) => (b.businessDate ?? '').localeCompare(a.businessDate ?? ''));
+
+/** How many counts each variance chip would show. */
+export function reconciliationCounts(
+  rows: readonly VarianceRow[],
+): Record<'all' | VarianceStatusState, number> {
+  const counts = { all: rows.length, short: 0, surplus: 0, balanced: 0 };
+  for (const r of rows) counts[varianceState(r)] += 1;
+  return counts;
+}

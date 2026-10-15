@@ -218,6 +218,19 @@ describe('Inventory page (#536)', () => {
     expect(screen.queryByText('Book stock over capacity')).toBeNull();
   });
 
+  it('shows the stock tiles on the stock tabs only (owner decision)', async () => {
+    const { container } = open();
+    await waitFor(() => expect(tileOf('Oversold')).toBeTruthy());
+    for (const name of ['Decantations', 'Density']) {
+      tab(name);
+      expect(container.querySelector('.kpi-value')).toBeNull();
+    }
+    for (const name of ['Product stock', 'Movements', 'Reconciliations', 'Tanks']) {
+      tab(name);
+      expect(container.querySelectorAll('.kpi-value').length).toBe(4);
+    }
+  });
+
   it('draws each tank with the Dashboard gauge at the large size, states as chips', async () => {
     open();
     const t1 = await screen.findByTestId('tank-t1');
@@ -272,6 +285,13 @@ describe('Inventory page (#536)', () => {
     expect(within(table).getAllByText('Decantation').length).toBe(1);
     expect(within(table).queryByText('decantation_tank_line')).toBeNull();
     expect(within(table).getByText('Net of 2 movements, Petrol')).toBeTruthy();
+    // Under 5 products: counted chips, not a dropdown.
+    const products = within(header).getByRole('radiogroup', { name: 'Product' });
+    expect(
+      within(products)
+        .getAllByRole('radio')
+        .map((r) => r.getAttribute('aria-label')),
+    ).toEqual(['All, 2', 'Diesel, 0', 'Petrol, 2']);
     expect(within(table).getByText('7,500.00 L')).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
@@ -282,8 +302,50 @@ describe('Inventory page (#536)', () => {
     const header = await screen.findByTestId('section-header-reconciliations');
     await waitFor(() => expect(within(header).getByText('1 reconciliation')).toBeTruthy());
     const table = screen.getByRole('table');
-    expect(within(table).getAllByText('−100.00 L')[0].className).toContain('text-danger-fg');
+    const cell = within(table).getAllByText('−100.00 L')[0];
+    expect(cell.className).toContain('text-danger-fg');
+    // Body figures are regular weight; only the total row is set bold.
+    expect(cell.className).not.toContain('font-semibold');
     expect(within(table).getByText('Short')).toBeTruthy();
+  });
+
+  it('closes the count drawer on the write, without waiting for the refetch (caching rule 6)', async () => {
+    let saved = false;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === 'POST' && url.includes('/inventory/count')) {
+          saved = true;
+          return new Response(JSON.stringify({ success: true, data: { warnings: [] } }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        // After the save every refetch hangs: the drawer must not wait on it.
+        if (saved) return new Promise<Response>(() => {});
+        const path = Object.keys(DATA).find((p) => url.includes(p));
+        const answer = path ? DATA[path] : { data: [] };
+        return new Response(JSON.stringify({ success: true, data: (answer as any).data }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }),
+    );
+    renderWithProviders(<InventoryList selectedStation={station} userRole="Owner" />);
+    await screen.findByTestId('tank-t1');
+    fireEvent.click(screen.getByRole('button', { name: 'Reconcile stock' }));
+    fireEvent.change(screen.getByPlaceholderText('Measured quantity'), {
+      target: { value: '1990' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Reconcile stock' }).at(-1)!);
+    await waitFor(() => expect(saved).toBe(true));
+    await waitFor(() => expect(screen.queryByPlaceholderText('Measured quantity')).toBeNull());
+    // The save settled: a new count is not stuck behind the hanging refetch.
+    fireEvent.click(screen.getByRole('button', { name: 'Reconcile stock' }));
+    const submit = screen.getAllByRole('button', { name: /Reconcile stock/ }).at(-1)!;
+    await waitFor(() => expect(submit.getAttribute('aria-busy')).not.toBe('true'));
+    expect(submit.querySelector('[class*="animate-spin"]')).toBeNull();
   });
 
   it('shows "Couldn\'t load" with Retry per region, and keeps the rest up', async () => {
