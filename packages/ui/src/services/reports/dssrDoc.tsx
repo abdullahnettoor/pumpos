@@ -253,7 +253,7 @@ export const DssrDoc: React.FC<{
         {config.sections.map((key) => builders[key]?.(day, config))}
         <View style={s.foot} fixed>
           <Text>
-            Generated {new Date().toLocaleString('en-IN')}
+            Generated {formatDateTime(new Date())}
             {draft ? ` \u2022 ${DSSR_DRAFT_MARK}` : ''}
           </Text>
           <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />

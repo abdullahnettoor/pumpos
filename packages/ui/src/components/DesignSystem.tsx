@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { PageLayout } from './primitives/PageLayout.js';
+import { PageFrame } from './page-frame/index.js';
 import { Tabs } from '../pump-ds/tabs/index.js';
 import { KpiStrip, KpiTile, SegmentedControl } from '../pump-ds/index.js';
 import { DataTable } from './primitives/DataTable.js';
-import { SkeletonGrid } from './primitives/Skeleton.js';
 import { useToast } from './primitives/ToastProvider.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
 import {
@@ -19,10 +18,9 @@ import {
 import { Checkbox, Switch } from './primitives/Toggle.js';
 import { Combobox } from './primitives/Combobox.js';
 import { Tooltip } from './primitives/Tooltip.js';
-import { Menu, Popover } from './primitives/Menu.js';
 import { Banner } from './primitives/Banner.js';
 import { Drawer } from './Drawer.js';
-import { Chip } from '../pump-ds/index.js';
+import { Button, Chip, SkeletonGrid } from '../pump-ds/index.js';
 import {
   inr,
   formatMoney,
@@ -109,10 +107,18 @@ const Mono: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   </code>
 );
 
-const ColorSwatch: React.FC<{ name: string; token: string; value: string; fg?: string }> = ({
+/**
+ * A token's resolved value in the current theme, read from the document so the
+ * reference never drifts from `index.css` (and shows dark values in dark).
+ */
+const tokenValue = (token: string): string =>
+  typeof document === 'undefined'
+    ? ''
+    : getComputedStyle(document.documentElement).getPropertyValue(token).trim().toUpperCase();
+
+const ColorSwatch: React.FC<{ name: string; token: string; fg?: string }> = ({
   name,
   token,
-  value,
   fg,
 }) => (
   <div
@@ -130,7 +136,7 @@ const ColorSwatch: React.FC<{ name: string; token: string; value: string; fg?: s
         display: 'flex',
         alignItems: 'flex-end',
         padding: '6px 8px',
-        color: fg ?? 'transparent',
+        color: fg ? `var(${fg})` : 'transparent',
         fontSize: '11px',
         fontWeight: 600,
       }}
@@ -140,8 +146,8 @@ const ColorSwatch: React.FC<{ name: string; token: string; value: string; fg?: s
     <div style={{ padding: '6px 8px' }}>
       <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>{name}</div>
       <Mono>{token}</Mono>
-      <div style={{ fontSize: '11px', color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
-        {value}
+      <div style={{ fontSize: '12px', color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
+        {tokenValue(token)}
       </div>
     </div>
   </div>
@@ -153,59 +159,36 @@ const grid = (min: number): React.CSSProperties => ({
   gap: 'var(--space-3)',
 });
 
-// ---- token data (mirrors packages/ui/src/index.css :root) ----
+// ---- token data (values are read live from packages/ui/src/index.css) ----
 
 const NEUTRALS = [
-  { name: 'Canvas', token: '--bg-canvas', value: '#F6F7F4' },
-  { name: 'Surface', token: '--bg-surface', value: '#FFFFFF' },
-  { name: 'Surface Alt', token: '--bg-surface-alt', value: '#F1F3EF' },
-  { name: 'Border Soft', token: '--border-soft', value: '#D9DED6' },
-  { name: 'Border Strong', token: '--border-strong', value: '#B9C1B7' },
+  { name: 'Canvas', token: '--bg-canvas' },
+  { name: 'Surface', token: '--bg-surface' },
+  { name: 'Surface Alt', token: '--bg-surface-alt' },
+  { name: 'Border Soft', token: '--border-soft' },
+  { name: 'Border Strong', token: '--border-strong' },
 ];
 
+/** `fg` is the token of the "Aa" sample drawn on the swatch. */
 const TEXT_COLORS = [
-  { name: 'Text Strong', token: '--text-strong', value: '#18201A', fg: '#FFFFFF' },
-  { name: 'Text Default', token: '--text-default', value: '#2B342D', fg: '#FFFFFF' },
-  { name: 'Text Muted', token: '--text-muted', value: '#5E6A61', fg: '#FFFFFF' },
-  { name: 'Text Faint', token: '--text-faint', value: '#7A857C', fg: '#FFFFFF' },
+  { name: 'Text Strong', token: '--text-strong', fg: '--text-on-neutral' },
+  { name: 'Text Default', token: '--text-default', fg: '--bg-surface' },
+  { name: 'Text Muted', token: '--text-muted', fg: '--bg-surface' },
+  { name: 'Text Faint', token: '--text-faint', fg: '--bg-surface' },
 ];
 
 const BRAND = [
-  { name: 'Petrol Green', token: '--brand-primary', value: '#1F6A53', fg: '#FFFFFF' },
-  { name: 'Diesel Blue', token: '--brand-secondary', value: '#2E5E88', fg: '#FFFFFF' },
-  { name: 'Signal Amber', token: '--brand-warning', value: '#B7811E', fg: '#FFFFFF' },
-  { name: 'Alert Red', token: '--brand-danger', value: '#B44A3F', fg: '#FFFFFF' },
+  { name: 'Petrol Green', token: '--brand-primary', fg: '--text-on-brand' },
+  { name: 'Diesel Blue', token: '--brand-secondary', fg: '--text-on-info' },
+  { name: 'Signal Amber', token: '--brand-warning', fg: '--text-on-warning' },
+  { name: 'Alert Red', token: '--brand-danger', fg: '--text-on-danger' },
 ];
 
-const STATES: { label: string; bg: string; fg: string; bgVal: string; fgVal: string }[] = [
-  {
-    label: 'Success',
-    bg: '--state-success-bg',
-    fg: '--state-success-fg',
-    bgVal: '#E8F4EE',
-    fgVal: '#1E6A4E',
-  },
-  {
-    label: 'Warning',
-    bg: '--state-warning-bg',
-    fg: '--state-warning-fg',
-    bgVal: '#F9F0DA',
-    fgVal: '#8A6116',
-  },
-  {
-    label: 'Danger',
-    bg: '--state-danger-bg',
-    fg: '--state-danger-fg',
-    bgVal: '#F8E3E0',
-    fgVal: '#9F3F36',
-  },
-  {
-    label: 'Info',
-    bg: '--state-info-bg',
-    fg: '--state-info-fg',
-    bgVal: '#E8F0F7',
-    fgVal: '#2E5E88',
-  },
+const STATES: { label: string; bg: string; fg: string }[] = [
+  { label: 'Success', bg: '--state-success-bg', fg: '--state-success-fg' },
+  { label: 'Warning', bg: '--state-warning-bg', fg: '--state-warning-fg' },
+  { label: 'Danger', bg: '--state-danger-bg', fg: '--state-danger-fg' },
+  { label: 'Info', bg: '--state-info-bg', fg: '--state-info-fg' },
 ];
 
 const SPACING = [
@@ -232,8 +215,8 @@ const TYPE_SCALE = [
   { size: 15, weight: 600, use: 'Section title' },
   { size: 14, weight: 400, use: 'Body (base)' },
   { size: 13, weight: 400, use: 'Dense body / inputs' },
-  { size: 12, weight: 500, use: 'Secondary / captions' },
-  { size: 11, weight: 600, use: 'Labels (uppercase)' },
+  { size: 12, weight: 500, use: 'Secondary, captions, field labels (the minimum)' },
+  { size: 10, weight: 600, use: 'Table headers only (uppercase)' },
 ];
 
 interface DemoRow {
@@ -336,11 +319,15 @@ const TokensPanel: React.FC = () => (
             <div style={{ padding: '6px 8px', backgroundColor: 'var(--bg-surface)' }}>
               <div>
                 <Mono>{s.bg}</Mono>{' '}
-                <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{s.bgVal}</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-faint)' }}>
+                  {tokenValue(s.bg)}
+                </span>
               </div>
               <div>
                 <Mono>{s.fg}</Mono>{' '}
-                <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{s.fgVal}</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-faint)' }}>
+                  {tokenValue(s.fg)}
+                </span>
               </div>
             </div>
           </div>
@@ -673,24 +660,6 @@ const InputsPanel: React.FC = () => {
           </div>
         </Card>
       </Section>
-
-      <Section
-        title="Legacy .form-input — now unified"
-        description="The old .form-input class and bare <select> elements are now aliased to the canonical .input look (36px · 13px · strong border), so existing setup screens match the primitives without a per-input rewrite. New forms should still use the Field + primitives above; .input-compact (28px) remains for filter bars."
-      >
-        <Card>
-          <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-            <div>
-              <Mono>.form-input (aliased)</Mono>
-              <input className="form-input" defaultValue="matches" style={{ maxWidth: 160 }} />
-            </div>
-            <div>
-              <Mono>&lt;TextInput /&gt;</Mono>
-              <TextInput defaultValue="matches" style={{ maxWidth: 160 }} />
-            </div>
-          </div>
-        </Card>
-      </Section>
     </div>
   );
 };
@@ -785,7 +754,7 @@ const ComponentsPanel: React.FC = () => {
 
       <Section
         title="Skeletons"
-        description="Pulsing placeholders (pump-ds Skeleton; SkeletonGrid is deprecated) for lazy / partial loading — render the page shell immediately and swap these in for cards or rows while their data loads, instead of blocking the whole screen."
+        description="Pulsing placeholders (pump-ds Skeleton and SkeletonGrid) for lazy / partial loading — render the page shell immediately and swap these in for cards or rows while their data loads, instead of blocking the whole screen."
       >
         <SkeletonGrid count={3} />
       </Section>
@@ -803,12 +772,12 @@ const OverlaysPanel: React.FC = () => {
       >
         <Card>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            <button className="btn btn-primary btn-sm" onClick={() => setOpen('default')}>
+            <Button size="sm" onClick={() => setOpen('default')}>
               Open drawer
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => setOpen('wide')}>
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setOpen('wide')}>
               Open wide drawer
-            </button>
+            </Button>
           </div>
         </Card>
       </Section>
@@ -819,12 +788,10 @@ const OverlaysPanel: React.FC = () => {
         widthVariant={open === 'wide' ? 'wide' : 'default'}
         footer={
           <>
-            <button className="btn btn-secondary btn-md" onClick={() => setOpen(false)}>
+            <Button variant="secondary" onClick={() => setOpen(false)}>
               Cancel
-            </button>
-            <button className="btn btn-primary btn-md" onClick={() => setOpen(false)}>
-              Save
-            </button>
+            </Button>
+            <Button onClick={() => setOpen(false)}>Save</Button>
           </>
         }
       >
@@ -851,50 +818,6 @@ const OverlaysPanel: React.FC = () => {
       </Drawer>
 
       <Section
-        title="Dropdown menu"
-        description="A trigger button plus a list of actions. Closes on select, outside click or Esc. Use for row / entity actions instead of crowding a row with buttons."
-      >
-        <Card>
-          <Menu
-            trigger={<>Actions ▾</>}
-            items={[
-              { label: 'View details', onSelect: () => {} },
-              { label: 'Edit', onSelect: () => {} },
-              { label: 'Archive', onSelect: () => {} },
-              { label: 'Delete', danger: true, onSelect: () => {} },
-            ]}
-          />
-        </Card>
-      </Section>
-
-      <Section
-        title="Popover"
-        description="A floating panel anchored to a trigger for richer content — filter forms, column pickers, quick summaries. Closes on outside click or Esc."
-      >
-        <Card>
-          <Popover trigger={<>Filters</>}>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 'var(--space-3)',
-                minWidth: 200,
-                padding: 'var(--space-2)',
-              }}
-            >
-              <Field label="From" style={{ marginBottom: 0 }}>
-                <DateField defaultValue="2026-06-01" />
-              </Field>
-              <Field label="To" style={{ marginBottom: 0 }}>
-                <DateField defaultValue="2026-06-30" />
-              </Field>
-              <Checkbox label="Only with variance" />
-            </div>
-          </Popover>
-        </Card>
-      </Section>
-
-      <Section
         title="Tooltip"
         description="Hover / focus bubble for hints and truncated values. Wire meaningful hints through this instead of bare title attributes."
       >
@@ -908,7 +831,9 @@ const OverlaysPanel: React.FC = () => {
             }}
           >
             <Tooltip content="Reconciles at shift close">
-              <button className="btn btn-secondary btn-sm">Hover me</button>
+              <Button variant="secondary" size="sm">
+                Hover me
+              </Button>
             </Tooltip>
             <Tooltip content="Expected − Actual drawer cash" placement="bottom">
               <span
@@ -942,30 +867,30 @@ const FeedbackPanel: React.FC = () => {
       >
         <Card>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => toast.success('Shift closed successfully')}
-            >
+            <Button size="sm" onClick={() => toast.success('Shift closed successfully')}>
               Success
-            </button>
-            <button
-              className="btn btn-danger btn-sm"
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
               onClick={() => toast.error('Failed to save expense')}
             >
               Error
-            </button>
-            <button
-              className="btn btn-secondary btn-sm"
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => toast.info('Sync in progress\u2026')}
             >
               Info
-            </button>
-            <button
-              className="btn btn-ghost btn-sm"
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => toast.success('DSR compiled for 01 Jul', { title: 'Report ready' })}
             >
               With title
-            </button>
+            </Button>
           </div>
         </Card>
       </Section>
@@ -983,8 +908,9 @@ const FeedbackPanel: React.FC = () => {
               alignItems: 'center',
             }}
           >
-            <button
-              className="btn btn-secondary btn-sm"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() =>
                 runTask(
                   confirm({
@@ -996,9 +922,10 @@ const FeedbackPanel: React.FC = () => {
               }
             >
               Standard confirm
-            </button>
-            <button
-              className="btn btn-danger btn-sm"
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
               onClick={() =>
                 runTask(
                   confirm({
@@ -1012,7 +939,7 @@ const FeedbackPanel: React.FC = () => {
               }
             >
               Danger confirm
-            </button>
+            </Button>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
               Last result:{' '}
               <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
@@ -1239,10 +1166,10 @@ const TABS = [
 export const DesignSystem: React.FC = () => {
   const [active, setActive] = useState('tokens');
   return (
-    <PageLayout
+    <PageFrame
       title="Design System"
       subtitle="Local-only reference for tokens, primitives and patterns. Verify design choices here before applying them to product screens."
-      toolbar={
+      tabs={
         <Tabs
           tabs={TABS}
           activeId={active}
@@ -1287,6 +1214,6 @@ export const DesignSystem: React.FC = () => {
       )}
       {active === 'page-controls' && <PageControlsShowcase />}
       {active === 'shell-proto' && <DesignSystemShellProtoPanel />}
-    </PageLayout>
+    </PageFrame>
   );
 };

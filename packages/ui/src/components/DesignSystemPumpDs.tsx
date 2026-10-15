@@ -29,6 +29,7 @@ import {
 } from '../pump-ds/index.js';
 import { DEFAULT_TANK_LEVEL_SETTINGS, deriveTankLevel } from '@pump/shared';
 import { TimelineNowPill } from './Dashboard/cards/timeline/TimelineStrip.js';
+import { formatMoney } from '../utils/format.js';
 import {
   Fuel,
   User,
@@ -692,7 +693,7 @@ const DashboardBlocks: React.FC = () => (
           }
         >
           <BreakdownBar
-            formatValue={(n) => `₹${n.toLocaleString('en-IN')}`}
+            formatValue={(n) => formatMoney(n, { decimals: 0 })}
             segments={[
               { label: 'Cash', value: 184260, tone: 'success' },
               { label: 'UPI', value: 92140, tone: 'info' },
