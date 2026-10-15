@@ -87,6 +87,7 @@ export function CreateDemoDrawer({ target, onClose }: { target: ApiTarget; onClo
           <Banner severity="success" title="Ready to open in the console">
             The demo organization and station are ready on {target.label}.
           </Banner>
+          {error && <Banner severity="danger">{error}</Banner>}
           <dl
             style={{
               display: 'grid',

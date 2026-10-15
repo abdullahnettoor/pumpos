@@ -275,6 +275,15 @@ describe.skipIf(!CONNECTION)('demo stations against real Postgres', () => {
       expect(Number(handover.cash) - Number(handover.expectedCash)).toBe(-350);
     });
 
+    it('keeps every attendant on a DU in the open shift, so Ravi K can hand over on mobile', async () => {
+      const onDuty = await db
+        .select({ attendant: schema.users.fullName })
+        .from(schema.shiftStaffAssignments)
+        .innerJoin(schema.users, eq(schema.users.id, schema.shiftStaffAssignments.userId))
+        .where(eq(schema.shiftStaffAssignments.shiftId, demo.history.eveningShiftId));
+      expect(onDuty.map((row) => row.attendant).sort()).toEqual(['Anitha S', 'Meera P', 'Ravi K']);
+    });
+
     it('records the −18 L HSD dip variance with a reason', async () => {
       const variances = await db
         .select()

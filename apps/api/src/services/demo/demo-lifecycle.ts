@@ -265,8 +265,8 @@ export interface CreatedDemo {
   demoExpiresAt: string;
 }
 
-/** The attendant who signs in on mobile: still on duty in today's open shift. */
-const DEMO_LOGIN_ATTENDANT = 'Ravi K';
+/** Preferred demo attendant login, when on duty (Anitha S has handed over). */
+const PREFERRED_LOGIN_ATTENDANT = 'Ravi K';
 
 /** The demo attendant login for an owner login: `slug-code-attendant@…`. */
 export function demoAttendantEmail(ownerEmail: string): string {
@@ -274,30 +274,34 @@ export function demoAttendantEmail(ownerEmail: string): string {
 }
 
 /**
- * Attach an attendant login to the seeded on-duty attendant (Ravi K; Anitha S
- * has already handed over). Falls back to any attendant on small demos.
+ * An attendant still on duty in the open shift: assigned to a DU and not yet
+ * handed over. Null on demos too small to leave one (one DU or one attendant).
  */
-async function linkDemoAttendantLogin(
+async function onDutyAttendant(tx: DbClient, shiftId: string) {
+  const assigned = await tx
+    .select({ id: schema.users.id, fullName: schema.users.fullName })
+    .from(schema.shiftStaffAssignments)
+    .innerJoin(schema.users, eq(schema.users.id, schema.shiftStaffAssignments.userId))
+    .where(
+      and(
+        eq(schema.shiftStaffAssignments.shiftId, shiftId),
+        eq(schema.users.role, 'Attendant'),
+        sql`${schema.users.id} not in (select user_id from attendant_handovers where shift_id = ${shiftId})`,
+      ),
+    );
+  const sorted = assigned.sort((a, b) => a.fullName.localeCompare(b.fullName));
+  return sorted.find((user) => user.fullName === PREFERRED_LOGIN_ATTENDANT) ?? sorted[0] ?? null;
+}
+
+async function linkAttendantLogin(
   tx: DbClient,
-  organizationId: string,
+  userId: string,
   login: { authUserId: string; email: string },
 ) {
-  const attendants = await tx
-    .select({ id: schema.users.id, fullName: schema.users.fullName })
-    .from(schema.users)
-    .where(
-      and(eq(schema.users.organizationId, organizationId), eq(schema.users.role, 'Attendant')),
-    );
-  const target =
-    attendants.find((user) => user.fullName === DEMO_LOGIN_ATTENDANT) ??
-    attendants.find((user) => user.fullName !== 'Anitha S') ??
-    attendants[0];
-  if (!target) throw new Error('Demo has no attendant to give a login');
   await tx
     .update(schema.users)
     .set({ authUserId: login.authUserId, email: login.email })
-    .where(eq(schema.users.id, target.id));
-  return target.fullName;
+    .where(eq(schema.users.id, userId));
 }
 
 /**
@@ -438,17 +442,20 @@ export async function createDemo(
       .where(eq(schema.organizations.id, owner.organizationId));
     const seeded = await runInTransaction(db, async (tx) => {
       await limitAbandonedTransaction(tx);
-      await seedDemoOrganization(tx, owner.organizationId, owner.id, setup, { now });
-      return ok(true);
+      const { history } = await seedDemoOrganization(tx, owner.organizationId, owner.id, setup, {
+        now,
+      });
+      return ok(await onDutyAttendant(tx, history.eveningShiftId));
     });
     if (!seeded.success) throw new Error(seeded.error.message);
-    const attendantEmail = demoAttendantEmail(ownerEmail);
-    const attendant = await admin.createUser({ email: attendantEmail, password });
-    attendantAuthUserId = attendant.id;
-    const attendantName = await linkDemoAttendantLogin(db, owner.organizationId, {
-      authUserId: attendant.id,
-      email: attendantEmail,
-    });
+    const onDuty = seeded.data;
+    let attendantEmail: string | undefined;
+    if (onDuty) {
+      attendantEmail = demoAttendantEmail(ownerEmail);
+      const attendant = await admin.createUser({ email: attendantEmail, password });
+      attendantAuthUserId = attendant.id;
+      await linkAttendantLogin(db, onDuty.id, { authUserId: attendant.id, email: attendantEmail });
+    }
     logDemo('DEMO_ORGANIZATION_CREATED', { organizationId, platformAdmin: actor.email });
     return ok({
       organizationId,
@@ -456,7 +463,7 @@ export async function createDemo(
       authUserId,
       password,
       attendantEmail,
-      attendantName,
+      attendantName: onDuty?.fullName,
       demoExpiresAt: expiresAt.toISOString(),
     });
   } catch (error) {
@@ -537,10 +544,13 @@ export async function resetDemo(
       .limit(1);
     await limitAbandonedTransaction(tx);
     await clearDemoData(tx, organizationId, { keepOwner: true });
-    await seedDemoOrganization(tx, organizationId, owner.id, setup, { now: options.now });
-    // Keep the shared attendant login working after a reset.
-    if (attendantLogin?.authUserId && attendantLogin.email)
-      await linkDemoAttendantLogin(tx, organizationId, {
+    const { history } = await seedDemoOrganization(tx, organizationId, owner.id, setup, {
+      now: options.now,
+    });
+    // Keep the shared attendant login working: move it to whoever is on duty now.
+    const onDuty = await onDutyAttendant(tx, history.eveningShiftId);
+    if (onDuty && attendantLogin?.authUserId && attendantLogin.email)
+      await linkAttendantLogin(tx, onDuty.id, {
         authUserId: attendantLogin.authUserId,
         email: attendantLogin.email,
       });
