@@ -58,7 +58,7 @@ export function StatementTable<T>({
   return (
     <table
       aria-label={label}
-      className={cn('w-full border-collapse text-[11px] text-ink-default', className)}
+      className={cn('w-full border-collapse text-[12px] text-ink-default', className)}
     >
       <thead>
         <tr className="border-b border-border-soft">
