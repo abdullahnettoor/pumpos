@@ -42,6 +42,12 @@ interface ShiftHistoryTabProps {
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
   viewShiftId?: string | null;
   onClearViewShiftId?: () => void;
+  /**
+   * Open a row's summary by id. When given, the parent owns the open summary
+   * (and renders this tab outside its Page Frame, so the summary is a page of
+   * its own); else the tab keeps it locally.
+   */
+  onOpenShift?: (shiftId: string) => void;
 }
 
 /**
@@ -55,6 +61,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
   userRole,
   viewShiftId,
   onClearViewShiftId,
+  onOpenShift,
 }) => {
   const stationId = selectedStation?.id ?? null;
   const timeZone = (selectedStation?.settings as { timezone?: string } | undefined)?.timezone;
@@ -74,10 +81,14 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
   // Stable so the column definitions below keep memoising.
   const setActiveSummary = useCallback(
     (row: any) => {
+      if (onOpenShift) {
+        onOpenShift(row.shiftId);
+        return;
+      }
       onClearViewShiftId?.();
       setPickedSummary(row);
     },
-    [onClearViewShiftId],
+    [onClearViewShiftId, onOpenShift],
   );
 
   const handleBack = () => {
@@ -182,17 +193,19 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
     );
   }
 
-  if (activeSummary) {
+  if (activeSummary || viewShiftId) {
     const canReopen =
-      (userRole === 'Owner' || userRole === 'Manager') && activeSummary.shiftStatus === 'CLOSED';
+      (userRole === 'Owner' || userRole === 'Manager') &&
+      (activeSummary?.shiftStatus ?? activeSummary?.status) === 'CLOSED';
 
     return (
       <div>
         <ShiftSummaryView
           shiftSummary={activeSummary}
+          query={summariesQ}
           userRole={userRole}
           canReopen={canReopen}
-          shiftStatus={activeSummary.shiftStatus}
+          shiftStatus={activeSummary?.shiftStatus ?? activeSummary?.status}
           station={selectedStation}
           onReopenSuccess={() => {
             runTask(

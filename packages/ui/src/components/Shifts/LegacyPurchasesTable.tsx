@@ -1,6 +1,31 @@
 import React from 'react';
-import { inr } from '../../utils/format.js';
-import { legacyPurchases } from '../../services/reports/legacyPurchases.js';
+import { Panel, SectionHeader, StatementTable, type TableColumn } from '../../pump-ds/index.js';
+import {
+  legacyPurchases,
+  type LegacySnapshotPurchase,
+} from '../../services/reports/legacyPurchases.js';
+
+type Row = LegacySnapshotPurchase & { key: string };
+
+const COLUMNS: TableColumn<Row>[] = [
+  {
+    id: 'supplier',
+    header: 'Supplier',
+    kind: 'text',
+    emphasis: true,
+    value: (r) => r.supplierName,
+  },
+  {
+    id: 'ref',
+    header: 'Ref / invoice',
+    kind: 'text',
+    value: (r) =>
+      [r.documentNumber, r.invoiceNumber && `(${r.invoiceNumber})`].filter(Boolean).join(' ') ||
+      null,
+  },
+  { id: 'notes', header: 'Notes', kind: 'text', value: (r) => r.notes },
+  { id: 'amount', header: 'Amount', kind: 'money', value: (r) => r.amount },
+];
 
 /**
  * "Supplier Fuel Intakes" from an older Shift Summary snapshot. Purchases anchor
@@ -9,52 +34,22 @@ import { legacyPurchases } from '../../services/reports/legacyPurchases.js';
  * purchases they stored keep showing.
  */
 export const LegacyPurchasesTable: React.FC<{ snapshot: unknown }> = ({ snapshot }) => {
-  const rows = legacyPurchases(snapshot);
+  const rows: Row[] = legacyPurchases(snapshot).map((p, i) => ({ ...p, key: String(i) }));
   if (rows.length === 0) return null;
   return (
-    <div style={{ marginBottom: '28px' }}>
-      <h4
-        style={{
-          fontSize: '12px',
-          fontWeight: 600,
-          color: 'var(--text-muted)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-          marginBottom: '8px',
-        }}
-      >
-        Supplier Fuel Intakes
-      </h4>
-      <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr
-            style={{
-              borderBottom: '1px solid var(--border-strong)',
-              textAlign: 'left',
-              color: 'var(--text-muted)',
-            }}
-          >
-            <th style={{ padding: '6px 8px' }}>Supplier</th>
-            <th style={{ padding: '6px 8px' }}>Ref / Invoice</th>
-            <th style={{ padding: '6px 8px' }}>Notes</th>
-            <th style={{ padding: '6px 8px', textAlign: 'right' }}>Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((p: any, idx: number) => (
-            <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-              <td style={{ padding: '6px 8px', fontWeight: 600 }}>{p.supplierName}</td>
-              <td style={{ padding: '6px 8px', color: 'var(--text-default)' }}>
-                {p.documentNumber} {p.invoiceNumber ? `(${p.invoiceNumber})` : ''}
-              </td>
-              <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{p.notes}</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>
-                {inr(p.amount)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <section className="flex flex-col gap-2">
+      <SectionHeader title="Supplier Fuel Intakes" />
+      <Panel>
+        <StatementTable
+          columns={COLUMNS}
+          rows={rows}
+          rowKey={(r) => r.key}
+          totalRow={{
+            label: `Total of ${rows.length} stored ${rows.length === 1 ? 'purchase' : 'purchases'}`,
+          }}
+          label="Supplier fuel intakes"
+        />
+      </Panel>
+    </section>
   );
 };

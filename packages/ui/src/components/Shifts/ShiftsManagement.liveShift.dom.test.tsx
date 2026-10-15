@@ -310,6 +310,8 @@ describe('the last shift summary link', () => {
     mount('Manager');
     const bar = screen.getByTestId('live-shift-bar');
     fireEvent.click(within(bar).getByRole('button', { name: /Last shift summary/ }));
-    expect(screen.getByRole('tab', { name: /History/ }).getAttribute('aria-selected')).toBe('true');
+    // The summary is a page of its own (#535): its back link leads to History.
+    expect(screen.getByRole('link', { name: 'Back to History' })).toBeDefined();
+    expect(screen.queryByRole('tab', { name: /History/ })).toBeNull();
   });
 });
