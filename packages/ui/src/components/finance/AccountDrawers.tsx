@@ -1,9 +1,9 @@
 import React, { useState, type ReactNode } from 'react';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { Drawer } from '../Drawer.js';
-import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
+import { Field, TextInput, NumberInput, Select } from '../primitives/Field.js';
 import { useToast } from '../primitives/ToastProvider.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, DatePickerButton } from '../../pump-ds/index.js';
 import { queryKeys } from '../../query/hooks.js';
 import { CloudFinanceService } from '../../services/cloud.js';
 import { formatMoney } from '../../utils/format.js';
@@ -230,9 +230,11 @@ export const NewAccountDrawer: React.FC<Omit<BaseDrawerProps, 'today'>> = ({
             />
           </Field>
           <Field label="As of">
-            <DateField
+            <DatePickerButton
+              variant="field"
+              aria-label="Opening balance as of"
               value={openingDate}
-              onChange={(e) => setOpeningDate(e.target.value)}
+              onChange={setOpeningDate}
               disabled={submitting}
             />
           </Field>
@@ -348,9 +350,11 @@ export const TransferDrawer: React.FC<BaseDrawerProps & { accounts: readonly Acc
             />
           </Field>
           <Field label="Date">
-            <DateField
+            <DatePickerButton
+              variant="field"
+              aria-label="Date"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={setDate}
               disabled={submitting}
             />
           </Field>
@@ -471,7 +475,13 @@ export const SettleDrawer: React.FC<
           </strong>
         </div>
         <Field label="Date">
-          <DateField value={date} onChange={(e) => setDate(e.target.value)} disabled={submitting} />
+          <DatePickerButton
+            variant="field"
+            aria-label="Date"
+            value={date}
+            onChange={setDate}
+            disabled={submitting}
+          />
         </Field>
         <Field label="Notes">
           <TextInput
@@ -623,9 +633,11 @@ export const AddEntryDrawer: React.FC<BaseDrawerProps & { account: AccountRow }>
             />
           </Field>
           <Field label={opening ? 'As of' : 'Date'}>
-            <DateField
+            <DatePickerButton
+              variant="field"
+              aria-label={opening ? 'Opening balance as of' : 'Date'}
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={setDate}
               disabled={submitting}
             />
           </Field>

@@ -5,6 +5,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
+import { pickDate, pickedDate } from '../../test/datePicker.js';
 import { publishNavIntent, __resetNavIntentForTests } from '../../nav-intent/store.js';
 import { queryKeys } from '../../query/hooks.js';
 import { AccountsRoute } from '../../test/AccountsRoute.js';
@@ -145,7 +146,7 @@ describe('New account drawer', () => {
     type('Account no.', '****9876');
     type('IFSC', 'HDFC0000123');
     type('Opening balance (₹)', '1500');
-    type('As of', '2026-10-01');
+    pickDate('Opening balance as of', '2026-10-01', drawer());
     submit('Create account');
     await waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0]).toMatchObject({
@@ -194,7 +195,7 @@ describe('Transfer drawer', () => {
     fireEvent.click(screen.getByRole('button', { name: /New transfer/ }));
     expect(field('From').value).toBe('cash');
     expect(field('To').value).toBe('sbi');
-    expect(field('Date').value).toBe('2026-10-14');
+    expect(pickedDate('Date', drawer())).toBe('2026-10-14');
 
     submit('Record transfer');
     expect(alertText()).toBe('Enter an amount greater than zero.');
@@ -232,7 +233,7 @@ describe('Settle to bank drawer', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Settle to bank/ }));
     expect(field('Settle into (bank)').value).toBe('sbi');
     expect(field('Gross batch (₹)').value).toBe('300');
-    expect(field('Date').value).toBe('2026-10-14');
+    expect(pickedDate('Date', drawer())).toBe('2026-10-14');
 
     type('MDR / fee (₹)', '400');
     submit('Record settlement');
@@ -313,7 +314,7 @@ describe('Add entry drawer', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Add entry/ }));
     fireEvent.change(field('Type'), { target: { value: 'OPENING' } });
     expect(field('Opening balance (₹)').value).toBe('250');
-    expect(field('As of').value).toBe('2026-04-01');
+    expect(pickedDate('Opening balance as of', drawer())).toBe('2026-04-01');
     expect(within(drawer()).queryByText('Notes', { selector: 'label' })).toBeNull();
     type('Opening balance (₹)', '-1200');
     submit('Save opening balance');

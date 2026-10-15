@@ -16,6 +16,7 @@ import {
   sameOfficeEntries,
   type OfficePaymentFields,
 } from '../../lib/money/officePayment.js';
+import { pickedDateLabel } from '../../lib/dates.js';
 import { inputClass } from '../../components/handover/Fields.js';
 import { BottomSheet } from '../../ui/BottomSheet.js';
 import { SegmentedControl } from '../../ui/SegmentedControl.js';
@@ -237,9 +238,14 @@ const Form = <F extends OfficePaymentFields>({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor={dateId} className="text-[11.5px] font-semibold text-text-muted">
-          Entry date
-        </label>
+        <div className="flex items-baseline justify-between gap-2">
+          <label htmlFor={dateId} className="text-[11.5px] font-semibold text-text-muted">
+            Entry date
+          </label>
+          <span className="num text-xs font-semibold text-text-high" data-testid="entry-date-shown">
+            {pickedDateLabel(String(entries.entryDate ?? ''))}
+          </span>
+        </div>
         <input
           id={dateId}
           type="date"

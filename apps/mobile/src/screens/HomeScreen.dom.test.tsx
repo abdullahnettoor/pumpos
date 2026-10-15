@@ -581,8 +581,9 @@ describe('Home: tanks, money, removed sections', () => {
     expect(level('HSD')).toBe('critical'); // 18%
     expect(level('XP95')).toBe('low'); // 35%
     expect(container.querySelectorAll('[data-level]')).toHaveLength(3);
+    // Stock leads, its capacity line under it (#609).
     expect(screen.getByText('18%')).toBeTruthy();
-    expect(screen.getByText('12.4 KL')).toBeTruthy();
+    expect(screen.getByText('12,400 L', { exact: false })).toBeTruthy();
   });
 
   it('colours tank gauges by the station tank levels (#520)', () => {

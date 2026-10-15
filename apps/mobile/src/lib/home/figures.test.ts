@@ -77,7 +77,7 @@ describe('tank gauges', () => {
     expect(deriveTanksWith([row], { criticalBelowPct: 10, lowBelowPct: 20 })[0]?.level).toBe('ok');
   });
 
-  it('derives fill, level and a KL label per tank', () => {
+  it('derives fill, level and the stock of capacity per tank (#609)', () => {
     const [ms, hsd] = deriveTanks([
       {
         id: 't1',
@@ -98,8 +98,21 @@ describe('tank gauges', () => {
         productUnit: 'Litre',
       },
     ]);
-    expect(ms).toMatchObject({ title: 'MS', pct: 62, fill: 62, level: 'ok', volume: '12.4 KL' });
-    expect(hsd).toMatchObject({ title: 'HSD', pct: 18, level: 'critical', volume: '3.6 KL' });
+    expect(ms).toMatchObject({
+      title: 'MS',
+      pct: 62,
+      fill: 62,
+      level: 'ok',
+      stock: '12,400 L',
+      detail: 'of 20,000 L · 62%',
+    });
+    expect(hsd).toMatchObject({
+      title: 'HSD',
+      pct: 18,
+      level: 'critical',
+      stock: '3,600 L',
+      detail: 'of 20,000 L · 18%',
+    });
   });
 
   it('keeps the tube within bounds when book stock is over capacity', () => {
@@ -156,7 +169,7 @@ describe('tank gauges', () => {
         productUnit: 'kg',
       },
     ]);
-    expect(t.volume).toBe('250 kg');
+    expect(t).toMatchObject({ stock: '250 kg', detail: 'of 500 kg · 50%' });
   });
 });
 

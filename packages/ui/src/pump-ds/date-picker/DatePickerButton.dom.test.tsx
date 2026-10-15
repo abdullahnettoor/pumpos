@@ -112,3 +112,83 @@ describe('DatePickerButton (#603)', () => {
     expect(screen.getByRole('grid', { name: 'October 2026' })).toBeTruthy();
   });
 });
+
+describe('DatePickerButton as a form field (#609)', () => {
+  it('fills its column at form-field height', () => {
+    render(
+      <DatePickerButton
+        aria-label="DSR date"
+        variant="field"
+        value="2026-10-11"
+        onChange={() => {}}
+      />,
+    );
+    expect(trigger().className).toContain('h-9');
+    expect(trigger().className).toContain('w-full');
+  });
+
+  it('does not open while disabled, and closes when it becomes disabled', () => {
+    const { rerender } = render(
+      <DatePickerButton aria-label="DSR date" value="2026-10-11" onChange={() => {}} disabled />,
+    );
+    fireEvent.click(trigger());
+    expect(screen.queryByRole('dialog')).toBeNull();
+    rerender(<DatePickerButton aria-label="DSR date" value="2026-10-11" onChange={() => {}} />);
+    fireEvent.click(trigger());
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    rerender(
+      <DatePickerButton aria-label="DSR date" value="2026-10-11" onChange={() => {}} disabled />,
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('marks an invalid field', () => {
+    render(<DatePickerButton aria-label="DSR date" value="" invalid onChange={() => {}} />);
+    expect(trigger().getAttribute('aria-invalid')).toBe('true');
+    expect(trigger().className).toContain('border-danger-fg');
+  });
+
+  it('forwards its button ref and hands its calendar to calendarRef', () => {
+    const button = React.createRef<HTMLButtonElement>();
+    const calendar: React.MutableRefObject<HTMLDivElement | null> = { current: null };
+    render(
+      <DatePickerButton
+        ref={button}
+        calendarRef={calendar}
+        aria-label="DSR date"
+        value="2026-10-11"
+        onChange={() => {}}
+      />,
+    );
+    expect(button.current).toBe(trigger());
+    fireEvent.click(trigger());
+    expect(calendar.current).toBe(screen.getByTestId('date-picker-popover'));
+    fireEvent.keyDown(calendar.current!, { key: 'Escape' });
+    expect(calendar.current).toBeNull();
+  });
+});
+
+describe('DatePickerButton onBlur (#611 review)', () => {
+  it('fires when focus leaves the control, not when it moves into its calendar', () => {
+    const onBlur = vi.fn();
+    render(
+      <>
+        <DatePickerButton
+          aria-label="DSR date"
+          value="2026-10-11"
+          onChange={() => {}}
+          onBlur={onBlur}
+        />
+        <button type="button">Elsewhere</button>
+      </>,
+    );
+    fireEvent.click(trigger());
+    const day = screen.getByRole('button', { name: 'Sun 11 Oct 2026' });
+    fireEvent.blur(trigger(), { relatedTarget: day });
+    expect(onBlur).not.toHaveBeenCalled();
+    fireEvent.blur(day, { relatedTarget: screen.getByRole('button', { name: 'Elsewhere' }) });
+    expect(onBlur).toHaveBeenCalledTimes(1);
+    fireEvent.blur(trigger(), { relatedTarget: screen.getByRole('button', { name: 'Elsewhere' }) });
+    expect(onBlur).toHaveBeenCalledTimes(2);
+  });
+});

@@ -97,7 +97,15 @@ const station = {
 } as unknown as Station;
 
 const TANKS = [
-  { id: 'tk-ms', name: 'Tank 1', productId: 'ms', productName: 'Petrol', currentVolume: 8000 },
+  {
+    id: 'tk-ms',
+    name: 'Tank 1',
+    productId: 'ms',
+    productName: 'Petrol',
+    currentVolume: 8000,
+    capacity: 20000,
+    productUnit: 'L',
+  },
   { id: 'tk-hsd', name: 'Tank 2', productId: 'hsd', productName: 'Diesel', currentVolume: 9000 },
 ];
 
@@ -267,6 +275,14 @@ describe('Tanker arrived (first half)', () => {
       lines: [{ tankId: 'tk-ms', beforeDip: 3000, roDensity: 746 }],
     });
     expect(body.unloadEndedAt).toBeUndefined();
+  });
+
+  it("reads a tank's book stock of its capacity, as desktop (#609)", () => {
+    mount('Owner', <TankerArrivedPage station={station} />);
+    fireEvent.change(screen.getByLabelText('Tank 1'), { target: { value: 'tk-ms' } });
+    expect(screen.getByText('Book 8,000 L of 20,000 L · 40%')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Tank 1'), { target: { value: 'tk-hsd' } });
+    expect(screen.getByText('Book 9,000 L')).toBeTruthy();
   });
 
   it('shows the tanker chambers only behind the checkbox', () => {

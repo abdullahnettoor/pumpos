@@ -190,6 +190,10 @@ describe('the sheet', () => {
     await openSheet();
     expect(dateField().value).toBe('2026-10-10');
     expect(dateField().max).toBe('2026-10-10');
+    // The native picker stays; the date beside it reads unambiguously (#609).
+    expect(screen.getByTestId('entry-date-shown').textContent).toBe('Sat 10 Oct 2026');
+    fireEvent.change(dateField(), { target: { value: '2026-09-08' } });
+    expect(screen.getByTestId('entry-date-shown').textContent).toBe('Tue 8 Sep 2026');
     cleanup();
 
     mount({ station: station('UTC') });

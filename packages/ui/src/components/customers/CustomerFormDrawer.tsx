@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { canChangeCreditLimit, customerCreateSchema } from '@pump/shared';
+import { canChangeCreditLimit, customerCreateSchema, resolveEntryDate } from '@pump/shared';
 import type { Role } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { Field, TextInput, MoneyInput, Textarea, Select } from '../primitives/Field.js';
 import { Checkbox } from '../primitives/Toggle.js';
-import { Button, Form } from '../../pump-ds/index.js';
+import { Button, DatePickerButton, Form } from '../../pump-ds/index.js';
 import { CloudTransactionService } from '../../services/cloud.js';
-import { useInvalidateOperational } from '../../query/hooks.js';
+import { useInvalidateOperational, useStationTimeZone } from '../../query/hooks.js';
 import { useToast } from '../primitives/ToastProvider.js';
 
 const transactionService = new CloudTransactionService();
@@ -60,6 +60,10 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
   // schema). Only offered on create for non-prepaid Credit/Fleet customers.
   const [openingDue, setOpeningDue] = useState('');
   const [openingAsOf, setOpeningAsOf] = useState('');
+  // An opening balance is dated by the station's calendar (Entry Date, ADR
+  // 0005), never this device's.
+  const timeZone = useStationTimeZone(stationId);
+  const today = resolveEntryDate({ timeZone });
 
   const {
     register,
@@ -274,11 +278,12 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
                 />
               </Field>
               <Field label="As of Date" hint="Defaults to today">
-                <TextInput
-                  type="date"
-                  max={new Date().toLocaleDateString('en-CA')}
+                <DatePickerButton
+                  variant="field"
+                  aria-label="Opening due as of"
                   value={openingAsOf}
-                  onChange={(e) => setOpeningAsOf(e.target.value)}
+                  onChange={setOpeningAsOf}
+                  max={today}
                   disabled={isSubmitting}
                 />
               </Field>
