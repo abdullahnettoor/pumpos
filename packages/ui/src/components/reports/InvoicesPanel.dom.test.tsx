@@ -56,7 +56,7 @@ describe('InvoicesPanel', () => {
 
   it('lists merchandise sales newest first with a total and in-range tiles', () => {
     renderWithProviders(<InvoicesPanel selectedStation={station} userRole="Owner" />);
-    expect(screen.getAllByText('In range')).toHaveLength(3);
+    expect(screen.getAllByText('In range')).toHaveLength(1);
     const section = screen.getByTestId('section-header-merchandise-invoices').parentElement!;
     const bodyRows = section.querySelectorAll('tbody tr');
     expect(within(bodyRows[0] as HTMLElement).getByText('Acme Logistics')).toBeTruthy();

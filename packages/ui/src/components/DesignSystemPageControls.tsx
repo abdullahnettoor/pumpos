@@ -100,25 +100,22 @@ const ReportLayout: React.FC = () => {
         exportMenu={<ExportMenu onPdf={noop} onCsv={noop} onPrint={noop} />}
         info={<Tip>Gross margin is by sales day. Expenses and other income are by entry date.</Tip>}
       />
-      <KpiStrip>
+      <KpiStrip scope="in-range">
         <KpiTile
           label="Revenue"
-          scope="in-range"
           value="₹87,57,000"
           delta={{ value: '6%', direction: 'up' }}
           hint="vs Sep, same days"
         />
-        <KpiTile label="Gross margin" scope="in-range" value="₹6,63,600" hint="7.6% of revenue" />
+        <KpiTile label="Gross margin" value="₹6,63,600" hint="7.6% of revenue" />
         <KpiTile
           label="Operating expenses"
-          scope="in-range"
           value="₹93,940"
           delta={{ value: '5%', direction: 'up', neutral: true }}
           hint="vs Sep, same days"
         />
         <KpiTile
           label="Net profit"
-          scope="in-range"
           value="₹5,69,660"
           delta={{ value: '6%', direction: 'up' }}
           hint="vs Sep, same days"
@@ -339,7 +336,9 @@ const Pieces: React.FC = () => {
         </div>
       </div>
       <div className="flex flex-col gap-2">
-        <Caption>KpiTile · period chips, plain values, alert as the only colour</Caption>
+        <Caption>
+          KpiTile · a chip only where periods differ, none on a balance; alert as the only colour
+        </Caption>
         <KpiStrip>
           <KpiTile
             label="Spent"

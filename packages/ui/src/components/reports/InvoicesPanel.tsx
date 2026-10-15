@@ -187,18 +187,16 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
       />
 
       <DataSection title="Invoice totals" query={salesQ} shape="cards" placeholderHeight={90}>
-        <KpiStrip columns="auto">
+        <KpiStrip columns="auto" scope="in-range">
           <KpiTile
             label="Merchandise sales"
-            scope="in-range"
             value={formatMoney(kpis.total)}
             hint={`${rows.length} ${rows.length === 1 ? 'sale' : 'sales'}`}
           />
-          <KpiTile label="Invoiced" scope="in-range" value={String(kpis.invoiced)} />
+          <KpiTile label="Invoiced" value={String(kpis.invoiced)} />
           <KpiTile
             alert={kpis.pending > 0 ? 'warning' : undefined}
             label="Not invoiced"
-            scope="in-range"
             value={String(kpis.pending)}
           />
         </KpiStrip>

@@ -137,16 +137,14 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
       />
 
       <DataSection title="Attendant totals" query={reportQ} shape="cards" placeholderHeight={90}>
-        <KpiStrip columns="auto">
+        <KpiStrip columns="auto" scope="in-range">
           <KpiTile
             label="Attendants"
-            scope="in-range"
             value={String(attendants.length)}
             hint={`${countOf(totals.shifts, 'shift', 'shifts')} closed`}
           />
           <KpiTile
             label="Net variance"
-            scope="in-range"
             value={formatVariance(totals.variance, 'cash').text}
             alert={varianceAlert(totals.variance)}
             hint={varianceSpread(attendants)}

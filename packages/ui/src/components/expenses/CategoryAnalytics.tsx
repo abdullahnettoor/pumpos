@@ -175,23 +175,16 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
       />
 
       <DataSection title={`${kind} totals`} query={recordsQ} shape="cards" placeholderHeight={90}>
-        <KpiStrip columns="auto">
+        <KpiStrip columns="auto" scope="in-range">
           <KpiTile
             label="Average per day"
-            scope="in-range"
             value={formatMoney(total / days)}
             hint={`over ${days} ${days === 1 ? 'day' : 'days'}`}
           />
-          <KpiTile label="Entries" scope="in-range" value={String(active.length)} />
-          <KpiTile
-            label="Categories"
-            scope="in-range"
-            value={String(byCategory.length)}
-            hint={copy.withAmount}
-          />
+          <KpiTile label="Entries" value={String(active.length)} />
+          <KpiTile label="Categories" value={String(byCategory.length)} hint={copy.withAmount} />
           <KpiTile
             label="Largest category"
-            scope="in-range"
             value={formatMoney(largest?.total ?? 0)}
             hint={largest?.name ?? '—'}
           />

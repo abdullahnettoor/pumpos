@@ -424,7 +424,7 @@ describe('DecantationReportPanel DOM tests', () => {
     expect(screen.getByText('Settled invoice volume')).toBeTruthy();
     expect(screen.getByText('Settled invoice variance')).toBeTruthy();
     expect(screen.getByText('Transit discrepancies')).toBeTruthy();
-    expect(screen.getAllByText('In range').length).toBe(4);
+    expect(screen.getAllByText('In range').length).toBe(1);
     // Volume received is the visits table's total, not a tile
     expect(screen.queryByText('Volume received')).toBeNull();
     const visits = screen.getByTestId('decantation-report-table');

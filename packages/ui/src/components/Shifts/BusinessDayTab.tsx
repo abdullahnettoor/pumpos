@@ -568,28 +568,24 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
           }
         >
           <div className="flex flex-col gap-4">
-            <KpiStrip columns="auto">
+            <KpiStrip columns="auto" scope={scope}>
               <KpiTile
                 label="Fuel sold"
-                scope={scope}
                 value={formatQuantity(figures.netVolume, 'L')}
                 hint={`${countOf(figures.shiftsIncluded, 'closed shift', 'closed shifts')}`}
               />
               <KpiTile
                 label="Sales"
-                scope={scope}
                 value={formatMoney(figures.revenue)}
                 hint={`Fuel ${formatMoney(figures.revenueFuel, { decimals: 0 })} · Products ${formatMoney(figures.revenueProducts, { decimals: 0 })}`}
               />
               <KpiTile
                 label="Credit sales"
-                scope={scope}
                 value={formatMoney(figures.creditTotal)}
                 hint={`Fleet ${formatMoney(figures.fleetCredit, { decimals: 0 })}`}
               />
               <KpiTile
                 label="Gross margin"
-                scope={scope}
                 value={formatMoney(figures.grossMargin)}
                 alert={figures.grossMargin < 0 ? 'danger' : undefined}
                 hint={`COGS ${formatMoney(figures.cogs, { decimals: 0 })}`}

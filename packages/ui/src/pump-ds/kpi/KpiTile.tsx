@@ -2,13 +2,16 @@ import React, { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../lib/cn.js';
 import { Delta, type DeltaDirection } from '../delta/Delta.js';
-import { formatKpiScope, type KpiScope } from './scope.js';
+import { kpiTileChip, type KpiScope } from './scope.js';
+import { useKpiStripScope } from './context.js';
 
 /**
  * KpiTile — one headline figure (#567). Lives inside `KpiStrip`, which paints
  * the frame and the dividers; the tile itself has no border or radius.
  *
- * - A 12px sentence-case label, with the period chip (`scope`) at its right.
+ * - A 12px sentence-case label, with the period chip (`scope`) at its right
+ *   only where it tells the reader something (#604): never on a balance
+ *   (`now`), and never when the strip already names the period.
  * - A plain mono value. Ordinary money is never coloured.
  * - `alert` is the only way a tile shows colour, and only for a problem
  *   (Overdue, Over limit, a negative net): a coloured left edge plus the value
@@ -42,7 +45,11 @@ export interface KpiTileProps
   label: ReactNode;
   /** The figure, pre-formatted (`inr(…)`, `formatQuantity(…)`). */
   value: ReactNode;
-  /** The period chip: Today · a month (Oct) · In range · Now. */
+  /**
+   * The period the figure covers: Today · a month (Oct) · In range · This
+   * shift · `now` for a balance (never shown). The chip is dropped when the
+   * strip's `scope` names the same period.
+   */
   scope?: KpiScope;
   /** Colour the tile for a problem only. Never for ordinary money. */
   alert?: KpiAlert;
@@ -69,6 +76,7 @@ export const KpiTile = forwardRef<HTMLDivElement, KpiTileProps>(function KpiTile
   { className, size, label, value, scope, alert, delta, hint, ...rest },
   ref,
 ) {
+  const chip = kpiTileChip(scope, useKpiStripScope());
   return (
     <div
       ref={ref}
@@ -76,11 +84,12 @@ export const KpiTile = forwardRef<HTMLDivElement, KpiTileProps>(function KpiTile
       className={cn(kpiTileVariants({ size, alert: alert ?? 'none' }), className)}
       {...rest}
     >
-      <div className="flex min-w-0 items-center gap-1.5 text-[12px] font-medium text-ink-muted">
+      {/* Chip height, chip or not: values line up across a mixed strip (#604). */}
+      <div className="flex min-h-5 min-w-0 items-center gap-1.5 text-[12px] font-medium text-ink-muted">
         <span className="truncate">{label}</span>
-        {scope && (
+        {chip && (
           <span className="ml-auto shrink-0 whitespace-nowrap rounded-sm border border-border-soft bg-surface-alt px-1.5 text-[12px] leading-normal text-ink-muted">
-            {formatKpiScope(scope)}
+            {chip}
           </span>
         )}
       </div>

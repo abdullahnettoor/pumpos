@@ -72,7 +72,7 @@ describe('TaxRegisterPanel', () => {
     query = ok(rows);
     renderWithProviders(<TaxRegisterPanel selectedStation={station} />);
     expect(screen.getAllByTestId('control-bar')).toHaveLength(1);
-    expect(screen.getAllByText('In range')).toHaveLength(2);
+    expect(screen.getAllByText('In range')).toHaveLength(1);
 
     const gst = sectionOf('section-header-gst-on-merchandise-sales');
     expect(within(gst).getByText('HSN 2710')).toBeTruthy();

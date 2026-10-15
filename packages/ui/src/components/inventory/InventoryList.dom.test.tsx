@@ -213,8 +213,9 @@ describe('Inventory page (#536)', () => {
     expect(tileOf('Tanks low / critical').dataset.alert).toBe('danger');
     expect(tileOf('Out of stock').dataset.alert).toBe('warning');
     expect(tileOf('Oversold').dataset.alert).toBe('danger');
+    // Every tile is a balance at this moment: no period chip (#604).
     for (const label of ['Fuel stock', 'Tanks low / critical', 'Out of stock', 'Oversold'])
-      expect(tileOf(label).textContent).toContain('Now');
+      expect(tileOf(label).textContent).not.toContain('Now');
     expect(screen.queryByText('Book stock over capacity')).toBeNull();
   });
 

@@ -191,16 +191,14 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({
       />
 
       <DataSection title="Output tax totals" query={salesQ} shape="cards" placeholderHeight={90}>
-        <KpiStrip columns="auto">
+        <KpiStrip columns="auto" scope="in-range">
           <KpiTile
             label="Output GST (merchandise)"
-            scope="in-range"
             value={formatMoney(totals.gstOutput)}
             hint={`${gstSaleRows.length} ${gstSaleRows.length === 1 ? 'line' : 'lines'}`}
           />
           <KpiTile
             label="Output VAT (fuel)"
-            scope="in-range"
             value={formatMoney(totals.vat)}
             hint="no input credit"
           />

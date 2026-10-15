@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { KpiStrip } from './KpiStrip.js';
 import { KpiTile } from './KpiTile.js';
-import { formatKpiScope } from './scope.js';
+import { formatKpiScope, kpiTileChip, sharedKpiScope } from './scope.js';
 
 const COLOUR = /(?:^|\s)(?:text|bg|border|shadow)-[^\s]*(?:warning|danger|success|info|brand)/;
 
@@ -29,6 +29,32 @@ describe('KpiTile', () => {
     expect(formatKpiScope({ month: '2026-10' })).toBe('Oct');
     // One locale-free month table: never ICU's "Sept".
     expect(formatKpiScope({ month: '2026-09-30' })).toBe('Sep');
+  });
+
+  it('never labels a balance: `now` shows no chip (#604)', () => {
+    render(<KpiTile label="Receivable" scope="now" value="₹3,82,711.00" />);
+    expect(screen.queryByText('Now')).toBeNull();
+  });
+
+  it('labels a tile only when its strip does not already name the period (#604)', () => {
+    expect(kpiTileChip(undefined)).toBeNull();
+    expect(kpiTileChip('now')).toBeNull();
+    expect(kpiTileChip('today')).toBe('Today');
+    expect(kpiTileChip('today', 'today')).toBeNull();
+    expect(kpiTileChip({ month: '2026-10-14' }, { month: '2026-10' })).toBeNull();
+    expect(kpiTileChip({ month: '2026-10' }, 'today')).toBe('Oct');
+  });
+
+  it('finds the one period a strip shares, or none when tiles differ (#604)', () => {
+    expect(sharedKpiScope(['today', 'today', 'today'])).toBe('today');
+    expect(sharedKpiScope([{ month: '2026-10-01' }, { month: '2026-10' }])).toEqual({
+      month: '2026-10-01',
+    });
+    expect(sharedKpiScope(['today', { month: '2026-10' }])).toBeNull();
+    // A balance has no period, so a strip holding one names nothing.
+    expect(sharedKpiScope(['now', 'now'])).toBeNull();
+    expect(sharedKpiScope([{ month: '2026-10' }, 'now'])).toBeNull();
+    expect(sharedKpiScope([])).toBeNull();
   });
 
   it('has no colour without alert: the value is plain ink', () => {
@@ -80,6 +106,27 @@ describe('KpiStrip', () => {
 
   const tiles = (n: number) =>
     Array.from({ length: n }, (_, i) => <KpiTile key={i} label={`Tile ${i}`} value={String(i)} />);
+
+  it('names a shared period once above the strip; tiles drop the repeat (#604)', () => {
+    render(
+      <KpiStrip scope="today" aria-label="Today's figures">
+        <KpiTile label="Fuel sold" scope="today" value="0.00 L" />
+        <KpiTile label="Sales" value="₹0.00" />
+        <KpiTile label="Other" scope={{ month: '2026-10' }} value="1" />
+      </KpiStrip>,
+    );
+    expect(screen.getAllByText('Today')).toHaveLength(1);
+    expect(screen.getByText('Oct')).toBeTruthy();
+    const strip = screen.getByLabelText("Today's figures");
+    expect(strip.firstElementChild?.textContent).toBe('Today');
+  });
+
+  it('renders no caption without a scope', () => {
+    const { container } = render(<KpiStrip>{tiles(2)}</KpiStrip>);
+    const strip = container.firstElementChild as HTMLElement;
+    expect(strip.className).toContain('bg-border-soft');
+    expect(strip.children).toHaveLength(2);
+  });
 
   it('warns in development above 4 tiles', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

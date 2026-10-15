@@ -263,7 +263,7 @@ describe('owner decisions for the pilot (#566)', () => {
   );
 
   it.each(['expense', 'income'] as const)(
-    '%s By category is layout A: one range bar above "In range" tiles and the table',
+    '%s By category is layout A: one range bar above the tiles ("In range", named once) and the table',
     async (kind) => {
       stubApi({ [PAGES[kind].path]: { data: RECORDS } });
       renderWithProviders(PAGES[kind].render());
@@ -272,7 +272,8 @@ describe('owner decisions for the pilot (#566)', () => {
       const bar = screen.getByTestId('control-bar');
       expect(within(bar).getByRole('button', { name: /by category period/i })).toBeTruthy();
       expect(before(bar, table)).toBe(true);
-      expect(screen.getAllByText('In range')).toHaveLength(4);
+      // The strip names its one period once (#604).
+      expect(screen.getAllByText('In range')).toHaveLength(1);
       // A tile never repeats the table's total: the total row carries it.
       expect(screen.queryByText(kind === 'expense' ? 'Total expenses' : 'Total income')).toBeNull();
       expect(document.body.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
@@ -431,7 +432,8 @@ describe('Income › GST for Staff (#529)', () => {
     const bar = screen.getByTestId('control-bar');
     expect(before(bar, table)).toBe(true);
     expect(within(bar).getByRole('button', { name: 'About income GST' })).toBeTruthy();
-    expect(screen.getAllByText('In range')).toHaveLength(4);
+    // The strip names its one period once (#604).
+    expect(screen.getAllByText('In range')).toHaveLength(1);
     // Output GST is plain, not a brand or success figure.
     const output = screen.getByText('Output GST').closest('div')!.parentElement!;
     expect(output.querySelector('.kpi-value')!.getAttribute('class')).toMatch(/text-ink-strong/);
