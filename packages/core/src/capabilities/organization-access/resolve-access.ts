@@ -9,7 +9,7 @@ import type {
   Role,
   SubscriptionStatus,
 } from '@pump/shared';
-import { PAYMENT_GRACE_DAYS } from '@pump/shared';
+import { PAYMENT_GRACE_DAYS, isUnlimitedLimit } from '@pump/shared';
 import { PRODUCT_ACCESS_REGISTRY, resolveProductPlan, type AccessRegistry } from './registry.js';
 import type { OrganizationAccessInputs } from './ports.js';
 
@@ -324,7 +324,8 @@ function resolveLimits(
   for (const key of Object.keys(plan.limits) as LimitKey[]) {
     const value = resolveEffectiveLimit(key, inputs, registry);
     const used = inputs.usage[key] ?? 0;
-    entries[key] = { value, used, reached: used >= value };
+    // The "no limit" sentinel is never reached (#603).
+    entries[key] = { value, used, reached: !isUnlimitedLimit(value) && used >= value };
   }
   return entries;
 }

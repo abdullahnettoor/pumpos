@@ -319,6 +319,8 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
                 <span className="text-[12px] font-semibold text-ink-muted">Login with</span>
                 <SegmentedControl
                   aria-label="Login with"
+                  stretch
+                  className="flex-1"
                   options={[
                     { value: 'Phone', label: 'Phone' },
                     { value: 'Email', label: 'Email' },

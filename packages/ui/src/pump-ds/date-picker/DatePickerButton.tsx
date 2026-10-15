@@ -1,15 +1,7 @@
-import React, {
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type KeyboardEvent,
-} from 'react';
+import React, { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn.js';
+import { useAnchoredPopover } from '../lib/anchoredPopover.js';
 import { Icon } from '../icon/Icon.js';
 import {
   formatPickerDate,
@@ -19,8 +11,6 @@ import {
   shiftDate,
   shiftMonth,
 } from './calendar.js';
-
-const GAP = 6;
 
 /** This device's calendar date; only a page to open the calendar on, never data. */
 function deviceToday(): string {
@@ -73,7 +63,6 @@ export function DatePickerButton({
   const valid = /^\d{4}-\d{2}-\d{2}$/.test(value);
   const home = valid ? value : (max ?? deviceToday());
   const [focusDay, setFocusDay] = useState(home);
-  const [position, setPosition] = useState<CSSProperties>({ position: 'fixed', top: 0, left: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const gridId = useId();
@@ -82,44 +71,15 @@ export function DatePickerButton({
   const allowed = (d: string) => (!max || d <= max) && (!min || d >= min);
   const clamp = (d: string) => (max && d > max ? max : min && d < min ? min : d);
 
-  const place = useCallback(() => {
-    const t = triggerRef.current;
-    if (!t) return;
-    const r = t.getBoundingClientRect();
-    const height = popoverRef.current?.getBoundingClientRect().height ?? 0;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const below = vh - r.bottom - GAP;
-    const flip = height > below && r.top - GAP > below;
-    setPosition({
-      position: 'fixed',
-      ...(flip ? { bottom: vh - r.top + GAP } : { top: r.bottom + GAP }),
-      ...(align === 'end' ? { right: vw - r.right } : { left: r.left }),
-    });
-  }, [align]);
-
-  useLayoutEffect(() => {
-    if (!open) return;
-    place();
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
-    return () => {
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
-    };
-  }, [open, place]);
-
-  // A click outside closes it without moving focus.
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      const n = e.target as Node;
-      if (triggerRef.current?.contains(n) || popoverRef.current?.contains(n)) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
+  // Fixed under the button (above when there is no room below); a click
+  // outside closes it without moving focus. Shared with DateRangeMenu.
+  const position = useAnchoredPopover({
+    open,
+    triggerRef,
+    popoverRef,
+    align,
+    onPressOutside: () => setOpen(false),
+  });
 
   // The focused day follows the arrows.
   useEffect(() => {
@@ -162,11 +122,33 @@ export function DatePickerButton({
     }
   };
 
+  // The popover is portalled to the end of <body>, so Tab is kept to it, as in
+  // DateRangeMenu: Tab past the last stop (the day) or Shift+Tab before the
+  // first closes the calendar and returns focus to the button.
   const onPopoverKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
       close();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const stops = Array.from(
+      popoverRef.current?.querySelectorAll<HTMLButtonElement>('button:not([disabled])') ?? [],
+    ).filter((b) => b.tabIndex >= 0);
+    const at = stops.indexOf(e.target as HTMLButtonElement);
+    if ((e.shiftKey && at <= 0) || (!e.shiftKey && at === stops.length - 1)) {
+      e.preventDefault();
+      close();
+    }
+  };
+
+  // Focus leaving for somewhere else (a click into another control, a
+  // programmatic move) closes it without pulling focus back.
+  const onPopoverBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    const next = e.relatedTarget as Node | null;
+    if (next && !popoverRef.current?.contains(next) && !triggerRef.current?.contains(next)) {
+      setOpen(false);
     }
   };
 
@@ -216,6 +198,7 @@ export function DatePickerButton({
             aria-label={ariaLabel}
             style={position}
             onKeyDown={onPopoverKeyDown}
+            onBlur={onPopoverBlur}
             data-testid="date-picker-popover"
             className="z-[1050] w-[264px] rounded-card border border-border-soft bg-surface p-2 shadow-(--shadow-popover)"
           >

@@ -213,6 +213,9 @@ describe('Reports → DSR missing report and Generate (review #579)', () => {
       staleTime: Infinity,
     });
     const stop = watcher.subscribe(() => {});
+    // The calendar opens on today's month: pin today to 15 Oct.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-15T08:00:00Z'));
     try {
       renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />, {
         queryClient: qc,
@@ -229,8 +232,34 @@ describe('Reports → DSR missing report and Generate (review #579)', () => {
       // The day just written holds the write's answer.
       expect(qc.getQueryData(queryKeys.dssrPreview('st-1', '2026-10-14'))).toBe(gen.result);
     } finally {
+      vi.useRealTimers();
       stop();
       gen.result = null;
+    }
+  });
+
+  // Review (#603): the generate picker stops at the station's business date.
+  it("caps the generate date at the station's business date, not the calendar day", () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // 05:30 in Kochi on 15 Oct: before the 06:00 Day Start, so still 14 Oct's business day.
+    vi.setSystemTime(new Date('2026-10-15T00:00:00Z'));
+    try {
+      const kochi = {
+        ...station,
+        settings: { timezone: 'Asia/Kolkata', business_day_starts_at: '06:00' },
+      };
+      renderWithProviders(<ReportsOverview selectedStation={kochi} userRole="Owner" />);
+      const picker = screen.getByRole('button', { name: /^Business date to generate: / });
+      expect(picker.textContent).toBe('Wed 14 Oct 2026');
+      fireEvent.click(picker);
+      expect(screen.getByRole('button', { name: 'Wed 14 Oct 2026' }).hasAttribute('disabled')).toBe(
+        false,
+      );
+      expect(screen.getByRole('button', { name: 'Thu 15 Oct 2026' }).hasAttribute('disabled')).toBe(
+        true,
+      );
+    } finally {
+      vi.useRealTimers();
     }
   });
 

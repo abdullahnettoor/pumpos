@@ -58,6 +58,51 @@ describe('DatePickerButton (#603)', () => {
     expect(document.activeElement).toBe(trigger());
   });
 
+  // Review: Tab out and blur close it, as DateRangeMenu does.
+  it('keeps Tab inside, and Tab past either end closes and returns to the button', () => {
+    render(<DatePickerButton aria-label="DSR date" value="2026-09-11" onChange={() => {}} />);
+    fireEvent.click(trigger());
+    const day = () => document.activeElement as HTMLElement;
+    expect(day().getAttribute('data-date')).toBe('2026-09-11');
+    // The day is the last stop: Tab closes.
+    fireEvent.keyDown(day(), { key: 'Tab' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(trigger());
+
+    // Shift+Tab walks back through Next month, then Previous month, then closes.
+    fireEvent.click(trigger());
+    const stops = screen
+      .getAllByRole('button')
+      .filter((b) => screen.getByRole('dialog').contains(b) && b.tabIndex >= 0);
+    expect(stops.map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Previous month',
+      'Next month',
+      'Fri 11 Sep 2026',
+    ]);
+    fireEvent.keyDown(stops[1], { key: 'Tab', shiftKey: true });
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    fireEvent.keyDown(stops[0], { key: 'Tab', shiftKey: true });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(trigger());
+  });
+
+  it('closes when focus leaves for another control, and on a click outside', () => {
+    render(
+      <>
+        <DatePickerButton aria-label="DSR date" value="2026-10-11" onChange={() => {}} />
+        <button type="button">Elsewhere</button>
+      </>,
+    );
+    const elsewhere = screen.getByRole('button', { name: 'Elsewhere' });
+    fireEvent.click(trigger());
+    fireEvent.blur(document.activeElement as HTMLElement, { relatedTarget: elsewhere });
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    fireEvent.click(trigger());
+    fireEvent.mouseDown(elsewhere);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('asks for a date when none is chosen', () => {
     render(
       <DatePickerButton aria-label="DSR date" value="" max="2026-10-15" onChange={() => {}} />,

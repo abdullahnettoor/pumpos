@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import * as RadixTooltip from '@radix-ui/react-tooltip';
 import { Info } from 'lucide-react';
 import { cn } from '../../pump-ds/lib/cn.js';
-import { TOOLTIP_BUBBLE, TOOLTIP_DELAY_MS } from './Tooltip.js';
+import { TOOLTIP_BUBBLE } from './Tooltip.js';
 
 export interface InfoTipProps {
   /** The explanation shown in the bubble. May wrap over several lines. */
@@ -21,6 +21,7 @@ export interface InfoTipProps {
  *
  * Built on Radix Tooltip (#603): the bubble is portalled and stays inside the
  * window, so a tip at the right end of a control bar no longer runs off-screen.
+ * Needs the app's `TooltipProvider`.
  */
 export const InfoTip: React.FC<InfoTipProps> = ({ children, label, placement = 'bottom' }) => {
   // Hover and focus, as Radix reports them.
@@ -31,53 +32,51 @@ export const InfoTip: React.FC<InfoTipProps> = ({ children, label, placement = '
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <RadixTooltip.Provider delayDuration={TOOLTIP_DELAY_MS}>
-      <RadixTooltip.Root open={open} onOpenChange={setShown}>
-        <RadixTooltip.Trigger asChild>
-          <button
-            ref={triggerRef}
-            type="button"
-            aria-label={label}
-            aria-expanded={open}
-            onClick={() => setPinned((p) => !p)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setPinned(false);
-                setShown(false);
-              }
-            }}
-            className={cn(
-              'inline-flex cursor-pointer rounded-full border-none bg-transparent p-0.5 align-middle text-ink-faint',
-              'hover:text-ink-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand',
-            )}
-          >
-            <Info size={13} aria-hidden="true" />
-          </button>
-        </RadixTooltip.Trigger>
-        <RadixTooltip.Portal>
-          <RadixTooltip.Content
-            side={placement}
-            align="start"
-            sideOffset={6}
-            collisionPadding={8}
-            onEscapeKeyDown={() => setPinned(false)}
-            onPointerDownOutside={(e) => {
-              // A tap on the icon itself toggles through its click.
-              if (triggerRef.current?.contains(e.target as Node)) {
-                e.preventDefault();
-                return;
-              }
+    <RadixTooltip.Root open={open} onOpenChange={setShown}>
+      <RadixTooltip.Trigger asChild>
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-label={label}
+          aria-expanded={open}
+          onClick={() => setPinned((p) => !p)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
               setPinned(false);
-            }}
-            className={cn(
-              TOOLTIP_BUBBLE,
-              'w-max max-w-[280px] whitespace-normal px-2.5 py-2 text-[12px] font-normal normal-case leading-[1.45] tracking-normal',
-            )}
-          >
-            {children}
-          </RadixTooltip.Content>
-        </RadixTooltip.Portal>
-      </RadixTooltip.Root>
-    </RadixTooltip.Provider>
+              setShown(false);
+            }
+          }}
+          className={cn(
+            'inline-flex cursor-pointer rounded-full border-none bg-transparent p-0.5 align-middle text-ink-faint',
+            'hover:text-ink-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand',
+          )}
+        >
+          <Info size={13} aria-hidden="true" />
+        </button>
+      </RadixTooltip.Trigger>
+      <RadixTooltip.Portal>
+        <RadixTooltip.Content
+          side={placement}
+          align="start"
+          sideOffset={6}
+          collisionPadding={8}
+          onEscapeKeyDown={() => setPinned(false)}
+          onPointerDownOutside={(e) => {
+            // A tap on the icon itself toggles through its click.
+            if (triggerRef.current?.contains(e.target as Node)) {
+              e.preventDefault();
+              return;
+            }
+            setPinned(false);
+          }}
+          className={cn(
+            TOOLTIP_BUBBLE,
+            'w-max max-w-[280px] whitespace-normal px-2.5 py-2 text-[12px] font-normal normal-case leading-[1.45] tracking-normal',
+          )}
+        >
+          {children}
+        </RadixTooltip.Content>
+      </RadixTooltip.Portal>
+    </RadixTooltip.Root>
   );
 };

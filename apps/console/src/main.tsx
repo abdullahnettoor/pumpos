@@ -7,6 +7,7 @@ import {
   ErrorBoundary,
   ConfirmProvider,
   ToastProvider,
+  TooltipProvider,
   ThemeProvider,
 } from '@pump/ui';
 import '@pump/ui/src/index.css';
@@ -20,9 +21,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <ThemeProvider>
         <QueryProvider client={queryClient}>
           <ToastProvider>
-            <ConfirmProvider>
-              <App />
-            </ConfirmProvider>
+            <TooltipProvider>
+              <ConfirmProvider>
+                <App />
+              </ConfirmProvider>
+            </TooltipProvider>
           </ToastProvider>
         </QueryProvider>
       </ThemeProvider>

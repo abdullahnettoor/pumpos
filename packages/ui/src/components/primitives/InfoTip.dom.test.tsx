@@ -1,8 +1,11 @@
 import { afterEach, describe, it, expect } from 'vitest';
 import React from 'react';
-import { cleanup, render, screen, fireEvent } from '@testing-library/react';
+import { cleanup, render as rtlRender, screen, fireEvent } from '@testing-library/react';
 import { InfoTip } from './InfoTip.js';
-import { Tooltip } from './Tooltip.js';
+import { Tooltip, TooltipProvider } from './Tooltip.js';
+
+/** The app mounts one TooltipProvider; so does this render. */
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: TooltipProvider });
 
 afterEach(cleanup);
 
@@ -48,6 +51,22 @@ describe('InfoTip', () => {
 });
 
 describe('Tooltip', () => {
+  it('needs the one app-level provider (no per-tooltip provider)', () => {
+    const quiet = console.error;
+    console.error = () => {};
+    try {
+      expect(() =>
+        rtlRender(
+          <Tooltip content="x">
+            <button type="button">y</button>
+          </Tooltip>,
+        ),
+      ).toThrow(/TooltipProvider/);
+    } finally {
+      console.error = quiet;
+    }
+  });
+
   it('describes its trigger on focus', () => {
     render(
       <Tooltip content="Reconciles at shift close">
