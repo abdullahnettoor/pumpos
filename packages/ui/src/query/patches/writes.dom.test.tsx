@@ -17,6 +17,7 @@ const tx = {
   recordSale: vi.fn(),
   voidExpense: vi.fn(),
   voidIncome: vi.fn(),
+  getMerchandiseSales: vi.fn(),
 };
 
 vi.mock('../../services/cloud.js', async (importOriginal) => {
@@ -30,6 +31,7 @@ vi.mock('../../services/cloud.js', async (importOriginal) => {
       recordSale = (...a: unknown[]) => tx.recordSale(...a);
       voidExpense = (...a: unknown[]) => tx.voidExpense(...a);
       voidIncome = (...a: unknown[]) => tx.voidIncome(...a);
+      getMerchandiseSales = (...a: unknown[]) => tx.getMerchandiseSales(...a);
     },
   };
 });
@@ -215,6 +217,42 @@ describe('Billed Product Sale', () => {
       totalAmount: '472.00',
       items: [{ productName: 'Engine oil 1L', quantity: '2', lineTotal: '472.00' }],
     });
+  });
+});
+
+describe('Billed Product Sale, refetch fails', () => {
+  it('keeps the accepted sale when the revalidation fails', async () => {
+    const key = queryKeys.merchandiseSales('shift-1');
+    tx.recordSale.mockResolvedValue({
+      sale: { ...saleAnswer.sale, paymentMethod: 'Cash' },
+      lines: [],
+    });
+    tx.getMerchandiseSales.mockRejectedValue(new Error('offline'));
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(key, [{ id: 'sale-0' }]);
+    const Live: React.FC = () => {
+      hooks.useMerchandiseSales('shift-1', { staleTime: 0 });
+      return null;
+    };
+    const wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+      <QueryClientProvider client={queryClient}>
+        <Live />
+        {children}
+      </QueryClientProvider>
+    );
+    const { result } = renderHook(() => hooks.useRecordProductSale('station-1'), { wrapper });
+
+    await act(() =>
+      result.current.mutateAsync({
+        payload: { shiftId: 'shift-1', paymentMethod: 'Cash', lines: [] },
+        idempotencyKey: 'k',
+        labels,
+      }),
+    );
+    await waitFor(() => expect(queryClient.getQueryState(key)?.status).toBe('error'));
+
+    const list = queryClient.getQueryData<{ id: string }[]>(key)!;
+    expect(list.map((r) => r.id)).toEqual(['sale-new', 'sale-0']);
   });
 });
 

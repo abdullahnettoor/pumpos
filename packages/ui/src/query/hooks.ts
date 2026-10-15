@@ -609,7 +609,9 @@ export function useMerchandiseHandovers(
 export function useMerchandiseSales(shiftId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.merchandiseSales(shiftId ?? ''),
-    queryFn: () => txService.getMerchandiseSales(shiftId!).catch(() => []),
+    // A failure fails the query (its Data Section offers Retry); it is never
+    // read as "no sales", which would also wipe a sale patched in from its answer.
+    queryFn: () => txService.getMerchandiseSales(shiftId!),
     enabled: !!shiftId,
     ...TIER.operational,
     ...options,

@@ -10,6 +10,8 @@
  * is the server's and arrives with the refetch.
  */
 
+import { isNewer } from './shiftStatus.js';
+
 /** A sale line as POST /transactions/sales and …/merchandise-handover answer it. */
 export interface AnsweredSaleLine {
   saleId: string;
@@ -120,10 +122,14 @@ export function handoverProductSaleRow(
  * One Handover Product Sale per employee per shift: the answer replaces the
  * employee's previous one and, being the newest, leads the list.
  */
-export function withHandoverProductSale<T extends { id: string; attendantId?: string | null }>(
-  list: T[],
-  row: HandoverProductSaleRow,
-): (T | HandoverProductSaleRow)[] {
+export function withHandoverProductSale<
+  T extends { id: string; attendantId?: string | null; createdAt?: string | null },
+>(list: T[], row: HandoverProductSaleRow): (T | HandoverProductSaleRow)[] {
+  // A replayed answer, or an older one arriving after a newer save or refetch
+  // of the same employee's sale: the list already holds what is current.
+  if (list.some((r) => r.id === row.id)) return list;
+  const mine = row.attendantId ? list.find((r) => r.attendantId === row.attendantId) : undefined;
+  if (mine && isNewer(mine.createdAt, row.createdAt)) return list;
   const rest = list.filter(
     (r) => r.id !== row.id && !(row.attendantId && r.attendantId === row.attendantId),
   );

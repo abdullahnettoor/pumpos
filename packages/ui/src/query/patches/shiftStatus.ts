@@ -27,6 +27,13 @@ export interface ActiveShiftSlice {
   [key: string]: unknown;
 }
 
+/** Whether ISO timestamp `a` is strictly later than `b` (missing reads as oldest). */
+export const isNewer = (a: unknown, b: unknown): boolean => {
+  const ta = typeof a === 'string' ? Date.parse(a) : NaN;
+  const tb = typeof b === 'string' ? Date.parse(b) : NaN;
+  return Number.isFinite(ta) && (!Number.isFinite(tb) || ta > tb);
+};
+
 const isDrawer = (row: Row, userKey: string, attendantId: string, duId: string) =>
   row[userKey] === attendantId && row.duId === duId;
 
@@ -55,6 +62,10 @@ export function withAcceptedHandover<T extends ShiftStatusSlice>(
   // which is where the server reads them from too.
   const handovers = shift.handovers ?? [];
   const previous = handovers.find((h) => isDrawer(h, 'userId', attendantId, duId));
+  // Out of order: the board already holds a newer save of this Drawer (a later
+  // save's answer, or a refetch). The server stamps each save under the
+  // Drawer's lock, so the older answer is dropped, never written over it.
+  if (previous && isNewer(previous.createdAt, accepted.createdAt)) return status;
   const assignment = (shift.staffAssignments ?? []).find((a) =>
     isDrawer(a, 'userId', attendantId, duId),
   );
