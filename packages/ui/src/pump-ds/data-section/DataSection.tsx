@@ -29,7 +29,12 @@ export interface SectionQuery {
 export type DataSectionState = 'loading' | 'error' | 'refused' | 'empty' | 'ready';
 
 export interface DataSectionProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
-  /** Names the section in the error ("Couldn't load <title>") and loading label. */
+  /**
+   * Names the section in the error ("Couldn't load <title>") and loading label.
+   * It reads mid-sentence, so every word is lowercased except an acronym: a
+   * word of two or more letters, all capitals, keeps its case ("GST totals" →
+   * "Couldn't load GST totals", "Fuel Sales" → "fuel sales").
+   */
   title: string;
   /** The section's own query, or all of them. Omit for sections with no data. */
   query?: SectionQuery | SectionQuery[];

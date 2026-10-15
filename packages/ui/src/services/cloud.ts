@@ -809,11 +809,20 @@ export class CloudShiftService {
     return request<any>(`/shifts/shift-summaries/${encodeURIComponent(shiftId)}`);
   }
 
-  async generateDailyDssr(stationId: string, businessDate: string): Promise<any> {
-    return request<any>('/dssr/daily/generate', {
-      method: 'POST',
-      body: JSON.stringify({ stationId, businessDate }),
-    });
+  /**
+   * Generate (or regenerate) a day's DSR. Pass an `idempotencyKey` so a retry
+   * after a dropped response is answered with the first result (#532).
+   */
+  async generateDailyDssr(
+    stationId: string,
+    businessDate: string,
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/dssr/daily/generate',
+      { method: 'POST', body: JSON.stringify({ stationId, businessDate }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async closeBusinessDay(businessDayId: string, stationId: string): Promise<any> {

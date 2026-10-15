@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
-import { resolveBusinessDate } from '@pump/shared';
+import { resolveBusinessDate, type Role } from '@pump/shared';
 import { renderWithProviders } from '../test/renderWithProviders.js';
 import { DailyDssrView } from './DailyDssrView.js';
 import { addDays } from '../utils/cashBook.js';
@@ -102,8 +102,16 @@ const snapshotRow = (businessDate: string, extra: Record<string, unknown> = {}) 
   },
 });
 
-const view = (dailyDssr: unknown) =>
-  renderWithProviders(<DailyDssrView dailyDssr={dailyDssr} station={station} onBack={() => {}} />);
+/** `null`: no Role passed at all. */
+const view = (dailyDssr: unknown, role: Role | null = 'Owner') =>
+  renderWithProviders(
+    <DailyDssrView
+      dailyDssr={dailyDssr}
+      station={station}
+      userRole={role ?? undefined}
+      onBack={() => {}}
+    />,
+  );
 
 describe('DailyDssrView (ADR 0005: sales-only)', () => {
   it('renders gross margin and ignores office keys left in old snapshots', () => {
@@ -231,6 +239,60 @@ describe('DailyDssrView look (#532)', () => {
     expect(screen.getByRole('button', { name: 'Export the DSR' }).hasAttribute('disabled')).toBe(
       true,
     );
+  });
+
+  it('Generate DSR shows only to Roles the generate route allows', async () => {
+    const prev = '2026-10-08';
+    for (const role of ['Staff', null] as const) {
+      stubPreview({ [prev]: { status: 409, code: 'CONFLICT' } });
+      view(snapshotRow('2026-10-09'), role);
+      fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
+      expect(await screen.findByText('Report missing')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Generate DSR' })).toBeNull();
+      expect(screen.getByText(/An owner, manager or accountant can generate it/)).toBeTruthy();
+      cleanup();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('Generate DSR sends one Idempotency-Key and refreshes the day it ran on', async () => {
+    const prev = '2026-10-08';
+    let generated = false;
+    const calls: { url: string; method: string; key: string | null }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const headers = new Headers(init?.headers);
+        calls.push({ url, method: init?.method ?? 'GET', key: headers.get('Idempotency-Key') });
+        const json = (status: number, body: unknown) =>
+          new Response(JSON.stringify(body), {
+            status,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        if (url.includes('/dssr/daily/generate')) {
+          generated = true;
+          return json(200, { success: true, data: snapshotRow(prev) });
+        }
+        return generated
+          ? json(200, { success: true, data: snapshotRow(prev) })
+          : json(409, { success: false, error: { code: 'CONFLICT', message: 'no' } });
+      }),
+    );
+    view(snapshotRow('2026-10-09'), 'Accountant');
+    fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Generate DSR' }));
+    expect(await screen.findByText(/^08 Oct 2026 · Generated /)).toBeTruthy();
+    const post = calls.find((c) => c.method === 'POST');
+    expect(post?.url).toContain('/dssr/daily/generate');
+    expect(post?.key).toBeTruthy();
+    expect(screen.getByText('Sealed')).toBeTruthy();
+  });
+
+  it('a row that only names its day is read like any other day', async () => {
+    stubPreview({ '2026-10-08': { status: 409, code: 'CONFLICT' } });
+    view({ businessDate: '2026-10-08' });
+    expect(await screen.findByText('Report missing')).toBeTruthy();
   });
 
   it('a day that fails to load shows "Couldn\'t load the DSR · Retry"', async () => {

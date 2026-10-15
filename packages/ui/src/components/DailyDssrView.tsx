@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { DSR_FULL_NAME, DSR_LABEL, resolveBusinessDate } from '@pump/shared';
+import { DSR_FULL_NAME, DSR_LABEL, canExportReports, resolveBusinessDate } from '@pump/shared';
+import type { Role } from '@pump/shared';
 import {
   Button,
   ControlBar,
@@ -25,6 +26,7 @@ import { queryKeys, useDailyDssrPreview } from '../query/hooks.js';
 import { CloudShiftService } from '../services/cloud.js';
 import { formatBusinessDate, formatDateTime, formatMoney } from '../utils/format.js';
 import { useRunTask } from '../utils/runTask.js';
+import { officeSubmitKeys } from '../office-records/submitKeys.js';
 import {
   dssrDayStatus,
   readDssrDay,
@@ -46,10 +48,16 @@ import {
 const shiftService = new CloudShiftService();
 
 interface DailyDssrViewProps {
-  /** The DSR the Reports page opened: a stored snapshot row or a preview. */
+  /**
+   * The DSR the Reports page opened: a stored snapshot row or a preview. A row
+   * with no `snapshotData` (just `{ businessDate }`) names the day only; the
+   * screen then reads it like any other day.
+   */
   dailyDssr: any;
   onBack?: () => void;
   station?: any;
+  /** Generate DSR shows only to Roles the generate route allows (`canExportReports`). */
+  userRole?: Role;
 }
 
 /** A closed day with no stored snapshot (the preview read answers 409). */
@@ -64,7 +72,12 @@ const isReportMissing = (error: unknown): boolean =>
  * stored snapshot for a closed day, live figures for an open one). The control
  * bar drives everything below it; Export and the info tip sit at its right end.
  */
-export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack, station }) => {
+export const DailyDssrView: React.FC<DailyDssrViewProps> = ({
+  dailyDssr,
+  onBack,
+  station,
+  userRole,
+}) => {
   const runTask = useRunTask();
   const qc = useQueryClient();
   const stationId: string | undefined = station?.id;
@@ -76,7 +89,12 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
 
   const openedDate: string = dailyDssr?.businessDate ?? dailyDssr?.snapshotData?.businessDate ?? '';
   const [date, setDate] = useState<string>(openedDate || currentBusinessDate);
-  const onOpenedDay = date === openedDate;
+  // The opened row is shown as handed over, without a read. It is always a real
+  // DSR (a snapshot or a preview), never the Report missing state: that state
+  // only comes from reading another day, and Generate DSR only shows there. So
+  // generating never leaves the opened row stale; it refreshes the day it ran
+  // on through the preview key below. A row without figures is read like any day.
+  const onOpenedDay = date === openedDate && !!dailyDssr?.snapshotData;
 
   const dayQ = useDailyDssrPreview(stationId, date, {
     enabled: !!stationId && !onOpenedDay,
@@ -88,8 +106,24 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   const day = useMemo(() => (row ? readDssrDay(row) : null), [row]);
   const status = row ? dssrDayStatus(row, date, currentBusinessDate) : null;
 
+  const canGenerate = !!stationId && !!userRole && canExportReports(userRole);
   const generate = useMutation({
-    mutationFn: () => shiftService.generateDailyDssr(stationId!, date),
+    // One Idempotency-Key per logical generate: a retry after a dropped
+    // response reuses it, so the snapshot cannot be generated twice.
+    mutationFn: async () => {
+      const keys = officeSubmitKeys.session('dssr:generate');
+      const idempotencyKey = keys.next(JSON.stringify({ stationId, businessDate: date }));
+      try {
+        const result: unknown = await shiftService.generateDailyDssr(stationId!, date, {
+          idempotencyKey,
+        });
+        keys.settle();
+        return result;
+      } catch (error) {
+        keys.settle(error);
+        throw error;
+      }
+    },
     onSuccess: () =>
       Promise.all([
         qc.invalidateQueries({ queryKey: queryKeys.dssrPreviewPrefix(stationId!) }),
@@ -123,6 +157,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   );
 
   return (
+    // TODO(#576): move Back to Reports to the Page Frame `back` slot once #578 merges.
     <PageFrame
       route={ROUTES.reports}
       title={DSR_LABEL}
@@ -179,19 +214,20 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
             <EmptyState
               icon={<Icon name="report" size="md" />}
               title="Report missing"
-              description={`${formatBusinessDate(date)} is closed, but its ${DSR_LABEL} was never generated.`}
+              description={`${formatBusinessDate(date)} is closed, but its ${DSR_LABEL} was never generated.${canGenerate ? '' : ' An owner, manager or accountant can generate it.'}`}
               action={
-                <Button
-                  variant="primary"
-                  size="sm"
-                  loading={generate.isPending}
-                  disabled={!stationId}
-                  onClick={() =>
-                    runTask(generate.mutateAsync(), `Could not generate the ${DSR_LABEL}.`)
-                  }
-                >
-                  Generate {DSR_LABEL}
-                </Button>
+                canGenerate && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    loading={generate.isPending}
+                    onClick={() =>
+                      runTask(generate.mutateAsync(), `Could not generate the ${DSR_LABEL}.`)
+                    }
+                  >
+                    Generate {DSR_LABEL}
+                  </Button>
+                )
               }
             />
           ) : (
