@@ -61,14 +61,12 @@ export function advanceFigures(suppliers: readonly SupplierRow[]) {
 const CASH = new Set<string>(CASH_ACCOUNT_TYPES);
 
 /**
- * The month's Supplier Payments (by Entry Date): total, the cash / other split,
- * the suppliers paid, and today's share. Read from the month's payments query.
+ * The month's Supplier Payments (by Entry Date): total, the cash / other split
+ * and the suppliers paid. Read from the month's payments query.
  */
 export function paymentFigures(payments: readonly SupplierPaymentRow[], clock: EntryClock) {
-  const today = computeRange('today', clock);
   const month = computeRange('this-month', clock);
   const monthRows = payments.filter((p) => inWindow(p.entryDate, month));
-  const todayRows = monthRows.filter((p) => inWindow(p.entryDate, today));
   const cash = sumAmounts(monthRows.filter((p) => CASH.has(p.accountType ?? '')));
   const total = sumAmounts(monthRows);
   return {
@@ -78,9 +76,17 @@ export function paymentFigures(payments: readonly SupplierPaymentRow[], clock: E
     cash,
     other: Math.round((total - cash) * 100) / 100,
     suppliers: new Set(monthRows.map((p) => p.supplierId)).size,
-    today: sumAmounts(todayRows),
-    todayCount: todayRows.length,
   };
+}
+
+/**
+ * Today's Supplier Payments (by Entry Date): amount and count. Read from its
+ * own today query, so the Paid today tile fails on its own (#575).
+ */
+export function paidToday(payments: readonly SupplierPaymentRow[], clock: EntryClock) {
+  const today = computeRange('today', clock);
+  const rows = payments.filter((p) => inWindow(p.entryDate, today));
+  return { amount: sumAmounts(rows), count: rows.length };
 }
 
 /** The balance list's row filters. */
