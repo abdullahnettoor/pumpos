@@ -267,7 +267,7 @@ describe('DailyDssrView look (#532)', () => {
     }
   });
 
-  it('Generate DSR sends one Idempotency-Key and refreshes the day it ran on', async () => {
+  it('Generate DSR sends one Idempotency-Key and shows the response without waiting on refetches', async () => {
     const prev = '2026-10-08';
     let generated = false;
     const calls: { url: string; method: string; key: string | null }[] = [];
@@ -286,19 +286,26 @@ describe('DailyDssrView look (#532)', () => {
           generated = true;
           return json(200, { success: true, data: snapshotRow(prev) });
         }
-        return generated
-          ? json(200, { success: true, data: snapshotRow(prev) })
-          : json(409, { success: false, error: { code: 'CONFLICT', message: 'no' } });
+        // Every read after the write hangs: success must not wait on it.
+        if (generated) return new Promise<Response>(() => {});
+        return json(409, { success: false, error: { code: 'CONFLICT', message: 'no' } });
       }),
     );
     view(snapshotRow('2026-10-09'), 'Accountant');
     fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Generate DSR' }));
     expect(await screen.findByText(/^08 Oct 2026 · Generated /)).toBeTruthy();
-    const post = calls.find((c) => c.method === 'POST');
-    expect(post?.url).toContain('/dssr/daily/generate');
-    expect(post?.key).toBeTruthy();
     expect(screen.getByText('Sealed')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Generate DSR' })).toBeNull();
+    const posts = calls.filter((c) => c.method === 'POST');
+    expect(posts).toHaveLength(1);
+    expect(posts[0].url).toContain('/dssr/daily/generate');
+    expect(posts[0].key).toBeTruthy();
+    // The generated day is not read again: it already holds the write's answer.
+    const previewReads = calls.filter(
+      (c) => c.url.includes('/dssr/daily/preview') && c.url.includes(prev),
+    );
+    expect(previewReads).toHaveLength(1);
   });
 
   it('a row that only names its day is read like any other day', async () => {

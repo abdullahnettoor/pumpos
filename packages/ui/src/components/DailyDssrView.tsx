@@ -124,13 +124,22 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({
         throw error;
       }
     },
-    onSuccess: () =>
-      Promise.all([
-        qc.invalidateQueries({ queryKey: queryKeys.dssrPreviewPrefix(stationId!) }),
-        qc.invalidateQueries({ queryKey: ['dssr'] }),
-        qc.invalidateQueries({ queryKey: ['dssr-range'] }),
-        qc.invalidateQueries({ queryKey: queryKeys.businessDayList(stationId!) }),
-      ]),
+    // Synchronous on purpose (pump-data-caching rule 6): the screen shows the
+    // write's own response at once, and the refreshes run in the background.
+    // Returning them would keep Generate spinning until every refetch lands.
+    onSuccess: (generated) => {
+      const dayKey = queryKeys.dssrPreview(stationId!, date);
+      qc.setQueryData(dayKey, generated);
+      const keyOf = JSON.stringify(dayKey);
+      void qc.invalidateQueries({
+        queryKey: queryKeys.dssrPreviewPrefix(stationId!),
+        // The day just generated already holds the write's answer.
+        predicate: (q) => JSON.stringify(q.queryKey) !== keyOf,
+      });
+      void qc.invalidateQueries({ queryKey: ['dssr'] });
+      void qc.invalidateQueries({ queryKey: ['dssr-range'] });
+      void qc.invalidateQueries({ queryKey: queryKeys.businessDayList(stationId!) });
+    },
   });
 
   // Save PDF and Print render the same DssrDoc, so they match page for page (#309).
