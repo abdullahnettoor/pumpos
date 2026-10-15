@@ -107,6 +107,8 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
         productId: t.productId,
         productName: t.productName ?? t.productCode ?? 'Fuel',
         currentVolume: t.currentVolume != null ? Number(t.currentVolume) : null,
+        capacity: t.capacity != null ? Number(t.capacity) : null,
+        unit: t.productUnit ?? null,
       })),
     [tanksQ.data],
   );
