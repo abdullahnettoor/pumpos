@@ -164,6 +164,8 @@ export const queryKeys = {
   dssr: (stationId: string, date: string) => ['dssr', stationId, date] as const,
   dssrPreview: (stationId: string, date: string) => ['dssr-preview', stationId, date] as const,
   businessDayList: (stationId: string) => ['business-day-list', stationId] as const,
+  /** Every `dssrRange` window: what a new DSR invalidates. */
+  dssrRangePrefix: () => ['dssr-range'] as const,
   dssrRange: (stationId: string, from: string, to: string) =>
     ['dssr-range', stationId, from, to] as const,
   attendantHandoverReport: (stationId: string, from: string, to: string) =>
@@ -1133,6 +1135,17 @@ export function useDailyDssr(
   });
 }
 
+/**
+ * One day's DSR read (the stored snapshot for a closed day, live figures for an
+ * open one), as query options: the hook reads it, and a deep link fetches it
+ * through the same key (`qc.fetchQuery(dailyDssrPreviewQuery(…))`).
+ */
+export const dailyDssrPreviewQuery = (stationId: string, date: string) => ({
+  queryKey: queryKeys.dssrPreview(stationId, date),
+  queryFn: () => shiftService.getDailyDssrPreview(stationId, date),
+  ...TIER.operational,
+});
+
 // Live (non-persisted) DSSR/P&L for the open day — recomputed on demand.
 export function useDailyDssrPreview(
   stationId: string | null | undefined,
@@ -1140,10 +1153,8 @@ export function useDailyDssrPreview(
   options?: Options<any>,
 ) {
   return useQuery({
-    queryKey: queryKeys.dssrPreview(stationId ?? '', date),
-    queryFn: () => shiftService.getDailyDssrPreview(stationId!, date),
+    ...dailyDssrPreviewQuery(stationId ?? '', date),
     enabled: !!stationId && !!date,
-    ...TIER.operational,
     ...options,
   });
 }

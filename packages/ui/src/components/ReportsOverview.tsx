@@ -25,8 +25,8 @@ import {
   resolveBusinessDate,
 } from '@pump/shared';
 import { useRunTask } from '../utils/runTask.js';
-import { createIdempotencyKey } from '../query/handoverMutation.js';
-import { keepsIdempotencyKey } from '../utils/idempotency.js';
+import { officeSubmitKeys } from '../office-records/submitKeys.js';
+import { dailyDssrPreviewQuery, queryKeys } from '../query/hooks.js';
 
 const shiftService = new CloudShiftService();
 
@@ -109,14 +109,15 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
     runTask(
       (async () => {
         try {
-          const result = await shiftService.getDailyDssrPreview(stationId, date);
+          // Through the preview key, so the DSR screen reads the same cache entry.
+          const result = await qc.fetchQuery(dailyDssrPreviewQuery(stationId, date));
           if (!cancelled) setActiveDailyDssr(result);
         } catch (err) {
           if (cancelled) return;
           if ((err as { code?: unknown } | null)?.code === 'CONFLICT') {
-            // A closed day with no stored report: the DSR screen opens on it
-            // and shows its "Report missing" state, with Generate (#579).
-            setActiveDailyDssr({ businessDate: date, snapshotData: null, missing: true });
+            // A closed day with no stored report: the DSR screen opens on the
+            // day (no figures), reads it again and shows "Report missing" (#579).
+            setActiveDailyDssr({ businessDate: date, snapshotData: null });
           } else {
             // Any other failure: select the day so the operator can generate it.
             setSelectedDate(date);
@@ -142,31 +143,32 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
       // effect pick the same intent up instead of leaving it pending forever.
       if (!settled) handledTokenRef.current = null;
     };
-  }, [intent?.openDssrDate, intentToken, stationId, runTask]);
+  }, [intent?.openDssrDate, intentToken, stationId, runTask, qc]);
 
-  // One Idempotency-Key per logical Generate of a day: kept while the outcome
-  // is unknown (network drop, 5xx), so a retry cannot freeze the day twice;
-  // renewed on any decided answer or for another day.
-  const generateKeyRef = useRef<{ scope: string; key: string } | null>(null);
+  // One Idempotency-Key per logical Generate of a day, from the shared office
+  // submit keys (scope + station and date), as the DSR screen sends (#579): kept
+  // while the outcome is unknown, so a retry cannot freeze the day twice.
   const handleGenerateDailyDssr = async () => {
     if (!selectedStation || !selectedDate) return;
-    const scope = `${selectedStation.id}:${selectedDate}`;
-    if (generateKeyRef.current?.scope !== scope) {
-      generateKeyRef.current = { scope, key: createIdempotencyKey() };
-    }
+    const stationKey = selectedStation.id as string;
+    const keys = officeSubmitKeys.session('dssr:generate');
+    const idempotencyKey = keys.next(
+      JSON.stringify({ stationId: stationKey, businessDate: selectedDate }),
+    );
     try {
       setGeneratingDailyDssr(true);
       setGenerateError(null);
-      const result = await shiftService.generateDailyDssr(selectedStation.id, selectedDate, {
-        idempotencyKey: generateKeyRef.current.key,
+      const result = await shiftService.generateDailyDssr(stationKey, selectedDate, {
+        idempotencyKey,
       });
-      generateKeyRef.current = null;
-      // The list is a cached query — invalidate so the new snapshot appears.
-      await qc.invalidateQueries({ queryKey: ['dssr-range'] });
+      keys.settle();
+      // The response is the DSR: open it now; the list catches up in the background.
       setActiveDailyDssr(result);
+      void qc.invalidateQueries({ queryKey: queryKeys.dssrRangePrefix() });
+      void qc.invalidateQueries({ queryKey: queryKeys.dssrPreview(stationKey, selectedDate) });
     } catch (err: any) {
-      if (!keepsIdempotencyKey(err)) generateKeyRef.current = null;
-      setGenerateError(err.message || 'Failed to generate daily DSR');
+      keys.settle(err);
+      setGenerateError(err.message || 'Failed to generate the DSR');
     } finally {
       setGeneratingDailyDssr(false);
     }

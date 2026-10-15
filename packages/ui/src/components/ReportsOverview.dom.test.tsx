@@ -22,6 +22,7 @@ vi.mock('../services/cloud.js', async (importOriginal) => {
     }
     generateDailyDssr(...args: unknown[]) {
       gen.calls.push(args);
+      if (gen.result) return Promise.resolve(gen.result);
       return Promise.reject(Object.assign(new Error('offline'), { code: 'NETWORK' }));
     }
   }
@@ -34,7 +35,7 @@ vi.mock('./DailyDssrView.js', () => ({
     return <div data-testid="dsr-screen" />;
   },
 }));
-const gen = vi.hoisted(() => ({ calls: [] as unknown[][] }));
+const gen = vi.hoisted(() => ({ calls: [] as unknown[][], result: null as unknown }));
 vi.mock('../access/CapabilityGate.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   useCapability: () => ({ status: 'enabled' }),
@@ -180,7 +181,7 @@ describe('Reports → DSR missing report and Generate (review #579)', () => {
     act(() => publishNavIntent({ openDssrDate: '2026-10-01' }));
     renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
     expect(await screen.findByTestId('dsr-screen')).toBeTruthy();
-    expect(view.opened).toMatchObject({ businessDate: '2026-10-01', missing: true });
+    expect(view.opened).toEqual({ businessDate: '2026-10-01', snapshotData: null });
   });
 
   it('Generate sends one Idempotency-Key, kept when the outcome is unknown', async () => {
@@ -193,6 +194,22 @@ describe('Reports → DSR missing report and Generate (review #579)', () => {
     const key = (c: unknown[]) => (c[2] as { idempotencyKey: string }).idempotencyKey;
     expect(key(gen.calls[0])).toBeTruthy();
     expect(key(gen.calls[1])).toBe(key(gen.calls[0]));
+  });
+
+  it('a generated DSR opens from the response, and the list refreshes in the background', async () => {
+    gen.calls = [];
+    gen.result = { businessDate: '2026-10-14', snapshotData: { shiftsIncluded: 2 } };
+    try {
+      renderWithProviders(<ReportsOverview selectedStation={station} userRole="Owner" />);
+      fireEvent.change(screen.getByLabelText('Business date to generate'), {
+        target: { value: '2026-10-14' },
+      });
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: /Generate DSR/ })));
+      expect(await screen.findByTestId('dsr-screen')).toBeTruthy();
+      expect(view.opened).toBe(gen.result);
+    } finally {
+      gen.result = null;
+    }
   });
 
   it('shows Generate only to Roles the API lets generate', () => {
