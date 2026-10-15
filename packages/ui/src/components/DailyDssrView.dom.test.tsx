@@ -132,7 +132,10 @@ describe('DailyDssrView (ADR 0005: sales-only)', () => {
     expect(screen.queryByText(/4,321/)).toBeNull();
     expect(screen.queryByText(/Supplier Payments/i)).toBeNull();
     expect(screen.queryByText(/Operating Expenses/i)).toBeNull();
-    expect(screen.getByText('Gross margin')).toBeTruthy();
+    // In the tiles and, as the report has always printed it, in the sales summary (#583).
+    expect(screen.getAllByText('Gross margin')).toHaveLength(2);
+    const summary = document.querySelector('dl[aria-label="Sales summary"]');
+    expect(summary?.textContent).toMatch(/Gross margin₹1,000\.00$/);
     // Where the office records live: the info tip at the end of the control bar.
     fireEvent.focus(screen.getByRole('button', { name: 'About the DSR' }));
     expect(screen.getByRole('tooltip').textContent).toMatch(/Accounts → Daily cash book/);

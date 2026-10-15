@@ -5,8 +5,8 @@ import { formatMoney } from '../../../utils/format.js';
 /**
  * The DSR screen's section models (#532): one pure read of a stored DSR
  * snapshot or a live preview, so the screen renders figures and never sums raw
- * snapshot keys itself. The PDF (`dssrDoc`) still reads the snapshot directly;
- * see the PR for where the two differ.
+ * snapshot keys itself. The PDF (`dssrDoc`) reads the same model and prints the
+ * screen's columns (`dssrColumns`), so the two never disagree (#580).
  */
 
 /** What the DSR reads return (the services are untyped): a stored snapshot row or a preview. */
@@ -94,8 +94,12 @@ export interface DssrDay {
   sales: FigureLine[];
   fuel: {
     rows: FuelProductRow[];
-    /** The snapshot's own totals, so the total row is the stored figure. */
-    totals: { gross: number; testing: number; net: number; salesValue: number };
+    /**
+     * The snapshot's own totals, so the total row is the stored figure. `net`
+     * is null for a snapshot that stores no `totalNetVolume`: it is never
+     * derived from gross and testing.
+     */
+    totals: { gross: number; testing: number; net: number | null; salesValue: number };
     /** Fuel units on the day (L, kg). More than one: volumes are never added across them. */
     units: string[];
   };
@@ -131,7 +135,8 @@ const stockRows = (rows: any[], withProduct: boolean, fallbackUnit: string): Sto
   });
 
 /**
- * The sales summary lines, in the order the report has always printed them.
+ * The sales summary lines, in the order the report has always printed them,
+ * closing on the day's gross margin.
  * Output GST and VAT stay on separate lines: fuel VAT is outside GST (T5).
  */
 function salesLines(snap: Record<string, any>): FigureLine[] {
@@ -159,6 +164,8 @@ function salesLines(snap: Record<string, any>): FigureLine[] {
     );
   }
   if (vat > 0) lines.push({ label: 'Output VAT on fuel', value: formatMoney(vat) });
+  // Last, as the report has always printed it; the Gross margin tile repeats it (#583).
+  lines.push({ label: 'Gross margin', value: formatMoney(snap.pnl?.grossMargin) });
   return lines;
 }
 
@@ -203,7 +210,7 @@ export function readDssrDay(row: DssrRow): DssrDay {
       totals: {
         gross,
         testing,
-        net: num(fuel.totalNetVolume ?? gross - testing),
+        net: optionalNum(fuel.totalNetVolume),
         salesValue: num(fuel.totalSalesValue),
       },
       units: Array.from(new Set(byProduct.map((p) => String(p.unit || 'L')))),

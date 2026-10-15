@@ -1,7 +1,7 @@
 import React, { type ReactNode } from 'react';
 import { cn } from '../lib/cn.js';
 import { StatusChip } from '../chip/StatusChip.js';
-import type { PumpStatus } from '../chip/status-map.js';
+import { STATUS_MAP, type PumpStatus } from '../chip/status-map.js';
 import { formatDate, formatMoney, formatQuantity } from '../../utils/format.js';
 
 interface ColumnBase<T> {
@@ -13,6 +13,12 @@ interface ColumnBase<T> {
    * the alignment and font; `value` still drives sorting and the total.
    */
   cell?: (row: T) => ReactNode;
+  /**
+   * The cell as plain text, for a PDF or a print that cannot render `cell`.
+   * Without `cell` it is the cell too. Set it whenever `cell` changes the
+   * words or figures, so the screen and the PDF print the same thing.
+   */
+  text?: (row: T) => string;
   /**
    * The figure the row is about, set in semibold. Not for a column with a
    * total row: money cells are regular weight so the total stands out.
@@ -74,8 +80,23 @@ export type TableColumn<T> =
  * The closing row. `true` sums every money and qty column under a "Total"
  * label. Pass `values` to print a figure the rows explain (the server's total)
  * instead of re-deriving it.
+ *
+ * `derive: false` prints only the figures in `values` and never sums a
+ * column: for a report whose totals are stored (the DSR). There a column
+ * missing from `values` stays blank, and `null` prints `—` (a figure that is
+ * not added up, such as volumes across L and kg).
+ *
+ * `units` names the unit of a qty figure in `values`, when the total's unit is
+ * not the rows' own (the DSR's shift total takes the day's fuel unit).
  */
-export type TotalRow = boolean | { label?: string; values?: Record<string, Amount> };
+export type TotalRow =
+  | boolean
+  | {
+      label?: string;
+      values?: Record<string, Amount>;
+      units?: Record<string, string>;
+      derive?: boolean;
+    };
 
 /** Which adapter is rendering; a statement prints, so its status is ink, not a fill. */
 export type TableMode = 'interactive' | 'statement';
@@ -89,12 +110,14 @@ interface KindDef<K extends Kind> {
   className: string;
   /** Header alignment: a number's header sits over its figures, in the same sans as every header. */
   align: 'text-left' | 'text-right';
-  /** The cell: the shared format, or the status vocabulary. */
-  cell<T>(col: ColumnOf<K, T>, row: T, mode: TableMode): ReactNode;
+  /** The cell as plain text: the shared format, or the status vocabulary's word. */
+  text<T>(col: ColumnOf<K, T>, row: T): string;
+  /** The cell, when it is more than its text (a status chip). */
+  cell?<T>(col: ColumnOf<K, T>, row: T, mode: TableMode): ReactNode;
   /** What the column sorts by; the raw value when absent. */
   sortValue?<T>(col: ColumnOf<K, T>, row: T): number | undefined;
   /** The column's total, formatted; absent when the kind does not add up. */
-  total?<T>(col: ColumnOf<K, T>, rows: T[], given: Amount): string;
+  total?<T>(col: ColumnOf<K, T>, rows: T[], given: Amount, unit?: string): string;
 }
 
 const NUMERIC = 'text-right font-mono tabular-nums';
@@ -142,7 +165,7 @@ const KINDS: { [K in Kind]: KindDef<K> } = {
   money: {
     className: NUMERIC,
     align: 'text-right',
-    cell: (col, row) => {
+    text: (col, row) => {
       const v = col.value(row);
       return v == null || v === '' ? '' : formatMoney(v);
     },
@@ -152,23 +175,26 @@ const KINDS: { [K in Kind]: KindDef<K> } = {
   qty: {
     className: NUMERIC,
     align: 'text-right',
-    cell: (col, row) =>
+    text: (col, row) =>
       formatQuantity(col.value(row), unitOf(col, row), { decimals: col.decimals }),
     sortValue: (col, row) => toNumber(col.value(row)),
     // Quantities are never added across units: a figure the caller passes
-    // obeys the same rule as the sum.
-    total: (col, rows, given) => {
+    // obeys the same rule as the sum, unless the caller names its unit.
+    total: (col, rows, given, unit) => {
+      if (unit != null && given != null) {
+        return formatQuantity(given, unit, { decimals: col.decimals });
+      }
       const units = new Set(rows.map((row) => unitOf(col, row) ?? ''));
       if (units.size > 1) return '—';
-      const [unit] = units;
-      return formatQuantity(given ?? sum(col, rows), unit, { decimals: col.decimals });
+      const [rowUnit] = units;
+      return formatQuantity(given ?? sum(col, rows), rowUnit, { decimals: col.decimals });
     },
   },
   // Dates sit in the sans face with aligned digits, as the Dashboard prints its times.
   date: {
     className: 'text-left tabular-nums',
     align: 'text-left',
-    cell: (col, row) => formatDate(col.value(row)),
+    text: (col, row) => formatDate(col.value(row)),
     sortValue: (col, row) => {
       const v = col.value(row);
       if (v == null || v === '') return undefined;
@@ -179,7 +205,7 @@ const KINDS: { [K in Kind]: KindDef<K> } = {
   text: {
     className: 'text-left',
     align: 'text-left',
-    cell: (col, row) => {
+    text: (col, row) => {
       const v = col.value(row);
       return v == null || v === '' ? '—' : String(v);
     },
@@ -187,6 +213,7 @@ const KINDS: { [K in Kind]: KindDef<K> } = {
   status: {
     className: 'text-left',
     align: 'text-left',
+    text: (col, row) => STATUS_MAP[col.value(row)].label,
     cell: (col, row, mode) =>
       mode === 'statement' ? (
         <StatusChip status={col.value(row)} size="md" variant="outline" showIcon={false} />
@@ -220,10 +247,20 @@ export const headerClass = <T,>(col: TableColumn<T>): string => cn(HEADER, kindO
 export const columnClass = <T,>(col: TableColumn<T>): string =>
   cn(kindClass(col), col.emphasis && 'font-semibold');
 
-/** The body of a cell: the caller's override, else the kind's. */
+/** The body of a cell: the caller's override, else its text, else the kind's. */
 export function renderCell<T>(col: TableColumn<T>, row: T, mode: TableMode): ReactNode {
   if (col.cell) return col.cell(row);
-  return kindOf(col).cell(col, row, mode);
+  if (col.text) return col.text(row);
+  const def = kindOf(col);
+  return def.cell ? def.cell(col, row, mode) : def.text(col, row);
+}
+
+/**
+ * A cell as plain text, as a PDF prints it: the column's `text`, else the
+ * kind's format (a status reads its vocabulary word, `Short`).
+ */
+export function cellText<T>(col: TableColumn<T>, row: T): string {
+  return col.text ? col.text(row) : kindOf(col).text(col, row);
 }
 
 /** The value a column sorts by. */
@@ -245,12 +282,34 @@ export function totalCells<T>(
   rows: T[],
   totalRow: TotalRow | undefined,
 ): ReactNode[] | null {
+  const total = totalTexts(columns, rows, totalRow);
+  if (!total) return null;
+  return total.cells.map((text, i) =>
+    i === 0 && total.labelled ? <span className="font-sans">{text}</span> : text,
+  );
+}
+
+/**
+ * The total row as plain text, cell by cell, as a PDF prints it. `labelled`
+ * when the first cell holds the label rather than a figure.
+ */
+export function totalTexts<T>(
+  columns: TableColumn<T>[],
+  rows: T[],
+  totalRow: TotalRow | undefined,
+): { cells: string[]; labelled: boolean } | null {
   if (!totalRow) return null;
-  const { label = 'Total', values } = totalRow === true ? {} : totalRow;
-  return columns.map((col, i) => {
+  const { label = 'Total', values, units, derive = true } = totalRow === true ? {} : totalRow;
+  const figures = columns.map((col) => {
     const total = totalOf(col);
-    const figure = total ? total(col, rows, values?.[col.id]) : '';
-    if (i === 0 && !figure) return <span className="font-sans">{label}</span>;
-    return figure;
+    if (!total) return '';
+    if (!derive) {
+      if (!values || !(col.id in values)) return '';
+      if (values[col.id] == null) return '—';
+    }
+    return total(col, rows, values?.[col.id], units?.[col.id]);
   });
+  const labelled = figures.length > 0 && !figures[0];
+  if (labelled) figures[0] = label;
+  return { cells: figures, labelled };
 }

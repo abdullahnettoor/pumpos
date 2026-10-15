@@ -83,19 +83,6 @@ export const vol3 = (n: any) => formatQuantity(reading(n), 'L', { decimals: 3 })
 export const vol1 = (n: any) => formatQuantity(reading(n), 'L', { decimals: 1 });
 // Unit-aware variants (L for liquids, kg for CNG/Auto-LPG). Never sum across units.
 export const vol3u = (n: any, u?: string) => formatQuantity(reading(n), u || 'L', { decimals: 3 });
-export const unitTotals = (rows: any[], getter: (r: any) => number, dec = 3): string => {
-  const m: Record<string, number> = {};
-  for (const r of rows) {
-    const u = r.unit || 'L';
-    m[u] = (m[u] || 0) + Number(getter(r) || 0);
-  }
-  return Object.entries(m)
-    .map(
-      ([u, v]) =>
-        `${Number(v).toLocaleString('en-IN', { minimumFractionDigits: dec, maximumFractionDigits: dec })} ${u}`,
-    )
-    .join(' \u00b7 ');
-};
 export const fix3 = (n: any) => Number(n || 0).toFixed(3);
 export const fmtTime = (iso?: string) => {
   if (!iso) return '—';
