@@ -217,4 +217,54 @@ describe.skipIf(!CONNECTION)('GET /finance/movements pairs transfer legs (#530)'
     expect(data.movements).toHaveLength(1);
     expect(data.movements[0]).toMatchObject({ sourceType: 'BANK_CHARGE', transferId: null });
   });
+
+  // Reports › Cash & bank is a per-account summary (#531): Opening · In · Out ·
+  // Closing for each account, so the opening comes back per account, for every
+  // account of the station and the organization-shared ones, moved or not.
+  it('returns one opening per account: Σ before the range, 0 for all time', async () => {
+    const OTHER_STATION = id(8);
+    const OTHER_CASH = id(9);
+    await db
+      .insert(schema.stations)
+      .values({ id: OTHER_STATION, organizationId: ORG, name: 'Station B', code: 'STB' });
+    await db.insert(schema.financialAccounts).values({
+      id: OTHER_CASH,
+      organizationId: ORG,
+      stationId: OTHER_STATION,
+      accountType: 'CASH_IN_HAND',
+      name: 'Station B cash',
+    });
+
+    // Everything above happened on 10 Oct (moves) and 11 Oct (a ₹50 bank charge).
+    const res = await app.request(
+      `/finance/movements?stationId=${STATION}&from=2026-10-11&to=2026-10-31`,
+    );
+    expect(res.status).toBe(200);
+    const { data } = (await res.json()) as any;
+    const byId = new Map((data.openings as any[]).map((o) => [o.accountId, o]));
+    expect([...byId.keys()].sort()).toEqual([CASH, BANK, ORG_BANK, PETTY].sort());
+    expect(byId.get(CASH)).toMatchObject({
+      accountType: 'CASH_IN_HAND',
+      accountName: 'Cash in Hand',
+      shared: false,
+      isActive: true,
+    });
+    expect(Number(byId.get(CASH).opening)).toBe(-5300);
+    expect(Number(byId.get(PETTY).opening)).toBe(300);
+    expect(Number(byId.get(BANK).opening)).toBe(3000); // the 11 Oct charge is in range
+    expect(byId.get(ORG_BANK)).toMatchObject({ shared: true });
+    expect(Number(byId.get(ORG_BANK).opening)).toBe(2000);
+
+    // No `from`: the range is all time, nothing precedes it.
+    const all = await app.request(`/finance/movements?stationId=${STATION}`);
+    const allData = ((await all.json()) as any).data;
+    expect((allData.openings as any[]).map((o) => [o.accountId, Number(o.opening)]).sort()).toEqual(
+      [
+        [CASH, 0],
+        [BANK, 0],
+        [ORG_BANK, 0],
+        [PETTY, 0],
+      ].sort(),
+    );
+  });
 });
